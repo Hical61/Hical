@@ -1,13 +1,19 @@
 # 测试程序
 
+# 平台相关库
+if(WIN32)
+    set(PLATFORM_LIBS ws2_32 mswsock)
+else()
+    set(PLATFORM_LIBS "")
+endif()
+
 # 基础测试
 add_executable(test_basic test_basic.cpp)
 target_link_libraries(test_basic
     PRIVATE
     hical_core
     GTest::gtest_main
-    ws2_32
-    mswsock
+    ${PLATFORM_LIBS}
 )
 
 # 错误码测试
@@ -16,8 +22,7 @@ target_link_libraries(test_error
     PRIVATE
     hical_core
     GTest::gtest_main
-    ws2_32
-    mswsock
+    ${PLATFORM_LIBS}
 )
 
 # AsioEventLoop 测试
@@ -26,8 +31,7 @@ target_link_libraries(test_asio_event_loop
     PRIVATE
     hical_core
     GTest::gtest_main
-    ws2_32
-    mswsock
+    ${PLATFORM_LIBS}
 )
 
 # AsioTcpConnection 测试
@@ -36,8 +40,7 @@ target_link_libraries(test_asio_tcp_connection
     PRIVATE
     hical_core
     GTest::gtest_main
-    ws2_32
-    mswsock
+    ${PLATFORM_LIBS}
 )
 
 # MemoryPool 和 PmrBuffer 测试
@@ -46,8 +49,7 @@ target_link_libraries(test_memory_pool
     PRIVATE
     hical_core
     GTest::gtest_main
-    ws2_32
-    mswsock
+    ${PLATFORM_LIBS}
 )
 
 # AsioTimer 测试
@@ -56,8 +58,7 @@ target_link_libraries(test_asio_timer
     PRIVATE
     hical_core
     GTest::gtest_main
-    ws2_32
-    mswsock
+    ${PLATFORM_LIBS}
 )
 
 # SSL 连接测试
@@ -66,8 +67,7 @@ target_link_libraries(test_ssl_connection
     PRIVATE
     hical_core
     GTest::gtest_main
-    ws2_32
-    mswsock
+    ${PLATFORM_LIBS}
 )
 
 # 协程工具测试
@@ -76,8 +76,7 @@ target_link_libraries(test_coroutine
     PRIVATE
     hical_core
     GTest::gtest_main
-    ws2_32
-    mswsock
+    ${PLATFORM_LIBS}
 )
 
 # HTTP 类型测试
@@ -86,8 +85,7 @@ target_link_libraries(test_http_types
     PRIVATE
     hical_core
     GTest::gtest_main
-    ws2_32
-    mswsock
+    ${PLATFORM_LIBS}
 )
 
 # 路由器测试
@@ -96,8 +94,7 @@ target_link_libraries(test_router
     PRIVATE
     hical_core
     GTest::gtest_main
-    ws2_32
-    mswsock
+    ${PLATFORM_LIBS}
 )
 
 # TcpServer + EventLoopPool 测试
@@ -106,8 +103,7 @@ target_link_libraries(test_tcp_server
     PRIVATE
     hical_core
     GTest::gtest_main
-    ws2_32
-    mswsock
+    ${PLATFORM_LIBS}
 )
 
 # 中间件测试
@@ -116,8 +112,7 @@ target_link_libraries(test_middleware
     PRIVATE
     hical_core
     GTest::gtest_main
-    ws2_32
-    mswsock
+    ${PLATFORM_LIBS}
 )
 
 # HttpServer 集成测试
@@ -126,8 +121,7 @@ target_link_libraries(test_http_server
     PRIVATE
     hical_core
     GTest::gtest_main
-    ws2_32
-    mswsock
+    ${PLATFORM_LIBS}
 )
 
 # WebSocket 测试
@@ -136,8 +130,7 @@ target_link_libraries(test_websocket
     PRIVATE
     hical_core
     GTest::gtest_main
-    ws2_32
-    mswsock
+    ${PLATFORM_LIBS}
 )
 
 # 路由性能测试（阶段五）
@@ -146,8 +139,7 @@ target_link_libraries(test_router_perf
     PRIVATE
     hical_core
     GTest::gtest_main
-    ws2_32
-    mswsock
+    ${PLATFORM_LIBS}
 )
 
 # Concepts 编译期验证测试（阶段六）
@@ -156,8 +148,7 @@ target_link_libraries(test_concepts
     PRIVATE
     hical_core
     GTest::gtest_main
-    ws2_32
-    mswsock
+    ${PLATFORM_LIBS}
 )
 
 # 集成测试（阶段六）
@@ -166,8 +157,7 @@ target_link_libraries(test_integration
     PRIVATE
     hical_core
     GTest::gtest_main
-    ws2_32
-    mswsock
+    ${PLATFORM_LIBS}
 )
 
 # 注册测试

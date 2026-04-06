@@ -1,0 +1,97 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            compiler: gcc
+            cc: gcc-14
+            cxx: g++-14
+          - os: ubuntu-24.04
+            compiler: clang
+            cc: clang-18
+            cxx: clang++-18
+          - os: windows-latest
+            compiler: msys2-gcc
+
+    runs-on: ${{ matrix.os }}
+    name: ${{ matrix.os }} / ${{ matrix.compiler }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # ── Linux 依赖 ──
+      - name: Install dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libboost-all-dev libssl-dev libgtest-dev cmake
+
+      # ── Linux 构建与测试 ──
+      - name: Configure (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          cmake -B build -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER=${{ matrix.cc }} \
+            -DCMAKE_CXX_COMPILER=${{ matrix.cxx }}
+
+      - name: Build (Linux)
+        if: runner.os == 'Linux'
+        run: cmake --build build -j$(nproc)
+
+      - name: Test (Linux)
+        if: runner.os == 'Linux'
+        run: ctest --test-dir build --output-on-failure --timeout 60 -j4
+
+      # ── clang-format 检查 (仅 GCC job) ──
+      - name: Check formatting
+        if: matrix.compiler == 'gcc'
+        run: |
+          find src tests examples -name '*.h' -o -name '*.cpp' | \
+            xargs clang-format --dry-run --Werror
+
+      # ── clang-tidy 检查 (仅 Clang job, 警告模式) ──
+      - name: Run clang-tidy
+        if: matrix.compiler == 'clang'
+        continue-on-error: true
+        run: |
+          find src -name '*.cpp' | xargs clang-tidy -p build
+
+      # ── Windows MSYS2 ──
+      - name: Setup MSYS2
+        if: runner.os == 'Windows'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          cache: true
+          install: >-
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-ninja
+            mingw-w64-x86_64-boost
+            mingw-w64-x86_64-openssl
+            mingw-w64-x86_64-gtest
+
+      - name: Configure (MSYS2)
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build (MSYS2)
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        run: cmake --build build
+
+      - name: Test (MSYS2)
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        run: ctest --test-dir build --output-on-failure --timeout 60 -j4

@@ -1,5 +1,8 @@
 # hical
 
+[![CI](https://github.com/Hical61/Hical/actions/workflows/ci.yml/badge.svg)](https://github.com/Hical61/Hical/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 基于 **Boost.Asio/Beast** 的现代 C++20 高性能 Web 框架，集成 PMR 内存池、协程异步 I/O 和 C++ Concepts。
 
 > **状态：** 开发中

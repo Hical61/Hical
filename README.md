@@ -1,5 +1,8 @@
 # hical
 
+[![CI](https://github.com/Hical61/Hical/actions/workflows/ci.yml/badge.svg)](https://github.com/Hical61/Hical/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 A modern C++20 high-performance web framework built on **Boost.Asio/Beast**, featuring PMR memory pools, coroutine-based async I/O, and C++ Concepts.
 
 > **Status:** Work in Progress
