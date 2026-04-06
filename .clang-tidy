@@ -1,0 +1,247 @@
+# 文档：https://clang.llvm.org/extra/clang-tidy/checks/list.html
+
+ExtraArgs: [-std=c++2a]
+Checks: '-*,
+      #-clang-diagnostic-pragma-once-outside-header,
+      readability-*,
+      -readability-identifier-length,
+      -readability-magic-numbers,
+      -readability-redundant-access-specifiers,
+      bugprone-*,
+      -bugprone-easily-swappable-parameters,
+      cppcoreguidelines-*,
+	  -cppcoreguidelines-avoid-non-const-global-variables
+      -cppcoreguidelines-pro-type-reinterpret-cast,
+      -cppcoreguidelines-avoid-c-arrays,
+      -cppcoreguidelines-avoid-magic-numbers,
+      -cppcoreguidelines-owning-memory,
+      -cppcoreguidelines-virtual-class-destructor,
+      -cppcoreguidelines-special-member-functions,
+      -cppcoreguidelines-non-private-member-variables-in-classes,
+      modernize-*,
+      -modernize-use-auto,
+      -modernize-avoid-c-arrays,
+      -modernize-use-default-member-init,
+      -modernize-use-trailing-return-type,
+      misc-*,
+      -misc-unused-parameters,
+      -misc-non-private-member-variables-in-classes,
+      -misc-const-correctness,
+      performance-*'
+
+CheckOptions:
+  # 结构体使用大驼峰，并且加上S前缀
+  # struct pre_foo {};
+  # struct SFoo {};
+  - key:             readability-identifier-naming.StructCase
+    value:           CamelCase
+  - key:             readability-identifier-naming.StructPrefix
+    value:           S
+
+  # enum pre_foo_post { One, Two, Three };
+  # enum EFoo { EOne, ETwo, EThree };
+  - key:             readability-identifier-naming.EnumCase
+    value:           CamelCase
+  - key:             readability-identifier-naming.EnumPrefix
+    value:           E
+  - key:             readability-identifier-naming.EnumConstantCase
+    value:           CamelCase
+  - key:             readability-identifier-naming.EnumConstantPrefix
+    value:           E
+
+  # 抽象接口类使用大驼峰，并且加上I前缀
+  - key:             readability-identifier-naming.AbstractClassCase
+    value:           CamelCase
+  - key:             readability-identifier-naming.AbstractClassPrefix
+    value:           I
+
+  # 类名使用大驼峰，并且加上C前缀
+  - key:             readability-identifier-naming.ClassCase
+    value:           CamelCase
+  - key:             readability-identifier-naming.ClassPrefix
+    value:           C
+
+  # class FOO { public: static const int pre_class_constant; };
+  # class FOO { public: static const int m_ciClassConstant; };
+  - key:             readability-identifier-naming.ClassConstantCase
+    value:           camelBack
+  - key:             readability-identifier-naming.ClassConstantPrefix
+    value:           m_
+
+  # class Foo { const char pre_constmember; };
+  # class Foo { const char m_ccConstMember; };
+  - key:             readability-identifier-naming.ConstantMemberCase
+    value:           camelBack
+  - key:             readability-identifier-naming.ConstantMemberPrefix
+    value:           m_
+
+  # class FOO { public: static int pre_class_constant; };
+  # class FOO { public: static int m_iClassConstant; };
+  - key:             readability-identifier-naming.ClassMemberCase
+    value:           camelBack
+  - key:             readability-identifier-naming.ClassMemberPrefix
+    value:           m_
+
+  # class FOO { private: int pre_class_constant; };
+  # class FOO { private: int m_iClassConstant; };
+  - key:             readability-identifier-naming.PrivateMemberCase
+    value:           camelBack
+  - key:             readability-identifier-naming.PrivateMemberPrefix
+    value:           m_
+
+  # class FOO { protected: int pre_class_constant; };
+  # class FOO { protected: int m_iClassConstant; };
+  - key:             readability-identifier-naming.ProtectedMemberCase
+    value:           camelBack
+  - key:             readability-identifier-naming.ProtectedMemberPrefix
+    value:           m_
+
+  # void function() { int const pre_myconst_val; }
+  # void function() { int const ciMyConstVal; }
+  - key:             readability-identifier-naming.ConstantCase
+    value:           camelBack
+  - key:             readability-identifier-naming.ConstantPrefix
+    value:           c
+
+  - key:             readability-identifier-naming.LocalConstantCase
+    value:           camelBack
+  - key:             readability-identifier-naming.LocalConstantPrefix
+    value:           c
+
+  # unsigned const pre_myconstglobal_array[] = {1, 2, 3};
+  # unsigned const g_caMyConstGlobalArray[] = {1, 2, 3};
+  - key:             readability-identifier-naming.GlobalConstantCase
+    value:           camelBack
+  - key:             readability-identifier-naming.GlobalConstantPrefix
+    value:           g_c
+
+  # # 函数使用小驼峰命名
+  - key:             readability-identifier-naming.GlobalFunctionCase
+    value:           camelBack
+  - key:             readability-identifier-naming.FunctionCase
+    value:           camelBack
+  - key:             readability-identifier-naming.MethodCase
+    value:           camelBack
+
+  # 变量统一使用小驼峰：int iMyVariable;
+  - key:             readability-identifier-naming.VariableCase
+    value:           camelBack
+
+  # int pre_global3_post;
+  # int g_iGloabl13;
+  - key:             readability-identifier-naming.GlobalVariableCase
+    value:           camelBack
+  - key:             readability-identifier-naming.GlobalVariablePrefix
+    value:           g_
+
+  # void foo() { int local = 3; }
+  # void foo() { int iLocal = 3; }
+  - key:             readability-identifier-naming.LocalVariableCase
+    value:           camelBack
+
+  # #define my_macro_definition
+  # #define MY_MACRO_DEFINITION
+  - key:             readability-identifier-naming.MacroDefinitionCase
+    value:           UPPER_CASE
+
+  # void func(int pre_param);
+  # void func(int iParam);
+  - key:             readability-identifier-naming.ParameterCase
+    value:           camelBack
+
+  # void func(const int pre_param);
+  # void func(const int iParam);
+  - key:             readability-identifier-naming.ConstantParameterCase
+    value:           camelBack
+
+
+  # static unsigned const pre_mystatic_array[] = {1, 2, 3};
+  # static unsigned const saMystaticArray[] = {1, 2, 3};
+  - key:             readability-identifier-naming.StaticVariableCase
+    value:           camelBack
+  - key:             readability-identifier-naming.StaticVariablePrefix
+    value:           s
+
+  # static unsigned const pre_mystatic_array[] = {1, 2, 3};
+  # static unsigned const caMystaticArray[] = {1, 2, 3};
+  - key:             readability-identifier-naming.StaticConstantCase
+    value:           camelBack
+  - key:             readability-identifier-naming.StaticConstantPrefix
+    value:           c
+
+  # void FUNCTION(int *pre_parameter);
+  # void FUNCTION(int *piParameter);
+  - key:             readability-identifier-naming.PointerParameterCase
+    value:           CamelCase
+  - key:             readability-identifier-naming.PointerParameterIgnoredRegexp
+    value:           "psz.*|pscw.*"
+  - key:             readability-identifier-naming.PointerParameterPrefix
+    value:           p
+
+  # void GLOBAL_FUNCTION(int const *pre_const_parameter);
+  # void GLOBAL_FUNCTION(int const *pConstParameter);
+  - key:             readability-identifier-naming.ConstantPointerParameterCase
+    value:           CamelCase
+  - key:             readability-identifier-naming.ConstantPointerParameterIgnoredRegexp
+    value:           "psz.*"
+  - key:             readability-identifier-naming.ConstantPointerParameterPrefix
+    value:           p
+
+  # int *pre_global;
+  # int *g_piGlobal;
+  - key:             readability-identifier-naming.GlobalPointerCase
+    value:           CamelCase
+  - key:             readability-identifier-naming.GlobalPointerIgnoredRegexp
+    value:           "psz.*"
+  - key:             readability-identifier-naming.GlobalPointerPrefix
+    value:           g_p
+
+  # void foo() { int *pre_local_constant; }
+  # void foo() { int *piLocalConstant; }
+  - key:             readability-identifier-naming.LocalPointerCase
+    value:           CamelCase
+  - key:             readability-identifier-naming.LocalPointerIgnoredRegexp
+    value:           "psz.*"
+  - key:             readability-identifier-naming.LocalPointerPrefix
+    value:           p
+
+  # void foo() { int const *pre_local_constant; }
+  # void foo() { int const *piLocalConstant; }
+  - key:             readability-identifier-naming.LocalConstantPointerCase
+    value:           CamelCase
+  - key:             readability-identifier-naming.LocalConstantPointerIgnoredRegexp
+    value:           "psz.*"
+  - key:             readability-identifier-naming.LocalConstantPointerPrefix
+    value:           p
+
+  - key:             readability-identifier-naming.GlobalConstantPointerCase
+    value:           CamelCase
+  - key:             readability-identifier-naming.GlobalConstantPointerIgnoredRegexp
+    value:           "psz.*"
+  - key:             readability-identifier-naming.GlobalConstantPointerPrefix
+    value:           g_p
+
+  # 模板参数名称使用大驼峰
+  - key:             readability-identifier-naming.TemplateParameterCase
+    value:           CamelCase
+
+  # 使用typedef和using重命名类型时，使用大驼峰
+  - key:             readability-identifier-naming.TypedefCase
+    value:           CamelCase
+  - key:             readability-identifier-naming.TypeAliasCase
+    value:           CamelCase
+
+  # 超过 150 行的函数警告
+  - key:             readability-function-size.LineThreshold
+    value:           150
+  # 函数参数超过5个的警报
+  - key:             readability-function-size.ParameterThreshold
+    value:           5
+  # 函数嵌套超过4个的警报
+  - key:             readability-function-size.NestingThreshold
+    value:           4
+  # 全部都是 public 成员的时候不警告成员私有化
+  - key:             misc-non-private-member-variables-in-classes.IgnoreClassesWithAllMemberVariablesBeingPublic
+    value:           true
+  - key:             cppcoreguidelines-non-private-member-variables-in-classes.IgnoreClassesWithAllMemberVariablesBeingPublic
+    value:           true

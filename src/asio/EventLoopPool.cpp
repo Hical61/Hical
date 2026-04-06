@@ -1,0 +1,94 @@
+#include "EventLoopPool.h"
+
+namespace hical
+{
+
+EventLoopPool::EventLoopPool(size_t numThreads)
+{
+    for (size_t i = 0; i < numThreads; ++i)
+    {
+        auto loop = std::make_unique<AsioEventLoop>();
+        loop->setIndex(i);
+        loops_.push_back(std::move(loop));
+    }
+}
+
+EventLoopPool::~EventLoopPool()
+{
+    if (running_.load())
+    {
+        stop();
+    }
+}
+
+void EventLoopPool::start()
+{
+    if (running_.exchange(true))
+    {
+        return;  // 已经启动
+    }
+
+    for (auto& loop : loops_)
+    {
+        threads_.emplace_back([&loop]() {
+            loop->run();
+        });
+    }
+}
+
+void EventLoopPool::stop()
+{
+    if (!running_.exchange(false))
+    {
+        return;  // 已经停止
+    }
+
+    for (auto& loop : loops_)
+    {
+        loop->stop();
+    }
+
+    for (auto& thread : threads_)
+    {
+        if (thread.joinable())
+        {
+            thread.join();
+        }
+    }
+
+    threads_.clear();
+}
+
+AsioEventLoop* EventLoopPool::getNextLoop()
+{
+    if (loops_.empty())
+    {
+        return nullptr;
+    }
+
+    size_t index = nextIndex_.fetch_add(1) % loops_.size();
+    return loops_[index].get();
+}
+
+std::vector<AsioEventLoop*> EventLoopPool::getAllLoops()
+{
+    std::vector<AsioEventLoop*> result;
+    result.reserve(loops_.size());
+    for (auto& loop : loops_)
+    {
+        result.push_back(loop.get());
+    }
+    return result;
+}
+
+size_t EventLoopPool::size() const
+{
+    return loops_.size();
+}
+
+bool EventLoopPool::isRunning() const
+{
+    return running_.load();
+}
+
+}  // namespace hical
