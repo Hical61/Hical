@@ -6,7 +6,7 @@ namespace hical
 
 	AsioEventLoop::AsioEventLoop()
 		: workGuard_(std::make_unique<boost::asio::executor_work_guard<boost::asio::io_context::executor_type>>(
-			boost::asio::make_work_guard(ioContext_)))
+			  boost::asio::make_work_guard(ioContext_)))
 	{
 	}
 

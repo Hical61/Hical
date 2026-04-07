@@ -24,47 +24,25 @@ namespace hical
 	template <typename T>
 	concept EventLoopLike = requires(T loop, std::function<void()> func, double delay) {
 		// 生命周期
-		{
-			loop.run()
-		} -> std::same_as<void>;
-		{
-			loop.stop()
-		} -> std::same_as<void>;
-		{
-			loop.isRunning()
-		} -> std::convertible_to<bool>;
+		{ loop.run() } -> std::same_as<void>;
+		{ loop.stop() } -> std::same_as<void>;
+		{ loop.isRunning() } -> std::convertible_to<bool>;
 
 		// 任务调度
-		{
-			loop.post(func)
-		} -> std::same_as<void>;
-		{
-			loop.dispatch(func)
-		} -> std::same_as<void>;
+		{ loop.post(func) } -> std::same_as<void>;
+		{ loop.dispatch(func) } -> std::same_as<void>;
 
 		// 定时器
-		{
-			loop.runAfter(delay, func)
-		} -> std::convertible_to<uint64_t>;
-		{
-			loop.runEvery(delay, func)
-		} -> std::convertible_to<uint64_t>;
-		{
-			loop.cancelTimer(uint64_t {})
-		} -> std::same_as<void>;
+		{ loop.runAfter(delay, func) } -> std::convertible_to<uint64_t>;
+		{ loop.runEvery(delay, func) } -> std::convertible_to<uint64_t>;
+		{ loop.cancelTimer(uint64_t {}) } -> std::same_as<void>;
 
 		// 线程属性
-		{
-			loop.isInLoopThread()
-		} -> std::convertible_to<bool>;
-		{
-			loop.index()
-		} -> std::convertible_to<size_t>;
+		{ loop.isInLoopThread() } -> std::convertible_to<bool>;
+		{ loop.index() } -> std::convertible_to<size_t>;
 
 		// pmr 分配器
-		{
-			loop.allocator()
-		} -> std::same_as<std::pmr::polymorphic_allocator<std::byte>>;
+		{ loop.allocator() } -> std::same_as<std::pmr::polymorphic_allocator<std::byte>>;
 	};
 
 	/**
@@ -75,34 +53,18 @@ namespace hical
 	template <typename T>
 	concept TcpConnectionLike = requires(T conn, const char* data, size_t len, const std::string& msg) {
 		// 数据发送
-		{
-			conn.send(data, len)
-		} -> std::same_as<void>;
-		{
-			conn.send(msg)
-		} -> std::same_as<void>;
+		{ conn.send(data, len) } -> std::same_as<void>;
+		{ conn.send(msg) } -> std::same_as<void>;
 
 		// 连接控制
-		{
-			conn.shutdown()
-		} -> std::same_as<void>;
-		{
-			conn.close()
-		} -> std::same_as<void>;
+		{ conn.shutdown() } -> std::same_as<void>;
+		{ conn.close() } -> std::same_as<void>;
 
 		// 状态查询
-		{
-			conn.connected()
-		} -> std::convertible_to<bool>;
-		{
-			conn.disconnected()
-		} -> std::convertible_to<bool>;
-		{
-			conn.bytesSent()
-		} -> std::convertible_to<size_t>;
-		{
-			conn.bytesReceived()
-		} -> std::convertible_to<size_t>;
+		{ conn.connected() } -> std::convertible_to<bool>;
+		{ conn.disconnected() } -> std::convertible_to<bool>;
+		{ conn.bytesSent() } -> std::convertible_to<size_t>;
+		{ conn.bytesReceived() } -> std::convertible_to<size_t>;
 	};
 
 	/**
@@ -113,18 +75,10 @@ namespace hical
 	template <typename T>
 	concept TimerLike = requires(T timer) {
 		// 定时器控制
-		{
-			timer.cancel()
-		} -> std::same_as<void>;
-		{
-			timer.isActive()
-		} -> std::convertible_to<bool>;
-		{
-			timer.isRepeating()
-		} -> std::convertible_to<bool>;
-		{
-			timer.interval()
-		} -> std::convertible_to<double>;
+		{ timer.cancel() } -> std::same_as<void>;
+		{ timer.isActive() } -> std::convertible_to<bool>;
+		{ timer.isRepeating() } -> std::convertible_to<bool>;
+		{ timer.interval() } -> std::convertible_to<double>;
 	};
 
 	/**

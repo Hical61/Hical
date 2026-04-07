@@ -34,12 +34,12 @@ int main(int argc, char* argv[])
 							});
 
 		// GET /api/status — 状态查询
-		server.router().get(
-			"/api/status",
-			[](const HttpRequest&) -> HttpResponse
-			{
-				return HttpResponse::json({{"status", "running"}, {"version", "0.2.0"}, {"framework", "hical"}});
-			});
+		server.router().get("/api/status",
+							[](const HttpRequest&) -> HttpResponse
+							{
+								return HttpResponse::json(
+									{{"status", "running"}, {"version", "0.2.0"}, {"framework", "hical"}});
+							});
 
 		// POST /api/echo — Echo 回写
 		server.router().post("/api/echo",
@@ -61,12 +61,12 @@ int main(int argc, char* argv[])
 							});
 
 		// GET /users/{id} — 路径参数示例
-		server.router().get(
-			"/users/{id}",
-			[](const HttpRequest& req) -> HttpResponse
-			{
-				return HttpResponse::json({{"userId", req.param("id")}, {"name", "User " + req.param("id")}});
-			});
+		server.router().get("/users/{id}",
+							[](const HttpRequest& req) -> HttpResponse
+							{
+								return HttpResponse::json(
+									{{"userId", req.param("id")}, {"name", "User " + req.param("id")}});
+							});
 
 		// ============ WebSocket 路由 ============
 
