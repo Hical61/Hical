@@ -398,7 +398,6 @@ hical/
 │   └── asio/
 │       ├── AsioEventLoop.h/.cpp      # Asio 事件循环
 │       ├── GenericConnection.h/.cpp  # TCP/SSL 统一连接
-│       ├── AsioTcpConnection.h       # 向后兼容别名
 │       ├── AsioTimer.h/.cpp          # Asio 定时器
 │       ├── EventLoopPool.h/.cpp      # 多线程事件循环池
 │       └── TcpServer.h/.cpp          # TCP 服务器

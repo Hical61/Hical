@@ -34,7 +34,7 @@ target_link_libraries(test_asio_event_loop
     ${PLATFORM_LIBS}
 )
 
-# AsioTcpConnection 测试
+# GenericConnection (PlainConnection) 测试
 add_executable(test_asio_tcp_connection test_asio_tcp_connection.cpp)
 target_link_libraries(test_asio_tcp_connection
     PRIVATE

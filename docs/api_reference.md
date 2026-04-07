@@ -913,8 +913,7 @@ Boost.Asio 适配层，将 Boost.Asio 的原始 API 封装为 hical 风格的接
 | --------------------- | -------------------------- |
 | `AsioEventLoop.h`     | EventLoop 的 Asio 实现     |
 | `AsioTimer.h`         | 定时器的 Asio 实现         |
-| `AsioTcpConnection.h` | TcpConnection 类型别名     |
-| `GenericConnection.h` | 模板化连接（支持 TCP/SSL） |
+| `GenericConnection.h` | 模板化连接（支持 TCP/SSL），提供 PlainConnection / SslConnection 类型别名 |
 | `TcpServer.h`         | TCP 服务器                 |
 | `EventLoopPool.h`     | 事件循环线程池             |
 

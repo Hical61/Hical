@@ -38,7 +38,6 @@ hical/
 │   └── asio/                   # Boost.Asio 适配实现
 │       ├── AsioEventLoop.h/.cpp      # 基于 io_context 的事件循环
 │       ├── GenericConnection.h/.cpp  # 模板化连接（TCP/SSL 统一）
-│       ├── AsioTcpConnection.h       # 向后兼容头文件
 │       ├── AsioTimer.h/.cpp          # 基于 steady_timer 的定时器
 │       ├── EventLoopPool.h/.cpp      # 多线程事件循环池（1 Thread : 1 io_context）
 │       └── TcpServer.h/.cpp          # TCP 服务器（accept + 连接管理 + IO 线程分发）
@@ -137,7 +136,7 @@ hical/
 - **统一内存池**: MemoryPool（全局同步池 + 线程本地池 + 请求级单调池）+ PmrBuffer（pmr 统一缓冲区）
 - **抽象接口层**: EventLoop / TcpConnection / Timer 纯虚基类 + Concepts 约束
 - **AsioEventLoop**: 1 Thread : 1 io_context，dispatch/post，定时器管理
-- **AsioTcpConnection**: 协程式 readLoop/writeLoop，写队列，高水位回调
+- **GenericConnection**: 协程式 readLoop/writeLoop，写队列，高水位回调（PlainConnection / SslConnection）
 - **AsioTimer**: 基于 steady_timer 的单次/周期定时器
 - **错误码体系**: ErrorCode 枚举 + boost error_code 转换（含 SSL 错误预留）
 - **InetAddress**: IPv4/IPv6 地址封装，跨平台

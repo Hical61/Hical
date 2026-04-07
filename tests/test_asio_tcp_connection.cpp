@@ -1,4 +1,4 @@
-#include "asio/AsioTcpConnection.h"
+#include "asio/GenericConnection.h"
 #include "asio/AsioEventLoop.h"
 #include "core/PmrBuffer.h"
 #include <gtest/gtest.h>
@@ -47,7 +47,7 @@ std::pair<boost::asio::ip::tcp::socket, boost::asio::ip::tcp::socket> createConn
 }
 
 // 测试基本的连接建立
-TEST(AsioTcpConnectionTest, BasicConnection)
+TEST(PlainConnectionTest, BasicConnection)
 {
 	AsioEventLoop loop;
 	auto [socket1, socket2] = createConnectedSockets(loop.getIoContext(), loop.getIoContext());
@@ -55,7 +55,7 @@ TEST(AsioTcpConnectionTest, BasicConnection)
 	InetAddress localAddr("127.0.0.1", 12345);
 	InetAddress peerAddr("127.0.0.1", 54321);
 
-	auto conn = std::make_shared<AsioTcpConnection>(&loop, std::move(socket1), localAddr, peerAddr);
+	auto conn = std::make_shared<PlainConnection>(&loop, std::move(socket1), localAddr, peerAddr);
 
 	EXPECT_FALSE(conn->connected());
 
@@ -90,7 +90,7 @@ TEST(AsioTcpConnectionTest, BasicConnection)
 }
 
 // 测试数据发送和接收
-TEST(AsioTcpConnectionTest, SendAndReceive)
+TEST(PlainConnectionTest, SendAndReceive)
 {
 	AsioEventLoop loop;
 	auto [socket1, socket2] = createConnectedSockets(loop.getIoContext(), loop.getIoContext());
@@ -98,7 +98,7 @@ TEST(AsioTcpConnectionTest, SendAndReceive)
 	InetAddress localAddr("127.0.0.1", 12345);
 	InetAddress peerAddr("127.0.0.1", 54321);
 
-	auto conn = std::make_shared<AsioTcpConnection>(&loop, std::move(socket1), localAddr, peerAddr);
+	auto conn = std::make_shared<PlainConnection>(&loop, std::move(socket1), localAddr, peerAddr);
 
 	std::atomic<bool> received {false};
 	std::string receivedData;
@@ -121,7 +121,7 @@ TEST(AsioTcpConnectionTest, SendAndReceive)
 	std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
 	// 从 socket2 发送数据
-	std::string testData = "Hello AsioTcpConnection!";
+	std::string testData = "Hello PlainConnection!";
 	boost::asio::write(socket2, boost::asio::buffer(testData));
 
 	// 等待接收
@@ -136,8 +136,8 @@ TEST(AsioTcpConnectionTest, SendAndReceive)
 	loopThread.join();
 }
 
-// 测试从 AsioTcpConnection 发送数据
-TEST(AsioTcpConnectionTest, SendFromConnection)
+// 测试从 PlainConnection 发送数据
+TEST(PlainConnectionTest, SendFromConnection)
 {
 	AsioEventLoop loop;
 	auto [socket1, socket2] = createConnectedSockets(loop.getIoContext(), loop.getIoContext());
@@ -145,7 +145,7 @@ TEST(AsioTcpConnectionTest, SendFromConnection)
 	InetAddress localAddr("127.0.0.1", 12345);
 	InetAddress peerAddr("127.0.0.1", 54321);
 
-	auto conn = std::make_shared<AsioTcpConnection>(&loop, std::move(socket1), localAddr, peerAddr);
+	auto conn = std::make_shared<PlainConnection>(&loop, std::move(socket1), localAddr, peerAddr);
 
 	conn->connectEstablished();
 
@@ -158,7 +158,7 @@ TEST(AsioTcpConnectionTest, SendFromConnection)
 	std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
 	// 从连接发送数据
-	std::string testData = "Hello from AsioTcpConnection!";
+	std::string testData = "Hello from PlainConnection!";
 	conn->send(testData);
 
 	// 等待异步写操作完成
@@ -182,7 +182,7 @@ TEST(AsioTcpConnectionTest, SendFromConnection)
 }
 
 // 测试写完成回调
-TEST(AsioTcpConnectionTest, WriteCompleteCallback)
+TEST(PlainConnectionTest, WriteCompleteCallback)
 {
 	AsioEventLoop loop;
 	auto [socket1, socket2] = createConnectedSockets(loop.getIoContext(), loop.getIoContext());
@@ -190,7 +190,7 @@ TEST(AsioTcpConnectionTest, WriteCompleteCallback)
 	InetAddress localAddr("127.0.0.1", 12345);
 	InetAddress peerAddr("127.0.0.1", 54321);
 
-	auto conn = std::make_shared<AsioTcpConnection>(&loop, std::move(socket1), localAddr, peerAddr);
+	auto conn = std::make_shared<PlainConnection>(&loop, std::move(socket1), localAddr, peerAddr);
 
 	std::atomic<int> writeCompleteCount {0};
 	conn->onWriteComplete(
@@ -223,7 +223,7 @@ TEST(AsioTcpConnectionTest, WriteCompleteCallback)
 }
 
 // 测试连接关闭回调
-TEST(AsioTcpConnectionTest, CloseCallback)
+TEST(PlainConnectionTest, CloseCallback)
 {
 	AsioEventLoop loop;
 	auto [socket1, socket2] = createConnectedSockets(loop.getIoContext(), loop.getIoContext());
@@ -231,7 +231,7 @@ TEST(AsioTcpConnectionTest, CloseCallback)
 	InetAddress localAddr("127.0.0.1", 12345);
 	InetAddress peerAddr("127.0.0.1", 54321);
 
-	auto conn = std::make_shared<AsioTcpConnection>(&loop, std::move(socket1), localAddr, peerAddr);
+	auto conn = std::make_shared<PlainConnection>(&loop, std::move(socket1), localAddr, peerAddr);
 
 	std::atomic<bool> closed {false};
 	conn->onClose(
@@ -263,7 +263,7 @@ TEST(AsioTcpConnectionTest, CloseCallback)
 }
 
 // 测试 TCP_NODELAY
-TEST(AsioTcpConnectionTest, TcpNoDelay)
+TEST(PlainConnectionTest, TcpNoDelay)
 {
 	AsioEventLoop loop;
 	auto [socket1, socket2] = createConnectedSockets(loop.getIoContext(), loop.getIoContext());
@@ -271,7 +271,7 @@ TEST(AsioTcpConnectionTest, TcpNoDelay)
 	InetAddress localAddr("127.0.0.1", 12345);
 	InetAddress peerAddr("127.0.0.1", 54321);
 
-	auto conn = std::make_shared<AsioTcpConnection>(&loop, std::move(socket1), localAddr, peerAddr);
+	auto conn = std::make_shared<PlainConnection>(&loop, std::move(socket1), localAddr, peerAddr);
 
 	conn->connectEstablished();
 
@@ -285,7 +285,7 @@ TEST(AsioTcpConnectionTest, TcpNoDelay)
 }
 
 // 测试用户上下文
-TEST(AsioTcpConnectionTest, UserContext)
+TEST(PlainConnectionTest, UserContext)
 {
 	AsioEventLoop loop;
 	auto [socket1, socket2] = createConnectedSockets(loop.getIoContext(), loop.getIoContext());
@@ -293,7 +293,7 @@ TEST(AsioTcpConnectionTest, UserContext)
 	InetAddress localAddr("127.0.0.1", 12345);
 	InetAddress peerAddr("127.0.0.1", 54321);
 
-	auto conn = std::make_shared<AsioTcpConnection>(&loop, std::move(socket1), localAddr, peerAddr);
+	auto conn = std::make_shared<PlainConnection>(&loop, std::move(socket1), localAddr, peerAddr);
 
 	EXPECT_FALSE(conn->hasContext());
 
@@ -310,7 +310,7 @@ TEST(AsioTcpConnectionTest, UserContext)
 }
 
 // 测试 PmrBuffer 使用
-TEST(AsioTcpConnectionTest, PmrBufferUsage)
+TEST(PlainConnectionTest, PmrBufferUsage)
 {
 	AsioEventLoop loop;
 	auto [socket1, socket2] = createConnectedSockets(loop.getIoContext(), loop.getIoContext());
@@ -318,7 +318,7 @@ TEST(AsioTcpConnectionTest, PmrBufferUsage)
 	InetAddress localAddr("127.0.0.1", 12345);
 	InetAddress peerAddr("127.0.0.1", 54321);
 
-	auto conn = std::make_shared<AsioTcpConnection>(&loop, std::move(socket1), localAddr, peerAddr);
+	auto conn = std::make_shared<PlainConnection>(&loop, std::move(socket1), localAddr, peerAddr);
 
 	std::atomic<bool> received {false};
 	PmrBuffer receivedBuffer(loop.allocator());

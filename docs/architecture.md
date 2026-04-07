@@ -598,9 +598,6 @@ using PlainConnection = GenericConnection<boost::asio::ip::tcp::socket>;
 
 // SSL/TLS 连接
 using SslConnection = GenericConnection<boost::asio::ssl::stream<tcp::socket>>;
-
-// 向后兼容
-using AsioTcpConnection = PlainConnection;
 ```
 
 ### 8.3 SSL 类型检测

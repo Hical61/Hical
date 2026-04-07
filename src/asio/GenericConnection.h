@@ -214,9 +214,6 @@ namespace hical
 	/** SSL/TLS 加密连接 */
 	using SslConnection = GenericConnection<boost::asio::ssl::stream<boost::asio::ip::tcp::socket>>;
 
-	/** 向后兼容：AsioTcpConnection 即 PlainConnection */
-	using AsioTcpConnection = PlainConnection;
-
 	// ============ 模板实现（header-only 部分） ============
 
 	template <typename SocketType>

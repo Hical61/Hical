@@ -34,7 +34,6 @@ hical/
 │   └── asio/          # Boost.Asio implementations
 │       ├── AsioEventLoop.h/cpp
 │       ├── AsioTimer.h/cpp
-│       ├── AsioTcpConnection.h/cpp
 │       ├── GenericConnection.h/cpp
 │       ├── EventLoopPool.h/cpp
 │       └── TcpServer.h/cpp

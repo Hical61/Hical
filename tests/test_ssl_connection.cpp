@@ -178,14 +178,6 @@ TEST(SslConnectionTest, LoadCertAndKey)
 	EXPECT_NO_THROW(ctx.loadPrivateKey(hTestKeyFile));
 }
 
-// 测试 PlainConnection 类型别名兼容性
-TEST(GenericConnectionTest, PlainConnectionAlias)
-{
-	// PlainConnection 应该和 AsioTcpConnection 是同一类型
-	static_assert(std::is_same_v<PlainConnection, AsioTcpConnection>, "PlainConnection 应与 AsioTcpConnection 相同");
-	SUCCEED();
-}
-
 // 测试 isSsl() 编译期判断
 TEST(GenericConnectionTest, IsSslCompileTime)
 {
