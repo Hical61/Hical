@@ -16,7 +16,7 @@
 namespace hical
 {
 
-/**
+	/**
  * @brief HTTP 服务器
  *
  * 高层封装：整合 TcpServer + Router + 中间件管道。
@@ -30,100 +30,99 @@ namespace hical
  * server.start();  // 阻塞
  * ```
  */
-class HttpServer
-{
-  public:
-    /**
+	class HttpServer
+	{
+	public:
+		/**
      * @brief 构造 HTTP 服务器
      * @param port 监听端口
      * @param ioThreads IO 线程数（默认 1，即单线程）
      */
-    explicit HttpServer(uint16_t port, size_t ioThreads = 1);
+		explicit HttpServer(uint16_t port, size_t ioThreads = 1);
 
-    ~HttpServer();
+		~HttpServer();
 
-    /**
+		/**
      * @brief 获取路由器引用（用于注册路由）
      * @return 路由器引用
      */
-    Router& router();
+		Router& router();
 
-    /**
+		/**
      * @brief 添加中间件
      * @param middleware 中间件处理器
      */
-    void use(MiddlewareHandler middleware);
+		void use(MiddlewareHandler middleware);
 
-    /**
+		/**
      * @brief 启用 SSL/TLS
      * @param certFile 证书文件路径
      * @param keyFile 私钥文件路径
      */
-    void enableSsl(const std::string& certFile, const std::string& keyFile);
+		void enableSsl(const std::string& certFile, const std::string& keyFile);
 
-    /**
+		/**
      * @brief 设置最大请求体大小
      * @param bytes 最大字节数（默认 1MB）
      */
-    void setMaxBodySize(size_t bytes);
+		void setMaxBodySize(size_t bytes);
 
-    /**
+		/**
      * @brief 设置最大请求头大小
      * @param bytes 最大字节数（默认 8KB）
      */
-    void setMaxHeaderSize(size_t bytes);
+		void setMaxHeaderSize(size_t bytes);
 
-    /**
+		/**
      * @brief 启动服务器（阻塞）
      *
      * 调用后阻塞当前线程，直到 stop() 被调用。
      */
-    void start();
+		void start();
 
-    /**
+		/**
      * @brief 停止服务器
      */
-    void stop();
+		void stop();
 
-    /**
+		/**
      * @brief 服务器是否正在运行
      * @return true 如果正在运行
      */
-    bool isRunning() const;
+		bool isRunning() const;
 
-    /**
+		/**
      * @brief 获取监听端口
      * @return 端口号
      */
-    uint16_t port() const;
+		uint16_t port() const;
 
-  private:
-    // 协程式连接监听
-    Awaitable<void> acceptLoop();
+	private:
+		// 协程式连接监听
+		Awaitable<void> acceptLoop();
 
-    // 协程式 HTTP 会话处理
-    Awaitable<void> handleSession(boost::asio::ip::tcp::socket socket);
+		// 协程式 HTTP 会话处理
+		Awaitable<void> handleSession(boost::asio::ip::tcp::socket socket);
 
-    // 协程式 WebSocket 会话处理
-    Awaitable<void> handleWebSocket(
-        boost::asio::ip::tcp::socket socket,
-        boost::beast::http::request<boost::beast::http::string_body> req,
-        const Router::WsRoute& wsRoute);
+		// 协程式 WebSocket 会话处理
+		Awaitable<void> handleWebSocket(boost::asio::ip::tcp::socket socket,
+										boost::beast::http::request<boost::beast::http::string_body> req,
+										const Router::WsRoute& wsRoute);
 
-    std::atomic<uint16_t> port_;
-    size_t ioThreads_;
-    boost::asio::io_context ioContext_;
-    std::unique_ptr<boost::asio::ip::tcp::acceptor> acceptor_;
-    std::atomic<bool> running_{false};
+		std::atomic<uint16_t> port_;
+		size_t ioThreads_;
+		boost::asio::io_context ioContext_;
+		std::unique_ptr<boost::asio::ip::tcp::acceptor> acceptor_;
+		std::atomic<bool> running_ {false};
 
-    Router router_;
-    MiddlewarePipeline middlewarePipeline_;
+		Router router_;
+		MiddlewarePipeline middlewarePipeline_;
 
-    std::shared_ptr<SslContext> sslCtx_;
+		std::shared_ptr<SslContext> sslCtx_;
 
-    // 请求大小限制
-    size_t maxBodySize_{1024 * 1024};   // 1MB
-    size_t maxHeaderSize_{8192};         // 8KB
-};
+		// 请求大小限制
+		size_t maxBodySize_ {1024 * 1024}; // 1MB
+		size_t maxHeaderSize_ {8192};      // 8KB
+	};
 
-}  // namespace hical
+} // namespace hical

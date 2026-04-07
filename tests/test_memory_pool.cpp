@@ -11,96 +11,98 @@ using namespace hical;
 // 测试单例模式
 TEST(MemoryPoolTest, Singleton)
 {
-    auto& pool1 = MemoryPool::instance();
-    auto& pool2 = MemoryPool::instance();
-    EXPECT_EQ(&pool1, &pool2);
+	auto& pool1 = MemoryPool::instance();
+	auto& pool2 = MemoryPool::instance();
+	EXPECT_EQ(&pool1, &pool2);
 }
 
 // 测试全局分配器可用
 TEST(MemoryPoolTest, GlobalAllocator)
 {
-    auto allocator = MemoryPool::instance().globalAllocator();
-    std::pmr::vector<int> vec(allocator);
-    vec.push_back(1);
-    vec.push_back(2);
-    vec.push_back(3);
+	auto allocator = MemoryPool::instance().globalAllocator();
+	std::pmr::vector<int> vec(allocator);
+	vec.push_back(1);
+	vec.push_back(2);
+	vec.push_back(3);
 
-    EXPECT_EQ(vec.size(), 3);
-    EXPECT_EQ(vec[0], 1);
-    EXPECT_EQ(vec[2], 3);
+	EXPECT_EQ(vec.size(), 3);
+	EXPECT_EQ(vec[0], 1);
+	EXPECT_EQ(vec[2], 3);
 }
 
 // 测试线程本地分配器可用
 TEST(MemoryPoolTest, ThreadLocalAllocator)
 {
-    auto allocator = MemoryPool::instance().threadLocalAllocator();
-    std::pmr::vector<char> buffer(allocator);
-    buffer.resize(4096);
+	auto allocator = MemoryPool::instance().threadLocalAllocator();
+	std::pmr::vector<char> buffer(allocator);
+	buffer.resize(4096);
 
-    EXPECT_EQ(buffer.size(), 4096);
+	EXPECT_EQ(buffer.size(), 4096);
 }
 
 // 测试请求级单调池
 TEST(MemoryPoolTest, RequestPool)
 {
-    auto pool = MemoryPool::instance().createRequestPool(1024);
-    EXPECT_NE(pool.get(), nullptr);
+	auto pool = MemoryPool::instance().createRequestPool(1024);
+	EXPECT_NE(pool.get(), nullptr);
 
-    std::pmr::polymorphic_allocator<std::byte> allocator(pool.get());
-    std::pmr::vector<int> vec(allocator);
-    for (int i = 0; i < 100; ++i)
-    {
-        vec.push_back(i);
-    }
+	std::pmr::polymorphic_allocator<std::byte> allocator(pool.get());
+	std::pmr::vector<int> vec(allocator);
+	for (int i = 0; i < 100; ++i)
+	{
+		vec.push_back(i);
+	}
 
-    EXPECT_EQ(vec.size(), 100);
-    EXPECT_EQ(vec[99], 99);
-    // pool 析构时整体释放内存
+	EXPECT_EQ(vec.size(), 100);
+	EXPECT_EQ(vec[99], 99);
+	// pool 析构时整体释放内存
 }
 
 // 测试多线程安全
 TEST(MemoryPoolTest, MultiThreadSafety)
 {
-    const int numThreads = 8;
-    const int iterations = 1000;
-    std::vector<std::thread> threads;
+	const int numThreads = 8;
+	const int iterations = 1000;
+	std::vector<std::thread> threads;
 
-    for (int i = 0; i < numThreads; ++i)
-    {
-        threads.emplace_back([iterations]() {
-            auto allocator = MemoryPool::instance().threadLocalAllocator();
-            for (int j = 0; j < iterations; ++j)
-            {
-                std::pmr::vector<char> buffer(allocator);
-                buffer.resize(256);
-                buffer[0] = 'x';
-            }
-        });
-    }
+	for (int i = 0; i < numThreads; ++i)
+	{
+		threads.emplace_back(
+			[iterations]()
+			{
+				auto allocator = MemoryPool::instance().threadLocalAllocator();
+				for (int j = 0; j < iterations; ++j)
+				{
+					std::pmr::vector<char> buffer(allocator);
+					buffer.resize(256);
+					buffer[0] = 'x';
+				}
+			});
+	}
 
-    for (auto& t : threads)
-    {
-        t.join();
-    }
+	for (auto& t : threads)
+	{
+		t.join();
+	}
 
-    auto stats = MemoryPool::instance().getStats();
-    EXPECT_GT(stats.totalAllocations, 0);
+	auto stats = MemoryPool::instance().getStats();
+	EXPECT_GT(stats.totalAllocations, 0);
 }
 
 // 测试统计信息
 TEST(MemoryPoolTest, Stats)
 {
-    MemoryPool::instance().resetStats();
+	MemoryPool::instance().resetStats();
 
-    // 直接通过 trackedResource 分配（绕过 pool 缓存）
-    auto& tracked = MemoryPool::instance().trackedResource();
-    auto* p = tracked.allocate(256, 8);
-    tracked.deallocate(p, 256, 8);
+	// 直接通过 trackedResource 分配（绕过 pool 缓存）
+	auto& tracked = MemoryPool::instance().trackedResource();
+	auto* p = tracked.allocate(256, 8);
+	tracked.deallocate(p, 256, 8);
 
-    auto stats = MemoryPool::instance().getStats();
-    EXPECT_GE(stats.totalAllocations, 1);
-    EXPECT_GE(stats.totalDeallocations, 1);
-    EXPECT_GE(stats.peakBytesAllocated, 256);
+	auto stats = MemoryPool::instance().getStats();
+	EXPECT_GE(stats.totalAllocations, 1);
+	EXPECT_GE(stats.totalDeallocations, 1);
+	EXPECT_GE(stats.peakBytesAllocated, 256);
 }
 
 // ============ PmrBuffer 测试 ============
@@ -108,180 +110,180 @@ TEST(MemoryPoolTest, Stats)
 // 测试默认构造
 TEST(PmrBufferTest, DefaultConstruction)
 {
-    PmrBuffer buffer;
-    EXPECT_EQ(buffer.readableBytes(), 0);
-    EXPECT_GT(buffer.writableBytes(), 0);
+	PmrBuffer buffer;
+	EXPECT_EQ(buffer.readableBytes(), 0);
+	EXPECT_GT(buffer.writableBytes(), 0);
 }
 
 // 测试使用 pmr 分配器构造
 TEST(PmrBufferTest, PmrAllocatorConstruction)
 {
-    auto allocator = MemoryPool::instance().threadLocalAllocator();
-    PmrBuffer buffer(allocator);
-    EXPECT_EQ(buffer.readableBytes(), 0);
+	auto allocator = MemoryPool::instance().threadLocalAllocator();
+	PmrBuffer buffer(allocator);
+	EXPECT_EQ(buffer.readableBytes(), 0);
 }
 
 // 测试 append 和 read
 TEST(PmrBufferTest, AppendAndRead)
 {
-    PmrBuffer buffer;
+	PmrBuffer buffer;
 
-    buffer.append("Hello, ");
-    buffer.append("World!");
+	buffer.append("Hello, ");
+	buffer.append("World!");
 
-    EXPECT_EQ(buffer.readableBytes(), 13);
+	EXPECT_EQ(buffer.readableBytes(), 13);
 
-    auto data = buffer.read(7);
-    EXPECT_EQ(data, "Hello, ");
-    EXPECT_EQ(buffer.readableBytes(), 6);
+	auto data = buffer.read(7);
+	EXPECT_EQ(data, "Hello, ");
+	EXPECT_EQ(buffer.readableBytes(), 6);
 
-    auto rest = buffer.readAll();
-    EXPECT_EQ(rest, "World!");
-    EXPECT_EQ(buffer.readableBytes(), 0);
+	auto rest = buffer.readAll();
+	EXPECT_EQ(rest, "World!");
+	EXPECT_EQ(buffer.readableBytes(), 0);
 }
 
 // 测试 peek
 TEST(PmrBufferTest, Peek)
 {
-    PmrBuffer buffer;
-    buffer.append("test data");
+	PmrBuffer buffer;
+	buffer.append("test data");
 
-    EXPECT_EQ(std::string(buffer.peek(), 4), "test");
-    // peek 不消费数据
-    EXPECT_EQ(buffer.readableBytes(), 9);
+	EXPECT_EQ(std::string(buffer.peek(), 4), "test");
+	// peek 不消费数据
+	EXPECT_EQ(buffer.readableBytes(), 9);
 }
 
 // 测试 retrieve
 TEST(PmrBufferTest, Retrieve)
 {
-    PmrBuffer buffer;
-    buffer.append("Hello, World!");
+	PmrBuffer buffer;
+	buffer.append("Hello, World!");
 
-    buffer.retrieve(7);
-    EXPECT_EQ(buffer.readableBytes(), 6);
-    EXPECT_EQ(std::string(buffer.peek(), buffer.readableBytes()), "World!");
+	buffer.retrieve(7);
+	EXPECT_EQ(buffer.readableBytes(), 6);
+	EXPECT_EQ(std::string(buffer.peek(), buffer.readableBytes()), "World!");
 }
 
 // 测试 retrieveAll
 TEST(PmrBufferTest, RetrieveAll)
 {
-    PmrBuffer buffer;
-    buffer.append("test");
-    EXPECT_EQ(buffer.readableBytes(), 4);
+	PmrBuffer buffer;
+	buffer.append("test");
+	EXPECT_EQ(buffer.readableBytes(), 4);
 
-    buffer.retrieveAll();
-    EXPECT_EQ(buffer.readableBytes(), 0);
+	buffer.retrieveAll();
+	EXPECT_EQ(buffer.readableBytes(), 0);
 }
 
 // 测试 findCRLF
 TEST(PmrBufferTest, FindCRLF)
 {
-    PmrBuffer buffer;
-    buffer.append("line1\r\nline2");
+	PmrBuffer buffer;
+	buffer.append("line1\r\nline2");
 
-    auto crlf = buffer.findCRLF();
-    EXPECT_NE(crlf, nullptr);
-    EXPECT_EQ(crlf - buffer.peek(), 5);
+	auto crlf = buffer.findCRLF();
+	EXPECT_NE(crlf, nullptr);
+	EXPECT_EQ(crlf - buffer.peek(), 5);
 }
 
 // 测试 findCRLF 未找到
 TEST(PmrBufferTest, FindCRLFNotFound)
 {
-    PmrBuffer buffer;
-    buffer.append("no crlf here");
+	PmrBuffer buffer;
+	buffer.append("no crlf here");
 
-    auto crlf = buffer.findCRLF();
-    EXPECT_EQ(crlf, nullptr);
+	auto crlf = buffer.findCRLF();
+	EXPECT_EQ(crlf, nullptr);
 }
 
 // 测试 findEOL
 TEST(PmrBufferTest, FindEOL)
 {
-    PmrBuffer buffer;
-    buffer.append("line1\nline2");
+	PmrBuffer buffer;
+	buffer.append("line1\nline2");
 
-    auto eol = buffer.findEOL();
-    EXPECT_NE(eol, nullptr);
-    EXPECT_EQ(eol - buffer.peek(), 5);
+	auto eol = buffer.findEOL();
+	EXPECT_NE(eol, nullptr);
+	EXPECT_EQ(eol - buffer.peek(), 5);
 }
 
 // 测试确保可写空间
 TEST(PmrBufferTest, EnsureWritableBytes)
 {
-    PmrBuffer buffer({}, 16);  // 初始大小 16
+	PmrBuffer buffer({}, 16); // 初始大小 16
 
-    buffer.ensureWritableBytes(1024);
-    EXPECT_GE(buffer.writableBytes(), 1024);
+	buffer.ensureWritableBytes(1024);
+	EXPECT_GE(buffer.writableBytes(), 1024);
 }
 
 // 测试大量数据
 TEST(PmrBufferTest, LargeData)
 {
-    PmrBuffer buffer;
-    std::string largeData(100000, 'x');
-    buffer.append(largeData);
+	PmrBuffer buffer;
+	std::string largeData(100000, 'x');
+	buffer.append(largeData);
 
-    EXPECT_EQ(buffer.readableBytes(), 100000);
-    auto result = buffer.readAll();
-    EXPECT_EQ(result, largeData);
+	EXPECT_EQ(buffer.readableBytes(), 100000);
+	auto result = buffer.readAll();
+	EXPECT_EQ(result, largeData);
 }
 
 // 测试 swap
 TEST(PmrBufferTest, Swap)
 {
-    PmrBuffer buf1;
-    PmrBuffer buf2;
+	PmrBuffer buf1;
+	PmrBuffer buf2;
 
-    buf1.append("aaa");
-    buf2.append("bbbbb");
+	buf1.append("aaa");
+	buf2.append("bbbbb");
 
-    buf1.swap(buf2);
+	buf1.swap(buf2);
 
-    EXPECT_EQ(buf1.readableBytes(), 5);
-    EXPECT_EQ(buf2.readableBytes(), 3);
+	EXPECT_EQ(buf1.readableBytes(), 5);
+	EXPECT_EQ(buf2.readableBytes(), 3);
 }
 
 // 测试 append 另一个 PmrBuffer
 TEST(PmrBufferTest, AppendBuffer)
 {
-    PmrBuffer buf1;
-    PmrBuffer buf2;
+	PmrBuffer buf1;
+	PmrBuffer buf2;
 
-    buf1.append("Hello, ");
-    buf2.append("World!");
+	buf1.append("Hello, ");
+	buf2.append("World!");
 
-    buf1.append(buf2);
-    EXPECT_EQ(buf1.readableBytes(), 13);
-    EXPECT_EQ(std::string(buf1.peek(), buf1.readableBytes()), "Hello, World!");
+	buf1.append(buf2);
+	EXPECT_EQ(buf1.readableBytes(), 13);
+	EXPECT_EQ(std::string(buf1.peek(), buf1.readableBytes()), "Hello, World!");
 }
 
 // 测试空间回收（数据移动到前面）
 TEST(PmrBufferTest, SpaceReclaim)
 {
-    PmrBuffer buffer({}, 32);
+	PmrBuffer buffer({}, 32);
 
-    // 先写入再读出，制造 readIndex 前移
-    buffer.append("12345678901234567890");  // 20 字节
-    buffer.retrieve(18);  // 消费 18 字节，剩余 2 字节
+	// 先写入再读出，制造 readIndex 前移
+	buffer.append("12345678901234567890"); // 20 字节
+	buffer.retrieve(18);                   // 消费 18 字节，剩余 2 字节
 
-    // 此时 readIndex 前面有大量空闲空间
-    // 追加新数据应该触发数据前移而非扩容
-    buffer.append("new data");
-    EXPECT_EQ(buffer.readableBytes(), 10);
-    EXPECT_EQ(std::string(buffer.peek(), 2), "90");
+	// 此时 readIndex 前面有大量空闲空间
+	// 追加新数据应该触发数据前移而非扩容
+	buffer.append("new data");
+	EXPECT_EQ(buffer.readableBytes(), 10);
+	EXPECT_EQ(std::string(buffer.peek(), 2), "90");
 }
 
 // 测试 hasWritten
 TEST(PmrBufferTest, HasWritten)
 {
-    PmrBuffer buffer;
-    buffer.ensureWritableBytes(10);
+	PmrBuffer buffer;
+	buffer.ensureWritableBytes(10);
 
-    // 手动写入数据
-    char* writePos = buffer.beginWrite();
-    std::memcpy(writePos, "test", 4);
-    buffer.hasWritten(4);
+	// 手动写入数据
+	char* writePos = buffer.beginWrite();
+	std::memcpy(writePos, "test", 4);
+	buffer.hasWritten(4);
 
-    EXPECT_EQ(buffer.readableBytes(), 4);
-    EXPECT_EQ(std::string(buffer.peek(), 4), "test");
+	EXPECT_EQ(buffer.readableBytes(), 4);
+	EXPECT_EQ(std::string(buffer.peek(), 4), "test");
 }

@@ -4,122 +4,122 @@
 namespace hical
 {
 
-AsioTimer::AsioTimer(AsioEventLoop* loop, double delay, Callback cb)
-    : loop_(loop),
-      timer_(loop->getIoContext()),
-      callback_(std::move(cb)),
-      interval_(delay),
-      repeating_(false)
-{
-}
+	AsioTimer::AsioTimer(AsioEventLoop* loop, double delay, Callback cb)
+		: loop_(loop)
+		, timer_(loop->getIoContext())
+		, callback_(std::move(cb))
+		, interval_(delay)
+		, repeating_(false)
+	{
+	}
 
-AsioTimer::AsioTimer(AsioEventLoop* loop, double interval, Callback cb, bool repeating)
-    : loop_(loop),
-      timer_(loop->getIoContext()),
-      callback_(std::move(cb)),
-      interval_(interval),
-      repeating_(repeating)
-{
-}
+	AsioTimer::AsioTimer(AsioEventLoop* loop, double interval, Callback cb, bool repeating)
+		: loop_(loop)
+		, timer_(loop->getIoContext())
+		, callback_(std::move(cb))
+		, interval_(interval)
+		, repeating_(repeating)
+	{
+	}
 
-AsioTimer::~AsioTimer()
-{
-    cancel();
-}
+	AsioTimer::~AsioTimer()
+	{
+		cancel();
+	}
 
-void AsioTimer::cancel()
-{
-    if (!cancelled_.exchange(true))
-    {
-        timer_.cancel();
-    }
-}
+	void AsioTimer::cancel()
+	{
+		if (!cancelled_.exchange(true))
+		{
+			timer_.cancel();
+		}
+	}
 
-bool AsioTimer::isActive() const
-{
-    return !cancelled_.load();
-}
+	bool AsioTimer::isActive() const
+	{
+		return !cancelled_.load();
+	}
 
-EventLoop* AsioTimer::getLoop() const
-{
-    return loop_;
-}
+	EventLoop* AsioTimer::getLoop() const
+	{
+		return loop_;
+	}
 
-bool AsioTimer::isRepeating() const
-{
-    return repeating_;
-}
+	bool AsioTimer::isRepeating() const
+	{
+		return repeating_;
+	}
 
-double AsioTimer::interval() const
-{
-    return interval_;
-}
+	double AsioTimer::interval() const
+	{
+		return interval_;
+	}
 
-void AsioTimer::start()
-{
-    if (repeating_)
-    {
-        scheduleRepeating();
-    }
-    else
-    {
-        scheduleOnce();
-    }
-}
+	void AsioTimer::start()
+	{
+		if (repeating_)
+		{
+			scheduleRepeating();
+		}
+		else
+		{
+			scheduleOnce();
+		}
+	}
 
-void AsioTimer::scheduleOnce()
-{
-    if (cancelled_.load())
-    {
-        return;
-    }
+	void AsioTimer::scheduleOnce()
+	{
+		if (cancelled_.load())
+		{
+			return;
+		}
 
-    timer_.expires_after(std::chrono::milliseconds(
-        static_cast<int>(interval_ * 1000)));
+		timer_.expires_after(std::chrono::milliseconds(static_cast<int>(interval_ * 1000)));
 
-    timer_.async_wait([this, self = shared_from_this()](
-                          const boost::system::error_code& ec) {
-        handleTimeout(ec);
-    });
-}
+		timer_.async_wait(
+			[this, self = shared_from_this()](const boost::system::error_code& ec)
+			{
+				handleTimeout(ec);
+			});
+	}
 
-void AsioTimer::scheduleRepeating()
-{
-    if (cancelled_.load())
-    {
-        return;
-    }
+	void AsioTimer::scheduleRepeating()
+	{
+		if (cancelled_.load())
+		{
+			return;
+		}
 
-    timer_.expires_after(std::chrono::milliseconds(
-        static_cast<int>(interval_ * 1000)));
+		timer_.expires_after(std::chrono::milliseconds(static_cast<int>(interval_ * 1000)));
 
-    timer_.async_wait([this, self = shared_from_this()](
-                          const boost::system::error_code& ec) {
-        if (ec || cancelled_.load())
-        {
-            return;
-        }
+		timer_.async_wait(
+			[this, self = shared_from_this()](const boost::system::error_code& ec)
+			{
+				if (ec || cancelled_.load())
+				{
+					return;
+				}
 
-        // 执行回调
-        callback_();
+				// 执行回调
+				callback_();
 
-        // 重新调度
-        if (!cancelled_.load())
-        {
-            scheduleRepeating();
-        }
-    });
-}
+				// 重新调度
+				if (!cancelled_.load())
+				{
+					scheduleRepeating();
+				}
+			});
+	}
 
-void AsioTimer::handleTimeout(const boost::system::error_code& ec)
-{
-    if (ec || cancelled_.load())
-    {
-        return;
-    }
+	void AsioTimer::handleTimeout(const boost::system::error_code& ec)
+	{
+		if (ec || cancelled_.load())
+		{
+			return;
+		}
 
-    // 执行回调
-    callback_();
-}
+		// 执行回调
+		callback_();
+	}
 
-}  // namespace hical
+} // namespace hical

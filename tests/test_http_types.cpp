@@ -9,203 +9,200 @@ using namespace hical;
 
 TEST(HttpTypesTest, MethodToString)
 {
-    EXPECT_STREQ(httpMethodToString(HttpMethod::hGet), "GET");
-    EXPECT_STREQ(httpMethodToString(HttpMethod::hPost), "POST");
-    EXPECT_STREQ(httpMethodToString(HttpMethod::hPut), "PUT");
-    EXPECT_STREQ(httpMethodToString(HttpMethod::hDelete), "DELETE");
-    EXPECT_STREQ(httpMethodToString(HttpMethod::hPatch), "PATCH");
-    EXPECT_STREQ(httpMethodToString(HttpMethod::hHead), "HEAD");
-    EXPECT_STREQ(httpMethodToString(HttpMethod::hOptions), "OPTIONS");
-    EXPECT_STREQ(httpMethodToString(HttpMethod::hUnknown), "UNKNOWN");
+	EXPECT_STREQ(httpMethodToString(HttpMethod::hGet), "GET");
+	EXPECT_STREQ(httpMethodToString(HttpMethod::hPost), "POST");
+	EXPECT_STREQ(httpMethodToString(HttpMethod::hPut), "PUT");
+	EXPECT_STREQ(httpMethodToString(HttpMethod::hDelete), "DELETE");
+	EXPECT_STREQ(httpMethodToString(HttpMethod::hPatch), "PATCH");
+	EXPECT_STREQ(httpMethodToString(HttpMethod::hHead), "HEAD");
+	EXPECT_STREQ(httpMethodToString(HttpMethod::hOptions), "OPTIONS");
+	EXPECT_STREQ(httpMethodToString(HttpMethod::hUnknown), "UNKNOWN");
 }
 
 TEST(HttpTypesTest, StringToMethod)
 {
-    EXPECT_EQ(stringToHttpMethod("GET"), HttpMethod::hGet);
-    EXPECT_EQ(stringToHttpMethod("POST"), HttpMethod::hPost);
-    EXPECT_EQ(stringToHttpMethod("PUT"), HttpMethod::hPut);
-    EXPECT_EQ(stringToHttpMethod("DELETE"), HttpMethod::hDelete);
-    EXPECT_EQ(stringToHttpMethod("PATCH"), HttpMethod::hPatch);
-    EXPECT_EQ(stringToHttpMethod("HEAD"), HttpMethod::hHead);
-    EXPECT_EQ(stringToHttpMethod("OPTIONS"), HttpMethod::hOptions);
-    EXPECT_EQ(stringToHttpMethod("INVALID"), HttpMethod::hUnknown);
+	EXPECT_EQ(stringToHttpMethod("GET"), HttpMethod::hGet);
+	EXPECT_EQ(stringToHttpMethod("POST"), HttpMethod::hPost);
+	EXPECT_EQ(stringToHttpMethod("PUT"), HttpMethod::hPut);
+	EXPECT_EQ(stringToHttpMethod("DELETE"), HttpMethod::hDelete);
+	EXPECT_EQ(stringToHttpMethod("PATCH"), HttpMethod::hPatch);
+	EXPECT_EQ(stringToHttpMethod("HEAD"), HttpMethod::hHead);
+	EXPECT_EQ(stringToHttpMethod("OPTIONS"), HttpMethod::hOptions);
+	EXPECT_EQ(stringToHttpMethod("INVALID"), HttpMethod::hUnknown);
 }
 
 TEST(HttpTypesTest, StatusCodeToString)
 {
-    EXPECT_STREQ(httpStatusCodeToString(HttpStatusCode::hOk), "OK");
-    EXPECT_STREQ(httpStatusCodeToString(HttpStatusCode::hNotFound),
-                 "Not Found");
-    EXPECT_STREQ(httpStatusCodeToString(HttpStatusCode::hInternalServerError),
-                 "Internal Server Error");
-    EXPECT_STREQ(httpStatusCodeToString(HttpStatusCode::hBadRequest),
-                 "Bad Request");
+	EXPECT_STREQ(httpStatusCodeToString(HttpStatusCode::hOk), "OK");
+	EXPECT_STREQ(httpStatusCodeToString(HttpStatusCode::hNotFound), "Not Found");
+	EXPECT_STREQ(httpStatusCodeToString(HttpStatusCode::hInternalServerError), "Internal Server Error");
+	EXPECT_STREQ(httpStatusCodeToString(HttpStatusCode::hBadRequest), "Bad Request");
 }
 
 // ============ HttpRequest 测试 ============
 
 TEST(HttpRequestTest, DefaultConstruction)
 {
-    HttpRequest req;
-    EXPECT_EQ(req.body(), "");
+	HttpRequest req;
+	EXPECT_EQ(req.body(), "");
 }
 
 TEST(HttpRequestTest, SetAndGetMethod)
 {
-    HttpRequest req;
-    req.setMethod(HttpMethod::hGet);
-    EXPECT_EQ(req.method(), HttpMethod::hGet);
+	HttpRequest req;
+	req.setMethod(HttpMethod::hGet);
+	EXPECT_EQ(req.method(), HttpMethod::hGet);
 
-    req.setMethod(HttpMethod::hPost);
-    EXPECT_EQ(req.method(), HttpMethod::hPost);
+	req.setMethod(HttpMethod::hPost);
+	EXPECT_EQ(req.method(), HttpMethod::hPost);
 }
 
 TEST(HttpRequestTest, SetAndGetTarget)
 {
-    HttpRequest req;
-    req.setTarget("/api/users?page=1");
+	HttpRequest req;
+	req.setTarget("/api/users?page=1");
 
-    EXPECT_EQ(req.target(), "/api/users?page=1");
-    EXPECT_EQ(req.path(), "/api/users");
-    EXPECT_EQ(req.query(), "page=1");
+	EXPECT_EQ(req.target(), "/api/users?page=1");
+	EXPECT_EQ(req.path(), "/api/users");
+	EXPECT_EQ(req.query(), "page=1");
 }
 
 TEST(HttpRequestTest, PathWithoutQuery)
 {
-    HttpRequest req;
-    req.setTarget("/api/users");
+	HttpRequest req;
+	req.setTarget("/api/users");
 
-    EXPECT_EQ(req.path(), "/api/users");
-    EXPECT_EQ(req.query(), "");
+	EXPECT_EQ(req.path(), "/api/users");
+	EXPECT_EQ(req.query(), "");
 }
 
 TEST(HttpRequestTest, SetAndGetHeader)
 {
-    HttpRequest req;
-    req.setHeader("Content-Type", "application/json");
-    EXPECT_EQ(req.header("Content-Type"), "application/json");
-    EXPECT_EQ(req.contentType(), "application/json");
+	HttpRequest req;
+	req.setHeader("Content-Type", "application/json");
+	EXPECT_EQ(req.header("Content-Type"), "application/json");
+	EXPECT_EQ(req.contentType(), "application/json");
 }
 
 TEST(HttpRequestTest, SetAndGetBody)
 {
-    HttpRequest req;
-    req.setBody("{\"name\": \"hical\"}");
-    EXPECT_EQ(req.body(), "{\"name\": \"hical\"}");
+	HttpRequest req;
+	req.setBody("{\"name\": \"hical\"}");
+	EXPECT_EQ(req.body(), "{\"name\": \"hical\"}");
 }
 
 TEST(HttpRequestTest, JsonBody)
 {
-    HttpRequest req;
-    req.setBody("{\"key\": \"value\"}");
+	HttpRequest req;
+	req.setBody("{\"key\": \"value\"}");
 
-    auto json = req.jsonBody();
-    EXPECT_EQ(json.at("key").as_string(), "value");
+	auto json = req.jsonBody();
+	EXPECT_EQ(json.at("key").as_string(), "value");
 }
 
 TEST(HttpRequestTest, MissingHeader)
 {
-    HttpRequest req;
-    EXPECT_EQ(req.header("X-Custom"), "");
+	HttpRequest req;
+	EXPECT_EQ(req.header("X-Custom"), "");
 }
 
 TEST(HttpRequestTest, FromBeastRequest)
 {
-    HttpRequest::BeastRequest beastReq;
-    beastReq.method(boost::beast::http::verb::get);
-    beastReq.target("/test");
-    beastReq.version(11);
-    beastReq.set(boost::beast::http::field::host, "localhost");
+	HttpRequest::BeastRequest beastReq;
+	beastReq.method(boost::beast::http::verb::get);
+	beastReq.target("/test");
+	beastReq.version(11);
+	beastReq.set(boost::beast::http::field::host, "localhost");
 
-    HttpRequest req(std::move(beastReq));
-    EXPECT_EQ(req.method(), HttpMethod::hGet);
-    EXPECT_EQ(req.path(), "/test");
+	HttpRequest req(std::move(beastReq));
+	EXPECT_EQ(req.method(), HttpMethod::hGet);
+	EXPECT_EQ(req.path(), "/test");
 }
 
 // ============ HttpResponse 测试 ============
 
 TEST(HttpResponseTest, DefaultConstruction)
 {
-    HttpResponse res;
-    EXPECT_EQ(res.statusCode(), HttpStatusCode::hOk);
+	HttpResponse res;
+	EXPECT_EQ(res.statusCode(), HttpStatusCode::hOk);
 }
 
 TEST(HttpResponseTest, SetAndGetStatus)
 {
-    HttpResponse res;
-    res.setStatus(HttpStatusCode::hNotFound);
-    EXPECT_EQ(res.statusCode(), HttpStatusCode::hNotFound);
+	HttpResponse res;
+	res.setStatus(HttpStatusCode::hNotFound);
+	EXPECT_EQ(res.statusCode(), HttpStatusCode::hNotFound);
 }
 
 TEST(HttpResponseTest, SetAndGetHeader)
 {
-    HttpResponse res;
-    res.setHeader("X-Custom", "test-value");
-    EXPECT_EQ(res.header("X-Custom"), "test-value");
+	HttpResponse res;
+	res.setHeader("X-Custom", "test-value");
+	EXPECT_EQ(res.header("X-Custom"), "test-value");
 }
 
 TEST(HttpResponseTest, SetBody)
 {
-    HttpResponse res;
-    res.setBody("Hello, World!");
-    EXPECT_EQ(res.body(), "Hello, World!");
-    EXPECT_EQ(res.header("Content-Type"), "text/plain");
+	HttpResponse res;
+	res.setBody("Hello, World!");
+	EXPECT_EQ(res.body(), "Hello, World!");
+	EXPECT_EQ(res.header("Content-Type"), "text/plain");
 }
 
 TEST(HttpResponseTest, SetBodyWithContentType)
 {
-    HttpResponse res;
-    res.setBody("<html></html>", "text/html");
-    EXPECT_EQ(res.body(), "<html></html>");
-    EXPECT_EQ(res.header("Content-Type"), "text/html");
+	HttpResponse res;
+	res.setBody("<html></html>", "text/html");
+	EXPECT_EQ(res.body(), "<html></html>");
+	EXPECT_EQ(res.header("Content-Type"), "text/html");
 }
 
 TEST(HttpResponseTest, SetJsonBody)
 {
-    HttpResponse res;
-    boost::json::value json = {{"status", "ok"}, {"count", 42}};
-    res.setJsonBody(json);
+	HttpResponse res;
+	boost::json::value json = {{"status", "ok"}, {"count", 42}};
+	res.setJsonBody(json);
 
-    EXPECT_EQ(res.header("Content-Type"), "application/json");
-    EXPECT_FALSE(res.body().empty());
+	EXPECT_EQ(res.header("Content-Type"), "application/json");
+	EXPECT_FALSE(res.body().empty());
 
-    auto parsed = boost::json::parse(res.body());
-    EXPECT_EQ(parsed.at("status").as_string(), "ok");
-    EXPECT_EQ(parsed.at("count").as_int64(), 42);
+	auto parsed = boost::json::parse(res.body());
+	EXPECT_EQ(parsed.at("status").as_string(), "ok");
+	EXPECT_EQ(parsed.at("count").as_int64(), 42);
 }
 
 // ============ HttpResponse 工厂方法测试 ============
 
 TEST(HttpResponseTest, FactoryOk)
 {
-    auto res = HttpResponse::ok("Hello");
-    EXPECT_EQ(res.statusCode(), HttpStatusCode::hOk);
-    EXPECT_EQ(res.body(), "Hello");
+	auto res = HttpResponse::ok("Hello");
+	EXPECT_EQ(res.statusCode(), HttpStatusCode::hOk);
+	EXPECT_EQ(res.body(), "Hello");
 }
 
 TEST(HttpResponseTest, FactoryJson)
 {
-    auto res = HttpResponse::json({{"key", "value"}});
-    EXPECT_EQ(res.statusCode(), HttpStatusCode::hOk);
-    EXPECT_EQ(res.header("Content-Type"), "application/json");
+	auto res = HttpResponse::json({{"key", "value"}});
+	EXPECT_EQ(res.statusCode(), HttpStatusCode::hOk);
+	EXPECT_EQ(res.header("Content-Type"), "application/json");
 }
 
 TEST(HttpResponseTest, FactoryNotFound)
 {
-    auto res = HttpResponse::notFound();
-    EXPECT_EQ(res.statusCode(), HttpStatusCode::hNotFound);
-    EXPECT_EQ(res.body(), "Not Found");
+	auto res = HttpResponse::notFound();
+	EXPECT_EQ(res.statusCode(), HttpStatusCode::hNotFound);
+	EXPECT_EQ(res.body(), "Not Found");
 }
 
 TEST(HttpResponseTest, FactoryBadRequest)
 {
-    auto res = HttpResponse::badRequest("Invalid input");
-    EXPECT_EQ(res.statusCode(), HttpStatusCode::hBadRequest);
-    EXPECT_EQ(res.body(), "Invalid input");
+	auto res = HttpResponse::badRequest("Invalid input");
+	EXPECT_EQ(res.statusCode(), HttpStatusCode::hBadRequest);
+	EXPECT_EQ(res.body(), "Invalid input");
 }
 
 TEST(HttpResponseTest, FactoryServerError)
 {
-    auto res = HttpResponse::serverError();
-    EXPECT_EQ(res.statusCode(), HttpStatusCode::hInternalServerError);
+	auto res = HttpResponse::serverError();
+	EXPECT_EQ(res.statusCode(), HttpStatusCode::hInternalServerError);
 }

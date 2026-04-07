@@ -3,93 +3,95 @@
 namespace hical
 {
 
-EventLoopPool::EventLoopPool(size_t numThreads)
-{
-    for (size_t i = 0; i < numThreads; ++i)
-    {
-        auto loop = std::make_unique<AsioEventLoop>();
-        loop->setIndex(i);
-        loops_.push_back(std::move(loop));
-    }
-}
+	EventLoopPool::EventLoopPool(size_t numThreads)
+	{
+		for (size_t i = 0; i < numThreads; ++i)
+		{
+			auto loop = std::make_unique<AsioEventLoop>();
+			loop->setIndex(i);
+			loops_.push_back(std::move(loop));
+		}
+	}
 
-EventLoopPool::~EventLoopPool()
-{
-    if (running_.load())
-    {
-        stop();
-    }
-}
+	EventLoopPool::~EventLoopPool()
+	{
+		if (running_.load())
+		{
+			stop();
+		}
+	}
 
-void EventLoopPool::start()
-{
-    if (running_.exchange(true))
-    {
-        return;  // 已经启动
-    }
+	void EventLoopPool::start()
+	{
+		if (running_.exchange(true))
+		{
+			return; // 已经启动
+		}
 
-    for (auto& loop : loops_)
-    {
-        auto* ptr = loop.get();
-        threads_.emplace_back([ptr]() {
-            ptr->run();
-        });
-    }
-}
+		for (auto& loop : loops_)
+		{
+			auto* ptr = loop.get();
+			threads_.emplace_back(
+				[ptr]()
+				{
+					ptr->run();
+				});
+		}
+	}
 
-void EventLoopPool::stop()
-{
-    if (!running_.exchange(false))
-    {
-        return;  // 已经停止
-    }
+	void EventLoopPool::stop()
+	{
+		if (!running_.exchange(false))
+		{
+			return; // 已经停止
+		}
 
-    for (auto& loop : loops_)
-    {
-        loop->stop();
-    }
+		for (auto& loop : loops_)
+		{
+			loop->stop();
+		}
 
-    for (auto& thread : threads_)
-    {
-        if (thread.joinable())
-        {
-            thread.join();
-        }
-    }
+		for (auto& thread : threads_)
+		{
+			if (thread.joinable())
+			{
+				thread.join();
+			}
+		}
 
-    threads_.clear();
-}
+		threads_.clear();
+	}
 
-AsioEventLoop* EventLoopPool::getNextLoop()
-{
-    if (loops_.empty())
-    {
-        return nullptr;
-    }
+	AsioEventLoop* EventLoopPool::getNextLoop()
+	{
+		if (loops_.empty())
+		{
+			return nullptr;
+		}
 
-    size_t index = nextIndex_.fetch_add(1) % loops_.size();
-    return loops_[index].get();
-}
+		size_t index = nextIndex_.fetch_add(1) % loops_.size();
+		return loops_[index].get();
+	}
 
-std::vector<AsioEventLoop*> EventLoopPool::getAllLoops()
-{
-    std::vector<AsioEventLoop*> result;
-    result.reserve(loops_.size());
-    for (auto& loop : loops_)
-    {
-        result.push_back(loop.get());
-    }
-    return result;
-}
+	std::vector<AsioEventLoop*> EventLoopPool::getAllLoops()
+	{
+		std::vector<AsioEventLoop*> result;
+		result.reserve(loops_.size());
+		for (auto& loop : loops_)
+		{
+			result.push_back(loop.get());
+		}
+		return result;
+	}
 
-size_t EventLoopPool::size() const
-{
-    return loops_.size();
-}
+	size_t EventLoopPool::size() const
+	{
+		return loops_.size();
+	}
 
-bool EventLoopPool::isRunning() const
-{
-    return running_.load();
-}
+	bool EventLoopPool::isRunning() const
+	{
+		return running_.load();
+	}
 
-}  // namespace hical
+} // namespace hical

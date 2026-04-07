@@ -17,156 +17,157 @@ using boost::asio::ip::tcp;
 // 辅助：启动服务器并等待就绪，返回实际端口
 static uint16_t startWsServerAndWait(HttpServer& server, std::thread& serverThread)
 {
-    serverThread = std::thread([&server]() {
-        server.start();
-    });
+	serverThread = std::thread(
+		[&server]()
+		{
+			server.start();
+		});
 
-    uint16_t port = 0;
-    for (int i = 0; i < 50; ++i)
-    {
-        port = server.port();
-        if (port != 0)
-        {
-            break;
-        }
-        std::this_thread::sleep_for(std::chrono::milliseconds(20));
-    }
+	uint16_t port = 0;
+	for (int i = 0; i < 50; ++i)
+	{
+		port = server.port();
+		if (port != 0)
+		{
+			break;
+		}
+		std::this_thread::sleep_for(std::chrono::milliseconds(20));
+	}
 
-    for (int i = 0; i < 50; ++i)
-    {
-        try
-        {
-            boost::asio::io_context io;
-            tcp::socket sock(io);
-            sock.connect(tcp::endpoint(
-                boost::asio::ip::make_address("127.0.0.1"), port));
-            sock.close();
-            return port;
-        }
-        catch (...)
-        {
-            std::this_thread::sleep_for(std::chrono::milliseconds(20));
-        }
-    }
-    return port;
+	for (int i = 0; i < 50; ++i)
+	{
+		try
+		{
+			boost::asio::io_context io;
+			tcp::socket sock(io);
+			sock.connect(tcp::endpoint(boost::asio::ip::make_address("127.0.0.1"), port));
+			sock.close();
+			return port;
+		}
+		catch (...)
+		{
+			std::this_thread::sleep_for(std::chrono::milliseconds(20));
+		}
+	}
+	return port;
 }
 
 // 测试 WebSocket Echo
 TEST(WebSocketTest, EchoMessage)
 {
-    HttpServer server(0);
+	HttpServer server(0);
 
-    server.router().ws("/ws/echo",
-        [](const std::string& msg, WebSocketSession& session)
-            -> Awaitable<void> {
-            co_await session.send("Echo: " + msg);
-        });
+	server.router().ws("/ws/echo",
+					   [](const std::string& msg, WebSocketSession& session) -> Awaitable<void>
+					   {
+						   co_await session.send("Echo: " + msg);
+					   });
 
-    std::thread serverThread;
-    uint16_t port = startWsServerAndWait(server, serverThread);
+	std::thread serverThread;
+	uint16_t port = startWsServerAndWait(server, serverThread);
 
-    // 客户端 WebSocket 连接
-    boost::asio::io_context ioCtx;
-    tcp::socket socket(ioCtx);
-    socket.connect(tcp::endpoint(
-        boost::asio::ip::make_address("127.0.0.1"), port));
+	// 客户端 WebSocket 连接
+	boost::asio::io_context ioCtx;
+	tcp::socket socket(ioCtx);
+	socket.connect(tcp::endpoint(boost::asio::ip::make_address("127.0.0.1"), port));
 
-    ws::stream<tcp::socket> wsClient(std::move(socket));
-    wsClient.handshake("127.0.0.1:" + std::to_string(port), "/ws/echo");
+	ws::stream<tcp::socket> wsClient(std::move(socket));
+	wsClient.handshake("127.0.0.1:" + std::to_string(port), "/ws/echo");
 
-    // 发送消息
-    wsClient.write(boost::asio::buffer(std::string("Hello WS")));
+	// 发送消息
+	wsClient.write(boost::asio::buffer(std::string("Hello WS")));
 
-    // 接收回复
-    beast::flat_buffer buffer;
-    wsClient.read(buffer);
-    std::string reply = beast::buffers_to_string(buffer.data());
+	// 接收回复
+	beast::flat_buffer buffer;
+	wsClient.read(buffer);
+	std::string reply = beast::buffers_to_string(buffer.data());
 
-    EXPECT_EQ(reply, "Echo: Hello WS");
+	EXPECT_EQ(reply, "Echo: Hello WS");
 
-    // 关闭
-    wsClient.close(ws::close_code::normal);
+	// 关闭
+	wsClient.close(ws::close_code::normal);
 
-    server.stop();
-    serverThread.join();
+	server.stop();
+	serverThread.join();
 }
 
 // 测试 WebSocket 连接回调
 TEST(WebSocketTest, ConnectCallback)
 {
-    HttpServer server(0);
+	HttpServer server(0);
 
-    server.router().ws("/ws/greet",
-        [](const std::string& msg, WebSocketSession& session)
-            -> Awaitable<void> {
-            co_await session.send("Got: " + msg);
-        },
-        [](WebSocketSession& session) -> Awaitable<void> {
-            co_await session.send("Welcome!");
-        });
+	server.router().ws(
+		"/ws/greet",
+		[](const std::string& msg, WebSocketSession& session) -> Awaitable<void>
+		{
+			co_await session.send("Got: " + msg);
+		},
+		[](WebSocketSession& session) -> Awaitable<void>
+		{
+			co_await session.send("Welcome!");
+		});
 
-    std::thread serverThread;
-    uint16_t port = startWsServerAndWait(server, serverThread);
+	std::thread serverThread;
+	uint16_t port = startWsServerAndWait(server, serverThread);
 
-    boost::asio::io_context ioCtx;
-    tcp::socket socket(ioCtx);
-    socket.connect(tcp::endpoint(
-        boost::asio::ip::make_address("127.0.0.1"), port));
+	boost::asio::io_context ioCtx;
+	tcp::socket socket(ioCtx);
+	socket.connect(tcp::endpoint(boost::asio::ip::make_address("127.0.0.1"), port));
 
-    ws::stream<tcp::socket> wsClient(std::move(socket));
-    wsClient.handshake("127.0.0.1:" + std::to_string(port), "/ws/greet");
+	ws::stream<tcp::socket> wsClient(std::move(socket));
+	wsClient.handshake("127.0.0.1:" + std::to_string(port), "/ws/greet");
 
-    // 应先收到 Welcome 消息
-    beast::flat_buffer buffer;
-    wsClient.read(buffer);
-    std::string welcome = beast::buffers_to_string(buffer.data());
-    EXPECT_EQ(welcome, "Welcome!");
+	// 应先收到 Welcome 消息
+	beast::flat_buffer buffer;
+	wsClient.read(buffer);
+	std::string welcome = beast::buffers_to_string(buffer.data());
+	EXPECT_EQ(welcome, "Welcome!");
 
-    // 发送消息并接收回复
-    buffer.consume(buffer.size());
-    wsClient.write(boost::asio::buffer(std::string("test")));
-    wsClient.read(buffer);
-    std::string reply = beast::buffers_to_string(buffer.data());
-    EXPECT_EQ(reply, "Got: test");
+	// 发送消息并接收回复
+	buffer.consume(buffer.size());
+	wsClient.write(boost::asio::buffer(std::string("test")));
+	wsClient.read(buffer);
+	std::string reply = beast::buffers_to_string(buffer.data());
+	EXPECT_EQ(reply, "Got: test");
 
-    wsClient.close(ws::close_code::normal);
-    server.stop();
-    serverThread.join();
+	wsClient.close(ws::close_code::normal);
+	server.stop();
+	serverThread.join();
 }
 
 // 测试 WebSocket 未注册路由返回 404
 TEST(WebSocketTest, UnregisteredPathFallsToHttp)
 {
-    HttpServer server(0);
+	HttpServer server(0);
 
-    // 仅注册 HTTP 路由，不注册 WS 路由
-    server.router().get("/", [](const HttpRequest&) -> HttpResponse {
-        return HttpResponse::ok("http");
-    });
+	// 仅注册 HTTP 路由，不注册 WS 路由
+	server.router().get("/",
+						[](const HttpRequest&) -> HttpResponse
+						{
+							return HttpResponse::ok("http");
+						});
 
-    std::thread serverThread;
-    uint16_t port = startWsServerAndWait(server, serverThread);
+	std::thread serverThread;
+	uint16_t port = startWsServerAndWait(server, serverThread);
 
-    // 尝试 WS 握手到未注册路径，服务端应当作普通 HTTP 处理（404）
-    // 但由于 Beast 的 ws::is_upgrade 检查，服务端不会升级
-    // 直接发 HTTP 请求验证
-    boost::asio::io_context ioCtx;
-    tcp::socket socket(ioCtx);
-    socket.connect(tcp::endpoint(
-        boost::asio::ip::make_address("127.0.0.1"), port));
+	// 尝试 WS 握手到未注册路径，服务端应当作普通 HTTP 处理（404）
+	// 但由于 Beast 的 ws::is_upgrade 检查，服务端不会升级
+	// 直接发 HTTP 请求验证
+	boost::asio::io_context ioCtx;
+	tcp::socket socket(ioCtx);
+	socket.connect(tcp::endpoint(boost::asio::ip::make_address("127.0.0.1"), port));
 
-    beast::http::request<beast::http::string_body> req(
-        beast::http::verb::get, "/ws/nonexist", 11);
-    req.set(beast::http::field::host, "127.0.0.1");
-    beast::http::write(socket, req);
+	beast::http::request<beast::http::string_body> req(beast::http::verb::get, "/ws/nonexist", 11);
+	req.set(beast::http::field::host, "127.0.0.1");
+	beast::http::write(socket, req);
 
-    beast::flat_buffer buffer;
-    beast::http::response<beast::http::string_body> res;
-    beast::http::read(socket, buffer, res);
+	beast::flat_buffer buffer;
+	beast::http::response<beast::http::string_body> res;
+	beast::http::read(socket, buffer, res);
 
-    EXPECT_EQ(res.result_int(), 404);
+	EXPECT_EQ(res.result_int(), 404);
 
-    socket.shutdown(tcp::socket::shutdown_both);
-    server.stop();
-    serverThread.join();
+	socket.shutdown(tcp::socket::shutdown_both);
+	server.stop();
+	serverThread.join();
 }
