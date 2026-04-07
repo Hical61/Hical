@@ -28,6 +28,13 @@ MemoryPool& MemoryPool::instance()
 void MemoryPool::configure(const PoolConfig& config)
 {
     config_ = config;
+
+    // 先清理所有线程本地池（它们引用 globalPool_ 作为上游）
+    {
+        std::lock_guard<std::mutex> lock(threadPoolsMutex_);
+        threadPools_.clear();
+    }
+
     // 重建全局池
     globalPool_.~synchronized_pool_resource();
     new (&globalPool_) std::pmr::synchronized_pool_resource(
@@ -35,6 +42,9 @@ void MemoryPool::configure(const PoolConfig& config)
             .max_blocks_per_chunk = config_.globalMaxBlocksPerChunk,
             .largest_required_pool_block = config_.globalLargestPoolBlock},
         &trackedResource_);
+
+    // 递增代际计数器，使所有 thread_local 缓存失效
+    generation_.fetch_add(1, std::memory_order_release);
 }
 
 std::pmr::polymorphic_allocator<std::byte> MemoryPool::globalAllocator()
@@ -61,13 +71,18 @@ MemoryPool::createRequestPool(size_t initialSize)
 
 std::pmr::unsynchronized_pool_resource* MemoryPool::getOrCreateThreadPool()
 {
-    // thread_local 裸指针做缓存，避免每次加锁查找
-    // MemoryPool 持有 unique_ptr 所有权，保证在 globalPool_ 之前析构
-    thread_local std::pmr::unsynchronized_pool_resource* cachedPool = nullptr;
-
-    if (cachedPool != nullptr)
+    // 代际感知的 thread_local 缓存：configure() 后自动失效重建
+    struct ThreadCache
     {
-        return cachedPool;
+        std::pmr::unsynchronized_pool_resource* pool = nullptr;
+        uint64_t generation = 0;
+    };
+    thread_local ThreadCache cache;
+
+    auto currentGen = generation_.load(std::memory_order_acquire);
+    if (cache.pool != nullptr && cache.generation == currentGen)
+    {
+        return cache.pool;
     }
 
     auto pool = std::make_unique<std::pmr::unsynchronized_pool_resource>(
@@ -83,7 +98,8 @@ std::pmr::unsynchronized_pool_resource* MemoryPool::getOrCreateThreadPool()
         threadPools_.push_back(std::move(pool));
     }
 
-    cachedPool = poolPtr;
+    cache.pool = poolPtr;
+    cache.generation = currentGen;
     return poolPtr;
 }
 

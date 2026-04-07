@@ -3,6 +3,7 @@
 #include "Coroutine.h"
 #include <boost/beast/websocket.hpp>
 #include <boost/asio.hpp>
+#include <optional>
 #include <string>
 
 namespace hical
@@ -34,9 +35,9 @@ class WebSocketSession
 
     /**
      * @brief 接收消息
-     * @return 接收到的消息内容
+     * @return 接收到的消息内容，连接关闭时返回 std::nullopt
      */
-    Awaitable<std::string> receive();
+    Awaitable<std::optional<std::string>> receive();
 
     /**
      * @brief 关闭 WebSocket 连接

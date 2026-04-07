@@ -18,7 +18,7 @@ Awaitable<void> WebSocketSession::send(const std::string& msg)
         boost::asio::use_awaitable);
 }
 
-Awaitable<std::string> WebSocketSession::receive()
+Awaitable<std::optional<std::string>> WebSocketSession::receive()
 {
     beast::flat_buffer buffer;
     try
@@ -32,7 +32,7 @@ Awaitable<std::string> WebSocketSession::receive()
         if (e.code() == beast::websocket::error::closed ||
             e.code() == boost::asio::error::eof)
         {
-            co_return "";
+            co_return std::nullopt;
         }
         throw;
     }

@@ -62,6 +62,18 @@ class HttpServer
     void enableSsl(const std::string& certFile, const std::string& keyFile);
 
     /**
+     * @brief 设置最大请求体大小
+     * @param bytes 最大字节数（默认 1MB）
+     */
+    void setMaxBodySize(size_t bytes);
+
+    /**
+     * @brief 设置最大请求头大小
+     * @param bytes 最大字节数（默认 8KB）
+     */
+    void setMaxHeaderSize(size_t bytes);
+
+    /**
      * @brief 启动服务器（阻塞）
      *
      * 调用后阻塞当前线程，直到 stop() 被调用。
@@ -87,7 +99,7 @@ class HttpServer
 
   private:
     // 协程式连接监听
-    Awaitable<void> acceptLoop(boost::asio::ip::tcp::acceptor acceptor);
+    Awaitable<void> acceptLoop();
 
     // 协程式 HTTP 会话处理
     Awaitable<void> handleSession(boost::asio::ip::tcp::socket socket);
@@ -98,15 +110,20 @@ class HttpServer
         boost::beast::http::request<boost::beast::http::string_body> req,
         const Router::WsRoute& wsRoute);
 
-    uint16_t port_;
+    std::atomic<uint16_t> port_;
     size_t ioThreads_;
     boost::asio::io_context ioContext_;
+    std::unique_ptr<boost::asio::ip::tcp::acceptor> acceptor_;
     std::atomic<bool> running_{false};
 
     Router router_;
     MiddlewarePipeline middlewarePipeline_;
 
     std::shared_ptr<SslContext> sslCtx_;
+
+    // 请求大小限制
+    size_t maxBodySize_{1024 * 1024};   // 1MB
+    size_t maxHeaderSize_{8192};         // 8KB
 };
 
 }  // namespace hical

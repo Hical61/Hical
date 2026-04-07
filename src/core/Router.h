@@ -54,6 +54,10 @@ using WsConnectCallback =
 class Router
 {
   public:
+    // 路径参数安全限制
+    static constexpr size_t hMaxPathSegments = 32;
+    static constexpr size_t hMaxParamValueLength = 1024;
+
     Router() = default;
 
     /**

@@ -12,6 +12,45 @@ namespace beast = boost::beast;
 namespace http = beast::http;
 using boost::asio::ip::tcp;
 
+// 辅助：启动服务器并等待就绪，返回实际端口
+uint16_t startServerAndWait(HttpServer& server, std::thread& serverThread)
+{
+    serverThread = std::thread([&server]() {
+        server.start();
+    });
+
+    // 等待端口分配
+    uint16_t port = 0;
+    for (int i = 0; i < 50; ++i)
+    {
+        port = server.port();
+        if (port != 0)
+        {
+            break;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    }
+
+    // 等待可连接
+    for (int i = 0; i < 50; ++i)
+    {
+        try
+        {
+            boost::asio::io_context io;
+            tcp::socket sock(io);
+            sock.connect(tcp::endpoint(
+                boost::asio::ip::make_address("127.0.0.1"), port));
+            sock.close();
+            return port;
+        }
+        catch (...)
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        }
+    }
+    return port;
+}
+
 // 辅助：发送 HTTP 请求并获取响应
 std::pair<unsigned int, std::string>
 httpGet(const std::string& host, uint16_t port, const std::string& target)
@@ -64,12 +103,8 @@ TEST(HttpServerTest, StartAndStop)
         return HttpResponse::ok("hello");
     });
 
-    // 在后台线程启动
-    std::thread serverThread([&server]() {
-        server.start();
-    });
-
-    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    std::thread serverThread;
+    startServerAndWait(server, serverThread);
     EXPECT_TRUE(server.isRunning());
 
     server.stop();
@@ -79,20 +114,15 @@ TEST(HttpServerTest, StartAndStop)
 // 测试 HttpServer GET 请求
 TEST(HttpServerTest, GetRequest)
 {
-    // 使用固定端口（测试）
-    uint16_t port = 18080;
-    HttpServer server(port);
+    HttpServer server(0);
 
     server.router().get("/api/hello",
                         [](const HttpRequest&) -> HttpResponse {
                             return HttpResponse::ok("Hello from hical!");
                         });
 
-    std::thread serverThread([&server]() {
-        server.start();
-    });
-
-    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    std::thread serverThread;
+    uint16_t port = startServerAndWait(server, serverThread);
 
     auto [status, body] = httpGet("127.0.0.1", port, "/api/hello");
     EXPECT_EQ(status, 200);
@@ -105,19 +135,15 @@ TEST(HttpServerTest, GetRequest)
 // 测试 HttpServer POST 请求
 TEST(HttpServerTest, PostRequest)
 {
-    uint16_t port = 18081;
-    HttpServer server(port);
+    HttpServer server(0);
 
     server.router().post("/api/echo",
                          [](const HttpRequest& req) -> HttpResponse {
                              return HttpResponse::ok(req.body());
                          });
 
-    std::thread serverThread([&server]() {
-        server.start();
-    });
-
-    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    std::thread serverThread;
+    uint16_t port = startServerAndWait(server, serverThread);
 
     auto [status, body] = httpPost(
         "127.0.0.1", port, "/api/echo", "Echo this!");
@@ -131,14 +157,10 @@ TEST(HttpServerTest, PostRequest)
 // 测试 404
 TEST(HttpServerTest, NotFound)
 {
-    uint16_t port = 18082;
-    HttpServer server(port);
+    HttpServer server(0);
 
-    std::thread serverThread([&server]() {
-        server.start();
-    });
-
-    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    std::thread serverThread;
+    uint16_t port = startServerAndWait(server, serverThread);
 
     auto [status, body] = httpGet("127.0.0.1", port, "/nonexistent");
     EXPECT_EQ(status, 404);
@@ -150,19 +172,15 @@ TEST(HttpServerTest, NotFound)
 // 测试路径参数
 TEST(HttpServerTest, PathParam)
 {
-    uint16_t port = 18083;
-    HttpServer server(port);
+    HttpServer server(0);
 
     server.router().get("/users/{id}",
                         [](const HttpRequest& req) -> HttpResponse {
                             return HttpResponse::ok("User " + req.param("id"));
                         });
 
-    std::thread serverThread([&server]() {
-        server.start();
-    });
-
-    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    std::thread serverThread;
+    uint16_t port = startServerAndWait(server, serverThread);
 
     auto [status, body] = httpGet("127.0.0.1", port, "/users/42");
     EXPECT_EQ(status, 200);
@@ -175,8 +193,7 @@ TEST(HttpServerTest, PathParam)
 // 测试中间件
 TEST(HttpServerTest, Middleware)
 {
-    uint16_t port = 18084;
-    HttpServer server(port);
+    HttpServer server(0);
 
     server.use([](const HttpRequest& req, MiddlewareNext next)
                    -> Awaitable<HttpResponse> {
@@ -190,11 +207,8 @@ TEST(HttpServerTest, Middleware)
                             return HttpResponse::ok("test");
                         });
 
-    std::thread serverThread([&server]() {
-        server.start();
-    });
-
-    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    std::thread serverThread;
+    uint16_t port = startServerAndWait(server, serverThread);
 
     // 手动检查响应头
     boost::asio::io_context ioCtx;
@@ -222,8 +236,7 @@ TEST(HttpServerTest, Middleware)
 // 测试 JSON 响应
 TEST(HttpServerTest, JsonResponse)
 {
-    uint16_t port = 18085;
-    HttpServer server(port);
+    HttpServer server(0);
 
     server.router().get("/api/status",
                         [](const HttpRequest&) -> HttpResponse {
@@ -231,11 +244,8 @@ TEST(HttpServerTest, JsonResponse)
                                 {{"status", "ok"}, {"version", "0.2.0"}});
                         });
 
-    std::thread serverThread([&server]() {
-        server.start();
-    });
-
-    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    std::thread serverThread;
+    uint16_t port = startServerAndWait(server, serverThread);
 
     boost::asio::io_context ioCtx;
     tcp::socket socket(ioCtx);

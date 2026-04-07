@@ -3,7 +3,7 @@
 [![CI](https://github.com/Hical61/Hical/actions/workflows/ci.yml/badge.svg)](https://github.com/Hical61/Hical/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-A modern C++20 high-performance web framework built on **Boost.Asio/Beast**, featuring PMR memory pools, coroutine-based async I/O, and C++ Concepts.
+Hical is a modern C++web framework built on Boost. Asio, utilizing C++26 reflection and pmr memory pooling to achieve high performance
 
 > **Status:** Work in Progress
 
@@ -46,14 +46,14 @@ hical/
 
 ## Requirements
 
-| Dependency | Version |
-|-----------|---------|
-| C++ Standard | C++20 |
-| Boost | >= 1.70 (Asio, Beast, System, JSON) |
-| CMake | >= 3.20 |
-| OpenSSL | Required |
-| Google Test | Required |
-| Compiler | GCC 14+ / Clang 18+ / MSVC 2022+ |
+| Dependency   | Version                             |
+| ------------ | ----------------------------------- |
+| C++ Standard | C++20                               |
+| Boost        | >= 1.70 (Asio, Beast, System, JSON) |
+| CMake        | >= 3.20                             |
+| OpenSSL      | Required                            |
+| Google Test  | Required                            |
+| Compiler     | GCC 14+ / Clang 18+ / MSVC 2022+    |
 
 ## Build
 

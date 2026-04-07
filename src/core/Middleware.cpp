@@ -23,8 +23,9 @@ Awaitable<HttpResponse> MiddlewarePipeline::execute(
 
     for (int i = static_cast<int>(middlewares_.size()) - 1; i >= 0; --i)
     {
-        auto& mw = middlewares_[i];
-        current = [&mw, next = std::move(current)](
+        // 值拷贝捕获，避免 vector 扩容后引用悬空
+        auto mw = middlewares_[i];
+        current = [mw, next = std::move(current)](
                       const HttpRequest& r) -> Awaitable<HttpResponse> {
             co_return co_await mw(r, next);
         };

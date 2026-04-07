@@ -81,7 +81,13 @@ const std::string& HttpRequest::body() const
 
 boost::json::value HttpRequest::jsonBody() const
 {
-    return boost::json::parse(req_.body());
+    boost::system::error_code ec;
+    auto val = boost::json::parse(req_.body(), ec);
+    if (ec)
+    {
+        return nullptr;
+    }
+    return val;
 }
 
 std::string HttpRequest::contentType() const

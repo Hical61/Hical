@@ -3,7 +3,7 @@
 [![CI](https://github.com/Hical61/Hical/actions/workflows/ci.yml/badge.svg)](https://github.com/Hical61/Hical/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-基于 **Boost.Asio/Beast** 的现代 C++20 高性能 Web 框架，集成 PMR 内存池、协程异步 I/O 和 C++ Concepts。
+Hical 是一个基于 Boost.Asio，利用 C++26 反射和 pmr 内存池构建高性能的现代 C++ Web 框架
 
 > **状态：** 开发中
 
@@ -48,14 +48,14 @@ hical/
 
 ## 依赖
 
-| 依赖项 | 版本要求 |
-|--------|---------|
-| C++ 标准 | C++20 |
-| Boost | >= 1.70（Asio、Beast、System、JSON） |
-| CMake | >= 3.20 |
-| OpenSSL | 必需 |
-| Google Test | 必需 |
-| 编译器 | GCC 14+ / Clang 18+ / MSVC 2022+ |
+| 依赖项      | 版本要求                             |
+| ----------- | ------------------------------------ |
+| C++ 标准    | C++20                                |
+| Boost       | >= 1.70（Asio、Beast、System、JSON） |
+| CMake       | >= 3.20                              |
+| OpenSSL     | 必需                                 |
+| Google Test | 必需                                 |
+| 编译器      | GCC 14+ / Clang 18+ / MSVC 2022+     |
 
 ## 构建
 

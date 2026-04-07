@@ -144,6 +144,9 @@ class TcpServer
 
     // SSL
     std::shared_ptr<SslContext> sslCtx_;
+
+    // 生命周期标志：析构时置 false，防止回调中 use-after-free
+    std::shared_ptr<std::atomic<bool>> alive_;
 };
 
 }  // namespace hical

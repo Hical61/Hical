@@ -38,6 +38,16 @@ void HttpServer::use(MiddlewareHandler middleware)
     middlewarePipeline_.use(std::move(middleware));
 }
 
+void HttpServer::setMaxBodySize(size_t bytes)
+{
+    maxBodySize_ = bytes;
+}
+
+void HttpServer::setMaxHeaderSize(size_t bytes)
+{
+    maxHeaderSize_ = bytes;
+}
+
 void HttpServer::enableSsl(const std::string& certFile,
                            const std::string& keyFile)
 {
@@ -51,14 +61,38 @@ void HttpServer::start()
 {
     running_.store(true);
 
-    tcp::acceptor acceptor(
-        ioContext_, tcp::endpoint(tcp::v4(), port_));
+    acceptor_ = std::make_unique<tcp::acceptor>(ioContext_);
+    auto endpoint = tcp::endpoint(tcp::v4(), port_.load());
+    acceptor_->open(endpoint.protocol());
+    acceptor_->set_option(boost::asio::socket_base::reuse_address(true));
+    acceptor_->bind(endpoint);
+    acceptor_->listen();
+
+    // 端口 0 时由系统分配，更新实际端口
+    port_.store(acceptor_->local_endpoint().port());
 
     coSpawn(ioContext_,
-            acceptLoop(std::move(acceptor)));
+            acceptLoop());
 
     // 多线程运行 io_context
     std::vector<std::thread> threads;
+
+    // RAII 守卫：确保工作线程在任何退出路径（含异常）都被 join
+    struct ThreadJoiner
+    {
+        std::vector<std::thread>& threads;
+        ~ThreadJoiner()
+        {
+            for (auto& t : threads)
+            {
+                if (t.joinable())
+                {
+                    t.join();
+                }
+            }
+        }
+    } joiner{threads};
+
     for (size_t i = 1; i < ioThreads_; ++i)
     {
         threads.emplace_back([this]() {
@@ -69,21 +103,26 @@ void HttpServer::start()
     // 主线程也参与运行（阻塞）
     ioContext_.run();
 
-    // 等待工作线程结束
-    for (auto& t : threads)
-    {
-        if (t.joinable())
-        {
-            t.join();
-        }
-    }
-
+    // joiner 析构时 join 所有线程
     running_.store(false);
 }
 
 void HttpServer::stop()
 {
-    running_.store(false);
+    if (!running_.exchange(false))
+    {
+        return;
+    }
+
+    // 将 acceptor 关闭调度到 io_context 线程内，与 acceptLoop 串行执行，消除竞态
+    boost::asio::post(ioContext_, [this]() {
+        if (acceptor_)
+        {
+            boost::system::error_code ec;
+            acceptor_->close(ec);
+        }
+    });
+
     ioContext_.stop();
 }
 
@@ -94,17 +133,22 @@ bool HttpServer::isRunning() const
 
 uint16_t HttpServer::port() const
 {
-    return port_;
+    return port_.load();
 }
 
-Awaitable<void> HttpServer::acceptLoop(tcp::acceptor acceptor)
+Awaitable<void> HttpServer::acceptLoop()
 {
     while (running_.load())
     {
         try
         {
-            auto socket = co_await acceptor.async_accept(
+            auto socket = co_await acceptor_->async_accept(
                 boost::asio::use_awaitable);
+
+            if (!running_.load())
+            {
+                break;
+            }
 
             boost::asio::co_spawn(
                 ioContext_,
@@ -113,16 +157,33 @@ Awaitable<void> HttpServer::acceptLoop(tcp::acceptor acceptor)
         }
         catch (const boost::system::system_error& e)
         {
-            if (e.code() == boost::asio::error::operation_aborted)
+            if (e.code() == boost::asio::error::operation_aborted ||
+                e.code() == boost::asio::error::bad_descriptor)
             {
                 break;
             }
+            // 瞬态错误（如 EMFILE）继续接受
         }
     }
 }
 
 Awaitable<void> HttpServer::handleSession(tcp::socket socket)
 {
+    // RAII 守卫：确保 socket 在任何退出路径（含异常）都被正确关闭
+    struct SocketGuard
+    {
+        tcp::socket& sock;
+        ~SocketGuard()
+        {
+            if (sock.is_open())
+            {
+                boost::system::error_code ec;
+                sock.shutdown(tcp::socket::shutdown_send, ec);
+                sock.close(ec);
+            }
+        }
+    } guard{socket};
+
     try
     {
         // 使用请求级 pmr 单调池，整个连接生命周期内复用
@@ -133,11 +194,16 @@ Awaitable<void> HttpServer::handleSession(tcp::socket socket)
 
         for (;;)
         {
-            // 读取 HTTP 请求
-            HttpRequest::BeastRequest beastReq;
+            // 使用 parser 并设置请求大小限制，防止 OOM 攻击
+            http::request_parser<http::string_body> parser;
+            parser.body_limit(maxBodySize_);
+            parser.header_limit(maxHeaderSize_);
+
             co_await http::async_read(
-                socket, buffer, beastReq,
+                socket, buffer, parser,
                 boost::asio::use_awaitable);
+
+            auto beastReq = parser.release();
 
             // 检查 WebSocket 升级请求
             if (ws::is_upgrade(beastReq))
@@ -166,10 +232,8 @@ Awaitable<void> HttpServer::handleSession(tcp::socket socket)
             {
                 res = co_await middlewarePipeline_.execute(
                     req,
-                    [this](const HttpRequest& r) -> Awaitable<HttpResponse> {
-                        // 这里需要非 const 引用，做一份拷贝
-                        HttpRequest mutableReq = r;
-                        co_return co_await router_.dispatch(mutableReq);
+                    [this, &req](const HttpRequest&) -> Awaitable<HttpResponse> {
+                        co_return co_await router_.dispatch(req);
                     });
             }
             else
@@ -197,15 +261,25 @@ Awaitable<void> HttpServer::handleSession(tcp::socket socket)
     }
     catch (const beast::system_error& e)
     {
-        if (e.code() != beast::errc::not_connected &&
-            e.code() != boost::asio::error::eof)
+        if (e.code() == http::error::body_limit)
+        {
+            // 请求体过大：返回 413 Payload Too Large
+            http::response<http::string_body> res{
+                http::status::payload_too_large, 11};
+            res.set(http::field::server, "hical/0.2.0");
+            res.set(http::field::connection, "close");
+            res.body() = "Request body too large";
+            res.prepare_payload();
+            boost::system::error_code writeEc;
+            http::write(socket, res, writeEc);
+        }
+        else if (e.code() != beast::errc::not_connected &&
+                 e.code() != boost::asio::error::eof)
         {
             // 忽略正常的连接关闭
         }
     }
-
-    boost::system::error_code ec;
-    socket.shutdown(tcp::socket::shutdown_send, ec);
+    // SocketGuard 析构时自动关闭 socket
 }
 
 Awaitable<void> HttpServer::handleWebSocket(
@@ -232,14 +306,14 @@ Awaitable<void> HttpServer::handleWebSocket(
         while (session.isOpen())
         {
             auto msg = co_await session.receive();
-            if (!session.isOpen())
+            if (!msg.has_value())
             {
                 break;
             }
 
             if (wsRoute.onMessage)
             {
-                co_await wsRoute.onMessage(msg, session);
+                co_await wsRoute.onMessage(*msg, session);
             }
         }
     }

@@ -194,6 +194,9 @@ class MemoryPool
     // MemoryPool 持有所有线程本地池的所有权（避免 thread_local 析构顺序问题）
     mutable std::mutex threadPoolsMutex_;
     std::vector<std::unique_ptr<std::pmr::unsynchronized_pool_resource>> threadPools_;
+
+    // 代际计数器：configure() 时递增，使 thread_local 缓存自动失效
+    std::atomic<uint64_t> generation_{0};
 };
 
 }  // namespace hical

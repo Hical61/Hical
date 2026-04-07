@@ -10,12 +10,14 @@ TcpServer::TcpServer(AsioEventLoop* baseLoop,
     : baseLoop_(baseLoop),
       listenAddr_(listenAddr),
       name_(name),
-      acceptor_(baseLoop->getIoContext())
+      acceptor_(baseLoop->getIoContext()),
+      alive_(std::make_shared<std::atomic<bool>>(true))
 {
 }
 
 TcpServer::~TcpServer()
 {
+    alive_->store(false);
     if (running_.load())
     {
         stop();
@@ -203,14 +205,19 @@ Awaitable<void> TcpServer::acceptLoop()
             }
 
             // 设置关闭回调（在原始回调之上添加连接移除逻辑）
-            auto weakThis = this;
-            conn->onClose([weakThis, userCb = closeCallback_](
+            // 使用 alive_ 标志防止 TcpServer 析构后回调中的 use-after-free
+            auto aliveFlag = alive_;
+            auto* self = this;
+            conn->onClose([aliveFlag, self, userCb = closeCallback_](
                               const TcpConnection::Ptr& c) {
                 if (userCb)
                 {
                     userCb(c);
                 }
-                weakThis->removeConnection(c);
+                if (aliveFlag->load())
+                {
+                    self->removeConnection(c);
+                }
             });
 
             addConnection(conn);

@@ -10,12 +10,12 @@
 
 **最低要求：**
 
-| 组件 | 版本 |
-|------|------|
-| GCC (MinGW-w64) | 10+（需支持 C++20 协程） |
-| CMake | 3.20+ |
-| Boost | 1.70+（Asio / Beast / JSON） |
-| OpenSSL | 3.0+ |
+| 组件            | 版本                         |
+| --------------- | ---------------------------- |
+| GCC (MinGW-w64) | 10+（需支持 C++20 协程）     |
+| CMake           | 3.20+                        |
+| Boost           | 1.70+（Asio / Beast / JSON） |
+| OpenSSL         | 3.0+                         |
 
 **快速安装（MSYS2 MINGW64）：**
 
@@ -274,6 +274,7 @@ cmake --build build --target http_server
 
 ## 下一步
 
+- [使用示例](examples_guide.md) — 8 个从简到繁的完整示例
 - [API 文档](api_reference.md) — 所有公共类和方法的详细说明
 - [架构设计](architecture.md) — 框架分层架构和设计决策
 - [性能报告](performance_report.md) — 基准测试数据

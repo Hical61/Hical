@@ -26,22 +26,18 @@ namespace
 /**
  * @brief 集成测试 fixture
  *
- * 每个测试启动一个 HttpServer，测试完毕后停止。
- * 服务器端口从 19100 起递增，避免端口冲突。
+ * 每个测试启动一个 HttpServer（端口 0，由 OS 分配），测试完毕后停止。
  */
 class IntegrationTest : public ::testing::Test
 {
   protected:
-    static std::atomic<uint16_t> nextPort_;
-
     uint16_t port_{0};
     std::unique_ptr<HttpServer> server_;
     std::thread serverThread_;
 
     void SetUp() override
     {
-        port_ = nextPort_.fetch_add(1);
-        server_ = std::make_unique<HttpServer>(port_);
+        server_ = std::make_unique<HttpServer>(0);
 
         // 注册基础路由
         server_->router().get("/",
@@ -70,9 +66,16 @@ class IntegrationTest : public ::testing::Test
             server_->start();
         });
 
-        // 等待服务器就绪（尝试连接）
+        // 等待服务器就绪：轮询实际端口（端口 0 启动后会更新为真实端口）
         for (int i = 0; i < 50; ++i)
         {
+            port_ = server_->port();
+            if (port_ == 0)
+            {
+                std::this_thread::sleep_for(std::chrono::milliseconds(20));
+                continue;
+            }
+
             try
             {
                 boost::asio::io_context io;
@@ -177,8 +180,6 @@ class IntegrationTest : public ::testing::Test
         return responses;
     }
 };
-
-std::atomic<uint16_t> IntegrationTest::nextPort_{19100};
 
 }  // namespace
 

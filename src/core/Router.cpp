@@ -99,6 +99,20 @@ Awaitable<HttpResponse> Router::dispatch(HttpRequest& req)
     auto reqMethod = req.method();
     auto reqPath = req.path();
 
+    // 路径深度快速检查，防止超深路径 DoS
+    size_t segmentCount = 0;
+    for (char c : reqPath)
+    {
+        if (c == '/')
+        {
+            ++segmentCount;
+        }
+    }
+    if (segmentCount > hMaxPathSegments)
+    {
+        co_return HttpResponse::badRequest("Path too deep");
+    }
+
     // 1. 优先查找静态路由（O(1) 哈希查找）
     auto it = staticRoutes_.find({reqMethod, reqPath});
     if (it != staticRoutes_.end())
@@ -158,8 +172,16 @@ bool Router::matchParamPath(
     }
 
     // 按 '/' 逐段匹配（零分配：使用 string_view 原地切分）
+    size_t segmentCount = 0;
     while (!pattern.empty() && !path.empty())
     {
+        // 段数限制，防止超深路径 DoS
+        if (++segmentCount > Router::hMaxPathSegments)
+        {
+            params.clear();
+            return false;
+        }
+
         // 提取当前段
         auto pSlash = pattern.find('/');
         auto rSlash = path.find('/');
@@ -177,6 +199,12 @@ bool Router::matchParamPath(
 
         if (patSeg.size() >= 3 && patSeg.front() == '{' && patSeg.back() == '}')
         {
+            // 参数值长度限制
+            if (reqSeg.size() > Router::hMaxParamValueLength)
+            {
+                params.clear();
+                return false;
+            }
             // 参数段：提取参数名和值
             auto paramName = patSeg.substr(1, patSeg.size() - 2);
             params[std::string(paramName)] = std::string(reqSeg);

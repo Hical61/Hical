@@ -183,6 +183,7 @@ class GenericConnection : public TcpConnection
 
     // 发送队列
     std::deque<std::shared_ptr<std::string>> writeQueue_;
+    size_t queuedBytes_{0};  // 发送队列累计字节数（O(1) 高水位线检查）
     std::mutex writeMutex_;
     std::atomic<bool> writing_{false};
 
@@ -312,6 +313,7 @@ void GenericConnection<SocketType>::send(std::string&& msg)
     {
         {
             std::lock_guard<std::mutex> lock(writeMutex_);
+            queuedBytes_ += msgPtr->size();
             writeQueue_.push_back(std::move(msgPtr));
         }
         tryStartWrite();
@@ -322,6 +324,7 @@ void GenericConnection<SocketType>::send(std::string&& msg)
         loop_->post([this, msgPtr = std::move(msgPtr), self]() {
             {
                 std::lock_guard<std::mutex> lock(writeMutex_);
+                queuedBytes_ += msgPtr->size();
                 writeQueue_.push_back(std::move(msgPtr));
             }
             tryStartWrite();
@@ -366,25 +369,19 @@ void GenericConnection<SocketType>::sendInLoop(const char* data, size_t len)
     {
         std::lock_guard<std::mutex> lock(writeMutex_);
         auto msg = std::make_shared<std::string>(data, len);
+        queuedBytes_ += msg->size();
         writeQueue_.push_back(std::move(msg));
 
-        // 检查高水位
-        if (highWaterMarkCallback_)
+        // O(1) 高水位检查
+        if (highWaterMarkCallback_ && queuedBytes_ >= highWaterMark_)
         {
-            size_t queueSize = 0;
-            for (const auto& m : writeQueue_)
-            {
-                queueSize += m->size();
-            }
-            if (queueSize >= highWaterMark_)
-            {
-                auto self = sharedThis();
-                loop_->post([this, queueSize, self]() {
-                    highWaterMarkCallback_(
-                        std::static_pointer_cast<TcpConnection>(self),
-                        queueSize);
-                });
-            }
+            size_t currentQueuedBytes = queuedBytes_;
+            auto self = sharedThis();
+            loop_->post([this, currentQueuedBytes, self]() {
+                highWaterMarkCallback_(
+                    std::static_pointer_cast<TcpConnection>(self),
+                    currentQueuedBytes);
+            });
         }
     }
 
@@ -427,27 +424,62 @@ void GenericConnection<SocketType>::shutdown()
 template <typename SocketType>
 void GenericConnection<SocketType>::shutdownInLoop()
 {
-    auto& sock = lowestLayerSocket();
-    if (!sock.is_open())
+    if constexpr (hIsSslStream<SocketType>)
     {
-        return;
+        // SSL 连接：先执行 TLS close_notify，再做 TCP shutdown
+        auto self = sharedThis();
+        boost::asio::co_spawn(
+            socketExecutor(),
+            [self]() -> boost::asio::awaitable<void> {
+                try
+                {
+                    co_await self->socket_.async_shutdown(
+                        boost::asio::use_awaitable);
+                }
+                catch (const boost::system::system_error&)
+                {
+                    // 忽略 shutdown 错误（对端可能已关闭）
+                }
+                boost::system::error_code ec;
+                auto& sock = self->lowestLayerSocket();
+                if (sock.is_open())
+                {
+                    sock.shutdown(
+                        boost::asio::ip::tcp::socket::shutdown_send, ec);
+                }
+            },
+            boost::asio::detached);
     }
+    else
+    {
+        auto& sock = lowestLayerSocket();
+        if (!sock.is_open())
+        {
+            return;
+        }
 
-    boost::system::error_code ec;
-    sock.shutdown(boost::asio::ip::tcp::socket::shutdown_send, ec);
+        boost::system::error_code ec;
+        sock.shutdown(boost::asio::ip::tcp::socket::shutdown_send, ec);
+    }
 }
 
 template <typename SocketType>
 void GenericConnection<SocketType>::close()
 {
-    if (state_.load() == State::hConnected ||
-        state_.load() == State::hDisconnecting)
+    // 仅从 hConnected 转为 hDisconnecting；实际 hDisconnected 在 closeInLoop 中设置
+    auto expected = State::hConnected;
+    if (state_.compare_exchange_strong(expected, State::hDisconnecting))
     {
-        state_.store(State::hDisconnected);
         auto self = sharedThis();
         loop_->dispatch([this, self]() {
             closeInLoop();
         });
+        return;
+    }
+    // 已经是 hDisconnecting 状态也尝试关闭
+    if (expected == State::hDisconnecting)
+    {
+        return;
     }
 }
 
@@ -714,9 +746,9 @@ boost::asio::awaitable<void> GenericConnection<SocketType>::readLoop()
     }
     catch (const boost::system::system_error& e)
     {
-        if (e.code() == boost::asio::error::eof ||
-            e.code() == boost::asio::error::connection_reset ||
-            e.code() == boost::asio::error::operation_aborted)
+        // operation_aborted 表示主动关闭，由 close/shutdown 路径处理
+        // 其他所有错误（eof、connection_reset、broken_pipe 等）都需清理连接
+        if (e.code() != boost::asio::error::operation_aborted)
         {
             handleClose();
         }
@@ -739,18 +771,38 @@ boost::asio::awaitable<void> GenericConnection<SocketType>::writeLoop()
                 {
                     writing_.store(false);
 
-                    if (writeCompleteCallback_)
+                    // 在锁内重检队列，防止 set false 与 enqueue 之间的竞态丢消息
+                    if (!writeQueue_.empty())
                     {
-                        auto self = std::static_pointer_cast<TcpConnection>(
-                            sharedThis());
-                        loop_->post([this, self]() {
-                            writeCompleteCallback_(self);
-                        });
+                        writing_.store(true);
+                        batch.swap(writeQueue_);
+                        for (const auto& m : batch)
+                        {
+                            queuedBytes_ -= m->size();
+                        }
                     }
+                    else
+                    {
+                        if (writeCompleteCallback_)
+                        {
+                            auto self = std::static_pointer_cast<TcpConnection>(
+                                sharedThis());
+                            loop_->post([this, self]() {
+                                writeCompleteCallback_(self);
+                            });
+                        }
 
-                    co_return;
+                        co_return;
+                    }
                 }
-                batch.swap(writeQueue_);
+                else
+                {
+                    batch.swap(writeQueue_);
+                    for (const auto& m : batch)
+                    {
+                        queuedBytes_ -= m->size();
+                    }
+                }
             }
 
             if (batch.size() == 1)

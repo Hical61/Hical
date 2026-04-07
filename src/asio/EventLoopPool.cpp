@@ -30,8 +30,9 @@ void EventLoopPool::start()
 
     for (auto& loop : loops_)
     {
-        threads_.emplace_back([&loop]() {
-            loop->run();
+        auto* ptr = loop.get();
+        threads_.emplace_back([ptr]() {
+            ptr->run();
         });
     }
 }

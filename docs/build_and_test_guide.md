@@ -1,20 +1,20 @@
 # Hical 编译与测试指南
 
-**最后更新：** 2026-04-06  
+**最后更新：** 2026-04-06
 **验证环境：** Windows 10 Pro 10.0.19045
 
 ---
 
 ## 1. 环境要求
 
-| 组件 | 最低版本 | 验证版本 | 用途 |
-|------|---------|---------|------|
-| GCC (MinGW-w64) | 10+ | 15.2.0 | C++20 编译器（协程支持） |
-| CMake | 3.20+ | 3.28.3 | 构建系统 |
-| Ninja | 1.10+ | 1.13.2 | 构建工具（比 Make 更快） |
-| Boost | 1.70+ | 1.90.0 | Asio / Beast / JSON |
-| OpenSSL | 3.0+ | 3.6.1 | SSL/TLS 支持 |
-| Google Test | 1.10+ | 1.17.0 | 单元测试框架 |
+| 组件            | 最低版本 | 验证版本 | 用途                     |
+| --------------- | -------- | -------- | ------------------------ |
+| GCC (MinGW-w64) | 10+      | 15.2.0   | C++20 编译器（协程支持） |
+| CMake           | 3.20+    | 3.28.3   | 构建系统                 |
+| Ninja           | 1.10+    | 1.13.2   | 构建工具（比 Make 更快） |
+| Boost           | 1.70+    | 1.90.0   | Asio / Beast / JSON      |
+| OpenSSL         | 3.0+     | 3.6.1    | SSL/TLS 支持             |
+| Google Test     | 1.10+    | 1.17.0   | 单元测试框架             |
 
 ---
 
@@ -52,7 +52,7 @@ C:\msys64\mingw64\bin
 
 ```bash
 g++ --version      # 应显示 GCC 15.x.x
-cmake --version    # 应显示 cmake version 3.x.x
+cmake --version    # 应显示 cmake version 4.x.x
 ninja --version    # 应显示 1.x.x
 openssl version    # 应显示 OpenSSL 3.x.x
 ```
@@ -198,23 +198,23 @@ MSYS_NO_PATHCONV=1 openssl req -x509 -newkey rsa:2048 \
 
 ### 4.6 测试用例清单（145 个）
 
-| 测试文件 | 用例数 | 覆盖范围 |
-|---------|--------|---------|
-| test_basic | 2 | Boost 版本、C++ 标准 |
-| test_error | 17 | 错误码映射、NetworkError 结构体 |
-| test_asio_event_loop | 10 | run/stop/post/dispatch/定时器/pmr |
-| test_asio_tcp_connection | 8 | 连接/收发/回调/上下文/PmrBuffer |
-| test_memory_pool | 21 | 单例/全局池/线程本地池/请求池/TrackedResource/PmrBuffer |
-| test_asio_timer | 8 | 单次/周期/取消/精度/EventLoop 集成 |
-| test_ssl_connection | 9 | SslContext/SSL 握手/加密通信/类型别名 |
-| test_coroutine | 5 | sleep/sleepFor/coSpawn/多协程/返回值 |
-| test_http_types | 23 | HttpMethod/HttpStatusCode/HttpRequest/HttpResponse/工厂方法 |
-| test_router | 14 | 路由注册/分发/404/协程/JSON/宏/路径参数/{param} |
-| test_router_perf | 5 | 静态路由首条/末条/未命中/参数路由/1000 路由性能 |
-| test_tcp_server | 8 | EventLoopPool/TcpServer(accept/消息/IO 线程池) |
-| test_middleware | 5 | 空管道/单层/洋葱顺序/拦截/响应修改 |
-| test_http_server | 7 | GET/POST/404/路径参数/中间件/JSON |
-| test_websocket | 3 | Echo/连接回调/未注册路径 |
+| 测试文件                 | 用例数 | 覆盖范围                                                    |
+| ------------------------ | ------ | ----------------------------------------------------------- |
+| test_basic               | 2      | Boost 版本、C++ 标准                                        |
+| test_error               | 17     | 错误码映射、NetworkError 结构体                             |
+| test_asio_event_loop     | 10     | run/stop/post/dispatch/定时器/pmr                           |
+| test_asio_tcp_connection | 8      | 连接/收发/回调/上下文/PmrBuffer                             |
+| test_memory_pool         | 21     | 单例/全局池/线程本地池/请求池/TrackedResource/PmrBuffer     |
+| test_asio_timer          | 8      | 单次/周期/取消/精度/EventLoop 集成                          |
+| test_ssl_connection      | 9      | SslContext/SSL 握手/加密通信/类型别名                       |
+| test_coroutine           | 5      | sleep/sleepFor/coSpawn/多协程/返回值                        |
+| test_http_types          | 23     | HttpMethod/HttpStatusCode/HttpRequest/HttpResponse/工厂方法 |
+| test_router              | 14     | 路由注册/分发/404/协程/JSON/宏/路径参数/{param}             |
+| test_router_perf         | 5      | 静态路由首条/末条/未命中/参数路由/1000 路由性能             |
+| test_tcp_server          | 8      | EventLoopPool/TcpServer(accept/消息/IO 线程池)              |
+| test_middleware          | 5      | 空管道/单层/洋葱顺序/拦截/响应修改                          |
+| test_http_server         | 7      | GET/POST/404/路径参数/中间件/JSON                           |
+| test_websocket           | 3      | Echo/连接回调/未注册路径                                    |
 
 ---
 
@@ -412,5 +412,10 @@ hical/
 │   └── pmr_benchmark.cpp      # pmr 内存池基准测试
 └── docs/
     ├── project_structure.md   # 项目代码结构说明
-    └── build_and_test_guide.md # 本文档
+    ├── build_and_test_guide.md # 本文档
+    ├── api_reference.md        # 完整公共 API 说明
+    ├── quickstart.md           # 快速上手指南
+    ├── examples_guide.md       # 使用示例（8 个完整示例）
+    ├── architecture.md         # 架构设计文档（PMR/协程/Concepts/反射）
+    └── performance_report.md   # 性能测试报告与调优指南
 ```

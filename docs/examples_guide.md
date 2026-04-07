@@ -1,0 +1,888 @@
+# Hical 使用示例与快速上手指南
+
+> 从零开始，逐步构建完整的 hical Web 服务
+
+---
+
+## 目录
+
+- [快速开始](#快速开始)
+- [示例 1：最小 HTTP 服务器](#示例-1最小-http-服务器)
+- [示例 2：RESTful API 服务](#示例-2restful-api-服务)
+- [示例 3：中间件实战](#示例-3中间件实战)
+- [示例 4：WebSocket 实时通信](#示例-4websocket-实时通信)
+- [示例 5：SSL/TLS 安全服务](#示例-5ssltls-安全服务)
+- [示例 6：协程异步处理](#示例-6协程异步处理)
+- [示例 7：PMR 内存池使用](#示例-7pmr-内存池使用)
+- [示例 8：完整应用示例](#示例-8完整应用示例)
+- [运行内置示例程序](#运行内置示例程序)
+- [常见问题](#常见问题)
+
+---
+
+## 快速开始
+
+### 环境准备
+
+**最低要求：**
+
+| 组件       | 版本                                             |
+| ---------- | ------------------------------------------------ |
+| C++ 编译器 | GCC 14+ / Clang 18+ / MSVC 2022+（需支持 C++20） |
+| CMake      | 3.20+                                            |
+| Boost      | 1.70+（Asio、Beast、JSON）                       |
+| OpenSSL    | 3.0+                                             |
+
+**MSYS2 MINGW64 快速安装：**
+
+```bash
+pacman -S mingw-w64-x86_64-gcc mingw-w64-x86_64-cmake mingw-w64-x86_64-ninja \
+          mingw-w64-x86_64-boost mingw-w64-x86_64-openssl mingw-w64-x86_64-gtest
+```
+
+**Ubuntu 24.04 快速安装：**
+
+```bash
+sudo apt install g++-14 cmake ninja-build libboost-all-dev libssl-dev libgtest-dev
+```
+
+### 编译 Hical
+
+```bash
+git clone https://github.com/your-repo/hical.git
+cd hical
+
+# Linux / macOS
+cmake -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j$(nproc)
+
+# Windows (MSYS2 MINGW64)
+cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build build
+```
+
+### 运行测试验证
+
+```bash
+ctest --test-dir build --output-on-failure --timeout 60 -j4
+```
+
+---
+
+## 示例 1：最小 HTTP 服务器
+
+最简单的 hical 服务器，3 行核心代码：
+
+```cpp
+#include "core/HttpServer.h"
+
+using namespace hical;
+
+int main()
+{
+    HttpServer server(8080);
+
+    server.router().get("/", [](const HttpRequest&) -> HttpResponse {
+        return HttpResponse::ok("Hello, hical!");
+    });
+
+    server.start();  // 阻塞运行
+    return 0;
+}
+```
+
+**测试：**
+
+```bash
+curl http://localhost:8080/
+# 输出: Hello, hical!
+```
+
+**要点：**
+- `HttpServer(port)` 创建服务器实例
+- `router().get(path, handler)` 注册 GET 路由
+- 处理器返回 `HttpResponse`，使用工厂方法构建响应
+- `start()` 阻塞当前线程，开始监听和处理请求
+
+---
+
+## 示例 2：RESTful API 服务
+
+构建一个简单的用户管理 API：
+
+```cpp
+#include "core/HttpServer.h"
+#include <iostream>
+
+using namespace hical;
+
+int main()
+{
+    HttpServer server(8080);
+    auto& router = server.router();
+
+    // GET /api/users — 获取用户列表
+    router.get("/api/users", [](const HttpRequest&) -> HttpResponse {
+        return HttpResponse::json({
+            {"users", {
+                {{"id", 1}, {"name", "Alice"}},
+                {{"id", 2}, {"name", "Bob"}}
+            }}
+        });
+    });
+
+    // GET /api/users/{id} — 获取单个用户（路径参数）
+    router.get("/api/users/{id}", [](const HttpRequest& req) -> HttpResponse {
+        auto userId = req.param("id");
+        if (userId.empty())
+        {
+            return HttpResponse::badRequest("缺少用户 ID");
+        }
+        return HttpResponse::json({
+            {"id", userId},
+            {"name", "User " + userId}
+        });
+    });
+
+    // POST /api/users — 创建用户（读取 JSON 请求体）
+    router.post("/api/users", [](const HttpRequest& req) -> HttpResponse {
+        try
+        {
+            auto json = req.jsonBody();
+            auto name = json.at("name").as_string();
+
+            HttpResponse res;
+            res.setStatus(HttpStatusCode::hCreated);
+            res.setJsonBody({
+                {"message", "用户创建成功"},
+                {"name", std::string(name)}
+            });
+            return res;
+        }
+        catch (const std::exception& e)
+        {
+            return HttpResponse::badRequest("无效的 JSON: " + std::string(e.what()));
+        }
+    });
+
+    // PUT /api/users/{id} — 更新用户
+    router.put("/api/users/{id}", [](const HttpRequest& req) -> HttpResponse {
+        auto userId = req.param("id");
+        return HttpResponse::json({
+            {"message", "用户 " + userId + " 已更新"},
+            {"body", req.body()}
+        });
+    });
+
+    // DELETE /api/users/{id} — 删除用户
+    router.del("/api/users/{id}", [](const HttpRequest& req) -> HttpResponse {
+        auto userId = req.param("id");
+        return HttpResponse::json({
+            {"message", "用户 " + userId + " 已删除"}
+        });
+    });
+
+    // GET /api/search — 查询参数示例
+    router.get("/api/search", [](const HttpRequest& req) -> HttpResponse {
+        auto query = req.query();  // "?keyword=hello&page=1" → "keyword=hello&page=1"
+        return HttpResponse::json({
+            {"query", query},
+            {"results", boost::json::array{}}
+        });
+    });
+
+    std::cout << "RESTful API 服务运行在 http://localhost:8080" << std::endl;
+    server.start();
+    return 0;
+}
+```
+
+**测试：**
+
+```bash
+# 获取用户列表
+curl http://localhost:8080/api/users
+
+# 获取单个用户
+curl http://localhost:8080/api/users/42
+
+# 创建用户
+curl -X POST -H "Content-Type: application/json" \
+     -d '{"name":"Charlie"}' \
+     http://localhost:8080/api/users
+
+# 更新用户
+curl -X PUT -d '{"name":"Updated"}' http://localhost:8080/api/users/1
+
+# 删除用户
+curl -X DELETE http://localhost:8080/api/users/1
+
+# 搜索（带查询参数）
+curl "http://localhost:8080/api/search?keyword=hello&page=1"
+```
+
+**要点：**
+- `req.param("id")` 获取路径参数 `{id}` 的值
+- `req.jsonBody()` 解析 JSON 请求体（返回 `boost::json::value`）
+- `req.query()` 获取查询字符串（`?` 后面的部分）
+- `req.body()` 获取原始请求体
+- 工厂方法：`ok()`, `json()`, `notFound()`, `badRequest()`, `serverError()`
+- 手动构建：`setStatus()`, `setJsonBody()`, `setHeader()`
+
+---
+
+## 示例 3：中间件实战
+
+### 日志中间件
+
+```cpp
+auto logger = [](const HttpRequest& req, MiddlewareNext next)
+                  -> Awaitable<HttpResponse> {
+    auto start = std::chrono::steady_clock::now();
+
+    std::cout << "[REQ] " << httpMethodToString(req.method())
+              << " " << req.path() << std::endl;
+
+    auto res = co_await next(req);  // 调用下一层
+
+    auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(
+        std::chrono::steady_clock::now() - start).count();
+
+    std::cout << "[RES] " << static_cast<int>(res.statusCode())
+              << " (" << elapsed << " us)" << std::endl;
+
+    co_return res;
+};
+
+server.use(logger);
+```
+
+### 认证中间件
+
+```cpp
+auto auth = [](const HttpRequest& req, MiddlewareNext next)
+                -> Awaitable<HttpResponse> {
+    // 放行公开路径
+    if (req.path() == "/" || req.path() == "/api/status")
+    {
+        co_return co_await next(req);
+    }
+
+    // 检查 Authorization 头
+    auto token = req.header("Authorization");
+    if (token.empty())
+    {
+        co_return HttpResponse::badRequest("需要认证: 请提供 Authorization 头");
+    }
+
+    if (token != "Bearer my-secret-token")
+    {
+        HttpResponse res;
+        res.setStatus(HttpStatusCode::hUnauthorized);
+        res.setJsonBody({{"error", "无效的认证令牌"}});
+        co_return res;
+    }
+
+    // 验证通过，继续执行
+    co_return co_await next(req);
+};
+
+server.use(auth);
+```
+
+### CORS 中间件
+
+```cpp
+auto cors = [](const HttpRequest& req, MiddlewareNext next)
+                -> Awaitable<HttpResponse> {
+    // OPTIONS 预检请求
+    if (req.method() == HttpMethod::hOptions)
+    {
+        HttpResponse res;
+        res.setStatus(HttpStatusCode::hNoContent);
+        res.setHeader("Access-Control-Allow-Origin", "*");
+        res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+        res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+        co_return res;
+    }
+
+    auto res = co_await next(req);
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    co_return res;
+};
+
+server.use(cors);
+```
+
+### 异常处理中间件
+
+```cpp
+auto errorHandler = [](const HttpRequest& req, MiddlewareNext next)
+                        -> Awaitable<HttpResponse> {
+    try
+    {
+        co_return co_await next(req);
+    }
+    catch (const std::exception& e)
+    {
+        std::cerr << "未处理异常: " << e.what() << std::endl;
+        co_return HttpResponse::serverError();
+    }
+};
+
+// 异常处理中间件应最先注册（最外层）
+server.use(errorHandler);
+server.use(logger);
+server.use(auth);
+```
+
+**中间件执行顺序：**
+
+```
+请求 → errorHandler → logger → auth → 路由处理器
+响应 ← errorHandler ← logger ← auth ← 路由处理器
+```
+
+---
+
+## 示例 4：WebSocket 实时通信
+
+```cpp
+#include "core/HttpServer.h"
+#include "core/WebSocket.h"
+#include <iostream>
+
+using namespace hical;
+
+int main()
+{
+    HttpServer server(8080);
+
+    // WebSocket Echo
+    server.router().ws("/ws/echo",
+        // 消息回调
+        [](const std::string& msg, WebSocketSession& ws) -> Awaitable<void> {
+            std::cout << "收到消息: " << msg << std::endl;
+            co_await ws.send("Echo: " + msg);
+        },
+        // 连接建立回调（可选）
+        [](WebSocketSession& ws) -> Awaitable<void> {
+            std::cout << "新 WebSocket 连接建立" << std::endl;
+            co_await ws.send("欢迎连接 hical WebSocket!");
+        }
+    );
+
+    // WebSocket 聊天室（简单示例）
+    server.router().ws("/ws/chat",
+        [](const std::string& msg, WebSocketSession& ws) -> Awaitable<void> {
+            // 处理聊天消息
+            std::string response = "[服务器] 收到: " + msg;
+            co_await ws.send(response);
+        },
+        [](WebSocketSession& ws) -> Awaitable<void> {
+            co_await ws.send("[系统] 您已加入聊天室");
+        }
+    );
+
+    // 同时注册 HTTP 路由
+    server.router().get("/", [](const HttpRequest&) -> HttpResponse {
+        return HttpResponse::ok("WebSocket 服务运行中。连接 /ws/echo 或 /ws/chat");
+    });
+
+    std::cout << "WebSocket 服务运行在 ws://localhost:8080" << std::endl;
+    server.start();
+    return 0;
+}
+```
+
+**测试 WebSocket：**
+
+```bash
+# 方法 1：使用 wscat（需要 Node.js）
+npm install -g wscat
+wscat -c ws://localhost:8080/ws/echo
+
+# 方法 2：使用 websocat
+websocat ws://localhost:8080/ws/echo
+
+# 方法 3：浏览器控制台
+# const ws = new WebSocket('ws://localhost:8080/ws/echo');
+# ws.onmessage = (e) => console.log(e.data);
+# ws.send('Hello!');
+```
+
+---
+
+## 示例 5：SSL/TLS 安全服务
+
+### 生成测试证书
+
+```bash
+openssl req -x509 -newkey rsa:2048 -keyout server.key -out server.crt \
+    -days 365 -nodes -subj "/CN=localhost"
+```
+
+### HTTPS 服务器
+
+```cpp
+#include "core/HttpServer.h"
+
+using namespace hical;
+
+int main()
+{
+    HttpServer server(8443);
+
+    // 启用 SSL
+    server.enableSsl("server.crt", "server.key");
+
+    server.router().get("/", [](const HttpRequest&) -> HttpResponse {
+        return HttpResponse::ok("Hello from HTTPS!");
+    });
+
+    server.router().get("/api/secure", [](const HttpRequest&) -> HttpResponse {
+        return HttpResponse::json({
+            {"secure", true},
+            {"protocol", "HTTPS"}
+        });
+    });
+
+    std::cout << "HTTPS 服务运行在 https://localhost:8443" << std::endl;
+    server.start();
+    return 0;
+}
+```
+
+**测试：**
+
+```bash
+# -k 跳过证书验证（自签名证书）
+curl -k https://localhost:8443/
+curl -k https://localhost:8443/api/secure
+```
+
+---
+
+## 示例 6：协程异步处理
+
+### 异步路由处理器
+
+```cpp
+#include "core/HttpServer.h"
+#include "core/Coroutine.h"
+
+using namespace hical;
+
+int main()
+{
+    HttpServer server(8080);
+
+    // 协程路由：可以使用 co_await
+    server.router().get("/async/delay",
+        [](const HttpRequest&) -> Awaitable<HttpResponse> {
+            // 模拟异步操作（如数据库查询、RPC 调用）
+            co_await hical::sleep(0.5);  // 等待 0.5 秒
+            co_return HttpResponse::json({
+                {"message", "异步处理完成"},
+                {"delayed", "500ms"}
+            });
+        });
+
+    // 使用 chrono 精确控制延迟
+    server.router().get("/async/precise",
+        [](const HttpRequest&) -> Awaitable<HttpResponse> {
+            co_await hical::sleep(std::chrono::milliseconds(100));
+            co_return HttpResponse::ok("精确延迟 100ms");
+        });
+
+    // 同步路由：无需协程，直接返回
+    server.router().get("/sync",
+        [](const HttpRequest&) -> HttpResponse {
+            return HttpResponse::ok("同步处理，无 co_await");
+        });
+
+    server.start();
+    return 0;
+}
+```
+
+**要点：**
+- 协程处理器返回类型为 `Awaitable<HttpResponse>`，使用 `co_return`
+- 同步处理器返回类型为 `HttpResponse`，使用 `return`
+- 两种风格可混用，同步处理器会被框架自动包装为协程
+- `hical::sleep()` 在当前协程上下文中等待，不阻塞线程
+
+---
+
+## 示例 7：PMR 内存池使用
+
+### 基本用法
+
+```cpp
+#include "core/MemoryPool.h"
+#include "core/PmrBuffer.h"
+#include <iostream>
+
+using namespace hical;
+
+int main()
+{
+    // 可选：自定义内存池配置
+    PoolConfig config;
+    config.requestPoolInitialSize = 8192;
+    config.threadLocalMaxBlocksPerChunk = 128;
+    MemoryPool::instance().configure(config);
+
+    // 使用线程本地池分配（高性能，无锁）
+    auto alloc = MemoryPool::instance().threadLocalAllocator();
+    std::pmr::vector<int> numbers(alloc);
+    for (int i = 0; i < 1000; ++i)
+    {
+        numbers.push_back(i);
+    }
+
+    // 使用 PmrBuffer 读写数据
+    PmrBuffer buffer(alloc);
+    buffer.append("Hello, ");
+    buffer.append("PMR world!");
+    std::cout << "缓冲区: " << buffer.readAll() << std::endl;
+
+    // 模拟请求级池：一次 HTTP 请求的生命周期
+    {
+        auto requestPool = MemoryPool::instance().createRequestPool(4096);
+        std::pmr::polymorphic_allocator<std::byte> reqAlloc(requestPool.get());
+
+        // 请求内所有分配共享同一个池
+        std::pmr::vector<char> header(128, reqAlloc);
+        std::pmr::vector<char> body(2048, reqAlloc);
+        std::pmr::string jsonStr("JSON data", reqAlloc);
+
+        // 做业务处理...
+
+    }  // requestPool 析构 → 所有内存一次性释放
+
+    // 查看统计
+    auto stats = MemoryPool::instance().getStats();
+    std::cout << "分配次数: " << stats.totalAllocations << std::endl;
+    std::cout << "释放次数: " << stats.totalDeallocations << std::endl;
+    std::cout << "当前字节: " << stats.currentBytesAllocated << std::endl;
+    std::cout << "峰值字节: " << stats.peakBytesAllocated << std::endl;
+
+    return 0;
+}
+```
+
+### PmrBuffer 高级用法
+
+```cpp
+PmrBuffer buf;
+
+// 写入数据
+buf.append("GET / HTTP/1.1\r\nHost: localhost\r\n\r\n");
+
+// 查找 CRLF（协议解析场景）
+auto crlf = buf.findCRLF();
+if (crlf)
+{
+    // 读取第一行
+    size_t lineLen = crlf - buf.peek();
+    std::string firstLine = buf.read(lineLen);
+    buf.retrieve(2);  // 跳过 \r\n
+}
+
+// 确保可写空间
+buf.ensureWritableBytes(4096);
+
+// 直接写入
+char* writePos = buf.beginWrite();
+// ... 写入数据到 writePos ...
+buf.hasWritten(bytesWritten);
+```
+
+---
+
+## 示例 8：完整应用示例
+
+将以上所有特性组合为一个完整的 Web 服务：
+
+```cpp
+#include "core/HttpServer.h"
+#include "core/WebSocket.h"
+#include "core/MemoryPool.h"
+#include "core/Coroutine.h"
+#include <iostream>
+
+using namespace hical;
+
+int main(int argc, char* argv[])
+{
+    try
+    {
+        // 配置
+        auto port = static_cast<uint16_t>(argc >= 2 ? std::atoi(argv[1]) : 8080);
+        auto threads = argc >= 3 ? std::atoi(argv[2]) : 1;
+
+        // 内存池配置
+        PoolConfig poolConfig;
+        poolConfig.requestPoolInitialSize = 8192;
+        MemoryPool::instance().configure(poolConfig);
+
+        // 创建多线程 HTTP 服务器
+        HttpServer server(port, threads);
+
+        // ========== 中间件 ==========
+
+        // 异常处理（最外层）
+        server.use([](const HttpRequest& req, MiddlewareNext next)
+                       -> Awaitable<HttpResponse> {
+            try
+            {
+                co_return co_await next(req);
+            }
+            catch (const std::exception& e)
+            {
+                std::cerr << "[ERROR] " << req.path() << ": " << e.what() << std::endl;
+                co_return HttpResponse::serverError();
+            }
+        });
+
+        // 日志
+        server.use([](const HttpRequest& req, MiddlewareNext next)
+                       -> Awaitable<HttpResponse> {
+            std::cout << httpMethodToString(req.method())
+                      << " " << req.path() << std::endl;
+            auto res = co_await next(req);
+            std::cout << "  -> " << static_cast<int>(res.statusCode()) << std::endl;
+            co_return res;
+        });
+
+        // CORS
+        server.use([](const HttpRequest& req, MiddlewareNext next)
+                       -> Awaitable<HttpResponse> {
+            auto res = co_await next(req);
+            res.setHeader("Access-Control-Allow-Origin", "*");
+            co_return res;
+        });
+
+        // ========== HTTP 路由 ==========
+
+        auto& router = server.router();
+
+        // 首页
+        router.get("/", [](const HttpRequest&) -> HttpResponse {
+            return HttpResponse::ok("hical Web 服务 v0.2.0");
+        });
+
+        // 状态接口
+        router.get("/api/status", [](const HttpRequest&) -> HttpResponse {
+            auto stats = MemoryPool::instance().getStats();
+            return HttpResponse::json({
+                {"status", "running"},
+                {"version", "0.2.0"},
+                {"memory", {
+                    {"allocated", stats.currentBytesAllocated},
+                    {"peak", stats.peakBytesAllocated},
+                    {"allocations", stats.totalAllocations}
+                }}
+            });
+        });
+
+        // RESTful 用户 API
+        router.get("/api/users/{id}", [](const HttpRequest& req) -> HttpResponse {
+            return HttpResponse::json({
+                {"id", req.param("id")},
+                {"name", "User " + req.param("id")}
+            });
+        });
+
+        router.post("/api/echo", [](const HttpRequest& req) -> HttpResponse {
+            return HttpResponse::ok(req.body());
+        });
+
+        // 协程路由
+        router.get("/api/async", [](const HttpRequest&) -> Awaitable<HttpResponse> {
+            co_await hical::sleep(0.1);
+            co_return HttpResponse::json({{"async", true}});
+        });
+
+        // ========== WebSocket ==========
+
+        router.ws("/ws/echo",
+            [](const std::string& msg, WebSocketSession& ws) -> Awaitable<void> {
+                co_await ws.send("Echo: " + msg);
+            },
+            [](WebSocketSession& ws) -> Awaitable<void> {
+                co_await ws.send("Connected!");
+            }
+        );
+
+        // ========== 启动 ==========
+
+        std::cout << "hical Web 服务 v0.2.0" << std::endl;
+        std::cout << "端口: " << port << ", IO 线程: " << threads << std::endl;
+        std::cout << "路由:" << std::endl;
+        std::cout << "  GET    /              — 首页" << std::endl;
+        std::cout << "  GET    /api/status    — 状态查询" << std::endl;
+        std::cout << "  GET    /api/users/{id}— 用户查询" << std::endl;
+        std::cout << "  POST   /api/echo      — Echo" << std::endl;
+        std::cout << "  GET    /api/async     — 异步示例" << std::endl;
+        std::cout << "  WS     /ws/echo       — WebSocket" << std::endl;
+
+        server.start();
+    }
+    catch (const std::exception& e)
+    {
+        std::cerr << "异常: " << e.what() << std::endl;
+    }
+
+    return 0;
+}
+```
+
+**运行：**
+
+```bash
+# 单线程
+./my_server 8080
+
+# 4 线程
+./my_server 8080 4
+```
+
+---
+
+## 运行内置示例程序
+
+Hical 项目自带 6 个示例程序：
+
+```bash
+# 编译所有示例
+cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build build
+```
+
+### Echo Server（底层 TCP）
+
+```bash
+./build/examples/echo_server 8888
+# 测试: telnet localhost 8888
+```
+
+### HTTP Server（完整示例）
+
+```bash
+./build/examples/http_server 8080
+# 测试:
+#   curl http://localhost:8080/
+#   curl http://localhost:8080/api/status
+#   curl -X POST -d 'hello' http://localhost:8080/api/echo
+#   curl http://localhost:8080/users/42
+#   wscat -c ws://localhost:8080/ws/echo
+```
+
+### PMR PoC（内存池验证）
+
+```bash
+./build/examples/pmr_poc
+# 输出: 缓冲区复用、批量分配、PmrBuffer 功能、多线程并发的性能数据
+```
+
+### PMR Benchmark（内存池基准测试）
+
+```bash
+./build/examples/pmr_benchmark
+# 输出: 不同分配策略在不同块大小和线程数下的性能对比
+```
+
+### HTTP Benchmark（HTTP 压测工具）
+
+```bash
+# 先启动 http_server
+./build/examples/http_server 8080
+
+# 压测
+./build/examples/http_benchmark localhost 8080 50 1000 /api/status GET
+# 输出: QPS、延迟分布 (P50/P90/P95/P99)
+```
+
+### TCP Benchmark（Echo 压测工具）
+
+```bash
+# 先启动 echo_server
+./build/examples/echo_server 8888
+
+# 压测
+./build/examples/benchmark localhost 8888 100 1000
+# 输出: QPS、总耗时、成功/失败数
+```
+
+---
+
+## 常见问题
+
+### Q: 协程处理器和同步处理器该选哪个？
+
+**同步处理器**：无需异步操作时使用，代码更简洁：
+```cpp
+router.get("/api/hello", [](const HttpRequest&) -> HttpResponse {
+    return HttpResponse::ok("Hello!");
+});
+```
+
+**协程处理器**：需要 `co_await` 异步操作时使用：
+```cpp
+router.get("/api/async", [](const HttpRequest&) -> Awaitable<HttpResponse> {
+    co_await hical::sleep(0.1);
+    co_return HttpResponse::ok("Done");
+});
+```
+
+框架会自动将同步处理器包装为协程，性能无差别。
+
+### Q: 中间件的注册顺序重要吗？
+
+重要。中间件按注册顺序从外到内执行。建议顺序：
+1. 异常处理中间件（最外层，兜底所有异常）
+2. 日志中间件
+3. CORS 中间件
+4. 认证/鉴权中间件（最内层，最接近路由处理器）
+
+### Q: 路径参数和查询参数有什么区别？
+
+- **路径参数**：`/users/{id}` → `req.param("id")` 获取
+- **查询参数**：`/search?keyword=hello` → `req.query()` 获取整个查询字符串
+
+### Q: 如何配置多线程？
+
+```cpp
+// 构造函数第二个参数指定 IO 线程数
+HttpServer server(8080, 4);  // 4 个 IO 线程
+```
+
+推荐设为 CPU 核数：`HttpServer server(8080, std::thread::hardware_concurrency());`
+
+### Q: 内存池需要手动管理吗？
+
+不需要。Hical 的 PMR 内存池自动管理：
+- 线程本地池：线程启动时自动创建
+- 请求级池：请求结束时自动释放
+- 全局池：进程退出时自动清理
+
+如需自定义配置，在创建 `HttpServer` 之前调用：
+```cpp
+PoolConfig config;
+config.requestPoolInitialSize = 8192;
+MemoryPool::instance().configure(config);
+```
+
+### Q: 如何启用 SSL？
+
+```cpp
+server.enableSsl("server.crt", "server.key");
+```
+
+详见 [示例 5：SSL/TLS 安全服务](#示例-5ssltls-安全服务)。
+
+---
+
+> 更多信息：[API 文档](api_reference.md) | [架构设计](architecture.md) | [性能报告](performance_report.md) | [编译指南](build_and_test_guide.md)

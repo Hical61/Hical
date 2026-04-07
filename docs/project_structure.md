@@ -1,6 +1,6 @@
 # Hical 项目代码结构
 
-> 最后更新：2026-04-06（阶段五完成）
+> 最后更新：2026-04-06
 
 ## 项目概述
 
@@ -74,7 +74,10 @@ hical/
 │   ├── project_structure.md    # 本文件 — 项目代码结构说明
 │   ├── build_and_test_guide.md # 编译与测试指南
 │   ├── api_reference.md        # 完整的 hical 框架公共 API 说明
-│   ├── quickstart.md           # Hical 快速上手指南
+│   ├── quickstart.md           # Hical 快速上手指南（5 分钟入门）
+│   ├── examples_guide.md       # 使用示例（8 个由浅入深的完整示例）
+│   ├── architecture.md         # 架构设计文档（PMR 内存池/反射层/Concepts 等）
+│   └── performance_report.md   # 性能测试报告（基准测试方法与调优指南）
 
 ```
 
@@ -174,6 +177,12 @@ hical/
   - `http_benchmark` — 多线程 HTTP 压测（QPS / P50 / P90 / P95 / P99 延迟）
   - `pmr_benchmark` — 内存池策略对比（new/delete vs sync_pool vs unsync_pool vs monotonic）
   - `test_router_perf` — 路由查找性能（100/1000 路由静态/参数/未命中）
+
+### 阶段六：文档与交付
+- **API 文档** (`docs/api_reference.md`) — 所有公共类和方法的完整说明
+- **架构设计文档** (`docs/architecture.md`) — 两层架构、PMR 三层内存池、协程模型、路由/中间件/SSL 设计、Concepts 后端抽象、反射 API 包装层（当前宏降级方案 + C++26 迁移路径）
+- **性能测试报告** (`docs/performance_report.md`) — PMR 内存池基准测试方法、HTTP 吞吐量测试场景、调优指南、复现方法
+- **使用示例文档** (`docs/examples_guide.md`) — 8 个由浅入深的完整示例（最小服务器 / RESTful API / 中间件 / WebSocket / SSL / 协程 / PMR / 完整应用）
 
 ## 命名风格
 

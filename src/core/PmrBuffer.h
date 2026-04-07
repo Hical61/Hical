@@ -4,6 +4,7 @@
 #include <cassert>
 #include <cstring>
 #include <memory_resource>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -62,7 +63,10 @@ class PmrBuffer
      */
     void retrieve(size_t len)
     {
-        assert(len <= readableBytes());
+        if (len > readableBytes())
+        {
+            throw std::out_of_range("PmrBuffer::retrieve: len exceeds readable bytes");
+        }
         if (len < readableBytes())
         {
             readIndex_ += len;
@@ -79,8 +83,10 @@ class PmrBuffer
      */
     void retrieveUntil(const char* end)
     {
-        assert(peek() <= end);
-        assert(end <= beginWrite());
+        if (peek() > end || end > beginWrite())
+        {
+            throw std::out_of_range("PmrBuffer::retrieveUntil: invalid end pointer");
+        }
         retrieve(end - peek());
     }
 
@@ -100,7 +106,10 @@ class PmrBuffer
      */
     std::string read(size_t len)
     {
-        assert(len <= readableBytes());
+        if (len > readableBytes())
+        {
+            throw std::out_of_range("PmrBuffer::read: len exceeds readable bytes");
+        }
         std::string result(peek(), len);
         retrieve(len);
         return result;
@@ -167,7 +176,10 @@ class PmrBuffer
      */
     void hasWritten(size_t len)
     {
-        assert(len <= writableBytes());
+        if (len > writableBytes())
+        {
+            throw std::out_of_range("PmrBuffer::hasWritten: len exceeds writable bytes");
+        }
         writeIndex_ += len;
     }
 
