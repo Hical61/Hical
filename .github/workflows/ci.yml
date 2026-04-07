@@ -22,6 +22,8 @@ jobs:
             cxx: clang++-18
           - os: windows-latest
             compiler: msys2-gcc
+          - os: windows-latest
+            compiler: msvc
 
     runs-on: ${{ matrix.os }}
     name: ${{ matrix.os }} / ${{ matrix.compiler }}
@@ -68,7 +70,7 @@ jobs:
 
       # ── Windows MSYS2 ──
       - name: Setup MSYS2
-        if: runner.os == 'Windows'
+        if: matrix.compiler == 'msys2-gcc'
         uses: msys2/setup-msys2@v2
         with:
           msystem: MINGW64
@@ -82,16 +84,38 @@ jobs:
             mingw-w64-x86_64-gtest
 
       - name: Configure (MSYS2)
-        if: runner.os == 'Windows'
+        if: matrix.compiler == 'msys2-gcc'
         shell: msys2 {0}
         run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 
       - name: Build (MSYS2)
-        if: runner.os == 'Windows'
+        if: matrix.compiler == 'msys2-gcc'
         shell: msys2 {0}
         run: cmake --build build
 
       - name: Test (MSYS2)
-        if: runner.os == 'Windows'
+        if: matrix.compiler == 'msys2-gcc'
         shell: msys2 {0}
         run: ctest --test-dir build --output-on-failure --timeout 60 -j4
+
+      # ── Windows MSVC ──
+      - name: Setup vcpkg (MSVC)
+        if: matrix.compiler == 'msvc'
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgGitCommitId: '01f602195983451bc83e72f4214af2c7571cb1f4'
+
+      - name: Configure (MSVC)
+        if: matrix.compiler == 'msvc'
+        run: >
+          cmake -B build
+          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake
+
+      - name: Build (MSVC)
+        if: matrix.compiler == 'msvc'
+        run: cmake --build build --config Release
+
+      - name: Test (MSVC)
+        if: matrix.compiler == 'msvc'
+        run: ctest --test-dir build --output-on-failure --timeout 60 -j4 -C Release

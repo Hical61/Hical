@@ -38,9 +38,31 @@ add_subdirectory(src)
 add_subdirectory(tests)
 add_subdirectory(examples)
 
-# 安装配置（暂时注释，等有实际目标后再启用）
-# install(TARGETS hical
-#     RUNTIME DESTINATION bin
-#     LIBRARY DESTINATION lib
-#     ARCHIVE DESTINATION lib
-# )
+# CMake package export（支持 find_package(hical)）
+include(CMakePackageConfigHelpers)
+
+install(
+    EXPORT hicalTargets
+    FILE hicalTargets.cmake
+    NAMESPACE hical::
+    DESTINATION lib/cmake/hical
+)
+
+configure_package_config_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/cmake/hicalConfig.cmake.in
+    ${CMAKE_CURRENT_BINARY_DIR}/hicalConfig.cmake
+    INSTALL_DESTINATION lib/cmake/hical
+)
+
+write_basic_package_version_file(
+    ${CMAKE_CURRENT_BINARY_DIR}/hicalConfigVersion.cmake
+    VERSION ${PROJECT_VERSION}
+    COMPATIBILITY SameMajorVersion
+)
+
+install(
+    FILES
+    ${CMAKE_CURRENT_BINARY_DIR}/hicalConfig.cmake
+    ${CMAKE_CURRENT_BINARY_DIR}/hicalConfigVersion.cmake
+    DESTINATION lib/cmake/hical
+)

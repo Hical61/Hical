@@ -1,0 +1,58 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  # ── 门控检查：确保 tag 对应的代码可以构建且测试通过 ──
+  build-and-test:
+    runs-on: ubuntu-24.04
+    name: Build & Test Gate
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libboost-all-dev libssl-dev libgtest-dev cmake
+
+      - name: Configure
+        run: |
+          cmake -B build -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER=gcc-14 \
+            -DCMAKE_CXX_COMPILER=g++-14
+
+      - name: Build
+        run: cmake --build build -j$(nproc)
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure --timeout 60 -j4
+
+  # ── 创建 GitHub Release ──
+  create-release:
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Determine release type
+        id: release_type
+        run: |
+          if [[ "${{ github.ref_name }}" =~ -(alpha|beta|rc) ]]; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          prerelease: ${{ steps.release_type.outputs.prerelease == 'true' }}
+          fail_on_unmatched_files: false

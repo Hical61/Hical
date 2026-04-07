@@ -21,7 +21,8 @@ add_library(hical_core
 
 target_include_directories(hical_core
     PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+    $<INSTALL_INTERFACE:include>
 )
 
 target_link_libraries(hical_core
@@ -30,4 +31,25 @@ target_link_libraries(hical_core
     Boost::json
     OpenSSL::SSL
     OpenSSL::Crypto
+)
+
+# 安装库和头文件
+install(
+    TARGETS hical_core
+    EXPORT hicalTargets
+    ARCHIVE DESTINATION lib
+    LIBRARY DESTINATION lib
+    RUNTIME DESTINATION bin
+)
+
+install(
+    DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/core/
+    DESTINATION include/hical/core
+    FILES_MATCHING PATTERN "*.h"
+)
+
+install(
+    DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/asio/
+    DESTINATION include/hical/asio
+    FILES_MATCHING PATTERN "*.h"
 )
