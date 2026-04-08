@@ -187,12 +187,14 @@ namespace hical
 	};
 
 /**
- * @brief 路由注册宏（反射降级方案）
+ * @brief 路由注册宏（手动注册的便捷方式）
  *
  * 用法：HICAL_ROUTE(router, Get, "/api/users", myHandler)
  *
- * 预留给未来 C++26 反射自动路由注册。
- * 当反射可用时，可替换为编译期自动发现。
+ * 等价于 router.route(HttpMethod::hGet, "/api/users", myHandler);
+ *
+ * 如需自动路由注册，请参考 MetaRoutes.h 中的反射方案：
+ *   hical::meta::registerRoutes<UserHandler>(router);
  */
 #define HICAL_ROUTE(router, method, path, handler) (router).route(::hical::HttpMethod::h##method, path, handler)
 

@@ -151,6 +151,15 @@ target_link_libraries(test_concepts
     ${PLATFORM_LIBS}
 )
 
+# 反射层测试（MetaJson + MetaRoutes）
+add_executable(test_reflection test_reflection.cpp)
+target_link_libraries(test_reflection
+    PRIVATE
+    hical_core
+    GTest::gtest_main
+    ${PLATFORM_LIBS}
+)
+
 # 集成测试（阶段六）
 add_executable(test_integration test_integration.cpp)
 target_link_libraries(test_integration
@@ -178,4 +187,5 @@ gtest_discover_tests(test_http_server)
 gtest_discover_tests(test_websocket)
 gtest_discover_tests(test_router_perf)
 gtest_discover_tests(test_concepts)
+gtest_discover_tests(test_reflection)
 gtest_discover_tests(test_integration)

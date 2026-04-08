@@ -1,46 +1,9 @@
 #include "core/Router.h"
-#include "asio/AsioEventLoop.h"
-#include "core/Coroutine.h"
+#include "test_helpers.h"
 #include <gtest/gtest.h>
-#include <atomic>
-#include <chrono>
-#include <thread>
 
 using namespace hical;
-
-// 辅助：在事件循环中运行协程并等待结果
-template <typename F>
-auto runCoroutine(AsioEventLoop& loop, F&& f)
-{
-	using ReturnType = typename std::invoke_result_t<F>::value_type;
-
-	std::optional<ReturnType> result;
-	std::atomic<bool> done {false};
-
-	coSpawn(loop.getIoContext(),
-			[&]() -> Awaitable<void>
-			{
-				result = co_await f();
-				done = true;
-			});
-
-	std::thread loopThread(
-		[&loop]()
-		{
-			loop.run();
-		});
-
-	// 等待协程完成
-	for (int i = 0; i < 100 && !done.load(); ++i)
-	{
-		std::this_thread::sleep_for(std::chrono::milliseconds(10));
-	}
-
-	loop.stop();
-	loopThread.join();
-
-	return result;
-}
+using hical::test::runCoroutine;
 
 // 测试空路由器返回 404
 TEST(RouterTest, EmptyRouterReturns404)

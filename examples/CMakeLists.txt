@@ -54,3 +54,11 @@ target_link_libraries(pmr_benchmark
     hical_core
     ${PLATFORM_LIBS}
 )
+
+# 反射路由 + JSON 序列化示例
+add_executable(reflection_server reflection_server.cpp)
+target_link_libraries(reflection_server
+    PRIVATE
+    hical_core
+    ${PLATFORM_LIBS}
+)

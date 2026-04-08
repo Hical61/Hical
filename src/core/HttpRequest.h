@@ -76,6 +76,16 @@ namespace hical
 		boost::json::value jsonBody() const;
 
 		/**
+     * @brief 将消息体反序列化为指定类型（反射驱动）
+     * @tparam T 目标类型（需标注 HICAL_JSON 或支持 C++26 反射）
+     * @return T 反序列化后的对象
+     *
+     * 注意：使用此方法需 #include "MetaJson.h"（定义在该头文件中）。
+     */
+		template <typename T>
+		T readJson() const;
+
+		/**
      * @brief 获取 Content-Type 头
      * @return Content-Type 字符串
      */

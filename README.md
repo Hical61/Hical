@@ -2,13 +2,19 @@
 
 [![CI](https://github.com/Hical61/Hical/actions/workflows/ci.yml/badge.svg)](https://github.com/Hical61/Hical/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![C++20](https://img.shields.io/badge/C%2B%2B-20-blue.svg)](https://isocpp.org/)
+[![Platform](https://img.shields.io/badge/Platform-Linux%20%7C%20Windows%20%7C%20macOS-green.svg)]()
+[![Boost](https://img.shields.io/badge/Boost-%E2%89%A51.70-orange.svg)](https://www.boost.org/)
 
-Hical is a modern C++web framework built on Boost. Asio, utilizing C++26 reflection and pmr memory pooling to achieve high performance
+Hical is a modern C++ web framework built on Boost.Asio/Beast, utilizing C++26 reflection and PMR memory pooling to achieve high performance.
 
 > **Status:** Work in Progress
 
+English | [简体中文](README_CN.md)
+
 ## Features
 
+- **C++26 Reflection** — Designed around C++26 static reflection for automatic route registration, serialization, and compile-time metaprogramming
 - **Boost.Asio/Beast Backend** — Industrial-grade networking with `io_context` per-thread model
 - **PMR Memory Pool** — Unified `std::pmr` allocator strategy across buffers, HTTP bodies, and JSON objects for reduced fragmentation and improved cache locality
 - **Coroutine Support** — `asio::awaitable<T>` + `co_spawn` for clean async code
@@ -17,6 +23,69 @@ Hical is a modern C++web framework built on Boost. Asio, utilizing C++26 reflect
 - **WebSocket** — WebSocket upgrade and bidirectional communication
 - **Router & Middleware** — Middleware pipeline (logging, auth, rate limiting) with path parameter support
 - **HTTP Server** — Full HTTP/1.1 support via Boost.Beast (chunked transfer, keep-alive)
+
+## Why Hical?
+
+| | Hical | Drogon | Crow |
+|---|---|---|---|
+| **C++ Standard** | C++20 (C++26 ready) | C++17 | C++11 |
+| **Async Model** | Coroutines (`co_await`) | Callbacks + Coroutines | Callbacks |
+| **Memory Strategy** | 3-tier PMR pool | Default allocator | Default allocator |
+| **HTTP Parser** | Boost.Beast | Custom (Trantor) | Custom |
+| **SSL** | Compile-time template branching | Runtime branch | Runtime branch |
+| **Backend Abstraction** | C++20 Concepts | N/A | N/A |
+
+## Quick Start
+
+```cpp
+#include "core/HttpServer.h"
+#include "core/WebSocket.h"
+
+using namespace hical;
+
+int main()
+{
+    HttpServer server(8080);
+
+    // Middleware — logging
+    server.use([](const HttpRequest& req, MiddlewareNext next)
+                   -> Awaitable<HttpResponse> {
+        std::cout << httpMethodToString(req.method()) << " "
+                  << req.path() << std::endl;
+        co_return co_await next(req);
+    });
+
+    // GET / — JSON response
+    server.router().get("/", [](const HttpRequest&) -> HttpResponse {
+        return HttpResponse::json({
+            {"status", "running"},
+            {"framework", "hical"}
+        });
+    });
+
+    // GET /users/{id} — path parameters
+    server.router().get("/users/{id}",
+        [](const HttpRequest& req) -> HttpResponse {
+            return HttpResponse::json({{"userId", req.param("id")}});
+        });
+
+    // WebSocket echo
+    server.router().ws("/ws/echo",
+        [](const std::string& msg, WebSocketSession& ws)
+            -> Awaitable<void> {
+            co_await ws.send("Echo: " + msg);
+        });
+
+    server.start();
+}
+```
+
+```bash
+curl http://localhost:8080/
+# {"status":"running","framework":"hical"}
+```
+
+> See [docs/quickstart.md](docs/quickstart.md) for the full tutorial and [examples/](examples/) for more.
 
 ## Project Structure
 
@@ -38,7 +107,7 @@ hical/
 │       ├── EventLoopPool.h/cpp
 │       └── TcpServer.h/cpp
 ├── tests/             # Unit tests (Google Test)
-├── examples/          # Echo server, benchmark, PMR PoC
+├── examples/          # HTTP server, WebSocket, benchmarks, PMR demos
 ├── docs/              # Design analysis documents
 └── CMakeLists.txt
 ```
@@ -59,79 +128,44 @@ hical/
 ### Linux / macOS
 
 ```bash
-mkdir build && cd build
-cmake .. -DCMAKE_BUILD_TYPE=Release
-cmake --build .
-ctest
+cmake -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j$(nproc)
+ctest --test-dir build --output-on-failure
 ```
 
 ### Windows (MSYS2 MINGW64)
 
 ```bash
-mkdir build && cd build
-cmake .. -G "Ninja" -DCMAKE_BUILD_TYPE=Release
-cmake --build .
-ctest
+cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build build
+ctest --test-dir build --output-on-failure
 ```
 
-## Quick Start
+## Performance
 
-A coroutine-based Echo Server:
+Hical features a three-tier PMR memory pool architecture:
 
-```cpp
-#include <boost/asio.hpp>
-#include <boost/asio/awaitable.hpp>
-#include <boost/asio/co_spawn.hpp>
-#include <boost/asio/detached.hpp>
-#include <boost/asio/use_awaitable.hpp>
+- **Thread-local pools** — lock-free allocation, zero contention across threads
+- **Request-level monotonic pools** — bulk deallocation at request end, no per-object overhead
+- **Scatter-Gather I/O** — multiple messages coalesced into a single system call
 
-using boost::asio::ip::tcp;
-using boost::asio::awaitable;
-using boost::asio::co_spawn;
-using boost::asio::detached;
-using boost::asio::use_awaitable;
+Run the built-in benchmarks:
 
-awaitable<void> handleSession(tcp::socket socket)
-{
-    try
-    {
-        char data[1024];
-        for (;;)
-        {
-            auto bytesRead = co_await socket.async_read_some(
-                boost::asio::buffer(data), use_awaitable);
-
-            co_await boost::asio::async_write(
-                socket,
-                boost::asio::buffer(data, bytesRead),
-                use_awaitable);
-        }
-    }
-    catch (const std::exception&)
-    {
-        // Connection closed
-    }
-}
-
-awaitable<void> listener(tcp::acceptor acceptor)
-{
-    for (;;)
-    {
-        auto socket = co_await acceptor.async_accept(use_awaitable);
-        co_spawn(acceptor.get_executor(),
-                 handleSession(std::move(socket)), detached);
-    }
-}
-
-int main()
-{
-    boost::asio::io_context ioContext;
-    tcp::acceptor acceptor(ioContext, tcp::endpoint(tcp::v4(), 8080));
-
-    co_spawn(ioContext, listener(std::move(acceptor)), detached);
-    ioContext.run();
-}
+```bash
+./build/examples/http_server 8080
+./build/examples/http_benchmark localhost 8080 50 1000 /api/status GET
 ```
+
+> See [docs/performance_report.md](docs/performance_report.md) for methodology and analysis.
+
+## Documentation
+
+- [Quick Start Guide](docs/quickstart.md) — 5-minute tutorial
+- [Examples Guide](docs/examples_guide.md) — 8 progressive examples
+- [API Reference](docs/api_reference.md) — Complete public API
+- [Architecture](docs/architecture.md) — Design decisions and internals
+- [Performance Report](docs/performance_report.md) — Benchmarking methodology
+- [Contributing](CONTRIBUTING.md) — How to contribute
 
 ## License
 
