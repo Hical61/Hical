@@ -6,8 +6,9 @@ namespace hical
 
 	namespace beast = boost::beast;
 
-	WebSocketSession::WebSocketSession(WsStream stream) : stream_(std::move(stream))
+	WebSocketSession::WebSocketSession(WsStream stream, size_t maxMessageSize) : stream_(std::move(stream))
 	{
+		stream_.read_message_max(maxMessageSize);
 	}
 
 	Awaitable<void> WebSocketSession::send(const std::string& msg)
@@ -34,11 +35,27 @@ namespace hical
 		}
 	}
 
+	Awaitable<void> WebSocketSession::closeAsync()
+	{
+		bool expected = true;
+		if (open_.compare_exchange_strong(expected, false))
+		{
+			try
+			{
+				co_await stream_.async_close(beast::websocket::close_code::normal, boost::asio::use_awaitable);
+			}
+			catch (const beast::system_error&)
+			{
+				// 忽略关闭错误（对端可能已关闭）
+			}
+		}
+	}
+
 	void WebSocketSession::close()
 	{
-		if (open_)
+		bool expected = true;
+		if (open_.compare_exchange_strong(expected, false))
 		{
-			open_ = false;
 			boost::system::error_code ec;
 			stream_.close(beast::websocket::close_code::normal, ec);
 		}
@@ -46,7 +63,7 @@ namespace hical
 
 	bool WebSocketSession::isOpen() const
 	{
-		return open_ && stream_.is_open();
+		return open_.load() && stream_.is_open();
 	}
 
 	WebSocketSession::WsStream& WebSocketSession::native()

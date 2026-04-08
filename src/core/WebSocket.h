@@ -3,6 +3,7 @@
 #include "Coroutine.h"
 #include <boost/beast/websocket.hpp>
 #include <boost/asio.hpp>
+#include <atomic>
 #include <optional>
 #include <string>
 
@@ -20,11 +21,15 @@ namespace hical
 	public:
 		using WsStream = boost::beast::websocket::stream<boost::asio::ip::tcp::socket>;
 
+		// 默认最大消息大小 1MB，防止恶意客户端发送超大帧导致 OOM
+		static constexpr size_t hDefaultMaxMessageSize = 1024 * 1024;
+
 		/**
      * @brief 从已升级的 WebSocket stream 构造
      * @param stream WebSocket 流
+     * @param maxMessageSize 最大消息大小（字节，默认 1MB）
      */
-		explicit WebSocketSession(WsStream stream);
+		explicit WebSocketSession(WsStream stream, size_t maxMessageSize = hDefaultMaxMessageSize);
 
 		/**
      * @brief 发送文本消息
@@ -39,7 +44,17 @@ namespace hical
 		Awaitable<std::optional<std::string>> receive();
 
 		/**
-     * @brief 关闭 WebSocket 连接
+     * @brief 协程式关闭 WebSocket 连接（推荐）
+     *
+     * 在协程上下文中安全关闭，不会与 async_read 竞争。
+     */
+		Awaitable<void> closeAsync();
+
+		/**
+     * @brief 同步关闭 WebSocket 连接
+     *
+     * @warning 必须在 io_context 线程中调用，否则与 async_read 竞争。
+     * 推荐使用 closeAsync() 替代。
      */
 		void close();
 
@@ -57,7 +72,7 @@ namespace hical
 
 	private:
 		WsStream stream_;
-		bool open_ {true};
+		std::atomic<bool> open_ {true};
 	};
 
 } // namespace hical

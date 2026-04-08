@@ -199,7 +199,7 @@ TEST(HttpServerTest, Middleware)
 	HttpServer server(0);
 
 	server.use(
-		[](const HttpRequest& req, MiddlewareNext next) -> Awaitable<HttpResponse>
+		[](HttpRequest& req, MiddlewareNext next) -> Awaitable<HttpResponse>
 		{
 			auto res = co_await next(req);
 			res.setHeader("X-Powered-By", "hical");

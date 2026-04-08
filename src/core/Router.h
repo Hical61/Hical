@@ -9,6 +9,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 namespace hical
@@ -53,6 +54,9 @@ namespace hical
 		// 路径参数安全限制
 		static constexpr size_t hMaxPathSegments = 32;
 		static constexpr size_t hMaxParamValueLength = 1024;
+
+		// 参数列表类型：用 vector<pair> 替代 unordered_map，减少堆分配
+		using ParamList = std::vector<std::pair<std::string, std::string>>;
 
 		Router() = default;
 
@@ -146,7 +150,9 @@ namespace hical
 			{
 				auto h1 = std::hash<int> {}(static_cast<int>(key.method));
 				auto h2 = std::hash<std::string> {}(key.path);
-				return h1 ^ (h2 << 1);
+				// boost::hash_combine 风格的哈希组合，减少碰撞
+				h1 ^= h2 + 0x9e3779b9 + (h1 << 6) + (h1 >> 2);
+				return h1;
 			}
 		};
 
@@ -181,9 +187,14 @@ namespace hical
      * @param params 提取的路径参数（输出）
      * @return true 如果匹配
      */
-		static bool matchParamPath(std::string_view pattern,
-								   std::string_view path,
-								   std::unordered_map<std::string, std::string>& params);
+		static bool matchParamPath(std::string_view pattern, std::string_view path, ParamList& params);
+
+		/**
+     * @brief URL 解码（百分号编码 -> 原始字符）
+     * @param encoded 编码后的字符串
+     * @return 解码后的字符串
+     */
+		static std::string urlDecode(std::string_view encoded);
 	};
 
 /**

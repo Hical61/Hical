@@ -41,7 +41,7 @@ TEST(MiddlewareTest, EmptyPipeline)
 		[&]()
 		{
 			return pipeline.execute(req,
-									[](const HttpRequest&) -> Awaitable<HttpResponse>
+									[](HttpRequest&) -> Awaitable<HttpResponse>
 									{
 										co_return HttpResponse::ok("final");
 									});
@@ -56,7 +56,7 @@ TEST(MiddlewareTest, SingleMiddleware)
 	MiddlewarePipeline pipeline;
 
 	pipeline.use(
-		[](const HttpRequest& req, MiddlewareNext next) -> Awaitable<HttpResponse>
+		[](HttpRequest& req, MiddlewareNext next) -> Awaitable<HttpResponse>
 		{
 			auto res = co_await next(req);
 			res.setHeader("X-Middleware", "applied");
@@ -73,7 +73,7 @@ TEST(MiddlewareTest, SingleMiddleware)
 		[&]()
 		{
 			return pipeline.execute(req,
-									[](const HttpRequest&) -> Awaitable<HttpResponse>
+									[](HttpRequest&) -> Awaitable<HttpResponse>
 									{
 										co_return HttpResponse::ok("body");
 									});
@@ -90,7 +90,7 @@ TEST(MiddlewareTest, ExecutionOrder)
 	std::vector<int> order;
 
 	pipeline.use(
-		[&order](const HttpRequest& req, MiddlewareNext next) -> Awaitable<HttpResponse>
+		[&order](HttpRequest& req, MiddlewareNext next) -> Awaitable<HttpResponse>
 		{
 			order.push_back(1); // 前置
 			auto res = co_await next(req);
@@ -99,7 +99,7 @@ TEST(MiddlewareTest, ExecutionOrder)
 		});
 
 	pipeline.use(
-		[&order](const HttpRequest& req, MiddlewareNext next) -> Awaitable<HttpResponse>
+		[&order](HttpRequest& req, MiddlewareNext next) -> Awaitable<HttpResponse>
 		{
 			order.push_back(2); // 前置
 			auto res = co_await next(req);
@@ -115,7 +115,7 @@ TEST(MiddlewareTest, ExecutionOrder)
 		[&]()
 		{
 			return pipeline.execute(req,
-									[](const HttpRequest&) -> Awaitable<HttpResponse>
+									[](HttpRequest&) -> Awaitable<HttpResponse>
 									{
 										co_return HttpResponse::ok("done");
 									});
@@ -136,7 +136,7 @@ TEST(MiddlewareTest, Intercept)
 
 	// 拦截中间件：直接返回 403，不调用 next
 	pipeline.use(
-		[](const HttpRequest&, MiddlewareNext) -> Awaitable<HttpResponse>
+		[](HttpRequest&, MiddlewareNext) -> Awaitable<HttpResponse>
 		{
 			HttpResponse res;
 			res.setStatus(HttpStatusCode::hForbidden);
@@ -152,7 +152,7 @@ TEST(MiddlewareTest, Intercept)
 		[&]()
 		{
 			return pipeline.execute(req,
-									[&handlerCalled](const HttpRequest&) -> Awaitable<HttpResponse>
+									[&handlerCalled](HttpRequest&) -> Awaitable<HttpResponse>
 									{
 										handlerCalled = true;
 										co_return HttpResponse::ok("should not reach");
@@ -170,7 +170,7 @@ TEST(MiddlewareTest, ModifyRequest)
 
 	// 中间件在前置逻辑中给请求添加头
 	pipeline.use(
-		[](const HttpRequest& req, MiddlewareNext next) -> Awaitable<HttpResponse>
+		[](HttpRequest& req, MiddlewareNext next) -> Awaitable<HttpResponse>
 		{
 			// 注意：中间件目前不能修改 const 请求
 			// 但可以在后置逻辑中修改响应
@@ -187,7 +187,7 @@ TEST(MiddlewareTest, ModifyRequest)
 		[&]()
 		{
 			return pipeline.execute(req,
-									[](const HttpRequest&) -> Awaitable<HttpResponse>
+									[](HttpRequest&) -> Awaitable<HttpResponse>
 									{
 										co_return HttpResponse::ok("ok");
 									});

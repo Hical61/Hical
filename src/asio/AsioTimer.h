@@ -3,6 +3,7 @@
 #include "../core/Timer.h"
 #include <boost/asio.hpp>
 #include <atomic>
+#include <functional>
 #include <memory>
 
 namespace hical
@@ -54,6 +55,13 @@ namespace hical
      */
 		void start();
 
+		/**
+     * @brief 设置定时器 ID 和完成时的清理回调
+     * @param id 定时器 ID
+     * @param cleanup 触发后的清理回调（用于从 EventLoop 的 map 中移除自身）
+     */
+		void setCleanup(uint64_t id, std::function<void(uint64_t)> cleanup);
+
 	private:
 		void scheduleOnce();
 		void scheduleRepeating();
@@ -65,6 +73,10 @@ namespace hical
 		double interval_; // 秒
 		bool repeating_;
 		std::atomic<bool> cancelled_ {false};
+
+		// 单次定时器自动清理：触发后通知 EventLoop 移除自身，防止 timers_ map 泄漏
+		uint64_t timerId_ {0};
+		std::function<void(uint64_t)> cleanupCallback_;
 	};
 
 } // namespace hical

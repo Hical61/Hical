@@ -40,21 +40,21 @@ namespace hical
 
 		/**
      * @brief 获取请求路径（不含查询参数）
-     * @return 路径字符串
+     * @return 路径 string_view（零拷贝，生命周期与请求对象一致）
      */
-		std::string path() const;
+		std::string_view path() const;
 
 		/**
      * @brief 获取完整的 URI（含查询参数）
-     * @return URI 字符串
+     * @return URI string_view
      */
-		std::string target() const;
+		std::string_view target() const;
 
 		/**
      * @brief 获取查询字符串（? 后面的部分）
-     * @return 查询字符串
+     * @return 查询字符串 string_view
      */
-		std::string query() const;
+		std::string_view query() const;
 
 		/**
      * @brief 获取指定头部字段

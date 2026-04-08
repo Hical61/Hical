@@ -92,7 +92,7 @@ namespace hical
 	Awaitable<HttpResponse> Router::dispatch(HttpRequest& req)
 	{
 		auto reqMethod = req.method();
-		auto reqPath = req.path();
+		auto reqPath = urlDecode(req.path());
 
 		// 路径深度快速检查，防止超深路径 DoS
 		size_t segmentCount = 0;
@@ -123,7 +123,7 @@ namespace hical
 				continue;
 			}
 
-			std::unordered_map<std::string, std::string> params;
+			ParamList params;
 			if (matchParamPath(entry.path, reqPath, params))
 			{
 				for (const auto& [name, value] : params)
@@ -149,9 +149,7 @@ namespace hical
 		return path.find('{') != std::string::npos;
 	}
 
-	bool Router::matchParamPath(std::string_view pattern,
-								std::string_view path,
-								std::unordered_map<std::string, std::string>& params)
+	bool Router::matchParamPath(std::string_view pattern, std::string_view path, ParamList& params)
 	{
 		params.clear();
 
@@ -197,7 +195,7 @@ namespace hical
 				}
 				// 参数段：提取参数名和值
 				auto paramName = patSeg.substr(1, patSeg.size() - 2);
-				params[std::string(paramName)] = std::string(reqSeg);
+				params.emplace_back(std::string(paramName), std::string(reqSeg));
 			}
 			else if (patSeg != reqSeg)
 			{
@@ -214,6 +212,54 @@ namespace hical
 		}
 
 		return true;
+	}
+
+	std::string Router::urlDecode(std::string_view encoded)
+	{
+		std::string result;
+		result.reserve(encoded.size());
+
+		for (size_t i = 0; i < encoded.size(); ++i)
+		{
+			if (encoded[i] == '%' && i + 2 < encoded.size())
+			{
+				auto hi = encoded[i + 1];
+				auto lo = encoded[i + 2];
+
+				auto hexVal = [](char c) -> int
+				{
+					if (c >= '0' && c <= '9')
+					{
+						return c - '0';
+					}
+					if (c >= 'A' && c <= 'F')
+					{
+						return c - 'A' + 10;
+					}
+					if (c >= 'a' && c <= 'f')
+					{
+						return c - 'a' + 10;
+					}
+					return -1;
+				};
+
+				int hiVal = hexVal(hi);
+				int loVal = hexVal(lo);
+				if (hiVal >= 0 && loVal >= 0)
+				{
+					result += static_cast<char>((hiVal << 4) | loVal);
+					i += 2;
+					continue;
+				}
+			}
+			else if (encoded[i] == '+')
+			{
+				result += ' ';
+				continue;
+			}
+			result += encoded[i];
+		}
+		return result;
 	}
 
 } // namespace hical

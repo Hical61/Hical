@@ -96,6 +96,8 @@ namespace hical
 		size_t bytesReceived() const override;
 
 		// ============ 回调设置（hical 风格命名）============
+		// @warning 线程安全约束：所有回调必须在 connectEstablished() 调用前设置完毕。
+		// 连接运行期间从其他线程修改回调会导致数据竞争。
 
 		void onMessage(MessageCallback cb) override;
 		void onConnection(ConnectionCallback cb) override;
@@ -115,12 +117,12 @@ namespace hical
      * @brief 连接建立后调用（由 TcpServer 调用）
      * @note SSL 连接会自动执行握手
      */
-		void connectEstablished();
+		void connectEstablished() override;
 
 		/**
      * @brief 连接销毁前调用（由 TcpServer 调用）
      */
-		void connectDestroyed();
+		void connectDestroyed() override;
 
 		/**
      * @brief 是否为 SSL 连接
@@ -232,9 +234,13 @@ namespace hical
 	template <typename SocketType>
 	GenericConnection<SocketType>::~GenericConnection()
 	{
-		if (state_.load() == State::hConnected)
+		// 不调用 close()，因为析构时 shared_from_this() 无效（引用计数已为 0）
+		// 直接操作底层 socket 关闭
+		auto& sock = lowestLayerSocket();
+		if (sock.is_open())
 		{
-			close();
+			boost::system::error_code ec;
+			sock.close(ec);
 		}
 	}
 
@@ -714,6 +720,7 @@ namespace hical
 				handleClose();
 			}
 		}
+		co_return;
 	}
 
 	// ============ 协程式异步 I/O ============
@@ -828,6 +835,12 @@ namespace hical
 		}
 		catch (const boost::system::system_error&)
 		{
+			// 线程安全说明：此处 writing_.store(false) 和 handleClose() 是安全的，
+			// 因为 writeLoop lambda 持有 self（shared_ptr），保证了对象在整个 catch 块
+			// 期间不会被析构。即使 readLoop 已经先调用了 handleClose() 并触发了
+			// closeCallback_（可能导致 TcpServer::removeConnection），shared_ptr 的
+			// 引用计数仍大于 0（self 仍在栈上），handleClose 中的 CAS 会让第二个
+			// 调用者直接返回，不会重复触发回调。
 			writing_.store(false);
 			handleClose();
 		}
@@ -836,7 +849,18 @@ namespace hical
 	template <typename SocketType>
 	void GenericConnection<SocketType>::handleClose()
 	{
-		state_.store(State::hDisconnected);
+		// CAS 保护：readLoop 和 writeLoop 可能并发调用 handleClose()，
+		// 确保回调只触发一次
+		auto expected = State::hConnected;
+		if (!state_.compare_exchange_strong(expected, State::hDisconnected))
+		{
+			expected = State::hDisconnecting;
+			if (!state_.compare_exchange_strong(expected, State::hDisconnected))
+			{
+				return; // 已经 hDisconnected，跳过
+			}
+		}
+
 		reading_ = false;
 
 		auto self = std::static_pointer_cast<TcpConnection>(sharedThis());

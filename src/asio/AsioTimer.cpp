@@ -74,7 +74,7 @@ namespace hical
 			return;
 		}
 
-		timer_.expires_after(std::chrono::milliseconds(static_cast<int>(interval_ * 1000)));
+		timer_.expires_after(std::chrono::milliseconds(static_cast<int64_t>(interval_ * 1000)));
 
 		timer_.async_wait(
 			[this, self = shared_from_this()](const boost::system::error_code& ec)
@@ -90,7 +90,7 @@ namespace hical
 			return;
 		}
 
-		timer_.expires_after(std::chrono::milliseconds(static_cast<int>(interval_ * 1000)));
+		timer_.expires_after(std::chrono::milliseconds(static_cast<int64_t>(interval_ * 1000)));
 
 		timer_.async_wait(
 			[this, self = shared_from_this()](const boost::system::error_code& ec)
@@ -120,6 +120,18 @@ namespace hical
 
 		// 执行回调
 		callback_();
+
+		// 单次定时器触发后自动从 EventLoop 的 timers_ map 中移除自身，防止泄漏
+		if (!repeating_ && cleanupCallback_)
+		{
+			cleanupCallback_(timerId_);
+		}
+	}
+
+	void AsioTimer::setCleanup(uint64_t id, std::function<void(uint64_t)> cleanup)
+	{
+		timerId_ = id;
+		cleanupCallback_ = std::move(cleanup);
 	}
 
 } // namespace hical

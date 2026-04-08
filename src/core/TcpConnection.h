@@ -109,6 +109,18 @@ namespace hical
      */
 		virtual void stopRead() = 0;
 
+		// ============ 连接生命周期（由 TcpServer 调用） ============
+
+		/**
+	     * @brief 连接建立后调用（SSL 连接会自动执行握手）
+	     */
+		virtual void connectEstablished() = 0;
+
+		/**
+	     * @brief 连接销毁前调用
+	     */
+		virtual void connectDestroyed() = 0;
+
 		// ============ 状态查询 ============
 
 		/**

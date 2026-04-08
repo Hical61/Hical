@@ -81,6 +81,14 @@ namespace hical
 
 		auto timer = std::make_shared<AsioTimer>(this, delay, std::move(cb));
 
+		// 设置自动清理回调：单次定时器触发后自动从 map 中移除，防止内存泄漏
+		timer->setCleanup(id,
+						  [this](uint64_t timerId)
+						  {
+							  std::lock_guard<std::mutex> lock(timersMutex_);
+							  timers_.erase(timerId);
+						  });
+
 		{
 			std::lock_guard<std::mutex> lock(timersMutex_);
 			timers_[id] = timer;

@@ -36,31 +36,31 @@ namespace hical
 		}
 	}
 
-	std::string HttpRequest::path() const
+	std::string_view HttpRequest::path() const
 	{
-		std::string t(req_.target());
+		auto t = req_.target();
 		auto pos = t.find('?');
-		if (pos != std::string::npos)
+		if (pos != std::string_view::npos)
 		{
 			return t.substr(0, pos);
 		}
 		return t;
 	}
 
-	std::string HttpRequest::target() const
+	std::string_view HttpRequest::target() const
 	{
-		return std::string(req_.target());
+		return req_.target();
 	}
 
-	std::string HttpRequest::query() const
+	std::string_view HttpRequest::query() const
 	{
-		std::string t(req_.target());
+		auto t = req_.target();
 		auto pos = t.find('?');
-		if (pos != std::string::npos)
+		if (pos != std::string_view::npos)
 		{
 			return t.substr(pos + 1);
 		}
-		return "";
+		return {};
 	}
 
 	std::string HttpRequest::header(const std::string& name) const

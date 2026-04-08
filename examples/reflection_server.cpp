@@ -79,7 +79,7 @@ int main(int argc, char* argv[])
 
 		// 日志中间件
 		server.use(
-			[](const HttpRequest& req, MiddlewareNext next) -> Awaitable<HttpResponse>
+			[](HttpRequest& req, MiddlewareNext next) -> Awaitable<HttpResponse>
 			{
 				std::cout << httpMethodToString(req.method()) << " " << req.path() << std::endl;
 				auto res = co_await next(req);

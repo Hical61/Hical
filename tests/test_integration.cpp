@@ -395,7 +395,7 @@ TEST_F(IntegrationTest, ConcurrentMiddleware)
 	std::atomic<int> callCount {0};
 
 	pipeline.use(
-		[&callCount](const HttpRequest& req, MiddlewareNext next) -> Awaitable<HttpResponse>
+		[&callCount](HttpRequest& req, MiddlewareNext next) -> Awaitable<HttpResponse>
 		{
 			callCount.fetch_add(1);
 			co_return co_await next(req);

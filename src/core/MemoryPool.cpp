@@ -1,4 +1,6 @@
 #include "MemoryPool.h"
+#include <cassert>
+#include <stdexcept>
 
 namespace hical
 {
@@ -26,6 +28,12 @@ namespace hical
 
 	void MemoryPool::configure(const PoolConfig& config)
 	{
+		// 安全检查：configure() 必须在服务器启动前、单线程环境中调用。
+		// 如果有通过 createRequestPool() 创建的 monotonic_buffer_resource 仍在使用中，
+		// 析构旧 globalPool_ 会导致 use-after-free。
+		assert(generation_.load(std::memory_order_relaxed) == 0
+			   || !"configure() should only be called before server starts");
+
 		config_ = config;
 
 		// 先清理所有线程本地池（它们引用 globalPool_ 作为上游）
@@ -34,7 +42,9 @@ namespace hical
 			threadPools_.clear();
 		}
 
-		// 重建全局池
+		// 重建全局池（placement new 原地重建）
+		// 安全前提：此时无其他线程通过 globalAllocator()/threadLocalAllocator() 分配内存，
+		// 且无通过 createRequestPool() 创建的存活 monotonic_buffer_resource。
 		globalPool_.~synchronized_pool_resource();
 		new (&globalPool_) std::pmr::synchronized_pool_resource(
 			std::pmr::pool_options {.max_blocks_per_chunk = config_.globalMaxBlocksPerChunk,

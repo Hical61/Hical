@@ -3,6 +3,7 @@
 #include "WebSocket.h"
 #include <boost/beast/websocket.hpp>
 #include <iostream>
+#include <stdexcept>
 #include <thread>
 #include <vector>
 
@@ -28,11 +29,19 @@ namespace hical
 
 	Router& HttpServer::router()
 	{
+		if (started_)
+		{
+			throw std::logic_error("HttpServer: cannot modify router after start()");
+		}
 		return router_;
 	}
 
 	void HttpServer::use(MiddlewareHandler middleware)
 	{
+		if (started_)
+		{
+			throw std::logic_error("HttpServer: cannot add middleware after start()");
+		}
 		middlewarePipeline_.use(std::move(middleware));
 	}
 
@@ -46,6 +55,16 @@ namespace hical
 		maxHeaderSize_ = bytes;
 	}
 
+	void HttpServer::setMaxConnections(size_t maxConns)
+	{
+		maxConnections_ = maxConns;
+	}
+
+	void HttpServer::setIdleTimeout(double seconds)
+	{
+		idleTimeout_ = seconds;
+	}
+
 	void HttpServer::enableSsl(const std::string& certFile, const std::string& keyFile)
 	{
 		sslCtx_ = std::make_shared<SslContext>(boost::asio::ssl::context::tls_server);
@@ -56,6 +75,17 @@ namespace hical
 	void HttpServer::start()
 	{
 		running_.store(true);
+		started_ = true;
+
+		// 预构建中间件调用链，避免每请求重建
+		if (middlewarePipeline_.size() > 0)
+		{
+			middlewarePipeline_.build(
+				[this](HttpRequest& req) -> Awaitable<HttpResponse>
+				{
+					co_return co_await router_.dispatch(req);
+				});
+		}
 
 		acceptor_ = std::make_unique<tcp::acceptor>(ioContext_);
 		auto endpoint = tcp::endpoint(tcp::v4(), port_.load());
@@ -149,6 +179,14 @@ namespace hical
 					break;
 				}
 
+				// 连接数限制：超过上限时立即关闭新连接
+				if (maxConnections_ > 0 && activeConnections_.load() >= maxConnections_)
+				{
+					boost::system::error_code ec;
+					socket.close(ec);
+					continue;
+				}
+
 				boost::asio::co_spawn(ioContext_, handleSession(std::move(socket)), boost::asio::detached);
 			}
 			catch (const boost::system::system_error& e)
@@ -164,14 +202,29 @@ namespace hical
 
 	Awaitable<void> HttpServer::handleSession(tcp::socket socket)
 	{
+		// 连接计数 RAII 守卫
+		activeConnections_.fetch_add(1);
+
+		struct ConnectionCounter
+		{
+			std::atomic<size_t>& count;
+
+			~ConnectionCounter()
+			{
+				count.fetch_sub(1);
+			}
+		} connCounter {activeConnections_};
+
 		// RAII 守卫：确保 socket 在任何退出路径（含异常）都被正确关闭
+		// transferred 标志：当 socket 被 move 给 WebSocket 会话后，跳过析构
 		struct SocketGuard
 		{
 			tcp::socket& sock;
+			bool transferred {false};
 
 			~SocketGuard()
 			{
-				if (sock.is_open())
+				if (!transferred && sock.is_open())
 				{
 					boost::system::error_code ec;
 					sock.shutdown(tcp::socket::shutdown_send, ec);
@@ -192,9 +245,32 @@ namespace hical
 				// 使用 parser 并设置请求大小限制，防止 OOM 攻击
 				http::request_parser<http::string_body> parser;
 				parser.body_limit(maxBodySize_);
-				parser.header_limit(maxHeaderSize_);
+				parser.header_limit(static_cast<std::uint32_t>(maxHeaderSize_));
 
-				co_await http::async_read(socket, buffer, parser, boost::asio::use_awaitable);
+				// 空闲超时：防止 Slowloris 类攻击，客户端不发数据时自动断开
+				if (idleTimeout_ > 0)
+				{
+					boost::asio::steady_timer deadline(
+						socket.get_executor(),
+						std::chrono::milliseconds(static_cast<int64_t>(idleTimeout_ * 1000)));
+					deadline.async_wait(
+						[&socket](const boost::system::error_code& ec)
+						{
+							if (!ec)
+							{
+								boost::system::error_code closeEc;
+								socket.close(closeEc);
+							}
+						});
+
+					co_await http::async_read(socket, buffer, parser, boost::asio::use_awaitable);
+
+					deadline.cancel();
+				}
+				else
+				{
+					co_await http::async_read(socket, buffer, parser, boost::asio::use_awaitable);
+				}
 
 				auto beastReq = parser.release();
 
@@ -211,6 +287,8 @@ namespace hical
 					auto* wsRoute = router_.findWsRoute(reqPath);
 					if (wsRoute)
 					{
+						// socket 所有权转移给 WebSocket 会话，标记 guard 跳过析构
+						guard.transferred = true;
 						co_await handleWebSocket(std::move(socket), std::move(beastReq), *wsRoute);
 						co_return;
 					}
@@ -222,12 +300,11 @@ namespace hical
 				HttpResponse res;
 				if (middlewarePipeline_.size() > 0)
 				{
-					res =
-						co_await middlewarePipeline_.execute(req,
-															 [this, &req](const HttpRequest&) -> Awaitable<HttpResponse>
-															 {
-																 co_return co_await router_.dispatch(req);
-															 });
+					res = co_await middlewarePipeline_.execute(req,
+															   [this](HttpRequest& r) -> Awaitable<HttpResponse>
+															   {
+																   co_return co_await router_.dispatch(r);
+															   });
 				}
 				else
 				{

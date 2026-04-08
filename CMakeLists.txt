@@ -18,6 +18,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # 编译选项
 if(MSVC)
     add_compile_options(/W4 /utf-8 /Zc:preprocessor)
+    add_compile_definitions(_WIN32_WINNT=0x0A00)  # Target Windows 10
 else()
     add_compile_options(-Wall -Wextra -Wpedantic)
 endif()

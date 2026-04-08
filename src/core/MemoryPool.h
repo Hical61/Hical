@@ -128,6 +128,11 @@ namespace hical
 		/**
      * @brief 使用指定配置初始化（必须在首次使用前调用，否则使用默认配置）
      * @param config 池配置
+     *
+     * @warning 线程安全约束：此方法必须在服务器启动前、单线程环境中调用。
+     * 如果在多线程运行期间调用，会导致 use-after-free（globalPool_ 被重建时
+     * 其他线程可能正在通过 globalAllocator()/threadLocalAllocator() 分配内存）。
+     * 同样，调用时不应有通过 threadLocalAllocator() 分配的存活对象。
      */
 		void configure(const PoolConfig& config);
 

@@ -16,7 +16,7 @@ int main(int argc, char* argv[])
 
 		// 日志中间件
 		server.use(
-			[](const HttpRequest& req, MiddlewareNext next) -> Awaitable<HttpResponse>
+			[](HttpRequest& req, MiddlewareNext next) -> Awaitable<HttpResponse>
 			{
 				std::cout << httpMethodToString(req.method()) << " " << req.path() << std::endl;
 				auto res = co_await next(req);
@@ -57,7 +57,7 @@ int main(int argc, char* argv[])
 								{
 									return HttpResponse::ok("Hello, World!");
 								}
-								return HttpResponse::ok("Hello! query=" + query);
+								return HttpResponse::ok("Hello! query=" + std::string(query));
 							});
 
 		// GET /users/{id} — 路径参数示例

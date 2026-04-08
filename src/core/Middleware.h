@@ -14,7 +14,7 @@ namespace hical
  *
  * 调用 next 会继续执行下一个中间件或最终的路由处理器。
  */
-	using MiddlewareNext = std::function<Awaitable<HttpResponse>(const HttpRequest&)>;
+	using MiddlewareNext = std::function<Awaitable<HttpResponse>(HttpRequest&)>;
 
 	/**
  * @brief 中间件处理器类型
@@ -24,7 +24,7 @@ namespace hical
  *
  * 示例：
  * ```cpp
- * auto logger = [](const HttpRequest& req, MiddlewareNext next)
+ * auto logger = [](HttpRequest& req, MiddlewareNext next)
  *     -> Awaitable<HttpResponse> {
  *     std::cout << req.path() << std::endl;    // 前置逻辑
  *     auto res = co_await next(req);            // 调用下一层
@@ -33,7 +33,7 @@ namespace hical
  * };
  * ```
  */
-	using MiddlewareHandler = std::function<Awaitable<HttpResponse>(const HttpRequest&, MiddlewareNext)>;
+	using MiddlewareHandler = std::function<Awaitable<HttpResponse>(HttpRequest&, MiddlewareNext)>;
 
 	/**
  * @brief 中间件管道（洋葱模型）
@@ -49,16 +49,26 @@ namespace hical
 		/**
      * @brief 添加中间件
      * @param middleware 中间件处理器
+     * @note 必须在 build() 之前调用
      */
 		void use(MiddlewareHandler middleware);
 
 		/**
+     * @brief 预构建中间件调用链
+     * @param finalHandler 最终处理器（通常是路由分发）
+     *
+     * 调用后，execute() 直接使用缓存的调用链，避免每次请求重建。
+     * 调用后不应再 use() 添加中间件。
+     */
+		void build(MiddlewareNext finalHandler);
+
+		/**
      * @brief 执行中间件管道
      * @param req HTTP 请求
-     * @param finalHandler 最终处理器（通常是路由分发）
+     * @param finalHandler 最终处理器（当未调用 build() 时使用此参数）
      * @return 协程化的 HTTP 响应
      */
-		Awaitable<HttpResponse> execute(const HttpRequest& req, MiddlewareNext finalHandler);
+		Awaitable<HttpResponse> execute(HttpRequest& req, MiddlewareNext finalHandler);
 
 		/**
      * @brief 获取中间件数量
@@ -68,6 +78,7 @@ namespace hical
 
 	private:
 		std::vector<MiddlewareHandler> middlewares_;
+		MiddlewareNext cachedChain_; // 预构建的调用链缓存
 	};
 
 } // namespace hical

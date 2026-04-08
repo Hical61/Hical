@@ -219,14 +219,7 @@ namespace hical
 				}
 
 				// 建立连接（SSL 会触发握手）
-				if (auto* plain = dynamic_cast<PlainConnection*>(conn.get()))
-				{
-					plain->connectEstablished();
-				}
-				else if (auto* ssl = dynamic_cast<SslConnection*>(conn.get()))
-				{
-					ssl->connectEstablished();
-				}
+				conn->connectEstablished();
 			}
 			catch (const boost::system::system_error& e)
 			{
@@ -234,6 +227,7 @@ namespace hical
 				{
 					break; // acceptor 被关闭
 				}
+				// 瞬态错误（如 EMFILE 文件描述符耗尽）继续接受
 			}
 		}
 	}

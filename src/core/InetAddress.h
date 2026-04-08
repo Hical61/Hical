@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <cstring>
 #include <string>
 
 #ifdef _WIN32
@@ -22,7 +23,10 @@ namespace hical
 	class InetAddress
 	{
 	public:
-		InetAddress() = default;
+		InetAddress()
+		{
+			std::memset(&addr6_, 0, sizeof(addr6_));
+		}
 
 		/**
      * @brief 构造函数（IPv4）

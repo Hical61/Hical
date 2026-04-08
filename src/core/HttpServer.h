@@ -74,6 +74,18 @@ namespace hical
 		void setMaxHeaderSize(size_t bytes);
 
 		/**
+     * @brief 设置最大并发连接数
+     * @param maxConns 最大连接数（0 表示不限制，默认 10000）
+     */
+		void setMaxConnections(size_t maxConns);
+
+		/**
+     * @brief 设置空闲连接超时时间
+     * @param seconds 超时秒数（0 表示不超时，默认 60 秒）
+     */
+		void setIdleTimeout(double seconds);
+
+		/**
      * @brief 启动服务器（阻塞）
      *
      * 调用后阻塞当前线程，直到 stop() 被调用。
@@ -120,9 +132,20 @@ namespace hical
 
 		std::shared_ptr<SslContext> sslCtx_;
 
+		// 启动后锁定配置，防止运行期修改路由/中间件导致数据竞争
+		// 使用 atomic 确保多线程环境下可见性（start() 后 IO 线程需读取此标志）
+		std::atomic<bool> started_ {false};
+
 		// 请求大小限制
 		size_t maxBodySize_ {1024 * 1024}; // 1MB
 		size_t maxHeaderSize_ {8192};      // 8KB
+
+		// 连接数限制（0 表示不限制）
+		size_t maxConnections_ {10000};
+		std::atomic<size_t> activeConnections_ {0};
+
+		// 空闲连接超时（秒，0 表示不超时）
+		double idleTimeout_ {60.0};
 	};
 
 } // namespace hical

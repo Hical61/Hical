@@ -231,6 +231,8 @@ namespace hical
      */
 		void swap(PmrBuffer& rhs) noexcept
 		{
+			// pmr::vector::swap 在分配器不相等时行为未定义，此处做防御性检查
+			assert(buffer_.get_allocator() == rhs.buffer_.get_allocator());
 			buffer_.swap(rhs.buffer_);
 			std::swap(readIndex_, rhs.readIndex_);
 			std::swap(writeIndex_, rhs.writeIndex_);
