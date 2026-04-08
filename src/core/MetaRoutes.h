@@ -38,96 +38,104 @@
 namespace hical::meta
 {
 
-    // ============ C++20 回退实现 ============
+	// ============ C++20 回退实现 ============
 
 #if !HICAL_HAS_REFLECTION
 
-    namespace detail
-    {
+	namespace detail
+	{
 
-        /**
+		/**
          * @brief 注册单个同步路由
          *
          * 通过 shared_ptr 捕获 handler，确保生命周期安全。
          */
-        template <typename Handler>
-        void registerOneRoute(Router& router, std::shared_ptr<Handler> pHandler, const RouteInfo& info,
-                              HttpResponse (Handler::*fn)(const HttpRequest&))
-        {
-            router.route(info.method, std::string(info.path),
-                         [pHandler, fn](const HttpRequest& req) -> HttpResponse
-                         {
-                             return (pHandler.get()->*fn)(req);
-                         });
-        }
+		template <typename Handler>
+		void registerOneRoute(Router& router,
+							  std::shared_ptr<Handler> pHandler,
+							  const RouteInfo& info,
+							  HttpResponse (Handler::*fn)(const HttpRequest&))
+		{
+			router.route(info.method,
+						 std::string(info.path),
+						 [pHandler, fn](const HttpRequest& req) -> HttpResponse
+						 {
+							 return (pHandler.get()->*fn)(req);
+						 });
+		}
 
-        /**
+		/**
          * @brief 注册单个协程路由
          */
-        template <typename Handler>
-        void registerOneRoute(Router& router, std::shared_ptr<Handler> pHandler, const RouteInfo& info,
-                              Awaitable<HttpResponse> (Handler::*fn)(const HttpRequest&))
-        {
-            router.route(info.method, std::string(info.path),
-                         [pHandler, fn](const HttpRequest& req) -> Awaitable<HttpResponse>
-                         {
-                             co_return co_await (pHandler.get()->*fn)(req);
-                         });
-        }
+		template <typename Handler>
+		void registerOneRoute(Router& router,
+							  std::shared_ptr<Handler> pHandler,
+							  const RouteInfo& info,
+							  Awaitable<HttpResponse> (Handler::*fn)(const HttpRequest&))
+		{
+			router.route(info.method,
+						 std::string(info.path),
+						 [pHandler, fn](const HttpRequest& req) -> Awaitable<HttpResponse>
+						 {
+							 co_return co_await (pHandler.get()->*fn)(req);
+						 });
+		}
 
-        /**
+		/**
          * @brief 路由注册函数对象
          *
          * 将 RouteInfo 和成员函数指针打包为可调用对象。
          */
-        template <typename Handler, typename MemFnPtr>
-        struct RouteRegistrar
-        {
-            RouteInfo info;
-            MemFnPtr fnPtr;
+		template <typename Handler, typename MemFnPtr>
+		struct RouteRegistrar
+		{
+			RouteInfo info;
+			MemFnPtr fnPtr;
 
-            void apply(Router& router, std::shared_ptr<Handler> pHandler) const
-            {
-                registerOneRoute(router, pHandler, info, fnPtr);
-            }
-        };
+			void apply(Router& router, std::shared_ptr<Handler> pHandler) const
+			{
+				registerOneRoute(router, pHandler, info, fnPtr);
+			}
+		};
 
-        template <typename Handler, typename MemFnPtr>
-        constexpr RouteRegistrar<Handler, MemFnPtr> makeRegistrar(RouteInfo info, MemFnPtr fn)
-        {
-            return {info, fn};
-        }
+		template <typename Handler, typename MemFnPtr>
+		constexpr RouteRegistrar<Handler, MemFnPtr> makeRegistrar(RouteInfo info, MemFnPtr fn)
+		{
+			return {info, fn};
+		}
 
-        /**
+		/**
          * @brief 遍历 tuple 逐个注册
          */
-        template <typename Handler, typename Tuple, size_t... I>
-        void registerAll(Router& router, std::shared_ptr<Handler> pHandler, const Tuple& table,
-                         std::index_sequence<I...>)
-        {
-            (std::get<I>(table).apply(router, pHandler), ...);
-        }
+		template <typename Handler, typename Tuple, size_t... I>
+		void registerAll(Router& router,
+						 std::shared_ptr<Handler> pHandler,
+						 const Tuple& table,
+						 std::index_sequence<I...>)
+		{
+			(std::get<I>(table).apply(router, pHandler), ...);
+		}
 
-    } // namespace detail
+	} // namespace detail
 
-    /**
+	/**
      * @brief 自动注册 Handler 中所有路由到 Router（shared_ptr 版本，推荐）
      *
      * 通过 shared_ptr 管理 handler 生命周期，确保路由回调中的引用始终有效。
      * 适用于 handler 需要跨异步边界存活的场景。
      */
-    template <typename Handler>
-    void registerRoutes(Router& router, std::shared_ptr<Handler> pHandler)
-    {
-        static_assert(HasRouteTable<Handler>::value,
-                      "Handler must use HICAL_ROUTES() macro or have C++26 reflection support");
+	template <typename Handler>
+	void registerRoutes(Router& router, std::shared_ptr<Handler> pHandler)
+	{
+		static_assert(HasRouteTable<Handler>::value,
+					  "Handler must use HICAL_ROUTES() macro or have C++26 reflection support");
 
-        auto table = Handler::hicalRouteTable();
-        constexpr auto count = std::tuple_size_v<decltype(table)>;
-        detail::registerAll(router, pHandler, table, std::make_index_sequence<count> {});
-    }
+		auto table = Handler::hicalRouteTable();
+		constexpr auto count = std::tuple_size_v<decltype(table)>;
+		detail::registerAll(router, pHandler, table, std::make_index_sequence<count> {});
+	}
 
-    /**
+	/**
      * @brief 自动注册 Handler 中所有路由到 Router（引用版本，便捷）
      *
      * 内部创建 shared_ptr（以空删除器包装），调用者需确保 handler 的生命周期
@@ -135,52 +143,56 @@ namespace hical::meta
      *
      * 对于非阻塞/异步场景，推荐使用 shared_ptr 重载。
      */
-    template <typename Handler>
-    void registerRoutes(Router& router, Handler& handler)
-    {
-        static_assert(HasRouteTable<Handler>::value,
-                      "Handler must use HICAL_ROUTES() macro or have C++26 reflection support");
+	template <typename Handler>
+	void registerRoutes(Router& router, Handler& handler)
+	{
+		static_assert(HasRouteTable<Handler>::value,
+					  "Handler must use HICAL_ROUTES() macro or have C++26 reflection support");
 
-        // 空删除器：不接管所有权，由调用者管理生命周期
-        auto pHandler = std::shared_ptr<Handler>(&handler, [](Handler*) {});
-        registerRoutes(router, pHandler);
-    }
+		// 空删除器：不接管所有权，由调用者管理生命周期
+		auto pHandler = std::shared_ptr<Handler>(&handler,
+												 [](Handler*)
+												 {
+												 });
+		registerRoutes(router, pHandler);
+	}
 
 #else // HICAL_HAS_REFLECTION == 1
 
-    // ============ C++26 反射实现 ============
+	// ============ C++26 反射实现 ============
 
-    template <typename Handler>
-    void registerRoutes(Router& router, Handler& handler)
-    {
-        template for (constexpr auto fn : std::meta::nonstatic_member_functions_of(^^Handler))
-        {
-            constexpr auto attrs = std::meta::attributes_of(fn);
-            template for (constexpr auto attr : attrs)
-            {
-                if constexpr (std::meta::identifier_of(attr) == "hical::route")
-                {
-                    constexpr auto args = std::meta::attribute_arguments_of(attr);
-                    constexpr auto path = std::meta::extract<const char*>(args[0]);
-                    constexpr auto methodStr = std::meta::extract<const char*>(args[1]);
-                    auto method = stringToHttpMethod(methodStr);
+	template <typename Handler>
+	void registerRoutes(Router& router, Handler& handler)
+	{
+		template for (constexpr auto fn : std::meta::nonstatic_member_functions_of(^^Handler))
+		{
+			constexpr auto attrs = std::meta::attributes_of(fn);
+			template for (constexpr auto attr : attrs)
+			{
+				if constexpr (std::meta::identifier_of(attr) == "hical::route")
+				{
+					constexpr auto args = std::meta::attribute_arguments_of(attr);
+					constexpr auto path = std::meta::extract<const char*>(args[0]);
+					constexpr auto methodStr = std::meta::extract<const char*>(args[1]);
+					auto method = stringToHttpMethod(methodStr);
 
-                    router.route(method, path,
-                                 [&handler](const HttpRequest& req) -> Awaitable<HttpResponse>
-                                 {
-                                     if constexpr (std::is_same_v<decltype(handler.[:fn:](req)), HttpResponse>)
-                                     {
-                                         co_return handler.[:fn:](req);
-                                     }
-                                     else
-                                     {
-                                         co_return co_await handler.[:fn:](req);
-                                     }
-                                 });
-                }
-            }
-        }
-    }
+					router.route(method,
+								 path,
+								 [&handler](const HttpRequest& req) -> Awaitable<HttpResponse>
+								 {
+									 if constexpr (std::is_same_v<decltype(handler.[:fn:](req)), HttpResponse>)
+									 {
+										 co_return handler.[:fn:](req);
+									 }
+									 else
+									 {
+										 co_return co_await handler.[:fn:](req);
+									 }
+								 });
+				}
+			}
+		}
+	}
 
 #endif // HICAL_HAS_REFLECTION
 
@@ -197,11 +209,8 @@ namespace hical::meta
  * @param path   路由路径
  * @param func   成员函数名
  */
-    #define HICAL_HANDLER(method, path, func)                                                                          \
-        static constexpr ::hical::meta::RouteInfo hicalRouteInfo_##func                                                \
-        {                                                                                                              \
-            ::hical::HttpMethod::h##method, path, #func                                                                \
-        };
+	#define HICAL_HANDLER(method, path, func) \
+		static constexpr ::hical::meta::RouteInfo hicalRouteInfo_##func {::hical::HttpMethod::h##method, path, #func};
 
 /**
  * @brief 收集所有路由（C++20 回退方案）
@@ -210,55 +219,54 @@ namespace hical::meta
  *
  * 用法：HICAL_ROUTES(MyHandler, listUsers, getUser)
  */
-    #define HICAL_ROUTES(Type, ...)                                                                                    \
-        static auto hicalRouteTable()                                                                                  \
-        {                                                                                                              \
-            return std::make_tuple(HICAL_ROUTES_EXPAND_(Type, __VA_ARGS__));                                           \
-        }
+	#define HICAL_ROUTES(Type, ...)                                          \
+		static auto hicalRouteTable()                                        \
+		{                                                                    \
+			return std::make_tuple(HICAL_ROUTES_EXPAND_(Type, __VA_ARGS__)); \
+		}
 
-    // 生成单个 registrar
-    #define HICAL_ROUTE_REG_(T, func)                                                                                  \
-        ::hical::meta::detail::makeRegistrar<T>(T::hicalRouteInfo_##func, &T::func)
+	// 生成单个 registrar
+	#define HICAL_ROUTE_REG_(T, func) ::hical::meta::detail::makeRegistrar<T>(T::hicalRouteInfo_##func, &T::func)
 
-    // 展开辅助宏
-    #define HICAL_ROUTES_EXPAND_(T, ...) HICAL_ROUTES_DISPATCH_(T, HICAL_ROUTES_COUNT_(__VA_ARGS__), __VA_ARGS__)
+	// 展开辅助宏
+	#define HICAL_ROUTES_EXPAND_(T, ...) HICAL_ROUTES_DISPATCH_(T, HICAL_ROUTES_COUNT_(__VA_ARGS__), __VA_ARGS__)
 
-    // 参数计数
-    #define HICAL_ROUTES_COUNT_(...) HICAL_ROUTES_COUNT_IMPL_(__VA_ARGS__, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1)
-    #define HICAL_ROUTES_COUNT_IMPL_(_1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, N, ...) N
+	// 参数计数
+	#define HICAL_ROUTES_COUNT_(...) \
+		HICAL_ROUTES_COUNT_IMPL_(__VA_ARGS__, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1)
+	#define HICAL_ROUTES_COUNT_IMPL_(_1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, N, ...) N
 
-    // 分发到对应数量的展开宏
-    #define HICAL_ROUTES_DISPATCH_(T, N, ...) HICAL_ROUTES_CAT_(HICAL_ROUTES_E_, N)(T, __VA_ARGS__)
-    #define HICAL_ROUTES_CAT_(a, b) HICAL_ROUTES_CAT2_(a, b)
-    #define HICAL_ROUTES_CAT2_(a, b) a##b
+	// 分发到对应数量的展开宏
+	#define HICAL_ROUTES_DISPATCH_(T, N, ...) HICAL_ROUTES_CAT_(HICAL_ROUTES_E_, N)(T, __VA_ARGS__)
+	#define HICAL_ROUTES_CAT_(a, b) HICAL_ROUTES_CAT2_(a, b)
+	#define HICAL_ROUTES_CAT2_(a, b) a##b
 
-    #define HICAL_ROUTES_E_1(T, a) HICAL_ROUTE_REG_(T, a)
-    #define HICAL_ROUTES_E_2(T, a, b) HICAL_ROUTE_REG_(T, a), HICAL_ROUTE_REG_(T, b)
-    #define HICAL_ROUTES_E_3(T, a, b, c) HICAL_ROUTES_E_2(T, a, b), HICAL_ROUTE_REG_(T, c)
-    #define HICAL_ROUTES_E_4(T, a, b, c, d) HICAL_ROUTES_E_3(T, a, b, c), HICAL_ROUTE_REG_(T, d)
-    #define HICAL_ROUTES_E_5(T, a, b, c, d, e) HICAL_ROUTES_E_4(T, a, b, c, d), HICAL_ROUTE_REG_(T, e)
-    #define HICAL_ROUTES_E_6(T, a, b, c, d, e, f) HICAL_ROUTES_E_5(T, a, b, c, d, e), HICAL_ROUTE_REG_(T, f)
-    #define HICAL_ROUTES_E_7(T, a, b, c, d, e, f, g) HICAL_ROUTES_E_6(T, a, b, c, d, e, f), HICAL_ROUTE_REG_(T, g)
-    #define HICAL_ROUTES_E_8(T, a, b, c, d, e, f, g, h)                                                               \
-        HICAL_ROUTES_E_7(T, a, b, c, d, e, f, g), HICAL_ROUTE_REG_(T, h)
-    #define HICAL_ROUTES_E_9(T, a, b, c, d, e, f, g, h, i)                                                            \
-        HICAL_ROUTES_E_8(T, a, b, c, d, e, f, g, h), HICAL_ROUTE_REG_(T, i)
-    #define HICAL_ROUTES_E_10(T, a, b, c, d, e, f, g, h, i, j)                                                        \
-        HICAL_ROUTES_E_9(T, a, b, c, d, e, f, g, h, i), HICAL_ROUTE_REG_(T, j)
-    #define HICAL_ROUTES_E_11(T, a, b, c, d, e, f, g, h, i, j, k)                                                     \
-        HICAL_ROUTES_E_10(T, a, b, c, d, e, f, g, h, i, j), HICAL_ROUTE_REG_(T, k)
-    #define HICAL_ROUTES_E_12(T, a, b, c, d, e, f, g, h, i, j, k, l)                                                  \
-        HICAL_ROUTES_E_11(T, a, b, c, d, e, f, g, h, i, j, k, l), HICAL_ROUTE_REG_(T, l)
-    #define HICAL_ROUTES_E_13(T, a, b, c, d, e, f, g, h, i, j, k, l, m)                                               \
-        HICAL_ROUTES_E_12(T, a, b, c, d, e, f, g, h, i, j, k, l, m), HICAL_ROUTE_REG_(T, m)
-    #define HICAL_ROUTES_E_14(T, a, b, c, d, e, f, g, h, i, j, k, l, m, n)                                            \
-        HICAL_ROUTES_E_13(T, a, b, c, d, e, f, g, h, i, j, k, l, m, n), HICAL_ROUTE_REG_(T, n)
-    #define HICAL_ROUTES_E_15(T, a, b, c, d, e, f, g, h, i, j, k, l, m, n, o)                                         \
-        HICAL_ROUTES_E_14(T, a, b, c, d, e, f, g, h, i, j, k, l, m, n, o), HICAL_ROUTE_REG_(T, o)
-    #define HICAL_ROUTES_E_16(T, a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p)                                      \
-        HICAL_ROUTES_E_15(T, a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p), HICAL_ROUTE_REG_(T, p)
+	#define HICAL_ROUTES_E_1(T, a) HICAL_ROUTE_REG_(T, a)
+	#define HICAL_ROUTES_E_2(T, a, b) HICAL_ROUTE_REG_(T, a), HICAL_ROUTE_REG_(T, b)
+	#define HICAL_ROUTES_E_3(T, a, b, c) HICAL_ROUTES_E_2(T, a, b), HICAL_ROUTE_REG_(T, c)
+	#define HICAL_ROUTES_E_4(T, a, b, c, d) HICAL_ROUTES_E_3(T, a, b, c), HICAL_ROUTE_REG_(T, d)
+	#define HICAL_ROUTES_E_5(T, a, b, c, d, e) HICAL_ROUTES_E_4(T, a, b, c, d), HICAL_ROUTE_REG_(T, e)
+	#define HICAL_ROUTES_E_6(T, a, b, c, d, e, f) HICAL_ROUTES_E_5(T, a, b, c, d, e), HICAL_ROUTE_REG_(T, f)
+	#define HICAL_ROUTES_E_7(T, a, b, c, d, e, f, g) HICAL_ROUTES_E_6(T, a, b, c, d, e, f), HICAL_ROUTE_REG_(T, g)
+	#define HICAL_ROUTES_E_8(T, a, b, c, d, e, f, g, h) HICAL_ROUTES_E_7(T, a, b, c, d, e, f, g), HICAL_ROUTE_REG_(T, h)
+	#define HICAL_ROUTES_E_9(T, a, b, c, d, e, f, g, h, i) \
+		HICAL_ROUTES_E_8(T, a, b, c, d, e, f, g, h), HICAL_ROUTE_REG_(T, i)
+	#define HICAL_ROUTES_E_10(T, a, b, c, d, e, f, g, h, i, j) \
+		HICAL_ROUTES_E_9(T, a, b, c, d, e, f, g, h, i), HICAL_ROUTE_REG_(T, j)
+	#define HICAL_ROUTES_E_11(T, a, b, c, d, e, f, g, h, i, j, k) \
+		HICAL_ROUTES_E_10(T, a, b, c, d, e, f, g, h, i, j), HICAL_ROUTE_REG_(T, k)
+	#define HICAL_ROUTES_E_12(T, a, b, c, d, e, f, g, h, i, j, k, l) \
+		HICAL_ROUTES_E_11(T, a, b, c, d, e, f, g, h, i, j, k, l), HICAL_ROUTE_REG_(T, l)
+	#define HICAL_ROUTES_E_13(T, a, b, c, d, e, f, g, h, i, j, k, l, m) \
+		HICAL_ROUTES_E_12(T, a, b, c, d, e, f, g, h, i, j, k, l, m), HICAL_ROUTE_REG_(T, m)
+	#define HICAL_ROUTES_E_14(T, a, b, c, d, e, f, g, h, i, j, k, l, m, n) \
+		HICAL_ROUTES_E_13(T, a, b, c, d, e, f, g, h, i, j, k, l, m, n), HICAL_ROUTE_REG_(T, n)
+	#define HICAL_ROUTES_E_15(T, a, b, c, d, e, f, g, h, i, j, k, l, m, n, o) \
+		HICAL_ROUTES_E_14(T, a, b, c, d, e, f, g, h, i, j, k, l, m, n, o), HICAL_ROUTE_REG_(T, o)
+	#define HICAL_ROUTES_E_16(T, a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p) \
+		HICAL_ROUTES_E_15(T, a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p), HICAL_ROUTE_REG_(T, p)
 
 #else
-    #define HICAL_HANDLER(method, path, func)
-    #define HICAL_ROUTES(Type, ...)
+	#define HICAL_HANDLER(method, path, func)
+	#define HICAL_ROUTES(Type, ...)
 #endif

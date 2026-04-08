@@ -17,43 +17,43 @@
 namespace hical::test
 {
 
-    /**
+	/**
      * @brief 在事件循环中运行协程并等待结果
      * @tparam F 协程工厂函数类型
      * @param loop 事件循环
      * @param f 返回 Awaitable<T> 的可调用对象
      * @return std::optional<T> 协程返回值，超时返回 nullopt
      */
-    template <typename F>
-    auto runCoroutine(AsioEventLoop& loop, F&& f)
-    {
-        using ReturnType = typename std::invoke_result_t<F>::value_type;
+	template <typename F>
+	auto runCoroutine(AsioEventLoop& loop, F&& f)
+	{
+		using ReturnType = typename std::invoke_result_t<F>::value_type;
 
-        std::optional<ReturnType> result;
-        std::atomic<bool> done {false};
+		std::optional<ReturnType> result;
+		std::atomic<bool> done {false};
 
-        coSpawn(loop.getIoContext(),
-                [&]() -> Awaitable<void>
-                {
-                    result = co_await f();
-                    done = true;
-                });
+		coSpawn(loop.getIoContext(),
+				[&]() -> Awaitable<void>
+				{
+					result = co_await f();
+					done = true;
+				});
 
-        std::thread loopThread(
-            [&loop]()
-            {
-                loop.run();
-            });
+		std::thread loopThread(
+			[&loop]()
+			{
+				loop.run();
+			});
 
-        for (int i = 0; i < 100 && !done.load(); ++i)
-        {
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
-        }
+		for (int i = 0; i < 100 && !done.load(); ++i)
+		{
+			std::this_thread::sleep_for(std::chrono::milliseconds(10));
+		}
 
-        loop.stop();
-        loopThread.join();
+		loop.stop();
+		loopThread.join();
 
-        return result;
-    }
+		return result;
+	}
 
 } // namespace hical::test
