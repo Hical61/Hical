@@ -10,19 +10,70 @@
 
 **最低要求：**
 
-| 组件            | 版本                         |
-| --------------- | ---------------------------- |
-| GCC (MinGW-w64) | 10+（需支持 C++20 协程）     |
-| CMake           | 3.20+                        |
-| Boost           | 1.70+（Asio / Beast / JSON） |
-| OpenSSL         | 3.0+                         |
+| 组件       | 版本                                  |
+| ---------- | ------------------------------------- |
+| C++ 编译器 | GCC 10+ / Clang 15+ / MSVC 2022+（需支持 C++20 协程） |
+| CMake      | 3.20+                                 |
+| Boost      | 1.70+（Asio / Beast / JSON）          |
+| OpenSSL    | 3.0+                                  |
 
-**快速安装（MSYS2 MINGW64）：**
+**快速安装：**
+
+<details>
+<summary><b>Windows（MSYS2 MINGW64）</b></summary>
 
 ```bash
+pacman -Syu
 pacman -S mingw-w64-x86_64-gcc mingw-w64-x86_64-cmake mingw-w64-x86_64-ninja \
           mingw-w64-x86_64-boost mingw-w64-x86_64-openssl mingw-w64-x86_64-gtest
 ```
+
+将 `C:\msys64\mingw64\bin` 添加到系统 PATH。
+
+</details>
+
+<details>
+<summary><b>Ubuntu / Debian</b></summary>
+
+```bash
+sudo apt update
+sudo apt install -y build-essential g++ cmake ninja-build \
+                    libboost-all-dev libssl-dev libgtest-dev
+```
+
+> Ubuntu 22.04+ 开箱即用。Ubuntu 20.04 需升级 GCC，详见 [编译与测试指南](build_and_test_guide.md)。
+
+</details>
+
+<details>
+<summary><b>Fedora / RHEL</b></summary>
+
+```bash
+sudo dnf install -y gcc-c++ cmake ninja-build \
+                    boost-devel openssl-devel gtest-devel
+```
+
+</details>
+
+<details>
+<summary><b>Arch Linux</b></summary>
+
+```bash
+sudo pacman -S gcc cmake ninja boost openssl gtest
+```
+
+</details>
+
+<details>
+<summary><b>macOS（Homebrew）</b></summary>
+
+```bash
+brew install cmake ninja boost openssl@3 googletest
+```
+
+> macOS 自带 LibreSSL 而非 OpenSSL，编译时需指定路径，详见下方编译命令。
+
+</details>
 
 ---
 
@@ -83,9 +134,20 @@ int main()
 **编译运行：**
 
 ```bash
+# Windows (MSYS2)
 cmake -B build -G "Ninja" -DCMAKE_PREFIX_PATH=C:/msys64/mingw64
 cmake --build build
 ./build/my_server.exe
+
+# Linux (Ubuntu / Fedora / Arch)
+cmake -B build -G "Ninja"
+cmake --build build
+./build/my_server
+
+# macOS (Homebrew)
+cmake -B build -G "Ninja" -DOPENSSL_ROOT_DIR=$(brew --prefix openssl@3)
+cmake --build build
+./build/my_server
 ```
 
 **测试：**
@@ -264,10 +326,21 @@ std::cout << "峰值: " << stats.peakBytesAllocated << " bytes\n";
 **运行示例：**
 
 ```bash
-cd e:/MyGit/hical
+cd /path/to/hical
+
+# Windows (MSYS2)
 cmake -B build -G "Ninja" -DCMAKE_PREFIX_PATH=C:/msys64/mingw64
+
+# Linux
+cmake -B build -G "Ninja"
+
+# macOS (Homebrew)
+cmake -B build -G "Ninja" -DOPENSSL_ROOT_DIR=$(brew --prefix openssl@3)
+
+# 编译并运行
 cmake --build build --target http_server
-./build/examples/http_server.exe 8080
+./build/examples/http_server       # Linux / macOS
+./build/examples/http_server.exe   # Windows
 ```
 
 ---

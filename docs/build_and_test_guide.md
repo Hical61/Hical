@@ -1,32 +1,30 @@
 # Hical 编译与测试指南
 
-**最后更新：** 2026-04-06
-**验证环境：** Windows 10 Pro 10.0.19045
+**最后更新：** 2026-04-10
+**支持平台：** Windows / Linux / macOS
 
 ---
 
 ## 1. 环境要求
 
-| 组件            | 最低版本 | 验证版本 | 用途                     |
-| --------------- | -------- | -------- | ------------------------ |
-| GCC (MinGW-w64) | 10+      | 15.2.0   | C++20 编译器（协程支持） |
-| CMake           | 3.20+    | 3.28.3   | 构建系统                 |
-| Ninja           | 1.10+    | 1.13.2   | 构建工具（比 Make 更快） |
-| Boost           | 1.70+    | 1.90.0   | Asio / Beast / JSON      |
-| OpenSSL         | 3.0+     | 3.6.1    | SSL/TLS 支持             |
-| Google Test     | 1.10+    | 1.17.0   | 单元测试框架             |
+| 组件       | 最低版本                          | 用途                     |
+| ---------- | --------------------------------- | ------------------------ |
+| C++ 编译器 | GCC 10+ / Clang 15+ / MSVC 2022+ | C++20 编译器（协程支持） |
+| CMake      | 3.20+                             | 构建系统                 |
+| Ninja      | 1.10+                             | 构建工具（比 Make 更快） |
+| Boost      | 1.70+                             | Asio / Beast / JSON      |
+| OpenSSL    | 3.0+                              | SSL/TLS 支持             |
+| Google Test | 1.10+                            | 单元测试框架             |
 
 ---
 
-## 2. 环境安装（MSYS2）
+## 2. 环境安装
 
-### 2.1 安装 MSYS2
+### 2.1 Windows（MSYS2）
 
-从 https://www.msys2.org/ 下载并安装到 `C:\msys64`。
+**安装 MSYS2：** 从 https://www.msys2.org/ 下载并安装到 `C:\msys64`。
 
-### 2.2 安装编译工具链
-
-打开 **MSYS2 MINGW64** 终端，执行：
+**安装编译工具链：** 打开 **MSYS2 MINGW64** 终端，执行：
 
 ```bash
 pacman -Syu
@@ -38,23 +36,101 @@ pacman -S mingw-w64-x86_64-openssl
 pacman -S mingw-w64-x86_64-gtest
 ```
 
-### 2.3 配置系统 PATH
+**配置系统 PATH：** 将 `C:\msys64\mingw64\bin` 添加到 Windows 系统环境变量 PATH，然后**重新打开终端**生效。
 
-将以下路径添加到 Windows 系统环境变量 PATH 中：
-
-```
-C:\msys64\mingw64\bin
-```
-
-添加后**关闭并重新打开终端**即可生效，无需重启电脑。
-
-### 2.4 验证安装
+**验证安装：**
 
 ```bash
 g++ --version      # 应显示 GCC 15.x.x
 cmake --version    # 应显示 cmake version 4.x.x
 ninja --version    # 应显示 1.x.x
 openssl version    # 应显示 OpenSSL 3.x.x
+```
+
+### 2.2 Ubuntu / Debian
+
+```bash
+sudo apt update
+sudo apt install -y build-essential g++ cmake ninja-build \
+                    libboost-all-dev libssl-dev libgtest-dev
+```
+
+> Ubuntu 22.04+ 开箱即用（GCC 12+、Boost 1.74+）。Ubuntu 20.04 的 GCC 9 不支持 C++20 协程，需升级：
+
+```bash
+# Ubuntu 20.04 升级 GCC
+sudo add-apt-repository ppa:ubuntu-toolchain-r/test
+sudo apt update
+sudo apt install g++-12
+```
+
+**验证安装：**
+
+```bash
+g++ --version                        # 需要 10+
+cmake --version                      # 需要 3.20+
+dpkg -s libboost-dev | grep Version  # 需要 1.70+
+openssl version                      # 需要 3.0+
+```
+
+### 2.3 Fedora / RHEL / CentOS
+
+```bash
+# Fedora
+sudo dnf install -y gcc-c++ cmake ninja-build \
+                    boost-devel openssl-devel gtest-devel
+
+# RHEL 8 / CentOS Stream 8（需启用 EPEL 和 PowerTools）
+sudo dnf install -y epel-release
+sudo dnf config-manager --set-enabled powertools
+sudo dnf install -y gcc-c++ cmake ninja-build \
+                    boost-devel openssl-devel gtest-devel
+```
+
+**验证安装：**
+
+```bash
+g++ --version      # 需要 10+
+cmake --version    # 需要 3.20+
+rpm -q boost-devel # 需要 1.70+
+openssl version    # 需要 3.0+
+```
+
+### 2.4 Arch Linux
+
+```bash
+sudo pacman -S gcc cmake ninja boost openssl gtest
+```
+
+> Arch 滚动更新，软件包版本始终满足要求。
+
+### 2.5 macOS（Homebrew）
+
+**安装 Homebrew（如未安装）：**
+
+```bash
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+```
+
+**安装依赖：**
+
+```bash
+brew install cmake ninja boost openssl@3 googletest
+```
+
+> **注意：** macOS 系统自带的是 LibreSSL，不是 OpenSSL。Homebrew 安装的 OpenSSL 不在默认搜索路径，编译时需通过 CMake 参数指定（见第 3 节）。
+
+**Apple Silicon（M1/M2/M3/M4）：**
+- Homebrew 安装路径为 `/opt/homebrew`（Intel Mac 为 `/usr/local`）
+- 使用 `brew --prefix` 会自动返回正确路径，无需手动区分
+
+**验证安装：**
+
+```bash
+clang++ --version                   # 需要 Xcode 14+（Apple Clang 14+）
+cmake --version                     # 需要 3.20+
+brew list --versions boost          # 需要 1.70+
+$(brew --prefix openssl@3)/bin/openssl version  # 需要 3.0+
 ```
 
 ---
@@ -64,24 +140,39 @@ openssl version    # 应显示 OpenSSL 3.x.x
 ### 3.1 CMake 配置
 
 ```bash
-cd e:/MyGit/hical
+cd /path/to/hical
 
 # 清理旧构建（首次或配置变更时执行）
 rm -rf build
+```
 
-# 配置构建，指定 MSYS2 路径
+根据平台选择对应的配置命令：
+
+```bash
+# Windows (MSYS2)
 cmake -B build -G "Ninja" -DCMAKE_PREFIX_PATH=C:/msys64/mingw64
+
+# Linux (Ubuntu / Fedora / Arch)
+cmake -B build -G "Ninja"
+
+# Linux (Ubuntu 20.04 — 需指定升级后的编译器)
+cmake -B build -G "Ninja" -DCMAKE_CXX_COMPILER=g++-12
+
+# macOS (Homebrew)
+cmake -B build -G "Ninja" \
+    -DOPENSSL_ROOT_DIR=$(brew --prefix openssl@3) \
+    -DCMAKE_PREFIX_PATH="$(brew --prefix boost);$(brew --prefix openssl@3)"
 ```
 
 **预期输出：**
 
 ```
--- Found Boost: .../Boost-1.90.0/BoostConfig.cmake (found suitable version "1.90.0", ...)
--- Found OpenSSL: .../libcrypto.dll.a (found version "3.6.1")
--- Found GTest: .../GTestConfig.cmake (found version "1.17.0")
+-- Found Boost: ...BoostConfig.cmake (found suitable version "x.xx.x", ...)
+-- Found OpenSSL: ... (found version "3.x.x")
+-- Found GTest: ...GTestConfig.cmake (found version "x.xx.x")
 -- Configuring done
 -- Generating done
--- Build files have been written to: E:/MyGit/hical/build
+-- Build files have been written to: /path/to/hical/build
 ```
 
 ### 3.2 编译
@@ -97,6 +188,16 @@ cmake --build build
 ```bash
 cmake --build build --clean-first
 ```
+
+### 3.4 各平台注意事项
+
+| 平台 | 注意事项 |
+|------|----------|
+| Windows (MSYS2) | 必须指定 `CMAKE_PREFIX_PATH=C:/msys64/mingw64`，否则找不到 Boost/OpenSSL |
+| Windows (MSVC) | hical CMakeLists.txt 已自动添加 `/utf-8` 和 `_WIN32_WINNT=0x0A00` |
+| Linux | 系统包管理器安装的库在标准路径，无需额外指定 |
+| macOS | **必须**指定 `OPENSSL_ROOT_DIR`，否则 CMake 会找到系统自带的 LibreSSL 而非 OpenSSL 3.x |
+| macOS (Apple Silicon) | `brew --prefix` 自动返回 `/opt/homebrew` 前缀，无需手动区分架构 |
 
 ---
 
@@ -189,12 +290,17 @@ SSL 握手测试需要自签名证书。在 `build/` 目录下执行：
 
 ```bash
 cd build
+
+# Linux / macOS
+openssl req -x509 -newkey rsa:2048 \
+    -keyout test_server.key -out test_server.crt \
+    -days 365 -nodes -subj "/CN=localhost"
+
+# Windows (MSYS2) — 需要 MSYS_NO_PATHCONV=1 防止路径转换
 MSYS_NO_PATHCONV=1 openssl req -x509 -newkey rsa:2048 \
     -keyout test_server.key -out test_server.crt \
     -days 365 -nodes -subj "/CN=localhost"
 ```
-
-> Windows MSYS2 环境需要 `MSYS_NO_PATHCONV=1` 前缀防止路径转换。
 
 ### 4.6 测试用例清单（145 个）
 
@@ -227,18 +333,31 @@ MSYS_NO_PATHCONV=1 openssl req -x509 -newkey rsa:2048 \
 **Debug 模式运行：**
 
 ```bash
-./build/examples/pmr_poc.exe
+./build/examples/pmr_poc        # Linux / macOS
+./build/examples/pmr_poc.exe    # Windows
 ```
 
 **Release 模式运行（推荐）：**
 
 ```bash
+# Windows (MSYS2)
 cmake -B build-release -G "Ninja" -DCMAKE_PREFIX_PATH=C:/msys64/mingw64 -DCMAKE_BUILD_TYPE=Release
+
+# Linux
+cmake -B build-release -G "Ninja" -DCMAKE_BUILD_TYPE=Release
+
+# macOS (Homebrew)
+cmake -B build-release -G "Ninja" -DCMAKE_BUILD_TYPE=Release \
+    -DOPENSSL_ROOT_DIR=$(brew --prefix openssl@3) \
+    -DCMAKE_PREFIX_PATH="$(brew --prefix boost);$(brew --prefix openssl@3)"
+
+# 编译并运行
 cmake --build build-release --target pmr_poc
-./build-release/examples/pmr_poc.exe
+./build-release/examples/pmr_poc        # Linux / macOS
+./build-release/examples/pmr_poc.exe    # Windows
 ```
 
-**PowerShell 中文乱码修复：**
+**Windows PowerShell 中文乱码修复：**
 
 ```powershell
 chcp 65001
@@ -249,14 +368,16 @@ chcp 65001
 **终端 1 — 启动服务器：**
 
 ```bash
-./build/examples/echo_server.exe 8888
+./build/examples/echo_server 8888        # Linux / macOS
+./build/examples/echo_server.exe 8888    # Windows
 ```
 
 **终端 2 — 压力测试：**
 
 ```bash
 # 10 个并发连接，每连接 100 个请求
-./build/examples/benchmark.exe localhost 8888 10 100
+./build/examples/benchmark localhost 8888 10 100        # Linux / macOS
+./build/examples/benchmark.exe localhost 8888 10 100    # Windows
 ```
 
 ### 5.3 HTTP Server
@@ -264,7 +385,8 @@ chcp 65001
 **终端 1 — 启动服务器：**
 
 ```bash
-./build/examples/http_server.exe 8080
+./build/examples/http_server 8080        # Linux / macOS
+./build/examples/http_server.exe 8080    # Windows
 ```
 
 **终端 2 — 测试请求：**
@@ -295,10 +417,12 @@ curl http://localhost:8080/nonexistent
 
 ```bash
 # 50 个并发连接，每连接 1000 个 GET 请求
-./build-release/examples/http_benchmark.exe localhost 8080 50 1000 /api/status GET
+./build-release/examples/http_benchmark localhost 8080 50 1000 /api/status GET         # Linux / macOS
+./build-release/examples/http_benchmark.exe localhost 8080 50 1000 /api/status GET     # Windows
 
 # POST 请求基准测试
-./build-release/examples/http_benchmark.exe localhost 8080 50 1000 /api/echo POST '{"hello":"world"}'
+./build-release/examples/http_benchmark localhost 8080 50 1000 /api/echo POST '{"hello":"world"}'       # Linux / macOS
+./build-release/examples/http_benchmark.exe localhost 8080 50 1000 /api/echo POST '{"hello":"world"}'   # Windows
 ```
 
 **预期输出：**
@@ -329,7 +453,8 @@ curl http://localhost:8080/nonexistent
 ### 5.5 pmr 内存池基准测试
 
 ```bash
-./build-release/examples/pmr_benchmark.exe
+./build-release/examples/pmr_benchmark        # Linux / macOS
+./build-release/examples/pmr_benchmark.exe    # Windows
 ```
 
 **输出内容：**
