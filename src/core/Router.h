@@ -42,6 +42,11 @@ namespace hical
 	using WsConnectCallback = std::function<Awaitable<void>(WebSocketSession&)>;
 
 	/**
+ * @brief WebSocket 断开回调类型
+ */
+	using WsDisconnectCallback = std::function<Awaitable<void>(WebSocketSession&)>;
+
+	/**
  * @brief HTTP 路由器
  *
  * 管理路由注册和请求分发。
@@ -95,8 +100,12 @@ namespace hical
      * @param path 路由路径
      * @param onMessage 消息回调
      * @param onConnect 连接建立回调（可选）
+     * @param onDisconnect 连接断开回调（可选）
      */
-		void ws(const std::string& path, WsMessageCallback onMessage, WsConnectCallback onConnect = nullptr);
+		void ws(const std::string& path,
+				WsMessageCallback onMessage,
+				WsConnectCallback onConnect = nullptr,
+				WsDisconnectCallback onDisconnect = nullptr);
 
 		/**
      * @brief 分发请求到匹配的路由处理器
@@ -117,6 +126,7 @@ namespace hical
 			std::string path;
 			WsMessageCallback onMessage;
 			WsConnectCallback onConnect;
+			WsDisconnectCallback onDisconnect;
 		};
 
 		const WsRoute* findWsRoute(const std::string& path) const;

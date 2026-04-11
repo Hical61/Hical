@@ -29,6 +29,12 @@ namespace hical
  * server.use(logMiddleware);
  * server.start();  // 阻塞
  * ```
+ *
+ * @note 线程安全
+ * 当 ioThreads > 1 时，多个 IO 线程共享同一个 io_context，
+ * 路由 handler 和中间件可能被并发调用。此时用户必须保证：
+ * - 路由 handler 内访问的共享数据需自行加锁或使用无锁结构
+ * - 如果不需要多线程并发，使用默认的 ioThreads=1（单线程模式）即可
  */
 	class HttpServer
 	{
@@ -89,6 +95,9 @@ namespace hical
      * @brief 启动服务器（阻塞）
      *
      * 调用后阻塞当前线程，直到 stop() 被调用。
+     *
+     * @warning 当 ioThreads > 1 时，路由 handler 可能被多个线程并发调用，
+     * handler 中访问的任何共享状态必须自行保证线程安全。
      */
 		void start();
 

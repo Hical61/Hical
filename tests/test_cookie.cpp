@@ -195,3 +195,40 @@ TEST(CookieTest, DuplicateCookieNameFirstWins)
 	// cookies() 中该键只有一个条目
 	EXPECT_EQ(req.cookies().count("token"), 1u);
 }
+
+// ============ Cookie value URL 编码测试 ============
+
+TEST(CookieTest, SetCookieEncodesSpecialChars)
+{
+	HttpResponse res;
+	// value 含 ';' 和空格，应被 URL 编码，不破坏 Set-Cookie 格式
+	res.setCookie("data", "a;b c");
+
+	auto header = res.header("Set-Cookie");
+	// ';' -> %3B, ' ' -> %20
+	EXPECT_NE(header.find("data=a%3Bb%20c"), std::string::npos);
+	// 确保原始 ';' 不会被解析为 Cookie 属性分隔符
+	EXPECT_EQ(header.find("data=a;b"), std::string::npos);
+}
+
+TEST(CookieTest, SetCookieEncodesCommaAndDoubleQuote)
+{
+	HttpResponse res;
+	res.setCookie("json", "{\"k\":\"v\"}");
+
+	auto header = res.header("Set-Cookie");
+	// '"' -> %22, 应不含裸双引号
+	EXPECT_EQ(header.find("json={\""), std::string::npos);
+	EXPECT_NE(header.find("%22"), std::string::npos);
+}
+
+TEST(CookieTest, SetCookieSafeCharsNotEncoded)
+{
+	HttpResponse res;
+	// 纯 ASCII 安全字符不应被编码
+	res.setCookie("token", "abc123-._~!#$&'()*+/:=?@[]");
+
+	auto header = res.header("Set-Cookie");
+	// 验证常见安全字符未被编码
+	EXPECT_NE(header.find("abc123"), std::string::npos);
+}

@@ -29,9 +29,7 @@ namespace hical
      * @param initialSize 初始大小
      */
 		explicit PmrBuffer(std::pmr::polymorphic_allocator<std::byte> allocator = {}, size_t initialSize = hDefaultSize)
-			: buffer_(hPrependSize + initialSize, allocator)
-			, readIndex_(hPrependSize)
-			, writeIndex_(hPrependSize)
+			: buffer_(hPrependSize + initialSize, allocator), readIndex_(hPrependSize), writeIndex_(hPrependSize)
 		{
 		}
 

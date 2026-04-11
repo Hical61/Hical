@@ -5,11 +5,7 @@ namespace hical
 {
 
 	AsioTimer::AsioTimer(AsioEventLoop* loop, double delay, Callback cb)
-		: loop_(loop)
-		, timer_(loop->getIoContext())
-		, callback_(std::move(cb))
-		, interval_(delay)
-		, repeating_(false)
+		: loop_(loop), timer_(loop->getIoContext()), callback_(std::move(cb)), interval_(delay), repeating_(false)
 	{
 	}
 

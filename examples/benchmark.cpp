@@ -16,11 +16,7 @@ public:
 					int num_requests,
 					std::atomic<int>& completed,
 					std::atomic<int>& errors)
-		: socket_(io)
-		, resolver_(io)
-		, num_requests_(num_requests)
-		, completed_(completed)
-		, errors_(errors)
+		: socket_(io), resolver_(io), num_requests_(num_requests), completed_(completed), errors_(errors)
 	{
 		auto endpoints = resolver_.resolve(host, port);
 		boost::asio::async_connect(socket_,

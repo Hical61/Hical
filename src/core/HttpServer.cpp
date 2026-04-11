@@ -1,5 +1,6 @@
 #include "HttpServer.h"
 #include "MemoryPool.h"
+#include "core/Version.h"
 #include "WebSocket.h"
 #include <boost/beast/websocket.hpp>
 #include <iostream>
@@ -314,7 +315,7 @@ namespace hical
 				// 设置通用头部
 				auto& nativeRes = res.native();
 				nativeRes.version(11);
-				nativeRes.set(http::field::server, "hical/0.2.0");
+				nativeRes.set(http::field::server, HICAL_VERSION_STRING);
 				nativeRes.keep_alive(req.native().keep_alive());
 				nativeRes.prepare_payload();
 
@@ -333,7 +334,7 @@ namespace hical
 			{
 				// 请求体过大：返回 413 Payload Too Large
 				http::response<http::string_body> res {http::status::payload_too_large, 11};
-				res.set(http::field::server, "hical/0.2.0");
+				res.set(http::field::server, HICAL_VERSION_STRING);
 				res.set(http::field::connection, "close");
 				res.body() = "Request body too large";
 				res.prepare_payload();
@@ -352,6 +353,8 @@ namespace hical
 												http::request<http::string_body> req,
 												const Router::WsRoute& wsRoute)
 	{
+		std::unique_ptr<WebSocketSession> session;
+
 		try
 		{
 			ws::stream<tcp::socket> wsStream(std::move(socket));
@@ -359,18 +362,18 @@ namespace hical
 			// 接受 WebSocket 升级
 			co_await wsStream.async_accept(req, boost::asio::use_awaitable);
 
-			WebSocketSession session(std::move(wsStream));
+			session = std::make_unique<WebSocketSession>(std::move(wsStream));
 
 			// 调用连接回调
 			if (wsRoute.onConnect)
 			{
-				co_await wsRoute.onConnect(session);
+				co_await wsRoute.onConnect(*session);
 			}
 
 			// 消息循环
-			while (session.isOpen())
+			while (session->isOpen())
 			{
-				auto msg = co_await session.receive();
+				auto msg = co_await session->receive();
 				if (!msg.has_value())
 				{
 					break;
@@ -378,7 +381,7 @@ namespace hical
 
 				if (wsRoute.onMessage)
 				{
-					co_await wsRoute.onMessage(*msg, session);
+					co_await wsRoute.onMessage(*msg, *session);
 				}
 			}
 		}
@@ -387,6 +390,19 @@ namespace hical
 			if (e.code() != ws::error::closed && e.code() != boost::asio::error::eof)
 			{
 				// 忽略正常关闭
+			}
+		}
+
+		// 连接断开回调（正常退出和异常退出都会触发）
+		if (session && wsRoute.onDisconnect)
+		{
+			try
+			{
+				co_await wsRoute.onDisconnect(*session);
+			}
+			catch (...)
+			{
+				// 忽略断开回调中的异常
 			}
 		}
 	}

@@ -82,15 +82,18 @@ namespace hical
  */
 		inline bool isSafePath(const std::filesystem::path& root, const std::filesystem::path& target)
 		{
-			// 将两个路径都规范化后，检查 target 是否以 root 为前缀
-			auto rootStr = root.generic_string();
-			auto targetStr = target.generic_string();
-			// 确保比较时 root 末尾有斜杠（防止 /pub 匹配 /public）
-			if (rootStr.back() != '/')
+			// 逐段迭代器比较：root 的每个路径分量必须是 target 的前缀
+			// 比字符串前缀比对更可靠，不受 /pub vs /public 等 edge case 影响
+			auto rootIt = root.begin();
+			auto targetIt = target.begin();
+			for (; rootIt != root.end(); ++rootIt, ++targetIt)
 			{
-				rootStr += '/';
+				if (targetIt == target.end() || *rootIt != *targetIt)
+				{
+					return false;
+				}
 			}
-			return targetStr.substr(0, rootStr.size()) == rootStr || targetStr == root.generic_string();
+			return true;
 		}
 
 		/**
@@ -163,10 +166,10 @@ namespace hical
 				relPath = "";
 			}
 
-			// 构建目标路径并规范化
+			// 构建目标路径并规范化（使用 canonical 完全解析符号链接，防止路径遍历）
 			fs::path target = root / std::string(relPath);
 			std::error_code ec2;
-			target = fs::weakly_canonical(target, ec2);
+			target = fs::canonical(target, ec2);
 			if (ec2)
 			{
 				return HttpResponse::notFound();
@@ -185,6 +188,12 @@ namespace hical
 			if (fs::is_directory(target, ec2))
 			{
 				target /= "index.html";
+				// 追加后重新 canonical 解析（防止 index.html 是指向 root 外的符号链接）
+				target = fs::canonical(target, ec2);
+				if (ec2 || !detail::isSafePath(root, target))
+				{
+					return HttpResponse::notFound();
+				}
 			}
 
 			// 文件存在性检查

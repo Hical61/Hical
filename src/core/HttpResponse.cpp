@@ -1,4 +1,5 @@
 #include "HttpResponse.h"
+#include <iomanip>
 #include <sstream>
 
 namespace hical
@@ -71,8 +72,30 @@ namespace hical
 			return;
 		}
 
+		// RFC 6265 cookie-value 合法字符百分号编码
+		// 合法: %x21 / %x23-2B / %x2D-3A / %x3C-5B / %x5D-7E
+		auto encodeCookieValue = [](const std::string& raw) -> std::string
+		{
+			std::ostringstream encoded;
+			encoded << std::hex << std::uppercase;
+			for (unsigned char c : raw)
+			{
+				bool safe = (c == 0x21) || (c >= 0x23 && c <= 0x2B) || (c >= 0x2D && c <= 0x3A)
+							|| (c >= 0x3C && c <= 0x5B) || (c >= 0x5D && c <= 0x7E);
+				if (safe)
+				{
+					encoded << static_cast<char>(c);
+				}
+				else
+				{
+					encoded << '%' << std::setw(2) << std::setfill('0') << static_cast<int>(c);
+				}
+			}
+			return encoded.str();
+		};
+
 		std::ostringstream oss;
-		oss << name << "=" << value;
+		oss << name << "=" << encodeCookieValue(value);
 
 		if (!options.path.empty())
 		{

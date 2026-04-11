@@ -176,14 +176,14 @@ namespace hical::meta
 		struct FieldDescriptor
 		{
 			std::string_view name;
-			FieldType Class::*pointer;
+			FieldType Class::* pointer;
 		};
 
 		/**
          * @brief 创建字段描述器的辅助函数
          */
 		template <typename Class, typename FieldType>
-		constexpr FieldDescriptor<Class, FieldType> makeField(std::string_view name, FieldType Class::*ptr)
+		constexpr FieldDescriptor<Class, FieldType> makeField(std::string_view name, FieldType Class::* ptr)
 		{
 			return {name, ptr};
 		}

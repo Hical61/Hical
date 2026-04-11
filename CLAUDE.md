@@ -67,6 +67,10 @@ find src -name '*.cpp' | xargs clang-tidy -p build
 - `Middleware.h` — Onion-model middleware pipeline with `MiddlewareNext` chaining
 - `Coroutine.h` — `Awaitable<T>` alias for `boost::asio::awaitable<T>`, plus `sleep()` / `coSpawn()` helpers
 - `Reflection.h` / `MetaJson.h` / `MetaRoutes.h` — C++26 reflection layer (see below)
+- `StaticFiles.h` — Static file serving with ETag/304, MIME detection, path traversal protection
+- `Multipart.h/cpp` — RFC 7578 multipart/form-data parser (256 part DoS limit)
+- `Session.h/cpp` — In-memory session manager with lazy GC, 128-bit secure random IDs, `makeSessionMiddleware` factory
+- `Version.h.in` — CMake-configured version header (single source of truth from `project(VERSION)`)
 
 **`src/asio/`** — Boost.Asio concrete implementations:
 - `AsioEventLoop` — Wraps `boost::asio::io_context`, implements `EventLoop`

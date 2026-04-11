@@ -70,9 +70,12 @@ namespace hical
 
 	// ============ WebSocket ============
 
-	void Router::ws(const std::string& path, WsMessageCallback onMessage, WsConnectCallback onConnect)
+	void Router::ws(const std::string& path,
+					WsMessageCallback onMessage,
+					WsConnectCallback onConnect,
+					WsDisconnectCallback onDisconnect)
 	{
-		wsRoutes_.push_back({path, std::move(onMessage), std::move(onConnect)});
+		wsRoutes_.push_back({path, std::move(onMessage), std::move(onConnect), std::move(onDisconnect)});
 	}
 
 	const Router::WsRoute* Router::findWsRoute(const std::string& path) const

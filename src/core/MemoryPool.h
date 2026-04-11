@@ -115,6 +115,13 @@ namespace hical
  * 1. 全局同步池（synchronized_pool_resource）— 跨线程共享，带追踪统计
  * 2. 线程本地池（unsynchronized_pool_resource）— thread_local 无锁访问
  * 3. 请求级单调池（monotonic_buffer_resource）— 请求结束后整体释放
+ *
+ * @note 线程模型
+ * 线程本地池为每个调用 threadLocalAllocator() 的线程创建独立的 unsynchronized_pool_resource。
+ * 这些池对象由 MemoryPool 持有所有权（通过 threadPools_ vector），线程退出后池仍在内存中。
+ * 对于固定线程池（如 Web 服务器的 IO 线程池），这不是问题。
+ * 但在频繁创建/销毁短命线程的场景下，threadPools_ 会单调增长。
+ * 如有此类需求，可通过 configure() 重置或在服务器启动前固定线程池大小。
  */
 	class MemoryPool
 	{

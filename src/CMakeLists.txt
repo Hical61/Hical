@@ -1,5 +1,12 @@
 # Hical 核心库源码
 
+# 从 CMake 版本号生成 Version.h（唯一版本号来源）
+configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/Version.h.in
+    ${CMAKE_CURRENT_BINARY_DIR}/core/Version.h
+    @ONLY
+)
+
 # 核心库实现
 add_library(hical_core
     core/InetAddress.cpp
@@ -24,6 +31,7 @@ add_library(hical_core
 target_include_directories(hical_core
     PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
     $<INSTALL_INTERFACE:include>
 )
 

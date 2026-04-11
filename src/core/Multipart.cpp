@@ -72,7 +72,16 @@ namespace hical
 		{
 			rest = rest.substr(0, semi);
 		}
-		return std::string(trim(rest));
+
+		auto boundary = std::string(trim(rest));
+
+		// RFC 2046: boundary 最长 70 字符
+		if (boundary.size() > 70)
+		{
+			return "";
+		}
+
+		return boundary;
 	}
 
 	void MultipartParser::parseDispositionParams(std::string_view disposition, std::string& name, std::string& filename)
