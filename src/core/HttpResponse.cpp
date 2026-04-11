@@ -1,4 +1,5 @@
 #include "HttpResponse.h"
+#include <sstream>
 
 namespace hical
 {
@@ -55,6 +56,51 @@ namespace hical
 		res_.body() = boost::json::serialize(json);
 		res_.set(boost::beast::http::field::content_type, "application/json");
 		res_.prepare_payload();
+	}
+
+	void HttpResponse::setCookie(const std::string& name, const std::string& value, const CookieOptions& options)
+	{
+		// HTTP Response Splitting 防护：name/value 不允许包含 CR/LF
+		auto containsCRLF = [](const std::string& s) -> bool
+		{
+			return s.find('\r') != std::string::npos || s.find('\n') != std::string::npos;
+		};
+		if (containsCRLF(name) || containsCRLF(value))
+		{
+			// 拒绝含控制字符的 Cookie，静默忽略（生产环境应记录告警日志）
+			return;
+		}
+
+		std::ostringstream oss;
+		oss << name << "=" << value;
+
+		if (!options.path.empty())
+		{
+			oss << "; Path=" << options.path;
+		}
+		if (!options.domain.empty())
+		{
+			oss << "; Domain=" << options.domain;
+		}
+		if (options.maxAge >= 0)
+		{
+			oss << "; Max-Age=" << options.maxAge;
+		}
+		if (options.httpOnly)
+		{
+			oss << "; HttpOnly";
+		}
+		if (options.secure)
+		{
+			oss << "; Secure";
+		}
+		if (!options.sameSite.empty())
+		{
+			oss << "; SameSite=" << options.sameSite;
+		}
+
+		// Beast 不支持同名字段多值直接 set，使用 insert 追加多个 Set-Cookie
+		res_.insert(boost::beast::http::field::set_cookie, oss.str());
 	}
 
 	HttpResponse::BeastResponse& HttpResponse::native()

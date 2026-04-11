@@ -1,10 +1,12 @@
 #pragma once
 
 #include "HttpTypes.h"
+#include <any>
 #include <boost/beast/http.hpp>
 #include <boost/json.hpp>
 #include <memory>
 #include <memory_resource>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -148,9 +150,78 @@ namespace hical
      */
 		bool hasParam(const std::string& name) const;
 
+		// ============ Cookie ============
+
+		/**
+         * @brief 获取指定名称的 Cookie 值
+         * @param name Cookie 名称
+         * @return Cookie 值，不存在返回空字符串
+         */
+		std::string cookie(const std::string& name) const;
+
+		/**
+         * @brief 获取所有 Cookie
+         * @return Cookie 名值 map（首次调用时惰性解析 Cookie 头）
+         */
+		const std::unordered_map<std::string, std::string>& cookies() const;
+
+		/**
+         * @brief 是否包含指定 Cookie
+         * @param name Cookie 名称
+         * @return true 如果存在
+         */
+		bool hasCookie(const std::string& name) const;
+
+		// ============ 请求级属性（供中间件传递上下文数据） ============
+
+		/**
+         * @brief 设置请求级属性
+         * @param key 属性键
+         * @param value 任意类型的值（使用 std::any 存储）
+         */
+		void setAttribute(const std::string& key, std::any value);
+
+		/**
+         * @brief 获取请求级属性
+         * @param key 属性键
+         * @return 找到返回 std::any，否则 nullopt
+         */
+		std::optional<std::any> getAttribute(const std::string& key) const;
+
+		/**
+         * @brief 获取请求级属性（类型安全版本）
+         * @tparam T 期望的值类型
+         * @param key 属性键
+         * @return 找到且类型匹配返回值，否则 nullopt
+         */
+		template <typename T>
+		std::optional<T> getAttribute(const std::string& key) const
+		{
+			auto it = attributes_.find(key);
+			if (it == attributes_.end())
+			{
+				return std::nullopt;
+			}
+			try
+			{
+				return std::any_cast<T>(it->second);
+			}
+			catch (const std::bad_any_cast&)
+			{
+				return std::nullopt;
+			}
+		}
+
 	private:
+		/**
+         * @brief 惰性解析 Cookie 头，结果缓存到 cookies_
+         */
+		void parseCookies() const;
+
 		BeastRequest req_;
 		std::unordered_map<std::string, std::string> pathParams_;
+		mutable std::optional<std::unordered_map<std::string, std::string>> cookies_;
+		std::unordered_map<std::string, std::any> attributes_;
 	};
 
 } // namespace hical

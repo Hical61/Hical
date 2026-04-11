@@ -168,7 +168,7 @@ hical 支持 GET / POST / PUT / DELETE 等 HTTP 方法，以及路径参数和�
 server.router().get("/api/status", [](const HttpRequest&) -> HttpResponse {
     return HttpResponse::json({
         {"status", "running"},
-        {"version", "0.2.0"}
+        {"version", "1.0.0"}
     });
 });
 

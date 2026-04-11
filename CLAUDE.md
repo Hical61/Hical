@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Hical is a modern C++20 high-performance web framework built on Boost.Asio/Beast, featuring PMR memory pools, coroutine-based async I/O (`asio::awaitable<T>`), C++20 Concepts for compile-time type safety, and a C++26 reflection layer (dual-track: native P2996 or C++20 macro fallback). Status: Work in Progress (v0.2.0).
+Hical is a modern C++20 high-performance web framework built on Boost.Asio/Beast, featuring PMR memory pools, coroutine-based async I/O (`asio::awaitable<T>`), C++20 Concepts for compile-time type safety, and a C++26 reflection layer (dual-track: native P2996 or C++20 macro fallback). Status: v1.0.0.
 
 ## Build Commands
 
@@ -139,7 +139,7 @@ Core design principle: when `HICAL_HAS_REFLECTION == 1` (compiler supports P2996
 
 ## Test Structure
 
-18 test executables in `tests/`, each linked against `hical_core` + `GTest::gtest_main`. Tests are registered via `gtest_discover_tests()` for CTest integration. On Windows, tests also link `ws2_32` and `mswsock`. Key test files:
+22 test executables in `tests/`, each linked against `hical_core` + `GTest::gtest_main`. Tests are registered via `gtest_discover_tests()` for CTest integration. On Windows, tests also link `ws2_32` and `mswsock`. Key test files:
 - `test_router.cpp` / `test_router_perf.cpp` — Route dispatch and performance
 - `test_memory_pool.cpp` — Three-tier PMR allocation
 - `test_http_server.cpp` / `test_integration.cpp` — Full HTTP request/response cycle
@@ -148,6 +148,10 @@ Core design principle: when `HICAL_HAS_REFLECTION == 1` (compiler supports P2996
 - `test_websocket.cpp` — WebSocket messaging
 - `test_concepts.cpp` — Compile-time concept verification
 - `test_reflection.cpp` — MetaJson + MetaRoutes reflection layer
+- `test_cookie.cpp` — Cookie parsing and Set-Cookie header
+- `test_static_files.cpp` — Static file serving, ETag, path traversal
+- `test_multipart.cpp` — multipart/form-data parsing
+- `test_session.cpp` — Session lifecycle and thread safety
 
 ## CI
 

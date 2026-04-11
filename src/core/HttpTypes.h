@@ -44,6 +44,7 @@ namespace hical
 		hNotFound = 404,
 		hMethodNotAllowed = 405,
 		hConflict = 409,
+		hPayloadTooLarge = 413,
 		hTooManyRequests = 429,
 
 		// 5xx 服务端错误

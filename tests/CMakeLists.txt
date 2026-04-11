@@ -169,6 +169,15 @@ target_link_libraries(test_integration
     ${PLATFORM_LIBS}
 )
 
+# Cookie 测试
+add_executable(test_cookie test_cookie.cpp)
+target_link_libraries(test_cookie
+    PRIVATE
+    hical_core
+    GTest::gtest_main
+    ${PLATFORM_LIBS}
+)
+
 # 注册测试
 include(GoogleTest)
 gtest_discover_tests(test_basic)
@@ -189,3 +198,34 @@ gtest_discover_tests(test_router_perf)
 gtest_discover_tests(test_concepts)
 gtest_discover_tests(test_reflection)
 gtest_discover_tests(test_integration)
+gtest_discover_tests(test_cookie)
+
+# 静态文件服务测试
+add_executable(test_static_files test_static_files.cpp)
+target_link_libraries(test_static_files
+    PRIVATE
+    hical_core
+    GTest::gtest_main
+    ${PLATFORM_LIBS}
+)
+gtest_discover_tests(test_static_files)
+
+# 文件上传测试
+add_executable(test_multipart test_multipart.cpp)
+target_link_libraries(test_multipart
+    PRIVATE
+    hical_core
+    GTest::gtest_main
+    ${PLATFORM_LIBS}
+)
+gtest_discover_tests(test_multipart)
+
+# Session 测试
+add_executable(test_session test_session.cpp)
+target_link_libraries(test_session
+    PRIVATE
+    hical_core
+    GTest::gtest_main
+    ${PLATFORM_LIBS}
+)
+gtest_discover_tests(test_session)

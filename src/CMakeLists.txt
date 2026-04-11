@@ -12,6 +12,8 @@ add_library(hical_core
     core/Middleware.cpp
     core/HttpServer.cpp
     core/WebSocket.cpp
+    core/Multipart.cpp
+    core/Session.cpp
     asio/AsioEventLoop.cpp
     asio/AsioTimer.cpp
     asio/GenericConnection.cpp

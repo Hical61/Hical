@@ -11,7 +11,7 @@
 
 Hical is a modern C++ web framework built on Boost.Asio/Beast, utilizing C++26 reflection and PMR memory pooling to achieve high performance.
 
-> **Status:** Work in Progress
+> **v1.0.0** — C++20/26 dual-track reflection · PMR memory pool · coroutine async I/O · Cookie / Session / StaticFiles / Multipart built-in
 
 English | [简体中文](README_CN.md)
 
@@ -26,6 +26,10 @@ English | [简体中文](README_CN.md)
 - **WebSocket** — WebSocket upgrade and bidirectional communication
 - **Router & Middleware** — Middleware pipeline (logging, auth, rate limiting) with path parameter support
 - **HTTP Server** — Full HTTP/1.1 support via Boost.Beast (chunked transfer, keep-alive)
+- **Cookie Support** — RFC 6265 compliant parsing (first-wins semantics) + `Set-Cookie` with CRLF injection protection
+- **Static File Serving** — MIME auto-detection, ETag/304 caching, path traversal protection, 64 MB size limit
+- **Multipart File Upload** — RFC 7578 `multipart/form-data` parser with DoS protection (≤256 parts)
+- **Session Management** — In-memory `SessionManager` with lazy GC, 128-bit random IDs, thread-safe `Session` objects
 
 ## Why Hical?
 
@@ -37,6 +41,9 @@ English | [简体中文](README_CN.md)
 | **HTTP Parser** | Boost.Beast | Custom (Trantor) | Custom |
 | **SSL** | Compile-time template branching | Runtime branch | Runtime branch |
 | **Backend Abstraction** | C++20 Concepts | N/A | N/A |
+| **Cookie / Session** | Built-in | Built-in | Limited |
+| **Static Files** | Built-in (ETag, DoS guard) | Built-in | Built-in |
+| **File Upload** | Built-in (part limit guard) | Built-in | Built-in |
 
 ## Quick Start
 

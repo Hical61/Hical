@@ -479,7 +479,7 @@ wscat -c ws://localhost:8080/ws/echo
 Welcome to hical!
 
 # GET /api/status
-{"framework":"hical","status":"running","version":"0.2.0"}
+{"framework":"hical","status":"running","version":"1.0.0"}
 
 # POST /api/echo
 Hello hical

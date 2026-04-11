@@ -13,6 +13,10 @@
 - [HttpResponse](#httpresponse) — HTTP 响应
 - [HttpTypes](#httptypes) — HTTP 类型定义
 - [Middleware](#middleware) — 中间件
+- [Cookie](#cookie) — Cookie 解析与设置
+- [StaticFiles](#staticfiles) — 静态文件服务
+- [Multipart](#multipart) — 文件上传解析
+- [Session](#session) — Session 会话管理
 - [WebSocketSession](#websocketsession) — WebSocket 会话
 
 **基础设施 API（进阶用户）**
@@ -947,6 +951,258 @@ Boost.Asio 适配层，将 Boost.Asio 的原始 API 封装为 hical 风格的接
 | WS 消息  | `Awaitable<void>(const string&, WebSocketSession&)`           | WebSocket 消息回调 |
 | WS 连接  | `Awaitable<void>(WebSocketSession&)`                          | WebSocket 连接回调 |
 | 定时器   | `void()`                                                      | 无参回调           |
+
+---
+
+### Cookie
+
+Cookie 解析（请求侧）与设置（响应侧）支持，符合 RFC 6265。
+
+**头文件：** `src/core/Cookie.h`（`CookieOptions`），`src/core/HttpRequest.h`，`src/core/HttpResponse.h`
+
+#### CookieOptions 结构体
+
+| 字段       | 类型          | 默认值  | 说明                               |
+| ---------- | ------------- | ------- | ---------------------------------- |
+| `path`     | `std::string` | `"/"`   | Cookie 作用路径                    |
+| `domain`   | `std::string` | `""`    | Cookie 作用域（空=当前域）         |
+| `maxAge`   | `int`         | `-1`    | 有效期（秒），-1 表示会话 Cookie   |
+| `httpOnly` | `bool`        | `false` | 防 XSS：禁止 JS 访问               |
+| `secure`   | `bool`        | `false` | 仅 HTTPS 传输                      |
+| `sameSite` | `std::string` | `""`    | SameSite 策略（`Lax`/`Strict`/`None`） |
+
+#### HttpRequest Cookie API
+
+| 方法              | 参数        | 返回值                                               | 说明                                |
+| ----------------- | ----------- | ---------------------------------------------------- | ----------------------------------- |
+| `cookie(name)`    | name: Cookie 名 | `std::string`                                    | 获取指定 Cookie 值（懒解析+缓存）   |
+| `cookies()`       | 无          | `const std::unordered_map<std::string,std::string>&` | 获取所有 Cookie（同名取第一个值）   |
+| `hasCookie(name)` | name: Cookie 名 | `bool`                                           | 是否存在指定 Cookie                 |
+
+#### HttpResponse Cookie API
+
+| 方法                           | 参数                                                         | 返回值 | 说明                             |
+| ------------------------------ | ------------------------------------------------------------ | ------ | -------------------------------- |
+| `setCookie(name, value, opts)` | name: Cookie 名<br>value: Cookie 值<br>opts: CookieOptions | `void` | 追加 `Set-Cookie` 响应头（防 CRLF 注入） |
+
+#### 示例
+
+```cpp
+// 读取 Cookie
+server.router().get("/profile", [](const HttpRequest& req) -> HttpResponse {
+    auto token = req.cookie("token");
+    if (token.empty()) {
+        return HttpResponse::badRequest("未登录");
+    }
+    return HttpResponse::ok("Hello " + token);
+});
+
+// 设置 Cookie
+server.router().post("/login", [](const HttpRequest& req) -> HttpResponse {
+    CookieOptions opts;
+    opts.maxAge   = 3600;
+    opts.httpOnly = true;
+    opts.sameSite = "Lax";
+
+    HttpResponse res = HttpResponse::ok("登录成功");
+    res.setCookie("token", "user_jwt_here", opts);
+    return res;
+});
+```
+
+---
+
+### StaticFiles
+
+静态文件服务工厂函数，将 URL 前缀映射到本地目录。
+
+**头文件：** `src/core/StaticFiles.h`
+
+#### serveStatic 函数
+
+```cpp
+std::function<HttpResponse(const HttpRequest&)> serveStatic(
+    const std::string& rootDir,
+    const std::string& urlPrefix,
+    std::uintmax_t maxFileSize = 64ULL * 1024 * 1024);
+```
+
+| 参数          | 说明                                            |
+| ------------- | ----------------------------------------------- |
+| `rootDir`     | 本地根目录（如 `"./public"`）                   |
+| `urlPrefix`   | URL 前缀（如 `"/static/"`）                     |
+| `maxFileSize` | 单文件大小上限（默认 64 MB，超出返回 413）      |
+
+**返回值：** `SyncRouteHandler`，可直接传入 `router.get()`。
+
+**功能特性：**
+
+| 特性               | 说明                                                 |
+| ------------------ | ---------------------------------------------------- |
+| MIME 自动推断      | 支持 27 种扩展名（html/css/js/png/svg/mp4 等）       |
+| 目录默认文件       | 访问目录时自动返回 `index.html`                      |
+| ETag 缓存验证      | `If-None-Match` 匹配时返回 304                       |
+| 路径遍历防护       | `../` 等跳出根目录的路径返回 403                     |
+| 大文件保护         | 超过 `maxFileSize` 返回 413                          |
+
+#### 示例
+
+```cpp
+#include "core/StaticFiles.h"
+
+// 将 /static/... 映射到 ./public 目录
+server.router().get("/static/{path}", hical::serveStatic("./public", "/static/"));
+
+// 限制单文件大小为 1 MB
+server.router().get("/assets/{path}",
+    hical::serveStatic("./assets", "/assets/", 1ULL * 1024 * 1024));
+```
+
+---
+
+### Multipart
+
+`multipart/form-data` 上传解析器（RFC 7578）。
+
+**头文件：** `src/core/Multipart.h`
+
+#### MultipartPart 结构体
+
+| 字段          | 类型                                          | 说明                          |
+| ------------- | --------------------------------------------- | ----------------------------- |
+| `name`        | `std::string`                                 | 字段名（`name` 属性）         |
+| `filename`    | `std::string`                                 | 原始文件名（文件字段才有值）  |
+| `contentType` | `std::string`                                 | Part 的 Content-Type          |
+| `data`        | `std::string`                                 | Part 数据内容（二进制安全）   |
+| `headers`     | `std::unordered_map<std::string,std::string>` | 所有 Part 头（键已转小写）    |
+| `isFile()`    | `bool`                                        | 是否为文件字段                |
+
+#### MultipartParser 静态方法
+
+| 方法                          | 参数                                    | 返回值                                  | 说明                         |
+| ----------------------------- | --------------------------------------- | --------------------------------------- | ---------------------------- |
+| `parse(req)`                  | req: HTTP 请求                          | `std::optional<std::vector<MultipartPart>>` | 解析全部 Part（超 256 个返回 nullopt） |
+| `getFile(req, fieldName)`     | req: 请求<br>fieldName: 字段名          | `std::optional<MultipartPart>`          | 获取指定文件 Part            |
+| `getField(req, fieldName)`    | req: 请求<br>fieldName: 字段名          | `std::optional<std::string>`            | 获取文本字段值               |
+
+#### 示例
+
+```cpp
+#include "core/Multipart.h"
+
+server.router().post("/upload", [](const HttpRequest& req) -> HttpResponse {
+    // 获取上传文件
+    auto file = MultipartParser::getFile(req, "avatar");
+    if (!file) {
+        return HttpResponse::badRequest("未找到 avatar 字段");
+    }
+
+    // file->filename  — 原始文件名
+    // file->contentType — MIME 类型
+    // file->data        — 文件内容（二进制）
+
+    // 获取文本字段
+    auto desc = MultipartParser::getField(req, "description");
+
+    return HttpResponse::ok("上传成功: " + file->filename);
+});
+```
+
+---
+
+### Session
+
+内存 Session 会话管理，通过中间件自动与 Cookie 联动。
+
+**头文件：** `src/core/Session.h`
+
+#### SessionOptions 结构体
+
+| 字段         | 类型          | 默认值            | 说明                                        |
+| ------------ | ------------- | ----------------- | ------------------------------------------- |
+| `cookieName` | `std::string` | `"HICAL_SESSION"` | Session Cookie 名称                         |
+| `maxAge`     | `int`         | `3600`            | Session 有效期（秒）                        |
+| `httpOnly`   | `bool`        | `true`            | Cookie HttpOnly                             |
+| `secure`     | `bool`        | `false`           | Cookie Secure（仅 HTTPS）                   |
+| `sameSite`   | `std::string` | `"Lax"`           | Cookie SameSite 策略                        |
+| `path`       | `std::string` | `"/"`             | Cookie 作用路径                             |
+| `gcInterval` | `int`         | `300`             | 懒 GC 触发间隔（秒），≤0 则禁用 GC         |
+
+#### Session 类（线程安全）
+
+| 方法           | 参数                     | 返回值                | 说明                      |
+| -------------- | ------------------------ | --------------------- | ------------------------- |
+| `id()`         | 无                       | `const std::string&`  | 获取 Session ID（只读）   |
+| `set(key, v)`  | key: 键<br>v: 任意类型值 | `void`                | 设置属性（自动 dirty）    |
+| `get<T>(key)`  | key: 键                  | `std::optional<T>`    | 获取属性（类型安全）      |
+| `has(key)`     | key: 键                  | `bool`                | 检查属性是否存在          |
+| `remove(key)`  | key: 键                  | `void`                | 删除指定属性              |
+| `clear()`      | 无                       | `void`                | 清空所有属性              |
+| `isDirty()`    | 无                       | `bool`                | 是否已修改（需刷新 Cookie）|
+| `touch()`      | 无                       | `void`                | 更新最后访问时间          |
+| `lastAccess()` | 无                       | `steady_clock::time_point` | 获取最后访问时间     |
+
+#### SessionManager 类
+
+| 方法         | 参数                           | 返回值                         | 说明                     |
+| ------------ | ------------------------------ | ------------------------------ | ------------------------ |
+| `find(id)`   | id: Session ID                 | `shared_ptr<Session>`（可空）  | 查找 Session             |
+| `create()`   | 无                             | `shared_ptr<Session>`          | 创建新 Session（含懒 GC）|
+| `destroy(id)`| id: Session ID                 | `void`                         | 销毁 Session（登出）     |
+| `gc()`       | 无                             | `void`                         | 清理过期 Session         |
+| `count()`    | 无                             | `size_t`                       | 当前活跃 Session 数      |
+| `options()`  | 无                             | `const SessionOptions&`        | 获取配置                 |
+
+#### makeSessionMiddleware 函数
+
+```cpp
+MiddlewareHandler makeSessionMiddleware(std::shared_ptr<SessionManager> manager);
+```
+
+中间件工作流程：
+1. 从 Cookie 读取 Session ID，查找或创建 Session
+2. 将 `shared_ptr<Session>` 注入 `HttpRequest` attribute（键：`SessionManager::hSessionKey`）
+3. 请求处理完毕后，若 Session 被 dirty，自动刷新 `Set-Cookie`
+
+#### 示例
+
+```cpp
+#include "core/Session.h"
+
+// 启动时注册 Session 中间件
+auto sessionMgr = std::make_shared<hical::SessionManager>();
+server.use(hical::makeSessionMiddleware(sessionMgr));
+
+// 在路由中使用 Session
+server.router().post("/login", [](const HttpRequest& req) -> HttpResponse {
+    auto session = req.getAttribute<std::shared_ptr<hical::Session>>(
+        hical::SessionManager::hSessionKey);
+    if (!session) {
+        return HttpResponse::serverError();
+    }
+    (*session)->set("user", std::string("alice"));
+    return HttpResponse::ok("登录成功");
+});
+
+server.router().get("/profile", [](const HttpRequest& req) -> HttpResponse {
+    auto session = req.getAttribute<std::shared_ptr<hical::Session>>(
+        hical::SessionManager::hSessionKey);
+    if (!session || !(*session)->has("user")) {
+        return HttpResponse::badRequest("未登录");
+    }
+    auto user = (*session)->get<std::string>("user");
+    return HttpResponse::ok("Hello " + user.value_or("unknown"));
+});
+
+server.router().post("/logout", [](const HttpRequest& req) -> HttpResponse {
+    auto session = req.getAttribute<std::shared_ptr<hical::Session>>(
+        hical::SessionManager::hSessionKey);
+    if (session) {
+        sessionMgr->destroy((*session)->id());
+    }
+    return HttpResponse::ok("已退出");
+});
+```
 
 ---
 

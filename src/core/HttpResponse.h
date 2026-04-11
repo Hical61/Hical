@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Cookie.h"
 #include "HttpTypes.h"
 #include <boost/beast/http.hpp>
 #include <boost/json.hpp>
@@ -71,6 +72,16 @@ namespace hical
      * @param json JSON 值
      */
 		void setJsonBody(const boost::json::value& json);
+
+		/**
+     * @brief 添加 Set-Cookie 响应头
+     * @param name Cookie 名称
+     * @param value Cookie 值
+     * @param options Cookie 设置选项（有效期、路径、HttpOnly 等）
+     *
+     * 可多次调用以设置多个 Cookie，每次追加一个 Set-Cookie 头。
+     */
+		void setCookie(const std::string& name, const std::string& value, const CookieOptions& options = {});
 
 		/**
      * @brief 获取底层 Beast 响应的引用

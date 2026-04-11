@@ -172,6 +172,108 @@ namespace hical
 		return pathParams_.count(name) > 0;
 	}
 
+	// ============ Cookie ============
+
+	void HttpRequest::parseCookies() const
+	{
+		cookies_.emplace();
+		auto cookieHeader = header("Cookie");
+		if (cookieHeader.empty())
+		{
+			return;
+		}
+
+		// 解析 "name1=value1; name2=value2; ..." 格式
+		std::string_view sv(cookieHeader);
+		while (!sv.empty())
+		{
+			// 跳过前导空格
+			while (!sv.empty() && sv.front() == ' ')
+			{
+				sv.remove_prefix(1);
+			}
+
+			// 查找分隔符 ';'
+			auto semi = sv.find(';');
+			std::string_view pair = (semi != std::string_view::npos) ? sv.substr(0, semi) : sv;
+			sv = (semi != std::string_view::npos) ? sv.substr(semi + 1) : std::string_view {};
+
+			// 分割 name=value
+			auto eq = pair.find('=');
+			if (eq == std::string_view::npos)
+			{
+				continue;
+			}
+			std::string_view name = pair.substr(0, eq);
+			std::string_view value = pair.substr(eq + 1);
+
+			// 去除 name 首尾空格
+			while (!name.empty() && name.front() == ' ')
+			{
+				name.remove_prefix(1);
+			}
+			while (!name.empty() && name.back() == ' ')
+			{
+				name.remove_suffix(1);
+			}
+
+			if (!name.empty())
+			{
+				// RFC 6265：同名 Cookie 以先出现的值为准（first-wins）
+				(*cookies_).try_emplace(std::string(name), std::string(value));
+			}
+		}
+	}
+
+	std::string HttpRequest::cookie(const std::string& name) const
+	{
+		if (!cookies_)
+		{
+			parseCookies();
+		}
+		auto it = cookies_->find(name);
+		if (it != cookies_->end())
+		{
+			return it->second;
+		}
+		return "";
+	}
+
+	const std::unordered_map<std::string, std::string>& HttpRequest::cookies() const
+	{
+		if (!cookies_)
+		{
+			parseCookies();
+		}
+		return *cookies_;
+	}
+
+	bool HttpRequest::hasCookie(const std::string& name) const
+	{
+		if (!cookies_)
+		{
+			parseCookies();
+		}
+		return cookies_->count(name) > 0;
+	}
+
+	// ============ 请求级属性 ============
+
+	void HttpRequest::setAttribute(const std::string& key, std::any value)
+	{
+		attributes_[key] = std::move(value);
+	}
+
+	std::optional<std::any> HttpRequest::getAttribute(const std::string& key) const
+	{
+		auto it = attributes_.find(key);
+		if (it == attributes_.end())
+		{
+			return std::nullopt;
+		}
+		return it->second;
+	}
+
 	// ============ HttpTypes 实用函数 ============
 
 	const char* httpMethodToString(HttpMethod method)
@@ -263,6 +365,8 @@ namespace hical
 				return "Conflict";
 			case HttpStatusCode::hTooManyRequests:
 				return "Too Many Requests";
+			case HttpStatusCode::hPayloadTooLarge:
+				return "Payload Too Large";
 			case HttpStatusCode::hInternalServerError:
 				return "Internal Server Error";
 			case HttpStatusCode::hNotImplemented:

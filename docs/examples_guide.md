@@ -670,7 +670,7 @@ int main(int argc, char* argv[])
 
         // 首页
         router.get("/", [](const HttpRequest&) -> HttpResponse {
-            return HttpResponse::ok("hical Web 服务 v0.2.0");
+            return HttpResponse::ok("hical Web 服务 v1.0.0");
         });
 
         // 状态接口
@@ -678,7 +678,7 @@ int main(int argc, char* argv[])
             auto stats = MemoryPool::instance().getStats();
             return HttpResponse::json({
                 {"status", "running"},
-                {"version", "0.2.0"},
+                {"version", "1.0.0"},
                 {"memory", {
                     {"allocated", stats.currentBytesAllocated},
                     {"peak", stats.peakBytesAllocated},
@@ -718,7 +718,7 @@ int main(int argc, char* argv[])
 
         // ========== 启动 ==========
 
-        std::cout << "hical Web 服务 v0.2.0" << std::endl;
+        std::cout << "hical Web 服务 v1.0.0" << std::endl;
         std::cout << "端口: " << port << ", IO 线程: " << threads << std::endl;
         std::cout << "路由:" << std::endl;
         std::cout << "  GET    /              — 首页" << std::endl;

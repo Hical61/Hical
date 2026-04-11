@@ -100,7 +100,7 @@ Hical uses a tag-based release workflow. Pushing a tag triggers CI to build, tes
 4. GitHub Actions will: build → test → create Release with auto-generated notes
 5. Verify the [Releases page](https://github.com/Hical61/Hical/releases)
 
-**Pre-release:** Use tags like `v0.2.0-alpha.1`, `v0.2.0-beta.1`, or `v0.2.0-rc.1` — they will be marked as pre-release automatically.
+**Pre-release:** Use tags like `v1.1.0-alpha.1`, `v1.1.0-beta.1`, or `v1.1.0-rc.1` — they will be marked as pre-release automatically.
 
 ### Reporting Issues
 
@@ -204,7 +204,7 @@ Hical 使用基于 tag 的发布流程。推送 tag 后，CI 会自动构建、�
 4. GitHub Actions 自动执行：构建 → 测试 → 创建 Release（附自动生成的变更日志）
 5. 在 [Releases 页面](https://github.com/Hical61/Hical/releases) 确认发布结果
 
-**预发布版本：** 使用 `v0.2.0-alpha.1`、`v0.2.0-beta.1` 或 `v0.2.0-rc.1` 格式的 tag，会自动标记为预发布。
+**预发布版本：** 使用 `v1.1.0-alpha.1`、`v1.1.0-beta.1` 或 `v1.1.0-rc.1` 格式的 tag，会自动标记为预发布。
 
 ### 提交 Issue
 

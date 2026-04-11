@@ -165,7 +165,7 @@ Hical 内置 HTTP 基准测试客户端 `http_benchmark`，支持：
 ```
 
 - **路由类型**：静态路由（哈希表 O(1) 查找）
-- **响应类型**：JSON `{"status":"running","version":"0.2.0","framework":"hical"}`
+- **响应类型**：JSON `{"status":"running","version":"1.0.0","framework":"hical"}`
 - **关注指标**：QPS、平均延迟、P99 延迟
 
 #### 场景 B：POST Echo 请求
