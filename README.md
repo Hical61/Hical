@@ -126,16 +126,67 @@ hical/
 
 | Dependency   | Version                             |
 | ------------ | ----------------------------------- |
-| C++ Standard | C++20                               |
+| C++ Standard | C++20 / C++26                       |
 | Boost        | >= 1.70 (Asio, Beast, System, JSON) |
 | CMake        | >= 3.20                             |
 | OpenSSL      | Required                            |
 | Google Test  | Required                            |
-| Compiler     | GCC 14+ / Clang 18+ / MSVC 2022+    |
+| Compiler     | GCC 14+ / Clang 22+ / MSVC 2022+    |
 
-## Build
+## Installation
 
-### Linux / macOS
+### vcpkg (Recommended)
+
+```bash
+vcpkg install hical
+```
+
+Then in your `CMakeLists.txt`:
+
+```cmake
+find_package(hical CONFIG REQUIRED)
+target_link_libraries(my_app PRIVATE hical::hical_core)
+```
+
+> **Note:** If hical is not yet available in the official vcpkg registry, you can use overlay ports:
+> ```bash
+> git clone https://github.com/Hical61/Hical.git
+> vcpkg install hical --overlay-ports=Hical/ports/hical
+> ```
+
+### Conan
+
+```bash
+conan install --requires="hical/1.0.1" --build=missing
+```
+
+Or add to your `conanfile.txt`:
+
+```ini
+[requires]
+hical/1.0.1
+
+[generators]
+CMakeDeps
+CMakeToolchain
+```
+
+Then in your `CMakeLists.txt`:
+
+```cmake
+find_package(hical REQUIRED)
+target_link_libraries(my_app PRIVATE hical::hical_core)
+```
+
+> **Note:** If hical is not yet available on Conan Center, you can build from the repository:
+> ```bash
+> git clone https://github.com/Hical61/Hical.git
+> conan create Hical/ --build=missing
+> ```
+
+### Build from Source
+
+#### Linux / macOS
 
 ```bash
 cmake -B build -DCMAKE_BUILD_TYPE=Release
@@ -143,7 +194,7 @@ cmake --build build -j$(nproc)
 ctest --test-dir build --output-on-failure
 ```
 
-### Windows (MSYS2 MINGW64)
+#### Windows (MSYS2 MINGW64)
 
 ```bash
 cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release

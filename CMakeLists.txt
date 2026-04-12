@@ -28,7 +28,11 @@ else()
 endif()
 
 # 查找依赖库
-find_package(Boost 1.70 REQUIRED COMPONENTS system json)
+find_package(Boost 1.70 REQUIRED COMPONENTS json)
+if(NOT TARGET Boost::system)
+    # Boost.System is header-only since 1.69; Conan may not provide this target
+    add_library(Boost::system ALIAS Boost::headers)
+endif()
 find_package(OpenSSL REQUIRED)
 
 # GTest 仅在构建测试时需要

@@ -33,17 +33,17 @@ Hical 是一个基于 Boost.Asio/Beast，利用 C++26 反射和 PMR 内存池构
 
 ## 为什么选择 Hical？
 
-| | Hical | Drogon | Crow |
-|---|---|---|---|
-| **C++ 标准** | C++20（C++26 就绪） | C++17 | C++11 |
-| **异步模型** | 协程 (`co_await`) | 回调 + 协程 | 回调 |
-| **内存策略** | 三层 PMR 内存池 | 默认分配器 | 默认分配器 |
-| **HTTP 解析** | Boost.Beast | 自研 (Trantor) | 自研 |
-| **SSL** | 编译期模板分支 | 运行时分支 | 运行时分支 |
-| **后端抽象** | C++20 Concepts | 无 | 无 |
-| **Cookie / Session** | 内置 | 内置 | 有限支持 |
-| **静态文件** | 内置（ETag、DoS 防护） | 内置 | 内置 |
-| **文件上传** | 内置（Part 数量限制） | 内置 | 内置 |
+|                      | Hical                  | Drogon         | Crow       |
+| -------------------- | ---------------------- | -------------- | ---------- |
+| **C++ 标准**         | C++20（C++26 就绪）    | C++17          | C++11      |
+| **异步模型**         | 协程 (`co_await`)      | 回调 + 协程    | 回调       |
+| **内存策略**         | 三层 PMR 内存池        | 默认分配器     | 默认分配器 |
+| **HTTP 解析**        | Boost.Beast            | 自研 (Trantor) | 自研       |
+| **SSL**              | 编译期模板分支         | 运行时分支     | 运行时分支 |
+| **后端抽象**         | C++20 Concepts         | 无             | 无         |
+| **Cookie / Session** | 内置                   | 内置           | 有限支持   |
+| **静态文件**         | 内置（ETag、DoS 防护） | 内置           | 内置       |
+| **文件上传**         | 内置（Part 数量限制）  | 内置           | 内置       |
 
 ## 快速开始
 
@@ -126,16 +126,67 @@ hical/
 
 | 依赖项      | 版本要求                             |
 | ----------- | ------------------------------------ |
-| C++ 标准    | C++20                                |
+| C++ 标准    | C++20 / C++26                        |
 | Boost       | >= 1.70（Asio、Beast、System、JSON） |
 | CMake       | >= 3.20                              |
 | OpenSSL     | 必需                                 |
 | Google Test | 必需                                 |
-| 编译器      | GCC 14+ / Clang 18+ / MSVC 2022+     |
+| 编译器      | GCC 14+ / Clang 22+ / MSVC 2022+     |
 
-## 构建
+## 安装
 
-### Linux / macOS
+### vcpkg（推荐）
+
+```bash
+vcpkg install hical
+```
+
+在 `CMakeLists.txt` 中使用：
+
+```cmake
+find_package(hical CONFIG REQUIRED)
+target_link_libraries(my_app PRIVATE hical::hical_core)
+```
+
+> **提示：** 若 hical 尚未进入 vcpkg 官方注册表，可通过 overlay ports 方式安装：
+> ```bash
+> git clone https://github.com/Hical61/Hical.git
+> vcpkg install hical --overlay-ports=Hical/ports/hical
+> ```
+
+### Conan
+
+```bash
+conan install --requires="hical/1.0.1" --build=missing
+```
+
+或在 `conanfile.txt` 中添加：
+
+```ini
+[requires]
+hical/1.0.1
+
+[generators]
+CMakeDeps
+CMakeToolchain
+```
+
+在 `CMakeLists.txt` 中使用：
+
+```cmake
+find_package(hical REQUIRED)
+target_link_libraries(my_app PRIVATE hical::hical_core)
+```
+
+> **提示：** 若 hical 尚未进入 Conan Center，可直接从仓库创建本地包：
+> ```bash
+> git clone https://github.com/Hical61/Hical.git
+> conan create Hical/ --build=missing
+> ```
+
+### 从源码构建
+
+#### Linux / macOS
 
 ```bash
 cmake -B build -DCMAKE_BUILD_TYPE=Release
@@ -143,7 +194,7 @@ cmake --build build -j$(nproc)
 ctest --test-dir build --output-on-failure
 ```
 
-### Windows（MSYS2 MINGW64）
+#### Windows（MSYS2 MINGW64）
 
 ```bash
 cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
