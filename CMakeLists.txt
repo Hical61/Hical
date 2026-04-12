@@ -1,8 +1,12 @@
 cmake_minimum_required(VERSION 3.20)
-project(hical VERSION 1.0.0 LANGUAGES CXX)
+project(hical VERSION 1.0.1 LANGUAGES CXX)
 
 # C++26 反射可选支持
 option(HICAL_ENABLE_REFLECTION "Enable C++26 reflection (requires compatible compiler)" OFF)
+
+# 构建控制选项（作为库分发时关闭以加快构建）
+option(HICAL_BUILD_TESTS    "Build unit tests"       ON)
+option(HICAL_BUILD_EXAMPLES "Build example programs" ON)
 
 if(HICAL_ENABLE_REFLECTION)
     set(CMAKE_CXX_STANDARD 26)
@@ -25,25 +29,27 @@ endif()
 
 # 查找依赖库
 find_package(Boost 1.70 REQUIRED COMPONENTS system json)
-find_package(GTest REQUIRED)
 find_package(OpenSSL REQUIRED)
+
+# GTest 仅在构建测试时需要
+if(HICAL_BUILD_TESTS)
+    find_package(GTest REQUIRED)
+endif()
 
 # Boost.Asio 和 Boost.Beast 是 header-only，无需 COMPONENTS
 # 但需要确保 Boost 版本足够新（Beast 在 1.70+ 可用）
 
-# 包含目录
-include_directories(
-    ${CMAKE_SOURCE_DIR}/src
-    ${Boost_INCLUDE_DIRS}
-)
-
-# 启用测试
-enable_testing()
-
 # 子目录
 add_subdirectory(src)
-add_subdirectory(tests)
-add_subdirectory(examples)
+
+if(HICAL_BUILD_TESTS)
+    enable_testing()
+    add_subdirectory(tests)
+endif()
+
+if(HICAL_BUILD_EXAMPLES)
+    add_subdirectory(examples)
+endif()
 
 # CMake package export（支持 find_package(hical)）
 include(CMakePackageConfigHelpers)

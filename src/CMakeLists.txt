@@ -32,7 +32,8 @@ target_include_directories(hical_core
     PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
-    $<INSTALL_INTERFACE:include>
+    $<INSTALL_INTERFACE:include/hical/core>
+    $<INSTALL_INTERFACE:include/hical/asio>
 )
 
 target_link_libraries(hical_core
@@ -43,6 +44,11 @@ target_link_libraries(hical_core
     OpenSSL::Crypto
 )
 
+# Windows 需要链接 Winsock
+if(WIN32)
+    target_link_libraries(hical_core PRIVATE ws2_32 mswsock)
+endif()
+
 # 安装库和头文件
 install(
     TARGETS hical_core
@@ -50,12 +56,22 @@ install(
     ARCHIVE DESTINATION lib
     LIBRARY DESTINATION lib
     RUNTIME DESTINATION bin
+    INCLUDES DESTINATION include
 )
+
+# ALIAS 目标，方便外部项目使用 hical::hical_core
+add_library(hical::hical_core ALIAS hical_core)
 
 install(
     DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/core/
     DESTINATION include/hical/core
     FILES_MATCHING PATTERN "*.h"
+)
+
+# 安装 CMake 生成的 Version.h
+install(
+    FILES ${CMAKE_CURRENT_BINARY_DIR}/core/Version.h
+    DESTINATION include/hical/core
 )
 
 install(
