@@ -138,7 +138,7 @@ hical/
 ### vcpkg（推荐）
 
 ```bash
-vcpkg install hical
+vcpkg install hical61-hical
 ```
 
 在 `CMakeLists.txt` 中使用：
@@ -151,7 +151,7 @@ target_link_libraries(my_app PRIVATE hical::hical_core)
 > **提示：** 若 hical 尚未进入 vcpkg 官方注册表，可通过 overlay ports 方式安装：
 > ```bash
 > git clone https://github.com/Hical61/Hical.git
-> vcpkg install hical --overlay-ports=Hical/ports/hical
+> vcpkg install hical61-hical --overlay-ports=Hical/ports/hical61-hical
 > ```
 
 ### Conan

@@ -20,7 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 新增 `HICAL_BUILD_TESTS` / `HICAL_BUILD_EXAMPLES` CMake 选项（默认 ON），作为库分发时可关闭以加快构建
 - `GTest` 改为按需查找，仅 `HICAL_BUILD_TESTS=ON` 时才 `find_package`
 - 新增 `hical::hical_core` ALIAS 目标，方便消费者使用命名空间形式链接
-- 新增 `ports/hical/` vcpkg overlay port（`portfile.cmake`、`vcpkg.json`、`usage`）
+- 新增 `ports/hical61-hical/` vcpkg overlay port（`portfile.cmake`、`vcpkg.json`、`usage`）
 - 新增 `docs/integration_guide.md`：vcpkg overlay、FetchContent、cmake install 三种集成方式说明
 
 ## [1.0.0] - 2026-04-12

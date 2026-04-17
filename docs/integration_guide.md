@@ -11,7 +11,7 @@ git clone https://github.com/your-org/hical.git /path/to/hical
 ### Step 2 — Install via vcpkg with overlay
 
 ```bash
-vcpkg install hical --overlay-ports=/path/to/hical/ports
+vcpkg install hical61-hical --overlay-ports=/path/to/hical/ports/hical61-hical
 ```
 
 ### Step 3 — Use in your CMakeLists.txt

@@ -33,17 +33,17 @@ English | [简体中文](README_CN.md)
 
 ## Why Hical?
 
-| | Hical | Drogon | Crow |
-|---|---|---|---|
-| **C++ Standard** | C++20 (C++26 ready) | C++17 | C++11 |
-| **Async Model** | Coroutines (`co_await`) | Callbacks + Coroutines | Callbacks |
-| **Memory Strategy** | 3-tier PMR pool | Default allocator | Default allocator |
-| **HTTP Parser** | Boost.Beast | Custom (Trantor) | Custom |
-| **SSL** | Compile-time template branching | Runtime branch | Runtime branch |
-| **Backend Abstraction** | C++20 Concepts | N/A | N/A |
-| **Cookie / Session** | Built-in | Built-in | Limited |
-| **Static Files** | Built-in (ETag, DoS guard) | Built-in | Built-in |
-| **File Upload** | Built-in (part limit guard) | Built-in | Built-in |
+|                         | Hical                           | Drogon                 | Crow              |
+| ----------------------- | ------------------------------- | ---------------------- | ----------------- |
+| **C++ Standard**        | C++20 (C++26 ready)             | C++17                  | C++11             |
+| **Async Model**         | Coroutines (`co_await`)         | Callbacks + Coroutines | Callbacks         |
+| **Memory Strategy**     | 3-tier PMR pool                 | Default allocator      | Default allocator |
+| **HTTP Parser**         | Boost.Beast                     | Custom (Trantor)       | Custom            |
+| **SSL**                 | Compile-time template branching | Runtime branch         | Runtime branch    |
+| **Backend Abstraction** | C++20 Concepts                  | N/A                    | N/A               |
+| **Cookie / Session**    | Built-in                        | Built-in               | Limited           |
+| **Static Files**        | Built-in (ETag, DoS guard)      | Built-in               | Built-in          |
+| **File Upload**         | Built-in (part limit guard)     | Built-in               | Built-in          |
 
 ## Quick Start
 
@@ -138,7 +138,7 @@ hical/
 ### vcpkg (Recommended)
 
 ```bash
-vcpkg install hical
+vcpkg install hical61-hical
 ```
 
 Then in your `CMakeLists.txt`:
@@ -151,7 +151,7 @@ target_link_libraries(my_app PRIVATE hical::hical_core)
 > **Note:** If hical is not yet available in the official vcpkg registry, you can use overlay ports:
 > ```bash
 > git clone https://github.com/Hical61/Hical.git
-> vcpkg install hical --overlay-ports=Hical/ports/hical
+> vcpkg install hical61-hical --overlay-ports=Hical/ports/hical61-hical
 > ```
 
 ### Conan
