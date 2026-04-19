@@ -11,7 +11,7 @@
 
 Hical 是一个基于 Boost.Asio/Beast，利用 C++26 反射和 PMR 内存池构建高性能的现代 C++ Web 框架。
 
-> **v1.0.0** — C++20/26 双轨反射 · PMR 内存池 · 协程异步 I/O · Cookie / Session / 静态文件 / 文件上传 内置
+> **v2.0.0** — C++20/26 双轨反射 · PMR 内存池 · 协程异步 I/O · Cookie / Session / 静态文件 / 文件上传 内置
 
 [English](README.md) | 简体中文
 
@@ -148,23 +148,17 @@ find_package(hical CONFIG REQUIRED)
 target_link_libraries(my_app PRIVATE hical::hical_core)
 ```
 
-> **提示：** 若 hical 尚未进入 vcpkg 官方注册表，可通过 overlay ports 方式安装：
-> ```bash
-> git clone https://github.com/Hical61/Hical.git
-> vcpkg install hical61-hical --overlay-ports=Hical/ports/hical61-hical
-> ```
-
 ### Conan
 
 ```bash
-conan install --requires="hical/1.0.1" --build=missing
+conan install --requires="hical/2.0.0" --build=missing
 ```
 
 或在 `conanfile.txt` 中添加：
 
 ```ini
 [requires]
-hical/1.0.1
+hical/2.0.0
 
 [generators]
 CMakeDeps

@@ -11,7 +11,7 @@
 
 Hical is a modern C++ web framework built on Boost.Asio/Beast, utilizing C++26 reflection and PMR memory pooling to achieve high performance.
 
-> **v1.0.0** — C++20/26 dual-track reflection · PMR memory pool · coroutine async I/O · Cookie / Session / StaticFiles / Multipart built-in
+> **v2.0.0** — C++20/26 dual-track reflection · PMR memory pool · coroutine async I/O · Cookie / Session / StaticFiles / Multipart built-in
 
 English | [简体中文](README_CN.md)
 
@@ -148,23 +148,17 @@ find_package(hical CONFIG REQUIRED)
 target_link_libraries(my_app PRIVATE hical::hical_core)
 ```
 
-> **Note:** If hical is not yet available in the official vcpkg registry, you can use overlay ports:
-> ```bash
-> git clone https://github.com/Hical61/Hical.git
-> vcpkg install hical61-hical --overlay-ports=Hical/ports/hical61-hical
-> ```
-
 ### Conan
 
 ```bash
-conan install --requires="hical/1.0.1" --build=missing
+conan install --requires="hical/2.0.0" --build=missing
 ```
 
 Or add to your `conanfile.txt`:
 
 ```ini
 [requires]
-hical/1.0.1
+hical/2.0.0
 
 [generators]
 CMakeDeps
