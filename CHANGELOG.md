@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-04-19
+
+### Fixed
+- **[P0] Middleware 悬空引用**：`build()` 和 `execute()` 中 lambda 按引用捕获 `middlewares_[i]` 改为按值捕获，防止协程帧中 use-after-free
+- **[P0] HttpServer timer 竞态**：超时 `steady_timer` 移到循环外复用，引入 `shared_ptr<atomic<bool>>` 存活标志 + RAII 守卫，消除 timer 回调访问已销毁 socket 的竞态
+- **[P0] GenericConnection 数据竞争**：`reading_` 从 `bool` 改为 `std::atomic<bool>`，修复 `stopRead()` 跨线程写入与 `readLoop()` 读取之间的数据竞争
+- **[P0] TcpServer acceptLoop use-after-this**：协程 lambda 捕获 `alive_` 标志，循环条件和 `co_await` 恢复后均检查存活性，防止析构后访问 `this`
+- **[P1] Multipart DoS 检查位置**：Part 数量上限检查从 `push_back` 之后移到之前，避免先分配后丢弃
+
+### Changed
+- **Middleware 重构**：提取公共 `buildChain()` 方法消除 `build()`/`execute()` 逻辑重复；新增无参 `execute(HttpRequest&)` 重载走缓存路径，双参 `execute(req, finalHandler)` 始终动态构建
+- **Session ID 生成**：从 `std::mt19937_64`（伪随机）改为 `OpenSSL RAND_bytes`（密码学安全），hex 编码改为查表法消除 `ostringstream` 开销
+- **Cookie 安全默认值**：`CookieOptions` 默认 `httpOnly=true`、`secure=true`、`sameSite="Lax"`；`SessionOptions::secure` 同步改为 `true`
+- **Session 嵌套锁消除**：`Session::lastAccess_` 从 `chrono::time_point`（mutex 保护）改为 `atomic<int64_t>` 纳秒时间戳，`touch()` / `lastAccess()` 无锁操作
+- **send(PmrBuffer&&) 语义修复**：改为调用 `buffer.readAll()` 走 `send(std::string&&)` 的 move 通道，不再退化为拷贝
+- **Router urlDecode 快速路径**：先扫描路径是否含 `%`/`+`，无编码字符时跳过 `urlDecode` 分配；`RouteKey` 引入透明哈希（`RouteKeyView` + `is_transparent`），`staticRoutes_.find()` 直接用 `string_view` 查找，消除每请求的 `std::string` 堆分配
+- **HttpServer 中间件调用**：已 `build()` 场景改用无参 `execute(req)`，每请求省去一次 `std::function` 堆分配
+
+### Added
+- `SessionOptions::maxSessions`（默认 100000）：Session 存储上限，`create()` 达到上限时返回 `nullptr`，中间件返回 503
+
 ## [1.0.1] - 2026-04-12
 
 ### Fixed
@@ -72,5 +93,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Multipart Part 数量上限（DoS 防护）
 - Session ID 使用密码学安全的随机数生成
 
-[Unreleased]: https://github.com/Hical61/Hical/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/Hical61/Hical/compare/v2.0.0...HEAD
+[2.0.0]: https://github.com/Hical61/Hical/compare/v1.0.1...v2.0.0
+[1.0.1]: https://github.com/Hical61/Hical/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/Hical61/Hical/releases/tag/v1.0.0

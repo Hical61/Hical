@@ -88,8 +88,8 @@ public:
 
     std::string dispatch(HttpMethod method, const std::string& path)
     {
-        // 1. 静态路由 O(1) 查找
-        auto it = staticRoutes_.find({method, path});
+        // 1. 静态路由 O(1) 查找（透明哈希，string_view 零分配）
+        auto it = staticRoutes_.find(RouteKeyView{method, path});
         if (it != staticRoutes_.end())
         {
             return it->second(path, {});
@@ -111,7 +111,7 @@ public:
     }
 
 private:
-    // RouteKey：method + path 组合键
+    // RouteKey：method + path 组合键（存储用）
     struct RouteKey
     {
         HttpMethod method;
@@ -123,19 +123,50 @@ private:
         }
     };
 
-    // 组合哈希：boost::hash_combine 风格
+    // RouteKeyView：轻量级 view（查找用，零拷贝）
+    struct RouteKeyView
+    {
+        HttpMethod method;
+        std::string_view path;
+    };
+
+    // 透明哈希：同时支持 RouteKey 和 RouteKeyView
     struct RouteKeyHash
     {
-        size_t operator()(const RouteKey& key) const
+        using is_transparent = void;  // 启用异构查找
+
+        static size_t combine(size_t h1, size_t h2)
         {
-            auto h1 = std::hash<int>{}(static_cast<int>(key.method));
-            auto h2 = std::hash<std::string>{}(key.path);
             h1 ^= h2 + 0x9e3779b9 + (h1 << 6) + (h1 >> 2);
             return h1;
         }
+
+        size_t operator()(const RouteKey& key) const
+        {
+            return combine(std::hash<int>{}(static_cast<int>(key.method)),
+                           std::hash<std::string>{}(key.path));
+        }
+
+        size_t operator()(const RouteKeyView& key) const
+        {
+            return combine(std::hash<int>{}(static_cast<int>(key.method)),
+                           std::hash<std::string_view>{}(key.path));
+        }
     };
 
-    std::unordered_map<RouteKey, RouteHandler, RouteKeyHash> staticRoutes_;
+    // 透明比较器
+    struct RouteKeyEqual
+    {
+        using is_transparent = void;
+        bool operator()(const RouteKey& a, const RouteKey& b) const
+        { return a.method == b.method && a.path == b.path; }
+        bool operator()(const RouteKeyView& a, const RouteKey& b) const
+        { return a.method == b.method && a.path == b.path; }
+        bool operator()(const RouteKey& a, const RouteKeyView& b) const
+        { return a.method == b.method && a.path == b.path; }
+    };
+
+    std::unordered_map<RouteKey, RouteHandler, RouteKeyHash, RouteKeyEqual> staticRoutes_;
 
     struct ParamRouteEntry
     {
@@ -317,40 +348,44 @@ public:
     // 预构建调用链（只构建一次，所有请求复用）
     void build(MiddlewareNext finalHandler)
     {
+        cachedChain_ = buildChain(std::move(finalHandler));
+    }
+
+    // 执行管道（预构建路径，零分配）
+    Awaitable<HttpResponse> execute(HttpRequest& req)
+    {
+        if (!cachedChain_)
+            throw std::logic_error("must call build() first");
+        co_return co_await cachedChain_(req);
+    }
+
+    // 执行管道（动态路径，始终按传入的 finalHandler 构建）
+    Awaitable<HttpResponse> execute(HttpRequest& req, MiddlewareNext fallback)
+    {
+        auto chain = buildChain(std::move(fallback));
+        co_return co_await chain(req);
+    }
+
+private:
+    // 公共链构建逻辑：按值捕获中间件，防止协程帧悬空引用
+    MiddlewareNext buildChain(MiddlewareNext finalHandler) const
+    {
         if (middlewares_.empty())
-        {
-            cachedChain_ = std::move(finalHandler);
-            return;
-        }
+            return finalHandler;
 
-        // 从最内层向外构建链
         MiddlewareNext current = std::move(finalHandler);
-
         for (int i = static_cast<int>(middlewares_.size()) - 1; i >= 0; --i)
         {
-            // 关键优化：按 const 引用捕获中间件
-            const auto& mw = middlewares_[i];
-            current = [&mw, next = std::move(current)](HttpRequest& r)
+            auto mw = middlewares_[i];  // 按值捕获
+            current = [mw = std::move(mw), next = std::move(current)](HttpRequest& r)
                 -> Awaitable<HttpResponse>
             {
                 co_return co_await mw(r, next);
             };
         }
-
-        cachedChain_ = std::move(current);
+        return current;
     }
 
-    // 执行管道
-    Awaitable<HttpResponse> execute(HttpRequest& req, MiddlewareNext fallback)
-    {
-        if (cachedChain_)
-        {
-            co_return co_await cachedChain_(req);  // 使用预构建缓存
-        }
-        co_return co_await fallback(req);  // 无中间件时直接执行
-    }
-
-private:
     std::vector<MiddlewareHandler> middlewares_;
     MiddlewareNext cachedChain_;  // 预构建的调用链
 };
@@ -390,18 +425,27 @@ void HttpServer::start()
 }
 ```
 
-**优化 2：const 引用捕获避免堆分配**
+**优化 2：按值捕获确保协程安全**
 
 ```cpp
-// 慢：值捕获 — 每次构建都拷贝 std::function，触发堆分配
-current = [mw, next = std::move(current)](...) { ... };
-
-// 快：const 引用捕获 — 零拷贝
-const auto& mw = middlewares_[i];
-current = [&mw, next = std::move(current)](...) { ... };
+// 按值捕获 — 协程帧持有独立副本，安全跨越 co_await 挂起点
+auto mw = middlewares_[i];
+current = [mw = std::move(mw), next = std::move(current)](...) { ... };
 ```
 
-这是安全的，因为 `build()` 之后 `middlewares_` 不再修改（`started_` 标志保护），且 `MiddlewarePipeline` 的生命周期覆盖所有请求处理。
+为什么不按引用捕获？协程帧的生命周期跨越 `co_await` 挂起点，如果按引用捕获 `middlewares_[i]`，而 vector 在协程挂起期间发生扩容或对象析构，引用将悬空。按值捕获虽然多一次 `std::function` 拷贝，但仅在 `build()` 时发生一次（而非每请求），是安全性与性能的正确权衡。
+
+**优化 3：双重 `execute()` 重载消除热路径分配**
+
+```cpp
+// 预构建路径：零额外分配，每请求直接调用缓存链
+Awaitable<HttpResponse> execute(HttpRequest& req);
+
+// 动态路径：始终按传入的 finalHandler 构建，用于测试或特殊场景
+Awaitable<HttpResponse> execute(HttpRequest& req, MiddlewareNext finalHandler);
+```
+
+HttpServer 在 `start()` 时调用 `build()` 预构建链，运行时使用无参 `execute(req)`，**每请求省去一次 `std::function` lambda 构造的堆分配**。
 
 ### 2.4 中间件使用示例
 
@@ -887,7 +931,7 @@ void HttpServer::start()
 
 | 组件           | 设计                     | 关键技术                         |
 | -------------- | ------------------------ | -------------------------------- |
-| **路由系统**   | 静态 O(1) + 参数线性     | 组合哈希、string_view 零分配匹配 |
+| **路由系统**   | 静态 O(1) + 参数线性     | 透明哈希零分配查找、string_view 零拷贝匹配 |
 | **中间件管道** | 洋葱模型                 | 预构建链、const 引用捕获         |
 | **SSL 支持**   | 模板化 GenericConnection | `if constexpr` 编译期分支消除    |
 | **WebSocket**  | 协程化会话               | 原子 CAS 关闭协调                |

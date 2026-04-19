@@ -220,12 +220,12 @@ hical 的 `CookieOptions` 结构体涵盖了所有 RFC 6265 规定的属性：
 ```cpp
 struct CookieOptions
 {
-    std::string path = "/";    // Cookie 作用路径，默认 "/"
-    std::string domain;        // Cookie 作用域名，空表示当前域
-    int maxAge = -1;           // 有效期（秒），-1 表示会话 Cookie
-    bool httpOnly = false;     // 禁止 JavaScript 访问（防 XSS）
-    bool secure = false;       // 仅通过 HTTPS 传输
-    std::string sameSite;      // SameSite 策略："Strict"/"Lax"/"None"
+    std::string path = "/";           // Cookie 作用路径，默认 "/"
+    std::string domain;               // Cookie 作用域名，空表示当前域
+    int maxAge = -1;                  // 有效期（秒），-1 表示会话 Cookie
+    bool httpOnly = true;             // 禁止 JavaScript 访问（防 XSS），默认开启
+    bool secure = true;               // 仅通过 HTTPS 传输，默认开启
+    std::string sameSite = "Lax";     // SameSite 策略，默认 "Lax"
 };
 ```
 
@@ -236,9 +236,11 @@ struct CookieOptions
 | `path`     | `"/"`        | 限制 Cookie 发送路径                      |
 | `domain`   | 空（当前域） | 防止跨子域泄露                            |
 | `maxAge`   | `-1`（会话） | 控制持久化时长                            |
-| `httpOnly` | `false`      | **防 XSS**：JS 无法读取 `document.cookie` |
-| `secure`   | `false`      | **防中间人**：仅 HTTPS 传输               |
-| `sameSite` | 空           | **防 CSRF**：`Strict`/`Lax` 限制跨站发送  |
+| `httpOnly` | `true`       | **防 XSS**：JS 无法读取 `document.cookie` |
+| `secure`   | `true`       | **防中间人**：仅 HTTPS 传输               |
+| `sameSite` | `"Lax"`      | **防 CSRF**：限制跨站发送                 |
+
+> **注意**：框架默认安全（`httpOnly=true`、`secure=true`、`sameSite="Lax"`）。开发环境使用 HTTP 时需显式设置 `secure=false`。
 
 Cookie 值必须经过 RFC 6265 编码。规范规定的合法字符范围：
 
@@ -386,27 +388,27 @@ public:
     bool has(const std::string& key) const;
     void remove(const std::string& key);
     void clear();
-    void touch();
+    void touch();          // 无锁原子操作
+    auto lastAccess();     // 无锁原子操作
 
 private:
     std::string id_;                                       // 构造后不可变
-    mutable std::mutex mutex_;                             // 保护下面所有字段
+    mutable std::mutex mutex_;                             // 保护 data_ 和 dirty_
     std::unordered_map<std::string, std::any> data_;       // 数据存储
     bool dirty_ = false;                                   // 是否被修改
-    std::chrono::steady_clock::time_point lastAccess_      // 上次访问时间
-        = std::chrono::steady_clock::now();
+    std::atomic<int64_t> lastAccessNs_;                    // 纳秒时间戳（无锁）
 };
 ```
 
 关键设计决策：
 
-| 设计选择              | 原因                                                                |
-| --------------------- | ------------------------------------------------------------------- |
-| `std::any` 作为值类型 | 无需为每种数据类型定义序列化，直接存任意 C++ 对象                   |
-| `std::mutex` 保护     | Keep-Alive 多路复用下，同一 Session 可能被多个 IO 线程并发访问      |
-| `id_` 不加锁          | 构造后不可变，天然线程安全                                          |
-| `dirty_` 标志         | 只有被写过数据的 Session 才需要刷新 Cookie，减少不必要的 Set-Cookie |
-| `lastAccess_` 时间戳  | 用于过期判断和懒 GC                                                 |
+| 设计选择                  | 原因                                                                |
+| ------------------------- | ------------------------------------------------------------------- |
+| `std::any` 作为值类型     | 无需为每种数据类型定义序列化，直接存任意 C++ 对象                   |
+| `std::mutex` 保护数据字段 | Keep-Alive 多路复用下，同一 Session 可能被多个 IO 线程并发访问      |
+| `id_` 不加锁              | 构造后不可变，天然线程安全                                          |
+| `dirty_` 标志             | 只有被写过数据的 Session 才需要刷新 Cookie，减少不必要的 Set-Cookie |
+| `lastAccessNs_` 原子变量  | 消除与 `SessionManager::mutex_` 的嵌套锁风险，`touch()`/`lastAccess()` 无锁 |
 
 `get<T>()` 方法通过模板实现类型安全的取值：
 
@@ -441,34 +443,37 @@ std::optional<T> get(const std::string& key) const
 
 Session ID 的安全性至关重要——如果攻击者能猜到或暴力破解 ID，就能劫持用户会话。
 
-hical 使用 128 位随机数作为 Session ID（`Session.cpp:99-112`）：
+hical 使用 OpenSSL 密码学安全随机数生成 128 位 Session ID（`Session.cpp:105-122`）：
 
 ```cpp
 std::string SessionManager::generateId()
 {
-    // 使用 thread_local 随机引擎，避免加锁
-    thread_local std::mt19937_64 rng(std::random_device {}());
-    std::uniform_int_distribution<uint64_t> dist;
+    // 使用 OpenSSL 密码学安全随机数生成 128 位 Session ID
+    unsigned char buf[16];
+    if (RAND_bytes(buf, sizeof(buf)) != 1)
+    {
+        throw std::runtime_error("SessionManager::generateId: RAND_bytes failed");
+    }
 
-    // 生成两个 64 位随机数拼成 128 位 ID
-    uint64_t hi = dist(rng);
-    uint64_t lo = dist(rng);
-
-    std::ostringstream oss;
-    oss << std::hex << std::setfill('0')
-        << std::setw(16) << hi << std::setw(16) << lo;
-    return oss.str();
+    static constexpr char kHex[] = "0123456789abcdef";
+    std::string result(32, '\0');
+    for (size_t i = 0; i < 16; ++i)
+    {
+        result[i * 2] = kHex[buf[i] >> 4];
+        result[i * 2 + 1] = kHex[buf[i] & 0x0f];
+    }
+    return result;
 }
 ```
 
 设计要点：
 
-| 细节                      | 说明                                                |
-| ------------------------- | --------------------------------------------------- |
-| `thread_local` 引擎       | 每个线程独立的随机引擎，无需加锁，高并发下无竞争    |
-| `std::random_device` 播种 | 使用操作系统熵源初始化，确保不可预测                |
-| 128 位长度                | 2^128 种可能，暴力破解不可行                        |
-| 碰撞保护                  | `while (store_.count(id))` 循环检查（极低概率触发） |
+| 细节                          | 说明                                                |
+| ----------------------------- | --------------------------------------------------- |
+| `RAND_bytes`（OpenSSL）       | 密码学安全随机数，不可从输出预测后续值              |
+| 查表法 hex 编码               | 零额外堆分配（32 字节在 SSO 范围内），无 ostringstream 开销 |
+| 128 位长度                    | 2^128 种可能，暴力破解不可行                        |
+| 碰撞保护                      | `while (store_.count(id))` 循环检查（极低概率触发） |
 
 生成的 ID 形如：`a1b2c3d4e5f60718091a2b3c4d5e6f70`——32 个十六进制字符。
 
@@ -552,15 +557,16 @@ std::shared_ptr<Session> SessionManager::create()
 
 `SessionOptions` 控制 GC 行为：
 
-| 选项         | 默认值            | 说明                  |
-| ------------ | ----------------- | --------------------- |
-| `cookieName` | `"HICAL_SESSION"` | Cookie 名称           |
-| `maxAge`     | `3600`（1小时）   | Session 有效期（秒）  |
-| `httpOnly`   | `true`            | 防 XSS                |
-| `secure`     | `false`           | 生产环境应设为 `true` |
-| `sameSite`   | `"Lax"`           | 防 CSRF               |
-| `path`       | `"/"`             | Cookie 作用路径       |
-| `gcInterval` | `300`（5分钟）    | 懒 GC 触发间隔        |
+| 选项          | 默认值            | 说明                            |
+| ------------- | ----------------- | ------------------------------- |
+| `cookieName`  | `"HICAL_SESSION"` | Cookie 名称                     |
+| `maxAge`      | `3600`（1小时）   | Session 有效期（秒）            |
+| `httpOnly`    | `true`            | 防 XSS                          |
+| `secure`      | `true`            | 仅 HTTPS 传输（开发环境需显式关闭） |
+| `sameSite`    | `"Lax"`           | 防 CSRF                         |
+| `path`        | `"/"`             | Cookie 作用路径                 |
+| `gcInterval`  | `300`（5分钟）    | 懒 GC 触发间隔                  |
+| `maxSessions` | `100000`          | 最大 Session 数量（0=不限制），防 DoS 内存耗尽 |
 
 ### 3.4 Session 中间件：洋葱模型的完美应用
 
@@ -1126,15 +1132,16 @@ std::string MultipartParser::extractBoundary(const std::string& contentType)
 | **解析层** | **256 Part 上限** | 防止在 maxBodySize 内构造大量小 Part 消耗 CPU         |
 | **应用层** | 用户自行校验      | 检查文件名、大小、类型，防止上传恶意文件              |
 
-256 Part 上限的实现（`Multipart.cpp:236-240`）：
+256 Part 上限的实现（`Multipart.cpp:235-240`）——检查在 `push_back` **之前**，超限时不分配直接拒绝：
 
 ```cpp
 // Part 数量上限：防止在 maxBodySize 内构造大量小 Part 消耗 CPU/内存
 static constexpr std::size_t hMaxMultipartParts = 256;
 if (parts.size() >= hMaxMultipartParts)
 {
-    return std::nullopt;
+    return std::nullopt;  // 超限直接拒绝，不执行 push_back
 }
+parts.push_back(std::move(part));
 ```
 
 **为什么 256 够用？** 常见的文件上传表单通常只有几个到几十个字段。256 对正常使用绰绰有余，但能有效阻止 DoS 攻击——攻击者可以构造一个合法大小的请求体，但内含上千个微小 Part，让解析器消耗大量 CPU 和内存。

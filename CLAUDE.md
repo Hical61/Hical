@@ -63,20 +63,20 @@ find src -name '*.cpp' | xargs clang-tidy -p build
 - `Concepts.h` — C++20 concepts (`EventLoopLike`, `TcpConnectionLike`, `TimerLike`, `NetworkBackend`) for compile-time backend constraints
 - `MemoryPool.h` — Three-tier PMR memory strategy: global synchronized pool, thread-local unsynchronized pool, request-level monotonic buffer
 - `HttpServer.h` — Top-level facade integrating TcpServer + Router + MiddlewarePipeline
-- `Router.h` — Static routes (hash map O(1)) + parameter routes (`{id}` pattern, linear scan) + WebSocket routes
-- `Middleware.h` — Onion-model middleware pipeline with `MiddlewareNext` chaining
+- `Router.h` — Static routes (hash map O(1) with transparent hashing via `RouteKeyView`/`is_transparent` for zero-alloc `string_view` lookup) + parameter routes (`{id}` pattern, linear scan) + WebSocket routes
+- `Middleware.h` — Onion-model middleware pipeline with `MiddlewareNext` chaining; supports pre-built chain (`build()`) and dynamic chain (`buildChain()`), with separate `execute()` overloads for cached vs dynamic paths
 - `Coroutine.h` — `Awaitable<T>` alias for `boost::asio::awaitable<T>`, plus `sleep()` / `coSpawn()` helpers
 - `Reflection.h` / `MetaJson.h` / `MetaRoutes.h` — C++26 reflection layer (see below)
 - `StaticFiles.h` — Static file serving with ETag/304, MIME detection, path traversal protection
 - `Multipart.h/cpp` — RFC 7578 multipart/form-data parser (256 part DoS limit)
-- `Session.h/cpp` — In-memory session manager with lazy GC, 128-bit secure random IDs, `makeSessionMiddleware` factory
+- `Session.h/cpp` — In-memory session manager with lazy GC, OpenSSL RAND_bytes 128-bit IDs, `makeSessionMiddleware` factory, `maxSessions` DoS limit, atomic `lastAccess` (lock-free)
 - `Version.h.in` — CMake-configured version header (single source of truth from `project(VERSION)`)
 
 **`src/asio/`** — Boost.Asio concrete implementations:
 - `AsioEventLoop` — Wraps `boost::asio::io_context`, implements `EventLoop`
-- `GenericConnection<SocketType>` — Template supporting both `tcp::socket` (plain) and `ssl::stream<tcp::socket>` (SSL). Type aliases: `PlainConnection`, `SslConnection`
+- `GenericConnection<SocketType>` — Template supporting both `tcp::socket` (plain) and `ssl::stream<tcp::socket>` (SSL). Type aliases: `PlainConnection`, `SslConnection`. `reading_` is `atomic<bool>` for thread-safe `stopRead()`
 - `EventLoopPool` — Multi-threaded pool (1 thread : 1 io_context), round-robin connection distribution
-- `TcpServer` — Accept loop managing connection lifecycle
+- `TcpServer` — Accept loop managing connection lifecycle, `alive_` flag guards coroutine against use-after-this on destruction
 
 ### Key Patterns
 
@@ -124,7 +124,7 @@ Core design principle: when `HICAL_HAS_REFLECTION == 1` (compiler supports P2996
 
 ## Code Style
 
-- **clang-format**: Allman brace style (braces on new line), 4-space indent, 120-char column limit, `InsertBraces: true`, `UseTab: ForContinuationAndIndentation`
+- **clang-format**: Requires version 22+. On Windows use MSYS2 MINGW64 的 `C:\msys64\mingw64\bin\clang-format.exe`。Allman brace style (braces on new line), 4-space indent, 120-char column limit, `InsertBraces: true`, `UseTab: ForContinuationAndIndentation`
 - **clang-tidy**: readability, bugprone, cppcoreguidelines, modernize, misc, performance checks enabled. Function line threshold: 150, nesting threshold: 4, parameter threshold: 5
 - Qualifier order: `inline static const type`
 - Pointer/reference alignment: left (`int* p`, `std::string& s`)
@@ -132,14 +132,14 @@ Core design principle: when `HICAL_HAS_REFLECTION == 1` (compiler supports P2996
 
 ## Dependencies
 
-| Dependency   | Version                             |
-| ------------ | ----------------------------------- |
+| Dependency   | Version                               |
+| ------------ | ------------------------------------- |
 | C++ Standard | C++20 (C++26 optional for reflection) |
-| Boost        | >= 1.70 (Asio, Beast, System, JSON) |
-| OpenSSL      | Required                            |
-| Google Test  | Required                            |
-| CMake        | >= 3.20                             |
-| Compiler     | GCC 14+ / Clang 18+ / MSVC 2022+    |
+| Boost        | >= 1.70 (Asio, Beast, System, JSON)   |
+| OpenSSL      | Required                              |
+| Google Test  | Required                              |
+| CMake        | >= 3.20                               |
+| Compiler     | GCC 14+ / Clang 18+ / MSVC 2022+      |
 
 ## Test Structure
 

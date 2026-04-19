@@ -100,7 +100,7 @@ int main()
 
 ### Router
 
-路由管理器，负责路由注册和请求分发。静态路由使用哈希表 O(1) 查找，参数路由线性匹配。
+路由管理器，负责路由注册和请求分发。静态路由使用透明哈希表 O(1) 查找（`RouteKeyView` + `is_transparent` 实现零分配 `string_view` 查找），参数路由线性匹配。
 
 **头文件：** `src/core/Router.h`
 
@@ -375,8 +375,10 @@ using MiddlewareHandler = std::function<Awaitable<HttpResponse>(const HttpReques
 
 | 方法                         | 参数                                       | 返回值                    | 说明           |
 | ---------------------------- | ------------------------------------------ | ------------------------- | -------------- |
-| `use(middleware)`            | middleware: 中间件处理器                   | `void`                    | 添加中间件     |
-| `execute(req, finalHandler)` | req: HTTP 请求<br>finalHandler: 最终处理器 | `Awaitable<HttpResponse>` | 执行中间件管道 |
+| `use(middleware)`            | middleware: 中间件处理器                   | `void`                    | 添加中间件（`build()` 后禁止调用） |
+| `build(finalHandler)`        | finalHandler: 最终处理器                   | `void`                    | 预构建调用链（仅调用一次） |
+| `execute(req)`               | req: HTTP 请求                             | `Awaitable<HttpResponse>` | 执行预构建缓存链（需先 `build()`） |
+| `execute(req, finalHandler)` | req: HTTP 请求<br>finalHandler: 最终处理器 | `Awaitable<HttpResponse>` | 动态构建并执行（始终使用传入的 handler） |
 | `size()`                     | 无                                         | `size_t`                  | 获取中间件数量 |
 
 #### 示例
@@ -967,9 +969,9 @@ Cookie 解析（请求侧）与设置（响应侧）支持，符合 RFC 6265。
 | `path`     | `std::string` | `"/"`   | Cookie 作用路径                    |
 | `domain`   | `std::string` | `""`    | Cookie 作用域（空=当前域）         |
 | `maxAge`   | `int`         | `-1`    | 有效期（秒），-1 表示会话 Cookie   |
-| `httpOnly` | `bool`        | `false` | 防 XSS：禁止 JS 访问               |
-| `secure`   | `bool`        | `false` | 仅 HTTPS 传输                      |
-| `sameSite` | `std::string` | `""`    | SameSite 策略（`Lax`/`Strict`/`None`） |
+| `httpOnly` | `bool`        | `true`  | 防 XSS：禁止 JS 访问（默认开启）  |
+| `secure`   | `bool`        | `true`  | 仅 HTTPS 传输（默认开启，开发环境需显式关闭） |
+| `sameSite` | `std::string` | `"Lax"` | SameSite 策略（`Lax`/`Strict`/`None`） |
 
 #### HttpRequest Cookie API
 
@@ -1118,15 +1120,16 @@ server.router().post("/upload", [](const HttpRequest& req) -> HttpResponse {
 
 #### SessionOptions 结构体
 
-| 字段         | 类型          | 默认值            | 说明                                        |
-| ------------ | ------------- | ----------------- | ------------------------------------------- |
-| `cookieName` | `std::string` | `"HICAL_SESSION"` | Session Cookie 名称                         |
-| `maxAge`     | `int`         | `3600`            | Session 有效期（秒）                        |
-| `httpOnly`   | `bool`        | `true`            | Cookie HttpOnly                             |
-| `secure`     | `bool`        | `false`           | Cookie Secure（仅 HTTPS）                   |
-| `sameSite`   | `std::string` | `"Lax"`           | Cookie SameSite 策略                        |
-| `path`       | `std::string` | `"/"`             | Cookie 作用路径                             |
-| `gcInterval` | `int`         | `300`             | 懒 GC 触发间隔（秒），≤0 则禁用 GC         |
+| 字段          | 类型          | 默认值            | 说明                                        |
+| ------------- | ------------- | ----------------- | ------------------------------------------- |
+| `cookieName`  | `std::string` | `"HICAL_SESSION"` | Session Cookie 名称                         |
+| `maxAge`      | `int`         | `3600`            | Session 有效期（秒）                        |
+| `httpOnly`    | `bool`        | `true`            | Cookie HttpOnly                             |
+| `secure`      | `bool`        | `true`            | Cookie Secure（仅 HTTPS，开发环境需显式关闭） |
+| `sameSite`    | `std::string` | `"Lax"`           | Cookie SameSite 策略                        |
+| `path`        | `std::string` | `"/"`             | Cookie 作用路径                             |
+| `gcInterval`  | `int`         | `300`             | 懒 GC 触发间隔（秒），≤0 则禁用 GC         |
+| `maxSessions` | `size_t`      | `100000`          | 最大 Session 数量（0=不限制），防 DoS 内存耗尽 |
 
 #### Session 类（线程安全）
 
@@ -1147,7 +1150,7 @@ server.router().post("/upload", [](const HttpRequest& req) -> HttpResponse {
 | 方法         | 参数                           | 返回值                         | 说明                     |
 | ------------ | ------------------------------ | ------------------------------ | ------------------------ |
 | `find(id)`   | id: Session ID                 | `shared_ptr<Session>`（可空）  | 查找 Session             |
-| `create()`   | 无                             | `shared_ptr<Session>`          | 创建新 Session（含懒 GC）|
+| `create()`   | 无                             | `shared_ptr<Session>`（可空）  | 创建新 Session（含懒 GC），达到 `maxSessions` 上限时返回 `nullptr` |
 | `destroy(id)`| id: Session ID                 | `void`                         | 销毁 Session（登出）     |
 | `gc()`       | 无                             | `void`                         | 清理过期 Session         |
 | `count()`    | 无                             | `size_t`                       | 当前活跃 Session 数      |
