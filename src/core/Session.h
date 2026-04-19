@@ -5,12 +5,12 @@
 #include "HttpResponse.h"
 #include "Middleware.h"
 #include <any>
+#include <atomic>
 #include <chrono>
 #include <functional>
 #include <memory>
 #include <mutex>
 #include <optional>
-#include <random>
 #include <string>
 #include <unordered_map>
 
@@ -127,21 +127,21 @@ namespace hical
 		}
 
 		/**
-     * @brief 更新最后访问时间（线程安全）
+     * @brief 更新最后访问时间（无锁，原子操作）
      */
 		void touch()
 		{
-			std::lock_guard<std::mutex> lk(mutex_);
-			lastAccess_ = std::chrono::steady_clock::now();
+			auto now = std::chrono::steady_clock::now();
+			lastAccessNs_.store(now.time_since_epoch().count(), std::memory_order_release);
 		}
 
 		/**
-     * @brief 获取最后访问时间（线程安全）
+     * @brief 获取最后访问时间（无锁，原子操作）
      */
 		std::chrono::steady_clock::time_point lastAccess() const
 		{
-			std::lock_guard<std::mutex> lk(mutex_);
-			return lastAccess_;
+			auto ns = lastAccessNs_.load(std::memory_order_acquire);
+			return std::chrono::steady_clock::time_point(std::chrono::steady_clock::duration(ns));
 		}
 
 	private:
@@ -149,7 +149,8 @@ namespace hical
 		mutable std::mutex mutex_;
 		std::unordered_map<std::string, std::any> data_;
 		bool dirty_ = false;
-		std::chrono::steady_clock::time_point lastAccess_ = std::chrono::steady_clock::now();
+		/// 最后访问时间（纳秒时间戳），无锁原子操作，消除与 SessionManager::mutex_ 的嵌套锁
+		std::atomic<int64_t> lastAccessNs_ {std::chrono::steady_clock::now().time_since_epoch().count()};
 	};
 
 	/**
@@ -157,13 +158,18 @@ namespace hical
  */
 	struct SessionOptions
 	{
+		static constexpr int kDefaultMaxAge = 3600;           ///< 默认有效期 1 小时（秒）
+		static constexpr int kDefaultGcInterval = 300;        ///< 默认 GC 间隔 5 分钟（秒）
+		static constexpr size_t kDefaultMaxSessions = 100000; ///< 默认最大 Session 数量
+
 		std::string cookieName = "HICAL_SESSION"; ///< Session Cookie 名称
-		int maxAge = 3600;                        ///< Session 有效期（秒，默认 1 小时）
+		int maxAge = kDefaultMaxAge;              ///< Session 有效期（秒，默认 1 小时）
 		bool httpOnly = true;                     ///< Cookie HttpOnly（防 XSS）
-		bool secure = false;                      ///< Cookie Secure（仅 HTTPS）
+		bool secure = true;                       ///< Cookie Secure（仅 HTTPS，开发环境需显式关闭）
 		std::string sameSite = "Lax";             ///< Cookie SameSite 策略
 		std::string path = "/";                   ///< Cookie Path
-		int gcInterval = 300;                     ///< 懒 GC 触发间隔（秒，默认 5 分钟）
+		int gcInterval = kDefaultGcInterval;      ///< 懒 GC 触发间隔（秒，默认 5 分钟）
+		size_t maxSessions = kDefaultMaxSessions; ///< 最大 Session 数量（0 = 不限制），防 DoS 内存耗尽
 	};
 
 	/**
@@ -283,8 +289,15 @@ namespace hical
 			}
 			if (!session)
 			{
-				// 新建 Session
+				// 新建 Session（可能因达到上限返回 nullptr）
 				session = manager->create();
+				if (!session)
+				{
+					HttpResponse errRes;
+					errRes.setStatus(HttpStatusCode::hServiceUnavailable);
+					errRes.setBody("Service Unavailable: session store full");
+					co_return errRes;
+				}
 			}
 			session->touch();
 

@@ -178,7 +178,7 @@ namespace hical
 		AsioEventLoop* loop_;
 		SocketType socket_;
 		std::atomic<State> state_ {State::hConnecting};
-		bool reading_ {false};
+		std::atomic<bool> reading_ {false};
 
 		InetAddress localAddr_;
 		InetAddress peerAddr_;
@@ -348,7 +348,8 @@ namespace hical
 	template <typename SocketType>
 	void GenericConnection<SocketType>::send(PmrBuffer&& buffer)
 	{
-		send(buffer.peek(), buffer.readableBytes());
+		// 提取数据为 std::string 后走 move 通道，避免退化为 const char* 拷贝路径
+		send(buffer.readAll());
 	}
 
 	template <typename SocketType>

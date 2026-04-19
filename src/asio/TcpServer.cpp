@@ -55,9 +55,11 @@ namespace hical
 		listenAddr_ = InetAddress(actualEndpoint.address().to_string(), actualEndpoint.port());
 
 		// 启动协程式 accept 循环
+		// 捕获 alive_ 标志防止 TcpServer 析构后协程访问悬空 this
+		auto aliveFlag = alive_;
 		boost::asio::co_spawn(
 			baseLoop_->getIoContext(),
-			[this]() -> Awaitable<void>
+			[this, aliveFlag]() -> Awaitable<void>
 			{
 				co_await acceptLoop();
 			},
@@ -158,11 +160,17 @@ namespace hical
 	{
 		using boost::asio::ip::tcp;
 
-		while (running_.load())
+		while (running_.load() && alive_->load())
 		{
 			try
 			{
 				tcp::socket socket = co_await acceptor_.async_accept(boost::asio::use_awaitable);
+
+				// co_await 恢复后再次检查 TcpServer 是否仍存活
+				if (!alive_->load())
+				{
+					break;
+				}
 
 				// 获取地址信息
 				auto remoteEp = socket.remote_endpoint();

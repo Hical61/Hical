@@ -1,9 +1,12 @@
 #include "Session.h"
-#include <iomanip>
-#include <sstream>
+#include <openssl/rand.h>
+#include <stdexcept>
 
 namespace hical
 {
+
+	/// 秒转毫秒的转换因子
+	static constexpr int64_t kMsPerSecond = 1000LL;
 
 	std::shared_ptr<Session> SessionManager::find(const std::string& id)
 	{
@@ -17,7 +20,7 @@ namespace hical
 		// 检查是否已过期（使用毫秒精度，避免秒级截断的边界问题）
 		auto now = std::chrono::steady_clock::now();
 		auto elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(now - it->second->lastAccess()).count();
-		if (opts_.maxAge > 0 && elapsedMs >= static_cast<long long>(opts_.maxAge) * 1000LL)
+		if (opts_.maxAge > 0 && elapsedMs >= static_cast<long long>(opts_.maxAge) * kMsPerSecond)
 		{
 			store_.erase(it);
 			return nullptr;
@@ -35,14 +38,14 @@ namespace hical
 		{
 			auto now = std::chrono::steady_clock::now();
 			auto sinceGcMs = std::chrono::duration_cast<std::chrono::milliseconds>(now - lastGc_).count();
-			if (sinceGcMs >= static_cast<long long>(opts_.gcInterval) * 1000LL)
+			if (sinceGcMs >= static_cast<long long>(opts_.gcInterval) * kMsPerSecond)
 			{
 				lastGc_ = now;
 				for (auto it = store_.begin(); it != store_.end();)
 				{
 					auto elapsedMs =
 						std::chrono::duration_cast<std::chrono::milliseconds>(now - it->second->lastAccess()).count();
-					if (opts_.maxAge > 0 && elapsedMs >= static_cast<long long>(opts_.maxAge) * 1000LL)
+					if (opts_.maxAge > 0 && elapsedMs >= static_cast<long long>(opts_.maxAge) * kMsPerSecond)
 					{
 						it = store_.erase(it);
 					}
@@ -52,6 +55,12 @@ namespace hical
 					}
 				}
 			}
+		}
+
+		// Session 数量上限检查：防止攻击者创建无限 Session 导致 OOM
+		if (opts_.maxSessions > 0 && store_.size() >= opts_.maxSessions)
+		{
+			return nullptr;
 		}
 
 		auto id = generateId();
@@ -79,7 +88,7 @@ namespace hical
 		{
 			auto elapsedMs =
 				std::chrono::duration_cast<std::chrono::milliseconds>(now - it->second->lastAccess()).count();
-			if (opts_.maxAge > 0 && elapsedMs >= static_cast<long long>(opts_.maxAge) * 1000LL)
+			if (opts_.maxAge > 0 && elapsedMs >= static_cast<long long>(opts_.maxAge) * kMsPerSecond)
 			{
 				it = store_.erase(it);
 			}
@@ -98,17 +107,21 @@ namespace hical
 
 	std::string SessionManager::generateId()
 	{
-		// 使用 thread_local 随机引擎，避免加锁
-		thread_local std::mt19937_64 rng(std::random_device {}());
-		std::uniform_int_distribution<uint64_t> dist;
+		// 使用 OpenSSL 密码学安全随机数生成 128 位 Session ID
+		unsigned char buf[16];
+		if (RAND_bytes(buf, sizeof(buf)) != 1)
+		{
+			throw std::runtime_error("SessionManager::generateId: RAND_bytes failed");
+		}
 
-		// 生成两个 64 位随机数拼成 128 位 ID
-		uint64_t hi = dist(rng);
-		uint64_t lo = dist(rng);
-
-		std::ostringstream oss;
-		oss << std::hex << std::setfill('0') << std::setw(16) << hi << std::setw(16) << lo;
-		return oss.str();
+		static constexpr char kHex[] = "0123456789abcdef";
+		std::string result(32, '\0');
+		for (size_t i = 0; i < 16; ++i)
+		{
+			result[i * 2] = kHex[buf[i] >> 4];
+			result[i * 2 + 1] = kHex[buf[i] & 0x0f];
+		}
+		return result;
 	}
 
 } // namespace hical

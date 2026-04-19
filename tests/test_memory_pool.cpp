@@ -1,6 +1,8 @@
 #include "core/MemoryPool.h"
 #include "core/PmrBuffer.h"
 #include <gtest/gtest.h>
+#include <array>
+#include <stdexcept>
 #include <thread>
 #include <vector>
 
@@ -286,4 +288,33 @@ TEST(PmrBufferTest, HasWritten)
 
 	EXPECT_EQ(buffer.readableBytes(), 4);
 	EXPECT_EQ(std::string(buffer.peek(), 4), "test");
+}
+
+// 测试 swap 不同分配器抛异常
+TEST(PmrBufferTest, SwapDifferentAllocatorThrows)
+{
+	std::array<std::byte, 4096> storage1;
+	std::array<std::byte, 4096> storage2;
+	std::pmr::monotonic_buffer_resource res1(storage1.data(), storage1.size(), std::pmr::null_memory_resource());
+	std::pmr::monotonic_buffer_resource res2(storage2.data(), storage2.size(), std::pmr::null_memory_resource());
+
+	PmrBuffer buf1(std::pmr::polymorphic_allocator<std::byte>(&res1), 64);
+	PmrBuffer buf2(std::pmr::polymorphic_allocator<std::byte>(&res2), 64);
+
+	buf1.append("aaa");
+	buf2.append("bbb");
+
+	EXPECT_THROW(buf1.swap(buf2), std::logic_error);
+}
+
+// 测试 ensureWritableBytes 在不可扩容的分配器上抛 std::bad_alloc
+TEST(PmrBufferTest, EnsureWritableBytesThrowsOnAllocationFailure)
+{
+	std::array<std::byte, 128> storage;
+	std::pmr::monotonic_buffer_resource res(storage.data(), storage.size(), std::pmr::null_memory_resource());
+
+	PmrBuffer buffer(std::pmr::polymorphic_allocator<std::byte>(&res), 32);
+
+	// 请求远超可用空间的容量，上游 null_memory_resource 会抛 std::bad_alloc
+	EXPECT_THROW(buffer.ensureWritableBytes(65536), std::bad_alloc);
 }

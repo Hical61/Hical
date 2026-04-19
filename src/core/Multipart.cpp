@@ -230,7 +230,6 @@ namespace hical
 			MultipartPart part;
 			parsePartHeaders(partData.substr(0, headerEnd), part);
 			part.data = std::string(partData.substr(headerEnd + 4));
-			parts.push_back(std::move(part));
 
 			// Part 数量上限：防止在 maxBodySize 内构造大量小 Part 消耗 CPU/内存
 			static constexpr std::size_t hMaxMultipartParts = 256;
@@ -238,6 +237,8 @@ namespace hical
 			{
 				return std::nullopt;
 			}
+
+			parts.push_back(std::move(part));
 
 			// 移动到下一个 delimiter 之后
 			pos = nextDelim + delimiter.size();

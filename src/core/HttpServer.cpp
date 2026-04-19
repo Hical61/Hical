@@ -4,6 +4,7 @@
 #include "WebSocket.h"
 #include <boost/beast/websocket.hpp>
 #include <iostream>
+#include <optional>
 #include <stdexcept>
 #include <thread>
 #include <vector>
@@ -188,7 +189,9 @@ namespace hical
 					continue;
 				}
 
-				boost::asio::co_spawn(ioContext_, handleSession(std::move(socket)), boost::asio::detached);
+				boost::asio::co_spawn(boost::asio::make_strand(ioContext_.get_executor()),
+									  handleSession(std::move(socket)),
+									  boost::asio::detached);
 			}
 			catch (const boost::system::system_error& e)
 			{
@@ -234,12 +237,33 @@ namespace hical
 			}
 		} guard {socket};
 
+		// 空闲超时 timer 在 try 外声明，catch 块需要访问以取消 timer 防竞态
+		std::optional<boost::asio::steady_timer> deadline;
+		if (idleTimeout_ > 0)
+		{
+			deadline.emplace(socket.get_executor());
+		}
+
 		try
 		{
 			// 使用请求级 pmr 单调池，整个连接生命周期内复用
 			auto requestPool = MemoryPool::instance().createRequestPool();
 			std::pmr::polymorphic_allocator<std::byte> alloc(requestPool.get());
 			beast::basic_flat_buffer<std::pmr::polymorphic_allocator<std::byte>> buffer(alloc);
+
+			// 使用 alive 标志防止 timer 回调在 socket 销毁后访问悬空引用
+			auto socketAlive = std::make_shared<std::atomic<bool>>(true);
+
+			// RAII：确保协程退出时标记 socket 已失效，timer 回调不再操作 socket
+			struct AliveGuard
+			{
+				std::shared_ptr<std::atomic<bool>> alive;
+
+				~AliveGuard()
+				{
+					alive->store(false);
+				}
+			} aliveGuard {socketAlive};
 
 			for (;;)
 			{
@@ -249,24 +273,30 @@ namespace hical
 				parser.header_limit(static_cast<std::uint32_t>(maxHeaderSize_));
 
 				// 空闲超时：防止 Slowloris 类攻击，客户端不发数据时自动断开
-				if (idleTimeout_ > 0)
+				if (deadline)
 				{
-					boost::asio::steady_timer deadline(
-						socket.get_executor(),
-						std::chrono::milliseconds(static_cast<int64_t>(idleTimeout_ * 1000)));
-					deadline.async_wait(
-						[&socket](const boost::system::error_code& ec)
+					deadline->expires_after(std::chrono::milliseconds(static_cast<int64_t>(idleTimeout_ * 1000)));
+					deadline->async_wait(
+						[&socket, aliveFlag = socketAlive](const boost::system::error_code& ec)
 						{
-							if (!ec)
+							if (!ec && aliveFlag->load())
 							{
-								boost::system::error_code closeEc;
-								socket.close(closeEc);
+								// dispatch 到 socket 的 executor（strand）上序列化执行，避免与 async_read 竞态
+								boost::asio::dispatch(socket.get_executor(),
+													  [&socket, aliveFlag]()
+													  {
+														  if (aliveFlag->load())
+														  {
+															  boost::system::error_code closeEc;
+															  socket.close(closeEc);
+														  }
+													  });
 							}
 						});
 
 					co_await http::async_read(socket, buffer, parser, boost::asio::use_awaitable);
 
-					deadline.cancel();
+					deadline->cancel();
 				}
 				else
 				{
@@ -301,11 +331,8 @@ namespace hical
 				HttpResponse res;
 				if (middlewarePipeline_.size() > 0)
 				{
-					res = co_await middlewarePipeline_.execute(req,
-															   [this](HttpRequest& r) -> Awaitable<HttpResponse>
-															   {
-																   co_return co_await router_.dispatch(r);
-															   });
+					// build() 已在 start() 中调用，使用无参版本避免每请求构造 std::function
+					res = co_await middlewarePipeline_.execute(req);
 				}
 				else
 				{
@@ -330,6 +357,12 @@ namespace hical
 		}
 		catch (const beast::system_error& e)
 		{
+			// 异常路径先取消 timer，防止 timer 回调的 socket.close() 与下方 http::write 竞态
+			if (deadline)
+			{
+				deadline->cancel();
+			}
+
 			if (e.code() == http::error::body_limit)
 			{
 				// 请求体过大：返回 413 Payload Too Large

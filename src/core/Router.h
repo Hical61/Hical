@@ -154,19 +154,56 @@ namespace hical
 			}
 		};
 
+		/// 轻量级 view 类型，用于 find() 异构查找，避免构造临时 std::string
+		struct RouteKeyView
+		{
+			HttpMethod method;
+			std::string_view path;
+		};
+
 		struct RouteKeyHash
 		{
-			size_t operator()(const RouteKey& key) const
+			using is_transparent = void;
+
+			static size_t combine(size_t h1, size_t h2)
 			{
-				auto h1 = std::hash<int> {}(static_cast<int>(key.method));
-				auto h2 = std::hash<std::string> {}(key.path);
-				// boost::hash_combine 风格的哈希组合，减少碰撞
 				h1 ^= h2 + 0x9e3779b9 + (h1 << 6) + (h1 >> 2);
 				return h1;
 			}
+
+			size_t operator()(const RouteKey& key) const
+			{
+				return combine(std::hash<int> {}(static_cast<int>(key.method)), std::hash<std::string> {}(key.path));
+			}
+
+			size_t operator()(const RouteKeyView& key) const
+			{
+				return combine(std::hash<int> {}(static_cast<int>(key.method)),
+							   std::hash<std::string_view> {}(key.path));
+			}
 		};
 
-		std::unordered_map<RouteKey, RouteHandler, RouteKeyHash> staticRoutes_;
+		struct RouteKeyEqual
+		{
+			using is_transparent = void;
+
+			bool operator()(const RouteKey& a, const RouteKey& b) const
+			{
+				return a.method == b.method && a.path == b.path;
+			}
+
+			bool operator()(const RouteKeyView& a, const RouteKey& b) const
+			{
+				return a.method == b.method && a.path == b.path;
+			}
+
+			bool operator()(const RouteKey& a, const RouteKeyView& b) const
+			{
+				return a.method == b.method && a.path == b.path;
+			}
+		};
+
+		std::unordered_map<RouteKey, RouteHandler, RouteKeyHash, RouteKeyEqual> staticRoutes_;
 
 		// ============ 参数路由（线性匹配） ============
 

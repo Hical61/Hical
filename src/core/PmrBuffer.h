@@ -218,7 +218,7 @@ namespace hical
 			{
 				makeSpace(len);
 			}
-			assert(writableBytes() >= len);
+			assert(writableBytes() >= len && "makeSpace logic error: insufficient space after expansion");
 		}
 
 		// ============ 交换 ============
@@ -226,11 +226,15 @@ namespace hical
 		/**
      * @brief 与另一个缓冲区交换
      * @param rhs 另一个缓冲区
+     * @throw std::logic_error 当两个缓冲区的分配器不同时抛出
      */
-		void swap(PmrBuffer& rhs) noexcept
+		void swap(PmrBuffer& rhs)
 		{
 			// pmr::vector::swap 在分配器不相等时行为未定义，此处做防御性检查
-			assert(buffer_.get_allocator() == rhs.buffer_.get_allocator());
+			if (buffer_.get_allocator() != rhs.buffer_.get_allocator())
+			{
+				throw std::logic_error("PmrBuffer::swap: cannot swap buffers with different allocators");
+			}
 			buffer_.swap(rhs.buffer_);
 			std::swap(readIndex_, rhs.readIndex_);
 			std::swap(writeIndex_, rhs.writeIndex_);

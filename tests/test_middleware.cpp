@@ -2,6 +2,7 @@
 #include "core/Coroutine.h"
 #include "asio/AsioEventLoop.h"
 #include <gtest/gtest.h>
+#include <stdexcept>
 #include <atomic>
 #include <chrono>
 #include <thread>
@@ -195,4 +196,62 @@ TEST(MiddlewareTest, ModifyRequest)
 
 	ASSERT_TRUE(result.has_value());
 	EXPECT_EQ(result->header("X-Processed"), "true");
+}
+
+// 测试 build() 后调用 use() 抛异常
+TEST(MiddlewareTest, UseAfterBuildThrows)
+{
+	MiddlewarePipeline pipeline;
+
+	pipeline.use(
+		[](HttpRequest& req, MiddlewareNext next) -> Awaitable<HttpResponse>
+		{
+			co_return co_await next(req);
+		});
+
+	pipeline.build(
+		[](HttpRequest&) -> Awaitable<HttpResponse>
+		{
+			co_return HttpResponse::ok("final");
+		});
+
+	EXPECT_THROW(pipeline.use(
+					 [](HttpRequest& req, MiddlewareNext next) -> Awaitable<HttpResponse>
+					 {
+						 co_return co_await next(req);
+					 }),
+				 std::logic_error);
+}
+
+// 测试空管道 build() 后也不能 use()
+TEST(MiddlewareTest, UseAfterBuildEmptyPipelineThrows)
+{
+	MiddlewarePipeline pipeline;
+
+	pipeline.build(
+		[](HttpRequest&) -> Awaitable<HttpResponse>
+		{
+			co_return HttpResponse::ok("final");
+		});
+
+	EXPECT_THROW(pipeline.use(
+					 [](HttpRequest& req, MiddlewareNext next) -> Awaitable<HttpResponse>
+					 {
+						 co_return co_await next(req);
+					 }),
+				 std::logic_error);
+}
+
+// 测试 build() 前 use() 正常
+TEST(MiddlewareTest, UseBeforeBuildSucceeds)
+{
+	MiddlewarePipeline pipeline;
+
+	EXPECT_NO_THROW(pipeline.use(
+		[](HttpRequest& req, MiddlewareNext next) -> Awaitable<HttpResponse>
+		{
+			co_return co_await next(req);
+		}));
+
+	EXPECT_EQ(pipeline.size(), 1);
 }

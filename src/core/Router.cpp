@@ -95,7 +95,30 @@ namespace hical
 	Awaitable<HttpResponse> Router::dispatch(HttpRequest& req)
 	{
 		auto reqMethod = req.method();
-		auto reqPath = urlDecode(req.path());
+		auto rawPath = req.path();
+
+		// 快速路径：大多数 API 路径不含编码字符，直接用 string_view 避免堆分配
+		bool needsDecode = false;
+		for (char c : rawPath)
+		{
+			if (c == '%' || c == '+')
+			{
+				needsDecode = true;
+				break;
+			}
+		}
+
+		std::string decodedStorage;
+		std::string_view reqPath;
+		if (needsDecode)
+		{
+			decodedStorage = urlDecode(rawPath);
+			reqPath = decodedStorage;
+		}
+		else
+		{
+			reqPath = rawPath;
+		}
 
 		// 路径深度快速检查，防止超深路径 DoS
 		size_t segmentCount = 0;
@@ -111,8 +134,8 @@ namespace hical
 			co_return HttpResponse::badRequest("Path too deep");
 		}
 
-		// 1. 优先查找静态路由（O(1) 哈希查找）
-		auto it = staticRoutes_.find({reqMethod, reqPath});
+		// 1. 优先查找静态路由（O(1) 哈希查找，透明哈希避免构造临时 std::string）
+		auto it = staticRoutes_.find(RouteKeyView {reqMethod, reqPath});
 		if (it != staticRoutes_.end())
 		{
 			co_return co_await it->second(req);
