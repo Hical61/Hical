@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Hical is a modern C++20 high-performance web framework built on Boost.Asio/Beast, featuring PMR memory pools, coroutine-based async I/O (`asio::awaitable<T>`), C++20 Concepts for compile-time type safety, and a C++26 reflection layer (dual-track: native P2996 or C++20 macro fallback). Status: v1.0.0.
+Hical is a modern C++20 high-performance web framework built on Boost.Asio/Beast, featuring PMR memory pools, coroutine-based async I/O (`asio::awaitable<T>`), C++20 Concepts for compile-time type safety, and a C++26 reflection layer (dual-track: native P2996 or C++20 macro fallback). Status: v2.0.0.
 
 ## Build Commands
 
