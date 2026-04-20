@@ -25,7 +25,7 @@ See [docs/build_and_test_guide.md](docs/build_and_test_guide.md) for full detail
 | CMake | >= 3.20 |
 | OpenSSL | Required |
 | Google Test | Required |
-| Compiler | GCC 14+ / Clang 18+ / MSVC 2022+ |
+| Compiler | GCC 14+ / Clang 20+ / MSVC 2022+ |
 
 **Quick build:**
 
@@ -131,7 +131,7 @@ Use the [issue templates](https://github.com/Hical61/Hical/issues/new/choose). P
 | CMake | >= 3.20 |
 | OpenSSL | 必需 |
 | Google Test | 必需 |
-| 编译器 | GCC 14+ / Clang 18+ / MSVC 2022+ |
+| 编译器 | GCC 14+ / Clang 20+ / MSVC 2022+ |
 
 **快速构建：**
 

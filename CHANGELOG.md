@@ -81,7 +81,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `HttpTypes.h` 新增 `hPayloadTooLarge = 413` 状态码
 
 **工程**
-- GitHub Actions CI（GCC 14 / Clang 18 / MSYS2 MINGW64 / MSVC + vcpkg 四平台矩阵）
+- GitHub Actions CI（GCC 14 / Clang 20 / MSYS2 MINGW64 / MSVC + vcpkg 四平台矩阵）
 - 232 个测试用例（GTest + CTest 集成），clang-format / clang-tidy 检查
 - MSVC + vcpkg 支持（`vcpkg.json` 清单）
 - 社区基础设施：`CONTRIBUTING.md`、`CODE_OF_CONDUCT.md`、`SECURITY.md`、PR/Issue 模板

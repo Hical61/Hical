@@ -139,7 +139,7 @@ Core design principle: when `HICAL_HAS_REFLECTION == 1` (compiler supports P2996
 | OpenSSL      | Required                              |
 | Google Test  | Required                              |
 | CMake        | >= 3.20                               |
-| Compiler     | GCC 14+ / Clang 18+ / MSVC 2022+      |
+| Compiler     | GCC 14+ / Clang 20+ / MSVC 2022+      |
 
 ## Test Structure
 
@@ -159,4 +159,4 @@ Core design principle: when `HICAL_HAS_REFLECTION == 1` (compiler supports P2996
 
 ## CI
 
-GitHub Actions (`.github/workflows/ci.yml`): matrix of Ubuntu 24.04 (GCC 14, Clang 18) + Windows (MSYS2 MINGW64, MSVC + vcpkg). GCC job runs clang-format check; Clang job runs clang-tidy (warning mode, non-blocking).
+GitHub Actions (`.github/workflows/ci.yml`): matrix of Ubuntu 24.04 (GCC 14, Clang 20) + Windows (MSYS2 MINGW64, MSVC + vcpkg). GCC job runs clang-format check; Clang job runs clang-tidy (warning mode, non-blocking).

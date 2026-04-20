@@ -23,8 +23,8 @@ jobs:
             cxx: g++-14
           - os: ubuntu-24.04
             compiler: clang
-            cc: clang-18
-            cxx: clang++-18
+            cc: clang-20
+            cxx: clang++-20
           - os: windows-latest
             compiler: msys2-gcc
           - os: windows-latest
@@ -42,8 +42,10 @@ jobs:
       - name: Install dependencies (Linux)
         if: runner.os == 'Linux'
         run: |
+          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/llvm.asc
+          echo "deb http://apt.llvm.org/noble/ llvm-toolchain-noble-20 main" | sudo tee /etc/apt/sources.list.d/llvm-20.list
           sudo apt-get update
-          sudo apt-get install -y libboost-all-dev libssl-dev libgtest-dev cmake gcovr
+          sudo apt-get install -y libboost-all-dev libssl-dev libgtest-dev cmake gcovr clang-20 clang-tidy-20
           pip install clang-format==22.1.1
 
       # ── ccache 加速编译 (Linux) ──
@@ -96,7 +98,7 @@ jobs:
         if: matrix.compiler == 'clang'
         continue-on-error: true
         run: |
-          find src -name '*.cpp' | xargs clang-tidy -p build
+          find src -name '*.cpp' | xargs clang-tidy-20 -p build
 
       # ── 代码覆盖率 (仅 GCC job) ──
       - name: Build with coverage (GCC)
