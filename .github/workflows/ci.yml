@@ -7,6 +7,10 @@ on:
     branches: [main]
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     strategy:
@@ -28,6 +32,8 @@ jobs:
 
     runs-on: ${{ matrix.os }}
     name: ${{ matrix.os }} / ${{ matrix.compiler }}
+    permissions:
+      contents: write
 
     steps:
       - uses: actions/checkout@v4
@@ -37,31 +43,53 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libboost-all-dev libssl-dev libgtest-dev cmake
+          sudo apt-get install -y libboost-all-dev libssl-dev libgtest-dev cmake gcovr
           pip install clang-format==22.1.1
+
+      # ── ccache 加速编译 (Linux) ──
+      - name: Setup ccache
+        if: runner.os == 'Linux'
+        uses: hendrikmuhs/ccache-action@v1
+        with:
+          key: ${{ matrix.os }}-${{ matrix.compiler }}
 
       # ── Linux 构建与测试 ──
       - name: Configure (Linux)
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && matrix.compiler != 'clang'
         run: |
           cmake -B build -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_C_COMPILER=${{ matrix.cc }} \
-            -DCMAKE_CXX_COMPILER=${{ matrix.cxx }}
+            -DCMAKE_CXX_COMPILER=${{ matrix.cxx }} \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
       - name: Build (Linux)
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && matrix.compiler != 'clang'
         run: cmake --build build -j$(nproc)
 
       - name: Test (Linux)
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && matrix.compiler != 'clang'
         run: ctest --test-dir build --output-on-failure --timeout 60 -j4
 
-      # ── clang-format 检查 (仅 GCC job) ──
-      - name: Check formatting
-        if: matrix.compiler == 'gcc'
+      # ── Clang: Sanitizer 构建 (ASan + UBSan) ──
+      - name: Configure with sanitizers (Clang)
+        if: matrix.compiler == 'clang'
         run: |
-          find src tests examples -name '*.h' -o -name '*.cpp' | \
-            xargs clang-format --dry-run --Werror
+          cmake -B build -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_C_COMPILER=${{ matrix.cc }} \
+            -DCMAKE_CXX_COMPILER=${{ matrix.cxx }} \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
+            -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined"
+
+      - name: Build with sanitizers (Clang)
+        if: matrix.compiler == 'clang'
+        run: cmake --build build -j$(nproc)
+
+      - name: Test with sanitizers (Clang)
+        if: matrix.compiler == 'clang'
+        run: ctest --test-dir build --output-on-failure --timeout 120 -j4
 
       # ── clang-tidy 检查 (仅 Clang job, 警告模式) ──
       - name: Run clang-tidy
@@ -69,6 +97,69 @@ jobs:
         continue-on-error: true
         run: |
           find src -name '*.cpp' | xargs clang-tidy -p build
+
+      # ── 代码覆盖率 (仅 GCC job) ──
+      - name: Build with coverage (GCC)
+        if: matrix.compiler == 'gcc'
+        run: |
+          cmake -B build-cov -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_C_COMPILER=${{ matrix.cc }} \
+            -DCMAKE_CXX_COMPILER=${{ matrix.cxx }} \
+            -DCMAKE_CXX_FLAGS="--coverage" \
+            -DCMAKE_C_FLAGS="--coverage" \
+            -DCMAKE_EXE_LINKER_FLAGS="--coverage"
+          cmake --build build-cov -j$(nproc)
+
+      - name: Run tests for coverage
+        if: matrix.compiler == 'gcc'
+        run: ctest --test-dir build-cov --output-on-failure --timeout 60 -j4
+
+      - name: Generate coverage report
+        if: matrix.compiler == 'gcc'
+        run: |
+          gcovr --xml -o coverage.xml \
+            --root . --filter 'src/' \
+            --exclude 'tests/' --exclude 'examples/'
+
+      - name: Upload coverage to Codecov
+        if: matrix.compiler == 'gcc'
+        uses: codecov/codecov-action@v4
+        with:
+          files: coverage.xml
+          fail_ci_if_error: false
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+      # ── 自动格式化修复 (仅 GCC job, 仅非 fork 的 PR) ──
+      - name: Auto-fix formatting
+        if: >-
+          matrix.compiler == 'gcc'
+          && github.event_name == 'pull_request'
+          && github.event.pull_request.head.repo.full_name == github.repository
+        run: |
+          find src tests examples -name '*.h' -o -name '*.cpp' | \
+            xargs clang-format -i
+          python3 scripts/fix-comment-indent.py \
+            $(find src tests examples -name '*.h' -o -name '*.cpp')
+
+      - name: Commit formatting fixes
+        if: >-
+          matrix.compiler == 'gcc'
+          && github.event_name == 'pull_request'
+          && github.event.pull_request.head.repo.full_name == github.repository
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "[chore] auto-fix formatting"
+          branch: ${{ github.head_ref }}
+
+      # ── clang-format 严格检查 (GCC job: push 到 main 或 PR 均检查) ──
+      - name: Check formatting
+        if: matrix.compiler == 'gcc'
+        run: |
+          find src tests examples -name '*.h' -o -name '*.cpp' | \
+            xargs clang-format --dry-run --Werror
+          python3 scripts/fix-comment-indent.py --check \
+            $(find src tests examples -name '*.h' -o -name '*.cpp')
 
       # ── Windows MSYS2 ──
       - name: Setup MSYS2
@@ -123,3 +214,16 @@ jobs:
       - name: Test (MSVC)
         if: matrix.compiler == 'msvc'
         run: ctest --test-dir build --output-on-failure --timeout 60 -j4 -C Release
+
+  # ── PR 自动打标签 ──
+  labeler:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/labeler@v5
+        with:
+          sync-labels: true

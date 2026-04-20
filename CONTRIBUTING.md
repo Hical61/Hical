@@ -43,6 +43,8 @@ This project enforces style via `.clang-format` and `.clang-tidy`. Run before co
 clang-format -i <files>
 ```
 
+> **Note:** CI will automatically fix formatting issues (including multi-line comment indentation via `scripts/fix-comment-indent.py`) and commit the fix to your PR branch. You don't need to run this script locally.
+
 **Naming conventions** (from `.clang-tidy`):
 
 | Element | Convention | Example |
@@ -146,6 +148,8 @@ ctest --test-dir build --output-on-failure
 ```bash
 clang-format -i <files>
 ```
+
+> **提示：** CI 会自动修复格式问题（包括通过 `scripts/fix-comment-indent.py` 修复多行注释缩进），并将修复 commit 推送到你的 PR 分支。你无需在本地运行此脚本。
 
 **命名约定**（来自 `.clang-tidy`）：
 
