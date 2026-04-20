@@ -2,15 +2,12 @@
 
 /**
  * @brief 反射驱动的 JSON 自动序列化/反序列化
- *
  * 双路线：
  * - C++26 反射：通过 ^^T 自动枚举数据成员，无需用户标注
  * - C++20 回退：用户使用 HICAL_JSON(StructType, field1, field2, ...) 宏标注字段
- *
  * 对外 API：
  *   boost::json::value json = hical::meta::toJson(myStruct);
  *   auto obj = hical::meta::fromJson<MyStruct>(jsonValue);
- *
  * 支持类型：int, int64_t, double, bool, std::string, std::vector<T>, 嵌套结构体
  */
 
@@ -49,8 +46,8 @@ namespace hical::meta
 	// ============ 单值 JSON 转换 ============
 
 	/**
-     * @brief 将 C++ 值转换为 boost::json::value
-     */
+	 * @brief 将 C++ 值转换为 boost::json::value
+	 */
 	template <typename T>
 	boost::json::value valueToJson(const T& val)
 	{
@@ -90,9 +87,9 @@ namespace hical::meta
 	}
 
 	/**
-     * @brief 从 boost::json::value 提取 C++ 值（带类型检查）
-     * @throws std::runtime_error 当 JSON 值类型与目标 C++ 类型不匹配时
-     */
+	 * @brief 从 boost::json::value 提取 C++ 值（带类型检查）
+	 * @throws std::runtime_error 当 JSON 值类型与目标 C++ 类型不匹配时
+	 */
 	template <typename T>
 	T valueFromJson(const boost::json::value& val)
 	{
@@ -170,8 +167,8 @@ namespace hical::meta
 	{
 
 		/**
-         * @brief 字段描述器：绑定字段名 + 成员指针
-         */
+		 * @brief 字段描述器：绑定字段名 + 成员指针
+		 */
 		template <typename Class, typename FieldType>
 		struct FieldDescriptor
 		{
@@ -180,8 +177,8 @@ namespace hical::meta
 		};
 
 		/**
-         * @brief 创建字段描述器的辅助函数
-         */
+		 * @brief 创建字段描述器的辅助函数
+		 */
 		template <typename Class, typename FieldType>
 		constexpr FieldDescriptor<Class, FieldType> makeField(std::string_view name, FieldType Class::* ptr)
 		{
@@ -189,8 +186,8 @@ namespace hical::meta
 		}
 
 		/**
-         * @brief 序列化所有字段
-         */
+		 * @brief 序列化所有字段
+		 */
 		template <typename T, typename Tuple, size_t... I>
 		void serializeFields(const T& obj, boost::json::object& jsonObj, const Tuple& fields, std::index_sequence<I...>)
 		{
@@ -198,8 +195,8 @@ namespace hical::meta
 		}
 
 		/**
-         * @brief 反序列化所有字段
-         */
+		 * @brief 反序列化所有字段
+		 */
 		template <typename T, typename Tuple, size_t... I>
 		void deserializeFields(T& obj,
 							   const boost::json::object& jsonObj,
@@ -221,8 +218,8 @@ namespace hical::meta
 	} // namespace detail
 
 	/**
-     * @brief 序列化结构体为 JSON（C++20 回退）
-     */
+	 * @brief 序列化结构体为 JSON（C++20 回退）
+	 */
 	template <typename T>
 	boost::json::object toJson(const T& obj)
 	{
@@ -236,8 +233,8 @@ namespace hical::meta
 	}
 
 	/**
-     * @brief 从 JSON 反序列化为结构体（C++20 回退）
-     */
+	 * @brief 从 JSON 反序列化为结构体（C++20 回退）
+	 */
 	template <typename T>
 	T fromJson(const boost::json::value& json)
 	{
@@ -261,8 +258,8 @@ namespace hical::meta
 	// ============ C++26 反射实现 ============
 
 	/**
-     * @brief 序列化结构体为 JSON（C++26 反射，无需宏标注）
-     */
+	 * @brief 序列化结构体为 JSON（C++26 反射，无需宏标注）
+	 */
 	template <typename T>
 	boost::json::object toJson(const T& obj)
 	{
@@ -278,8 +275,8 @@ namespace hical::meta
 	}
 
 	/**
-     * @brief 从 JSON 反序列化为结构体（C++26 反射，无需宏标注）
-     */
+	 * @brief 从 JSON 反序列化为结构体（C++26 反射，无需宏标注）
+	 */
 	template <typename T>
 	T fromJson(const boost::json::value& json)
 	{
@@ -303,15 +300,14 @@ namespace hical::meta
 #endif // HICAL_HAS_REFLECTION
 
 	/**
-     * @brief 从 HttpRequest 消息体反序列化为指定类型
-     * @tparam T 目标类型（需标注 HICAL_JSON 或支持 C++26 反射）
-     * @param req HTTP 请求
-     * @return T 反序列化后的对象
-     * @throws std::runtime_error 当请求体不是合法 JSON 或类型不匹配时
-     *
-     * 用法：auto user = hical::meta::readJson<UserDTO>(req);
-     * 或直接：auto user = req.readJson<UserDTO>();（需 include MetaJson.h）
-     */
+	 * @brief 从 HttpRequest 消息体反序列化为指定类型
+	 * @tparam T 目标类型（需标注 HICAL_JSON 或支持 C++26 反射）
+	 * @param req HTTP 请求
+	 * @return T 反序列化后的对象
+	 * @throws std::runtime_error 当请求体不是合法 JSON 或类型不匹配时
+	 * 用法：auto user = hical::meta::readJson<UserDTO>(req);
+	 * 或直接：auto user = req.readJson<UserDTO>();（需 include MetaJson.h）
+	 */
 	template <typename T>
 	T readJson(const ::hical::HttpRequest& req)
 	{
@@ -332,14 +328,13 @@ namespace hical
 {
 
 	/**
-     * @brief 将消息体反序列化为指定类型（反射驱动）
-     * @tparam T 目标类型（需标注 HICAL_JSON 或支持 C++26 反射）
-     * @return T 反序列化后的对象
-     *
-     * 用法：
-     *   #include "core/MetaJson.h"
-     *   auto user = req.readJson<UserDTO>();
-     */
+	 * @brief 将消息体反序列化为指定类型（反射驱动）
+	 * @tparam T 目标类型（需标注 HICAL_JSON 或支持 C++26 反射）
+	 * @return T 反序列化后的对象
+	 * 用法：
+	 *   #include "core/MetaJson.h"
+	 *   auto user = req.readJson<UserDTO>();
+	 */
 	template <typename T>
 	T HttpRequest::readJson() const
 	{
@@ -352,7 +347,6 @@ namespace hical
 
 /**
  * @brief 标注结构体字段用于自动 JSON 序列化（C++20 回退方案）
- *
  * 用法：
  * ```cpp
  * struct UserDTO
@@ -360,11 +354,9 @@ namespace hical
  *     std::string name;
  *     int age;
  *     double score;
- *
  *     HICAL_JSON(UserDTO, name, age, score)
  * };
  * ```
- *
  * 当 C++26 反射可用时，此宏为空操作。
  */
 #if !HICAL_HAS_REFLECTION

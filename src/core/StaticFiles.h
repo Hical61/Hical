@@ -14,30 +14,27 @@ namespace hical
 {
 
 	/**
- * @brief 静态文件服务
- *
- * 提供 serveStatic() 工厂函数，将指定 URL 前缀映射到本地目录，
- * 返回可直接注册到 Router 的 SyncRouteHandler。
- *
- * 用法：
- * ```cpp
- * // 将 /static/... 映射到 ./public 目录
- * server.router().get("/static/{file}", hical::serveStatic("./public", "/static/"));
- * ```
- *
- * 安全：内置路径遍历攻击防护（阻止 "../" 跳出根目录）。
- * MIME：根据文件扩展名自动推断 Content-Type。
- * 缓存：支持 ETag / Last-Modified / 304 Not Modified。
- */
+	 * @brief 静态文件服务
+	 * 提供 serveStatic() 工厂函数，将指定 URL 前缀映射到本地目录，
+	 * 返回可直接注册到 Router 的 SyncRouteHandler。
+	 * 用法：
+	 * ```cpp
+	 * // 将 /static/... 映射到 ./public 目录
+	 * server.router().get("/static/{file}", hical::serveStatic("./public", "/static/"));
+	 * ```
+	 * 安全：内置路径遍历攻击防护（阻止 "../" 跳出根目录）。
+	 * MIME：根据文件扩展名自动推断 Content-Type。
+	 * 缓存：支持 ETag / Last-Modified / 304 Not Modified。
+	 */
 
 	namespace detail
 	{
 
 		/**
- * @brief 根据文件扩展名返回 MIME 类型
- * @param ext 文件扩展名（含 "."，如 ".html"）
- * @return MIME 类型字符串
- */
+		 * @brief 根据文件扩展名返回 MIME 类型
+		 * @param ext 文件扩展名（含 "."，如 ".html"）
+		 * @return MIME 类型字符串
+		 */
 		inline std::string mimeType(const std::string& ext)
 		{
 			static const std::unordered_map<std::string, std::string> table = {
@@ -75,11 +72,11 @@ namespace hical
 		}
 
 		/**
- * @brief 检查路径是否试图跳出根目录（路径遍历攻击防护）
- * @param root 根目录规范路径
- * @param target 目标文件规范路径
- * @return true 表示安全
- */
+		 * @brief 检查路径是否试图跳出根目录（路径遍历攻击防护）
+		 * @param root 根目录规范路径
+		 * @param target 目标文件规范路径
+		 * @return true 表示安全
+		 */
 		inline bool isSafePath(const std::filesystem::path& root, const std::filesystem::path& target)
 		{
 			// 逐段迭代器比较：root 的每个路径分量必须是 target 的前缀
@@ -97,11 +94,11 @@ namespace hical
 		}
 
 		/**
- * @brief 生成简单的 ETag（基于文件大小 + 最后修改时间）
- * @param fileSize 文件大小（字节）
- * @param lastWrite 最后修改时间
- * @return ETag 字符串（带引号，符合 RFC 7232）
- */
+		 * @brief 生成简单的 ETag（基于文件大小 + 最后修改时间）
+		 * @param fileSize 文件大小（字节）
+		 * @param lastWrite 最后修改时间
+		 * @return ETag 字符串（带引号，符合 RFC 7232）
+		 */
 		inline std::string makeEtag(std::uintmax_t fileSize, std::filesystem::file_time_type lastWrite)
 		{
 			auto ns = lastWrite.time_since_epoch().count();
@@ -111,26 +108,23 @@ namespace hical
 	} // namespace detail
 
 	/**
- * @brief 创建静态文件服务处理器
- *
- * @param rootDir     本地目录路径（如 "./public"）
- * @param urlPrefix   URL 前缀（如 "/static/"），用于从请求路径中去除前缀得到相对路径
- * @param maxFileSize 单文件最大字节数（默认 64MB），超出返回 413
- * @return SyncRouteHandler 可直接注册到 Router 的处理器
- *
- * 示例：
- * ```cpp
- * // 注册通配路由：/static/{path} -> ./public/{path}
- * server.router().get("/static/{path}", hical::serveStatic("./public", "/static/"));
- * ```
- *
- * 支持功能：
- * - MIME 自动推断
- * - 目录默认文件（index.html）
- * - ETag 缓存验证（304 Not Modified）
- * - 路径遍历攻击防护
- * - 大文件限制（防止 bad_alloc 崩溃）
- */
+	 * @brief 创建静态文件服务处理器
+	 * @param rootDir     本地目录路径（如 "./public"）
+	 * @param urlPrefix   URL 前缀（如 "/static/"），用于从请求路径中去除前缀得到相对路径
+	 * @param maxFileSize 单文件最大字节数（默认 64MB），超出返回 413
+	 * @return SyncRouteHandler 可直接注册到 Router 的处理器
+	 * 示例：
+	 * ```cpp
+	 * // 注册通配路由：/static/{path} -> ./public/{path}
+	 * server.router().get("/static/{path}", hical::serveStatic("./public", "/static/"));
+	 * ```
+	 * 支持功能：
+	 * - MIME 自动推断
+	 * - 目录默认文件（index.html）
+	 * - ETag 缓存验证（304 Not Modified）
+	 * - 路径遍历攻击防护
+	 * - 大文件限制（防止 bad_alloc 崩溃）
+	 */
 	inline std::function<HttpResponse(const HttpRequest&)> serveStatic(const std::string& rootDir,
 																	   const std::string& urlPrefix,
 																	   std::uintmax_t maxFileSize = 64ULL * 1024 * 1024)

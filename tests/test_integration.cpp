@@ -24,10 +24,9 @@ namespace
 {
 
 	/**
- * @brief 集成测试 fixture
- *
- * 每个测试启动一个 HttpServer（端口 0，由 OS 分配），测试完毕后停止。
- */
+	 * @brief 集成测试 fixture
+	 * 每个测试启动一个 HttpServer（端口 0，由 OS 分配），测试完毕后停止。
+	 */
 	class IntegrationTest : public ::testing::Test
 	{
 	protected:
@@ -60,8 +59,8 @@ namespace
 		}
 
 		/**
-     * @brief 在后台线程启动服务器，等待其就绪
-     */
+		 * @brief 在后台线程启动服务器，等待其就绪
+		 */
 		void startServer()
 		{
 			serverThread_ = std::thread(
@@ -109,12 +108,12 @@ namespace
 		}
 
 		/**
-     * @brief 发送 HTTP 请求并获取响应
-     * @param method HTTP 方法
-     * @param target 目标路径
-     * @param body 请求体（可选）
-     * @return 响应体字符串
-     */
+		 * @brief 发送 HTTP 请求并获取响应
+		 * @param method HTTP 方法
+		 * @param target 目标路径
+		 * @param body 请求体（可选）
+		 * @return 响应体字符串
+		 */
 		struct Response
 		{
 			unsigned status;
@@ -147,8 +146,8 @@ namespace
 		}
 
 		/**
-     * @brief 在同一连接上发送多个请求（Keep-Alive）
-     */
+		 * @brief 在同一连接上发送多个请求（Keep-Alive）
+		 */
 		std::vector<Response> sendKeepAliveRequests(const std::vector<std::pair<http::verb, std::string>>& requests)
 		{
 			boost::asio::io_context io;

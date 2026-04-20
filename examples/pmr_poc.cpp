@@ -10,7 +10,6 @@ using namespace hical;
 
 /**
  * @brief pmr 内存池性能验证 PoC
- *
  * 场景一：复用缓冲区（模拟 HTTP 请求反复读写同一个 buffer）
  * 场景二：单调池批量分配（模拟一次请求生命周期内的多次分配）
  * 场景三：PmrBuffer 功能验证

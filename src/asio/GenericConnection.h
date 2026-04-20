@@ -22,8 +22,8 @@ namespace hical
 {
 
 	/**
- * @brief 判断 SocketType 是否为 SSL 流
- */
+	 * @brief 判断 SocketType 是否为 SSL 流
+	 */
 	template <typename T>
 	struct IsSslStream : std::false_type
 	{
@@ -38,15 +38,13 @@ namespace hical
 	inline constexpr bool hIsSslStream = IsSslStream<T>::value;
 
 	/**
- * @brief 通用连接模板类（支持普通 TCP 和 SSL）
- *
- * 模板参数 SocketType：
- * - boost::asio::ip::tcp::socket（普通连接）
- * - boost::asio::ssl::stream<tcp::socket>（SSL 连接）
- *
- * 两种 socket 类型共享同一套协程读写逻辑。
- * SSL 连接在 connectEstablished 时自动执行握手。
- */
+	 * @brief 通用连接模板类（支持普通 TCP 和 SSL）
+	 * 模板参数 SocketType：
+	 * - boost::asio::ip::tcp::socket（普通连接）
+	 * - boost::asio::ssl::stream<tcp::socket>（SSL 连接）
+	 * 两种 socket 类型共享同一套协程读写逻辑。
+	 * SSL 连接在 connectEstablished 时自动执行握手。
+	 */
 	template <typename SocketType>
 	class GenericConnection : public TcpConnection
 	{
@@ -54,12 +52,12 @@ namespace hical
 		using Ptr = std::shared_ptr<GenericConnection<SocketType>>;
 
 		/**
-     * @brief 构造普通 TCP 连接
-     * @param loop 所属事件循环
-     * @param socket 已连接的 socket
-     * @param localAddr 本地地址
-     * @param peerAddr 远端地址
-     */
+		 * @brief 构造普通 TCP 连接
+		 * @param loop 所属事件循环
+		 * @param socket 已连接的 socket
+		 * @param localAddr 本地地址
+		 * @param peerAddr 远端地址
+		 */
 		GenericConnection(AsioEventLoop* loop,
 						  SocketType socket,
 						  const InetAddress& localAddr,
@@ -114,20 +112,20 @@ namespace hical
 		// ============ 内部接口 ============
 
 		/**
-     * @brief 连接建立后调用（由 TcpServer 调用）
-     * @note SSL 连接会自动执行握手
-     */
+		 * @brief 连接建立后调用（由 TcpServer 调用）
+		 * @note SSL 连接会自动执行握手
+		 */
 		void connectEstablished() override;
 
 		/**
-     * @brief 连接销毁前调用（由 TcpServer 调用）
-     */
+		 * @brief 连接销毁前调用（由 TcpServer 调用）
+		 */
 		void connectDestroyed() override;
 
 		/**
-     * @brief 是否为 SSL 连接
-     * @return true 如果是 SSL 连接
-     */
+		 * @brief 是否为 SSL 连接
+		 * @return true 如果是 SSL 连接
+		 */
 		static constexpr bool isSsl()
 		{
 			return hIsSslStream<SocketType>;
@@ -146,22 +144,22 @@ namespace hical
 		};
 
 		/**
-     * @brief 获取指向自身的 shared_ptr（正确类型）
-     */
+		 * @brief 获取指向自身的 shared_ptr（正确类型）
+		 */
 		std::shared_ptr<GenericConnection<SocketType>> sharedThis()
 		{
 			return std::static_pointer_cast<GenericConnection<SocketType>>(shared_from_this());
 		}
 
 		/**
-     * @brief 获取最底层 socket（用于设置 socket 选项、检查 is_open 等）
-     * @return 最底层 socket 引用
-     */
+		 * @brief 获取最底层 socket（用于设置 socket 选项、检查 is_open 等）
+		 * @return 最底层 socket 引用
+		 */
 		auto& lowestLayerSocket();
 
 		/**
-     * @brief 获取 executor（用于 co_spawn）
-     */
+		 * @brief 获取 executor（用于 co_spawn）
+		 */
 		auto socketExecutor();
 
 		// 协程式异步操作

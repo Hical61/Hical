@@ -16,7 +16,6 @@ using boost::asio::ip::tcp;
 
 /**
  * @brief HTTP 压测客户端
- *
  * 每个实例在独立协程中完成指定数量的 HTTP 请求，
  * 记录每个请求的延迟。
  */

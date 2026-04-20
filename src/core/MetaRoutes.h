@@ -2,27 +2,21 @@
 
 /**
  * @brief 反射驱动的自动路由注册
- *
  * 双路线：
  * - C++26 反射：用户用 [[hical::route(...)]] 标注，框架自动发现并注册
  * - C++20 回退：用户用 HICAL_HANDLER / HICAL_ROUTES 宏标注，框架遍历注册
- *
  * 对外 API：
  *   hical::meta::registerRoutes<UserHandler>(router, handler);
- *
  * 用法（C++20 回退）：
  * ```cpp
  * struct UserHandler
  * {
  *     HttpResponse listUsers(const HttpRequest& req) { ... }
  *     HICAL_HANDLER(Get, "/api/users", listUsers)
- *
  *     HttpResponse getUser(const HttpRequest& req) { ... }
  *     HICAL_HANDLER(Get, "/api/users/{id}", getUser)
- *
  *     HICAL_ROUTES(UserHandler, listUsers, getUser)
  * };
- *
  * UserHandler handler;
  * hical::meta::registerRoutes(router, handler);
  * ```
@@ -46,10 +40,9 @@ namespace hical::meta
 	{
 
 		/**
-         * @brief 注册单个同步路由
-         *
-         * 通过 shared_ptr 捕获 handler，确保生命周期安全。
-         */
+		 * @brief 注册单个同步路由
+		 * 通过 shared_ptr 捕获 handler，确保生命周期安全。
+		 */
 		template <typename Handler>
 		void registerOneRoute(Router& router,
 							  std::shared_ptr<Handler> pHandler,
@@ -65,8 +58,8 @@ namespace hical::meta
 		}
 
 		/**
-         * @brief 注册单个协程路由
-         */
+		 * @brief 注册单个协程路由
+		 */
 		template <typename Handler>
 		void registerOneRoute(Router& router,
 							  std::shared_ptr<Handler> pHandler,
@@ -82,10 +75,9 @@ namespace hical::meta
 		}
 
 		/**
-         * @brief 路由注册函数对象
-         *
-         * 将 RouteInfo 和成员函数指针打包为可调用对象。
-         */
+		 * @brief 路由注册函数对象
+		 * 将 RouteInfo 和成员函数指针打包为可调用对象。
+		 */
 		template <typename Handler, typename MemFnPtr>
 		struct RouteRegistrar
 		{
@@ -105,8 +97,8 @@ namespace hical::meta
 		}
 
 		/**
-         * @brief 遍历 tuple 逐个注册
-         */
+		 * @brief 遍历 tuple 逐个注册
+		 */
 		template <typename Handler, typename Tuple, size_t... I>
 		void registerAll(Router& router,
 						 std::shared_ptr<Handler> pHandler,
@@ -119,11 +111,10 @@ namespace hical::meta
 	} // namespace detail
 
 	/**
-     * @brief 自动注册 Handler 中所有路由到 Router（shared_ptr 版本，推荐）
-     *
-     * 通过 shared_ptr 管理 handler 生命周期，确保路由回调中的引用始终有效。
-     * 适用于 handler 需要跨异步边界存活的场景。
-     */
+	 * @brief 自动注册 Handler 中所有路由到 Router（shared_ptr 版本，推荐）
+	 * 通过 shared_ptr 管理 handler 生命周期，确保路由回调中的引用始终有效。
+	 * 适用于 handler 需要跨异步边界存活的场景。
+	 */
 	template <typename Handler>
 	void registerRoutes(Router& router, std::shared_ptr<Handler> pHandler)
 	{
@@ -136,13 +127,11 @@ namespace hical::meta
 	}
 
 	/**
-     * @brief 自动注册 Handler 中所有路由到 Router（引用版本，便捷）
-     *
-     * 内部创建 shared_ptr（以空删除器包装），调用者需确保 handler 的生命周期
-     * 覆盖所有路由回调的执行期（如 server.start() 阻塞期间）。
-     *
-     * 对于非阻塞/异步场景，推荐使用 shared_ptr 重载。
-     */
+	 * @brief 自动注册 Handler 中所有路由到 Router（引用版本，便捷）
+	 * 内部创建 shared_ptr（以空删除器包装），调用者需确保 handler 的生命周期
+	 * 覆盖所有路由回调的执行期（如 server.start() 阻塞期间）。
+	 * 对于非阻塞/异步场景，推荐使用 shared_ptr 重载。
+	 */
 	template <typename Handler>
 	void registerRoutes(Router& router, Handler& handler)
 	{
@@ -204,7 +193,6 @@ namespace hical::meta
 
 /**
  * @brief 标注单个路由处理器（C++20 回退方案）
- *
  * @param method HTTP 方法（Get, Post, Put, Delete 等）
  * @param path   路由路径
  * @param func   成员函数名
@@ -214,9 +202,7 @@ namespace hical::meta
 
 /**
  * @brief 收集所有路由（C++20 回退方案）
- *
  * 第一个参数为 Handler 类型名，后续参数为成员函数名。
- *
  * 用法：HICAL_ROUTES(MyHandler, listUsers, getUser)
  */
 	#define HICAL_ROUTES(Type, ...)                                          \

@@ -15,12 +15,11 @@ namespace hical
 	class AsioTimer;
 
 	/**
- * @brief 基于 Boost.Asio 的事件循环实现
- *
- * 将 hical::EventLoop 接口映射到 Boost.Asio io_context。
- * 线程模型：1 Thread : 1 io_context
- * 每个实例持有独立的 per-thread pmr pool resource
- */
+	 * @brief 基于 Boost.Asio 的事件循环实现
+	 * 将 hical::EventLoop 接口映射到 Boost.Asio io_context。
+	 * 线程模型：1 Thread : 1 io_context
+	 * 每个实例持有独立的 per-thread pmr pool resource
+	 */
 	class AsioEventLoop : public EventLoop
 	{
 	public:
@@ -61,9 +60,9 @@ namespace hical
 		// ============ Asio 特有接口 ============
 
 		/**
-     * @brief 获取底层 io_context
-     * @return io_context 引用
-     */
+		 * @brief 获取底层 io_context
+		 * @return io_context 引用
+		 */
 		boost::asio::io_context& getIoContext()
 		{
 			return ioContext_;

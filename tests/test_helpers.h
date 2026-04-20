@@ -2,7 +2,6 @@
 
 /**
  * @brief 测试辅助工具
- *
  * 提供 runCoroutine 等共享辅助函数，避免各测试文件重复定义。
  */
 
@@ -18,12 +17,12 @@ namespace hical::test
 {
 
 	/**
-     * @brief 在事件循环中运行协程并等待结果
-     * @tparam F 协程工厂函数类型
-     * @param loop 事件循环
-     * @param f 返回 Awaitable<T> 的可调用对象
-     * @return std::optional<T> 协程返回值，超时返回 nullopt
-     */
+	 * @brief 在事件循环中运行协程并等待结果
+	 * @tparam F 协程工厂函数类型
+	 * @param loop 事件循环
+	 * @param f 返回 Awaitable<T> 的可调用对象
+	 * @return std::optional<T> 协程返回值，超时返回 nullopt
+	 */
 	template <typename F>
 	auto runCoroutine(AsioEventLoop& loop, F&& f)
 	{

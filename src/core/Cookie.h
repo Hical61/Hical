@@ -6,10 +6,9 @@ namespace hical
 {
 
 	/**
- * @brief Cookie 设置选项
- *
- * 用于 HttpResponse::setCookie() 配置 Set-Cookie 响应头的附加属性。
- */
+	 * @brief Cookie 设置选项
+	 * 用于 HttpResponse::setCookie() 配置 Set-Cookie 响应头的附加属性。
+	 */
 	struct CookieOptions
 	{
 		std::string path = "/";       ///< Cookie 作用路径，默认 "/"

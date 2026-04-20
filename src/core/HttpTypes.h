@@ -7,8 +7,8 @@ namespace hical
 {
 
 	/**
- * @brief HTTP 请求方法枚举
- */
+	 * @brief HTTP 请求方法枚举
+	 */
 	enum class HttpMethod : uint8_t
 	{
 		hGet,
@@ -22,8 +22,8 @@ namespace hical
 	};
 
 	/**
- * @brief HTTP 状态码枚举
- */
+	 * @brief HTTP 状态码枚举
+	 */
 	enum class HttpStatusCode : uint16_t
 	{
 		// 2xx 成功
@@ -55,24 +55,24 @@ namespace hical
 	};
 
 	/**
- * @brief 将 HttpMethod 转换为字符串
- * @param method HTTP 方法
- * @return 方法名字符串（如 "GET"）
- */
+	 * @brief 将 HttpMethod 转换为字符串
+	 * @param method HTTP 方法
+	 * @return 方法名字符串（如 "GET"）
+	 */
 	const char* httpMethodToString(HttpMethod method);
 
 	/**
- * @brief 将字符串转换为 HttpMethod
- * @param str 方法名字符串
- * @return HTTP 方法枚举值
- */
+	 * @brief 将字符串转换为 HttpMethod
+	 * @param str 方法名字符串
+	 * @return HTTP 方法枚举值
+	 */
 	HttpMethod stringToHttpMethod(const std::string& str);
 
 	/**
- * @brief 获取状态码的默认描述文本
- * @param code 状态码
- * @return 描述文本（如 "OK"）
- */
+	 * @brief 获取状态码的默认描述文本
+	 * @param code 状态码
+	 * @return 描述文本（如 "OK"）
+	 */
 	const char* httpStatusCodeToString(HttpStatusCode code);
 
 } // namespace hical

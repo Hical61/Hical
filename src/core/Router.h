@@ -16,43 +16,40 @@ namespace hical
 {
 
 	/**
- * @brief 路由处理器类型（协程版）
- *
- * 接收请求，返回协程化的响应。
- */
+	 * @brief 路由处理器类型（协程版）
+	 * 接收请求，返回协程化的响应。
+	 */
 	using RouteHandler = std::function<Awaitable<HttpResponse>(const HttpRequest&)>;
 
 	/**
- * @brief 同步路由处理器类型
- *
- * 接收请求，直接返回响应（非协程）。
- */
+	 * @brief 同步路由处理器类型
+	 * 接收请求，直接返回响应（非协程）。
+	 */
 	using SyncRouteHandler = std::function<HttpResponse(const HttpRequest&)>;
 
 	class WebSocketSession; // 前向声明
 
 	/**
- * @brief WebSocket 消息回调类型
- */
+	 * @brief WebSocket 消息回调类型
+	 */
 	using WsMessageCallback = std::function<Awaitable<void>(const std::string&, WebSocketSession&)>;
 
 	/**
- * @brief WebSocket 连接回调类型
- */
+	 * @brief WebSocket 连接回调类型
+	 */
 	using WsConnectCallback = std::function<Awaitable<void>(WebSocketSession&)>;
 
 	/**
- * @brief WebSocket 断开回调类型
- */
+	 * @brief WebSocket 断开回调类型
+	 */
 	using WsDisconnectCallback = std::function<Awaitable<void>(WebSocketSession&)>;
 
 	/**
- * @brief HTTP 路由器
- *
- * 管理路由注册和请求分发。
- * 静态路由使用哈希表 O(1) 查找，参数路由线性匹配。
- * 支持协程和同步两种处理器风格。
- */
+	 * @brief HTTP 路由器
+	 * 管理路由注册和请求分发。
+	 * 静态路由使用哈希表 O(1) 查找，参数路由线性匹配。
+	 * 支持协程和同步两种处理器风格。
+	 */
 	class Router
 	{
 	public:
@@ -66,19 +63,19 @@ namespace hical
 		Router() = default;
 
 		/**
-     * @brief 注册协程路由处理器
-     * @param method HTTP 方法
-     * @param path 路由路径（如 "/api/users"）
-     * @param handler 协程处理器
-     */
+		 * @brief 注册协程路由处理器
+		 * @param method HTTP 方法
+		 * @param path 路由路径（如 "/api/users"）
+		 * @param handler 协程处理器
+		 */
 		void route(HttpMethod method, const std::string& path, RouteHandler handler);
 
 		/**
-     * @brief 注册同步路由处理器（自动包装为协程）
-     * @param method HTTP 方法
-     * @param path 路由路径
-     * @param handler 同步处理器
-     */
+		 * @brief 注册同步路由处理器（自动包装为协程）
+		 * @param method HTTP 方法
+		 * @param path 路由路径
+		 * @param handler 同步处理器
+		 */
 		void route(HttpMethod method, const std::string& path, SyncRouteHandler handler);
 
 		// ============ 便捷方法 ============
@@ -96,31 +93,30 @@ namespace hical
 		void del(const std::string& path, SyncRouteHandler handler);
 
 		/**
-     * @brief 注册 WebSocket 路由
-     * @param path 路由路径
-     * @param onMessage 消息回调
-     * @param onConnect 连接建立回调（可选）
-     * @param onDisconnect 连接断开回调（可选）
-     */
+		 * @brief 注册 WebSocket 路由
+		 * @param path 路由路径
+		 * @param onMessage 消息回调
+		 * @param onConnect 连接建立回调（可选）
+		 * @param onDisconnect 连接断开回调（可选）
+		 */
 		void ws(const std::string& path,
 				WsMessageCallback onMessage,
 				WsConnectCallback onConnect = nullptr,
 				WsDisconnectCallback onDisconnect = nullptr);
 
 		/**
-     * @brief 分发请求到匹配的路由处理器
-     * @param req HTTP 请求（路径参数会被写入 req 中）
-     * @return 协程化的 HTTP 响应
-     *
-     * 如果没有匹配的路由，返回 404 Not Found。
-     */
+		 * @brief 分发请求到匹配的路由处理器
+		 * @param req HTTP 请求（路径参数会被写入 req 中）
+		 * @return 协程化的 HTTP 响应
+		 * 如果没有匹配的路由，返回 404 Not Found。
+		 */
 		Awaitable<HttpResponse> dispatch(HttpRequest& req);
 
 		/**
-     * @brief 检查路径是否为 WebSocket 路由
-     * @param path 请求路径
-     * @return 如果是 ws 路由返回对应的 WsRoute 指针，否则 nullptr
-     */
+		 * @brief 检查路径是否为 WebSocket 路由
+		 * @param path 请求路径
+		 * @return 如果是 ws 路由返回对应的 WsRoute 指针，否则 nullptr
+		 */
 		struct WsRoute
 		{
 			std::string path;
@@ -132,17 +128,17 @@ namespace hical
 		const WsRoute* findWsRoute(const std::string& path) const;
 
 		/**
-     * @brief 获取已注册路由数量（HTTP + WebSocket）
-     * @return 路由数量
-     */
+		 * @brief 获取已注册路由数量（HTTP + WebSocket）
+		 * @return 路由数量
+		 */
 		size_t routeCount() const;
 
 	private:
 		// ============ 静态路由（哈希表 O(1) 查找） ============
 
 		/**
-     * @brief 组合键：method + path，用于静态路由哈希查找
-     */
+		 * @brief 组合键：method + path，用于静态路由哈希查找
+		 */
 		struct RouteKey
 		{
 			HttpMethod method;
@@ -221,36 +217,33 @@ namespace hical
 		std::vector<WsRoute> wsRoutes_;
 
 		/**
-     * @brief 判断路径模式是否包含参数（如 {id}）
-     * @param path 路径模式
-     * @return true 如果是参数路由
-     */
+		 * @brief 判断路径模式是否包含参数（如 {id}）
+		 * @param path 路径模式
+		 * @return true 如果是参数路由
+		 */
 		static bool isParamRoute(const std::string& path);
 
 		/**
-     * @brief 匹配参数路径并提取参数（零分配 string_view 版本）
-     * @param pattern 注册的路径模式（可含 {param}）
-     * @param path 请求路径
-     * @param params 提取的路径参数（输出）
-     * @return true 如果匹配
-     */
+		 * @brief 匹配参数路径并提取参数（零分配 string_view 版本）
+		 * @param pattern 注册的路径模式（可含 {param}）
+		 * @param path 请求路径
+		 * @param params 提取的路径参数（输出）
+		 * @return true 如果匹配
+		 */
 		static bool matchParamPath(std::string_view pattern, std::string_view path, ParamList& params);
 
 		/**
-     * @brief URL 解码（百分号编码 -> 原始字符）
-     * @param encoded 编码后的字符串
-     * @return 解码后的字符串
-     */
+		 * @brief URL 解码（百分号编码 -> 原始字符）
+		 * @param encoded 编码后的字符串
+		 * @return 解码后的字符串
+		 */
 		static std::string urlDecode(std::string_view encoded);
 	};
 
 /**
  * @brief 路由注册宏（手动注册的便捷方式）
- *
  * 用法：HICAL_ROUTE(router, Get, "/api/users", myHandler)
- *
  * 等价于 router.route(HttpMethod::hGet, "/api/users", myHandler);
- *
  * 如需自动路由注册，请参考 MetaRoutes.h 中的反射方案：
  *   hical::meta::registerRoutes<UserHandler>(router);
  */

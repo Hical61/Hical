@@ -14,7 +14,6 @@ using boost::asio::ip::tcp;
 
 /**
  * @brief 协程式会话处理
- *
  * 使用 co_await 进行异步读写，替代旧版回调式实现。
  */
 awaitable<void> handleSession(tcp::socket socket)

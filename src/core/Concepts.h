@@ -16,11 +16,10 @@ namespace hical
 	class Timer;
 
 	/**
- * @brief 事件循环接口约束
- *
- * 要求事件循环类型提供完整的生命周期管理、任务调度、
- * 定时器和 pmr 分配器支持。
- */
+	 * @brief 事件循环接口约束
+	 * 要求事件循环类型提供完整的生命周期管理、任务调度、
+	 * 定时器和 pmr 分配器支持。
+	 */
 	template <typename T>
 	concept EventLoopLike = requires(T loop, std::function<void()> func, double delay) {
 		// 生命周期
@@ -46,10 +45,9 @@ namespace hical
 	};
 
 	/**
- * @brief TCP 连接接口约束
- *
- * 要求连接类型提供数据收发、连接控制和状态查询能力。
- */
+	 * @brief TCP 连接接口约束
+	 * 要求连接类型提供数据收发、连接控制和状态查询能力。
+	 */
 	template <typename T>
 	concept TcpConnectionLike = requires(T conn, const char* data, size_t len, const std::string& msg) {
 		// 数据发送
@@ -68,10 +66,9 @@ namespace hical
 	};
 
 	/**
- * @brief 定时器接口约束
- *
- * 要求定时器类型提供取消、状态查询和间隔信息。
- */
+	 * @brief 定时器接口约束
+	 * 要求定时器类型提供取消、状态查询和间隔信息。
+	 */
 	template <typename T>
 	concept TimerLike = requires(T timer) {
 		// 定时器控制
@@ -82,30 +79,25 @@ namespace hical
 	};
 
 	/**
- * @brief 网络后端统一约束（C++20 Concept）
- *
- * 定义了网络后端必须满足的接口要求，支持"双模"运行时切换。
- * 任何满足此约束的类型都可以作为 hical 的网络后端。
- *
- * 后端需提供三个关联类型：
- * - EventLoopType  — 满足 EventLoopLike 约束的事件循环
- * - ConnectionType — 满足 TcpConnectionLike 约束的 TCP 连接
- * - TimerType      — 满足 TimerLike 约束的定时器
- *
- * 用法示例：
- * ```cpp
- * template <NetworkBackend Backend>
- * class GenericServer {
- *     using Loop = typename Backend::EventLoopType;
- *     using Conn = typename Backend::ConnectionType;
- * };
- *
- * // 使用 Asio 后端
- * GenericServer<AsioBackend> server;
- * ```
- *
- * 当前仅提供 AsioBackend 实现。未来可添加轻量后端用于极致性能场景。
- */
+	 * @brief 网络后端统一约束（C++20 Concept）
+	 * 定义了网络后端必须满足的接口要求，支持"双模"运行时切换。
+	 * 任何满足此约束的类型都可以作为 hical 的网络后端。
+	 * 后端需提供三个关联类型：
+	 * - EventLoopType  — 满足 EventLoopLike 约束的事件循环
+	 * - ConnectionType — 满足 TcpConnectionLike 约束的 TCP 连接
+	 * - TimerType      — 满足 TimerLike 约束的定时器
+	 * 用法示例：
+	 * ```cpp
+	 * template <NetworkBackend Backend>
+	 * class GenericServer {
+	 *     using Loop = typename Backend::EventLoopType;
+	 *     using Conn = typename Backend::ConnectionType;
+	 * };
+	 * // 使用 Asio 后端
+	 * GenericServer<AsioBackend> server;
+	 * ```
+	 * 当前仅提供 AsioBackend 实现。未来可添加轻量后端用于极致性能场景。
+	 */
 	template <typename T>
 	concept NetworkBackend =
 		requires {
@@ -135,13 +127,11 @@ namespace hical
 	class TcpConnection;
 
 	/**
- * @brief Asio 网络后端类型定义
- *
- * 将 Boost.Asio 适配层的三个核心类型打包为一个后端定义，
- * 满足 NetworkBackend concept 约束。
- *
- * 这是 hical 的默认后端，适用于开发和生产环境。
- */
+	 * @brief Asio 网络后端类型定义
+	 * 将 Boost.Asio 适配层的三个核心类型打包为一个后端定义，
+	 * 满足 NetworkBackend concept 约束。
+	 * 这是 hical 的默认后端，适用于开发和生产环境。
+	 */
 	struct AsioBackend
 	{
 		using EventLoopType = AsioEventLoop;

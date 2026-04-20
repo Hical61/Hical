@@ -12,10 +12,9 @@ namespace hical
 {
 
 	/**
- * @brief multipart/form-data 中的单个 Part
- *
- * 对应 RFC 7578 中的一个 body part，包含头部和数据。
- */
+	 * @brief multipart/form-data 中的单个 Part
+	 * 对应 RFC 7578 中的一个 body part，包含头部和数据。
+	 */
 	struct MultipartPart
 	{
 		std::unordered_map<std::string, std::string> headers; ///< Part 头部（键已转小写）
@@ -25,9 +24,9 @@ namespace hical
 		std::string data;        ///< Part 数据（文件内容或字段值）
 
 		/**
-     * @brief 是否为文件上传 Part（有 filename）
-     * @return true 如果是文件上传
-     */
+		 * @brief 是否为文件上传 Part（有 filename）
+		 * @return true 如果是文件上传
+		 */
 		bool isFile() const
 		{
 			return !filename.empty();
@@ -35,79 +34,75 @@ namespace hical
 	};
 
 	/**
- * @brief multipart/form-data 解析器
- *
- * 按照 RFC 7578 解析 Content-Type: multipart/form-data 请求体。
- *
- * 用法（通过 HttpRequest 访问）：
- * ```cpp
- * auto parts = hical::MultipartParser::parse(req);
- * if (parts) {
- *     for (const auto& part : *parts) {
- *         if (part.isFile()) {
- *             // 处理上传文件
- *         } else {
- *             // 处理表单字段
- *         }
- *     }
- * }
- * ```
- *
- * 也可以直接用辅助方法：
- * ```cpp
- * auto file  = hical::MultipartParser::getFile(req, "avatar");
- * auto field = hical::MultipartParser::getField(req, "username");
- * ```
- */
+	 * @brief multipart/form-data 解析器
+	 * 按照 RFC 7578 解析 Content-Type: multipart/form-data 请求体。
+	 * 用法（通过 HttpRequest 访问）：
+	 * ```cpp
+	 * auto parts = hical::MultipartParser::parse(req);
+	 * if (parts) {
+	 *     for (const auto& part : *parts) {
+	 *         if (part.isFile()) {
+	 *             // 处理上传文件
+	 *         } else {
+	 *             // 处理表单字段
+	 *         }
+	 *     }
+	 * }
+	 * ```
+	 * 也可以直接用辅助方法：
+	 * ```cpp
+	 * auto file  = hical::MultipartParser::getFile(req, "avatar");
+	 * auto field = hical::MultipartParser::getField(req, "username");
+	 * ```
+	 */
 	class MultipartParser
 	{
 	public:
 		/**
-     * @brief 解析 multipart/form-data 请求体
-     * @param req HTTP 请求
-     * @return 解析成功返回 Part 列表，失败返回 nullopt
-     *
-     * 失败情况：Content-Type 不是 multipart/form-data、boundary 缺失、格式错误。
-     */
+		 * @brief 解析 multipart/form-data 请求体
+		 * @param req HTTP 请求
+		 * @return 解析成功返回 Part 列表，失败返回 nullopt
+		 * 失败情况：Content-Type 不是 multipart/form-data、boundary 缺失、格式错误。
+		 */
 		static std::optional<std::vector<MultipartPart>> parse(const HttpRequest& req);
 
 		/**
-     * @brief 获取指定名称的文件上传 Part
-     * @param req HTTP 请求
-     * @param fieldName 表单字段名
-     * @return 找到返回 MultipartPart（isFile() == true），否则 nullopt
-     */
+		 * @brief 获取指定名称的文件上传 Part
+		 * @param req HTTP 请求
+		 * @param fieldName 表单字段名
+		 * @return 找到返回 MultipartPart（isFile() == true），否则 nullopt
+		 */
 		static std::optional<MultipartPart> getFile(const HttpRequest& req, const std::string& fieldName);
 
 		/**
-     * @brief 获取指定名称的表单文本字段值
-     * @param req HTTP 请求
-     * @param fieldName 表单字段名
-     * @return 找到返回字段值，否则 nullopt
-     */
+		 * @brief 获取指定名称的表单文本字段值
+		 * @param req HTTP 请求
+		 * @param fieldName 表单字段名
+		 * @return 找到返回字段值，否则 nullopt
+		 */
 		static std::optional<std::string> getField(const HttpRequest& req, const std::string& fieldName);
 
 	private:
 		/**
-     * @brief 从 Content-Type 头中提取 boundary
-     * @param contentType Content-Type 头字符串
-     * @return boundary 字符串，失败返回空字符串
-     */
+		 * @brief 从 Content-Type 头中提取 boundary
+		 * @param contentType Content-Type 头字符串
+		 * @return boundary 字符串，失败返回空字符串
+		 */
 		static std::string extractBoundary(const std::string& contentType);
 
 		/**
-     * @brief 解析单个 Part 的头部
-     * @param headerBlock 头部文本块（CRLF 分隔的多行）
-     * @param part 输出的 Part（写入 headers/name/filename/contentType）
-     */
+		 * @brief 解析单个 Part 的头部
+		 * @param headerBlock 头部文本块（CRLF 分隔的多行）
+		 * @param part 输出的 Part（写入 headers/name/filename/contentType）
+		 */
 		static void parsePartHeaders(std::string_view headerBlock, MultipartPart& part);
 
 		/**
-     * @brief 解析 Content-Disposition 中的参数（name/filename）
-     * @param disposition Content-Disposition 字段值
-     * @param name 输出 name 参数
-     * @param filename 输出 filename 参数
-     */
+		 * @brief 解析 Content-Disposition 中的参数（name/filename）
+		 * @param disposition Content-Disposition 字段值
+		 * @param name 输出 name 参数
+		 * @param filename 输出 filename 参数
+		 */
 		static void parseDispositionParams(std::string_view disposition, std::string& name, std::string& filename);
 	};
 

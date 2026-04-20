@@ -8,11 +8,10 @@ namespace hical
 {
 
 	/**
- * @brief 通用网络错误码枚举
- *
- * 将 Boost.Asio / 系统错误码统一映射为框架内部错误码，
- * 使上层业务逻辑不直接依赖 Asio 错误码体系。
- */
+	 * @brief 通用网络错误码枚举
+	 * 将 Boost.Asio / 系统错误码统一映射为框架内部错误码，
+	 * 使上层业务逻辑不直接依赖 Asio 错误码体系。
+	 */
 	enum class ErrorCode : uint32_t
 	{
 		hNoError = 0,
@@ -74,46 +73,45 @@ namespace hical
 	};
 
 	/**
- * @brief 网络错误结构体
- *
- * 封装错误码和错误描述信息。
- */
+	 * @brief 网络错误结构体
+	 * 封装错误码和错误描述信息。
+	 */
 	struct NetworkError
 	{
 		ErrorCode code {ErrorCode::hNoError};
 		std::string message;
 
 		/**
-     * @brief 是否有错误
-     * @return true 如果有错误
-     */
+		 * @brief 是否有错误
+		 * @return true 如果有错误
+		 */
 		explicit operator bool() const
 		{
 			return code != ErrorCode::hNoError;
 		}
 
 		/**
-     * @brief 是否无错误
-     * @return true 如果无错误
-     */
+		 * @brief 是否无错误
+		 * @return true 如果无错误
+		 */
 		bool ok() const
 		{
 			return code == ErrorCode::hNoError;
 		}
 
 		/**
-     * @brief 是否为 EOF（对端正常关闭）
-     * @return true 如果是 EOF
-     */
+		 * @brief 是否为 EOF（对端正常关闭）
+		 * @return true 如果是 EOF
+		 */
 		bool isEof() const
 		{
 			return code == ErrorCode::hEof;
 		}
 
 		/**
-     * @brief 是否为操作取消
-     * @return true 如果是取消
-     */
+		 * @brief 是否为操作取消
+		 * @return true 如果是取消
+		 */
 		bool isCancelled() const
 		{
 			return code == ErrorCode::hOperationAborted;
@@ -121,24 +119,24 @@ namespace hical
 	};
 
 	/**
- * @brief 将 boost::system::error_code 转换为 ErrorCode
- * @param ec Boost 错误码
- * @return 框架内部错误码
- */
+	 * @brief 将 boost::system::error_code 转换为 ErrorCode
+	 * @param ec Boost 错误码
+	 * @return 框架内部错误码
+	 */
 	ErrorCode fromBoostError(const boost::system::error_code& ec);
 
 	/**
- * @brief 将 boost::system::error_code 转换为 NetworkError
- * @param ec Boost 错误码
- * @return 网络错误结构体
- */
+	 * @brief 将 boost::system::error_code 转换为 NetworkError
+	 * @param ec Boost 错误码
+	 * @return 网络错误结构体
+	 */
 	NetworkError toNetworkError(const boost::system::error_code& ec);
 
 	/**
- * @brief 获取错误码的字符串描述
- * @param code 错误码
- * @return 错误描述
- */
+	 * @brief 获取错误码的字符串描述
+	 * @param code 错误码
+	 * @return 错误描述
+	 */
 	const char* errorCodeToString(ErrorCode code);
 
 } // namespace hical

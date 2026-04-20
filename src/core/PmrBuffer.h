@@ -12,11 +12,10 @@ namespace hical
 {
 
 	/**
- * @brief 基于 pmr 的统一缓冲区
- *
- * hical 统一缓冲区，使用 pmr 分配器管理内存。
- * 支持 prepend 区域和自动扩容，底层使用 std::pmr::vector。
- */
+	 * @brief 基于 pmr 的统一缓冲区
+	 * hical 统一缓冲区，使用 pmr 分配器管理内存。
+	 * 支持 prepend 区域和自动扩容，底层使用 std::pmr::vector。
+	 */
 	class PmrBuffer
 	{
 	public:
@@ -24,10 +23,10 @@ namespace hical
 		static constexpr size_t hPrependSize = 8;
 
 		/**
-     * @brief 构造函数
-     * @param allocator pmr 分配器
-     * @param initialSize 初始大小
-     */
+		 * @brief 构造函数
+		 * @param allocator pmr 分配器
+		 * @param initialSize 初始大小
+		 */
 		explicit PmrBuffer(std::pmr::polymorphic_allocator<std::byte> allocator = {}, size_t initialSize = hDefaultSize)
 			: buffer_(hPrependSize + initialSize, allocator), readIndex_(hPrependSize), writeIndex_(hPrependSize)
 		{
@@ -36,27 +35,27 @@ namespace hical
 		// ============ 读取接口 ============
 
 		/**
-     * @brief 获取可读数据起始指针
-     * @return 数据指针
-     */
+		 * @brief 获取可读数据起始指针
+		 * @return 数据指针
+		 */
 		const char* peek() const
 		{
 			return reinterpret_cast<const char*>(begin() + readIndex_);
 		}
 
 		/**
-     * @brief 获取可读字节数
-     * @return 字节数
-     */
+		 * @brief 获取可读字节数
+		 * @return 字节数
+		 */
 		size_t readableBytes() const
 		{
 			return writeIndex_ - readIndex_;
 		}
 
 		/**
-     * @brief 消费指定字节数
-     * @param len 字节数
-     */
+		 * @brief 消费指定字节数
+		 * @param len 字节数
+		 */
 		void retrieve(size_t len)
 		{
 			if (len > readableBytes())
@@ -74,9 +73,9 @@ namespace hical
 		}
 
 		/**
-     * @brief 消费到指定位置
-     * @param end 结束位置指针
-     */
+		 * @brief 消费到指定位置
+		 * @param end 结束位置指针
+		 */
 		void retrieveUntil(const char* end)
 		{
 			if (peek() > end || end > beginWrite())
@@ -87,8 +86,8 @@ namespace hical
 		}
 
 		/**
-     * @brief 消费所有数据
-     */
+		 * @brief 消费所有数据
+		 */
 		void retrieveAll()
 		{
 			readIndex_ = hPrependSize;
@@ -96,10 +95,10 @@ namespace hical
 		}
 
 		/**
-     * @brief 读取指定字节数并返回字符串
-     * @param len 字节数
-     * @return 字符串
-     */
+		 * @brief 读取指定字节数并返回字符串
+		 * @param len 字节数
+		 * @return 字符串
+		 */
 		std::string read(size_t len)
 		{
 			if (len > readableBytes())
@@ -112,18 +111,18 @@ namespace hical
 		}
 
 		/**
-     * @brief 读取所有数据并返回字符串
-     * @return 字符串
-     */
+		 * @brief 读取所有数据并返回字符串
+		 * @return 字符串
+		 */
 		std::string readAll()
 		{
 			return read(readableBytes());
 		}
 
 		/**
-     * @brief 查找 CRLF（\r\n）
-     * @return CRLF 位置指针，未找到返回 nullptr
-     */
+		 * @brief 查找 CRLF（\r\n）
+		 * @return CRLF 位置指针，未找到返回 nullptr
+		 */
 		const char* findCRLF() const
 		{
 			const char* crlf = std::search(peek(), beginWrite(), hCrlf, hCrlf + 2);
@@ -131,9 +130,9 @@ namespace hical
 		}
 
 		/**
-     * @brief 查找 EOL（\n）
-     * @return EOL 位置指针，未找到返回 nullptr
-     */
+		 * @brief 查找 EOL（\n）
+		 * @return EOL 位置指针，未找到返回 nullptr
+		 */
 		const char* findEOL() const
 		{
 			const void* eol = std::memchr(peek(), '\n', readableBytes());
@@ -143,9 +142,9 @@ namespace hical
 		// ============ 写入接口 ============
 
 		/**
-     * @brief 获取可写区域起始指针
-     * @return 指针
-     */
+		 * @brief 获取可写区域起始指针
+		 * @return 指针
+		 */
 		char* beginWrite()
 		{
 			return reinterpret_cast<char*>(begin() + writeIndex_);
@@ -157,18 +156,18 @@ namespace hical
 		}
 
 		/**
-     * @brief 获取可写字节数
-     * @return 字节数
-     */
+		 * @brief 获取可写字节数
+		 * @return 字节数
+		 */
 		size_t writableBytes() const
 		{
 			return buffer_.size() - writeIndex_;
 		}
 
 		/**
-     * @brief 标记已写入字节数
-     * @param len 字节数
-     */
+		 * @brief 标记已写入字节数
+		 * @param len 字节数
+		 */
 		void hasWritten(size_t len)
 		{
 			if (len > writableBytes())
@@ -179,10 +178,10 @@ namespace hical
 		}
 
 		/**
-     * @brief 追加数据
-     * @param data 数据指针
-     * @param len 数据长度
-     */
+		 * @brief 追加数据
+		 * @param data 数据指针
+		 * @param len 数据长度
+		 */
 		void append(const char* data, size_t len)
 		{
 			ensureWritableBytes(len);
@@ -191,27 +190,27 @@ namespace hical
 		}
 
 		/**
-     * @brief 追加字符串
-     * @param str 字符串
-     */
+		 * @brief 追加字符串
+		 * @param str 字符串
+		 */
 		void append(const std::string& str)
 		{
 			append(str.data(), str.size());
 		}
 
 		/**
-     * @brief 追加另一个缓冲区
-     * @param buf 缓冲区
-     */
+		 * @brief 追加另一个缓冲区
+		 * @param buf 缓冲区
+		 */
 		void append(const PmrBuffer& buf)
 		{
 			append(buf.peek(), buf.readableBytes());
 		}
 
 		/**
-     * @brief 确保有足够的可写空间
-     * @param len 需要的字节数
-     */
+		 * @brief 确保有足够的可写空间
+		 * @param len 需要的字节数
+		 */
 		void ensureWritableBytes(size_t len)
 		{
 			if (writableBytes() < len)
@@ -224,10 +223,10 @@ namespace hical
 		// ============ 交换 ============
 
 		/**
-     * @brief 与另一个缓冲区交换
-     * @param rhs 另一个缓冲区
-     * @throw std::logic_error 当两个缓冲区的分配器不同时抛出
-     */
+		 * @brief 与另一个缓冲区交换
+		 * @param rhs 另一个缓冲区
+		 * @throw std::logic_error 当两个缓冲区的分配器不同时抛出
+		 */
 		void swap(PmrBuffer& rhs)
 		{
 			// pmr::vector::swap 在分配器不相等时行为未定义，此处做防御性检查
@@ -243,9 +242,9 @@ namespace hical
 		// ============ 分配器访问 ============
 
 		/**
-     * @brief 获取底层分配器
-     * @return pmr 分配器
-     */
+		 * @brief 获取底层分配器
+		 * @return pmr 分配器
+		 */
 		std::pmr::polymorphic_allocator<std::byte> get_allocator() const
 		{
 			return buffer_.get_allocator();
