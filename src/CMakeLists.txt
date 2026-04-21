@@ -28,6 +28,11 @@ add_library(hical_core
     asio/TcpServer.cpp
 )
 
+# Windows shared 库自动导出所有符号（生成 .lib 导入库）
+set_target_properties(hical_core PROPERTIES
+    WINDOWS_EXPORT_ALL_SYMBOLS ON
+)
+
 target_include_directories(hical_core
     PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
