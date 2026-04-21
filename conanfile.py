@@ -14,16 +14,14 @@ class HicalConan(ConanFile):
     homepage = "https://github.com/Hical61/Hical"
     description = "Modern C++20/C++26 high-performance web framework based on Boost.Asio/Beast"
     topics = ("web-framework", "http", "websocket", "boost-asio", "coroutine", "cpp20")
-    package_type = "library"
+    package_type = "static-library"
 
     settings = "os", "compiler", "build_type", "arch"
     options = {
-        "shared": [True, False],
         "fPIC": [True, False],
         "with_reflection": [True, False],
     }
     default_options = {
-        "shared": False,
         "fPIC": True,
         "with_reflection": False,
     }
@@ -46,8 +44,7 @@ class HicalConan(ConanFile):
             del self.options.fPIC
 
     def configure(self):
-        if self.options.shared:
-            self.options.rm_safe("fPIC")
+        pass
 
     def validate(self):
         check_min_cppstd(self, 20)
