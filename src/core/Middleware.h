@@ -76,6 +76,13 @@ namespace hical
 		Awaitable<HttpResponse> execute(HttpRequest& req, MiddlewareNext finalHandler);
 
 		/**
+		 * @brief 预构建自定义终端处理器的调用链
+		 * @param finalHandler 自定义终端处理器
+		 * @return 预构建好的调用链（可缓存后多次调用）
+		 */
+		MiddlewareNext buildFor(MiddlewareNext finalHandler) const;
+
+		/**
 		 * @brief 获取中间件数量
 		 * @return 数量
 		 */

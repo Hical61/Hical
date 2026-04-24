@@ -61,7 +61,14 @@ namespace hical::meta
 		}
 		else if constexpr (std::is_integral_v<T>)
 		{
-			return static_cast<int64_t>(val);
+			if constexpr (std::is_unsigned_v<T>)
+			{
+				return static_cast<uint64_t>(val);
+			}
+			else
+			{
+				return static_cast<int64_t>(val);
+			}
 		}
 		else if constexpr (std::is_floating_point_v<T>)
 		{
@@ -115,17 +122,25 @@ namespace hical::meta
 			{
 				throw std::runtime_error("JSON type mismatch: expected integer");
 			}
+			if (val.is_uint64())
+			{
+				return static_cast<T>(val.as_uint64());
+			}
 			return static_cast<T>(val.as_int64());
 		}
 		else if constexpr (std::is_floating_point_v<T>)
 		{
-			if (!val.is_double() && !val.is_int64())
+			if (!val.is_double() && !val.is_int64() && !val.is_uint64())
 			{
 				throw std::runtime_error("JSON type mismatch: expected number");
 			}
 			if (val.is_int64())
 			{
 				return static_cast<T>(val.as_int64());
+			}
+			if (val.is_uint64())
+			{
+				return static_cast<T>(val.as_uint64());
 			}
 			return static_cast<T>(val.as_double());
 		}
@@ -167,35 +182,56 @@ namespace hical::meta
 	{
 
 		/**
-		 * @brief 字段描述器：绑定字段名 + 成员指针
+		 * @brief 字段描述器：绑定字段名 + 成员指针 + 必需/忽略标记
 		 */
 		template <typename Class, typename FieldType>
 		struct FieldDescriptor
 		{
 			std::string_view name;
 			FieldType Class::* pointer;
+			bool required = false;
+			bool ignored = false;
 		};
 
 		/**
-		 * @brief 创建字段描述器的辅助函数
+		 * @brief 创建字段描述器的辅助函数（2 参数，向后兼容）
 		 */
 		template <typename Class, typename FieldType>
 		constexpr FieldDescriptor<Class, FieldType> makeField(std::string_view name, FieldType Class::* ptr)
 		{
-			return {name, ptr};
+			return {name, ptr, false, false};
 		}
 
 		/**
-		 * @brief 序列化所有字段
+		 * @brief 创建字段描述器的辅助函数（4 参数，支持 required/ignored）
+		 */
+		template <typename Class, typename FieldType>
+		constexpr FieldDescriptor<Class, FieldType> makeField(std::string_view name,
+															  FieldType Class::* ptr,
+															  bool isRequired,
+															  bool isIgnored)
+		{
+			return {name, ptr, isRequired, isIgnored};
+		}
+
+		/**
+		 * @brief 序列化所有字段（跳过 ignored 字段）
 		 */
 		template <typename T, typename Tuple, size_t... I>
 		void serializeFields(const T& obj, boost::json::object& jsonObj, const Tuple& fields, std::index_sequence<I...>)
 		{
-			((jsonObj[std::get<I>(fields).name] = valueToJson(obj.*std::get<I>(fields).pointer)), ...);
+			auto serializeOne = [&](const auto& field)
+			{
+				if (!field.ignored)
+				{
+					jsonObj[field.name] = valueToJson(obj.*field.pointer);
+				}
+			};
+			(serializeOne(std::get<I>(fields)), ...);
 		}
 
 		/**
-		 * @brief 反序列化所有字段
+		 * @brief 反序列化所有字段（跳过 ignored，检查 required）
 		 */
 		template <typename T, typename Tuple, size_t... I>
 		void deserializeFields(T& obj,
@@ -205,11 +241,19 @@ namespace hical::meta
 		{
 			auto trySet = [&](const auto& field)
 			{
+				if (field.ignored)
+				{
+					return;
+				}
 				auto it = jsonObj.find(field.name);
 				if (it != jsonObj.end())
 				{
 					using FieldType = std::remove_reference_t<decltype(obj.*field.pointer)>;
 					obj.*field.pointer = valueFromJson<FieldType>(it->value());
+				}
+				else if (field.required)
+				{
+					throw std::runtime_error("fromJson: required field '" + std::string(field.name) + "' is missing");
 				}
 			};
 			(trySet(std::get<I>(fields)), ...);
@@ -225,9 +269,9 @@ namespace hical::meta
 	{
 		static_assert(HasJsonFields<T>::value, "Type must use HICAL_JSON() macro or have C++26 reflection support");
 
-		auto fields = T::hicalJsonFields();
+		const auto& fields = T::hicalJsonFields();
 		boost::json::object jsonObj;
-		constexpr auto count = std::tuple_size_v<decltype(fields)>;
+		constexpr auto count = std::tuple_size_v<std::remove_cvref_t<decltype(fields)>>;
 		detail::serializeFields(obj, jsonObj, fields, std::make_index_sequence<count> {});
 		return jsonObj;
 	}
@@ -247,8 +291,8 @@ namespace hical::meta
 
 		T obj {};
 		const auto& jsonObj = json.as_object();
-		auto fields = T::hicalJsonFields();
-		constexpr auto count = std::tuple_size_v<decltype(fields)>;
+		const auto& fields = T::hicalJsonFields();
+		constexpr auto count = std::tuple_size_v<std::remove_cvref_t<decltype(fields)>>;
 		detail::deserializeFields(obj, jsonObj, fields, std::make_index_sequence<count> {});
 		return obj;
 	}
@@ -257,8 +301,86 @@ namespace hical::meta
 
 	// ============ C++26 反射实现 ============
 
+	namespace detail
+	{
+
+		/**
+		 * @brief 检测字段是否带指定属性（通用基础函数）
+		 */
+		template <auto Member>
+		consteval bool hasAttribute(std::string_view attrName)
+		{
+			for (auto attr : std::meta::attributes_of(Member))
+			{
+				if (std::meta::identifier_of(attr) == attrName)
+				{
+					return true;
+				}
+			}
+			return false;
+		}
+
+		template <auto Member>
+		consteval bool isJsonIgnored()
+		{
+			return hasAttribute<Member>("hical::json_ignore");
+		}
+
+		template <auto Member>
+		consteval bool isJsonRequired()
+		{
+			return hasAttribute<Member>("hical::json_required");
+		}
+
+		/**
+		 * @brief 获取字段的 JSON key（优先 [[hical::json_name("xxx")]]，否则原名）
+		 */
+		template <auto Member>
+		consteval std::string_view jsonKeyOf()
+		{
+			for (auto attr : std::meta::attributes_of(Member))
+			{
+				if (std::meta::identifier_of(attr) == "hical::json_name")
+				{
+					auto args = std::meta::attribute_arguments_of(attr);
+					return std::meta::extract<const char*>(args[0]);
+				}
+			}
+			return std::meta::identifier_of(Member);
+		}
+
+		/**
+		 * @brief camelCase → snake_case 编译期转换
+		 */
+		consteval bool isUpperAscii(char c) noexcept
+		{
+			return c >= 'A' && c <= 'Z';
+		}
+
+		consteval char toLowerAscii(char c) noexcept
+		{
+			return isUpperAscii(c) ? static_cast<char>(c + ('a' - 'A')) : c;
+		}
+
+		consteval std::string camelToSnake(std::string_view input)
+		{
+			std::string result;
+			for (size_t i = 0; i < input.size(); ++i)
+			{
+				if (i > 0 && isUpperAscii(input[i]))
+				{
+					result += '_';
+				}
+				result += toLowerAscii(input[i]);
+			}
+			return result;
+		}
+
+	} // namespace detail
+
 	/**
-	 * @brief 序列化结构体为 JSON（C++26 反射，无需宏标注）
+	 * @brief 序列化结构体为 JSON（C++26 反射）
+	 * 支持 [[hical::json_ignore]]、[[hical::json_name("xxx")]]
 	 */
 	template <typename T>
 	boost::json::object toJson(const T& obj)
@@ -267,34 +389,135 @@ namespace hical::meta
 
 		template for (constexpr auto member : std::meta::nonstatic_data_members_of(^^T))
 		{
-			constexpr auto name = std::meta::identifier_of(member);
-			jsonObj[name] = valueToJson(obj.[:member:]);
+			if constexpr (!detail::isJsonIgnored<member>())
+			{
+				constexpr auto key = detail::jsonKeyOf<member>();
+				jsonObj[key] = valueToJson(obj.[:member:]);
+			}
 		}
 
 		return jsonObj;
 	}
 
 	/**
-	 * @brief 从 JSON 反序列化为结构体（C++26 反射，无需宏标注）
+	 * @brief 从 JSON 反序列化为结构体（C++26 反射）
+	 * 支持 [[hical::json_ignore]]、[[hical::json_name("xxx")]]、[[hical::json_required]]
 	 */
 	template <typename T>
 	T fromJson(const boost::json::value& json)
 	{
+		if (!json.is_object())
+		{
+			throw std::runtime_error("fromJson: expected JSON object, got " + std::string(to_string(json.kind())));
+		}
+
 		T obj {};
 		const auto& jsonObj = json.as_object();
 
 		template for (constexpr auto member : std::meta::nonstatic_data_members_of(^^T))
 		{
-			constexpr auto name = std::meta::identifier_of(member);
-			auto it = jsonObj.find(name);
-			if (it != jsonObj.end())
+			if constexpr (!detail::isJsonIgnored<member>())
 			{
-				using FieldType = typename[:std::meta::type_of(member):];
-				obj.[:member:] = valueFromJson<FieldType>(it->value());
+				constexpr auto key = detail::jsonKeyOf<member>();
+				auto it = jsonObj.find(key);
+				if (it != jsonObj.end())
+				{
+					using FieldType = typename[:std::meta::type_of(member):];
+					obj.[:member:] = valueFromJson<FieldType>(it->value());
+				}
+				else if constexpr (detail::isJsonRequired<member>())
+				{
+					throw std::runtime_error("fromJson: required field '" + std::string(key) + "' is missing");
+				}
 			}
 		}
 
 		return obj;
+	}
+
+	/**
+	 * @brief 编译期生成 JSON Schema（C++26 反射）
+	 * 根据结构体成员类型和属性注解自动生成符合 JSON Schema 规范的描述。
+	 */
+	template <typename T>
+	boost::json::object jsonSchema()
+	{
+		boost::json::object schema;
+		schema["type"] = "object";
+		boost::json::object properties;
+		boost::json::array requiredFields;
+
+		template for (constexpr auto member : std::meta::nonstatic_data_members_of(^^T))
+		{
+			if constexpr (!detail::isJsonIgnored<member>())
+			{
+				constexpr auto key = detail::jsonKeyOf<member>();
+				using FT = typename[:std::meta::type_of(member):];
+
+				boost::json::object prop;
+				if constexpr (std::is_same_v<FT, std::string>)
+				{
+					prop["type"] = "string";
+				}
+				else if constexpr (std::is_same_v<FT, bool>)
+				{
+					prop["type"] = "boolean";
+				}
+				else if constexpr (std::is_integral_v<FT>)
+				{
+					prop["type"] = "integer";
+				}
+				else if constexpr (std::is_floating_point_v<FT>)
+				{
+					prop["type"] = "number";
+				}
+				else if constexpr (IsVector<FT>::value)
+				{
+					prop["type"] = "array";
+				}
+				else if constexpr (HasJsonFields<FT>::value)
+				{
+					prop = jsonSchema<FT>();
+				}
+
+				properties[key] = prop;
+
+				if constexpr (detail::isJsonRequired<member>())
+				{
+					requiredFields.push_back(std::string(key));
+				}
+			}
+		}
+
+		schema["properties"] = properties;
+		if (!requiredFields.empty())
+		{
+			schema["required"] = requiredFields;
+		}
+		return schema;
+	}
+
+	/**
+	 * @brief 序列化策略：camelCase → snake_case 自动转换（C++26 反射）
+	 * 优先使用 [[hical::json_name(...)]] 显式注解，否则自动转换。
+	 */
+	template <typename T>
+	boost::json::object toJsonSnakeCase(const T& obj)
+	{
+		boost::json::object jsonObj;
+
+		template for (constexpr auto member : std::meta::nonstatic_data_members_of(^^T))
+		{
+			if constexpr (!detail::isJsonIgnored<member>())
+			{
+				constexpr auto explicitKey = detail::jsonKeyOf<member>();
+				constexpr auto memberName = std::meta::identifier_of(member);
+				constexpr auto key = (explicitKey != memberName) ? explicitKey : detail::camelToSnake(memberName);
+				jsonObj[key] = valueToJson(obj.[:member:]);
+			}
+		}
+
+		return jsonObj;
 	}
 
 #endif // HICAL_HAS_REFLECTION
@@ -311,7 +534,7 @@ namespace hical::meta
 	template <typename T>
 	T readJson(const ::hical::HttpRequest& req)
 	{
-		auto json = req.jsonBody();
+		const auto& json = req.jsonBody();
 		if (json.is_null())
 		{
 			throw std::runtime_error("readJson: request body is not valid JSON");
@@ -347,67 +570,126 @@ namespace hical
 
 /**
  * @brief 标注结构体字段用于自动 JSON 序列化（C++20 回退方案）
- * 用法：
+ * 基本用法（字段名 = JSON key，全部可选）：
  * ```cpp
  * struct UserDTO
  * {
  *     std::string name;
  *     int age;
- *     double score;
- *     HICAL_JSON(UserDTO, name, age, score)
+ *     HICAL_JSON(UserDTO, name, age)
  * };
  * ```
- * 当 C++26 反射可用时，此宏为空操作。
+ * 高级用法（装饰器混写）：
+ * ```cpp
+ * struct ApiResponse
+ * {
+ *     std::string requestId;
+ *     int statusCode;
+ *     std::string message;
+ *     std::string traceId;
+ *     HICAL_JSON(ApiResponse,
+ *         REQUIRED_ALIAS(requestId, "request_id"),
+ *         REQUIRED(statusCode),
+ *         ALIAS(message, "status_message"),
+ *         HICAL_IGNORE(traceId))
+ * };
+ * ```
+ * 装饰器：
+ *   ALIAS(field, "json_key")          - 自定义 JSON key
+ *   REQUIRED(field)                   - 反序列化时必需
+ *   REQUIRED_ALIAS(field, "json_key") - 必需 + 自定义 key
+ *   HICAL_IGNORE(field)               - 序列化/反序列化均跳过
+ * 当 C++26 反射可用时，此宏及所有装饰器为空操作。
  */
 #if !HICAL_HAS_REFLECTION
 
-	// 展开辅助
-	#define HICAL_JSON_FIELD_(T, field) ::hical::meta::detail::makeField<T>(#field, &T::field)
+	// ---- 装饰器宏（展开为括号元组，对 FOR_EACH 仍是单个 token）----
 
-	// HICAL_JSON 宏：生成 hicalJsonFields() 静态方法
-	// 使用 FOR_EACH 模式遍历字段列表
-	#define HICAL_JSON(Type, ...)                                            \
-		static auto hicalJsonFields()                                        \
-		{                                                                    \
-			return std::make_tuple(HICAL_JSON_FOR_EACH_(Type, __VA_ARGS__)); \
-		}
+	// NOLINTBEGIN(cppcoreguidelines-macro-usage)
+	#define ALIAS(field, alias) (hical_alias_, field, alias)
+	#define REQUIRED(field) (hical_required_, field)
+	#define REQUIRED_ALIAS(field, alias) (hical_required_alias_, field, alias)
 
-	// 可变参数 FOR_EACH 宏（支持 1-16 个字段）
-	#define HICAL_JSON_ARG_N_(_1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, N, ...) N
-	#define HICAL_JSON_NARGS_(...) HICAL_JSON_ARG_N_(__VA_ARGS__, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1)
+	#define HICAL_IGNORE(field) (hical_ignore_, field)
+
+// ---- IS_PAREN 检测（区分裸字段名 vs 括号装饰器）----
+
+	#define HICAL_IS_PAREN_PROBE_(...) ~, 1,
+	#define HICAL_IS_PAREN_CHECK_(...) HICAL_IS_PAREN_CHECK_N_(__VA_ARGS__, 0)
+	#define HICAL_IS_PAREN_CHECK_N_(x, n, ...) n
+	#define HICAL_IS_PAREN_(x) HICAL_IS_PAREN_CHECK_(HICAL_IS_PAREN_PROBE_ x)
+
+// ---- Token 拼接辅助 ----
 
 	#define HICAL_JSON_PASTE2_(a, b) a##b
 	#define HICAL_JSON_PASTE_(a, b) HICAL_JSON_PASTE2_(a, b)
 
-	#define HICAL_JSON_FOR_EACH_(T, ...) \
-		HICAL_JSON_PASTE_(HICAL_JSON_FE_, HICAL_JSON_NARGS_(__VA_ARGS__))(T, __VA_ARGS__)
+// ---- 叶子宏分派 ----
 
-	#define HICAL_JSON_FE_1(T, a) HICAL_JSON_FIELD_(T, a)
-	#define HICAL_JSON_FE_2(T, a, b) HICAL_JSON_FIELD_(T, a), HICAL_JSON_FIELD_(T, b)
-	#define HICAL_JSON_FE_3(T, a, b, c) HICAL_JSON_FE_2(T, a, b), HICAL_JSON_FIELD_(T, c)
-	#define HICAL_JSON_FE_4(T, a, b, c, d) HICAL_JSON_FE_3(T, a, b, c), HICAL_JSON_FIELD_(T, d)
-	#define HICAL_JSON_FE_5(T, a, b, c, d, e) HICAL_JSON_FE_4(T, a, b, c, d), HICAL_JSON_FIELD_(T, e)
-	#define HICAL_JSON_FE_6(T, a, b, c, d, e, f) HICAL_JSON_FE_5(T, a, b, c, d, e), HICAL_JSON_FIELD_(T, f)
-	#define HICAL_JSON_FE_7(T, a, b, c, d, e, f, g) HICAL_JSON_FE_6(T, a, b, c, d, e, f), HICAL_JSON_FIELD_(T, g)
-	#define HICAL_JSON_FE_8(T, a, b, c, d, e, f, g, h) HICAL_JSON_FE_7(T, a, b, c, d, e, f, g), HICAL_JSON_FIELD_(T, h)
-	#define HICAL_JSON_FE_9(T, a, b, c, d, e, f, g, h, i) \
-		HICAL_JSON_FE_8(T, a, b, c, d, e, f, g, h), HICAL_JSON_FIELD_(T, i)
-	#define HICAL_JSON_FE_10(T, a, b, c, d, e, f, g, h, i, j) \
-		HICAL_JSON_FE_9(T, a, b, c, d, e, f, g, h, i), HICAL_JSON_FIELD_(T, j)
-	#define HICAL_JSON_FE_11(T, a, b, c, d, e, f, g, h, i, j, k) \
-		HICAL_JSON_FE_10(T, a, b, c, d, e, f, g, h, i, j), HICAL_JSON_FIELD_(T, k)
-	#define HICAL_JSON_FE_12(T, a, b, c, d, e, f, g, h, i, j, k, l) \
-		HICAL_JSON_FE_11(T, a, b, c, d, e, f, g, h, i, j, k), HICAL_JSON_FIELD_(T, l)
-	#define HICAL_JSON_FE_13(T, a, b, c, d, e, f, g, h, i, j, k, l, m) \
-		HICAL_JSON_FE_12(T, a, b, c, d, e, f, g, h, i, j, k, l), HICAL_JSON_FIELD_(T, m)
-	#define HICAL_JSON_FE_14(T, a, b, c, d, e, f, g, h, i, j, k, l, m, n) \
-		HICAL_JSON_FE_13(T, a, b, c, d, e, f, g, h, i, j, k, l, m), HICAL_JSON_FIELD_(T, n)
-	#define HICAL_JSON_FE_15(T, a, b, c, d, e, f, g, h, i, j, k, l, m, n, o) \
-		HICAL_JSON_FE_14(T, a, b, c, d, e, f, g, h, i, j, k, l, m, n), HICAL_JSON_FIELD_(T, o)
-	#define HICAL_JSON_FE_16(T, a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p) \
-		HICAL_JSON_FE_15(T, a, b, c, d, e, f, g, h, i, j, k, l, m, n, o), HICAL_JSON_FIELD_(T, p)
+	#define HICAL_JSON_FIELD_(T, arg) HICAL_JSON_PASTE_(HICAL_JSON_LEAF_, HICAL_IS_PAREN_(arg))(T, arg)
+
+	// 字段存在性校验 + makeField 构造（公共骨架）
+	#define HICAL_JSON_MAKE_FIELD_(T, field, ...)                                                          \
+		(                                                                                                  \
+			[]()                                                                                           \
+			{                                                                                              \
+				static_assert(                                                                             \
+					requires { std::declval<T>().field; },                                                 \
+					"HICAL_JSON: field '" #field "' does not exist or is not publicly accessible in " #T); \
+				return ::hical::meta::detail::makeField<T>(__VA_ARGS__);                                   \
+			}())
+
+	// 裸字段：name → makeField("name", &T::name)
+	#define HICAL_JSON_LEAF_0(T, field) HICAL_JSON_MAKE_FIELD_(T, field, #field, &T::field)
+
+	// 括号装饰 → 解包括号 → 提取 tag → 分派到对应 TAG 处理器
+	// HICAL_JSON_DEPAREN_ 剥离外层括号：(a, b, c) → a, b, c
+	#define HICAL_JSON_DEPAREN_(...) __VA_ARGS__
+	#define HICAL_JSON_LEAF_1(T, tagged) HICAL_JSON_UNWRAP_(T, HICAL_JSON_DEPAREN_ tagged)
+	#define HICAL_JSON_UNWRAP_(T, ...) HICAL_JSON_TAG_DISPATCH_(T, __VA_ARGS__)
+	#define HICAL_JSON_TAG_DISPATCH_(T, tag, ...) HICAL_JSON_PASTE_(HICAL_JSON_TAG_, tag)(T, __VA_ARGS__)
+
+// ---- Tag 处理器 ----
+
+	#define HICAL_JSON_TAG_hical_alias_(T, field, alias) HICAL_JSON_MAKE_FIELD_(T, field, alias, &T::field)
+	#define HICAL_JSON_TAG_hical_required_(T, field) HICAL_JSON_MAKE_FIELD_(T, field, #field, &T::field, true, false)
+	#define HICAL_JSON_TAG_hical_required_alias_(T, field, alias) \
+		HICAL_JSON_MAKE_FIELD_(T, field, alias, &T::field, true, false)
+	#define HICAL_JSON_TAG_hical_ignore_(T, field) HICAL_JSON_MAKE_FIELD_(T, field, #field, &T::field, false, true)
+
+// ---- __VA_OPT__ 递归展开（无字段数量限制）----
+
+	#define HICAL_JSON_PARENS_ ()
+
+	#define HICAL_JSON_FOR_EACH_(macro, T, a, ...) \
+		macro(T, a) __VA_OPT__(, HICAL_JSON_FE_AGAIN_ HICAL_JSON_PARENS_(macro, T, __VA_ARGS__))
+
+	#define HICAL_JSON_FE_AGAIN_() HICAL_JSON_FOR_EACH_
+
+	// 多层 EXPAND 解锁递归深度（支持最多 243 字段）
+	#define HICAL_JSON_EXPAND_(...) HICAL_JSON_EXP4_(HICAL_JSON_EXP4_(__VA_ARGS__))
+	#define HICAL_JSON_EXP4_(...) HICAL_JSON_EXP3_(HICAL_JSON_EXP3_(__VA_ARGS__))
+	#define HICAL_JSON_EXP3_(...) HICAL_JSON_EXP2_(HICAL_JSON_EXP2_(__VA_ARGS__))
+	#define HICAL_JSON_EXP2_(...) HICAL_JSON_EXP1_(HICAL_JSON_EXP1_(__VA_ARGS__))
+	#define HICAL_JSON_EXP1_(...) __VA_ARGS__
+
+// ---- 入口宏 ----
+
+	#define HICAL_JSON(Type, ...)                                                                                \
+		static const auto& hicalJsonFields()                                                                     \
+		{                                                                                                        \
+			static const auto fields =                                                                           \
+				std::make_tuple(HICAL_JSON_EXPAND_(HICAL_JSON_FOR_EACH_(HICAL_JSON_FIELD_, Type, __VA_ARGS__))); \
+			return fields;                                                                                       \
+		}
+
+// NOLINTEND(cppcoreguidelines-macro-usage)
 
 #else
-// C++26 反射模式下，HICAL_JSON 为空操作
+// C++26 反射模式下，所有宏为空操作
 	#define HICAL_JSON(Type, ...)
+	#define ALIAS(field, alias)
+	#define REQUIRED(field)
+	#define REQUIRED_ALIAS(field, alias)
+	#define HICAL_IGNORE(field)
 #endif

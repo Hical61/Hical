@@ -28,7 +28,10 @@ namespace hical
 		 * @param initialSize 初始大小
 		 */
 		explicit PmrBuffer(std::pmr::polymorphic_allocator<std::byte> allocator = {}, size_t initialSize = hDefaultSize)
-			: buffer_(hPrependSize + initialSize, allocator), readIndex_(hPrependSize), writeIndex_(hPrependSize)
+			: buffer_(hPrependSize + initialSize, allocator)
+			, initialCapacity_(initialSize)
+			, readIndex_(hPrependSize)
+			, writeIndex_(hPrependSize)
 		{
 		}
 
@@ -90,6 +93,13 @@ namespace hical
 		 */
 		void retrieveAll()
 		{
+			// 缓冲区膨胀超过初始容量 2 倍时缩容，避免内存浪费
+			// 使用构造时的 initialCapacity_ 作为基准，而非固定 hDefaultSize，
+			// 防止大初始容量的 buffer 被错误缩容后反复扩容
+			if (buffer_.size() > (initialCapacity_ + hPrependSize) * 2)
+			{
+				buffer_.resize(initialCapacity_ + hPrependSize);
+			}
 			readIndex_ = hPrependSize;
 			writeIndex_ = hPrependSize;
 		}
@@ -265,8 +275,17 @@ namespace hical
 		{
 			if (writableBytes() + prependableBytes() < len + hPrependSize)
 			{
-				// 扩容
-				buffer_.resize(writeIndex_ + len);
+				// 扩容：优先 2 倍增长减少频繁扩容
+				size_t newLen;
+				if (buffer_.size() * 2 > writeIndex_ + len)
+				{
+					newLen = buffer_.size() * 2;
+				}
+				else
+				{
+					newLen = writeIndex_ + len;
+				}
+				buffer_.resize(newLen);
 			}
 			else
 			{
@@ -284,6 +303,7 @@ namespace hical
 		}
 
 		std::pmr::vector<std::byte> buffer_;
+		size_t initialCapacity_; ///< 构造时传入的初始容量（缩容基准）
 		size_t readIndex_;
 		size_t writeIndex_;
 

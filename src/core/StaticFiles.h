@@ -3,9 +3,16 @@
 #include "HttpRequest.h"
 #include "HttpResponse.h"
 #include "HttpTypes.h"
-#include <filesystem>
+#include "Coroutine.h"
+#ifdef BOOST_ASIO_HAS_FILE
+	#include <boost/asio/random_access_file.hpp>
+#endif
+#include <boost/asio/use_awaitable.hpp>
 #include <fstream>
+#include <filesystem>
 #include <functional>
+#include <mutex>
+#include <shared_mutex>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -125,9 +132,11 @@ namespace hical
 	 * - 路径遍历攻击防护
 	 * - 大文件限制（防止 bad_alloc 崩溃）
 	 */
-	inline std::function<HttpResponse(const HttpRequest&)> serveStatic(const std::string& rootDir,
-																	   const std::string& urlPrefix,
-																	   std::uintmax_t maxFileSize = 64ULL * 1024 * 1024)
+	inline std::function<Awaitable<HttpResponse>(const HttpRequest&)> serveStatic(const std::string& rootDir,
+																				  const std::string& urlPrefix,
+																				  std::uintmax_t maxFileSize = 64ULL
+																											   * 1024
+																											   * 1024)
 	{
 		namespace fs = std::filesystem;
 
@@ -137,13 +146,30 @@ namespace hical
 		if (ec)
 		{
 			// 根目录不存在时，每次请求都返回 404
-			return [rootDir](const HttpRequest&) -> HttpResponse
+			return [rootDir](const HttpRequest&) -> Awaitable<HttpResponse>
 			{
-				return HttpResponse::notFound();
+				co_return HttpResponse::notFound();
 			};
 		}
 
-		return [root, urlPrefix, maxFileSize](const HttpRequest& req) -> HttpResponse
+		// canonical 路径缓存：避免每次请求都执行 canonical() 系统调用
+		struct CacheEntry
+		{
+			fs::path canonical;
+			std::chrono::steady_clock::time_point cachedAt;
+		};
+
+		struct PathCache
+		{
+			mutable std::shared_mutex mutex;
+			std::unordered_map<std::string, CacheEntry> cache;
+		};
+
+		static constexpr size_t kMaxPathCacheEntries = 4096;
+		static constexpr auto kCacheTtl = std::chrono::seconds(60);
+		auto pathCache = std::make_shared<PathCache>();
+
+		return [root, urlPrefix, maxFileSize, pathCache](const HttpRequest& req) -> Awaitable<HttpResponse>
 		{
 			namespace fs = std::filesystem;
 
@@ -156,17 +182,61 @@ namespace hical
 			}
 			else if (!urlPrefix.empty() && relPath == urlPrefix.substr(0, urlPrefix.size() - 1))
 			{
-				// 访问 /static（无尾部斜杠）
 				relPath = "";
 			}
 
-			// 构建目标路径并规范化（使用 canonical 完全解析符号链接，防止路径遍历）
-			fs::path target = root / std::string(relPath);
-			std::error_code ec2;
-			target = fs::canonical(target, ec2);
-			if (ec2)
+			// 构建目标路径并规范化（使用带 TTL 的缓存避免每次请求都调用 canonical 系统调用）
+			std::string relPathStr(relPath);
+			fs::path target;
+			bool cacheHit = false;
+
 			{
-				return HttpResponse::notFound();
+				std::shared_lock<std::shared_mutex> readLock(pathCache->mutex);
+				auto cacheIt = pathCache->cache.find(relPathStr);
+				if (cacheIt != pathCache->cache.end())
+				{
+					auto age = std::chrono::steady_clock::now() - cacheIt->second.cachedAt;
+					if (age < kCacheTtl)
+					{
+						target = cacheIt->second.canonical;
+						cacheHit = true;
+					}
+				}
+			}
+
+			if (!cacheHit)
+			{
+				fs::path rawTarget = root / relPathStr;
+				std::error_code ec2;
+				target = fs::canonical(rawTarget, ec2);
+				if (ec2)
+				{
+					co_return HttpResponse::notFound();
+				}
+
+				{
+					std::unique_lock<std::shared_mutex> writeLock(pathCache->mutex);
+					if (pathCache->cache.size() < kMaxPathCacheEntries)
+					{
+						pathCache->cache.insert_or_assign(relPathStr,
+														  CacheEntry {target, std::chrono::steady_clock::now()});
+					}
+					else
+					{
+						// 缓存已满：先尝试更新已有条目，否则淘汰一个旧条目再插入
+						auto existIt = pathCache->cache.find(relPathStr);
+						if (existIt != pathCache->cache.end())
+						{
+							existIt->second = CacheEntry {target, std::chrono::steady_clock::now()};
+						}
+						else
+						{
+							// 淘汰 begin() 条目（unordered_map 的 begin 分布近似随机，O(1)）
+							pathCache->cache.erase(pathCache->cache.begin());
+							pathCache->cache.emplace(relPathStr, CacheEntry {target, std::chrono::steady_clock::now()});
+						}
+					}
+				}
 			}
 
 			// 路径遍历防护
@@ -175,79 +245,103 @@ namespace hical
 				HttpResponse res;
 				res.setStatus(HttpStatusCode::hForbidden);
 				res.setBody("403 Forbidden");
-				return res;
+				co_return res;
 			}
 
 			// 目录处理：尝试 index.html
+			std::error_code ec2;
 			if (fs::is_directory(target, ec2))
 			{
-				target /= "index.html";
-				// 追加后重新 canonical 解析（防止 index.html 是指向 root 外的符号链接）
-				target = fs::canonical(target, ec2);
-				if (ec2 || !detail::isSafePath(root, target))
+				fs::path indexTarget = target / "index.html";
+				indexTarget = fs::canonical(indexTarget, ec2);
+				if (ec2 || !detail::isSafePath(root, indexTarget))
 				{
-					return HttpResponse::notFound();
+					co_return HttpResponse::notFound();
 				}
+				target = indexTarget;
 			}
 
 			// 文件存在性检查
 			if (!fs::is_regular_file(target, ec2))
 			{
-				return HttpResponse::notFound();
+				co_return HttpResponse::notFound();
 			}
 
 			// 获取文件元信息
 			auto fileSize = fs::file_size(target, ec2);
 			if (ec2)
 			{
-				return HttpResponse::serverError();
+				co_return HttpResponse::serverError();
 			}
 
-			// 大文件限制：防止 bad_alloc 崩溃
+			// 大文件限制
 			if (fileSize > maxFileSize)
 			{
 				HttpResponse res;
 				res.setStatus(HttpStatusCode::hPayloadTooLarge);
 				res.setBody("413 File Too Large");
-				return res;
+				co_return res;
 			}
 
 			auto lastWrite = fs::last_write_time(target, ec2);
 			if (ec2)
 			{
-				return HttpResponse::serverError();
+				co_return HttpResponse::serverError();
 			}
 
 			// ETag 缓存验证
 			std::string etag = detail::makeEtag(fileSize, lastWrite);
-			std::string ifNoneMatch = req.header("If-None-Match");
+			auto ifNoneMatch = req.header("If-None-Match");
 			if (!ifNoneMatch.empty() && ifNoneMatch == etag)
 			{
 				HttpResponse res;
 				res.setStatus(HttpStatusCode::hNotModified);
 				res.setHeader("ETag", etag);
-				// 304 无 body，需手动 prepare_payload 使 Content-Length 为 0
 				res.native().prepare_payload();
-				return res;
+				co_return res;
 			}
 
 			// 读取文件内容
-			std::ifstream ifs(target, std::ios::binary);
-			if (!ifs)
-			{
-				return HttpResponse::serverError();
-			}
 			std::string content(fileSize, '\0');
-			ifs.read(content.data(), static_cast<std::streamsize>(fileSize));
-			auto bytesRead = ifs.gcount();
-			// 文件在 stat 和 read 之间被截短时，截断到实际读取长度，拒绝返回零填充内容
-			if (bytesRead <= 0)
+			size_t totalRead = 0;
+
+#ifdef BOOST_ASIO_HAS_FILE
+			// 异步读取（不阻塞 io_context 线程）
+			auto executor = co_await boost::asio::this_coro::executor;
+			boost::asio::random_access_file file(executor, target.string(), boost::asio::random_access_file::read_only);
+
+			while (totalRead < fileSize)
 			{
-				return HttpResponse::serverError();
+				auto bytesRead = co_await file.async_read_some_at(
+					totalRead,
+					boost::asio::buffer(content.data() + totalRead, fileSize - totalRead),
+					boost::asio::use_awaitable);
+				if (bytesRead == 0)
+				{
+					break;
+				}
+				totalRead += bytesRead;
 			}
-			if (static_cast<std::uintmax_t>(bytesRead) < fileSize)
+#else
+			// 同步 ifstream 回退（macOS 等不支持 BOOST_ASIO_HAS_FILE 的平台）
 			{
-				content.resize(static_cast<std::size_t>(bytesRead));
+				std::ifstream ifs(target, std::ios::binary);
+				if (!ifs)
+				{
+					co_return HttpResponse::serverError();
+				}
+				ifs.read(content.data(), static_cast<std::streamsize>(fileSize));
+				totalRead = static_cast<size_t>(ifs.gcount());
+			}
+#endif
+
+			if (totalRead == 0)
+			{
+				co_return HttpResponse::serverError();
+			}
+			if (totalRead < fileSize)
+			{
+				content.resize(totalRead);
 			}
 
 			// 构建响应
@@ -256,7 +350,8 @@ namespace hical
 			res.setStatus(HttpStatusCode::hOk);
 			res.setBody(content, detail::mimeType(ext));
 			res.setHeader("ETag", etag);
-			return res;
+			res.setHeader("X-Content-Type-Options", "nosniff");
+			co_return res;
 		};
 	}
 

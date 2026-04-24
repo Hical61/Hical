@@ -396,7 +396,7 @@ namespace hical
 
 ### 6.1 双策略路由
 
-Router 采用**静态路由 + 参数路由**双策略，兼顾查找性能和功能灵活性：
+Router 采用**静态路由 + 参数路由**双策略，兼顾查找性能和功能灵活性。参数路由按 HTTP 方法分桶存储，仅扫描对应方法的路由子集：
 
 ```
 请求到达: GET /api/users/42
@@ -415,13 +415,16 @@ Router 采用**静态路由 + 参数路由**双策略，兼顾查找性能和功
             │
             ▼
 ┌─────────────────────────┐
-│  参数路由匹配 (O(n))      │
-│  vector<ParamRouteEntry> │
-│                          │
-│  遍历:                    │
-│  {GET, "/users/{id}"}    │
-│  → 匹配! id = "42"       │
-└───────────┬─────────────┘
+│  参数路由匹配              │
+│  按方法分桶:               │
+│  unordered_map<HttpMethod,│
+│    vector<ParamRouteEntry>│
+│  >                        │
+│                           │
+│  查找 GET 桶:              │
+│  {GET, "/users/{id}"}     │
+│  → 匹配! id = "42"        │
+└───────────┬──────────────┘
             │
             ▼
 ┌─────────────────────────┐
@@ -462,7 +465,7 @@ std::unordered_map<RouteKey, RouteHandler, RouteKeyHash> staticRoutes_;
 static bool matchParamPath(
     std::string_view pattern,   // "/users/{id}/posts/{pid}"
     std::string_view path,      // "/users/42/posts/100"
-    std::unordered_map<std::string, std::string>& params);
+    std::vector<std::pair<std::string, std::string>>& params);
 ```
 
 匹配过程：
@@ -841,28 +844,42 @@ class GenericConnection : public TcpConnection,
 ### 11.3 写队列与 Scatter-Gather
 
 ```cpp
-// 发送数据 → 加入写队列
-void sendInLoop(const char* data, size_t len)
+// 写队列使用多态节点，支持内存数据和文件数据
+std::deque<std::shared_ptr<WriteNode>> writeQueue_;
+
+// 发送内存数据 → 加入写队列
+void send(const char* data, size_t len)
 {
-    writeQueue_.emplace_back(data, data + len);
-    tryStartWrite();  // 尝试启动写循环
+    enqueueNode(std::make_shared<MemoryWriteNode>(
+        std::make_shared<std::string>(data, len)));
 }
 
-// 写循环：批量发送
+// 发送文件数据 → 加入写队列
+void sendFile(const std::filesystem::path& path, int64_t offset, int64_t length)
+{
+    enqueueNode(std::make_shared<FileWriteNode>(path, offset, length));
+}
+
+// 写循环：按节点类型分批处理
 Awaitable<void> writeLoop()
 {
-    // Scatter-Gather I/O：将队列中所有消息合并为一次系统调用
+    // MemoryWriteNode: Scatter-Gather I/O 批量发送
     std::vector<boost::asio::const_buffer> buffers;
-    for (auto& msg : writeQueue_)
+    for (auto& node : memoryBatch)
     {
-        buffers.emplace_back(msg.data(), msg.size());
+        buffers.emplace_back(static_cast<MemoryWriteNode&>(*node).buffer());
     }
     co_await boost::asio::async_write(socket_, buffers, use_awaitable);
+
+    // FileWriteNode: 异步分块读取 + 发送（64KB 每块）
+    co_await sendFileNode(fileNode);
 }
 ```
 
 - **队列化写入**：避免并发写入冲突
-- **Scatter-Gather**：多条消息合并为一次 `async_write` 系统调用，减少系统调用次数
+- **多态节点**：`MemoryWriteNode`（内存缓冲区）和 `FileWriteNode`（文件路径+偏移+长度）
+- **Scatter-Gather**：连续的内存节点合并为一次 `async_write` 系统调用
+- **异步文件发送**：`sendFileNode()` 使用 `boost::asio::random_access_file`（`BOOST_ASIO_HAS_FILE`）异步读取，无此特性时回退到 `std::ifstream`
 - **高水位标记**：队列超过 64MB 时触发回调，防止内存无限增长
 
 ---
@@ -969,7 +986,7 @@ struct NetworkError
 | 内存管理    | C++17 PMR 三层池                       | 标准化接口，高并发低碎片，与 Boost.JSON 天然兼容     |
 | SSL 实现    | 模板化 `GenericConnection<SocketType>` | 编译期分支消除，零运行时开销                         |
 | 后端抽象    | C++20 Concepts                         | 编译期约束，不引入虚函数开销，面向未来可扩展         |
-| 路由查找    | 哈希表 + 线性匹配                      | 静态路由 O(1)，参数路由灵活性                        |
+| 路由查找    | 哈希表 + 按方法分桶线性匹配            | 静态路由 O(1)，参数路由按方法子集匹配                |
 | 中间件模型  | 洋葱模型                               | 前置/后置/拦截能力完整，Koa/Express 验证过的成熟模式 |
 | 反射降级    | HICAL_ROUTE 宏                         | C++26 反射尚不成熟，宏方案保持向前兼容               |
 | 线程模型    | 1 Thread : 1 io_context                | 线程间无共享状态，天然避免锁竞争                     |

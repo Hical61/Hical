@@ -71,16 +71,36 @@ namespace hical
 		 * @param req HTTP 请求
 		 * @param fieldName 表单字段名
 		 * @return 找到返回 MultipartPart（isFile() == true），否则 nullopt
+		 * @note 多次调用 getFile/getField 建议先调用 parse() 再用下方重载，避免重复解析
 		 */
 		static std::optional<MultipartPart> getFile(const HttpRequest& req, const std::string& fieldName);
+
+		/**
+		 * @brief 从已解析的 parts 中查找文件 Part（避免重复解析）
+		 * @param parts 已通过 parse() 获取的 Part 列表
+		 * @param fieldName 表单字段名
+		 * @return 找到返回 MultipartPart，否则 nullopt
+		 */
+		static std::optional<MultipartPart> getFile(const std::vector<MultipartPart>& parts,
+													const std::string& fieldName);
 
 		/**
 		 * @brief 获取指定名称的表单文本字段值
 		 * @param req HTTP 请求
 		 * @param fieldName 表单字段名
 		 * @return 找到返回字段值，否则 nullopt
+		 * @note 多次调用 getFile/getField 建议先调用 parse() 再用下方重载，避免重复解析
 		 */
 		static std::optional<std::string> getField(const HttpRequest& req, const std::string& fieldName);
+
+		/**
+		 * @brief 从已解析的 parts 中查找文本字段（避免重复解析）
+		 * @param parts 已通过 parse() 获取的 Part 列表
+		 * @param fieldName 表单字段名
+		 * @return 找到返回字段值，否则 nullopt
+		 */
+		static std::optional<std::string> getField(const std::vector<MultipartPart>& parts,
+												   const std::string& fieldName);
 
 	private:
 		/**

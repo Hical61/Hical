@@ -10,8 +10,8 @@ namespace hical
 	namespace
 	{
 
-		// 原地转小写
-		inline std::string toLower(std::string s)
+		// 就地转小写（避免字符串拷贝）
+		inline void toLowerInPlace(std::string& s)
 		{
 			std::transform(s.begin(),
 						   s.end(),
@@ -20,7 +20,6 @@ namespace hical
 						   {
 							   return std::tolower(c);
 						   });
-			return s;
 		}
 
 		// 去除首尾空白
@@ -142,7 +141,8 @@ namespace hical
 				continue;
 			}
 
-			std::string key = toLower(std::string(trim(line.substr(0, colon))));
+			std::string key(trim(line.substr(0, colon)));
+			toLowerInPlace(key);
 			std::string val = std::string(trim(line.substr(colon + 1)));
 			part.headers[key] = val;
 
@@ -160,8 +160,10 @@ namespace hical
 	std::optional<std::vector<MultipartPart>> MultipartParser::parse(const HttpRequest& req)
 	{
 		// 检查 Content-Type
-		auto ct = req.contentType();
-		auto ctLower = toLower(ct);
+		auto ctView = req.contentType();
+		std::string ct(ctView);
+		auto ctLower = ct;
+		toLowerInPlace(ctLower);
 		if (ctLower.find("multipart/form-data") == std::string::npos)
 		{
 			return std::nullopt;
@@ -269,7 +271,13 @@ namespace hical
 		{
 			return std::nullopt;
 		}
-		for (auto& part : *parts)
+		return getFile(*parts, fieldName);
+	}
+
+	std::optional<MultipartPart> MultipartParser::getFile(const std::vector<MultipartPart>& parts,
+														  const std::string& fieldName)
+	{
+		for (const auto& part : parts)
 		{
 			if (part.name == fieldName && part.isFile())
 			{
@@ -286,7 +294,13 @@ namespace hical
 		{
 			return std::nullopt;
 		}
-		for (auto& part : *parts)
+		return getField(*parts, fieldName);
+	}
+
+	std::optional<std::string> MultipartParser::getField(const std::vector<MultipartPart>& parts,
+														 const std::string& fieldName)
+	{
+		for (const auto& part : parts)
 		{
 			if (part.name == fieldName && !part.isFile())
 			{

@@ -6,6 +6,7 @@
 #include "HttpResponse.h"
 #include "Coroutine.h"
 #include "SslContext.h"
+#include "IdleFd.h"
 #include "../asio/AsioEventLoop.h"
 #include <boost/asio.hpp>
 #include <boost/beast.hpp>
@@ -140,6 +141,9 @@ namespace hical
 		// 使用 atomic 确保多线程环境下可见性（start() 后 IO 线程需读取此标志）
 		std::atomic<bool> started_ {false};
 
+		// WebSocket 升级专用的预构建中间件链（finalHandler 返回 200 占位）
+		MiddlewareNext wsMiddlewareChain_;
+
 		// 请求大小限制
 		size_t maxBodySize_ {1024 * 1024}; // 1MB
 		size_t maxHeaderSize_ {8192};      // 8KB
@@ -150,6 +154,9 @@ namespace hical
 
 		// 空闲连接超时（秒，0 表示不超时）
 		double idleTimeout_ {60.0};
+
+		// fd 耗尽处理：预留一个 fd 防止 accept 循环空转
+		IdleFd idleFd_;
 	};
 
 } // namespace hical

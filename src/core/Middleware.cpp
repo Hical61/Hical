@@ -64,6 +64,11 @@ namespace hical
 		co_return co_await chain(req);
 	}
 
+	MiddlewareNext MiddlewarePipeline::buildFor(MiddlewareNext finalHandler) const
+	{
+		return buildChain(std::move(finalHandler));
+	}
+
 	size_t MiddlewarePipeline::size() const
 	{
 		return middlewares_.size();

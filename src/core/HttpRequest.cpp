@@ -4,6 +4,24 @@
 namespace hical
 {
 
+	namespace
+	{
+
+		/// HTTP Header Injection 防护：检测字符串是否包含 CR/LF（单次遍历）
+		bool containsCRLF(const std::string& s)
+		{
+			for (char c : s)
+			{
+				if (c == '\r' || c == '\n')
+				{
+					return true;
+				}
+			}
+			return false;
+		}
+
+	} // namespace
+
 	HttpRequest::HttpRequest()
 	{
 		req_.version(11); // HTTP/1.1
@@ -63,14 +81,14 @@ namespace hical
 		return {};
 	}
 
-	std::string HttpRequest::header(const std::string& name) const
+	std::string_view HttpRequest::header(std::string_view name) const
 	{
 		auto it = req_.find(name);
 		if (it != req_.end())
 		{
-			return std::string(it->value());
+			return it->value();
 		}
-		return "";
+		return {};
 	}
 
 	const std::string& HttpRequest::body() const
@@ -78,18 +96,18 @@ namespace hical
 		return req_.body();
 	}
 
-	boost::json::value HttpRequest::jsonBody() const
+	const boost::json::value& HttpRequest::jsonBody() const
 	{
-		boost::system::error_code ec;
-		auto val = boost::json::parse(req_.body(), ec);
-		if (ec)
+		if (!cachedJsonBody_)
 		{
-			return nullptr;
+			boost::system::error_code ec;
+			auto val = boost::json::parse(req_.body(), ec);
+			cachedJsonBody_.emplace(ec ? boost::json::value(nullptr) : std::move(val));
 		}
-		return val;
+		return *cachedJsonBody_;
 	}
 
-	std::string HttpRequest::contentType() const
+	std::string_view HttpRequest::contentType() const
 	{
 		return header("Content-Type");
 	}
@@ -141,6 +159,11 @@ namespace hical
 
 	void HttpRequest::setHeader(const std::string& name, const std::string& value)
 	{
+		// HTTP Header Injection 防护：拒绝含 CR/LF 的头部
+		if (containsCRLF(name) || containsCRLF(value))
+		{
+			return;
+		}
 		req_.set(name, value);
 	}
 
@@ -152,24 +175,42 @@ namespace hical
 
 	// ============ 路径参数 ============
 
-	std::string HttpRequest::param(const std::string& name) const
+	const std::string& HttpRequest::param(const std::string& name) const
 	{
-		auto it = pathParams_.find(name);
-		if (it != pathParams_.end())
+		static const std::string empty;
+		for (const auto& [key, value] : pathParams_)
 		{
-			return it->second;
+			if (key == name)
+			{
+				return value;
+			}
 		}
-		return "";
+		return empty;
 	}
 
 	void HttpRequest::setParam(const std::string& name, const std::string& value)
 	{
-		pathParams_[name] = value;
+		for (auto& [key, val] : pathParams_)
+		{
+			if (key == name)
+			{
+				val = value;
+				return;
+			}
+		}
+		pathParams_.emplace_back(name, value);
 	}
 
 	bool HttpRequest::hasParam(const std::string& name) const
 	{
-		return pathParams_.count(name) > 0;
+		for (const auto& [key, value] : pathParams_)
+		{
+			if (key == name)
+			{
+				return true;
+			}
+		}
+		return false;
 	}
 
 	// ============ Cookie ============
@@ -225,8 +266,9 @@ namespace hical
 		}
 	}
 
-	std::string HttpRequest::cookie(const std::string& name) const
+	const std::string& HttpRequest::cookie(const std::string& name) const
 	{
+		static const std::string empty;
 		if (!cookies_)
 		{
 			parseCookies();
@@ -236,7 +278,7 @@ namespace hical
 		{
 			return it->second;
 		}
-		return "";
+		return empty;
 	}
 
 	const std::unordered_map<std::string, std::string>& HttpRequest::cookies() const

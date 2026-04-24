@@ -7,6 +7,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-04-24
+
+### Breaking Changes
+- **HttpRequest 返回类型收紧**：`header()` 返回 `string_view`（原 `string`）、`cookie()` / `param()` 返回 `const string&`（原 `string`）、`contentType()` 返回 `string_view`、`jsonBody()` 返回 `const json::value&`（原值拷贝）——大多数调用点源码兼容，仅存储到 `auto` 的场景可能需确认
+- **serveStatic 异步化**：返回类型从 `function<HttpResponse(...)>` 改为 `function<Awaitable<HttpResponse>(...)>`，调用方需在协程中 `co_await`
+- **Boost 最低版本**：1.70 → 1.78（`random_access_file` 依赖）
+- **Linux 新增依赖**：`liburing-dev`（Boost.Asio `random_access_file` 在 Linux 上依赖 io_uring）
+
+### Added
+- **文件异步发送**：`TcpConnection::sendFile(path, offset, length)` + `WriteNode` 多态写队列（`MemoryWriteNode` / `FileWriteNode`），支持 `random_access_file` 异步读取 + 64KB 分块发送
+- **macOS 平台回退**：`GenericConnection::sendFileNode()` 和 `serveStatic()` 在无 `BOOST_ASIO_HAS_FILE` 平台自动回退到 `std::ifstream` 同步读取
+- **WebSocket Origin 白名单**：`Router::ws()` 新增 `WsOptions` 重载，支持 `allowedOrigins` 集合，不在白名单内的 Origin 返回 403（CSWSH 防护）
+- **WebSocket 中间件链**：WS 升级请求经过预构建的中间件链，中间件可返回非 200 阻止升级（认证/限流）
+- **WebSocket 空闲超时**：复用 `idleTimeout_` 设置，超时无消息的 WS 连接自动断开
+- **空闲连接超时清理**：`TcpServer::setIdleTimeout(seconds)` + `idleCheckLoop()` 协程定期扫描，断开超时连接
+- **fd 耗尽防护**：`IdleFd` 类（POSIX 预留 `/dev/null` fd），EMFILE 时临时释放→accept→close→重新预留，避免 accept 循环忙转
+- **Session 重建**：`SessionManager::regenerate(oldId)` 生成新 ID 并迁移数据，旧 ID 失效（Session 固定攻击防护）
+- **Session 数据迁移**：`Session::migrateFrom(other)` 原子迁移数据，地址序双锁防死锁
+- **MetaJson 装饰器**：C++20 宏路径新增 `ALIAS(field, "key")`、`REQUIRED(field)`、`REQUIRED_ALIAS(field, "key")`、`HICAL_IGNORE(field)`，`__VA_OPT__` 递归展开无字段数上限
+- **MetaJson C++26 属性**：`[[hical::json_name("alias")]]`、`[[hical::json_required]]`、`[[hical::json_ignore]]` + `jsonSchema<T>()` / `toJsonSnakeCase<T>()`
+- **MetaJson unsigned 支持**：`valueToJson()` / `valueFromJson()` 正确处理 `uint64_t`，防止大无符号数据丢失
+- **中间件预构建 API**：`MiddlewarePipeline::buildFor(finalHandler)` 返回可缓存的 `MiddlewareNext`
+- **Multipart 双 API**：新增 `getFile(parts, fieldName)` / `getField(parts, fieldName)` 重载，搜索预解析结果避免重复解析
+- **HTTP Header 注入防护**：`HttpRequest::setHeader()` 和 `HttpResponse::setHeader()` 拒绝含 CR/LF 的头部名/值
+- **SSL 懒包含**：`SslConnection.h` 独立类型别名头文件，非 SSL 场景不拉 OpenSSL 头文件
+- **Session 测试补充**：`RegenerateSession`、`RegenerateNonExistent`、`MigrateFromSession`、`RegenerateConcurrent` 4 个测试
+
+### Changed
+- **Session 读写锁**：`SessionManager::mutex_` 从 `std::mutex` 升级为 `std::shared_mutex`，`find()` 使用 `shared_lock` 提升读并发
+- **Session 懒 GC**：`find()` 不再立即删除过期条目（避免 shared→unique 锁升级竞态），过期条目由 `gc()` 定期清理；`create()` 达上限时先强制 GC 再拒绝
+- **路由参数分组**：参数路由从全局 `vector` 改为 `unordered_map<HttpMethod, vector>`，dispatch 仅扫描匹配方法的子集
+- **路径 DoS 防护**：单遍扫描同时计算 URL 解码需求和段深度，>256 段早期拒绝（`hMaxPathSegments`）
+- **连接存储优化**：`TcpServer` 连接集合从 `set` 改为 `unordered_set`（O(1) 插入/删除）
+- **连接活跃时间**：`GenericConnection` 新增 `lastActiveTimeMs_` 原子字段，读写循环更新
+- **HttpRequest path params**：存储从 `unordered_map` 改为 `vector<pair>`，小参数集更少分配
+- **jsonBody() 缓存**：多次调用只解析一次，后续返回缓存引用
+- **PmrBuffer 自适应**：`retrieveAll()` 超过 2× 初始容量时自动缩容；`ensureWritableBytes()` 改为 2× 指数增长
+- **StaticFiles 路径缓存**：`PathCache`（4096 条目 / 60s TTL）避免每请求 `canonical()` 系统调用
+- **Multipart toLowerInPlace**：头部键原地小写，消除临时 string 拷贝
+- **GenericConnection 写队列**：从 `deque<shared_ptr<string>>` 改为 `deque<shared_ptr<WriteNode>>`，统一内存/文件节点
+
+### Security
+- WebSocket Origin 白名单（CSWSH 防护）
+- HTTP Header CR/LF 注入防护（Response Splitting 防护）
+- Session `regenerate()` 防 Session 固定攻击
+- 路径段深度限制防 DoS
+
 ## [2.0.0] - 2026-04-19
 
 ### Fixed
@@ -93,7 +140,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Multipart Part 数量上限（DoS 防护）
 - Session ID 使用密码学安全的随机数生成
 
-[Unreleased]: https://github.com/Hical61/Hical/compare/v2.0.0...HEAD
+[Unreleased]: https://github.com/Hical61/Hical/compare/v2.1.0...HEAD
+[2.1.0]: https://github.com/Hical61/Hical/compare/v2.0.0...v2.1.0
 [2.0.0]: https://github.com/Hical61/Hical/compare/v1.0.1...v2.0.0
 [1.0.1]: https://github.com/Hical61/Hical/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/Hical61/Hical/releases/tag/v1.0.0

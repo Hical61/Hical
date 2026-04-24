@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(hical VERSION 2.0.0 LANGUAGES CXX)
+project(hical VERSION 2.1.0 LANGUAGES CXX)
 
 # C++26 反射可选支持
 option(HICAL_ENABLE_REFLECTION "Enable C++26 reflection (requires compatible compiler)" OFF)
@@ -28,7 +28,7 @@ else()
 endif()
 
 # 查找依赖库
-find_package(Boost 1.70 REQUIRED COMPONENTS json)
+find_package(Boost 1.78 REQUIRED COMPONENTS json)
 if(NOT TARGET Boost::system)
     # Boost.System is header-only since 1.69; Conan may not provide this target
     add_library(Boost::system ALIAS Boost::headers)

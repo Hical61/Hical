@@ -1,7 +1,9 @@
 #pragma once
 
 #include "PmrBuffer.h"
+#include <chrono>
 #include <cstddef>
+#include <filesystem>
 #include <functional>
 #include <memory>
 #include <string>
@@ -163,6 +165,22 @@ namespace hical
 		 * @return 字节数
 		 */
 		virtual size_t bytesReceived() const = 0;
+
+		/**
+		 * @brief 获取最后活跃时间
+		 * @return 最后一次读写数据的时间点
+		 */
+		virtual std::chrono::steady_clock::time_point lastActiveTime() const = 0;
+
+		// ============ 文件发送 ============
+
+		/**
+		 * @brief 发送文件（支持零拷贝优化）
+		 * @param path 文件路径
+		 * @param offset 起始偏移量（默认 0）
+		 * @param length 发送长度（-1 表示到文件末尾）
+		 */
+		virtual void sendFile(const std::filesystem::path& path, int64_t offset = 0, int64_t length = -1) = 0;
 
 		// ============ 回调设置（hical 风格命名）============
 

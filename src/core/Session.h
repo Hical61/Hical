@@ -10,6 +10,7 @@
 #include <functional>
 #include <memory>
 #include <mutex>
+#include <shared_mutex>
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -104,6 +105,31 @@ namespace hical
 		{
 			std::lock_guard<std::mutex> lk(mutex_);
 			data_.clear();
+		}
+
+		/**
+		 * @brief 从另一个 Session 迁移所有数据（用于 ID 再生场景）
+		 * @param other 源 Session，迁移后 other 的数据被清空
+		 * @note 调用者需确保 other 不会被并发访问（通常在 SessionManager 写锁保护下调用）
+		 */
+		void migrateFrom(Session& other)
+		{
+			// 先锁自己，再锁 other（固定顺序避免死锁：按 this 指针地址排序）
+			if (this < &other)
+			{
+				std::lock_guard<std::mutex> lk1(mutex_);
+				std::lock_guard<std::mutex> lk2(other.mutex_);
+				data_ = std::move(other.data_);
+				other.data_.clear();
+			}
+			else
+			{
+				std::lock_guard<std::mutex> lk1(other.mutex_);
+				std::lock_guard<std::mutex> lk2(mutex_);
+				data_ = std::move(other.data_);
+				other.data_.clear();
+			}
+			dirty_ = true;
 		}
 
 		/**
@@ -204,9 +230,19 @@ namespace hical
 		void destroy(const std::string& id);
 
 		/**
-		 * @brief 清理过期的 Session（应定期调用）
+		 * @brief 重新生成 Session ID（防 Session Fixation 攻击）
+		 * 保留 Session 内的所有数据，仅更换 ID。旧 ID 立即失效。
+		 * 典型场景：用户登录成功后调用此方法，确保攻击者无法利用预设的 Session ID。
+		 * @param oldId 当前 Session ID
+		 * @return 拥有相同数据但新 ID 的 Session，旧 ID 不存在时返回 nullptr
 		 */
-		void gc();
+		std::shared_ptr<Session> regenerate(const std::string& oldId);
+
+		/**
+		 * @brief 清理过期的 Session（应定期调用）
+		 * @param force true 时跳过 gcInterval 双重检查，强制执行清理
+		 */
+		void gc(bool force = true);
 
 		/**
 		 * @brief 获取当前活跃 Session 数量
@@ -236,9 +272,9 @@ namespace hical
 		static std::string generateId();
 
 		SessionOptions opts_;
-		std::mutex mutex_;
+		mutable std::shared_mutex mutex_;
 		std::unordered_map<std::string, std::shared_ptr<Session>> store_;
-		/// 上次懒 GC 触发时间（在 mutex_ 保护下访问）
+		/// 上次懒 GC 触发时间（在写锁保护下访问）
 		std::chrono::steady_clock::time_point lastGc_ = std::chrono::steady_clock::now();
 	};
 
@@ -279,6 +315,9 @@ namespace hical
 			if (!sessionId.empty())
 			{
 				session = manager->find(sessionId);
+				// find() 内部会检查过期：过期 Session 被删除并返回 nullptr，
+				// 随后走 create() 分配新 ID，下方 sessionId != session->id()
+				// 会触发 Set-Cookie 将新 ID 写回客户端。
 			}
 			if (!session)
 			{

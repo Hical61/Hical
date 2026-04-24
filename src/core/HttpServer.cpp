@@ -87,6 +87,14 @@ namespace hical
 				{
 					co_return co_await router_.dispatch(req);
 				});
+
+			// 预构建 WebSocket 升级专用中间件链（finalHandler 返回 200 占位）
+			// 避免每次 WS 升级都动态 buildChain 导致 N 次 std::function 堆分配
+			wsMiddlewareChain_ = middlewarePipeline_.buildFor(
+				[](HttpRequest&) -> Awaitable<HttpResponse>
+				{
+					co_return HttpResponse::ok("");
+				});
 		}
 
 		acceptor_ = std::make_unique<tcp::acceptor>(ioContext_);
@@ -172,6 +180,8 @@ namespace hical
 	{
 		while (running_.load())
 		{
+			bool needSleep = false;
+
 			try
 			{
 				auto socket = co_await acceptor_->async_accept(boost::asio::use_awaitable);
@@ -199,7 +209,26 @@ namespace hical
 				{
 					break;
 				}
-				// 瞬态错误（如 EMFILE）继续接受
+
+				// fd 耗尽处理：释放预留 fd → accept 并关闭 → 重新预留
+				if (e.code() == boost::asio::error::no_descriptors)
+				{
+					idleFd_.temporaryRelease();
+					{
+						boost::system::error_code acceptEc;
+						boost::asio::ip::tcp::socket tmpSocket(ioContext_);
+						acceptor_->accept(tmpSocket, acceptEc);
+					}
+					idleFd_.reacquire();
+				}
+
+				needSleep = true;
+			}
+
+			// MSVC 不允许在 catch 块内 co_await，延迟到块外
+			if (needSleep)
+			{
+				co_await hical::sleep(0.05);
 			}
 		}
 	}
@@ -305,27 +334,59 @@ namespace hical
 
 				auto beastReq = parser.release();
 
+				// 统一构造 HttpRequest（WS 和 HTTP 路径共用）
+				HttpRequest req(std::move(beastReq));
+
 				// 检查 WebSocket 升级请求
-				if (ws::is_upgrade(beastReq))
+				if (ws::is_upgrade(req.native()))
 				{
-					auto reqPath = std::string(beastReq.target());
-					auto pos = reqPath.find('?');
-					if (pos != std::string::npos)
-					{
-						reqPath = reqPath.substr(0, pos);
-					}
+					auto reqPath = std::string(req.path());
 
 					auto* wsRoute = router_.findWsRoute(reqPath);
 					if (wsRoute)
 					{
+						// H-2: Origin 白名单校验（CSWSH 防护）
+						if (!wsRoute->allowedOrigins.empty())
+						{
+							auto origin = std::string(req.header("Origin"));
+							if (wsRoute->allowedOrigins.count(origin) == 0)
+							{
+								HttpResponse forbiddenRes;
+								forbiddenRes.setStatus(HttpStatusCode::hForbidden);
+								forbiddenRes.setBody("403 Forbidden: Origin not allowed");
+								auto& nativeRes = forbiddenRes.native();
+								nativeRes.version(11);
+								nativeRes.set(http::field::connection, "close");
+								nativeRes.prepare_payload();
+								co_await http::async_write(socket, nativeRes, boost::asio::use_awaitable);
+								break;
+							}
+						}
+
+						// H-1: WebSocket 升级也走中间件管道（认证/限流/日志等）
+						if (wsMiddlewareChain_)
+						{
+							auto wsAuthRes = co_await wsMiddlewareChain_(req);
+
+							auto wsAuthCode = wsAuthRes.statusCode();
+							if (wsAuthCode != HttpStatusCode::hOk)
+							{
+								// 中间件拦截（如 401/403），返回 HTTP 响应拒绝升级
+								auto& nativeRes = wsAuthRes.native();
+								nativeRes.version(11);
+								nativeRes.set(http::field::connection, "close");
+								nativeRes.prepare_payload();
+								co_await http::async_write(socket, nativeRes, boost::asio::use_awaitable);
+								break;
+							}
+						}
+
 						// socket 所有权转移给 WebSocket 会话，标记 guard 跳过析构
 						guard.transferred = true;
-						co_await handleWebSocket(std::move(socket), std::move(beastReq), *wsRoute);
+						co_await handleWebSocket(std::move(socket), std::move(req.native()), *wsRoute);
 						co_return;
 					}
 				}
-
-				HttpRequest req(std::move(beastReq));
 
 				// 通过中间件管道 + 路由器分发
 				HttpResponse res;
@@ -403,10 +464,41 @@ namespace hical
 				co_await wsRoute.onConnect(*session);
 			}
 
+			// M-4: WebSocket 空闲超时（复用 idleTimeout_，默认 60 秒）
+			std::optional<boost::asio::steady_timer> wsDeadline;
+			auto wsTimeoutDuration = std::chrono::milliseconds(static_cast<int64_t>(idleTimeout_ * 1000));
+			if (idleTimeout_ > 0)
+			{
+				wsDeadline.emplace(co_await boost::asio::this_coro::executor);
+			}
+
 			// 消息循环
 			while (session->isOpen())
 			{
+				// 设置空闲超时（每次读取前重置）
+				if (wsDeadline)
+				{
+					wsDeadline->expires_after(wsTimeoutDuration);
+					wsDeadline->async_wait(
+						[&session](const boost::system::error_code& ec)
+						{
+							if (!ec && session && session->isOpen())
+							{
+								// 超时：关闭底层 socket 以中断 async_read
+								boost::system::error_code closeEc;
+								session->native().next_layer().close(closeEc);
+							}
+						});
+				}
+
 				auto msg = co_await session->receive();
+
+				// 收到消息后取消超时
+				if (wsDeadline)
+				{
+					wsDeadline->cancel();
+				}
+
 				if (!msg.has_value())
 				{
 					break;

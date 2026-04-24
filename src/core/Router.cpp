@@ -9,7 +9,7 @@ namespace hical
 	{
 		if (isParamRoute(path))
 		{
-			paramRoutes_.push_back({method, path, std::move(handler)});
+			paramRoutesByMethod_[method].push_back({method, path, std::move(handler)});
 		}
 		else
 		{
@@ -75,7 +75,27 @@ namespace hical
 					WsConnectCallback onConnect,
 					WsDisconnectCallback onDisconnect)
 	{
-		wsRoutes_.push_back({path, std::move(onMessage), std::move(onConnect), std::move(onDisconnect)});
+		WsRoute route;
+		route.path = path;
+		route.onMessage = std::move(onMessage);
+		route.onConnect = std::move(onConnect);
+		route.onDisconnect = std::move(onDisconnect);
+		wsRoutes_.push_back(std::move(route));
+	}
+
+	void Router::ws(const std::string& path,
+					WsOptions options,
+					WsMessageCallback onMessage,
+					WsConnectCallback onConnect,
+					WsDisconnectCallback onDisconnect)
+	{
+		WsRoute route;
+		route.path = path;
+		route.onMessage = std::move(onMessage);
+		route.onConnect = std::move(onConnect);
+		route.onDisconnect = std::move(onDisconnect);
+		route.allowedOrigins = std::move(options.allowedOrigins);
+		wsRoutes_.push_back(std::move(route));
 	}
 
 	const Router::WsRoute* Router::findWsRoute(const std::string& path) const
@@ -97,15 +117,24 @@ namespace hical
 		auto reqMethod = req.method();
 		auto rawPath = req.path();
 
-		// 快速路径：大多数 API 路径不含编码字符，直接用 string_view 避免堆分配
+		// 单次遍历：同时检查 urlDecode 需求和路径深度
 		bool needsDecode = false;
+		size_t segmentCount = 0;
 		for (char c : rawPath)
 		{
 			if (c == '%' || c == '+')
 			{
 				needsDecode = true;
-				break;
 			}
+			if (c == '/')
+			{
+				++segmentCount;
+			}
+		}
+
+		if (segmentCount > hMaxPathSegments)
+		{
+			co_return HttpResponse::badRequest("Path too deep");
 		}
 
 		std::string decodedStorage;
@@ -120,20 +149,6 @@ namespace hical
 			reqPath = rawPath;
 		}
 
-		// 路径深度快速检查，防止超深路径 DoS
-		size_t segmentCount = 0;
-		for (char c : reqPath)
-		{
-			if (c == '/')
-			{
-				++segmentCount;
-			}
-		}
-		if (segmentCount > hMaxPathSegments)
-		{
-			co_return HttpResponse::badRequest("Path too deep");
-		}
-
 		// 1. 优先查找静态路由（O(1) 哈希查找，透明哈希避免构造临时 std::string）
 		auto it = staticRoutes_.find(RouteKeyView {reqMethod, reqPath});
 		if (it != staticRoutes_.end())
@@ -141,22 +156,21 @@ namespace hical
 			co_return co_await it->second(req);
 		}
 
-		// 2. 回退到参数路由线性匹配
-		for (const auto& entry : paramRoutes_)
+		// 2. 回退到参数路由匹配（按 method 分组，仅扫描同 method 的路由）
+		auto groupIt = paramRoutesByMethod_.find(reqMethod);
+		if (groupIt != paramRoutesByMethod_.end())
 		{
-			if (entry.method != reqMethod)
+			for (const auto& entry : groupIt->second)
 			{
-				continue;
-			}
-
-			ParamList params;
-			if (matchParamPath(entry.path, reqPath, params))
-			{
-				for (const auto& [name, value] : params)
+				ParamList params;
+				if (matchParamPath(entry.path, reqPath, params))
 				{
-					req.setParam(name, value);
+					for (const auto& [name, value] : params)
+					{
+						req.setParam(name, value);
+					}
+					co_return co_await entry.handler(req);
 				}
-				co_return co_await entry.handler(req);
 			}
 		}
 
@@ -165,7 +179,12 @@ namespace hical
 
 	size_t Router::routeCount() const
 	{
-		return staticRoutes_.size() + paramRoutes_.size() + wsRoutes_.size();
+		size_t paramCount = 0;
+		for (const auto& [method, routes] : paramRoutesByMethod_)
+		{
+			paramCount += routes.size();
+		}
+		return staticRoutes_.size() + paramCount + wsRoutes_.size();
 	}
 
 	// ============ 辅助方法 ============

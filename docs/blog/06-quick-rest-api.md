@@ -59,7 +59,7 @@ int main()
     server.router().get("/api/status",
         [](const HttpRequest&) -> HttpResponse {
             return HttpResponse::json(
-                {{"status", "running"}, {"version", "2.0.0"},
+                {{"status", "running"}, {"version", "2.1.0"},
                  {"framework", "hical"}});
         });
 
@@ -86,7 +86,7 @@ int main()
 ```bash
 # JSON 响应
 curl http://localhost:8080/api/status
-# {"status":"running","version":"2.0.0","framework":"hical"}
+# {"status":"running","version":"2.1.0","framework":"hical"}
 
 # 路径参数
 curl http://localhost:8080/users/42
@@ -172,7 +172,7 @@ cmake --build build
 include(FetchContent)
 FetchContent_Declare(hical
     GIT_REPOSITORY https://github.com/Hical61/Hical.git
-    GIT_TAG        v2.0.0)
+    GIT_TAG        v2.1.0)
 FetchContent_MakeAvailable(hical)
 target_link_libraries(my_app PRIVATE hical_core)
 ```

@@ -1,19 +1,20 @@
 # Hical 编译与测试指南
 
-**最后更新：** 2026-04-10
+**最后更新：** 2026-04-24
 **支持平台：** Windows / Linux / macOS
 
 ---
 
 ## 1. 环境要求
 
-| 组件       | 最低版本                          | 用途                     |
-| ---------- | --------------------------------- | ------------------------ |
-| C++ 编译器 | GCC 10+ / Clang 15+ / MSVC 2022+ | C++20 编译器（协程支持） |
-| CMake      | 3.20+                             | 构建系统                 |
-| Ninja      | 1.10+                             | 构建工具（比 Make 更快） |
-| Boost      | 1.70+                             | Asio / Beast / JSON      |
-| OpenSSL    | 3.0+                              | SSL/TLS 支持             |
+| 组件        | 最低版本                         | 用途                     |
+| ----------- | -------------------------------- | ------------------------ |
+| C++ 编译器  | GCC 14+ / Clang 20+ / MSVC 2022+ | C++20 编译器（协程支持） |
+| CMake       | 3.20+                            | 构建系统                 |
+| Ninja       | 1.10+                            | 构建工具（比 Make 更快） |
+| Boost       | 1.78+                            | Asio / Beast / JSON      |
+| OpenSSL     | 3.0+                             | SSL/TLS 支持             |
+| liburing    | —（Linux 可选）                  | Boost.Asio 异步文件 I/O  |
 | Google Test | 1.10+                            | 单元测试框架             |
 
 ---
@@ -52,24 +53,24 @@ openssl version    # 应显示 OpenSSL 3.x.x
 ```bash
 sudo apt update
 sudo apt install -y build-essential g++ cmake ninja-build \
-                    libboost-all-dev libssl-dev libgtest-dev
+                    libboost-all-dev libssl-dev libgtest-dev liburing-dev
 ```
 
-> Ubuntu 22.04+ 开箱即用（GCC 12+、Boost 1.74+）。Ubuntu 20.04 的 GCC 9 不支持 C++20 协程，需升级：
+> Ubuntu 24.04+ 开箱即用（GCC 14+、Boost 1.83+）。Ubuntu 22.04 的 Boost 1.74 不满足 1.78+ 要求，需手动升级 Boost 或使用 Ubuntu 24.04。
 
 ```bash
-# Ubuntu 20.04 升级 GCC
+# Ubuntu 22.04 升级 GCC
 sudo add-apt-repository ppa:ubuntu-toolchain-r/test
 sudo apt update
-sudo apt install g++-12
+sudo apt install g++-14
 ```
 
 **验证安装：**
 
 ```bash
-g++ --version                        # 需要 10+
+g++ --version                        # 需要 14+
 cmake --version                      # 需要 3.20+
-dpkg -s libboost-dev | grep Version  # 需要 1.70+
+dpkg -s libboost-dev | grep Version  # 需要 1.78+
 openssl version                      # 需要 3.0+
 ```
 
@@ -78,21 +79,21 @@ openssl version                      # 需要 3.0+
 ```bash
 # Fedora
 sudo dnf install -y gcc-c++ cmake ninja-build \
-                    boost-devel openssl-devel gtest-devel
+                    boost-devel openssl-devel gtest-devel liburing-devel
 
 # RHEL 8 / CentOS Stream 8（需启用 EPEL 和 PowerTools）
 sudo dnf install -y epel-release
 sudo dnf config-manager --set-enabled powertools
 sudo dnf install -y gcc-c++ cmake ninja-build \
-                    boost-devel openssl-devel gtest-devel
+                    boost-devel openssl-devel gtest-devel liburing-devel
 ```
 
 **验证安装：**
 
 ```bash
-g++ --version      # 需要 10+
+g++ --version      # 需要 14+
 cmake --version    # 需要 3.20+
-rpm -q boost-devel # 需要 1.70+
+rpm -q boost-devel # 需要 1.78+
 openssl version    # 需要 3.0+
 ```
 
@@ -129,7 +130,7 @@ brew install cmake ninja boost openssl@3 googletest
 ```bash
 clang++ --version                   # 需要 Xcode 14+（Apple Clang 14+）
 cmake --version                     # 需要 3.20+
-brew list --versions boost          # 需要 1.70+
+brew list --versions boost          # 需要 1.78+
 $(brew --prefix openssl@3)/bin/openssl version  # 需要 3.0+
 ```
 
@@ -155,8 +156,8 @@ cmake -B build -G "Ninja" -DCMAKE_PREFIX_PATH=C:/msys64/mingw64
 # Linux (Ubuntu / Fedora / Arch)
 cmake -B build -G "Ninja"
 
-# Linux (Ubuntu 20.04 — 需指定升级后的编译器)
-cmake -B build -G "Ninja" -DCMAKE_CXX_COMPILER=g++-12
+# Linux (Ubuntu 22.04 — 需指定升级后的编译器)
+cmake -B build -G "Ninja" -DCMAKE_CXX_COMPILER=g++-14
 
 # macOS (Homebrew)
 cmake -B build -G "Ninja" \
@@ -191,13 +192,13 @@ cmake --build build --clean-first
 
 ### 3.4 各平台注意事项
 
-| 平台 | 注意事项 |
-|------|----------|
-| Windows (MSYS2) | 必须指定 `CMAKE_PREFIX_PATH=C:/msys64/mingw64`，否则找不到 Boost/OpenSSL |
-| Windows (MSVC) | hical CMakeLists.txt 已自动添加 `/utf-8` 和 `_WIN32_WINNT=0x0A00` |
-| Linux | 系统包管理器安装的库在标准路径，无需额外指定 |
-| macOS | **必须**指定 `OPENSSL_ROOT_DIR`，否则 CMake 会找到系统自带的 LibreSSL 而非 OpenSSL 3.x |
-| macOS (Apple Silicon) | `brew --prefix` 自动返回 `/opt/homebrew` 前缀，无需手动区分架构 |
+| 平台                  | 注意事项                                                                               |
+| --------------------- | -------------------------------------------------------------------------------------- |
+| Windows (MSYS2)       | 必须指定 `CMAKE_PREFIX_PATH=C:/msys64/mingw64`，否则找不到 Boost/OpenSSL               |
+| Windows (MSVC)        | hical CMakeLists.txt 已自动添加 `/utf-8` 和 `_WIN32_WINNT=0x0A00`                      |
+| Linux                 | 系统包管理器安装的库在标准路径，无需额外指定                                           |
+| macOS                 | **必须**指定 `OPENSSL_ROOT_DIR`，否则 CMake 会找到系统自带的 LibreSSL 而非 OpenSSL 3.x |
+| macOS (Apple Silicon) | `brew --prefix` 自动返回 `/opt/homebrew` 前缀，无需手动区分架构                        |
 
 ---
 
@@ -253,6 +254,27 @@ ctest --test-dir build --output-on-failure -j4
 
 # WebSocket 测试
 ./build/tests/test_websocket.exe
+
+# C++20 Concepts 编译期约束测试
+./build/tests/test_concepts.exe
+
+# MetaJson + MetaRoutes 反射层测试
+./build/tests/test_reflection.exe
+
+# Cookie 解析与 Set-Cookie 测试
+./build/tests/test_cookie.exe
+
+# 静态文件服务测试
+./build/tests/test_static_files.exe
+
+# Multipart 解析测试
+./build/tests/test_multipart.exe
+
+# Session 生命周期 / 线程安全 / regenerate 测试
+./build/tests/test_session.exe
+
+# 完整 HTTP 请求/响应周期集成测试
+./build/tests/test_integration.exe
 ```
 
 ### 4.3 运行路由性能基准测试
@@ -302,25 +324,32 @@ MSYS_NO_PATHCONV=1 openssl req -x509 -newkey rsa:2048 \
     -days 365 -nodes -subj "/CN=localhost"
 ```
 
-### 4.6 测试用例清单（145 个）
+### 4.6 测试用例清单（22 个测试套件）
 
-| 测试文件                 | 用例数 | 覆盖范围                                                    |
-| ------------------------ | ------ | ----------------------------------------------------------- |
-| test_basic               | 2      | Boost 版本、C++ 标准                                        |
-| test_error               | 17     | 错误码映射、NetworkError 结构体                             |
-| test_asio_event_loop     | 10     | run/stop/post/dispatch/定时器/pmr                           |
-| test_asio_tcp_connection | 8      | 连接/收发/回调/上下文/PmrBuffer                             |
-| test_memory_pool         | 21     | 单例/全局池/线程本地池/请求池/TrackedResource/PmrBuffer     |
-| test_asio_timer          | 8      | 单次/周期/取消/精度/EventLoop 集成                          |
-| test_ssl_connection      | 9      | SslContext/SSL 握手/加密通信/类型别名                       |
-| test_coroutine           | 5      | sleep/sleepFor/coSpawn/多协程/返回值                        |
-| test_http_types          | 23     | HttpMethod/HttpStatusCode/HttpRequest/HttpResponse/工厂方法 |
-| test_router              | 14     | 路由注册/分发/404/协程/JSON/宏/路径参数/{param}             |
-| test_router_perf         | 5      | 静态路由首条/末条/未命中/参数路由/1000 路由性能             |
-| test_tcp_server          | 8      | EventLoopPool/TcpServer(accept/消息/IO 线程池)              |
-| test_middleware          | 5      | 空管道/单层/洋葱顺序/拦截/响应修改                          |
-| test_http_server         | 7      | GET/POST/404/路径参数/中间件/JSON                           |
-| test_websocket           | 3      | Echo/连接回调/未注册路径                                    |
+| 测试文件                 | 用例数 | 覆盖范围                                                       |
+| ------------------------ | ------ | -------------------------------------------------------------- |
+| test_basic               | 2      | Boost 版本、C++ 标准                                           |
+| test_error               | 17     | 错误码映射、NetworkError 结构体                                |
+| test_asio_event_loop     | 10     | run/stop/post/dispatch/定时器/pmr                              |
+| test_asio_tcp_connection | 8      | 连接/收发/回调/上下文/PmrBuffer                                |
+| test_memory_pool         | 21     | 单例/全局池/线程本地池/请求池/TrackedResource/PmrBuffer        |
+| test_asio_timer          | 8      | 单次/周期/取消/精度/EventLoop 集成                             |
+| test_ssl_connection      | 9      | SslContext/SSL 握手/加密通信/类型别名                          |
+| test_coroutine           | 5      | sleep/sleepFor/coSpawn/多协程/返回值                           |
+| test_http_types          | 23     | HttpMethod/HttpStatusCode/HttpRequest/HttpResponse/工厂方法    |
+| test_router              | 14     | 路由注册/分发/404/协程/JSON/宏/路径参数/{param}                |
+| test_router_perf         | 5      | 静态路由首条/末条/未命中/参数路由/1000 路由性能                |
+| test_tcp_server          | 8      | EventLoopPool/TcpServer(accept/消息/IO 线程池)                 |
+| test_middleware          | 5      | 空管道/单层/洋葱顺序/拦截/响应修改                             |
+| test_http_server         | 7      | GET/POST/404/路径参数/中间件/JSON                              |
+| test_websocket           | 3      | Echo/连接回调/未注册路径                                       |
+| test_concepts            | —      | C++20 Concepts 编译期约束验证                                  |
+| test_reflection          | 35     | MetaJson 装饰器/alias/required/ignore/unsigned/backward compat |
+| test_cookie              | —      | Cookie 解析/Set-Cookie 头/CookieOptions                        |
+| test_static_files        | —      | 静态文件服务/ETag 304/路径遍历防护/大文件拒绝                  |
+| test_multipart           | —      | multipart/form-data 解析/256 part 上限                         |
+| test_session             | —      | Session 生命周期/线程安全/regenerate/migrateFrom/并发          |
+| test_integration         | —      | 完整 HTTP 请求/响应周期集成测试                                |
 
 ---
 
@@ -505,28 +534,37 @@ hical/
 │   ├── CMakeLists.txt          # 核心库构建配置
 │   ├── core/
 │   │   ├── EventLoop.h         # 事件循环接口
-│   │   ├── TcpConnection.h     # TCP 连接接口
+│   │   ├── TcpConnection.h     # TCP 连接接口（含 sendFile/lastActiveTime）
 │   │   ├── Timer.h / Concepts.h # 定时器接口 / C++ Concepts
-│   │   ├── PmrBuffer.h         # pmr 统一缓冲区
+│   │   ├── PmrBuffer.h         # pmr 统一缓冲区（指数增长 + 自适应缩容）
 │   │   ├── MemoryPool.h/.cpp   # pmr 内存池管理器
 │   │   ├── Error.h/.cpp        # 错误码体系
 │   │   ├── InetAddress.h/.cpp  # 网络地址封装
 │   │   ├── SslContext.h/.cpp   # SSL/TLS 上下文配置
 │   │   ├── Coroutine.h         # 协程工具（Awaitable/sleep/coSpawn）
 │   │   ├── HttpTypes.h         # HTTP 方法/状态码枚举
-│   │   ├── HttpRequest.h/.cpp  # HttpRequest 封装（含路径参数）
-│   │   ├── HttpResponse.h/.cpp # HttpResponse 封装 + 工厂方法
-│   │   ├── Router.h/.cpp       # 路由器（{param}/WS/HICAL_ROUTE）
-│   │   ├── Middleware.h/.cpp   # 中间件系统（洋葱模型）
-│   │   ├── HttpServer.h/.cpp   # HTTP 服务器（高层封装）
-│   │   └── WebSocket.h/.cpp    # WebSocket 会话
+│   │   ├── HttpRequest.h/.cpp  # HttpRequest 封装（string_view 返回 + jsonBody 缓存）
+│   │   ├── HttpResponse.h/.cpp # HttpResponse 封装 + 工厂方法（CR/LF 防护）
+│   │   ├── Cookie.h            # CookieOptions 结构体
+│   │   ├── Router.h/.cpp       # 路由器（{param}/WS + WsOptions Origin 白名单）
+│   │   ├── Middleware.h/.cpp   # 中间件系统（洋葱模型 + buildFor）
+│   │   ├── HttpServer.h/.cpp   # HTTP 服务器（高层封装 + WS 中间件预构建 + fd 防护）
+│   │   ├── WebSocket.h/.cpp    # WebSocket 会话
+│   │   ├── StaticFiles.h       # 静态文件服务（异步 I/O + PathCache + ETag）
+│   │   ├── Multipart.h/.cpp    # multipart/form-data 解析（dual API）
+│   │   ├── Session.h/.cpp      # Session 会话管理（shared_mutex + regenerate）
+│   │   ├── IdleFd.h            # 空闲 fd 预留（EMFILE 防护）
+│   │   ├── WriteNode.h         # 多态写队列节点（内存/文件）
+│   │   ├── Reflection.h / MetaJson.h / MetaRoutes.h  # C++26 反射层
+│   │   └── Version.h.in        # CMake 配置版本头
 │   └── asio/
 │       ├── AsioEventLoop.h/.cpp      # Asio 事件循环
-│       ├── GenericConnection.h/.cpp  # TCP/SSL 统一连接
+│       ├── GenericConnection.h/.cpp  # TCP/SSL 统一连接（WriteNode 写队列 + sendFile）
+│       ├── SslConnection.h           # SSL 连接类型别名
 │       ├── AsioTimer.h/.cpp          # Asio 定时器
 │       ├── EventLoopPool.h/.cpp      # 多线程事件循环池
-│       └── TcpServer.h/.cpp          # TCP 服务器
-├── tests/                     # 15 个测试套件，145 个用例
+│       └── TcpServer.h/.cpp          # TCP 服务器（空闲超时 + IdleFd 防护）
+├── tests/                     # 22 个测试套件
 ├── examples/
 │   ├── echo_server.cpp        # Echo Server（PoC）
 │   ├── pmr_poc.cpp            # pmr PoC

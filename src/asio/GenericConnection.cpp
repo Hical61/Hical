@@ -1,4 +1,5 @@
 #include "GenericConnection.h"
+#include "SslConnection.h"
 #include "AsioEventLoop.h"
 
 namespace hical

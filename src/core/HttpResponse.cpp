@@ -5,6 +5,24 @@
 namespace hical
 {
 
+	namespace
+	{
+
+		/// HTTP Response Splitting 防护：检测字符串是否包含 CR/LF（单次遍历）
+		bool containsCRLF(const std::string& s)
+		{
+			for (char c : s)
+			{
+				if (c == '\r' || c == '\n')
+				{
+					return true;
+				}
+			}
+			return false;
+		}
+
+	} // namespace
+
 	HttpResponse::HttpResponse()
 	{
 		res_.version(11); // HTTP/1.1
@@ -37,6 +55,11 @@ namespace hical
 
 	void HttpResponse::setHeader(const std::string& name, const std::string& value)
 	{
+		// HTTP Response Splitting 防护：拒绝含 CR/LF 的头部
+		if (containsCRLF(name) || containsCRLF(value))
+		{
+			return;
+		}
 		res_.set(name, value);
 	}
 
@@ -62,10 +85,6 @@ namespace hical
 	void HttpResponse::setCookie(const std::string& name, const std::string& value, const CookieOptions& options)
 	{
 		// HTTP Response Splitting 防护：name/value 不允许包含 CR/LF
-		auto containsCRLF = [](const std::string& s) -> bool
-		{
-			return s.find('\r') != std::string::npos || s.find('\n') != std::string::npos;
-		};
 		if (containsCRLF(name) || containsCRLF(value))
 		{
 			// 拒绝含控制字符的 Cookie，静默忽略（生产环境应记录告警日志）

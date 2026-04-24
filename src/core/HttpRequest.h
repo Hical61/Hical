@@ -10,6 +10,8 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <utility>
+#include <vector>
 
 namespace hical
 {
@@ -60,9 +62,9 @@ namespace hical
 		/**
 		 * @brief 获取指定头部字段
 		 * @param name 头部字段名
-		 * @return 字段值，未找到返回空字符串
+		 * @return 字段值的 string_view（生命周期与请求对象一致），未找到返回空
 		 */
-		std::string header(const std::string& name) const;
+		std::string_view header(std::string_view name) const;
 
 		/**
 		 * @brief 获取消息体
@@ -71,10 +73,10 @@ namespace hical
 		const std::string& body() const;
 
 		/**
-		 * @brief 将消息体解析为 JSON
-		 * @return boost::json::value
+		 * @brief 将消息体解析为 JSON（带缓存，多次调用零拷贝）
+		 * @return boost::json::value 的常引用
 		 */
-		boost::json::value jsonBody() const;
+		const boost::json::value& jsonBody() const;
 
 		/**
 		 * @brief 将消息体反序列化为指定类型（反射驱动）
@@ -87,9 +89,9 @@ namespace hical
 
 		/**
 		 * @brief 获取 Content-Type 头
-		 * @return Content-Type 字符串
+		 * @return Content-Type string_view
 		 */
-		std::string contentType() const;
+		std::string_view contentType() const;
 
 		/**
 		 * @brief 获取底层 Beast 请求的引用
@@ -128,10 +130,9 @@ namespace hical
 		/**
 		 * @brief 获取路径参数
 		 * @param name 参数名（如 "id"）
-		 * @return 参数值，未找到返回空字符串
-		 * 路径 "/users/{id}" 匹配 "/users/123" 时，param("id") 返回 "123"
+		 * @return 参数值的常引用，未找到返回空字符串引用
 		 */
-		std::string param(const std::string& name) const;
+		const std::string& param(const std::string& name) const;
 
 		/**
 		 * @brief 设置路径参数（由 Router 内部调用）
@@ -152,9 +153,9 @@ namespace hical
 		/**
 		 * @brief 获取指定名称的 Cookie 值
 		 * @param name Cookie 名称
-		 * @return Cookie 值，不存在返回空字符串
+		 * @return Cookie 值的常引用，不存在返回空字符串引用
 		 */
-		std::string cookie(const std::string& name) const;
+		const std::string& cookie(const std::string& name) const;
 
 		/**
 		 * @brief 获取所有 Cookie
@@ -216,8 +217,9 @@ namespace hical
 		void parseCookies() const;
 
 		BeastRequest req_;
-		std::unordered_map<std::string, std::string> pathParams_;
+		std::vector<std::pair<std::string, std::string>> pathParams_;
 		mutable std::optional<std::unordered_map<std::string, std::string>> cookies_;
+		mutable std::optional<boost::json::value> cachedJsonBody_;
 		std::unordered_map<std::string, std::any> attributes_;
 	};
 

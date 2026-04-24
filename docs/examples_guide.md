@@ -30,7 +30,7 @@
 | ---------- | ------------------------------------------------ |
 | C++ 编译器 | GCC 14+ / Clang 20+ / MSVC 2022+（需支持 C++20） |
 | CMake      | 3.20+                                            |
-| Boost      | 1.70+（Asio、Beast、JSON）                       |
+| Boost      | 1.78+（Asio、Beast、JSON）                       |
 | OpenSSL    | 3.0+                                             |
 
 **MSYS2 MINGW64 快速安装：**

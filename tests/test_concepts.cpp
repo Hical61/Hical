@@ -1,7 +1,7 @@
 #include "core/Concepts.h"
 #include "asio/AsioEventLoop.h"
 #include "asio/AsioTimer.h"
-#include "asio/GenericConnection.h"
+#include "asio/SslConnection.h"
 #include <gtest/gtest.h>
 
 using namespace hical;

@@ -18,14 +18,14 @@ See [docs/build_and_test_guide.md](docs/build_and_test_guide.md) for full detail
 
 **Requirements:**
 
-| Dependency | Version |
-|-----------|---------|
-| C++ Standard | C++20 |
-| Boost | >= 1.70 (Asio, Beast, System, JSON) |
-| CMake | >= 3.20 |
-| OpenSSL | Required |
-| Google Test | Required |
-| Compiler | GCC 14+ / Clang 20+ / MSVC 2022+ |
+| Dependency   | Version                             |
+| ------------ | ----------------------------------- |
+| C++ Standard | C++20                               |
+| Boost        | >= 1.78 (Asio, Beast, System, JSON) |
+| CMake        | >= 3.20                             |
+| OpenSSL      | Required                            |
+| Google Test  | Required                            |
+| Compiler     | GCC 14+ / Clang 20+ / MSVC 2022+    |
 
 **Quick build:**
 
@@ -47,17 +47,17 @@ clang-format -i <files>
 
 **Naming conventions** (from `.clang-tidy`):
 
-| Element | Convention | Example |
-|---------|-----------|---------|
-| Class | `C` + PascalCase | `CHttpServer` |
-| Struct | `S` + PascalCase | `SRequestData` |
-| Enum | `E` + PascalCase | `EHttpMethod` |
-| Interface (abstract) | `I` + PascalCase | `IEventLoop` |
-| Function / Method | camelBack | `handleRequest` |
-| Member variable | `m_` + camelBack | `m_bufferSize` |
-| Global variable | `g_` + camelBack | `g_instanceCount` |
-| Constant | `h` + PascalCase | `hDefaultSize` |
-| Macro | UPPER_CASE | `HICAL_LOG_INFO` |
+| Element              | Convention       | Example           |
+| -------------------- | ---------------- | ----------------- |
+| Class                | `C` + PascalCase | `CHttpServer`     |
+| Struct               | `S` + PascalCase | `SRequestData`    |
+| Enum                 | `E` + PascalCase | `EHttpMethod`     |
+| Interface (abstract) | `I` + PascalCase | `IEventLoop`      |
+| Function / Method    | camelBack        | `handleRequest`   |
+| Member variable      | `m_` + camelBack | `m_bufferSize`    |
+| Global variable      | `g_` + camelBack | `g_instanceCount` |
+| Constant             | `h` + PascalCase | `hDefaultSize`    |
+| Macro                | UPPER_CASE       | `HICAL_LOG_INFO`  |
 
 **Style:** 4-space indentation, 120-column limit, Allman brace style.
 
@@ -124,14 +124,14 @@ Use the [issue templates](https://github.com/Hical61/Hical/issues/new/choose). P
 
 **依赖项：**
 
-| 依赖项 | 版本要求 |
-|--------|---------|
-| C++ 标准 | C++20 |
-| Boost | >= 1.70（Asio、Beast、System、JSON） |
-| CMake | >= 3.20 |
-| OpenSSL | 必需 |
-| Google Test | 必需 |
-| 编译器 | GCC 14+ / Clang 20+ / MSVC 2022+ |
+| 依赖项      | 版本要求                             |
+| ----------- | ------------------------------------ |
+| C++ 标准    | C++20                                |
+| Boost       | >= 1.78（Asio、Beast、System、JSON） |
+| CMake       | >= 3.20                              |
+| OpenSSL     | 必需                                 |
+| Google Test | 必需                                 |
+| 编译器      | GCC 14+ / Clang 20+ / MSVC 2022+     |
 
 **快速构建：**
 
@@ -153,17 +153,17 @@ clang-format -i <files>
 
 **命名约定**（来自 `.clang-tidy`）：
 
-| 元素 | 约定 | 示例 |
-|------|------|------|
-| 类 | `C` + PascalCase | `CHttpServer` |
-| 结构体 | `S` + PascalCase | `SRequestData` |
-| 枚举 | `E` + PascalCase | `EHttpMethod` |
-| 接口（抽象类） | `I` + PascalCase | `IEventLoop` |
-| 函数 / 方法 | camelBack | `handleRequest` |
-| 成员变量 | `m_` + camelBack | `m_bufferSize` |
-| 全局变量 | `g_` + camelBack | `g_instanceCount` |
-| 常量 | `h` + PascalCase | `hDefaultSize` |
-| 宏 | UPPER_CASE | `HICAL_LOG_INFO` |
+| 元素           | 约定             | 示例              |
+| -------------- | ---------------- | ----------------- |
+| 类             | `C` + PascalCase | `CHttpServer`     |
+| 结构体         | `S` + PascalCase | `SRequestData`    |
+| 枚举           | `E` + PascalCase | `EHttpMethod`     |
+| 接口（抽象类） | `I` + PascalCase | `IEventLoop`      |
+| 函数 / 方法    | camelBack        | `handleRequest`   |
+| 成员变量       | `m_` + camelBack | `m_bufferSize`    |
+| 全局变量       | `g_` + camelBack | `g_instanceCount` |
+| 常量           | `h` + PascalCase | `hDefaultSize`    |
+| 宏             | UPPER_CASE       | `HICAL_LOG_INFO`  |
 
 **风格：** 4 空格缩进，120 列限制，Allman 大括号风格。
 

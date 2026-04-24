@@ -1,5 +1,8 @@
 #include "TcpServer.h"
 #include "GenericConnection.h"
+#include "SslConnection.h"
+#include <algorithm>
+#include <vector>
 
 namespace hical
 {
@@ -64,6 +67,18 @@ namespace hical
 				co_await acceptLoop();
 			},
 			boost::asio::detached);
+
+		// 启动空闲连接超时扫描协程
+		if (idleTimeout_ > 0)
+		{
+			boost::asio::co_spawn(
+				baseLoop_->getIoContext(),
+				[this, aliveFlag]() -> Awaitable<void>
+				{
+					co_await idleCheckLoop();
+				},
+				boost::asio::detached);
+		}
 	}
 
 	void TcpServer::stop()
@@ -135,6 +150,11 @@ namespace hical
 		return running_.load();
 	}
 
+	void TcpServer::setIdleTimeout(double seconds)
+	{
+		idleTimeout_ = seconds;
+	}
+
 	AsioEventLoop* TcpServer::getNextIoLoop()
 	{
 		if (ioPool_ && ioPool_->size() > 0)
@@ -162,6 +182,8 @@ namespace hical
 
 		while (running_.load() && alive_->load())
 		{
+			bool needSleep = false;
+
 			try
 			{
 				tcp::socket socket = co_await acceptor_.async_accept(boost::asio::use_awaitable);
@@ -235,7 +257,62 @@ namespace hical
 				{
 					break; // acceptor 被关闭
 				}
-				// 瞬态错误（如 EMFILE 文件描述符耗尽）继续接受
+
+				// fd 耗尽处理：释放预留 fd → accept 并关闭 → 重新预留
+				if (e.code() == boost::asio::error::no_descriptors)
+				{
+					idleFd_.temporaryRelease();
+					{
+						boost::system::error_code acceptEc;
+						tcp::socket tmpSocket(baseLoop_->getIoContext());
+						acceptor_.accept(tmpSocket, acceptEc);
+					}
+					idleFd_.reacquire();
+				}
+
+				needSleep = true;
+			}
+
+			// MSVC 不允许在 catch 块内 co_await，延迟到块外
+			if (needSleep)
+			{
+				co_await hical::sleep(0.05);
+			}
+		}
+	}
+
+	Awaitable<void> TcpServer::idleCheckLoop()
+	{
+		// 扫描间隔：超时时间的 1/4，至少 1 秒
+		auto intervalSec = (std::max)(1.0, idleTimeout_ / 4.0);
+
+		while (running_.load() && alive_->load())
+		{
+			co_await hical::sleep(intervalSec);
+
+			if (!running_.load() || !alive_->load())
+			{
+				break;
+			}
+
+			auto now = std::chrono::steady_clock::now();
+			auto timeout = std::chrono::milliseconds(static_cast<int64_t>(idleTimeout_ * 1000));
+
+			std::vector<TcpConnection::Ptr> toClose;
+			{
+				std::lock_guard<std::mutex> lock(connectionsMutex_);
+				for (const auto& conn : connections_)
+				{
+					if (now - conn->lastActiveTime() > timeout)
+					{
+						toClose.push_back(conn);
+					}
+				}
+			}
+
+			for (const auto& conn : toClose)
+			{
+				conn->close();
 			}
 		}
 	}

@@ -5,17 +5,25 @@
 #include "../core/PmrBuffer.h"
 #include "../core/InetAddress.h"
 #include "../core/MemoryPool.h"
+#include "../core/WriteNode.h"
 #include "AsioEventLoop.h"
 #include <boost/asio.hpp>
 #include <boost/asio/ssl.hpp>
+#ifdef BOOST_ASIO_HAS_FILE
+	#include <boost/asio/random_access_file.hpp>
+#endif
 #include <boost/asio/awaitable.hpp>
 #include <boost/asio/use_awaitable.hpp>
 #include <boost/asio/co_spawn.hpp>
 #include <boost/asio/detached.hpp>
+#include <array>
 #include <atomic>
+#include <chrono>
 #include <deque>
+#include <fstream>
 #include <memory>
 #include <mutex>
+#include <span>
 #include <type_traits>
 
 namespace hical
@@ -92,6 +100,11 @@ namespace hical
 		EventLoop* getLoop() override;
 		size_t bytesSent() const override;
 		size_t bytesReceived() const override;
+		std::chrono::steady_clock::time_point lastActiveTime() const override;
+
+		// ============ 文件发送 ============
+
+		void sendFile(const std::filesystem::path& path, int64_t offset = 0, int64_t length = -1) override;
 
 		// ============ 回调设置（hical 风格命名）============
 		// @warning 线程安全约束：所有回调必须在 connectEstablished() 调用前设置完毕。
@@ -170,8 +183,23 @@ namespace hical
 		void handleClose();
 		void shutdownInLoop();
 		void closeInLoop();
-		void sendInLoop(const char* data, size_t len);
+
+		/**
+		 * @brief 刷新最后活跃时间（readLoop/writeLoop 中调用）
+		 */
+		void updateLastActiveTime()
+		{
+			lastActiveTimeMs_.store(std::chrono::duration_cast<std::chrono::milliseconds>(
+										std::chrono::steady_clock::now().time_since_epoch())
+										.count(),
+									std::memory_order_relaxed);
+		}
+
+		void enqueueNode(std::shared_ptr<WriteNode> node);
 		void tryStartWrite();
+
+		// 协程式文件发送（writeLoop 内部调用）
+		boost::asio::awaitable<size_t> sendFileNode(const FileWriteNode& node);
 
 		AsioEventLoop* loop_;
 		SocketType socket_;
@@ -184,8 +212,8 @@ namespace hical
 		// 接收缓冲区（pmr 分配）
 		PmrBuffer inputBuffer_;
 
-		// 发送队列
-		std::deque<std::shared_ptr<std::string>> writeQueue_;
+		// 发送队列（多态写节点：内存数据 / 文件）
+		std::deque<std::shared_ptr<WriteNode>> writeQueue_;
 		size_t queuedBytes_ {0}; // 发送队列累计字节数（O(1) 高水位线检查）
 		std::mutex writeMutex_;
 		std::atomic<bool> writing_ {false};
@@ -193,6 +221,11 @@ namespace hical
 		// 统计
 		std::atomic<size_t> bytesSent_ {0};
 		std::atomic<size_t> bytesReceived_ {0};
+
+		// 最后活跃时间（用于空闲连接超时检测）
+		std::atomic<int64_t> lastActiveTimeMs_ {
+			std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch())
+				.count()};
 
 		// 回调（hical 风格）
 		MessageCallback messageCallback_;
@@ -210,9 +243,6 @@ namespace hical
 
 	/** 普通 TCP 连接 */
 	using PlainConnection = GenericConnection<boost::asio::ip::tcp::socket>;
-
-	/** SSL/TLS 加密连接 */
-	using SslConnection = GenericConnection<boost::asio::ssl::stream<boost::asio::ip::tcp::socket>>;
 
 	// ============ 模板实现（header-only 部分） ============
 
@@ -280,20 +310,7 @@ namespace hical
 			return;
 		}
 
-		if (loop_->isInLoopThread())
-		{
-			sendInLoop(data, len);
-		}
-		else
-		{
-			auto msg = std::make_shared<std::string>(data, len);
-			auto self = sharedThis();
-			loop_->post(
-				[this, msg, self]()
-				{
-					sendInLoop(msg->data(), msg->size());
-				});
-		}
+		enqueueNode(std::make_shared<MemoryWriteNode>(std::make_shared<std::string>(data, len)));
 	}
 
 	template <typename SocketType>
@@ -310,31 +327,7 @@ namespace hical
 			return;
 		}
 
-		// move 语义：直接转移到 writeQueue_，避免拷贝
-		auto msgPtr = std::make_shared<std::string>(std::move(msg));
-		if (loop_->isInLoopThread())
-		{
-			{
-				std::lock_guard<std::mutex> lock(writeMutex_);
-				queuedBytes_ += msgPtr->size();
-				writeQueue_.push_back(std::move(msgPtr));
-			}
-			tryStartWrite();
-		}
-		else
-		{
-			auto self = sharedThis();
-			loop_->post(
-				[this, msgPtr = std::move(msgPtr), self]()
-				{
-					{
-						std::lock_guard<std::mutex> lock(writeMutex_);
-						queuedBytes_ += msgPtr->size();
-						writeQueue_.push_back(std::move(msgPtr));
-					}
-					tryStartWrite();
-				});
-		}
+		enqueueNode(std::make_shared<MemoryWriteNode>(std::move(msg)));
 	}
 
 	template <typename SocketType>
@@ -346,50 +339,80 @@ namespace hical
 	template <typename SocketType>
 	void GenericConnection<SocketType>::send(PmrBuffer&& buffer)
 	{
-		// 提取数据为 std::string 后走 move 通道，避免退化为 const char* 拷贝路径
-		send(buffer.readAll());
+		if (state_.load() != State::hConnected)
+		{
+			return;
+		}
+
+		enqueueNode(std::make_shared<MemoryWriteNode>(buffer.readAll()));
 	}
 
 	template <typename SocketType>
 	void GenericConnection<SocketType>::send(const std::shared_ptr<std::string>& msgPtr)
-	{
-		send(msgPtr->data(), msgPtr->size());
-	}
-
-	template <typename SocketType>
-	void GenericConnection<SocketType>::send(const std::shared_ptr<PmrBuffer>& msgPtr)
-	{
-		send(msgPtr->peek(), msgPtr->readableBytes());
-	}
-
-	template <typename SocketType>
-	void GenericConnection<SocketType>::sendInLoop(const char* data, size_t len)
 	{
 		if (state_.load() != State::hConnected)
 		{
 			return;
 		}
 
-		{
-			std::lock_guard<std::mutex> lock(writeMutex_);
-			auto msg = std::make_shared<std::string>(data, len);
-			queuedBytes_ += msg->size();
-			writeQueue_.push_back(std::move(msg));
+		enqueueNode(std::make_shared<MemoryWriteNode>(msgPtr));
+	}
 
-			// O(1) 高水位检查
-			if (highWaterMarkCallback_ && queuedBytes_ >= highWaterMark_)
-			{
-				size_t currentQueuedBytes = queuedBytes_;
-				auto self = sharedThis();
-				loop_->post(
-					[this, currentQueuedBytes, self]()
-					{
-						highWaterMarkCallback_(std::static_pointer_cast<TcpConnection>(self), currentQueuedBytes);
-					});
-			}
+	template <typename SocketType>
+	void GenericConnection<SocketType>::send(const std::shared_ptr<PmrBuffer>& msgPtr)
+	{
+		if (state_.load() != State::hConnected)
+		{
+			return;
 		}
 
-		tryStartWrite();
+		enqueueNode(
+			std::make_shared<MemoryWriteNode>(std::make_shared<std::string>(msgPtr->peek(), msgPtr->readableBytes())));
+	}
+
+	/**
+	 * @brief 将写节点入队并触发写操作（统一的入队路径）
+	 * 线程安全：可从任意线程调用，内部通过 loop_->post 保证线程安全。
+	 */
+	template <typename SocketType>
+	void GenericConnection<SocketType>::enqueueNode(std::shared_ptr<WriteNode> node)
+	{
+		auto enqueue = [this, node = std::move(node)]()
+		{
+			{
+				std::lock_guard<std::mutex> lock(writeMutex_);
+				queuedBytes_ += node->size();
+				writeQueue_.push_back(std::move(node));
+
+				// O(1) 高水位检查
+				if (highWaterMarkCallback_ && queuedBytes_ >= highWaterMark_)
+				{
+					size_t currentQueuedBytes = queuedBytes_;
+					auto self = sharedThis();
+					loop_->post(
+						[this, currentQueuedBytes, self]()
+						{
+							highWaterMarkCallback_(std::static_pointer_cast<TcpConnection>(self), currentQueuedBytes);
+						});
+				}
+			}
+
+			tryStartWrite();
+		};
+
+		if (loop_->isInLoopThread())
+		{
+			enqueue();
+		}
+		else
+		{
+			auto self = sharedThis();
+			loop_->post(
+				[self, enqueue = std::move(enqueue)]() mutable
+				{
+					enqueue();
+				});
+		}
 	}
 
 	template <typename SocketType>
@@ -582,6 +605,24 @@ namespace hical
 		return bytesReceived_.load();
 	}
 
+	template <typename SocketType>
+	std::chrono::steady_clock::time_point GenericConnection<SocketType>::lastActiveTime() const
+	{
+		auto ms = std::chrono::milliseconds(lastActiveTimeMs_.load(std::memory_order_relaxed));
+		return std::chrono::steady_clock::time_point(ms);
+	}
+
+	template <typename SocketType>
+	void GenericConnection<SocketType>::sendFile(const std::filesystem::path& path, int64_t offset, int64_t length)
+	{
+		if (state_.load() != State::hConnected)
+		{
+			return;
+		}
+
+		enqueueNode(std::make_shared<FileWriteNode>(path, offset, length));
+	}
+
 	// ============ 回调设置 ============
 
 	template <typename SocketType>
@@ -651,6 +692,7 @@ namespace hical
 			[this, self]()
 			{
 				state_.store(State::hConnected);
+				updateLastActiveTime();
 
 				if constexpr (hIsSslStream<SocketType>)
 				{
@@ -739,6 +781,7 @@ namespace hical
 					boost::asio::use_awaitable);
 
 				bytesReceived_ += bytesRead;
+				updateLastActiveTime();
 				inputBuffer_.hasWritten(bytesRead);
 
 				if (messageCallback_)
@@ -765,8 +808,8 @@ namespace hical
 		{
 			while (true)
 			{
-				// 批量取出所有待发送消息
-				std::deque<std::shared_ptr<std::string>> batch;
+				// 批量取出所有待发送节点
+				std::deque<std::shared_ptr<WriteNode>> batch;
 
 				{
 					std::lock_guard<std::mutex> lock(writeMutex_);
@@ -779,9 +822,9 @@ namespace hical
 						{
 							writing_.store(true);
 							batch.swap(writeQueue_);
-							for (const auto& m : batch)
+							for (const auto& node : batch)
 							{
-								queuedBytes_ -= m->size();
+								queuedBytes_ -= node->size();
 							}
 						}
 						else
@@ -802,47 +845,165 @@ namespace hical
 					else
 					{
 						batch.swap(writeQueue_);
-						for (const auto& m : batch)
+						for (const auto& node : batch)
 						{
-							queuedBytes_ -= m->size();
+							queuedBytes_ -= node->size();
 						}
 					}
 				}
 
-				if (batch.size() == 1)
+				// 发送逻辑：收集连续内存节点做 scatter-gather，遇到文件节点单独发送
+				size_t idx = 0;
+				while (idx < batch.size())
 				{
-					// 单条消息直接发送，避免 scatter-gather 的额外开销
-					auto bytesWritten = co_await boost::asio::async_write(socket_,
-																		  boost::asio::buffer(*batch.front()),
-																		  boost::asio::use_awaitable);
-					bytesSent_ += bytesWritten;
-				}
-				else
-				{
-					// Scatter-Gather I/O：组合多个缓冲区一次发送
-					std::vector<boost::asio::const_buffer> buffers;
-					buffers.reserve(batch.size());
-					for (const auto& msg : batch)
+					// 文件节点：单独发送
+					if (batch[idx]->isFile())
 					{
-						buffers.emplace_back(boost::asio::buffer(*msg));
+						auto& fileNode = static_cast<FileWriteNode&>(*batch[idx]);
+						auto sent = co_await sendFileNode(fileNode);
+						bytesSent_ += sent;
+						updateLastActiveTime();
+						++idx;
+						continue;
 					}
 
-					auto bytesWritten = co_await boost::asio::async_write(socket_, buffers, boost::asio::use_awaitable);
-					bytesSent_ += bytesWritten;
+					// 收集连续的内存节点
+					size_t memStart = idx;
+					while (idx < batch.size() && !batch[idx]->isFile())
+					{
+						++idx;
+					}
+					size_t memCount = idx - memStart;
+
+					if (memCount == 1)
+					{
+						auto& memNode = static_cast<MemoryWriteNode&>(*batch[memStart]);
+						auto bytesWritten =
+							co_await boost::asio::async_write(socket_, memNode.buffer(), boost::asio::use_awaitable);
+						bytesSent_ += bytesWritten;
+						updateLastActiveTime();
+					}
+					else
+					{
+						// Scatter-Gather I/O
+						static constexpr size_t hSmallBatchSize = 16;
+						if (memCount <= hSmallBatchSize)
+						{
+							std::array<boost::asio::const_buffer, hSmallBatchSize> stackBufs;
+							for (size_t i = 0; i < memCount; ++i)
+							{
+								stackBufs[i] = static_cast<MemoryWriteNode&>(*batch[memStart + i]).buffer();
+							}
+							auto bytesWritten = co_await boost::asio::async_write(
+								socket_,
+								std::span<const boost::asio::const_buffer>(stackBufs.data(), memCount),
+								boost::asio::use_awaitable);
+							bytesSent_ += bytesWritten;
+							updateLastActiveTime();
+						}
+						else
+						{
+							std::vector<boost::asio::const_buffer> buffers;
+							buffers.reserve(memCount);
+							for (size_t i = 0; i < memCount; ++i)
+							{
+								buffers.emplace_back(static_cast<MemoryWriteNode&>(*batch[memStart + i]).buffer());
+							}
+							auto bytesWritten =
+								co_await boost::asio::async_write(socket_, buffers, boost::asio::use_awaitable);
+							bytesSent_ += bytesWritten;
+							updateLastActiveTime();
+						}
+					}
 				}
 			}
 		}
 		catch (const boost::system::system_error&)
 		{
-			// 线程安全说明：此处 writing_.store(false) 和 handleClose() 是安全的，
-			// 因为 writeLoop lambda 持有 self（shared_ptr），保证了对象在整个 catch 块
-			// 期间不会被析构。即使 readLoop 已经先调用了 handleClose() 并触发了
-			// closeCallback_（可能导致 TcpServer::removeConnection），shared_ptr 的
-			// 引用计数仍大于 0（self 仍在栈上），handleClose 中的 CAS 会让第二个
-			// 调用者直接返回，不会重复触发回调。
 			writing_.store(false);
 			handleClose();
 		}
+	}
+
+	/**
+	 * @brief 协程式文件异步分块发送
+	 * 使用 boost::asio::random_access_file 异步读取，不阻塞 io_context 线程。
+	 * @return 发送的总字节数
+	 */
+	template <typename SocketType>
+	boost::asio::awaitable<size_t> GenericConnection<SocketType>::sendFileNode(const FileWriteNode& node)
+	{
+		static constexpr size_t hChunkSize = 65536; // 64KB
+
+#ifdef BOOST_ASIO_HAS_FILE
+		boost::asio::random_access_file file(socketExecutor(),
+											 node.path().string(),
+											 boost::asio::random_access_file::read_only);
+
+		int64_t remaining = node.length();
+		size_t totalSent = 0;
+		uint64_t offset = static_cast<uint64_t>(node.offset());
+		std::string chunk((std::min)(static_cast<int64_t>(hChunkSize), remaining), '\0');
+
+		while (remaining > 0)
+		{
+			auto toRead = (std::min)(static_cast<int64_t>(hChunkSize), remaining);
+			auto bytesRead =
+				co_await file.async_read_some_at(offset,
+												 boost::asio::buffer(chunk.data(), static_cast<size_t>(toRead)),
+												 boost::asio::use_awaitable);
+
+			if (bytesRead == 0)
+			{
+				break;
+			}
+
+			auto written = co_await boost::asio::async_write(socket_,
+															 boost::asio::buffer(chunk.data(), bytesRead),
+															 boost::asio::use_awaitable);
+			totalSent += written;
+			offset += bytesRead;
+			remaining -= static_cast<int64_t>(bytesRead);
+		}
+
+		co_return totalSent;
+#else
+		// 同步 ifstream 回退（macOS 等不支持 BOOST_ASIO_HAS_FILE 的平台）
+		std::ifstream ifs(node.path(), std::ios::binary);
+		if (!ifs)
+		{
+			co_return 0;
+		}
+
+		ifs.seekg(node.offset());
+		if (!ifs)
+		{
+			co_return 0;
+		}
+
+		int64_t remaining = node.length();
+		size_t totalSent = 0;
+		std::string chunk((std::min)(static_cast<int64_t>(hChunkSize), remaining), '\0');
+
+		while (remaining > 0)
+		{
+			auto toRead = (std::min)(static_cast<int64_t>(hChunkSize), remaining);
+			ifs.read(chunk.data(), toRead);
+			auto bytesRead = static_cast<size_t>(ifs.gcount());
+			if (bytesRead == 0)
+			{
+				break;
+			}
+
+			auto written = co_await boost::asio::async_write(socket_,
+															 boost::asio::buffer(chunk.data(), bytesRead),
+															 boost::asio::use_awaitable);
+			totalSent += written;
+			remaining -= static_cast<int64_t>(bytesRead);
+		}
+
+		co_return totalSent;
+#endif
 	}
 
 	template <typename SocketType>

@@ -9,6 +9,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -93,6 +94,24 @@ namespace hical
 		void del(const std::string& path, SyncRouteHandler handler);
 
 		/**
+		 * @brief WebSocket 路由选项
+		 */
+		struct WsOptions
+		{
+			/// 允许的 Origin 列表（防 CSWSH）。为空时不校验 Origin。
+			std::unordered_set<std::string> allowedOrigins;
+		};
+
+		struct WsRoute
+		{
+			std::string path;
+			WsMessageCallback onMessage;
+			WsConnectCallback onConnect;
+			WsDisconnectCallback onDisconnect;
+			std::unordered_set<std::string> allowedOrigins; ///< 允许的 Origin 列表（空 = 不校验）
+		};
+
+		/**
 		 * @brief 注册 WebSocket 路由
 		 * @param path 路由路径
 		 * @param onMessage 消息回调
@@ -100,6 +119,20 @@ namespace hical
 		 * @param onDisconnect 连接断开回调（可选）
 		 */
 		void ws(const std::string& path,
+				WsMessageCallback onMessage,
+				WsConnectCallback onConnect = nullptr,
+				WsDisconnectCallback onDisconnect = nullptr);
+
+		/**
+		 * @brief 注册 WebSocket 路由（带安全选项）
+		 * @param path 路由路径
+		 * @param options WebSocket 选项（Origin 白名单等）
+		 * @param onMessage 消息回调
+		 * @param onConnect 连接建立回调（可选）
+		 * @param onDisconnect 连接断开回调（可选）
+		 */
+		void ws(const std::string& path,
+				WsOptions options,
 				WsMessageCallback onMessage,
 				WsConnectCallback onConnect = nullptr,
 				WsDisconnectCallback onDisconnect = nullptr);
@@ -117,13 +150,6 @@ namespace hical
 		 * @param path 请求路径
 		 * @return 如果是 ws 路由返回对应的 WsRoute 指针，否则 nullptr
 		 */
-		struct WsRoute
-		{
-			std::string path;
-			WsMessageCallback onMessage;
-			WsConnectCallback onConnect;
-			WsDisconnectCallback onDisconnect;
-		};
 
 		const WsRoute* findWsRoute(const std::string& path) const;
 
@@ -201,7 +227,7 @@ namespace hical
 
 		std::unordered_map<RouteKey, RouteHandler, RouteKeyHash, RouteKeyEqual> staticRoutes_;
 
-		// ============ 参数路由（线性匹配） ============
+		// ============ 参数路由（按 method 分组，减少线性扫描范围） ============
 
 		struct ParamRouteEntry
 		{
@@ -210,7 +236,7 @@ namespace hical
 			RouteHandler handler;
 		};
 
-		std::vector<ParamRouteEntry> paramRoutes_;
+		std::unordered_map<HttpMethod, std::vector<ParamRouteEntry>> paramRoutesByMethod_;
 
 		// ============ WebSocket 路由 ============
 

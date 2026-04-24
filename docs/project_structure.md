@@ -1,6 +1,6 @@
 # Hical 项目代码结构
 
-> 最后更新：2026-04-06
+> 最后更新：2026-04-24
 
 ## 项目概述
 
@@ -18,29 +18,40 @@ hical/
 │   ├── CMakeLists.txt          # 构建 hical_core 静态库
 │   ├── core/                   # 核心抽象层（接口 + 基础设施 + HTTP 框架）
 │   │   ├── EventLoop.h         # 事件循环抽象基类
-│   │   ├── TcpConnection.h     # TCP 连接抽象基类
+│   │   ├── TcpConnection.h     # TCP 连接抽象基类（含 sendFile/lastActiveTime 虚方法）
 │   │   ├── Timer.h             # 定时器抽象基类
 │   │   ├── Concepts.h          # C++20 Concepts 约束
 │   │   ├── Error.h/.cpp        # 错误码枚举 + boost error_code 转换
 │   │   ├── MemoryPool.h/.cpp   # pmr 内存池管理器（TrackedResource + PoolConfig + thread_local）
-│   │   ├── PmrBuffer.h         # 基于 pmr 的统一缓冲区（header-only）
+│   │   ├── PmrBuffer.h         # 基于 pmr 的统一缓冲区（指数增长 + 自适应缩容）
 │   │   ├── InetAddress.h/.cpp  # 网络地址封装（IPv4/IPv6）
 │   │   ├── SslContext.h/.cpp   # SSL/TLS 上下文配置封装
 │   │   ├── Coroutine.h         # 协程工具（Awaitable/sleep/coSpawn，header-only）
 │   │   ├── HttpTypes.h         # HTTP 方法/状态码枚举 + 字符串转换
-│   │   ├── HttpRequest.h/.cpp  # HttpRequest 封装（含路径参数）
-│   │   ├── HttpResponse.h/.cpp # HttpResponse 封装 + 工厂方法
-│   │   ├── Router.h/.cpp       # 路由器（哈希表静态路由 + {param} 参数路由 + WebSocket）
-│   │   ├── Middleware.h/.cpp   # 中间件系统（洋葱模型管道）
-│   │   ├── HttpServer.h/.cpp   # HTTP 服务器（Router + Middleware + WebSocket）
-│   │   └── WebSocket.h/.cpp    # WebSocket 会话封装（beast::websocket）
+│   │   ├── HttpRequest.h/.cpp  # HttpRequest 封装（string_view 返回类型，jsonBody 缓存）
+│   │   ├── HttpResponse.h/.cpp # HttpResponse 封装 + 工厂方法（setHeader CR/LF 防护）
+│   │   ├── Cookie.h            # CookieOptions 结构体
+│   │   ├── Router.h/.cpp       # 路由器（哈希表静态路由 + 按方法分桶参数路由 + WebSocket + WsOptions）
+│   │   ├── Middleware.h/.cpp   # 中间件系统（洋葱模型管道 + buildFor 预构建）
+│   │   ├── HttpServer.h/.cpp   # HTTP 服务器（Router + Middleware + WS 中间件预构建 + fd 耗尽防护）
+│   │   ├── WebSocket.h/.cpp    # WebSocket 会话封装（beast::websocket）
+│   │   ├── StaticFiles.h       # 静态文件服务（异步 I/O + PathCache + ETag/304）
+│   │   ├── Multipart.h/.cpp    # multipart/form-data 解析（dual API: req 版 + parts 版）
+│   │   ├── Session.h/.cpp      # Session 会话管理（shared_mutex + regenerate + migrateFrom）
+│   │   ├── IdleFd.h            # 空闲 fd 预留（POSIX /dev/null，Windows no-op）
+│   │   ├── WriteNode.h         # 多态写队列节点（MemoryWriteNode / FileWriteNode）
+│   │   ├── Reflection.h        # C++26 反射特性检测 + RouteInfo + 类型萃取
+│   │   ├── MetaJson.h          # 自动 JSON 序列化（ALIAS/REQUIRED/IGNORE 装饰器）
+│   │   ├── MetaRoutes.h        # 自动路由注册（HICAL_HANDLER/HICAL_ROUTES 宏）
+│   │   └── Version.h.in        # CMake 配置版本头（唯一版本号来源）
 │   │
 │   └── asio/                   # Boost.Asio 适配实现
 │       ├── AsioEventLoop.h/.cpp      # 基于 io_context 的事件循环
-│       ├── GenericConnection.h/.cpp  # 模板化连接（TCP/SSL 统一）
+│       ├── GenericConnection.h/.cpp  # 模板化连接（TCP/SSL 统一，WriteNode 写队列，sendFile 异步文件发送）
+│       ├── SslConnection.h           # SSL 连接类型别名（懒包含 OpenSSL）
 │       ├── AsioTimer.h/.cpp          # 基于 steady_timer 的定时器
 │       ├── EventLoopPool.h/.cpp      # 多线程事件循环池（1 Thread : 1 io_context）
-│       └── TcpServer.h/.cpp          # TCP 服务器（accept + 连接管理 + IO 线程分发）
+│       └── TcpServer.h/.cpp          # TCP 服务器（accept + 连接管理 + 空闲超时 + IdleFd 防护）
 │
 ├── tests/                      # 单元测试（Google Test）
 │   ├── CMakeLists.txt          # 测试构建配置
@@ -58,7 +69,14 @@ hical/
 │   ├── test_tcp_server.cpp     # TcpServer + EventLoopPool 测试
 │   ├── test_middleware.cpp     # 中间件测试（洋葱模型/拦截）
 │   ├── test_http_server.cpp    # HttpServer 集成测试
-│   └── test_websocket.cpp      # WebSocket 测试
+│   ├── test_websocket.cpp      # WebSocket 测试
+│   ├── test_concepts.cpp       # C++20 Concepts 编译期约束测试
+│   ├── test_reflection.cpp     # MetaJson + MetaRoutes 反射层测试（35 个）
+│   ├── test_cookie.cpp         # Cookie 解析与 Set-Cookie 测试
+│   ├── test_static_files.cpp   # 静态文件服务 / ETag / 路径遍历测试
+│   ├── test_multipart.cpp      # multipart/form-data 解析测试
+│   ├── test_session.cpp        # Session 生命周期 / 线程安全 / regenerate 测试
+│   └── test_integration.cpp    # 完整 HTTP 请求/响应周期集成测试
 │
 ├── examples/                   # 示例程序
 │   ├── CMakeLists.txt          # 示例构建配置
@@ -115,13 +133,13 @@ hical/
 - **编译标准**: C++20（C++26 反射待编译器支持后启用）
 - **构建工具**: CMake 3.20+
 - **依赖库**:
-  - Boost 1.70+（system, json; Asio/Beast header-only）
+  - Boost 1.78+（system, json; Asio/Beast header-only）
   - OpenSSL 3.x（SSL/TLS 支持）
   - Google Test（单元测试）
   - ws2_32, mswsock（Windows 网络库）
 - **构建产物**:
   - `hical_core` — 框架核心静态库
-  - `test_*` — 各组件单元测试（15 个测试套件，145 个用例）
+  - `test_*` — 各组件单元测试（22 个测试套件）
   - `echo_server` / `pmr_poc` / `benchmark` / `http_server` — 示例程序
   - `http_benchmark` / `pmr_benchmark` — 性能基准测试工具
 
@@ -136,7 +154,7 @@ hical/
 - **统一内存池**: MemoryPool（全局同步池 + 线程本地池 + 请求级单调池）+ PmrBuffer（pmr 统一缓冲区）
 - **抽象接口层**: EventLoop / TcpConnection / Timer 纯虚基类 + Concepts 约束
 - **AsioEventLoop**: 1 Thread : 1 io_context，dispatch/post，定时器管理
-- **GenericConnection**: 协程式 readLoop/writeLoop，写队列，高水位回调（PlainConnection / SslConnection）
+- **GenericConnection**: 协程式 readLoop/writeLoop，WriteNode 多态写队列（内存/文件），sendFile 异步发送，高水位回调（PlainConnection / SslConnection）
 - **AsioTimer**: 基于 steady_timer 的单次/周期定时器
 - **错误码体系**: ErrorCode 枚举 + boost error_code 转换（含 SSL 错误预留）
 - **InetAddress**: IPv4/IPv6 地址封装，跨平台
@@ -170,7 +188,7 @@ hical/
   - PoolConfig 可配置池参数（全局池/线程本地池/请求池）
 - **路由分发优化**:
   - 静态路由使用 `unordered_map<RouteKey, handler>` O(1) 哈希查找
-  - 参数路由保持线性扫描（数量少）
+  - 参数路由按 HTTP 方法分桶，保持桶内线性扫描（单方法路由数量少）
   - matchPath 改用 `string_view` 原地切分（消除 `vector<string>` / `istringstream` 临时分配）
 - **性能基准测试套件**:
   - `http_benchmark` — 多线程 HTTP 压测（QPS / P50 / P90 / P95 / P99 延迟）

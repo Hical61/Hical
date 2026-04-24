@@ -42,7 +42,7 @@ include(FetchContent)
 FetchContent_Declare(
     hical
     GIT_REPOSITORY https://github.com/Hical61/Hical.git
-    GIT_TAG        v2.0.0
+    GIT_TAG        v2.1.0
 )
 
 # Disable tests and examples to speed up the build

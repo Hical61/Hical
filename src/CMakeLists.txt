@@ -54,6 +54,15 @@ if(WIN32)
     target_link_libraries(hical_core PRIVATE ws2_32 mswsock)
 endif()
 
+# Linux 需要链接 liburing（Boost.Asio random_access_file 依赖 io_uring）
+if(UNIX AND NOT APPLE)
+    find_library(URING_LIB uring)
+    if(URING_LIB)
+        target_link_libraries(hical_core PRIVATE ${URING_LIB})
+        target_compile_definitions(hical_core PUBLIC BOOST_ASIO_HAS_IO_URING)
+    endif()
+endif()
+
 # 安装库和头文件
 install(
     TARGETS hical_core

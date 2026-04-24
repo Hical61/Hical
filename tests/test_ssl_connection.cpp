@@ -1,4 +1,4 @@
-#include "asio/GenericConnection.h"
+#include "asio/SslConnection.h"
 #include "asio/AsioEventLoop.h"
 #include "core/SslContext.h"
 #include <gtest/gtest.h>

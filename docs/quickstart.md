@@ -10,12 +10,12 @@
 
 **最低要求：**
 
-| 组件       | 版本                                  |
-| ---------- | ------------------------------------- |
-| C++ 编译器 | GCC 10+ / Clang 15+ / MSVC 2022+（需支持 C++20 协程） |
-| CMake      | 3.20+                                 |
-| Boost      | 1.70+（Asio / Beast / JSON）          |
-| OpenSSL    | 3.0+                                  |
+| 组件       | 版本                                                  |
+| ---------- | ----------------------------------------------------- |
+| C++ 编译器 | GCC 14+ / Clang 20+ / MSVC 2022+（需支持 C++20 协程） |
+| CMake      | 3.20+                                                 |
+| Boost      | 1.78+（Asio / Beast / JSON）                          |
+| OpenSSL    | 3.0+                                                  |
 
 **快速安装：**
 
@@ -94,7 +94,7 @@ project(my_server LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-find_package(Boost 1.70 REQUIRED COMPONENTS system json)
+find_package(Boost 1.78 REQUIRED COMPONENTS system json)
 find_package(OpenSSL REQUIRED)
 
 # 假设 hical 安装在 HICAL_DIR 或作为子目录引入

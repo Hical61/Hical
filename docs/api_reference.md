@@ -100,23 +100,24 @@ int main()
 
 ### Router
 
-路由管理器，负责路由注册和请求分发。静态路由使用透明哈希表 O(1) 查找（`RouteKeyView` + `is_transparent` 实现零分配 `string_view` 查找），参数路由线性匹配。
+路由管理器，负责路由注册和请求分发。静态路由使用透明哈希表 O(1) 查找（`RouteKeyView` + `is_transparent` 实现零分配 `string_view` 查找），参数路由按 HTTP 方法分桶存储（`unordered_map<HttpMethod, vector<ParamRouteEntry>>`），仅扫描对应方法的路由子集。
 
 **头文件：** `src/core/Router.h`
 
 #### 公共方法
 
-| 方法                             | 参数                                                                 | 返回值                    | 说明                           |
-| -------------------------------- | -------------------------------------------------------------------- | ------------------------- | ------------------------------ |
-| `route(method, path, handler)`   | method: HTTP 方法<br>path: 路由路径<br>handler: 协程处理器           | `void`                    | 注册协程路由                   |
-| `route(method, path, handler)`   | method: HTTP 方法<br>path: 路由路径<br>handler: 同步处理器           | `void`                    | 注册同步路由（自动包装为协程） |
-| `get(path, handler)`             | path: 路由路径<br>handler: 处理器                                    | `void`                    | 注册 GET 路由                  |
-| `post(path, handler)`            | path: 路由路径<br>handler: 处理器                                    | `void`                    | 注册 POST 路由                 |
-| `put(path, handler)`             | path: 路由路径<br>handler: 处理器                                    | `void`                    | 注册 PUT 路由                  |
-| `del(path, handler)`             | path: 路由路径<br>handler: 处理器                                    | `void`                    | 注册 DELETE 路由               |
-| `ws(path, onMessage, onConnect)` | path: 路由路径<br>onMessage: 消息回调<br>onConnect: 连接回调（可选） | `void`                    | 注册 WebSocket 路由            |
-| `dispatch(req)`                  | req: HTTP 请求                                                       | `Awaitable<HttpResponse>` | 分发请求到匹配的路由           |
-| `routeCount()`                   | 无                                                                   | `size_t`                  | 获取已注册路由数量             |
+| 方法                                                    | 参数                                                                             | 返回值                    | 说明                           |
+| ------------------------------------------------------- | -------------------------------------------------------------------------------- | ------------------------- | ------------------------------ |
+| `route(method, path, handler)`                          | method: HTTP 方法<br>path: 路由路径<br>handler: 协程处理器                       | `void`                    | 注册协程路由                   |
+| `route(method, path, handler)`                          | method: HTTP 方法<br>path: 路由路径<br>handler: 同步处理器                       | `void`                    | 注册同步路由（自动包装为协程） |
+| `get(path, handler)`                                    | path: 路由路径<br>handler: 处理器                                                | `void`                    | 注册 GET 路由                  |
+| `post(path, handler)`                                   | path: 路由路径<br>handler: 处理器                                                | `void`                    | 注册 POST 路由                 |
+| `put(path, handler)`                                    | path: 路由路径<br>handler: 处理器                                                | `void`                    | 注册 PUT 路由                  |
+| `del(path, handler)`                                    | path: 路由路径<br>handler: 处理器                                                | `void`                    | 注册 DELETE 路由               |
+| `ws(path, onMessage, onConnect)`                        | path: 路由路径<br>onMessage: 消息回调<br>onConnect: 连接回调（可选）             | `void`                    | 注册 WebSocket 路由            |
+| `ws(path, onMessage, onConnect, onDisconnect, options)` | path: 路由路径<br>onMessage/onConnect/onDisconnect: 回调<br>options: `WsOptions` | `void`                    | 注册带选项的 WebSocket 路由    |
+| `dispatch(req)`                                         | req: HTTP 请求                                                                   | `Awaitable<HttpResponse>` | 分发请求到匹配的路由           |
+| `routeCount()`                                          | 无                                                                               | `size_t`                  | 获取已注册路由数量             |
 
 #### 路径参数
 
@@ -159,6 +160,16 @@ router.ws("/ws/chat",
     }
 );
 
+// WebSocket 路由（带 Origin 白名单）
+WsOptions wsOpts;
+wsOpts.allowedOrigins = {"https://example.com", "https://app.example.com"};
+router.ws("/ws/chat",
+    [](const std::string& msg, WebSocketSession& ws) -> Awaitable<void> {
+        co_await ws.send("Echo: " + msg);
+    },
+    nullptr, nullptr, wsOpts
+);
+
 // 使用宏
 HICAL_ROUTE(router, Get, "/hello", myHandler);
 ```
@@ -173,19 +184,19 @@ HTTP 请求封装，对 Boost.Beast `http::request` 的 hical 风格封装。
 
 #### 公共方法
 
-| 方法             | 参数             | 返回值               | 说明                           |
-| ---------------- | ---------------- | -------------------- | ------------------------------ |
-| `method()`       | 无               | `HttpMethod`         | 获取 HTTP 方法                 |
-| `path()`         | 无               | `std::string`        | 获取请求路径（不含查询参数）   |
-| `target()`       | 无               | `std::string`        | 获取完整 URI（含查询参数）     |
-| `query()`        | 无               | `std::string`        | 获取查询字符串（? 后面的部分） |
-| `header(name)`   | name: 头部字段名 | `std::string`        | 获取指定头部字段值             |
-| `body()`         | 无               | `const std::string&` | 获取消息体                     |
-| `jsonBody()`     | 无               | `boost::json::value` | 将消息体解析为 JSON            |
-| `contentType()`  | 无               | `std::string`        | 获取 Content-Type 头           |
-| `param(name)`    | name: 参数名     | `std::string`        | 获取路径参数                   |
-| `hasParam(name)` | name: 参数名     | `bool`               | 是否有指定路径参数             |
-| `native()`       | 无               | `BeastRequest&`      | 获取底层 Beast 请求引用        |
+| 方法             | 参数             | 返回值                      | 说明                                        |
+| ---------------- | ---------------- | --------------------------- | ------------------------------------------- |
+| `method()`       | 无               | `HttpMethod`                | 获取 HTTP 方法                              |
+| `path()`         | 无               | `std::string_view`          | 获取请求路径（不含查询参数）                |
+| `target()`       | 无               | `std::string_view`          | 获取完整 URI（含查询参数）                  |
+| `query()`        | 无               | `std::string_view`          | 获取查询字符串（? 后面的部分）              |
+| `header(name)`   | name: 头部字段名 | `std::string_view`          | 获取指定头部字段值                          |
+| `body()`         | 无               | `const std::string&`        | 获取消息体                                  |
+| `jsonBody()`     | 无               | `const boost::json::value&` | 将消息体解析为 JSON（多次调用返回缓存引用） |
+| `contentType()`  | 无               | `std::string_view`          | 获取 Content-Type 头                        |
+| `param(name)`    | name: 参数名     | `const std::string&`        | 获取路径参数                                |
+| `hasParam(name)` | name: 参数名     | `bool`                      | 是否有指定路径参数                          |
+| `native()`       | 无               | `BeastRequest&`             | 获取底层 Beast 请求引用                     |
 
 #### 构建请求的方法
 
@@ -193,7 +204,7 @@ HTTP 请求封装，对 Boost.Beast `http::request` 的 hical 风格封装。
 | ------------------------ | ----------------------------- | ------ | ---------------------------------- |
 | `setMethod(method)`      | method: HTTP 方法             | `void` | 设置 HTTP 方法                     |
 | `setTarget(target)`      | target: 目标 URI              | `void` | 设置请求路径                       |
-| `setHeader(name, value)` | name: 字段名<br>value: 字段值 | `void` | 设置头部字段                       |
+| `setHeader(name, value)` | name: 字段名<br>value: 字段值 | `void` | 设置头部字段（拒绝含 CR/LF 的值）  |
 | `setBody(body)`          | body: 消息体                  | `void` | 设置消息体                         |
 | `setParam(name, value)`  | name: 参数名<br>value: 参数值 | `void` | 设置路径参数（由 Router 内部调用） |
 
@@ -373,13 +384,14 @@ using MiddlewareHandler = std::function<Awaitable<HttpResponse>(const HttpReques
 
 #### MiddlewarePipeline 类
 
-| 方法                         | 参数                                       | 返回值                    | 说明           |
-| ---------------------------- | ------------------------------------------ | ------------------------- | -------------- |
-| `use(middleware)`            | middleware: 中间件处理器                   | `void`                    | 添加中间件（`build()` 后禁止调用） |
-| `build(finalHandler)`        | finalHandler: 最终处理器                   | `void`                    | 预构建调用链（仅调用一次） |
-| `execute(req)`               | req: HTTP 请求                             | `Awaitable<HttpResponse>` | 执行预构建缓存链（需先 `build()`） |
+| 方法                         | 参数                                       | 返回值                    | 说明                                     |
+| ---------------------------- | ------------------------------------------ | ------------------------- | ---------------------------------------- |
+| `use(middleware)`            | middleware: 中间件处理器                   | `void`                    | 添加中间件（`build()` 后禁止调用）       |
+| `build(finalHandler)`        | finalHandler: 最终处理器                   | `void`                    | 预构建调用链（仅调用一次）               |
+| `buildFor(finalHandler)`     | finalHandler: 最终处理器                   | `MiddlewareNext`          | 预构建并返回可缓存的调用链               |
+| `execute(req)`               | req: HTTP 请求                             | `Awaitable<HttpResponse>` | 执行预构建缓存链（需先 `build()`）       |
 | `execute(req, finalHandler)` | req: HTTP 请求<br>finalHandler: 最终处理器 | `Awaitable<HttpResponse>` | 动态构建并执行（始终使用传入的 handler） |
-| `size()`                     | 无                                         | `size_t`                  | 获取中间件数量 |
+| `size()`                     | 无                                         | `size_t`                  | 获取中间件数量                           |
 
 #### 示例
 
@@ -915,13 +927,14 @@ Boost.Asio 适配层，将 Boost.Asio 的原始 API 封装为 hical 风格的接
 
 **头文件：** `src/asio/` 目录
 
-| 文件                  | 说明                       |
-| --------------------- | -------------------------- |
-| `AsioEventLoop.h`     | EventLoop 的 Asio 实现     |
-| `AsioTimer.h`         | 定时器的 Asio 实现         |
-| `GenericConnection.h` | 模板化连接（支持 TCP/SSL），提供 PlainConnection / SslConnection 类型别名 |
-| `TcpServer.h`         | TCP 服务器                 |
-| `EventLoopPool.h`     | 事件循环线程池             |
+| 文件                  | 说明                                                                                                        |
+| --------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `AsioEventLoop.h`     | EventLoop 的 Asio 实现                                                                                      |
+| `AsioTimer.h`         | 定时器的 Asio 实现                                                                                          |
+| `GenericConnection.h` | 模板化连接（支持 TCP/SSL），提供 PlainConnection 类型别名；WriteNode 写队列，支持 `sendFile()` 异步文件发送 |
+| `SslConnection.h`     | SSL 连接类型别名（`SslConnection`），懒包含 OpenSSL 头文件                                                  |
+| `TcpServer.h`         | TCP 服务器，支持 `setIdleTimeout()` 空闲连接超时清理 + `IdleFd` fd 耗尽防护                                 |
+| `EventLoopPool.h`     | 事件循环线程池                                                                                              |
 
 通常用户不需要直接使用适配层，`HttpServer` 已封装了全部网络操作。
 
@@ -964,27 +977,27 @@ Cookie 解析（请求侧）与设置（响应侧）支持，符合 RFC 6265。
 
 #### CookieOptions 结构体
 
-| 字段       | 类型          | 默认值  | 说明                               |
-| ---------- | ------------- | ------- | ---------------------------------- |
-| `path`     | `std::string` | `"/"`   | Cookie 作用路径                    |
-| `domain`   | `std::string` | `""`    | Cookie 作用域（空=当前域）         |
-| `maxAge`   | `int`         | `-1`    | 有效期（秒），-1 表示会话 Cookie   |
-| `httpOnly` | `bool`        | `true`  | 防 XSS：禁止 JS 访问（默认开启）  |
+| 字段       | 类型          | 默认值  | 说明                                          |
+| ---------- | ------------- | ------- | --------------------------------------------- |
+| `path`     | `std::string` | `"/"`   | Cookie 作用路径                               |
+| `domain`   | `std::string` | `""`    | Cookie 作用域（空=当前域）                    |
+| `maxAge`   | `int`         | `-1`    | 有效期（秒），-1 表示会话 Cookie              |
+| `httpOnly` | `bool`        | `true`  | 防 XSS：禁止 JS 访问（默认开启）              |
 | `secure`   | `bool`        | `true`  | 仅 HTTPS 传输（默认开启，开发环境需显式关闭） |
-| `sameSite` | `std::string` | `"Lax"` | SameSite 策略（`Lax`/`Strict`/`None`） |
+| `sameSite` | `std::string` | `"Lax"` | SameSite 策略（`Lax`/`Strict`/`None`）        |
 
 #### HttpRequest Cookie API
 
-| 方法              | 参数        | 返回值                                               | 说明                                |
-| ----------------- | ----------- | ---------------------------------------------------- | ----------------------------------- |
-| `cookie(name)`    | name: Cookie 名 | `std::string`                                    | 获取指定 Cookie 值（懒解析+缓存）   |
-| `cookies()`       | 无          | `const std::unordered_map<std::string,std::string>&` | 获取所有 Cookie（同名取第一个值）   |
-| `hasCookie(name)` | name: Cookie 名 | `bool`                                           | 是否存在指定 Cookie                 |
+| 方法              | 参数            | 返回值                                               | 说明                              |
+| ----------------- | --------------- | ---------------------------------------------------- | --------------------------------- |
+| `cookie(name)`    | name: Cookie 名 | `const std::string&`                                 | 获取指定 Cookie 值（懒解析+缓存） |
+| `cookies()`       | 无              | `const std::unordered_map<std::string,std::string>&` | 获取所有 Cookie（同名取第一个值） |
+| `hasCookie(name)` | name: Cookie 名 | `bool`                                               | 是否存在指定 Cookie               |
 
 #### HttpResponse Cookie API
 
-| 方法                           | 参数                                                         | 返回值 | 说明                             |
-| ------------------------------ | ------------------------------------------------------------ | ------ | -------------------------------- |
+| 方法                           | 参数                                                       | 返回值 | 说明                                     |
+| ------------------------------ | ---------------------------------------------------------- | ------ | ---------------------------------------- |
 | `setCookie(name, value, opts)` | name: Cookie 名<br>value: Cookie 值<br>opts: CookieOptions | `void` | 追加 `Set-Cookie` 响应头（防 CRLF 注入） |
 
 #### 示例
@@ -1023,29 +1036,31 @@ server.router().post("/login", [](const HttpRequest& req) -> HttpResponse {
 #### serveStatic 函数
 
 ```cpp
-std::function<HttpResponse(const HttpRequest&)> serveStatic(
+std::function<Awaitable<HttpResponse>(const HttpRequest&)> serveStatic(
     const std::string& rootDir,
     const std::string& urlPrefix,
     std::uintmax_t maxFileSize = 64ULL * 1024 * 1024);
 ```
 
-| 参数          | 说明                                            |
-| ------------- | ----------------------------------------------- |
-| `rootDir`     | 本地根目录（如 `"./public"`）                   |
-| `urlPrefix`   | URL 前缀（如 `"/static/"`）                     |
-| `maxFileSize` | 单文件大小上限（默认 64 MB，超出返回 413）      |
+| 参数          | 说明                                       |
+| ------------- | ------------------------------------------ |
+| `rootDir`     | 本地根目录（如 `"./public"`）              |
+| `urlPrefix`   | URL 前缀（如 `"/static/"`）                |
+| `maxFileSize` | 单文件大小上限（默认 64 MB，超出返回 413） |
 
-**返回值：** `SyncRouteHandler`，可直接传入 `router.get()`。
+**返回值：** `RouteHandler`（协程版），可直接传入 `router.get()`。调用方需在协程中 `co_await`。
 
 **功能特性：**
 
-| 特性               | 说明                                                 |
-| ------------------ | ---------------------------------------------------- |
-| MIME 自动推断      | 支持 27 种扩展名（html/css/js/png/svg/mp4 等）       |
-| 目录默认文件       | 访问目录时自动返回 `index.html`                      |
-| ETag 缓存验证      | `If-None-Match` 匹配时返回 304                       |
-| 路径遍历防护       | `../` 等跳出根目录的路径返回 403                     |
-| 大文件保护         | 超过 `maxFileSize` 返回 413                          |
+| 特性          | 说明                                                          |
+| ------------- | ------------------------------------------------------------- |
+| 异步文件读取  | 支持 `BOOST_ASIO_HAS_FILE` 异步 I/O，否则 ifstream 回退       |
+| 路径缓存      | `PathCache`（4096 条目 / 60s TTL）减少 `canonical()` 系统调用 |
+| MIME 自动推断 | 支持 27 种扩展名（html/css/js/png/svg/mp4 等）                |
+| 目录默认文件  | 访问目录时自动返回 `index.html`                               |
+| ETag 缓存验证 | `If-None-Match` 匹配时返回 304                                |
+| 路径遍历防护  | `../` 等跳出根目录的路径返回 403                              |
+| 大文件保护    | 超过 `maxFileSize` 返回 413                                   |
 
 #### 示例
 
@@ -1070,22 +1085,24 @@ server.router().get("/assets/{path}",
 
 #### MultipartPart 结构体
 
-| 字段          | 类型                                          | 说明                          |
-| ------------- | --------------------------------------------- | ----------------------------- |
-| `name`        | `std::string`                                 | 字段名（`name` 属性）         |
-| `filename`    | `std::string`                                 | 原始文件名（文件字段才有值）  |
-| `contentType` | `std::string`                                 | Part 的 Content-Type          |
-| `data`        | `std::string`                                 | Part 数据内容（二进制安全）   |
-| `headers`     | `std::unordered_map<std::string,std::string>` | 所有 Part 头（键已转小写）    |
-| `isFile()`    | `bool`                                        | 是否为文件字段                |
+| 字段          | 类型                                          | 说明                         |
+| ------------- | --------------------------------------------- | ---------------------------- |
+| `name`        | `std::string`                                 | 字段名（`name` 属性）        |
+| `filename`    | `std::string`                                 | 原始文件名（文件字段才有值） |
+| `contentType` | `std::string`                                 | Part 的 Content-Type         |
+| `data`        | `std::string`                                 | Part 数据内容（二进制安全）  |
+| `headers`     | `std::unordered_map<std::string,std::string>` | 所有 Part 头（键已转小写）   |
+| `isFile()`    | `bool`                                        | 是否为文件字段               |
 
 #### MultipartParser 静态方法
 
-| 方法                          | 参数                                    | 返回值                                  | 说明                         |
-| ----------------------------- | --------------------------------------- | --------------------------------------- | ---------------------------- |
-| `parse(req)`                  | req: HTTP 请求                          | `std::optional<std::vector<MultipartPart>>` | 解析全部 Part（超 256 个返回 nullopt） |
-| `getFile(req, fieldName)`     | req: 请求<br>fieldName: 字段名          | `std::optional<MultipartPart>`          | 获取指定文件 Part            |
-| `getField(req, fieldName)`    | req: 请求<br>fieldName: 字段名          | `std::optional<std::string>`            | 获取文本字段值               |
+| 方法                         | 参数                                   | 返回值                                      | 说明                                        |
+| ---------------------------- | -------------------------------------- | ------------------------------------------- | ------------------------------------------- |
+| `parse(req)`                 | req: HTTP 请求                         | `std::optional<std::vector<MultipartPart>>` | 解析全部 Part（超 256 个返回 nullopt）      |
+| `getFile(req, fieldName)`    | req: 请求<br>fieldName: 字段名         | `std::optional<MultipartPart>`              | 获取指定文件 Part（每次重新解析）           |
+| `getField(req, fieldName)`   | req: 请求<br>fieldName: 字段名         | `std::optional<std::string>`                | 获取文本字段值（每次重新解析）              |
+| `getFile(parts, fieldName)`  | parts: 预解析结果<br>fieldName: 字段名 | `std::optional<MultipartPart>`              | 从预解析结果中搜索文件 Part（零拷贝，推荐） |
+| `getField(parts, fieldName)` | parts: 预解析结果<br>fieldName: 字段名 | `std::optional<std::string>`                | 从预解析结果中搜索文本字段（零拷贝，推荐）  |
 
 #### 示例
 
@@ -1093,8 +1110,13 @@ server.router().get("/assets/{path}",
 #include "core/Multipart.h"
 
 server.router().post("/upload", [](const HttpRequest& req) -> HttpResponse {
-    // 获取上传文件
-    auto file = MultipartParser::getFile(req, "avatar");
+    // 推荐：先解析一次，再用预解析结果查询（避免重复解析）
+    auto parts = MultipartParser::parse(req);
+    if (!parts) {
+        return HttpResponse::badRequest("无效的 multipart 数据");
+    }
+
+    auto file = MultipartParser::getFile(*parts, "avatar");
     if (!file) {
         return HttpResponse::badRequest("未找到 avatar 字段");
     }
@@ -1104,7 +1126,7 @@ server.router().post("/upload", [](const HttpRequest& req) -> HttpResponse {
     // file->data        — 文件内容（二进制）
 
     // 获取文本字段
-    auto desc = MultipartParser::getField(req, "description");
+    auto desc = MultipartParser::getField(*parts, "description");
 
     return HttpResponse::ok("上传成功: " + file->filename);
 });
@@ -1120,41 +1142,43 @@ server.router().post("/upload", [](const HttpRequest& req) -> HttpResponse {
 
 #### SessionOptions 结构体
 
-| 字段          | 类型          | 默认值            | 说明                                        |
-| ------------- | ------------- | ----------------- | ------------------------------------------- |
-| `cookieName`  | `std::string` | `"HICAL_SESSION"` | Session Cookie 名称                         |
-| `maxAge`      | `int`         | `3600`            | Session 有效期（秒）                        |
-| `httpOnly`    | `bool`        | `true`            | Cookie HttpOnly                             |
-| `secure`      | `bool`        | `true`            | Cookie Secure（仅 HTTPS，开发环境需显式关闭） |
-| `sameSite`    | `std::string` | `"Lax"`           | Cookie SameSite 策略                        |
-| `path`        | `std::string` | `"/"`             | Cookie 作用路径                             |
-| `gcInterval`  | `int`         | `300`             | 懒 GC 触发间隔（秒），≤0 则禁用 GC         |
+| 字段          | 类型          | 默认值            | 说明                                           |
+| ------------- | ------------- | ----------------- | ---------------------------------------------- |
+| `cookieName`  | `std::string` | `"HICAL_SESSION"` | Session Cookie 名称                            |
+| `maxAge`      | `int`         | `3600`            | Session 有效期（秒）                           |
+| `httpOnly`    | `bool`        | `true`            | Cookie HttpOnly                                |
+| `secure`      | `bool`        | `true`            | Cookie Secure（仅 HTTPS，开发环境需显式关闭）  |
+| `sameSite`    | `std::string` | `"Lax"`           | Cookie SameSite 策略                           |
+| `path`        | `std::string` | `"/"`             | Cookie 作用路径                                |
+| `gcInterval`  | `int`         | `300`             | 懒 GC 触发间隔（秒），≤0 则禁用 GC             |
 | `maxSessions` | `size_t`      | `100000`          | 最大 Session 数量（0=不限制），防 DoS 内存耗尽 |
 
-#### Session 类（线程安全）
+#### Session 类（线程安全，内部使用 `std::shared_mutex` 读写锁）
 
-| 方法           | 参数                     | 返回值                | 说明                      |
-| -------------- | ------------------------ | --------------------- | ------------------------- |
-| `id()`         | 无                       | `const std::string&`  | 获取 Session ID（只读）   |
-| `set(key, v)`  | key: 键<br>v: 任意类型值 | `void`                | 设置属性（自动 dirty）    |
-| `get<T>(key)`  | key: 键                  | `std::optional<T>`    | 获取属性（类型安全）      |
-| `has(key)`     | key: 键                  | `bool`                | 检查属性是否存在          |
-| `remove(key)`  | key: 键                  | `void`                | 删除指定属性              |
-| `clear()`      | 无                       | `void`                | 清空所有属性              |
-| `isDirty()`    | 无                       | `bool`                | 是否已修改（需刷新 Cookie）|
-| `touch()`      | 无                       | `void`                | 更新最后访问时间          |
-| `lastAccess()` | 无                       | `steady_clock::time_point` | 获取最后访问时间     |
+| 方法             | 参数                     | 返回值                     | 说明                                     |
+| ---------------- | ------------------------ | -------------------------- | ---------------------------------------- |
+| `id()`           | 无                       | `const std::string&`       | 获取 Session ID（只读）                  |
+| `set(key, v)`    | key: 键<br>v: 任意类型值 | `void`                     | 设置属性（自动 dirty）                   |
+| `get<T>(key)`    | key: 键                  | `std::optional<T>`         | 获取属性（类型安全）                     |
+| `has(key)`       | key: 键                  | `bool`                     | 检查属性是否存在                         |
+| `remove(key)`    | key: 键                  | `void`                     | 删除指定属性                             |
+| `clear()`        | 无                       | `void`                     | 清空所有属性                             |
+| `isDirty()`      | 无                       | `bool`                     | 是否已修改（需刷新 Cookie）              |
+| `touch()`        | 无                       | `void`                     | 更新最后访问时间                         |
+| `lastAccess()`   | 无                       | `steady_clock::time_point` | 获取最后访问时间                         |
+| `migrateFrom(o)` | o: 另一个 Session 引用   | `void`                     | 原子迁移数据（地址序双锁防死锁，清空源） |
 
 #### SessionManager 类
 
-| 方法         | 参数                           | 返回值                         | 说明                     |
-| ------------ | ------------------------------ | ------------------------------ | ------------------------ |
-| `find(id)`   | id: Session ID                 | `shared_ptr<Session>`（可空）  | 查找 Session             |
-| `create()`   | 无                             | `shared_ptr<Session>`（可空）  | 创建新 Session（含懒 GC），达到 `maxSessions` 上限时返回 `nullptr` |
-| `destroy(id)`| id: Session ID                 | `void`                         | 销毁 Session（登出）     |
-| `gc()`       | 无                             | `void`                         | 清理过期 Session         |
-| `count()`    | 无                             | `size_t`                       | 当前活跃 Session 数      |
-| `options()`  | 无                             | `const SessionOptions&`        | 获取配置                 |
+| 方法             | 参数              | 返回值                        | 说明                                                               |
+| ---------------- | ----------------- | ----------------------------- | ------------------------------------------------------------------ |
+| `find(id)`       | id: Session ID    | `shared_ptr<Session>`（可空） | 查找 Session（过期条目返回 nullptr，不立即删除，由 gc() 清理）     |
+| `create()`       | 无                | `shared_ptr<Session>`（可空） | 创建新 Session（含懒 GC），达到 `maxSessions` 上限时返回 `nullptr` |
+| `destroy(id)`    | id: Session ID    | `void`                        | 销毁 Session（登出）                                               |
+| `regenerate(id)` | id: 旧 Session ID | `shared_ptr<Session>`（可空） | 重新生成 ID 并迁移数据（防 Session 固定攻击），旧 ID 失效          |
+| `gc()`           | 无                | `void`                        | 清理过期 Session                                                   |
+| `count()`        | 无                | `size_t`                      | 当前活跃 Session 数                                                |
+| `options()`      | 无                | `const SessionOptions&`       | 获取配置                                                           |
 
 #### makeSessionMiddleware 函数
 

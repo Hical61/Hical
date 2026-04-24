@@ -4,6 +4,7 @@
 #include "../core/InetAddress.h"
 #include "../core/Coroutine.h"
 #include "../core/SslContext.h"
+#include "../core/IdleFd.h"
 #include "AsioEventLoop.h"
 #include "EventLoopPool.h"
 #include <boost/asio.hpp>
@@ -11,6 +12,7 @@
 #include <memory>
 #include <mutex>
 #include <set>
+#include <unordered_set>
 #include <string>
 
 namespace hical
@@ -103,6 +105,13 @@ namespace hical
 		 */
 		bool isRunning() const;
 
+		/**
+		 * @brief 设置空闲连接超时时间
+		 * @param seconds 超时秒数（0 表示不检查，默认不检查）
+		 * @note 必须在 start() 之前调用
+		 */
+		void setIdleTimeout(double seconds);
+
 		// 禁止拷贝
 		TcpServer(const TcpServer&) = delete;
 		TcpServer& operator=(const TcpServer&) = delete;
@@ -110,6 +119,9 @@ namespace hical
 	private:
 		// 协程式 accept 循环
 		Awaitable<void> acceptLoop();
+
+		// 空闲连接超时扫描协程
+		Awaitable<void> idleCheckLoop();
 
 		// 获取下一个 IO 事件循环
 		AsioEventLoop* getNextIoLoop();
@@ -129,8 +141,8 @@ namespace hical
 		size_t ioLoopNum_ {0};
 		std::unique_ptr<EventLoopPool> ioPool_;
 
-		// 连接集合
-		std::set<TcpConnection::Ptr> connections_;
+		// 连接集合（unordered_set: O(1) 插入/删除，替代 set 的 O(log N)）
+		std::unordered_set<TcpConnection::Ptr> connections_;
 		mutable std::mutex connectionsMutex_;
 
 		// 回调
@@ -140,6 +152,12 @@ namespace hical
 
 		// SSL
 		std::shared_ptr<SslContext> sslCtx_;
+
+		// 空闲连接超时（秒，0 表示不检查）
+		double idleTimeout_ {0.0};
+
+		// fd 耗尽处理：预留一个 fd 防止 accept 循环空转
+		IdleFd idleFd_;
 
 		// 生命周期标志：析构时置 false，防止回调中 use-after-free
 		std::shared_ptr<std::atomic<bool>> alive_;

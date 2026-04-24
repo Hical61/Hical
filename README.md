@@ -4,14 +4,14 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![C++ Standard](https://img.shields.io/badge/C%2B%2B-20%20%7C%2026-blue.svg)](https://isocpp.org/)
 [![Platform](https://img.shields.io/badge/Platform-Linux%20%7C%20Windows%20%7C%20macOS-green.svg)]()
-[![Boost](https://img.shields.io/badge/Boost-%E2%89%A51.70-orange.svg)](https://www.boost.org/)
+[![Boost](https://img.shields.io/badge/Boost-%E2%89%A51.78-orange.svg)](https://www.boost.org/)
 [![GitHub release](https://img.shields.io/github/v/release/Hical61/Hical?include_prereleases&sort=semver)](https://github.com/Hical61/Hical/releases)
 [![GitHub stars](https://img.shields.io/github/stars/Hical61/Hical?style=flat)](https://github.com/Hical61/Hical/stargazers)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
 Hical is a modern C++ web framework built on Boost.Asio/Beast, utilizing C++26 reflection and PMR memory pooling to achieve high performance.
 
-> **v2.0.0** — C++20/26 dual-track reflection · PMR memory pool · coroutine async I/O · Cookie / Session / StaticFiles / Multipart built-in
+> **v2.1.0** — C++20/26 dual-track reflection · PMR memory pool · coroutine async I/O · Cookie / Session / StaticFiles / Multipart built-in
 
 English | [简体中文](README_CN.md)
 
@@ -127,7 +127,7 @@ hical/
 | Dependency   | Version                             |
 | ------------ | ----------------------------------- |
 | C++ Standard | C++20 / C++26                       |
-| Boost        | >= 1.70 (Asio, Beast, System, JSON) |
+| Boost        | >= 1.78 (Asio, Beast, System, JSON) |
 | CMake        | >= 3.20                             |
 | OpenSSL      | Required                            |
 | Google Test  | Required                            |
@@ -151,14 +151,14 @@ target_link_libraries(my_app PRIVATE hical::hical_core)
 ### Conan
 
 ```bash
-conan install --requires="hical/2.0.0" --build=missing
+conan install --requires="hical/2.1.0" --build=missing
 ```
 
 Or add to your `conanfile.txt`:
 
 ```ini
 [requires]
-hical/2.0.0
+hical/2.1.0
 
 [generators]
 CMakeDeps

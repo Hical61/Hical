@@ -4,7 +4,7 @@
 // 基础环境测试
 TEST(BasicTest, BoostVersion)
 {
-	EXPECT_GE(BOOST_VERSION, 107000); // Boost >= 1.70
+	EXPECT_GE(BOOST_VERSION, 107800); // Boost >= 1.78
 }
 
 TEST(BasicTest, CppStandard)

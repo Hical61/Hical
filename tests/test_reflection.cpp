@@ -332,3 +332,342 @@ TEST(MetaTraitsTest, HasRouteTableDetection)
 	EXPECT_TRUE(meta::HasRouteTable<TestHandler>::value);
 	EXPECT_FALSE(meta::HasRouteTable<SimpleDTO>::value);
 }
+
+// ============ 字段别名测试 ============
+
+struct AliasDTO
+{
+	std::string userName;
+	int userAge;
+	std::string email;
+
+	HICAL_JSON(AliasDTO, ALIAS(userName, "user_name"), ALIAS(userAge, "user_age"), email)
+};
+
+TEST(MetaJsonTest, AliasSerialize)
+{
+	AliasDTO dto {"Alice", 30, "alice@test.com"};
+	auto json = meta::toJson(dto);
+
+	// 别名字段使用自定义 key
+	EXPECT_EQ(json["user_name"].as_string(), "Alice");
+	EXPECT_EQ(json["user_age"].as_int64(), 30);
+	// 裸字段使用原名
+	EXPECT_EQ(json["email"].as_string(), "alice@test.com");
+	// 原名不应出现
+	EXPECT_FALSE(json.contains("userName"));
+	EXPECT_FALSE(json.contains("userAge"));
+}
+
+TEST(MetaJsonTest, AliasDeserialize)
+{
+	boost::json::value json = boost::json::object {{"user_name", "Bob"}, {"user_age", 25}, {"email", "bob@test.com"}};
+	auto dto = meta::fromJson<AliasDTO>(json);
+
+	EXPECT_EQ(dto.userName, "Bob");
+	EXPECT_EQ(dto.userAge, 25);
+	EXPECT_EQ(dto.email, "bob@test.com");
+}
+
+TEST(MetaJsonTest, AliasRoundTrip)
+{
+	AliasDTO original {"Charlie", 42, "c@test.com"};
+	boost::json::value json = meta::toJson(original);
+	auto restored = meta::fromJson<AliasDTO>(json);
+
+	EXPECT_EQ(restored.userName, original.userName);
+	EXPECT_EQ(restored.userAge, original.userAge);
+	EXPECT_EQ(restored.email, original.email);
+}
+
+// ============ 必需字段测试 ============
+
+struct RequiredDTO
+{
+	std::string id;
+	std::string name;
+	int age;
+	std::string bio;
+
+	HICAL_JSON(RequiredDTO, REQUIRED(id), REQUIRED(name), age, bio)
+};
+
+TEST(MetaJsonTest, RequiredFieldsPresent)
+{
+	boost::json::value json = boost::json::object {{"id", "123"}, {"name", "Dave"}, {"age", 35}, {"bio", "dev"}};
+	auto dto = meta::fromJson<RequiredDTO>(json);
+
+	EXPECT_EQ(dto.id, "123");
+	EXPECT_EQ(dto.name, "Dave");
+	EXPECT_EQ(dto.age, 35);
+	EXPECT_EQ(dto.bio, "dev");
+}
+
+TEST(MetaJsonTest, RequiredFieldMissing)
+{
+	// id 缺失应抛异常
+	boost::json::value json = boost::json::object {{"name", "Eve"}, {"age", 28}};
+	EXPECT_THROW(
+		{
+			try
+			{
+				meta::fromJson<RequiredDTO>(json);
+			}
+			catch (const std::runtime_error& e)
+			{
+				EXPECT_NE(std::string(e.what()).find("id"), std::string::npos);
+				throw;
+			}
+		},
+		std::runtime_error);
+}
+
+TEST(MetaJsonTest, OptionalFieldMissing)
+{
+	// age 和 bio 可选，缺失保留默认值
+	boost::json::value json = boost::json::object {{"id", "456"}, {"name", "Frank"}};
+	auto dto = meta::fromJson<RequiredDTO>(json);
+
+	EXPECT_EQ(dto.id, "456");
+	EXPECT_EQ(dto.name, "Frank");
+	EXPECT_EQ(dto.age, 0);
+	EXPECT_EQ(dto.bio, "");
+}
+
+// ============ 必需 + 别名组合测试 ============
+
+struct RequiredAliasDTO
+{
+	std::string userId;
+	std::string userName;
+	int age;
+
+	HICAL_JSON(RequiredAliasDTO, REQUIRED_ALIAS(userId, "user_id"), REQUIRED_ALIAS(userName, "user_name"), age)
+};
+
+TEST(MetaJsonTest, RequiredAliasPresent)
+{
+	boost::json::value json = boost::json::object {{"user_id", "789"}, {"user_name", "Grace"}, {"age", 22}};
+	auto dto = meta::fromJson<RequiredAliasDTO>(json);
+
+	EXPECT_EQ(dto.userId, "789");
+	EXPECT_EQ(dto.userName, "Grace");
+	EXPECT_EQ(dto.age, 22);
+}
+
+TEST(MetaJsonTest, RequiredAliasMissing)
+{
+	// user_id 缺失应抛异常
+	boost::json::value json = boost::json::object {{"user_name", "Helen"}};
+	EXPECT_THROW(meta::fromJson<RequiredAliasDTO>(json), std::runtime_error);
+}
+
+TEST(MetaJsonTest, RequiredAliasSerialize)
+{
+	RequiredAliasDTO dto {"abc", "Ivan", 30};
+	auto json = meta::toJson(dto);
+
+	EXPECT_EQ(json["user_id"].as_string(), "abc");
+	EXPECT_EQ(json["user_name"].as_string(), "Ivan");
+	EXPECT_EQ(json["age"].as_int64(), 30);
+	EXPECT_FALSE(json.contains("userId"));
+}
+
+// ============ 忽略字段测试 ============
+
+struct IgnoreDTO
+{
+	std::string name;
+	std::string email;
+	std::string passwordHash;
+	std::string internalToken;
+
+	HICAL_JSON(IgnoreDTO, name, email, HICAL_IGNORE(passwordHash), HICAL_IGNORE(internalToken))
+};
+
+TEST(MetaJsonTest, IgnoreSerialize)
+{
+	IgnoreDTO dto {"Jack", "j@test.com", "hash123", "token456"};
+	auto json = meta::toJson(dto);
+
+	// 只输出非忽略字段
+	EXPECT_EQ(json.size(), 2);
+	EXPECT_EQ(json["name"].as_string(), "Jack");
+	EXPECT_EQ(json["email"].as_string(), "j@test.com");
+	EXPECT_FALSE(json.contains("passwordHash"));
+	EXPECT_FALSE(json.contains("internalToken"));
+}
+
+TEST(MetaJsonTest, IgnoreDeserialize)
+{
+	// 即使 JSON 中有被忽略字段的 key，也不会读取
+	boost::json::value json = boost::json::object {{"name", "Kate"},
+												   {"email", "k@test.com"},
+												   {"passwordHash", "should_be_ignored"},
+												   {"internalToken", "also_ignored"}};
+	auto dto = meta::fromJson<IgnoreDTO>(json);
+
+	EXPECT_EQ(dto.name, "Kate");
+	EXPECT_EQ(dto.email, "k@test.com");
+	EXPECT_EQ(dto.passwordHash, "");  // 保持默认值
+	EXPECT_EQ(dto.internalToken, ""); // 保持默认值
+}
+
+// ============ 混合装饰器测试 ============
+
+struct MixedDTO
+{
+	std::string requestId;
+	int statusCode;
+	std::string message;
+	std::string debugInfo;
+	std::string traceId;
+
+	HICAL_JSON(MixedDTO,
+			   REQUIRED_ALIAS(requestId, "request_id"),
+			   REQUIRED(statusCode),
+			   ALIAS(message, "status_message"),
+			   debugInfo,
+			   HICAL_IGNORE(traceId))
+};
+
+TEST(MetaJsonTest, MixedSerialize)
+{
+	MixedDTO dto {"req-001", 200, "OK", "debug", "trace-abc"};
+	auto json = meta::toJson(dto);
+
+	EXPECT_EQ(json["request_id"].as_string(), "req-001");
+	EXPECT_EQ(json["statusCode"].as_int64(), 200);
+	EXPECT_EQ(json["status_message"].as_string(), "OK");
+	EXPECT_EQ(json["debugInfo"].as_string(), "debug");
+	EXPECT_FALSE(json.contains("traceId")); // ignored
+	EXPECT_EQ(json.size(), 4);
+}
+
+TEST(MetaJsonTest, MixedDeserialize)
+{
+	boost::json::value json = boost::json::object {{"request_id", "req-002"},
+												   {"statusCode", 404},
+												   {"status_message", "Not Found"},
+												   {"debugInfo", "info"}};
+	auto dto = meta::fromJson<MixedDTO>(json);
+
+	EXPECT_EQ(dto.requestId, "req-002");
+	EXPECT_EQ(dto.statusCode, 404);
+	EXPECT_EQ(dto.message, "Not Found");
+	EXPECT_EQ(dto.debugInfo, "info");
+	EXPECT_EQ(dto.traceId, ""); // ignored, 保持默认
+}
+
+TEST(MetaJsonTest, MixedRequiredMissing)
+{
+	// request_id 缺失应抛异常
+	boost::json::value json = boost::json::object {{"statusCode", 500}};
+	EXPECT_THROW(meta::fromJson<MixedDTO>(json), std::runtime_error);
+}
+
+// ============ 大字段数测试（突破旧 16 字段限制）============
+
+struct LargeDTO
+{
+	int f1, f2, f3, f4, f5, f6, f7, f8, f9, f10;
+	int f11, f12, f13, f14, f15, f16, f17, f18, f19, f20;
+
+	HICAL_JSON(LargeDTO, f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12, f13, f14, f15, f16, f17, f18, f19, f20)
+};
+
+TEST(MetaJsonTest, LargeDTOSerialize)
+{
+	LargeDTO dto {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20};
+	auto json = meta::toJson(dto);
+
+	EXPECT_EQ(json.size(), 20);
+	EXPECT_EQ(json["f1"].as_int64(), 1);
+	EXPECT_EQ(json["f17"].as_int64(), 17);
+	EXPECT_EQ(json["f20"].as_int64(), 20);
+}
+
+TEST(MetaJsonTest, LargeDTORoundTrip)
+{
+	LargeDTO original {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20};
+	boost::json::value json = meta::toJson(original);
+	auto restored = meta::fromJson<LargeDTO>(json);
+
+	EXPECT_EQ(restored.f1, 1);
+	EXPECT_EQ(restored.f10, 10);
+	EXPECT_EQ(restored.f17, 17);
+	EXPECT_EQ(restored.f20, 20);
+}
+
+// ============ HasJsonFields 对新类型的检测 ============
+
+TEST(MetaTraitsTest, HasJsonFieldsNewTypes)
+{
+	EXPECT_TRUE(meta::HasJsonFields<AliasDTO>::value);
+	EXPECT_TRUE(meta::HasJsonFields<RequiredDTO>::value);
+	EXPECT_TRUE(meta::HasJsonFields<IgnoreDTO>::value);
+	EXPECT_TRUE(meta::HasJsonFields<MixedDTO>::value);
+	EXPECT_TRUE(meta::HasJsonFields<LargeDTO>::value);
+}
+
+// ============ 向后兼容性验证 ============
+
+TEST(MetaJsonTest, BackwardCompatibility)
+{
+	// SimpleDTO 使用原始 HICAL_JSON(T, f1, f2) 语法，必须仍然工作
+	SimpleDTO dto {"Zara", 99};
+	auto json = meta::toJson(dto);
+	EXPECT_EQ(json["name"].as_string(), "Zara");
+	EXPECT_EQ(json["age"].as_int64(), 99);
+
+	// 缺失字段仍保留默认值（不抛异常）
+	boost::json::value partial = boost::json::object {{"name", "Yuki"}};
+	auto restored = meta::fromJson<SimpleDTO>(partial);
+	EXPECT_EQ(restored.name, "Yuki");
+	EXPECT_EQ(restored.age, 0);
+}
+
+// ============ uint64_t 大整数 round-trip 测试 ============
+
+struct Uint64DTO
+{
+	uint64_t snowflakeId;
+	uint64_t timestamp;
+	int32_t status;
+
+	HICAL_JSON(Uint64DTO, snowflakeId, timestamp, status)
+};
+
+TEST(MetaJsonTest, Uint64Serialize)
+{
+	// 超出 int64_t 范围的值
+	Uint64DTO dto {18446744073709551615ULL, 9223372036854775808ULL, -1};
+	auto json = meta::toJson(dto);
+
+	EXPECT_EQ(json["snowflakeId"].as_uint64(), 18446744073709551615ULL);
+	EXPECT_EQ(json["timestamp"].as_uint64(), 9223372036854775808ULL);
+	EXPECT_EQ(json["status"].as_int64(), -1);
+}
+
+TEST(MetaJsonTest, Uint64Deserialize)
+{
+	boost::json::value json = boost::json::object {{"snowflakeId", 18446744073709551615ULL},
+												   {"timestamp", 9223372036854775808ULL},
+												   {"status", -1}};
+	auto dto = meta::fromJson<Uint64DTO>(json);
+
+	EXPECT_EQ(dto.snowflakeId, 18446744073709551615ULL);
+	EXPECT_EQ(dto.timestamp, 9223372036854775808ULL);
+	EXPECT_EQ(dto.status, -1);
+}
+
+TEST(MetaJsonTest, Uint64RoundTrip)
+{
+	Uint64DTO original {18446744073709551615ULL, 9223372036854775808ULL, 42};
+	boost::json::value json = meta::toJson(original);
+	auto restored = meta::fromJson<Uint64DTO>(json);
+
+	EXPECT_EQ(restored.snowflakeId, original.snowflakeId);
+	EXPECT_EQ(restored.timestamp, original.timestamp);
+	EXPECT_EQ(restored.status, original.status);
+}
