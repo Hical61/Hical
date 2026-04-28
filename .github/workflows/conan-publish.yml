@@ -87,7 +87,8 @@ jobs:
             -s compiler=gcc \
             -s compiler.version=14 \
             -s compiler.cppstd=20 \
-            -s build_type=Release
+            -s build_type=Release \
+            -o "boost/*:without_cobalt=True"
 
       - name: Conan create (MSVC)
         if: matrix.compiler == 'msvc'
@@ -95,9 +96,11 @@ jobs:
           conan create . `
             --version=${{ steps.version.outputs.version }} `
             --build=missing `
+            -s compiler.cppstd=20 `
             -s build_type=Release `
             -c tools.cmake.cmaketoolchain:generator="Visual Studio 17 2022" `
-            -c tools.microsoft.msbuild:vs_version=17
+            -c tools.microsoft.msbuild:vs_version=17 `
+            -o "boost/*:without_cobalt=True"
 
       # ── 添加 Remote 并上传 ──
       - name: Configure Conan remote
