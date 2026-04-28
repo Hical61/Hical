@@ -133,7 +133,7 @@ hical/
 - **编译标准**: C++20（C++26 反射待编译器支持后启用）
 - **构建工具**: CMake 3.20+
 - **依赖库**:
-  - Boost 1.78+（system, json; Asio/Beast header-only）
+  - Boost 1.82+（system, json; Asio/Beast header-only）
   - OpenSSL 3.x（SSL/TLS 支持）
   - Google Test（单元测试）
   - ws2_32, mswsock（Windows 网络库）

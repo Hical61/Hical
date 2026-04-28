@@ -318,3 +318,67 @@ TEST(PmrBufferTest, EnsureWritableBytesThrowsOnAllocationFailure)
 	// 请求远超可用空间的容量，上游 null_memory_resource 会抛 std::bad_alloc
 	EXPECT_THROW(buffer.ensureWritableBytes(65536), std::bad_alloc);
 }
+
+// ============ MemoryPool GC 测试 ============
+
+// 测试 getStats 返回扩展字段
+TEST(MemoryPoolGcTest, StatsIncludeThreadPoolCount)
+{
+	auto& pool = MemoryPool::instance();
+
+	// 触发 thread-local 池创建
+	auto alloc = pool.threadLocalAllocator();
+	(void)alloc;
+
+	auto stats = pool.getStats();
+	EXPECT_GE(stats.threadPoolCount, 1);
+}
+
+// 测试 gc() 不崩溃，gcCycles 递增
+TEST(MemoryPoolGcTest, GcIncrementsCycles)
+{
+	auto& pool = MemoryPool::instance();
+
+	// 确保有 thread-local 池
+	auto alloc = pool.threadLocalAllocator();
+	(void)alloc;
+
+	auto beforeStats = pool.getStats();
+	pool.gc(std::chrono::seconds(0)); // maxIdle=0 意味着所有池都视为过期
+
+	auto afterStats = pool.getStats();
+	EXPECT_GT(afterStats.gcCycles, beforeStats.gcCycles);
+}
+
+// 测试 gc() 在多线程场景下不崩溃
+TEST(MemoryPoolGcTest, GcThreadSafety)
+{
+	auto& pool = MemoryPool::instance();
+
+	std::vector<std::thread> threads;
+	for (int i = 0; i < 4; ++i)
+	{
+		threads.emplace_back(
+			[&pool]()
+			{
+				// 创建 thread-local 池并分配一些内存
+				auto alloc = pool.threadLocalAllocator();
+				std::pmr::vector<int> vec(alloc);
+				for (int j = 0; j < 100; ++j)
+				{
+					vec.push_back(j);
+				}
+			});
+	}
+
+	for (auto& t : threads)
+	{
+		t.join();
+	}
+
+	// 线程已退出，GC 应该能安全回收
+	EXPECT_NO_THROW(pool.gc(std::chrono::seconds(0)));
+
+	auto stats = pool.getStats();
+	EXPECT_GE(stats.threadPoolCount, 4);
+}

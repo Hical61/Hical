@@ -20,10 +20,12 @@ class HicalConan(ConanFile):
     options = {
         "fPIC": [True, False],
         "with_reflection": [True, False],
+        "with_database": [True, False],
     }
     default_options = {
         "fPIC": True,
         "with_reflection": False,
+        "with_database": False,
     }
 
     exports_sources = (
@@ -52,7 +54,7 @@ class HicalConan(ConanFile):
             check_min_cppstd(self, 26)
 
     def requirements(self):
-        self.requires("boost/[>=1.78.0]", transitive_headers=True, transitive_libs=True)
+        self.requires("boost/[>=1.82.0]", transitive_headers=True, transitive_libs=True)
         self.requires("openssl/[>=1.1.0]", transitive_headers=True, transitive_libs=True)
 
     def layout(self):
@@ -66,6 +68,7 @@ class HicalConan(ConanFile):
         tc.variables["HICAL_BUILD_TESTS"] = False
         tc.variables["HICAL_BUILD_EXAMPLES"] = False
         tc.variables["HICAL_ENABLE_REFLECTION"] = bool(self.options.with_reflection)
+        tc.variables["HICAL_WITH_DATABASE"] = bool(self.options.with_database)
         tc.generate()
 
     def build(self):

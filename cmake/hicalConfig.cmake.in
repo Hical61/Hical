@@ -2,11 +2,18 @@
 
 include(CMakeFindDependencyMacro)
 
-find_dependency(Boost 1.78 COMPONENTS json)
+find_dependency(Boost 1.82 COMPONENTS json)
 if(NOT TARGET Boost::system)
     add_library(Boost::system ALIAS Boost::headers)
 endif()
 find_dependency(OpenSSL)
+
+# DB 中间件依赖（构建时由 CMake 写入实际值）
+set(_HICAL_WITH_DATABASE @HICAL_WITH_DATABASE@)
+if(_HICAL_WITH_DATABASE)
+    find_dependency(Boost 1.82 COMPONENTS charconv)
+endif()
+unset(_HICAL_WITH_DATABASE)
 
 include("${CMAKE_CURRENT_LIST_DIR}/hicalTargets.cmake")
 

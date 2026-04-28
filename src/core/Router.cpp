@@ -95,10 +95,14 @@ namespace hical
 		route.onConnect = std::move(onConnect);
 		route.onDisconnect = std::move(onDisconnect);
 		route.allowedOrigins = std::move(options.allowedOrigins);
+		route.enableCompression = options.enableCompression;
+		route.serverMaxWindowBits = options.serverMaxWindowBits;
+		route.clientMaxWindowBits = options.clientMaxWindowBits;
+		route.serverNoContextTakeover = options.serverNoContextTakeover;
 		wsRoutes_.push_back(std::move(route));
 	}
 
-	const Router::WsRoute* Router::findWsRoute(const std::string& path) const
+	const Router::WsRoute* Router::findWsRoute(std::string_view path) const
 	{
 		for (const auto& route : wsRoutes_)
 		{
@@ -160,9 +164,9 @@ namespace hical
 		auto groupIt = paramRoutesByMethod_.find(reqMethod);
 		if (groupIt != paramRoutesByMethod_.end())
 		{
+			ParamList params;
 			for (const auto& entry : groupIt->second)
 			{
-				ParamList params;
 				if (matchParamPath(entry.path, reqPath, params))
 				{
 					for (const auto& [name, value] : params)
@@ -292,7 +296,12 @@ namespace hical
 				int loVal = hexVal(lo);
 				if (hiVal >= 0 && loVal >= 0)
 				{
-					result += static_cast<char>((hiVal << 4) | loVal);
+					char decoded = static_cast<char>((hiVal << 4) | loVal);
+					// 防御纵深：跳过 %00 NULL 字节，防止 C API 路径截断攻击
+					if (decoded != '\0')
+					{
+						result += decoded;
+					}
 					i += 2;
 					continue;
 				}

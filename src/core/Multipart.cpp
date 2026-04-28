@@ -1,6 +1,7 @@
 #include "Multipart.h"
 #include <algorithm>
 #include <cctype>
+#include <functional>
 
 namespace hical
 {
@@ -180,16 +181,20 @@ namespace hical
 		// delimiter = "--" + boundary
 		std::string delimiter = "--" + boundary;
 
+		// 预构建 Boyer-Moore-Horspool 搜索器，将 O(n*m) 朴素搜索降至 O(n)
+		// 防止恶意构造的 body 触发最坏情况二次复杂度（类 ReDoS）
+		std::boyer_moore_horspool_searcher searcher(delimiter.begin(), delimiter.end());
+
 		std::vector<MultipartPart> parts;
 		std::string_view data(body);
 
 		// 查找第一个 delimiter
-		auto pos = data.find(delimiter);
-		if (pos == std::string_view::npos)
+		auto firstIt = std::search(data.begin(), data.end(), searcher);
+		if (firstIt == data.end())
 		{
 			return std::nullopt;
 		}
-		pos += delimiter.size();
+		auto pos = static_cast<size_t>(firstIt - data.begin()) + delimiter.size();
 
 		// 跳过 delimiter 后的 CRLF
 		if (data.substr(pos, 2) == "\r\n")
@@ -209,11 +214,12 @@ namespace hical
 		while (pos < data.size())
 		{
 			// 查找下一个 delimiter（可能是普通 delimiter 或 end delimiter）
-			auto nextDelim = data.find(delimiter, pos);
-			if (nextDelim == std::string_view::npos)
+			auto nextIt = std::search(data.begin() + static_cast<std::ptrdiff_t>(pos), data.end(), searcher);
+			if (nextIt == data.end())
 			{
 				break;
 			}
+			auto nextDelim = static_cast<size_t>(nextIt - data.begin());
 
 			// Part 内容：从 pos 到 nextDelim（去掉末尾 CRLF）
 			std::string_view partData = data.substr(pos, nextDelim - pos);

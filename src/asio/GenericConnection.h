@@ -344,7 +344,7 @@ namespace hical
 			return;
 		}
 
-		enqueueNode(std::make_shared<MemoryWriteNode>(buffer.readAll()));
+		enqueueNode(std::make_shared<PmrBufferWriteNode>(std::move(buffer)));
 	}
 
 	template <typename SocketType>
@@ -366,8 +366,7 @@ namespace hical
 			return;
 		}
 
-		enqueueNode(
-			std::make_shared<MemoryWriteNode>(std::make_shared<std::string>(msgPtr->peek(), msgPtr->readableBytes())));
+		enqueueNode(std::make_shared<MemoryWriteNode>(msgPtr->readAll()));
 	}
 
 	/**
@@ -877,9 +876,9 @@ namespace hical
 
 					if (memCount == 1)
 					{
-						auto& memNode = static_cast<MemoryWriteNode&>(*batch[memStart]);
-						auto bytesWritten =
-							co_await boost::asio::async_write(socket_, memNode.buffer(), boost::asio::use_awaitable);
+						auto bytesWritten = co_await boost::asio::async_write(socket_,
+																			  batch[memStart]->asBuffer(),
+																			  boost::asio::use_awaitable);
 						bytesSent_ += bytesWritten;
 						updateLastActiveTime();
 					}
@@ -892,7 +891,7 @@ namespace hical
 							std::array<boost::asio::const_buffer, hSmallBatchSize> stackBufs;
 							for (size_t i = 0; i < memCount; ++i)
 							{
-								stackBufs[i] = static_cast<MemoryWriteNode&>(*batch[memStart + i]).buffer();
+								stackBufs[i] = batch[memStart + i]->asBuffer();
 							}
 							auto bytesWritten = co_await boost::asio::async_write(
 								socket_,
@@ -907,7 +906,7 @@ namespace hical
 							buffers.reserve(memCount);
 							for (size_t i = 0; i < memCount; ++i)
 							{
-								buffers.emplace_back(static_cast<MemoryWriteNode&>(*batch[memStart + i]).buffer());
+								buffers.emplace_back(batch[memStart + i]->asBuffer());
 							}
 							auto bytesWritten =
 								co_await boost::asio::async_write(socket_, buffers, boost::asio::use_awaitable);

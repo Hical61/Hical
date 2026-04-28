@@ -205,52 +205,30 @@ namespace hical::meta
  * 第一个参数为 Handler 类型名，后续参数为成员函数名。
  * 用法：HICAL_ROUTES(MyHandler, listUsers, getUser)
  */
-	#define HICAL_ROUTES(Type, ...)                                          \
-		static auto hicalRouteTable()                                        \
-		{                                                                    \
-			return std::make_tuple(HICAL_ROUTES_EXPAND_(Type, __VA_ARGS__)); \
+	#define HICAL_ROUTES(Type, ...)                                                                  \
+		static auto hicalRouteTable()                                                                \
+		{                                                                                            \
+			return std::make_tuple(HICAL_ROUTES_EXPAND_(HICAL_ROUTES_FOR_EACH_(Type, __VA_ARGS__))); \
 		}
 
 	// 生成单个 registrar
 	#define HICAL_ROUTE_REG_(T, func) ::hical::meta::detail::makeRegistrar<T>(T::hicalRouteInfo_##func, &T::func)
 
-	// 展开辅助宏
-	#define HICAL_ROUTES_EXPAND_(T, ...) HICAL_ROUTES_DISPATCH_(T, HICAL_ROUTES_COUNT_(__VA_ARGS__), __VA_ARGS__)
+// ---- __VA_OPT__ 递归展开 ----
 
-	// 参数计数
-	#define HICAL_ROUTES_COUNT_(...) \
-		HICAL_ROUTES_COUNT_IMPL_(__VA_ARGS__, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1)
-	#define HICAL_ROUTES_COUNT_IMPL_(_1, _2, _3, _4, _5, _6, _7, _8, _9, _10, _11, _12, _13, _14, _15, _16, N, ...) N
+	#define HICAL_ROUTES_PARENS_ ()
 
-	// 分发到对应数量的展开宏
-	#define HICAL_ROUTES_DISPATCH_(T, N, ...) HICAL_ROUTES_CAT_(HICAL_ROUTES_E_, N)(T, __VA_ARGS__)
-	#define HICAL_ROUTES_CAT_(a, b) HICAL_ROUTES_CAT2_(a, b)
-	#define HICAL_ROUTES_CAT2_(a, b) a##b
+	#define HICAL_ROUTES_FOR_EACH_(T, a, ...) \
+		HICAL_ROUTE_REG_(T, a) __VA_OPT__(, HICAL_ROUTES_FE_AGAIN_ HICAL_ROUTES_PARENS_(T, __VA_ARGS__))
 
-	#define HICAL_ROUTES_E_1(T, a) HICAL_ROUTE_REG_(T, a)
-	#define HICAL_ROUTES_E_2(T, a, b) HICAL_ROUTE_REG_(T, a), HICAL_ROUTE_REG_(T, b)
-	#define HICAL_ROUTES_E_3(T, a, b, c) HICAL_ROUTES_E_2(T, a, b), HICAL_ROUTE_REG_(T, c)
-	#define HICAL_ROUTES_E_4(T, a, b, c, d) HICAL_ROUTES_E_3(T, a, b, c), HICAL_ROUTE_REG_(T, d)
-	#define HICAL_ROUTES_E_5(T, a, b, c, d, e) HICAL_ROUTES_E_4(T, a, b, c, d), HICAL_ROUTE_REG_(T, e)
-	#define HICAL_ROUTES_E_6(T, a, b, c, d, e, f) HICAL_ROUTES_E_5(T, a, b, c, d, e), HICAL_ROUTE_REG_(T, f)
-	#define HICAL_ROUTES_E_7(T, a, b, c, d, e, f, g) HICAL_ROUTES_E_6(T, a, b, c, d, e, f), HICAL_ROUTE_REG_(T, g)
-	#define HICAL_ROUTES_E_8(T, a, b, c, d, e, f, g, h) HICAL_ROUTES_E_7(T, a, b, c, d, e, f, g), HICAL_ROUTE_REG_(T, h)
-	#define HICAL_ROUTES_E_9(T, a, b, c, d, e, f, g, h, i) \
-		HICAL_ROUTES_E_8(T, a, b, c, d, e, f, g, h), HICAL_ROUTE_REG_(T, i)
-	#define HICAL_ROUTES_E_10(T, a, b, c, d, e, f, g, h, i, j) \
-		HICAL_ROUTES_E_9(T, a, b, c, d, e, f, g, h, i), HICAL_ROUTE_REG_(T, j)
-	#define HICAL_ROUTES_E_11(T, a, b, c, d, e, f, g, h, i, j, k) \
-		HICAL_ROUTES_E_10(T, a, b, c, d, e, f, g, h, i, j), HICAL_ROUTE_REG_(T, k)
-	#define HICAL_ROUTES_E_12(T, a, b, c, d, e, f, g, h, i, j, k, l) \
-		HICAL_ROUTES_E_11(T, a, b, c, d, e, f, g, h, i, j, k, l), HICAL_ROUTE_REG_(T, l)
-	#define HICAL_ROUTES_E_13(T, a, b, c, d, e, f, g, h, i, j, k, l, m) \
-		HICAL_ROUTES_E_12(T, a, b, c, d, e, f, g, h, i, j, k, l, m), HICAL_ROUTE_REG_(T, m)
-	#define HICAL_ROUTES_E_14(T, a, b, c, d, e, f, g, h, i, j, k, l, m, n) \
-		HICAL_ROUTES_E_13(T, a, b, c, d, e, f, g, h, i, j, k, l, m, n), HICAL_ROUTE_REG_(T, n)
-	#define HICAL_ROUTES_E_15(T, a, b, c, d, e, f, g, h, i, j, k, l, m, n, o) \
-		HICAL_ROUTES_E_14(T, a, b, c, d, e, f, g, h, i, j, k, l, m, n, o), HICAL_ROUTE_REG_(T, o)
-	#define HICAL_ROUTES_E_16(T, a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p) \
-		HICAL_ROUTES_E_15(T, a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p), HICAL_ROUTE_REG_(T, p)
+	#define HICAL_ROUTES_FE_AGAIN_() HICAL_ROUTES_FOR_EACH_
+
+	// 多层 EXPAND 解锁递归深度（支持最多 243 个路由）
+	#define HICAL_ROUTES_EXPAND_(...) HICAL_ROUTES_EXP4_(HICAL_ROUTES_EXP4_(__VA_ARGS__))
+	#define HICAL_ROUTES_EXP4_(...) HICAL_ROUTES_EXP3_(HICAL_ROUTES_EXP3_(__VA_ARGS__))
+	#define HICAL_ROUTES_EXP3_(...) HICAL_ROUTES_EXP2_(HICAL_ROUTES_EXP2_(__VA_ARGS__))
+	#define HICAL_ROUTES_EXP2_(...) HICAL_ROUTES_EXP1_(HICAL_ROUTES_EXP1_(__VA_ARGS__))
+	#define HICAL_ROUTES_EXP1_(...) __VA_ARGS__
 
 #else
 	#define HICAL_HANDLER(method, path, func)

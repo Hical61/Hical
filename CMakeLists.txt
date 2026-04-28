@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(hical VERSION 2.1.0 LANGUAGES CXX)
+project(hical VERSION 2.2.0 LANGUAGES CXX)
 
 # C++26 反射可选支持
 option(HICAL_ENABLE_REFLECTION "Enable C++26 reflection (requires compatible compiler)" OFF)
@@ -7,6 +7,12 @@ option(HICAL_ENABLE_REFLECTION "Enable C++26 reflection (requires compatible com
 # 构建控制选项（作为库分发时关闭以加快构建）
 option(HICAL_BUILD_TESTS    "Build unit tests"       ON)
 option(HICAL_BUILD_EXAMPLES "Build example programs" ON)
+
+# 中间件性能剖析（启用后对每个命名中间件记录调用次数和耗时统计）
+option(HICAL_ENABLE_MIDDLEWARE_PROFILING "Enable per-middleware timing statistics" OFF)
+
+# 数据库中间件（启用后编译 DB 连接池和 MySQL 后端，需要 boost-mysql）
+option(HICAL_WITH_DATABASE "Enable database middleware (requires Boost.MySQL)" OFF)
 
 if(HICAL_ENABLE_REFLECTION)
     set(CMAKE_CXX_STANDARD 26)
@@ -27,13 +33,18 @@ else()
     add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
-# 查找依赖库
-find_package(Boost 1.78 REQUIRED COMPONENTS json)
+# 查找依赖库（Boost >= 1.82：框架核心 + DB 中间件所需的最低版本）
+find_package(Boost 1.82 REQUIRED COMPONENTS json)
 if(NOT TARGET Boost::system)
     # Boost.System is header-only since 1.69; Conan may not provide this target
     add_library(Boost::system ALIAS Boost::headers)
 endif()
 find_package(OpenSSL REQUIRED)
+
+# DB 依赖：boost::mysql（header-only）需要链接 boost::charconv
+if(HICAL_WITH_DATABASE)
+    find_package(Boost 1.82 REQUIRED COMPONENTS charconv)
+endif()
 
 # GTest 仅在构建测试时需要
 if(HICAL_BUILD_TESTS)

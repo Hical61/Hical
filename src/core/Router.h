@@ -100,6 +100,18 @@ namespace hical
 		{
 			/// 允许的 Origin 列表（防 CSWSH）。为空时不校验 Origin。
 			std::unordered_set<std::string> allowedOrigins;
+
+			/// 是否启用 permessage-deflate 压缩（默认关闭，向后兼容）
+			bool enableCompression = false;
+
+			/// zlib 服务端最大窗口位数 (9-15，默认 15)
+			int serverMaxWindowBits = 15;
+
+			/// zlib 客户端最大窗口位数 (9-15，默认 15)
+			int clientMaxWindowBits = 15;
+
+			/// 每消息独立压缩（省内存但降低压缩率）
+			bool serverNoContextTakeover = false;
 		};
 
 		struct WsRoute
@@ -109,6 +121,12 @@ namespace hical
 			WsConnectCallback onConnect;
 			WsDisconnectCallback onDisconnect;
 			std::unordered_set<std::string> allowedOrigins; ///< 允许的 Origin 列表（空 = 不校验）
+
+			/// 压缩配置（从 WsOptions 复制）
+			bool enableCompression = false;
+			int serverMaxWindowBits = 15;
+			int clientMaxWindowBits = 15;
+			bool serverNoContextTakeover = false;
 		};
 
 		/**
@@ -151,7 +169,7 @@ namespace hical
 		 * @return 如果是 ws 路由返回对应的 WsRoute 指针，否则 nullptr
 		 */
 
-		const WsRoute* findWsRoute(const std::string& path) const;
+		const WsRoute* findWsRoute(std::string_view path) const;
 
 		/**
 		 * @brief 获取已注册路由数量（HTTP + WebSocket）

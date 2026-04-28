@@ -63,6 +63,33 @@ if(UNIX AND NOT APPLE)
     endif()
 endif()
 
+# 中间件性能剖析编译定义
+if(HICAL_ENABLE_MIDDLEWARE_PROFILING)
+    target_compile_definitions(hical_core PUBLIC HICAL_ENABLE_MIDDLEWARE_PROFILING)
+endif()
+
+# 数据库中间件（可选）
+# 分为两层：
+#   1. DB 核心（连接池/中间件/查询日志）— 后端无关，仅依赖 DbConnection 抽象
+#   2. MySQL 后端 — 依赖 boost::mysql（header-only）+ boost::charconv（需链接）
+# 将来添加 PostgreSQL 后端时，只需在此处新增一个 if(HICAL_WITH_PGSQL) 块
+if(HICAL_WITH_DATABASE)
+    # DB 核心（后端无关）
+    target_sources(hical_core PRIVATE
+        db/DbConnectionPool.cpp
+        db/DbQueryLog.cpp
+    )
+    target_compile_definitions(hical_core PUBLIC HICAL_HAS_DATABASE=1)
+
+    # MySQL 后端
+    target_sources(hical_core PRIVATE
+        db/MysqlConnection.cpp
+        db/StmtCache.cpp
+    )
+    # boost::mysql 的 client-side SQL formatting 依赖 boost::charconv
+    target_link_libraries(hical_core PUBLIC Boost::charconv)
+endif()
+
 # 安装库和头文件
 install(
     TARGETS hical_core
@@ -93,3 +120,12 @@ install(
     DESTINATION include/hical/asio
     FILES_MATCHING PATTERN "*.h"
 )
+
+# 数据库头文件安装（可选）
+if(HICAL_WITH_DATABASE)
+    install(
+        DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/db/
+        DESTINATION include/hical/db
+        FILES_MATCHING PATTERN "*.h"
+    )
+endif()

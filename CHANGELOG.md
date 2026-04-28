@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-04-28
+
+### Breaking Changes
+- **Boost 最低版本**：1.78 → 1.82（DB 中间件依赖 `Boost.MySQL`，需 `charconv` 组件）
+
+### Added
+- **内存池 GC**：`MemoryPool::gc(maxIdleSeconds)` 遍历线程本地池，空闲超时的池由拥有线程延迟执行 `release()`（避免跨线程操作 `unsynchronized_pool_resource` 的 UB）；`HttpServer::setGcInterval()` + `gcLoop()` 协程定时触发；`Stats` 扩展 `threadPoolCount` / `gcCycles` / `gcReclaimedPools` 字段
+- **中间件 Profiling**：编译选项 `HICAL_ENABLE_MIDDLEWARE_PROFILING`，开启后记录每层中间件调用次数、总耗时、平均/最大/最小耗时（原子 CAS 更新，lock-free）；`HttpServer::middlewareStats()` 获取快照
+- **命名中间件**：`MiddlewarePipeline::use(name, handler)` / `HttpServer::use(name, handler)`，Profiling 报告中显示中间件名称
+- **WebSocket permessage-deflate 压缩**：`WsOptions` 新增 `enableCompression` / `serverMaxWindowBits` / `clientMaxWindowBits` / `serverNoContextTakeover` 配置；`WsCompressionConfig` 结构体传入 `WebSocketSession`
+- **PmrBufferWriteNode**：零拷贝持有 `PmrBuffer`（move 语义），消除 `PmrBuffer → string` 数据拷贝；`WriteNode` 基类新增 `asBuffer()` 虚方法
+- **协程异常日志**：`coSpawn()` 默认使用 `logOnException` 回调替代 `detached`，未捕获异常输出到 stderr
+- **Cookie 属性 CRLF 防护**：`setCookie()` 的 `path` / `domain` / `sameSite` 属性新增 CR/LF 注入检查
+- **URL 解码 NULL 字节防御**：`Router::urlDecode()` 跳过 `%00`，防止 C API 路径截断攻击
+- **DB 中间件基础设施**（本次未发布代码，仅构建系统支持）：`HICAL_WITH_DATABASE` CMake 开关（默认 OFF）、vcpkg/Conan `database` feature、`hicalConfig.cmake.in` 自动传递 `charconv` 依赖
+
+### Changed
+- **Session 读写锁细化**：`Session::mutex_` 从 `std::mutex` 升级为 `std::shared_mutex`，`get()` / `has()` / `isDirty()` 使用 `shared_lock`；`get<T>()` 用 `typeid` 比较替代 `try-catch bad_any_cast`
+- **WebSocket 读缓冲区复用**：`WebSocketSession::readBuffer_` 跨 `receive()` 调用复用，避免每次堆分配
+- **WebSocket 超时 timer 生命周期修正**：timer 声明移到 try 块外，catch 块取消 timer；新增 `wsAlive` 原子标志 + RAII 守卫，防止 timer 回调访问已析构 session
+- **GenericConnection 批量发送**：统一通过 `asBuffer()` 多态调用，消除 `static_cast<MemoryWriteNode&>` 向下转型
+- **Router 参数路由**：`ParamList` 提到匹配循环外复用；`findWsRoute()` 参数 `string` → `string_view`
+- **StaticFiles PathCache**：引入 LRU 淘汰策略（`std::list` + `unordered_map`）
+- **Cookie 编码优化**：`setCookie()` 从 `ostringstream` 改为直接字符串拼接 + 查表法百分号编码
+- **MetaRoutes 宏重构**：`HICAL_ROUTES` 从硬编码 `E_1` ~ `E_16` 改为 `__VA_OPT__` 递归展开（支持最多 243 个路由），代码量大幅缩减
+
+### Security
+- Cookie `Set-Cookie` 属性字段（path/domain/sameSite）CRLF 注入防护
+- URL 解码 `%00` NULL 字节截断防护
+- WebSocket timer 生命周期修正（消除 use-after-free 竞态）
+
 ## [2.1.0] - 2026-04-24
 
 ### Breaking Changes
@@ -140,7 +171,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Multipart Part 数量上限（DoS 防护）
 - Session ID 使用密码学安全的随机数生成
 
-[Unreleased]: https://github.com/Hical61/Hical/compare/v2.1.0...HEAD
+[Unreleased]: https://github.com/Hical61/Hical/compare/v2.2.0...HEAD
+[2.2.0]: https://github.com/Hical61/Hical/compare/v2.1.0...v2.2.0
 [2.1.0]: https://github.com/Hical61/Hical/compare/v2.0.0...v2.1.0
 [2.0.0]: https://github.com/Hical61/Hical/compare/v1.0.1...v2.0.0
 [1.0.1]: https://github.com/Hical61/Hical/compare/v1.0.0...v1.0.1

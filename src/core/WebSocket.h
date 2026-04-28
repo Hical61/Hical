@@ -11,6 +11,18 @@ namespace hical
 {
 
 	/**
+	 * @brief WebSocket 压缩配置
+	 * 由 WsRoute 传入，用于配置 permessage-deflate。
+	 */
+	struct WsCompressionConfig
+	{
+		bool enabled = false;
+		int serverMaxWindowBits = 15;
+		int clientMaxWindowBits = 15;
+		bool serverNoContextTakeover = false;
+	};
+
+	/**
 	 * @brief WebSocket 会话封装
 	 * 对 Boost.Beast websocket::stream 的 hical 风格封装。
 	 * 提供协程化的 send/receive 接口。
@@ -27,8 +39,11 @@ namespace hical
 		 * @brief 从已升级的 WebSocket stream 构造
 		 * @param stream WebSocket 流
 		 * @param maxMessageSize 最大消息大小（字节，默认 1MB）
+		 * @param compression 压缩配置（默认不压缩）
 		 */
-		explicit WebSocketSession(WsStream stream, size_t maxMessageSize = hDefaultMaxMessageSize);
+		explicit WebSocketSession(WsStream stream,
+								  size_t maxMessageSize = hDefaultMaxMessageSize,
+								  WsCompressionConfig compression = {});
 
 		/**
 		 * @brief 发送文本消息
@@ -67,9 +82,16 @@ namespace hical
 		 */
 		WsStream& native();
 
+		/**
+		 * @brief 获取压缩配置
+		 */
+		const WsCompressionConfig& compressionConfig() const;
+
 	private:
 		WsStream stream_;
 		std::atomic<bool> open_ {true};
+		WsCompressionConfig compression_;
+		boost::beast::flat_buffer readBuffer_; ///< 读缓冲区（跨 receive() 调用复用，避免每次堆分配）
 	};
 
 } // namespace hical

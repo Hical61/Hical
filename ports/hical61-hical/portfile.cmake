@@ -8,11 +8,17 @@ vcpkg_from_github(
     HEAD_REF main
 )
 
+vcpkg_check_features(OUT_FEATURE_OPTIONS FEATURE_OPTIONS
+    FEATURES
+        database HICAL_WITH_DATABASE
+)
+
 vcpkg_cmake_configure(
     SOURCE_PATH "${SOURCE_PATH}"
     OPTIONS
         -DHICAL_BUILD_TESTS=OFF
         -DHICAL_BUILD_EXAMPLES=OFF
+        ${FEATURE_OPTIONS}
 )
 
 vcpkg_cmake_install()

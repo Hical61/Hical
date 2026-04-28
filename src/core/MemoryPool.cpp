@@ -81,6 +81,7 @@ namespace hical
 		struct ThreadCache
 		{
 			std::pmr::unsynchronized_pool_resource* pool = nullptr;
+			ThreadPoolEntry* entry = nullptr;
 			uint64_t generation = 0;
 		};
 
@@ -89,6 +90,14 @@ namespace hical
 		auto currentGen = generation_.load(std::memory_order_acquire);
 		if (cache.pool != nullptr && cache.generation == currentGen)
 		{
+			// 检查 GC 是否标记了此池需要释放（延迟释放策略：由拥有线程自行执行 release，
+			// 避免跨线程操作 unsynchronized_pool_resource 导致 UB）
+			if (cache.entry->needsRelease.exchange(false, std::memory_order_acquire))
+			{
+				cache.pool->release();
+			}
+			// 更新活跃时间戳（无锁）
+			cache.entry->lastAllocTime.store(std::chrono::steady_clock::now(), std::memory_order_relaxed);
 			return cache.pool;
 		}
 
@@ -98,30 +107,68 @@ namespace hical
 			&globalPool_);
 
 		auto* poolPtr = pool.get();
+		auto entry = std::make_unique<ThreadPoolEntry>(std::move(pool));
+		auto* entryPtr = entry.get();
 
 		{
 			std::lock_guard<std::mutex> lock(threadPoolsMutex_);
-			threadPools_.push_back(std::move(pool));
+			threadPools_.push_back(std::move(entry));
 		}
 
 		cache.pool = poolPtr;
+		cache.entry = entryPtr;
 		cache.generation = currentGen;
 		return poolPtr;
 	}
 
 	MemoryPool::Stats MemoryPool::getStats() const
 	{
+		size_t poolCount = 0;
+		{
+			std::lock_guard<std::mutex> lock(threadPoolsMutex_);
+			poolCount = threadPools_.size();
+		}
+
 		return Stats {
 			.totalAllocations = trackedResource_.totalAllocations(),
 			.totalDeallocations = trackedResource_.totalDeallocations(),
 			.currentBytesAllocated = trackedResource_.currentBytes(),
 			.peakBytesAllocated = trackedResource_.peakBytes(),
+			.threadPoolCount = poolCount,
+			.gcCycles = gcCycles_.load(std::memory_order_relaxed),
+			.gcReclaimedPools = gcReclaimedPools_.load(std::memory_order_relaxed),
 		};
 	}
 
 	void MemoryPool::resetStats()
 	{
 		trackedResource_.resetStats();
+		gcCycles_.store(0, std::memory_order_relaxed);
+		gcReclaimedPools_.store(0, std::memory_order_relaxed);
+	}
+
+	void MemoryPool::gc(std::chrono::seconds maxIdleSeconds)
+	{
+		auto now = std::chrono::steady_clock::now();
+		size_t reclaimed = 0;
+
+		{
+			std::lock_guard<std::mutex> lock(threadPoolsMutex_);
+			for (auto& entry : threadPools_)
+			{
+				auto lastActive = entry->lastAllocTime.load(std::memory_order_relaxed);
+				if (now - lastActive > maxIdleSeconds)
+				{
+					// 标记需要释放，由拥有线程在下次分配时安全执行 release()。
+					// 不直接调用 release()，因为 unsynchronized_pool_resource 不是线程安全的。
+					entry->needsRelease.store(true, std::memory_order_release);
+					++reclaimed;
+				}
+			}
+		}
+
+		gcCycles_.fetch_add(1, std::memory_order_relaxed);
+		gcReclaimedPools_.fetch_add(reclaimed, std::memory_order_relaxed);
 	}
 
 } // namespace hical

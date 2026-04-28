@@ -171,3 +171,88 @@ TEST(WebSocketTest, UnregisteredPathFallsToHttp)
 	server.stop();
 	serverThread.join();
 }
+
+// ============ 安全：WebSocket 空闲超时不触发 use-after-free ============
+
+// 测试：WebSocket 空闲超时正常关闭连接，不 crash（UAF 修复验证）
+TEST(WebSocketTest, IdleTimeoutClosesCleanly)
+{
+	HttpServer server(0);
+	server.setIdleTimeout(1.0); // 1 秒超时
+
+	std::atomic<bool> disconnected {false};
+
+	server.router().ws(
+		"/ws/idle",
+		[](const std::string&, WebSocketSession&) -> Awaitable<void>
+		{
+			co_return;
+		},
+		nullptr,
+		[&disconnected](WebSocketSession&) -> Awaitable<void>
+		{
+			disconnected = true;
+			co_return;
+		});
+
+	std::thread serverThread;
+	uint16_t port = startWsServerAndWait(server, serverThread);
+
+	// 客户端连接后不发任何消息，等待服务端超时关闭
+	boost::asio::io_context ioCtx;
+	tcp::socket socket(ioCtx);
+	socket.connect(tcp::endpoint(boost::asio::ip::make_address("127.0.0.1"), port));
+
+	ws::stream<tcp::socket> wsClient(std::move(socket));
+	wsClient.handshake("127.0.0.1:" + std::to_string(port), "/ws/idle");
+
+	// 等待服务端超时关闭连接（1 秒超时 + 余量）
+	beast::flat_buffer buffer;
+	beast::error_code ec;
+	wsClient.read(buffer, ec);
+
+	// 连接应被服务端关闭（EOF 或 closed）
+	EXPECT_TRUE(ec == boost::asio::error::eof || ec == ws::error::closed || ec == boost::asio::error::connection_reset
+				|| ec == boost::asio::error::operation_aborted);
+
+	server.stop();
+	serverThread.join();
+
+	// 关键：执行到这里没 crash 说明 UAF 已修复
+	EXPECT_TRUE(disconnected.load());
+}
+
+// 测试：服务器 stop() 时 WebSocket 连接有序关闭，不 crash
+TEST(WebSocketTest, ServerStopDuringConnection)
+{
+	HttpServer server(0);
+	server.setIdleTimeout(60.0); // 长超时，确保 timer pending
+
+	server.router().ws("/ws/stop",
+					   [](const std::string& msg, WebSocketSession& session) -> Awaitable<void>
+					   {
+						   co_await session.send("Echo: " + msg);
+					   });
+
+	std::thread serverThread;
+	uint16_t port = startWsServerAndWait(server, serverThread);
+
+	boost::asio::io_context ioCtx;
+	tcp::socket socket(ioCtx);
+	socket.connect(tcp::endpoint(boost::asio::ip::make_address("127.0.0.1"), port));
+
+	ws::stream<tcp::socket> wsClient(std::move(socket));
+	wsClient.handshake("127.0.0.1:" + std::to_string(port), "/ws/stop");
+
+	// 发一条消息确保连接完全建立且 timer pending
+	wsClient.write(boost::asio::buffer(std::string("hello")));
+	beast::flat_buffer buffer;
+	wsClient.read(buffer);
+	EXPECT_EQ(beast::buffers_to_string(buffer.data()), "Echo: hello");
+
+	// 在连接仍打开且 timer pending 时 stop 服务器
+	server.stop();
+	serverThread.join();
+
+	// 关键：执行到这里没 crash 说明 timer 回调不会访问已析构的 session
+}

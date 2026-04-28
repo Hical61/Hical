@@ -224,7 +224,7 @@ TEST_F(StaticFilesTest, InvalidRootDirReturns404)
 	EXPECT_EQ(static_cast<int>(res.statusCode()), 404);
 }
 
-// ============ P0: 大文件限制测试 ============
+// ============ 大文件限制测试 ============
 
 TEST_F(StaticFilesTest, LargeFileReturns413)
 {
@@ -248,7 +248,7 @@ TEST_F(StaticFilesTest, FileWithinLimitServedNormally)
 	EXPECT_EQ(res.body(), "hi");
 }
 
-// ============ P3: 304 响应 prepare_payload 测试 ============
+// ============ 304 响应 prepare_payload 测试 ============
 
 TEST_F(StaticFilesTest, NotModifiedResponseHasEmptyBody)
 {

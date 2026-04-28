@@ -1,6 +1,4 @@
 #include "HttpResponse.h"
-#include <iomanip>
-#include <sstream>
 
 namespace hical
 {
@@ -87,62 +85,78 @@ namespace hical
 		// HTTP Response Splitting 防护：name/value 不允许包含 CR/LF
 		if (containsCRLF(name) || containsCRLF(value))
 		{
-			// 拒绝含控制字符的 Cookie，静默忽略（生产环境应记录告警日志）
+			// 拒绝含控制字符的 Cookie，静默忽略（��产环境应记录告警日志）
+			return;
+		}
+
+		// HTTP Response Splitting 防护：path/domain/sameSite 不允许包含 CR/LF
+		if (containsCRLF(options.path) || containsCRLF(options.domain) || containsCRLF(options.sameSite))
+		{
 			return;
 		}
 
 		// RFC 6265 cookie-value 合法字符百分号编码
 		// 合法: %x21 / %x23-2B / %x2D-3A / %x3C-5B / %x5D-7E
+		static constexpr char kHexDigits[] = "0123456789ABCDEF";
 		auto encodeCookieValue = [](const std::string& raw) -> std::string
 		{
-			std::ostringstream encoded;
-			encoded << std::hex << std::uppercase;
+			std::string encoded;
+			encoded.reserve(raw.size());
 			for (unsigned char c : raw)
 			{
 				bool safe = (c == 0x21) || (c >= 0x23 && c <= 0x2B) || (c >= 0x2D && c <= 0x3A)
 							|| (c >= 0x3C && c <= 0x5B) || (c >= 0x5D && c <= 0x7E);
 				if (safe)
 				{
-					encoded << static_cast<char>(c);
+					encoded += static_cast<char>(c);
 				}
 				else
 				{
-					encoded << '%' << std::setw(2) << std::setfill('0') << static_cast<int>(c);
+					encoded += '%';
+					encoded += kHexDigits[c >> 4];
+					encoded += kHexDigits[c & 0x0F];
 				}
 			}
-			return encoded.str();
+			return encoded;
 		};
 
-		std::ostringstream oss;
-		oss << name << "=" << encodeCookieValue(value);
+		std::string cookie;
+		cookie.reserve(name.size() + value.size() * 3 + 128);
+		cookie += name;
+		cookie += '=';
+		cookie += encodeCookieValue(value);
 
 		if (!options.path.empty())
 		{
-			oss << "; Path=" << options.path;
+			cookie += "; Path=";
+			cookie += options.path;
 		}
 		if (!options.domain.empty())
 		{
-			oss << "; Domain=" << options.domain;
+			cookie += "; Domain=";
+			cookie += options.domain;
 		}
 		if (options.maxAge >= 0)
 		{
-			oss << "; Max-Age=" << options.maxAge;
+			cookie += "; Max-Age=";
+			cookie += std::to_string(options.maxAge);
 		}
 		if (options.httpOnly)
 		{
-			oss << "; HttpOnly";
+			cookie += "; HttpOnly";
 		}
 		if (options.secure)
 		{
-			oss << "; Secure";
+			cookie += "; Secure";
 		}
 		if (!options.sameSite.empty())
 		{
-			oss << "; SameSite=" << options.sameSite;
+			cookie += "; SameSite=";
+			cookie += options.sameSite;
 		}
 
 		// Beast 不支持同名字段多值直接 set，使用 insert 追加多个 Set-Cookie
-		res_.insert(boost::beast::http::field::set_cookie, oss.str());
+		res_.insert(boost::beast::http::field::set_cookie, cookie);
 	}
 
 	HttpResponse::BeastResponse& HttpResponse::native()

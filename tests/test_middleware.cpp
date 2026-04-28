@@ -255,3 +255,103 @@ TEST(MiddlewareTest, UseBeforeBuildSucceeds)
 
 	EXPECT_EQ(pipeline.size(), 1);
 }
+
+// ============ 命名中间件 ============
+
+TEST(MiddlewareTest, NamedUseWorks)
+{
+	MiddlewarePipeline pipeline;
+
+	pipeline.use("logger",
+				 [](HttpRequest& req, MiddlewareNext next) -> Awaitable<HttpResponse>
+				 {
+					 co_return co_await next(req);
+				 });
+
+	pipeline.use("auth",
+				 [](HttpRequest& req, MiddlewareNext next) -> Awaitable<HttpResponse>
+				 {
+					 co_return co_await next(req);
+				 });
+
+	EXPECT_EQ(pipeline.size(), 2);
+}
+
+// ============ Profiling 测试（仅在编译选项开启时生效） ============
+
+#ifdef HICAL_ENABLE_MIDDLEWARE_PROFILING
+
+TEST(MiddlewareProfilingTest, TimingStatsRecordCallCount)
+{
+	MiddlewarePipeline pipeline;
+
+	pipeline.use("fast",
+				 [](HttpRequest& req, MiddlewareNext next) -> Awaitable<HttpResponse>
+				 {
+					 co_return co_await next(req);
+				 });
+
+	pipeline.use("slow",
+				 [](HttpRequest& req, MiddlewareNext next) -> Awaitable<HttpResponse>
+				 {
+					 auto res = co_await next(req);
+					 co_return res;
+				 });
+
+	pipeline.build(
+		[](HttpRequest&) -> Awaitable<HttpResponse>
+		{
+			co_return HttpResponse::ok("ok");
+		});
+
+	// 执行 3 次
+	for (int i = 0; i < 3; ++i)
+	{
+		auto result = runCoroutine(
+			[&]()
+			{
+				HttpRequest req;
+				return pipeline.execute(req);
+			});
+		ASSERT_TRUE(result.has_value());
+	}
+
+	auto stats = pipeline.getTimingStats();
+	ASSERT_EQ(stats.size(), 2);
+	EXPECT_EQ(stats[0].name, "fast");
+	EXPECT_EQ(stats[1].name, "slow");
+	EXPECT_EQ(stats[0].callCount, 3);
+	EXPECT_EQ(stats[1].callCount, 3);
+	EXPECT_GE(stats[0].avgTimeMs, 0.0);
+	EXPECT_GE(stats[1].avgTimeMs, 0.0);
+}
+
+TEST(MiddlewareProfilingTest, ResetTimingStats)
+{
+	MiddlewarePipeline pipeline;
+	pipeline.use("mw",
+				 [](HttpRequest& req, MiddlewareNext next) -> Awaitable<HttpResponse>
+				 {
+					 co_return co_await next(req);
+				 });
+	pipeline.build(
+		[](HttpRequest&) -> Awaitable<HttpResponse>
+		{
+			co_return HttpResponse::ok("ok");
+		});
+
+	auto result = runCoroutine(
+		[&]()
+		{
+			HttpRequest req;
+			return pipeline.execute(req);
+		});
+	ASSERT_TRUE(result.has_value());
+
+	pipeline.resetTimingStats();
+	auto stats = pipeline.getTimingStats();
+	ASSERT_EQ(stats.size(), 1);
+	EXPECT_EQ(stats[0].callCount, 0);
+}
+
+#endif // HICAL_ENABLE_MIDDLEWARE_PROFILING

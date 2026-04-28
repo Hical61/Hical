@@ -6,7 +6,10 @@ namespace hical
 
 	namespace beast = boost::beast;
 
-	WebSocketSession::WebSocketSession(WsStream stream, size_t maxMessageSize) : stream_(std::move(stream))
+	// ============ WebSocketSession ============
+
+	WebSocketSession::WebSocketSession(WsStream stream, size_t maxMessageSize, WsCompressionConfig compression)
+		: stream_(std::move(stream)), compression_(compression)
 	{
 		stream_.read_message_max(maxMessageSize);
 	}
@@ -18,11 +21,11 @@ namespace hical
 
 	Awaitable<std::optional<std::string>> WebSocketSession::receive()
 	{
-		beast::flat_buffer buffer;
 		try
 		{
-			co_await stream_.async_read(buffer, boost::asio::use_awaitable);
-			co_return beast::buffers_to_string(buffer.data());
+			readBuffer_.consume(readBuffer_.size());
+			co_await stream_.async_read(readBuffer_, boost::asio::use_awaitable);
+			co_return beast::buffers_to_string(readBuffer_.data());
 		}
 		catch (const beast::system_error& e)
 		{
@@ -69,6 +72,11 @@ namespace hical
 	WebSocketSession::WsStream& WebSocketSession::native()
 	{
 		return stream_;
+	}
+
+	const WsCompressionConfig& WebSocketSession::compressionConfig() const
+	{
+		return compression_;
 	}
 
 } // namespace hical

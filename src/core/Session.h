@@ -47,7 +47,7 @@ namespace hical
 		 */
 		void set(const std::string& key, std::any value)
 		{
-			std::lock_guard<std::mutex> lk(mutex_);
+			std::unique_lock lk(mutex_);
 			data_[key] = std::move(value);
 			dirty_ = true;
 		}
@@ -61,20 +61,17 @@ namespace hical
 		template <typename T>
 		std::optional<T> get(const std::string& key) const
 		{
-			std::lock_guard<std::mutex> lk(mutex_);
+			std::shared_lock lk(mutex_);
 			auto it = data_.find(key);
 			if (it == data_.end())
 			{
 				return std::nullopt;
 			}
-			try
-			{
-				return std::any_cast<T>(it->second);
-			}
-			catch (const std::bad_any_cast&)
+			if (it->second.type() != typeid(T))
 			{
 				return std::nullopt;
 			}
+			return std::any_cast<T>(it->second);
 		}
 
 		/**
@@ -84,7 +81,7 @@ namespace hical
 		 */
 		bool has(const std::string& key) const
 		{
-			std::lock_guard<std::mutex> lk(mutex_);
+			std::shared_lock lk(mutex_);
 			return data_.count(key) > 0;
 		}
 
@@ -94,7 +91,7 @@ namespace hical
 		 */
 		void remove(const std::string& key)
 		{
-			std::lock_guard<std::mutex> lk(mutex_);
+			std::unique_lock lk(mutex_);
 			data_.erase(key);
 		}
 
@@ -103,7 +100,7 @@ namespace hical
 		 */
 		void clear()
 		{
-			std::lock_guard<std::mutex> lk(mutex_);
+			std::unique_lock lk(mutex_);
 			data_.clear();
 		}
 
@@ -117,15 +114,15 @@ namespace hical
 			// 先锁自己，再锁 other（固定顺序避免死锁：按 this 指针地址排序）
 			if (this < &other)
 			{
-				std::lock_guard<std::mutex> lk1(mutex_);
-				std::lock_guard<std::mutex> lk2(other.mutex_);
+				std::unique_lock lk1(mutex_);
+				std::unique_lock lk2(other.mutex_);
 				data_ = std::move(other.data_);
 				other.data_.clear();
 			}
 			else
 			{
-				std::lock_guard<std::mutex> lk1(other.mutex_);
-				std::lock_guard<std::mutex> lk2(mutex_);
+				std::unique_lock lk1(other.mutex_);
+				std::unique_lock lk2(mutex_);
 				data_ = std::move(other.data_);
 				other.data_.clear();
 			}
@@ -137,7 +134,7 @@ namespace hical
 		 */
 		void markDirty()
 		{
-			std::lock_guard<std::mutex> lk(mutex_);
+			std::unique_lock lk(mutex_);
 			dirty_ = true;
 		}
 
@@ -147,7 +144,7 @@ namespace hical
 		 */
 		bool isDirty() const
 		{
-			std::lock_guard<std::mutex> lk(mutex_);
+			std::shared_lock lk(mutex_);
 			return dirty_;
 		}
 
@@ -171,7 +168,7 @@ namespace hical
 
 	private:
 		std::string id_; ///< 构造后不可变，无需加锁
-		mutable std::mutex mutex_;
+		mutable std::shared_mutex mutex_;
 		std::unordered_map<std::string, std::any> data_;
 		bool dirty_ = false;
 		/// 最后访问时间（纳秒时间戳），无锁原子操作，消除与 SessionManager::mutex_ 的嵌套锁

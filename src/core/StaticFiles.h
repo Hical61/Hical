@@ -11,6 +11,7 @@
 #include <fstream>
 #include <filesystem>
 #include <functional>
+#include <list>
 #include <mutex>
 #include <shared_mutex>
 #include <string>
@@ -153,8 +154,10 @@ namespace hical
 		}
 
 		// canonical 路径缓存：避免每次请求都执行 canonical() 系统调用
+		// 使用 LRU 链表 + 哈希表实现 O(1) 查找、O(1) 驱逐
 		struct CacheEntry
 		{
+			std::string key;
 			fs::path canonical;
 			std::chrono::steady_clock::time_point cachedAt;
 		};
@@ -162,7 +165,8 @@ namespace hical
 		struct PathCache
 		{
 			mutable std::shared_mutex mutex;
-			std::unordered_map<std::string, CacheEntry> cache;
+			std::list<CacheEntry> lruList;                                          // 头部 = 最近使用
+			std::unordered_map<std::string, std::list<CacheEntry>::iterator> index; // key → 链表迭代器
 		};
 
 		static constexpr size_t kMaxPathCacheEntries = 4096;
@@ -185,22 +189,34 @@ namespace hical
 				relPath = "";
 			}
 
-			// 构建目标路径并规范化（使用带 TTL 的缓存避免每次请求都调用 canonical 系统调用）
+			// 构建目标路径并规范化（使用 LRU 缓存避免每次请求都调用 canonical 系统调用）
 			std::string relPathStr(relPath);
 			fs::path target;
 			bool cacheHit = false;
 
+			// 读路径：shared_lock
 			{
 				std::shared_lock<std::shared_mutex> readLock(pathCache->mutex);
-				auto cacheIt = pathCache->cache.find(relPathStr);
-				if (cacheIt != pathCache->cache.end())
+				auto indexIt = pathCache->index.find(relPathStr);
+				if (indexIt != pathCache->index.end())
 				{
-					auto age = std::chrono::steady_clock::now() - cacheIt->second.cachedAt;
+					auto age = std::chrono::steady_clock::now() - indexIt->second->cachedAt;
 					if (age < kCacheTtl)
 					{
-						target = cacheIt->second.canonical;
+						target = indexIt->second->canonical;
 						cacheHit = true;
 					}
+				}
+			}
+
+			// 命中但需要提升 LRU 位置（写锁，O(1) splice）
+			if (cacheHit)
+			{
+				std::unique_lock<std::shared_mutex> writeLock(pathCache->mutex);
+				auto indexIt = pathCache->index.find(relPathStr);
+				if (indexIt != pathCache->index.end())
+				{
+					pathCache->lruList.splice(pathCache->lruList.begin(), pathCache->lruList, indexIt->second);
 				}
 			}
 
@@ -214,27 +230,33 @@ namespace hical
 					co_return HttpResponse::notFound();
 				}
 
+				// 插入缓存（写锁）
 				{
 					std::unique_lock<std::shared_mutex> writeLock(pathCache->mutex);
-					if (pathCache->cache.size() < kMaxPathCacheEntries)
+
+					// Double-check：其他线程可能已在我们等待写锁期间插入了同一 key
+					auto existIt = pathCache->index.find(relPathStr);
+					if (existIt != pathCache->index.end())
 					{
-						pathCache->cache.insert_or_assign(relPathStr,
-														  CacheEntry {target, std::chrono::steady_clock::now()});
+						// 已存在：更新并提升到头部
+						existIt->second->canonical = target;
+						existIt->second->cachedAt = std::chrono::steady_clock::now();
+						pathCache->lruList.splice(pathCache->lruList.begin(), pathCache->lruList, existIt->second);
 					}
 					else
 					{
-						// 缓存已满：先尝试更新已有条目，否则淘汰一个旧条目再插入
-						auto existIt = pathCache->cache.find(relPathStr);
-						if (existIt != pathCache->cache.end())
+						// 驱逐：缓存已满时弹出尾部（最久未使用），O(1)
+						if (pathCache->index.size() >= kMaxPathCacheEntries)
 						{
-							existIt->second = CacheEntry {target, std::chrono::steady_clock::now()};
+							auto& victim = pathCache->lruList.back();
+							pathCache->index.erase(victim.key);
+							pathCache->lruList.pop_back();
 						}
-						else
-						{
-							// 淘汰 begin() 条目（unordered_map 的 begin 分布近似随机，O(1)）
-							pathCache->cache.erase(pathCache->cache.begin());
-							pathCache->cache.emplace(relPathStr, CacheEntry {target, std::chrono::steady_clock::now()});
-						}
+
+						// 插入头部
+						pathCache->lruList.push_front(
+							CacheEntry {relPathStr, target, std::chrono::steady_clock::now()});
+						pathCache->index.emplace(relPathStr, pathCache->lruList.begin());
 					}
 				}
 			}

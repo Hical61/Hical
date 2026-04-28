@@ -7,6 +7,7 @@
 #include <boost/asio/steady_timer.hpp>
 #include <boost/asio/use_awaitable.hpp>
 #include <chrono>
+#include <cstdio>
 #include <functional>
 
 namespace hical
@@ -69,15 +70,40 @@ namespace hical
 	}
 
 	/**
-	 * @brief co_spawn 便捷封装
+	 * @brief 默认协程完成回调：异常时输出日志到 stderr，而非静默丢弃
+	 * 相比 boost::asio::detached，此 handler 在协程抛出未捕获异常时
+	 * 输出错误信息，避免连接泄漏等问题在生产环境中无从追踪。
+	 */
+	inline auto logOnException = [](std::exception_ptr eptr)
+	{
+		if (eptr)
+		{
+			try
+			{
+				std::rethrow_exception(eptr);
+			}
+			catch (const std::exception& e)
+			{
+				std::fprintf(stderr, "[hical] unhandled coroutine exception: %s\n", e.what());
+			}
+			catch (...)
+			{
+				std::fprintf(stderr, "[hical] unhandled coroutine exception (unknown type)\n");
+			}
+		}
+	};
+
+	/**
+	 * @brief co_spawn 便捷封装（默认带异常日志）
 	 * @param ioCtx io_context 引用
 	 * @param coroutine 协程函数
 	 * 在指定 io_context 上启动一个协程。
+	 * 协程内未捕获的异常会输出到 stderr，而非静默丢弃。
 	 */
 	template <typename F>
 	void coSpawn(boost::asio::io_context& ioCtx, F&& coroutine)
 	{
-		boost::asio::co_spawn(ioCtx, std::forward<F>(coroutine), boost::asio::detached);
+		boost::asio::co_spawn(ioCtx, std::forward<F>(coroutine), logOnException);
 	}
 
 	/**

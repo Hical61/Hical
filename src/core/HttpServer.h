@@ -59,6 +59,21 @@ namespace hical
 		void use(MiddlewareHandler middleware);
 
 		/**
+		 * @brief 添加命名中间件（启用 profiling 时记录名称用于统计）
+		 * @param name 中间件名称
+		 * @param middleware 中间件处理器
+		 */
+		void use(const std::string& name, MiddlewareHandler middleware);
+
+#ifdef HICAL_ENABLE_MIDDLEWARE_PROFILING
+		/**
+		 * @brief 获取中间件计时统计快照
+		 * @return 各层中间件的统计数据
+		 */
+		std::vector<MiddlewarePipeline::TimingSnapshot> middlewareStats() const;
+#endif
+
+		/**
 		 * @brief 启用 SSL/TLS
 		 * @param certFile 证书文件路径
 		 * @param keyFile 私钥文件路径
@@ -88,6 +103,12 @@ namespace hical
 		 * @param seconds 超时秒数（0 表示不超时，默认 60 秒）
 		 */
 		void setIdleTimeout(double seconds);
+
+		/**
+		 * @brief 设置内存池 GC 间隔
+		 * @param seconds GC 间隔秒数（0 表示关闭自动 GC，默认 60 秒）
+		 */
+		void setGcInterval(double seconds);
 
 		/**
 		 * @brief 启动服务器（阻塞）
@@ -126,6 +147,9 @@ namespace hical
 										boost::beast::http::request<boost::beast::http::string_body> req,
 										const Router::WsRoute& wsRoute);
 
+		// 内存池定期 GC 协程
+		Awaitable<void> gcLoop();
+
 		std::atomic<uint16_t> port_;
 		size_t ioThreads_;
 		boost::asio::io_context ioContext_;
@@ -157,6 +181,9 @@ namespace hical
 
 		// fd 耗尽处理：预留一个 fd 防止 accept 循环空转
 		IdleFd idleFd_;
+
+		// 内存池 GC 间隔（秒，0 表示关闭自动 GC）
+		double gcInterval_ {60.0};
 	};
 
 } // namespace hical

@@ -47,6 +47,22 @@ namespace hical
 		middlewarePipeline_.use(std::move(middleware));
 	}
 
+	void HttpServer::use(const std::string& name, MiddlewareHandler middleware)
+	{
+		if (started_)
+		{
+			throw std::logic_error("HttpServer: cannot add middleware after start()");
+		}
+		middlewarePipeline_.use(name, std::move(middleware));
+	}
+
+#ifdef HICAL_ENABLE_MIDDLEWARE_PROFILING
+	std::vector<MiddlewarePipeline::TimingSnapshot> HttpServer::middlewareStats() const
+	{
+		return middlewarePipeline_.getTimingStats();
+	}
+#endif
+
 	void HttpServer::setMaxBodySize(size_t bytes)
 	{
 		maxBodySize_ = bytes;
@@ -65,6 +81,11 @@ namespace hical
 	void HttpServer::setIdleTimeout(double seconds)
 	{
 		idleTimeout_ = seconds;
+	}
+
+	void HttpServer::setGcInterval(double seconds)
+	{
+		gcInterval_ = seconds;
 	}
 
 	void HttpServer::enableSsl(const std::string& certFile, const std::string& keyFile)
@@ -108,6 +129,12 @@ namespace hical
 		port_.store(acceptor_->local_endpoint().port());
 
 		coSpawn(ioContext_, acceptLoop());
+
+		// 启动内存池 GC 定时器协程
+		if (gcInterval_ > 0)
+		{
+			coSpawn(ioContext_, gcLoop());
+		}
 
 		// 多线程运行 io_context
 		std::vector<std::thread> threads;
@@ -340,12 +367,12 @@ namespace hical
 				// 检查 WebSocket 升级请求
 				if (ws::is_upgrade(req.native()))
 				{
-					auto reqPath = std::string(req.path());
+					auto reqPath = req.path();
 
 					auto* wsRoute = router_.findWsRoute(reqPath);
 					if (wsRoute)
 					{
-						// H-2: Origin 白名单校验（CSWSH 防护）
+						// Origin 白名单校验（CSWSH 防护）
 						if (!wsRoute->allowedOrigins.empty())
 						{
 							auto origin = std::string(req.header("Origin"));
@@ -363,7 +390,7 @@ namespace hical
 							}
 						}
 
-						// H-1: WebSocket 升级也走中间件管道（认证/限流/日志等）
+						// WebSocket 升级也走中间件管道（认证/限流/日志等）
 						if (wsMiddlewareChain_)
 						{
 							auto wsAuthRes = co_await wsMiddlewareChain_(req);
@@ -449,27 +476,65 @@ namespace hical
 	{
 		std::unique_ptr<WebSocketSession> session;
 
+		// WebSocket 空闲超时 timer 在 try 外声明，catch 块需要访问以取消 timer 防竞态
+		// （与 HTTP 路径的 deadline 声明位置对齐：handleSession 第 297 行）
+		std::optional<boost::asio::steady_timer> wsDeadline;
+		auto wsTimeoutDuration = std::chrono::milliseconds(static_cast<int64_t>(idleTimeout_ * 1000));
+		if (idleTimeout_ > 0)
+		{
+			wsDeadline.emplace(socket.get_executor());
+		}
+
 		try
 		{
 			ws::stream<tcp::socket> wsStream(std::move(socket));
 
+			// 配置 permessage-deflate 压缩（在 accept 前设置）
+			if (wsRoute.enableCompression)
+			{
+				ws::permessage_deflate opt;
+				opt.server_enable = true;
+				opt.client_enable = true;
+				opt.server_max_window_bits = wsRoute.serverMaxWindowBits;
+				opt.client_max_window_bits = wsRoute.clientMaxWindowBits;
+				opt.server_no_context_takeover = wsRoute.serverNoContextTakeover;
+				opt.compLevel = 6;
+				opt.memLevel = 4;
+				wsStream.set_option(opt);
+			}
+
 			// 接受 WebSocket 升级
 			co_await wsStream.async_accept(req, boost::asio::use_awaitable);
 
-			session = std::make_unique<WebSocketSession>(std::move(wsStream));
+			WsCompressionConfig compressionCfg;
+			compressionCfg.enabled = wsRoute.enableCompression;
+			compressionCfg.serverMaxWindowBits = wsRoute.serverMaxWindowBits;
+			compressionCfg.clientMaxWindowBits = wsRoute.clientMaxWindowBits;
+			compressionCfg.serverNoContextTakeover = wsRoute.serverNoContextTakeover;
+
+			session = std::make_unique<WebSocketSession>(std::move(wsStream),
+														 WebSocketSession::hDefaultMaxMessageSize,
+														 compressionCfg);
+
+			// 使用 alive 标志防止 timer 回调在 session 销毁后访问悬空引用
+			// （与 HTTP 路径的 socketAlive 模式对齐：handleSession 第 311 行）
+			auto wsAlive = std::make_shared<std::atomic<bool>>(true);
+
+			// RAII：确保协程退出时标记 session 已失效，timer 回调不再操作 session
+			struct WsAliveGuard
+			{
+				std::shared_ptr<std::atomic<bool>> alive;
+
+				~WsAliveGuard()
+				{
+					alive->store(false);
+				}
+			} wsAliveGuard {wsAlive};
 
 			// 调用连接回调
 			if (wsRoute.onConnect)
 			{
 				co_await wsRoute.onConnect(*session);
-			}
-
-			// M-4: WebSocket 空闲超时（复用 idleTimeout_，默认 60 秒）
-			std::optional<boost::asio::steady_timer> wsDeadline;
-			auto wsTimeoutDuration = std::chrono::milliseconds(static_cast<int64_t>(idleTimeout_ * 1000));
-			if (idleTimeout_ > 0)
-			{
-				wsDeadline.emplace(co_await boost::asio::this_coro::executor);
 			}
 
 			// 消息循环
@@ -480,9 +545,9 @@ namespace hical
 				{
 					wsDeadline->expires_after(wsTimeoutDuration);
 					wsDeadline->async_wait(
-						[&session](const boost::system::error_code& ec)
+						[&session, aliveFlag = wsAlive](const boost::system::error_code& ec)
 						{
-							if (!ec && session && session->isOpen())
+							if (!ec && aliveFlag->load() && session && session->isOpen())
 							{
 								// 超时：关闭底层 socket 以中断 async_read
 								boost::system::error_code closeEc;
@@ -512,6 +577,13 @@ namespace hical
 		}
 		catch (const beast::system_error& e)
 		{
+			// 异常路径先取消 timer，防止 timer 回调在 session 析构后访问悬空引用
+			// （与 HTTP 路径的 catch 块对齐：handleSession 第 448 行）
+			if (wsDeadline)
+			{
+				wsDeadline->cancel();
+			}
+
 			if (e.code() != ws::error::closed && e.code() != boost::asio::error::eof)
 			{
 				// 忽略正常关闭
@@ -529,6 +601,19 @@ namespace hical
 			{
 				// 忽略断开回调中的异常
 			}
+		}
+	}
+
+	Awaitable<void> HttpServer::gcLoop()
+	{
+		while (running_.load())
+		{
+			co_await hical::sleep(gcInterval_);
+			if (!running_.load())
+			{
+				break;
+			}
+			MemoryPool::instance().gc();
 		}
 	}
 

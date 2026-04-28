@@ -381,3 +381,63 @@ TEST(RouterTest, MixedStaticAndParam)
 	ASSERT_TRUE(result.has_value());
 	EXPECT_EQ(result->body(), "item 789");
 }
+
+// ============ 安全：URL 解码 NULL 字节过滤 ============
+
+TEST(RouterTest, UrlDecodeStripsNullByte)
+{
+	AsioEventLoop loop;
+	Router router;
+
+	std::string capturedParam;
+	router.get("/files/{name}",
+			   [&capturedParam](const HttpRequest& req) -> HttpResponse
+			   {
+				   capturedParam = req.param("name");
+				   return HttpResponse::ok("ok");
+			   });
+
+	HttpRequest req;
+	req.setMethod(HttpMethod::hGet);
+	req.setTarget("/files/secret%00.txt");
+
+	auto result = runCoroutine(loop,
+							   [&]()
+							   {
+								   return router.dispatch(req);
+							   });
+
+	ASSERT_TRUE(result.has_value());
+	EXPECT_EQ(result->statusCode(), HttpStatusCode::hOk);
+	// %00 应被剥离，参数值中不应包含 NULL 字节
+	EXPECT_EQ(capturedParam, "secret.txt");
+	EXPECT_EQ(capturedParam.find('\0'), std::string::npos);
+}
+
+TEST(RouterTest, UrlDecodeStripsMultipleNullBytes)
+{
+	AsioEventLoop loop;
+	Router router;
+
+	std::string capturedParam;
+	router.get("/data/{key}",
+			   [&capturedParam](const HttpRequest& req) -> HttpResponse
+			   {
+				   capturedParam = req.param("key");
+				   return HttpResponse::ok("ok");
+			   });
+
+	HttpRequest req;
+	req.setMethod(HttpMethod::hGet);
+	req.setTarget("/data/%00abc%00def%00");
+
+	auto result = runCoroutine(loop,
+							   [&]()
+							   {
+								   return router.dispatch(req);
+							   });
+
+	ASSERT_TRUE(result.has_value());
+	EXPECT_EQ(result->statusCode(), HttpStatusCode::hOk);
+	EXPECT_EQ(capturedParam, "abcdef");
+}

@@ -146,7 +146,7 @@ TEST(CookieTest, SetMultipleCookies)
 	EXPECT_EQ(count, 2);
 }
 
-// ============ P0: CRLF 注入防护测试 ============
+// ============ CRLF 注入防护测试 ============
 
 TEST(CookieTest, SetCookieRejectsCRLFInName)
 {
@@ -183,7 +183,66 @@ TEST(CookieTest, SetCookieRejectsCRLFInValue)
 	EXPECT_EQ(count, 0);
 }
 
-// ============ P3: 重复键 first-wins 测试 ============
+// ============ CRLF 注入防护 — Cookie 属性字段 ============
+
+TEST(CookieTest, SetCookieRejectsCRLFInPath)
+{
+	HttpResponse res;
+	CookieOptions opts;
+	opts.path = "/; \r\nSet-Cookie: injected=1";
+	res.setCookie("session", "abc123", opts);
+
+	auto& native = res.native();
+	int count = 0;
+	for (auto& field : native)
+	{
+		if (field.name() == boost::beast::http::field::set_cookie)
+		{
+			++count;
+		}
+	}
+	EXPECT_EQ(count, 0);
+}
+
+TEST(CookieTest, SetCookieRejectsCRLFInDomain)
+{
+	HttpResponse res;
+	CookieOptions opts;
+	opts.domain = "example.com\r\nEvil-Header: injected";
+	res.setCookie("session", "abc123", opts);
+
+	auto& native = res.native();
+	int count = 0;
+	for (auto& field : native)
+	{
+		if (field.name() == boost::beast::http::field::set_cookie)
+		{
+			++count;
+		}
+	}
+	EXPECT_EQ(count, 0);
+}
+
+TEST(CookieTest, SetCookieRejectsCRLFInSameSite)
+{
+	HttpResponse res;
+	CookieOptions opts;
+	opts.sameSite = "Strict\r\nX-Injected: true";
+	res.setCookie("session", "abc123", opts);
+
+	auto& native = res.native();
+	int count = 0;
+	for (auto& field : native)
+	{
+		if (field.name() == boost::beast::http::field::set_cookie)
+		{
+			++count;
+		}
+	}
+	EXPECT_EQ(count, 0);
+}
+
+// ============ 重复键 first-wins 测试 ============
 
 TEST(CookieTest, DuplicateCookieNameFirstWins)
 {

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <atomic>
+#include <chrono>
 #include <memory>
 #include <memory_resource>
 #include <mutex>
@@ -167,6 +168,9 @@ namespace hical
 			size_t totalDeallocations {0};    // 总释放次数
 			size_t currentBytesAllocated {0}; // 当前已分配字节数
 			size_t peakBytesAllocated {0};    // 峰值字节数
+			size_t threadPoolCount {0};       // 当前 thread-local 池数量
+			size_t gcCycles {0};              // GC 运行次数
+			size_t gcReclaimedPools {0};      // GC 回收的池数量
 		};
 
 		/**
@@ -179,6 +183,16 @@ namespace hical
 		 * @brief 重置统计数据
 		 */
 		void resetStats();
+
+		/**
+		 * @brief 释放空闲线程池资源
+		 * 设计目标：
+		 * 遍历所有 thread-local 池，若超过 maxIdleSeconds 未分配则调用 release() 释放内部块。
+		 * 不删除池对象（避免 thread_local 悬垂），仅释放池持有的上游内存块。
+		 * @param maxIdleSeconds 最大空闲时间（默认 60 秒）
+		 * @note 线程安全：内部加锁，可从任意线程调用。
+		 */
+		void gc(std::chrono::seconds maxIdleSeconds = std::chrono::seconds(60));
 
 		/**
 		 * @brief 获取追踪资源的直接引用（用于高级诊断）
@@ -217,9 +231,28 @@ namespace hical
 		// 获取当前线程的本地池（thread_local 缓存 + mutex 注册）
 		std::pmr::unsynchronized_pool_resource* getOrCreateThreadPool();
 
+		// thread-local 池及其活跃时间戳
+		struct ThreadPoolEntry
+		{
+			std::unique_ptr<std::pmr::unsynchronized_pool_resource> pool;
+			std::atomic<std::chrono::steady_clock::time_point> lastAllocTime {std::chrono::steady_clock::now()};
+			std::atomic<bool> needsRelease {false}; // GC 标记，由拥有线程在下次分配时执行 release
+
+			explicit ThreadPoolEntry(std::unique_ptr<std::pmr::unsynchronized_pool_resource> p) : pool(std::move(p))
+			{
+			}
+
+			ThreadPoolEntry(const ThreadPoolEntry&) = delete;
+			ThreadPoolEntry& operator=(const ThreadPoolEntry&) = delete;
+		};
+
 		// MemoryPool 持有所有线程本地池的所有权（避免 thread_local 析构顺序问题）
 		mutable std::mutex threadPoolsMutex_;
-		std::vector<std::unique_ptr<std::pmr::unsynchronized_pool_resource>> threadPools_;
+		std::vector<std::unique_ptr<ThreadPoolEntry>> threadPools_;
+
+		// GC 统计
+		std::atomic<size_t> gcCycles_ {0};
+		std::atomic<size_t> gcReclaimedPools_ {0};
 
 		// 代际计数器：configure() 时递增，使 thread_local 缓存自动失效
 		std::atomic<uint64_t> generation_ {0};

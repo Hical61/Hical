@@ -12,6 +12,7 @@
  * - 文件节点 → 分块读取并发送（后续可优化为 sendfile/TransmitFile）
  */
 
+#include "PmrBuffer.h"
 #include <boost/asio/buffer.hpp>
 #include <cstdint>
 #include <filesystem>
@@ -44,6 +45,15 @@ namespace hical
 			return false;
 		}
 
+		/**
+		 * @brief 获取内存数据的 const_buffer 视图（仅内存节点有效）
+		 * @return const_buffer，文件节点返回空 buffer
+		 */
+		virtual boost::asio::const_buffer asBuffer() const
+		{
+			return {};
+		}
+
 		WriteNode() = default;
 		WriteNode(const WriteNode&) = delete;
 		WriteNode& operator=(const WriteNode&) = delete;
@@ -69,6 +79,11 @@ namespace hical
 			return data_->size();
 		}
 
+		boost::asio::const_buffer asBuffer() const override
+		{
+			return boost::asio::buffer(*data_);
+		}
+
 		boost::asio::const_buffer buffer() const
 		{
 			return boost::asio::buffer(*data_);
@@ -81,6 +96,36 @@ namespace hical
 
 	private:
 		std::shared_ptr<std::string> data_;
+	};
+
+	/**
+	 * @brief PMR 缓冲区写节点
+	 * 直接持有 PmrBuffer（move 语义），避免 PmrBuffer → string 的数据拷贝。
+	 */
+	class PmrBufferWriteNode : public WriteNode
+	{
+	public:
+		explicit PmrBufferWriteNode(PmrBuffer&& buffer) : buffer_(std::move(buffer))
+		{
+		}
+
+		size_t size() const override
+		{
+			return buffer_.readableBytes();
+		}
+
+		boost::asio::const_buffer asBuffer() const override
+		{
+			return boost::asio::buffer(buffer_.peek(), buffer_.readableBytes());
+		}
+
+		boost::asio::const_buffer buffer() const
+		{
+			return boost::asio::buffer(buffer_.peek(), buffer_.readableBytes());
+		}
+
+	private:
+		PmrBuffer buffer_;
 	};
 
 	/**

@@ -113,3 +113,31 @@ add_executable(test_session test_session.cpp)
 target_link_libraries(test_session PRIVATE hical_core GTest::gtest_main)
 gtest_discover_tests(test_session)
 
+# 数据库中间件测试（可选，仅当 HICAL_WITH_DATABASE=ON）
+if (HICAL_WITH_DATABASE)
+    # 连接池测试（使用 Mock 连接，不依赖真实数据库）
+    add_executable(test_db_pool test_db_pool.cpp)
+    target_link_libraries(test_db_pool PRIVATE hical_core GTest::gtest_main)
+    gtest_discover_tests(test_db_pool)
+
+    # DB 中间件测试（使用 Mock 连接池）
+    add_executable(test_db_middleware test_db_middleware.cpp)
+    target_link_libraries(test_db_middleware PRIVATE hical_core GTest::gtest_main)
+    gtest_discover_tests(test_db_middleware)
+
+    # PreparedStatement 缓存 LRU 测试
+    add_executable(test_stmt_cache test_stmt_cache.cpp)
+    target_link_libraries(test_stmt_cache PRIVATE hical_core GTest::gtest_main)
+    gtest_discover_tests(test_stmt_cache)
+
+    # 查询日志中间件测试
+    add_executable(test_db_query_log test_db_query_log.cpp)
+    target_link_libraries(test_db_query_log PRIVATE hical_core GTest::gtest_main)
+    gtest_discover_tests(test_db_query_log)
+
+    # MySQL 集成测试（需要真实 MySQL 实例，连接失败时自动 SKIP）
+    add_executable(test_mysql_integration test_mysql_integration.cpp)
+    target_link_libraries(test_mysql_integration PRIVATE hical_core GTest::gtest_main)
+    gtest_discover_tests(test_mysql_integration)
+endif()
+
