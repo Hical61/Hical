@@ -1,7 +1,7 @@
-name: Conan Verify
+name: Conan Publish
 
 on:
-  # tag 触发：推送 v* 标签时验证 Conan 包
+  # tag 触发：推送 v* 标签时验证并发布 Conan 包
   push:
     tags:
       - "v*"
@@ -12,15 +12,14 @@ on:
         description: "覆盖版本号（留空则从 CMakeLists.txt 读取）"
         required: false
 
-# 正式发布通过 Conan Center Index：
-#   https://github.com/conan-io/conan-center-index
-# 此 workflow 仅验证 conan create 能在各平台成功构建
+# CCI 审核中，过渡方案：验证构建 + 打包到 GitHub Release
+# CCI 通过后可移除 Release 上传步骤
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  verify:
+  publish:
     strategy:
       fail-fast: false
       matrix:
@@ -35,7 +34,7 @@ jobs:
             compiler: msvc
 
     runs-on: ${{ matrix.os }}
-    name: Conan Verify (${{ matrix.os }} / ${{ matrix.compiler }})
+    name: Conan Publish (${{ matrix.os }} / ${{ matrix.compiler }})
 
     steps:
       - uses: actions/checkout@v4
@@ -104,3 +103,26 @@ jobs:
             -c tools.cmake.cmaketoolchain:generator="Visual Studio 17 2022" `
             -c tools.microsoft.msbuild:vs_version=17 `
             -o "boost/*:without_cobalt=True"
+
+      # ── 打包源码分发包并上传到 GitHub Release ──
+      # 仅 Linux job + tag 触发时执行（源码包跨平台通用，只需上传一次）
+      - name: Package Conan source
+        if: runner.os == 'Linux' && startsWith(github.ref, 'refs/tags/v')
+        run: |
+          VER=${{ steps.version.outputs.version }}
+          mkdir -p dist/hical
+          cp conanfile.py dist/hical/
+          cp CMakeLists.txt dist/hical/
+          cp LICENSE dist/hical/
+          cp -r cmake dist/hical/
+          cp -r src dist/hical/
+          cp -r test_package dist/hical/
+          tar -czf "hical-${VER}-conan-src.tar.gz" -C dist hical
+          echo "Packaged: hical-${VER}-conan-src.tar.gz ($(du -h hical-${VER}-conan-src.tar.gz | cut -f1))"
+
+      - name: Upload to GitHub Release
+        if: runner.os == 'Linux' && startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: hical-*-conan-src.tar.gz
+          fail_on_unmatched_files: false
