@@ -63,7 +63,8 @@ jobs:
             -DCMAKE_C_COMPILER=${{ matrix.cc }} \
             -DCMAKE_CXX_COMPILER=${{ matrix.cxx }} \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
-            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            -DHICAL_DISABLE_IO_URING=ON
 
       - name: Build (Linux)
         if: runner.os == 'Linux' && matrix.compiler != 'clang'
@@ -83,7 +84,8 @@ jobs:
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
-            -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined"
+            -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined" \
+            -DHICAL_DISABLE_IO_URING=ON
 
       - name: Build with sanitizers (Clang)
         if: matrix.compiler == 'clang'
@@ -109,7 +111,8 @@ jobs:
             -DCMAKE_CXX_COMPILER=${{ matrix.cxx }} \
             -DCMAKE_CXX_FLAGS="--coverage" \
             -DCMAKE_C_FLAGS="--coverage" \
-            -DCMAKE_EXE_LINKER_FLAGS="--coverage"
+            -DCMAKE_EXE_LINKER_FLAGS="--coverage" \
+            -DHICAL_DISABLE_IO_URING=ON
           cmake --build build-cov -j$(nproc)
 
       - name: Run tests for coverage

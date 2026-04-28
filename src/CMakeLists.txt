@@ -55,11 +55,18 @@ if(WIN32)
 endif()
 
 # Linux 需要链接 liburing（Boost.Asio random_access_file 依赖 io_uring）
+# GitHub Actions 自 2025-04 起封禁 io_uring syscall，CI 中需 -DHICAL_DISABLE_IO_URING=ON
 if(UNIX AND NOT APPLE)
-    find_library(URING_LIB uring)
-    if(URING_LIB)
-        target_link_libraries(hical_core PRIVATE ${URING_LIB})
-        target_compile_definitions(hical_core PUBLIC BOOST_ASIO_HAS_IO_URING)
+    option(HICAL_DISABLE_IO_URING "Disable io_uring backend (for environments where io_uring is blocked)" OFF)
+
+    if(NOT HICAL_DISABLE_IO_URING)
+        find_library(URING_LIB uring)
+        if(URING_LIB)
+            target_link_libraries(hical_core PRIVATE ${URING_LIB})
+            target_compile_definitions(hical_core PUBLIC BOOST_ASIO_HAS_IO_URING)
+        endif()
+    else()
+        message(STATUS "io_uring disabled via HICAL_DISABLE_IO_URING")
     endif()
 endif()
 
