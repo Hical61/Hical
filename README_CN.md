@@ -148,17 +148,21 @@ find_package(hical CONFIG REQUIRED)
 target_link_libraries(my_app PRIVATE hical::hical_core)
 ```
 
-### Conan（GitHub Packages）
+### Conan
+
+从 [GitHub Releases](https://github.com/Hical61/Hical/releases) 下载 Conan 源码包并导入本地缓存：
 
 ```bash
-# 添加 Hical 的 Conan remote（仅需一次）
-conan remote add github-hical https://conan.pkg.github.com/Hical61
+# 下载并解压（替换为所需版本）
+curl -LO https://github.com/Hical61/Hical/releases/download/v2.2.0/hical-2.2.0-conan-src.tar.gz
+tar xzf hical-2.2.0-conan-src.tar.gz
 
-# 安装
-conan install --requires="hical/2.2.0" -r github-hical --build=missing
+# 导出到本地 Conan 缓存
+cd hical
+conan export . --version=2.2.0
 ```
 
-或在 `conanfile.txt` 中添加：
+在 `conanfile.txt` 中添加：
 
 ```ini
 [requires]
@@ -167,6 +171,12 @@ hical/2.2.0
 [generators]
 CMakeDeps
 CMakeToolchain
+```
+
+安装并构建：
+
+```bash
+conan install . --build=missing
 ```
 
 在 `CMakeLists.txt` 中使用：

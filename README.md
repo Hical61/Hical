@@ -148,17 +148,21 @@ find_package(hical CONFIG REQUIRED)
 target_link_libraries(my_app PRIVATE hical::hical_core)
 ```
 
-### Conan (GitHub Packages)
+### Conan
+
+Download the Conan source package from [GitHub Releases](https://github.com/Hical61/Hical/releases) and export to local cache:
 
 ```bash
-# Add Hical's Conan remote (one-time setup)
-conan remote add github-hical https://conan.pkg.github.com/Hical61
+# Download & extract (replace version as needed)
+curl -LO https://github.com/Hical61/Hical/releases/download/v2.2.0/hical-2.2.0-conan-src.tar.gz
+tar xzf hical-2.2.0-conan-src.tar.gz
 
-# Install
-conan install --requires="hical/2.2.0" -r github-hical --build=missing
+# Export to local Conan cache
+cd hical
+conan export . --version=2.2.0
 ```
 
-Or add to your `conanfile.txt`:
+Then add to your `conanfile.txt`:
 
 ```ini
 [requires]
@@ -167,6 +171,12 @@ hical/2.2.0
 [generators]
 CMakeDeps
 CMakeToolchain
+```
+
+Install and build:
+
+```bash
+conan install . --build=missing
 ```
 
 Then in your `CMakeLists.txt`:
