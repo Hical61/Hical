@@ -1,23 +1,26 @@
-name: Conan Publish
+name: Conan Verify
 
 on:
-  # tag 触发：推送 v* 标签时自动发布
+  # tag 触发：推送 v* 标签时验证 Conan 包
   push:
     tags:
       - "v*"
-  # 手动触发：用于测试或紧急发布
+  # 手动触发
   workflow_dispatch:
     inputs:
       version_override:
         description: "覆盖版本号（留空则从 CMakeLists.txt 读取）"
         required: false
 
+# 正式发布通过 Conan Center Index：
+#   https://github.com/conan-io/conan-center-index
+# 此 workflow 仅验证 conan create 能在各平台成功构建
+
 permissions:
   contents: read
-  packages: write
 
 jobs:
-  publish:
+  verify:
     strategy:
       fail-fast: false
       matrix:
@@ -32,7 +35,7 @@ jobs:
             compiler: msvc
 
     runs-on: ${{ matrix.os }}
-    name: Conan Publish (${{ matrix.os }} / ${{ matrix.compiler }})
+    name: Conan Verify (${{ matrix.os }} / ${{ matrix.compiler }})
 
     steps:
       - uses: actions/checkout@v4
@@ -101,12 +104,3 @@ jobs:
             -c tools.cmake.cmaketoolchain:generator="Visual Studio 17 2022" `
             -c tools.microsoft.msbuild:vs_version=17 `
             -o "boost/*:without_cobalt=True"
-
-      # ── 添加 Remote 并上传 ──
-      - name: Configure Conan remote
-        run: |
-          conan remote add github-hical https://conan.pkg.github.com/Hical61
-          conan remote login github-hical ${{ github.actor }} -p ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Upload package
-        run: conan upload "hical/${{ steps.version.outputs.version }}" -r github-hical --confirm
