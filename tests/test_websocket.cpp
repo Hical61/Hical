@@ -215,6 +215,13 @@ TEST(WebSocketTest, IdleTimeoutClosesCleanly)
 	EXPECT_TRUE(ec == boost::asio::error::eof || ec == ws::error::closed || ec == boost::asio::error::connection_reset
 				|| ec == boost::asio::error::operation_aborted);
 
+	// 等待 onDisconnect 回调在 io_context 中完成
+	// sanitizer 构建下（ASan/UBSan ~2-5x 性能惩罚），回调链需要更多时间
+	for (int i = 0; i < 200 && !disconnected.load(); ++i)
+	{
+		std::this_thread::sleep_for(std::chrono::milliseconds(10));
+	}
+
 	server.stop();
 	serverThread.join();
 
