@@ -85,7 +85,7 @@ namespace hical
 		// HTTP Response Splitting 防护：name/value 不允许包含 CR/LF
 		if (containsCRLF(name) || containsCRLF(value))
 		{
-			// 拒绝含控制字符的 Cookie，静默忽略（��产环境应记录告警日志）
+			// 拒绝含控制字符的 Cookie，静默忽略
 			return;
 		}
 

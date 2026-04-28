@@ -477,7 +477,6 @@ namespace hical
 		std::unique_ptr<WebSocketSession> session;
 
 		// WebSocket 空闲超时 timer 在 try 外声明，catch 块需要访问以取消 timer 防竞态
-		// （与 HTTP 路径的 deadline 声明位置对齐：handleSession 第 297 行）
 		std::optional<boost::asio::steady_timer> wsDeadline;
 		auto wsTimeoutDuration = std::chrono::milliseconds(static_cast<int64_t>(idleTimeout_ * 1000));
 		if (idleTimeout_ > 0)
@@ -517,7 +516,6 @@ namespace hical
 														 compressionCfg);
 
 			// 使用 alive 标志防止 timer 回调在 session 销毁后访问悬空引用
-			// （与 HTTP 路径的 socketAlive 模式对齐：handleSession 第 311 行）
 			auto wsAlive = std::make_shared<std::atomic<bool>>(true);
 
 			// RAII：确保协程退出时标记 session 已失效，timer 回调不再操作 session
@@ -578,7 +576,6 @@ namespace hical
 		catch (const beast::system_error& e)
 		{
 			// 异常路径先取消 timer，防止 timer 回调在 session 析构后访问悬空引用
-			// （与 HTTP 路径的 catch 块对齐：handleSession 第 448 行）
 			if (wsDeadline)
 			{
 				wsDeadline->cancel();

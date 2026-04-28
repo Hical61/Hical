@@ -1,0 +1,108 @@
+name: Conan Publish
+
+on:
+  # tag 触发：推送 v* 标签时自动发布
+  push:
+    tags:
+      - "v*"
+  # 手动触发：用于测试或紧急发布
+  workflow_dispatch:
+    inputs:
+      version_override:
+        description: "覆盖版本号（留空则从 CMakeLists.txt 读取）"
+        required: false
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux GCC —— 最通用的二进制包
+          - os: ubuntu-24.04
+            compiler: gcc
+            cc: gcc-14
+            cxx: g++-14
+          # Windows MSVC —— Windows 用户的主要选择
+          - os: windows-latest
+            compiler: msvc
+
+    runs-on: ${{ matrix.os }}
+    name: Conan Publish (${{ matrix.os }} / ${{ matrix.compiler }})
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # ── 安装 Conan ──
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Conan
+        run: |
+          pip install conan
+          conan profile detect
+
+      # ── Linux 依赖 ──
+      - name: Install dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libboost-all-dev libssl-dev cmake
+
+      # ── Windows MSVC：vcpkg 缓存 ──
+      - name: Setup vcpkg cache (MSVC)
+        if: matrix.compiler == 'msvc'
+        uses: actions/cache@v4
+        with:
+          path: C:\Users\runneradmin\AppData\Local\vcpkg\archives
+          key: vcpkg-conan-msvc-${{ hashFiles('vcpkg.json') }}
+          restore-keys: vcpkg-conan-msvc-
+
+      # ── 提取版本号 ──
+      - name: Extract version
+        id: version
+        shell: bash
+        run: |
+          if [ -n "${{ github.event.inputs.version_override }}" ]; then
+            echo "version=${{ github.event.inputs.version_override }}" >> "$GITHUB_OUTPUT"
+          else
+            VER=$(grep -oP 'project\s*\(\s*hical\s+VERSION\s+\K[\d.]+' CMakeLists.txt)
+            echo "version=${VER}" >> "$GITHUB_OUTPUT"
+          fi
+          echo "Detected version: ${{ steps.version.outputs.version || '(see GITHUB_OUTPUT)' }}"
+
+      # ── 创建 Conan 包 ──
+      - name: Conan create (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          conan create . \
+            --version=${{ steps.version.outputs.version }} \
+            --build=missing \
+            -s compiler=gcc \
+            -s compiler.version=14 \
+            -s build_type=Release
+
+      - name: Conan create (MSVC)
+        if: matrix.compiler == 'msvc'
+        run: |
+          conan create . `
+            --version=${{ steps.version.outputs.version }} `
+            --build=missing `
+            -s build_type=Release `
+            -c tools.cmake.cmaketoolchain:generator="Visual Studio 17 2022" `
+            -c tools.microsoft.msbuild:vs_version=17
+
+      # ── 添加 Remote 并上传 ──
+      - name: Configure Conan remote
+        run: |
+          conan remote add github-hical https://conan.pkg.github.com/Hical61
+          conan remote login github-hical ${{ github.actor }} -p ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload package
+        run: conan upload "hical/${{ steps.version.outputs.version }}" -r github-hical --confirm

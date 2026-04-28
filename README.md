@@ -11,7 +11,7 @@
 
 Hical is a modern C++ web framework built on Boost.Asio/Beast, utilizing C++26 reflection and PMR memory pooling to achieve high performance.
 
-> **v2.1.0** — C++20/26 dual-track reflection · PMR memory pool · coroutine async I/O · Cookie / Session / StaticFiles / Multipart built-in
+> **v2.2.0** — C++20/26 dual-track reflection · PMR memory pool · coroutine async I/O · Cookie / Session / StaticFiles / Multipart built-in
 
 English | [简体中文](README_CN.md)
 
@@ -131,7 +131,7 @@ hical/
 | CMake        | >= 3.20                             |
 | OpenSSL      | Required                            |
 | Google Test  | Required                            |
-| Compiler     | GCC 14+ / Clang 22+ / MSVC 2022+    |
+| Compiler     | GCC 14+ / Clang 20+ / MSVC 2022+    |
 
 ## Installation
 
@@ -148,17 +148,21 @@ find_package(hical CONFIG REQUIRED)
 target_link_libraries(my_app PRIVATE hical::hical_core)
 ```
 
-### Conan
+### Conan (GitHub Packages)
 
 ```bash
-conan install --requires="hical/2.1.0" --build=missing
+# Add Hical's Conan remote (one-time setup)
+conan remote add github-hical https://conan.pkg.github.com/Hical61
+
+# Install
+conan install --requires="hical/2.2.0" -r github-hical --build=missing
 ```
 
 Or add to your `conanfile.txt`:
 
 ```ini
 [requires]
-hical/2.1.0
+hical/2.2.0
 
 [generators]
 CMakeDeps
@@ -172,11 +176,6 @@ find_package(hical REQUIRED)
 target_link_libraries(my_app PRIVATE hical::hical_core)
 ```
 
-> **Note:** If hical is not yet available on Conan Center, you can build from the repository:
-> ```bash
-> git clone https://github.com/Hical61/Hical.git
-> conan create Hical/ --build=missing
-> ```
 
 ### Build from Source
 

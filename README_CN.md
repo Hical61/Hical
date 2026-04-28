@@ -11,7 +11,7 @@
 
 Hical 是一个基于 Boost.Asio/Beast，利用 C++26 反射和 PMR 内存池构建高性能的现代 C++ Web 框架。
 
-> **v2.1.0** — C++20/26 双轨反射 · PMR 内存池 · 协程异步 I/O · Cookie / Session / 静态文件 / 文件上传 内置
+> **v2.2.0** — C++20/26 双轨反射 · PMR 内存池 · 协程异步 I/O · Cookie / Session / 静态文件 / 文件上传 内置
 
 [English](README.md) | 简体中文
 
@@ -131,7 +131,7 @@ hical/
 | CMake       | >= 3.20                              |
 | OpenSSL     | 必需                                 |
 | Google Test | 必需                                 |
-| 编译器      | GCC 14+ / Clang 22+ / MSVC 2022+     |
+| 编译器      | GCC 14+ / Clang 20+ / MSVC 2022+     |
 
 ## 安装
 
@@ -148,17 +148,21 @@ find_package(hical CONFIG REQUIRED)
 target_link_libraries(my_app PRIVATE hical::hical_core)
 ```
 
-### Conan
+### Conan（GitHub Packages）
 
 ```bash
-conan install --requires="hical/2.1.0" --build=missing
+# 添加 Hical 的 Conan remote（仅需一次）
+conan remote add github-hical https://conan.pkg.github.com/Hical61
+
+# 安装
+conan install --requires="hical/2.2.0" -r github-hical --build=missing
 ```
 
 或在 `conanfile.txt` 中添加：
 
 ```ini
 [requires]
-hical/2.1.0
+hical/2.2.0
 
 [generators]
 CMakeDeps
@@ -172,11 +176,6 @@ find_package(hical REQUIRED)
 target_link_libraries(my_app PRIVATE hical::hical_core)
 ```
 
-> **提示：** 若 hical 尚未进入 Conan Center，可直接从仓库创建本地包：
-> ```bash
-> git clone https://github.com/Hical61/Hical.git
-> conan create Hical/ --build=missing
-> ```
 
 ### 从源码构建
 
