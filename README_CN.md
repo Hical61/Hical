@@ -11,7 +11,7 @@
 
 Hical 是一个基于 Boost.Asio/Beast，利用 C++26 反射和 PMR 内存池构建高性能的现代 C++ Web 框架。
 
-> **v2.2.0** — C++20/26 双轨反射 · PMR 内存池 · 协程异步 I/O · Cookie / Session / 静态文件 / 文件上传 内置
+> C++20/26 双轨反射 · PMR 内存池 · 协程异步 I/O · Cookie / Session / 静态文件 / 文件上传 内置 · 可选 DB 中间件（Boost.MySQL）
 
 [English](README.md) | 简体中文
 
@@ -153,20 +153,20 @@ target_link_libraries(my_app PRIVATE hical::hical_core)
 从 [GitHub Releases](https://github.com/Hical61/Hical/releases) 下载 Conan 源码包并导入本地缓存：
 
 ```bash
-# 下载并解压（替换为所需版本）
-curl -LO https://github.com/Hical61/Hical/releases/download/v2.2.0/hical-2.2.0-conan-src.tar.gz
-tar xzf hical-2.2.0-conan-src.tar.gz
+# 下载并解压（将 VERSION 替换为实际版本号）
+curl -LO https://github.com/Hical61/Hical/releases/download/vVERSION/hical-VERSION-conan-src.tar.gz
+tar xzf hical-VERSION-conan-src.tar.gz
 
 # 导出到本地 Conan 缓存
 cd hical
-conan export . --version=2.2.0
+conan export . --version=VERSION
 ```
 
 在 `conanfile.txt` 中添加：
 
 ```ini
 [requires]
-hical/2.2.0
+hical/VERSION
 
 [generators]
 CMakeDeps

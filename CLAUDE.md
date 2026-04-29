@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Hical is a modern C++20 high-performance web framework built on Boost.Asio/Beast, featuring PMR memory pools, coroutine-based async I/O (`asio::awaitable<T>`), C++20 Concepts for compile-time type safety, and a C++26 reflection layer (dual-track: native P2996 or C++20 macro fallback). Status: v2.1.0.
+Hical is a modern C++20 high-performance web framework built on Boost.Asio/Beast, featuring PMR memory pools, coroutine-based async I/O (`asio::awaitable<T>`), C++20 Concepts for compile-time type safety, a C++26 reflection layer (dual-track: native P2996 or C++20 macro fallback), and an optional coroutine-based database middleware (Boost.MySQL backend).
 
 ## Build Commands
 
@@ -24,6 +24,11 @@ cmake --build build
 ```bash
 cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake
 cmake --build build --config Release
+```
+
+### Enable Database Middleware (requires Boost.MySQL)
+```bash
+cmake -B build -DHICAL_WITH_DATABASE=ON ...
 ```
 
 ### Enable C++26 Reflection (requires compatible compiler)
@@ -81,13 +86,24 @@ find src -name '*.cpp' | xargs clang-tidy -p build
 - `EventLoopPool` — Multi-threaded pool (1 thread : 1 io_context), round-robin connection distribution
 - `TcpServer` — Accept loop managing connection lifecycle, `alive_` flag guards coroutine against use-after-this, `setIdleTimeout()` + `idleCheckLoop()` for idle connection cleanup, `unordered_set` connection storage (O(1)), `IdleFd` for EMFILE protection
 
+**`src/db/`** — Optional coroutine-based database middleware (enabled via `HICAL_WITH_DATABASE=ON`, guarded by `HICAL_HAS_DATABASE` macro). Namespace: `hical::db`. Four-layer architecture:
+- `DbConfig.h` — `struct DbConfig` with pool sizing (`minConnections`/`maxConnections`), timeouts (`idleTimeout`/`acquireTimeout`/`queryTimeout`), health check intervals (`healthCheckInterval`/`pingGracePeriod`/`idleCheckInterval`), `stmtCacheSize` (per-connection LRU capacity), `autoReconnect`, `charset`
+- `DbResult.h` — `struct DbResult` with `columns`/`rows` (string-based), `affectedRows`, `insertId`, `columnIndex()` for name-based lookup
+- `DbConnection.h` — Abstract interface (pure virtual). Parameterized `query()`/`execute()` with `std::span<const std::string>` params (deprecated non-parameterized overloads with `[[deprecated]]`). Transaction control: `beginTransaction()`/`commit()`/`rollback()`/`inTransaction()`. Connection health: `ping()`/`isAlive()`/`lastActiveTime()`/`lastPingTime()`/`touch()`. All async methods return `Awaitable<T>`
+- `DbConnectionPool.h/cpp` — Coroutine-based connection pool using `steady_timer` as coroutine semaphore (no `condition_variable`). LIFO idle connection reuse, background `healthCheckLoop` (ping + replenish to `minConnections`), `idleCheckLoop` (evict idle beyond `idleTimeout`), `pingGracePeriod` optimization (skip ping if recently checked), automatic rollback on release if `inTransaction()`. Factory pattern via `DbConnectionFactory` function type
+- `DbMiddleware.h` — HTTP middleware integration: `makeDbMiddleware()` factory with `DbMiddlewareOptions` (`autoTransaction`/`injectPool`). Helper functions `getDbConnection(req)`/`getDbPool(req)`. Onion model: acquire → inject → [auto begin] → next → [auto commit/rollback] → release. Request attribute keys: `hPoolKey`/`hConnKey`
+- `DbQueryLog.h/cpp` — Query logging middleware via decorator pattern (`LoggingDbConnection` wraps real connection). `makeQueryLogMiddleware()` with `QueryLogOptions`: `onRequestComplete` callback, `slowQueryThreshold` + `onSlowQuery` for slow query detection. Must be registered **after** `makeDbMiddleware()`. `QueryLogEntry` struct records `sql`/`duration`/`rowCount`/`affectedRows`/`isParameterized`
+- `MysqlConnection.h/cpp` — Boost.MySQL backend using `any_connection` (type-erased TCP/SSL). `create()` async factory + `makeFactory()` for pool integration. Full type conversion (int64/uint64/double/string/blob/date/datetime/time/NULL). PreparedStatement retry on stale statement. `validateCharset()` whitelist against SQL injection in `SET NAMES`
+- `StmtCache.h/cpp` — Per-connection LRU PreparedStatement cache (not thread-safe, one instance per connection). `std::list` + `std::unordered_map` with transparent `StringHash`/`StringEqual` for zero-alloc `string_view` lookup. Evicted statements returned to caller for async close
+
 ### Key Patterns
 
 - **Coroutine-based I/O**: All async operations use `co_await` with `boost::asio::use_awaitable`. Route handlers return `Awaitable<HttpResponse>`.
 - **Template-based SSL**: `GenericConnection<SocketType>` uses `if constexpr (hIsSslStream<SocketType>)` to branch SSL vs plain logic at compile time.
 - **PMR everywhere**: Buffers (`PmrBuffer`), HTTP bodies, and JSON objects use `std::pmr` allocators from the three-tier pool.
 - **Backend abstraction**: `AsioBackend` struct bundles `AsioEventLoop` + `PlainConnection` + `AsioTimer` to satisfy the `NetworkBackend` concept. Future backends can be swapped in.
-- **Namespaces**: Public API in `hical::`, reflection layer in `hical::meta::`.
+- **Namespaces**: Public API in `hical::`, reflection layer in `hical::meta::`, database middleware in `hical::db::`.
+- **Optional DB module**: Entire `src/db/` is opt-in via `HICAL_WITH_DATABASE=ON`. `HICAL_HAS_DATABASE` macro guards all DB code at compile boundaries. DB core layer (pool/middleware/query log) is backend-agnostic; MySQL backend is a separate layer. Adding PostgreSQL requires only a new `if(HICAL_WITH_PGSQL)` CMake block.
 
 ### C++26 Reflection Layer (Dual-Track)
 
@@ -138,7 +154,7 @@ Core design principle: when `HICAL_HAS_REFLECTION == 1` (compiler supports P2996
 | Dependency   | Version                               |
 | ------------ | ------------------------------------- |
 | C++ Standard | C++20 (C++26 optional for reflection) |
-| Boost        | >= 1.82 (Asio, Beast, System, JSON, MySQL)   |
+| Boost        | >= 1.82 (Asio, Beast, System, JSON, MySQL, charconv) |
 | OpenSSL      | Required                              |
 | Google Test  | Required                              |
 | CMake        | >= 3.20                               |
@@ -146,7 +162,7 @@ Core design principle: when `HICAL_HAS_REFLECTION == 1` (compiler supports P2996
 
 ## Test Structure
 
-22 test executables in `tests/`, each linked against `hical_core` + `GTest::gtest_main`. Tests are registered via `gtest_discover_tests()` for CTest integration. On Windows, tests also link `ws2_32` and `mswsock`. Key test files:
+22 test executables in `tests/` (+ 5 optional DB tests), each linked against `hical_core` + `GTest::gtest_main`. Tests are registered via `gtest_discover_tests()` for CTest integration. On Windows, tests also link `ws2_32` and `mswsock`. Key test files:
 - `test_router.cpp` / `test_router_perf.cpp` — Route dispatch and performance
 - `test_memory_pool.cpp` — Three-tier PMR allocation
 - `test_http_server.cpp` / `test_integration.cpp` — Full HTTP request/response cycle
@@ -159,6 +175,15 @@ Core design principle: when `HICAL_HAS_REFLECTION == 1` (compiler supports P2996
 - `test_static_files.cpp` — Static file serving, ETag, path traversal
 - `test_multipart.cpp` — multipart/form-data parsing
 - `test_session.cpp` — Session lifecycle and thread safety
+
+### Database Tests (requires `HICAL_WITH_DATABASE=ON`)
+
+5 additional test executables, 4 use `MockDbConnection` (no real DB needed), 1 requires a live MySQL instance (auto-skips if unavailable):
+- `test_db_pool.cpp` — Connection pool: acquire/release, health check, idle eviction, statistics, ping grace period (12 tests)
+- `test_db_middleware.cpp` — DB middleware: connection injection, auto-transaction commit/rollback, onion model integration (8 tests)
+- `test_db_query_log.cpp` — Query log middleware: recording, slow query detection, callbacks, connection restore (6 tests)
+- `test_stmt_cache.cpp` — PreparedStatement LRU cache: eviction, promotion, disabled mode (9 tests)
+- `test_mysql_integration.cpp` — Real MySQL: CRUD, transactions, parameterized queries, pool integration (7 tests, env vars: `MYSQL_HOST`/`MYSQL_PORT`/`MYSQL_USER`/`MYSQL_PASSWORD`/`MYSQL_DATABASE`)
 
 ## CI
 

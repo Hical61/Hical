@@ -11,7 +11,7 @@
 
 Hical is a modern C++ web framework built on Boost.Asio/Beast, utilizing C++26 reflection and PMR memory pooling to achieve high performance.
 
-> **v2.2.0** — C++20/26 dual-track reflection · PMR memory pool · coroutine async I/O · Cookie / Session / StaticFiles / Multipart built-in
+> C++20/26 dual-track reflection · PMR memory pool · coroutine async I/O · Cookie / Session / StaticFiles / Multipart built-in · Optional DB middleware (Boost.MySQL)
 
 English | [简体中文](README_CN.md)
 
@@ -153,20 +153,20 @@ target_link_libraries(my_app PRIVATE hical::hical_core)
 Download the Conan source package from [GitHub Releases](https://github.com/Hical61/Hical/releases) and export to local cache:
 
 ```bash
-# Download & extract (replace version as needed)
-curl -LO https://github.com/Hical61/Hical/releases/download/v2.2.0/hical-2.2.0-conan-src.tar.gz
-tar xzf hical-2.2.0-conan-src.tar.gz
+# Download & extract (replace VERSION with the desired release, e.g.)
+curl -LO https://github.com/Hical61/Hical/releases/download/vVERSION/hical-VERSION-conan-src.tar.gz
+tar xzf hical-VERSION-conan-src.tar.gz
 
 # Export to local Conan cache
 cd hical
-conan export . --version=2.2.0
+conan export . --version=VERSION
 ```
 
 Then add to your `conanfile.txt`:
 
 ```ini
 [requires]
-hical/2.2.0
+hical/VERSION
 
 [generators]
 CMakeDeps
