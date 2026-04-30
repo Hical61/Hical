@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(hical VERSION 2.2.0 LANGUAGES CXX)
+project(hical VERSION 2.3.0 LANGUAGES CXX)
 
 # C++26 反射可选支持
 option(HICAL_ENABLE_REFLECTION "Enable C++26 reflection (requires compatible compiler)" OFF)
@@ -33,7 +33,7 @@ else()
     add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
-# 查找依赖库（Boost >= 1.82：框架核心 + DB 中间件所需的最低版本）
+# 查找依赖库（Boost >= 1.82：框架核心所需的最低版本）
 find_package(Boost 1.82 REQUIRED COMPONENTS json)
 if(NOT TARGET Boost::system)
     # Boost.System is header-only since 1.69; Conan may not provide this target
@@ -41,9 +41,9 @@ if(NOT TARGET Boost::system)
 endif()
 find_package(OpenSSL REQUIRED)
 
-# DB 依赖：boost::mysql（header-only）需要链接 boost::charconv
+# DB 依赖：boost::mysql any_connection(1.84+) + boost::charconv(1.85+)
 if(HICAL_WITH_DATABASE)
-    find_package(Boost 1.82 REQUIRED COMPONENTS charconv)
+    find_package(Boost 1.85 REQUIRED COMPONENTS charconv)
 endif()
 
 # GTest 仅在构建测试时需要
