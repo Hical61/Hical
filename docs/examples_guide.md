@@ -15,6 +15,7 @@
 - [示例 6：协程异步处理](#示例-6协程异步处理)
 - [示例 7：PMR 内存池使用](#示例-7pmr-内存池使用)
 - [示例 8：完整应用示例](#示例-8完整应用示例)
+- [示例 9：数据库中间件](#示例-9数据库中间件)
 - [运行内置示例程序](#运行内置示例程序)
 - [常见问题](#常见问题)
 
@@ -30,7 +31,7 @@
 | ---------- | ------------------------------------------------ |
 | C++ 编译器 | GCC 14+ / Clang 20+ / MSVC 2022+（需支持 C++20） |
 | CMake      | 3.20+                                            |
-| Boost      | 1.82+（Asio、Beast、JSON）                       |
+| Boost      | 1.82+（Asio、Beast、JSON）；DB 中间件 >= 1.85    |
 | OpenSSL    | 3.0+                                             |
 
 **MSYS2 MINGW64 快速安装：**
@@ -747,6 +748,212 @@ int main(int argc, char* argv[])
 
 # 4 线程
 ./my_server 8080 4
+```
+
+---
+
+## 示例 9：数据库中间件
+
+> 需要 `HICAL_WITH_DATABASE=ON` 编译选项和 MySQL 数据库
+
+### 基础用法：连接池 + 参数化查询
+
+```cpp
+#include "core/HttpServer.h"
+#include "db/DbMiddleware.h"
+#include "db/MysqlConnection.h"
+
+using namespace hical;
+using namespace hical::db;
+
+int main()
+{
+    HttpServer server(8080);
+
+    // 配置连接池
+    DbConfig dbConfig;
+    dbConfig.host     = "127.0.0.1";
+    dbConfig.port     = 3306;
+    dbConfig.database = "mydb";
+    dbConfig.user     = "root";
+    dbConfig.password = "secret";
+    dbConfig.poolSize = 10;           // 连接池大小
+    dbConfig.connectTimeoutSec  = 5;  // 连接超时
+    dbConfig.idleTimeoutSec     = 60; // 空闲连接回收阈值
+
+    // 初始化连接池（MySQL 工厂）
+    auto factory = MysqlConnection::makeFactory(dbConfig);
+    auto pool    = std::make_shared<DbConnectionPool>(std::move(factory), dbConfig);
+
+    // 注册数据库中间件：自动为每个请求分配 / 归还连接
+    server.use(makeDbMiddleware(pool));
+
+    // 路由中使用参数化查询
+    server.router().get("/api/users/{id}",
+        [](const HttpRequest& req) -> Awaitable<HttpResponse> {
+            auto conn   = getDbConnection(req);  // 获取当前请求的连接
+            auto userId = req.param("id");
+
+            // 参数化查询，防止 SQL 注入
+            auto rows = co_await conn->query(
+                "SELECT id, name, email FROM users WHERE id = ?",
+                {userId}
+            );
+
+            if (rows.empty())
+            {
+                co_return HttpResponse::notFound("用户不存在");
+            }
+
+            co_return HttpResponse::json({
+                {"id",    rows[0]["id"]},
+                {"name",  rows[0]["name"]},
+                {"email", rows[0]["email"]}
+            });
+        });
+
+    server.router().post("/api/users",
+        [](const HttpRequest& req) -> Awaitable<HttpResponse> {
+            auto conn = getDbConnection(req);
+            auto json = req.jsonBody();
+            auto name  = std::string(json.at("name").as_string());
+            auto email = std::string(json.at("email").as_string());
+
+            auto result = co_await conn->execute(
+                "INSERT INTO users (name, email) VALUES (?, ?)",
+                {name, email}
+            );
+
+            HttpResponse res;
+            res.setStatus(HttpStatusCode::hCreated);
+            res.setJsonBody({
+                {"message",  "用户创建成功"},
+                {"insertId", result.lastInsertId}
+            });
+            co_return res;
+        });
+
+    server.start();
+    return 0;
+}
+```
+
+**测试：**
+
+```bash
+curl http://localhost:8080/api/users/1
+
+curl -X POST -H "Content-Type: application/json" \
+     -d '{"name":"Alice","email":"alice@example.com"}' \
+     http://localhost:8080/api/users
+```
+
+### 自动事务 + 查询日志
+
+```cpp
+#include "core/HttpServer.h"
+#include "db/DbMiddleware.h"
+#include "db/QueryLogMiddleware.h"
+#include "db/MysqlConnection.h"
+
+using namespace hical;
+using namespace hical::db;
+
+int main()
+{
+    HttpServer server(8080);
+
+    DbConfig dbConfig;
+    dbConfig.host            = "127.0.0.1";
+    dbConfig.database        = "mydb";
+    dbConfig.user            = "root";
+    dbConfig.password        = "secret";
+    dbConfig.poolSize        = 10;
+    dbConfig.autoTransaction = true;  // 请求成功自动 commit，异常自动 rollback
+
+    auto pool = std::make_shared<DbConnectionPool>(
+        MysqlConnection::makeFactory(dbConfig), dbConfig
+    );
+
+    // 数据库中间件（先注册）
+    server.use(makeDbMiddleware(pool));
+
+    // 查询日志中间件（必须在 makeDbMiddleware 之后注册）
+    QueryLogConfig logConfig;
+    logConfig.slowQueryThresholdMs = 100;  // 超过 100ms 记为慢查询
+    logConfig.onSlowQuery = [](const QueryLogEntry& entry) {
+        std::cerr << "[SLOW QUERY] " << entry.sql
+                  << " | " << entry.durationMs << "ms" << std::endl;
+    };
+    server.use(makeQueryLogMiddleware(logConfig));
+
+    // 转账接口：多步操作自动在同一事务内
+    server.router().post("/api/transfer",
+        [](const HttpRequest& req) -> Awaitable<HttpResponse> {
+            auto conn = getDbConnection(req);
+            auto json = req.jsonBody();
+            auto from   = std::string(json.at("from").as_string());
+            auto to     = std::string(json.at("to").as_string());
+            auto amount = json.at("amount").as_int64();
+
+            // 扣款
+            co_await conn->execute(
+                "UPDATE accounts SET balance = balance - ? WHERE id = ?",
+                {amount, from}
+            );
+
+            // 入账
+            co_await conn->execute(
+                "UPDATE accounts SET balance = balance + ? WHERE id = ?",
+                {amount, to}
+            );
+
+            // autoTransaction=true：两步都成功则 commit，任意步抛异常则 rollback
+            co_return HttpResponse::json({{"message", "转账成功"}, {"amount", amount}});
+        });
+
+    // onRequestComplete 回调：请求结束时记录汇总信息
+    server.setOnRequestComplete([](const HttpRequest& req, const HttpResponse& res) {
+        auto log = getQueryLog(req);
+        if (log && !log->entries.empty())
+        {
+            std::cout << req.path() << " 执行了 " << log->entries.size()
+                      << " 条查询" << std::endl;
+        }
+    });
+
+    server.start();
+    return 0;
+}
+```
+
+### 要点
+
+- `DbConfig` 配置连接池大小、超时、健康检查等参数
+- `MysqlConnection::makeFactory()` 创建 MySQL 连接工厂
+- `makeDbMiddleware()` 自动为每个请求获取/归还连接
+- `autoTransaction = true` 时，请求成功自动 commit，异常自动 rollback
+- `makeQueryLogMiddleware()` 必须注册在 `makeDbMiddleware()` 之后
+- `getDbConnection(req)` 获取当前请求的数据库连接
+- 参数化查询使用 `conn->query(sql, {params})`，防止 SQL 注入
+- 不带参数的 `query(sql)` 和 `execute(sql)` 已标记 `[[deprecated]]`
+
+### 构建与运行
+
+```bash
+# 启用数据库中间件编译
+cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+      -DHICAL_WITH_DATABASE=ON
+cmake --build build
+
+# 配置数据库连接（也可直接写在代码中）
+export DB_HOST=127.0.0.1
+export DB_PORT=3306
+export DB_NAME=mydb
+export DB_USER=root
+export DB_PASS=secret
+
+./build/examples/db_example
 ```
 
 ---

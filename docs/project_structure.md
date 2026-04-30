@@ -1,6 +1,6 @@
 # Hical 项目代码结构
 
-> 最后更新：2026-04-24
+> 最后更新：2026-04-30
 
 ## 项目概述
 
@@ -45,15 +45,25 @@ hical/
 │   │   ├── MetaRoutes.h        # 自动路由注册（HICAL_HANDLER/HICAL_ROUTES 宏）
 │   │   └── Version.h.in        # CMake 配置版本头（唯一版本号来源）
 │   │
-│   └── asio/                   # Boost.Asio 适配实现
-│       ├── AsioEventLoop.h/.cpp      # 基于 io_context 的事件循环
-│       ├── GenericConnection.h/.cpp  # 模板化连接（TCP/SSL 统一，WriteNode 写队列，sendFile 异步文件发送）
-│       ├── SslConnection.h           # SSL 连接类型别名（懒包含 OpenSSL）
-│       ├── AsioTimer.h/.cpp          # 基于 steady_timer 的定时器
-│       ├── EventLoopPool.h/.cpp      # 多线程事件循环池（1 Thread : 1 io_context）
-│       └── TcpServer.h/.cpp          # TCP 服务器（accept + 连接管理 + 空闲超时 + IdleFd 防护）
+│   ├── asio/                   # Boost.Asio 适配实现
+│   │   ├── AsioEventLoop.h/.cpp      # 基于 io_context 的事件循环
+│   │   ├── GenericConnection.h/.cpp  # 模板化连接（TCP/SSL 统一，WriteNode 写队列，sendFile 异步文件发送）
+│   │   ├── SslConnection.h           # SSL 连接类型别名（懒包含 OpenSSL）
+│   │   ├── AsioTimer.h/.cpp          # 基于 steady_timer 的定时器
+│   │   ├── EventLoopPool.h/.cpp      # 多线程事件循环池（1 Thread : 1 io_context）
+│   │   └── TcpServer.h/.cpp          # TCP 服务器（accept + 连接管理 + 空闲超时 + IdleFd 防护）
+│   │
+│   └── db/                    # 数据库中间件（可选，HICAL_WITH_DATABASE=ON）
+│       ├── DbConfig.h         # 数据库连接配置
+│       ├── DbResult.h         # 查询结果封装
+│       ├── DbConnection.h     # 数据库连接抽象接口
+│       ├── DbConnectionPool.h/.cpp # 协程化连接池（steady_timer 协程信号量）
+│       ├── DbMiddleware.h     # HTTP 数据库中间件（连接注入+自动事务）
+│       ├── DbQueryLog.h/.cpp  # 查询日志中间件（装饰器模式）
+│       ├── MysqlConnection.h/.cpp  # MySQL 后端（Boost.MySQL any_connection）
+│       └── StmtCache.h/.cpp   # PreparedStatement LRU 缓存（透明哈希）
 │
-├── tests/                      # 单元测试（Google Test）
+├── tests/                      # 单元测试（Google Test）— 22 个测试套件 + 5 个可选 DB 测试
 │   ├── CMakeLists.txt          # 测试构建配置
 │   ├── test_basic.cpp          # 基础测试
 │   ├── test_error.cpp          # 错误码转换测试
@@ -76,7 +86,12 @@ hical/
 │   ├── test_static_files.cpp   # 静态文件服务 / ETag / 路径遍历测试
 │   ├── test_multipart.cpp      # multipart/form-data 解析测试
 │   ├── test_session.cpp        # Session 生命周期 / 线程安全 / regenerate 测试
-│   └── test_integration.cpp    # 完整 HTTP 请求/响应周期集成测试
+│   ├── test_integration.cpp    # 完整 HTTP 请求/响应周期集成测试
+│   ├── test_db_pool.cpp       # 连接池单元测试（Mock，12 个用例）
+│   ├── test_db_middleware.cpp  # DB 中间件测试（Mock，8 个用例）
+│   ├── test_db_query_log.cpp  # 查询日志测试（Mock，6 个用例）
+│   ├── test_stmt_cache.cpp    # PreparedStatement 缓存测试（9 个用例）
+│   └── test_mysql_integration.cpp # MySQL 集成测试（需真实数据库，7 个用例）
 │
 ├── examples/                   # 示例程序
 │   ├── CMakeLists.txt          # 示例构建配置
@@ -122,6 +137,18 @@ hical/
 └─────────────────────────────────────────────────────┘
                          │
 ┌─────────────────────────────────────────────────────┐
+│           DB Middleware (可选, HICAL_WITH_DATABASE)    │
+│  ┌──────────────┐  ┌─────────────┐  ┌───────────┐  │
+│  │DbMiddleware  │  │ DbQueryLog  │  │ DbConnPool│  │
+│  │              │  │ (装饰器)     │  │ (协程池)   │  │
+│  └──────────────┘  └─────────────┘  └───────────┘  │
+│         │                                │          │
+│  ┌──────┴────────────────────────────────┘          │
+│  │     MysqlConnection + StmtCache (Boost.MySQL)    │
+│  └──────────────────────────────────────────────────│
+└─────────────────────────────────────────────────────┘
+                         │
+┌─────────────────────────────────────────────────────┐
 │              Core Infrastructure                     │
 │  EventLoop / Timer / MemoryPool / PmrBuffer         │
 │  SslContext / Error / InetAddress / Coroutine        │
@@ -133,13 +160,13 @@ hical/
 - **编译标准**: C++20（C++26 反射待编译器支持后启用）
 - **构建工具**: CMake 3.20+
 - **依赖库**:
-  - Boost 1.82+（system, json; Asio/Beast header-only）
+  - Boost 1.82+（system, json; Asio/Beast header-only）；DB 中间件 >= 1.85（MySQL, charconv）
   - OpenSSL 3.x（SSL/TLS 支持）
   - Google Test（单元测试）
   - ws2_32, mswsock（Windows 网络库）
 - **构建产物**:
   - `hical_core` — 框架核心静态库
-  - `test_*` — 各组件单元测试（22 个测试套件）
+  - `test_*` — 各组件单元测试（22 + 5 个可选 DB 测试套件）
   - `echo_server` / `pmr_poc` / `benchmark` / `http_server` — 示例程序
   - `http_benchmark` / `pmr_benchmark` — 性能基准测试工具
 
@@ -201,9 +228,18 @@ hical/
 - **性能测试报告** (`docs/performance_report.md`) — PMR 内存池基准测试方法、HTTP 吞吐量测试场景、调优指南、复现方法
 - **使用示例文档** (`docs/examples_guide.md`) — 8 个由浅入深的完整示例（最小服务器 / RESTful API / 中间件 / WebSocket / SSL / 协程 / PMR / 完整应用）
 
+### 阶段七：数据库中间件
+- **抽象接口层**: DbConnection 纯虚基类 + DbResult 统一结果集 + DbConfig 配置
+- **协程化连接池**: DbConnectionPool（steady_timer 协程信号量、LIFO 复用、后台健康检查、空闲淘汰、事务残留回滚）
+- **HTTP 中间件集成**: makeDbMiddleware（连接注入 + 自动事务提交/回滚）
+- **查询日志**: makeQueryLogMiddleware（装饰器模式、慢查询检测、请求完成回调）
+- **MySQL 后端**: MysqlConnection（Boost.MySQL any_connection、参数化查询、类型转换、charset 安全校验）
+- **PreparedStatement 缓存**: StmtCache（每连接 LRU、透明哈希 string_view 查找、淘汰 statement 异步 close）
+- **测试套件**: 5 个测试文件（42 个用例），Mock 测试 + MySQL 集成测试
+
 ## 命名风格
 
-- **命名空间**: `hical`
+- **命名空间**: `hical`（核心框架）、`hical::db`（数据库中间件）
 - **类名**: 大驼峰（`AsioEventLoop`, `PmrBuffer`）
 - **方法名**: 小驼峰（`runAfter`, `isInLoopThread`）
 - **回调**: `onMessage`, `onClose`, `onWriteComplete`（hical 风格）

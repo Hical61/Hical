@@ -31,6 +31,16 @@
 - [Concepts](#concepts) — 后端约束
 - [Asio 适配层](#asio-适配层) — Boost.Asio 适配
 
+**数据库中间件 API（可选，需 `HICAL_WITH_DATABASE=ON`）**
+- [DbConfig](#dbconfig) — 数据库连接配置
+- [DbResult](#dbresult) — 查询结果
+- [DbConnection](#dbconnection) — 数据库连接接口
+- [DbConnectionPool](#dbconnectionpool) — 协程化连接池
+- [DbMiddleware](#dbmiddleware) — HTTP 数据库中间件
+- [DbQueryLog](#dbquerylog) — 查询日志中间件
+- [MysqlConnection](#mysqlconnection) — MySQL 后端
+- [StmtCache](#stmtcache) — PreparedStatement LRU 缓存
+
 **附录**
 - [类型别名速查](#类型别名速查)
 - [回调类型速查](#回调类型速查)
@@ -1229,6 +1239,319 @@ server.router().post("/logout", [](const HttpRequest& req) -> HttpResponse {
     }
     return HttpResponse::ok("已退出");
 });
+```
+
+---
+
+## 数据库中间件 API
+
+> 需要在 CMake 构建时开启 `HICAL_WITH_DATABASE=ON`，并链接 Boost.MySQL。命名空间为 `hical::db`，头文件在 `src/db/`。
+
+---
+
+### DbConfig
+
+数据库连接池全局配置结构体。
+
+**头文件：** `src/db/DbConfig.h`
+
+#### 字段说明
+
+| 字段                  | 类型                     | 默认值       | 说明                              |
+| --------------------- | ------------------------ | ------------ | --------------------------------- |
+| `host`                | `std::string`            | `127.0.0.1`  | 数据库主机地址                    |
+| `port`                | `uint16_t`               | `3306`        | 数据库端口                        |
+| `user`                | `std::string`            | `""`          | 登录用户名                        |
+| `password`            | `std::string`            | `""`          | 登录密码                          |
+| `database`            | `std::string`            | `""`          | 默认数据库名                      |
+| `charset`             | `std::string`            | `"utf8mb4"`   | 连接字符集                        |
+| `minConnections`      | `size_t`                 | `2`           | 连接池最小连接数（启动时预热）    |
+| `maxConnections`      | `size_t`                 | `16`          | 连接池最大连接数                  |
+| `idleTimeout`         | `std::chrono::seconds`   | `300s`        | 空闲连接超时后回收                |
+| `acquireTimeout`      | `std::chrono::seconds`   | `5s`          | 从池中获取连接的等待超时          |
+| `queryTimeout`        | `std::chrono::seconds`   | `30s`         | 单条查询执行超时                  |
+| `autoReconnect`       | `bool`                   | `true`        | 连接断开时是否自动重连            |
+| `idleCheckInterval`   | `std::chrono::seconds`   | `60s`         | 定期检查空闲连接的间隔            |
+| `healthCheckInterval` | `std::chrono::seconds`   | `30s`         | 定期 ping 健康检查的间隔          |
+| `pingGracePeriod`     | `std::chrono::seconds`   | `15s`         | ping 超时宽限期                   |
+| `stmtCacheSize`       | `size_t`                 | `64`          | 每条连接的 PreparedStatement 缓存上限（0=禁用） |
+
+---
+
+### DbResult
+
+查询结果结构体，包含返回行、列名以及 DML 影响行数。
+
+**头文件：** `src/db/DbResult.h`
+
+#### 字段说明
+
+| 字段           | 类型                                       | 说明                              |
+| -------------- | ------------------------------------------ | --------------------------------- |
+| `columns`      | `std::vector<std::string>`                 | 列名列表（SELECT 查询时填充）     |
+| `rows`         | `std::vector<std::vector<std::string>>`    | 结果行，每行为字符串列值列表      |
+| `affectedRows` | `uint64_t`                                 | DML 操作影响的行数                |
+| `insertId`     | `uint64_t`                                 | INSERT 操作自动生成的主键值       |
+
+#### 方法
+
+| 方法                   | 返回值     | 说明                                                 |
+| ---------------------- | ---------- | ---------------------------------------------------- |
+| `empty()`              | `bool`     | 结果集是否为空（无行数据）                           |
+| `size()`               | `size_t`   | 结果行数                                             |
+| `operator[](index)`    | `std::vector<std::string>&` | 按行下标访问                        |
+| `columnIndex(name)`    | `size_t`   | 按列名查找下标，未找到返回 `std::string::npos`       |
+
+---
+
+### DbConnection
+
+数据库连接抽象基类，所有 I/O 方法均为协程接口。
+
+**头文件：** `src/db/DbConnection.h`
+
+#### 查询方法
+
+| 方法                          | 参数                                                    | 返回值                    | 说明                                   |
+| ----------------------------- | ------------------------------------------------------- | ------------------------- | -------------------------------------- |
+| `query(sql, params)`          | sql: SQL 语句<br>params: 参数列表（`vector<string>`）   | `Awaitable<DbResult>`     | 参数化查询（推荐，防 SQL 注入）        |
+| `execute(sql, params)`        | sql: SQL 语句<br>params: 参数列表（`vector<string>`）   | `Awaitable<DbResult>`     | 参数化执行（INSERT/UPDATE/DELETE）     |
+| `query(sql)` *(deprecated)*   | sql: 原始 SQL                                           | `Awaitable<DbResult>`     | 直接查询，已标记 `[[deprecated]]`      |
+| `execute(sql)` *(deprecated)* | sql: 原始 SQL                                           | `Awaitable<DbResult>`     | 直接执行，已标记 `[[deprecated]]`      |
+
+#### 事务方法
+
+| 方法                 | 返回值                | 说明                         |
+| -------------------- | --------------------- | ---------------------------- |
+| `beginTransaction()` | `Awaitable<void>`     | 开启事务                     |
+| `commit()`           | `Awaitable<void>`     | 提交事务                     |
+| `rollback()`         | `Awaitable<void>`     | 回滚事务                     |
+| `inTransaction()`    | `bool`                | 当前是否处于事务中           |
+
+#### 状态方法
+
+| 方法               | 返回值                           | 说明                         |
+| ------------------ | -------------------------------- | ---------------------------- |
+| `isAlive()`        | `bool`                           | 连接是否存活                 |
+| `ping()`           | `Awaitable<bool>`                | 发送 ping 包检查连通性       |
+| `backend()`        | `std::string_view`               | 后端名称（如 `"mysql"`）     |
+| `lastActiveTime()` | `std::chrono::steady_clock::time_point` | 最后一次活跃时间        |
+| `lastPingTime()`   | `std::chrono::steady_clock::time_point` | 最后一次 ping 时间      |
+| `touch()`          | `void`                           | 更新最后活跃时间戳           |
+
+---
+
+### DbConnectionPool
+
+协程化数据库连接池，负责连接生命周期管理、空闲回收和健康检查。
+
+**头文件：** `src/db/DbConnectionPool.h`
+
+#### 工厂类型
+
+```cpp
+using DbConnectionFactory =
+    std::function<Awaitable<std::shared_ptr<DbConnection>>(
+        boost::asio::io_context&, DbConfig&)>;
+```
+
+#### 构造函数
+
+| 方法                                              | 参数                                                                                  | 说明           |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------- | -------------- |
+| `DbConnectionPool(ioCtx, config, factory)` | ioCtx: io_context 引用<br>config: DbConfig<br>factory: DbConnectionFactory | 创建连接池     |
+
+#### 公共方法
+
+| 方法          | 参数                               | 返回值                               | 说明                                       |
+| ------------- | ---------------------------------- | ------------------------------------ | ------------------------------------------ |
+| `init()`      | 无                                 | `Awaitable<void>`                    | 预热连接池（建立 `minConnections` 条连接） |
+| `acquire()`   | 无                                 | `Awaitable<std::shared_ptr<DbConnection>>` | 从池中获取一条连接（超时抛出异常）    |
+| `release(conn)` | conn: 连接智能指针               | `void`                               | 归还连接到池中                             |
+| `shutdown()`  | 无                                 | `void`                               | 关闭连接池，回收所有连接                   |
+
+#### 统计方法
+
+| 方法             | 返回值   | 说明                 |
+| ---------------- | -------- | -------------------- |
+| `activeCount()`  | `size_t` | 当前借出的连接数     |
+| `idleCount()`    | `size_t` | 当前空闲的连接数     |
+| `waitingCount()` | `size_t` | 当前等待获取连接的数 |
+| `totalCount()`   | `size_t` | 池中总连接数         |
+
+#### 常量键
+
+| 常量       | 值                  | 说明                             |
+| ---------- | ------------------- | -------------------------------- |
+| `hPoolKey` | `"hical.db.pool"`   | 连接池注入到 Request attribute 的键 |
+| `hConnKey` | `"hical.db.conn"`   | 连接注入到 Request attribute 的键   |
+
+---
+
+### DbMiddleware
+
+将连接池与单次请求的连接获取/释放封装为中间件，支持自动事务。
+
+**头文件：** `src/db/DbMiddleware.h`
+
+#### DbMiddlewareOptions 结构体
+
+| 字段              | 类型   | 默认值  | 说明                                                     |
+| ----------------- | ------ | ------- | -------------------------------------------------------- |
+| `autoTransaction` | `bool` | `false` | 是否对每个请求自动包裹事务（成功提交，异常回滚）         |
+| `injectPool`      | `bool` | `true`  | 是否同时将连接池本身注入 Request（键：`hPoolKey`）       |
+
+#### 函数
+
+| 函数                           | 参数                                                          | 返回值              | 说明                         |
+| ------------------------------ | ------------------------------------------------------------- | ------------------- | ---------------------------- |
+| `makeDbMiddleware(pool, opts)`  | pool: 连接池智能指针<br>opts: DbMiddlewareOptions（可选）     | `MiddlewareHandler` | 创建 DB 中间件               |
+| `getDbConnection(req)`         | req: HTTP 请求                                                | `std::shared_ptr<DbConnection>` | 从请求中取出已注入的连接   |
+| `getDbPool(req)`               | req: HTTP 请求                                                | `std::shared_ptr<DbConnectionPool>` | 从请求中取出连接池       |
+
+---
+
+### DbQueryLog
+
+查询日志中间件，记录每次请求中执行的全部 SQL，支持慢查询告警。
+
+**头文件：** `src/db/DbQueryLog.h`
+
+> 注意：必须在 `makeDbMiddleware()` **之后**注册，否则无法拦截查询。
+
+#### QueryLogEntry 结构体
+
+| 字段              | 类型                         | 说明                           |
+| ----------------- | ---------------------------- | ------------------------------ |
+| `sql`             | `std::string`                | 执行的 SQL 语句                |
+| `duration`        | `std::chrono::microseconds`  | 查询执行耗时                   |
+| `rowCount`        | `uint64_t`                   | SELECT 返回行数                |
+| `affectedRows`    | `uint64_t`                   | DML 影响行数                   |
+| `isParameterized` | `bool`                       | 是否为参数化查询               |
+
+#### QueryLogOptions 结构体
+
+| 字段                   | 类型                                              | 默认值 | 说明                                              |
+| ---------------------- | ------------------------------------------------- | ------ | ------------------------------------------------- |
+| `onRequestComplete`    | `std::function<void(const std::vector<QueryLogEntry>&)>` | `nullptr` | 请求完成时回调，接收本次请求的全部日志条目    |
+| `slowQueryThreshold`   | `std::chrono::microseconds`                       | `0`    | 慢查询阈值（0=禁用慢查询告警）                    |
+| `onSlowQuery`          | `std::function<void(const QueryLogEntry&)>`       | `nullptr` | 单条慢查询触发时的回调                        |
+
+#### 函数
+
+| 函数                           | 参数                     | 返回值              | 说明                   |
+| ------------------------------ | ------------------------ | ------------------- | ---------------------- |
+| `makeQueryLogMiddleware(opts)` | opts: QueryLogOptions    | `MiddlewareHandler` | 创建查询日志中间件     |
+
+#### 常量键
+
+| 常量           | 值                      | 说明                                      |
+| -------------- | ----------------------- | ----------------------------------------- |
+| `hQueryLogKey` | `"hical.db.queryLog"`   | 查询日志列表注入到 Request attribute 的键 |
+
+---
+
+### MysqlConnection
+
+基于 Boost.MySQL 的 MySQL 后端实现，受 `HICAL_HAS_DATABASE` 宏保护。
+
+**头文件：** `src/db/MysqlConnection.h`
+
+#### 静态方法
+
+| 方法                                    | 参数                                          | 返回值                                      | 说明                               |
+| --------------------------------------- | --------------------------------------------- | ------------------------------------------- | ---------------------------------- |
+| `create(ioCtx, config)`                 | ioCtx: io_context 引用<br>config: DbConfig 引用 | `Awaitable<std::shared_ptr<MysqlConnection>>` | 异步建立连接并返回实例           |
+| `makeFactory()`                         | 无                                            | `DbConnectionFactory`                       | 生成可传入 `DbConnectionPool` 的工厂函数 |
+
+---
+
+### StmtCache
+
+PreparedStatement LRU 缓存，按 SQL 文本为键缓存已编译的语句句柄，减少重复 PREPARE 开销。
+
+**头文件：** `src/db/StmtCache.h`
+
+#### 构造函数
+
+| 方法                  | 参数                             | 说明                              |
+| --------------------- | -------------------------------- | --------------------------------- |
+| `StmtCache(maxSize)`  | maxSize: 最大缓存条目数（默认 64，0=禁用） | 创建 LRU 语句缓存          |
+
+#### 公共方法
+
+| 方法                  | 参数                                          | 返回值                                     | 说明                                          |
+| --------------------- | --------------------------------------------- | ------------------------------------------ | --------------------------------------------- |
+| `find(sql)`           | sql: SQL 语句文本                             | `statement*`（可为 nullptr）               | 查找缓存中的语句句柄，未命中返回 `nullptr`    |
+| `insert(key, stmt)`   | key: SQL 文本<br>stmt: 语句句柄              | `std::optional<statement>`                 | 插入新条目，若触发淘汰则返回被淘汰的语句      |
+| `erase(sql)`          | sql: SQL 文本                                 | `void`                                     | 主动删除指定条目                              |
+| `clear()`             | 无                                            | `std::vector<statement>`                   | 清空全部条目并返回所有语句（供调用方关闭）    |
+| `size()`              | 无                                            | `size_t`                                   | 当前缓存条目数                                |
+| `maxSize()`           | 无                                            | `size_t`                                   | 缓存容量上限                                  |
+
+---
+
+### 综合示例
+
+以下示例展示连接池、DB 中间件、查询日志的完整集成用法。
+
+```cpp
+#include "core/HttpServer.h"
+#include "db/DbConfig.h"
+#include "db/DbConnectionPool.h"
+#include "db/DbMiddleware.h"
+#include "db/DbQueryLog.h"
+#include "db/MysqlConnection.h"
+
+using namespace hical;
+using namespace hical::db;
+
+int main()
+{
+    HttpServer server(8080);
+    boost::asio::io_context& ioCtx = /* 从 server 获取 */;
+
+    // 1. 配置数据库
+    DbConfig dbConfig;
+    dbConfig.host = "127.0.0.1";
+    dbConfig.user = "root";
+    dbConfig.password = "secret";
+    dbConfig.database = "myapp";
+    dbConfig.minConnections = 4;
+    dbConfig.maxConnections = 32;
+
+    // 2. 创建连接池
+    auto pool = std::make_shared<DbConnectionPool>(
+        ioCtx, dbConfig, MysqlConnection::makeFactory());
+
+    // 3. 注册中间件（顺序重要：DB 在前，QueryLog 在后）
+    server.use(makeDbMiddleware(pool, {.autoTransaction = true}));
+    server.use(makeQueryLogMiddleware({
+        .slowQueryThreshold = std::chrono::milliseconds(100),
+        .onSlowQuery = [](const QueryLogEntry& entry) {
+            std::cerr << "[SLOW] " << entry.sql
+                      << " (" << entry.duration.count() << "us)" << std::endl;
+        }
+    }));
+
+    // 4. 在路由中使用
+    server.router().get("/users/{id}",
+        [](const HttpRequest& req) -> Awaitable<HttpResponse> {
+            auto conn = getDbConnection(req);
+            auto result = co_await conn->query(
+                "SELECT * FROM users WHERE id = ?",
+                {req.param("id")});
+            if (result.empty()) {
+                co_return HttpResponse::notFound();
+            }
+            co_return HttpResponse::json({
+                {"id", result[0][0]},
+                {"name", result[0][1]}
+            });
+        });
+
+    server.start();
+}
 ```
 
 ---

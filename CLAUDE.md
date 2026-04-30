@@ -154,7 +154,7 @@ Core design principle: when `HICAL_HAS_REFLECTION == 1` (compiler supports P2996
 | Dependency   | Version                               |
 | ------------ | ------------------------------------- |
 | C++ Standard | C++20 (C++26 optional for reflection) |
-| Boost        | >= 1.82 (Asio, Beast, System, JSON, MySQL, charconv) |
+| Boost        | >= 1.82 (Asio, Beast, System, JSON); DB middleware >= 1.85 (MySQL, charconv) |
 | OpenSSL      | Required                              |
 | Google Test  | Required                              |
 | CMake        | >= 3.20                               |

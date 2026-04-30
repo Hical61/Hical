@@ -1,21 +1,21 @@
 # Hical 编译与测试指南
 
-**最后更新：** 2026-04-24
+**最后更新：** 2026-04-30
 **支持平台：** Windows / Linux / macOS
 
 ---
 
 ## 1. 环境要求
 
-| 组件        | 最低版本                         | 用途                     |
-| ----------- | -------------------------------- | ------------------------ |
-| C++ 编译器  | GCC 14+ / Clang 20+ / MSVC 2022+ | C++20 编译器（协程支持） |
-| CMake       | 3.20+                            | 构建系统                 |
-| Ninja       | 1.10+                            | 构建工具（比 Make 更快） |
-| Boost       | 1.82+                            | Asio / Beast / JSON      |
-| OpenSSL     | 3.0+                             | SSL/TLS 支持             |
-| liburing    | —（Linux 可选）                  | Boost.Asio 异步文件 I/O  |
-| Google Test | 1.10+                            | 单元测试框架             |
+| 组件        | 最低版本                         | 用途                        |
+| ----------- | -------------------------------- | --------------------------- |
+| C++ 编译器  | GCC 14+ / Clang 20+ / MSVC 2022+ | C++20 编译器（协程支持）    |
+| CMake       | 3.20+                            | 构建系统                    |
+| Ninja       | 1.10+                            | 构建工具（比 Make 更快）    |
+| Boost       | 1.82+（DB 中间件 1.85+）         | Asio / Beast / JSON / MySQL |
+| OpenSSL     | 3.0+                             | SSL/TLS 支持                |
+| liburing    | —（Linux 可选）                  | Boost.Asio 异步文件 I/O     |
+| Google Test | 1.10+                            | 单元测试框架                |
 
 ---
 
@@ -56,7 +56,7 @@ sudo apt install -y build-essential g++ cmake ninja-build \
                     libboost-all-dev libssl-dev libgtest-dev liburing-dev
 ```
 
-> Ubuntu 24.04+ 开箱即用（GCC 14+、Boost 1.83+）。Ubuntu 22.04 的 Boost 1.74 不满足 1.78+ 要求，需手动升级 Boost 或使用 Ubuntu 24.04。
+> Ubuntu 24.04+ 开箱即用（GCC 14+、Boost 1.83+）。Ubuntu 22.04 的 Boost 1.74 不满足 1.82+ 要求，需手动升级 Boost 或使用 Ubuntu 24.04。
 
 ```bash
 # Ubuntu 22.04 升级 GCC
@@ -70,7 +70,7 @@ sudo apt install g++-14
 ```bash
 g++ --version                        # 需要 14+
 cmake --version                      # 需要 3.20+
-dpkg -s libboost-dev | grep Version  # 需要 1.78+
+dpkg -s libboost-dev | grep Version  # 需要 1.82+（DB 中间件需 1.85+）
 openssl version                      # 需要 3.0+
 ```
 
@@ -93,7 +93,7 @@ sudo dnf install -y gcc-c++ cmake ninja-build \
 ```bash
 g++ --version      # 需要 14+
 cmake --version    # 需要 3.20+
-rpm -q boost-devel # 需要 1.78+
+rpm -q boost-devel # 需要 1.82+（DB 中间件需 1.85+）
 openssl version    # 需要 3.0+
 ```
 
@@ -130,7 +130,7 @@ brew install cmake ninja boost openssl@3 googletest
 ```bash
 clang++ --version                   # 需要 Xcode 14+（Apple Clang 14+）
 cmake --version                     # 需要 3.20+
-brew list --versions boost          # 需要 1.78+
+brew list --versions boost          # 需要 1.82+（DB 中间件需 1.85+）
 $(brew --prefix openssl@3)/bin/openssl version  # 需要 3.0+
 ```
 
@@ -183,6 +183,14 @@ cmake --build build
 ```
 
 **预期输出：** 全部编译成功，0 错误 0 警告。
+
+**构建产物说明：**
+
+| 产物         | 说明                                                           |
+| ------------ | -------------------------------------------------------------- |
+| `hical_core` | 核心静态库；启用 `HICAL_WITH_DATABASE=ON` 时包含 DB 中间件代码 |
+| `test_*`     | 各组件单元测试（22 + 5 个可选 DB 测试套件）                    |
+| `examples/*` | 示例可执行文件（echo_server / http_server / benchmark 等）     |
 
 ### 3.3 清理后重新编译
 
@@ -324,32 +332,38 @@ MSYS_NO_PATHCONV=1 openssl req -x509 -newkey rsa:2048 \
     -days 365 -nodes -subj "/CN=localhost"
 ```
 
-### 4.6 测试用例清单（22 个测试套件）
+### 4.6 测试用例清单（22 + 5 个可选 DB 测试套件）
 
-| 测试文件                 | 用例数 | 覆盖范围                                                       |
-| ------------------------ | ------ | -------------------------------------------------------------- |
-| test_basic               | 2      | Boost 版本、C++ 标准                                           |
-| test_error               | 17     | 错误码映射、NetworkError 结构体                                |
-| test_asio_event_loop     | 10     | run/stop/post/dispatch/定时器/pmr                              |
-| test_asio_tcp_connection | 8      | 连接/收发/回调/上下文/PmrBuffer                                |
-| test_memory_pool         | 21     | 单例/全局池/线程本地池/请求池/TrackedResource/PmrBuffer        |
-| test_asio_timer          | 8      | 单次/周期/取消/精度/EventLoop 集成                             |
-| test_ssl_connection      | 9      | SslContext/SSL 握手/加密通信/类型别名                          |
-| test_coroutine           | 5      | sleep/sleepFor/coSpawn/多协程/返回值                           |
-| test_http_types          | 23     | HttpMethod/HttpStatusCode/HttpRequest/HttpResponse/工厂方法    |
-| test_router              | 14     | 路由注册/分发/404/协程/JSON/宏/路径参数/{param}                |
-| test_router_perf         | 5      | 静态路由首条/末条/未命中/参数路由/1000 路由性能                |
-| test_tcp_server          | 8      | EventLoopPool/TcpServer(accept/消息/IO 线程池)                 |
-| test_middleware          | 5      | 空管道/单层/洋葱顺序/拦截/响应修改                             |
-| test_http_server         | 7      | GET/POST/404/路径参数/中间件/JSON                              |
-| test_websocket           | 3      | Echo/连接回调/未注册路径                                       |
-| test_concepts            | —      | C++20 Concepts 编译期约束验证                                  |
-| test_reflection          | 35     | MetaJson 装饰器/alias/required/ignore/unsigned/backward compat |
-| test_cookie              | —      | Cookie 解析/Set-Cookie 头/CookieOptions                        |
-| test_static_files        | —      | 静态文件服务/ETag 304/路径遍历防护/大文件拒绝                  |
-| test_multipart           | —      | multipart/form-data 解析/256 part 上限                         |
-| test_session             | —      | Session 生命周期/线程安全/regenerate/migrateFrom/并发          |
-| test_integration         | —      | 完整 HTTP 请求/响应周期集成测试                                |
+| 测试文件                                                | 用例数 | 覆盖范围                                                       |
+| ------------------------------------------------------- | ------ | -------------------------------------------------------------- |
+| test_basic                                              | 2      | Boost 版本、C++ 标准                                           |
+| test_error                                              | 17     | 错误码映射、NetworkError 结构体                                |
+| test_asio_event_loop                                    | 10     | run/stop/post/dispatch/定时器/pmr                              |
+| test_asio_tcp_connection                                | 8      | 连接/收发/回调/上下文/PmrBuffer                                |
+| test_memory_pool                                        | 21     | 单例/全局池/线程本地池/请求池/TrackedResource/PmrBuffer        |
+| test_asio_timer                                         | 8      | 单次/周期/取消/精度/EventLoop 集成                             |
+| test_ssl_connection                                     | 9      | SslContext/SSL 握手/加密通信/类型别名                          |
+| test_coroutine                                          | 5      | sleep/sleepFor/coSpawn/多协程/返回值                           |
+| test_http_types                                         | 23     | HttpMethod/HttpStatusCode/HttpRequest/HttpResponse/工厂方法    |
+| test_router                                             | 14     | 路由注册/分发/404/协程/JSON/宏/路径参数/{param}                |
+| test_router_perf                                        | 5      | 静态路由首条/末条/未命中/参数路由/1000 路由性能                |
+| test_tcp_server                                         | 8      | EventLoopPool/TcpServer(accept/消息/IO 线程池)                 |
+| test_middleware                                         | 5      | 空管道/单层/洋葱顺序/拦截/响应修改                             |
+| test_http_server                                        | 7      | GET/POST/404/路径参数/中间件/JSON                              |
+| test_websocket                                          | 3      | Echo/连接回调/未注册路径                                       |
+| test_concepts                                           | —      | C++20 Concepts 编译期约束验证                                  |
+| test_reflection                                         | 35     | MetaJson 装饰器/alias/required/ignore/unsigned/backward compat |
+| test_cookie                                             | —      | Cookie 解析/Set-Cookie 头/CookieOptions                        |
+| test_static_files                                       | —      | 静态文件服务/ETag 304/路径遍历防护/大文件拒绝                  |
+| test_multipart                                          | —      | multipart/form-data 解析/256 part 上限                         |
+| test_session                                            | —      | Session 生命周期/线程安全/regenerate/migrateFrom/并发          |
+| test_integration                                        | —      | 完整 HTTP 请求/响应周期集成测试                                |
+| **以下为可选 DB 测试（需 `-DHICAL_WITH_DATABASE=ON`）** |        |                                                                |
+| test_db_pool                                            | 12     | 连接池获取/释放、健康检查、空闲淘汰、统计                      |
+| test_db_middleware                                      | 8      | DB 中间件连接注入、自动事务、洋葱模型集成                      |
+| test_db_query_log                                       | 6      | 查询日志记录、慢查询检测、回调                                 |
+| test_stmt_cache                                         | 9      | PreparedStatement LRU 缓存淘汰/提升/禁用                       |
+| test_mysql_integration                                  | 7      | 真实 MySQL CRUD、事务、参数化查询（需数据库）                  |
 
 ---
 
@@ -557,14 +571,28 @@ hical/
 │   │   ├── WriteNode.h         # 多态写队列节点（内存/文件）
 │   │   ├── Reflection.h / MetaJson.h / MetaRoutes.h  # C++26 反射层
 │   │   └── Version.h.in        # CMake 配置版本头
-│   └── asio/
-│       ├── AsioEventLoop.h/.cpp      # Asio 事件循环
-│       ├── GenericConnection.h/.cpp  # TCP/SSL 统一连接（WriteNode 写队列 + sendFile）
-│       ├── SslConnection.h           # SSL 连接类型别名
-│       ├── AsioTimer.h/.cpp          # Asio 定时器
-│       ├── EventLoopPool.h/.cpp      # 多线程事件循环池
-│       └── TcpServer.h/.cpp          # TCP 服务器（空闲超时 + IdleFd 防护）
-├── tests/                     # 22 个测试套件
+│   ├── asio/
+│   │   ├── AsioEventLoop.h/.cpp      # Asio 事件循环
+│   │   ├── GenericConnection.h/.cpp  # TCP/SSL 统一连接（WriteNode 写队列 + sendFile）
+│   │   ├── SslConnection.h           # SSL 连接类型别名
+│   │   ├── AsioTimer.h/.cpp          # Asio 定时器
+│   │   ├── EventLoopPool.h/.cpp      # 多线程事件循环池
+│   │   └── TcpServer.h/.cpp          # TCP 服务器（空闲超时 + IdleFd 防护）
+│   └── db/                    # 数据库中间件（可选，HICAL_WITH_DATABASE=ON）
+│       ├── DbConfig.h         # 数据库连接配置
+│       ├── DbResult.h         # 查询结果封装
+│       ├── DbConnection.h     # 数据库连接抽象接口
+│       ├── DbConnectionPool.h/.cpp # 协程化连接池
+│       ├── DbMiddleware.h     # HTTP 数据库中间件
+│       ├── DbQueryLog.h/.cpp  # 查询日志中间件（装饰器模式）
+│       ├── MysqlConnection.h/.cpp  # MySQL 后端（Boost.MySQL）
+│       └── StmtCache.h/.cpp   # PreparedStatement LRU 缓存
+├── tests/                     # 22 个测试套件 + 5 个可选 DB 测试
+│   ├── test_db_pool.cpp           # DB 连接池测试
+│   ├── test_db_middleware.cpp     # DB 中间件测试
+│   ├── test_db_query_log.cpp      # 查询日志测试
+│   ├── test_stmt_cache.cpp        # PreparedStatement 缓存测试
+│   └── test_mysql_integration.cpp # 真实 MySQL 集成测试（需数据库）
 ├── examples/
 │   ├── echo_server.cpp        # Echo Server（PoC）
 │   ├── pmr_poc.cpp            # pmr PoC

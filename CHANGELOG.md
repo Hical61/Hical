@@ -7,10 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.3.0] - 2026-04-30
+
+### Added
+- **数据库中间件**（`HICAL_WITH_DATABASE=ON`，默认 OFF）：
+  - `DbConfig` — 数据库连接配置（池大小、超时、健康检查、PreparedStatement 缓存容量）
+  - `DbResult` — 统一查询结果集（string-based 列/行、affectedRows、insertId、columnIndex）
+  - `DbConnection` — 数据库连接纯虚接口（参数化 query/execute、事务控制、健康检查，deprecated 非参数化重载）
+  - `DbConnectionPool` — 协程化连接池（steady_timer 协程信号量、LIFO 复用、后台 healthCheck/idleCheck、pingGracePeriod 优化、事务残留自动回滚）
+  - `DbMiddleware` — HTTP 中间件集成（makeDbMiddleware 连接注入 + autoTransaction 自动提交/回滚、getDbConnection/getDbPool 辅助函数）
+  - `DbQueryLog` — 查询日志中间件（装饰器模式 LoggingDbConnection、慢查询检测、onRequestComplete 回调）
+  - `MysqlConnection` — MySQL 后端（Boost.MySQL any_connection、完整类型转换、PreparedStatement 失效重试、validateCharset 白名单防注入）
+  - `StmtCache` — 每连接 LRU PreparedStatement 缓存（透明哈希 string_view 查找、淘汰 statement 返回调用方异步 close）
+  - 5 个测试文件（42 个用例）：test_db_pool / test_db_middleware / test_db_query_log / test_stmt_cache / test_mysql_integration
+
 ## [2.2.0] - 2026-04-28
 
 ### Breaking Changes
-- **Boost 最低版本**：1.78 → 1.82（DB 中间件依赖 `Boost.MySQL`，需 `charconv` 组件）
+- **Boost 最低版本**：1.78 → 1.85（DB 中间件依赖 `Boost.MySQL` 1.84+ 的 `any_connection` + `Boost.Charconv` 1.85+）；框架核心仍为 >= 1.82
 
 ### Added
 - **内存池 GC**：`MemoryPool::gc(maxIdleSeconds)` 遍历线程本地池，空闲超时的池由拥有线程延迟执行 `release()`（避免跨线程操作 `unsynchronized_pool_resource` 的 UB）；`HttpServer::setGcInterval()` + `gcLoop()` 协程定时触发；`Stats` 扩展 `threadPoolCount` / `gcCycles` / `gcReclaimedPools` 字段
@@ -171,7 +185,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Multipart Part 数量上限（DoS 防护）
 - Session ID 使用密码学安全的随机数生成
 
-[Unreleased]: https://github.com/Hical61/Hical/compare/v2.2.0...HEAD
+[Unreleased]: https://github.com/Hical61/Hical/compare/v2.3.0...HEAD
+[2.3.0]: https://github.com/Hical61/Hical/compare/v2.2.0...v2.3.0
 [2.2.0]: https://github.com/Hical61/Hical/compare/v2.1.0...v2.2.0
 [2.1.0]: https://github.com/Hical61/Hical/compare/v2.0.0...v2.1.0
 [2.0.0]: https://github.com/Hical61/Hical/compare/v1.0.1...v2.0.0

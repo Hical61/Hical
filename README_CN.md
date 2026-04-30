@@ -127,7 +127,7 @@ hical/
 | 依赖项      | 版本要求                             |
 | ----------- | ------------------------------------ |
 | C++ 标准    | C++20 / C++26                        |
-| Boost       | >= 1.82（Asio、Beast、System、JSON） |
+| Boost       | >= 1.82（Asio、Beast、System、JSON）；DB 中间件 >= 1.85 |
 | CMake       | >= 3.20                              |
 | OpenSSL     | 必需                                 |
 | Google Test | 必需                                 |

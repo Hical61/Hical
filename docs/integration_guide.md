@@ -42,12 +42,13 @@ include(FetchContent)
 FetchContent_Declare(
     hical
     GIT_REPOSITORY https://github.com/Hical61/Hical.git
-    GIT_TAG        v2.1.0
+    GIT_TAG        main  # 或锁定到具体版本 tag（见 GitHub Releases）
 )
 
 # Disable tests and examples to speed up the build
 set(HICAL_BUILD_TESTS    OFF CACHE BOOL "" FORCE)
 set(HICAL_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+# set(HICAL_WITH_DATABASE ON CACHE BOOL "" FORCE)  # 可选：启用数据库中间件
 
 FetchContent_MakeAvailable(hical)
 

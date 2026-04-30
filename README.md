@@ -127,7 +127,7 @@ hical/
 | Dependency   | Version                             |
 | ------------ | ----------------------------------- |
 | C++ Standard | C++20 / C++26                       |
-| Boost        | >= 1.82 (Asio, Beast, System, JSON) |
+| Boost        | >= 1.82 (Asio, Beast, System, JSON); DB middleware >= 1.85 |
 | CMake        | >= 3.20                             |
 | OpenSSL      | Required                            |
 | Google Test  | Required                            |

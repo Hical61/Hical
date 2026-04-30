@@ -72,9 +72,18 @@ Hical 采用**两层分离**架构：核心抽象层（`src/core/`）与网络�
 │  │  GenericConnection<SocketType>        │            │
 │  │  EventLoopPool   TcpServer            │            │
 │  └──────────────────┬───────────────────┘            │
-├──────────────────────┼───────────────────────────────┤
+├──────────────────────────────────────────────────────┤
+│        DB 中间件层 (src/db/，可选 HICAL_WITH_DATABASE)  │
+│  ┌──────────────────────────────────────────────────┐ │
+│  │  DbMiddleware   DbQueryLog                        │ │
+│  │  DbConnectionPool                                 │ │
+│  │  DbConnection (纯虚)   MysqlConnection            │ │
+│  │  StmtCache (LRU PreparedStatement)                │ │
+│  └──────────────────────────────────────────────────┘ │
+├──────────────────────────────────────────────────────┤
 │              底层库                                    │
 │  Boost.Asio   Boost.Beast   Boost.JSON   OpenSSL     │
+│  Boost.MySQL                                          │
 └──────────────────────────────────────────────────────┘
 ```
 
@@ -128,7 +137,36 @@ Hical 采用**两层分离**架构：核心抽象层（`src/core/`）与网络�
 | `EventLoopPool`                 | —               | 多线程池，Round-Robin 分发          |
 | `TcpServer`                     | —               | Accept 循环 + 连接生命周期管理      |
 
-### 3.3 组件依赖关系
+### 3.3 数据库中间件层 (`src/db/`)
+
+DB 层是**可选模块**，通过 CMake 选项 `HICAL_WITH_DATABASE=ON` 启用，不影响核心库的零开销原则。所有符号位于命名空间 `hical::db`。
+
+#### 四层架构
+
+```
+HTTP 中间件层      DbMiddleware / DbQueryLog（洋葱模型集成，属性注入连接池）
+      │
+连接池层          DbConnectionPool（协程化信号量调度，max_connections 限流）
+      │
+抽象接口层        DbConnection（纯虚，后端可扩展）
+      │
+MySQL 后端层      MysqlConnection（Boost.MySQL async 实现）+ StmtCache（LRU 缓存）
+```
+
+#### 核心组件
+
+| 组件                | 职责                                                  |
+| ------------------- | ----------------------------------------------------- |
+| `DbConfig`          | 连接参数（host/port/user/password/db/pool_size 等）   |
+| `DbResult`          | 查询结果封装，行列迭代器，类型安全字段访问            |
+| `DbConnection`      | 纯虚接口：`query()` / `execute()` / `ping()`          |
+| `DbConnectionPool`  | 协程安全连接池，`acquire()` 挂起等待，`release()` 唤醒 |
+| `DbMiddleware`      | HTTP 中间件，将连接池引用注入 `HttpRequest` 属性      |
+| `DbQueryLog`        | 装饰器模式，透明记录 SQL、耗时、错误                  |
+| `MysqlConnection`   | Boost.MySQL 后端实现 `DbConnection`                   |
+| `StmtCache`         | 每连接 LRU PreparedStatement 缓存，避免重复 prepare   |
+
+### 3.4 组件依赖关系
 
 ```
 HttpServer
@@ -150,6 +188,15 @@ MemoryPool (独立基础设施，贯穿所有层)
 ├── synchronized_pool_resource (全局同步池)
 ├── unsynchronized_pool_resource (线程本地池)
 └── monotonic_buffer_resource (请求级池)
+
+DbMiddleware / DbQueryLog          [可选，HICAL_WITH_DATABASE=ON]
+├── DbConnectionPool (协程化连接池)
+│   ├── DbConnection (纯虚接口)
+│   │   └── MysqlConnection (Boost.MySQL 后端)
+│   │       └── StmtCache (LRU PreparedStatement 缓存)
+│   └── steady_timer (协程信号量)
+├── HttpRequest (属性注入)
+└── Middleware (洋葱模型集成)
 ```
 
 ---
@@ -990,6 +1037,10 @@ struct NetworkError
 | 中间件模型  | 洋葱模型                               | 前置/后置/拦截能力完整，Koa/Express 验证过的成熟模式 |
 | 反射降级    | HICAL_ROUTE 宏                         | C++26 反射尚不成熟，宏方案保持向前兼容               |
 | 线程模型    | 1 Thread : 1 io_context                | 线程间无共享状态，天然避免锁竞争                     |
+| 连接池信号量 | `steady_timer` 作协程信号量             | 协程不能用 `condition_variable`，`timer.cancel()` 唤醒挂起协程 |
+| 查询日志    | 装饰器模式                              | 透明拦截所有查询，不修改连接池和业务代码              |
+| PreparedStatement 缓存 | 每连接 LRU                   | 避免重复 prepare，非线程安全但每连接独占无锁开销      |
+| DB 模块化   | 可选编译 `HICAL_WITH_DATABASE`          | 不影响核心库，零开销，后端可扩展                     |
 
 ---
 
