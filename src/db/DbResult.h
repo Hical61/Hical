@@ -41,6 +41,7 @@ namespace hical::db
 
 		/// 查找列索引，未找到返回 npos
 		static constexpr size_t npos = static_cast<size_t>(-1);
+
 		size_t columnIndex(std::string_view name) const
 		{
 			for (size_t i = 0; i < columns.size(); ++i)
