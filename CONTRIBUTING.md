@@ -47,17 +47,19 @@ clang-format -i <files>
 
 **Naming conventions** (from `.clang-tidy`):
 
-| Element              | Convention       | Example           |
-| -------------------- | ---------------- | ----------------- |
-| Class                | `C` + PascalCase | `CHttpServer`     |
-| Struct               | `S` + PascalCase | `SRequestData`    |
-| Enum                 | `E` + PascalCase | `EHttpMethod`     |
-| Interface (abstract) | `I` + PascalCase | `IEventLoop`      |
-| Function / Method    | camelBack        | `handleRequest`   |
-| Member variable      | `m_` + camelBack | `m_bufferSize`    |
-| Global variable      | `g_` + camelBack | `g_instanceCount` |
-| Constant             | `h` + PascalCase | `hDefaultSize`    |
-| Macro                | UPPER_CASE       | `HICAL_LOG_INFO`  |
+| Element              | Convention              | Example              |
+| -------------------- | ----------------------- | -------------------- |
+| Class / Struct       | CamelCase (no prefix)   | `HttpServer`         |
+| Enum                 | CamelCase (no prefix)   | `HttpMethod`         |
+| Enum constant        | `E` + CamelCase         | `EGet`, `EPost`      |
+| Interface (abstract) | CamelCase (no prefix)   | `EventLoop`          |
+| Function / Method    | camelBack               | `handleRequest`      |
+| Member variable      | `m_` + camelBack        | `m_bufferSize`       |
+| Global variable      | `g_` + camelBack        | `g_instanceCount`    |
+| Static variable      | `s` + camelBack         | `sThreadPool`        |
+| Pointer parameter    | `p` + CamelCase         | `pSocket`            |
+| Macro                | UPPER_CASE              | `HICAL_LOG_INFO`     |
+| Template parameter   | CamelCase               | `SocketType`         |
 
 **Style:** 4-space indentation, 120-column limit, Allman brace style.
 
@@ -153,17 +155,19 @@ clang-format -i <files>
 
 **命名约定**（来自 `.clang-tidy`）：
 
-| 元素           | 约定             | 示例              |
-| -------------- | ---------------- | ----------------- |
-| 类             | `C` + PascalCase | `CHttpServer`     |
-| 结构体         | `S` + PascalCase | `SRequestData`    |
-| 枚举           | `E` + PascalCase | `EHttpMethod`     |
-| 接口（抽象类） | `I` + PascalCase | `IEventLoop`      |
-| 函数 / 方法    | camelBack        | `handleRequest`   |
-| 成员变量       | `m_` + camelBack | `m_bufferSize`    |
-| 全局变量       | `g_` + camelBack | `g_instanceCount` |
-| 常量           | `h` + PascalCase | `hDefaultSize`    |
-| 宏             | UPPER_CASE       | `HICAL_LOG_INFO`  |
+| 元素           | 约定                    | 示例                   |
+| -------------- | ----------------------- | ---------------------- |
+| 类 / 结构体    | CamelCase（无前缀）     | `HttpServer`           |
+| 枚举           | CamelCase（无前缀）     | `HttpMethod`           |
+| 枚举常量       | `E` + CamelCase         | `EGet`、`EPost`        |
+| 接口（抽象类） | CamelCase（无前缀）     | `EventLoop`            |
+| 函数 / 方法    | camelBack               | `handleRequest`        |
+| 成员变量       | `m_` + camelBack        | `m_bufferSize`         |
+| 全局变量       | `g_` + camelBack        | `g_instanceCount`      |
+| 静态变量       | `s` + camelBack         | `sThreadPool`          |
+| 指针参数       | `p` + CamelCase         | `pSocket`              |
+| 宏             | UPPER_CASE              | `HICAL_LOG_INFO`       |
+| 模板参数       | CamelCase               | `SocketType`           |
 
 **风格：** 4 空格缩进，120 列限制，Allman 大括号风格。
 
