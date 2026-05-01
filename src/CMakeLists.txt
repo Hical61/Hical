@@ -16,6 +16,7 @@ add_library(hical_core
     core/HttpRequest.cpp
     core/HttpResponse.cpp
     core/Router.cpp
+    core/RouteGroup.cpp
     core/Middleware.cpp
     core/HttpServer.cpp
     core/WebSocket.cpp

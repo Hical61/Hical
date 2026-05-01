@@ -132,7 +132,7 @@ namespace hical
 		 * @param name 参数名（如 "id"）
 		 * @return 参数值的常引用，未找到返回空字符串引用
 		 */
-		const std::string& param(const std::string& name) const;
+		const std::string& param(std::string_view name) const;
 
 		/**
 		 * @brief 设置路径参数（由 Router 内部调用）
@@ -146,7 +146,7 @@ namespace hical
 		 * @param name 参数名
 		 * @return true 如果存在
 		 */
-		bool hasParam(const std::string& name) const;
+		bool hasParam(std::string_view name) const;
 
 		// ============ Cookie ============
 
@@ -155,20 +155,64 @@ namespace hical
 		 * @param name Cookie 名称
 		 * @return Cookie 值的常引用，不存在返回空字符串引用
 		 */
-		const std::string& cookie(const std::string& name) const;
+		const std::string& cookie(std::string_view name) const;
 
 		/**
 		 * @brief 获取所有 Cookie
 		 * @return Cookie 名值 map（首次调用时惰性解析 Cookie 头）
 		 */
-		const std::unordered_map<std::string, std::string>& cookies() const;
+		const std::unordered_map<std::string, std::string, StringHash, StringEqual>& cookies() const;
 
 		/**
 		 * @brief 是否包含指定 Cookie
 		 * @param name Cookie 名称
 		 * @return true 如果存在
 		 */
-		bool hasCookie(const std::string& name) const;
+		bool hasCookie(std::string_view name) const;
+
+		// ============ 查询参数 ============
+
+		/**
+		 * @brief 获取指定名称的查询参数值
+		 * @param name 参数名
+		 * @return 参数值，不存在返回 nullopt
+		 */
+		std::optional<std::string> queryParam(std::string_view name) const;
+
+		/**
+		 * @brief 获取所有查询参数
+		 * @return 查询参数 multimap（首次调用时惰性解析）
+		 */
+		const std::unordered_multimap<std::string, std::string, StringHash, StringEqual>& queryParams() const;
+
+		/**
+		 * @brief 是否包含指定查询参数
+		 * @param name 参数名
+		 * @return true 如果存在
+		 */
+		bool hasQueryParam(std::string_view name) const;
+
+		// ============ 表单参数（application/x-www-form-urlencoded） ============
+
+		/**
+		 * @brief 获取指定名称的表单参数值
+		 * @param name 参数名
+		 * @return 参数值，不存在返回 nullopt
+		 */
+		std::optional<std::string> formParam(std::string_view name) const;
+
+		/**
+		 * @brief 获取所有表单参数
+		 * @return 表单参数 multimap（首次调用时惰性解析）
+		 */
+		const std::unordered_multimap<std::string, std::string, StringHash, StringEqual>& formParams() const;
+
+		/**
+		 * @brief 是否包含指定表单参数
+		 * @param name 参数名
+		 * @return true 如果存在
+		 */
+		bool hasFormParam(std::string_view name) const;
 
 		// ============ 请求级属性（供中间件传递上下文数据） ============
 
@@ -216,10 +260,23 @@ namespace hical
 		 */
 		void parseCookies() const;
 
+		/**
+		 * @brief URL 编码键值对解析（查询参数和表单参数共用）
+		 * @param input 输入字符串（如 "key1=val1&key2=val2"）
+		 * @param out 输出 multimap
+		 */
+		static void parseUrlEncoded(std::string_view input,
+									std::unordered_multimap<std::string, std::string, StringHash, StringEqual>& out);
+
+		void parseQueryParams() const;
+		void parseFormParams() const;
+
 		BeastRequest req_;
 		std::vector<std::pair<std::string, std::string>> pathParams_;
-		mutable std::optional<std::unordered_map<std::string, std::string>> cookies_;
+		mutable std::optional<std::unordered_map<std::string, std::string, StringHash, StringEqual>> cookies_;
 		mutable std::optional<boost::json::value> cachedJsonBody_;
+		mutable std::optional<std::unordered_multimap<std::string, std::string, StringHash, StringEqual>> m_queryParams;
+		mutable std::optional<std::unordered_multimap<std::string, std::string, StringHash, StringEqual>> m_formParams;
 		std::unordered_map<std::string, std::any> attributes_;
 	};
 

@@ -1,10 +1,38 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 #include <string>
+#include <string_view>
 
 namespace hical
 {
+
+	/**
+	 * @brief 透明字符串哈希（支持 string_view 异构查找，避免构造临时 std::string）
+	 */
+	struct StringHash
+	{
+		using is_transparent = void;
+
+		size_t operator()(std::string_view sv) const noexcept
+		{
+			return std::hash<std::string_view> {}(sv);
+		}
+	};
+
+	/**
+	 * @brief 透明字符串相等比较（配合 StringHash 使用）
+	 */
+	struct StringEqual
+	{
+		using is_transparent = void;
+
+		bool operator()(std::string_view a, std::string_view b) const
+		{
+			return a == b;
+		}
+	};
 
 	/**
 	 * @brief HTTP 请求方法枚举
@@ -36,6 +64,8 @@ namespace hical
 		hMovedPermanently = 301,
 		hFound = 302,
 		hNotModified = 304,
+		hTemporaryRedirect = 307,
+		hPermanentRedirect = 308,
 
 		// 4xx 客户端错误
 		hBadRequest = 400,

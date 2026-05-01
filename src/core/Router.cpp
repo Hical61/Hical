@@ -1,4 +1,5 @@
 #include "Router.h"
+#include "RouteGroup.h"
 
 namespace hical
 {
@@ -178,6 +179,52 @@ namespace hical
 			}
 		}
 
+		// 3. 405 检测：路径匹配但方法不匹配时返回 405 + Allow 头
+		// 仅在 miss 路径执行，hot path 零额外开销
+		std::string allowedMethods;
+
+		for (const auto& [key, handler] : staticRoutes_)
+		{
+			if (key.path == reqPath && key.method != reqMethod)
+			{
+				if (!allowedMethods.empty())
+				{
+					allowedMethods += ", ";
+				}
+				allowedMethods += httpMethodToString(key.method);
+			}
+		}
+
+		ParamList tempParams;
+		for (const auto& [method, routes] : paramRoutesByMethod_)
+		{
+			if (method == reqMethod)
+			{
+				continue;
+			}
+			for (const auto& entry : routes)
+			{
+				if (matchParamPath(entry.path, reqPath, tempParams))
+				{
+					if (!allowedMethods.empty())
+					{
+						allowedMethods += ", ";
+					}
+					allowedMethods += httpMethodToString(method);
+					break;
+				}
+			}
+		}
+
+		if (!allowedMethods.empty())
+		{
+			HttpResponse res;
+			res.setStatus(HttpStatusCode::hMethodNotAllowed);
+			res.setHeader("Allow", allowedMethods);
+			res.setBody("Method Not Allowed");
+			co_return res;
+		}
+
 		co_return HttpResponse::notFound();
 	}
 
@@ -314,6 +361,11 @@ namespace hical
 			result += encoded[i];
 		}
 		return result;
+	}
+
+	RouteGroup Router::group(const std::string& prefix)
+	{
+		return RouteGroup(*this, prefix);
 	}
 
 } // namespace hical

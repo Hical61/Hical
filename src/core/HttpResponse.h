@@ -5,6 +5,7 @@
 #include <boost/beast/http.hpp>
 #include <boost/json.hpp>
 #include <string>
+#include <string_view>
 
 namespace hical
 {
@@ -44,7 +45,7 @@ namespace hical
 		 * @param name 字段名
 		 * @return 字段值
 		 */
-		std::string header(const std::string& name) const;
+		std::string_view header(std::string_view name) const;
 
 		/**
 		 * @brief 设置头部字段
@@ -122,6 +123,14 @@ namespace hical
 		 * @return HttpResponse
 		 */
 		static HttpResponse serverError();
+
+		/**
+		 * @brief 创建重定向响应
+		 * @param location 重定向目标 URL
+		 * @param code 状态码（默认 302 Found，支持 301/302/307/308）
+		 * @return HttpResponse
+		 */
+		static HttpResponse redirect(const std::string& location, HttpStatusCode code = HttpStatusCode::hFound);
 
 	private:
 		BeastResponse res_;

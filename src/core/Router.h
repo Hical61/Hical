@@ -16,6 +16,8 @@
 namespace hical
 {
 
+	class RouteGroup; // 前向声明
+
 	/**
 	 * @brief 路由处理器类型（协程版）
 	 * 接收请求，返回协程化的响应。
@@ -177,6 +179,20 @@ namespace hical
 		 */
 		size_t routeCount() const;
 
+		/**
+		 * @brief 创建路由组（前缀分组）
+		 * @param prefix 路由前缀（如 "/api/v1"）
+		 * @return 路由组对象
+		 */
+		RouteGroup group(const std::string& prefix);
+
+		/**
+		 * @brief URL 解码（百分号编码 -> 原始字符，'+' -> 空格）
+		 * @param encoded 编码后的字符串
+		 * @return 解码后的字符串
+		 */
+		static std::string urlDecode(std::string_view encoded);
+
 	private:
 		// ============ 静态路由（哈希表 O(1) 查找） ============
 
@@ -275,13 +291,6 @@ namespace hical
 		 * @return true 如果匹配
 		 */
 		static bool matchParamPath(std::string_view pattern, std::string_view path, ParamList& params);
-
-		/**
-		 * @brief URL 解码（百分号编码 -> 原始字符）
-		 * @param encoded 编码后的字符串
-		 * @return 解码后的字符串
-		 */
-		static std::string urlDecode(std::string_view encoded);
 	};
 
 /**

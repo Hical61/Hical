@@ -40,6 +40,10 @@ target_link_libraries(test_http_types PRIVATE hical_core GTest::gtest_main)
 add_executable(test_router test_router.cpp)
 target_link_libraries(test_router PRIVATE hical_core GTest::gtest_main)
 
+# 路由组测试
+add_executable(test_route_group test_route_group.cpp)
+target_link_libraries(test_route_group PRIVATE hical_core GTest::gtest_main)
+
 # TcpServer + EventLoopPool 测试
 add_executable(test_tcp_server test_tcp_server.cpp)
 target_link_libraries(test_tcp_server PRIVATE hical_core GTest::gtest_main)
@@ -88,6 +92,7 @@ gtest_discover_tests(test_ssl_connection)
 gtest_discover_tests(test_coroutine)
 gtest_discover_tests(test_http_types)
 gtest_discover_tests(test_router)
+gtest_discover_tests(test_route_group)
 gtest_discover_tests(test_tcp_server)
 gtest_discover_tests(test_middleware)
 gtest_discover_tests(test_http_server)
@@ -112,6 +117,36 @@ gtest_discover_tests(test_multipart)
 add_executable(test_session test_session.cpp)
 target_link_libraries(test_session PRIVATE hical_core GTest::gtest_main)
 gtest_discover_tests(test_session)
+
+# 查询参数解析测试
+add_executable(test_query_params test_query_params.cpp)
+target_link_libraries(test_query_params PRIVATE hical_core GTest::gtest_main)
+gtest_discover_tests(test_query_params)
+
+# 表单参数解析测试
+add_executable(test_form_params test_form_params.cpp)
+target_link_libraries(test_form_params PRIVATE hical_core GTest::gtest_main)
+gtest_discover_tests(test_form_params)
+
+# 重定向便捷方法测试
+add_executable(test_redirect test_redirect.cpp)
+target_link_libraries(test_redirect PRIVATE hical_core GTest::gtest_main)
+gtest_discover_tests(test_redirect)
+
+# CORS 中间件测试
+add_executable(test_cors test_cors.cpp)
+target_link_libraries(test_cors PRIVATE hical_core GTest::gtest_main)
+gtest_discover_tests(test_cors)
+
+# 优雅关机与信号处理测试
+add_executable(test_graceful_shutdown test_graceful_shutdown.cpp)
+target_link_libraries(test_graceful_shutdown PRIVATE hical_core GTest::gtest_main)
+gtest_discover_tests(test_graceful_shutdown)
+
+# 全局错误处理器测试
+add_executable(test_error_handler test_error_handler.cpp)
+target_link_libraries(test_error_handler PRIVATE hical_core GTest::gtest_main)
+gtest_discover_tests(test_error_handler)
 
 # 数据库中间件测试（可选，仅当 HICAL_WITH_DATABASE=ON）
 if (HICAL_WITH_DATABASE)

@@ -88,6 +88,20 @@ namespace hical
 		gcInterval_ = seconds;
 	}
 
+	void HttpServer::setShutdownTimeout(double seconds)
+	{
+		shutdownTimeout_ = seconds;
+	}
+
+	void HttpServer::setErrorHandler(ErrorHandler handler)
+	{
+		if (started_)
+		{
+			throw std::logic_error("HttpServer: cannot set error handler after start()");
+		}
+		errorHandler_ = std::move(handler);
+	}
+
 	void HttpServer::enableSsl(const std::string& certFile, const std::string& keyFile)
 	{
 		sslCtx_ = std::make_shared<SslContext>(boost::asio::ssl::context::tls_server);
@@ -127,6 +141,17 @@ namespace hical
 
 		// 端口 0 时由系统分配，更新实际端口
 		port_.store(acceptor_->local_endpoint().port());
+
+		// 注册信号处理（SIGINT/SIGTERM → 优雅关机）
+		boost::asio::signal_set signals(ioContext_, SIGINT, SIGTERM);
+		signals.async_wait(
+			[this](const boost::system::error_code& ec, int)
+			{
+				if (!ec)
+				{
+					gracefulStop();
+				}
+			});
 
 		coSpawn(ioContext_, acceptLoop());
 
@@ -178,6 +203,8 @@ namespace hical
 		{
 			return;
 		}
+
+		draining_.store(true);
 
 		// 将 acceptor 关闭调度到 io_context 线程内，与 acceptLoop 串行执行，消除竞态
 		boost::asio::post(ioContext_,
@@ -268,12 +295,18 @@ namespace hical
 		struct ConnectionCounter
 		{
 			std::atomic<size_t>& count;
+			std::atomic<bool>& draining;
+			boost::asio::io_context& ioCtx;
 
 			~ConnectionCounter()
 			{
-				count.fetch_sub(1);
+				// fetch_sub 返回旧值；旧值为 1 表示减到 0（最后一个连接）
+				if (count.fetch_sub(1) == 1 && draining.load())
+				{
+					ioCtx.stop();
+				}
 			}
-		} connCounter {activeConnections_};
+		} connCounter {activeConnections_, draining_, ioContext_};
 
 		// RAII 守卫：确保 socket 在任何退出路径（含异常）都被正确关闭
 		// transferred 标志：当 socket 被 move 给 WebSocket 会话后，跳过析构
@@ -415,23 +448,49 @@ namespace hical
 					}
 				}
 
-				// 通过中间件管道 + 路由器分发
+				// 通过中间件管道 + 路由器分发（带全局错误处理）
 				HttpResponse res;
-				if (middlewarePipeline_.size() > 0)
+				try
 				{
-					// build() 已在 start() 中调用，使用无参版本避免每请求构造 std::function
-					res = co_await middlewarePipeline_.execute(req);
+					if (middlewarePipeline_.size() > 0)
+					{
+						// build() 已在 start() 中调用，使用无参版本避免每请求构造 std::function
+						res = co_await middlewarePipeline_.execute(req);
+					}
+					else
+					{
+						res = co_await router_.dispatch(req);
+					}
 				}
-				else
+				catch (const std::exception& e)
 				{
-					res = co_await router_.dispatch(req);
+					if (errorHandler_)
+					{
+						try
+						{
+							res = errorHandler_(e, req);
+						}
+						catch (...)
+						{
+							// errorHandler 自身抛异常时 fallback
+							res = HttpResponse::serverError();
+						}
+					}
+					else
+					{
+						res = HttpResponse::serverError();
+					}
+				}
+				catch (...)
+				{
+					res = HttpResponse::serverError();
 				}
 
 				// 设置通用头部
 				auto& nativeRes = res.native();
 				nativeRes.version(11);
 				nativeRes.set(http::field::server, HICAL_VERSION_STRING);
-				nativeRes.keep_alive(req.native().keep_alive());
+				nativeRes.keep_alive(req.native().keep_alive() && !draining_.load());
 				nativeRes.prepare_payload();
 
 				// 发送响应
@@ -612,6 +671,38 @@ namespace hical
 			}
 			MemoryPool::instance().gc();
 		}
+	}
+
+	void HttpServer::gracefulStop()
+	{
+		if (draining_.exchange(true))
+		{
+			return;
+		}
+
+		// 关闭 acceptor，不再接受新连接
+		boost::asio::post(ioContext_,
+						  [this]()
+						  {
+							  if (acceptor_)
+							  {
+								  boost::system::error_code ec;
+								  acceptor_->close(ec);
+							  }
+						  });
+
+		// 超时后强制停止（防止活跃连接迟迟不退出）
+		auto timer = std::make_shared<boost::asio::steady_timer>(ioContext_);
+		timer->expires_after(std::chrono::milliseconds(static_cast<int64_t>(shutdownTimeout_ * 1000)));
+		timer->async_wait(
+			[this, timer](const boost::system::error_code& ec)
+			{
+				if (!ec)
+				{
+					running_.store(false);
+					ioContext_.stop();
+				}
+			});
 	}
 
 } // namespace hical

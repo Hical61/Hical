@@ -19,6 +19,29 @@ namespace hical
 			return false;
 		}
 
+		/// RFC 6265 cookie-name 合法性校验：必须是 RFC 2616 token 字符
+		/// token = 1*<any CHAR except CTLs or separators>
+		/// separators = "(" | ")" | "<" | ">" | "@" | "," | ";" | ":" | "\" | <"> | "/" | "[" | "]" | "?" | "="
+		///              | "{" | "}" | SP | HT
+		bool isValidCookieName(const std::string& name)
+		{
+			if (name.empty())
+			{
+				return false;
+			}
+			for (unsigned char c : name)
+			{
+				// CTLs (0-31, 127) 和分隔符
+				if (c <= 0x20 || c == 0x7F || c == '(' || c == ')' || c == '<' || c == '>' || c == '@' || c == ','
+					|| c == ';' || c == ':' || c == '\\' || c == '"' || c == '/' || c == '[' || c == ']' || c == '?'
+					|| c == '=' || c == '{' || c == '}')
+				{
+					return false;
+				}
+			}
+			return true;
+		}
+
 	} // namespace
 
 	HttpResponse::HttpResponse()
@@ -41,14 +64,14 @@ namespace hical
 		res_.result(static_cast<unsigned int>(code));
 	}
 
-	std::string HttpResponse::header(const std::string& name) const
+	std::string_view HttpResponse::header(std::string_view name) const
 	{
 		auto it = res_.find(name);
 		if (it != res_.end())
 		{
-			return std::string(it->value());
+			return it->value();
 		}
-		return "";
+		return {};
 	}
 
 	void HttpResponse::setHeader(const std::string& name, const std::string& value)
@@ -68,6 +91,11 @@ namespace hical
 
 	void HttpResponse::setBody(const std::string& body, const std::string& contentType)
 	{
+		// HTTP Response Splitting 防护：contentType 也需检查 CR/LF
+		if (containsCRLF(contentType))
+		{
+			return;
+		}
 		res_.body() = body;
 		res_.set(boost::beast::http::field::content_type, contentType);
 		res_.prepare_payload();
@@ -82,10 +110,15 @@ namespace hical
 
 	void HttpResponse::setCookie(const std::string& name, const std::string& value, const CookieOptions& options)
 	{
-		// HTTP Response Splitting 防护：name/value 不允许包含 CR/LF
-		if (containsCRLF(name) || containsCRLF(value))
+		// RFC 6265 cookie-name 合法性校验：必须是 token 字符（含 CRLF 检测）
+		if (!isValidCookieName(name))
 		{
-			// 拒绝含控制字符的 Cookie，静默忽略
+			return;
+		}
+
+		// HTTP Response Splitting 防护：value 不允许包含 CR/LF
+		if (containsCRLF(value))
+		{
 			return;
 		}
 
@@ -211,6 +244,16 @@ namespace hical
 		HttpResponse res;
 		res.setStatus(HttpStatusCode::hInternalServerError);
 		res.setBody("Internal Server Error");
+		return res;
+	}
+
+	HttpResponse HttpResponse::redirect(const std::string& location, HttpStatusCode code)
+	{
+		HttpResponse res;
+		res.setStatus(code);
+		// Location 头经过 CRLF 注入检查（setHeader 内部处理）
+		res.setHeader("Location", location);
+		res.setBody("");
 		return res;
 	}
 

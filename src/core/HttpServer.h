@@ -111,6 +111,28 @@ namespace hical
 		void setGcInterval(double seconds);
 
 		/**
+		 * @brief 设置优雅关机超时时间
+		 * @param seconds 超时秒数（默认 30 秒，超时后强制关闭）
+		 */
+		void setShutdownTimeout(double seconds);
+
+		/**
+		 * @brief 错误处理器类型
+		 * 当路由 handler 或中间件抛出异常时调用，返回自定义错误响应。
+		 * @param e 捕获的异常
+		 * @param req 当前请求
+		 * @return 错误响应
+		 */
+		using ErrorHandler = std::function<HttpResponse(const std::exception& e, const HttpRequest& req)>;
+
+		/**
+		 * @brief 设置全局错误处理器
+		 * @param handler 错误处理回调
+		 * @note 必须在 start() 之前调用
+		 */
+		void setErrorHandler(ErrorHandler handler);
+
+		/**
 		 * @brief 启动服务器（阻塞）
 		 * 调用后阻塞当前线程，直到 stop() 被调用。
 		 * @warning 当 ioThreads > 1 时，路由 handler 可能被多个线程并发调用，
@@ -150,6 +172,9 @@ namespace hical
 		// 内存池定期 GC 协程
 		Awaitable<void> gcLoop();
 
+		// 优雅关机：停止接受新连接，等待活跃连接处理完毕
+		void gracefulStop();
+
 		std::atomic<uint16_t> port_;
 		size_t ioThreads_;
 		boost::asio::io_context ioContext_;
@@ -184,6 +209,13 @@ namespace hical
 
 		// 内存池 GC 间隔（秒，0 表示关闭自动 GC）
 		double gcInterval_ {60.0};
+
+		// 优雅关机
+		double shutdownTimeout_ {30.0};
+		std::atomic<bool> draining_ {false};
+
+		// 全局错误处理器
+		ErrorHandler errorHandler_;
 	};
 
 } // namespace hical

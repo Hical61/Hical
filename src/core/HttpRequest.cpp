@@ -1,4 +1,5 @@
 #include "HttpRequest.h"
+#include "Router.h"
 #include <boost/beast/http/verb.hpp>
 
 namespace hical
@@ -175,7 +176,7 @@ namespace hical
 
 	// ============ 路径参数 ============
 
-	const std::string& HttpRequest::param(const std::string& name) const
+	const std::string& HttpRequest::param(std::string_view name) const
 	{
 		static const std::string empty;
 		for (const auto& [key, value] : pathParams_)
@@ -201,7 +202,7 @@ namespace hical
 		pathParams_.emplace_back(name, value);
 	}
 
-	bool HttpRequest::hasParam(const std::string& name) const
+	bool HttpRequest::hasParam(std::string_view name) const
 	{
 		for (const auto& [key, value] : pathParams_)
 		{
@@ -266,7 +267,7 @@ namespace hical
 		}
 	}
 
-	const std::string& HttpRequest::cookie(const std::string& name) const
+	const std::string& HttpRequest::cookie(std::string_view name) const
 	{
 		static const std::string empty;
 		if (!cookies_)
@@ -281,7 +282,7 @@ namespace hical
 		return empty;
 	}
 
-	const std::unordered_map<std::string, std::string>& HttpRequest::cookies() const
+	const std::unordered_map<std::string, std::string, StringHash, StringEqual>& HttpRequest::cookies() const
 	{
 		if (!cookies_)
 		{
@@ -290,13 +291,141 @@ namespace hical
 		return *cookies_;
 	}
 
-	bool HttpRequest::hasCookie(const std::string& name) const
+	bool HttpRequest::hasCookie(std::string_view name) const
 	{
 		if (!cookies_)
 		{
 			parseCookies();
 		}
 		return cookies_->count(name) > 0;
+	}
+
+	// ============ 查询参数 ============
+
+	void HttpRequest::parseUrlEncoded(std::string_view input,
+									  std::unordered_multimap<std::string, std::string, StringHash, StringEqual>& out)
+	{
+		while (!input.empty())
+		{
+			auto amp = input.find('&');
+			std::string_view pair = (amp != std::string_view::npos) ? input.substr(0, amp) : input;
+			input = (amp != std::string_view::npos) ? input.substr(amp + 1) : std::string_view {};
+
+			if (pair.empty())
+			{
+				continue;
+			}
+
+			auto eq = pair.find('=');
+			std::string_view rawKey;
+			std::string_view rawValue;
+			if (eq != std::string_view::npos)
+			{
+				rawKey = pair.substr(0, eq);
+				rawValue = pair.substr(eq + 1);
+			}
+			else
+			{
+				rawKey = pair;
+			}
+
+			if (rawKey.empty())
+			{
+				continue;
+			}
+
+			out.emplace(Router::urlDecode(rawKey), Router::urlDecode(rawValue));
+		}
+	}
+
+	void HttpRequest::parseQueryParams() const
+	{
+		m_queryParams.emplace();
+		auto q = query();
+		if (!q.empty())
+		{
+			parseUrlEncoded(q, *m_queryParams);
+		}
+	}
+
+	std::optional<std::string> HttpRequest::queryParam(std::string_view name) const
+	{
+		if (!m_queryParams)
+		{
+			parseQueryParams();
+		}
+		auto it = m_queryParams->find(name);
+		if (it != m_queryParams->end())
+		{
+			return it->second;
+		}
+		return std::nullopt;
+	}
+
+	const std::unordered_multimap<std::string, std::string, StringHash, StringEqual>& HttpRequest::queryParams() const
+	{
+		if (!m_queryParams)
+		{
+			parseQueryParams();
+		}
+		return *m_queryParams;
+	}
+
+	bool HttpRequest::hasQueryParam(std::string_view name) const
+	{
+		if (!m_queryParams)
+		{
+			parseQueryParams();
+		}
+		return m_queryParams->count(name) > 0;
+	}
+
+	// ============ 表单参数 ============
+
+	void HttpRequest::parseFormParams() const
+	{
+		m_formParams.emplace();
+		auto ct = contentType();
+		if (ct.find("application/x-www-form-urlencoded") != std::string_view::npos)
+		{
+			auto b = body();
+			if (!b.empty())
+			{
+				parseUrlEncoded(b, *m_formParams);
+			}
+		}
+	}
+
+	std::optional<std::string> HttpRequest::formParam(std::string_view name) const
+	{
+		if (!m_formParams)
+		{
+			parseFormParams();
+		}
+		auto it = m_formParams->find(name);
+		if (it != m_formParams->end())
+		{
+			return it->second;
+		}
+		return std::nullopt;
+	}
+
+	const std::unordered_multimap<std::string, std::string, StringHash, StringEqual>& HttpRequest::formParams() const
+	{
+		if (!m_formParams)
+		{
+			parseFormParams();
+		}
+		return *m_formParams;
+	}
+
+	bool HttpRequest::hasFormParam(std::string_view name) const
+	{
+		if (!m_formParams)
+		{
+			parseFormParams();
+		}
+		return m_formParams->count(name) > 0;
 	}
 
 	// ============ 请求级属性 ============
@@ -393,6 +522,10 @@ namespace hical
 				return "Found";
 			case HttpStatusCode::hNotModified:
 				return "Not Modified";
+			case HttpStatusCode::hTemporaryRedirect:
+				return "Temporary Redirect";
+			case HttpStatusCode::hPermanentRedirect:
+				return "Permanent Redirect";
 			case HttpStatusCode::hBadRequest:
 				return "Bad Request";
 			case HttpStatusCode::hUnauthorized:

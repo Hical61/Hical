@@ -145,6 +145,15 @@ namespace hical
 		 */
 		size_t size() const;
 
+		/**
+		 * @brief 从指定中间件列表构建洋葱调用链（供 RouteGroup 等外部使用）
+		 * @param middlewares 中间件列表
+		 * @param finalHandler 最终处理器
+		 * @return 构建好的调用链
+		 */
+		static MiddlewareNext buildChainFrom(const std::vector<MiddlewareHandler>& middlewares,
+											 MiddlewareNext finalHandler);
+
 #ifdef HICAL_ENABLE_MIDDLEWARE_PROFILING
 		/**
 		 * @brief 获取各中间件的计时统计快照
@@ -175,15 +184,6 @@ namespace hical
 		 * @return 构建好的调用链
 		 */
 		MiddlewareNext buildChain(MiddlewareNext finalHandler) const;
-
-		/**
-		 * @brief 从指定中间件列表构建洋葱调用链
-		 * @param middlewares 中间件列表
-		 * @param finalHandler 最终处理器
-		 * @return 构建好的调用链
-		 */
-		static MiddlewareNext buildChainFrom(const std::vector<MiddlewareHandler>& middlewares,
-											 MiddlewareNext finalHandler);
 
 #ifdef HICAL_ENABLE_MIDDLEWARE_PROFILING
 		/**

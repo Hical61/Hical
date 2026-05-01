@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.4.0] - 2026-05-01
+
+### Added
+- **CORS 中间件**：
+  - `Cors.h` — `makeCorsMiddleware(CorsOptions{...})`，支持 Origin 通配符/精确匹配、Preflight OPTIONS 自动响应、`Vary: Origin` 缓存提示、凭证模式下禁止通配符安全校验、可配置 maxAge
+- **路由组（Route Group）**：
+  - `RouteGroup.h/cpp` — `router.group("/api/v1")` 前缀分组，支持组级中间件继承、多层嵌套、镜像 Router API（get/post/put/del/route）
+- **HTTP 核心增强**：
+  - `HttpRequest` 新增查询参数解析 API（`queryParam()`/`queryParams()`）和表单参数解析 API（`formParam()`/`formParams()`）
+  - `HttpResponse` 新增 `redirect()` 便捷方法
+  - `HttpServer` 新增全局错误处理器 `setErrorHandler()`，优雅关闭 `shutdown()` 支持
+  - 7 个测试文件：test_query_params / test_form_params / test_redirect / test_cors / test_route_group / test_error_handler / test_graceful_shutdown
+
 ## [2.3.0] - 2026-04-30
 
 ### Added
@@ -185,7 +198,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Multipart Part 数量上限（DoS 防护）
 - Session ID 使用密码学安全的随机数生成
 
-[Unreleased]: https://github.com/Hical61/Hical/compare/v2.3.0...HEAD
+[Unreleased]: https://github.com/Hical61/Hical/compare/v2.4.0...HEAD
+[2.4.0]: https://github.com/Hical61/Hical/compare/v2.3.0...v2.4.0
 [2.3.0]: https://github.com/Hical61/Hical/compare/v2.2.0...v2.3.0
 [2.2.0]: https://github.com/Hical61/Hical/compare/v2.1.0...v2.2.0
 [2.1.0]: https://github.com/Hical61/Hical/compare/v2.0.0...v2.1.0

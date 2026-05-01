@@ -81,8 +81,8 @@ TEST(RouterTest, PostRoute)
 	EXPECT_EQ(result->body(), "Received: test body");
 }
 
-// 测试方法不匹配返回 404
-TEST(RouterTest, MethodMismatchReturns404)
+// 测试方法不匹配返回 405（路径存在但方法未注册）
+TEST(RouterTest, MethodMismatchReturns405)
 {
 	AsioEventLoop loop;
 	Router router;
@@ -104,7 +104,8 @@ TEST(RouterTest, MethodMismatchReturns404)
 							   });
 
 	ASSERT_TRUE(result.has_value());
-	EXPECT_EQ(result->statusCode(), HttpStatusCode::hNotFound);
+	EXPECT_EQ(result->statusCode(), HttpStatusCode::hMethodNotAllowed);
+	EXPECT_NE(result->header("Allow").find("GET"), std::string::npos);
 }
 
 // 测试路径不匹配返回 404
@@ -440,4 +441,94 @@ TEST(RouterTest, UrlDecodeStripsMultipleNullBytes)
 	ASSERT_TRUE(result.has_value());
 	EXPECT_EQ(result->statusCode(), HttpStatusCode::hOk);
 	EXPECT_EQ(capturedParam, "abcdef");
+}
+
+// ============ 405 Method Not Allowed 测试 ============
+
+TEST(RouterTest, MethodNotAllowedStaticRoute)
+{
+	AsioEventLoop loop;
+	Router router;
+
+	router.get("/api/users",
+			   [](const HttpRequest&) -> HttpResponse
+			   {
+				   return HttpResponse::ok("get");
+			   });
+	router.post("/api/users",
+				[](const HttpRequest&) -> HttpResponse
+				{
+					return HttpResponse::ok("post");
+				});
+
+	// DELETE /api/users 未注册，但路径匹配，应返回 405
+	HttpRequest req;
+	req.setMethod(HttpMethod::hDelete);
+	req.setTarget("/api/users");
+
+	auto result = runCoroutine(loop,
+							   [&]()
+							   {
+								   return router.dispatch(req);
+							   });
+
+	ASSERT_TRUE(result.has_value());
+	EXPECT_EQ(result->statusCode(), HttpStatusCode::hMethodNotAllowed);
+	auto allow = result->header("Allow");
+	EXPECT_NE(allow.find("GET"), std::string::npos);
+	EXPECT_NE(allow.find("POST"), std::string::npos);
+}
+
+TEST(RouterTest, NotFoundReturns404NotMethod405)
+{
+	AsioEventLoop loop;
+	Router router;
+
+	router.get("/api/users",
+			   [](const HttpRequest&) -> HttpResponse
+			   {
+				   return HttpResponse::ok("ok");
+			   });
+
+	// 完全不匹配的路径应返回 404
+	HttpRequest req;
+	req.setMethod(HttpMethod::hGet);
+	req.setTarget("/api/nonexistent");
+
+	auto result = runCoroutine(loop,
+							   [&]()
+							   {
+								   return router.dispatch(req);
+							   });
+
+	ASSERT_TRUE(result.has_value());
+	EXPECT_EQ(result->statusCode(), HttpStatusCode::hNotFound);
+}
+
+TEST(RouterTest, MethodNotAllowedParamRoute)
+{
+	AsioEventLoop loop;
+	Router router;
+
+	router.get("/api/users/{id}",
+			   [](const HttpRequest&) -> HttpResponse
+			   {
+				   return HttpResponse::ok("get user");
+			   });
+
+	// PUT /api/users/123 未注册，但参数路由路径匹配，应返回 405
+	HttpRequest req;
+	req.setMethod(HttpMethod::hPut);
+	req.setTarget("/api/users/123");
+
+	auto result = runCoroutine(loop,
+							   [&]()
+							   {
+								   return router.dispatch(req);
+							   });
+
+	ASSERT_TRUE(result.has_value());
+	EXPECT_EQ(result->statusCode(), HttpStatusCode::hMethodNotAllowed);
+	auto allow = result->header("Allow");
+	EXPECT_NE(allow.find("GET"), std::string::npos);
 }
