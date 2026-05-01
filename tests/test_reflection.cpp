@@ -280,7 +280,7 @@ TEST(MetaRoutesTest, DispatchPostWithJsonBody)
 	EXPECT_EQ(json.at("created").as_string(), "Ivan");
 }
 
-TEST(MetaRoutesTest, RouteNotFoundReturns404)
+TEST(MetaRoutesTest, UnregisteredMethodReturns405)
 {
 	AsioEventLoop loop;
 	Router router;
@@ -288,9 +288,33 @@ TEST(MetaRoutesTest, RouteNotFoundReturns404)
 
 	meta::registerRoutes(router, handler);
 
+	// /api/users 存在 GET 和 POST，DELETE 应返回 405
 	HttpRequest req;
 	req.setMethod(HttpMethod::hDelete);
 	req.setTarget("/api/users");
+
+	auto result = runCoroutine(loop,
+							   [&]()
+							   {
+								   return router.dispatch(req);
+							   });
+
+	ASSERT_TRUE(result.has_value());
+	EXPECT_EQ(result->statusCode(), HttpStatusCode::hMethodNotAllowed);
+}
+
+TEST(MetaRoutesTest, NonExistentPathReturns404)
+{
+	AsioEventLoop loop;
+	Router router;
+	TestHandler handler;
+
+	meta::registerRoutes(router, handler);
+
+	// 完全不存在的路径应返回 404
+	HttpRequest req;
+	req.setMethod(HttpMethod::hGet);
+	req.setTarget("/api/nonexistent");
 
 	auto result = runCoroutine(loop,
 							   [&]()
