@@ -11,39 +11,30 @@
 
 Hical 是一个基于 Boost.Asio/Beast，利用 C++26 反射和 PMR 内存池构建高性能的现代 C++ Web 框架。
 
-> C++20/26 双轨反射 · PMR 内存池 · 协程异步 I/O · Cookie / Session / 静态文件 / 文件上传 内置 · 可选 DB 中间件（Boost.MySQL）
+> C++20/26 双轨反射 · PMR 内存池 · 协程异步 I/O · Cookie / Session / 静态文件 / 文件上传 内置 · CORS · RouteGroup 路由分组 · 生产级日志系统 · OpenAPI 3.0 自动文档 · 可选 DB 中间件（Boost.MySQL）
 
 [English](README.md) | 简体中文
 
 ## 特性
 
-- **C++26 反射** — 面向 C++26 反射特性设计，支持自动路由注册、序列化等编译期元编程能力
+- **C++26 反射** — 面向 C++26 反射特性设计，支持自动路由注册、JSON 序列化/反序列化等编译期元编程能力；C++20 宏回退提供相同 API
 - **Boost.Asio/Beast 后端** — 工业级网络库，每线程独立 `io_context` 模型
-- **PMR 内存池** — 统一 `std::pmr` 分配器策略，缓冲区、HTTP 消息体、JSON 对象共享内存池，减少碎片，提升缓存命中率
+- **PMR 内存池** — 三层 `std::pmr` 分配器策略（全局同步池、线程局部池、请求级单调缓冲区），缓冲区、HTTP 消息体、JSON 对象共享内存池
 - **协程支持** — `asio::awaitable<T>` + `co_spawn`，简洁的异步代码风格
 - **C++ Concepts** — 编译期 `NetworkBackend` 类型约束，保障类型安全
-- **SSL/TLS** — 模板化 `GenericConnection<SocketType>`，同时支持明文和加密连接
-- **WebSocket** — WebSocket 升级与双向通信
-- **路由 & 中间件** — 中间件管线（日志、认证、限流），支持路径参数
-- **HTTP 服务器** — 基于 Boost.Beast 的完整 HTTP/1.1 支持（分块传输、Keep-Alive）
+- **SSL/TLS** — 模板化 `GenericConnection<SocketType>`，编译期 `if constexpr` 分支同时支持明文和加密连接
+- **WebSocket** — WebSocket 升级与双向通信，支持 Origin 白名单
+- **路由 & 中间件** — 洋葱模型中间件管线，支持路径参数（`{id}`）、静态路由 O(1) 哈希查找、参数路由按方法分组
+- **RouteGroup 路由分组** — 前缀分组 + 组级中间件，支持嵌套分组
+- **CORS 中间件** — 内置跨域资源共享中间件，支持预检请求自动处理
+- **HTTP 服务器** — 基于 Boost.Beast 的完整 HTTP/1.1 支持（分块传输、Keep-Alive），fd 耗尽保护
 - **Cookie 支持** — RFC 6265 兼容解析（first-wins 语义）+ `Set-Cookie`（CRLF 注入防护）
-- **静态文件服务** — MIME 自动推断、ETag/304 缓存验证、路径遍历防护、64 MB 大小限制
+- **静态文件服务** — MIME 自动推断、ETag/304 缓存验证、路径遍历防护、异步文件 I/O、PathCache（4096 条/60s TTL）、64 MB 大小限制
 - **Multipart 文件上传** — RFC 7578 `multipart/form-data` 解析，含 DoS 防护（≤256 个 Part）
-- **Session 会话管理** — 内存 `SessionManager`，懒 GC，128 位随机 ID，线程安全 `Session` 对象
-
-## 为什么选择 Hical？
-
-|                      | Hical                  | Drogon         | Crow       |
-| -------------------- | ---------------------- | -------------- | ---------- |
-| **C++ 标准**         | C++20（C++26 就绪）    | C++17          | C++11      |
-| **异步模型**         | 协程 (`co_await`)      | 回调 + 协程    | 回调       |
-| **内存策略**         | 三层 PMR 内存池        | 默认分配器     | 默认分配器 |
-| **HTTP 解析**        | Boost.Beast            | 自研 (Trantor) | 自研       |
-| **SSL**              | 编译期模板分支         | 运行时分支     | 运行时分支 |
-| **后端抽象**         | C++20 Concepts         | 无             | 无         |
-| **Cookie / Session** | 内置                   | 内置           | 有限支持   |
-| **静态文件**         | 内置（ETag、DoS 防护） | 内置           | 内置       |
-| **文件上传**         | 内置（Part 数量限制）  | 内置           | 内置       |
+- **Session 会话管理** — 内存 `SessionManager`，懒 GC，128 位随机 ID，线程安全，会话固定防护（`regenerate()`）、原子数据迁移（`migrateFrom()`）
+- **日志系统** — 6 级日志（Trace~Fatal）、`std::format` + 流式 + 条件宏三种 API、可插拔 Sink（Stderr/File/AsyncFile/OStream）、命名通道（Channel）、JSON/Text 格式化器、异步双缓冲文件写入、NDEBUG 下 TRACE 编译期消除、动态级别管理端点（LogAdmin）
+- **OpenAPI 3.0 自动文档** — 从 `HICAL_JSON` 宏自动生成 JSON Schema，`HICAL_API()` 路由标注，一键暴露 `/openapi.json` + Swagger UI `/docs`
+- **可选数据库中间件** — 基于协程的 Boost.MySQL 后端，连接池（LIFO 复用、健康检查、空闲驱逐）、自动事务、查询日志与慢查询检测、LRU 预处理语句缓存
 
 ## 快速开始
 
@@ -102,36 +93,54 @@ curl http://localhost:8080/
 ```
 hical/
 ├── src/
-│   ├── core/          # 抽象接口与共享类型
-│   │   ├── EventLoop.h, Timer.h, TcpConnection.h
-│   │   ├── MemoryPool.h/cpp, PmrBuffer.h
-│   │   ├── Error.h/cpp, Concepts.h, Coroutine.h
-│   │   ├── HttpServer.h/cpp, HttpRequest.h/cpp, HttpResponse.h/cpp
-│   │   ├── Router.h/cpp, Middleware.h/cpp
-│   │   ├── WebSocket.h/cpp, SslContext.h/cpp
-│   │   └── HttpTypes.h, InetAddress.h/cpp
-│   └── asio/          # Boost.Asio 实现层
-│       ├── AsioEventLoop.h/cpp
-│       ├── AsioTimer.h/cpp
-│       ├── GenericConnection.h/cpp
-│       ├── EventLoopPool.h/cpp
-│       └── TcpServer.h/cpp
-├── tests/             # 单元测试（Google Test）
-├── examples/          # HTTP 服务器、WebSocket、基准测试、PMR 演示
-├── docs/              # 设计分析文档
+│   ├── core/            # 抽象接口、共享类型、HTTP 框架与反射层
+│   │   ├── EventLoop.h, Timer.h, TcpConnection.h   # 抽象基类
+│   │   ├── Concepts.h, Coroutine.h                  # C++20 Concepts & 协程
+│   │   ├── MemoryPool.h/cpp, PmrBuffer.h            # 三层 PMR 内存池
+│   │   ├── HttpServer.h/cpp, HttpRequest.h/cpp      # HTTP 服务器
+│   │   ├── HttpResponse.h/cpp, HttpTypes.h          # HTTP 响应 & 类型
+│   │   ├── Router.h/cpp, RouteGroup.h/cpp           # 路由 & 路由分组
+│   │   ├── Middleware.h/cpp, Cors.h                 # 中间件 & CORS
+│   │   ├── WebSocket.h/cpp, SslContext.h/cpp        # WebSocket & SSL
+│   │   ├── Cookie.h, Session.h/cpp                  # Cookie & 会话
+│   │   ├── StaticFiles.h, Multipart.h/cpp           # 静态文件 & 文件上传
+│   │   ├── Reflection.h, MetaJson.h, MetaRoutes.h   # C++26 反射层
+│   │   ├── Log.h/cpp, LogRecord.h, LogFormatter.h/cpp  # 日志核心
+│   │   ├── LogSink.h/cpp, LogFile.h/cpp             # 日志 Sink & 文件轮转
+│   │   ├── AsyncFileSink.h/cpp, FixedBuffer.h       # 异步 Sink & 栈缓冲
+│   │   ├── LogChannel.h/cpp, LogMiddleware.h/cpp    # 日志通道 & 中间件
+│   │   ├── LogAdmin.h/cpp                           # 动态日志级别端点
+│   │   ├── OpenApiSchema.h, OpenApiRegistry.h/cpp   # OpenAPI Schema & 注册表
+│   │   ├── OpenApiDocument.h/cpp, OpenApiEndpoint.h # OpenAPI 文档 & 端点
+│   │   └── IdleFd.h, WriteNode.h, Version.h.in      # 工具类
+│   ├── asio/            # Boost.Asio 实现层
+│   │   ├── AsioEventLoop.h/cpp, AsioTimer.h/cpp
+│   │   ├── GenericConnection.h/cpp, SslConnection.h
+│   │   ├── EventLoopPool.h/cpp, TcpServer.h/cpp
+│   │   └── ...
+│   └── db/              # 可选数据库中间件（HICAL_WITH_DATABASE=ON）
+│       ├── DbConfig.h, DbResult.h, DbConnection.h  # 配置、结果、抽象接口
+│       ├── DbConnectionPool.h/cpp                   # 协程连接池
+│       ├── DbMiddleware.h                           # HTTP 中间件集成
+│       ├── DbQueryLog.h/cpp                         # 查询日志 & 慢查询检测
+│       ├── MysqlConnection.h/cpp                    # Boost.MySQL 后端
+│       └── StmtCache.h/cpp                          # LRU 预处理语句缓存
+├── tests/               # 单元测试（Google Test，30+ 个测试可执行文件）
+├── examples/            # HTTP 服务器、WebSocket、OpenAPI、基准测试、PMR 演示
+├── docs/                # 设计文档与指南
 └── CMakeLists.txt
 ```
 
 ## 依赖
 
-| 依赖项      | 版本要求                             |
-| ----------- | ------------------------------------ |
-| C++ 标准    | C++20 / C++26                        |
-| Boost       | >= 1.82（Asio、Beast、System、JSON）；DB 中间件 >= 1.85 |
-| CMake       | >= 3.20                              |
-| OpenSSL     | 必需                                 |
-| Google Test | 必需                                 |
-| 编译器      | GCC 14+ / Clang 20+ / MSVC 2022+     |
+| 依赖项      | 版本要求                                                                   |
+| ----------- | -------------------------------------------------------------------------- |
+| C++ 标准    | C++20 / C++26                                                              |
+| Boost       | >= 1.82（Asio、Beast、System、JSON）；DB 中间件 >= 1.85（MySQL、charconv） |
+| CMake       | >= 3.20                                                                    |
+| OpenSSL     | 必需                                                                       |
+| Google Test | 必需                                                                       |
+| 编译器      | GCC 14+ / Clang 20+ / MSVC 2022+                                           |
 
 ## 安装
 
@@ -186,7 +195,6 @@ find_package(hical REQUIRED)
 target_link_libraries(my_app PRIVATE hical::hical_core)
 ```
 
-
 ### 从源码构建
 
 #### Linux / macOS
@@ -203,6 +211,27 @@ ctest --test-dir build --output-on-failure
 cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build
 ctest --test-dir build --output-on-failure
+```
+
+#### Windows（MSVC + vcpkg）
+
+```bash
+cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake
+cmake --build build --config Release
+ctest --test-dir build --output-on-failure -C Release
+```
+
+#### 启用可选模块
+
+```bash
+# 数据库中间件（需要 Boost.MySQL >= 1.85）
+cmake -B build -DHICAL_WITH_DATABASE=ON ...
+
+# 禁用 OpenAPI 模块（默认启用）
+cmake -B build -DHICAL_WITH_OPENAPI=OFF ...
+
+# 启用 C++26 反射（需要兼容编译器）
+cmake -B build -DHICAL_ENABLE_REFLECTION=ON ...
 ```
 
 ## 性能
@@ -225,9 +254,12 @@ Hical 内置三层 PMR 内存池架构：
 ## 文档
 
 - [快速上手](docs/quickstart.md) — 5 分钟教程
-- [示例指南](docs/examples_guide.md) — 8 个从简到繁的完整示例
+- [构建与测试指南](docs/build_and_test_guide.md) — 构建、测试、CI 配置
+- [示例指南](docs/examples_guide.md) — 从简到繁的完整示例
 - [API 参考](docs/api_reference.md) — 完整公共 API
 - [架构设计](docs/architecture.md) — 设计决策与内部实现
+- [集成指南](docs/integration_guide.md) — vcpkg / Conan / CMake 集成
+- [项目结构](docs/project_structure.md) — 源码目录与模块说明
 - [性能报告](docs/performance_report.md) — 基准测试方法与分析
 - [贡献指南](CONTRIBUTING.md) — 如何参与贡献
 

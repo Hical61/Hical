@@ -13,8 +13,8 @@
   - CLAUDE.md / README.md / README_CN.md / docs/TESTING.md
 
 用法:
-    python scripts/bump_version.py 2.4.0            # 执行更新
-    python scripts/bump_version.py 2.4.0 --dry-run  # 仅预览，不写入
+    python scripts/bump_version.py 2.2.0            # 执行更新
+    python scripts/bump_version.py 2.2.0 --dry-run  # 仅预览，不写入
 """
 
 import argparse

@@ -17,6 +17,8 @@
 - [StaticFiles](#staticfiles) — 静态文件服务
 - [Multipart](#multipart) — 文件上传解析
 - [Session](#session) — Session 会话管理
+- [CORS 中间件](#cors-中间件) — 跨域资源共享
+- [RouteGroup](#routegroup) — 路由分组
 - [WebSocketSession](#websocketsession) — WebSocket 会话
 
 **基础设施 API（进阶用户）**
@@ -40,6 +42,24 @@
 - [DbQueryLog](#dbquerylog) — 查询日志中间件
 - [MysqlConnection](#mysqlconnection) — MySQL 后端
 - [StmtCache](#stmtcache) — PreparedStatement LRU 缓存
+
+**OpenAPI 元数据 API（可选，需 `HICAL_WITH_OPENAPI=ON`，默认启用）**
+- [OpenApiSchema](#openapiSchema) — JSON Schema 生成
+- [OpenApiRegistry](#openapiregistry) — 路由元数据注册表
+- [OpenApiDocument](#openapidocument) — 文档组装
+- [OpenApiEndpoint](#openapiendpoint) — 端点暴露
+
+**日志系统 API**
+- [Log](#log) — 日志核心（Logger 单例 + 宏 API）
+- [LogRecord](#logrecord) — 结构化日志条目
+- [LogFormatter](#logformatter) — 日志格式化器
+- [LogSink](#logsink) — 日志输出后端
+- [LogFile](#logfile) — 日志文件轮转
+- [AsyncFileSink](#asyncfilesink) — 异步文件 Sink
+- [FixedBuffer](#fixedbuffer) — 栈上固定缓冲区
+- [LogChannel](#logchannel) — 命名日志通道
+- [LogMiddleware](#logmiddleware) — 日志中间件
+- [LogAdmin](#logadmin) — 动态日志级别管理
 
 **附录**
 - [类型别名速查](#类型别名速查)
@@ -72,6 +92,14 @@ HTTP 服务器，整合路由、中间件和网络层，提供一键启动的高
 | `stop()`                       | 无                                              | `void`     | 停止服务器                   |
 | `isRunning()`                  | 无                                              | `bool`     | 服务器是否正在运行           |
 | `port()`                       | 无                                              | `uint16_t` | 获取监听端口                 |
+| `setErrorHandler(handler)`     | handler: `ErrorHandler`                         | `void`     | 设置全局错误处理器           |
+| `setGcInterval(seconds)`       | seconds: GC 间隔（秒）                          | `void`     | 设置内存池 GC 间隔           |
+
+#### 类型定义
+
+```cpp
+using ErrorHandler = std::function<HttpResponse(const std::exception& e, const HttpRequest& req)>;
+```
 
 #### 示例
 
@@ -128,6 +156,7 @@ int main()
 | `ws(path, onMessage, onConnect, onDisconnect, options)` | path: 路由路径<br>onMessage/onConnect/onDisconnect: 回调<br>options: `WsOptions` | `void`                    | 注册带选项的 WebSocket 路由    |
 | `dispatch(req)`                                         | req: HTTP 请求                                                                   | `Awaitable<HttpResponse>` | 分发请求到匹配的路由           |
 | `routeCount()`                                          | 无                                                                               | `size_t`                  | 获取已注册路由数量             |
+| `group(prefix)`                                         | prefix: 路由前缀                                                                 | `RouteGroup`              | 创建路由组（前缀分组）         |
 
 #### 路径参数
 
@@ -208,6 +237,22 @@ HTTP 请求封装，对 Boost.Beast `http::request` 的 hical 风格封装。
 | `hasParam(name)` | name: 参数名     | `bool`                      | 是否有指定路径参数                          |
 | `native()`       | 无               | `BeastRequest&`             | 获取底层 Beast 请求引用                     |
 
+#### 查询参数 API
+
+| 方法                  | 参数         | 返回值                                                     | 说明                                |
+| --------------------- | ------------ | ---------------------------------------------------------- | ----------------------------------- |
+| `queryParam(name)`    | name: 参数名 | `std::optional<std::string>`                               | 获取指定查询参数值（惰性解析+缓存） |
+| `queryParams()`       | 无           | `const std::unordered_multimap<std::string, std::string>&` | 获取所有查询参数                    |
+| `hasQueryParam(name)` | name: 参数名 | `bool`                                                     | 是否有指定查询参数                  |
+
+#### 表单参数 API
+
+| 方法                 | 参数         | 返回值                                                     | 说明                                                    |
+| -------------------- | ------------ | ---------------------------------------------------------- | ------------------------------------------------------- |
+| `formParam(name)`    | name: 参数名 | `std::optional<std::string>`                               | 获取指定表单参数值（application/x-www-form-urlencoded） |
+| `formParams()`       | 无           | `const std::unordered_multimap<std::string, std::string>&` | 获取所有表单参数                                        |
+| `hasFormParam(name)` | name: 参数名 | `bool`                                                     | 是否有指定表单参数                                      |
+
 #### 构建请求的方法
 
 | 方法                     | 参数                          | 返回值 | 说明                               |
@@ -268,13 +313,14 @@ HTTP 响应封装，对 Boost.Beast `http::response` 的 hical 风格封装。
 
 #### 工厂方法
 
-| 方法                  | 参数                                    | 返回值         | 说明                                |
-| --------------------- | --------------------------------------- | -------------- | ----------------------------------- |
-| `ok(body)`            | body: 消息体（默认空）                  | `HttpResponse` | 创建 200 OK 响应                    |
-| `json(json)`          | json: JSON 值                           | `HttpResponse` | 创建 JSON 200 OK 响应               |
-| `notFound()`          | 无                                      | `HttpResponse` | 创建 404 Not Found 响应             |
-| `badRequest(message)` | message: 错误信息（默认 "Bad Request"） | `HttpResponse` | 创建 400 Bad Request 响应           |
-| `serverError()`       | 无                                      | `HttpResponse` | 创建 500 Internal Server Error 响应 |
+| 方法                       | 参数                                                   | 返回值         | 说明                                      |
+| -------------------------- | ------------------------------------------------------ | -------------- | ----------------------------------------- |
+| `ok(body)`                 | body: 消息体（默认空）                                 | `HttpResponse` | 创建 200 OK 响应                          |
+| `json(json)`               | json: JSON 值                                          | `HttpResponse` | 创建 JSON 200 OK 响应                     |
+| `notFound()`               | 无                                                     | `HttpResponse` | 创建 404 Not Found 响应                   |
+| `badRequest(message)`      | message: 错误信息（默认 "Bad Request"）                | `HttpResponse` | 创建 400 Bad Request 响应                 |
+| `serverError()`            | 无                                                     | `HttpResponse` | 创建 500 Internal Server Error 响应       |
+| `redirect(location, code)` | location: 重定向 URL<br>code: 状态码（默认 302 Found） | `HttpResponse` | 创建重定向响应（Location 头经 CRLF 防护） |
 
 #### 示例
 
@@ -950,6 +996,280 @@ Boost.Asio 适配层，将 Boost.Asio 的原始 API 封装为 hical 风格的接
 
 ---
 
+## 日志系统 API
+
+> 命名空间为 `hical`，头文件在 `src/core/`。
+
+---
+
+### Log
+
+生产级日志系统，提供 6 级日志、多种 API 风格和零开销设计。
+
+**头文件：** `src/core/Log.h`
+
+#### LogLevel 枚举
+
+| 枚举值   | 说明                        |
+| -------- | --------------------------- |
+| `ETrace` | 跟踪（NDEBUG 下编译期消除） |
+| `EDebug` | 调试                        |
+| `EInfo`  | 信息                        |
+| `EWarn`  | 警告                        |
+| `EError` | 错误                        |
+| `EFatal` | 致命（触发 abort）          |
+
+#### Logger 类（单例）
+
+| 方法                   | 参数                        | 返回值     | 说明             |
+| ---------------------- | --------------------------- | ---------- | ---------------- |
+| `instance()`           | 无                          | `Logger&`  | 获取全局单例     |
+| `setLevel(level)`      | level: LogLevel             | `void`     | 设置最低日志级别 |
+| `level()`              | 无                          | `LogLevel` | 获取当前级别     |
+| `setFlushLevel(level)` | level: LogLevel             | `void`     | 设置自动刷盘级别 |
+| `addSink(sink)`        | sink: `shared_ptr<LogSink>` | `void`     | 添加输出后端     |
+| `clearSinks()`         | 无                          | `void`     | 清空所有输出后端 |
+
+#### 宏 API
+
+| 宏                                        | 说明                              |
+| ----------------------------------------- | --------------------------------- |
+| `HICAL_LOG_TRACE(fmt, ...)`               | Trace 级别（NDEBUG 下编译期消除） |
+| `HICAL_LOG_DEBUG(fmt, ...)`               | Debug 级别                        |
+| `HICAL_LOG_INFO(fmt, ...)`                | Info 级别                         |
+| `HICAL_LOG_WARN(fmt, ...)`                | Warn 级别                         |
+| `HICAL_LOG_ERROR(fmt, ...)`               | Error 级别                        |
+| `HICAL_LOG_FATAL(fmt, ...)`               | Fatal 级别（触发 abort）          |
+| `HICAL_LOG_INFO_STREAM << val`            | 流式 API                          |
+| `HICAL_LOG_INFO_IF(cond, fmt, ...)`       | 条件宏                            |
+| `HICAL_LOG_INFO_F(fmt, fields, ...)`      | 结构化字段 API                    |
+| `HICAL_LOG_TO("channel", Info, fmt, ...)` | 通道路由                          |
+
+#### 示例
+
+```cpp
+#include "core/Log.h"
+
+using namespace hical;
+
+// 基本用法
+HICAL_LOG_INFO("服务器启动, port={}", 8080);
+HICAL_LOG_ERROR("连接失败: {}", ec.message());
+
+// 流式 API
+HICAL_LOG_INFO_STREAM << "请求处理完成, 耗时: " << elapsed << "ms";
+
+// 条件宏
+HICAL_LOG_WARN_IF(latency > 100, "慢请求: {}ms", latency);
+
+// 结构化字段
+HICAL_LOG_INFO_F("用户登录", {{"userId", 42}, {"ip", "1.2.3.4"}});
+
+// 配置
+auto& logger = Logger::instance();
+logger.setLevel(LogLevel::EInfo);
+logger.setFlushLevel(LogLevel::EWarn);
+logger.addSink(std::make_shared<StderrSink>());
+```
+
+---
+
+### LogRecord
+
+结构化日志条目，存储单条日志的所有上下文信息。
+
+**头文件：** `src/core/LogRecord.h`
+
+| 字段        | 类型                       | 说明                  |
+| ----------- | -------------------------- | --------------------- |
+| `level`     | `LogLevel`                 | 日志级别              |
+| `timestamp` | `system_clock::time_point` | 时间戳                |
+| `threadId`  | `uint64_t`                 | 发出日志的线程 ID     |
+| `file`      | `std::string_view`         | 源文件名              |
+| `line`      | `int`                      | 源文件行号            |
+| `message`   | `std::string`              | 日志消息              |
+| `fields`    | `boost::json::object`      | 附加结构化字段        |
+| `traceId`   | `std::string`              | 请求 trace-id（可选） |
+
+---
+
+### LogFormatter
+
+日志格式化器接口，决定日志条目的输出文本格式。
+
+**头文件：** `src/core/LogFormatter.h`
+
+| 实现类          | 说明                                                    |
+| --------------- | ------------------------------------------------------- |
+| `TextFormatter` | 人类可读文本格式，含 `thread_local` 时间戳缓存          |
+| `JsonFormatter` | JSON Lines 格式（`boost::json::serialize`，UTC 时间戳） |
+
+所有格式化器实现 `format(const LogRecord&) -> std::string` 接口。
+
+---
+
+### LogSink
+
+可插拔日志输出后端接口。
+
+**头文件：** `src/core/LogSink.h`
+
+| 实现类        | 说明                                             |
+| ------------- | ------------------------------------------------ |
+| `StderrSink`  | 输出到 stderr（`fprintf`）                       |
+| `FileSink`    | 同步写文件（`fwrite` + `LogFile` 轮转）          |
+| `OStreamSink` | 线程安全 `ostream` 包装，兼容 `setOutput()` 桥接 |
+
+所有 Sink 实现 `write(const LogRecord&)` 和 `flush()` 接口，可通过 `Logger::addSink()` 注册多个并发输出。
+
+---
+
+### LogFile
+
+日志文件轮转引擎，按大小自动归档历史日志。
+
+**头文件：** `src/core/LogFile.h`
+
+| 构造参数      | 类型          | 默认值 | 说明                       |
+| ------------- | ------------- | ------ | -------------------------- |
+| `baseName`    | `std::string` | —      | 基础文件名（如 `"app"`）   |
+| `maxFileSize` | `size_t`      | 100MB  | 单文件大小阈值，超出后滚动 |
+| `maxFiles`    | `size_t`      | `10`   | 保留的归档文件数量         |
+
+归档文件命名格式：`app.YYMMDD-HHMMSS.NNNNNN.log`，旧文件超出 `maxFiles` 后自动删除。
+
+---
+
+### AsyncFileSink
+
+异步双缓冲文件 Sink，避免日志写入阻塞业务线程。
+
+**头文件：** `src/core/AsyncFileSink.h`
+
+- 后台 `std::jthread` 线程 + `stop_token` 优雅关闭
+- 前后 4MB 缓冲区交换，`condition_variable_any` 唤醒
+- 背压保护：缓冲区满时丢弃并计数，1 秒超时强制刷盘
+- 析构时自动排空 `m_curBuf` 中的剩余日志
+
+```cpp
+#include "core/AsyncFileSink.h"
+
+auto sink = std::make_shared<AsyncFileSink>("logs/app", 100 * 1024 * 1024, 10);
+Logger::instance().addSink(sink);
+```
+
+---
+
+### FixedBuffer
+
+栈上固定大小缓冲区，用于日志格式化，替代 `std::ostringstream` 以减少堆分配。
+
+**头文件：** `src/core/FixedBuffer.h`
+
+```cpp
+template <size_t N = 4096>
+class FixedBuffer;
+```
+
+| 方法                | 说明                                     |
+| ------------------- | ---------------------------------------- |
+| `append(data, len)` | 追加原始数据（溢出时自动 fallback 到堆） |
+| `appendInt(v)`      | `std::to_chars` 格式化整数               |
+| `appendFloat(v)`    | `std::to_chars` 格式化浮点数             |
+| `str()`             | 返回 `std::string_view` 视图             |
+| `clear()`           | 清空缓冲区（不释放内存）                 |
+
+---
+
+### LogChannel
+
+命名日志通道，支持独立的级别、格式化器和输出后端。
+
+**头文件：** `src/core/LogChannel.h`
+
+`LogChannelRegistry` 以 `shared_mutex` 管理所有通道（读多写少）。通道不存在时 `HICAL_LOG_TO` 静默丢弃。
+
+| 方法（LogChannel）        | 说明             |
+| ------------------------- | ---------------- |
+| `setLevel(level)`         | 设置通道级别     |
+| `setFormatter(formatter)` | 设置格式化器     |
+| `addSink(sink)`           | 添加输出 Sink    |
+| `emit(record)`            | 发射一条日志条目 |
+
+| 方法（LogChannelRegistry） | 说明               |
+| -------------------------- | ------------------ |
+| `get(name)`                | 获取或创建命名通道 |
+| `remove(name)`             | 删除命名通道       |
+| `has(name)`                | 是否存在指定通道   |
+
+```cpp
+#include "core/LogChannel.h"
+
+// 配置 access 通道
+auto ch = LogChannelRegistry::instance().get("access");
+ch->setFormatter(std::make_shared<JsonFormatter>());
+ch->addSink(std::make_shared<FileSink>("logs/access"));
+
+// 向通道写日志
+HICAL_LOG_TO("access", Info, "GET /api/users 200");
+```
+
+---
+
+### LogMiddleware
+
+洋葱模型日志中间件，自动生成 trace-id 并记录结构化访问日志。
+
+**头文件：** `src/core/LogMiddleware.h`
+
+#### makeLogMiddleware 函数
+
+```cpp
+MiddlewareHandler makeLogMiddleware(const std::string& channelName = "access");
+```
+
+- 自动为每个请求生成 128 位十六进制 trace-id（OpenSSL RAND_bytes）
+- 将 trace-id 注入 `req.setAttribute("hical.trace_id", ...)`
+- 请求完成后记录结构化访问日志到指定通道（method/path/status/latency_ms）
+
+#### 示例
+
+```cpp
+#include "core/LogMiddleware.h"
+
+server.use(makeLogMiddleware());       // 默认通道 "access"
+server.use(makeLogMiddleware("api"));  // 自定义通道
+```
+
+---
+
+### LogAdmin
+
+动态日志级别管理端点，支持运行时调整日志级别。
+
+**头文件：** `src/core/LogAdmin.h`
+
+#### registerLogAdmin 函数
+
+```cpp
+void registerLogAdmin(Router& router, const std::string& prefix = "/admin");
+```
+
+注册两个端点：
+- `GET {prefix}/log-level` — 查询当前所有日志级别（默认级别 + 各通道级别）
+- `PUT {prefix}/log-level` — 调整日志级别，请求体：`{"level":"info"}` 或 `{"channel":"access","level":"debug"}`
+
+#### 示例
+
+```cpp
+#include "core/LogAdmin.h"
+
+registerLogAdmin(server.router());               // → GET/PUT /admin/log-level
+registerLogAdmin(server.router(), "/internal");  // → GET/PUT /internal/log-level
+```
+
+---
+
 ## 附录
 
 ### 类型别名速查
@@ -965,6 +1285,7 @@ Boost.Asio 适配层，将 Boost.Asio 的原始 API 封装为 hical 风格的接
 | `WsConnectCallback` | `function<Awaitable<void>(WebSocketSession&)>`                          | `Router.h`     |
 | `Func`              | `function<void()>`                                                      | `EventLoop.h`  |
 | `TimerId`           | `uint64_t`                                                              | `EventLoop.h`  |
+| `ErrorHandler`      | `function<HttpResponse(const exception&, const HttpRequest&)>`          | `HttpServer.h` |
 
 ### 回调类型速查
 
@@ -1243,6 +1564,87 @@ server.router().post("/logout", [](const HttpRequest& req) -> HttpResponse {
 
 ---
 
+### CORS 中间件
+
+跨域资源共享（CORS）中间件，符合 W3C CORS 规范。
+
+**头文件：** `src/core/Cors.h`
+
+#### CorsOptions 结构体
+
+| 字段               | 类型                       | 默认值                                            | 说明                           |
+| ------------------ | -------------------------- | ------------------------------------------------- | ------------------------------ |
+| `allowedOrigins`   | `std::vector<std::string>` | `{"*"}`                                           | 允许的源列表（`"*"` 为通配符） |
+| `allowedMethods`   | `std::vector<std::string>` | `{"GET","POST","PUT","DELETE","PATCH","OPTIONS"}` | 允许的 HTTP 方法               |
+| `allowedHeaders`   | `std::vector<std::string>` | `{"Content-Type","Authorization"}`                | 允许的请求头                   |
+| `exposeHeaders`    | `std::vector<std::string>` | `{}`                                              | 暴露给浏览器的响应头           |
+| `allowCredentials` | `bool`                     | `false`                                           | 是否允许凭证（Cookie 等）      |
+| `maxAge`           | `int`                      | `86400`                                           | 预检缓存时间（秒）             |
+
+#### makeCorsMiddleware 函数
+
+```cpp
+MiddlewareHandler makeCorsMiddleware(CorsOptions opts = {});
+```
+
+创建 CORS 中间件。自动处理 OPTIONS 预检请求，添加 `Vary: Origin` 缓存提示。凭证模式下禁止 `"*"` 通配符（安全校验）。
+
+#### 示例
+
+```cpp
+#include "core/Cors.h"
+
+// 允许所有源（默认配置）
+server.use(makeCorsMiddleware());
+
+// 精确匹配源 + 凭证模式
+CorsOptions opts;
+opts.allowedOrigins    = {"https://example.com", "https://app.example.com"};
+opts.allowCredentials  = true;
+opts.allowedHeaders    = {"Content-Type", "Authorization", "X-Custom-Header"};
+server.use(makeCorsMiddleware(opts));
+```
+
+---
+
+### RouteGroup
+
+路由组，为一组路由设置公共前缀和组级中间件。支持多层嵌套。
+
+**头文件：** `src/core/RouteGroup.h`
+
+#### 公共方法
+
+| 方法                           | 参数                     | 返回值       | 说明                                 |
+| ------------------------------ | ------------------------ | ------------ | ------------------------------------ |
+| `use(middleware)`              | middleware: 中间件处理器 | `void`       | 添加组级中间件（仅对组内路由生效）   |
+| `group(subPrefix)`             | subPrefix: 子前缀        | `RouteGroup` | 创建嵌套子组（继承父组中间件和前缀） |
+| `route(method, path, handler)` | method/path/handler      | `void`       | 注册路由（协程/同步）                |
+| `get(path, handler)`           | path/handler             | `void`       | 注册 GET 路由                        |
+| `post(path, handler)`          | path/handler             | `void`       | 注册 POST 路由                       |
+| `put(path, handler)`           | path/handler             | `void`       | 注册 PUT 路由                        |
+| `del(path, handler)`           | path/handler             | `void`       | 注册 DELETE 路由                     |
+
+#### 示例
+
+```cpp
+#include "core/RouteGroup.h"
+
+auto api = server.router().group("/api/v1");
+api.use(authMiddleware);      // 仅对 /api/v1/* 生效
+
+api.get("/users", listUsers);           // → GET /api/v1/users
+api.post("/users", createUser);         // → POST /api/v1/users
+api.get("/users/{id}", getUser);        // → GET /api/v1/users/{id}
+
+// 嵌套子组
+auto admin = api.group("/admin");
+admin.use(adminAuthMiddleware);
+admin.get("/stats", getStats);          // → GET /api/v1/admin/stats
+```
+
+---
+
 ## 数据库中间件 API
 
 > 需要在 CMake 构建时开启 `HICAL_WITH_DATABASE=ON`，并链接 Boost.MySQL。命名空间为 `hical::db`，头文件在 `src/db/`。
@@ -1257,24 +1659,24 @@ server.router().post("/logout", [](const HttpRequest& req) -> HttpResponse {
 
 #### 字段说明
 
-| 字段                  | 类型                     | 默认值       | 说明                              |
-| --------------------- | ------------------------ | ------------ | --------------------------------- |
-| `host`                | `std::string`            | `127.0.0.1`  | 数据库主机地址                    |
-| `port`                | `uint16_t`               | `3306`        | 数据库端口                        |
-| `user`                | `std::string`            | `""`          | 登录用户名                        |
-| `password`            | `std::string`            | `""`          | 登录密码                          |
-| `database`            | `std::string`            | `""`          | 默认数据库名                      |
-| `charset`             | `std::string`            | `"utf8mb4"`   | 连接字符集                        |
-| `minConnections`      | `size_t`                 | `2`           | 连接池最小连接数（启动时预热）    |
-| `maxConnections`      | `size_t`                 | `16`          | 连接池最大连接数                  |
-| `idleTimeout`         | `std::chrono::seconds`   | `300s`        | 空闲连接超时后回收                |
-| `acquireTimeout`      | `std::chrono::seconds`   | `5s`          | 从池中获取连接的等待超时          |
-| `queryTimeout`        | `std::chrono::seconds`   | `30s`         | 单条查询执行超时                  |
-| `autoReconnect`       | `bool`                   | `true`        | 连接断开时是否自动重连            |
-| `idleCheckInterval`   | `std::chrono::seconds`   | `60s`         | 定期检查空闲连接的间隔            |
-| `healthCheckInterval` | `std::chrono::seconds`   | `30s`         | 定期 ping 健康检查的间隔          |
-| `pingGracePeriod`     | `std::chrono::seconds`   | `15s`         | ping 超时宽限期                   |
-| `stmtCacheSize`       | `size_t`                 | `64`          | 每条连接的 PreparedStatement 缓存上限（0=禁用） |
+| 字段                  | 类型                   | 默认值      | 说明                                            |
+| --------------------- | ---------------------- | ----------- | ----------------------------------------------- |
+| `host`                | `std::string`          | `127.0.0.1` | 数据库主机地址                                  |
+| `port`                | `uint16_t`             | `3306`      | 数据库端口                                      |
+| `user`                | `std::string`          | `""`        | 登录用户名                                      |
+| `password`            | `std::string`          | `""`        | 登录密码                                        |
+| `database`            | `std::string`          | `""`        | 默认数据库名                                    |
+| `charset`             | `std::string`          | `"utf8mb4"` | 连接字符集                                      |
+| `minConnections`      | `size_t`               | `2`         | 连接池最小连接数（启动时预热）                  |
+| `maxConnections`      | `size_t`               | `16`        | 连接池最大连接数                                |
+| `idleTimeout`         | `std::chrono::seconds` | `300s`      | 空闲连接超时后回收                              |
+| `acquireTimeout`      | `std::chrono::seconds` | `5s`        | 从池中获取连接的等待超时                        |
+| `queryTimeout`        | `std::chrono::seconds` | `30s`       | 单条查询执行超时                                |
+| `autoReconnect`       | `bool`                 | `true`      | 连接断开时是否自动重连                          |
+| `idleCheckInterval`   | `std::chrono::seconds` | `60s`       | 定期检查空闲连接的间隔                          |
+| `healthCheckInterval` | `std::chrono::seconds` | `30s`       | 定期 ping 健康检查的间隔                        |
+| `pingGracePeriod`     | `std::chrono::seconds` | `15s`       | ping 超时宽限期                                 |
+| `stmtCacheSize`       | `size_t`               | `64`        | 每条连接的 PreparedStatement 缓存上限（0=禁用） |
 
 ---
 
@@ -1286,21 +1688,21 @@ server.router().post("/logout", [](const HttpRequest& req) -> HttpResponse {
 
 #### 字段说明
 
-| 字段           | 类型                                       | 说明                              |
-| -------------- | ------------------------------------------ | --------------------------------- |
-| `columns`      | `std::vector<std::string>`                 | 列名列表（SELECT 查询时填充）     |
-| `rows`         | `std::vector<std::vector<std::string>>`    | 结果行，每行为字符串列值列表      |
-| `affectedRows` | `uint64_t`                                 | DML 操作影响的行数                |
-| `insertId`     | `uint64_t`                                 | INSERT 操作自动生成的主键值       |
+| 字段           | 类型                                    | 说明                          |
+| -------------- | --------------------------------------- | ----------------------------- |
+| `columns`      | `std::vector<std::string>`              | 列名列表（SELECT 查询时填充） |
+| `rows`         | `std::vector<std::vector<std::string>>` | 结果行，每行为字符串列值列表  |
+| `affectedRows` | `uint64_t`                              | DML 操作影响的行数            |
+| `insertId`     | `uint64_t`                              | INSERT 操作自动生成的主键值   |
 
 #### 方法
 
-| 方法                   | 返回值     | 说明                                                 |
-| ---------------------- | ---------- | ---------------------------------------------------- |
-| `empty()`              | `bool`     | 结果集是否为空（无行数据）                           |
-| `size()`               | `size_t`   | 结果行数                                             |
-| `operator[](index)`    | `std::vector<std::string>&` | 按行下标访问                        |
-| `columnIndex(name)`    | `size_t`   | 按列名查找下标，未找到返回 `std::string::npos`       |
+| 方法                | 返回值                      | 说明                                           |
+| ------------------- | --------------------------- | ---------------------------------------------- |
+| `empty()`           | `bool`                      | 结果集是否为空（无行数据）                     |
+| `size()`            | `size_t`                    | 结果行数                                       |
+| `operator[](index)` | `std::vector<std::string>&` | 按行下标访问                                   |
+| `columnIndex(name)` | `size_t`                    | 按列名查找下标，未找到返回 `std::string::npos` |
 
 ---
 
@@ -1312,32 +1714,32 @@ server.router().post("/logout", [](const HttpRequest& req) -> HttpResponse {
 
 #### 查询方法
 
-| 方法                          | 参数                                                    | 返回值                    | 说明                                   |
-| ----------------------------- | ------------------------------------------------------- | ------------------------- | -------------------------------------- |
-| `query(sql, params)`          | sql: SQL 语句<br>params: 参数列表（`vector<string>`）   | `Awaitable<DbResult>`     | 参数化查询（推荐，防 SQL 注入）        |
-| `execute(sql, params)`        | sql: SQL 语句<br>params: 参数列表（`vector<string>`）   | `Awaitable<DbResult>`     | 参数化执行（INSERT/UPDATE/DELETE）     |
-| `query(sql)` *(deprecated)*   | sql: 原始 SQL                                           | `Awaitable<DbResult>`     | 直接查询，已标记 `[[deprecated]]`      |
-| `execute(sql)` *(deprecated)* | sql: 原始 SQL                                           | `Awaitable<DbResult>`     | 直接执行，已标记 `[[deprecated]]`      |
+| 方法                          | 参数                                                  | 返回值                | 说明                               |
+| ----------------------------- | ----------------------------------------------------- | --------------------- | ---------------------------------- |
+| `query(sql, params)`          | sql: SQL 语句<br>params: 参数列表（`vector<string>`） | `Awaitable<DbResult>` | 参数化查询（推荐，防 SQL 注入）    |
+| `execute(sql, params)`        | sql: SQL 语句<br>params: 参数列表（`vector<string>`） | `Awaitable<DbResult>` | 参数化执行（INSERT/UPDATE/DELETE） |
+| `query(sql)` *(deprecated)*   | sql: 原始 SQL                                         | `Awaitable<DbResult>` | 直接查询，已标记 `[[deprecated]]`  |
+| `execute(sql)` *(deprecated)* | sql: 原始 SQL                                         | `Awaitable<DbResult>` | 直接执行，已标记 `[[deprecated]]`  |
 
 #### 事务方法
 
-| 方法                 | 返回值                | 说明                         |
-| -------------------- | --------------------- | ---------------------------- |
-| `beginTransaction()` | `Awaitable<void>`     | 开启事务                     |
-| `commit()`           | `Awaitable<void>`     | 提交事务                     |
-| `rollback()`         | `Awaitable<void>`     | 回滚事务                     |
-| `inTransaction()`    | `bool`                | 当前是否处于事务中           |
+| 方法                 | 返回值            | 说明               |
+| -------------------- | ----------------- | ------------------ |
+| `beginTransaction()` | `Awaitable<void>` | 开启事务           |
+| `commit()`           | `Awaitable<void>` | 提交事务           |
+| `rollback()`         | `Awaitable<void>` | 回滚事务           |
+| `inTransaction()`    | `bool`            | 当前是否处于事务中 |
 
 #### 状态方法
 
-| 方法               | 返回值                           | 说明                         |
-| ------------------ | -------------------------------- | ---------------------------- |
-| `isAlive()`        | `bool`                           | 连接是否存活                 |
-| `ping()`           | `Awaitable<bool>`                | 发送 ping 包检查连通性       |
-| `backend()`        | `std::string_view`               | 后端名称（如 `"mysql"`）     |
-| `lastActiveTime()` | `std::chrono::steady_clock::time_point` | 最后一次活跃时间        |
-| `lastPingTime()`   | `std::chrono::steady_clock::time_point` | 最后一次 ping 时间      |
-| `touch()`          | `void`                           | 更新最后活跃时间戳           |
+| 方法               | 返回值                                  | 说明                     |
+| ------------------ | --------------------------------------- | ------------------------ |
+| `isAlive()`        | `bool`                                  | 连接是否存活             |
+| `ping()`           | `Awaitable<bool>`                       | 发送 ping 包检查连通性   |
+| `backend()`        | `std::string_view`                      | 后端名称（如 `"mysql"`） |
+| `lastActiveTime()` | `std::chrono::steady_clock::time_point` | 最后一次活跃时间         |
+| `lastPingTime()`   | `std::chrono::steady_clock::time_point` | 最后一次 ping 时间       |
+| `touch()`          | `void`                                  | 更新最后活跃时间戳       |
 
 ---
 
@@ -1357,18 +1759,18 @@ using DbConnectionFactory =
 
 #### 构造函数
 
-| 方法                                              | 参数                                                                                  | 说明           |
-| ------------------------------------------------- | ------------------------------------------------------------------------------------- | -------------- |
-| `DbConnectionPool(ioCtx, config, factory)` | ioCtx: io_context 引用<br>config: DbConfig<br>factory: DbConnectionFactory | 创建连接池     |
+| 方法                                       | 参数                                                                       | 说明       |
+| ------------------------------------------ | -------------------------------------------------------------------------- | ---------- |
+| `DbConnectionPool(ioCtx, config, factory)` | ioCtx: io_context 引用<br>config: DbConfig<br>factory: DbConnectionFactory | 创建连接池 |
 
 #### 公共方法
 
-| 方法          | 参数                               | 返回值                               | 说明                                       |
-| ------------- | ---------------------------------- | ------------------------------------ | ------------------------------------------ |
-| `init()`      | 无                                 | `Awaitable<void>`                    | 预热连接池（建立 `minConnections` 条连接） |
-| `acquire()`   | 无                                 | `Awaitable<std::shared_ptr<DbConnection>>` | 从池中获取一条连接（超时抛出异常）    |
-| `release(conn)` | conn: 连接智能指针               | `void`                               | 归还连接到池中                             |
-| `shutdown()`  | 无                                 | `void`                               | 关闭连接池，回收所有连接                   |
+| 方法            | 参数               | 返回值                                     | 说明                                       |
+| --------------- | ------------------ | ------------------------------------------ | ------------------------------------------ |
+| `init()`        | 无                 | `Awaitable<void>`                          | 预热连接池（建立 `minConnections` 条连接） |
+| `acquire()`     | 无                 | `Awaitable<std::shared_ptr<DbConnection>>` | 从池中获取一条连接（超时抛出异常）         |
+| `release(conn)` | conn: 连接智能指针 | `void`                                     | 归还连接到池中                             |
+| `shutdown()`    | 无                 | `void`                                     | 关闭连接池，回收所有连接                   |
 
 #### 统计方法
 
@@ -1381,10 +1783,10 @@ using DbConnectionFactory =
 
 #### 常量键
 
-| 常量       | 值                  | 说明                             |
-| ---------- | ------------------- | -------------------------------- |
-| `hPoolKey` | `"hical.db.pool"`   | 连接池注入到 Request attribute 的键 |
-| `hConnKey` | `"hical.db.conn"`   | 连接注入到 Request attribute 的键   |
+| 常量       | 值                | 说明                                |
+| ---------- | ----------------- | ----------------------------------- |
+| `hPoolKey` | `"hical.db.pool"` | 连接池注入到 Request attribute 的键 |
+| `hConnKey` | `"hical.db.conn"` | 连接注入到 Request attribute 的键   |
 
 ---
 
@@ -1396,18 +1798,18 @@ using DbConnectionFactory =
 
 #### DbMiddlewareOptions 结构体
 
-| 字段              | 类型   | 默认值  | 说明                                                     |
-| ----------------- | ------ | ------- | -------------------------------------------------------- |
-| `autoTransaction` | `bool` | `false` | 是否对每个请求自动包裹事务（成功提交，异常回滚）         |
-| `injectPool`      | `bool` | `true`  | 是否同时将连接池本身注入 Request（键：`hPoolKey`）       |
+| 字段              | 类型   | 默认值  | 说明                                               |
+| ----------------- | ------ | ------- | -------------------------------------------------- |
+| `autoTransaction` | `bool` | `false` | 是否对每个请求自动包裹事务（成功提交，异常回滚）   |
+| `injectPool`      | `bool` | `true`  | 是否同时将连接池本身注入 Request（键：`hPoolKey`） |
 
 #### 函数
 
-| 函数                           | 参数                                                          | 返回值              | 说明                         |
-| ------------------------------ | ------------------------------------------------------------- | ------------------- | ---------------------------- |
-| `makeDbMiddleware(pool, opts)`  | pool: 连接池智能指针<br>opts: DbMiddlewareOptions（可选）     | `MiddlewareHandler` | 创建 DB 中间件               |
-| `getDbConnection(req)`         | req: HTTP 请求                                                | `std::shared_ptr<DbConnection>` | 从请求中取出已注入的连接   |
-| `getDbPool(req)`               | req: HTTP 请求                                                | `std::shared_ptr<DbConnectionPool>` | 从请求中取出连接池       |
+| 函数                           | 参数                                                      | 返回值                              | 说明                     |
+| ------------------------------ | --------------------------------------------------------- | ----------------------------------- | ------------------------ |
+| `makeDbMiddleware(pool, opts)` | pool: 连接池智能指针<br>opts: DbMiddlewareOptions（可选） | `MiddlewareHandler`                 | 创建 DB 中间件           |
+| `getDbConnection(req)`         | req: HTTP 请求                                            | `std::shared_ptr<DbConnection>`     | 从请求中取出已注入的连接 |
+| `getDbPool(req)`               | req: HTTP 请求                                            | `std::shared_ptr<DbConnectionPool>` | 从请求中取出连接池       |
 
 ---
 
@@ -1421,33 +1823,33 @@ using DbConnectionFactory =
 
 #### QueryLogEntry 结构体
 
-| 字段              | 类型                         | 说明                           |
-| ----------------- | ---------------------------- | ------------------------------ |
-| `sql`             | `std::string`                | 执行的 SQL 语句                |
-| `duration`        | `std::chrono::microseconds`  | 查询执行耗时                   |
-| `rowCount`        | `uint64_t`                   | SELECT 返回行数                |
-| `affectedRows`    | `uint64_t`                   | DML 影响行数                   |
-| `isParameterized` | `bool`                       | 是否为参数化查询               |
+| 字段              | 类型                        | 说明             |
+| ----------------- | --------------------------- | ---------------- |
+| `sql`             | `std::string`               | 执行的 SQL 语句  |
+| `duration`        | `std::chrono::microseconds` | 查询执行耗时     |
+| `rowCount`        | `uint64_t`                  | SELECT 返回行数  |
+| `affectedRows`    | `uint64_t`                  | DML 影响行数     |
+| `isParameterized` | `bool`                      | 是否为参数化查询 |
 
 #### QueryLogOptions 结构体
 
-| 字段                   | 类型                                              | 默认值 | 说明                                              |
-| ---------------------- | ------------------------------------------------- | ------ | ------------------------------------------------- |
-| `onRequestComplete`    | `std::function<void(const std::vector<QueryLogEntry>&)>` | `nullptr` | 请求完成时回调，接收本次请求的全部日志条目    |
-| `slowQueryThreshold`   | `std::chrono::microseconds`                       | `0`    | 慢查询阈值（0=禁用慢查询告警）                    |
-| `onSlowQuery`          | `std::function<void(const QueryLogEntry&)>`       | `nullptr` | 单条慢查询触发时的回调                        |
+| 字段                 | 类型                                                     | 默认值    | 说明                                       |
+| -------------------- | -------------------------------------------------------- | --------- | ------------------------------------------ |
+| `onRequestComplete`  | `std::function<void(const std::vector<QueryLogEntry>&)>` | `nullptr` | 请求完成时回调，接收本次请求的全部日志条目 |
+| `slowQueryThreshold` | `std::chrono::microseconds`                              | `0`       | 慢查询阈值（0=禁用慢查询告警）             |
+| `onSlowQuery`        | `std::function<void(const QueryLogEntry&)>`              | `nullptr` | 单条慢查询触发时的回调                     |
 
 #### 函数
 
-| 函数                           | 参数                     | 返回值              | 说明                   |
-| ------------------------------ | ------------------------ | ------------------- | ---------------------- |
-| `makeQueryLogMiddleware(opts)` | opts: QueryLogOptions    | `MiddlewareHandler` | 创建查询日志中间件     |
+| 函数                           | 参数                  | 返回值              | 说明               |
+| ------------------------------ | --------------------- | ------------------- | ------------------ |
+| `makeQueryLogMiddleware(opts)` | opts: QueryLogOptions | `MiddlewareHandler` | 创建查询日志中间件 |
 
 #### 常量键
 
-| 常量           | 值                      | 说明                                      |
-| -------------- | ----------------------- | ----------------------------------------- |
-| `hQueryLogKey` | `"hical.db.queryLog"`   | 查询日志列表注入到 Request attribute 的键 |
+| 常量           | 值                    | 说明                                      |
+| -------------- | --------------------- | ----------------------------------------- |
+| `hQueryLogKey` | `"hical.db.queryLog"` | 查询日志列表注入到 Request attribute 的键 |
 
 ---
 
@@ -1459,10 +1861,10 @@ using DbConnectionFactory =
 
 #### 静态方法
 
-| 方法                                    | 参数                                          | 返回值                                      | 说明                               |
-| --------------------------------------- | --------------------------------------------- | ------------------------------------------- | ---------------------------------- |
-| `create(ioCtx, config)`                 | ioCtx: io_context 引用<br>config: DbConfig 引用 | `Awaitable<std::shared_ptr<MysqlConnection>>` | 异步建立连接并返回实例           |
-| `makeFactory()`                         | 无                                            | `DbConnectionFactory`                       | 生成可传入 `DbConnectionPool` 的工厂函数 |
+| 方法                    | 参数                                            | 返回值                                        | 说明                                     |
+| ----------------------- | ----------------------------------------------- | --------------------------------------------- | ---------------------------------------- |
+| `create(ioCtx, config)` | ioCtx: io_context 引用<br>config: DbConfig 引用 | `Awaitable<std::shared_ptr<MysqlConnection>>` | 异步建立连接并返回实例                   |
+| `makeFactory()`         | 无                                              | `DbConnectionFactory`                         | 生成可传入 `DbConnectionPool` 的工厂函数 |
 
 ---
 
@@ -1474,20 +1876,20 @@ PreparedStatement LRU 缓存，按 SQL 文本为键缓存已编译的语句句�
 
 #### 构造函数
 
-| 方法                  | 参数                             | 说明                              |
-| --------------------- | -------------------------------- | --------------------------------- |
-| `StmtCache(maxSize)`  | maxSize: 最大缓存条目数（默认 64，0=禁用） | 创建 LRU 语句缓存          |
+| 方法                 | 参数                                       | 说明              |
+| -------------------- | ------------------------------------------ | ----------------- |
+| `StmtCache(maxSize)` | maxSize: 最大缓存条目数（默认 64，0=禁用） | 创建 LRU 语句缓存 |
 
 #### 公共方法
 
-| 方法                  | 参数                                          | 返回值                                     | 说明                                          |
-| --------------------- | --------------------------------------------- | ------------------------------------------ | --------------------------------------------- |
-| `find(sql)`           | sql: SQL 语句文本                             | `statement*`（可为 nullptr）               | 查找缓存中的语句句柄，未命中返回 `nullptr`    |
-| `insert(key, stmt)`   | key: SQL 文本<br>stmt: 语句句柄              | `std::optional<statement>`                 | 插入新条目，若触发淘汰则返回被淘汰的语句      |
-| `erase(sql)`          | sql: SQL 文本                                 | `void`                                     | 主动删除指定条目                              |
-| `clear()`             | 无                                            | `std::vector<statement>`                   | 清空全部条目并返回所有语句（供调用方关闭）    |
-| `size()`              | 无                                            | `size_t`                                   | 当前缓存条目数                                |
-| `maxSize()`           | 无                                            | `size_t`                                   | 缓存容量上限                                  |
+| 方法                | 参数                            | 返回值                       | 说明                                       |
+| ------------------- | ------------------------------- | ---------------------------- | ------------------------------------------ |
+| `find(sql)`         | sql: SQL 语句文本               | `statement*`（可为 nullptr） | 查找缓存中的语句句柄，未命中返回 `nullptr` |
+| `insert(key, stmt)` | key: SQL 文本<br>stmt: 语句句柄 | `std::optional<statement>`   | 插入新条目，若触发淘汰则返回被淘汰的语句   |
+| `erase(sql)`        | sql: SQL 文本                   | `void`                       | 主动删除指定条目                           |
+| `clear()`           | 无                              | `std::vector<statement>`     | 清空全部条目并返回所有语句（供调用方关闭） |
+| `size()`            | 无                              | `size_t`                     | 当前缓存条目数                             |
+| `maxSize()`         | 无                              | `size_t`                     | 缓存容量上限                               |
 
 ---
 
@@ -1552,6 +1954,312 @@ int main()
 
     server.start();
 }
+```
+
+---
+
+## OpenAPI 元数据 API
+
+> 需要在 CMake 构建时开启 `HICAL_WITH_OPENAPI=ON`（默认已开启）。命名空间为 `hical`，头文件在 `src/core/`。所有代码由 `HICAL_HAS_OPENAPI` 宏保护。
+
+---
+
+### OpenApiSchema
+
+C++20 模板驱动的 JSON Schema 生成器，从 `HICAL_JSON` 宏描述的类型元数据自动生成符合 OpenAPI 3.0 规范的 Schema Object。
+
+**头文件：** `src/core/OpenApiSchema.h`
+
+#### 函数
+
+| 函数                             | 参数                                    | 返回值                | 说明                                                                   |
+| -------------------------------- | --------------------------------------- | --------------------- | ---------------------------------------------------------------------- |
+| `jsonSchema<T>()`                | 无（模板参数 T 需有 `HICAL_JSON` 描述） | `boost::json::object` | 生成 OpenAPI 3.0 Schema Object，支持基本类型/vector/嵌套结构体/$ref    |
+| `collectSchemas<T>(schemas)`     | schemas: 输出的 schema map 引用         | `void`                | 递归收集 T 及其所有嵌套类型的 schema，写入 `map<string, json::object>` |
+| `registerSchemas<Types...>(doc)` | doc: OpenApiDocument 引用               | `void`                | 批量注册多个类型的 schema 到文档中                                     |
+
+#### 宏
+
+| 宏                                | 参数                                    | 说明                                                                |
+| --------------------------------- | --------------------------------------- | ------------------------------------------------------------------- |
+| `HICAL_SCHEMA_NAME(Type, "name")` | Type: C++ 类型<br>"name": schema 引用名 | 注册类型的 $ref 名称，用于跨类型引用（`#/components/schemas/name`） |
+
+#### 类型映射规则
+
+| C++ 类型                 | OpenAPI Schema 类型                |
+| ------------------------ | ---------------------------------- |
+| `bool`                   | `boolean`                          |
+| `int`, `int32_t`         | `integer`, format: int32           |
+| `int64_t`, `long`        | `integer`, format: int64           |
+| `float`                  | `number`, format: float            |
+| `double`                 | `number`, format: double           |
+| `std::string`            | `string`                           |
+| `std::vector<T>`         | `array`, items: schema of T        |
+| 带 `HICAL_JSON` 的结构体 | `object` 或 `$ref`（若注册了名称） |
+
+#### 示例
+
+```cpp
+#include "core/OpenApiSchema.h"
+#include "core/MetaJson.h"
+
+HICAL_SCHEMA_NAME(UserDTO, "User")
+
+struct UserDTO
+{
+    HICAL_JSON(UserDTO,
+        REQUIRED(id),
+        name,
+        ALIAS(emailAddr, "email")
+    )
+    int id;
+    std::string name;
+    std::string emailAddr;
+};
+
+// 生成单个 schema
+auto schema = hical::jsonSchema<UserDTO>();
+// 结果：{"type":"object","required":["id"],"properties":{...}}
+
+// 收集嵌套 schema（含 UserDTO 自身及其所有嵌套类型）
+std::map<std::string, boost::json::object> schemas;
+hical::collectSchemas<UserDTO>(schemas);
+```
+
+---
+
+### OpenApiRegistry
+
+线程安全的路由 API 元数据注册表，存储每条路由的 summary、tags、requestBody、responses 等标注信息。
+
+**头文件：** `src/core/OpenApiRegistry.h`
+
+#### RouteApiInfo 结构体
+
+| 字段          | 类型                                 | 默认值 | 说明                             |
+| ------------- | ------------------------------------ | ------ | -------------------------------- |
+| `method`      | `std::string`                        | `""`   | HTTP 方法（"GET"/"POST" 等）     |
+| `path`        | `std::string`                        | `""`   | 路由路径（如 "/users/{id}"）     |
+| `summary`     | `std::string`                        | `""`   | 接口简短描述                     |
+| `description` | `std::string`                        | `""`   | 接口详细描述（可选）             |
+| `tags`        | `std::vector<std::string>`           | `{}`   | 接口分组标签                     |
+| `requestBody` | `std::optional<boost::json::object>` | 无     | 请求体 Schema（POST/PUT 时使用） |
+| `responses`   | `std::map<int, boost::json::object>` | `{}`   | 响应 Schema，key 为 HTTP 状态码  |
+
+#### OpenApiRegistry 类
+
+| 方法        | 参数               | 返回值                      | 说明                                       |
+| ----------- | ------------------ | --------------------------- | ------------------------------------------ |
+| `add(info)` | info: RouteApiInfo | `void`                      | 注册一条路由的 API 元数据                  |
+| `getAll()`  | 无                 | `std::vector<RouteApiInfo>` | 获取全部已注册信息（快照，mutex 短暂锁定） |
+| `clear()`   | 无                 | `void`                      | 清空注册表                                 |
+| `count()`   | 无                 | `size_t`                    | 当前注册条目数                             |
+
+#### 宏
+
+| 宏                                        | 说明                                                                |
+| ----------------------------------------- | ------------------------------------------------------------------- |
+| `HICAL_API(builder_exprs...)`             | 综合标注宏，接受 `builder::*` 函数调用作为参数，返回 `RouteApiInfo` |
+| `HICAL_API_DEFAULT(method, path)`         | 最小标注宏，仅指定方法和路径，其余字段取默认值                      |
+| `HICAL_ROUTES_WITH_API(HandlerType, ...)` | 增强版路由收集宏，同时注册路由和收集元数据（替代 `HICAL_ROUTES`）   |
+
+#### builder 命名空间
+
+`hical::builder::` 提供流式风格的辅助函数，用于构建 `RouteApiInfo`：
+
+| 函数                            | 参数                               | 说明                                          |
+| ------------------------------- | ---------------------------------- | --------------------------------------------- |
+| `builder::summary(text)`        | text: 摘要字符串                   | 设置接口摘要                                  |
+| `builder::description(text)`    | text: 详细描述字符串               | 设置接口详细描述                              |
+| `builder::tag(name)`            | name: 标签名                       | 添加一个分组标签                              |
+| `builder::tags(names...)`       | names: 多个标签名                  | 批量添加分组标签                              |
+| `builder::requestBody<T>()`     | T: 请求体类型（需有 HICAL_JSON）   | 设置请求体 schema（自动调用 jsonSchema<T>()） |
+| `builder::response<T>(code)`    | T: 响应体类型<br>code: HTTP 状态码 | 添加一个响应描述                              |
+| `builder::response(code, desc)` | code: 状态码<br>desc: 描述字符串   | 添加无 schema 的响应描述                      |
+
+#### registerRoutesWithOpenApi 函数
+
+```cpp
+template <typename HandlerType>
+void registerRoutesWithOpenApi(
+    Router& router,
+    HandlerType& handler,
+    OpenApiRegistry& registry);
+```
+
+同时完成两件事：调用 `registerRoutes(router, handler)` 注册路由，并将 `HandlerType::routeApiTable()` 中的元数据批量写入 `registry`。
+
+---
+
+### OpenApiDocument
+
+OpenAPI 3.0 完整文档的惰性组装器，将 Registry 中的路由元数据与 Schema Map 合并为标准文档 JSON。
+
+**头文件：** `src/core/OpenApiDocument.h`
+
+#### OpenApiConfig 结构体
+
+| 字段          | 类型                       | 默认值        | 说明                                             |
+| ------------- | -------------------------- | ------------- | ------------------------------------------------ |
+| `title`       | `std::string`              | `"Hical API"` | API 文档标题                                     |
+| `version`     | `std::string`              | `"1.0.0"`     | API 版本号                                       |
+| `description` | `std::string`              | `""`          | API 文档整体描述                                 |
+| `servers`     | `std::vector<std::string>` | `{}`          | 服务器地址列表（如 `["http://localhost:8080"]`） |
+
+#### OpenApiDocument 类
+
+| 方法                                | 参数                                                | 返回值                       | 说明                                                 |
+| ----------------------------------- | --------------------------------------------------- | ---------------------------- | ---------------------------------------------------- |
+| `OpenApiDocument(config, registry)` | config: OpenApiConfig<br>registry: OpenApiRegistry& | —                            | 构造文档组装器                                       |
+| `addSchema(name, schema)`           | name: schema 名称<br>schema: JSON Schema Object     | `void`                       | 手动添加一个 schema 到 `components/schemas`          |
+| `addSchemas(schemaMap)`             | schemaMap: `map<string, json::object>`              | `void`                       | 批量添加 schema                                      |
+| `generate()`                        | 无                                                  | `const boost::json::object&` | 惰性生成并缓存完整文档（首次调用后后续直接返回缓存） |
+| `invalidate()`                      | 无                                                  | `void`                       | 使缓存失效，下次 `generate()` 重新生成               |
+
+**文档生成规则：**
+- 自动从路由路径 `{param}` 提取 path parameters
+- 同一路径的不同 HTTP method 合并为同一 Path Item（符合 OpenAPI 规范）
+- `components/schemas` 自动注入所有通过 `addSchema` 添加的类型
+
+---
+
+### OpenApiEndpoint
+
+一行代码暴露 `/openapi.json` 和 `/docs` 端点。
+
+**头文件：** `src/core/OpenApiEndpoint.h`
+
+#### serveOpenApi 函数
+
+```cpp
+void serveOpenApi(
+    Router& router,
+    std::shared_ptr<OpenApiDocument> doc,
+    std::string jsonPath  = "/openapi.json",
+    std::string docsPath  = "/docs");
+```
+
+| 参数       | 说明                                       |
+| ---------- | ------------------------------------------ |
+| `router`   | 路由器引用，端点将注册到此路由器           |
+| `doc`      | OpenApiDocument 智能指针                   |
+| `jsonPath` | JSON spec 端点路径（默认 `/openapi.json`） |
+| `docsPath` | Swagger UI HTML 页面路径（默认 `/docs`）   |
+
+**安全说明：** Swagger UI HTML 中的 `jsonPath` 通过 `boost::json::serialize()` 转义，防止路径中包含特殊字符导致 JS 注入。
+
+---
+
+### 综合用法示例
+
+```cpp
+#include "core/HttpServer.h"
+#include "core/MetaJson.h"
+#include "core/MetaRoutes.h"
+#include "core/OpenApiSchema.h"
+#include "core/OpenApiRegistry.h"
+#include "core/OpenApiDocument.h"
+#include "core/OpenApiEndpoint.h"
+
+using namespace hical;
+
+// 1. 定义 DTO（附带 JSON 序列化描述）
+HICAL_SCHEMA_NAME(UserDTO, "User")
+
+struct UserDTO
+{
+    HICAL_JSON(UserDTO, REQUIRED(id), name, ALIAS(emailAddr, "email"))
+    int id;
+    std::string name;
+    std::string emailAddr;
+};
+
+HICAL_SCHEMA_NAME(CreateUserRequest, "CreateUserRequest")
+
+struct CreateUserRequest
+{
+    HICAL_JSON(CreateUserRequest, REQUIRED(name), REQUIRED(email))
+    std::string name;
+    std::string email;
+};
+
+// 2. 定义 Handler，使用 HICAL_API 标注
+struct UserHandler
+{
+    HICAL_HANDLER(Get, "/api/users/{id}", getUser)
+    Awaitable<HttpResponse> getUser(const HttpRequest& req)
+    {
+        co_return HttpResponse::json({{"id", req.param("id")}});
+    }
+
+    HICAL_HANDLER(Post, "/api/users", createUser)
+    Awaitable<HttpResponse> createUser(const HttpRequest& req)
+    {
+        auto body = req.readJson<CreateUserRequest>();
+        co_return HttpResponse::json({{"name", body.name}});
+    }
+
+    // API 标注表（与 HICAL_ROUTES_WITH_API 配合）
+    static std::vector<RouteApiInfo> routeApiTable()
+    {
+        return {
+            HICAL_API(
+                builder::summary("获取用户"),
+                builder::tag("用户管理"),
+                builder::response<UserDTO>(200),
+                builder::response(404, "用户不存在")
+            ),
+            HICAL_API(
+                builder::summary("创建用户"),
+                builder::tag("用户管理"),
+                builder::requestBody<CreateUserRequest>(),
+                builder::response<UserDTO>(201)
+            ),
+        };
+    }
+
+    HICAL_ROUTES_WITH_API(UserHandler, getUser, createUser)
+};
+
+int main()
+{
+    HttpServer server(8080);
+    auto& router = server.router();
+
+    // 3. 创建 Registry 和 Document
+    auto registry = std::make_shared<OpenApiRegistry>();
+    OpenApiConfig config;
+    config.title   = "用户服务 API";
+    config.version = "1.0.0";
+    config.servers = {"http://localhost:8080"};
+    auto doc = std::make_shared<OpenApiDocument>(config, *registry);
+
+    // 4. 同时注册路由和收集元数据
+    UserHandler handler;
+    registerRoutesWithOpenApi(router, handler, *registry);
+
+    // 5. 收集 schema 并注入文档
+    std::map<std::string, boost::json::object> schemas;
+    collectSchemas<UserDTO>(schemas);
+    collectSchemas<CreateUserRequest>(schemas);
+    doc->addSchemas(schemas);
+
+    // 6. 一行暴露 /openapi.json 和 /docs
+    serveOpenApi(router, doc);
+
+    server.start();
+    return 0;
+}
+```
+
+**访问端点：**
+
+```bash
+# 获取 OpenAPI JSON 规范
+curl http://localhost:8080/openapi.json
+
+# 浏览器访问 Swagger UI
+# http://localhost:8080/docs
 ```
 
 ---

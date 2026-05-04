@@ -183,8 +183,8 @@ namespace hical::db
 			// 无论成功还是异常，都恢复原始连接（确保 DbMiddleware 归还的是真实连接）
 			req.setAttribute(DbConnectionPool::hConnKey, realConn);
 
-			// 请求完成回调（仅正常路径）
-			if (!eptr && opts.onRequestComplete)
+			// 请求完成回调（无论成功或异常都触发，让用户决定如何处理）
+			if (opts.onRequestComplete)
 			{
 				opts.onRequestComplete(req, *logEntries);
 			}

@@ -1,6 +1,6 @@
 # Hical 项目代码结构
 
-> 最后更新：2026-04-30
+> 最后更新：2026-05-05
 
 ## 项目概述
 
@@ -38,6 +38,22 @@ hical/
 │   │   ├── StaticFiles.h       # 静态文件服务（异步 I/O + PathCache + ETag/304）
 │   │   ├── Multipart.h/.cpp    # multipart/form-data 解析（dual API: req 版 + parts 版）
 │   │   ├── Session.h/.cpp      # Session 会话管理（shared_mutex + regenerate + migrateFrom）
+│   │   ├── Cors.h              # CORS 中间件（makeCorsMiddleware + CorsOptions）
+│   │   ├── RouteGroup.h/.cpp   # 路由组（前缀分组 + 组级中间件 + 嵌套子组）
+│   │   ├── Log.h/.cpp          # 日志系统（6 级 LogLevel，std::format API，流式 API，条件宏，NDEBUG TRACE 消除，thread_local 缓存，智能 flush，Fatal abort）
+│   │   ├── LogRecord.h         # 结构化日志条目（level/timestamp/threadId/file/line/message/fields/traceId）
+│   │   ├── LogFormatter.h/.cpp # 日志格式化器接口 + TextFormatter + JsonFormatter
+│   │   ├── LogSink.h/.cpp      # 可插拔日志后端（LogSink 抽象 + StderrSink + FileSink + OStreamSink）
+│   │   ├── LogFile.h/.cpp      # 日志文件轮转引擎（按大小轮转 + 最大文件数限制）
+│   │   ├── AsyncFileSink.h/.cpp # 异步双缓冲文件 Sink（jthread + stop_token + 背压保护）
+│   │   ├── FixedBuffer.h       # 栈上固定缓冲区模板（4KB，std::to_chars，溢出 fallback）
+│   │   ├── LogChannel.h/.cpp   # 命名日志通道 + LogChannelRegistry（shared_mutex 读多写少）
+│   │   ├── LogMiddleware.h/.cpp # 日志中间件（trace-id 自动注入 + 结构化访问日志）
+│   │   ├── LogAdmin.h/.cpp     # 动态日志级别管理端点（GET/PUT /admin/log-level）
+│   │   ├── OpenApiSchema.h     # JSON Schema 生成（jsonSchema<T>/collectSchemas/HICAL_SCHEMA_NAME）
+│   │   ├── OpenApiRegistry.h/.cpp  # 路由元数据注册表（RouteApiInfo/HICAL_API/builder::*）
+│   │   ├── OpenApiDocument.h/.cpp  # OpenAPI 3.0 文档组装（惰性缓存/路径合并/参数提取）
+│   │   ├── OpenApiEndpoint.h   # 端点暴露（serveOpenApi，/openapi.json + /docs）
 │   │   ├── IdleFd.h            # 空闲 fd 预留（POSIX /dev/null，Windows no-op）
 │   │   ├── WriteNode.h         # 多态写队列节点（MemoryWriteNode / FileWriteNode）
 │   │   ├── Reflection.h        # C++26 反射特性检测 + RouteInfo + 类型萃取
@@ -63,7 +79,7 @@ hical/
 │       ├── MysqlConnection.h/.cpp  # MySQL 后端（Boost.MySQL any_connection）
 │       └── StmtCache.h/.cpp   # PreparedStatement LRU 缓存（透明哈希）
 │
-├── tests/                      # 单元测试（Google Test）— 22 个测试套件 + 5 个可选 DB 测试
+├── tests/                      # 单元测试（Google Test）— 38 个测试套件 + 5 个可选 DB 测试
 │   ├── CMakeLists.txt          # 测试构建配置
 │   ├── test_basic.cpp          # 基础测试
 │   ├── test_error.cpp          # 错误码转换测试
@@ -86,7 +102,24 @@ hical/
 │   ├── test_static_files.cpp   # 静态文件服务 / ETag / 路径遍历测试
 │   ├── test_multipart.cpp      # multipart/form-data 解析测试
 │   ├── test_session.cpp        # Session 生命周期 / 线程安全 / regenerate 测试
+│   ├── test_query_params.cpp   # 查询参数解析测试
+│   ├── test_form_params.cpp    # 表单参数解析测试
+│   ├── test_redirect.cpp       # 重定向测试
+│   ├── test_cors.cpp           # CORS 中间件测试
+│   ├── test_route_group.cpp    # 路由组测试
+│   ├── test_error_handler.cpp  # 全局错误处理器测试
+│   ├── test_graceful_shutdown.cpp # 优雅关闭测试
+│   ├── test_openapi.cpp        # OpenAPI 自动生成测试（35 个，含 schema/registry/document/endpoint/集成）
 │   ├── test_integration.cpp    # 完整 HTTP 请求/响应周期集成测试
+│   ├── test_log.cpp            # 日志系统测试（36 个：format API、Sink API、多线程安全等）
+│   ├── test_log_ndebug.cpp     # NDEBUG 编译消除验证（3 个：TRACE 消除）
+│   ├── test_fixed_buffer.cpp   # FixedBuffer 栈缓冲测试（19 个：格式化、溢出）
+│   ├── test_log_file.cpp       # LogFile 文件轮转测试（7 个：写入、轮转、文件数限制）
+│   ├── test_async_file_sink.cpp # AsyncFileSink 异步日志测试（7 个：多线程、优雅关闭）
+│   ├── test_log_formatter.cpp  # TextFormatter + JsonFormatter 测试（12 个）
+│   ├── test_log_channel.cpp    # LogChannel + Registry 测试（12 个：通道路由、宏）
+│   ├── test_log_middleware.cpp  # LogMiddleware 测试（3 个：trace-id 生成）
+│   ├── test_log_admin.cpp      # LogAdmin 端点测试（4 个：注册、级别调整）
 │   ├── test_db_pool.cpp       # 连接池单元测试（Mock，12 个用例）
 │   ├── test_db_middleware.cpp  # DB 中间件测试（Mock，8 个用例）
 │   ├── test_db_query_log.cpp  # 查询日志测试（Mock，6 个用例）
@@ -100,7 +133,8 @@ hical/
 │   ├── benchmark.cpp           # Echo Server 压力测试工具
 │   ├── http_server.cpp         # HTTP Server 示例（HttpServer API + WebSocket + 中间件）
 │   ├── http_benchmark.cpp      # HTTP 基准测试工具（QPS/P50/P99 延迟统计）
-│   └── pmr_benchmark.cpp       # pmr 内存池基准测试（多策略性能对比）
+│   ├── pmr_benchmark.cpp       # pmr 内存池基准测试（多策略性能对比）
+│   └── openapi_server.cpp      # OpenAPI 文档自动生成示例
 │
 ├── docs/                       # 文档
 │   ├── project_structure.md    # 本文件 — 项目代码结构说明
@@ -117,31 +151,34 @@ hical/
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│                    HttpServer                        │
-│  ┌──────────┐  ┌───────────────┐  ┌──────────────┐ │
-│  │  Router   │  │  Middleware   │  │  WebSocket   │ │
-│  │  {param}  │  │  Pipeline    │  │  Session     │ │
-│  └──────────┘  └───────────────┘  └──────────────┘ │
-│         │              │                   │         │
+│                    HttpServer                       │
+│  ┌──────────┐  ┌───────────────┐  ┌──────────────┐  │
+│  │  Router  │  │  Middleware   │  │  WebSocket   │  │
+│  │  {param} │  │  Pipeline     │  │  Session     │  │
+│  └──────────┘  └───────────────┘  └──────────────┘  │
+│  ┌──────────┐  ┌───────────────┐  ┌──────────────┐  │
+│  │RouteGroup│  │     Cors      │  │     Log      │  │
+│  └──────────┘  └───────────────┘  └──────────────┘  │
+│         │              │                   │        │
 │  ┌──────┴──────────────┴───────────────────┘        │
 │  │     HttpRequest / HttpResponse (Beast)           │
 │  └──────────────────────────────────────────────────│
 └─────────────────────────────────────────────────────┘
                          │
 ┌─────────────────────────────────────────────────────┐
-│                    TcpServer                         │
-│  ┌──────────────┐  ┌───────────────────────────┐   │
-│  │ EventLoopPool│  │ GenericConnection<Socket>  │   │
-│  │ (IO threads) │  │  PlainConnection / SslConn │   │
-│  └──────────────┘  └───────────────────────────┘   │
+│                    TcpServer                        │
+│  ┌──────────────┐  ┌───────────────────────────┐    │
+│  │ EventLoopPool│  │ GenericConnection<Socket> │    │
+│  │ (IO threads) │  │  PlainConnection / SslConn│    │
+│  └──────────────┘  └───────────────────────────┘    │
 └─────────────────────────────────────────────────────┘
                          │
 ┌─────────────────────────────────────────────────────┐
-│           DB Middleware (可选, HICAL_WITH_DATABASE)    │
-│  ┌──────────────┐  ┌─────────────┐  ┌───────────┐  │
-│  │DbMiddleware  │  │ DbQueryLog  │  │ DbConnPool│  │
-│  │              │  │ (装饰器)     │  │ (协程池)   │  │
-│  └──────────────┘  └─────────────┘  └───────────┘  │
+│           DB Middleware (可选, HICAL_WITH_DATABASE)  │
+│  ┌──────────────┐  ┌─────────────┐  ┌───────────┐   │
+│  │DbMiddleware  │  │ DbQueryLog  │  │ DbConnPool│   │
+│  │              │  │ (装饰器)     │  │ (协程池)   │   │
+│  └──────────────┘  └─────────────┘  └───────────┘   │
 │         │                                │          │
 │  ┌──────┴────────────────────────────────┘          │
 │  │     MysqlConnection + StmtCache (Boost.MySQL)    │
@@ -149,9 +186,21 @@ hical/
 └─────────────────────────────────────────────────────┘
                          │
 ┌─────────────────────────────────────────────────────┐
-│              Core Infrastructure                     │
+│           Log System                                │
+│  ┌──────────────┐  ┌─────────────┐  ┌───────────┐   │
+│  │Logger (单例)  │  │ LogChannel  │  │LogMiddle- │   │
+│  │+ Sink 分发    │  │ Registry    │  │ware       │   │
+│  └──────┬───────┘  └─────────────┘  └───────────┘   │
+│         │                                           │
+│  ┌──────┴────────────────────────────────────────┐  │
+│  │  LogFormatter / LogSink / LogFile / AsyncFile │  │
+│  └───────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────┘
+                         │
+┌─────────────────────────────────────────────────────┐
+│              Core Infrastructure                    │
 │  EventLoop / Timer / MemoryPool / PmrBuffer         │
-│  SslContext / Error / InetAddress / Coroutine        │
+│  SslContext / Error / InetAddress / Coroutine       │
 └─────────────────────────────────────────────────────┘
 ```
 
@@ -166,7 +215,7 @@ hical/
   - ws2_32, mswsock（Windows 网络库）
 - **构建产物**:
   - `hical_core` — 框架核心静态库
-  - `test_*` — 各组件单元测试（22 + 5 个可选 DB 测试套件）
+  - `test_*` — 各组件单元测试（38 个测试套件 + 5 个可选 DB 测试）
   - `echo_server` / `pmr_poc` / `benchmark` / `http_server` — 示例程序
   - `http_benchmark` / `pmr_benchmark` — 性能基准测试工具
 
@@ -236,6 +285,36 @@ hical/
 - **MySQL 后端**: MysqlConnection（Boost.MySQL any_connection、参数化查询、类型转换、charset 安全校验）
 - **PreparedStatement 缓存**: StmtCache（每连接 LRU、透明哈希 string_view 查找、淘汰 statement 异步 close）
 - **测试套件**: 5 个测试文件（42 个用例），Mock 测试 + MySQL 集成测试
+
+### 阶段八：OpenAPI 元数据层
+- **Schema 生成层**: `OpenApiSchema.h`（`jsonSchema<T>()` 从 `HICAL_JSON` FieldDescriptor tuple 推导 OpenAPI 3.0 Schema，`collectSchemas<T>()` 递归收集，`HICAL_SCHEMA_NAME` 注册 `$ref` 引用名）
+- **路由元数据注册表**: `OpenApiRegistry`（mutex 线程安全、快照返回）+ `RouteApiInfo` + `HICAL_API()` 宏 + `builder::*` 辅助函数 + `registerRoutesWithOpenApi()`
+- **文档组装层**: `OpenApiDocument`（惰性缓存、mutex 保护、自动 `{param}` 提取、同路径不同 method 合并）+ `OpenApiConfig`
+- **端点暴露层**: `serveOpenApi()` 一键注册 `/openapi.json` + `/docs`（Swagger UI），boost::json::serialize() 防 JS 注入
+- **测试套件**: `test_openapi.cpp`（35 个用例，覆盖 schema 生成/registry CRUD/文档组装/端点注册/完整集成流程）
+
+### 阶段九：HTTP 核心增强
+- **CORS 中间件**: `makeCorsMiddleware(CorsOptions)`，W3C 规范，Preflight 自动应答，`Vary: Origin` 缓存提示，凭证模式安全校验
+- **路由组**: `Router::group(prefix)` → `RouteGroup`，前缀分组 + 组级中间件继承 + 多层嵌套
+- **查询参数**: `HttpRequest::queryParam()` / `queryParams()` / `hasQueryParam()`，惰性解析 + 缓存
+- **表单参数**: `HttpRequest::formParam()` / `formParams()` / `hasFormParam()`，`application/x-www-form-urlencoded` 解析
+- **重定向响应**: `HttpResponse::redirect(location, code)`，默认 302，Location 头 CRLF 防护
+- **全局错误处理器**: `HttpServer::setErrorHandler()`，未捕获异常统一处理
+- **优雅关闭**: `HttpServer::shutdown()` 支持
+- **测试套件**: 7 个新测试文件
+
+### 阶段十：日志系统
+- **日志核心**: `Log.h/cpp`，`Logger` 单例 + 6 级 `LogLevel`（Trace→Fatal），`std::format` / 流式 / 条件 / 结构化字段四种 API，NDEBUG 下 TRACE 编译期消除
+- **结构化日志**: `LogRecord.h`，level/timestamp/threadId/file/line/message + `boost::json::object` fields + traceId
+- **格式化器**: `LogFormatter.h/cpp`，`TextFormatter`（人类可读 + `thread_local` 时间戳缓存）+ `JsonFormatter`（JSON Lines + UTC）
+- **输出后端**: `LogSink.h/cpp`，可插拔接口 + `StderrSink` + `FileSink`（同步 + 轮转）+ `OStreamSink`
+- **文件轮转**: `LogFile.h/cpp`，按大小轮转（默认 100MB）、最大文件数限制、时间戳序列命名
+- **异步写盘**: `AsyncFileSink.h/cpp`，`std::jthread` + `stop_token` + 4MB 双缓冲 + 背压保护 + 优雅关闭
+- **栈缓冲**: `FixedBuffer.h`，4KB 固定缓冲 + `std::to_chars` 格式化 + 堆 fallback
+- **命名通道**: `LogChannel.h/cpp`，独立级别/格式化器/Sink，`LogChannelRegistry`（`shared_mutex`）
+- **日志中间件**: `LogMiddleware.h/cpp`，OpenSSL RAND_bytes 128 位 trace-id + 结构化访问日志
+- **动态级别管理**: `LogAdmin.h/cpp`，GET/PUT 端点运行时调整
+- **测试套件**: 9 个新测试文件（97 个用例）
 
 ## 命名风格
 

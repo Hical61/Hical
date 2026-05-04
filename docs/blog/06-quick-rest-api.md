@@ -59,7 +59,7 @@ int main()
     server.router().get("/api/status",
         [](const HttpRequest&) -> HttpResponse {
             return HttpResponse::json(
-                {{"status", "running"}, {"version", "2.1.0"},
+                {{"status", "running"}, {"version", "x.x.x"},
                  {"framework", "hical"}});
         });
 
@@ -86,7 +86,7 @@ int main()
 ```bash
 # JSON 响应
 curl http://localhost:8080/api/status
-# {"status":"running","version":"2.1.0","framework":"hical"}
+# {"status":"running","version":"x.x.x","framework":"hical"}
 
 # 路径参数
 curl http://localhost:8080/users/42
@@ -98,6 +98,43 @@ curl -X POST -d "Hello" http://localhost:8080/api/echo
 ```
 
 这 40 行代码覆盖了 REST API 最常见的场景：JSON 返回、路径参数、请求体处理、请求日志。如果你用过 Express.js 或 Flask，会发现 API 风格非常相似 —— 只是语言换成了 C++。
+
+### 路由分组 + 查询参数
+
+```cpp
+// v2.4.0: 路由分组 —— 共享前缀和中间件
+auto api = server.router().group("/api/v2");
+api.use(authMiddleware);  // 组级中间件，仅对 /api/v2/* 生效
+
+api.get("/users", [](const HttpRequest& req) -> HttpResponse {
+    auto page = req.queryParam("page").value_or("1");
+    return HttpResponse::json({{"page", page}, {"users", "..."}});
+});
+
+api.get("/users/{id}", [](const HttpRequest& req) -> HttpResponse {
+    return HttpResponse::json({{"id", req.param("id")}});
+});
+```
+
+### 日志中间件
+
+```cpp
+// 内置日志中间件 —— 一行代码替代手写日志
+#include "core/LogMiddleware.h"
+server.use(makeLogMiddleware());
+// 自动生成 trace-id，自动记录 method/path/status/latency_ms
+```
+
+### OpenAPI 一键集成
+
+```cpp
+// OpenAPI 文档 —— 访问 /docs 即得 Swagger UI
+#include "core/OpenApiEndpoint.h"
+auto registry = std::make_shared<OpenApiRegistry>();
+// ... 注册路由和标注 ...
+auto doc = std::make_shared<OpenApiDocument>(registry, OpenApiConfig{.title = "My API"});
+serveOpenApi(server.router(), doc);
+```
 
 ---
 
@@ -142,6 +179,24 @@ auto user = req.readJson<UserDTO>();
 
 当编译器支持 C++26 反射时，连这行宏都不需要 —— Hical 会自动切换到原生反射路径。
 
+### 数据库协程化，告别手动连接管理
+
+```cpp
+// v2.3.0: 协程化 DB 中间件 —— 连接自动获取/释放，事务自动提交/回滚
+auto pool = std::make_shared<DbConnectionPool>(MysqlConnection::makeFactory(dbConfig), dbConfig);
+server.use(makeDbMiddleware(pool, {.autoTransaction = true}));
+
+server.router().get("/users/{id}", [](const HttpRequest& req) -> Awaitable<HttpResponse> {
+    auto conn = getDbConnection(req);
+    auto result = co_await conn->query("SELECT * FROM users WHERE id = ?", {req.param("id")});
+    co_return HttpResponse::json({{"name", result.rows[0][1]}});
+});
+```
+
+### OpenAPI 自动生成，告别手写文档
+
+一行 `serveOpenApi()` 即可在 `/docs` 暴露完整的 Swagger UI，在 `/openapi.json` 暴露机器可读的规范文件。路径参数自动提取、同路径多方法自动合并，无需手写 YAML/JSON。
+
 ---
 
 ## 安装
@@ -172,7 +227,7 @@ cmake --build build
 include(FetchContent)
 FetchContent_Declare(hical
     GIT_REPOSITORY https://github.com/Hical61/Hical.git
-    GIT_TAG        v2.1.0)
+    GIT_TAG        VERSION)
 FetchContent_MakeAvailable(hical)
 target_link_libraries(my_app PRIVATE hical_core)
 ```
@@ -189,6 +244,11 @@ target_link_libraries(my_app PRIVATE hical_core)
 - [第三篇：路由、中间件与 SSL](03-router-middleware-ssl.md)
 - [第四篇：实战案例与性能调优](04-practice-and-performance.md)
 - [第五篇：Cookie、Session 与文件服务](05-cookies-sessions-fileservices.md)
+- [第六篇：快速上手 REST API](06-quick-rest-api.md)（本文）
+- [第七篇：框架横评对比](07-framework-comparison.md)
+- [第八篇：Hical + MySQL CRUD 实战](08-hical-mysql-crud.md)
+- [第九篇：日志系统完全指南](09-hical-logging-guide.md)
+- [第十篇：OpenAPI 自动文档生成](10-hical-openapi-swagger.md)
 
 GitHub: [https://github.com/Hical61/Hical](https://github.com/Hical61/Hical)
 

@@ -11,39 +11,30 @@
 
 Hical is a modern C++ web framework built on Boost.Asio/Beast, utilizing C++26 reflection and PMR memory pooling to achieve high performance.
 
-> C++20/26 dual-track reflection · PMR memory pool · coroutine async I/O · Cookie / Session / StaticFiles / Multipart built-in · Optional DB middleware (Boost.MySQL)
+> C++20/26 dual-track reflection · PMR memory pool · coroutine async I/O · Cookie / Session / StaticFiles / Multipart built-in · CORS · RouteGroup · logging system · OpenAPI 3.0 auto-docs · Optional DB middleware (Boost.MySQL)
 
 English | [简体中文](README_CN.md)
 
 ## Features
 
-- **C++26 Reflection** — Designed around C++26 static reflection for automatic route registration, serialization, and compile-time metaprogramming
+- **C++26 Reflection** — Designed around C++26 static reflection for automatic route registration, JSON serialization/deserialization, and compile-time metaprogramming; C++20 macro fallback provides the same API
 - **Boost.Asio/Beast Backend** — Industrial-grade networking with `io_context` per-thread model
-- **PMR Memory Pool** — Unified `std::pmr` allocator strategy across buffers, HTTP bodies, and JSON objects for reduced fragmentation and improved cache locality
+- **PMR Memory Pool** — Three-tier `std::pmr` allocator strategy (global synchronized pool, thread-local pool, request-level monotonic buffer) across buffers, HTTP bodies, and JSON objects
 - **Coroutine Support** — `asio::awaitable<T>` + `co_spawn` for clean async code
 - **C++ Concepts** — Compile-time `NetworkBackend` constraints for type safety
-- **SSL/TLS** — Template-based `GenericConnection<SocketType>` supporting both plain and encrypted connections
-- **WebSocket** — WebSocket upgrade and bidirectional communication
-- **Router & Middleware** — Middleware pipeline (logging, auth, rate limiting) with path parameter support
-- **HTTP Server** — Full HTTP/1.1 support via Boost.Beast (chunked transfer, keep-alive)
+- **SSL/TLS** — Template-based `GenericConnection<SocketType>` with compile-time `if constexpr` branching for plain and encrypted connections
+- **WebSocket** — WebSocket upgrade and bidirectional communication with Origin whitelist
+- **Router & Middleware** — Onion-model middleware pipeline with path parameter support (`{id}`), static route O(1) hash lookup, per-method parameter route grouping
+- **RouteGroup** — Prefix-based route grouping with group-level middleware, supporting nested groups
+- **CORS Middleware** — Built-in Cross-Origin Resource Sharing middleware with automatic preflight handling
+- **HTTP Server** — Full HTTP/1.1 support via Boost.Beast (chunked transfer, keep-alive), fd exhaustion protection
 - **Cookie Support** — RFC 6265 compliant parsing (first-wins semantics) + `Set-Cookie` with CRLF injection protection
-- **Static File Serving** — MIME auto-detection, ETag/304 caching, path traversal protection, 64 MB size limit
+- **Static File Serving** — MIME auto-detection, ETag/304 caching, path traversal protection, async file I/O, PathCache (4096 entries / 60s TTL), 64 MB size limit
 - **Multipart File Upload** — RFC 7578 `multipart/form-data` parser with DoS protection (≤256 parts)
-- **Session Management** — In-memory `SessionManager` with lazy GC, 128-bit random IDs, thread-safe `Session` objects
-
-## Why Hical?
-
-|                         | Hical                           | Drogon                 | Crow              |
-| ----------------------- | ------------------------------- | ---------------------- | ----------------- |
-| **C++ Standard**        | C++20 (C++26 ready)             | C++17                  | C++11             |
-| **Async Model**         | Coroutines (`co_await`)         | Callbacks + Coroutines | Callbacks         |
-| **Memory Strategy**     | 3-tier PMR pool                 | Default allocator      | Default allocator |
-| **HTTP Parser**         | Boost.Beast                     | Custom (Trantor)       | Custom            |
-| **SSL**                 | Compile-time template branching | Runtime branch         | Runtime branch    |
-| **Backend Abstraction** | C++20 Concepts                  | N/A                    | N/A               |
-| **Cookie / Session**    | Built-in                        | Built-in               | Limited           |
-| **Static Files**        | Built-in (ETag, DoS guard)      | Built-in               | Built-in          |
-| **File Upload**         | Built-in (part limit guard)     | Built-in               | Built-in          |
+- **Session Management** — In-memory `SessionManager` with lazy GC, 128-bit random IDs, thread-safe `Session` objects, session fixation prevention (`regenerate()`), atomic data migration (`migrateFrom()`)
+- **Logging System** — 6-level logging (Trace–Fatal), `std::format` + streaming + conditional macro APIs, pluggable Sinks (Stderr/File/AsyncFile/OStream), named Channels, JSON/Text formatters, async double-buffered file writes, TRACE compile-time elimination under NDEBUG, dynamic level management endpoints (LogAdmin)
+- **OpenAPI 3.0 Auto-Docs** — Auto-generate JSON Schema from `HICAL_JSON` macros, `HICAL_API()` route annotations, one-call setup for `/openapi.json` + Swagger UI at `/docs`
+- **Optional Database Middleware** — Coroutine-based Boost.MySQL backend with connection pool (LIFO reuse, health check, idle eviction), auto-transaction, query logging with slow query detection, LRU prepared statement cache
 
 ## Quick Start
 
@@ -102,23 +93,41 @@ curl http://localhost:8080/
 ```
 hical/
 ├── src/
-│   ├── core/          # Abstract interfaces & shared types
-│   │   ├── EventLoop.h, Timer.h, TcpConnection.h
-│   │   ├── MemoryPool.h/cpp, PmrBuffer.h
-│   │   ├── Error.h/cpp, Concepts.h, Coroutine.h
-│   │   ├── HttpServer.h/cpp, HttpRequest.h/cpp, HttpResponse.h/cpp
-│   │   ├── Router.h/cpp, Middleware.h/cpp
-│   │   ├── WebSocket.h/cpp, SslContext.h/cpp
-│   │   └── HttpTypes.h, InetAddress.h/cpp
-│   └── asio/          # Boost.Asio implementations
-│       ├── AsioEventLoop.h/cpp
-│       ├── AsioTimer.h/cpp
-│       ├── GenericConnection.h/cpp
-│       ├── EventLoopPool.h/cpp
-│       └── TcpServer.h/cpp
-├── tests/             # Unit tests (Google Test)
-├── examples/          # HTTP server, WebSocket, benchmarks, PMR demos
-├── docs/              # Design analysis documents
+│   ├── core/            # Abstract interfaces, shared types, HTTP framework & reflection
+│   │   ├── EventLoop.h, Timer.h, TcpConnection.h   # Abstract base classes
+│   │   ├── Concepts.h, Coroutine.h                  # C++20 Concepts & coroutines
+│   │   ├── MemoryPool.h/cpp, PmrBuffer.h            # Three-tier PMR memory pool
+│   │   ├── HttpServer.h/cpp, HttpRequest.h/cpp      # HTTP server
+│   │   ├── HttpResponse.h/cpp, HttpTypes.h          # HTTP response & types
+│   │   ├── Router.h/cpp, RouteGroup.h/cpp           # Router & route grouping
+│   │   ├── Middleware.h/cpp, Cors.h                 # Middleware & CORS
+│   │   ├── WebSocket.h/cpp, SslContext.h/cpp        # WebSocket & SSL
+│   │   ├── Cookie.h, Session.h/cpp                  # Cookie & session
+│   │   ├── StaticFiles.h, Multipart.h/cpp           # Static files & file upload
+│   │   ├── Reflection.h, MetaJson.h, MetaRoutes.h   # C++26 reflection layer
+│   │   ├── Log.h/cpp, LogRecord.h, LogFormatter.h/cpp  # Logging core
+│   │   ├── LogSink.h/cpp, LogFile.h/cpp             # Log sinks & file rotation
+│   │   ├── AsyncFileSink.h/cpp, FixedBuffer.h       # Async sink & stack buffer
+│   │   ├── LogChannel.h/cpp, LogMiddleware.h/cpp    # Log channels & middleware
+│   │   ├── LogAdmin.h/cpp                           # Dynamic log level endpoints
+│   │   ├── OpenApiSchema.h, OpenApiRegistry.h/cpp   # OpenAPI schema & registry
+│   │   ├── OpenApiDocument.h/cpp, OpenApiEndpoint.h # OpenAPI document & endpoints
+│   │   └── IdleFd.h, WriteNode.h, Version.h.in      # Utilities
+│   ├── asio/            # Boost.Asio concrete implementations
+│   │   ├── AsioEventLoop.h/cpp, AsioTimer.h/cpp
+│   │   ├── GenericConnection.h/cpp, SslConnection.h
+│   │   ├── EventLoopPool.h/cpp, TcpServer.h/cpp
+│   │   └── ...
+│   └── db/              # Optional database middleware (HICAL_WITH_DATABASE=ON)
+│       ├── DbConfig.h, DbResult.h, DbConnection.h  # Config, result, abstract interface
+│       ├── DbConnectionPool.h/cpp                   # Coroutine-based connection pool
+│       ├── DbMiddleware.h                           # HTTP middleware integration
+│       ├── DbQueryLog.h/cpp                         # Query logging & slow query detection
+│       ├── MysqlConnection.h/cpp                    # Boost.MySQL backend
+│       └── StmtCache.h/cpp                          # LRU prepared statement cache
+├── tests/               # Unit tests (Google Test, 30+ test executables)
+├── examples/            # HTTP server, WebSocket, OpenAPI, benchmarks, PMR demos
+├── docs/                # Design documents and guides
 └── CMakeLists.txt
 ```
 
@@ -127,7 +136,7 @@ hical/
 | Dependency   | Version                             |
 | ------------ | ----------------------------------- |
 | C++ Standard | C++20 / C++26                       |
-| Boost        | >= 1.82 (Asio, Beast, System, JSON); DB middleware >= 1.85 |
+| Boost        | >= 1.82 (Asio, Beast, System, JSON); DB middleware >= 1.85 (MySQL, charconv) |
 | CMake        | >= 3.20                             |
 | OpenSSL      | Required                            |
 | Google Test  | Required                            |
@@ -186,7 +195,6 @@ find_package(hical REQUIRED)
 target_link_libraries(my_app PRIVATE hical::hical_core)
 ```
 
-
 ### Build from Source
 
 #### Linux / macOS
@@ -203,6 +211,27 @@ ctest --test-dir build --output-on-failure
 cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build
 ctest --test-dir build --output-on-failure
+```
+
+#### Windows (MSVC + vcpkg)
+
+```bash
+cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake
+cmake --build build --config Release
+ctest --test-dir build --output-on-failure -C Release
+```
+
+#### Enable Optional Modules
+
+```bash
+# Database middleware (requires Boost.MySQL >= 1.85)
+cmake -B build -DHICAL_WITH_DATABASE=ON ...
+
+# Disable OpenAPI module (enabled by default)
+cmake -B build -DHICAL_WITH_OPENAPI=OFF ...
+
+# Enable C++26 Reflection (requires compatible compiler)
+cmake -B build -DHICAL_ENABLE_REFLECTION=ON ...
 ```
 
 ## Performance
@@ -225,9 +254,12 @@ Run the built-in benchmarks:
 ## Documentation
 
 - [Quick Start Guide](docs/quickstart.md) — 5-minute tutorial
-- [Examples Guide](docs/examples_guide.md) — 8 progressive examples
+- [Build & Test Guide](docs/build_and_test_guide.md) — Build, test, and CI configuration
+- [Examples Guide](docs/examples_guide.md) — Progressive examples
 - [API Reference](docs/api_reference.md) — Complete public API
 - [Architecture](docs/architecture.md) — Design decisions and internals
+- [Integration Guide](docs/integration_guide.md) — vcpkg / Conan / CMake integration
+- [Project Structure](docs/project_structure.md) — Source directory and module reference
 - [Performance Report](docs/performance_report.md) — Benchmarking methodology
 - [Contributing](CONTRIBUTING.md) — How to contribute
 

@@ -6,6 +6,7 @@
 	#include <boost/mysql/connect_params.hpp>
 	#include <boost/mysql/results.hpp>
 	#include <boost/mysql/statement.hpp>
+	#include <charconv>
 	#include <stdexcept>
 
 namespace hical::db
@@ -315,15 +316,21 @@ namespace hical::db
 				}
 				else if (field.is_int64())
 				{
-					dbRow.push_back(std::to_string(field.as_int64()));
+					char buf[24];
+					auto [ptr, ec] = std::to_chars(buf, buf + sizeof(buf), field.as_int64());
+					dbRow.emplace_back(buf, ptr);
 				}
 				else if (field.is_uint64())
 				{
-					dbRow.push_back(std::to_string(field.as_uint64()));
+					char buf[24];
+					auto [ptr, ec] = std::to_chars(buf, buf + sizeof(buf), field.as_uint64());
+					dbRow.emplace_back(buf, ptr);
 				}
 				else if (field.is_double())
 				{
-					dbRow.push_back(std::to_string(field.as_double()));
+					char buf[32];
+					auto [ptr, ec] = std::to_chars(buf, buf + sizeof(buf), field.as_double());
+					dbRow.emplace_back(buf, ptr);
 				}
 				else if (field.is_string())
 				{

@@ -31,6 +31,11 @@ cmake --build build --config Release
 cmake -B build -DHICAL_WITH_DATABASE=ON ...
 ```
 
+### Disable OpenAPI module (enabled by default)
+```bash
+cmake -B build -DHICAL_WITH_OPENAPI=OFF ...
+```
+
 ### Enable C++26 Reflection (requires compatible compiler)
 ```bash
 cmake -B build -DHICAL_ENABLE_REFLECTION=ON ...
@@ -75,6 +80,20 @@ find src -name '*.cpp' | xargs clang-tidy -p build
 - `StaticFiles.h` — Async static file serving (`Awaitable<HttpResponse>`) with `BOOST_ASIO_HAS_FILE` async I/O + ifstream fallback, PathCache (4096/60s TTL), ETag/304, MIME detection, path traversal protection, 64MB file size limit
 - `Multipart.h/cpp` — RFC 7578 multipart/form-data parser (256 part DoS limit), dual API: `getFile(req, field)` (re-parses) and `getFile(parts, field)` (searches pre-parsed vector, recommended)
 - `Session.h/cpp` — In-memory session manager with `shared_mutex` (read-write lock), lazy GC, OpenSSL RAND_bytes 128-bit IDs, `makeSessionMiddleware` factory, `maxSessions` DoS limit, atomic `lastAccess` (lock-free), `regenerate()` for session fixation prevention, `migrateFrom()` for atomic data migration with address-ordered double locking
+- `Log.h/cpp` — Production-grade logging system: 6-level `LogLevel` (Trace/Debug/Info/Warn/Error/Fatal), `Logger` singleton with `std::format`-style API (`HICAL_LOG_INFO("port={}", 8080)`), streaming API (`HICAL_LOG_INFO_STREAM << val`), conditional macros (`HICAL_LOG_INFO_IF`), compile-time TRACE elimination under NDEBUG, `thread_local` timestamp cache + thread ID cache, configurable flush level (`setFlushLevel()`), Fatal auto-abort
+- `LogRecord.h` — Structured log entry: level, timestamp, threadId, file, line, message, `boost::json::object` fields, traceId
+- `LogFormatter.h/cpp` — Log formatter interface + `TextFormatter` (Phase 1/2 compatible text output with `thread_local` timestamp cache) + `JsonFormatter` (JSON Lines via `boost::json::serialize`, UTC timestamps)
+- `LogSink.h/cpp` — Pluggable log output backend interface (`LogSink` abstract) + `StderrSink` (fprintf) + `FileSink` (sync fwrite + `LogFile` rotation) + `OStreamSink` (thread-safe ostream wrapper for `setOutput()` compat)
+- `LogFile.h/cpp` — Log file rotation engine: size-based rotation (default 100MB), max file count limit, timestamp-sequenced archive naming (`app.YYMMDD-HHMMSS.NNNNNN.log`), strict filename matching for cleanup, `FILE*`-based I/O
+- `AsyncFileSink.h/cpp` — Async double-buffered file Sink: `std::jthread` + `stop_token` background thread, 4MB front/back buffer swap, `condition_variable_any` wakeup, backpressure protection (drop + count), 1s timeout flush, graceful shutdown with final `m_curBuf` drain
+- `FixedBuffer.h` — Stack-allocated fixed buffer template (default 4KB), `std::to_chars` integer/float formatting, heap fallback on overflow, replaces `std::ostringstream` in `LogStream`
+- `LogChannel.h/cpp` — Named log channel with independent level/formatter/sinks, `LogChannelRegistry` with `shared_mutex` (read-many-write-rarely), `HICAL_LOG_TO("channel", Info, fmt, ...)` macro
+- `LogMiddleware.h/cpp` — Onion-model logging middleware: auto trace-id generation (OpenSSL RAND_bytes 128-bit hex), `req.setAttribute("hical.trace_id", ...)`, structured access log to named channel (method/path/status/latency_ms)
+- `LogAdmin.h/cpp` — Dynamic log level admin endpoints: `GET /admin/log-level` (query all levels) + `PUT /admin/log-level` (adjust default or per-channel level at runtime)
+- `OpenApiSchema.h` — C++20 JSON Schema generation: `jsonSchema<T>()` auto-generates OpenAPI 3.0 Schema Objects from the `FieldDescriptor` tuple of the `HICAL_JSON` macro, supporting primitive types/vector/nested structs/$ref. `HICAL_SCHEMA_NAME` macro registers type names for `$ref` references. `collectSchemas<T>()` recursively collects nested schemas
+- `OpenApiRegistry.h/cpp` — Route metadata registry: `RouteApiInfo` stores route annotations (summary/tags/requestBody/responses). `OpenApiRegistry` is a thread-safe registry (mutex + snapshot return). `HICAL_API()` all-in-one annotation macro + `builder::*` helpers. `HICAL_ROUTES_WITH_API()` enhanced route collection macro. `registerRoutesWithOpenApi()` registers routes and collects metadata simultaneously
+- `OpenApiDocument.h/cpp` — OpenAPI 3.0 document assembly: `OpenApiDocument` lazily generates and caches the full JSON document (mutex + bool flag). `OpenApiConfig` holds configuration (title/version/description/servers). Automatic path parameter extraction (`{param}` pattern). Multiple methods on the same path are merged into a single Path Item
+- `OpenApiEndpoint.h` — Endpoint exposure: `serveOpenApi()` registers `/openapi.json` (JSON spec) + `/docs` (Swagger UI CDN page) in one call. The jsonPath is safely escaped via `boost::json::serialize()` to prevent JS injection
 - `IdleFd.h` — Cross-platform idle fd reservation (POSIX: `/dev/null` fd; Windows: no-op stub) for EMFILE accept loop protection
 - `WriteNode.h` — Polymorphic write buffer nodes: `WriteNode` base, `MemoryWriteNode` (shared_ptr\<string\>), `FileWriteNode` (path/offset/length) for heterogeneous send queue
 - `Version.h.in` — CMake-configured version header (single source of truth from `project(VERSION)`)
@@ -103,6 +122,7 @@ find src -name '*.cpp' | xargs clang-tidy -p build
 - **PMR everywhere**: Buffers (`PmrBuffer`), HTTP bodies, and JSON objects use `std::pmr` allocators from the three-tier pool.
 - **Backend abstraction**: `AsioBackend` struct bundles `AsioEventLoop` + `PlainConnection` + `AsioTimer` to satisfy the `NetworkBackend` concept. Future backends can be swapped in.
 - **Namespaces**: Public API in `hical::`, reflection layer in `hical::meta::`, database middleware in `hical::db::`.
+- **Optional OpenAPI module**: `src/core/OpenApi*.h/cpp` is opt-in via `HICAL_WITH_OPENAPI=ON` (default ON). `HICAL_HAS_OPENAPI` macro guards all OpenAPI code. Four-layer design: Schema generation → Registry → Document assembly → Endpoint exposure. Zero-invasive: does not modify MetaJson.h / MetaRoutes.h / Router.h.
 - **Optional DB module**: Entire `src/db/` is opt-in via `HICAL_WITH_DATABASE=ON`. `HICAL_HAS_DATABASE` macro guards all DB code at compile boundaries. DB core layer (pool/middleware/query log) is backend-agnostic; MySQL backend is a separate layer. Adding PostgreSQL requires only a new `if(HICAL_WITH_PGSQL)` CMake block.
 
 ### C++26 Reflection Layer (Dual-Track)
@@ -123,27 +143,26 @@ Core design principle: when `HICAL_HAS_REFLECTION == 1` (compiler supports P2996
 
 ## Naming Conventions (enforced by clang-tidy)
 
-| Element            | Convention              | Example                    |
-| ------------------ | ----------------------- | -------------------------- |
-| Class              | `C` prefix + CamelCase  | `CMyClass`                 |
-| Struct             | `S` prefix + CamelCase  | `SRouteKey`                |
-| Enum               | `E` prefix + CamelCase  | `EHttpMethod`              |
-| Abstract/Interface | `I` prefix + CamelCase  | `IEventLoop`               |
-| Enum constant      | `E` prefix + CamelCase  | `EGet`, `EPost`            |
-| Member variable    | `m_` prefix + camelBack | `m_ioContext`              |
-| Global variable    | `g_` prefix + camelBack | `g_instance`               |
-| Static variable    | `s` prefix + camelBack  | `sThreadPool`              |
-| Function/Method    | camelBack               | `runAfter()`, `dispatch()` |
-| Local variable     | camelBack               | `bytesRead`                |
-| Pointer param      | `p` prefix + CamelCase  | `pSocket`                  |
-| Macro              | UPPER_CASE              | `HICAL_ROUTE`              |
-| Template param     | CamelCase               | `SocketType`               |
+| Element            | Convention              | Example                        |
+| ------------------ | ----------------------- | ------------------------------ |
+| Class / Struct     | CamelCase (no prefix)   | `HttpServer`, `PoolConfig`     |
+| Enum               | CamelCase (no prefix)   | `HttpMethod`                   |
+| Abstract/Interface | CamelCase (no prefix)   | `EventLoop`, `TcpConnection`   |
+| Enum constant      | `E` prefix + CamelCase  | `EGet`, `EPost`                |
+| Member variable    | `m_` prefix + camelBack | `m_ioContext`                  |
+| Global variable    | `g_` prefix + camelBack | `g_instance`                   |
+| Static variable    | `s` prefix + camelBack  | `sThreadPool`                  |
+| Function/Method    | camelBack               | `runAfter()`, `dispatch()`     |
+| Local variable     | camelBack               | `bytesRead`                    |
+| Pointer param      | `p` prefix + CamelCase  | `pSocket`                      |
+| Macro              | UPPER_CASE              | `HICAL_ROUTE`                  |
+| Template param     | CamelCase               | `SocketType`                   |
 
-**Note**: The existing codebase uses a slightly relaxed form — many types omit the C/S/E/I prefix (e.g., `HttpServer` not `CHttpServer`, `PoolConfig` not `SPoolConfig`). Follow the existing style in each file.
+**Note**: Class/Struct/Enum/Interface types do not use C/S/E/I prefixes — plain CamelCase only (e.g. `HttpServer`, `RouteInfo`, `HttpMethod`, `EventLoop`). Enum constants retain the `E` prefix to distinguish them from type names.
 
 ## Code Style
 
-- **clang-format**: Requires version 22+. On Windows use MSYS2 MINGW64 的 `C:\msys64\mingw64\bin\clang-format.exe`。Allman brace style (braces on new line), 4-space indent, 120-char column limit, `InsertBraces: true`, `UseTab: ForContinuationAndIndentation`
+- **clang-format**: Requires version 22+. On Windows use MSYS2 MINGW64's `C:\msys64\mingw64\bin\clang-format.exe`. Allman brace style (braces on new line), 4-space indent, 120-char column limit, `InsertBraces: true`, `UseTab: ForContinuationAndIndentation`
 - **clang-tidy**: readability, bugprone, cppcoreguidelines, modernize, misc, performance checks enabled. Function line threshold: 150, nesting threshold: 4, parameter threshold: 5
 - Qualifier order: `inline static const type`
 - Pointer/reference alignment: left (`int* p`, `std::string& s`)
@@ -160,9 +179,11 @@ Core design principle: when `HICAL_HAS_REFLECTION == 1` (compiler supports P2996
 | CMake        | >= 3.20                               |
 | Compiler     | GCC 14+ / Clang 20+ / MSVC 2022+      |
 
+> **Note:** The OpenAPI module (`HICAL_WITH_OPENAPI=ON`) introduces no new dependencies; it reuses the existing Boost.JSON.
+
 ## Test Structure
 
-22 test executables in `tests/` (+ 5 optional DB tests), each linked against `hical_core` + `GTest::gtest_main`. Tests are registered via `gtest_discover_tests()` for CTest integration. On Windows, tests also link `ws2_32` and `mswsock`. Key test files:
+30 test executables in `tests/` (+ 5 optional DB tests), each linked against `hical_core` + `GTest::gtest_main`. Tests are registered via `gtest_discover_tests()` for CTest integration. On Windows, tests also link `ws2_32` and `mswsock`. Key test files:
 - `test_router.cpp` / `test_router_perf.cpp` — Route dispatch and performance
 - `test_memory_pool.cpp` — Three-tier PMR allocation
 - `test_http_server.cpp` / `test_integration.cpp` — Full HTTP request/response cycle
@@ -175,6 +196,16 @@ Core design principle: when `HICAL_HAS_REFLECTION == 1` (compiler supports P2996
 - `test_static_files.cpp` — Static file serving, ETag, path traversal
 - `test_multipart.cpp` — multipart/form-data parsing
 - `test_session.cpp` — Session lifecycle and thread safety
+- `test_openapi.cpp` — OpenAPI auto-generation (35 tests: schema generation for all types/decorators, registry CRUD, document assembly with path merging/param extraction/caching, endpoint registration, full integration workflow)
+- `test_log.cpp` — Log system (36 tests: format API, level filter, thread ID, timestamp, flush strategy, Fatal abort, stream macros, conditional macros, Sink API, multi-Sink dispatch)
+- `test_log_ndebug.cpp` — NDEBUG compile-out verification (3 tests: TRACE/TRACE_IF/TRACE_STREAM eliminated)
+- `test_fixed_buffer.cpp` — FixedBuffer stack buffer (19 tests: append, overflow fallback, integer/float/bool formatting, clear)
+- `test_log_file.cpp` — LogFile rotation engine (7 tests: write, size rotation, max files, naming format, nested dirs)
+- `test_async_file_sink.cpp` — AsyncFileSink (7 tests: basic write, multi-thread, graceful shutdown, rotation, sink level)
+- `test_log_formatter.cpp` — TextFormatter + JsonFormatter (12 tests: output format, traceId, filename extraction, JSON validity, structured fields)
+- `test_log_channel.cpp` — LogChannel + Registry (12 tests: emit, level filter, custom formatter, multi-sink, registry CRUD, HICAL_LOG_TO/HICAL_LOG_TO_F macros)
+- `test_log_middleware.cpp` — LogMiddleware (3 tests: trace-id generation length/hex/uniqueness)
+- `test_log_admin.cpp` — LogAdmin endpoints (4 tests: registration, custom prefix, level round-trip, dynamic channel level)
 
 ### Database Tests (requires `HICAL_WITH_DATABASE=ON`)
 

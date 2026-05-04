@@ -16,6 +16,8 @@
 namespace hical
 {
 
+	class MultipartParser; // 前向声明，用于友元
+
 	/**
 	 * @brief HTTP 请求封装
 	 * 对 Boost.Beast http::request 的 hical 风格封装。
@@ -24,6 +26,8 @@ namespace hical
 	 */
 	class HttpRequest
 	{
+		friend class MultipartParser;
+
 	public:
 		using BeastRequest = boost::beast::http::request<boost::beast::http::string_body>;
 
@@ -244,14 +248,11 @@ namespace hical
 			{
 				return std::nullopt;
 			}
-			try
-			{
-				return std::any_cast<T>(it->second);
-			}
-			catch (const std::bad_any_cast&)
+			if (it->second.type() != typeid(T))
 			{
 				return std::nullopt;
 			}
+			return std::any_cast<T>(it->second);
 		}
 
 	private:
@@ -277,6 +278,7 @@ namespace hical
 		mutable std::optional<boost::json::value> cachedJsonBody_;
 		mutable std::optional<std::unordered_multimap<std::string, std::string, StringHash, StringEqual>> m_queryParams;
 		mutable std::optional<std::unordered_multimap<std::string, std::string, StringHash, StringEqual>> m_formParams;
+		mutable std::any m_cachedMultipartParts; // vector<MultipartPart>，惰性解析缓存
 		std::unordered_map<std::string, std::any> attributes_;
 	};
 

@@ -24,7 +24,7 @@ namespace hical
 		size_t threadLocalLargestPoolBlock = 512 * 1024; // 512KB
 
 		// 请求级池默认初始大小
-		size_t requestPoolInitialSize = 4096;
+		size_t requestPoolInitialSize = 8192;
 	};
 
 	/**

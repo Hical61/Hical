@@ -104,6 +104,13 @@ namespace hical
 
 	private:
 		/**
+		 * @brief 惰性解析并缓存 multipart parts 到 HttpRequest 中
+		 * @param req HTTP 请求
+		 * @return 缓存的 parts 指针，解析失败或无 multipart 数据时返回 nullptr
+		 */
+		static const std::vector<MultipartPart>* cachedParse(const HttpRequest& req);
+
+		/**
 		 * @brief 从 Content-Type 头中提取 boundary
 		 * @param contentType Content-Type 头字符串
 		 * @return boundary 字符串，失败返回空字符串

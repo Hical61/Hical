@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.5.0] - 2026-05-05
+
+### Added
+- **日志系统**（6 级日志，零开销设计）：
+  - `Log.h/cpp` — `Logger` 单例 + 6 级 `LogLevel`（Trace/Debug/Info/Warn/Error/Fatal），`std::format` 风格 API（`HICAL_LOG_INFO("port={}", 8080)`）、流式 API（`HICAL_LOG_INFO_STREAM << val`）、条件宏（`HICAL_LOG_INFO_IF`）、结构化字段 API（`HICAL_LOG_INFO_F`），NDEBUG 下 TRACE 编译期消除，`thread_local` 时间戳/线程 ID 缓存，可配置 flush 级别，Fatal 自动 abort
+  - `LogRecord.h` — 结构化日志条目（level/timestamp/threadId/file/line/message + `boost::json::object` fields + traceId）
+  - `LogFormatter.h/cpp` — 格式化器接口 + `TextFormatter`（`thread_local` 时间戳缓存）+ `JsonFormatter`（JSON Lines，UTC 时间戳）
+  - `LogSink.h/cpp` — 可插拔输出后端接口 + `StderrSink`（fprintf）+ `FileSink`（同步 fwrite + LogFile 轮转）+ `OStreamSink`（线程安全 ostream 包装）
+  - `LogFile.h/cpp` — 日志文件轮转引擎（按大小轮转默认 100MB、最大文件数限制、时间戳序列命名、严格文件名匹配清理）
+  - `AsyncFileSink.h/cpp` — 异步双缓冲文件 Sink（`std::jthread` + `stop_token` 后台线程、4MB 前后缓冲交换、背压保护丢弃 + 计数、1 秒超时刷盘、优雅关闭含最终缓冲排空）
+  - `FixedBuffer.h` — 栈上固定缓冲区模板（默认 4KB），`std::to_chars` 整数/浮点格式化，溢出自动 fallback 到堆
+  - `LogChannel.h/cpp` — 命名日志通道（独立 level/formatter/sinks），`LogChannelRegistry`（`shared_mutex` 读多写少），`HICAL_LOG_TO` 通道路由宏
+  - `LogMiddleware.h/cpp` — 洋葱模型日志中间件（OpenSSL RAND_bytes 128 位 trace-id 自动生成，结构化访问日志到命名通道）
+  - `LogAdmin.h/cpp` — 动态日志级别管理端点（`GET /admin/log-level` 查询 + `PUT /admin/log-level` 运行时调整）
+  - 9 个测试文件（97 个用例）：test_log / test_log_ndebug / test_fixed_buffer / test_log_file / test_async_file_sink / test_log_formatter / test_log_channel / test_log_middleware / test_log_admin
+- **OpenAPI 3.0 自动生成模块**（`HICAL_WITH_OPENAPI=ON`，默认开启，零新依赖）：
+  - `OpenApiSchema.h` — 从 `HICAL_JSON` 宏自动生成 JSON Schema（基本类型/vector/嵌套结构体/$ref），`HICAL_SCHEMA_NAME` 注册类型名，`collectSchemas<T>()` 递归收集
+  - `OpenApiRegistry.h/cpp` — 路由元数据注册表（`HICAL_API()` 综合标注宏 + `builder::*` 辅助函数、`HICAL_ROUTES_WITH_API()` 增强版路由收集、`registerRoutesWithOpenApi()` 同时注册路由和元数据）
+  - `OpenApiDocument.h/cpp` — 文档组装（惰性生成 + 缓存、自动路径参数提取、同路径不同 method 合并为同一 Path Item）
+  - `OpenApiEndpoint.h` — `serveOpenApi()` 一键注册 `/openapi.json` + `/docs`（Swagger UI CDN），`boost::json::serialize()` 安全转义防 JS 注入
+  - 1 个测试文件（35 个用例）：test_openapi
+  - 1 个示例：examples/openapi_server.cpp
+
 ## [2.4.0] - 2026-05-01
 
 ### Added
@@ -198,7 +221,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Multipart Part 数量上限（DoS 防护）
 - Session ID 使用密码学安全的随机数生成
 
-[Unreleased]: https://github.com/Hical61/Hical/compare/v2.4.0...HEAD
+[Unreleased]: https://github.com/Hical61/Hical/compare/v2.5.0...HEAD
+[2.5.0]: https://github.com/Hical61/Hical/compare/v2.4.0...v2.5.0
 [2.4.0]: https://github.com/Hical61/Hical/compare/v2.3.0...v2.4.0
 [2.3.0]: https://github.com/Hical61/Hical/compare/v2.2.0...v2.3.0
 [2.2.0]: https://github.com/Hical61/Hical/compare/v2.1.0...v2.2.0

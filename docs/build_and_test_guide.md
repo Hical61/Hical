@@ -1,6 +1,6 @@
 # Hical 编译与测试指南
 
-**最后更新：** 2026-04-30
+**最后更新：** 2026-05-05
 **支持平台：** Windows / Linux / macOS
 
 ---
@@ -165,6 +165,21 @@ cmake -B build -G "Ninja" \
     -DCMAKE_PREFIX_PATH="$(brew --prefix boost);$(brew --prefix openssl@3)"
 ```
 
+**可选编译开关：**
+
+| 选项                      | 默认值 | 说明                                                       |
+| ------------------------- | ------ | ---------------------------------------------------------- |
+| `HICAL_WITH_DATABASE`     | `OFF`  | 启用数据库中间件（需 Boost.MySQL，即 Boost >= 1.85）       |
+| `HICAL_WITH_OPENAPI`      | `ON`   | 启用 OpenAPI 文档自动生成模块（复用 Boost.JSON，无新依赖） |
+| `HICAL_ENABLE_REFLECTION` | `OFF`  | 启用 C++26 原生反射（需兼容编译器）                        |
+| `HICAL_BUILD_TESTS`       | `ON`   | 是否编译测试套件                                           |
+| `HICAL_BUILD_EXAMPLES`    | `ON`   | 是否编译示例程序                                           |
+
+```bash
+# 示例：启用数据库 + 关闭 OpenAPI（体积敏感场景）
+cmake -B build -G "Ninja" -DHICAL_WITH_DATABASE=ON -DHICAL_WITH_OPENAPI=OFF
+```
+
 **预期输出：**
 
 ```
@@ -186,11 +201,11 @@ cmake --build build
 
 **构建产物说明：**
 
-| 产物         | 说明                                                           |
-| ------------ | -------------------------------------------------------------- |
-| `hical_core` | 核心静态库；启用 `HICAL_WITH_DATABASE=ON` 时包含 DB 中间件代码 |
-| `test_*`     | 各组件单元测试（22 + 5 个可选 DB 测试套件）                    |
-| `examples/*` | 示例可执行文件（echo_server / http_server / benchmark 等）     |
+| 产物         | 说明                                                                                                               |
+| ------------ | ------------------------------------------------------------------------------------------------------------------ |
+| `hical_core` | 核心静态库；启用 `HICAL_WITH_DATABASE=ON` 时包含 DB 中间件代码；`HICAL_WITH_OPENAPI=ON`（默认）时包含 OpenAPI 代码 |
+| `test_*`     | 各组件单元测试                                                                                                     |
+| `examples/*` | 示例可执行文件（echo_server / http_server / benchmark 等）                                                         |
 
 ### 3.3 清理后重新编译
 
@@ -281,6 +296,57 @@ ctest --test-dir build --output-on-failure -j4
 # Session 生命周期 / 线程安全 / regenerate 测试
 ./build/tests/test_session.exe
 
+# OpenAPI 自动生成测试（Schema/Registry/Document/Endpoint）
+./build/tests/test_openapi.exe
+
+# 查询参数解析测试
+./build/tests/test_query_params.exe
+
+# 表单参数解析测试
+./build/tests/test_form_params.exe
+
+# 重定向测试
+./build/tests/test_redirect.exe
+
+# CORS 中间件测试
+./build/tests/test_cors.exe
+
+# 路由组测试
+./build/tests/test_route_group.exe
+
+# 全局错误处理器测试
+./build/tests/test_error_handler.exe
+
+# 优雅关闭测试
+./build/tests/test_graceful_shutdown.exe
+
+# 日志核心测试（36 个用例）
+./build/tests/test_log.exe
+
+# NDEBUG 编译消除验证（3 个用例）
+./build/tests/test_log_ndebug.exe
+
+# FixedBuffer 栈缓冲测试（19 个用例）
+./build/tests/test_fixed_buffer.exe
+
+# LogFile 文件轮转测试（7 个用例）
+./build/tests/test_log_file.exe
+
+# AsyncFileSink 异步日志测试（7 个用例）
+./build/tests/test_async_file_sink.exe
+
+# TextFormatter + JsonFormatter 测试（12 个用例）
+./build/tests/test_log_formatter.exe
+
+# LogChannel + Registry 测试（12 个用例）
+./build/tests/test_log_channel.exe
+
+# LogMiddleware 测试（3 个用例）
+./build/tests/test_log_middleware.exe
+
+# LogAdmin 端点测试（4 个用例）
+./build/tests/test_log_admin.exe
+
 # 完整 HTTP 请求/响应周期集成测试
 ./build/tests/test_integration.exe
 ```
@@ -332,7 +398,7 @@ MSYS_NO_PATHCONV=1 openssl req -x509 -newkey rsa:2048 \
     -days 365 -nodes -subj "/CN=localhost"
 ```
 
-### 4.6 测试用例清单（22 + 5 个可选 DB 测试套件）
+### 4.6 测试用例清单（38 + 5 个可选 DB 测试套件）
 
 | 测试文件                                                | 用例数 | 覆盖范围                                                       |
 | ------------------------------------------------------- | ------ | -------------------------------------------------------------- |
@@ -357,6 +423,23 @@ MSYS_NO_PATHCONV=1 openssl req -x509 -newkey rsa:2048 \
 | test_static_files                                       | —      | 静态文件服务/ETag 304/路径遍历防护/大文件拒绝                  |
 | test_multipart                                          | —      | multipart/form-data 解析/256 part 上限                         |
 | test_session                                            | —      | Session 生命周期/线程安全/regenerate/migrateFrom/并发          |
+| test_openapi                                            | 35     | OpenAPI Schema 生成/registry CRUD/文档组装/端点注册/完整集成   |
+| test_query_params                                       | —      | 查询参数解析（queryParam/queryParams/hasQueryParam）           |
+| test_form_params                                        | —      | 表单参数解析（formParam/formParams/hasFormParam）              |
+| test_redirect                                           | —      | 重定向响应（redirect 工厂方法/Location 头/CRLF 防护）          |
+| test_cors                                               | —      | CORS 中间件（通配符/精确匹配/Preflight/凭证模式）              |
+| test_route_group                                        | —      | 路由组（前缀拼接/组级中间件/嵌套子组）                         |
+| test_error_handler                                      | —      | 全局错误处理器（异常捕获/自定义响应）                          |
+| test_graceful_shutdown                                  | —      | 优雅关闭（stop()/进行中请求完成）                              |
+| test_log                                                | 36     | 日志核心（format API、Sink API、多线程安全、Fatal abort）      |
+| test_log_ndebug                                         | 3      | NDEBUG 编译消除（TRACE/TRACE_IF/TRACE_STREAM 消除）            |
+| test_fixed_buffer                                       | 19     | FixedBuffer 栈缓冲（append、溢出 fallback、格式化）            |
+| test_log_file                                           | 7      | LogFile 文件轮转（写入、大小轮转、文件数限制）                 |
+| test_async_file_sink                                    | 7      | AsyncFileSink 异步日志（多线程、优雅关闭、轮转）               |
+| test_log_formatter                                      | 12     | TextFormatter + JsonFormatter（格式、traceId、JSON）           |
+| test_log_channel                                        | 12     | LogChannel + Registry（通道路由、HICAL_LOG_TO 宏）             |
+| test_log_middleware                                     | 3      | LogMiddleware（trace-id 生成长度/hex/唯一性）                  |
+| test_log_admin                                          | 4      | LogAdmin 端点（注册、级别往返、通道级别调整）                  |
 | test_integration                                        | —      | 完整 HTTP 请求/响应周期集成测试                                |
 | **以下为可选 DB 测试（需 `-DHICAL_WITH_DATABASE=ON`）** |        |                                                                |
 | test_db_pool                                            | 12     | 连接池获取/释放、健康检查、空闲淘汰、统计                      |
@@ -567,6 +650,12 @@ hical/
 │   │   ├── StaticFiles.h       # 静态文件服务（异步 I/O + PathCache + ETag）
 │   │   ├── Multipart.h/.cpp    # multipart/form-data 解析（dual API）
 │   │   ├── Session.h/.cpp      # Session 会话管理（shared_mutex + regenerate）
+│   │   ├── Cors.h              # CORS 中间件（makeCorsMiddleware + CorsOptions）
+│   │   ├── RouteGroup.h/.cpp   # 路由组（前缀分组 + 组级中间件）
+│   │   ├── OpenApiSchema.h     # JSON Schema 生成（jsonSchema<T>/collectSchemas）
+│   │   ├── OpenApiRegistry.h/.cpp  # 路由元数据注册表（RouteApiInfo/HICAL_API）
+│   │   ├── OpenApiDocument.h/.cpp  # OpenAPI 3.0 文档组装（惰性缓存/路径合并）
+│   │   ├── OpenApiEndpoint.h   # 端点暴露（serveOpenApi，/openapi.json + /docs）
 │   │   ├── IdleFd.h            # 空闲 fd 预留（EMFILE 防护）
 │   │   ├── WriteNode.h         # 多态写队列节点（内存/文件）
 │   │   ├── Reflection.h / MetaJson.h / MetaRoutes.h  # C++26 反射层
@@ -587,19 +676,27 @@ hical/
 │       ├── DbQueryLog.h/.cpp  # 查询日志中间件（装饰器模式）
 │       ├── MysqlConnection.h/.cpp  # MySQL 后端（Boost.MySQL）
 │       └── StmtCache.h/.cpp   # PreparedStatement LRU 缓存
-├── tests/                     # 22 个测试套件 + 5 个可选 DB 测试
-│   ├── test_db_pool.cpp           # DB 连接池测试
-│   ├── test_db_middleware.cpp     # DB 中间件测试
-│   ├── test_db_query_log.cpp      # 查询日志测试
-│   ├── test_stmt_cache.cpp        # PreparedStatement 缓存测试
-│   └── test_mysql_integration.cpp # 真实 MySQL 集成测试（需数据库）
+├── tests/                     # 38 个测试套件 + 5 个可选 DB 测试
+│   ├── test_db_pool.cpp               # DB 连接池测试
+│   ├── test_db_middleware.cpp         # DB 中间件测试
+│   ├── test_db_query_log.cpp          # 查询日志测试
+│   ├── test_stmt_cache.cpp            # PreparedStatement 缓存测试
+│   ├── test_mysql_integration.cpp     # 真实 MySQL 集成测试（需数据库）
+│   ├── test_query_params.cpp          # 查询参数解析测试
+│   ├── test_form_params.cpp           # 表单参数解析测试
+│   ├── test_redirect.cpp              # 重定向测试
+│   ├── test_cors.cpp                  # CORS 中间件测试
+│   ├── test_route_group.cpp           # 路由组测试
+│   ├── test_error_handler.cpp         # 全局错误处理器测试
+│   └── test_graceful_shutdown.cpp     # 优雅关闭测试
 ├── examples/
 │   ├── echo_server.cpp        # Echo Server（PoC）
 │   ├── pmr_poc.cpp            # pmr PoC
 │   ├── benchmark.cpp          # Echo Server 压力测试
 │   ├── http_server.cpp        # HTTP Server（路由+中间件+WS）
 │   ├── http_benchmark.cpp     # HTTP 基准测试（QPS/延迟）
-│   └── pmr_benchmark.cpp      # pmr 内存池基准测试
+│   ├── pmr_benchmark.cpp      # pmr 内存池基准测试
+│   └── openapi_server.cpp     # OpenAPI 文档自动生成示例
 └── docs/
     ├── project_structure.md   # 项目代码结构说明
     ├── build_and_test_guide.md # 本文档

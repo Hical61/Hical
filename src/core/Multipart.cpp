@@ -270,9 +270,32 @@ namespace hical
 		return parts;
 	}
 
+	const std::vector<MultipartPart>* MultipartParser::cachedParse(const HttpRequest& req)
+	{
+		auto& cache = req.m_cachedMultipartParts;
+		if (!cache.has_value())
+		{
+			auto parsed = parse(req);
+			if (parsed)
+			{
+				cache = std::move(*parsed);
+			}
+			else
+			{
+				cache = std::vector<MultipartPart> {};
+			}
+		}
+		auto* parts = std::any_cast<std::vector<MultipartPart>>(&cache);
+		if (!parts || parts->empty())
+		{
+			return nullptr;
+		}
+		return parts;
+	}
+
 	std::optional<MultipartPart> MultipartParser::getFile(const HttpRequest& req, const std::string& fieldName)
 	{
-		auto parts = parse(req);
+		auto* parts = cachedParse(req);
 		if (!parts)
 		{
 			return std::nullopt;
@@ -295,7 +318,7 @@ namespace hical
 
 	std::optional<std::string> MultipartParser::getField(const HttpRequest& req, const std::string& fieldName)
 	{
-		auto parts = parse(req);
+		auto* parts = cachedParse(req);
 		if (!parts)
 		{
 			return std::nullopt;

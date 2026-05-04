@@ -15,6 +15,7 @@ namespace hical
 		else
 		{
 			staticRoutes_[{method, path}] = std::move(handler);
+			staticPathMethods_[path].push_back(method);
 		}
 	}
 
@@ -180,21 +181,26 @@ namespace hical
 		}
 
 		// 3. 405 检测：路径匹配但方法不匹配时返回 405 + Allow 头
-		// 仅在 miss 路径执行，hot path 零额外开销
+		// 静态路由：O(1) 反向索引查找
 		std::string allowedMethods;
 
-		for (const auto& [key, handler] : staticRoutes_)
+		auto pathIt = staticPathMethods_.find(reqPath);
+		if (pathIt != staticPathMethods_.end())
 		{
-			if (key.path == reqPath && key.method != reqMethod)
+			for (auto m : pathIt->second)
 			{
-				if (!allowedMethods.empty())
+				if (m != reqMethod)
 				{
-					allowedMethods += ", ";
+					if (!allowedMethods.empty())
+					{
+						allowedMethods += ", ";
+					}
+					allowedMethods += httpMethodToString(m);
 				}
-				allowedMethods += httpMethodToString(key.method);
 			}
 		}
 
+		// 参数路由：仍需线性扫描（路径匹配需要模式匹配）
 		ParamList tempParams;
 		for (const auto& [method, routes] : paramRoutesByMethod_)
 		{

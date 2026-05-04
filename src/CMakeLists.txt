@@ -11,6 +11,14 @@ configure_file(
 add_library(hical_core
     core/InetAddress.cpp
     core/Error.cpp
+    core/Log.cpp
+    core/LogSink.cpp
+    core/LogFile.cpp
+    core/AsyncFileSink.cpp
+    core/LogFormatter.cpp
+    core/LogChannel.cpp
+    core/LogMiddleware.cpp
+    core/LogAdmin.cpp
     core/MemoryPool.cpp
     core/SslContext.cpp
     core/HttpRequest.cpp
@@ -96,6 +104,16 @@ if(HICAL_WITH_DATABASE)
     )
     # boost::mysql 的 client-side SQL formatting 依赖 boost::charconv
     target_link_libraries(hical_core PUBLIC Boost::charconv)
+endif()
+
+# OpenAPI 自动生成（可选，默认开启）
+option(HICAL_WITH_OPENAPI "Enable OpenAPI 3.0 auto-generation module" ON)
+if(HICAL_WITH_OPENAPI)
+    target_sources(hical_core PRIVATE
+        core/OpenApiRegistry.cpp
+        core/OpenApiDocument.cpp
+    )
+    target_compile_definitions(hical_core PUBLIC HICAL_HAS_OPENAPI=1)
 endif()
 
 # 安装库和头文件

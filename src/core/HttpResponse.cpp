@@ -228,6 +228,7 @@ namespace hical
 		HttpResponse res;
 		res.setStatus(HttpStatusCode::hNotFound);
 		res.setBody("Not Found");
+		res.setHeader("X-Content-Type-Options", "nosniff");
 		return res;
 	}
 
@@ -236,6 +237,7 @@ namespace hical
 		HttpResponse res;
 		res.setStatus(HttpStatusCode::hBadRequest);
 		res.setBody(message);
+		res.setHeader("X-Content-Type-Options", "nosniff");
 		return res;
 	}
 
@@ -244,6 +246,7 @@ namespace hical
 		HttpResponse res;
 		res.setStatus(HttpStatusCode::hInternalServerError);
 		res.setBody("Internal Server Error");
+		res.setHeader("X-Content-Type-Options", "nosniff");
 		return res;
 	}
 

@@ -6,36 +6,38 @@
 
 ## 一句话概括
 
-| 框架       | 一句话定位                                     |
-| ---------- | ---------------------------------------------- |
-| **Drogon** | 久经考验的高性能全栈框架，TechEmpower 榜单常客 |
-| **Crow**   | 极简轻量的微框架，Express.js 风格，上手最快    |
-| **Oat++**  | 零依赖、内置 Swagger 的 API 框架，嵌入式友好   |
-| **Hical**  | 围绕 C++26 反射和 PMR 内存池设计的现代框架     |
+| 框架       | 一句话定位                                                  |
+| ---------- | ----------------------------------------------------------- |
+| **Drogon** | 久经考验的高性能全栈框架，TechEmpower 榜单常客              |
+| **Crow**   | 极简轻量的微框架，Express.js 风格，上手最快                 |
+| **Oat++**  | 零依赖、内置 Swagger 的 API 框架，嵌入式友好                |
+| **Hical**  | 围绕 C++26 反射、PMR 内存池和协程化中间件设计的现代全栈框架 |
 
 ---
 
 ## 核心对比表
 
-|                      | Hical                     | Drogon                  | Crow          | Oat++                     |
-| -------------------- | ------------------------- | ----------------------- | ------------- | ------------------------- |
-| **C++ 标准**         | C++20（C++26 就绪）       | C++17 / C++20           | C++14 / C++17 | C++11+                    |
-| **异步模型**         | 协程（`co_await` 全链路） | 回调 + 协程混合         | 回调          | 自研异步 API              |
-| **内存管理**         | PMR 三层内存池            | 默认分配器              | 默认分配器    | 默认分配器                |
-| **HTTP 解析**        | Boost.Beast               | 自研（Trantor）         | 自研          | 自研                      |
-| **SSL/TLS**          | 编译期模板分支            | 运行时分支              | 运行时分支    | 运行时分支                |
-| **路由**             | 哈希表 O(1) + 参数线性    | 基数树                  | 前缀树        | Controller 映射           |
-| **中间件**           | 洋葱模型（协程链）        | Filter 链               | 基础          | Interceptor               |
-| **WebSocket**        | 内置（协程式）            | 内置                    | 内置          | 内置                      |
-| **Cookie / Session** | 内置（RFC 6265）          | 内置                    | 有限          | 有限                      |
-| **文件上传**         | 内置（DoS 防护）          | 内置                    | 需手动        | 内置                      |
-| **静态文件**         | 内置（ETag/304）          | 内置                    | 需手动        | 有限                      |
-| **ORM**              | 无                        | 内置（PG/MySQL/SQLite） | 无            | 模块化（PG/SQLite/Mongo） |
-| **OpenAPI/Swagger**  | 无                        | 第三方                  | 无            | 内置                      |
-| **HTTP/2**           | 不支持                    | 支持                    | 不支持        | 不支持                    |
-| **反射/自动序列化**  | C++26 双轨（原生 + 宏）   | 无                      | 无            | 宏 DTO 系统               |
-| **外部依赖**         | Boost + OpenSSL           | Trantor + jsoncpp + ... | Asio          | 零依赖                    |
-| **License**          | MIT                       | MIT                     | BSD-3         | Apache-2.0                |
+|                      | Hical                                | Drogon                  | Crow          | Oat++                     |
+| -------------------- | ------------------------------------ | ----------------------- | ------------- | ------------------------- |
+| **C++ 标准**         | C++20（C++26 就绪）                  | C++17 / C++20           | C++14 / C++17 | C++11+                    |
+| **异步模型**         | 协程（`co_await` 全链路）            | 回调 + 协程混合         | 回调          | 自研异步 API              |
+| **内存管理**         | PMR 三层内存池                       | 默认分配器              | 默认分配器    | 默认分配器                |
+| **HTTP 解析**        | Boost.Beast                          | 自研（Trantor）         | 自研          | 自研                      |
+| **SSL/TLS**          | 编译期模板分支                       | 运行时分支              | 运行时分支    | 运行时分支                |
+| **路由**             | 哈希表 O(1) + 参数线性               | 基数树                  | 前缀树        | Controller 映射           |
+| **中间件**           | 洋葱模型（协程链）                   | Filter 链               | 基础          | Interceptor               |
+| **WebSocket**        | 内置（协程式）                       | 内置                    | 内置          | 内置                      |
+| **Cookie / Session** | 内置（RFC 6265）                     | 内置                    | 有限          | 有限                      |
+| **文件上传**         | 内置（DoS 防护）                     | 内置                    | 需手动        | 内置                      |
+| **静态文件**         | 内置（ETag/304）                     | 内置                    | 需手动        | 有限                      |
+| **ORM**              | 协程化 DB 中间件（MySQL）            | 内置（PG/MySQL/SQLite） | 无            | 模块化（PG/SQLite/Mongo） |
+| **OpenAPI/Swagger**  | 内置（自动生成 + Swagger UI）        | 第三方                  | 无            | 内置                      |
+| **日志系统**         | 内置（6 级 + 异步双缓冲 + 通道路由） | 自带（简易）            | 无            | 自带（loggers）           |
+| **CORS**             | 内置中间件                           | 内置                    | 需手动        | 内置                      |
+| **HTTP/2**           | 不支持                               | 支持                    | 不支持        | 不支持                    |
+| **反射/自动序列化**  | C++26 双轨（原生 + 宏）              | 无                      | 无            | 宏 DTO 系统               |
+| **外部依赖**         | Boost + OpenSSL                      | Trantor + jsoncpp + ... | Asio          | 零依赖                    |
+| **License**          | MIT                                  | MIT                     | BSD-3         | Apache-2.0                |
 
 ---
 
@@ -123,9 +125,9 @@ PMR 带来的收益是实实在在的。
 
 **Drogon 最全**。它是唯一内置 ORM 和 HTTP/2 的框架，还有 CSP 模板渲染、gzip/brotli 压缩、Redis 客户端等。如果你需要"开箱即用的全家桶"，Drogon 是第一选择。
 
-**Hical 次之**。Cookie、Session、静态文件、文件上传、WebSocket 全部内置，且每个模块都有安全防护（路径遍历保护、DoS 限制、CRLF 注入防护）。缺少 ORM 和 HTTP/2。
+**Hical 次之，但追赶迅速**。Cookie、Session、静态文件、文件上传、WebSocket、协程化 DB 中间件（MySQL 连接池 + 自动事务）、OpenAPI 3.0 自动文档生成、生产级日志系统（异步写盘 + trace-id + 动态级别调整）全部内置，且每个模块都有安全防护。缺少 HTTP/2。
 
-**Oat++ 特色鲜明**。零依赖 + 内置 Swagger 文档生成，对 API 开发特别友好。ORM 以模块化形式提供。
+**Oat++ 特色鲜明**。零依赖 + 内置 Swagger 文档生成（Hical 也已内置 OpenAPI），对 API 开发特别友好。ORM 以模块化形式提供。
 
 **Crow 最精简**。核心只有路由和 JSON，Cookie/Session 有限，静态文件和文件上传需自行实现。
 
@@ -186,6 +188,9 @@ Hical 是目前唯一围绕 C++20/26 新特性从零设计的 Web 框架。这�
 - 全链路协程异步（`co_await` 从中间件到路由）
 - PMR 内存池的性能优势（高并发、低延迟、内存可控）
 - C++26 反射自动序列化/路由注册
+- 协程化数据库中间件（MySQL 连接池 + 自动事务 + 慢查询检测）
+- 内置 OpenAPI 3.0 文档自动生成 + Swagger UI
+- 生产级日志系统（异步双缓冲写盘 + trace-id 分布式追踪）
 - 与现有 C++ 生态（如游戏服务器）零成本集成
 - 使用最新 C++ 标准特性的"现代 C++ 标杆"项目
 
@@ -197,7 +202,7 @@ Hical 是目前唯一围绕 C++20/26 新特性从零设计的 Web 框架。这�
 
 1. **团队的 C++ 标准线在哪？** 如果项目还在 C++14/17，Hical 的 C++20 要求可能是门槛。Drogon（C++17）或 Crow（C++14）更保险。
 
-2. **需要 ORM 吗？** 如果需要，Drogon 开箱即用。Hical 和 Crow 需要自己集成第三方 ORM。
+2. **需要 ORM 吗？** 如果需要完整 ORM，Drogon 开箱即用。Hical 内置了协程化 DB 中间件（MySQL 连接池 + 自动事务），满足大多数场景。Crow 需要自己集成第三方库。
 
 3. **性能瓶颈在内存还是 I/O？** 如果是内存（高并发短请求、长时间运行），Hical 的 PMR 优势最大。如果是 I/O（大文件传输、数据库查询），各框架差别不大。
 
@@ -205,7 +210,7 @@ Hical 是目前唯一围绕 C++20/26 新特性从零设计的 Web 框架。这�
 
 ## 链接
 
-- **Hical**: [GitHub](https://github.com/Hical61/Hical) | [快速上手](06-quick-rest-api.md)
+- **Hical**: [GitHub](https://github.com/Hical61/Hical) | [快速上手](06-quick-rest-api.md) | [DB 中间件](08-hical-mysql-crud.md) | [日志系统](09-hical-logging-guide.md) | [OpenAPI](10-hical-openapi-swagger.md)
 - **Drogon**: [GitHub](https://github.com/drogonframework/drogon)
 - **Crow**: [GitHub](https://github.com/CrowCpp/Crow)
 - **Oat++**: [GitHub](https://github.com/oatpp/oatpp)

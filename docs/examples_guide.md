@@ -16,6 +16,10 @@
 - [示例 7：PMR 内存池使用](#示例-7pmr-内存池使用)
 - [示例 8：完整应用示例](#示例-8完整应用示例)
 - [示例 9：数据库中间件](#示例-9数据库中间件)
+- [示例 10：OpenAPI 文档自动生成](#示例-10openapi-文档自动生成)
+- [示例 11：CORS 与路由分组](#示例-11cors-与路由分组)
+- [示例 12：查询参数与表单参数](#示例-12查询参数与表单参数)
+- [示例 13：日志系统](#示例-13日志系统)
 - [运行内置示例程序](#运行内置示例程序)
 - [常见问题](#常见问题)
 
@@ -958,9 +962,425 @@ export DB_PASS=secret
 
 ---
 
+## 示例 10：OpenAPI 文档自动生成
+
+> 需要 `HICAL_WITH_OPENAPI=ON`（默认已启用），**无需额外依赖**，复用 Boost.JSON。
+>
+> 源文件：`examples/openapi_server.cpp`
+
+### 功能演示
+
+该示例包含：
+- 4 个 DTO 结构体（`UserDTO`、`CreateUserRequest`、`UpdateUserRequest`、`ErrorResponse`），通过 `HICAL_SCHEMA_NAME` 注册 `$ref` 名
+- 5 条路由（GET /api/users、GET /api/users/{id}、POST /api/users、PUT /api/users/{id}、DELETE /api/users/{id}）
+- 每条路由使用 `HICAL_API()` + `builder::*` 进行完整标注（summary、tags、requestBody、responses）
+- `registerRoutesWithOpenApi()` 同步注册路由与 API 元数据
+- `serveOpenApi()` 一行暴露 `/openapi.json` + `/docs`（Swagger UI）
+
+### 编译与运行
+
+```bash
+# 确认 HICAL_WITH_OPENAPI 已启用（默认 ON）
+cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build build --target openapi_server
+
+# 启动服务器
+./build/examples/openapi_server 8080        # Linux / macOS
+./build/examples/openapi_server.exe 8080    # Windows
+```
+
+### 访问端点
+
+| 端点                                     | 说明                                      |
+| ---------------------------------------- | ----------------------------------------- |
+| `GET http://localhost:8080/openapi.json` | OpenAPI 3.0 JSON 规范，可直接导入 Postman |
+| `GET http://localhost:8080/docs`         | Swagger UI 交互式文档（CDN 加载）         |
+| `GET http://localhost:8080/api/users`    | 获取用户列表（示例路由）                  |
+| `GET http://localhost:8080/api/users/42` | 获取单个用户（路径参数示例）              |
+
+```bash
+# 获取 OpenAPI 规范
+curl http://localhost:8080/openapi.json | python -m json.tool
+
+# 访问浏览器查看 Swagger UI
+# http://localhost:8080/docs
+```
+
+### 关键代码结构
+
+```cpp
+// 1. 定义 DTO + 注册 schema 名
+HICAL_SCHEMA_NAME(UserDTO, "User")
+struct UserDTO { HICAL_JSON(UserDTO, REQUIRED(id), name); int id; std::string name; };
+
+// 2. Handler 中标注 API（routeApiTable 静态方法）
+static std::vector<RouteApiInfo> routeApiTable()
+{
+    return {
+        HICAL_API(
+            builder::summary("获取用户"),
+            builder::tag("用户管理"),
+            builder::response<UserDTO>(200),
+            builder::response(404, "用户不存在")
+        ),
+        // ...
+    };
+}
+HICAL_ROUTES_WITH_API(MyHandler, getUser, createUser, ...)
+
+// 3. 注册路由 + 元数据 + 暴露文档
+registerRoutesWithOpenApi(router, handler, *registry);
+doc->addSchemas(schemas);
+serveOpenApi(router, doc);
+```
+
+---
+
+## 示例 11：CORS 与路由分组
+
+> CORS 中间件 + RouteGroup 路由前缀分组
+
+### CORS 中间件
+
+```cpp
+#include "core/HttpServer.h"
+#include "core/Cors.h"
+
+using namespace hical;
+
+int main()
+{
+    HttpServer server(8080);
+
+    // 使用默认配置（允许所有源）
+    server.use(makeCorsMiddleware());
+
+    // 或者精确配置
+    CorsOptions corsOpts;
+    corsOpts.allowedOrigins = {"https://example.com", "https://app.example.com"};
+    corsOpts.allowCredentials = true;
+    corsOpts.allowedHeaders = {"Content-Type", "Authorization", "X-Custom"};
+    corsOpts.maxAge = 3600;
+    server.use(makeCorsMiddleware(corsOpts));
+
+    server.router().get("/api/data", [](const HttpRequest&) -> HttpResponse {
+        return HttpResponse::json({{"data", "hello"}});
+    });
+
+    server.start();
+    return 0;
+}
+```
+
+### 路由分组
+
+```cpp
+#include "core/HttpServer.h"
+#include "core/RouteGroup.h"
+
+using namespace hical;
+
+int main()
+{
+    HttpServer server(8080);
+    auto& router = server.router();
+
+    // 创建 /api/v1 路由组
+    auto api = router.group("/api/v1");
+
+    // 组级中间件（仅对组内路由生效）
+    api.use([](const HttpRequest& req, MiddlewareNext next) -> Awaitable<HttpResponse> {
+        auto token = req.header("Authorization");
+        if (token.empty())
+        {
+            co_return HttpResponse::badRequest("需要认证");
+        }
+        co_return co_await next(req);
+    });
+
+    // 组内路由（自动添加 /api/v1 前缀）
+    api.get("/users", [](const HttpRequest&) -> HttpResponse {
+        return HttpResponse::json({{"users", boost::json::array{}}});
+    });                                                    // → GET /api/v1/users
+
+    api.post("/users", [](const HttpRequest& req) -> HttpResponse {
+        return HttpResponse::json({{"created", true}});
+    });                                                    // → POST /api/v1/users
+
+    api.get("/users/{id}", [](const HttpRequest& req) -> HttpResponse {
+        return HttpResponse::json({{"id", req.param("id")}});
+    });                                                    // → GET /api/v1/users/{id}
+
+    // 嵌套子组
+    auto admin = api.group("/admin");
+    admin.get("/stats", [](const HttpRequest&) -> HttpResponse {
+        return HttpResponse::json({{"activeUsers", 42}});
+    });                                                    // → GET /api/v1/admin/stats
+
+    server.start();
+    return 0;
+}
+```
+
+**测试：**
+
+```bash
+# CORS 预检请求
+curl -X OPTIONS -H "Origin: https://example.com" http://localhost:8080/api/data
+
+# 路由组
+curl http://localhost:8080/api/v1/users
+curl http://localhost:8080/api/v1/users/42
+curl http://localhost:8080/api/v1/admin/stats
+```
+
+**要点：**
+- `makeCorsMiddleware()` 一行启用 CORS，自动处理 OPTIONS 预检
+- `router.group("/prefix")` 创建路由组，组内路由自动添加前缀
+- `RouteGroup::use()` 添加组级中间件，仅对该组路由生效
+- 支持多层嵌套：`api.group("/admin")` 继承父组前缀和中间件
+
+---
+
+## 示例 12：查询参数与表单参数
+
+> 查询参数、表单参数解析 API、重定向响应
+
+```cpp
+#include "core/HttpServer.h"
+
+using namespace hical;
+
+int main()
+{
+    HttpServer server(8080);
+    auto& router = server.router();
+
+    // 查询参数
+    router.get("/search", [](const HttpRequest& req) -> HttpResponse {
+        // 获取单个查询参数
+        auto keyword = req.queryParam("keyword");  // ?keyword=hello → "hello"
+        auto page = req.queryParam("page");        // ?page=2 → "2"
+
+        if (!keyword)
+        {
+            return HttpResponse::badRequest("缺少 keyword 参数");
+        }
+
+        return HttpResponse::json({
+            {"keyword", *keyword},
+            {"page", page.value_or("1")}
+        });
+    });
+
+    // 表单参数（application/x-www-form-urlencoded）
+    router.post("/login", [](const HttpRequest& req) -> HttpResponse {
+        auto username = req.formParam("username");
+        auto password = req.formParam("password");
+
+        if (!username || !password)
+        {
+            return HttpResponse::badRequest("缺少用户名或密码");
+        }
+
+        // 业务逻辑...
+        return HttpResponse::json({{"message", "登录成功"}, {"user", *username}});
+    });
+
+    // 重定向
+    router.get("/old-page", [](const HttpRequest&) -> HttpResponse {
+        return HttpResponse::redirect("/new-page");           // 302 临时重定向
+    });
+
+    router.get("/moved", [](const HttpRequest&) -> HttpResponse {
+        return HttpResponse::redirect("/new-location",
+            HttpStatusCode::hMovedPermanently);               // 301 永久重定向
+    });
+
+    // 全局错误处理器
+    server.setErrorHandler([](const std::exception& e, const HttpRequest& req) {
+        return HttpResponse::json({
+            {"error", e.what()},
+            {"path", std::string(req.path())}
+        });
+    });
+
+    server.start();
+    return 0;
+}
+```
+
+**测试：**
+
+```bash
+# 查询参数
+curl "http://localhost:8080/search?keyword=hello&page=2"
+
+# 表单参数
+curl -X POST -d "username=alice&password=secret" http://localhost:8080/login
+
+# 重定向
+curl -v http://localhost:8080/old-page
+# 返回 302 + Location: /new-page
+```
+
+**要点：**
+- `req.queryParam("name")` 返回 `optional<string>`，不存在返回 `nullopt`
+- `req.formParam("name")` 解析 `application/x-www-form-urlencoded` 请求体
+- 两者均为惰性解析 + 缓存，首次访问时解析
+- `HttpResponse::redirect(url)` 默认 302，可指定 301/307/308
+- `setErrorHandler()` 捕获路由处理器中未处理的异常
+
+---
+
+## 示例 13：日志系统
+
+> 日志系统
+
+### 基本用法
+
+```cpp
+#include "core/Log.h"
+
+using namespace hical;
+
+int main()
+{
+    // 配置日志
+    auto& logger = Logger::instance();
+    logger.setLevel(LogLevel::EInfo);          // 最低输出级别
+    logger.setFlushLevel(LogLevel::EWarn);      // Warn 及以上自动刷盘
+    logger.addSink(std::make_shared<StderrSink>());
+
+    // std::format 风格
+    HICAL_LOG_INFO("服务器启动, port={}, threads={}", 8080, 4);
+    HICAL_LOG_ERROR("连接失败: {}", "timeout");
+
+    // 流式 API
+    HICAL_LOG_INFO_STREAM << "处理完成, 耗时: " << 42 << "ms";
+
+    // 条件宏
+    int latency = 150;
+    HICAL_LOG_WARN_IF(latency > 100, "慢请求: {}ms", latency);
+
+    // 结构化字段
+    HICAL_LOG_INFO_F("用户登录", {{"userId", 42}, {"ip", "192.168.1.1"}});
+
+    return 0;
+}
+```
+
+### 文件日志 + 轮转
+
+```cpp
+#include "core/Log.h"
+#include "core/LogSink.h"
+#include "core/AsyncFileSink.h"
+
+using namespace hical;
+
+int main()
+{
+    auto& logger = Logger::instance();
+
+    // 同步文件日志（带轮转：100MB 单文件，保留 10 个历史文件）
+    auto fileSink = std::make_shared<FileSink>("./logs/app.log", 100 * 1024 * 1024, 10);
+    logger.addSink(fileSink);
+
+    // 异步文件日志（推荐高吞吐场景）
+    auto asyncSink = std::make_shared<AsyncFileSink>("./logs/async.log", 100 * 1024 * 1024, 10);
+    logger.addSink(asyncSink);
+
+    HICAL_LOG_INFO("日志写入文件");
+    return 0;
+}
+```
+
+### 命名通道
+
+```cpp
+#include "core/Log.h"
+#include "core/LogChannel.h"
+
+using namespace hical;
+
+int main()
+{
+    // 创建专用通道
+    auto& registry = LogChannelRegistry::instance();
+    auto accessChannel = std::make_shared<LogChannel>("access");
+    accessChannel->setLevel(LogLevel::EInfo);
+    accessChannel->setFormatter(std::make_shared<JsonFormatter>());
+    accessChannel->addSink(std::make_shared<FileSink>("./logs/access.log"));
+    registry.add("access", accessChannel);
+
+    // 使用通道路由宏
+    HICAL_LOG_TO("access", Info, "GET /api/users 200 12ms");
+
+    return 0;
+}
+```
+
+### HTTP 日志中间件 + 动态级别管理
+
+```cpp
+#include "core/HttpServer.h"
+#include "core/Log.h"
+#include "core/LogMiddleware.h"
+#include "core/LogAdmin.h"
+
+using namespace hical;
+
+int main()
+{
+    HttpServer server(8080);
+
+    // 日志中间件（自动 trace-id + 访问日志）
+    server.use(makeLogMiddleware());
+
+    // 动态级别管理端点
+    registerLogAdmin(server.router());
+
+    server.router().get("/api/data", [](const HttpRequest& req) -> HttpResponse {
+        // 中间件已注入 trace-id
+        auto traceId = req.getAttribute<std::string>("hical.trace_id");
+        return HttpResponse::json({{"traceId", traceId.value_or("")}});
+    });
+
+    server.start();
+    return 0;
+}
+```
+
+**测试：**
+
+```bash
+# 查看当前日志级别
+curl http://localhost:8080/admin/log-level
+
+# 动态调整日志级别
+curl -X PUT -H "Content-Type: application/json" \
+     -d '{"level":"debug"}' \
+     http://localhost:8080/admin/log-level
+
+# 调整通道级别
+curl -X PUT -H "Content-Type: application/json" \
+     -d '{"channel":"access","level":"warn"}' \
+     http://localhost:8080/admin/log-level
+```
+
+**要点：**
+- `HICAL_LOG_*` 宏支持 `std::format` 语法（`{}`/`{0}`/`{:.2f}`）
+- NDEBUG 编译下 `HICAL_LOG_TRACE` 完全消除（零开销）
+- `AsyncFileSink` 使用后台线程 + 双缓冲，不阻塞业务线程
+- `makeLogMiddleware()` 自动生成 128 位 trace-id 并记录访问日志
+- `registerLogAdmin()` 支持运行时动态调整日志级别
+
+---
+
 ## 运行内置示例程序
 
-Hical 项目自带 6 个示例程序：
+Hical 项目自带 7 个示例程序：
 
 ```bash
 # 编译所有示例
@@ -985,6 +1405,16 @@ cmake --build build
 #   curl -X POST -d 'hello' http://localhost:8080/api/echo
 #   curl http://localhost:8080/users/42
 #   wscat -c ws://localhost:8080/ws/echo
+```
+
+### OpenAPI Server（文档自动生成）
+
+```bash
+./build/examples/openapi_server 8080
+# 访问:
+#   http://localhost:8080/openapi.json  — OpenAPI 3.0 JSON 规范
+#   http://localhost:8080/docs          — Swagger UI 交互式文档
+#   curl http://localhost:8080/api/users
 ```
 
 ### PMR PoC（内存池验证）
@@ -1089,6 +1519,28 @@ server.enableSsl("server.crt", "server.key");
 ```
 
 详见 [示例 5：SSL/TLS 安全服务](#示例-5ssltls-安全服务)。
+
+### Q: 如何配置日志输出？
+
+```cpp
+#include "core/Log.h"
+
+auto& logger = hical::Logger::instance();
+logger.setLevel(hical::LogLevel::EInfo);
+logger.addSink(std::make_shared<hical::StderrSink>());       // 控制台
+logger.addSink(std::make_shared<hical::AsyncFileSink>(       // 异步文件
+    "./logs/app.log", 100 * 1024 * 1024, 10));
+```
+
+推荐高吞吐场景使用 `AsyncFileSink`，开发环境使用 `StderrSink`。
+
+### Q: CORS 中间件和手写 CORS 有什么区别？
+
+`makeCorsMiddleware()` 自动处理 OPTIONS 预检请求、`Vary: Origin` 缓存头、凭证模式安全校验。手写 CORS 容易遗漏这些细节。
+
+### Q: 路由组中间件和全局中间件有什么区别？
+
+全局中间件（`server.use()`）对所有路由生效。组级中间件（`group.use()`）仅对该组及子组的路由生效，不影响其他路由。
 
 ---
 

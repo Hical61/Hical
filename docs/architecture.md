@@ -20,6 +20,9 @@
 - [12. 线程模型](#12-线程模型)
 - [13. 错误处理体系](#13-错误处理体系)
 - [14. 设计决策记录](#14-设计决策记录)
+- [15. OpenAPI 元数据层设计](#15-openapi-元数据层设计)  
+- [16. 日志系统设计](#16-日志系统设计)
+- [17. HTTP 核心增强](#17-v24-http-核心增强)
 
 ---
 
@@ -52,6 +55,7 @@ Hical 采用**两层分离**架构：核心抽象层（`src/core/`）与网络�
 │  │HttpServer│ │  Router  │ │ Middleware  │            │
 │  │          │ │          │ │  Pipeline   │            │
 │  └─────┬────┘ └─────┬────┘ └──────┬─────┘            │
+│  │  Log       │ │   Cors     │ │ RouteGroup │            │
 │        │            │             │                   │
 │  ┌─────┴────────────┴─────────────┴─────┐            │
 │  │        HttpRequest / HttpResponse     │            │
@@ -81,6 +85,13 @@ Hical 采用**两层分离**架构：核心抽象层（`src/core/`）与网络�
 │  │  StmtCache (LRU PreparedStatement)                │ │
 │  └──────────────────────────────────────────────────┘ │
 ├──────────────────────────────────────────────────────┤
+│    OpenAPI 元数据层 (src/core/OpenApi*.h/cpp，可选     │
+│                     HICAL_WITH_OPENAPI，默认 ON)       │
+│  ┌──────────────────────────────────────────────────┐ │
+│  │  OpenApiSchema   OpenApiRegistry                  │ │
+│  │  OpenApiDocument   OpenApiEndpoint                │ │
+│  └──────────────────────────────────────────────────┘ │
+├──────────────────────────────────────────────────────┤
 │              底层库                                    │
 │  Boost.Asio   Boost.Beast   Boost.JSON   OpenSSL     │
 │  Boost.MySQL                                          │
@@ -103,14 +114,17 @@ Hical 采用**两层分离**架构：核心抽象层（`src/core/`）与网络�
 
 **用户直接使用的 API：**
 
-| 组件                           | 职责                                       |
-| ------------------------------ | ------------------------------------------ |
-| `HttpServer`                   | 顶层门面，整合路由+中间件+网络层，一键启动 |
-| `Router`                       | 路由注册与分发，静态路由 O(1) + 参数路由   |
-| `HttpRequest` / `HttpResponse` | Beast HTTP 消息的 hical 风格封装           |
-| `Middleware`                   | 洋葱模型中间件管道                         |
-| `WebSocketSession`             | WebSocket 会话封装                         |
-| `Coroutine`                    | `Awaitable<T>` 别名和协程工具函数          |
+| 组件                           | 职责                                                       |
+| ------------------------------ | ---------------------------------------------------------- |
+| `HttpServer`                   | 顶层门面，整合路由+中间件+网络层，一键启动                 |
+| `Router`                       | 路由注册与分发，静态路由 O(1) + 参数路由                   |
+| `HttpRequest` / `HttpResponse` | Beast HTTP 消息的 hical 风格封装                           |
+| `Middleware`                   | 洋葱模型中间件管道                                         |
+| `WebSocketSession`             | WebSocket 会话封装                                         |
+| `Coroutine`                    | `Awaitable<T>` 别名和协程工具函数                          |
+| `CORS`                         | `makeCorsMiddleware()`，W3C CORS 规范，Preflight 自动应答  |
+| `RouteGroup`                   | 路由前缀分组 + 组级中间件继承 + 嵌套子组                   |
+| `Log`                          | 6 级日志系统，`std::format` + 流式 + 条件 + 结构化字段 API |
 
 **基础设施（框架内部 + 进阶用户）：**
 
@@ -155,23 +169,25 @@ MySQL 后端层      MysqlConnection（Boost.MySQL async 实现）+ StmtCache（
 
 #### 核心组件
 
-| 组件                | 职责                                                  |
-| ------------------- | ----------------------------------------------------- |
-| `DbConfig`          | 连接参数（host/port/user/password/db/pool_size 等）   |
-| `DbResult`          | 查询结果封装，行列迭代器，类型安全字段访问            |
-| `DbConnection`      | 纯虚接口：`query()` / `execute()` / `ping()`          |
-| `DbConnectionPool`  | 协程安全连接池，`acquire()` 挂起等待，`release()` 唤醒 |
-| `DbMiddleware`      | HTTP 中间件，将连接池引用注入 `HttpRequest` 属性      |
-| `DbQueryLog`        | 装饰器模式，透明记录 SQL、耗时、错误                  |
-| `MysqlConnection`   | Boost.MySQL 后端实现 `DbConnection`                   |
-| `StmtCache`         | 每连接 LRU PreparedStatement 缓存，避免重复 prepare   |
+| 组件               | 职责                                                   |
+| ------------------ | ------------------------------------------------------ |
+| `DbConfig`         | 连接参数（host/port/user/password/db/pool_size 等）    |
+| `DbResult`         | 查询结果封装，行列迭代器，类型安全字段访问             |
+| `DbConnection`     | 纯虚接口：`query()` / `execute()` / `ping()`           |
+| `DbConnectionPool` | 协程安全连接池，`acquire()` 挂起等待，`release()` 唤醒 |
+| `DbMiddleware`     | HTTP 中间件，将连接池引用注入 `HttpRequest` 属性       |
+| `DbQueryLog`       | 装饰器模式，透明记录 SQL、耗时、错误                   |
+| `MysqlConnection`  | Boost.MySQL 后端实现 `DbConnection`                    |
+| `StmtCache`        | 每连接 LRU PreparedStatement 缓存，避免重复 prepare    |
 
 ### 3.4 组件依赖关系
 
 ```
 HttpServer
 ├── Router (路由注册和分发)
+│   └── RouteGroup (路由前缀分组)
 ├── MiddlewarePipeline (中间件管道)
+│   └── Cors (makeCorsMiddleware)
 ├── HttpRequest / HttpResponse (Beast 封装)
 ├── WebSocketSession (WebSocket)
 ├── SslContext (SSL/TLS 配置)
@@ -188,6 +204,16 @@ MemoryPool (独立基础设施，贯穿所有层)
 ├── synchronized_pool_resource (全局同步池)
 ├── unsynchronized_pool_resource (线程本地池)
 └── monotonic_buffer_resource (请求级池)
+
+Log 日志系统（独立基础设施）
+├── Logger (单例，级别过滤，Sink 分发)
+├── LogFormatter (TextFormatter / JsonFormatter)
+├── LogSink (StderrSink / FileSink / AsyncFileSink / OStreamSink)
+│   └── LogFile (文件轮转引擎)
+│       └── AsyncFileSink (jthread 双缓冲)
+├── LogChannel + LogChannelRegistry (命名通道)
+├── LogMiddleware (trace-id + 结构化访问日志)
+└── LogAdmin (动态级别管理端点)
 
 DbMiddleware / DbQueryLog          [可选，HICAL_WITH_DATABASE=ON]
 ├── DbConnectionPool (协程化连接池)
@@ -1026,21 +1052,202 @@ struct NetworkError
 
 ## 14. 设计决策记录
 
-| 决策        | 选择                                   | 理由                                                 |
-| ----------- | -------------------------------------- | ---------------------------------------------------- |
-| 协程模型    | `asio::awaitable<T>`                   | 与 Boost.Asio 原生集成，零额外开销，代码线性化       |
-| HTTP 解析器 | Boost.Beast                            | 工业级成熟度，不重复造轮子                           |
-| 内存管理    | C++17 PMR 三层池                       | 标准化接口，高并发低碎片，与 Boost.JSON 天然兼容     |
-| SSL 实现    | 模板化 `GenericConnection<SocketType>` | 编译期分支消除，零运行时开销                         |
-| 后端抽象    | C++20 Concepts                         | 编译期约束，不引入虚函数开销，面向未来可扩展         |
-| 路由查找    | 哈希表 + 按方法分桶线性匹配            | 静态路由 O(1)，参数路由按方法子集匹配                |
-| 中间件模型  | 洋葱模型                               | 前置/后置/拦截能力完整，Koa/Express 验证过的成熟模式 |
-| 反射降级    | HICAL_ROUTE 宏                         | C++26 反射尚不成熟，宏方案保持向前兼容               |
-| 线程模型    | 1 Thread : 1 io_context                | 线程间无共享状态，天然避免锁竞争                     |
-| 连接池信号量 | `steady_timer` 作协程信号量             | 协程不能用 `condition_variable`，`timer.cancel()` 唤醒挂起协程 |
-| 查询日志    | 装饰器模式                              | 透明拦截所有查询，不修改连接池和业务代码              |
-| PreparedStatement 缓存 | 每连接 LRU                   | 避免重复 prepare，非线程安全但每连接独占无锁开销      |
-| DB 模块化   | 可选编译 `HICAL_WITH_DATABASE`          | 不影响核心库，零开销，后端可扩展                     |
+| 决策                   | 选择                                   | 理由                                                           |
+| ---------------------- | -------------------------------------- | -------------------------------------------------------------- |
+| 协程模型               | `asio::awaitable<T>`                   | 与 Boost.Asio 原生集成，零额外开销，代码线性化                 |
+| HTTP 解析器            | Boost.Beast                            | 工业级成熟度，不重复造轮子                                     |
+| 内存管理               | C++17 PMR 三层池                       | 标准化接口，高并发低碎片，与 Boost.JSON 天然兼容               |
+| SSL 实现               | 模板化 `GenericConnection<SocketType>` | 编译期分支消除，零运行时开销                                   |
+| 后端抽象               | C++20 Concepts                         | 编译期约束，不引入虚函数开销，面向未来可扩展                   |
+| 路由查找               | 哈希表 + 按方法分桶线性匹配            | 静态路由 O(1)，参数路由按方法子集匹配                          |
+| 中间件模型             | 洋葱模型                               | 前置/后置/拦截能力完整，Koa/Express 验证过的成熟模式           |
+| 反射降级               | HICAL_ROUTE 宏                         | C++26 反射尚不成熟，宏方案保持向前兼容                         |
+| 线程模型               | 1 Thread : 1 io_context                | 线程间无共享状态，天然避免锁竞争                               |
+| 连接池信号量           | `steady_timer` 作协程信号量            | 协程不能用 `condition_variable`，`timer.cancel()` 唤醒挂起协程 |
+| 查询日志               | 装饰器模式                             | 透明拦截所有查询，不修改连接池和业务代码                       |
+| PreparedStatement 缓存 | 每连接 LRU                             | 避免重复 prepare，非线程安全但每连接独占无锁开销               |
+| DB 模块化              | 可选编译 `HICAL_WITH_DATABASE`         | 不影响核心库，零开销，后端可扩展                               |
+| 日志系统               | `std::format` + 宏 + Sink 插件         | 零开销编译期消除，可插拔后端，不引入第三方日志库               |
+| CORS 中间件            | 工厂函数 `makeCorsMiddleware`          | 一行启用，凭证模式安全校验，预检自动应答                       |
+| 路由分组               | `RouteGroup` 值对象                    | 组级中间件局部生效，不影响全局中间件链                         |
+| 日志异步写盘           | `AsyncFileSink` jthread 双缓冲         | 背压保护（丢弃 + 计数），不阻塞业务线程                        |
+
+---
+
+## 15. OpenAPI 元数据层设计
+
+### 15.1 设计目标
+
+| 目标                | 具体措施                                                                  |
+| ------------------- | ------------------------------------------------------------------------- |
+| **自动化**          | 从 `HICAL_JSON` 宏的 FieldDescriptor tuple 直接推导 JSON Schema，无需手写 |
+| **类型安全**        | 全程使用 C++20 模板，编译期检测字段类型，不依赖运行时字符串拼接           |
+| **实时同步**        | 路由注册与 API 标注同步完成，文档与代码一一对应，不会漂移                 |
+| **Swagger UI 集成** | 一行 `serveOpenApi()` 暴露 `/openapi.json` + `/docs`，CDN 加载 Swagger UI |
+
+### 15.2 四层架构
+
+```
+┌──────────────────────────────────────────────────────────┐
+│              用户业务代码                                   │
+│  HICAL_JSON(UserDTO, name, age)                          │
+│  HICAL_API(summary("获取用户"), ...)                      │
+│  HICAL_ROUTES_WITH_API(MyHandler, getUser, createUser)   │
+├──────────────────────────────────────────────────────────┤
+│  第一层：Schema 生成 (OpenApiSchema.h)                     │
+│  jsonSchema<T>()  ──→  boost::json::object               │
+│  collectSchemas<T>()  ──→  递归收集嵌套类型 schema        │
+│  HICAL_SCHEMA_NAME 宏  ──→  注册 $ref 引用名              │
+├──────────────────────────────────────────────────────────┤
+│  第二层：路由元数据注册表 (OpenApiRegistry.h/cpp)           │
+│  RouteApiInfo { summary, tags, requestBody, responses }  │
+│  OpenApiRegistry  ──→  mutex 保护，快照返回               │
+│  HICAL_API() 宏 + builder::* 辅助函数                    │
+├──────────────────────────────────────────────────────────┤
+│  第三层：文档组装 (OpenApiDocument.h/cpp)                  │
+│  OpenApiDocument { config, registry, schemaMap }         │
+│  惰性生成 + mutex 缓存完整 JSON 文档                       │
+│  自动提取 {param} → path parameter                       │
+│  同路径不同 method 合并为同一 Path Item                    │
+├──────────────────────────────────────────────────────────┤
+│  第四层：端点暴露 (OpenApiEndpoint.h)                      │
+│  serveOpenApi(router, doc)                               │
+│  GET /openapi.json  ──→  完整 OpenAPI 3.0 JSON spec      │
+│  GET /docs          ──→  Swagger UI CDN HTML 页面         │
+└──────────────────────────────────────────────────────────┘
+```
+
+### 15.3 关键组件
+
+| 组件              | 文件                    | 关键 API / 宏                                                              |
+| ----------------- | ----------------------- | -------------------------------------------------------------------------- |
+| `OpenApiSchema`   | `OpenApiSchema.h`       | `jsonSchema<T>()`、`collectSchemas<T>()`、`HICAL_SCHEMA_NAME`              |
+| `OpenApiRegistry` | `OpenApiRegistry.h/cpp` | `RouteApiInfo`、`HICAL_API()`、`builder::*`、`registerRoutesWithOpenApi()` |
+| `OpenApiDocument` | `OpenApiDocument.h/cpp` | `OpenApiDocument`、`OpenApiConfig`、`generate()`                           |
+| `OpenApiEndpoint` | `OpenApiEndpoint.h`     | `serveOpenApi(router, doc)`                                                |
+
+### 15.4 线程安全说明
+
+- **OpenApiRegistry**：内部使用 `std::mutex`，`getAll()` 以快照方式返回 `vector<RouteApiInfo>` 副本，避免长时间持锁。
+- **OpenApiDocument**：使用 `std::mutex` + `bool generated_` 标志实现惰性缓存，首次调用 `generate()` 时锁内生成，后续调用直接返回缓存，无锁开销。
+
+### 15.5 CMake 编译开关
+
+| 变量                 | 默认值 | 说明                                                            |
+| -------------------- | ------ | --------------------------------------------------------------- |
+| `HICAL_WITH_OPENAPI` | `ON`   | 是否编译 OpenAPI 模块                                           |
+| `HICAL_HAS_OPENAPI`  | —      | 由 CMake 根据 `HICAL_WITH_OPENAPI` 自动定义，用于 `#ifdef` 保护 |
+
+```bash
+# 关闭 OpenAPI 模块（极端体积敏感场景）
+cmake -B build -DHICAL_WITH_OPENAPI=OFF
+```
+
+---
+
+## 16. 日志系统设计
+
+### 16.1 设计目标
+
+| 目标            | 具体措施                                                                 |
+| --------------- | ------------------------------------------------------------------------ |
+| **零开销**      | NDEBUG 下 TRACE 级编译期消除，`thread_local` 缓存消除锁竞争              |
+| **多 API 风格** | `std::format` 格式化 / 流式 `<<` / 条件宏 / 结构化字段，适配不同使用场景 |
+| **可插拔后端**  | `LogSink` 抽象接口，支持 stderr / 文件 / 异步文件 / ostream 等后端       |
+| **生产级特性**  | 文件轮转、异步双缓冲、背压保护、命名通道、动态级别调整                   |
+
+### 16.2 分层架构
+
+```
+┌──────────────────────────────────────────────────────────┐
+│              用户代码                                       │
+│  HICAL_LOG_INFO("port={}", 8080)                         │
+│  HICAL_LOG_TO("access", Info, "...")                     │
+├──────────────────────────────────────────────────────────┤
+│  第一层：宏 API (Log.h)                                    │
+│  HICAL_LOG_* 宏 → Logger::instance().log(LogRecord)      │
+│  级别过滤（编译期 TRACE 消除 + 运行时级别检查）             │
+├──────────────────────────────────────────────────────────┤
+│  第二层：格式化 (LogFormatter.h/cpp)                       │
+│  TextFormatter（人类可读）/ JsonFormatter（结构化）         │
+│  thread_local 时间戳缓存（秒级复用）                       │
+├──────────────────────────────────────────────────────────┤
+│  第三层：输出后端 (LogSink.h/cpp)                          │
+│  StderrSink (fprintf) / FileSink (同步 fwrite + 轮转)    │
+│  AsyncFileSink (jthread 双缓冲) / OStreamSink (兼容桥接)  │
+├──────────────────────────────────────────────────────────┤
+│  第四层：通道路由 (LogChannel.h/cpp)                       │
+│  LogChannel（独立级别/格式化器/后端）                      │
+│  LogChannelRegistry（shared_mutex 读多写少）               │
+├──────────────────────────────────────────────────────────┤
+│  第五层：HTTP 集成                                         │
+│  LogMiddleware（trace-id 自动注入 + 结构化访问日志）       │
+│  LogAdmin（GET/PUT /admin/log-level 动态调整）            │
+└──────────────────────────────────────────────────────────┘
+```
+
+### 16.3 关键组件
+
+| 组件            | 文件                  | 关键设计                                                              |
+| --------------- | --------------------- | --------------------------------------------------------------------- |
+| `Logger`        | `Log.h/cpp`           | 单例，Sink 列表分发，`thread_local` 线程 ID + 时间戳缓存              |
+| `LogRecord`     | `LogRecord.h`         | 结构化条目，level/timestamp/threadId/file/line/message/fields/traceId |
+| `TextFormatter` | `LogFormatter.h/cpp`  | `[2026-05-01 12:00:00.123] [INFO] [tid:1234] message` 格式            |
+| `JsonFormatter` | `LogFormatter.h/cpp`  | JSON Lines 格式，UTC 时间戳，`boost::json::serialize`                 |
+| `StderrSink`    | `LogSink.h/cpp`       | `fprintf(stderr, ...)` 直接输出                                       |
+| `FileSink`      | `LogSink.h/cpp`       | 同步 `fwrite` + `LogFile` 轮转引擎                                    |
+| `AsyncFileSink` | `AsyncFileSink.h/cpp` | `std::jthread` + 4MB 前后缓冲交换 + 背压保护                          |
+| `LogFile`       | `LogFile.h/cpp`       | 按大小轮转（默认 100MB）、时间戳序列命名、严格文件名匹配清理          |
+| `FixedBuffer`   | `FixedBuffer.h`       | 4KB 栈缓冲 + `std::to_chars` 格式化 + 堆 fallback                     |
+| `LogChannel`    | `LogChannel.h/cpp`    | 命名通道，独立级别/格式化器/Sink 列表                                 |
+| `LogMiddleware` | `LogMiddleware.h/cpp` | OpenSSL RAND_bytes 128 位 trace-id，洋葱模型                          |
+| `LogAdmin`      | `LogAdmin.h/cpp`      | GET/PUT 端点，运行时级别调整                                          |
+
+### 16.4 线程安全
+
+- **Logger**：Sink 列表修改需外部同步（启动时配置），日志写入时 Sink 列表只读
+- **LogChannel**：`shared_mutex` 读写锁，读取路径共享锁
+- **AsyncFileSink**：`condition_variable_any` + `stop_token` 安全停止
+- **LogFile**：非线程安全（由 FileSink/AsyncFileSink 保证单线程访问）
+
+---
+
+## 17. HTTP 核心增强
+
+### 17.1 CORS 中间件
+
+`makeCorsMiddleware(CorsOptions)` 工厂函数创建符合 W3C 规范的 CORS 中间件：
+- **Preflight 自动应答**：OPTIONS 请求直接返回 204，不经过路由层
+- **Vary: Origin**：非通配符模式添加 `Vary: Origin` 缓存提示
+- **凭证安全**：`allowCredentials=true` 时禁止 `"*"` 通配符（浏览器安全要求）
+
+### 17.2 路由组
+
+`Router::group(prefix)` 创建 `RouteGroup`，支持：
+- **前缀拼接**：组内路由自动添加前缀（如 `/api/v1` + `/users` → `/api/v1/users`）
+- **组级中间件**：`RouteGroup::use()` 添加仅对组内路由生效的中间件
+- **嵌套子组**：`RouteGroup::group()` 创建子组，继承父组的前缀和中间件
+
+### 17.3 查询参数与表单参数
+
+`HttpRequest` 新增 URL 编码参数解析：
+- `queryParam(name)` / `queryParams()` — 查询字符串参数（`?key=value`）
+- `formParam(name)` / `formParams()` — 表单体参数（`application/x-www-form-urlencoded`）
+- 惰性解析 + 缓存，首次访问时解析，后续直接返回缓存
+
+### 17.4 重定向响应
+
+`HttpResponse::redirect(location, code)` 工厂方法，默认 302 Found。Location 头经 `setHeader()` 内部 CRLF 注入防护。
+
+### 17.5 全局错误处理器
+
+`HttpServer::setErrorHandler(handler)` 设置未捕获异常的统一处理函数：
+
+```cpp
+server.setErrorHandler([](const std::exception& e, const HttpRequest& req) {
+    return HttpResponse::json({{"error", e.what()}, {"path", std::string(req.path())}});
+});
+```
 
 ---
 

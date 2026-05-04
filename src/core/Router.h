@@ -272,6 +272,10 @@ namespace hical
 
 		std::unordered_map<HttpMethod, std::vector<ParamRouteEntry>> paramRoutesByMethod_;
 
+		// ============ 静态路由路径 → 方法集反向索引（405 检测 O(1)） ============
+
+		std::unordered_map<std::string, std::vector<HttpMethod>, StringHash, StringEqual> staticPathMethods_;
+
 		// ============ WebSocket 路由 ============
 
 		std::vector<WsRoute> wsRoutes_;
