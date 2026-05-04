@@ -6,11 +6,11 @@
 
 ## 三种姿势对比
 
-| 方式 | 代码量 | 连接池 | 异步 | 防注入 |
-|------|--------|--------|------|--------|
-| 裸 `mysql_query` | 多，手动管理连接 | 手写 | 阻塞 | 手拼字符串，危险 |
-| ORM（如 ODB） | 少，但有运行时膨胀 | 内置 | 视实现而定 | 安全 |
-| Hical 协程中间件 | 少，原生协程 | 内置 | 非阻塞 `co_await` | PreparedStatement |
+| 方式             | 代码量             | 连接池 | 异步              | 防注入            |
+| ---------------- | ------------------ | ------ | ----------------- | ----------------- |
+| 裸 `mysql_query` | 多，手动管理连接   | 手写   | 阻塞              | 手拼字符串，危险  |
+| ORM（如 ODB）    | 少，但有运行时膨胀 | 内置   | 视实现而定        | 安全              |
+| Hical 协程中间件 | 少，原生协程       | 内置   | 非阻塞 `co_await` | PreparedStatement |
 
 Hical 走第三条路：连接池是协程化的，查询全部走 PreparedStatement 防注入，事务在中间件层自动管理，业务代码只关心 SQL 逻辑。
 
@@ -304,28 +304,28 @@ server.use(makeQueryLogMiddleware(QueryLogOptions{
 
 `QueryLogEntry` 的字段：
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `sql` | `std::string` | 原始 SQL 文本 |
-| `duration` | `std::chrono::microseconds` | 执行耗时 |
-| `rowCount` | `size_t` | 返回行数（SELECT） |
-| `affectedRows` | `uint64_t` | 影响行数（DML） |
-| `isParameterized` | `bool` | 是否使用了参数化查询 |
+| 字段              | 类型                        | 说明                 |
+| ----------------- | --------------------------- | -------------------- |
+| `sql`             | `std::string`               | 原始 SQL 文本        |
+| `duration`        | `std::chrono::microseconds` | 执行耗时             |
+| `rowCount`        | `size_t`                    | 返回行数（SELECT）   |
+| `affectedRows`    | `uint64_t`                  | 影响行数（DML）      |
+| `isParameterized` | `bool`                      | 是否使用了参数化查询 |
 
 ---
 
 ## 连接池参数调优
 
-| 参数 | 默认值 | 推荐场景 |
-|------|--------|----------|
-| `minConnections` | 2 | 低流量服务保持 2-4，避免冷启动延迟 |
-| `maxConnections` | 16 | 单机 Web 服务通常 16-32，不超过 MySQL `max_connections` 的 1/4 |
-| `idleTimeout` | 300s | MySQL 默认 `wait_timeout` 8h，设 5 分钟绰绰有余 |
-| `acquireTimeout` | 5s | 池满等待上限；超时返回 503 而非无限阻塞 |
-| `queryTimeout` | 30s | 防止慢查询耗尽所有连接；OLTP 场景建议设 3-5s |
-| `healthCheckInterval` | 30s | 定期 ping 空闲连接，防止 MySQL 服务端主动断开 |
-| `pingGracePeriod` | 15s | 距上次 ping 不超过 15s 则跳过，减少不必要的往返 |
-| `stmtCacheSize` | 64 | 每连接 LRU 缓存容量，见下节 |
+| 参数                  | 默认值 | 推荐场景                                                       |
+| --------------------- | ------ | -------------------------------------------------------------- |
+| `minConnections`      | 2      | 低流量服务保持 2-4，避免冷启动延迟                             |
+| `maxConnections`      | 16     | 单机 Web 服务通常 16-32，不超过 MySQL `max_connections` 的 1/4 |
+| `idleTimeout`         | 300s   | MySQL 默认 `wait_timeout` 8h，设 5 分钟绰绰有余                |
+| `acquireTimeout`      | 5s     | 池满等待上限；超时返回 503 而非无限阻塞                        |
+| `queryTimeout`        | 30s    | 防止慢查询耗尽所有连接；OLTP 场景建议设 3-5s                   |
+| `healthCheckInterval` | 30s    | 定期 ping 空闲连接，防止 MySQL 服务端主动断开                  |
+| `pingGracePeriod`     | 15s    | 距上次 ping 不超过 15s 则跳过，减少不必要的往返                |
+| `stmtCacheSize`       | 64     | 每连接 LRU 缓存容量，见下节                                    |
 
 高并发写入场景参考配置：
 

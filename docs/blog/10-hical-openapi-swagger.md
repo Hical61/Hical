@@ -70,17 +70,17 @@ HICAL_SCHEMA_NAME(ErrorResponse, "ErrorResponse")
 
 **类型映射规则**（由 `jsonSchema<T>()` 在编译期推导）：
 
-| C++ 类型 | OpenAPI Schema |
-|---|---|
-| `std::string` | `{"type":"string"}` |
-| `bool` | `{"type":"boolean"}` |
-| `int` / `int32_t` | `{"type":"integer","format":"int32"}` |
-| `int64_t` | `{"type":"integer","format":"int64"}` |
-| `float` | `{"type":"number","format":"float"}` |
-| `double` | `{"type":"number","format":"double"}` |
-| `std::vector<T>` | `{"type":"array","items":{...}}` |
+| C++ 类型                                           | OpenAPI Schema                        |
+| -------------------------------------------------- | ------------------------------------- |
+| `std::string`                                      | `{"type":"string"}`                   |
+| `bool`                                             | `{"type":"boolean"}`                  |
+| `int` / `int32_t`                                  | `{"type":"integer","format":"int32"}` |
+| `int64_t`                                          | `{"type":"integer","format":"int64"}` |
+| `float`                                            | `{"type":"number","format":"float"}`  |
+| `double`                                           | `{"type":"number","format":"double"}` |
+| `std::vector<T>`                                   | `{"type":"array","items":{...}}`      |
 | 嵌套 `HICAL_JSON` 结构体（有 `HICAL_SCHEMA_NAME`） | `{"$ref":"#/components/schemas/XXX"}` |
-| 嵌套 `HICAL_JSON` 结构体（无名称） | 内联展开完整 schema |
+| 嵌套 `HICAL_JSON` 结构体（无名称）                 | 内联展开完整 schema                   |
 
 `REQUIRED(field)` 会把该字段加入 schema 的 `required` 数组，与业务验证逻辑保持一致。
 
@@ -149,15 +149,15 @@ struct UserHandler
 
 **builder 函数速查**：
 
-| 函数 | 作用 |
-|---|---|
-| `builder::summary(info, "...")` | 端点一句话摘要 |
-| `builder::description(info, "...")` | 详细描述（支持 Markdown） |
-| `builder::tags(info, {"tag1", "tag2"})` | 分组标签，Swagger UI 按此折叠 |
-| `builder::request<T>(info, "描述", required)` | 请求体 DTO，自动引用 schema |
-| `builder::response<T>(info, 状态码, "描述")` | 有 body 的响应 |
-| `builder::responseDesc(info, 状态码, "描述")` | 无 body 的响应（204/404 等） |
-| `builder::pathParam(info, "name", "type", "描述")` | 路径参数说明 |
+| 函数                                               | 作用                          |
+| -------------------------------------------------- | ----------------------------- |
+| `builder::summary(info, "...")`                    | 端点一句话摘要                |
+| `builder::description(info, "...")`                | 详细描述（支持 Markdown）     |
+| `builder::tags(info, {"tag1", "tag2"})`            | 分组标签，Swagger UI 按此折叠 |
+| `builder::request<T>(info, "描述", required)`      | 请求体 DTO，自动引用 schema   |
+| `builder::response<T>(info, 状态码, "描述")`       | 有 body 的响应                |
+| `builder::responseDesc(info, 状态码, "描述")`      | 无 body 的响应（204/404 等）  |
+| `builder::pathParam(info, "name", "type", "描述")` | 路径参数说明                  |
 
 ---
 
@@ -336,14 +336,14 @@ HICAL_API(getUserOrders,
 
 Oat++ 是 C++ 生态里另一个有 Swagger 集成的框架，来看看标注风格的差异：
 
-| 维度 | Hical | Oat++ |
-|---|---|---|
-| 路由标注 | `HICAL_HANDLER` + `HICAL_API` | `ENDPOINT_INFO` + `ENDPOINT` |
-| Schema 生成 | 从 `HICAL_JSON` 自动推导 | 需要继承 `oatpp::DTO` 并用 `DTO_FIELD` |
-| 响应声明 | `builder::response<T>(info, 200, "...")` | `info->addResponse<Object<T>>(Status::CODE_200)` |
-| 新依赖 | 零（复用 Boost.JSON） | 引入 oatpp-swagger 库 |
-| 编译期类型检查 | `static_assert` + concepts | 运行时反射 |
-| 内存模型 | 零堆分配查找（透明哈希） | 智能指针 DTO 对象 |
+| 维度           | Hical                                    | Oat++                                            |
+| -------------- | ---------------------------------------- | ------------------------------------------------ |
+| 路由标注       | `HICAL_HANDLER` + `HICAL_API`            | `ENDPOINT_INFO` + `ENDPOINT`                     |
+| Schema 生成    | 从 `HICAL_JSON` 自动推导                 | 需要继承 `oatpp::DTO` 并用 `DTO_FIELD`           |
+| 响应声明       | `builder::response<T>(info, 200, "...")` | `info->addResponse<Object<T>>(Status::CODE_200)` |
+| 新依赖         | 零（复用 Boost.JSON）                    | 引入 oatpp-swagger 库                            |
+| 编译期类型检查 | `static_assert` + concepts               | 运行时反射                                       |
+| 内存模型       | 零堆分配查找（透明哈希）                 | 智能指针 DTO 对象                                |
 
 Hical 的核心差异在于 schema 是**编译期从类型信息推导**的，而不是运行时通过 DTO 对象的虚函数反射。这意味着写错类型在编译阶段就能发现，而不是部署后才看到错误的文档。
 

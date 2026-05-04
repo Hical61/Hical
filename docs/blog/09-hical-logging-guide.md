@@ -1,6 +1,6 @@
 # C++ Web 服务日志最佳实践：Hical 日志系统完全指南
 
-> **适用版本**：Hical v2.4+  
+> **适用版本**：Hical v2.5+  
 > **难度**：初中级  
 > **阅读时间**：约 15 分钟
 
@@ -66,14 +66,14 @@ HICAL_LOG_DEBUG_IF(req.method() == HttpMethod::EPost, "POST body size={}", req.b
 
 Hical 定义了六个日志级别，对应不同使用场景：
 
-| 宏后缀 | 枚举值 | 典型用途 |
-|--------|--------|----------|
+| 宏后缀  | 枚举值   | 典型用途                                                    |
+| ------- | -------- | ----------------------------------------------------------- |
 | `TRACE` | `hTrace` | 极细粒度调试（循环内、协议字节级），**NDEBUG 下编译期消除** |
-| `DEBUG` | `hDebug` | 开发期调试信息，不进生产 |
-| `INFO` | `hInfo` | 正常运行信息（启动、请求摘要），**生产默认级别** |
-| `WARN` | `hWarn` | 值得关注但不影响服务的异常（重试、降级） |
-| `ERROR` | `hError` | 需要处理的错误，服务仍在运行 |
-| `FATAL` | `hFatal` | 不可恢复错误，自动 flush 全部缓冲区然后 `abort()` |
+| `DEBUG` | `hDebug` | 开发期调试信息，不进生产                                    |
+| `INFO`  | `hInfo`  | 正常运行信息（启动、请求摘要），**生产默认级别**            |
+| `WARN`  | `hWarn`  | 值得关注但不影响服务的异常（重试、降级）                    |
+| `ERROR` | `hError` | 需要处理的错误，服务仍在运行                                |
+| `FATAL` | `hFatal` | 不可恢复错误，自动 flush 全部缓冲区然后 `abort()`           |
 
 ### 运行时级别设置
 
@@ -446,16 +446,16 @@ int main()
 
 ## 10. 与 spdlog / glog 的差异
 
-| 特性 | spdlog | glog | Hical Log |
-|------|--------|------|-----------|
-| API 风格 | `fmt::format` | `<<` 流式 | 两者都支持，`std::format` |
-| 异步写盘 | 有（异步 logger） | 无 | `AsyncFileSink` 双缓冲 |
-| 文件轮转 | 有 | 有 | `LogFile`，大小轮转 + 数量限制 |
-| 结构化字段 | 无内置 | 无内置 | `HICAL_LOG_INFO_F` + JSON Lines |
-| 通道路由 | sink 可分 logger | 无 | `LogChannel` 命名通道，独立 level/formatter/sink |
-| HTTP 集成 | 无 | 无 | `makeLogMiddleware()` 一键 trace-id + 访问日志 |
-| 运行时调级 | 无 HTTP 端点 | 无 HTTP 端点 | `LogAdmin` REST 端点 |
-| 协程友好 | 线程局部安全 | 线程局部安全 | 设计上与 Boost.Asio 协程共存，无 TLS 阻塞 |
+| 特性       | spdlog            | glog         | Hical Log                                        |
+| ---------- | ----------------- | ------------ | ------------------------------------------------ |
+| API 风格   | `fmt::format`     | `<<` 流式    | 两者都支持，`std::format`                        |
+| 异步写盘   | 有（异步 logger） | 无           | `AsyncFileSink` 双缓冲                           |
+| 文件轮转   | 有                | 有           | `LogFile`，大小轮转 + 数量限制                   |
+| 结构化字段 | 无内置            | 无内置       | `HICAL_LOG_INFO_F` + JSON Lines                  |
+| 通道路由   | sink 可分 logger  | 无           | `LogChannel` 命名通道，独立 level/formatter/sink |
+| HTTP 集成  | 无                | 无           | `makeLogMiddleware()` 一键 trace-id + 访问日志   |
+| 运行时调级 | 无 HTTP 端点      | 无 HTTP 端点 | `LogAdmin` REST 端点                             |
+| 协程友好   | 线程局部安全      | 线程局部安全 | 设计上与 Boost.Asio 协程共存，无 TLS 阻塞        |
 
 Hical 日志的差异化在于**和 HTTP 框架的深度集成**：trace-id 的生成、传递、写入访问日志、运行时调级，都是框架层面的一等公民，不需要自己拼装。如果你用的是纯 spdlog，这些都得自己搭。
 
@@ -467,12 +467,12 @@ Hical 日志的差异化在于**和 HTTP 框架的深度集成**：trace-id 的�
 
 5 个常见需求的对应方案：
 
-| 需求 | 方案 |
-|------|------|
-| 级别过滤 | `setLevel()` + 6 级枚举，TRACE 在 Release 零开销 |
-| 文件轮转 | `FileSink` + `LogFile::Options`（大小 + 数量限制） |
-| 异步不阻塞 | `AsyncFileSink`（双缓冲 + 背压保护） |
-| 结构化字段 | `JsonFormatter` + `HICAL_LOG_INFO_F` |
-| 分布式追踪 | `makeLogMiddleware()` 自动 trace-id + 通道路由 |
+| 需求       | 方案                                               |
+| ---------- | -------------------------------------------------- |
+| 级别过滤   | `setLevel()` + 6 级枚举，TRACE 在 Release 零开销   |
+| 文件轮转   | `FileSink` + `LogFile::Options`（大小 + 数量限制） |
+| 异步不阻塞 | `AsyncFileSink`（双缓冲 + 背压保护）               |
+| 结构化字段 | `JsonFormatter` + `HICAL_LOG_INFO_F`               |
+| 分布式追踪 | `makeLogMiddleware()` 自动 trace-id + 通道路由     |
 
 完整 API 参考：`src/core/Log.h`、`src/core/LogChannel.h`、`src/core/LogMiddleware.h`、`src/core/LogAdmin.h`。
