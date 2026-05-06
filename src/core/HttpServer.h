@@ -157,6 +157,14 @@ namespace hical
 		 */
 		uint16_t port() const;
 
+		/**
+		 * @brief 获取底层 io_context 引用
+		 * 用于创建需要 io_context 的外部组件（如数据库连接池）。
+		 * @warning 不要在 start() 之后手动调用 ioCtx.run()
+		 * @return io_context 引用
+		 */
+		boost::asio::io_context& ioContext();
+
 	private:
 		// 协程式连接监听
 		Awaitable<void> acceptLoop();

@@ -230,6 +230,11 @@ namespace hical
 		return port_.load();
 	}
 
+	boost::asio::io_context& HttpServer::ioContext()
+	{
+		return ioContext_;
+	}
+
 	Awaitable<void> HttpServer::acceptLoop()
 	{
 		while (running_.load())

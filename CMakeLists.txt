@@ -73,6 +73,13 @@ if(HICAL_BUILD_BENCH)
     target_link_libraries(bench_server PRIVATE hical_core)
 endif()
 
+# 生产部署服务器（docker/prod/ 目录）
+option(HICAL_BUILD_DEPLOY "Build production deployment server" OFF)
+if(HICAL_BUILD_DEPLOY)
+    add_executable(prod_server docker/prod/prod_server.cpp)
+    target_link_libraries(prod_server PRIVATE hical_core)
+endif()
+
 # CMake package export（支持 find_package(hical)）
 include(CMakePackageConfigHelpers)
 
