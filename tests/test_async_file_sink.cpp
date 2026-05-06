@@ -44,7 +44,8 @@ TEST_F(AsyncFileSinkTest, BasicWrite)
 			AsyncFileSink::Options {.file = {.basePath = logPath}, .flushInterval = std::chrono::milliseconds(100)});
 
 		sink.write("[INFO] hello async\n");
-		sink.flush(); // 同步握手：返回即表示后台线程已完成写盘
+		// 同步握手：返回即表示后台线程已完成写盘
+		sink.flush();
 		// 析构时 jthread stop+join
 	}
 
