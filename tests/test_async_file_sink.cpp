@@ -44,10 +44,8 @@ TEST_F(AsyncFileSinkTest, BasicWrite)
 			AsyncFileSink::Options {.file = {.basePath = logPath}, .flushInterval = std::chrono::milliseconds(100)});
 
 		sink.write("[INFO] hello async\n");
-		sink.flush();
-		// 给后台线程一点时间处理
-		std::this_thread::sleep_for(std::chrono::milliseconds(300));
-	} // 析构时 jthread stop+join，确保 flush
+		sink.flush(); // 同步握手：返回即表示后台线程已完成写盘
+	}                 // 析构时 jthread stop+join
 
 	auto content = readFile(logPath);
 	EXPECT_NE(content.find("hello async"), std::string::npos) << "Content: " << content;

@@ -31,19 +31,25 @@ namespace hical
 
 	void AsyncFileSink::write(std::string_view formattedLine)
 	{
-		std::lock_guard<std::mutex> lock(m_bufMutex);
-
-		// 背压保护：缓冲区过大时丢弃
-		if (m_curBuf.size() > m_opts.backpressureLimit)
+		bool shouldNotify = false;
 		{
-			m_dropped.fetch_add(1, std::memory_order_relaxed);
-			return;
+			std::lock_guard<std::mutex> lock(m_bufMutex);
+
+			// 背压保护：缓冲区过大时丢弃
+			if (m_curBuf.size() > m_opts.backpressureLimit)
+			{
+				m_dropped.fetch_add(1, std::memory_order_relaxed);
+				return;
+			}
+
+			auto wasBufEmpty = m_curBuf.empty();
+			m_curBuf.append(formattedLine.data(), formattedLine.size());
+
+			// 从空到非空，或缓冲区接近满时通知后台线程
+			shouldNotify = wasBufEmpty || m_curBuf.size() >= m_opts.bufferSize;
 		}
 
-		m_curBuf.append(formattedLine.data(), formattedLine.size());
-
-		// 缓冲区接近满时通知后台线程
-		if (m_curBuf.size() >= m_opts.bufferSize)
+		if (shouldNotify)
 		{
 			m_cond.notify_one();
 		}
