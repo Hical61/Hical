@@ -45,7 +45,8 @@ TEST_F(AsyncFileSinkTest, BasicWrite)
 
 		sink.write("[INFO] hello async\n");
 		sink.flush(); // 同步握手：返回即表示后台线程已完成写盘
-	}                 // 析构时 jthread stop+join
+		// 析构时 jthread stop+join
+	}
 
 	auto content = readFile(logPath);
 	EXPECT_NE(content.find("hello async"), std::string::npos) << "Content: " << content;

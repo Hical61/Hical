@@ -45,16 +45,13 @@ class HicalConan(ConanFile):
         if self.settings.os == "Windows":
             del self.options.fPIC
 
-    def configure(self):
-        pass
-
     def validate(self):
         check_min_cppstd(self, 20)
         if self.options.with_reflection:
             check_min_cppstd(self, 26)
 
     def requirements(self):
-        self.requires("boost/[>=1.82.0]", transitive_headers=True, transitive_libs=True)
+        self.requires("boost/1.90.0", transitive_headers=True, transitive_libs=True)
         self.requires("openssl/[>=1.1.0]", transitive_headers=True, transitive_libs=True)
 
     def layout(self):
