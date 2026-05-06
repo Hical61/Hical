@@ -40,29 +40,27 @@ Rust 在 Web 领域的崛起速度超出很多人预期。**Actix-web** 连续�
 
 ### 2.1 硬件环境
 
-| 项目 | 规格                                                              |
-| ---- | ----------------------------------------------------------------- |
-| 部署 | Docker 容器化，每容器限制 4 CPU + 512MB 内存                      |
-| 网络 | Docker 内部网桥（Hical/Gin）；localhost 回环（Actix，见注意事项） |
+| 项目   | 规格                                                     |
+| ------ | -------------------------------------------------------- |
+| 宿主机 | Windows 10 Enterprise LTSC 2021，16 核 CPU，32GB 内存    |
+| Docker | Docker Desktop (Hyper-V)，CPU 16 / Memory 8GB / Swap 1GB |
+| 部署   | Docker 容器化，每容器限制 4 CPU + 512MB 内存             |
+| 网络   | Docker 内部网桥，wrk 独立容器通过网络名访问各服务        |
 
-> **网络拓扑注意**：wrk 压测工具安装在 Actix 容器内部（Debian 环境最方便），这导致测试并非完全公平：
-> - Actix 的请求走 **localhost 回环**（零网络开销）
-> - Hical 和 Gin 的请求走 **Docker 内部网桥**（有微量网络开销）
->
-> 因此 Actix 的 QPS 有约 10–20% 的网络优势，延迟对比也不完全公平。但 QPS 量级关系（Actix > Hical > Gin）在修正网络差异后仍然成立。
+> **网络拓扑说明**：wrk 运行在独立的 Alpine 容器中，通过 Docker 内部网桥以网络名（hical / gin / actix）访问三个框架服务。三者的网络条件完全一致，测试公平。
 
 ### 2.2 框架版本
 
-| 语言  | 框架      | 版本              |
-| ----- | --------- | ----------------- |
-| C++20 | Hical     | v2.5.0（GCC 14）  |
-| Go    | Gin       | v1.10（Go 1.22）  |
-| Rust  | Actix-web | v4（Rust latest） |
+| 语言  | 框架      | 版本                            |
+| ----- | --------- | ------------------------------- |
+| C++20 | Hical     | v2.5.0（Ubuntu 24.04 默认 GCC） |
+| Go    | Gin       | v1.10（Go 1.22）                |
+| Rust  | Actix-web | v4（Rust latest）               |
 
 ### 2.3 编译配置
 
 ```bash
-# C++ (Hical) — GCC 14，Release 优化
+# C++ (Hical) — Release 优化
 cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j$(nproc)
 
@@ -75,9 +73,9 @@ cargo build --release
 
 ### 2.4 压测工具
 
-- **吞吐量（QPS）**：`wrk`，4 threads，100 connections，持续 30 秒，记录 Avg/Max/Stdev 延迟
-- **内存**：`/usr/bin/time -v`（峰值 RSS）+ `smem` 采样（稳定态 PSS）
-- **代码行数**：`cloc`，不含注释和空行
+- **吞吐量（QPS）**：`wrk`（独立 Alpine 容器），4 threads，100 connections，持续 30 秒，记录 Avg/Max/Stdev 延迟
+- **内存**：`docker stats --no-stream`（容器级 RSS），分别采集空载和满载数据
+- **代码行数**：`wc -l`，含注释和空行
 
 ### 2.5 测试场景说明
 
@@ -87,6 +85,8 @@ cargo build --release
 
 - `GET /` — 返回固定字符串，测框架调度开销下限
 - `GET /api/status` — 返回 JSON 响应，测序列化路径
+- `POST /api/echo` — 接收 JSON Body 并返回，测反序列化+序列化完整链路（**注意**：压测脚本通过 heredoc 管道向 wrk 传递 Lua 脚本携带 POST Body，但实测中三个框架均返回 Non-2xx 错误响应——Lua 脚本未正确生效，该场景实际测的是错误处理路径的吞吐量，而非正常 JSON Echo 性能）
+- `GET /users/42` — 路径参数路由匹配 + JSON 响应，测参数路由性能
 
 并发配置：wrk 4 threads，100 connections，持续 30 秒。
 
@@ -105,14 +105,15 @@ cargo build --release
 
 int main()
 {
-    hical::HttpServer server(8080);
+    hical::HttpServer server(8080, 4);
 
-    server.get("/hello", [](hical::HttpRequest& req) -> hical::Awaitable<hical::HttpResponse>
-    {
-        co_return hical::HttpResponse::ok("Hello, World!");
-    });
+    server.router().get("/",
+        [](const hical::HttpRequest&) -> hical::HttpResponse
+        {
+            return hical::HttpResponse::ok("Hello, World!");
+        });
 
-    server.run();
+    server.start();
 }
 ```
 
@@ -121,57 +122,61 @@ int main()
 ```go
 package main
 
-import "github.com/gin-gonic/gin"
+import (
+    "net/http"
+    "github.com/gin-gonic/gin"
+)
 
 func main() {
+    gin.SetMode(gin.ReleaseMode)
     r := gin.New()
-    r.GET("/hello", func(c *gin.Context) {
-        c.String(200, "Hello, World!")
+    r.GET("/", func(c *gin.Context) {
+        c.String(http.StatusOK, "Hello, World!")
     })
-    r.Run(":8080")
+    r.Run(":8081")
 }
 ```
 
 **Actix-web (Rust)**
 
 ```rust
-use actix_web::{get, App, HttpServer, HttpResponse};
+use actix_web::{web, App, HttpServer, Responder};
 
-#[get("/hello")]
-async fn hello() -> HttpResponse {
-    HttpResponse::Ok().body("Hello, World!")
+async fn hello() -> impl Responder {
+    "Hello, World!"
 }
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    HttpServer::new(|| App::new().service(hello))
-        .bind("0.0.0.0:8080")?
-        .run()
-        .await
+    HttpServer::new(|| {
+        App::new().route("/", web::get().to(hello))
+    })
+    .bind("0.0.0.0:8082")?
+    .workers(4)
+    .run()
+    .await
 }
 ```
 
-### 3.2 QPS 数据（实测）
+### 3.2 QPS 数据（实测，三轮平均值）
 
 > 测试场景：`GET /`，返回固定字符串。wrk 4 threads，100 connections，30s。
 
 | 框架             | QPS     | Avg 延迟 | Max 延迟 | Stdev   |
 | ---------------- | ------- | -------- | -------- | ------- |
-| Hical (C++)      | 267,584 | 360μs    | 13.66ms  | 81μs    |
-| Gin (Go)         | 176,101 | 5.21ms   | 50.78ms  | 10.04ms |
-| Actix-web (Rust) | 427,861 | 7.45ms   | 52.35ms  | 13.34ms |
-
-> Actix 走 localhost 回环，Hical/Gin 走 Docker 网桥，Actix 有约 10–20% 网络优势，见 [2.1 节](#21-硬件环境)说明。
+| Hical (C++)      | 261,021 | 371.6μs  | 22.85ms  | 205.3μs |
+| Gin (Go)         | 171,460 | 5.31ms   | 51.48ms  | 10.19ms |
+| Actix-web (Rust) | 586,482 | 155.9μs  | 22.18ms  | 201.4μs |
 
 ### 3.3 分析
 
-**Actix QPS 最高，Hical 延迟最低**——两个维度的胜者不同：
+Hello World 返回固定字符串，不涉及 JSON 序列化、内存池、数据库等复杂路径——测的是**框架调度 + 网络 I/O 的纯开销下限**。
 
-- **Actix-web**：Tokio 运行时 + localhost 回环加持，纯 QPS 最高；但 Avg 延迟 7.45ms、Stdev 13.34ms 说明尾延迟较大，请求延迟分布较宽。
-- **Hical**：Avg 延迟仅 **360μs**，Stdev **81μs**，远低于另外两个框架。PMR 内存池消除了分配器锁竞争，请求延迟方差极小——没有"偶尔卡一下"的情况。
-- **Gin**：goroutine 调度开销与 Go 运行时共同作用，QPS 最低，Avg 延迟 5.21ms，Max 50.78ms，GC 引入的尾延迟在此已有体现。
+- **Actix-web**：QPS 586K，Avg 延迟 155.9μs，三者最高。Stdev 201.4μs，与 Hical 同级。
+- **Hical**：QPS 261K，Avg 延迟 371.6μs，约为 Actix 的 2.4 倍。Stdev 205.3μs，延迟分布与 Actix 接近。
+- **Gin**：QPS 171K，Avg 延迟 5.31ms，是 Hical 的 14.3 倍、Actix 的 34 倍。Max 51.48ms，Stdev 10.19ms——延迟方差比 C++/Rust 高两个数量级。
 
-关键洞察：**Hical 的延迟一致性是三者最好的**。如果业务关注的不是峰值 QPS，而是"每一个请求都快"，C++ + PMR 的优势在 Hello World 场景已经清晰可见。
+关键观测：**Hical 和 Actix 的延迟都在亚毫秒级**，两者 Stdev 都在微秒级（201–205μs），而 Gin 的 Stdev 在 10ms 级。在这个纯调度场景下，无 GC 语言（C++/Rust）与 GC 语言（Go）在延迟稳定性上的差距已非常显著。
 
 ---
 
@@ -179,7 +184,9 @@ async fn main() -> std::io::Result<()> {
 
 ### 4.1 场景设计
 
-测试 `GET /api/status`，返回包含若干字段的 JSON 响应，覆盖框架的 JSON 序列化路径。以下代码示例同时展示各框架完整的 JSON CRUD 写法，供参考。
+测试 `GET /api/status`，返回包含若干字段的 JSON 响应，覆盖框架的 JSON 序列化路径。以下代码示例展示各框架的 JSON 响应和 JSON Echo（反序列化+序列化）写法，与 benchmark 源码一致。
+
+> **实现差异说明**：三个框架的 JSON 响应体大小略有不同（Hical 40 bytes / Gin 38 bytes / Actix 44 bytes），差异在 6 bytes 以内，对 QPS 影响可忽略。Actix 的 `StatusResponse` 使用 `&'static str` 静态字符串引用（零堆分配），而 Hical 和 Gin 在运行时构建 map/object——这是 Rust 语言特性的自然写法，给 serde 序列化带来额外优势。
 
 ### 4.2 代码实现
 
@@ -188,121 +195,118 @@ async fn main() -> std::io::Result<()> {
 ```cpp
 #include "core/HttpServer.h"
 #include "core/MetaJson.h"
+#include <boost/json.hpp>
 
-struct CreateUserReq
+using namespace hical;
+namespace json = boost::json;
+
+struct UserDTO
 {
     std::string name;
+    int age{0};
     std::string email;
-    int age{};
-    HICAL_JSON(CreateUserReq, name, email, age)
+    HICAL_JSON(UserDTO, name, age, email)
 };
 
-struct UserResp
-{
-    int64_t id{};
-    std::string name;
-    std::string createdAt;
-    HICAL_JSON(UserResp, id, name, ALIAS(createdAt, "created_at"))
-};
-
-// 路由处理器
-server.post("/users", [&](hical::HttpRequest& req) -> hical::Awaitable<hical::HttpResponse>
-{
-    auto body = co_await req.readJson<CreateUserReq>();
-    if (!body)
+// JSON 响应 — 手动构建 boost::json 对象
+server.router().get("/api/status",
+    [](const HttpRequest&) -> HttpResponse
     {
-        co_return hical::HttpResponse::badRequest("invalid json");
-    }
+        json::object obj;
+        obj["status"] = "running";
+        obj["framework"] = "hical";
+        return HttpResponse::json(json::value(std::move(obj)));
+    });
 
-    UserResp resp{
-        .id = nextId++,
-        .name = body->name,
-        .createdAt = currentTimeStr()
-    };
-
-    co_return hical::HttpResponse::json(hical::meta::toJson(resp));
-});
+// JSON Echo — 反射宏自动反序列化 + 序列化
+server.router().post("/api/echo",
+    [](const HttpRequest& req) -> Awaitable<HttpResponse>
+    {
+        auto user = req.readJson<UserDTO>();
+        co_return HttpResponse::json(meta::toJson(user));
+    });
 ```
 
 **Gin (Go) — 标准 `json.Unmarshal` 路径**
 
 ```go
-type CreateUserReq struct {
+type UserDTO struct {
     Name  string `json:"name"`
-    Email string `json:"email"`
     Age   int    `json:"age"`
+    Email string `json:"email"`
 }
 
-type UserResp struct {
-    ID        int64  `json:"id"`
-    Name      string `json:"name"`
-    CreatedAt string `json:"created_at"`
-}
+// JSON 响应
+r.GET("/api/status", func(c *gin.Context) {
+    c.JSON(http.StatusOK, gin.H{
+        "status":    "running",
+        "framework": "gin",
+    })
+})
 
-r.POST("/users", func(c *gin.Context) {
-    var req CreateUserReq
-    if err := c.ShouldBindJSON(&req); err != nil {
-        c.JSON(400, gin.H{"error": err.Error()})
+// JSON Echo
+r.POST("/api/echo", func(c *gin.Context) {
+    var user UserDTO
+    if err := c.ShouldBindJSON(&user); err != nil {
+        c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
         return
     }
-    resp := UserResp{ID: nextID(), Name: req.Name, CreatedAt: time.Now().Format(time.RFC3339)}
-    c.JSON(200, resp)
+    c.JSON(http.StatusOK, user)
 })
 ```
 
-**Actix-web (Rust) — serde_json，编译期生成序列化代码**
+**Actix-web (Rust) — serde，编译期生成序列化代码**
 
 ```rust
+use actix_web::{web, HttpResponse, Responder};
 use serde::{Deserialize, Serialize};
 
-#[derive(Deserialize)]
-struct CreateUserReq {
-    name: String,
-    email: String,
-    age: u32,
-}
-
 #[derive(Serialize)]
-struct UserResp {
-    id: i64,
-    name: String,
-    created_at: String,
+struct StatusResponse {
+    status: &'static str,
+    framework: &'static str,
 }
 
-#[post("/users")]
-async fn create_user(req: web::Json<CreateUserReq>) -> impl Responder {
-    let resp = UserResp {
-        id: next_id(),
-        name: req.name.clone(),
-        created_at: Utc::now().to_rfc3339(),
-    };
-    web::Json(resp)
+#[derive(Serialize, Deserialize)]
+struct UserDTO {
+    name: String,
+    age: i32,
+    email: String,
+}
+
+// JSON 响应
+async fn status() -> impl Responder {
+    HttpResponse::Ok().json(StatusResponse {
+        status: "running",
+        framework: "actix-web",
+    })
+}
+
+// JSON Echo
+async fn echo(user: web::Json<UserDTO>) -> impl Responder {
+    HttpResponse::Ok().json(user.into_inner())
 }
 ```
 
-### 4.3 QPS 数据（实测）
+### 4.3 QPS 数据（实测，三轮平均值）
 
 > 测试场景：`GET /api/status`，返回 JSON 响应。wrk 4 threads，100 connections，30s。
 
 | 框架             | QPS     | Avg 延迟 | Max 延迟 | Stdev   | 备注                             |
 | ---------------- | ------- | -------- | -------- | ------- | -------------------------------- |
-| Hical (C++)      | 258,351 | 373μs    | 7.91ms   | 47μs    | PMR 减少 JSON 序列化中的堆分配   |
-| Gin (Go)         | 149,827 | 6.19ms   | 63.20ms  | 11.45ms | GC 引发尾延迟，Max 63ms          |
-| Actix-web (Rust) | 398,461 | 7.06ms   | 53.16ms  | 12.78ms | serde 编译期代码生成，网络有优势 |
-
-> 同上，Actix 走 localhost 回环，Hical/Gin 走 Docker 网桥。
+| Hical (C++)      | 250,410 | 385.4μs  | 12.46ms  | 69.7μs  | QPS 相比 Hello World 仅下降 4.1% |
+| Gin (Go)         | 146,765 | 6.00ms   | 61.71ms  | 11.16ms | Max 延迟三者最高，QPS 下降 14.4% |
+| Actix-web (Rust) | 535,111 | 171.5μs  | 3.07ms   | 66.4μs  | Max 延迟仅 3.07ms，三者最低      |
 
 ### 4.4 分析
 
-JSON 场景让各框架的内存管理差异进一步放大：
+JSON 序列化路径相比 Hello World 增加了对象构建和 JSON 编码开销，各框架的 QPS 均有所下降，但幅度差异明显：
 
-**Hical 延迟方差极小**：Avg 373μs、Stdev 仅 **47μs**，远优于 Gin（11.45ms）和 Actix（12.78ms）。这是 PMR + 无 GC 的直接体现——`toJson` 过程中的临时对象从请求级单调缓冲区分配，请求结束整块释放，不触发全局分配器锁，也没有"偶尔卡一下"。
+**QPS 下降幅度**（对比 Hello World）：Hical 仅下降 4.1%（261K→250K），Actix 下降 8.8%（586K→535K），Gin 下降 14.4%（171K→147K）。Hical 下降最小，说明 `boost::json` 序列化开销在此响应体量级（~40 bytes）下非常轻量。
 
-**Rust (serde) 的优势**：`serde` 在编译期展开所有序列化代码，没有运行时类型检查开销。配合 localhost 网络优势，Actix QPS 仍是最高；但 Stdev 12.78ms 说明存在较大的延迟抖动。
+**延迟稳定性进一步拉开**：JSON 场景下 Hical 的 Stdev 从 Hello World 的 205.3μs 降至 **69.7μs**，Actix 同样降至 66.4μs——两者延迟分布反而比 Hello World 更集中。Gin 的 Stdev 仍在 11.16ms 级，Max 延迟 62ms，延迟分布不均匀。
 
-**Go 的 GC 影响**：JSON 场景下 Go 堆分配压力更大，GC 触发更频繁。Max 延迟达到 63ms，是三者中最高。Stdev 11.45ms 反映出延迟分布极不均匀——调整 `GOGC=200` 或使用 `sync.Pool` 复用对象可以缓解，但无法根除。
-
-**JSON 场景 vs Hello World 的变化**：JSON 序列化增加了 CPU 占比，各框架的 QPS 相比 Hello World 均有所下降，但 Hical 延迟优势（Stdev 47μs）比 Hello World（Stdev 81μs）更显著——JSON 分配压力越大，PMR 的收益越明显。
+**Gin 下降幅度最大**的可能原因：Go 标准库 `encoding/json` 使用反射做序列化，运行时开销高于编译期方案（C++ `boost::json` 手动构建、Rust `serde` 宏展开）。不过具体瓶颈是 JSON 反射还是 GC 加重，本次测试未做 profiling，仅从 QPS 下降幅度推断。
 
 ---
 
@@ -310,23 +314,25 @@ JSON 场景让各框架的内存管理差异进一步放大：
 
 ### 5.1 空载内存（启动后，无请求压力）
 
-> 以下数据为基于同类项目的**参考估算**，未在本次 Docker 压测中专项采集。
+> 以下数据通过 `docker stats --no-stream` 实测采集（每容器限制 4 CPU / 512MB）。
 
-| 框架             | RSS（参考） | PSS（参考） | 备注                             |
-| ---------------- | ----------- | ----------- | -------------------------------- |
-| Hical (C++)      | ~8 MB       | ~6 MB       | 无运行时，Boost 库静态链接       |
-| Gin (Go)         | ~18 MB      | ~15 MB      | Go 运行时 + goroutine 调度器常驻 |
-| Actix-web (Rust) | ~6 MB       | ~5 MB       | 无运行时，Tokio 按需初始化       |
+| 框架             | 空载内存 | 备注                             |
+| ---------------- | -------- | -------------------------------- |
+| Hical (C++)      | 11.5 MiB | 无运行时，Boost 库动态链接       |
+| Gin (Go)         | 47.9 MiB | Go 运行时 + goroutine 调度器常驻 |
+| Actix-web (Rust) | 8.5 MiB  | 无运行时，Tokio 按需初始化       |
 
 ### 5.2 满载内存（100 并发连接，持续压测中）
 
-> 以下数据为基于同类项目的**参考估算**，未在本次 Docker 压测中专项采集。
+> 三个服务同时被 wrk（4t100c）压测时，通过 `docker stats` 采样。
 
-| 框架             | 峰值 RSS（参考） | 稳定 PSS（参考） | 内存增长趋势   |
-| ---------------- | ---------------- | ---------------- | -------------- |
-| Hical (C++)      | ~42 MB           | ~38 MB           | 平稳，PMR 复用 |
-| Gin (Go)         | ~95 MB           | ~70 MB           | GC 周期内波动  |
-| Actix-web (Rust) | ~35 MB           | ~32 MB           | 平稳，无 GC    |
+| 框架             | 满载内存 | 相比空载增长 | 内存增长趋势  |
+| ---------------- | -------- | ------------ | ------------- |
+| Hical (C++)      | 13.1 MiB | +1.6 MiB     | 平稳          |
+| Gin (Go)         | 52.5 MiB | +4.6 MiB     | GC 周期内波动 |
+| Actix-web (Rust) | 9.3 MiB  | +0.8 MiB     | 平稳，无 GC   |
+
+关键数据：**Gin 空载占用是 Actix 的 5.6 倍、Hical 的 4.2 倍**——这是 Go 运行时的固有开销（goroutine 调度器、GC 元数据、初始堆）。满载增长方面三者都很克制，100 并发下增长均不到 5 MiB。
 
 ### 5.3 PMR 内存策略详解
 
@@ -343,11 +349,11 @@ Hical 使用三层 PMR 策略，这是 C++ 在内存管理上区别于 Go/Rust �
          请求结束 → 整块归还，零碎片
 ```
 
-**实际收益**：在 JSON 密集的 API 服务下，每个请求解析 Body 产生的临时 `std::string`、`boost::json::value` 等对象全部从单调缓冲区分配，整个请求处理完成后一次性归还，不需要逐个 `delete`，也不会产生堆碎片。对比 Go 的 GC 方案：Go 同样不需要手动释放，但 GC 是"延迟清理"，内存峰值更高，且会有周期性的 GC 暂停。
+**设计意图**：在 JSON 密集的 API 服务下，每个请求解析 Body 产生的临时 `std::string`、`boost::json::value` 等对象可从单调缓冲区分配，整个请求处理完成后一次性归还，不需要逐个 `delete`，也不会产生堆碎片。理论上这避免了频繁的 `malloc`/`free` 调用和全局分配器锁竞争。不过本次测试未做 PMR 开/关对照实验，上述 QPS 数据无法直接量化 PMR 的具体收益。
 
 ### 5.4 GC 暂停 vs 无 GC
 
-这是跨语言 Web 服务最常见的争议点：
+这是跨语言 Web 服务最常见的争议点（以下为行业常见认知，非本次实测数据）：
 
 | 场景                     | Go 的影响              | C++/Rust 的影响                      |
 | ------------------------ | ---------------------- | ------------------------------------ |
@@ -364,13 +370,11 @@ Hical 使用三层 PMR 策略，这是 C++ 在内存管理上区别于 Go/Rust �
 
 ### 6.1 代码量对比
 
-> 以下数据基于上文代码示例的 `cloc` 计数，不含注释和空行（参考值）。
+> 以下数据基于 benchmark 目录下各框架压测源码的 `wc -l` 计数（含注释和空行），实现了相同的 4 个端点（`/`、`/api/status`、`/api/echo`、`/users/{id}`）。
 
-| 场景                     | Hical (C++) | Gin (Go) | Actix-web (Rust) |
-| ------------------------ | ----------- | -------- | ---------------- |
-| Hello World（含 main）   | ~10 行      | ~8 行    | ~15 行           |
-| CRUD API（单个接口）     | ~35 行      | ~25 行   | ~40 行           |
-| CRUD API（含结构体定义） | ~60 行      | ~50 行   | ~70 行           |
+| 场景                            | Hical (C++) | Gin (Go) | Actix-web (Rust) |
+| ------------------------------- | ----------- | -------- | ---------------- |
+| 完整压测代码（4 个端点 + main） | 54 行       | 52 行    | 64 行            |
 
 ### 6.2 编译时间
 
@@ -407,9 +411,9 @@ error[E0597]: `req` does not live long enough
 **C++ (使用 Concepts)** 的错误信息相比 C++17 已大幅改善，但模板嵌套深时仍可能出现长篇报错：
 
 ```
-error: no matching function for call to 'hical::HttpServer::get'
+error: no matching function for call to 'hical::Router::get'
 note: constraints not satisfied
-note: 'HandlerType' must be invocable with 'HttpRequest&'
+note: 'HandlerType' must be invocable with 'const HttpRequest&'
 ```
 
 Hical 通过 C++20 Concepts 约束 Handler 类型，错误定位到 concept 名称，而非展开整个模板实例化链——这比 C++17 时代有质的改善，但和 Go 相比仍有差距。
@@ -445,15 +449,15 @@ Hical 通过 C++20 Concepts 约束 Handler 类型，错误定位到 concept 名�
 
 ### 7.2 容器化与部署
 
-三个语言在 Docker 场景下的二进制大小（使用 `scratch` 或 `distroless` 基础镜像时）：
+三个语言在 Docker 场景下的二进制大小和镜像大小（实测数据）：
 
-| 框架                        | 静态编译二进制大小（参考） | Docker 镜像大小（参考） |
-| --------------------------- | -------------------------- | ----------------------- |
-| Hical (C++，静态链接 Boost) | ~15 MB                     | ~16 MB                  |
-| Gin (Go)                    | ~8 MB                      | ~9 MB                   |
-| Actix-web (Rust)            | ~5 MB                      | ~6 MB                   |
+| 框架             | 二进制大小（实测） | Docker 镜像大小（实测） | 基础镜像                 |
+| ---------------- | ------------------ | ----------------------- | ------------------------ |
+| Hical (C++)      | 9.2 MB             | 87.8 MB                 | ubuntu:24.04（动态链接） |
+| Gin (Go)         | 7.6 MB             | 15.3 MB                 | alpine:3.19（静态链接）  |
+| Actix-web (Rust) | 3.7 MB             | 78.6 MB                 | debian:bookworm-slim     |
 
-Go 和 Rust 的静态编译比 C++ 更简单——`CGO_ENABLED=0 go build` 或 `cargo build --target x86_64-unknown-linux-musl` 一行命令搞定；C++ 的全静态链接（包括 Boost、OpenSSL）需要较多 CMake 配置。
+> **镜像大小说明**：Gin 镜像最小是因为 Go 静态编译 + Alpine 基础镜像（~5MB）。Hical 和 Actix 使用了带系统库的基础镜像（ubuntu/debian），如果改用 `scratch` + 全静态链接，镜像可压缩到接近二进制本身大小。Actix 二进制仅 3.7MB，是三者中最小的——其 Cargo.toml 配置了 `lto = true` + `strip = true`。
 
 ---
 
@@ -509,11 +513,11 @@ Go 和 Rust 的静态编译比 C++ 更简单——`CGO_ENABLED=0 go build` 或 `
 
 把三种语言并排比较，结论其实很清晰：
 
-**性能维度**：Actix QPS 最高（网络优势加持），Hical 延迟最低、方差最小（360–373μs Avg，47–81μs Stdev），Gin 居中但尾延迟受 GC 影响最大（Max 50–63ms）。在 IO 密集的业务系统中，QPS 差距会被 DB 等外部依赖摊薄；延迟一致性才是真正的分水岭。
+**性能维度**：Actix QPS 最高（Hello World 586K，JSON 535K，路径参数 473K），Hical 稳定在亚毫秒延迟（Avg 372–393μs），Actix 延迟更低（Avg 156–199μs）。延迟稳定性方面，Hical Stdev 70–205μs、Actix Stdev 63–201μs，两者同一量级；Gin 的 Stdev 在 10–11ms 级，Max 51–62ms，延迟波动高出两个数量级。三者网络条件一致（三轮平均值，波动 ±2.3% 以内）。需要注意：在 IO 密集的业务系统中，QPS 差距会被 DB 等外部依赖摊薄；延迟一致性才是微基准中更有参考价值的指标。
 
 **开发效率维度**：Go > Rust ≈ C++（C++ 用了 Hical 反射宏之后追平），Go 的工具链和生态是公认的工程效率冠军。
 
-**安全性维度**：Rust > C++ >> Go（Go 不容易出内存安全漏洞，但数据竞争保护不如 Rust 全面；C++ 靠工具链和规范，无编译期保证）。
+**安全性维度**：Rust > Go > C++（Rust 借用检查器在编译期杜绝 UAF 和数据竞争；Go 有 GC 不会出现 UAF/double-free，但数据竞争保护不如 Rust 全面；C++ 无编译期内存安全保证，靠工具链和规范兜底）。
 
 |                 | C++ (Hical)                | Go (Gin)        | Rust (Actix)              |
 | --------------- | -------------------------- | --------------- | ------------------------- |
@@ -531,6 +535,6 @@ Go 和 Rust 的静态编译比 C++ 更简单——`CGO_ENABLED=0 go build` 或 `
 
 ---
 
-> **数据说明**：第 3、4 节 QPS/延迟数据为本次 Docker 容器实测数据（Hical v2.5.0 / Gin v1.10 / Actix-web v4，wrk 4t100c 30s）。内存占用、二进制大小、代码行数、编译时间为参考估算值，未在本次压测中专项采集。Actix 由于 wrk 安装在其容器内，走 localhost 回环，QPS 存在约 10–20% 的网络优势，详见 [2.1 节](#21-硬件环境)。
+> **数据说明**：第 3、4 节 QPS/延迟数据为 2026-05-06 Docker 容器三轮独立测试的平均值（Hical v2.5.0 / Gin v1.10 / Actix-web v4，wrk 独立 Alpine 容器，4t100c 30s，宿主机 16 核 / 32GB，Docker 分配 8GB 内存，每容器 4 CPU / 512MB）。wrk 通过 Docker 内部网桥访问三个框架服务，网络条件一致。三轮 QPS 波动均在 ±2.3% 以内。第 5 节内存占用、二进制大小、Docker 镜像大小、代码行数均由 `collect_stats.sh` 脚本在容器环境中实测采集（`docker stats` / `ls -lh` / `docker images` / `wc -l`）。第 6.2 节编译时间为参考估算值，未在本次压测中专项采集。JSON Echo 场景（`POST /api/echo`）压测脚本尝试通过 heredoc 管道传递 Lua 脚本携带 POST Body，但实际执行中三个框架均返回 Non-2xx 错误响应（Lua 脚本未正确生效），测的是错误处理路径而非正常 JSON 反序列化性能。完整 4 场景三轮数据详见 [benchmark/BENCHMARK_REPORT.md](../../benchmark/BENCHMARK_REPORT.md)。
 
 > **反馈**：如果你发现数据有明显偏差，或者有更好的测试方案，欢迎在评论区指出，本文保持持续更新。

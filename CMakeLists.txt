@@ -66,6 +66,13 @@ if(HICAL_BUILD_EXAMPLES)
     add_subdirectory(examples)
 endif()
 
+# 压测服务器（Docker benchmark 用）
+option(HICAL_BUILD_BENCH "Build benchmark server" OFF)
+if(HICAL_BUILD_BENCH)
+    add_executable(bench_server docker/bench_main.cpp)
+    target_link_libraries(bench_server PRIVATE hical_core)
+endif()
+
 # CMake package export（支持 find_package(hical)）
 include(CMakePackageConfigHelpers)
 

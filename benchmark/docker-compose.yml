@@ -1,0 +1,48 @@
+services:
+  hical:
+    build:
+      context: ..
+      dockerfile: benchmark/hical/Dockerfile
+    ports:
+      - "8080:8080"
+    cpus: 4
+    mem_limit: 512m
+    networks:
+      - bench
+
+  gin:
+    build:
+      context: ./gin
+    ports:
+      - "8081:8081"
+    cpus: 4
+    mem_limit: 512m
+    networks:
+      - bench
+
+  actix:
+    build:
+      context: ./actix
+    ports:
+      - "8082:8082"
+    cpus: 4
+    mem_limit: 512m
+    networks:
+      - bench
+
+  wrk:
+    build:
+      context: ./wrk
+    depends_on:
+      - hical
+      - gin
+      - actix
+    volumes:
+      - ./run_bench.sh:/bench/run_bench.sh:ro
+      - ./results.md:/bench/results.md
+    networks:
+      - bench
+
+networks:
+  bench:
+    driver: bridge
