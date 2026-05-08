@@ -99,14 +99,15 @@ jobs:
 
       - name: Conan create (MSVC)
         if: matrix.compiler == 'msvc'
+        shell: cmd
         run: |
-          conan create . `
-            --version=${{ steps.version.outputs.version }} `
-            --build=missing `
-            -s compiler.cppstd=20 `
-            -s build_type=Release `
-            -c tools.cmake.cmaketoolchain:generator="Visual Studio 17 2022" `
-            -c tools.microsoft.msbuild:vs_version=17 `
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x64
+          conan create . ^
+            --version=${{ steps.version.outputs.version }} ^
+            --build=missing ^
+            -s compiler.cppstd=20 ^
+            -s build_type=Release ^
+            -c tools.cmake.cmaketoolchain:generator=Ninja ^
             -o "boost/*:without_cobalt=True"
 
       # ── 打包源码分发包并上传到 GitHub Release ──
