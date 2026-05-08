@@ -29,15 +29,30 @@ namespace hical
 		 * @brief 构造路由组
 		 * @param router 路由器引用
 		 * @param prefix 路由前缀（如 "/api/v1"）
-		 * @param middlewares 继承自父组的中间件列表
+		 * @param middlewares 继承自父组的中间件列表（兼容）
 		 */
 		RouteGroup(Router& router, std::string prefix, std::vector<MiddlewareHandler> middlewares = {});
+
+		/**
+		 * @brief 构造路由组（优化路径，接收 MiddlewareEntry 列表）
+		 */
+		RouteGroup(Router& router, std::string prefix, std::vector<MiddlewareEntry> entries);
 
 		/**
 		 * @brief 添加组级中间件（仅对组内路由生效）
 		 * @param middleware 中间件处理器
 		 */
 		void use(MiddlewareHandler middleware);
+
+		/**
+		 * @brief 添加同步前置中间件（无协程帧开销）
+		 */
+		void use(SyncBeforeHandler before);
+
+		/**
+		 * @brief 添加同步前/后中间件（无协程帧开销）
+		 */
+		void use(SyncBeforeHandler before, SyncAfterHandler after);
 
 		/**
 		 * @brief 创建嵌套子组
@@ -77,7 +92,7 @@ namespace hical
 
 		Router& m_router;
 		std::string m_prefix;
-		std::vector<MiddlewareHandler> m_middlewares;
+		std::vector<MiddlewareEntry> m_entries;
 	};
 
 } // namespace hical

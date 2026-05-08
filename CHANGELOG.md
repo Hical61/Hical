@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.5.1] - 2026-05-08
+
+### Added
+- **SyncMiddleware 快速路径**（零协程帧中间件）：
+  - 新增 `SyncBeforeHandler` / `SyncAfterHandler` / `SyncMiddlewareResult` 类型（`Middleware.h`）
+  - 新增 `MiddlewareEntry` 统一存储结构（Async/Sync 标签联合）
+  - `MiddlewarePipeline` 新增 3 个同步 `use()` 重载，`RouteGroup` 新增 2 个
+  - `buildOptimizedChain()` 算法：连续 Sync 条目合并为单个协程帧，N 层同步中间件仅 1 次协程帧堆分配
+- `MemoryPool::threadLocalPool()` 公共方法，暴露 thread-local 无锁池资源指针
+
+### Changed
+- **HttpServer 多 io_context 架构**：
+  - `ioContext_` 替换为 `AsioEventLoop baseLoop_` + `EventLoopPool ioPool_`（1 Thread : 1 io_context）
+  - `acceptLoop()` 去除 `make_strand`，round-robin 分发到 worker loop（单线程天然串行）
+  - accept 后立即设置 `TCP_NODELAY` 减少 Nagle 延迟
+  - `stop()` / `gracefulStop()` 改为停止所有 loop（baseLoop + ioPool）
+- `handleSession()` 请求级 PMR 池改为栈上 `monotonic_buffer_resource` + thread-local 无锁池作 upstream，消除 `make_unique` 堆分配和同步锁竞争
+- `MiddlewarePipeline::build()` / `buildFor()` 非 profiling 路径改用 `buildOptimizedChain(entries_)`
+- `MiddlewarePipeline::size()` 改为返回 `entries_.size()`（支持纯 Sync 中间件计数）
+- 新增 `HttpServer::recommendedMaxConnections(availableMemoryMB)` 静态方法：按 25KB/连接 估算并预留 30% 内存，上限 65535，供使用者根据机器内存自行设置 `maxConnections`（默认值仍为 10000）
+- `PoolConfig::requestPoolInitialSize` 默认值从 8192 降至 4096
+- `handleSession()` 主路径去除冗余 `prepare_payload()` 调用（已由 `setBody()` / `setJsonBody()` 内部完成）
+- **RouteGroup 中间件预构建优化**：`RouteGroup` 同步分支接入 `buildOptimizedChain()`，组级 Sync 中间件同样享受零协程帧合并
+
 ## [2.5.0] - 2026-05-05
 
 ### Added
@@ -221,7 +245,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Multipart Part 数量上限（DoS 防护）
 - Session ID 使用密码学安全的随机数生成
 
-[Unreleased]: https://github.com/Hical61/Hical/compare/v2.5.0...HEAD
+[Unreleased]: https://github.com/Hical61/Hical/compare/v2.5.1...HEAD
+[2.5.1]: https://github.com/Hical61/Hical/compare/v2.5.0...v2.5.1
 [2.5.0]: https://github.com/Hical61/Hical/compare/v2.4.0...v2.5.0
 [2.4.0]: https://github.com/Hical61/Hical/compare/v2.3.0...v2.4.0
 [2.3.0]: https://github.com/Hical61/Hical/compare/v2.2.0...v2.3.0

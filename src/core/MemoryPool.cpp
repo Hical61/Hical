@@ -66,6 +66,11 @@ namespace hical
 		return std::pmr::polymorphic_allocator<std::byte>(pool);
 	}
 
+	std::pmr::unsynchronized_pool_resource* MemoryPool::threadLocalPool()
+	{
+		return getOrCreateThreadPool();
+	}
+
 	std::unique_ptr<std::pmr::monotonic_buffer_resource> MemoryPool::createRequestPool(size_t initialSize)
 	{
 		if (initialSize == 0)

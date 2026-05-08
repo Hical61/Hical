@@ -11,7 +11,7 @@
 
 Hical 是一个基于 Boost.Asio/Beast，利用 C++26 反射和 PMR 内存池构建高性能的现代 C++ Web 框架。
 
-> C++20/26 双轨反射 · PMR 内存池 · 协程异步 I/O · Cookie / Session / 静态文件 / 文件上传 内置 · CORS · RouteGroup 路由分组 · 生产级日志系统 · OpenAPI 3.0 自动文档 · 可选 DB 中间件（Boost.MySQL）
+> C++20/26 双轨反射 · PMR 内存池 · 协程异步 I/O · Cookie / Session / 静态文件 / 文件上传 内置 · CORS · RouteGroup 路由分组 · 日志系统 · OpenAPI 3.0 自动文档 · 可选 DB 中间件（Boost.MySQL）
 
 [English](README.md) | 简体中文
 

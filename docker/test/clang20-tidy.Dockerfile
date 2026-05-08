@@ -13,7 +13,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends wget gnupg ca-c
     && echo "deb https://apt.llvm.org/noble/ llvm-toolchain-noble-20 main" > /etc/apt/sources.list.d/llvm-20.list \
     && apt-get update && apt-get install -y --no-install-recommends \
         clang-20 clang-tidy-20 \
-        cmake ninja-build \
+        cmake ninja-build python3 \
         libboost-all-dev libssl-dev libgtest-dev \
     && rm -rf /var/lib/apt/lists/*
 
@@ -29,5 +29,5 @@ RUN cmake -B build -G Ninja \
         -DHICAL_DISABLE_IO_URING=ON \
     && cmake --build build -j$(nproc)
 
-# clang-tidy 检查（与 CI 命令一致）
-CMD ["sh", "-c", "find src -name '*.cpp' | xargs clang-tidy-20 -p build"]
+# clang-tidy 检查（与 CI 命令一致）+ 注释缩进检查
+CMD ["sh", "-c", "python3 scripts/fix-comment-indent.py --check $(find src tests examples -name '*.h' -o -name '*.cpp') && find src -name '*.cpp' | xargs clang-tidy-20 -p build"]

@@ -4,18 +4,51 @@ namespace hical
 {
 
 	RouteGroup::RouteGroup(Router& router, std::string prefix, std::vector<MiddlewareHandler> middlewares)
-		: m_router(router), m_prefix(std::move(prefix)), m_middlewares(std::move(middlewares))
+		: m_router(router), m_prefix(std::move(prefix))
+	{
+		m_entries.reserve(middlewares.size());
+		for (auto& mw : middlewares)
+		{
+			MiddlewareEntry entry;
+			entry.type = MiddlewareEntry::Type::Async;
+			entry.asyncHandler = std::move(mw);
+			m_entries.push_back(std::move(entry));
+		}
+	}
+
+	RouteGroup::RouteGroup(Router& router, std::string prefix, std::vector<MiddlewareEntry> entries)
+		: m_router(router), m_prefix(std::move(prefix)), m_entries(std::move(entries))
 	{
 	}
 
 	void RouteGroup::use(MiddlewareHandler middleware)
 	{
-		m_middlewares.push_back(std::move(middleware));
+		MiddlewareEntry entry;
+		entry.type = MiddlewareEntry::Type::Async;
+		entry.asyncHandler = std::move(middleware);
+		m_entries.push_back(std::move(entry));
+	}
+
+	void RouteGroup::use(SyncBeforeHandler before)
+	{
+		MiddlewareEntry entry;
+		entry.type = MiddlewareEntry::Type::Sync;
+		entry.before = std::move(before);
+		m_entries.push_back(std::move(entry));
+	}
+
+	void RouteGroup::use(SyncBeforeHandler before, SyncAfterHandler after)
+	{
+		MiddlewareEntry entry;
+		entry.type = MiddlewareEntry::Type::Sync;
+		entry.before = std::move(before);
+		entry.after = std::move(after);
+		m_entries.push_back(std::move(entry));
 	}
 
 	RouteGroup RouteGroup::group(const std::string& subPrefix)
 	{
-		return RouteGroup(m_router, joinPath(subPrefix), m_middlewares);
+		return RouteGroup(m_router, joinPath(subPrefix), m_entries);
 	}
 
 	std::string RouteGroup::joinPath(const std::string& path) const
@@ -45,7 +78,7 @@ namespace hical
 
 	RouteHandler RouteGroup::wrapHandler(RouteHandler handler) const
 	{
-		if (m_middlewares.empty())
+		if (m_entries.empty())
 		{
 			return handler;
 		}
@@ -56,7 +89,7 @@ namespace hical
 			co_return co_await h(req);
 		};
 
-		auto chain = MiddlewarePipeline::buildChainFrom(m_middlewares, std::move(finalNext));
+		auto chain = MiddlewarePipeline::buildOptimizedChain(m_entries, std::move(finalNext));
 
 		// SAFETY: const_cast 是安全的，因为 RouteHandler 被调用时，req 对象
 		// 始终是 HttpServer::handleSession 中的非 const 局部变量。

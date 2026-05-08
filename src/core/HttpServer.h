@@ -8,6 +8,7 @@
 #include "SslContext.h"
 #include "IdleFd.h"
 #include "../asio/AsioEventLoop.h"
+#include "../asio/EventLoopPool.h"
 #include <boost/asio.hpp>
 #include <boost/beast.hpp>
 #include <cstdint>
@@ -28,11 +29,11 @@ namespace hical
 	 * server.use(logMiddleware);
 	 * server.start();  // 阻塞
 	 * ```
-	 * @note 线程安全
-	 * 当 ioThreads > 1 时，多个 IO 线程共享同一个 io_context，
-	 * 路由 handler 和中间件可能被并发调用。此时用户必须保证：
-	 * - 路由 handler 内访问的共享数据需自行加锁或使用无锁结构
-	 * - 如果不需要多线程并发，使用默认的 ioThreads=1（单线程模式）即可
+	 * @note 线程模型
+	 * 采用 1 Thread : 1 io_context 架构。baseLoop_ 运行 accept/signal/GC，
+	 * ioPool_ 中的 worker loop 处理连接 I/O。每个 worker loop 单线程运行，
+	 * 同一 loop 上的协程天然串行，无需 strand。当 ioThreads > 1 时，
+	 * 不同 loop 上的路由 handler 仍可能并发调用。
 	 */
 	class HttpServer
 	{
@@ -95,8 +96,19 @@ namespace hical
 		/**
 		 * @brief 设置最大并发连接数
 		 * @param maxConns 最大连接数（0 表示不限制，默认 10000）
+		 * @note 过大的值可能在低配服务器上被连接洪水攻击导致 OOM。
+		 * 可使用 recommendedMaxConnections() 根据可用内存计算推荐值。
 		 */
 		void setMaxConnections(size_t maxConns);
+
+		/**
+		 * @brief 根据可用内存计算推荐的最大连接数
+		 * 按每连接约 25KB 估算（PMR 缓冲 + Beast parser + socket 缓冲），
+		 * 预留 30% 内存给业务逻辑和系统开销。
+		 * @param availableMemoryMB 可用内存（MB）
+		 * @return 推荐的最大连接数（上限 65535）
+		 */
+		static size_t recommendedMaxConnections(size_t availableMemoryMB);
 
 		/**
 		 * @brief 设置空闲连接超时时间
@@ -183,9 +195,13 @@ namespace hical
 		// 优雅关机：停止接受新连接，等待活跃连接处理完毕
 		void gracefulStop();
 
+		// 停止所有 loop（baseLoop + ioPool）
+		void stopAllLoops();
+
 		std::atomic<uint16_t> port_;
 		size_t ioThreads_;
-		boost::asio::io_context ioContext_;
+		AsioEventLoop baseLoop_;                              // 主 loop（accept + signal + GC）
+		std::unique_ptr<EventLoopPool> ioPool_;               // IO 线程池（ioThreads-1 个 worker loop）
 		std::unique_ptr<boost::asio::ip::tcp::acceptor> acceptor_;
 		std::atomic<bool> running_ {false};
 
@@ -205,7 +221,7 @@ namespace hical
 		size_t maxBodySize_ {1024 * 1024}; // 1MB
 		size_t maxHeaderSize_ {8192};      // 8KB
 
-		// 连接数限制（0 表示不限制）
+		// 连接数限制（0 表示不限制，默认 10000）
 		size_t maxConnections_ {10000};
 		std::atomic<size_t> activeConnections_ {0};
 

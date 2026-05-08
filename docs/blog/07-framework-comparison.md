@@ -125,7 +125,7 @@ PMR 带来的收益是实实在在的。
 
 **Drogon 最全**。它是唯一内置 ORM 和 HTTP/2 的框架，还有 CSP 模板渲染、gzip/brotli 压缩、Redis 客户端等。如果你需要"开箱即用的全家桶"，Drogon 是第一选择。
 
-**Hical 次之，但追赶迅速**。Cookie、Session、静态文件、文件上传、WebSocket、协程化 DB 中间件（MySQL 连接池 + 自动事务）、OpenAPI 3.0 自动文档生成、生产级日志系统（异步写盘 + trace-id + 动态级别调整）全部内置，且每个模块都有安全防护。缺少 HTTP/2。
+**Hical 次之，但追赶迅速**。Cookie、Session、静态文件、文件上传、WebSocket、协程化 DB 中间件（MySQL 连接池 + 自动事务）、OpenAPI 3.0 自动文档生成、日志系统（异步写盘 + trace-id + 动态级别调整）全部内置，且每个模块都有安全防护。缺少 HTTP/2。
 
 **Oat++ 特色鲜明**。零依赖 + 内置 Swagger 文档生成（Hical 也已内置 OpenAPI），对 API 开发特别友好。ORM 以模块化形式提供。
 

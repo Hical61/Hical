@@ -1004,7 +1004,7 @@ Boost.Asio 适配层，将 Boost.Asio 的原始 API 封装为 hical 风格的接
 
 ### Log
 
-生产级日志系统，提供 6 级日志、多种 API 风格和零开销设计。
+日志系统，提供 6 级日志、多种 API 风格和零开销设计。
 
 **头文件：** `src/core/Log.h`
 

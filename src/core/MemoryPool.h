@@ -24,7 +24,7 @@ namespace hical
 		size_t threadLocalLargestPoolBlock = 512 * 1024; // 512KB
 
 		// 请求级池默认初始大小
-		size_t requestPoolInitialSize = 8192;
+		size_t requestPoolInitialSize = 4096;
 	};
 
 	/**
@@ -151,6 +151,13 @@ namespace hical
 		 * @return pmr 分配器
 		 */
 		std::pmr::polymorphic_allocator<std::byte> threadLocalAllocator();
+
+		/**
+		 * @brief 获取当前线程的本地池资源指针
+		 * 适合作为 monotonic_buffer_resource 的 upstream（无锁，单线程环境下使用）。
+		 * @return 本地池资源指针
+		 */
+		std::pmr::unsynchronized_pool_resource* threadLocalPool();
 
 		/**
 		 * @brief 创建请求级单调池（用于 HTTP 请求生命周期）

@@ -78,6 +78,16 @@ namespace hical
 		maxConnections_ = maxConns;
 	}
 
+	size_t HttpServer::recommendedMaxConnections(size_t availableMemoryMB)
+	{
+		// 每连接约 25KB（PMR 缓冲 4KB + Beast parser ~8KB + socket 缓冲 ~8KB + 开销 ~5KB）
+		// 预留 30% 内存给业务逻辑和系统开销
+		constexpr size_t hBytesPerConnection = 25 * 1024;
+		size_t usableBytes = availableMemoryMB * 1024 * 1024 * 7 / 10;
+		size_t recommended = usableBytes / hBytesPerConnection;
+		return std::min(recommended, size_t(65535));
+	}
+
 	void HttpServer::setIdleTimeout(double seconds)
 	{
 		idleTimeout_ = seconds;
@@ -132,7 +142,9 @@ namespace hical
 				});
 		}
 
-		acceptor_ = std::make_unique<tcp::acceptor>(ioContext_);
+		auto& baseIoCtx = baseLoop_.getIoContext();
+
+		acceptor_ = std::make_unique<tcp::acceptor>(baseIoCtx);
 		auto endpoint = tcp::endpoint(tcp::v4(), port_.load());
 		acceptor_->open(endpoint.protocol());
 		acceptor_->set_option(boost::asio::socket_base::reuse_address(true));
@@ -143,7 +155,7 @@ namespace hical
 		port_.store(acceptor_->local_endpoint().port());
 
 		// 注册信号处理（SIGINT/SIGTERM → 优雅关机）
-		boost::asio::signal_set signals(ioContext_, SIGINT, SIGTERM);
+		boost::asio::signal_set signals(baseIoCtx, SIGINT, SIGTERM);
 		signals.async_wait(
 			[this](const boost::system::error_code& ec, int)
 			{
@@ -153,47 +165,30 @@ namespace hical
 				}
 			});
 
-		coSpawn(ioContext_, acceptLoop());
+		coSpawn(baseIoCtx, acceptLoop());
 
 		// 启动内存池 GC 定时器协程
 		if (gcInterval_ > 0)
 		{
-			coSpawn(ioContext_, gcLoop());
+			coSpawn(baseIoCtx, gcLoop());
 		}
 
-		// 多线程运行 io_context
-		std::vector<std::thread> threads;
-
-		// RAII 守卫：确保工作线程在任何退出路径（含异常）都被 join
-		struct ThreadJoiner
+		// 创建 IO 线程池：worker loop 数量 = ioThreads_ - 1（baseLoop 占 1 个线程）
+		if (ioThreads_ > 1)
 		{
-			std::vector<std::thread>& threads;
-
-			~ThreadJoiner()
-			{
-				for (auto& t : threads)
-				{
-					if (t.joinable())
-					{
-						t.join();
-					}
-				}
-			}
-		} joiner {threads};
-
-		for (size_t i = 1; i < ioThreads_; ++i)
-		{
-			threads.emplace_back(
-				[this]()
-				{
-					ioContext_.run();
-				});
+			ioPool_ = std::make_unique<EventLoopPool>(ioThreads_ - 1);
+			ioPool_->start();
 		}
 
-		// 主线程也参与运行（阻塞）
-		ioContext_.run();
+		// 主线程运行 baseLoop（阻塞）
+		baseLoop_.run();
 
-		// joiner 析构时 join 所有线程
+		// baseLoop 退出后，停止并等待 ioPool 中的 worker 线程
+		if (ioPool_)
+		{
+			ioPool_->stop();
+		}
+
 		running_.store(false);
 	}
 
@@ -206,8 +201,9 @@ namespace hical
 
 		draining_.store(true);
 
-		// 将 acceptor 关闭调度到 io_context 线程内，与 acceptLoop 串行执行，消除竞态
-		boost::asio::post(ioContext_,
+		// 将 acceptor 关闭调度到 baseLoop 线程内，与 acceptLoop 串行执行，消除竞态
+		auto& baseIoCtx = baseLoop_.getIoContext();
+		boost::asio::post(baseIoCtx,
 						  [this]()
 						  {
 							  if (acceptor_)
@@ -217,7 +213,7 @@ namespace hical
 							  }
 						  });
 
-		ioContext_.stop();
+		stopAllLoops();
 	}
 
 	bool HttpServer::isRunning() const
@@ -232,7 +228,7 @@ namespace hical
 
 	boost::asio::io_context& HttpServer::ioContext()
 	{
-		return ioContext_;
+		return baseLoop_.getIoContext();
 	}
 
 	Awaitable<void> HttpServer::acceptLoop()
@@ -258,7 +254,13 @@ namespace hical
 					continue;
 				}
 
-				boost::asio::co_spawn(boost::asio::make_strand(ioContext_.get_executor()),
+				// 减少 Nagle 延迟
+				socket.set_option(boost::asio::ip::tcp::no_delay(true));
+
+				// 将 socket 分发到 worker loop：每个 worker 单线程运行，无需 strand
+				auto& targetIoCtx = ioPool_ ? ioPool_->getNextLoop()->getIoContext()
+				                            : baseLoop_.getIoContext();
+				boost::asio::co_spawn(targetIoCtx.get_executor(),
 									  handleSession(std::move(socket)),
 									  boost::asio::detached);
 			}
@@ -275,7 +277,7 @@ namespace hical
 					idleFd_.temporaryRelease();
 					{
 						boost::system::error_code acceptEc;
-						boost::asio::ip::tcp::socket tmpSocket(ioContext_);
+						boost::asio::ip::tcp::socket tmpSocket(baseLoop_.getIoContext());
 						acceptor_->accept(tmpSocket, acceptEc);
 					}
 					idleFd_.reacquire();
@@ -301,17 +303,17 @@ namespace hical
 		{
 			std::atomic<size_t>& count;
 			std::atomic<bool>& draining;
-			boost::asio::io_context& ioCtx;
+			HttpServer& server;
 
 			~ConnectionCounter()
 			{
 				// fetch_sub 返回旧值；旧值为 1 表示减到 0（最后一个连接）
 				if (count.fetch_sub(1) == 1 && draining.load())
 				{
-					ioCtx.stop();
+					server.stopAllLoops();
 				}
 			}
-		} connCounter {activeConnections_, draining_, ioContext_};
+		} connCounter {activeConnections_, draining_, *this};
 
 		// RAII 守卫：确保 socket 在任何退出路径（含异常）都被正确关闭
 		// transferred 标志：当 socket 被 move 给 WebSocket 会话后，跳过析构
@@ -340,10 +342,7 @@ namespace hical
 
 		try
 		{
-			// 使用请求级 pmr 单调池，整个连接生命周期内复用
-			auto requestPool = MemoryPool::instance().createRequestPool();
-			std::pmr::polymorphic_allocator<std::byte> alloc(requestPool.get());
-			beast::basic_flat_buffer<std::pmr::polymorphic_allocator<std::byte>> buffer(alloc);
+			auto* tlPool = MemoryPool::instance().threadLocalPool();
 
 			// 使用 alive 标志防止 timer 回调在 socket 销毁后访问悬空引用
 			auto socketAlive = std::make_shared<std::atomic<bool>>(true);
@@ -361,6 +360,13 @@ namespace hical
 
 			for (;;)
 			{
+				// 每请求独立的 monotonic 池，避免 Keep-Alive 连接上的内存只增不减
+				// monotonic_buffer_resource::deallocate() 是空操作，flat_buffer 扩容释放的旧块不会回收
+				// 将池放在循环内，每轮请求结束时析构，统一归还所有内存到 thread-local upstream
+				std::pmr::monotonic_buffer_resource requestPool(4096, tlPool);
+				std::pmr::polymorphic_allocator<std::byte> alloc(&requestPool);
+				beast::basic_flat_buffer<std::pmr::polymorphic_allocator<std::byte>> buffer(alloc);
+
 				// 使用 parser 并设置请求大小限制，防止 OOM 攻击
 				http::request_parser<http::string_body> parser;
 				parser.body_limit(maxBodySize_);
@@ -496,9 +502,8 @@ namespace hical
 				nativeRes.version(11);
 				nativeRes.set(http::field::server, HICAL_VERSION_STRING);
 				nativeRes.keep_alive(req.native().keep_alive() && !draining_.load());
-				nativeRes.prepare_payload();
 
-				// 发送响应
+				// 发送响应（prepare_payload 已由 HttpResponse::setBody/setJsonBody 调用）
 				co_await http::async_write(socket, nativeRes, boost::asio::use_awaitable);
 
 				if (!nativeRes.keep_alive())
@@ -685,8 +690,10 @@ namespace hical
 			return;
 		}
 
+		auto& baseIoCtx = baseLoop_.getIoContext();
+
 		// 关闭 acceptor，不再接受新连接
-		boost::asio::post(ioContext_,
+		boost::asio::post(baseIoCtx,
 						  [this]()
 						  {
 							  if (acceptor_)
@@ -697,7 +704,7 @@ namespace hical
 						  });
 
 		// 超时后强制停止（防止活跃连接迟迟不退出）
-		auto timer = std::make_shared<boost::asio::steady_timer>(ioContext_);
+		auto timer = std::make_shared<boost::asio::steady_timer>(baseIoCtx);
 		timer->expires_after(std::chrono::milliseconds(static_cast<int64_t>(shutdownTimeout_ * 1000)));
 		timer->async_wait(
 			[this, timer](const boost::system::error_code& ec)
@@ -705,9 +712,25 @@ namespace hical
 				if (!ec)
 				{
 					running_.store(false);
-					ioContext_.stop();
+					stopAllLoops();
 				}
 			});
+	}
+
+	void HttpServer::stopAllLoops()
+	{
+		// baseLoop_.stop() 和 AsioEventLoop::stop() 都是幂等的（内部 atomic + ioContext_.stop()），
+		// 多线程并发调用此函数是安全的（ConnectionCounter 析构 / gracefulStop 超时可能同时触发）。
+		// ioPool_ 生命周期由 start() 保证：ioPool_->stop() 在 baseLoop_.run() 返回后才执行，
+		// 而 baseLoop_.run() 返回前 ioPool_ 必然存活。
+		baseLoop_.stop();
+		if (ioPool_)
+		{
+			for (auto* loop : ioPool_->getAllLoops())
+			{
+				loop->stop();
+			}
+		}
 	}
 
 } // namespace hical

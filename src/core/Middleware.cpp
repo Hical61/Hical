@@ -10,9 +10,13 @@ namespace hical
 		{
 			throw std::logic_error("MiddlewarePipeline::use: cannot add middleware after build()");
 		}
-		auto idx = middlewares_.size();
-		middlewares_.push_back(std::move(middleware));
-		middlewareNames_.emplace_back("middleware_" + std::to_string(idx));
+		auto name = "middleware_" + std::to_string(entries_.size());
+
+		MiddlewareEntry entry;
+		entry.type = MiddlewareEntry::Type::Async;
+		entry.name = std::move(name);
+		entry.asyncHandler = std::move(middleware);
+		entries_.push_back(std::move(entry));
 	}
 
 	void MiddlewarePipeline::use(const std::string& name, MiddlewareHandler middleware)
@@ -21,8 +25,58 @@ namespace hical
 		{
 			throw std::logic_error("MiddlewarePipeline::use: cannot add middleware after build()");
 		}
-		middlewares_.push_back(std::move(middleware));
-		middlewareNames_.push_back(name);
+
+		MiddlewareEntry entry;
+		entry.type = MiddlewareEntry::Type::Async;
+		entry.name = name;
+		entry.asyncHandler = std::move(middleware);
+		entries_.push_back(std::move(entry));
+	}
+
+	void MiddlewarePipeline::use(SyncBeforeHandler before)
+	{
+		if (cachedChain_)
+		{
+			throw std::logic_error("MiddlewarePipeline::use: cannot add middleware after build()");
+		}
+		auto name = "sync_middleware_" + std::to_string(entries_.size());
+
+		MiddlewareEntry entry;
+		entry.type = MiddlewareEntry::Type::Sync;
+		entry.name = std::move(name);
+		entry.before = std::move(before);
+		entries_.push_back(std::move(entry));
+	}
+
+	void MiddlewarePipeline::use(SyncBeforeHandler before, SyncAfterHandler after)
+	{
+		if (cachedChain_)
+		{
+			throw std::logic_error("MiddlewarePipeline::use: cannot add middleware after build()");
+		}
+		auto name = "sync_middleware_" + std::to_string(entries_.size());
+
+		MiddlewareEntry entry;
+		entry.type = MiddlewareEntry::Type::Sync;
+		entry.name = std::move(name);
+		entry.before = std::move(before);
+		entry.after = std::move(after);
+		entries_.push_back(std::move(entry));
+	}
+
+	void MiddlewarePipeline::use(const std::string& name, SyncBeforeHandler before, SyncAfterHandler after)
+	{
+		if (cachedChain_)
+		{
+			throw std::logic_error("MiddlewarePipeline::use: cannot add middleware after build()");
+		}
+
+		MiddlewareEntry entry;
+		entry.type = MiddlewareEntry::Type::Sync;
+		entry.name = name;
+		entry.before = std::move(before);
+		entry.after = std::move(after);
+		entries_.push_back(std::move(entry));
 	}
 
 	void MiddlewarePipeline::build(MiddlewareNext finalHandler)
@@ -34,15 +88,36 @@ namespace hical
 
 #ifdef HICAL_ENABLE_MIDDLEWARE_PROFILING
 		rebuildTimingStats();
-		cachedChain_ = buildChainWithProfiling(middlewares_, std::move(finalHandler), timingStats_);
+		// Profiling 模式：从 entries_ 提取 async handlers（Sync 中间件视为无 handler，跳过计时）
+		std::vector<MiddlewareHandler> asyncHandlers;
+		asyncHandlers.reserve(entries_.size());
+		for (const auto& e : entries_)
+		{
+			if (e.type == MiddlewareEntry::Type::Async)
+			{
+				asyncHandlers.push_back(e.asyncHandler);
+			}
+		}
+		cachedChain_ = buildChainWithProfiling(asyncHandlers, std::move(finalHandler), timingStats_);
 #else
-		cachedChain_ = buildChain(std::move(finalHandler));
+		// 使用优化链：连续 Sync 中间件合并为单个协程帧
+		cachedChain_ = buildOptimizedChain(entries_, std::move(finalHandler));
 #endif
 	}
 
 	MiddlewareNext MiddlewarePipeline::buildChain(MiddlewareNext finalHandler) const
 	{
-		return buildChainFrom(middlewares_, std::move(finalHandler));
+		// 从 entries_ 提取 async handlers（兼容旧接口）
+		std::vector<MiddlewareHandler> asyncHandlers;
+		asyncHandlers.reserve(entries_.size());
+		for (const auto& e : entries_)
+		{
+			if (e.type == MiddlewareEntry::Type::Async)
+			{
+				asyncHandlers.push_back(e.asyncHandler);
+			}
+		}
+		return buildChainFrom(asyncHandlers, std::move(finalHandler));
 	}
 
 	MiddlewareNext MiddlewarePipeline::buildChainFrom(const std::vector<MiddlewareHandler>& middlewares,
@@ -62,6 +137,108 @@ namespace hical
 			{
 				co_return co_await mw(r, next);
 			};
+		}
+
+		return current;
+	}
+
+	MiddlewareNext MiddlewarePipeline::buildOptimizedChain(const std::vector<MiddlewareEntry>& entries,
+														   MiddlewareNext finalHandler)
+	{
+		if (entries.empty())
+		{
+			return finalHandler;
+		}
+
+		// 如果全是 Async，退化为 buildChainFrom
+		bool hasSync = false;
+		for (const auto& e : entries)
+		{
+			if (e.type == MiddlewareEntry::Type::Sync)
+			{
+				hasSync = true;
+				break;
+			}
+		}
+
+		if (!hasSync)
+		{
+			std::vector<MiddlewareHandler> asyncHandlers;
+			asyncHandlers.reserve(entries.size());
+			for (const auto& e : entries)
+			{
+				asyncHandlers.push_back(e.asyncHandler);
+			}
+			return buildChainFrom(asyncHandlers, std::move(finalHandler));
+		}
+
+		// 逆序构建优化链：连续 Sync 条目合并为单个协程 lambda
+		MiddlewareNext current = std::move(finalHandler);
+
+		int i = static_cast<int>(entries.size()) - 1;
+		while (i >= 0)
+		{
+			if (entries[i].type == MiddlewareEntry::Type::Async)
+			{
+				// Async 条目：独立协程 lambda（不变）
+				auto mw = entries[i].asyncHandler;
+				current = [mw = std::move(mw), next = std::move(current)](HttpRequest& r) -> Awaitable<HttpResponse>
+				{
+					co_return co_await mw(r, next);
+				};
+				--i;
+			}
+			else
+			{
+				// 收集连续 Sync 条目
+				int syncEnd = i; // inclusive
+				while (i >= 0 && entries[i].type == MiddlewareEntry::Type::Sync)
+				{
+					--i;
+				}
+				int syncStart = i + 1; // inclusive
+
+				// 提取这组 Sync 条目的 before/after（按注册顺序）
+				std::vector<SyncBeforeHandler> befores;
+				std::vector<SyncAfterHandler> afters;
+				for (int j = syncStart; j <= syncEnd; ++j)
+				{
+					if (entries[j].before)
+					{
+						befores.push_back(entries[j].before);
+					}
+					if (entries[j].after)
+					{
+						afters.push_back(entries[j].after);
+					}
+				}
+
+				// 合并为单个协程 lambda：1 个协程帧覆盖 N 个 Sync 中间件
+				current = [befores = std::move(befores), afters = std::move(afters), next = std::move(current)](
+							  HttpRequest& r) -> Awaitable<HttpResponse>
+				{
+					// 前置：按注册顺序执行（外层中间件先执行）
+					for (const auto& before : befores)
+					{
+						auto intercepted = before(r);
+						if (intercepted)
+						{
+							co_return std::move(*intercepted);
+						}
+					}
+
+					// 唯一的协程挂起点
+					auto res = co_await next(r);
+
+					// 后置：按注册逆序执行（洋葱模型语义：后注册的 after 先退出）
+					for (int k = static_cast<int>(afters.size()) - 1; k >= 0; --k)
+					{
+						afters[k](r, res);
+					}
+
+					co_return res;
+				};
+			}
 		}
 
 		return current;
@@ -101,12 +278,15 @@ namespace hical
 	void MiddlewarePipeline::rebuildTimingStats()
 	{
 		timingStats_.clear();
-		timingStats_.reserve(middlewares_.size());
-		for (size_t i = 0; i < middlewares_.size(); ++i)
+		// 仅为 Async 条目创建 profiling 统计（Sync 中间件不独立计时）
+		for (const auto& e : entries_)
 		{
-			auto stats = std::make_shared<MiddlewareTimingStats>();
-			stats->name = i < middlewareNames_.size() ? middlewareNames_[i] : "middleware_" + std::to_string(i);
-			timingStats_.push_back(std::move(stats));
+			if (e.type == MiddlewareEntry::Type::Async)
+			{
+				auto stats = std::make_shared<MiddlewareTimingStats>();
+				stats->name = e.name;
+				timingStats_.push_back(std::move(stats));
+			}
 		}
 	}
 #endif
@@ -131,15 +311,24 @@ namespace hical
 #ifdef HICAL_ENABLE_MIDDLEWARE_PROFILING
 		if (!timingStats_.empty())
 		{
-			return buildChainWithProfiling(middlewares_, std::move(finalHandler), timingStats_);
+			std::vector<MiddlewareHandler> asyncHandlers;
+			asyncHandlers.reserve(entries_.size());
+			for (const auto& e : entries_)
+			{
+				if (e.type == MiddlewareEntry::Type::Async)
+				{
+					asyncHandlers.push_back(e.asyncHandler);
+				}
+			}
+			return buildChainWithProfiling(asyncHandlers, std::move(finalHandler), timingStats_);
 		}
 #endif
-		return buildChain(std::move(finalHandler));
+		return buildOptimizedChain(entries_, std::move(finalHandler));
 	}
 
 	size_t MiddlewarePipeline::size() const
 	{
-		return middlewares_.size();
+		return entries_.size();
 	}
 
 #ifdef HICAL_ENABLE_MIDDLEWARE_PROFILING

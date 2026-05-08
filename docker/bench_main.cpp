@@ -1,6 +1,7 @@
 #include "core/HttpServer.h"
 #include "core/Coroutine.h"
 #include "core/MetaJson.h"
+#include "core/RouteGroup.h"
 #include <boost/json.hpp>
 
 using namespace hical;
@@ -49,6 +50,52 @@ int main()
             obj["name"] = "User " + req.param("id");
             return HttpResponse::json(json::value(std::move(obj)));
         });
+
+    // ============ 中间件链测试端点 ============
+
+    // 空操作洋葱中间件
+    auto passthrough = [](HttpRequest& req, MiddlewareNext next) -> Awaitable<HttpResponse>
+    {
+        co_return co_await next(req);
+    };
+
+    // /middleware/0 — 无中间件
+    server.router().get("/middleware/0",
+        [](const HttpRequest&) -> HttpResponse {
+            json::object obj;
+            obj["middleware_count"] = 0;
+            return HttpResponse::json(json::value(std::move(obj)));
+        });
+
+    // /middleware/3 — 3 层空操作中间件
+    {
+        auto g3 = server.router().group("");
+        for (int i = 0; i < 3; ++i)
+        {
+            g3.use(passthrough);
+        }
+        g3.get("/middleware/3",
+            [](const HttpRequest&) -> HttpResponse {
+                json::object obj;
+                obj["middleware_count"] = 3;
+                return HttpResponse::json(json::value(std::move(obj)));
+            });
+    }
+
+    // /middleware/10 — 10 层空操作中间件
+    {
+        auto g10 = server.router().group("");
+        for (int i = 0; i < 10; ++i)
+        {
+            g10.use(passthrough);
+        }
+        g10.get("/middleware/10",
+            [](const HttpRequest&) -> HttpResponse {
+                json::object obj;
+                obj["middleware_count"] = 10;
+                return HttpResponse::json(json::value(std::move(obj)));
+            });
+    }
 
     server.start();
 }

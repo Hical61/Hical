@@ -25,10 +25,11 @@ docker/
 
 ## 多平台测试
 
-在项目根目录执行：
+在 `docker/test/` 目录下执行：
 
 ```bash
-docker compose -f docker-compose.test.yml up --build --abort-on-container-exit
+cd docker/test
+docker compose up --build --abort-on-container-exit
 ```
 
 详见 [test/README.md](test/README.md)。
