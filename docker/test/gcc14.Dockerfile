@@ -7,10 +7,14 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN sed -i 's|http://archive.ubuntu.com|http://mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list.d/ubuntu.sources \
     && sed -i 's|http://security.ubuntu.com|http://mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list.d/ubuntu.sources
 
-# 依赖与 CI 步骤 "Install dependencies (Linux)" 一致
-RUN apt-get update && apt-get install -y --no-install-recommends \
-        gcc-14 g++-14 cmake ninja-build \
+# 添加 LLVM 20 APT 源（clang-format 需要 19+ 支持 BreakAfterReturnType）
+RUN apt-get update && apt-get install -y --no-install-recommends wget gnupg ca-certificates \
+    && wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | tee /etc/apt/trusted.gpg.d/llvm.asc \
+    && echo "deb https://apt.llvm.org/noble/ llvm-toolchain-noble-20 main" > /etc/apt/sources.list.d/llvm-20.list \
+    && apt-get update && apt-get install -y --no-install-recommends \
+        gcc-14 g++-14 cmake ninja-build clang-format-20 \
         libboost-all-dev libssl-dev libgtest-dev \
+    && ln -sf /usr/bin/clang-format-20 /usr/bin/clang-format \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /src
@@ -26,5 +30,5 @@ RUN cmake -B build -G Ninja \
         -DHICAL_DISABLE_IO_URING=ON \
     && cmake --build build -j$(nproc)
 
-# 测试在运行时执行（DB 测试需要网络访问 MySQL 容器）
-CMD ["ctest", "--test-dir", "build", "--output-on-failure", "--timeout", "60", "-j4"]
+# 运行时：先检查格式，再跑测试
+CMD ["sh", "-c", "find src tests examples -name '*.h' -o -name '*.cpp' | xargs clang-format --dry-run --Werror && ctest --test-dir build --output-on-failure --timeout 60 -j4"]

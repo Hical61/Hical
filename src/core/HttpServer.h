@@ -200,8 +200,8 @@ namespace hical
 
 		std::atomic<uint16_t> port_;
 		size_t ioThreads_;
-		AsioEventLoop baseLoop_;                              // 主 loop（accept + signal + GC）
-		std::unique_ptr<EventLoopPool> ioPool_;               // IO 线程池（ioThreads-1 个 worker loop）
+		AsioEventLoop baseLoop_;                // 主 loop（accept + signal + GC）
+		std::unique_ptr<EventLoopPool> ioPool_; // IO 线程池（ioThreads-1 个 worker loop）
 		std::unique_ptr<boost::asio::ip::tcp::acceptor> acceptor_;
 		std::atomic<bool> running_ {false};
 

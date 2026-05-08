@@ -258,8 +258,7 @@ namespace hical
 				socket.set_option(boost::asio::ip::tcp::no_delay(true));
 
 				// 将 socket 分发到 worker loop：每个 worker 单线程运行，无需 strand
-				auto& targetIoCtx = ioPool_ ? ioPool_->getNextLoop()->getIoContext()
-				                            : baseLoop_.getIoContext();
+				auto& targetIoCtx = ioPool_ ? ioPool_->getNextLoop()->getIoContext() : baseLoop_.getIoContext();
 				boost::asio::co_spawn(targetIoCtx.get_executor(),
 									  handleSession(std::move(socket)),
 									  boost::asio::detached);
