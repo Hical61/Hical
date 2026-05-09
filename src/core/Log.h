@@ -455,8 +455,10 @@ namespace hical
 	}                                                                                     \
 	while (0)
 
-#define HICAL_LOG_TRACE_F(fields, fmt, ...) \
-	HICAL_LOG_IMPL_F_(::hical::LogLevel::hTrace, fields, fmt __VA_OPT__(, ) __VA_ARGS__)
+#ifndef NDEBUG
+	#define HICAL_LOG_TRACE_F(fields, fmt, ...) \
+		HICAL_LOG_IMPL_F_(::hical::LogLevel::hTrace, fields, fmt __VA_OPT__(, ) __VA_ARGS__)
+#endif
 #define HICAL_LOG_DEBUG_F(fields, fmt, ...) \
 	HICAL_LOG_IMPL_F_(::hical::LogLevel::hDebug, fields, fmt __VA_OPT__(, ) __VA_ARGS__)
 #define HICAL_LOG_INFO_F(fields, fmt, ...) \

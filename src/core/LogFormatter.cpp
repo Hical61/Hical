@@ -102,7 +102,7 @@ namespace hical
 		// 使用 thread_local 缓存的 localtime
 		struct tm tmInfo = cachedLocaltime(nowSec);
 
-		char timeBuf[32];
+		char timeBuf[64];
 		snprintf(timeBuf,
 				 sizeof(timeBuf),
 				 "%04d-%02d-%02d %02d:%02d:%02d.%03d",
@@ -169,7 +169,7 @@ namespace hical
 #else
 		gmtime_r(&nowSec, &tmInfo);
 #endif
-		char timeBuf[32];
+		char timeBuf[64];
 		snprintf(timeBuf,
 				 sizeof(timeBuf),
 				 "%04d-%02d-%02dT%02d:%02d:%02d.%03dZ",

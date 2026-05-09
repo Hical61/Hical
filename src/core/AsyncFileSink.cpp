@@ -81,13 +81,13 @@ namespace hical
 				std::unique_lock<std::mutex> lock(m_bufMutex);
 
 				// 等待数据到达、超时、或停止请求
-				auto hasData = m_cond.wait_for(lock,
-											   stopToken,
-											   m_opts.flushInterval,
-											   [this]()
-											   {
-												   return !m_curBuf.empty();
-											   });
+				m_cond.wait_for(lock,
+								stopToken,
+								m_opts.flushInterval,
+								[this]()
+								{
+									return !m_curBuf.empty();
+								});
 
 				if (stopToken.stop_requested() && m_curBuf.empty())
 				{

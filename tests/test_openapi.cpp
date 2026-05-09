@@ -466,7 +466,7 @@ TEST(OpenApiDocumentTest, MinimalDocument)
 TEST(OpenApiDocumentTest, InfoSection)
 {
 	auto registry = std::make_shared<OpenApiRegistry>();
-	OpenApiConfig config {.title = "Test API", .version = "2.0.0", .description = "A test"};
+	OpenApiConfig config {.title = "Test API", .version = "2.0.0", .description = "A test", .servers = {}};
 	OpenApiDocument doc(registry, config);
 	const auto& json = doc.generateString();
 	auto parsed = boost::json::parse(json).as_object();
@@ -664,7 +664,10 @@ TEST(OpenApiIntegrationTest, FullWorkflow)
 	registerRoutesWithOpenApi(router, handler, *registry);
 
 	// 3. 生成文档
-	OpenApiConfig config {.title = "Integration Test API", .version = "1.0.0", .description = "Full integration test"};
+	OpenApiConfig config {.title = "Integration Test API",
+						  .version = "1.0.0",
+						  .description = "Full integration test",
+						  .servers = {}};
 	OpenApiDocument doc(registry, config);
 	const auto& json = doc.generateString();
 
