@@ -6,6 +6,7 @@
 #include "Coroutine.h"
 #include <concepts>
 #include <functional>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -166,6 +167,14 @@ namespace hical
 		Awaitable<HttpResponse> dispatch(HttpRequest& req);
 
 		/**
+		 * @brief 同步快速路径分发（零协程帧开销）
+		 * 当 handler 是同步注册且无路由级中间件时，直接调用返回结果。
+		 * @param req HTTP 请求
+		 * @return 有值 = 同步处理完成；nullopt = 需要 fallback 到 co_await dispatch()
+		 */
+		std::optional<HttpResponse> dispatchSync(HttpRequest& req);
+
+		/**
 		 * @brief 检查路径是否为 WebSocket 路由
 		 * @param path 请求路径
 		 * @return 如果是 ws 路由返回对应的 WsRoute 指针，否则 nullptr
@@ -259,7 +268,13 @@ namespace hical
 			}
 		};
 
-		std::unordered_map<RouteKey, RouteHandler, RouteKeyHash, RouteKeyEqual> staticRoutes_;
+		struct RouteEntry
+		{
+			RouteHandler asyncHandler;
+			SyncRouteHandler syncHandler; ///< 可选，同步注册时保留原始 handler
+		};
+
+		std::unordered_map<RouteKey, RouteEntry, RouteKeyHash, RouteKeyEqual> staticRoutes_;
 
 		// ============ 参数路由（按 method 分组，减少线性扫描范围） ============
 
@@ -268,9 +283,27 @@ namespace hical
 			HttpMethod method;
 			std::string path;
 			RouteHandler handler;
+			SyncRouteHandler syncHandler; ///< 可选
 		};
 
 		std::unordered_map<HttpMethod, std::vector<ParamRouteEntry>> paramRoutesByMethod_;
+
+		// ============ 路由查找结果（dispatch/dispatchSync 共用） ============
+
+		struct ResolveResult
+		{
+			const RouteEntry* staticEntry = nullptr;     ///< 静态路由命中
+			const ParamRouteEntry* paramEntry = nullptr; ///< 参数路由命中
+			std::string allowedMethods;                  ///< 405 时的 Allow 头值
+			bool pathTooDeep = false;                    ///< 路径深度超限
+		};
+
+		/**
+		 * @brief 统一的路由查找（dispatch/dispatchSync 共用）
+		 * 执行 URL 解码、路径深度校验、静态路由查找、参数路由匹配、405 检测。
+		 * 匹配成功时将路径参数写入 req。
+		 */
+		ResolveResult resolveRoute(HttpRequest& req) const;
 
 		// ============ 静态路由路径 → 方法集反向索引（405 检测 O(1)） ============
 

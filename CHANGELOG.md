@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.5.2] - 2026-05-10
+
+### Changed
+- **Router 同步快速路径**：
+  - 新增 `Router::dispatchSync()` 方法，同步注册的 handler 直接调用返回结果，跳过协程帧分配（~40-130ns/req）
+  - 新增 `RouteEntry` 结构体（`asyncHandler` + 可选 `syncHandler`）替代裸 `RouteHandler` 存储
+  - 新增 `Router::resolveRoute()` 内部方法，统一 URL 解码、路径深度校验、静态/参数路由查找、405 检测，`dispatch()` 和 `dispatchSync()` 共用，消除 ~40 行重复代码和 404/405 场景的 double-lookup
+  - `dispatch()` 也优先检查 `syncHandler`，有值时 `co_return syncHandler(req)` 跳过 `co_await asyncHandler(req)`
+  - 同步 handler 注册只存 `syncHandler`，不再创建 asyncHandler wrapper，消除 `std::function` 拷贝
+  - `HttpSessionImpl.cpp` 无中间件路径先尝试 `dispatchSync()`，有值直接返回（零协程帧），`nullopt` 时 fallback 到 `co_await dispatch()`
+- **GenericConnection 编译防火墙**：
+  - 模板方法实现从 `GenericConnection.h`（~780 行）提取到 `GenericConnection.hci`，头文件仅保留声明 + `extern template` 声明
+  - 显式实例化集中在 `GenericConnection.cpp`（`tcp::socket` + `ssl::stream<tcp::socket>`）
+  - `.hci` 文件有 `#ifndef HICAL_BUILDING_GENERIC_CONNECTION` 防误包含守卫
+- **HttpServer 编译防火墙**：
+  - `handleSession()` + `handleWebSocket()` 从 `HttpServer.cpp` 移至 `HttpSessionImpl.cpp`，隔离 Beast HTTP parser/serializer 和 WebSocket 重模板代码
+  - 修改 HttpServer 配置逻辑不再触发 Beast 模板重编译
+- **MetaJson 错误抛出优化**：
+  - `throw std::runtime_error(...)` 从模板代码提取为 `MetaJsonError.h/cpp` 中的 `[[noreturn]]` 非模板函数（`throwTypeMismatch` / `throwMissingField` / `throwParseError`）
+  - 减少每个用户类型 `HICAL_JSON` 实例化的代码体积，改善 icache 利用率
+
+### Fixed
+- `SyncAfterHandler` 安全约束：禁止修改 body（仅允许 `setHeader`/`setCookie`），因 `Content-Length` 已由 `prepare_payload()` 固定，修改 body 会导致 HTTP Content-Length 不一致
+
 ## [2.5.1] - 2026-05-08
 
 ### Added
@@ -245,7 +269,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Multipart Part 数量上限（DoS 防护）
 - Session ID 使用密码学安全的随机数生成
 
-[Unreleased]: https://github.com/Hical61/Hical/compare/v2.5.1...HEAD
+[Unreleased]: https://github.com/Hical61/Hical/compare/v2.5.2...HEAD
+[2.5.2]: https://github.com/Hical61/Hical/compare/v2.5.1...v2.5.2
 [2.5.1]: https://github.com/Hical61/Hical/compare/v2.5.0...v2.5.1
 [2.5.0]: https://github.com/Hical61/Hical/compare/v2.4.0...v2.5.0
 [2.4.0]: https://github.com/Hical61/Hical/compare/v2.3.0...v2.4.0

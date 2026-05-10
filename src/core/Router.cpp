@@ -10,22 +10,28 @@ namespace hical
 	{
 		if (isParamRoute(path))
 		{
-			paramRoutesByMethod_[method].push_back({method, path, std::move(handler)});
+			paramRoutesByMethod_[method].push_back({method, path, std::move(handler), nullptr});
 		}
 		else
 		{
-			staticRoutes_[{method, path}] = std::move(handler);
+			staticRoutes_[{method, path}] = RouteEntry {std::move(handler), nullptr};
 			staticPathMethods_[path].push_back(method);
 		}
 	}
 
 	void Router::route(HttpMethod method, const std::string& path, SyncRouteHandler handler)
 	{
-		auto asyncHandler = [h = std::move(handler)](const HttpRequest& req) -> Awaitable<HttpResponse>
+		// 只存 syncHandler，不创建 asyncHandler wrapper，零拷贝。
+		// dispatch() 优先检查 syncHandler，asyncHandler 为 nullptr 时不会被调用。
+		if (isParamRoute(path))
 		{
-			co_return h(req);
-		};
-		route(method, path, std::move(asyncHandler));
+			paramRoutesByMethod_[method].push_back({method, path, nullptr, std::move(handler)});
+		}
+		else
+		{
+			staticRoutes_[{method, path}] = RouteEntry {nullptr, std::move(handler)};
+			staticPathMethods_[path].push_back(method);
+		}
 	}
 
 	// ============ 便捷方法 ============
@@ -120,6 +126,77 @@ namespace hical
 
 	Awaitable<HttpResponse> Router::dispatch(HttpRequest& req)
 	{
+		auto result = resolveRoute(req);
+
+		if (result.pathTooDeep)
+		{
+			co_return HttpResponse::badRequest("Path too deep");
+		}
+
+		if (result.staticEntry)
+		{
+			if (result.staticEntry->syncHandler)
+			{
+				co_return result.staticEntry->syncHandler(req);
+			}
+			co_return co_await result.staticEntry->asyncHandler(req);
+		}
+
+		if (result.paramEntry)
+		{
+			if (result.paramEntry->syncHandler)
+			{
+				co_return result.paramEntry->syncHandler(req);
+			}
+			co_return co_await result.paramEntry->handler(req);
+		}
+
+		if (!result.allowedMethods.empty())
+		{
+			HttpResponse res;
+			res.setStatus(HttpStatusCode::hMethodNotAllowed);
+			res.setHeader("Allow", result.allowedMethods);
+			res.setBody("Method Not Allowed");
+			co_return res;
+		}
+
+		co_return HttpResponse::notFound();
+	}
+
+	std::optional<HttpResponse> Router::dispatchSync(HttpRequest& req)
+	{
+		auto result = resolveRoute(req);
+
+		if (result.pathTooDeep)
+		{
+			return HttpResponse::badRequest("Path too deep");
+		}
+
+		if (result.staticEntry)
+		{
+			if (result.staticEntry->syncHandler)
+			{
+				return result.staticEntry->syncHandler(req);
+			}
+			return std::nullopt; // 异步 handler，需要 fallback 到 co_await dispatch()
+		}
+
+		if (result.paramEntry)
+		{
+			if (result.paramEntry->syncHandler)
+			{
+				return result.paramEntry->syncHandler(req);
+			}
+			return std::nullopt; // 异步 handler
+		}
+
+		// 404/405 无法同步处理，回退到异步 dispatch
+		return std::nullopt;
+	}
+
+	Router::ResolveResult Router::resolveRoute(HttpRequest& req) const
+	{
+		ResolveResult result;
 		auto reqMethod = req.method();
 		auto rawPath = req.path();
 
@@ -140,7 +217,8 @@ namespace hical
 
 		if (segmentCount > hMaxPathSegments)
 		{
-			co_return HttpResponse::badRequest("Path too deep");
+			result.pathTooDeep = true;
+			return result;
 		}
 
 		std::string decodedStorage;
@@ -159,7 +237,8 @@ namespace hical
 		auto it = staticRoutes_.find(RouteKeyView {reqMethod, reqPath});
 		if (it != staticRoutes_.end())
 		{
-			co_return co_await it->second(req);
+			result.staticEntry = &it->second;
+			return result;
 		}
 
 		// 2. 回退到参数路由匹配（按 method 分组，仅扫描同 method 的路由）
@@ -175,15 +254,14 @@ namespace hical
 					{
 						req.setParam(name, value);
 					}
-					co_return co_await entry.handler(req);
+					result.paramEntry = &entry;
+					return result;
 				}
 			}
 		}
 
-		// 3. 405 检测：路径匹配但方法不匹配时返回 405 + Allow 头
+		// 3. 405 检测：路径匹配但方法不匹配时收集 Allow 头
 		// 静态路由：O(1) 反向索引查找
-		std::string allowedMethods;
-
 		auto pathIt = staticPathMethods_.find(reqPath);
 		if (pathIt != staticPathMethods_.end())
 		{
@@ -191,16 +269,16 @@ namespace hical
 			{
 				if (m != reqMethod)
 				{
-					if (!allowedMethods.empty())
+					if (!result.allowedMethods.empty())
 					{
-						allowedMethods += ", ";
+						result.allowedMethods += ", ";
 					}
-					allowedMethods += httpMethodToString(m);
+					result.allowedMethods += httpMethodToString(m);
 				}
 			}
 		}
 
-		// 参数路由：仍需线性扫描（路径匹配需要模式匹配）
+		// 参数路由：线性扫描其他 method 的路由（路径匹配需要模式匹配）
 		ParamList tempParams;
 		for (const auto& [method, routes] : paramRoutesByMethod_)
 		{
@@ -212,26 +290,17 @@ namespace hical
 			{
 				if (matchParamPath(entry.path, reqPath, tempParams))
 				{
-					if (!allowedMethods.empty())
+					if (!result.allowedMethods.empty())
 					{
-						allowedMethods += ", ";
+						result.allowedMethods += ", ";
 					}
-					allowedMethods += httpMethodToString(method);
+					result.allowedMethods += httpMethodToString(method);
 					break;
 				}
 			}
 		}
 
-		if (!allowedMethods.empty())
-		{
-			HttpResponse res;
-			res.setStatus(HttpStatusCode::hMethodNotAllowed);
-			res.setHeader("Allow", allowedMethods);
-			res.setBody("Method Not Allowed");
-			co_return res;
-		}
-
-		co_return HttpResponse::notFound();
+		return result;
 	}
 
 	size_t Router::routeCount() const

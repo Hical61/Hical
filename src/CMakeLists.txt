@@ -11,6 +11,7 @@ configure_file(
 add_library(hical_core
     core/InetAddress.cpp
     core/Error.cpp
+    core/MetaJsonError.cpp
     core/Log.cpp
     core/LogSink.cpp
     core/LogFile.cpp
@@ -27,6 +28,7 @@ add_library(hical_core
     core/RouteGroup.cpp
     core/Middleware.cpp
     core/HttpServer.cpp
+    core/HttpSessionImpl.cpp
     core/WebSocket.cpp
     core/Multipart.cpp
     core/Session.cpp
@@ -144,7 +146,7 @@ install(
 install(
     DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/asio/
     DESTINATION include/hical/asio
-    FILES_MATCHING PATTERN "*.h"
+    FILES_MATCHING PATTERN "*.h" PATTERN "*.hci"
 )
 
 # 数据库头文件安装（可选）

@@ -12,9 +12,9 @@
  */
 
 #include "Reflection.h"
+#include "MetaJsonError.h"
 #include "HttpRequest.h"
 #include <boost/json.hpp>
-#include <stdexcept>
 #include <string>
 #include <tuple>
 #include <type_traits>
@@ -104,7 +104,7 @@ namespace hical::meta
 		{
 			if (!val.is_string())
 			{
-				throw std::runtime_error("JSON type mismatch: expected string");
+				detail::throwTypeMismatch("string");
 			}
 			return std::string(val.as_string());
 		}
@@ -112,7 +112,7 @@ namespace hical::meta
 		{
 			if (!val.is_bool())
 			{
-				throw std::runtime_error("JSON type mismatch: expected bool");
+				detail::throwTypeMismatch("bool");
 			}
 			return val.as_bool();
 		}
@@ -120,7 +120,7 @@ namespace hical::meta
 		{
 			if (!val.is_int64() && !val.is_uint64())
 			{
-				throw std::runtime_error("JSON type mismatch: expected integer");
+				detail::throwTypeMismatch("integer");
 			}
 			if (val.is_uint64())
 			{
@@ -132,7 +132,7 @@ namespace hical::meta
 		{
 			if (!val.is_double() && !val.is_int64() && !val.is_uint64())
 			{
-				throw std::runtime_error("JSON type mismatch: expected number");
+				detail::throwTypeMismatch("number");
 			}
 			if (val.is_int64())
 			{
@@ -148,7 +148,7 @@ namespace hical::meta
 		{
 			if (!val.is_array())
 			{
-				throw std::runtime_error("JSON type mismatch: expected array");
+				detail::throwTypeMismatch("array");
 			}
 			using ElemType = typename T::value_type;
 			T result;
@@ -164,7 +164,7 @@ namespace hical::meta
 		{
 			if (!val.is_object())
 			{
-				throw std::runtime_error("JSON type mismatch: expected object");
+				detail::throwTypeMismatch("object");
 			}
 			return fromJson<T>(val);
 		}
@@ -253,7 +253,7 @@ namespace hical::meta
 				}
 				else if (field.required)
 				{
-					throw std::runtime_error("fromJson: required field '" + std::string(field.name) + "' is missing");
+					detail::throwMissingField(field.name);
 				}
 			};
 			(trySet(std::get<I>(fields)), ...);
@@ -286,7 +286,7 @@ namespace hical::meta
 
 		if (!json.is_object())
 		{
-			throw std::runtime_error("fromJson: expected JSON object, got " + std::string(to_string(json.kind())));
+			detail::throwParseError("expected JSON object, got " + std::string(to_string(json.kind())));
 		}
 
 		T obj {};
@@ -408,7 +408,7 @@ namespace hical::meta
 	{
 		if (!json.is_object())
 		{
-			throw std::runtime_error("fromJson: expected JSON object, got " + std::string(to_string(json.kind())));
+			detail::throwParseError("expected JSON object, got " + std::string(to_string(json.kind())));
 		}
 
 		T obj {};
@@ -427,7 +427,7 @@ namespace hical::meta
 				}
 				else if constexpr (detail::isJsonRequired<member>())
 				{
-					throw std::runtime_error("fromJson: required field '" + std::string(key) + "' is missing");
+					detail::throwMissingField(key);
 				}
 			}
 		}
@@ -537,7 +537,7 @@ namespace hical::meta
 		const auto& json = req.jsonBody();
 		if (json.is_null())
 		{
-			throw std::runtime_error("readJson: request body is not valid JSON");
+			detail::throwParseError("request body is not valid JSON");
 		}
 		return fromJson<T>(json);
 	}

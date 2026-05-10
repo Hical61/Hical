@@ -1,15 +1,72 @@
 services:
+  # ============ C++ 框架（cpp profile） ============
   hical:
     build:
-      context: ..
-      dockerfile: benchmark/hical/Dockerfile
+      context: ./hical
     ports:
       - "8080:8080"
     cpus: 4
     mem_limit: 512m
+    profiles: [cpp, cross-lang]
     networks:
       - bench
 
+  drogon:
+    build:
+      context: ./drogon
+    ports:
+      - "8083:8083"
+    cpus: 4
+    mem_limit: 512m
+    profiles: [cpp]
+    networks:
+      - bench
+
+  crow:
+    build:
+      context: ./crow
+    ports:
+      - "8084:8084"
+    cpus: 4
+    mem_limit: 512m
+    profiles: [cpp]
+    networks:
+      - bench
+
+  oatpp:
+    build:
+      context: ./oatpp
+    ports:
+      - "8085:8085"
+    cpus: 4
+    mem_limit: 512m
+    profiles: [cpp]
+    networks:
+      - bench
+
+  cpphttplib:
+    build:
+      context: ./cpphttplib
+    ports:
+      - "8086:8086"
+    cpus: 4
+    mem_limit: 512m
+    profiles: [cpp]
+    networks:
+      - bench
+
+  cinatra:
+    build:
+      context: ./cinatra
+    ports:
+      - "8087:8087"
+    cpus: 4
+    mem_limit: 512m
+    profiles: [cpp]
+    networks:
+      - bench
+
+  # ============ 跨语言框架（cross-lang profile） ============
   gin:
     build:
       context: ./gin
@@ -17,6 +74,7 @@ services:
       - "8081:8081"
     cpus: 4
     mem_limit: 512m
+    profiles: [cross-lang]
     networks:
       - bench
 
@@ -27,19 +85,39 @@ services:
       - "8082:8082"
     cpus: 4
     mem_limit: 512m
+    profiles: [cross-lang]
     networks:
       - bench
 
+  # ============ 压测工具（两个 profile 共用） ============
   wrk:
     build:
       context: ./wrk
-    depends_on:
-      - hical
-      - gin
-      - actix
+    profiles: [cpp, cross-lang, profiling]
     volumes:
       - ./run_bench.sh:/bench/run_bench.sh:ro
+      - ./wrk/post_echo.lua:/bench/post_echo.lua:ro
       - ./results.md:/bench/results.md
+    networks:
+      - bench
+
+  # ============ Profiling 专用（profiling profile） ============
+  hical-profiling:
+    build:
+      context: ./hical
+      dockerfile: Dockerfile.profiling
+    ports:
+      - "8080:8080"
+    cpus: 4
+    mem_limit: 512m
+    profiles: [profiling]
+    cap_add:
+      - SYS_ADMIN
+      - SYS_PTRACE
+    security_opt:
+      - seccomp=unconfined
+    volumes:
+      - ./profiling-output:/profiling
     networks:
       - bench
 

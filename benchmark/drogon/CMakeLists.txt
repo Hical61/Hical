@@ -1,0 +1,6 @@
+cmake_minimum_required(VERSION 3.20)
+project(bench_drogon)
+set(CMAKE_CXX_STANDARD 20)
+find_package(Drogon REQUIRED)
+add_executable(bench_server main.cpp)
+target_link_libraries(bench_server PRIVATE Drogon::Drogon)

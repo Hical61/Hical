@@ -1,88 +1,198 @@
-# Hical vs Gin vs Actix-web 压测环境
+# 框架压测环境
 
-## 快速开始
+通过 Docker Compose profile 管理两套独立的压测集：
+
+| Profile       | 框架                              | 场景数 | 报告文件                    |
+| ------------- | --------------------------------- | ------ | --------------------------- |
+| `cpp`         | Hical / Drogon / Crow / Oat++     | 10     | `CPP_BENCHMARK_REPORT.md`   |
+| `cross-lang`  | Hical / Gin / Actix-web           | 4      | `BENCHMARK_REPORT.md`       |
+
+## 快速开始：C++ 框架对比
 
 ```bash
 cd benchmark
 
-# 1. 构建并启动所有服务（首次约 5-10 分钟）
-# 同时构建 4 个容器资源不够，分步构建
-# 先单独构建 wrk（最轻量）
-docker compose build wrk
-docker compose up -d wrk
+# 1. 构建（首次约 15-30 分钟，Drogon 编译较慢）
+docker compose --profile cpp build
 
-# 再启动其余服务
-docker compose up -d --build
+# 2. 启动
+docker compose --profile cpp up -d
 
-# 2. 验证服务正常
-curl http://localhost:8080/api/status   # Hical
-curl http://localhost:8081/api/status   # Gin
-curl http://localhost:8082/api/status   # Actix-web
+# 3. 验证服务正常
+curl http://localhost:8080/           # Hical
+curl http://localhost:8083/           # Drogon
+curl http://localhost:8084/           # Crow
+curl http://localhost:8085/           # Oat++
 
-# 3. 运行压测脚本（结果自动写入 benchmark/results.md）
-docker compose exec wrk bash /bench/run_bench.sh
+# 4. 运行压测（10 场景：基础 4 + 中间件 3 + 高并发 3）
+docker compose --profile cpp exec wrk bash -c "BENCH_MODE=cpp bash /bench/run_bench.sh"
 
-# 4. 采集补充数据（内存、二进制大小、镜像大小、代码行数 → stats.md）
-bash collect_stats.sh
+# 5. 采集补充数据（内存、二进制大小等）
+BENCH_MODE=cpp bash collect_stats.sh
 
-# 5. 清理
-docker compose down
+# 6. 清理
+docker compose --profile cpp down
 ```
 
-> **说明**: wrk 容器自建镜像（基于 Alpine），预装 wrk + bash + curl。
-> `run_bench.sh` 通过 volume 挂载到容器 `/bench/run_bench.sh`，
-> 容器内通过 Docker 网络名（hical / gin / actix）访问各服务，无需指定 HOST 环境变量。
+## 快速开始：跨语言对比
+
+```bash
+cd benchmark
+
+# 构建并启动
+docker compose --profile cross-lang up -d --build
+
+# 验证
+curl http://localhost:8080/           # Hical
+curl http://localhost:8081/           # Gin
+curl http://localhost:8082/           # Actix-web
+
+# 运行压测（4 基础场景）
+docker compose --profile cross-lang exec wrk bash -c "BENCH_MODE=cross-lang bash /bench/run_bench.sh"
+
+# 采集补充数据
+BENCH_MODE=cross-lang bash collect_stats.sh
+
+# 清理
+docker compose --profile cross-lang down
+```
+
+> **说明**: wrk 容器基于 Alpine，预装 wrk + bash + curl。
+> `run_bench.sh` 和 `post_echo.lua` 通过 volume 只读挂载到容器 `/bench/`，
+> 容器内通过 Docker 网络名访问各服务。Hical 同时属于两个 profile，始终参与测试。
 
 ### 宿主机直接运行（需要本地安装 wrk）
 
 ```bash
-HICAL_HOST=localhost:8080 GIN_HOST=localhost:8081 ACTIX_HOST=localhost:8082 bash run_bench.sh
+BENCH_MODE=cpp HICAL_HOST=localhost:8080 DROGON_HOST=localhost:8083 \
+CROW_HOST=localhost:8084 OATPP_HOST=localhost:8085 \
+bash run_bench.sh
+```
+
+### 自定义压测参数
+
+```bash
+# 调整并发数和持续时间
+docker compose --profile cpp exec wrk bash -c "BENCH_MODE=cpp CONNECTIONS=500 DURATION=60s bash /bench/run_bench.sh"
 ```
 
 ## 环境说明
 
-| 服务  | 端口 | 框架         | 语言                               |
-| ----- | ---- | ------------ | ---------------------------------- |
-| hical | 8080 | Hical v2.5.0 | C++20 (Ubuntu 24.04 GCC + Conan 2) |
-| gin   | 8081 | Gin v1.10    | Go 1.22                            |
-| actix | 8082 | Actix-web 4  | Rust 1.78                          |
-| wrk   | —    | wrk 压测工具 | Alpine 3.20                        |
+| 服务   | 端口 | 框架          | 语言 / 依赖                          |
+| ------ | ---- | ------------- | ------------------------------------ |
+| hical  | 8080 | Hical v2.5.1  | C++20 (Ubuntu 24.04 GCC + Conan 2)   |
+| drogon | 8083 | Drogon v1.9.8 | C++20 (Ubuntu 24.04 GCC + Trantor)   |
+| crow   | 8084 | Crow v1.2.0   | C++20 (Ubuntu 24.04 GCC + Asio)      |
+| oatpp  | 8085 | Oat++ v1.3.0  | C++20 (Ubuntu 24.04 GCC, 零外部依赖) |
+| gin    | 8081 | Gin v1.10     | Go 1.22                              |
+| actix  | 8082 | Actix-web 4   | Rust latest stable                   |
+| wrk    | —    | wrk 4.1.0     | Alpine 3.20                          |
 
-每个服务容器限制 4 CPU + 512MB 内存，确保公平对比。
+每个服务容器限制 **4 CPU + 512MB 内存**，确保公平对比。
 
 ## 压测场景
 
-| 场景        | 端点            | 描述                                     |
-| ----------- | --------------- | ---------------------------------------- |
-| Hello World | GET /           | 纯文本响应，测试框架底层开销             |
-| JSON 响应   | GET /api/status | JSON 序列化，测试 JSON 库性能            |
-| JSON Echo   | POST /api/echo  | JSON 反序列化+序列化，测试完整 JSON 处理 |
-| 路径参数    | GET /users/42   | 路由匹配+参数提取+JSON 响应              |
+### 基础场景（4 个）
+
+| 场景        | 端点              | 描述                                     |
+| ----------- | ----------------- | ---------------------------------------- |
+| Hello World | `GET /`           | 纯文本响应，测试框架底层开销             |
+| JSON 响应   | `GET /api/status` | JSON 序列化，测试 JSON 库性能            |
+| JSON Echo   | `POST /api/echo`  | JSON 反序列化+序列化，测试完整 JSON 处理 |
+| 路径参数    | `GET /users/42`   | 路由匹配+参数提取+JSON 响应              |
+
+### 中间件链场景（3 个）
+
+| 场景         | 端点                 | 描述              |
+| ------------ | -------------------- | ----------------- |
+| 中间件 0 层  | `GET /middleware/0`  | 无中间件基线      |
+| 中间件 3 层  | `GET /middleware/3`  | 3 层空操作中间件  |
+| 中间件 10 层 | `GET /middleware/10` | 10 层空操作中间件 |
+
+> **中间件实现差异**：Hical（RouteGroup 洋葱链）和 Drogon（HttpFilter）使用真实框架中间件机制；
+> Crow 和 Oat++ 因编译时/全局中间件限制，使用 handler 内 `std::function` 调用链模拟等价开销。
+
+### 高并发场景（3 个）
+
+| 场景          | 端点    | 并发连接 | 描述                       |
+| ------------- | ------- | -------- | -------------------------- |
+| 高并发 100    | `GET /` | 100      | 默认并发（基线）           |
+| 高并发 1,000  | `GET /` | 1,000    | 中等并发                   |
+| 高并发 10,000 | `GET /` | 10,000   | 极限并发，观察错误率和 OOM |
+
+## 目录结构
+
+```
+benchmark/
+├── README.md                  # 本文件
+├── BENCHMARK_REPORT.md        # 跨语言对比报告（Hical/Gin/Actix-web）
+├── CPP_BENCHMARK_REPORT.md    # C++ 框架对比报告（Hical/Drogon/Crow/Oat++）
+├── results.md                 # 压测结果（自动生成）
+├── stats.md                   # 统计数据（自动生成）
+├── run_bench.sh               # 压测脚本（BENCH_MODE 驱动）
+├── collect_stats.sh           # 统计采集脚本（BENCH_MODE 驱动）
+├── docker-compose.yml         # 容器编排（profile: cpp / cross-lang）
+├── hical/                     # Hical benchmark 源码
+│   ├── Dockerfile
+│   └── main.cpp
+├── drogon/                    # Drogon benchmark 源码
+│   ├── Dockerfile
+│   ├── CMakeLists.txt
+│   └── main.cpp
+├── crow/                      # Crow benchmark 源码
+│   ├── Dockerfile
+│   ├── CMakeLists.txt
+│   └── main.cpp
+├── oatpp/                     # Oat++ benchmark 源码
+│   ├── Dockerfile
+│   ├── CMakeLists.txt
+│   └── main.cpp
+├── gin/                       # Gin benchmark 源码
+│   ├── Dockerfile
+│   ├── go.mod
+│   └── main.go
+├── actix/                     # Actix benchmark 源码
+│   ├── Dockerfile
+│   ├── Cargo.toml
+│   └── src/main.rs
+└── wrk/                       # wrk 压测工具容器
+    ├── Dockerfile
+    └── post_echo.lua          # POST 测试 Lua 脚本
+```
 
 ## 常见问题
 
 ### `service "wrk" is not running`
 
-wrk 容器未启动。确认 `docker compose up -d --build` 已执行且无报错：
+wrk 容器未启动。确认 `docker compose up -d` 已执行且无报错：
 
 ```bash
 docker compose ps          # 确认所有容器 Running
 docker compose logs wrk    # 查看 wrk 容器日志
 ```
 
-### PowerShell 中 `<` 报错 "运算符是为将来使用而保留的"
+### Drogon 构建很慢
+
+Drogon 需要从源码编译整个框架（含 Trantor 网络库），首次构建约 10-15 分钟。后续重建会利用 Docker 层缓存，只有 `main.cpp` 变更时才重编译 benchmark server。
+
+### PowerShell 中 `<` 报错
 
 PowerShell 不支持 `<` 输入重定向。本文档已改为 volume 挂载方式，直接执行
-`docker compose exec wrk bash /bench/run_bench.sh` 即可，不依赖 shell 重定向。
+`docker compose exec wrk bash /bench/run_bench.sh` 即可。
 
-## 结果
+### 高并发 10K 测试报 Socket errors
+
+这是预期行为。10,000 并发连接会挑战容器的 fd 限制和内存上限（512MB），部分框架可能出现连接失败。这本身是有价值的对比数据——错误率和恢复能力也是框架质量的指标。
+
+## 结果输出
 
 | 脚本               | 输出文件     | 内容                                     |
 | ------------------ | ------------ | ---------------------------------------- |
-| `run_bench.sh`     | `results.md` | QPS、延迟、吞吐量（wrk 容器内执行）      |
+| `run_bench.sh`     | `results.md` | QPS、延迟、吞吐量（场景数取决于模式）    |
 | `collect_stats.sh` | `stats.md`   | 内存占用、二进制大小、镜像大小、代码行数 |
 
-两份数据可直接填入 `docs/blog/11-cpp-vs-go-rust-web.md` 和 `BENCHMARK_REPORT.md`。
+- `cpp` 模式数据填入 `CPP_BENCHMARK_REPORT.md` 和博客 `docs/blog/21-cpp-framework-benchmark.md`
+- `cross-lang` 模式数据填入 `BENCHMARK_REPORT.md` 和博客 `docs/blog/11-cpp-vs-go-rust-web.md`
 
 ### collect_stats.sh 采集项
 
@@ -97,4 +207,4 @@ PowerShell 不支持 `<` 输入重定向。本文档已改为 volume 挂载方�
 
 > **注意**：`collect_stats.sh` 在**宿主机** bash 中运行（不是容器内），需要 Docker CLI 可用。
 > Windows 用户请在 Git Bash / MSYS2 / WSL 中执行。
-> 注意：满载 CPU% 在 Windows Docker Desktop (Hyper-V) 上因统计刷新延迟可能显示为 0%，这是平台已知限制，不影响内存数据准确性。Linux 上运行无此问题。
+> 满载 CPU% 在 Windows Docker Desktop (Hyper-V) 上因统计刷新延迟可能显示为 0%，这是平台已知限制，不影响内存数据准确性。
