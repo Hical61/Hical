@@ -12,7 +12,7 @@
 | C++ 编译器  | GCC 14+ / Clang 20+ / MSVC 2022+ | C++20 编译器（协程支持）    |
 | CMake       | 3.20+                            | 构建系统                    |
 | Ninja       | 1.10+                            | 构建工具（比 Make 更快）    |
-| Boost       | 1.82+（DB 中间件 1.85+）         | Asio / Beast / JSON / MySQL |
+| Boost       | 1.82+（DB 中间件 1.85+）         | Asio / JSON / MySQL         |
 | OpenSSL     | 3.0+                             | SSL/TLS 支持                |
 | liburing    | —（Linux 可选）                  | Boost.Asio 异步文件 I/O     |
 | Google Test | 1.10+                            | 单元测试框架                |

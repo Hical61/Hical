@@ -46,32 +46,23 @@ namespace hical
 
 	HttpResponse::HttpResponse()
 	{
-		res_.version(11); // HTTP/1.1
-		res_.result(boost::beast::http::status::ok);
-	}
-
-	HttpResponse::HttpResponse(BeastResponse res) : res_(std::move(res))
-	{
+		m_res.httpVersionMinor = 1;
+		m_res.status = HttpStatusCode::hOk;
 	}
 
 	HttpStatusCode HttpResponse::statusCode() const
 	{
-		return static_cast<HttpStatusCode>(res_.result_int());
+		return m_res.status;
 	}
 
 	void HttpResponse::setStatus(HttpStatusCode code)
 	{
-		res_.result(static_cast<unsigned int>(code));
+		m_res.status = code;
 	}
 
 	std::string_view HttpResponse::header(std::string_view name) const
 	{
-		auto it = res_.find(name);
-		if (it != res_.end())
-		{
-			return it->value();
-		}
-		return {};
+		return m_res.headers.find(name);
 	}
 
 	void HttpResponse::setHeader(const std::string& name, const std::string& value)
@@ -81,12 +72,12 @@ namespace hical
 		{
 			return;
 		}
-		res_.set(name, value);
+		m_res.headers.set(name, value);
 	}
 
 	const std::string& HttpResponse::body() const
 	{
-		return res_.body();
+		return m_res.body;
 	}
 
 	void HttpResponse::setBody(const std::string& body, const std::string& contentType)
@@ -96,16 +87,16 @@ namespace hical
 		{
 			return;
 		}
-		res_.body() = body;
-		res_.set(boost::beast::http::field::content_type, contentType);
-		res_.prepare_payload();
+		m_res.body = body;
+		m_res.headers.set("Content-Type", contentType);
+		m_res.preparePayload();
 	}
 
 	void HttpResponse::setJsonBody(const boost::json::value& json)
 	{
-		res_.body() = boost::json::serialize(json);
-		res_.set(boost::beast::http::field::content_type, "application/json");
-		res_.prepare_payload();
+		m_res.body = boost::json::serialize(json);
+		m_res.headers.set("Content-Type", "application/json");
+		m_res.preparePayload();
 	}
 
 	void HttpResponse::setCookie(const std::string& name, const std::string& value, const CookieOptions& options)
@@ -188,18 +179,18 @@ namespace hical
 			cookie += options.sameSite;
 		}
 
-		// Beast 不支持同名字段多值直接 set，使用 insert 追加多个 Set-Cookie
-		res_.insert(boost::beast::http::field::set_cookie, cookie);
+		// insert 追加多个 Set-Cookie（不覆写）
+		m_res.headers.insert("Set-Cookie", cookie);
 	}
 
-	HttpResponse::BeastResponse& HttpResponse::native()
+	NativeResponse& HttpResponse::native()
 	{
-		return res_;
+		return m_res;
 	}
 
-	const HttpResponse::BeastResponse& HttpResponse::native() const
+	const NativeResponse& HttpResponse::native() const
 	{
-		return res_;
+		return m_res;
 	}
 
 	// ============ 快捷工厂方法 ============

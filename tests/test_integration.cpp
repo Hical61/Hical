@@ -1,10 +1,10 @@
+#include "TestHttpClient.h"
 #include "core/HttpServer.h"
 #include "core/MemoryPool.h"
 #include "core/PmrBuffer.h"
 #include "core/Router.h"
 #include "core/Middleware.h"
 #include <boost/asio.hpp>
-#include <boost/beast.hpp>
 #include <gtest/gtest.h>
 #include <atomic>
 #include <chrono>
@@ -13,9 +13,6 @@
 #include <vector>
 
 using namespace hical;
-
-namespace beast = boost::beast;
-namespace http = beast::http;
 using boost::asio::ip::tcp;
 
 // ============ 测试辅助 ============
@@ -109,10 +106,10 @@ namespace
 
 		/**
 		 * @brief 发送 HTTP 请求并获取响应
-		 * @param method HTTP 方法
+		 * @param method HTTP 方法字符串（"GET" / "POST"）
 		 * @param target 目标路径
 		 * @param body 请求体（可选）
-		 * @return 响应体字符串
+		 * @return 状态码和响应体
 		 */
 		struct Response
 		{
@@ -120,61 +117,31 @@ namespace
 			std::string body;
 		};
 
-		Response sendRequest(http::verb method, const std::string& target, const std::string& body = "")
+		Response sendRequest(const std::string& method, const std::string& target, const std::string& body = "")
 		{
-			boost::asio::io_context io;
-			tcp::socket sock(io);
-			sock.connect(tcp::endpoint(boost::asio::ip::make_address("127.0.0.1"), port_));
-
-			http::request<http::string_body> req(method, target, 11);
-			req.set(http::field::host, "localhost");
-			req.set(http::field::connection, "close");
-			if (!body.empty())
+			if (method == "GET")
 			{
-				req.body() = body;
-				req.set(http::field::content_type, "text/plain");
-				req.prepare_payload();
+				auto [status, respBody] = hical::test::httpGet("127.0.0.1", port_, target);
+				return {status, respBody};
 			}
-
-			http::write(sock, req);
-
-			beast::flat_buffer buffer;
-			http::response<http::string_body> res;
-			http::read(sock, buffer, res);
-
-			return {res.result_int(), res.body()};
+			auto [status, respBody] = hical::test::httpPost("127.0.0.1", port_, target, body);
+			return {status, respBody};
 		}
 
 		/**
 		 * @brief 在同一连接上发送多个请求（Keep-Alive）
+		 * @param requests {method字符串, target} 列表
 		 */
-		std::vector<Response> sendKeepAliveRequests(const std::vector<std::pair<http::verb, std::string>>& requests)
+		std::vector<Response> sendKeepAliveRequests(const std::vector<std::pair<std::string, std::string>>& requests)
 		{
-			boost::asio::io_context io;
-			tcp::socket sock(io);
-			sock.connect(tcp::endpoint(boost::asio::ip::make_address("127.0.0.1"), port_));
-
-			std::vector<Response> responses;
-			beast::flat_buffer buffer;
-
-			for (size_t i = 0; i < requests.size(); ++i)
+			auto parsed = hical::test::httpKeepAliveRequests("127.0.0.1", port_, requests);
+			std::vector<Response> results;
+			results.reserve(parsed.size());
+			for (auto& p : parsed)
 			{
-				auto& [method, target] = requests[i];
-				bool isLast = (i == requests.size() - 1);
-
-				http::request<http::string_body> req(method, target, 11);
-				req.set(http::field::host, "localhost");
-				req.set(http::field::connection, isLast ? "close" : "keep-alive");
-
-				http::write(sock, req);
-
-				http::response<http::string_body> res;
-				http::read(sock, buffer, res);
-				responses.push_back({res.result_int(), res.body()});
-				buffer.consume(buffer.size());
+				results.push_back({p.status, p.body});
 			}
-
-			return responses;
+			return results;
 		}
 	};
 
@@ -190,9 +157,9 @@ TEST_F(IntegrationTest, LargeBody)
 	// 生成 1MB 数据
 	std::string largeBody(1024 * 1024, 'X');
 
-	auto res = sendRequest(http::verb::post, "/echo", largeBody);
+	auto res = sendRequest("POST", "/echo", largeBody);
 
-	EXPECT_EQ(res.status, 200);
+	EXPECT_EQ(res.status, 200u);
 	EXPECT_EQ(res.body.size(), largeBody.size());
 	EXPECT_EQ(res.body, largeBody);
 }
@@ -207,21 +174,34 @@ TEST_F(IntegrationTest, HalfClose)
 	sock.connect(tcp::endpoint(boost::asio::ip::make_address("127.0.0.1"), port_));
 
 	// 发送请求
-	http::request<http::string_body> req(http::verb::get, "/", 11);
-	req.set(http::field::host, "localhost");
-	req.set(http::field::connection, "close");
-	http::write(sock, req);
+	std::string req = "GET / HTTP/1.1\r\n"
+					  "Host: localhost\r\n"
+					  "Connection: close\r\n"
+					  "\r\n";
+	boost::asio::write(sock, boost::asio::buffer(req));
 
 	// 客户端关闭写端
 	sock.shutdown(tcp::socket::shutdown_send);
 
-	// 仍然应该能读到完整响应
-	beast::flat_buffer buffer;
-	http::response<http::string_body> res;
-	http::read(sock, buffer, res);
+	// 仍然应该能读到完整响应（读取直到 EOF）
+	std::string rawResp;
+	boost::system::error_code ec;
+	for (;;)
+	{
+		char tmp[4096];
+		size_t n = sock.read_some(boost::asio::buffer(tmp), ec);
+		if (n > 0)
+		{
+			rawResp.append(tmp, n);
+		}
+		if (ec)
+		{
+			break;
+		}
+	}
 
-	EXPECT_EQ(res.result_int(), 200);
-	EXPECT_EQ(res.body(), "hello");
+	EXPECT_NE(rawResp.find("200"), std::string::npos);
+	EXPECT_NE(rawResp.find("hello"), std::string::npos);
 }
 
 // Keep-Alive 连接复用
@@ -230,16 +210,16 @@ TEST_F(IntegrationTest, KeepAlive)
 	startServer();
 
 	auto responses = sendKeepAliveRequests({
-		{http::verb::get, "/"},
-		{http::verb::get, "/users/42"},
-		{http::verb::get, "/"},
+		{"GET", "/"},
+		{"GET", "/users/42"},
+		{"GET", "/"},
 	});
 
-	ASSERT_EQ(responses.size(), 3);
-	EXPECT_EQ(responses[0].status, 200);
+	ASSERT_EQ(responses.size(), 3u);
+	EXPECT_EQ(responses[0].status, 200u);
 	EXPECT_EQ(responses[0].body, "hello");
-	EXPECT_EQ(responses[1].status, 200);
-	EXPECT_EQ(responses[2].status, 200);
+	EXPECT_EQ(responses[1].status, 200u);
+	EXPECT_EQ(responses[2].status, 200u);
 	EXPECT_EQ(responses[2].body, "hello");
 }
 
@@ -248,9 +228,9 @@ TEST_F(IntegrationTest, EmptyBodyPost)
 {
 	startServer();
 
-	auto res = sendRequest(http::verb::post, "/echo", "");
+	auto res = sendRequest("POST", "/echo", "");
 
-	EXPECT_EQ(res.status, 200);
+	EXPECT_EQ(res.status, 200u);
 	EXPECT_TRUE(res.body.empty());
 }
 
@@ -259,9 +239,9 @@ TEST_F(IntegrationTest, NotFoundRoute)
 {
 	startServer();
 
-	auto res = sendRequest(http::verb::get, "/nonexistent");
+	auto res = sendRequest("GET", "/nonexistent");
 
-	EXPECT_EQ(res.status, 404);
+	EXPECT_EQ(res.status, 404u);
 }
 
 // 并发连接
@@ -279,7 +259,7 @@ TEST_F(IntegrationTest, ConcurrentConnections)
 	for (int c = 0; c < hNumClients; ++c)
 	{
 		threads.emplace_back(
-			[&, c]()
+			[&]()
 			{
 				try
 				{
@@ -287,22 +267,22 @@ TEST_F(IntegrationTest, ConcurrentConnections)
 					tcp::socket sock(io);
 					sock.connect(tcp::endpoint(boost::asio::ip::make_address("127.0.0.1"), port_));
 
-					beast::flat_buffer buffer;
+					std::string residual;
 
 					for (int r = 0; r < hRequestsPerClient; ++r)
 					{
 						bool isLast = (r == hRequestsPerClient - 1);
-						http::request<http::string_body> req(http::verb::get, "/", 11);
-						req.set(http::field::host, "localhost");
-						req.set(http::field::connection, isLast ? "close" : "keep-alive");
+						std::string req = "GET / HTTP/1.1\r\n"
+										  "Host: localhost\r\n"
+										  "Connection: "
+										  + std::string(isLast ? "close" : "keep-alive")
+										  + "\r\n"
+											"\r\n";
+						boost::asio::write(sock, boost::asio::buffer(req));
 
-						http::write(sock, req);
+						auto parsed = hical::test::detail::readHttpResponse(sock, residual);
 
-						http::response<http::string_body> res;
-						http::read(sock, buffer, res);
-						buffer.consume(buffer.size());
-
-						if (res.result_int() == 200 && res.body() == "hello")
+						if (parsed.status == 200 && parsed.body == "hello")
 						{
 							successCount.fetch_add(1);
 						}

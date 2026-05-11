@@ -1,11 +1,15 @@
 #pragma once
 
 #include "Coroutine.h"
-#include <boost/beast/websocket.hpp>
+#include "WsDeflate.h"
+#include "WsFrame.h"
 #include <boost/asio.hpp>
 #include <atomic>
+#include <cstdint>
+#include <memory>
 #include <optional>
 #include <string>
+#include <vector>
 
 namespace hical
 {
@@ -22,28 +26,30 @@ namespace hical
 		bool serverNoContextTakeover = false;
 	};
 
+	struct WsDeflateNegotiation; // 前向声明，定义在 WsHandshake.h
+
 	/**
 	 * @brief WebSocket 会话封装
-	 * 对 Boost.Beast websocket::stream 的 hical 风格封装。
-	 * 提供协程化的 send/receive 接口。
+	 * 对原始 TCP socket 的 WebSocket 协议封装（RFC 6455）。
+	 * 提供协程化的 send/receive 接口，自研帧解析/构造。
 	 */
 	class WebSocketSession
 	{
 	public:
-		using WsStream = boost::beast::websocket::stream<boost::asio::ip::tcp::socket>;
-
 		// 默认最大消息大小 1MB，防止恶意客户端发送超大帧导致 OOM
 		static constexpr size_t hDefaultMaxMessageSize = 1024 * 1024;
 
 		/**
-		 * @brief 从已升级的 WebSocket stream 构造
-		 * @param stream WebSocket 流
+		 * @brief 从已完成 WebSocket 握手的 TCP socket 构造
+		 * @param socket      已完成握手的 TCP socket
 		 * @param maxMessageSize 最大消息大小（字节，默认 1MB）
-		 * @param compression 压缩配置（默认不压缩）
+		 * @param compression 压缩配置
+		 * @param deflateNeg  permessage-deflate 协商结果（nullptr 时不启用压缩）
 		 */
-		explicit WebSocketSession(WsStream stream,
+		explicit WebSocketSession(boost::asio::ip::tcp::socket socket,
 								  size_t maxMessageSize = hDefaultMaxMessageSize,
-								  WsCompressionConfig compression = {});
+								  WsCompressionConfig compression = {},
+								  const WsDeflateNegotiation* deflateNeg = nullptr);
 
 		/**
 		 * @brief 发送文本消息
@@ -59,13 +65,13 @@ namespace hical
 
 		/**
 		 * @brief 协程式关闭 WebSocket 连接（推荐）
-		 * 在协程上下文中安全关闭，不会与 async_read 竞争。
+		 * 在协程上下文中安全关闭，发送 close 帧后关闭 TCP 连接。
 		 */
 		Awaitable<void> closeAsync();
 
 		/**
 		 * @brief 同步关闭 WebSocket 连接
-		 * @warning 必须在 io_context 线程中调用，否则与 async_read 竞争。
+		 * @warning 不发送 close 帧，直接关闭底层 socket。
 		 * 推荐使用 closeAsync() 替代。
 		 */
 		void close();
@@ -77,10 +83,11 @@ namespace hical
 		bool isOpen() const;
 
 		/**
-		 * @brief 获取底层 WsStream 引用
-		 * @return WsStream 引用
+		 * @brief 获取底层 TCP socket 引用
+		 * 用于超时场景关闭底层 socket 以中断 async_read。
+		 * @return TCP socket 引用
 		 */
-		WsStream& native();
+		boost::asio::ip::tcp::socket& socket();
 
 		/**
 		 * @brief 获取压缩配置
@@ -88,10 +95,34 @@ namespace hical
 		const WsCompressionConfig& compressionConfig() const;
 
 	private:
-		WsStream stream_;
-		std::atomic<bool> open_ {true};
-		WsCompressionConfig compression_;
-		boost::beast::flat_buffer readBuffer_; ///< 读缓冲区（跨 receive() 调用复用，避免每次堆分配）
+		/// 确保读缓冲区中至少有 n 字节可用数据
+		Awaitable<void> ensureBytes(size_t n);
+
+		/// 丢弃读缓冲区前 n 字节（memmove 剩余数据）
+		void consumeBytes(size_t n);
+
+		/// 构造并发送 WebSocket 帧
+		Awaitable<void> sendFrame(WsOpcode opcode, std::string_view payload, bool fin = true, bool rsv1 = false);
+
+		/// 发送 close 帧的便捷方法
+		Awaitable<void> sendCloseFrame(WsCloseCode code, std::string_view reason = {});
+
+		boost::asio::ip::tcp::socket m_socket;
+		std::atomic<bool> m_open {true};
+		WsCompressionConfig m_compression;
+		size_t m_maxMessageSize;
+
+		// 连接级读缓冲区（跨 receive() 调用复用）
+		std::vector<uint8_t> m_readBuf;
+		size_t m_readBufUsed = 0;
+
+		// 分片消息重组
+		std::string m_fragmentBuf;
+		WsOpcode m_fragmentOpcode = WsOpcode::hText;
+		bool m_fragmentCompressed = false; ///< 当前分片消息的首帧是否带 RSV1（压缩）
+
+		// permessage-deflate 上下文（仅压缩启用时构造）
+		std::unique_ptr<WsDeflateContext> m_deflateCtx;
 	};
 
 } // namespace hical

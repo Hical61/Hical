@@ -1,4 +1,5 @@
 #include "RouteGroup.h"
+#include <algorithm>
 
 namespace hical
 {
@@ -108,11 +109,69 @@ namespace hical
 
 	void RouteGroup::route(HttpMethod method, const std::string& path, SyncRouteHandler handler)
 	{
-		auto asyncHandler = [h = std::move(handler)](const HttpRequest& req) -> Awaitable<HttpResponse>
+		// 检查是否所有中间件都是 Sync 类型
+		bool allSync = std::all_of(m_entries.begin(),
+								   m_entries.end(),
+								   [](const MiddlewareEntry& e)
+								   {
+									   return e.type == MiddlewareEntry::Type::Sync;
+								   });
+
+		if (m_entries.empty())
 		{
-			co_return h(req);
-		};
-		route(method, path, std::move(asyncHandler));
+			// 无中间件：直接注册同步 handler
+			m_router.route(method, joinPath(path), std::move(handler));
+			return;
+		}
+
+		if (allSync)
+		{
+			// 纯同步快速路径：所有中间件 + handler 都同步执行，零协程帧
+			auto syncEntries = m_entries; // 复制一份给 lambda 捕获
+			SyncRouteHandler syncWrapped = [syncEntries = std::move(syncEntries),
+											h = handler](const HttpRequest& req) -> HttpResponse
+			{
+				// 依次执行 SyncBeforeHandler
+				auto& mutableReq = const_cast<HttpRequest&>(req); // NOLINT
+				for (const auto& entry : syncEntries)
+				{
+					if (entry.before)
+					{
+						auto result = entry.before(mutableReq);
+						if (result.has_value())
+						{
+							return std::move(*result); // 短路：中间件拦截
+						}
+					}
+				}
+
+				// 所有 before 通过，调用最终 handler
+				auto res = h(req);
+
+				// 逆序执行 SyncAfterHandler
+				for (auto it = syncEntries.rbegin(); it != syncEntries.rend(); ++it)
+				{
+					if (it->after)
+					{
+						it->after(mutableReq, res);
+					}
+				}
+
+				return res;
+			};
+
+			// 同时注册 async 和 sync 版本
+			m_router.route(method, joinPath(path), std::move(syncWrapped));
+		}
+		else
+		{
+			// 有异步中间件或无中间件，走原来的异步包装路径
+			auto asyncHandler = [h = std::move(handler)](const HttpRequest& req) -> Awaitable<HttpResponse>
+			{
+				co_return h(req);
+			};
+			route(method, path, std::move(asyncHandler));
+		}
 	}
 
 	void RouteGroup::get(const std::string& path, RouteHandler handler)

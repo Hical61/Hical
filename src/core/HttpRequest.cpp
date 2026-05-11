@@ -1,6 +1,5 @@
 #include "HttpRequest.h"
 #include "Router.h"
-#include <boost/beast/http/verb.hpp>
 
 namespace hical
 {
@@ -25,39 +24,25 @@ namespace hical
 
 	HttpRequest::HttpRequest()
 	{
-		req_.version(11); // HTTP/1.1
+		m_req.httpVersionMajor = 1;
+		m_req.httpVersionMinor = 1;
 	}
 
-	HttpRequest::HttpRequest(BeastRequest req) : req_(std::move(req))
+	HttpRequest HttpRequest::fromParsed(NativeRequest&& req)
 	{
+		HttpRequest result;
+		result.m_req = std::move(req);
+		return result;
 	}
 
 	HttpMethod HttpRequest::method() const
 	{
-		switch (req_.method())
-		{
-			case boost::beast::http::verb::get:
-				return HttpMethod::hGet;
-			case boost::beast::http::verb::post:
-				return HttpMethod::hPost;
-			case boost::beast::http::verb::put:
-				return HttpMethod::hPut;
-			case boost::beast::http::verb::delete_:
-				return HttpMethod::hDelete;
-			case boost::beast::http::verb::patch:
-				return HttpMethod::hPatch;
-			case boost::beast::http::verb::head:
-				return HttpMethod::hHead;
-			case boost::beast::http::verb::options:
-				return HttpMethod::hOptions;
-			default:
-				return HttpMethod::hUnknown;
-		}
+		return m_req.method;
 	}
 
 	std::string_view HttpRequest::path() const
 	{
-		auto t = req_.target();
+		std::string_view t = m_req.target;
 		auto pos = t.find('?');
 		if (pos != std::string_view::npos)
 		{
@@ -68,12 +53,12 @@ namespace hical
 
 	std::string_view HttpRequest::target() const
 	{
-		return req_.target();
+		return m_req.target;
 	}
 
 	std::string_view HttpRequest::query() const
 	{
-		auto t = req_.target();
+		std::string_view t = m_req.target;
 		auto pos = t.find('?');
 		if (pos != std::string_view::npos)
 		{
@@ -84,17 +69,12 @@ namespace hical
 
 	std::string_view HttpRequest::header(std::string_view name) const
 	{
-		auto it = req_.find(name);
-		if (it != req_.end())
-		{
-			return it->value();
-		}
-		return {};
+		return m_req.headers.find(name);
 	}
 
 	const std::string& HttpRequest::body() const
 	{
-		return req_.body();
+		return m_req.body;
 	}
 
 	const boost::json::value& HttpRequest::jsonBody() const
@@ -102,7 +82,7 @@ namespace hical
 		if (!cachedJsonBody_)
 		{
 			boost::system::error_code ec;
-			auto val = boost::json::parse(req_.body(), ec);
+			auto val = boost::json::parse(m_req.body, ec);
 			cachedJsonBody_.emplace(ec ? boost::json::value(nullptr) : std::move(val));
 		}
 		return *cachedJsonBody_;
@@ -113,49 +93,25 @@ namespace hical
 		return header("Content-Type");
 	}
 
-	HttpRequest::BeastRequest& HttpRequest::native()
+	NativeRequest& HttpRequest::native()
 	{
-		return req_;
+		return m_req;
 	}
 
-	const HttpRequest::BeastRequest& HttpRequest::native() const
+	const NativeRequest& HttpRequest::native() const
 	{
-		return req_;
+		return m_req;
 	}
 
 	void HttpRequest::setMethod(HttpMethod method)
 	{
-		switch (method)
-		{
-			case HttpMethod::hGet:
-				req_.method(boost::beast::http::verb::get);
-				break;
-			case HttpMethod::hPost:
-				req_.method(boost::beast::http::verb::post);
-				break;
-			case HttpMethod::hPut:
-				req_.method(boost::beast::http::verb::put);
-				break;
-			case HttpMethod::hDelete:
-				req_.method(boost::beast::http::verb::delete_);
-				break;
-			case HttpMethod::hPatch:
-				req_.method(boost::beast::http::verb::patch);
-				break;
-			case HttpMethod::hHead:
-				req_.method(boost::beast::http::verb::head);
-				break;
-			case HttpMethod::hOptions:
-				req_.method(boost::beast::http::verb::options);
-				break;
-			default:
-				break;
-		}
+		m_req.method = method;
 	}
 
 	void HttpRequest::setTarget(const std::string& target)
 	{
-		req_.target(target);
+		m_ownedTarget = target;
+		m_req.target = m_ownedTarget;
 	}
 
 	void HttpRequest::setHeader(const std::string& name, const std::string& value)
@@ -165,13 +121,26 @@ namespace hical
 		{
 			return;
 		}
-		req_.set(name, value);
+		// setter 路径使用 owned HeaderMap（测试/构建场景）
+		m_ownedHeaders.set(name, value);
+		// 同步到 NativeRequest 的零拷贝 headers（通过 owned 的 string_view）
+		m_req.headers.clear();
+		for (const auto& [k, v] : m_ownedHeaders)
+		{
+			m_req.headers.add(k, v);
+		}
 	}
 
 	void HttpRequest::setBody(const std::string& body)
 	{
-		req_.body() = body;
-		req_.prepare_payload();
+		m_req.body = body;
+		// Content-Length 通过 owned headers 设置
+		m_ownedHeaders.set("Content-Length", std::to_string(body.size()));
+		m_req.headers.clear();
+		for (const auto& [k, v] : m_ownedHeaders)
+		{
+			m_req.headers.add(k, v);
+		}
 	}
 
 	// ============ 路径参数 ============
@@ -432,13 +401,21 @@ namespace hical
 
 	void HttpRequest::setAttribute(const std::string& key, std::any value)
 	{
-		attributes_[key] = std::move(value);
+		if (!attributes_)
+		{
+			attributes_ = std::make_unique<std::unordered_map<std::string, std::any>>();
+		}
+		(*attributes_)[key] = std::move(value);
 	}
 
 	std::optional<std::any> HttpRequest::getAttribute(const std::string& key) const
 	{
-		auto it = attributes_.find(key);
-		if (it == attributes_.end())
+		if (!attributes_)
+		{
+			return std::nullopt;
+		}
+		auto it = attributes_->find(key);
+		if (it == attributes_->end())
 		{
 			return std::nullopt;
 		}

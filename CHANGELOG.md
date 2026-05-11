@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.6.0] - 2026-05-12
+
+### Breaking Changes
+- **移除 Boost.Beast 依赖**：HTTP 解析/序列化和 WebSocket 全部替换为自研实现，`native()` 返回自研 `NativeRequest` / `NativeResponse`（原 Beast 类型）
+- **新增 zlib 依赖**：WebSocket permessage-deflate 压缩需要 zlib
+
+### Added
+- **自研 HTTP 解析栈**：集成 picohttpparser 替代 Beast HTTP parser（CPU 占比 10% → 0.08%），零拷贝 `NativeRequest`（`string_view` 引用连接级 `readBuf`，栈上 `RequestHeaders` 零堆分配），自研 `NativeResponse` 序列化（`FixedBuffer<512>` 栈缓冲 + scatter-gather I/O）
+- **自研 WebSocket 栈**（RFC 6455 完整实现）：手写帧解析/构造（`WsFrame.h`）、握手协议（`WsHandshake.h`）、permessage-deflate 压缩（`WsDeflate.h/cpp`，pimpl 封装 zlib），`WebSocketSession` 完全重写为 raw socket 实现，支持消息分片重组 + 控制帧穿插
+- **`HeaderMap` 头部容器**：`vector<pair>` 实现，大小写不敏感查找，延迟 reserve（默认构造零堆分配）
+- **SO_REUSEPORT 多 acceptor**：每个 worker loop 独立 acceptor，accept 与 I/O 同线程零跨线程调度（Windows 自动回退单 acceptor）
+- **连接级 atomic 时间戳超时**：替代 per-request timer，keep-alive 连接 `epoll_ctl` 调用降至 0
+- **Chunked Transfer-Encoding 支持**（RFC 7230）
+- **错误码统一映射**（`Error.h/cpp`）：36 个 `ErrorCode` + `NetworkError` 结构，隔离上层对 Asio 错误码的直接依赖
+- **`coSpawn()` 扩展**：任意 executor 重载 + `logOnException` 替代 `detached`（未捕获异常输出到 stderr）
+- **Docker 压测基础设施**：bench-server / bench-wrk Dockerfile + docker-compose 编排
+
+### Changed
+- **QPS 从 27K 提升至 159K**（+489%），与 Cinatra/Drogon 持平
+- **`HttpServer` 多 acceptor 架构**：`acceptLoop` 参数化支持并发运行，`gracefulStop()` 改为串行化关闭所有 acceptor
+- **热路径微优化**：header 按长度+首字符快速过滤、响应头 `insert()` O(1) 替代 `set()` O(N)、`attributes_` 延迟构造、`FixedBuffer` 从 4096 降至 512、200 OK 状态行预计算
+- **RouteGroup 同步中间件链优化**：纯同步场景零协程帧开销（10 层同步中间件仅比无中间件低 2.1%）
+
+### Fixed
+- **readBuf 残留数据丢弃**：TCP 粘包场景下 keep-alive 请求解析错误，`bufUsed` 移到循环外修复
+
+### Security
+- **WebSocket 协议校验强化**：客户端掩码强制检查、RSV 位限制、控制帧大小限制（≤125B）、zip bomb 防护
+- **HTTP 头部/Body 大小限制**：头部超限返回 431，Body 超限返回 413
+
 ## [2.5.2] - 2026-05-10
 
 ### Changed
@@ -269,7 +299,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Multipart Part 数量上限（DoS 防护）
 - Session ID 使用密码学安全的随机数生成
 
-[Unreleased]: https://github.com/Hical61/Hical/compare/v2.5.2...HEAD
+[Unreleased]: https://github.com/Hical61/Hical/compare/v2.6.0...HEAD
+[2.6.0]: https://github.com/Hical61/Hical/compare/v2.5.2...v2.6.0
 [2.5.2]: https://github.com/Hical61/Hical/compare/v2.5.1...v2.5.2
 [2.5.1]: https://github.com/Hical61/Hical/compare/v2.5.0...v2.5.1
 [2.5.0]: https://github.com/Hical61/Hical/compare/v2.4.0...v2.5.0

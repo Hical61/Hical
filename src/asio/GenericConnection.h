@@ -6,6 +6,7 @@
 #include "../core/InetAddress.h"
 #include "../core/MemoryPool.h"
 #include "../core/WriteNode.h"
+#include "../core/Coroutine.h"
 #include "AsioEventLoop.h"
 #include <boost/asio.hpp>
 #include <boost/asio/ssl.hpp>

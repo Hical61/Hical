@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Hical is a modern C++20 high-performance web framework built on Boost.Asio/Beast, featuring PMR memory pools, coroutine-based async I/O (`asio::awaitable<T>`), C++20 Concepts for compile-time type safety, a C++26 reflection layer (dual-track: native P2996 or C++20 macro fallback), and an optional coroutine-based database middleware (Boost.MySQL backend).
+Hical is a modern C++20 high-performance web framework built on Boost.Asio, featuring a native HTTP/WebSocket stack (picohttpparser + self-developed WebSocket implementation), PMR memory pools, coroutine-based async I/O (`asio::awaitable<T>`), C++20 Concepts for compile-time type safety, a C++26 reflection layer (dual-track: native P2996 or C++20 macro fallback), and an optional coroutine-based database middleware (Boost.MySQL backend).
 
 ## Build Commands
 
@@ -72,7 +72,11 @@ find src -name '*.cpp' | xargs clang-tidy -p build
 - `EventLoop.h` / `Timer.h` / `TcpConnection.h` — Abstract base classes (pure virtual). `TcpConnection` includes `sendFile()` and `lastActiveTime()` virtual methods
 - `Concepts.h` — C++20 concepts (`EventLoopLike`, `TcpConnectionLike`, `TimerLike`, `NetworkBackend`) for compile-time backend constraints
 - `MemoryPool.h` — Three-tier PMR memory strategy: global synchronized pool, thread-local unsynchronized pool, request-level monotonic buffer
-- `HttpServer.h` — Top-level facade integrating TcpServer + Router + MiddlewarePipeline + WebSocket middleware pre-build + fd exhaustion handling
+- `HttpServer.h` — Top-level facade integrating TcpServer + Router + MiddlewarePipeline + WebSocket middleware pre-build + fd exhaustion handling. SO_REUSEPORT multi-acceptor model (Linux/macOS) with single-acceptor fallback (Windows)
+- `HeaderMap.h` — HTTP header container: `vector<pair<string,string>>` backed, case-insensitive find/set/insert, multi-value support (Set-Cookie). L1-cache-friendly linear scan for typical <20 headers
+- `HttpRequest.h/cpp` — Zero-copy HTTP request wrapper. `NativeRequest` stores `string_view` target + `RequestHeaders` (stack-allocated `array<Entry,64>`, zero heap allocation) referencing connection-level read buffer. `HttpRequest::fromParsed()` factory for parser output. Public API: `method()`, `path()`, `target()`, `header()`, `body()`, `cookie()`, `queryParam()`, `formParam()`, `setAttribute()`
+- `HttpResponse.h/cpp` — HTTP response wrapper. `NativeResponse` stores owned `HeaderMap` + `string body`. `serialize()` produces full HTTP wire bytes. `serializeHeadTo(FixedBuffer<4096>&)` for zero-heap-alloc scatter-gather I/O. `preparePayload()` sets Content-Length via `std::to_chars`
+- `HttpSessionImpl.cpp` — Compilation firewall isolating picohttpparser + self-developed WebSocket implementation. Connection-level `std::string readBuf` (reused across keep-alive requests, no per-request allocation). Single-buffer serialization: head+body into one `FixedBuffer<4096>`, one `async_write` call. WebSocket bridge: reconstructs native request at upgrade time (rare path)
 - `Router.h` — Static routes (hash map O(1) with transparent hashing via `RouteKeyView`/`is_transparent` for zero-alloc `string_view` lookup) + parameter routes (`{id}` pattern, per-method grouping via `unordered_map<HttpMethod, vector>`) + WebSocket routes with `WsOptions` (Origin whitelist)
 - `Middleware.h` — Onion-model middleware pipeline with `MiddlewareNext` chaining; supports pre-built chain (`build()`), dynamic chain (`buildChain()`), and `buildFor()` for external pre-build, with separate `execute()` overloads for cached vs dynamic paths
 - `Coroutine.h` — `Awaitable<T>` alias for `boost::asio::awaitable<T>`, plus `sleep()` / `coSpawn()` helpers
@@ -120,6 +124,7 @@ find src -name '*.cpp' | xargs clang-tidy -p build
 - **Coroutine-based I/O**: All async operations use `co_await` with `boost::asio::use_awaitable`. Route handlers return `Awaitable<HttpResponse>`.
 - **Template-based SSL**: `GenericConnection<SocketType>` uses `if constexpr (hIsSslStream<SocketType>)` to branch SSL vs plain logic at compile time.
 - **PMR everywhere**: Buffers (`PmrBuffer`), HTTP bodies, and JSON objects use `std::pmr` allocators from the three-tier pool.
+- **Zero-copy HTTP parsing**: picohttpparser parses into stack-allocated `phr_header[64]` array. `NativeRequest` stores `string_view` referencing connection-level `readBuf` — zero heap allocation for headers/target. Body uses owned `std::string` (read directly from socket). Single-buffer response serialization: head+body into `FixedBuffer<4096>`, one `async_write` call.
 - **Backend abstraction**: `AsioBackend` struct bundles `AsioEventLoop` + `PlainConnection` + `AsioTimer` to satisfy the `NetworkBackend` concept. Future backends can be swapped in.
 - **Namespaces**: Public API in `hical::`, reflection layer in `hical::meta::`, database middleware in `hical::db::`.
 - **Optional OpenAPI module**: `src/core/OpenApi*.h/cpp` is opt-in via `HICAL_WITH_OPENAPI=ON` (default ON). `HICAL_HAS_OPENAPI` macro guards all OpenAPI code. Four-layer design: Schema generation → Registry → Document assembly → Endpoint exposure. Zero-invasive: does not modify MetaJson.h / MetaRoutes.h / Router.h.
@@ -173,7 +178,7 @@ Core design principle: when `HICAL_HAS_REFLECTION == 1` (compiler supports P2996
 | Dependency   | Version                               |
 | ------------ | ------------------------------------- |
 | C++ Standard | C++20 (C++26 optional for reflection) |
-| Boost        | >= 1.82 (Asio, Beast, System, JSON); DB middleware >= 1.85 (MySQL, charconv) |
+| Boost        | >= 1.82 (Asio, System, JSON); DB middleware >= 1.85 (MySQL, charconv) |
 | OpenSSL      | Required                              |
 | Google Test  | Required                              |
 | CMake        | >= 3.20                               |

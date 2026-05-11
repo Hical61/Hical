@@ -7,8 +7,12 @@ configure_file(
     @ONLY
 )
 
+# picohttpparser（H2O 出品的轻量 HTTP/1.1 解析器）
+set(PICOHTTPPARSER_DIR ${CMAKE_CURRENT_SOURCE_DIR}/third_party/picohttpparser)
+
 # 核心库实现
 add_library(hical_core
+    ${PICOHTTPPARSER_DIR}/picohttpparser.c
     core/InetAddress.cpp
     core/Error.cpp
     core/MetaJsonError.cpp
@@ -29,6 +33,7 @@ add_library(hical_core
     core/Middleware.cpp
     core/HttpServer.cpp
     core/HttpSessionImpl.cpp
+    core/WsDeflate.cpp
     core/WebSocket.cpp
     core/Multipart.cpp
     core/Session.cpp
@@ -39,6 +44,13 @@ add_library(hical_core
     asio/TcpServer.cpp
 )
 
+# GCC: Boost.Asio awaitable_frame_base 使用 aligned_alloc/operator delete 导致误报
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    set_source_files_properties(core/HttpSessionImpl.cpp PROPERTIES
+        COMPILE_OPTIONS "-Wno-mismatched-new-delete"
+    )
+endif()
+
 # Windows shared 库自动导出所有符号（生成 .lib 导入库）
 set_target_properties(hical_core PROPERTIES
     WINDOWS_EXPORT_ALL_SYMBOLS ON
@@ -48,6 +60,7 @@ target_include_directories(hical_core
     PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
+    $<BUILD_INTERFACE:${PICOHTTPPARSER_DIR}>
     $<INSTALL_INTERFACE:include/hical/core>
     $<INSTALL_INTERFACE:include/hical/asio>
 )
@@ -58,6 +71,7 @@ target_link_libraries(hical_core
     Boost::json
     OpenSSL::SSL
     OpenSSL::Crypto
+    ZLIB::ZLIB
 )
 
 # Windows 需要链接 Winsock

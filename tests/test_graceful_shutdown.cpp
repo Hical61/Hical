@@ -1,15 +1,14 @@
+#include "TestHttpClient.h"
 #include "core/HttpServer.h"
-#include <gtest/gtest.h>
 #include <boost/asio.hpp>
-#include <boost/beast.hpp>
+#include <gtest/gtest.h>
 #include <chrono>
 #include <string>
 #include <thread>
 
 using namespace hical;
-namespace beast = boost::beast;
-namespace http = beast::http;
 using boost::asio::ip::tcp;
+using hical::test::httpGet;
 
 // 辅助：启动服务器并等待就绪，返回实际端口
 static uint16_t startServerAndWait(HttpServer& server, std::thread& serverThread)
@@ -47,25 +46,6 @@ static uint16_t startServerAndWait(HttpServer& server, std::thread& serverThread
 		}
 	}
 	return port;
-}
-
-// 辅助：发送 HTTP GET 并获取响应
-static std::pair<unsigned int, std::string> httpGet(const std::string& host, uint16_t port, const std::string& target)
-{
-	boost::asio::io_context ioCtx;
-	tcp::socket socket(ioCtx);
-	socket.connect(tcp::endpoint(boost::asio::ip::make_address(host), port));
-
-	http::request<http::string_body> req(http::verb::get, target, 11);
-	req.set(http::field::host, host);
-	http::write(socket, req);
-
-	beast::flat_buffer buffer;
-	http::response<http::string_body> res;
-	http::read(socket, buffer, res);
-
-	socket.shutdown(tcp::socket::shutdown_both);
-	return {res.result_int(), res.body()};
 }
 
 // stop() 能正常关闭服务器，不挂起
@@ -109,25 +89,26 @@ TEST(GracefulShutdownTest, DrainingResponseConnectionClose)
 	std::thread serverThread;
 	auto port = startServerAndWait(server, serverThread);
 
-	// 先发一个请求建立 keep-alive 连接
+	// 发送一个 keep-alive 请求，建立连接后触发 stop
 	boost::asio::io_context ioCtx;
 	tcp::socket sock(ioCtx);
 	sock.connect(tcp::endpoint(boost::asio::ip::make_address("127.0.0.1"), port));
 
-	// HTTP/1.1 默认 keep-alive
-	http::request<http::string_body> req(http::verb::get, "/ping", 11);
-	req.set(http::field::host, "127.0.0.1");
-	http::write(sock, req);
+	std::string req = "GET /ping HTTP/1.1\r\n"
+					  "Host: 127.0.0.1\r\n"
+					  "Connection: keep-alive\r\n"
+					  "\r\n";
+	boost::asio::write(sock, boost::asio::buffer(req));
 
-	beast::flat_buffer buf;
-	http::response<http::string_body> res;
-	http::read(sock, buf, res);
+	// 读取响应
+	std::string residual;
+	auto result = hical::test::detail::readHttpResponse(sock, residual);
+	EXPECT_EQ(result.status, 200u);
 
-	EXPECT_EQ(res.result_int(), 200u);
-
-	// stop 触发 drain，关闭 io_context 之前响应里 keep_alive 应为 false
+	// stop 触发 drain，连接应在下一次请求时收到 Connection: close
 	server.stop();
-	sock.close();
+	boost::system::error_code ec;
+	sock.close(ec);
 
 	if (serverThread.joinable())
 	{

@@ -217,7 +217,7 @@ HICAL_ROUTE(router, Get, "/hello", myHandler);
 
 ### HttpRequest
 
-HTTP 请求封装，对 Boost.Beast `http::request` 的 hical 风格封装。
+HTTP 请求封装，对原生 HTTP 解析结果的 hical 风格封装。
 
 **头文件：** `src/core/HttpRequest.h`
 
@@ -235,7 +235,7 @@ HTTP 请求封装，对 Boost.Beast `http::request` 的 hical 风格封装。
 | `contentType()`  | 无               | `std::string_view`          | 获取 Content-Type 头                        |
 | `param(name)`    | name: 参数名     | `const std::string&`        | 获取路径参数                                |
 | `hasParam(name)` | name: 参数名     | `bool`                      | 是否有指定路径参数                          |
-| `native()`       | 无               | `BeastRequest&`             | 获取底层 Beast 请求引用                     |
+| `native()`       | 无               | `NativeRequest&`            | 获取底层原生请求引用                        |
 
 #### 查询参数 API
 
@@ -294,7 +294,7 @@ void handler(const HttpRequest& req)
 
 ### HttpResponse
 
-HTTP 响应封装，对 Boost.Beast `http::response` 的 hical 风格封装。
+HTTP 响应封装，对原生 HTTP 响应的 hical 风格封装。
 
 **头文件：** `src/core/HttpResponse.h`
 
@@ -309,7 +309,7 @@ HTTP 响应封装，对 Boost.Beast `http::response` 的 hical 风格封装。
 | `body()`                     | 无                                                           | `const std::string&` | 获取消息体              |
 | `setBody(body, contentType)` | body: 消息体<br>contentType: Content-Type（默认 text/plain） | `void`               | 设置消息体              |
 | `setJsonBody(json)`          | json: JSON 值                                                | `void`               | 设置 JSON 消息体        |
-| `native()`                   | 无                                                           | `BeastResponse&`     | 获取底层 Beast 响应引用 |
+| `native()`                   | 无                                                           | `NativeResponse&`    | 获取底层原生响应引用  |
 
 #### 工厂方法
 
@@ -500,7 +500,7 @@ server.use(cors);
 
 ### WebSocketSession
 
-WebSocket 会话封装，对 Boost.Beast `websocket::stream` 的 hical 风格封装。
+WebSocket 会话封装，对自研 WebSocket 实现的 hical 风格封装。
 
 **头文件：** `src/core/WebSocket.h`
 

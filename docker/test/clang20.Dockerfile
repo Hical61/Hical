@@ -14,7 +14,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends wget gnupg ca-c
     && apt-get update && apt-get install -y --no-install-recommends \
         clang-20 libclang-rt-20-dev \
         cmake ninja-build \
-        libboost-all-dev libssl-dev libgtest-dev \
+        libboost-all-dev libssl-dev libgtest-dev zlib1g-dev \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /src

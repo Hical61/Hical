@@ -93,7 +93,7 @@ Hical 采用**两层分离**架构：核心抽象层（`src/core/`）与网络�
 │  └──────────────────────────────────────────────────┘ │
 ├──────────────────────────────────────────────────────┤
 │              底层库                                    │
-│  Boost.Asio   Boost.Beast   Boost.JSON   OpenSSL     │
+│  Boost.Asio   Boost.JSON   OpenSSL                 │
 │  Boost.MySQL                                          │
 └──────────────────────────────────────────────────────┘
 ```
@@ -118,7 +118,7 @@ Hical 采用**两层分离**架构：核心抽象层（`src/core/`）与网络�
 | ------------------------------ | ---------------------------------------------------------- |
 | `HttpServer`                   | 顶层门面，整合路由+中间件+网络层，一键启动                 |
 | `Router`                       | 路由注册与分发，静态路由 O(1) + 参数路由                   |
-| `HttpRequest` / `HttpResponse` | Beast HTTP 消息的 hical 风格封装                           |
+| `HttpRequest` / `HttpResponse` | 原生 HTTP 消息的 hical 风格封装                            |
 | `Middleware`                   | 洋葱模型中间件管道                                         |
 | `WebSocketSession`             | WebSocket 会话封装                                         |
 | `Coroutine`                    | `Awaitable<T>` 别名和协程工具函数                          |
@@ -188,7 +188,7 @@ HttpServer
 │   └── RouteGroup (路由前缀分组)
 ├── MiddlewarePipeline (中间件管道)
 │   └── Cors (makeCorsMiddleware)
-├── HttpRequest / HttpResponse (Beast 封装)
+├── HttpRequest / HttpResponse (自研 HTTP 栈封装)
 ├── WebSocketSession (WebSocket)
 ├── SslContext (SSL/TLS 配置)
 └── Coroutine (协程工具)
@@ -790,7 +790,7 @@ GenericServer<AsioBackend> server;
 C++26 反射特性（`std::meta::info`）将使框架能够：
 
 1. **自动发现** — 通过反射自动提取用户 Handler 类的成员函数签名
-2. **自动包装** — 将 `co_await request.readBody()` 等高层调用映射到 Beast 底层异步操作
+2. **自动包装** — 将 `co_await request.readBody()` 等高层调用映射到底层异步操作
 3. **自动注册** — 编译期生成路由分发表，零运行时开销
 
 ### 10.2 当前降级方案
@@ -840,7 +840,7 @@ hical::meta::registerRoutes<UserHandler>(router);
 co_await request.readJson<UserDTO>();
 
 // 框架通过反射自动生成
-// 1. co_await beast::http::async_read(stream, buffer, req)
+// 1. co_await async_read(stream, buffer, req)
 // 2. 解析 JSON → 反射自动映射字段到 UserDTO 结构体
 // 3. 使用 pmr 分配器分配 UserDTO
 ```
@@ -1055,7 +1055,7 @@ struct NetworkError
 | 决策                   | 选择                                   | 理由                                                           |
 | ---------------------- | -------------------------------------- | -------------------------------------------------------------- |
 | 协程模型               | `asio::awaitable<T>`                   | 与 Boost.Asio 原生集成，零额外开销，代码线性化                 |
-| HTTP 解析器            | Boost.Beast                            | 工业级成熟度，不重复造轮子                                     |
+| HTTP 解析器            | picohttpparser（自研栈）               | 轻量零拷贝，性能优于 Beast                                     |
 | 内存管理               | C++17 PMR 三层池                       | 标准化接口，高并发低碎片，与 Boost.JSON 天然兼容               |
 | SSL 实现               | 模板化 `GenericConnection<SocketType>` | 编译期分支消除，零运行时开销                                   |
 | 后端抽象               | C++20 Concepts                         | 编译期约束，不引入虚函数开销，面向未来可扩展                   |

@@ -2,6 +2,7 @@ package main
 
 import (
 	"net/http"
+	"runtime"
 
 	"github.com/gin-gonic/gin"
 )
@@ -13,6 +14,7 @@ type UserDTO struct {
 }
 
 func main() {
+	runtime.GOMAXPROCS(4)
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
 

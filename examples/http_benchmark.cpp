@@ -1,18 +1,39 @@
 #include <boost/asio.hpp>
-#include <boost/beast.hpp>
 #include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <cstdlib>
 #include <iostream>
 #include <mutex>
 #include <numeric>
+#include <set>
 #include <string>
 #include <thread>
 #include <vector>
 
-namespace beast = boost::beast;
-namespace http = beast::http;
 using boost::asio::ip::tcp;
+
+static std::size_t parseContentLength(const std::string& headers)
+{
+	// 大小写不敏感地查找 content-length 字段
+	static const std::string kField = "content-length:";
+	std::string lower = headers;
+	for (char& c : lower)
+	{
+		c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+	}
+	auto pos = lower.find(kField);
+	if (pos == std::string::npos)
+	{
+		return 0;
+	}
+	pos += kField.size();
+	while (pos < lower.size() && lower[pos] == ' ')
+	{
+		++pos;
+	}
+	return static_cast<std::size_t>(std::stoul(lower.substr(pos)));
+}
 
 /**
  * @brief HTTP 压测客户端
@@ -26,7 +47,7 @@ public:
 					const std::string& host,
 					const std::string& port,
 					const std::string& target,
-					http::verb method,
+					const std::string& method,
 					const std::string& body,
 					int numRequests,
 					std::atomic<int>& completed,
@@ -56,29 +77,60 @@ private:
 			tcp::resolver resolver(io_);
 			auto endpoints = co_await resolver.async_resolve(host_, port_, boost::asio::use_awaitable);
 
-			beast::tcp_stream stream(io_);
-			co_await stream.async_connect(endpoints, boost::asio::use_awaitable);
+			tcp::socket socket(io_);
+			co_await boost::asio::async_connect(socket, endpoints, boost::asio::use_awaitable);
 
-			beast::flat_buffer buffer;
+			// 预构建请求字符串，循环内复用
+			std::string reqStr;
+			reqStr.reserve(256 + body_.size());
+			reqStr += method_ + " " + target_ + " HTTP/1.1\r\n";
+			reqStr += "Host: " + host_ + "\r\n";
+			reqStr += "Connection: keep-alive\r\n";
+			if (!body_.empty())
+			{
+				reqStr += "Content-Type: application/json\r\n";
+				reqStr += "Content-Length: " + std::to_string(body_.size()) + "\r\n";
+			}
+			reqStr += "\r\n";
+			reqStr += body_;
+
+			std::string respBuf;
+			respBuf.reserve(4096);
+			char tmp[4096];
 
 			for (int i = 0; i < numRequests_; ++i)
 			{
-				http::request<http::string_body> req(method_, target_, 11);
-				req.set(http::field::host, host_);
-				req.set(http::field::connection, "keep-alive");
-				if (!body_.empty())
-				{
-					req.body() = body_;
-					req.set(http::field::content_type, "application/json");
-					req.prepare_payload();
-				}
-
 				auto start = std::chrono::high_resolution_clock::now();
 
-				co_await http::async_write(stream, req, boost::asio::use_awaitable);
+				co_await boost::asio::async_write(socket, boost::asio::buffer(reqStr), boost::asio::use_awaitable);
 
-				http::response<http::string_body> res;
-				co_await http::async_read(stream, buffer, res, boost::asio::use_awaitable);
+				// 读取到 \r\n\r\n（响应头结束）
+				respBuf.clear();
+				std::size_t headerEnd = std::string::npos;
+				for (;;)
+				{
+					auto n = co_await socket.async_read_some(boost::asio::buffer(tmp), boost::asio::use_awaitable);
+					respBuf.append(tmp, n);
+					headerEnd = respBuf.find("\r\n\r\n");
+					if (headerEnd != std::string::npos)
+					{
+						break;
+					}
+				}
+
+				// 提取响应头部分，解析 Content-Length
+				std::string headerSection = respBuf.substr(0, headerEnd);
+				std::size_t contentLength = parseContentLength(headerSection);
+
+				// 已在 respBuf 中读到的 body 字节数
+				std::size_t bodyReceived = respBuf.size() - (headerEnd + 4);
+
+				// 若 body 未读完，继续读
+				while (bodyReceived < contentLength)
+				{
+					auto n = co_await socket.async_read_some(boost::asio::buffer(tmp), boost::asio::use_awaitable);
+					bodyReceived += n;
+				}
 
 				auto end = std::chrono::high_resolution_clock::now();
 				double latencyMs = std::chrono::duration<double, std::milli>(end - start).count();
@@ -89,12 +141,10 @@ private:
 				}
 
 				completed_.fetch_add(1, std::memory_order_relaxed);
-				buffer.consume(buffer.size());
 			}
 
-			// 优雅关闭
-			beast::error_code ec;
-			stream.socket().shutdown(tcp::socket::shutdown_both, ec);
+			boost::system::error_code ec;
+			socket.shutdown(tcp::socket::shutdown_both, ec);
 		}
 		catch (const std::exception&)
 		{
@@ -106,7 +156,7 @@ private:
 	std::string host_;
 	std::string port_;
 	std::string target_;
-	http::verb method_;
+	std::string method_;
 	std::string body_;
 	int numRequests_;
 	std::atomic<int>& completed_;
@@ -129,7 +179,7 @@ void printHistogram(std::vector<double>& latencies)
 
 	auto percentile = [&](double p) -> double
 	{
-		auto idx = static_cast<size_t>(latencies.size() * p);
+		auto idx = static_cast<std::size_t>(latencies.size() * p);
 		if (idx >= latencies.size())
 		{
 			idx = latencies.size() - 1;
@@ -169,8 +219,8 @@ int main(int argc, char* argv[])
 	std::string methodStr = argc >= 7 ? argv[6] : "GET";
 	std::string body = argc >= 8 ? argv[7] : "";
 
-	http::verb method = http::string_to_verb(methodStr);
-	if (method == http::verb::unknown)
+	static const std::set<std::string> kValidMethods = {"GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"};
+	if (kValidMethods.find(methodStr) == kValidMethods.end())
 	{
 		std::cerr << "不支持的 HTTP 方法: " << methodStr << "\n";
 		return 1;
@@ -181,7 +231,7 @@ int main(int argc, char* argv[])
 	std::atomic<int> errors {0};
 	std::vector<double> latencies;
 	std::mutex latencyMutex;
-	latencies.reserve(totalRequests);
+	latencies.reserve(static_cast<std::size_t>(totalRequests));
 
 	std::cout << "========== hical HTTP 基准测试 ==========\n";
 	std::cout << "目标: " << host << ":" << port << target << "\n";
@@ -194,9 +244,8 @@ int main(int argc, char* argv[])
 
 	auto start = std::chrono::high_resolution_clock::now();
 
-	// 多线程运行
-	size_t threadCount =
-		std::min(static_cast<size_t>(numClients), static_cast<size_t>(std::thread::hardware_concurrency()));
+	std::size_t threadCount =
+		std::min(static_cast<std::size_t>(numClients), static_cast<std::size_t>(std::thread::hardware_concurrency()));
 	if (threadCount == 0)
 	{
 		threadCount = 1;
@@ -204,7 +253,6 @@ int main(int argc, char* argv[])
 
 	boost::asio::io_context io;
 
-	// 创建客户端
 	std::vector<std::unique_ptr<HttpBenchClient>> clients;
 	for (int i = 0; i < numClients; ++i)
 	{
@@ -212,7 +260,7 @@ int main(int argc, char* argv[])
 															host,
 															port,
 															target,
-															method,
+															methodStr,
 															body,
 															requestsPerClient,
 															completed,
@@ -221,9 +269,8 @@ int main(int argc, char* argv[])
 															latencyMutex));
 	}
 
-	// 多线程运行 io_context
 	std::vector<std::thread> threads;
-	for (size_t i = 1; i < threadCount; ++i)
+	for (std::size_t i = 1; i < threadCount; ++i)
 	{
 		threads.emplace_back(
 			[&io]()

@@ -1,16 +1,17 @@
+#include "TestHttpClient.h"
 #include "core/HttpServer.h"
-#include <gtest/gtest.h>
 #include <boost/asio.hpp>
-#include <boost/beast.hpp>
+#include <boost/json.hpp>
+#include <gtest/gtest.h>
 #include <atomic>
 #include <chrono>
 #include <string>
 #include <thread>
 
 using namespace hical;
-namespace beast = boost::beast;
-namespace http = beast::http;
 using boost::asio::ip::tcp;
+using hical::test::httpGet;
+using hical::test::httpPost;
 
 // 辅助：启动服务器并等待就绪，返回实际端口
 uint16_t startServerAndWait(HttpServer& server, std::thread& serverThread)
@@ -52,48 +53,6 @@ uint16_t startServerAndWait(HttpServer& server, std::thread& serverThread)
 	return port;
 }
 
-// 辅助：发送 HTTP 请求并获取响应
-std::pair<unsigned int, std::string> httpGet(const std::string& host, uint16_t port, const std::string& target)
-{
-	boost::asio::io_context ioCtx;
-	tcp::socket socket(ioCtx);
-	socket.connect(tcp::endpoint(boost::asio::ip::make_address(host), port));
-
-	http::request<http::string_body> req(http::verb::get, target, 11);
-	req.set(http::field::host, host);
-	http::write(socket, req);
-
-	beast::flat_buffer buffer;
-	http::response<http::string_body> res;
-	http::read(socket, buffer, res);
-
-	socket.shutdown(tcp::socket::shutdown_both);
-	return {res.result_int(), res.body()};
-}
-
-std::pair<unsigned int, std::string> httpPost(const std::string& host,
-											  uint16_t port,
-											  const std::string& target,
-											  const std::string& body)
-{
-	boost::asio::io_context ioCtx;
-	tcp::socket socket(ioCtx);
-	socket.connect(tcp::endpoint(boost::asio::ip::make_address(host), port));
-
-	http::request<http::string_body> req(http::verb::post, target, 11);
-	req.set(http::field::host, host);
-	req.body() = body;
-	req.prepare_payload();
-	http::write(socket, req);
-
-	beast::flat_buffer buffer;
-	http::response<http::string_body> res;
-	http::read(socket, buffer, res);
-
-	socket.shutdown(tcp::socket::shutdown_both);
-	return {res.result_int(), res.body()};
-}
-
 // 测试 HttpServer 基本启动
 TEST(HttpServerTest, StartAndStop)
 {
@@ -127,7 +86,7 @@ TEST(HttpServerTest, GetRequest)
 	uint16_t port = startServerAndWait(server, serverThread);
 
 	auto [status, body] = httpGet("127.0.0.1", port, "/api/hello");
-	EXPECT_EQ(status, 200);
+	EXPECT_EQ(status, 200u);
 	EXPECT_EQ(body, "Hello from hical!");
 
 	server.stop();
@@ -149,7 +108,7 @@ TEST(HttpServerTest, PostRequest)
 	uint16_t port = startServerAndWait(server, serverThread);
 
 	auto [status, body] = httpPost("127.0.0.1", port, "/api/echo", "Echo this!");
-	EXPECT_EQ(status, 200);
+	EXPECT_EQ(status, 200u);
 	EXPECT_EQ(body, "Echo this!");
 
 	server.stop();
@@ -165,7 +124,7 @@ TEST(HttpServerTest, NotFound)
 	uint16_t port = startServerAndWait(server, serverThread);
 
 	auto [status, body] = httpGet("127.0.0.1", port, "/nonexistent");
-	EXPECT_EQ(status, 404);
+	EXPECT_EQ(status, 404u);
 
 	server.stop();
 	serverThread.join();
@@ -186,7 +145,7 @@ TEST(HttpServerTest, PathParam)
 	uint16_t port = startServerAndWait(server, serverThread);
 
 	auto [status, body] = httpGet("127.0.0.1", port, "/users/42");
-	EXPECT_EQ(status, 200);
+	EXPECT_EQ(status, 200u);
 	EXPECT_EQ(body, "User 42");
 
 	server.stop();
@@ -215,23 +174,10 @@ TEST(HttpServerTest, Middleware)
 	std::thread serverThread;
 	uint16_t port = startServerAndWait(server, serverThread);
 
-	// 手动检查响应头
-	boost::asio::io_context ioCtx;
-	tcp::socket socket(ioCtx);
-	socket.connect(tcp::endpoint(boost::asio::ip::make_address("127.0.0.1"), port));
+	auto result = hical::test::httpGetFull("127.0.0.1", port, "/api/test");
+	EXPECT_EQ(result.status, 200u);
+	EXPECT_EQ(result.findHeader("X-Powered-By"), "hical");
 
-	http::request<http::string_body> req(http::verb::get, "/api/test", 11);
-	req.set(http::field::host, "127.0.0.1");
-	http::write(socket, req);
-
-	beast::flat_buffer buffer;
-	http::response<http::string_body> res;
-	http::read(socket, buffer, res);
-
-	EXPECT_EQ(res.result_int(), 200);
-	EXPECT_EQ(std::string(res["X-Powered-By"]), "hical");
-
-	socket.shutdown(tcp::socket::shutdown_both);
 	server.stop();
 	serverThread.join();
 }
@@ -250,25 +196,13 @@ TEST(HttpServerTest, JsonResponse)
 	std::thread serverThread;
 	uint16_t port = startServerAndWait(server, serverThread);
 
-	boost::asio::io_context ioCtx;
-	tcp::socket socket(ioCtx);
-	socket.connect(tcp::endpoint(boost::asio::ip::make_address("127.0.0.1"), port));
+	auto result = hical::test::httpGetFull("127.0.0.1", port, "/api/status");
+	EXPECT_EQ(result.status, 200u);
+	EXPECT_EQ(result.findHeader("content-type"), "application/json");
 
-	http::request<http::string_body> req(http::verb::get, "/api/status", 11);
-	req.set(http::field::host, "127.0.0.1");
-	http::write(socket, req);
-
-	beast::flat_buffer buffer;
-	http::response<http::string_body> res;
-	http::read(socket, buffer, res);
-
-	EXPECT_EQ(res.result_int(), 200);
-	EXPECT_EQ(std::string(res[http::field::content_type]), "application/json");
-
-	auto json = boost::json::parse(res.body());
+	auto json = boost::json::parse(result.body);
 	EXPECT_EQ(json.at("status").as_string(), "ok");
 
-	socket.shutdown(tcp::socket::shutdown_both);
 	server.stop();
 	serverThread.join();
 }

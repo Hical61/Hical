@@ -9,6 +9,7 @@
 #include <chrono>
 #include <cstdio>
 #include <functional>
+#include <type_traits>
 
 namespace hical
 {
@@ -116,6 +117,35 @@ namespace hical
 	void coSpawn(boost::asio::io_context& ioCtx, F&& coroutine, Handler&& handler)
 	{
 		boost::asio::co_spawn(ioCtx, std::forward<F>(coroutine), std::forward<Handler>(handler));
+	}
+
+	/**
+	 * @brief co_spawn 便捷封装（接受任意 executor，默认带异常日志）
+	 * @param executor 执行器（如 socket.get_executor()、co_await this_coro::executor）
+	 * @param coroutine 协程函数
+	 * 在指定 executor 上启动一个协程。
+	 * 协程内未捕获的异常会输出到 stderr，而非静默丢弃。
+	 */
+	template <typename Executor, typename F>
+		requires(!std::is_same_v<std::decay_t<Executor>, boost::asio::io_context>)
+	void coSpawn(Executor&& executor, F&& coroutine)
+	{
+		boost::asio::co_spawn(std::forward<Executor>(executor), std::forward<F>(coroutine), logOnException);
+	}
+
+	/**
+	 * @brief co_spawn 带完成回调的封装（接受任意 executor）
+	 * @param executor 执行器
+	 * @param coroutine 协程函数
+	 * @param handler 完成回调（接收 std::exception_ptr）
+	 */
+	template <typename Executor, typename F, typename Handler>
+		requires(!std::is_same_v<std::decay_t<Executor>, boost::asio::io_context>)
+	void coSpawn(Executor&& executor, F&& coroutine, Handler&& handler)
+	{
+		boost::asio::co_spawn(std::forward<Executor>(executor),
+							  std::forward<F>(coroutine),
+							  std::forward<Handler>(handler));
 	}
 
 } // namespace hical

@@ -3,6 +3,7 @@
 #include <boost/system/error_code.hpp>
 #include <cstdint>
 #include <string>
+#include <system_error>
 
 namespace hical
 {
@@ -126,11 +127,25 @@ namespace hical
 	ErrorCode fromBoostError(const boost::system::error_code& ec);
 
 	/**
+	 * @brief 将 std::error_code 转换为 ErrorCode（为未来迁移预留）
+	 * @param ec 标准库错误码
+	 * @return 框架内部错误码
+	 */
+	ErrorCode fromStdError(const std::error_code& ec);
+
+	/**
 	 * @brief 将 boost::system::error_code 转换为 NetworkError
 	 * @param ec Boost 错误码
 	 * @return 网络错误结构体
 	 */
 	NetworkError toNetworkError(const boost::system::error_code& ec);
+
+	/**
+	 * @brief 将 std::error_code 转换为 NetworkError（为未来迁移预留）
+	 * @param ec 标准库错误码
+	 * @return 网络错误结构体
+	 */
+	NetworkError toNetworkError(const std::error_code& ec);
 
 	/**
 	 * @brief 获取错误码的字符串描述

@@ -386,7 +386,7 @@ if (stats.totalAllocations - stats.totalDeallocations > 10000) {
 | --------- | ----------------------- | ---------------------- | ----------------------- |
 | 语言      | C++20                   | C++17                  | C                       |
 | 异步模型  | 协程 (co_await)         | 回调 + 协程            | 事件驱动 (epoll/kqueue) |
-| HTTP 解析 | Boost.Beast             | 自研 (Trantor)         | 自研                    |
+| HTTP 解析 | picohttpparser（自研栈） | 自研 (Trantor)         | 自研                    |
 | 内存管理  | PMR 三层池              | 传统分配器             | slab 分配器             |
 | 线程模型  | 1:1 (thread:io_context) | 1:1 (thread:EventLoop) | 多进程 worker           |
 | SSL       | 模板化编译期分支        | 运行时分支             | OpenSSL                 |

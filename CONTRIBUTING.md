@@ -21,7 +21,7 @@ See [docs/build_and_test_guide.md](docs/build_and_test_guide.md) for full detail
 | Dependency   | Version                             |
 | ------------ | ----------------------------------- |
 | C++ Standard | C++20                               |
-| Boost        | >= 1.82 (Asio, Beast, System, JSON); DB middleware >= 1.85 |
+| Boost        | >= 1.82 (Asio, System, JSON); DB middleware >= 1.85 |
 | CMake        | >= 3.20                             |
 | OpenSSL      | Required                            |
 | Google Test  | Required                            |
@@ -129,7 +129,7 @@ Use the [issue templates](https://github.com/Hical61/Hical/issues/new/choose). P
 | 依赖项      | 版本要求                             |
 | ----------- | ------------------------------------ |
 | C++ 标准    | C++20                                |
-| Boost       | >= 1.82（Asio、Beast、System、JSON）；DB 中间件 >= 1.85 |
+| Boost       | >= 1.82（Asio、System、JSON）；DB 中间件 >= 1.85 |
 | CMake       | >= 3.20                              |
 | OpenSSL     | 必需                                 |
 | Google Test | 必需                                 |

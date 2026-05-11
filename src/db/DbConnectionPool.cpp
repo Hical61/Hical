@@ -185,7 +185,7 @@ namespace hical::db
 			// 避免 totalCount() 低估导致创建超出 maxConnections 的连接。
 			auto connPtr = std::move(conn);
 			auto self = shared_from_this();
-			boost::asio::co_spawn(
+			coSpawn(
 				m_ioCtx,
 				[self, connPtr]() mutable -> Awaitable<void>
 				{

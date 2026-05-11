@@ -2,7 +2,8 @@ services:
   # ============ C++ 框架（cpp profile） ============
   hical:
     build:
-      context: ./hical
+      context: ..
+      dockerfile: benchmark/hical/Dockerfile
     ports:
       - "8080:8080"
     cpus: 4
@@ -89,6 +90,17 @@ services:
     networks:
       - bench
 
+  fiber:
+    build:
+      context: ./fiber
+    ports:
+      - "8089:8089"
+    cpus: 4
+    mem_limit: 512m
+    profiles: [cross-lang]
+    networks:
+      - bench
+
   # ============ 压测工具（两个 profile 共用） ============
   wrk:
     build:
@@ -104,8 +116,8 @@ services:
   # ============ Profiling 专用（profiling profile） ============
   hical-profiling:
     build:
-      context: ./hical
-      dockerfile: Dockerfile.profiling
+      context: ..
+      dockerfile: benchmark/hical/Dockerfile.profiling
     ports:
       - "8080:8080"
     cpus: 4

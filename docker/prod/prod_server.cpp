@@ -1,10 +1,8 @@
 /**
  * @file prod_server.cpp
  * @brief Hical 生产级 HTTP 服务器入口
- *
  * 演示完整的生产中间件栈：CORS → 日志 → Session → DB → 业务路由。
  * 包含健康检查、Prometheus 指标、日志管理端点。
- *
  * 编译方式：
  *   cmake -B build -DHICAL_BUILD_DEPLOY=ON -DHICAL_WITH_DATABASE=ON ...
  *   cmake --build build --target prod_server
@@ -82,6 +80,7 @@ struct Metrics
 		uint64_t count = 0;
 		double totalLatencyMs = 0;
 	};
+
 	std::mutex mtx;
 	std::unordered_map<std::string, PathStats> pathStats;
 
@@ -210,7 +209,7 @@ int main()
 		HttpServer server(port, threads);
 
 		// ---- 服务器参数 ----
-		server.setMaxBodySize(10 * 1024 * 1024);  // 10MB
+		server.setMaxBodySize(10 * 1024 * 1024); // 10MB
 		server.setMaxConnections(10000);
 		server.setIdleTimeout(60.0);
 		server.setShutdownTimeout(30.0);
@@ -220,8 +219,10 @@ int main()
 		server.setErrorHandler(
 			[](const std::exception& e, const HttpRequest& req) -> HttpResponse
 			{
-				HICAL_LOG_ERROR("Unhandled exception: {} {} - {}", httpMethodToString(req.method()),
-								req.path(), e.what());
+				HICAL_LOG_ERROR("Unhandled exception: {} {} - {}",
+								httpMethodToString(req.method()),
+								req.path(),
+								e.what());
 				auto res = HttpResponse::json({{"error", "Internal Server Error"}});
 				res.setStatus(HttpStatusCode::hInternalServerError);
 				return res;
@@ -267,8 +268,8 @@ int main()
 #ifdef HICAL_HAS_DATABASE
 		// 5. 数据库中间件
 		auto dbConfig = buildDbConfig();
-		auto dbPool = std::make_shared<db::DbConnectionPool>(
-			server.ioContext(), dbConfig, db::MysqlConnection::makeFactory());
+		auto dbPool =
+			std::make_shared<db::DbConnectionPool>(server.ioContext(), dbConfig, db::MysqlConnection::makeFactory());
 
 		db::DbMiddlewareOptions dbOpts;
 		dbOpts.autoTransaction = false;
@@ -346,8 +347,7 @@ int main()
 							[](const HttpRequest& req) -> Awaitable<HttpResponse>
 							{
 								auto conn = db::getDbConnection(req);
-								auto result = co_await conn->query("SELECT id, name, email, created_at FROM users",
-																   {});
+								auto result = co_await conn->query("SELECT id, name, email, created_at FROM users", {});
 								boost::json::array users;
 								for (const auto& row : result.rows)
 								{
@@ -367,8 +367,9 @@ int main()
 							{
 								auto conn = db::getDbConnection(req);
 								std::vector<std::string> params = {req.param("id")};
-								auto result = co_await conn->query(
-									"SELECT id, name, email, created_at FROM users WHERE id = ?", params);
+								auto result =
+									co_await conn->query("SELECT id, name, email, created_at FROM users WHERE id = ?",
+														 params);
 								if (result.rows.empty())
 								{
 									auto res = HttpResponse::json({{"error", "User not found"}});
@@ -397,12 +398,11 @@ int main()
 								 auto result =
 									 co_await conn->execute("INSERT INTO users (name, email) VALUES (?, ?)", params);
 
-								 auto res = HttpResponse::json(
-									 boost::json::object {
-										 {"id", std::to_string(result.insertId)},
-										 {"name", name},
-										 {"email", email},
-									 });
+								 auto res = HttpResponse::json(boost::json::object {
+									 {"id", std::to_string(result.insertId)},
+									 {"name", name},
+									 {"email", email},
+								 });
 								 res.setStatus(HttpStatusCode::hCreated);
 								 co_return res;
 							 });

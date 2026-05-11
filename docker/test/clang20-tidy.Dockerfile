@@ -14,7 +14,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends wget gnupg ca-c
     && apt-get update && apt-get install -y --no-install-recommends \
         clang-20 clang-tidy-20 \
         cmake ninja-build python3 \
-        libboost-all-dev libssl-dev libgtest-dev \
+        libboost-all-dev libssl-dev libgtest-dev zlib1g-dev \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /src
@@ -29,5 +29,7 @@ RUN cmake -B build -G Ninja \
         -DHICAL_DISABLE_IO_URING=ON \
     && cmake --build build -j$(nproc)
 
-# clang-tidy 检查（与 CI 命令一致）+ 注释缩进检查
-CMD ["sh", "-c", "python3 scripts/fix-comment-indent.py --check $(find src tests examples -name '*.h' -o -name '*.cpp') && find src -name '*.cpp' | xargs clang-tidy-20 -p build"]
+# clang-tidy 只扫描 compile_commands.json 中实际编译的 .cpp 文件
+# （排除 .c 文件避免 -std=c++2a 与 C 语言冲突，排除未启用的可选模块）
+# fix-comment-indent 仍然检查所有源文件
+CMD ["sh", "-c", "python3 scripts/fix-comment-indent.py --check $(find src tests examples -path '*/third_party' -prune -o \\( -name '*.h' -o -name '*.cpp' \\) -print) && grep -oP '\"file\": \"\\K[^\"]+\\.cpp' build/compile_commands.json | xargs clang-tidy-20 -p build"]

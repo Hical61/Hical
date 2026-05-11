@@ -198,13 +198,12 @@ namespace hical
 		if (writing_.compare_exchange_strong(expected, true))
 		{
 			auto self = std::static_pointer_cast<GenericConnection<SocketType>>(sharedThis());
-			boost::asio::co_spawn(
+			coSpawn(
 				socketExecutor(),
 				[self]() -> boost::asio::awaitable<void>
 				{
 					co_await self->writeLoop();
-				},
-				boost::asio::detached);
+				});
 		}
 	}
 
@@ -232,7 +231,7 @@ namespace hical
 		{
 			// SSL 连接：先执行 TLS close_notify，再做 TCP shutdown
 			auto self = sharedThis();
-			boost::asio::co_spawn(
+			coSpawn(
 				socketExecutor(),
 				[self]() -> boost::asio::awaitable<void>
 				{
@@ -250,8 +249,7 @@ namespace hical
 					{
 						sock.shutdown(boost::asio::ip::tcp::socket::shutdown_send, ec);
 					}
-				},
-				boost::asio::detached);
+				});
 		}
 		else
 		{
@@ -319,13 +317,12 @@ namespace hical
 				{
 					reading_ = true;
 					auto conn = std::static_pointer_cast<GenericConnection<SocketType>>(self);
-					boost::asio::co_spawn(
+					coSpawn(
 						socketExecutor(),
 						[conn]() -> boost::asio::awaitable<void>
 						{
 							co_await conn->readLoop();
-						},
-						boost::asio::detached);
+						});
 				}
 			});
 	}
@@ -473,13 +470,12 @@ namespace hical
 				{
 					// SSL 连接：先执行握手，再触发回调和读取
 					auto conn = std::static_pointer_cast<GenericConnection<SocketType>>(self);
-					boost::asio::co_spawn(
+					coSpawn(
 						socketExecutor(),
 						[conn]() -> boost::asio::awaitable<void>
 						{
 							co_await conn->sslHandshake();
-						},
-						boost::asio::detached);
+						});
 				}
 				else
 				{

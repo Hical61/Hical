@@ -30,6 +30,7 @@ CPPHTTPLIB_HOST="${CPPHTTPLIB_HOST:-cpphttplib:8086}"
 CINATRA_HOST="${CINATRA_HOST:-cinatra:8087}"
 GIN_HOST="${GIN_HOST:-gin:8081}"
 ACTIX_HOST="${ACTIX_HOST:-actix:8082}"
+FIBER_HOST="${FIBER_HOST:-fiber:8089}"
 
 # ==================== 根据模式组装框架列表 ====================
 FRAMEWORKS=()
@@ -49,6 +50,7 @@ case "$BENCH_MODE" in
         FRAMEWORKS=(
             "Hical|${HICAL_HOST}"
             "Gin|${GIN_HOST}"
+            "Fiber|${FIBER_HOST}"
             "Actix-web|${ACTIX_HOST}"
         )
         ;;
@@ -61,6 +63,7 @@ case "$BENCH_MODE" in
             "cpp-httplib|${CPPHTTPLIB_HOST}"
             "Cinatra|${CINATRA_HOST}"
             "Gin|${GIN_HOST}"
+            "Fiber|${FIBER_HOST}"
             "Actix-web|${ACTIX_HOST}"
         )
         ;;

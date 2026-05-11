@@ -1,9 +1,11 @@
 #pragma once
 
 #include "Cookie.h"
+#include "FixedBuffer.h"
+#include "HeaderMap.h"
 #include "HttpTypes.h"
-#include <boost/beast/http.hpp>
 #include <boost/json.hpp>
+#include <charconv>
 #include <string>
 #include <string_view>
 
@@ -11,22 +13,132 @@ namespace hical
 {
 
 	/**
+	 * @brief HTTP 响应的原生内部表示
+	 * 自研 HTTP 响应内部表示，零外部依赖。
+	 * @warning serialize() / serializeHeadTo() 不做 CRLF 注入检查。
+	 * 所有头部写入应通过 HttpResponse 的 setHeader() 方法（内含 CRLF 防护），
+	 * 或确保数据源可信（如 picohttpparser 解析的请求头、框架内部设置的固定头部）。
+	 * 直接操作 headers 的代码需自行保证不含 CR/LF。
+	 */
+	struct NativeResponse
+	{
+		HttpStatusCode status = HttpStatusCode::hOk;
+		int httpVersionMinor = 1;
+		HeaderMap headers;
+		std::string body;
+		bool keepAlive = true;
+
+		/**
+		 * @brief 设置 Content-Length 头部
+		 * 空 body 且状态码非 204/304 时设置 Content-Length: 0
+		 */
+		void preparePayload()
+		{
+			if (body.empty())
+			{
+				auto code = static_cast<unsigned>(status);
+				if (code != 204 && code != 304)
+				{
+					headers.set("Content-Length", "0");
+				}
+			}
+			else
+			{
+				char buf[20];
+				auto [ptr, ec] = std::to_chars(buf, buf + 20, body.size());
+				headers.set("Content-Length", std::string_view(buf, static_cast<size_t>(ptr - buf)));
+			}
+		}
+
+		/**
+		 * @brief 序列化为完整的 HTTP 响应字节流
+		 * @return 包含状态行 + 头部 + 空行 + body 的字符串
+		 */
+		std::string serialize() const
+		{
+			std::string result;
+			result.reserve(256 + body.size());
+
+			// 状态行
+			result.append("HTTP/1.");
+			result += static_cast<char>('0' + httpVersionMinor);
+			result += ' ';
+			appendStatusCode(result);
+			result.append("\r\n");
+
+			// 头部
+			for (const auto& [name, value] : headers)
+			{
+				result.append(name);
+				result.append(": ");
+				result.append(value);
+				result.append("\r\n");
+			}
+
+			// 空行 + body
+			result.append("\r\n");
+			result.append(body);
+			return result;
+		}
+
+		/**
+		 * @brief 将状态行 + 头部序列化到栈缓冲区（零堆分配，用于 scatter-gather I/O）
+		 * @param buf 输出缓冲区（512 字节栈缓冲，覆盖典型 3-5 个 header 的响应头）
+		 */
+		void serializeHeadTo(FixedBuffer<512>& buf) const
+		{
+			// 200 OK + HTTP/1.1 快速路径（覆盖 80%+ 请求，1 次 append vs 7 次）
+			if (status == HttpStatusCode::hOk && httpVersionMinor == 1)
+			{
+				buf.append("HTTP/1.1 200 OK\r\n", 17);
+			}
+			else
+			{
+				buf << "HTTP/1.";
+				buf << static_cast<char>('0' + httpVersionMinor);
+				buf << ' ';
+
+				char codeBuf[4];
+				auto [ptr, ec] = std::to_chars(codeBuf, codeBuf + 4, static_cast<unsigned>(status));
+				buf.append(codeBuf, static_cast<size_t>(ptr - codeBuf));
+				buf << ' ';
+				buf << httpStatusCodeToString(status);
+				buf << "\r\n";
+			}
+
+			// 头部
+			for (const auto& [name, value] : headers)
+			{
+				buf << name;
+				buf << ": ";
+				buf << value;
+				buf << "\r\n";
+			}
+
+			// 空行
+			buf << "\r\n";
+		}
+
+	private:
+		void appendStatusCode(std::string& out) const
+		{
+			char buf[4];
+			auto [ptr, ec] = std::to_chars(buf, buf + 4, static_cast<unsigned>(status));
+			out.append(buf, static_cast<size_t>(ptr - buf));
+			out += ' ';
+			out.append(httpStatusCodeToString(status));
+		}
+	};
+
+	/**
 	 * @brief HTTP 响应封装
-	 * 对 Boost.Beast http::response 的 hical 风格封装。
+	 * 对自研 NativeResponse 的 hical 风格封装。
 	 * 提供简洁的接口设置状态码、头部和消息体。
 	 */
 	class HttpResponse
 	{
 	public:
-		using BeastResponse = boost::beast::http::response<boost::beast::http::string_body>;
-
 		HttpResponse();
-
-		/**
-		 * @brief 从 Beast response 构造
-		 * @param res Beast HTTP 响应
-		 */
-		explicit HttpResponse(BeastResponse res);
 
 		/**
 		 * @brief 获取状态码
@@ -83,11 +195,11 @@ namespace hical
 		void setCookie(const std::string& name, const std::string& value, const CookieOptions& options = {});
 
 		/**
-		 * @brief 获取底层 Beast 响应的引用
-		 * @return Beast 响应引用
+		 * @brief 获取底层原生响应的引用
+		 * @return NativeResponse 引用
 		 */
-		BeastResponse& native();
-		const BeastResponse& native() const;
+		NativeResponse& native();
+		const NativeResponse& native() const;
 
 		// ============ 快捷工厂方法 ============
 
@@ -133,7 +245,7 @@ namespace hical
 		static HttpResponse redirect(const std::string& location, HttpStatusCode code = HttpStatusCode::hFound);
 
 	private:
-		BeastResponse res_;
+		NativeResponse m_res;
 	};
 
 } // namespace hical

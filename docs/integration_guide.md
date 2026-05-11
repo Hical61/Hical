@@ -56,7 +56,7 @@ FetchContent_MakeAvailable(hical)
 target_link_libraries(my_app PRIVATE hical::hical_core)
 ```
 
-> **Note**: FetchContent requires Boost (asio, beast, system, json) and OpenSSL to be
+> **Note**: FetchContent requires Boost (asio, system, json) and OpenSSL to be
 > installed on the host machine and discoverable by CMake's `find_package`.
 
 ---

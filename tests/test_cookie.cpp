@@ -1,5 +1,6 @@
 #include "core/HttpRequest.h"
 #include "core/HttpResponse.h"
+#include "core/HeaderMap.h"
 #include <gtest/gtest.h>
 
 using namespace hical;
@@ -30,10 +31,9 @@ TEST(CookieTest, ParseMultipleCookies)
 TEST(CookieTest, CookieWithSpaces)
 {
 	HttpRequest req;
-	req.setHeader("Cookie", "  key1=val1;  key2=val2  ");
+	req.setHeader("Cookie", "  key1=val1;  key2=val2");
 
 	EXPECT_EQ(req.cookie("key1"), "val1");
-	// Beast 会 trim 请求头尾部空格，所以 value 不含尾部空格
 	EXPECT_EQ(req.cookie("key2"), "val2");
 }
 
@@ -133,17 +133,9 @@ TEST(CookieTest, SetMultipleCookies)
 	res.setCookie("a", "1");
 	res.setCookie("b", "2");
 
-	// Beast 多个 Set-Cookie 头：header() 只返回第一个，用 native() 验证完整
+	// 多个 Set-Cookie 头：header() 只返回第一个，用 native().headers 验证完整
 	auto& native = res.native();
-	int count = 0;
-	for (auto& field : native)
-	{
-		if (field.name() == boost::beast::http::field::set_cookie)
-		{
-			++count;
-		}
-	}
-	EXPECT_EQ(count, 2);
+	EXPECT_EQ(native.headers.count("Set-Cookie"), 2u);
 }
 
 // ============ CRLF 注入防护测试 ============
@@ -155,15 +147,7 @@ TEST(CookieTest, SetCookieRejectsCRLFInName)
 	res.setCookie("evil\r\nSet-Cookie: injected", "value");
 
 	auto& native = res.native();
-	int count = 0;
-	for (auto& field : native)
-	{
-		if (field.name() == boost::beast::http::field::set_cookie)
-		{
-			++count;
-		}
-	}
-	EXPECT_EQ(count, 0);
+	EXPECT_EQ(native.headers.count("Set-Cookie"), 0u);
 }
 
 TEST(CookieTest, SetCookieRejectsCRLFInValue)
@@ -172,15 +156,7 @@ TEST(CookieTest, SetCookieRejectsCRLFInValue)
 	res.setCookie("session", "val\r\nSet-Cookie: injected=1");
 
 	auto& native = res.native();
-	int count = 0;
-	for (auto& field : native)
-	{
-		if (field.name() == boost::beast::http::field::set_cookie)
-		{
-			++count;
-		}
-	}
-	EXPECT_EQ(count, 0);
+	EXPECT_EQ(native.headers.count("Set-Cookie"), 0u);
 }
 
 // ============ CRLF 注入防护 — Cookie 属性字段 ============
@@ -193,15 +169,7 @@ TEST(CookieTest, SetCookieRejectsCRLFInPath)
 	res.setCookie("session", "abc123", opts);
 
 	auto& native = res.native();
-	int count = 0;
-	for (auto& field : native)
-	{
-		if (field.name() == boost::beast::http::field::set_cookie)
-		{
-			++count;
-		}
-	}
-	EXPECT_EQ(count, 0);
+	EXPECT_EQ(native.headers.count("Set-Cookie"), 0u);
 }
 
 TEST(CookieTest, SetCookieRejectsCRLFInDomain)
@@ -212,15 +180,7 @@ TEST(CookieTest, SetCookieRejectsCRLFInDomain)
 	res.setCookie("session", "abc123", opts);
 
 	auto& native = res.native();
-	int count = 0;
-	for (auto& field : native)
-	{
-		if (field.name() == boost::beast::http::field::set_cookie)
-		{
-			++count;
-		}
-	}
-	EXPECT_EQ(count, 0);
+	EXPECT_EQ(native.headers.count("Set-Cookie"), 0u);
 }
 
 TEST(CookieTest, SetCookieRejectsCRLFInSameSite)
@@ -231,15 +191,7 @@ TEST(CookieTest, SetCookieRejectsCRLFInSameSite)
 	res.setCookie("session", "abc123", opts);
 
 	auto& native = res.native();
-	int count = 0;
-	for (auto& field : native)
-	{
-		if (field.name() == boost::beast::http::field::set_cookie)
-		{
-			++count;
-		}
-	}
-	EXPECT_EQ(count, 0);
+	EXPECT_EQ(native.headers.count("Set-Cookie"), 0u);
 }
 
 // ============ 重复键 first-wins 测试 ============

@@ -81,124 +81,126 @@ add_executable(test_cookie test_cookie.cpp)
 target_link_libraries(test_cookie PRIVATE hical_core GTest::gtest_main)
 
 # 注册测试
+# ASan/UBSan 构建下 test binary 启动较慢，默认 5 秒 discovery timeout 不够，统一提高到 30 秒
 include(GoogleTest)
-gtest_discover_tests(test_basic)
-gtest_discover_tests(test_error)
-gtest_discover_tests(test_asio_event_loop)
-gtest_discover_tests(test_asio_tcp_connection)
-gtest_discover_tests(test_memory_pool)
-gtest_discover_tests(test_asio_timer)
-gtest_discover_tests(test_ssl_connection)
-gtest_discover_tests(test_coroutine)
-gtest_discover_tests(test_http_types)
-gtest_discover_tests(test_router)
-gtest_discover_tests(test_route_group)
-gtest_discover_tests(test_tcp_server)
-gtest_discover_tests(test_middleware)
-gtest_discover_tests(test_http_server)
-gtest_discover_tests(test_websocket)
-gtest_discover_tests(test_router_perf)
-gtest_discover_tests(test_concepts)
-gtest_discover_tests(test_reflection)
-gtest_discover_tests(test_integration)
-gtest_discover_tests(test_cookie)
+set(HICAL_TEST_DISCOVERY_TIMEOUT 30)
+gtest_discover_tests(test_basic DISCOVERY_TIMEOUT ${HICAL_TEST_DISCOVERY_TIMEOUT})
+gtest_discover_tests(test_error DISCOVERY_TIMEOUT ${HICAL_TEST_DISCOVERY_TIMEOUT})
+gtest_discover_tests(test_asio_event_loop DISCOVERY_TIMEOUT ${HICAL_TEST_DISCOVERY_TIMEOUT})
+gtest_discover_tests(test_asio_tcp_connection DISCOVERY_TIMEOUT ${HICAL_TEST_DISCOVERY_TIMEOUT})
+gtest_discover_tests(test_memory_pool DISCOVERY_TIMEOUT ${HICAL_TEST_DISCOVERY_TIMEOUT})
+gtest_discover_tests(test_asio_timer DISCOVERY_TIMEOUT ${HICAL_TEST_DISCOVERY_TIMEOUT})
+gtest_discover_tests(test_ssl_connection DISCOVERY_TIMEOUT ${HICAL_TEST_DISCOVERY_TIMEOUT})
+gtest_discover_tests(test_coroutine DISCOVERY_TIMEOUT ${HICAL_TEST_DISCOVERY_TIMEOUT})
+gtest_discover_tests(test_http_types DISCOVERY_TIMEOUT ${HICAL_TEST_DISCOVERY_TIMEOUT})
+gtest_discover_tests(test_router DISCOVERY_TIMEOUT ${HICAL_TEST_DISCOVERY_TIMEOUT})
+gtest_discover_tests(test_route_group DISCOVERY_TIMEOUT ${HICAL_TEST_DISCOVERY_TIMEOUT})
+gtest_discover_tests(test_tcp_server DISCOVERY_TIMEOUT ${HICAL_TEST_DISCOVERY_TIMEOUT})
+gtest_discover_tests(test_middleware DISCOVERY_TIMEOUT ${HICAL_TEST_DISCOVERY_TIMEOUT})
+gtest_discover_tests(test_http_server DISCOVERY_TIMEOUT ${HICAL_TEST_DISCOVERY_TIMEOUT})
+gtest_discover_tests(test_websocket DISCOVERY_TIMEOUT ${HICAL_TEST_DISCOVERY_TIMEOUT})
+gtest_discover_tests(test_router_perf DISCOVERY_TIMEOUT ${HICAL_TEST_DISCOVERY_TIMEOUT})
+gtest_discover_tests(test_concepts DISCOVERY_TIMEOUT ${HICAL_TEST_DISCOVERY_TIMEOUT})
+gtest_discover_tests(test_reflection DISCOVERY_TIMEOUT ${HICAL_TEST_DISCOVERY_TIMEOUT})
+gtest_discover_tests(test_integration DISCOVERY_TIMEOUT ${HICAL_TEST_DISCOVERY_TIMEOUT})
+gtest_discover_tests(test_cookie DISCOVERY_TIMEOUT ${HICAL_TEST_DISCOVERY_TIMEOUT})
 
 # 静态文件服务测试
 add_executable(test_static_files test_static_files.cpp)
 target_link_libraries(test_static_files PRIVATE hical_core GTest::gtest_main)
-gtest_discover_tests(test_static_files)
+gtest_discover_tests(test_static_files DISCOVERY_TIMEOUT ${HICAL_TEST_DISCOVERY_TIMEOUT})
 
 # 文件上传测试
 add_executable(test_multipart test_multipart.cpp)
 target_link_libraries(test_multipart PRIVATE hical_core GTest::gtest_main)
-gtest_discover_tests(test_multipart)
+gtest_discover_tests(test_multipart DISCOVERY_TIMEOUT ${HICAL_TEST_DISCOVERY_TIMEOUT})
 
 # Session 测试
 add_executable(test_session test_session.cpp)
 target_link_libraries(test_session PRIVATE hical_core GTest::gtest_main)
-gtest_discover_tests(test_session)
+gtest_discover_tests(test_session DISCOVERY_TIMEOUT ${HICAL_TEST_DISCOVERY_TIMEOUT})
 
 # 查询参数解析测试
 add_executable(test_query_params test_query_params.cpp)
 target_link_libraries(test_query_params PRIVATE hical_core GTest::gtest_main)
-gtest_discover_tests(test_query_params)
+gtest_discover_tests(test_query_params DISCOVERY_TIMEOUT ${HICAL_TEST_DISCOVERY_TIMEOUT})
 
 # 表单参数解析测试
 add_executable(test_form_params test_form_params.cpp)
 target_link_libraries(test_form_params PRIVATE hical_core GTest::gtest_main)
-gtest_discover_tests(test_form_params)
+gtest_discover_tests(test_form_params DISCOVERY_TIMEOUT ${HICAL_TEST_DISCOVERY_TIMEOUT})
 
 # 重定向便捷方法测试
 add_executable(test_redirect test_redirect.cpp)
 target_link_libraries(test_redirect PRIVATE hical_core GTest::gtest_main)
-gtest_discover_tests(test_redirect)
+gtest_discover_tests(test_redirect DISCOVERY_TIMEOUT ${HICAL_TEST_DISCOVERY_TIMEOUT})
 
 # CORS 中间件测试
 add_executable(test_cors test_cors.cpp)
 target_link_libraries(test_cors PRIVATE hical_core GTest::gtest_main)
-gtest_discover_tests(test_cors)
+gtest_discover_tests(test_cors DISCOVERY_TIMEOUT ${HICAL_TEST_DISCOVERY_TIMEOUT})
 
 # 优雅关机与信号处理测试
 add_executable(test_graceful_shutdown test_graceful_shutdown.cpp)
 target_link_libraries(test_graceful_shutdown PRIVATE hical_core GTest::gtest_main)
-gtest_discover_tests(test_graceful_shutdown)
+gtest_discover_tests(test_graceful_shutdown DISCOVERY_TIMEOUT ${HICAL_TEST_DISCOVERY_TIMEOUT})
 
 # 全局错误处理器测试
 add_executable(test_error_handler test_error_handler.cpp)
 target_link_libraries(test_error_handler PRIVATE hical_core GTest::gtest_main)
-gtest_discover_tests(test_error_handler)
+gtest_discover_tests(test_error_handler DISCOVERY_TIMEOUT ${HICAL_TEST_DISCOVERY_TIMEOUT})
 
 # 日志系统测试
 add_executable(test_log test_log.cpp)
 target_link_libraries(test_log PRIVATE hical_core GTest::gtest_main)
-gtest_discover_tests(test_log)
+gtest_discover_tests(test_log DISCOVERY_TIMEOUT ${HICAL_TEST_DISCOVERY_TIMEOUT})
 
 # 日志系统 NDEBUG 测试（验证 TRACE 编译期消除）
 add_executable(test_log_ndebug test_log_ndebug.cpp)
 target_link_libraries(test_log_ndebug PRIVATE hical_core GTest::gtest_main)
 target_compile_definitions(test_log_ndebug PRIVATE NDEBUG)
-gtest_discover_tests(test_log_ndebug)
+gtest_discover_tests(test_log_ndebug DISCOVERY_TIMEOUT ${HICAL_TEST_DISCOVERY_TIMEOUT})
 
 # FixedBuffer 栈缓冲测试
 add_executable(test_fixed_buffer test_fixed_buffer.cpp)
 target_link_libraries(test_fixed_buffer PRIVATE hical_core GTest::gtest_main)
-gtest_discover_tests(test_fixed_buffer)
+gtest_discover_tests(test_fixed_buffer DISCOVERY_TIMEOUT ${HICAL_TEST_DISCOVERY_TIMEOUT})
 
 # LogFile 文件轮转测试
 add_executable(test_log_file test_log_file.cpp)
 target_link_libraries(test_log_file PRIVATE hical_core GTest::gtest_main)
-gtest_discover_tests(test_log_file)
+gtest_discover_tests(test_log_file DISCOVERY_TIMEOUT ${HICAL_TEST_DISCOVERY_TIMEOUT})
 
 # AsyncFileSink 异步日志测试
 add_executable(test_async_file_sink test_async_file_sink.cpp)
 target_link_libraries(test_async_file_sink PRIVATE hical_core GTest::gtest_main)
-gtest_discover_tests(test_async_file_sink)
+gtest_discover_tests(test_async_file_sink DISCOVERY_TIMEOUT ${HICAL_TEST_DISCOVERY_TIMEOUT})
 
 # LogFormatter 格式化器测试
 add_executable(test_log_formatter test_log_formatter.cpp)
 target_link_libraries(test_log_formatter PRIVATE hical_core GTest::gtest_main)
-gtest_discover_tests(test_log_formatter)
+gtest_discover_tests(test_log_formatter DISCOVERY_TIMEOUT ${HICAL_TEST_DISCOVERY_TIMEOUT})
 
 # LogChannel 多通道测试
 add_executable(test_log_channel test_log_channel.cpp)
 target_link_libraries(test_log_channel PRIVATE hical_core GTest::gtest_main)
-gtest_discover_tests(test_log_channel)
+gtest_discover_tests(test_log_channel DISCOVERY_TIMEOUT ${HICAL_TEST_DISCOVERY_TIMEOUT})
 
 # LogMiddleware 日志中间件测试
 add_executable(test_log_middleware test_log_middleware.cpp)
 target_link_libraries(test_log_middleware PRIVATE hical_core GTest::gtest_main)
-gtest_discover_tests(test_log_middleware)
+gtest_discover_tests(test_log_middleware DISCOVERY_TIMEOUT ${HICAL_TEST_DISCOVERY_TIMEOUT})
 
 # LogAdmin 动态级别端点测试
 add_executable(test_log_admin test_log_admin.cpp)
 target_link_libraries(test_log_admin PRIVATE hical_core GTest::gtest_main)
-gtest_discover_tests(test_log_admin)
+gtest_discover_tests(test_log_admin DISCOVERY_TIMEOUT ${HICAL_TEST_DISCOVERY_TIMEOUT})
 
 # OpenAPI 自动生成测试（可选，仅当 HICAL_WITH_OPENAPI=ON）
 if (HICAL_WITH_OPENAPI)
     add_executable(test_openapi test_openapi.cpp)
     target_link_libraries(test_openapi PRIVATE hical_core GTest::gtest_main)
-    gtest_discover_tests(test_openapi)
+    gtest_discover_tests(test_openapi DISCOVERY_TIMEOUT ${HICAL_TEST_DISCOVERY_TIMEOUT})
 endif()
 
 # 数据库中间件测试（可选，仅当 HICAL_WITH_DATABASE=ON）
@@ -206,26 +208,26 @@ if (HICAL_WITH_DATABASE)
     # 连接池测试（使用 Mock 连接，不依赖真实数据库）
     add_executable(test_db_pool test_db_pool.cpp)
     target_link_libraries(test_db_pool PRIVATE hical_core GTest::gtest_main)
-    gtest_discover_tests(test_db_pool)
+    gtest_discover_tests(test_db_pool DISCOVERY_TIMEOUT ${HICAL_TEST_DISCOVERY_TIMEOUT})
 
     # DB 中间件测试（使用 Mock 连接池）
     add_executable(test_db_middleware test_db_middleware.cpp)
     target_link_libraries(test_db_middleware PRIVATE hical_core GTest::gtest_main)
-    gtest_discover_tests(test_db_middleware)
+    gtest_discover_tests(test_db_middleware DISCOVERY_TIMEOUT ${HICAL_TEST_DISCOVERY_TIMEOUT})
 
     # PreparedStatement 缓存 LRU 测试
     add_executable(test_stmt_cache test_stmt_cache.cpp)
     target_link_libraries(test_stmt_cache PRIVATE hical_core GTest::gtest_main)
-    gtest_discover_tests(test_stmt_cache)
+    gtest_discover_tests(test_stmt_cache DISCOVERY_TIMEOUT ${HICAL_TEST_DISCOVERY_TIMEOUT})
 
     # 查询日志中间件测试
     add_executable(test_db_query_log test_db_query_log.cpp)
     target_link_libraries(test_db_query_log PRIVATE hical_core GTest::gtest_main)
-    gtest_discover_tests(test_db_query_log)
+    gtest_discover_tests(test_db_query_log DISCOVERY_TIMEOUT ${HICAL_TEST_DISCOVERY_TIMEOUT})
 
     # MySQL 集成测试（需要真实 MySQL 实例，连接失败时自动 SKIP）
     add_executable(test_mysql_integration test_mysql_integration.cpp)
     target_link_libraries(test_mysql_integration PRIVATE hical_core GTest::gtest_main)
-    gtest_discover_tests(test_mysql_integration)
+    gtest_discover_tests(test_mysql_integration DISCOVERY_TIMEOUT ${HICAL_TEST_DISCOVERY_TIMEOUT})
 endif()
 

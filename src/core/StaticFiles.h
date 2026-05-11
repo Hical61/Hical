@@ -319,7 +319,7 @@ namespace hical
 				HttpResponse res;
 				res.setStatus(HttpStatusCode::hNotModified);
 				res.setHeader("ETag", etag);
-				res.native().prepare_payload();
+				res.native().preparePayload();
 				co_return res;
 			}
 

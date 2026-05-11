@@ -1,16 +1,15 @@
+#include "TestHttpClient.h"
 #include "core/HttpServer.h"
-#include <gtest/gtest.h>
 #include <boost/asio.hpp>
-#include <boost/beast.hpp>
+#include <gtest/gtest.h>
 #include <atomic>
 #include <chrono>
 #include <string>
 #include <thread>
 
 using namespace hical;
-namespace beast = boost::beast;
-namespace http = beast::http;
 using boost::asio::ip::tcp;
+using hical::test::httpGet;
 
 static uint16_t startServerAndWait(HttpServer& server, std::thread& serverThread)
 {
@@ -47,24 +46,6 @@ static uint16_t startServerAndWait(HttpServer& server, std::thread& serverThread
 		}
 	}
 	return port;
-}
-
-static std::pair<unsigned int, std::string> httpGet(const std::string& host, uint16_t port, const std::string& target)
-{
-	boost::asio::io_context ioCtx;
-	tcp::socket socket(ioCtx);
-	socket.connect(tcp::endpoint(boost::asio::ip::make_address(host), port));
-
-	http::request<http::string_body> req(http::verb::get, target, 11);
-	req.set(http::field::host, host);
-	http::write(socket, req);
-
-	beast::flat_buffer buffer;
-	http::response<http::string_body> res;
-	http::read(socket, buffer, res);
-
-	socket.shutdown(tcp::socket::shutdown_both);
-	return {res.result_int(), res.body()};
 }
 
 // 自定义错误处理器：将 exception.what() 写入响应体

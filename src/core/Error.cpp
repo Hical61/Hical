@@ -1,5 +1,6 @@
 #include "Error.h"
 #include <boost/asio/error.hpp>
+#include <cerrno>
 
 #ifdef _WIN32
 	#include <winerror.h>
@@ -210,6 +211,158 @@ namespace hical
 				return "Unknown error";
 		}
 		return "Unknown error";
+	}
+
+	ErrorCode fromStdError(const std::error_code& ec)
+	{
+		if (!ec)
+		{
+			return ErrorCode::hNoError;
+		}
+
+		// 通过 std::errc 枚举映射平台无关的 POSIX 错误码
+		if (ec == std::errc::connection_reset)
+		{
+			return ErrorCode::hConnectionReset;
+		}
+		if (ec == std::errc::connection_refused)
+		{
+			return ErrorCode::hConnectionRefused;
+		}
+		if (ec == std::errc::timed_out)
+		{
+			return ErrorCode::hTimedOut;
+		}
+		if (ec == std::errc::operation_canceled)
+		{
+			return ErrorCode::hOperationAborted;
+		}
+		if (ec == std::errc::connection_aborted)
+		{
+			return ErrorCode::hConnectionAborted;
+		}
+		if (ec == std::errc::network_unreachable)
+		{
+			return ErrorCode::hNetworkUnreachable;
+		}
+		if (ec == std::errc::host_unreachable)
+		{
+			return ErrorCode::hHostUnreachable;
+		}
+		if (ec == std::errc::address_in_use)
+		{
+			return ErrorCode::hAddressInUse;
+		}
+		if (ec == std::errc::address_not_available)
+		{
+			return ErrorCode::hAddressNotAvailable;
+		}
+		if (ec == std::errc::already_connected)
+		{
+			return ErrorCode::hOperationInProgress;
+		}
+		if (ec == std::errc::broken_pipe)
+		{
+			return ErrorCode::hBrokenPipe;
+		}
+		if (ec == std::errc::permission_denied)
+		{
+			return ErrorCode::hPermissionDenied;
+		}
+		if (ec == std::errc::too_many_files_open || ec == std::errc::too_many_files_open_in_system)
+		{
+			return ErrorCode::hTooManyOpenFiles;
+		}
+		if (ec == std::errc::operation_would_block || ec == std::errc::resource_unavailable_try_again)
+		{
+			return ErrorCode::hWouldBlock;
+		}
+		if (ec == std::errc::operation_in_progress)
+		{
+			return ErrorCode::hConnectionInProgress;
+		}
+
+		// EOF 没有对应的 std::errc，通过原始值判断
+		auto value = ec.value();
+		auto& category = ec.category();
+
+		if (category == std::generic_category() || category == std::system_category())
+		{
+#ifdef _WIN32
+			switch (value)
+			{
+				case WSAECONNRESET:
+					return ErrorCode::hConnectionReset;
+				case WSAECONNREFUSED:
+					return ErrorCode::hConnectionRefused;
+				case WSAETIMEDOUT:
+					return ErrorCode::hTimedOut;
+				case WSAECONNABORTED:
+					return ErrorCode::hConnectionAborted;
+				case WSAENETUNREACH:
+					return ErrorCode::hNetworkUnreachable;
+				case WSAEHOSTUNREACH:
+					return ErrorCode::hHostUnreachable;
+				case WSAEADDRINUSE:
+					return ErrorCode::hAddressInUse;
+				case WSAEADDRNOTAVAIL:
+					return ErrorCode::hAddressNotAvailable;
+				case WSAEACCES:
+					return ErrorCode::hPermissionDenied;
+				case WSAEWOULDBLOCK:
+					return ErrorCode::hWouldBlock;
+				case WSAEINPROGRESS:
+					return ErrorCode::hConnectionInProgress;
+				default:
+					break;
+			}
+#else
+			switch (value)
+			{
+				case ECONNRESET:
+					return ErrorCode::hConnectionReset;
+				case ECONNREFUSED:
+					return ErrorCode::hConnectionRefused;
+				case ETIMEDOUT:
+					return ErrorCode::hTimedOut;
+				case ECONNABORTED:
+					return ErrorCode::hConnectionAborted;
+				case ENETUNREACH:
+					return ErrorCode::hNetworkUnreachable;
+				case EHOSTUNREACH:
+					return ErrorCode::hHostUnreachable;
+				case EADDRINUSE:
+					return ErrorCode::hAddressInUse;
+				case EADDRNOTAVAIL:
+					return ErrorCode::hAddressNotAvailable;
+				case EACCES:
+					return ErrorCode::hPermissionDenied;
+				case EMFILE:
+				case ENFILE:
+					return ErrorCode::hTooManyOpenFiles;
+				case EAGAIN:
+					return ErrorCode::hWouldBlock;
+				case EPIPE:
+					return ErrorCode::hBrokenPipe;
+				case EINPROGRESS:
+					return ErrorCode::hConnectionInProgress;
+				default:
+					break;
+			}
+#endif
+		}
+
+		return ErrorCode::hUnknown;
+	}
+
+	NetworkError toNetworkError(const std::error_code& ec)
+	{
+		if (!ec)
+		{
+			return {ErrorCode::hNoError, ""};
+		}
+
+		return {fromStdError(ec), ec.message()};
 	}
 
 } // namespace hical

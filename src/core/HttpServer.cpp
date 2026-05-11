@@ -75,7 +75,7 @@ namespace hical
 
 	size_t HttpServer::recommendedMaxConnections(size_t availableMemoryMB)
 	{
-		// 每连接约 25KB（PMR 缓冲 4KB + Beast parser ~8KB + socket 缓冲 ~8KB + 开销 ~5KB）
+		// 每连接约 25KB（PMR 缓冲 4KB + HTTP parser ~8KB + socket 缓冲 ~8KB + 开销 ~5KB）
 		// 预留 30% 内存给业务逻辑和系统开销
 		constexpr size_t hBytesPerConnection = 25 * 1024;
 		size_t usableBytes = availableMemoryMB * 1024 * 1024 * 7 / 10;
@@ -137,17 +137,84 @@ namespace hical
 				});
 		}
 
-		auto& baseIoCtx = baseLoop_.getIoContext();
+		// 创建 IO 线程池（提前到 acceptor 创建前，SO_REUSEPORT 需要所有 loop 就绪）
+		if (ioThreads_ > 1)
+		{
+			ioPool_ = std::make_unique<EventLoopPool>(ioThreads_ - 1);
+			ioPool_->start();
+		}
 
-		acceptor_ = std::make_unique<tcp::acceptor>(baseIoCtx);
+		// 收集所有 loop（baseLoop + workers）
+		std::vector<AsioEventLoop*> allLoops;
+		allLoops.push_back(&baseLoop_);
+		if (ioPool_)
+		{
+			for (auto* loop : ioPool_->getAllLoops())
+			{
+				allLoops.push_back(loop);
+			}
+		}
+
 		auto endpoint = tcp::endpoint(tcp::v4(), port_.load());
-		acceptor_->open(endpoint.protocol());
-		acceptor_->set_option(boost::asio::socket_base::reuse_address(true));
-		acceptor_->bind(endpoint);
-		acceptor_->listen();
+
+		// 尝试 SO_REUSEPORT 多 acceptor 模式（Linux / macOS / BSD）：
+		// 每个 worker loop 持有独立 acceptor，内核自动均衡分发连接，
+		// accept 和 I/O 在同一线程完成，消除跨线程调度开销（火焰图 14.5%）。
+		// Windows 不支持 SO_REUSEPORT，回退为单 acceptor + 跨线程分发。
+#if defined(__linux__) || defined(__APPLE__) || defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__)
+		{
+			bool allOk = true;
+			std::vector<std::unique_ptr<tcp::acceptor>> tempAcceptors;
+
+			for (auto* loop : allLoops)
+			{
+				auto acc = std::make_unique<tcp::acceptor>(loop->getIoContext());
+				acc->open(endpoint.protocol());
+				acc->set_option(boost::asio::socket_base::reuse_address(true));
+
+				boost::system::error_code ec;
+				using reuse_port = boost::asio::detail::socket_option::boolean<SOL_SOCKET, SO_REUSEPORT>;
+				acc->set_option(reuse_port(true), ec);
+				if (ec)
+				{
+					allOk = false;
+					break;
+				}
+
+				acc->bind(endpoint);
+				acc->listen();
+				tempAcceptors.push_back(std::move(acc));
+			}
+
+			if (allOk && tempAcceptors.size() == allLoops.size())
+			{
+				reusePortEnabled_ = true;
+				acceptors_ = std::move(tempAcceptors);
+			}
+		}
+#endif
+
+		// 回退：单 acceptor（Windows / SO_REUSEPORT 不可用）
+		if (!reusePortEnabled_)
+		{
+			auto acc = std::make_unique<tcp::acceptor>(baseLoop_.getIoContext());
+			acc->open(endpoint.protocol());
+			acc->set_option(boost::asio::socket_base::reuse_address(true));
+			acc->bind(endpoint);
+			acc->listen();
+			acceptors_.push_back(std::move(acc));
+		}
 
 		// 端口 0 时由系统分配，更新实际端口
-		port_.store(acceptor_->local_endpoint().port());
+		port_.store(acceptors_[0]->local_endpoint().port());
+
+		// 每个 acceptor 配独立 IdleFd（EMFILE 保护）
+		for (size_t i = 0; i < acceptors_.size(); ++i)
+		{
+			idleFds_.push_back(std::make_unique<IdleFd>());
+		}
+
+		auto& baseIoCtx = baseLoop_.getIoContext();
 
 		// 注册信号处理（SIGINT/SIGTERM → 优雅关机）
 		boost::asio::signal_set signals(baseIoCtx, SIGINT, SIGTERM);
@@ -160,19 +227,23 @@ namespace hical
 				}
 			});
 
-		coSpawn(baseIoCtx, acceptLoop());
+		// 在每个 loop 上启动独立 acceptLoop
+		if (reusePortEnabled_)
+		{
+			for (size_t i = 0; i < allLoops.size(); ++i)
+			{
+				coSpawn(allLoops[i]->getIoContext(), acceptLoop(*acceptors_[i], *idleFds_[i]));
+			}
+		}
+		else
+		{
+			coSpawn(baseIoCtx, acceptLoop(*acceptors_[0], *idleFds_[0]));
+		}
 
 		// 启动内存池 GC 定时器协程
 		if (gcInterval_ > 0)
 		{
 			coSpawn(baseIoCtx, gcLoop());
-		}
-
-		// 创建 IO 线程池：worker loop 数量 = ioThreads_ - 1（baseLoop 占 1 个线程）
-		if (ioThreads_ > 1)
-		{
-			ioPool_ = std::make_unique<EventLoopPool>(ioThreads_ - 1);
-			ioPool_->start();
 		}
 
 		// 主线程运行 baseLoop（阻塞）
@@ -195,19 +266,7 @@ namespace hical
 		}
 
 		draining_.store(true);
-
-		// 将 acceptor 关闭调度到 baseLoop 线程内，与 acceptLoop 串行执行，消除竞态
-		auto& baseIoCtx = baseLoop_.getIoContext();
-		boost::asio::post(baseIoCtx,
-						  [this]()
-						  {
-							  if (acceptor_)
-							  {
-								  boost::system::error_code ec;
-								  acceptor_->close(ec);
-							  }
-						  });
-
+		closeAllAcceptors();
 		stopAllLoops();
 	}
 
@@ -226,7 +285,7 @@ namespace hical
 		return baseLoop_.getIoContext();
 	}
 
-	Awaitable<void> HttpServer::acceptLoop()
+	Awaitable<void> HttpServer::acceptLoop(tcp::acceptor& acceptor, IdleFd& idleFd)
 	{
 		while (running_.load())
 		{
@@ -234,29 +293,53 @@ namespace hical
 
 			try
 			{
-				auto socket = co_await acceptor_->async_accept(boost::asio::use_awaitable);
-
-				if (!running_.load())
+				if (reusePortEnabled_)
 				{
-					break;
-				}
+					// SO_REUSEPORT 路径：socket 已在当前 loop 上，零跨线程调度
+					auto socket = co_await acceptor.async_accept(boost::asio::use_awaitable);
 
-				// 连接数限制：超过上限时立即关闭新连接
-				if (maxConnections_ > 0 && activeConnections_.load() >= maxConnections_)
+					if (!running_.load())
+					{
+						break;
+					}
+
+					if (maxConnections_ > 0 && activeConnections_.load() >= maxConnections_)
+					{
+						boost::system::error_code ec;
+						socket.close(ec);
+						continue;
+					}
+
+					socket.set_option(boost::asio::ip::tcp::no_delay(true));
+
+					coSpawn(co_await boost::asio::this_coro::executor, handleSession(std::move(socket)));
+				}
+				else
 				{
-					boost::system::error_code ec;
-					socket.close(ec);
-					continue;
+					// 回退路径（Windows 等无 SO_REUSEPORT 平台）：
+					// 借鉴 Cinatra 策略——socket 直接创建在目标 worker 的 io_context 上，
+					// 使 socket 的 IOCP/epoll 关联从一开始就在正确的线程，减少迁移开销。
+					auto& targetIoCtx = ioPool_ ? ioPool_->getNextLoop()->getIoContext() : baseLoop_.getIoContext();
+					tcp::socket socket(targetIoCtx.get_executor());
+
+					co_await acceptor.async_accept(socket, boost::asio::use_awaitable);
+
+					if (!running_.load())
+					{
+						break;
+					}
+
+					if (maxConnections_ > 0 && activeConnections_.load() >= maxConnections_)
+					{
+						boost::system::error_code ec;
+						socket.close(ec);
+						continue;
+					}
+
+					socket.set_option(boost::asio::ip::tcp::no_delay(true));
+
+					coSpawn(targetIoCtx.get_executor(), handleSession(std::move(socket)));
 				}
-
-				// 减少 Nagle 延迟
-				socket.set_option(boost::asio::ip::tcp::no_delay(true));
-
-				// 将 socket 分发到 worker loop：每个 worker 单线程运行，无需 strand
-				auto& targetIoCtx = ioPool_ ? ioPool_->getNextLoop()->getIoContext() : baseLoop_.getIoContext();
-				boost::asio::co_spawn(targetIoCtx.get_executor(),
-									  handleSession(std::move(socket)),
-									  boost::asio::detached);
 			}
 			catch (const boost::system::system_error& e)
 			{
@@ -268,13 +351,13 @@ namespace hical
 				// fd 耗尽处理：释放预留 fd → accept 并关闭 → 重新预留
 				if (e.code() == boost::asio::error::no_descriptors)
 				{
-					idleFd_.temporaryRelease();
+					idleFd.temporaryRelease();
 					{
 						boost::system::error_code acceptEc;
-						boost::asio::ip::tcp::socket tmpSocket(baseLoop_.getIoContext());
-						acceptor_->accept(tmpSocket, acceptEc);
+						boost::asio::ip::tcp::socket tmpSocket(acceptor.get_executor());
+						acceptor.accept(tmpSocket, acceptEc);
 					}
-					idleFd_.reacquire();
+					idleFd.reacquire();
 				}
 
 				needSleep = true;
@@ -308,20 +391,10 @@ namespace hical
 			return;
 		}
 
-		auto& baseIoCtx = baseLoop_.getIoContext();
-
-		// 关闭 acceptor，不再接受新连接
-		boost::asio::post(baseIoCtx,
-						  [this]()
-						  {
-							  if (acceptor_)
-							  {
-								  boost::system::error_code ec;
-								  acceptor_->close(ec);
-							  }
-						  });
+		closeAllAcceptors();
 
 		// 超时后强制停止（防止活跃连接迟迟不退出）
+		auto& baseIoCtx = baseLoop_.getIoContext();
 		auto timer = std::make_shared<boost::asio::steady_timer>(baseIoCtx);
 		timer->expires_after(std::chrono::milliseconds(static_cast<int64_t>(shutdownTimeout_ * 1000)));
 		timer->async_wait(
@@ -333,6 +406,20 @@ namespace hical
 					stopAllLoops();
 				}
 			});
+	}
+
+	void HttpServer::closeAllAcceptors()
+	{
+		// 将每个 acceptor 的关闭调度到其所在 loop 线程内，与 acceptLoop 串行执行，消除竞态
+		for (auto& acc : acceptors_)
+		{
+			boost::asio::post(acc->get_executor(),
+							  [&acc]()
+							  {
+								  boost::system::error_code ec;
+								  acc->close(ec);
+							  });
+		}
 	}
 
 	void HttpServer::stopAllLoops()

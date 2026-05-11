@@ -9,7 +9,7 @@
 [![GitHub stars](https://img.shields.io/github/stars/Hical61/Hical?style=flat)](https://github.com/Hical61/Hical/stargazers)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
-Hical is a modern C++ web framework built on Boost.Asio/Beast, utilizing C++26 reflection and PMR memory pooling to achieve high performance.
+Hical is a modern C++ web framework built on Boost.Asio with a native HTTP/WebSocket stack, utilizing C++26 reflection and PMR memory pooling to achieve high performance.
 
 > C++20/26 dual-track reflection · PMR memory pool · coroutine async I/O · Cookie / Session / StaticFiles / Multipart built-in · CORS · RouteGroup · logging system · OpenAPI 3.0 auto-docs · Optional DB middleware (Boost.MySQL)
 
@@ -18,7 +18,7 @@ English | [简体中文](README_CN.md)
 ## Features
 
 - **C++26 Reflection** — Designed around C++26 static reflection for automatic route registration, JSON serialization/deserialization, and compile-time metaprogramming; C++20 macro fallback provides the same API
-- **Boost.Asio/Beast Backend** — Industrial-grade networking with `io_context` per-thread model
+- **Boost.Asio Backend** — Industrial-grade networking with `io_context` per-thread model
 - **PMR Memory Pool** — Three-tier `std::pmr` allocator strategy (global synchronized pool, thread-local pool, request-level monotonic buffer) across buffers, HTTP bodies, and JSON objects
 - **Coroutine Support** — `asio::awaitable<T>` + `co_spawn` for clean async code
 - **C++ Concepts** — Compile-time `NetworkBackend` constraints for type safety
@@ -27,7 +27,7 @@ English | [简体中文](README_CN.md)
 - **Router & Middleware** — Onion-model middleware pipeline with path parameter support (`{id}`), static route O(1) hash lookup, per-method parameter route grouping
 - **RouteGroup** — Prefix-based route grouping with group-level middleware, supporting nested groups
 - **CORS Middleware** — Built-in Cross-Origin Resource Sharing middleware with automatic preflight handling
-- **HTTP Server** — Full HTTP/1.1 support via Boost.Beast (chunked transfer, keep-alive), fd exhaustion protection
+- **HTTP Server** — Full HTTP/1.1 support with native picohttpparser-based stack (chunked transfer, keep-alive), fd exhaustion protection
 - **Cookie Support** — RFC 6265 compliant parsing (first-wins semantics) + `Set-Cookie` with CRLF injection protection
 - **Static File Serving** — MIME auto-detection, ETag/304 caching, path traversal protection, async file I/O, PathCache (4096 entries / 60s TTL), 64 MB size limit
 - **Multipart File Upload** — RFC 7578 `multipart/form-data` parser with DoS protection (≤256 parts)
@@ -136,7 +136,7 @@ hical/
 | Dependency   | Version                             |
 | ------------ | ----------------------------------- |
 | C++ Standard | C++20 / C++26                       |
-| Boost        | >= 1.82 (Asio, Beast, System, JSON); DB middleware >= 1.85 (MySQL, charconv) |
+| Boost        | >= 1.82 (Asio, System, JSON); DB middleware >= 1.85 (MySQL, charconv) |
 | CMake        | >= 3.20                             |
 | OpenSSL      | Required                            |
 | Google Test  | Required                            |

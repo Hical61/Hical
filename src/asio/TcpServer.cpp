@@ -60,24 +60,20 @@ namespace hical
 		// 启动协程式 accept 循环
 		// 捕获 alive_ 标志防止 TcpServer 析构后协程访问悬空 this
 		auto aliveFlag = alive_;
-		boost::asio::co_spawn(
-			baseLoop_->getIoContext(),
-			[this, aliveFlag]() -> Awaitable<void>
-			{
-				co_await acceptLoop();
-			},
-			boost::asio::detached);
+		coSpawn(baseLoop_->getIoContext(),
+				[this, aliveFlag]() -> Awaitable<void>
+				{
+					co_await acceptLoop();
+				});
 
 		// 启动空闲连接超时扫描协程
 		if (idleTimeout_ > 0)
 		{
-			boost::asio::co_spawn(
-				baseLoop_->getIoContext(),
-				[this, aliveFlag]() -> Awaitable<void>
-				{
-					co_await idleCheckLoop();
-				},
-				boost::asio::detached);
+			coSpawn(baseLoop_->getIoContext(),
+					[this, aliveFlag]() -> Awaitable<void>
+					{
+						co_await idleCheckLoop();
+					});
 		}
 	}
 

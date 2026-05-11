@@ -1,41 +1,35 @@
 FROM ubuntu:24.04 AS builder
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    cmake make g++ python3 python3-pip pipx ca-certificates wget \
+    cmake make g++ ca-certificates \
+    libboost-all-dev libssl-dev zlib1g-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# 安装 Conan 2
-RUN pipx install conan && pipx ensurepath
-ENV PATH="/root/.local/bin:${PATH}"
-
-# 初始化 Conan 默认 profile
-RUN conan profile detect
-
-# 下载 hical v2.5.1 Conan 源码包并创建本地 Conan 包（Boost 静态链接）
-RUN wget -q https://github.com/Hical61/Hical/releases/download/v2.5.1/hical-2.5.1-conan-src.tar.gz \
-    -O /tmp/hical-src.tar.gz \
-    && mkdir -p /tmp/hical-src && tar xzf /tmp/hical-src.tar.gz -C /tmp/hical-src --strip-components=1 \
-    && cd /tmp/hical-src && conan create . --build=missing -s build_type=Release -s compiler.cppstd=20 \
-       -o "boost/*:shared=False" \
-    && rm -rf /tmp/hical-src /tmp/hical-src.tar.gz
-
 WORKDIR /src
-COPY main.cpp CMakeLists.txt conanfile.txt ./
 
-# 安装依赖
-RUN conan install . --build=missing -s build_type=Release -s compiler.cppstd=20
+# 复制 Hical 源码（build context = 仓库根目录）
+COPY CMakeLists.txt ./
+COPY cmake/ ./cmake/
+COPY src/ ./src/
+COPY docker/bench_main.cpp ./docker/bench_main.cpp
 
 # 构建 bench_server（Release 优化 + 保留调试符号，不 strip）
-RUN cmake --preset conan-release -DCMAKE_CXX_FLAGS_RELEASE="-O2 -g -DNDEBUG" \
-    && cmake --build --preset conan-release -j$(nproc)
+RUN cmake -B build -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_CXX_FLAGS_RELEASE="-O2 -g -DNDEBUG" \
+        -DHICAL_BUILD_TESTS=OFF \
+        -DHICAL_BUILD_EXAMPLES=OFF \
+        -DHICAL_WITH_DATABASE=OFF \
+        -DHICAL_WITH_OPENAPI=OFF \
+        -DHICAL_BUILD_BENCH=ON \
+    && cmake --build build -j$(nproc) --target bench_server
 
 # --- 运行阶段 ---
 FROM ubuntu:24.04
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    linux-tools-generic linux-tools-common \
+    linux-tools-generic linux-tools-common strace \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /src/bench_server /server
+COPY --from=builder /src/build/bench_server /server
 EXPOSE 8080
 CMD ["/server"]

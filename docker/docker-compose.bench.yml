@@ -1,0 +1,45 @@
+# Hical Benchmark — 分离模式（server 和 wrk 独立容器）
+#
+# 用法（在项目根目录执行）:
+#   同一 VM:
+#     docker compose -f docker/docker-compose.bench.yml up --build --abort-on-container-exit
+#
+#   跨 VM（server 在 VM-A，wrk 在 VM-B）:
+#     VM-A: docker compose -f docker/docker-compose.bench.yml up --build bench-server
+#     VM-B: docker run --rm -e SERVER_HOST=<VM-A-IP>:8080 hical-bench-wrk
+#
+#   自定义参数:
+#     DURATION=60s THREADS=8 docker compose -f docker/docker-compose.bench.yml up --build
+
+services:
+  bench-server:
+    build:
+      context: ..
+      dockerfile: docker/bench-server.Dockerfile
+    container_name: bench-server
+    cpus: 4
+    mem_limit: 512m
+    networks:
+      - bench
+
+  bench-wrk:
+    build:
+      context: ..
+      dockerfile: docker/bench-wrk.Dockerfile
+    container_name: bench-wrk
+    environment:
+      - SERVER_HOST=bench-server:8080
+      - DURATION=${DURATION:-30s}
+      - THREADS=${THREADS:-4}
+    volumes:
+      - ./:/output
+    cpus: 4
+    mem_limit: 512m
+    depends_on:
+      - bench-server
+    networks:
+      - bench
+
+networks:
+  bench:
+    driver: bridge

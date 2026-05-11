@@ -34,7 +34,7 @@ hical/
 │   │   ├── Router.h/.cpp       # 路由器（哈希表静态路由 + 按方法分桶参数路由 + WebSocket + WsOptions）
 │   │   ├── Middleware.h/.cpp   # 中间件系统（洋葱模型管道 + buildFor 预构建）
 │   │   ├── HttpServer.h/.cpp   # HTTP 服务器（Router + Middleware + WS 中间件预构建 + fd 耗尽防护）
-│   │   ├── WebSocket.h/.cpp    # WebSocket 会话封装（beast::websocket）
+│   │   ├── WebSocket.h/.cpp    # WebSocket 会话封装（自研实现）
 │   │   ├── StaticFiles.h       # 静态文件服务（异步 I/O + PathCache + ETag/304）
 │   │   ├── Multipart.h/.cpp    # multipart/form-data 解析（dual API: req 版 + parts 版）
 │   │   ├── Session.h/.cpp      # Session 会话管理（shared_mutex + regenerate + migrateFrom）
@@ -161,7 +161,7 @@ hical/
 │  └──────────┘  └───────────────┘  └──────────────┘  │
 │         │              │                   │        │
 │  ┌──────┴──────────────┴───────────────────┘        │
-│  │     HttpRequest / HttpResponse (Beast)           │
+│  │     HttpRequest / HttpResponse (自研 HTTP 栈)     │
 │  └──────────────────────────────────────────────────│
 └─────────────────────────────────────────────────────┘
                          │
@@ -209,7 +209,7 @@ hical/
 - **编译标准**: C++20（C++26 反射待编译器支持后启用）
 - **构建工具**: CMake 3.20+
 - **依赖库**:
-  - Boost 1.82+（system, json; Asio/Beast header-only）；DB 中间件 >= 1.85（MySQL, charconv）
+  - Boost 1.82+（system, json; Asio header-only）；DB 中间件 >= 1.85（MySQL, charconv）
   - OpenSSL 3.x（SSL/TLS 支持）
   - Google Test（单元测试）
   - ws2_32, mswsock（Windows 网络库）
@@ -240,7 +240,7 @@ hical/
 - **SslContext**: SSL 上下文配置（证书/私钥/CA/验证模式）
 - **协程工具（Coroutine.h）**: Awaitable<T> 别名、sleep()、coSpawn() 封装
 - **HTTP 类型体系**: HttpMethod/HttpStatusCode 枚举 + 字符串转换
-- **HttpRequest/HttpResponse**: Beast HTTP 请求/响应的 hical 风格封装
+- **HttpRequest/HttpResponse**: 原生 HTTP 请求/响应的 hical 风格封装
 - **Router**: 路由注册 + 协程分发 + HICAL_ROUTE 宏
 
 ### 阶段四：hical 框架层构建
@@ -248,8 +248,8 @@ hical/
 - **TcpServer**: 协程式 accept 循环、连接管理、IO 线程分发、SSL 支持、优雅关闭
 - **中间件系统**: 洋葱模型管道（MiddlewarePipeline），支持前置/后置逻辑和拦截
 - **路由增强**: 路径参数 `{param}` 匹配和提取（`/users/{id}` -> `req.param("id")`）
-- **HttpServer**: 高层封装，整合 Router + Middleware + Beast HTTP 读写 + Keep-Alive
-- **WebSocket**: 基于 beast::websocket 的会话封装（send/receive/close），Router 注册 ws 路由
+- **HttpServer**: 高层封装，整合 Router + Middleware + 自研 HTTP 读写 + Keep-Alive
+- **WebSocket**: 自研 WebSocket 会话封装（send/receive/close），Router 注册 ws 路由
 - **HTTP Server 示例**: 完整示例（路由 + 中间件 + 路径参数 + WebSocket）
 
 ### 阶段五：性能深度调优

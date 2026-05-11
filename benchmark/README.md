@@ -2,10 +2,10 @@
 
 通过 Docker Compose profile 管理两套独立的压测集：
 
-| Profile       | 框架                              | 场景数 | 报告文件                    |
-| ------------- | --------------------------------- | ------ | --------------------------- |
-| `cpp`         | Hical / Drogon / Crow / Oat++     | 10     | `CPP_BENCHMARK_REPORT.md`   |
-| `cross-lang`  | Hical / Gin / Actix-web           | 4      | `BENCHMARK_REPORT.md`       |
+| Profile      | 框架                                                       | 场景数 | 报告文件                  |
+| ------------ | ---------------------------------------------------------- | ------ | ------------------------- |
+| `cpp`        | Hical / Drogon / Crow / Oat++ / cpp-httplib / Cinatra      | 12     | `CPP_BENCHMARK_REPORT.md` |
+| `cross-lang` | Hical / Gin / Fiber / Actix-web                            | 4      | `BENCHMARK_REPORT.md`     |
 
 ## 快速开始：C++ 框架对比
 
@@ -23,8 +23,10 @@ curl http://localhost:8080/           # Hical
 curl http://localhost:8083/           # Drogon
 curl http://localhost:8084/           # Crow
 curl http://localhost:8085/           # Oat++
+curl http://localhost:8086/           # cpp-httplib
+curl http://localhost:8087/           # Cinatra
 
-# 4. 运行压测（10 场景：基础 4 + 中间件 3 + 高并发 3）
+# 4. 运行压测（12 场景：基础 4 + 中间件 5 + 高并发 3）
 docker compose --profile cpp exec wrk bash -c "BENCH_MODE=cpp bash /bench/run_bench.sh"
 
 # 5. 采集补充数据（内存、二进制大小等）
@@ -45,6 +47,7 @@ docker compose --profile cross-lang up -d --build
 # 验证
 curl http://localhost:8080/           # Hical
 curl http://localhost:8081/           # Gin
+curl http://localhost:8089/           # Fiber
 curl http://localhost:8082/           # Actix-web
 
 # 运行压测（4 基础场景）
@@ -66,6 +69,7 @@ docker compose --profile cross-lang down
 ```bash
 BENCH_MODE=cpp HICAL_HOST=localhost:8080 DROGON_HOST=localhost:8083 \
 CROW_HOST=localhost:8084 OATPP_HOST=localhost:8085 \
+CPPHTTPLIB_HOST=localhost:8086 CINATRA_HOST=localhost:8087 \
 bash run_bench.sh
 ```
 
@@ -78,15 +82,18 @@ docker compose --profile cpp exec wrk bash -c "BENCH_MODE=cpp CONNECTIONS=500 DU
 
 ## 环境说明
 
-| 服务   | 端口 | 框架          | 语言 / 依赖                          |
-| ------ | ---- | ------------- | ------------------------------------ |
-| hical  | 8080 | Hical v2.5.1  | C++20 (Ubuntu 24.04 GCC + Conan 2)   |
-| drogon | 8083 | Drogon v1.9.8 | C++20 (Ubuntu 24.04 GCC + Trantor)   |
-| crow   | 8084 | Crow v1.2.0   | C++20 (Ubuntu 24.04 GCC + Asio)      |
-| oatpp  | 8085 | Oat++ v1.3.0  | C++20 (Ubuntu 24.04 GCC, 零外部依赖) |
-| gin    | 8081 | Gin v1.10     | Go 1.22                              |
-| actix  | 8082 | Actix-web 4   | Rust latest stable                   |
-| wrk    | —    | wrk 4.1.0     | Alpine 3.20                          |
+| 服务       | 端口 | 框架              | 语言 / 依赖                           |
+| ---------- | ---- | ----------------- | ------------------------------------- |
+| hical      | 8080 | Hical v2.5.1      | C++20 (Ubuntu 24.04 GCC + Conan 2)    |
+| drogon     | 8083 | Drogon v1.9.8     | C++20 (Ubuntu 24.04 GCC + Trantor)    |
+| crow       | 8084 | Crow v1.2.0       | C++20 (Ubuntu 24.04 GCC + Asio)       |
+| oatpp      | 8085 | Oat++ v1.3.0      | C++20 (Ubuntu 24.04 GCC, 零外部依赖)  |
+| cpphttplib | 8086 | cpp-httplib v0.18 | C++20 (Ubuntu 24.04 GCC, 单头文件)    |
+| cinatra    | 8087 | Cinatra latest    | C++20 (Ubuntu 24.04 GCC, 协程框架)    |
+| gin        | 8081 | Gin v1.10         | Go 1.24                               |
+| fiber      | 8089 | Fiber v2          | Go 1.24 (fasthttp)                    |
+| actix      | 8082 | Actix-web 4       | Rust latest stable                    |
+| wrk        | —    | wrk 4.1.0         | Alpine 3.20                           |
 
 每个服务容器限制 **4 CPU + 512MB 内存**，确保公平对比。
 
@@ -101,13 +108,15 @@ docker compose --profile cpp exec wrk bash -c "BENCH_MODE=cpp CONNECTIONS=500 DU
 | JSON Echo   | `POST /api/echo`  | JSON 反序列化+序列化，测试完整 JSON 处理 |
 | 路径参数    | `GET /users/42`   | 路由匹配+参数提取+JSON 响应              |
 
-### 中间件链场景（3 个）
+### 中间件链场景（5 个）
 
-| 场景         | 端点                 | 描述              |
-| ------------ | -------------------- | ----------------- |
-| 中间件 0 层  | `GET /middleware/0`  | 无中间件基线      |
-| 中间件 3 层  | `GET /middleware/3`  | 3 层空操作中间件  |
-| 中间件 10 层 | `GET /middleware/10` | 10 层空操作中间件 |
+| 场景                          | 端点                    | 描述                         |
+| ----------------------------- | ----------------------- | ---------------------------- |
+| 中间件 0 层                   | `GET /middleware/0`     | 无中间件基线                 |
+| 中间件 3 层（原生机制）       | `GET /middleware/3`     | 3 层空操作中间件             |
+| 中间件 10 层（原生机制）      | `GET /middleware/10`    | 10 层空操作中间件            |
+| 中间件 3 层（Hical SyncMW）   | `GET /sync-middleware/3`  | Hical 同步中间件快速路径     |
+| 中间件 10 层（Hical SyncMW）  | `GET /sync-middleware/10` | Hical 同步中间件快速路径     |
 
 > **中间件实现差异**：Hical（RouteGroup 洋葱链）和 Drogon（HttpFilter）使用真实框架中间件机制；
 > Crow 和 Oat++ 因编译时/全局中间件限制，使用 handler 内 `std::function` 调用链模拟等价开销。
@@ -125,8 +134,8 @@ docker compose --profile cpp exec wrk bash -c "BENCH_MODE=cpp CONNECTIONS=500 DU
 ```
 benchmark/
 ├── README.md                  # 本文件
-├── BENCHMARK_REPORT.md        # 跨语言对比报告（Hical/Gin/Actix-web）
-├── CPP_BENCHMARK_REPORT.md    # C++ 框架对比报告（Hical/Drogon/Crow/Oat++）
+├── BENCHMARK_REPORT.md        # 跨语言对比报告（Hical/Gin/Fiber/Actix-web）
+├── CPP_BENCHMARK_REPORT.md    # C++ 框架对比报告（Hical/Drogon/Crow/Oat++/cpp-httplib/Cinatra）
 ├── results.md                 # 压测结果（自动生成）
 ├── stats.md                   # 统计数据（自动生成）
 ├── run_bench.sh               # 压测脚本（BENCH_MODE 驱动）
@@ -147,7 +156,18 @@ benchmark/
 │   ├── Dockerfile
 │   ├── CMakeLists.txt
 │   └── main.cpp
+├── cpphttplib/                # cpp-httplib benchmark 源码
+│   ├── Dockerfile
+│   └── main.cpp
+├── cinatra/                   # Cinatra benchmark 源码
+│   ├── Dockerfile
+│   ├── CMakeLists.txt
+│   └── main.cpp
 ├── gin/                       # Gin benchmark 源码
+│   ├── Dockerfile
+│   ├── go.mod
+│   └── main.go
+├── fiber/                     # Fiber benchmark 源码（Go fasthttp 对照组）
 │   ├── Dockerfile
 │   ├── go.mod
 │   └── main.go
@@ -161,6 +181,10 @@ benchmark/
 ```
 
 ## 常见问题
+
+### VirtualBox 环境下 Go 框架 QPS 异常低
+
+Go 1.21+ 引入的 per-P timer 机制大量调用 `timer_create` / `timer_settime`，VirtualBox 对这些系统调用的虚拟化开销比 KVM/Hyper-V 高 5-10 倍（参见 [golang/go#65073](https://github.com/golang/go/issues/65073)）。C++ 和 Rust 基于 `epoll_wait` 超时参数实现定时器，不受影响。如果在 VirtualBox 环境中观察到 Gin/Fiber QPS 仅为 C++/Rust 的 1/5~1/10，这是已知的虚拟化问题，建议换用 KVM 或裸机环境验证。
 
 ### `service "wrk" is not running`
 
@@ -192,7 +216,7 @@ PowerShell 不支持 `<` 输入重定向。本文档已改为 volume 挂载方�
 | `collect_stats.sh` | `stats.md`   | 内存占用、二进制大小、镜像大小、代码行数 |
 
 - `cpp` 模式数据填入 `CPP_BENCHMARK_REPORT.md` 和博客 `docs/blog/21-cpp-framework-benchmark.md`
-- `cross-lang` 模式数据填入 `BENCHMARK_REPORT.md` 和博客 `docs/blog/11-cpp-vs-go-rust-web.md`
+- `cross-lang` 模式数据填入 `BENCHMARK_REPORT.md` 和博客 `docs/blog/11-cpp-vs-go-rust-web.md`（含 Fiber 对照组）
 
 ### collect_stats.sh 采集项
 
@@ -200,11 +224,10 @@ PowerShell 不支持 `<` 输入重定向。本文档已改为 volume 挂载方�
 | ----------- | ----------------------------------- | ------------------------------- |
 | 空载内存    | `docker stats --no-stream`          | 服务启动后、无请求时采样        |
 | 满载内存    | 压测进行中 `docker stats` 多次采样  | wrk 4t100c 30s，3 次采样        |
-| 满载 CPU    | 同上                                | Windows Docker 可能偏低（已知） |
 | 二进制大小  | `docker exec <容器> ls -lh /server` | 容器内可执行文件                |
 | Docker 镜像 | `docker images`                     | 含基础镜像层                    |
 | 代码行数    | `wc -l`                             | benchmark 目录下各框架源码      |
 
 > **注意**：`collect_stats.sh` 在**宿主机** bash 中运行（不是容器内），需要 Docker CLI 可用。
 > Windows 用户请在 Git Bash / MSYS2 / WSL 中执行。
-> 满载 CPU% 在 Windows Docker Desktop (Hyper-V) 上因统计刷新延迟可能显示为 0%，这是平台已知限制，不影响内存数据准确性。
+> 脚本虽然也采集满载 CPU%，但 `docker stats` 在 Docker Desktop (Hyper-V) 和 VirtualBox 环境下 CPU% 数据普遍不准确（显示为 0%），仅供参考，不纳入报告。

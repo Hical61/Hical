@@ -12,7 +12,7 @@ class HicalConan(ConanFile):
     license = "MIT"
     url = "https://github.com/Hical61/Hical"
     homepage = "https://github.com/Hical61/Hical"
-    description = "Modern C++20/C++26 high-performance web framework based on Boost.Asio/Beast"
+    description = "Modern C++20/C++26 high-performance web framework based on Boost.Asio"
     topics = ("web-framework", "http", "websocket", "boost-asio", "coroutine", "cpp20")
     package_type = "static-library"
 
@@ -53,6 +53,7 @@ class HicalConan(ConanFile):
     def requirements(self):
         self.requires("boost/1.90.0", transitive_headers=True, transitive_libs=True)
         self.requires("openssl/[>=1.1.0]", transitive_headers=True, transitive_libs=True)
+        self.requires("zlib/[>=1.2.11]", transitive_headers=True, transitive_libs=True)
 
     def layout(self):
         cmake_layout(self, src_folder=".")

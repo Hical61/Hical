@@ -1,25 +1,190 @@
 /**
  * @file HttpSessionImpl.cpp
  * @brief HttpServer 的会话处理实现（编译防火墙）
- *
- * 将 Beast HTTP 解析器/序列化器和 WebSocket 的重模板代码隔离在此翻译单元，
- * 修改 HttpServer 配置逻辑时不会触发 Beast 模板重编译。
+ * 将 picohttpparser HTTP 解析器和 WebSocket 帧处理代码隔离在此翻译单元，
+ * 修改 HttpServer 配置逻辑时不会触发重模板编译。
  */
 
 #include "HttpServer.h"
+#include "FixedBuffer.h"
 #include "MemoryPool.h"
 #include "core/Version.h"
 #include "WebSocket.h"
-#include <boost/beast/websocket.hpp>
+#include "WsHandshake.h"
+#include <charconv>
+#include <chrono>
 #include <optional>
+
+// picohttpparser（C 库）
+extern "C"
+{
+#include "picohttpparser.h"
+}
 
 namespace hical
 {
 
-	namespace beast = boost::beast;
-	namespace http = beast::http;
-	namespace ws = beast::websocket;
 	using boost::asio::ip::tcp;
+
+	namespace
+	{
+
+		/// 将方法字符串映射到 HttpMethod 枚举
+		HttpMethod methodFromStringView(std::string_view sv)
+		{
+			if (sv.size() < 3)
+			{
+				return HttpMethod::hUnknown;
+			}
+			switch (sv[0])
+			{
+				case 'G':
+					if (sv == "GET")
+					{
+						return HttpMethod::hGet;
+					}
+					break;
+				case 'P':
+					if (sv == "POST")
+					{
+						return HttpMethod::hPost;
+					}
+					if (sv == "PUT")
+					{
+						return HttpMethod::hPut;
+					}
+					if (sv == "PATCH")
+					{
+						return HttpMethod::hPatch;
+					}
+					break;
+				case 'D':
+					if (sv == "DELETE")
+					{
+						return HttpMethod::hDelete;
+					}
+					break;
+				case 'H':
+					if (sv == "HEAD")
+					{
+						return HttpMethod::hHead;
+					}
+					break;
+				case 'O':
+					if (sv == "OPTIONS")
+					{
+						return HttpMethod::hOptions;
+					}
+					break;
+			}
+			return HttpMethod::hUnknown;
+		}
+
+		/// 快速发送错误响应（栈缓冲区，零堆分配）
+		Awaitable<void> sendRawResponse(tcp::socket& socket,
+										unsigned statusCode,
+										std::string_view reason,
+										std::string_view body)
+		{
+			FixedBuffer<512> buf;
+			buf << "HTTP/1.1 ";
+
+			char codeBuf[4];
+			auto [ptr, ec] = std::to_chars(codeBuf, codeBuf + 4, statusCode);
+			buf.append(codeBuf, static_cast<size_t>(ptr - codeBuf));
+			buf << ' ';
+			buf << reason;
+			buf << "\r\nContent-Length: ";
+
+			char lenBuf[16];
+			auto [ptr2, ec2] = std::to_chars(lenBuf, lenBuf + 16, body.size());
+			buf.append(lenBuf, static_cast<size_t>(ptr2 - lenBuf));
+			buf << "\r\nConnection: close\r\n\r\n";
+			buf << body;
+
+			boost::system::error_code writeEc;
+			co_await boost::asio::async_write(socket,
+											  boost::asio::buffer(buf.data(), buf.size()),
+											  boost::asio::redirect_error(boost::asio::use_awaitable, writeEc));
+		}
+
+		/// 发送 HttpResponse 对象（内部辅助）
+		/// @param skipBody 为 true 时仅发送头部（HEAD 方法响应）
+		Awaitable<void> writeResponse(tcp::socket& socket, NativeResponse& nativeRes, bool skipBody = false)
+		{
+			nativeRes.preparePayload();
+
+			// 序列化头部到栈缓冲区（响应头通常 150-300 字节，512 足够）
+			FixedBuffer<512> headBuf;
+			nativeRes.serializeHeadTo(headBuf);
+
+			if (skipBody || nativeRes.body.empty())
+			{
+				// HEAD 方法或空 body：仅发送头部
+				co_await boost::asio::async_write(socket,
+												  boost::asio::buffer(headBuf.data(), headBuf.size()),
+												  boost::asio::use_awaitable);
+			}
+			else if (headBuf.size() + nativeRes.body.size() <= 512 && !headBuf.overflowed())
+			{
+				// 小响应（head + body <= 512）：合并到栈缓冲区，单次 write，零堆分配
+				headBuf.append(nativeRes.body.data(), nativeRes.body.size());
+				co_await boost::asio::async_write(socket,
+												  boost::asio::buffer(headBuf.data(), headBuf.size()),
+												  boost::asio::use_awaitable);
+			}
+			else
+			{
+				// 大响应：scatter-gather I/O，head 在栈上 + body 零拷贝引用
+				// 一次 writev 系统调用，消除 body 的额外 memcpy
+				std::array<boost::asio::const_buffer, 2> bufs = {boost::asio::buffer(headBuf.data(), headBuf.size()),
+																 boost::asio::buffer(nativeRes.body)};
+				co_await boost::asio::async_write(socket, bufs, boost::asio::use_awaitable);
+			}
+		}
+
+	} // namespace
+
+	/// 连接级空闲超时协程：替代 shared_ptr<function> 自引用回调链
+	/// 仅启动一次，循环检查 atomic 时间戳判断是否真正超时
+	static Awaitable<void> idleTimerLoop(boost::asio::steady_timer& timer,
+										 tcp::socket& socket,
+										 std::shared_ptr<std::atomic<bool>> alive,
+										 std::shared_ptr<std::atomic<int64_t>> lastActive,
+										 int64_t timeoutMs)
+	{
+		while (alive->load())
+		{
+			timer.expires_after(std::chrono::milliseconds(timeoutMs));
+			boost::system::error_code ec;
+			co_await timer.async_wait(boost::asio::redirect_error(boost::asio::use_awaitable, ec));
+			if (ec || !alive->load())
+			{
+				break;
+			}
+
+			auto now = std::chrono::duration_cast<std::chrono::milliseconds>(
+						   std::chrono::steady_clock::now().time_since_epoch())
+						   .count();
+			auto elapsed = now - lastActive->load(std::memory_order_relaxed);
+
+			if (elapsed >= timeoutMs)
+			{
+				// 真正超时：关闭 socket 中断 async_read
+				boost::asio::dispatch(socket.get_executor(),
+									  [&socket, alive]()
+									  {
+										  if (alive->load())
+										  {
+											  boost::system::error_code closeEc;
+											  socket.close(closeEc);
+										  }
+									  });
+				break;
+			}
+			// 有活动：继续循环（协程自然续期，无 shared_ptr<function> 开销）
+		}
+	}
 
 	Awaitable<void> HttpServer::handleSession(tcp::socket socket)
 	{
@@ -69,8 +234,6 @@ namespace hical
 
 		try
 		{
-			auto* tlPool = MemoryPool::instance().threadLocalPool();
-
 			// 使用 alive 标志防止 timer 回调在 socket 销毁后访问悬空引用
 			auto socketAlive = std::make_shared<std::atomic<bool>>(true);
 
@@ -85,58 +248,305 @@ namespace hical
 				}
 			} aliveGuard {socketAlive};
 
+			// 连接级 atomic 活跃时间戳（毫秒精度）
+			// 替代 per-request 的 expires_after + cancel，消除 keep-alive 场景的 timer epoll_ctl
+			auto lastActiveMs =
+				std::make_shared<std::atomic<int64_t>>(std::chrono::duration_cast<std::chrono::milliseconds>(
+														   std::chrono::steady_clock::now().time_since_epoch())
+														   .count());
+			auto timeoutMs = static_cast<int64_t>(idleTimeout_ * 1000);
+
+			// 连接级 timer 超时协程：替代 shared_ptr<function> 自引用回调链
+			// 协程自然循环续期，消除每连接 2 次堆分配 + shared_ptr 环形引用
+			if (deadline)
+			{
+				boost::asio::co_spawn(socket.get_executor(),
+									  idleTimerLoop(*deadline, socket, socketAlive, lastActiveMs, timeoutMs),
+									  boost::asio::detached);
+			}
+
+			// 连接级读取缓冲区（跨 keep-alive 请求复用，零初始化开销）
+			// picohttpparser 不要求 buffer 初始化为零，只读 [0, bufUsed) 范围
+			std::string readBuf;
+			readBuf.resize(8192);
+			size_t bufUsed = 0; // 跨请求保留：TCP 粘包时残留下一请求的数据
+
 			for (;;)
 			{
-				// 每请求独立的 monotonic 池，避免 Keep-Alive 连接上的内存只增不减
-				// monotonic_buffer_resource::deallocate() 是空操作，flat_buffer 扩容释放的旧块不会回收
-				// 将池放在循环内，每轮请求结束时析构，统一归还所有内存到 thread-local upstream
-				std::pmr::monotonic_buffer_resource requestPool(4096, tlPool);
-				std::pmr::polymorphic_allocator<std::byte> alloc(&requestPool);
-				beast::basic_flat_buffer<std::pmr::polymorphic_allocator<std::byte>> buffer(alloc);
+				// picohttpparser 输出
+				const char* method = nullptr;
+				size_t methodLen = 0;
+				const char* path = nullptr;
+				size_t pathLen = 0;
+				int minorVersion = 0;
+				struct phr_header headers[64];
+				size_t numHeaders = 64;
+				int parseResult = -2; // -2 = 不完整
 
-				// 使用 parser 并设置请求大小限制，防止 OOM 攻击
-				http::request_parser<http::string_body> parser;
-				parser.body_limit(maxBodySize_);
-				parser.header_limit(static_cast<std::uint32_t>(maxHeaderSize_));
-
-				// 空闲超时：防止 Slowloris 类攻击，客户端不发数据时自动断开
-				if (deadline)
+				// ====== 阶段 A：读取并解析 HTTP 头部 ======
+				size_t prevBufLen = 0;
+				for (;;)
 				{
-					deadline->expires_after(std::chrono::milliseconds(static_cast<int64_t>(idleTimeout_ * 1000)));
-					deadline->async_wait(
-						[&socket, aliveFlag = socketAlive](const boost::system::error_code& ec)
+					// 确保缓冲区有空间
+					if (bufUsed >= readBuf.size())
+					{
+						if (readBuf.size() >= maxHeaderSize_)
 						{
-							if (!ec && aliveFlag->load())
+							// 头部过大
+							co_await sendRawResponse(socket,
+													 431,
+													 "Request Header Fields Too Large",
+													 "Request header too large");
+							co_return;
+						}
+						readBuf.resize(readBuf.size() * 2);
+					}
+
+					auto bytesRead = co_await socket.async_read_some(
+						boost::asio::buffer(readBuf.data() + bufUsed, readBuf.size() - bufUsed),
+						boost::asio::use_awaitable);
+					bufUsed += bytesRead;
+
+					// 头部大小检查
+					if (bufUsed > maxHeaderSize_)
+					{
+						co_await sendRawResponse(socket,
+												 431,
+												 "Request Header Fields Too Large",
+												 "Request header too large");
+						co_return;
+					}
+
+					numHeaders = 64;
+					parseResult = phr_parse_request(readBuf.data(),
+													bufUsed,
+													&method,
+													&methodLen,
+													&path,
+													&pathLen,
+													&minorVersion,
+													headers,
+													&numHeaders,
+													prevBufLen);
+					prevBufLen = bufUsed;
+
+					if (parseResult > 0)
+					{
+						break; // 头部解析完成
+					}
+					if (parseResult == -1)
+					{
+						// 解析错误
+						co_await sendRawResponse(socket, 400, "Bad Request", "Malformed HTTP request");
+						co_return;
+					}
+					// parseResult == -2：数据不完整，继续读取
+				}
+
+				// 读完头部后更新活跃时间戳
+				lastActiveMs->store(std::chrono::duration_cast<std::chrono::milliseconds>(
+										std::chrono::steady_clock::now().time_since_epoch())
+										.count(),
+									std::memory_order_relaxed);
+
+				// ====== 阶段 B：构建 NativeRequest ======
+				NativeRequest nativeReq;
+				nativeReq.method = methodFromStringView(std::string_view(method, methodLen));
+				nativeReq.target = std::string_view(path, pathLen);
+				nativeReq.httpVersionMajor = 1;
+				nativeReq.httpVersionMinor = minorVersion;
+
+				// 复制头部，同时检测关键头部
+				size_t contentLength = 0;
+				bool hasContentLength = false;
+				bool isChunked = false;
+				bool hasTransferEncoding = false;
+
+				nativeReq.headers.clear();
+				for (size_t i = 0; i < numHeaders; ++i)
+				{
+					std::string_view hname(headers[i].name, headers[i].name_len);
+					std::string_view hvalue(headers[i].value, headers[i].value_len);
+
+					nativeReq.headers.add(hname, hvalue);
+
+					// 按长度+首字符快速过滤，将 20 次 iequals 降到 ~2 次
+					// Content-Length: 长度 14，首字符 C/c
+					// Transfer-Encoding: 长度 17，首字符 T/t
+					if (hname.size() == 14 && (hname[0] == 'C' || hname[0] == 'c'))
+					{
+						if (HeaderMap::iequals(hname, "Content-Length"))
+						{
+							auto [ptr, ec] =
+								std::from_chars(hvalue.data(), hvalue.data() + hvalue.size(), contentLength);
+							hasContentLength = (ec == std::errc {});
+						}
+					}
+					else if (hname.size() == 17 && (hname[0] == 'T' || hname[0] == 't'))
+					{
+						if (HeaderMap::iequals(hname, "Transfer-Encoding"))
+						{
+							hasTransferEncoding = true;
+							// RFC 7230 ：chunked 必须是最后一个编码
+							auto lastComma = hvalue.rfind(',');
+							std::string_view lastToken =
+								(lastComma != std::string_view::npos) ? hvalue.substr(lastComma + 1) : hvalue;
+							while (!lastToken.empty() && lastToken.front() == ' ')
 							{
-								// dispatch 到 socket 的 executor（strand）上序列化执行，避免与 async_read 竞态
-								boost::asio::dispatch(socket.get_executor(),
-													  [&socket, aliveFlag]()
-													  {
-														  if (aliveFlag->load())
-														  {
-															  boost::system::error_code closeEc;
-															  socket.close(closeEc);
-														  }
-													  });
+								lastToken.remove_prefix(1);
 							}
-						});
+							while (!lastToken.empty() && lastToken.back() == ' ')
+							{
+								lastToken.remove_suffix(1);
+							}
+							if (HeaderMap::iequals(lastToken, "chunked"))
+							{
+								isChunked = true;
+							}
+						}
+					}
+				}
 
-					co_await http::async_read(socket, buffer, parser, boost::asio::use_awaitable);
+				// RFC 7230 ：不认识的 Transfer-Encoding 返回 501
+				if (hasTransferEncoding && !isChunked)
+				{
+					co_await sendRawResponse(socket, 501, "Not Implemented", "Unsupported Transfer-Encoding");
+					co_return;
+				}
 
-					deadline->cancel();
+				// 计算 keep-alive
+				auto connHeader = nativeReq.headers.find("Connection");
+				if (!connHeader.empty())
+				{
+					nativeReq.keepAlive = !HeaderMap::iequals(connHeader, "close");
 				}
 				else
 				{
-					co_await http::async_read(socket, buffer, parser, boost::asio::use_awaitable);
+					// HTTP/1.1 默认 keep-alive，HTTP/1.0 默认 close
+					nativeReq.keepAlive = (minorVersion >= 1);
 				}
 
-				auto beastReq = parser.release();
+				// ====== 阶段 C：读取 Body ======
+				size_t headerBytes = static_cast<size_t>(parseResult);
+				size_t remainingInBuf = bufUsed - headerBytes;
 
-				// 统一构造 HttpRequest（WS 和 HTTP 路径共用）
-				HttpRequest req(std::move(beastReq));
+				if (hasContentLength && contentLength > 0)
+				{
+					// Content-Length body 读取
+					if (contentLength > maxBodySize_)
+					{
+						co_await sendRawResponse(socket, 413, "Payload Too Large", "Request body too large");
+						co_return;
+					}
+
+					nativeReq.body.resize(contentLength);
+					size_t bodyCopied = std::min(remainingInBuf, contentLength);
+					if (bodyCopied > 0)
+					{
+						std::memcpy(nativeReq.body.data(), readBuf.data() + headerBytes, bodyCopied);
+					}
+
+					// 保留 readBuf 中超出当前 body 的残留数据（TCP 粘包：下一请求已到达）
+					size_t tailLen = remainingInBuf - bodyCopied;
+					if (tailLen > 0)
+					{
+						std::memmove(readBuf.data(), readBuf.data() + headerBytes + bodyCopied, tailLen);
+					}
+					bufUsed = tailLen;
+
+					size_t bodyRemaining = contentLength - bodyCopied;
+					size_t offset = bodyCopied;
+					while (bodyRemaining > 0)
+					{
+						auto bytesRead = co_await socket.async_read_some(
+							boost::asio::buffer(nativeReq.body.data() + offset, bodyRemaining),
+							boost::asio::use_awaitable);
+						offset += bytesRead;
+						bodyRemaining -= bytesRead;
+					}
+				}
+				else if (isChunked)
+				{
+					// Chunked transfer-encoding 解码
+					// phr_decode_chunked 是原地解码：将编码帧头剥离，解码数据覆写到同一缓冲区
+					// 返回值：>= 0 表示完成（值为尾部长度），-2 表示需要更多数据，-1 表示错误
+					// decodeBufLen 输入为待解码字节数，输出为本次解码产出的字节数
+					std::string chunkBuf;
+					if (remainingInBuf > 0)
+					{
+						chunkBuf.assign(readBuf.data() + headerBytes, remainingInBuf);
+					}
+					// chunked 路径消费了 readBuf 所有残留数据，清零
+					bufUsed = 0;
+
+					struct phr_chunked_decoder decoder = {};
+					// encodeStart: 下一次 decode 的起始偏移
+					// 解码产出的数据在 chunkBuf[encodeStart .. encodeStart+decodeBufLen)
+					size_t encodeStart = 0;
+
+					for (;;)
+					{
+						size_t available = chunkBuf.size() - encodeStart;
+						if (available == 0)
+						{
+							// 缓冲区无数据，读取更多
+							size_t oldSize = chunkBuf.size();
+							chunkBuf.resize(oldSize + 4096);
+							auto bytesRead =
+								co_await socket.async_read_some(boost::asio::buffer(chunkBuf.data() + oldSize, 4096),
+																boost::asio::use_awaitable);
+							chunkBuf.resize(oldSize + bytesRead);
+							continue;
+						}
+
+						size_t decodeBufLen = available;
+						auto decodeRet = phr_decode_chunked(&decoder, chunkBuf.data() + encodeStart, &decodeBufLen);
+
+						// decodeBufLen = 本次解码产出字节数，数据位于 chunkBuf[encodeStart..]
+						nativeReq.body.append(chunkBuf.data() + encodeStart, decodeBufLen);
+						encodeStart += decodeBufLen;
+
+						if (nativeReq.body.size() > maxBodySize_)
+						{
+							co_await sendRawResponse(socket, 413, "Payload Too Large", "Request body too large");
+							co_return;
+						}
+
+						if (decodeRet >= 0)
+						{
+							// 解码完成
+							break;
+						}
+						if (decodeRet == -1)
+						{
+							// 解码错误
+							co_await sendRawResponse(socket, 400, "Bad Request", "Malformed chunked encoding");
+							co_return;
+						}
+						// decodeRet == -2：需要更多数据
+						size_t oldSize = chunkBuf.size();
+						chunkBuf.resize(oldSize + 4096);
+						auto bytesRead =
+							co_await socket.async_read_some(boost::asio::buffer(chunkBuf.data() + oldSize, 4096),
+															boost::asio::use_awaitable);
+						chunkBuf.resize(oldSize + bytesRead);
+					}
+				}
+				else
+				{
+					// 无 body（GET/HEAD 等）：保留 readBuf 中头部之后的残留数据
+					if (remainingInBuf > 0)
+					{
+						std::memmove(readBuf.data(), readBuf.data() + headerBytes, remainingInBuf);
+					}
+					bufUsed = remainingInBuf;
+				}
+
+				// ====== 阶段 D：构建 HttpRequest 并分发 ======
+				HttpRequest req = HttpRequest::fromParsed(std::move(nativeReq));
 
 				// 检查 WebSocket 升级请求
-				if (ws::is_upgrade(req.native()))
+				if (req.native().isUpgrade())
 				{
 					auto reqPath = req.path();
 
@@ -153,11 +563,10 @@ namespace hical
 								forbiddenRes.setStatus(HttpStatusCode::hForbidden);
 								forbiddenRes.setBody("403 Forbidden: Origin not allowed");
 								auto& nativeRes = forbiddenRes.native();
-								nativeRes.version(11);
-								nativeRes.set(http::field::connection, "close");
-								nativeRes.prepare_payload();
-								co_await http::async_write(socket, nativeRes, boost::asio::use_awaitable);
-								break;
+								nativeRes.httpVersionMinor = 1;
+								nativeRes.headers.set("Connection", "close");
+								co_await writeResponse(socket, nativeRes);
+								co_return;
 							}
 						}
 
@@ -171,17 +580,16 @@ namespace hical
 							{
 								// 中间件拦截（如 401/403），返回 HTTP 响应拒绝升级
 								auto& nativeRes = wsAuthRes.native();
-								nativeRes.version(11);
-								nativeRes.set(http::field::connection, "close");
-								nativeRes.prepare_payload();
-								co_await http::async_write(socket, nativeRes, boost::asio::use_awaitable);
-								break;
+								nativeRes.httpVersionMinor = 1;
+								nativeRes.headers.set("Connection", "close");
+								co_await writeResponse(socket, nativeRes);
+								co_return;
 							}
 						}
 
 						// socket 所有权转移给 WebSocket 会话，标记 guard 跳过析构
 						guard.transferred = true;
-						co_await handleWebSocket(std::move(socket), std::move(req.native()), *wsRoute);
+						co_await handleWebSocket(std::move(socket), req.native(), *wsRoute);
 						co_return;
 					}
 				}
@@ -233,50 +641,52 @@ namespace hical
 					res = HttpResponse::serverError();
 				}
 
-				// 设置通用头部
+				// 设置通用头部（insert 替代 set：用户 handler 不会预设 Server/Connection，
+				// 直接 push_back O(1)，省去线性扫描）
 				auto& nativeRes = res.native();
-				nativeRes.version(11);
-				nativeRes.set(http::field::server, HICAL_VERSION_STRING);
-				nativeRes.keep_alive(req.native().keep_alive() && !draining_.load());
+				nativeRes.httpVersionMinor = 1;
+				nativeRes.headers.insert("Server", HICAL_VERSION_STRING);
+				bool shouldKeepAlive = req.native().keepAlive && !draining_.load();
+				nativeRes.keepAlive = shouldKeepAlive;
+				nativeRes.headers.insert("Connection", shouldKeepAlive ? "keep-alive" : "close");
 
-				// 发送响应（prepare_payload 已由 HttpResponse::setBody/setJsonBody 调用）
-				co_await http::async_write(socket, nativeRes, boost::asio::use_awaitable);
+				// 发送响应（scatter-gather I/O：状态行+头部在栈，body 零拷贝）
+				// HEAD 方法：仅发送头部，不发送 body（RFC 7231 §4.3.2）
+				bool isHead = (req.method() == HttpMethod::hHead);
+				co_await writeResponse(socket, nativeRes, isHead);
 
-				if (!nativeRes.keep_alive())
+				// 写完后更新活跃时间戳
+				lastActiveMs->store(std::chrono::duration_cast<std::chrono::milliseconds>(
+										std::chrono::steady_clock::now().time_since_epoch())
+										.count(),
+									std::memory_order_relaxed);
+
+				if (!shouldKeepAlive)
 				{
 					break;
 				}
 			}
 		}
-		catch (const beast::system_error& e)
+		catch (const boost::system::system_error& e)
 		{
-			// 异常路径先取消 timer，防止 timer 回调的 socket.close() 与下方 http::write 竞态
-			if (deadline)
-			{
-				deadline->cancel();
-			}
-
-			if (e.code() == http::error::body_limit)
-			{
-				// 请求体过大：返回 413 Payload Too Large
-				http::response<http::string_body> res {http::status::payload_too_large, 11};
-				res.set(http::field::server, HICAL_VERSION_STRING);
-				res.set(http::field::connection, "close");
-				res.body() = "Request body too large";
-				res.prepare_payload();
-				boost::system::error_code writeEc;
-				http::write(socket, res, writeEc);
-			}
-			else if (e.code() != beast::errc::not_connected && e.code() != boost::asio::error::eof)
+			if (e.code() != boost::asio::error::eof && e.code() != boost::asio::error::connection_reset
+				&& e.code() != boost::asio::error::operation_aborted)
 			{
 				// 忽略正常的连接关闭
 			}
 		}
-		// SocketGuard 析构时自动关闭 socket
+
+		// 取消 idleTimerLoop 协程：cancel timer 使其 co_await 收到 operation_aborted 并退出
+		// 必须在 AliveGuard 析构前执行（timer cancel 后协程 resume 时检查 alive 标志退出）
+		if (deadline)
+		{
+			deadline->cancel();
+		}
+		// AliveGuard 析构设 alive=false → SocketGuard 析构关闭 socket
 	}
 
 	Awaitable<void> HttpServer::handleWebSocket(tcp::socket socket,
-												http::request<http::string_body> req,
+												const NativeRequest& req,
 												const Router::WsRoute& wsRoute)
 	{
 		std::unique_ptr<WebSocketSession> session;
@@ -291,34 +701,46 @@ namespace hical
 
 		try
 		{
-			ws::stream<tcp::socket> wsStream(std::move(socket));
+			// 防御性复制关键头部值（NativeRequest 的 string_view 引用 handleSession 的 readBuf，
+			// 虽然此路径下 readBuf 生命周期足够，但防御性拷贝更安全）
+			std::string clientKeyStr(req.headers.find("Sec-WebSocket-Key"));
+			std::string extHeaderStr(req.headers.find("Sec-WebSocket-Extensions"));
 
-			// 配置 permessage-deflate 压缩（在 accept 前设置）
-			if (wsRoute.enableCompression)
+			// 1. 验证 WS 握手头部
+			auto clientKey = validateWsUpgrade(req);
+			if (clientKey.empty())
 			{
-				ws::permessage_deflate opt;
-				opt.server_enable = true;
-				opt.client_enable = true;
-				opt.server_max_window_bits = wsRoute.serverMaxWindowBits;
-				opt.client_max_window_bits = wsRoute.clientMaxWindowBits;
-				opt.server_no_context_takeover = wsRoute.serverNoContextTakeover;
-				opt.compLevel = 6;
-				opt.memLevel = 4;
-				wsStream.set_option(opt);
+				co_return;
 			}
 
-			// 接受 WebSocket 升级
-			co_await wsStream.async_accept(req, boost::asio::use_awaitable);
+			// 2. 计算 Sec-WebSocket-Accept
+			auto acceptKey = computeWsAcceptKey(clientKeyStr);
 
+			// 3. 协商 permessage-deflate
+			WsDeflateNegotiation deflateNeg;
 			WsCompressionConfig compressionCfg;
 			compressionCfg.enabled = wsRoute.enableCompression;
 			compressionCfg.serverMaxWindowBits = wsRoute.serverMaxWindowBits;
 			compressionCfg.clientMaxWindowBits = wsRoute.clientMaxWindowBits;
 			compressionCfg.serverNoContextTakeover = wsRoute.serverNoContextTakeover;
 
-			session = std::make_unique<WebSocketSession>(std::move(wsStream),
+			if (wsRoute.enableCompression && !extHeaderStr.empty())
+			{
+				deflateNeg = negotiateDeflate(extHeaderStr, compressionCfg);
+			}
+
+			// 4. 发送 101 Switching Protocols（FixedBuffer<512> 栈上零堆分配）
+			FixedBuffer<512> responseBuf;
+			buildWsAcceptResponse(responseBuf, acceptKey, deflateNeg.accepted ? &deflateNeg : nullptr);
+			co_await boost::asio::async_write(socket,
+											  boost::asio::buffer(responseBuf.data(), responseBuf.size()),
+											  boost::asio::use_awaitable);
+
+			// 5. 创建 WebSocketSession
+			session = std::make_unique<WebSocketSession>(std::move(socket),
 														 WebSocketSession::hDefaultMaxMessageSize,
-														 compressionCfg);
+														 compressionCfg,
+														 deflateNeg.accepted ? &deflateNeg : nullptr);
 
 			// 使用 alive 标志防止 timer 回调在 session 销毁后访问悬空引用
 			auto wsAlive = std::make_shared<std::atomic<bool>>(true);
@@ -354,7 +776,7 @@ namespace hical
 							{
 								// 超时：关闭底层 socket 以中断 async_read
 								boost::system::error_code closeEc;
-								session->native().next_layer().close(closeEc);
+								session->socket().close(closeEc);
 							}
 						});
 				}
@@ -378,7 +800,7 @@ namespace hical
 				}
 			}
 		}
-		catch (const beast::system_error& e)
+		catch (const boost::system::system_error& e)
 		{
 			// 异常路径先取消 timer，防止 timer 回调在 session 析构后访问悬空引用
 			if (wsDeadline)
@@ -386,7 +808,8 @@ namespace hical
 				wsDeadline->cancel();
 			}
 
-			if (e.code() != ws::error::closed && e.code() != boost::asio::error::eof)
+			if (e.code() != boost::asio::error::eof && e.code() != boost::asio::error::connection_reset
+				&& e.code() != boost::asio::error::operation_aborted)
 			{
 				// 忽略正常关闭
 			}

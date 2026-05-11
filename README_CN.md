@@ -9,7 +9,7 @@
 [![GitHub stars](https://img.shields.io/github/stars/Hical61/Hical?style=flat)](https://github.com/Hical61/Hical/stargazers)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
-Hical 是一个基于 Boost.Asio/Beast，利用 C++26 反射和 PMR 内存池构建高性能的现代 C++ Web 框架。
+Hical 是一个基于 Boost.Asio，采用自研 HTTP/WebSocket 栈，利用 C++26 反射和 PMR 内存池构建高性能的现代 C++ Web 框架。
 
 > C++20/26 双轨反射 · PMR 内存池 · 协程异步 I/O · Cookie / Session / 静态文件 / 文件上传 内置 · CORS · RouteGroup 路由分组 · 日志系统 · OpenAPI 3.0 自动文档 · 可选 DB 中间件（Boost.MySQL）
 
@@ -18,7 +18,7 @@ Hical 是一个基于 Boost.Asio/Beast，利用 C++26 反射和 PMR 内存池构
 ## 特性
 
 - **C++26 反射** — 面向 C++26 反射特性设计，支持自动路由注册、JSON 序列化/反序列化等编译期元编程能力；C++20 宏回退提供相同 API
-- **Boost.Asio/Beast 后端** — 工业级网络库，每线程独立 `io_context` 模型
+- **Boost.Asio 后端** — 工业级网络库，每线程独立 `io_context` 模型
 - **PMR 内存池** — 三层 `std::pmr` 分配器策略（全局同步池、线程局部池、请求级单调缓冲区），缓冲区、HTTP 消息体、JSON 对象共享内存池
 - **协程支持** — `asio::awaitable<T>` + `co_spawn`，简洁的异步代码风格
 - **C++ Concepts** — 编译期 `NetworkBackend` 类型约束，保障类型安全
@@ -27,7 +27,7 @@ Hical 是一个基于 Boost.Asio/Beast，利用 C++26 反射和 PMR 内存池构
 - **路由 & 中间件** — 洋葱模型中间件管线，支持路径参数（`{id}`）、静态路由 O(1) 哈希查找、参数路由按方法分组
 - **RouteGroup 路由分组** — 前缀分组 + 组级中间件，支持嵌套分组
 - **CORS 中间件** — 内置跨域资源共享中间件，支持预检请求自动处理
-- **HTTP 服务器** — 基于 Boost.Beast 的完整 HTTP/1.1 支持（分块传输、Keep-Alive），fd 耗尽保护
+- **HTTP 服务器** — 基于自研 picohttpparser 栈的完整 HTTP/1.1 支持（分块传输、Keep-Alive），fd 耗尽保护
 - **Cookie 支持** — RFC 6265 兼容解析（first-wins 语义）+ `Set-Cookie`（CRLF 注入防护）
 - **静态文件服务** — MIME 自动推断、ETag/304 缓存验证、路径遍历防护、异步文件 I/O、PathCache（4096 条/60s TTL）、64 MB 大小限制
 - **Multipart 文件上传** — RFC 7578 `multipart/form-data` 解析，含 DoS 防护（≤256 个 Part）
@@ -136,7 +136,7 @@ hical/
 | 依赖项      | 版本要求                                                                   |
 | ----------- | -------------------------------------------------------------------------- |
 | C++ 标准    | C++20 / C++26                                                              |
-| Boost       | >= 1.82（Asio、Beast、System、JSON）；DB 中间件 >= 1.85（MySQL、charconv） |
+| Boost       | >= 1.82（Asio、System、JSON）；DB 中间件 >= 1.85（MySQL、charconv） |
 | CMake       | >= 3.20                                                                    |
 | OpenSSL     | 必需                                                                       |
 | Google Test | 必需                                                                       |

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(hical VERSION 2.5.2 LANGUAGES CXX)
+project(hical VERSION 2.6.0 LANGUAGES C CXX)
 
 # C++26 反射可选支持
 option(HICAL_ENABLE_REFLECTION "Enable C++26 reflection (requires compatible compiler)" OFF)
@@ -40,6 +40,7 @@ if(NOT TARGET Boost::system)
     add_library(Boost::system ALIAS Boost::headers)
 endif()
 find_package(OpenSSL REQUIRED)
+find_package(ZLIB REQUIRED)
 
 # DB 依赖：boost::mysql any_connection(1.84+) + boost::charconv(1.85+)
 if(HICAL_WITH_DATABASE)
@@ -51,8 +52,8 @@ if(HICAL_BUILD_TESTS)
     find_package(GTest REQUIRED)
 endif()
 
-# Boost.Asio 和 Boost.Beast 是 header-only，无需 COMPONENTS
-# 但需要确保 Boost 版本足够新（Beast 在 1.70+ 可用）
+# Boost.Asio 是 header-only，无需 COMPONENTS
+# 但需要确保 Boost 版本足够新（Asio 在 1.66+ 可用）
 
 # 子目录
 add_subdirectory(src)

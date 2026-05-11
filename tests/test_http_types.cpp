@@ -106,15 +106,16 @@ TEST(HttpRequestTest, MissingHeader)
 	EXPECT_EQ(req.header("X-Custom"), "");
 }
 
-TEST(HttpRequestTest, FromBeastRequest)
+TEST(HttpRequestTest, FromNativeRequest)
 {
-	HttpRequest::BeastRequest beastReq;
-	beastReq.method(boost::beast::http::verb::get);
-	beastReq.target("/test");
-	beastReq.version(11);
-	beastReq.set(boost::beast::http::field::host, "localhost");
+	NativeRequest nativeReq;
+	nativeReq.method = HttpMethod::hGet;
+	nativeReq.target = "/test";
+	nativeReq.httpVersionMajor = 1;
+	nativeReq.httpVersionMinor = 1;
+	nativeReq.headers.add("Host", "localhost");
 
-	HttpRequest req(std::move(beastReq));
+	HttpRequest req = HttpRequest::fromParsed(std::move(nativeReq));
 	EXPECT_EQ(req.method(), HttpMethod::hGet);
 	EXPECT_EQ(req.path(), "/test");
 }

@@ -10,7 +10,6 @@
 #include "../asio/AsioEventLoop.h"
 #include "../asio/EventLoopPool.h"
 #include <boost/asio.hpp>
-#include <boost/beast.hpp>
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -103,7 +102,7 @@ namespace hical
 
 		/**
 		 * @brief 根据可用内存计算推荐的最大连接数
-		 * 按每连接约 25KB 估算（PMR 缓冲 + Beast parser + socket 缓冲），
+		 * 按每连接约 25KB 估算（PMR 缓冲 + HTTP parser + socket 缓冲），
 		 * 预留 30% 内存给业务逻辑和系统开销。
 		 * @param availableMemoryMB 可用内存（MB）
 		 * @return 推荐的最大连接数（上限 65535）
@@ -178,15 +177,15 @@ namespace hical
 		boost::asio::io_context& ioContext();
 
 	private:
-		// 协程式连接监听
-		Awaitable<void> acceptLoop();
+		// 协程式连接监听（每个 acceptor 独立运行）
+		Awaitable<void> acceptLoop(boost::asio::ip::tcp::acceptor& acceptor, IdleFd& idleFd);
 
 		// 协程式 HTTP 会话处理
 		Awaitable<void> handleSession(boost::asio::ip::tcp::socket socket);
 
 		// 协程式 WebSocket 会话处理
 		Awaitable<void> handleWebSocket(boost::asio::ip::tcp::socket socket,
-										boost::beast::http::request<boost::beast::http::string_body> req,
+										const NativeRequest& req,
 										const Router::WsRoute& wsRoute);
 
 		// 内存池定期 GC 协程
@@ -198,11 +197,21 @@ namespace hical
 		// 停止所有 loop（baseLoop + ioPool）
 		void stopAllLoops();
 
+		// 关闭所有 acceptor（stop/gracefulStop 共用）
+		void closeAllAcceptors();
+
 		std::atomic<uint16_t> port_;
 		size_t ioThreads_;
 		AsioEventLoop baseLoop_;                // 主 loop（accept + signal + GC）
 		std::unique_ptr<EventLoopPool> ioPool_; // IO 线程池（ioThreads-1 个 worker loop）
-		std::unique_ptr<boost::asio::ip::tcp::acceptor> acceptor_;
+
+		// SO_REUSEPORT 多 acceptor 模型：每个 worker loop 持有独立 acceptor，
+		// accept 和 I/O 在同一线程完成，消除跨线程调度开销。
+		// 不支持 SO_REUSEPORT 时（Windows / 低版本内核）回退为单 acceptor。
+		std::vector<std::unique_ptr<boost::asio::ip::tcp::acceptor>> acceptors_;
+		std::vector<std::unique_ptr<IdleFd>> idleFds_;
+		bool reusePortEnabled_ {false};
+
 		std::atomic<bool> running_ {false};
 
 		Router router_;
@@ -228,8 +237,7 @@ namespace hical
 		// 空闲连接超时（秒，0 表示不超时）
 		double idleTimeout_ {60.0};
 
-		// fd 耗尽处理：预留一个 fd 防止 accept 循环空转
-		IdleFd idleFd_;
+		// fd 耗尽处理：已移至 idleFds_（每个 acceptor 配独立 IdleFd）
 
 		// 内存池 GC 间隔（秒，0 表示关闭自动 GC）
 		double gcInterval_ {60.0};
