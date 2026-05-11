@@ -1,0 +1,1624 @@
+        -:    0:Source:/usr/include/boost/asio/detail/scheduler.hpp
+        -:    1://
+        -:    2:// detail/scheduler.hpp
+        -:    3:// ~~~~~~~~~~~~~~~~~~~~
+        -:    4://
+        -:    5:// Copyright (c) 2003-2023 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+        -:    6://
+        -:    7:// Distributed under the Boost Software License, Version 1.0. (See accompanying
+        -:    8:// file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+        -:    9://
+        -:   10:
+        -:   11:#ifndef BOOST_ASIO_DETAIL_SCHEDULER_HPP
+        -:   12:#define BOOST_ASIO_DETAIL_SCHEDULER_HPP
+        -:   13:
+        -:   14:#if defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   15:# pragma once
+        -:   16:#endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   17:
+        -:   18:#include <boost/asio/detail/config.hpp>
+        -:   19:
+        -:   20:#include <boost/system/error_code.hpp>
+        -:   21:#include <boost/asio/execution_context.hpp>
+        -:   22:#include <boost/asio/detail/atomic_count.hpp>
+        -:   23:#include <boost/asio/detail/conditionally_enabled_event.hpp>
+        -:   24:#include <boost/asio/detail/conditionally_enabled_mutex.hpp>
+        -:   25:#include <boost/asio/detail/op_queue.hpp>
+        -:   26:#include <boost/asio/detail/scheduler_operation.hpp>
+        -:   27:#include <boost/asio/detail/scheduler_task.hpp>
+        -:   28:#include <boost/asio/detail/thread.hpp>
+        -:   29:#include <boost/asio/detail/thread_context.hpp>
+        -:   30:
+        -:   31:#include <boost/asio/detail/push_options.hpp>
+        -:   32:
+        -:   33:namespace boost {
+        -:   34:namespace asio {
+        -:   35:namespace detail {
+        -:   36:
+        -:   37:struct scheduler_thread_info;
+        -:   38:
+        -:   39:class scheduler
+        -:   40:  : public execution_context_service_base<scheduler>,
+        -:   41:    public thread_context
+        -:   42:{
+        -:   43:public:
+        -:   44:  typedef scheduler_operation operation;
+        -:   45:
+        -:   46:  // The type of a function used to obtain a task instance.
+        -:   47:  typedef scheduler_task* (*get_task_func_type)(
+        -:   48:      boost::asio::execution_context&);
+        -:   49:
+        -:   50:  // Constructor. Specifies the number of concurrent threads that are likely to
+        -:   51:  // run the scheduler. If set to 1 certain optimisation are performed.
+        -:   52:  BOOST_ASIO_DECL scheduler(boost::asio::execution_context& ctx,
+        -:   53:      int concurrency_hint = 0, bool own_thread = true,
+        -:   54:      get_task_func_type get_task = &scheduler::get_default_task);
+        -:   55:
+        -:   56:  // Destructor.
+        -:   57:  BOOST_ASIO_DECL ~scheduler();
+        -:   58:
+        -:   59:  // Destroy all user-defined handler objects owned by the service.
+        -:   60:  BOOST_ASIO_DECL void shutdown();
+        -:   61:
+        -:   62:  // Initialise the task, if required.
+        -:   63:  BOOST_ASIO_DECL void init_task();
+        -:   64:
+        -:   65:  // Run the event loop until interrupted or no more work.
+        -:   66:  BOOST_ASIO_DECL std::size_t run(boost::system::error_code& ec);
+        -:   67:
+        -:   68:  // Run until interrupted or one operation is performed.
+        -:   69:  BOOST_ASIO_DECL std::size_t run_one(boost::system::error_code& ec);
+        -:   70:
+        -:   71:  // Run until timeout, interrupted, or one operation is performed.
+        -:   72:  BOOST_ASIO_DECL std::size_t wait_one(
+        -:   73:      long usec, boost::system::error_code& ec);
+        -:   74:
+        -:   75:  // Poll for operations without blocking.
+        -:   76:  BOOST_ASIO_DECL std::size_t poll(boost::system::error_code& ec);
+        -:   77:
+        -:   78:  // Poll for one operation without blocking.
+        -:   79:  BOOST_ASIO_DECL std::size_t poll_one(boost::system::error_code& ec);
+        -:   80:
+        -:   81:  // Interrupt the event processing loop.
+        -:   82:  BOOST_ASIO_DECL void stop();
+        -:   83:
+        -:   84:  // Determine whether the scheduler is stopped.
+        -:   85:  BOOST_ASIO_DECL bool stopped() const;
+        -:   86:
+        -:   87:  // Restart in preparation for a subsequent run invocation.
+        -:   88:  BOOST_ASIO_DECL void restart();
+        -:   89:
+        -:   90:  // Notify that some work has started.
+   51243*:   91:  void work_started()
+        -:   92:  {
+   51243*:   93:    ++outstanding_work_;
+   52458*:   94:  }
+------------------
+_ZN5boost4asio6detail9scheduler12work_startedEv:
+function _ZN5boost4asio6detail9scheduler12work_startedEv called 30 returned 100% blocks executed 100%
+       30:   91:  void work_started()
+        -:   92:  {
+       30:   93:    ++outstanding_work_;
+call    0 returned 100%
+       30:   94:  }
+------------------
+_ZN5boost4asio6detail9scheduler12work_startedEv:
+function _ZN5boost4asio6detail9scheduler12work_startedEv called 0 returned 0% blocks executed 0%
+    #####:   91:  void work_started()
+        -:   92:  {
+    #####:   93:    ++outstanding_work_;
+call    0 never executed
+    #####:   94:  }
+------------------
+_ZN5boost4asio6detail9scheduler12work_startedEv:
+function _ZN5boost4asio6detail9scheduler12work_startedEv called 162 returned 100% blocks executed 100%
+      162:   91:  void work_started()
+        -:   92:  {
+      162:   93:    ++outstanding_work_;
+call    0 returned 100%
+      162:   94:  }
+------------------
+_ZN5boost4asio6detail9scheduler12work_startedEv:
+function _ZN5boost4asio6detail9scheduler12work_startedEv called 0 returned 0% blocks executed 0%
+    #####:   91:  void work_started()
+        -:   92:  {
+    #####:   93:    ++outstanding_work_;
+call    0 never executed
+    #####:   94:  }
+------------------
+_ZN5boost4asio6detail9scheduler12work_startedEv:
+function _ZN5boost4asio6detail9scheduler12work_startedEv called 84 returned 100% blocks executed 100%
+       84:   91:  void work_started()
+        -:   92:  {
+       84:   93:    ++outstanding_work_;
+call    0 returned 100%
+       84:   94:  }
+------------------
+_ZN5boost4asio6detail9scheduler12work_startedEv:
+function _ZN5boost4asio6detail9scheduler12work_startedEv called 168 returned 100% blocks executed 100%
+      168:   91:  void work_started()
+        -:   92:  {
+      168:   93:    ++outstanding_work_;
+call    0 returned 100%
+      168:   94:  }
+------------------
+_ZN5boost4asio6detail9scheduler12work_startedEv:
+function _ZN5boost4asio6detail9scheduler12work_startedEv called 25 returned 100% blocks executed 100%
+       25:   91:  void work_started()
+        -:   92:  {
+       25:   93:    ++outstanding_work_;
+call    0 returned 100%
+       25:   94:  }
+------------------
+_ZN5boost4asio6detail9scheduler12work_startedEv:
+function _ZN5boost4asio6detail9scheduler12work_startedEv called 1 returned 100% blocks executed 100%
+        1:   91:  void work_started()
+        -:   92:  {
+        1:   93:    ++outstanding_work_;
+call    0 returned 100%
+        1:   94:  }
+------------------
+_ZN5boost4asio6detail9scheduler12work_startedEv:
+function _ZN5boost4asio6detail9scheduler12work_startedEv called 0 returned 0% blocks executed 0%
+    #####:   91:  void work_started()
+        -:   92:  {
+    #####:   93:    ++outstanding_work_;
+call    0 never executed
+    #####:   94:  }
+------------------
+_ZN5boost4asio6detail9scheduler12work_startedEv:
+function _ZN5boost4asio6detail9scheduler12work_startedEv called 70 returned 100% blocks executed 100%
+       70:   91:  void work_started()
+        -:   92:  {
+       70:   93:    ++outstanding_work_;
+call    0 returned 100%
+       70:   94:  }
+------------------
+_ZN5boost4asio6detail9scheduler12work_startedEv:
+function _ZN5boost4asio6detail9scheduler12work_startedEv called 48 returned 100% blocks executed 100%
+       48:   91:  void work_started()
+        -:   92:  {
+       48:   93:    ++outstanding_work_;
+call    0 returned 100%
+       48:   94:  }
+------------------
+_ZN5boost4asio6detail9scheduler12work_startedEv:
+function _ZN5boost4asio6detail9scheduler12work_startedEv called 50 returned 100% blocks executed 100%
+       50:   91:  void work_started()
+        -:   92:  {
+       50:   93:    ++outstanding_work_;
+call    0 returned 100%
+       50:   94:  }
+------------------
+_ZN5boost4asio6detail9scheduler12work_startedEv:
+function _ZN5boost4asio6detail9scheduler12work_startedEv called 62 returned 100% blocks executed 100%
+       62:   91:  void work_started()
+        -:   92:  {
+       62:   93:    ++outstanding_work_;
+call    0 returned 100%
+       62:   94:  }
+------------------
+_ZN5boost4asio6detail9scheduler12work_startedEv:
+function _ZN5boost4asio6detail9scheduler12work_startedEv called 74 returned 100% blocks executed 100%
+       74:   91:  void work_started()
+        -:   92:  {
+       74:   93:    ++outstanding_work_;
+call    0 returned 100%
+       74:   94:  }
+------------------
+_ZN5boost4asio6detail9scheduler12work_startedEv:
+function _ZN5boost4asio6detail9scheduler12work_startedEv called 192 returned 100% blocks executed 100%
+      192:   91:  void work_started()
+        -:   92:  {
+      192:   93:    ++outstanding_work_;
+call    0 returned 100%
+      192:   94:  }
+------------------
+_ZN5boost4asio6detail9scheduler12work_startedEv:
+function _ZN5boost4asio6detail9scheduler12work_startedEv called 0 returned 0% blocks executed 0%
+    #####:   91:  void work_started()
+        -:   92:  {
+    #####:   93:    ++outstanding_work_;
+call    0 never executed
+    #####:   94:  }
+------------------
+_ZN5boost4asio6detail9scheduler12work_startedEv:
+function _ZN5boost4asio6detail9scheduler12work_startedEv called 0 returned 0% blocks executed 0%
+    #####:   91:  void work_started()
+        -:   92:  {
+    #####:   93:    ++outstanding_work_;
+call    0 never executed
+    #####:   94:  }
+------------------
+_ZN5boost4asio6detail9scheduler12work_startedEv:
+function _ZN5boost4asio6detail9scheduler12work_startedEv called 0 returned 0% blocks executed 0%
+    #####:   91:  void work_started()
+        -:   92:  {
+    #####:   93:    ++outstanding_work_;
+call    0 never executed
+    #####:   94:  }
+------------------
+_ZN5boost4asio6detail9scheduler12work_startedEv:
+function _ZN5boost4asio6detail9scheduler12work_startedEv called 0 returned 0% blocks executed 0%
+    #####:   91:  void work_started()
+        -:   92:  {
+    #####:   93:    ++outstanding_work_;
+call    0 never executed
+    #####:   94:  }
+------------------
+_ZN5boost4asio6detail9scheduler12work_startedEv:
+function _ZN5boost4asio6detail9scheduler12work_startedEv called 0 returned 0% blocks executed 0%
+    #####:   91:  void work_started()
+        -:   92:  {
+    #####:   93:    ++outstanding_work_;
+call    0 never executed
+    #####:   94:  }
+------------------
+_ZN5boost4asio6detail9scheduler12work_startedEv:
+function _ZN5boost4asio6detail9scheduler12work_startedEv called 0 returned 0% blocks executed 0%
+    #####:   91:  void work_started()
+        -:   92:  {
+    #####:   93:    ++outstanding_work_;
+call    0 never executed
+    #####:   94:  }
+------------------
+_ZN5boost4asio6detail9scheduler12work_startedEv:
+function _ZN5boost4asio6detail9scheduler12work_startedEv called 0 returned 0% blocks executed 0%
+    #####:   91:  void work_started()
+        -:   92:  {
+    #####:   93:    ++outstanding_work_;
+call    0 never executed
+    #####:   94:  }
+------------------
+_ZN5boost4asio6detail9scheduler12work_startedEv:
+function _ZN5boost4asio6detail9scheduler12work_startedEv called 0 returned 0% blocks executed 0%
+    #####:   91:  void work_started()
+        -:   92:  {
+    #####:   93:    ++outstanding_work_;
+call    0 never executed
+    #####:   94:  }
+------------------
+_ZN5boost4asio6detail9scheduler12work_startedEv:
+function _ZN5boost4asio6detail9scheduler12work_startedEv called 0 returned 0% blocks executed 0%
+    #####:   91:  void work_started()
+        -:   92:  {
+    #####:   93:    ++outstanding_work_;
+call    0 never executed
+    #####:   94:  }
+------------------
+_ZN5boost4asio6detail9scheduler12work_startedEv:
+function _ZN5boost4asio6detail9scheduler12work_startedEv called 1018 returned 102% blocks executed 100%
+     1018:   91:  void work_started()
+        -:   92:  {
+     1018:   93:    ++outstanding_work_;
+call    0 returned 102%
+     1040:   94:  }
+------------------
+_ZN5boost4asio6detail9scheduler12work_startedEv:
+function _ZN5boost4asio6detail9scheduler12work_startedEv called 0 returned 0% blocks executed 0%
+    #####:   91:  void work_started()
+        -:   92:  {
+    #####:   93:    ++outstanding_work_;
+call    0 never executed
+    #####:   94:  }
+------------------
+_ZN5boost4asio6detail9scheduler12work_startedEv:
+function _ZN5boost4asio6detail9scheduler12work_startedEv called 0 returned 0% blocks executed 0%
+    #####:   91:  void work_started()
+        -:   92:  {
+    #####:   93:    ++outstanding_work_;
+call    0 never executed
+    #####:   94:  }
+------------------
+_ZN5boost4asio6detail9scheduler12work_startedEv:
+function _ZN5boost4asio6detail9scheduler12work_startedEv called 0 returned 0% blocks executed 0%
+    #####:   91:  void work_started()
+        -:   92:  {
+    #####:   93:    ++outstanding_work_;
+call    0 never executed
+    #####:   94:  }
+------------------
+_ZN5boost4asio6detail9scheduler12work_startedEv:
+function _ZN5boost4asio6detail9scheduler12work_startedEv called 0 returned 0% blocks executed 0%
+    #####:   91:  void work_started()
+        -:   92:  {
+    #####:   93:    ++outstanding_work_;
+call    0 never executed
+    #####:   94:  }
+------------------
+_ZN5boost4asio6detail9scheduler12work_startedEv:
+function _ZN5boost4asio6detail9scheduler12work_startedEv called 0 returned 0% blocks executed 0%
+    #####:   91:  void work_started()
+        -:   92:  {
+    #####:   93:    ++outstanding_work_;
+call    0 never executed
+    #####:   94:  }
+------------------
+_ZN5boost4asio6detail9scheduler12work_startedEv:
+function _ZN5boost4asio6detail9scheduler12work_startedEv called 0 returned 0% blocks executed 0%
+    #####:   91:  void work_started()
+        -:   92:  {
+    #####:   93:    ++outstanding_work_;
+call    0 never executed
+    #####:   94:  }
+------------------
+_ZN5boost4asio6detail9scheduler12work_startedEv:
+function _ZN5boost4asio6detail9scheduler12work_startedEv called 0 returned 0% blocks executed 0%
+    #####:   91:  void work_started()
+        -:   92:  {
+    #####:   93:    ++outstanding_work_;
+call    0 never executed
+    #####:   94:  }
+------------------
+_ZN5boost4asio6detail9scheduler12work_startedEv:
+function _ZN5boost4asio6detail9scheduler12work_startedEv called 0 returned 0% blocks executed 0%
+    #####:   91:  void work_started()
+        -:   92:  {
+    #####:   93:    ++outstanding_work_;
+call    0 never executed
+    #####:   94:  }
+------------------
+_ZN5boost4asio6detail9scheduler12work_startedEv:
+function _ZN5boost4asio6detail9scheduler12work_startedEv called 0 returned 0% blocks executed 0%
+    #####:   91:  void work_started()
+        -:   92:  {
+    #####:   93:    ++outstanding_work_;
+call    0 never executed
+    #####:   94:  }
+------------------
+_ZN5boost4asio6detail9scheduler12work_startedEv:
+function _ZN5boost4asio6detail9scheduler12work_startedEv called 0 returned 0% blocks executed 0%
+    #####:   91:  void work_started()
+        -:   92:  {
+    #####:   93:    ++outstanding_work_;
+call    0 never executed
+    #####:   94:  }
+------------------
+_ZN5boost4asio6detail9scheduler12work_startedEv:
+function _ZN5boost4asio6detail9scheduler12work_startedEv called 0 returned 0% blocks executed 0%
+    #####:   91:  void work_started()
+        -:   92:  {
+    #####:   93:    ++outstanding_work_;
+call    0 never executed
+    #####:   94:  }
+------------------
+_ZN5boost4asio6detail9scheduler12work_startedEv:
+function _ZN5boost4asio6detail9scheduler12work_startedEv called 0 returned 0% blocks executed 0%
+    #####:   91:  void work_started()
+        -:   92:  {
+    #####:   93:    ++outstanding_work_;
+call    0 never executed
+    #####:   94:  }
+------------------
+_ZN5boost4asio6detail9scheduler12work_startedEv:
+function _ZN5boost4asio6detail9scheduler12work_startedEv called 0 returned 0% blocks executed 0%
+    #####:   91:  void work_started()
+        -:   92:  {
+    #####:   93:    ++outstanding_work_;
+call    0 never executed
+    #####:   94:  }
+------------------
+_ZN5boost4asio6detail9scheduler12work_startedEv:
+function _ZN5boost4asio6detail9scheduler12work_startedEv called 0 returned 0% blocks executed 0%
+    #####:   91:  void work_started()
+        -:   92:  {
+    #####:   93:    ++outstanding_work_;
+call    0 never executed
+    #####:   94:  }
+------------------
+_ZN5boost4asio6detail9scheduler12work_startedEv:
+function _ZN5boost4asio6detail9scheduler12work_startedEv called 70 returned 100% blocks executed 100%
+       70:   91:  void work_started()
+        -:   92:  {
+       70:   93:    ++outstanding_work_;
+call    0 returned 100%
+       70:   94:  }
+------------------
+_ZN5boost4asio6detail9scheduler12work_startedEv:
+function _ZN5boost4asio6detail9scheduler12work_startedEv called 0 returned 0% blocks executed 0%
+    #####:   91:  void work_started()
+        -:   92:  {
+    #####:   93:    ++outstanding_work_;
+call    0 never executed
+    #####:   94:  }
+------------------
+_ZN5boost4asio6detail9scheduler12work_startedEv:
+function _ZN5boost4asio6detail9scheduler12work_startedEv called 49081 returned 102% blocks executed 100%
+    49081:   91:  void work_started()
+        -:   92:  {
+    49081:   93:    ++outstanding_work_;
+call    0 returned 102%
+    50274:   94:  }
+------------------
+_ZN5boost4asio6detail9scheduler12work_startedEv:
+function _ZN5boost4asio6detail9scheduler12work_startedEv called 108 returned 100% blocks executed 100%
+      108:   91:  void work_started()
+        -:   92:  {
+      108:   93:    ++outstanding_work_;
+call    0 returned 100%
+      108:   94:  }
+------------------
+        -:   95:
+        -:   96:  // Used to compensate for a forthcoming work_finished call. Must be called
+        -:   97:  // from within a scheduler-owned thread.
+        -:   98:  BOOST_ASIO_DECL void compensating_work_started();
+        -:   99:
+        -:  100:  // Notify that some work has finished.
+   51781*:  101:  void work_finished()
+        -:  102:  {
+   51781*:  103:    if (--outstanding_work_ == 0)
+     128*:  104:      stop();
+   52431*:  105:  }
+------------------
+_ZN5boost4asio6detail9scheduler13work_finishedEv:
+function _ZN5boost4asio6detail9scheduler13work_finishedEv called 30 returned 100% blocks executed 100%
+       30:  101:  void work_finished()
+        -:  102:  {
+       30:  103:    if (--outstanding_work_ == 0)
+call    0 returned 100%
+branch  1 taken 17% (fallthrough)
+branch  2 taken 83%
+        5:  104:      stop();
+call    0 returned 100%
+       30:  105:  }
+------------------
+_ZN5boost4asio6detail9scheduler13work_finishedEv:
+function _ZN5boost4asio6detail9scheduler13work_finishedEv called 0 returned 0% blocks executed 0%
+    #####:  101:  void work_finished()
+        -:  102:  {
+    #####:  103:    if (--outstanding_work_ == 0)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+    #####:  104:      stop();
+call    0 never executed
+    #####:  105:  }
+------------------
+_ZN5boost4asio6detail9scheduler13work_finishedEv:
+function _ZN5boost4asio6detail9scheduler13work_finishedEv called 118 returned 100% blocks executed 75%
+      118:  101:  void work_finished()
+        -:  102:  {
+      118:  103:    if (--outstanding_work_ == 0)
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+    #####:  104:      stop();
+call    0 never executed
+      118:  105:  }
+------------------
+_ZN5boost4asio6detail9scheduler13work_finishedEv:
+function _ZN5boost4asio6detail9scheduler13work_finishedEv called 0 returned 0% blocks executed 0%
+    #####:  101:  void work_finished()
+        -:  102:  {
+    #####:  103:    if (--outstanding_work_ == 0)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+    #####:  104:      stop();
+call    0 never executed
+    #####:  105:  }
+------------------
+_ZN5boost4asio6detail9scheduler13work_finishedEv:
+function _ZN5boost4asio6detail9scheduler13work_finishedEv called 60 returned 100% blocks executed 100%
+       60:  101:  void work_finished()
+        -:  102:  {
+       60:  103:    if (--outstanding_work_ == 0)
+call    0 returned 100%
+branch  1 taken 2% (fallthrough)
+branch  2 taken 98%
+        1:  104:      stop();
+call    0 returned 100%
+       60:  105:  }
+------------------
+_ZN5boost4asio6detail9scheduler13work_finishedEv:
+function _ZN5boost4asio6detail9scheduler13work_finishedEv called 130 returned 100% blocks executed 75%
+      130:  101:  void work_finished()
+        -:  102:  {
+      130:  103:    if (--outstanding_work_ == 0)
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+    #####:  104:      stop();
+call    0 never executed
+      130:  105:  }
+------------------
+_ZN5boost4asio6detail9scheduler13work_finishedEv:
+function _ZN5boost4asio6detail9scheduler13work_finishedEv called 25 returned 100% blocks executed 100%
+       25:  101:  void work_finished()
+        -:  102:  {
+       25:  103:    if (--outstanding_work_ == 0)
+call    0 returned 100%
+branch  1 taken 20% (fallthrough)
+branch  2 taken 80%
+        5:  104:      stop();
+call    0 returned 100%
+       25:  105:  }
+------------------
+_ZN5boost4asio6detail9scheduler13work_finishedEv:
+function _ZN5boost4asio6detail9scheduler13work_finishedEv called 1 returned 100% blocks executed 100%
+        1:  101:  void work_finished()
+        -:  102:  {
+        1:  103:    if (--outstanding_work_ == 0)
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0%
+        1:  104:      stop();
+call    0 returned 100%
+        1:  105:  }
+------------------
+_ZN5boost4asio6detail9scheduler13work_finishedEv:
+function _ZN5boost4asio6detail9scheduler13work_finishedEv called 0 returned 0% blocks executed 0%
+    #####:  101:  void work_finished()
+        -:  102:  {
+    #####:  103:    if (--outstanding_work_ == 0)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+    #####:  104:      stop();
+call    0 never executed
+    #####:  105:  }
+------------------
+_ZN5boost4asio6detail9scheduler13work_finishedEv:
+function _ZN5boost4asio6detail9scheduler13work_finishedEv called 70 returned 100% blocks executed 100%
+       70:  101:  void work_finished()
+        -:  102:  {
+       70:  103:    if (--outstanding_work_ == 0)
+call    0 returned 100%
+branch  1 taken 20% (fallthrough)
+branch  2 taken 80%
+       14:  104:      stop();
+call    0 returned 100%
+       70:  105:  }
+------------------
+_ZN5boost4asio6detail9scheduler13work_finishedEv:
+function _ZN5boost4asio6detail9scheduler13work_finishedEv called 48 returned 100% blocks executed 100%
+       48:  101:  void work_finished()
+        -:  102:  {
+       48:  103:    if (--outstanding_work_ == 0)
+call    0 returned 100%
+branch  1 taken 33% (fallthrough)
+branch  2 taken 67%
+       16:  104:      stop();
+call    0 returned 100%
+       48:  105:  }
+------------------
+_ZN5boost4asio6detail9scheduler13work_finishedEv:
+function _ZN5boost4asio6detail9scheduler13work_finishedEv called 50 returned 100% blocks executed 100%
+       50:  101:  void work_finished()
+        -:  102:  {
+       50:  103:    if (--outstanding_work_ == 0)
+call    0 returned 100%
+branch  1 taken 10% (fallthrough)
+branch  2 taken 90%
+        5:  104:      stop();
+call    0 returned 100%
+       50:  105:  }
+------------------
+_ZN5boost4asio6detail9scheduler13work_finishedEv:
+function _ZN5boost4asio6detail9scheduler13work_finishedEv called 49 returned 100% blocks executed 100%
+       49:  101:  void work_finished()
+        -:  102:  {
+       49:  103:    if (--outstanding_work_ == 0)
+call    0 returned 100%
+branch  1 taken 6% (fallthrough)
+branch  2 taken 94%
+        3:  104:      stop();
+call    0 returned 100%
+       49:  105:  }
+------------------
+_ZN5boost4asio6detail9scheduler13work_finishedEv:
+function _ZN5boost4asio6detail9scheduler13work_finishedEv called 74 returned 100% blocks executed 100%
+       74:  101:  void work_finished()
+        -:  102:  {
+       74:  103:    if (--outstanding_work_ == 0)
+call    0 returned 100%
+branch  1 taken 19% (fallthrough)
+branch  2 taken 81%
+       14:  104:      stop();
+call    0 returned 100%
+       74:  105:  }
+------------------
+_ZN5boost4asio6detail9scheduler13work_finishedEv:
+function _ZN5boost4asio6detail9scheduler13work_finishedEv called 152 returned 100% blocks executed 75%
+      152:  101:  void work_finished()
+        -:  102:  {
+      152:  103:    if (--outstanding_work_ == 0)
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+    #####:  104:      stop();
+call    0 never executed
+      152:  105:  }
+------------------
+_ZN5boost4asio6detail9scheduler13work_finishedEv:
+function _ZN5boost4asio6detail9scheduler13work_finishedEv called 0 returned 0% blocks executed 0%
+    #####:  101:  void work_finished()
+        -:  102:  {
+    #####:  103:    if (--outstanding_work_ == 0)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+    #####:  104:      stop();
+call    0 never executed
+    #####:  105:  }
+------------------
+_ZN5boost4asio6detail9scheduler13work_finishedEv:
+function _ZN5boost4asio6detail9scheduler13work_finishedEv called 0 returned 0% blocks executed 0%
+    #####:  101:  void work_finished()
+        -:  102:  {
+    #####:  103:    if (--outstanding_work_ == 0)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+    #####:  104:      stop();
+call    0 never executed
+    #####:  105:  }
+------------------
+_ZN5boost4asio6detail9scheduler13work_finishedEv:
+function _ZN5boost4asio6detail9scheduler13work_finishedEv called 0 returned 0% blocks executed 0%
+    #####:  101:  void work_finished()
+        -:  102:  {
+    #####:  103:    if (--outstanding_work_ == 0)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+    #####:  104:      stop();
+call    0 never executed
+    #####:  105:  }
+------------------
+_ZN5boost4asio6detail9scheduler13work_finishedEv:
+function _ZN5boost4asio6detail9scheduler13work_finishedEv called 0 returned 0% blocks executed 0%
+    #####:  101:  void work_finished()
+        -:  102:  {
+    #####:  103:    if (--outstanding_work_ == 0)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+    #####:  104:      stop();
+call    0 never executed
+    #####:  105:  }
+------------------
+_ZN5boost4asio6detail9scheduler13work_finishedEv:
+function _ZN5boost4asio6detail9scheduler13work_finishedEv called 0 returned 0% blocks executed 0%
+    #####:  101:  void work_finished()
+        -:  102:  {
+    #####:  103:    if (--outstanding_work_ == 0)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+    #####:  104:      stop();
+call    0 never executed
+    #####:  105:  }
+------------------
+_ZN5boost4asio6detail9scheduler13work_finishedEv:
+function _ZN5boost4asio6detail9scheduler13work_finishedEv called 0 returned 0% blocks executed 0%
+    #####:  101:  void work_finished()
+        -:  102:  {
+    #####:  103:    if (--outstanding_work_ == 0)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+    #####:  104:      stop();
+call    0 never executed
+    #####:  105:  }
+------------------
+_ZN5boost4asio6detail9scheduler13work_finishedEv:
+function _ZN5boost4asio6detail9scheduler13work_finishedEv called 0 returned 0% blocks executed 0%
+    #####:  101:  void work_finished()
+        -:  102:  {
+    #####:  103:    if (--outstanding_work_ == 0)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+    #####:  104:      stop();
+call    0 never executed
+    #####:  105:  }
+------------------
+_ZN5boost4asio6detail9scheduler13work_finishedEv:
+function _ZN5boost4asio6detail9scheduler13work_finishedEv called 0 returned 0% blocks executed 0%
+    #####:  101:  void work_finished()
+        -:  102:  {
+    #####:  103:    if (--outstanding_work_ == 0)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+    #####:  104:      stop();
+call    0 never executed
+    #####:  105:  }
+------------------
+_ZN5boost4asio6detail9scheduler13work_finishedEv:
+function _ZN5boost4asio6detail9scheduler13work_finishedEv called 0 returned 0% blocks executed 0%
+    #####:  101:  void work_finished()
+        -:  102:  {
+    #####:  103:    if (--outstanding_work_ == 0)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+    #####:  104:      stop();
+call    0 never executed
+    #####:  105:  }
+------------------
+_ZN5boost4asio6detail9scheduler13work_finishedEv:
+function _ZN5boost4asio6detail9scheduler13work_finishedEv called 1046 returned 100% blocks executed 100%
+     1046:  101:  void work_finished()
+        -:  102:  {
+     1046:  103:    if (--outstanding_work_ == 0)
+call    0 returned 100%
+branch  1 taken 2% (fallthrough)
+branch  2 taken 98%
+       17:  104:      stop();
+call    0 returned 100%
+     1046:  105:  }
+------------------
+_ZN5boost4asio6detail9scheduler13work_finishedEv:
+function _ZN5boost4asio6detail9scheduler13work_finishedEv called 0 returned 0% blocks executed 0%
+    #####:  101:  void work_finished()
+        -:  102:  {
+    #####:  103:    if (--outstanding_work_ == 0)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+    #####:  104:      stop();
+call    0 never executed
+    #####:  105:  }
+------------------
+_ZN5boost4asio6detail9scheduler13work_finishedEv:
+function _ZN5boost4asio6detail9scheduler13work_finishedEv called 0 returned 0% blocks executed 0%
+    #####:  101:  void work_finished()
+        -:  102:  {
+    #####:  103:    if (--outstanding_work_ == 0)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+    #####:  104:      stop();
+call    0 never executed
+    #####:  105:  }
+------------------
+_ZN5boost4asio6detail9scheduler13work_finishedEv:
+function _ZN5boost4asio6detail9scheduler13work_finishedEv called 0 returned 0% blocks executed 0%
+    #####:  101:  void work_finished()
+        -:  102:  {
+    #####:  103:    if (--outstanding_work_ == 0)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+    #####:  104:      stop();
+call    0 never executed
+    #####:  105:  }
+------------------
+_ZN5boost4asio6detail9scheduler13work_finishedEv:
+function _ZN5boost4asio6detail9scheduler13work_finishedEv called 0 returned 0% blocks executed 0%
+    #####:  101:  void work_finished()
+        -:  102:  {
+    #####:  103:    if (--outstanding_work_ == 0)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+    #####:  104:      stop();
+call    0 never executed
+    #####:  105:  }
+------------------
+_ZN5boost4asio6detail9scheduler13work_finishedEv:
+function _ZN5boost4asio6detail9scheduler13work_finishedEv called 0 returned 0% blocks executed 0%
+    #####:  101:  void work_finished()
+        -:  102:  {
+    #####:  103:    if (--outstanding_work_ == 0)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+    #####:  104:      stop();
+call    0 never executed
+    #####:  105:  }
+------------------
+_ZN5boost4asio6detail9scheduler13work_finishedEv:
+function _ZN5boost4asio6detail9scheduler13work_finishedEv called 0 returned 0% blocks executed 0%
+    #####:  101:  void work_finished()
+        -:  102:  {
+    #####:  103:    if (--outstanding_work_ == 0)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+    #####:  104:      stop();
+call    0 never executed
+    #####:  105:  }
+------------------
+_ZN5boost4asio6detail9scheduler13work_finishedEv:
+function _ZN5boost4asio6detail9scheduler13work_finishedEv called 0 returned 0% blocks executed 0%
+    #####:  101:  void work_finished()
+        -:  102:  {
+    #####:  103:    if (--outstanding_work_ == 0)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+    #####:  104:      stop();
+call    0 never executed
+    #####:  105:  }
+------------------
+_ZN5boost4asio6detail9scheduler13work_finishedEv:
+function _ZN5boost4asio6detail9scheduler13work_finishedEv called 0 returned 0% blocks executed 0%
+    #####:  101:  void work_finished()
+        -:  102:  {
+    #####:  103:    if (--outstanding_work_ == 0)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+    #####:  104:      stop();
+call    0 never executed
+    #####:  105:  }
+------------------
+_ZN5boost4asio6detail9scheduler13work_finishedEv:
+function _ZN5boost4asio6detail9scheduler13work_finishedEv called 0 returned 0% blocks executed 0%
+    #####:  101:  void work_finished()
+        -:  102:  {
+    #####:  103:    if (--outstanding_work_ == 0)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+    #####:  104:      stop();
+call    0 never executed
+    #####:  105:  }
+------------------
+_ZN5boost4asio6detail9scheduler13work_finishedEv:
+function _ZN5boost4asio6detail9scheduler13work_finishedEv called 0 returned 0% blocks executed 0%
+    #####:  101:  void work_finished()
+        -:  102:  {
+    #####:  103:    if (--outstanding_work_ == 0)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+    #####:  104:      stop();
+call    0 never executed
+    #####:  105:  }
+------------------
+_ZN5boost4asio6detail9scheduler13work_finishedEv:
+function _ZN5boost4asio6detail9scheduler13work_finishedEv called 0 returned 0% blocks executed 0%
+    #####:  101:  void work_finished()
+        -:  102:  {
+    #####:  103:    if (--outstanding_work_ == 0)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+    #####:  104:      stop();
+call    0 never executed
+    #####:  105:  }
+------------------
+_ZN5boost4asio6detail9scheduler13work_finishedEv:
+function _ZN5boost4asio6detail9scheduler13work_finishedEv called 0 returned 0% blocks executed 0%
+    #####:  101:  void work_finished()
+        -:  102:  {
+    #####:  103:    if (--outstanding_work_ == 0)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+    #####:  104:      stop();
+call    0 never executed
+    #####:  105:  }
+------------------
+_ZN5boost4asio6detail9scheduler13work_finishedEv:
+function _ZN5boost4asio6detail9scheduler13work_finishedEv called 0 returned 0% blocks executed 0%
+    #####:  101:  void work_finished()
+        -:  102:  {
+    #####:  103:    if (--outstanding_work_ == 0)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+    #####:  104:      stop();
+call    0 never executed
+    #####:  105:  }
+------------------
+_ZN5boost4asio6detail9scheduler13work_finishedEv:
+function _ZN5boost4asio6detail9scheduler13work_finishedEv called 0 returned 0% blocks executed 0%
+    #####:  101:  void work_finished()
+        -:  102:  {
+    #####:  103:    if (--outstanding_work_ == 0)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+    #####:  104:      stop();
+call    0 never executed
+    #####:  105:  }
+------------------
+_ZN5boost4asio6detail9scheduler13work_finishedEv:
+function _ZN5boost4asio6detail9scheduler13work_finishedEv called 55 returned 100% blocks executed 100%
+       55:  101:  void work_finished()
+        -:  102:  {
+       55:  103:    if (--outstanding_work_ == 0)
+call    0 returned 100%
+branch  1 taken 22% (fallthrough)
+branch  2 taken 78%
+       12:  104:      stop();
+call    0 returned 100%
+       55:  105:  }
+------------------
+_ZN5boost4asio6detail9scheduler13work_finishedEv:
+function _ZN5boost4asio6detail9scheduler13work_finishedEv called 0 returned 0% blocks executed 0%
+    #####:  101:  void work_finished()
+        -:  102:  {
+    #####:  103:    if (--outstanding_work_ == 0)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+    #####:  104:      stop();
+call    0 never executed
+    #####:  105:  }
+------------------
+_ZN5boost4asio6detail9scheduler13work_finishedEv:
+function _ZN5boost4asio6detail9scheduler13work_finishedEv called 49765 returned 101% blocks executed 100%
+    49765:  101:  void work_finished()
+        -:  102:  {
+    49765:  103:    if (--outstanding_work_ == 0)
+call    0 returned 101%
+branch  1 taken 1% (fallthrough)
+branch  2 taken 100%
+       17:  104:      stop();
+call    0 returned 100%
+    50415:  105:  }
+------------------
+_ZN5boost4asio6detail9scheduler13work_finishedEv:
+function _ZN5boost4asio6detail9scheduler13work_finishedEv called 108 returned 100% blocks executed 100%
+      108:  101:  void work_finished()
+        -:  102:  {
+      108:  103:    if (--outstanding_work_ == 0)
+call    0 returned 100%
+branch  1 taken 17% (fallthrough)
+branch  2 taken 83%
+       18:  104:      stop();
+call    0 returned 100%
+      108:  105:  }
+------------------
+        -:  106:
+        -:  107:  // Return whether a handler can be dispatched immediately.
+        -:  108:  BOOST_ASIO_DECL bool can_dispatch();
+        -:  109:
+        -:  110:  /// Capture the current exception so it can be rethrown from a run function.
+        -:  111:  BOOST_ASIO_DECL void capture_current_exception();
+        -:  112:
+        -:  113:  // Request invocation of the given operation and return immediately. Assumes
+        -:  114:  // that work_started() has not yet been called for the operation.
+        -:  115:  BOOST_ASIO_DECL void post_immediate_completion(
+        -:  116:      operation* op, bool is_continuation);
+        -:  117:
+        -:  118:  // Request invocation of the given operations and return immediately. Assumes
+        -:  119:  // that work_started() has not yet been called for the operations.
+        -:  120:  BOOST_ASIO_DECL void post_immediate_completions(std::size_t n,
+        -:  121:      op_queue<operation>& ops, bool is_continuation);
+        -:  122:
+        -:  123:  // Request invocation of the given operation and return immediately. Assumes
+        -:  124:  // that work_started() was previously called for the operation.
+        -:  125:  BOOST_ASIO_DECL void post_deferred_completion(operation* op);
+        -:  126:
+        -:  127:  // Request invocation of the given operations and return immediately. Assumes
+        -:  128:  // that work_started() was previously called for each operation.
+        -:  129:  BOOST_ASIO_DECL void post_deferred_completions(op_queue<operation>& ops);
+        -:  130:
+        -:  131:  // Enqueue the given operation following a failed attempt to dispatch the
+        -:  132:  // operation for immediate invocation.
+        -:  133:  BOOST_ASIO_DECL void do_dispatch(operation* op);
+        -:  134:
+        -:  135:  // Process unfinished operations as part of a shutdownoperation. Assumes that
+        -:  136:  // work_started() was previously called for the operations.
+        -:  137:  BOOST_ASIO_DECL void abandon_operations(op_queue<operation>& ops);
+        -:  138:
+        -:  139:  // Get the concurrency hint that was used to initialise the scheduler.
+     364*:  140:  int concurrency_hint() const
+        -:  141:  {
+     364*:  142:    return concurrency_hint_;
+        -:  143:  }
+------------------
+_ZNK5boost4asio6detail9scheduler16concurrency_hintEv:
+function _ZNK5boost4asio6detail9scheduler16concurrency_hintEv called 0 returned 0% blocks executed 0%
+    #####:  140:  int concurrency_hint() const
+        -:  141:  {
+    #####:  142:    return concurrency_hint_;
+        -:  143:  }
+------------------
+_ZNK5boost4asio6detail9scheduler16concurrency_hintEv:
+function _ZNK5boost4asio6detail9scheduler16concurrency_hintEv called 0 returned 0% blocks executed 0%
+    #####:  140:  int concurrency_hint() const
+        -:  141:  {
+    #####:  142:    return concurrency_hint_;
+        -:  143:  }
+------------------
+_ZNK5boost4asio6detail9scheduler16concurrency_hintEv:
+function _ZNK5boost4asio6detail9scheduler16concurrency_hintEv called 45 returned 100% blocks executed 100%
+       45:  140:  int concurrency_hint() const
+        -:  141:  {
+       45:  142:    return concurrency_hint_;
+        -:  143:  }
+------------------
+_ZNK5boost4asio6detail9scheduler16concurrency_hintEv:
+function _ZNK5boost4asio6detail9scheduler16concurrency_hintEv called 0 returned 0% blocks executed 0%
+    #####:  140:  int concurrency_hint() const
+        -:  141:  {
+    #####:  142:    return concurrency_hint_;
+        -:  143:  }
+------------------
+_ZNK5boost4asio6detail9scheduler16concurrency_hintEv:
+function _ZNK5boost4asio6detail9scheduler16concurrency_hintEv called 30 returned 100% blocks executed 100%
+       30:  140:  int concurrency_hint() const
+        -:  141:  {
+       30:  142:    return concurrency_hint_;
+        -:  143:  }
+------------------
+_ZNK5boost4asio6detail9scheduler16concurrency_hintEv:
+function _ZNK5boost4asio6detail9scheduler16concurrency_hintEv called 51 returned 100% blocks executed 100%
+       51:  140:  int concurrency_hint() const
+        -:  141:  {
+       51:  142:    return concurrency_hint_;
+        -:  143:  }
+------------------
+_ZNK5boost4asio6detail9scheduler16concurrency_hintEv:
+function _ZNK5boost4asio6detail9scheduler16concurrency_hintEv called 0 returned 0% blocks executed 0%
+    #####:  140:  int concurrency_hint() const
+        -:  141:  {
+    #####:  142:    return concurrency_hint_;
+        -:  143:  }
+------------------
+_ZNK5boost4asio6detail9scheduler16concurrency_hintEv:
+function _ZNK5boost4asio6detail9scheduler16concurrency_hintEv called 0 returned 0% blocks executed 0%
+    #####:  140:  int concurrency_hint() const
+        -:  141:  {
+    #####:  142:    return concurrency_hint_;
+        -:  143:  }
+------------------
+_ZNK5boost4asio6detail9scheduler16concurrency_hintEv:
+function _ZNK5boost4asio6detail9scheduler16concurrency_hintEv called 0 returned 0% blocks executed 0%
+    #####:  140:  int concurrency_hint() const
+        -:  141:  {
+    #####:  142:    return concurrency_hint_;
+        -:  143:  }
+------------------
+_ZNK5boost4asio6detail9scheduler16concurrency_hintEv:
+function _ZNK5boost4asio6detail9scheduler16concurrency_hintEv called 0 returned 0% blocks executed 0%
+    #####:  140:  int concurrency_hint() const
+        -:  141:  {
+    #####:  142:    return concurrency_hint_;
+        -:  143:  }
+------------------
+_ZNK5boost4asio6detail9scheduler16concurrency_hintEv:
+function _ZNK5boost4asio6detail9scheduler16concurrency_hintEv called 0 returned 0% blocks executed 0%
+    #####:  140:  int concurrency_hint() const
+        -:  141:  {
+    #####:  142:    return concurrency_hint_;
+        -:  143:  }
+------------------
+_ZNK5boost4asio6detail9scheduler16concurrency_hintEv:
+function _ZNK5boost4asio6detail9scheduler16concurrency_hintEv called 5 returned 100% blocks executed 100%
+        5:  140:  int concurrency_hint() const
+        -:  141:  {
+        5:  142:    return concurrency_hint_;
+        -:  143:  }
+------------------
+_ZNK5boost4asio6detail9scheduler16concurrency_hintEv:
+function _ZNK5boost4asio6detail9scheduler16concurrency_hintEv called 32 returned 100% blocks executed 100%
+       32:  140:  int concurrency_hint() const
+        -:  141:  {
+       32:  142:    return concurrency_hint_;
+        -:  143:  }
+------------------
+_ZNK5boost4asio6detail9scheduler16concurrency_hintEv:
+function _ZNK5boost4asio6detail9scheduler16concurrency_hintEv called 0 returned 0% blocks executed 0%
+    #####:  140:  int concurrency_hint() const
+        -:  141:  {
+    #####:  142:    return concurrency_hint_;
+        -:  143:  }
+------------------
+_ZNK5boost4asio6detail9scheduler16concurrency_hintEv:
+function _ZNK5boost4asio6detail9scheduler16concurrency_hintEv called 60 returned 100% blocks executed 100%
+       60:  140:  int concurrency_hint() const
+        -:  141:  {
+       60:  142:    return concurrency_hint_;
+        -:  143:  }
+------------------
+_ZNK5boost4asio6detail9scheduler16concurrency_hintEv:
+function _ZNK5boost4asio6detail9scheduler16concurrency_hintEv called 0 returned 0% blocks executed 0%
+    #####:  140:  int concurrency_hint() const
+        -:  141:  {
+    #####:  142:    return concurrency_hint_;
+        -:  143:  }
+------------------
+_ZNK5boost4asio6detail9scheduler16concurrency_hintEv:
+function _ZNK5boost4asio6detail9scheduler16concurrency_hintEv called 0 returned 0% blocks executed 0%
+    #####:  140:  int concurrency_hint() const
+        -:  141:  {
+    #####:  142:    return concurrency_hint_;
+        -:  143:  }
+------------------
+_ZNK5boost4asio6detail9scheduler16concurrency_hintEv:
+function _ZNK5boost4asio6detail9scheduler16concurrency_hintEv called 0 returned 0% blocks executed 0%
+    #####:  140:  int concurrency_hint() const
+        -:  141:  {
+    #####:  142:    return concurrency_hint_;
+        -:  143:  }
+------------------
+_ZNK5boost4asio6detail9scheduler16concurrency_hintEv:
+function _ZNK5boost4asio6detail9scheduler16concurrency_hintEv called 0 returned 0% blocks executed 0%
+    #####:  140:  int concurrency_hint() const
+        -:  141:  {
+    #####:  142:    return concurrency_hint_;
+        -:  143:  }
+------------------
+_ZNK5boost4asio6detail9scheduler16concurrency_hintEv:
+function _ZNK5boost4asio6detail9scheduler16concurrency_hintEv called 0 returned 0% blocks executed 0%
+    #####:  140:  int concurrency_hint() const
+        -:  141:  {
+    #####:  142:    return concurrency_hint_;
+        -:  143:  }
+------------------
+_ZNK5boost4asio6detail9scheduler16concurrency_hintEv:
+function _ZNK5boost4asio6detail9scheduler16concurrency_hintEv called 0 returned 0% blocks executed 0%
+    #####:  140:  int concurrency_hint() const
+        -:  141:  {
+    #####:  142:    return concurrency_hint_;
+        -:  143:  }
+------------------
+_ZNK5boost4asio6detail9scheduler16concurrency_hintEv:
+function _ZNK5boost4asio6detail9scheduler16concurrency_hintEv called 0 returned 0% blocks executed 0%
+    #####:  140:  int concurrency_hint() const
+        -:  141:  {
+    #####:  142:    return concurrency_hint_;
+        -:  143:  }
+------------------
+_ZNK5boost4asio6detail9scheduler16concurrency_hintEv:
+function _ZNK5boost4asio6detail9scheduler16concurrency_hintEv called 0 returned 0% blocks executed 0%
+    #####:  140:  int concurrency_hint() const
+        -:  141:  {
+    #####:  142:    return concurrency_hint_;
+        -:  143:  }
+------------------
+_ZNK5boost4asio6detail9scheduler16concurrency_hintEv:
+function _ZNK5boost4asio6detail9scheduler16concurrency_hintEv called 0 returned 0% blocks executed 0%
+    #####:  140:  int concurrency_hint() const
+        -:  141:  {
+    #####:  142:    return concurrency_hint_;
+        -:  143:  }
+------------------
+_ZNK5boost4asio6detail9scheduler16concurrency_hintEv:
+function _ZNK5boost4asio6detail9scheduler16concurrency_hintEv called 11 returned 100% blocks executed 100%
+       11:  140:  int concurrency_hint() const
+        -:  141:  {
+       11:  142:    return concurrency_hint_;
+        -:  143:  }
+------------------
+_ZNK5boost4asio6detail9scheduler16concurrency_hintEv:
+function _ZNK5boost4asio6detail9scheduler16concurrency_hintEv called 0 returned 0% blocks executed 0%
+    #####:  140:  int concurrency_hint() const
+        -:  141:  {
+    #####:  142:    return concurrency_hint_;
+        -:  143:  }
+------------------
+_ZNK5boost4asio6detail9scheduler16concurrency_hintEv:
+function _ZNK5boost4asio6detail9scheduler16concurrency_hintEv called 0 returned 0% blocks executed 0%
+    #####:  140:  int concurrency_hint() const
+        -:  141:  {
+    #####:  142:    return concurrency_hint_;
+        -:  143:  }
+------------------
+_ZNK5boost4asio6detail9scheduler16concurrency_hintEv:
+function _ZNK5boost4asio6detail9scheduler16concurrency_hintEv called 0 returned 0% blocks executed 0%
+    #####:  140:  int concurrency_hint() const
+        -:  141:  {
+    #####:  142:    return concurrency_hint_;
+        -:  143:  }
+------------------
+_ZNK5boost4asio6detail9scheduler16concurrency_hintEv:
+function _ZNK5boost4asio6detail9scheduler16concurrency_hintEv called 0 returned 0% blocks executed 0%
+    #####:  140:  int concurrency_hint() const
+        -:  141:  {
+    #####:  142:    return concurrency_hint_;
+        -:  143:  }
+------------------
+_ZNK5boost4asio6detail9scheduler16concurrency_hintEv:
+function _ZNK5boost4asio6detail9scheduler16concurrency_hintEv called 0 returned 0% blocks executed 0%
+    #####:  140:  int concurrency_hint() const
+        -:  141:  {
+    #####:  142:    return concurrency_hint_;
+        -:  143:  }
+------------------
+_ZNK5boost4asio6detail9scheduler16concurrency_hintEv:
+function _ZNK5boost4asio6detail9scheduler16concurrency_hintEv called 0 returned 0% blocks executed 0%
+    #####:  140:  int concurrency_hint() const
+        -:  141:  {
+    #####:  142:    return concurrency_hint_;
+        -:  143:  }
+------------------
+_ZNK5boost4asio6detail9scheduler16concurrency_hintEv:
+function _ZNK5boost4asio6detail9scheduler16concurrency_hintEv called 0 returned 0% blocks executed 0%
+    #####:  140:  int concurrency_hint() const
+        -:  141:  {
+    #####:  142:    return concurrency_hint_;
+        -:  143:  }
+------------------
+_ZNK5boost4asio6detail9scheduler16concurrency_hintEv:
+function _ZNK5boost4asio6detail9scheduler16concurrency_hintEv called 0 returned 0% blocks executed 0%
+    #####:  140:  int concurrency_hint() const
+        -:  141:  {
+    #####:  142:    return concurrency_hint_;
+        -:  143:  }
+------------------
+_ZNK5boost4asio6detail9scheduler16concurrency_hintEv:
+function _ZNK5boost4asio6detail9scheduler16concurrency_hintEv called 0 returned 0% blocks executed 0%
+    #####:  140:  int concurrency_hint() const
+        -:  141:  {
+    #####:  142:    return concurrency_hint_;
+        -:  143:  }
+------------------
+_ZNK5boost4asio6detail9scheduler16concurrency_hintEv:
+function _ZNK5boost4asio6detail9scheduler16concurrency_hintEv called 0 returned 0% blocks executed 0%
+    #####:  140:  int concurrency_hint() const
+        -:  141:  {
+    #####:  142:    return concurrency_hint_;
+        -:  143:  }
+------------------
+_ZNK5boost4asio6detail9scheduler16concurrency_hintEv:
+function _ZNK5boost4asio6detail9scheduler16concurrency_hintEv called 0 returned 0% blocks executed 0%
+    #####:  140:  int concurrency_hint() const
+        -:  141:  {
+    #####:  142:    return concurrency_hint_;
+        -:  143:  }
+------------------
+_ZNK5boost4asio6detail9scheduler16concurrency_hintEv:
+function _ZNK5boost4asio6detail9scheduler16concurrency_hintEv called 0 returned 0% blocks executed 0%
+    #####:  140:  int concurrency_hint() const
+        -:  141:  {
+    #####:  142:    return concurrency_hint_;
+        -:  143:  }
+------------------
+_ZNK5boost4asio6detail9scheduler16concurrency_hintEv:
+function _ZNK5boost4asio6detail9scheduler16concurrency_hintEv called 0 returned 0% blocks executed 0%
+    #####:  140:  int concurrency_hint() const
+        -:  141:  {
+    #####:  142:    return concurrency_hint_;
+        -:  143:  }
+------------------
+_ZNK5boost4asio6detail9scheduler16concurrency_hintEv:
+function _ZNK5boost4asio6detail9scheduler16concurrency_hintEv called 0 returned 0% blocks executed 0%
+    #####:  140:  int concurrency_hint() const
+        -:  141:  {
+    #####:  142:    return concurrency_hint_;
+        -:  143:  }
+------------------
+_ZNK5boost4asio6detail9scheduler16concurrency_hintEv:
+function _ZNK5boost4asio6detail9scheduler16concurrency_hintEv called 18 returned 100% blocks executed 100%
+       18:  140:  int concurrency_hint() const
+        -:  141:  {
+       18:  142:    return concurrency_hint_;
+        -:  143:  }
+------------------
+_ZNK5boost4asio6detail9scheduler16concurrency_hintEv:
+function _ZNK5boost4asio6detail9scheduler16concurrency_hintEv called 0 returned 0% blocks executed 0%
+    #####:  140:  int concurrency_hint() const
+        -:  141:  {
+    #####:  142:    return concurrency_hint_;
+        -:  143:  }
+------------------
+_ZNK5boost4asio6detail9scheduler16concurrency_hintEv:
+function _ZNK5boost4asio6detail9scheduler16concurrency_hintEv called 111 returned 100% blocks executed 100%
+      111:  140:  int concurrency_hint() const
+        -:  141:  {
+      111:  142:    return concurrency_hint_;
+        -:  143:  }
+------------------
+_ZNK5boost4asio6detail9scheduler16concurrency_hintEv:
+function _ZNK5boost4asio6detail9scheduler16concurrency_hintEv called 1 returned 100% blocks executed 100%
+        1:  140:  int concurrency_hint() const
+        -:  141:  {
+        1:  142:    return concurrency_hint_;
+        -:  143:  }
+------------------
+        -:  144:
+        -:  145:private:
+        -:  146:  // The mutex type used by this scheduler.
+        -:  147:  typedef conditionally_enabled_mutex mutex;
+        -:  148:
+        -:  149:  // The event type used by this scheduler.
+        -:  150:  typedef conditionally_enabled_event event;
+        -:  151:
+        -:  152:  // Structure containing thread-specific data.
+        -:  153:  typedef scheduler_thread_info thread_info;
+        -:  154:
+        -:  155:  // Run at most one operation. May block.
+        -:  156:  BOOST_ASIO_DECL std::size_t do_run_one(mutex::scoped_lock& lock,
+        -:  157:      thread_info& this_thread, const boost::system::error_code& ec);
+        -:  158:
+        -:  159:  // Run at most one operation with a timeout. May block.
+        -:  160:  BOOST_ASIO_DECL std::size_t do_wait_one(mutex::scoped_lock& lock,
+        -:  161:      thread_info& this_thread, long usec, const boost::system::error_code& ec);
+        -:  162:
+        -:  163:  // Poll for at most one operation.
+        -:  164:  BOOST_ASIO_DECL std::size_t do_poll_one(mutex::scoped_lock& lock,
+        -:  165:      thread_info& this_thread, const boost::system::error_code& ec);
+        -:  166:
+        -:  167:  // Stop the task and all idle threads.
+        -:  168:  BOOST_ASIO_DECL void stop_all_threads(mutex::scoped_lock& lock);
+        -:  169:
+        -:  170:  // Wake a single idle thread, or the task, and always unlock the mutex.
+        -:  171:  BOOST_ASIO_DECL void wake_one_thread_and_unlock(
+        -:  172:      mutex::scoped_lock& lock);
+        -:  173:
+        -:  174:  // Get the default task.
+        -:  175:  BOOST_ASIO_DECL static scheduler_task* get_default_task(
+        -:  176:      boost::asio::execution_context& ctx);
+        -:  177:
+        -:  178:  // Helper class to run the scheduler in its own thread.
+        -:  179:  class thread_function;
+        -:  180:  friend class thread_function;
+        -:  181:
+        -:  182:  // Helper class to perform task-related operations on block exit.
+        -:  183:  struct task_cleanup;
+        -:  184:  friend struct task_cleanup;
+        -:  185:
+        -:  186:  // Helper class to call work-related operations on block exit.
+        -:  187:  struct work_cleanup;
+        -:  188:  friend struct work_cleanup;
+        -:  189:
+        -:  190:  // Whether to optimise for single-threaded use cases.
+        -:  191:  const bool one_thread_;
+        -:  192:
+        -:  193:  // Mutex to protect access to internal data.
+        -:  194:  mutable mutex mutex_;
+        -:  195:
+        -:  196:  // Event to wake up blocked threads.
+        -:  197:  event wakeup_event_;
+        -:  198:
+        -:  199:  // The task to be run by this service.
+        -:  200:  scheduler_task* task_;
+        -:  201:
+        -:  202:  // The function used to get the task.
+        -:  203:  get_task_func_type get_task_;
+        -:  204:
+        -:  205:  // Operation object to represent the position of the task in the queue.
+        -:  206:  struct task_operation : operation
+        -:  207:  {
+     238*:  208:    task_operation() : operation(0) {}
+------------------
+_ZN5boost4asio6detail9scheduler14task_operationC2Ev:
+function _ZN5boost4asio6detail9scheduler14task_operationC2Ev called 5 returned 100% blocks executed 100%
+        5:  208:    task_operation() : operation(0) {}
+call    0 returned 100%
+------------------
+_ZN5boost4asio6detail9scheduler14task_operationC2Ev:
+function _ZN5boost4asio6detail9scheduler14task_operationC2Ev called 0 returned 0% blocks executed 0%
+    #####:  208:    task_operation() : operation(0) {}
+call    0 never executed
+------------------
+_ZN5boost4asio6detail9scheduler14task_operationC2Ev:
+function _ZN5boost4asio6detail9scheduler14task_operationC2Ev called 15 returned 100% blocks executed 100%
+       15:  208:    task_operation() : operation(0) {}
+call    0 returned 100%
+------------------
+_ZN5boost4asio6detail9scheduler14task_operationC2Ev:
+function _ZN5boost4asio6detail9scheduler14task_operationC2Ev called 0 returned 0% blocks executed 0%
+    #####:  208:    task_operation() : operation(0) {}
+call    0 never executed
+------------------
+_ZN5boost4asio6detail9scheduler14task_operationC2Ev:
+function _ZN5boost4asio6detail9scheduler14task_operationC2Ev called 11 returned 100% blocks executed 100%
+       11:  208:    task_operation() : operation(0) {}
+call    0 returned 100%
+------------------
+_ZN5boost4asio6detail9scheduler14task_operationC2Ev:
+function _ZN5boost4asio6detail9scheduler14task_operationC2Ev called 17 returned 100% blocks executed 100%
+       17:  208:    task_operation() : operation(0) {}
+call    0 returned 100%
+------------------
+_ZN5boost4asio6detail9scheduler14task_operationC2Ev:
+function _ZN5boost4asio6detail9scheduler14task_operationC2Ev called 5 returned 100% blocks executed 100%
+        5:  208:    task_operation() : operation(0) {}
+call    0 returned 100%
+------------------
+_ZN5boost4asio6detail9scheduler14task_operationC2Ev:
+function _ZN5boost4asio6detail9scheduler14task_operationC2Ev called 1 returned 100% blocks executed 100%
+        1:  208:    task_operation() : operation(0) {}
+call    0 returned 100%
+------------------
+_ZN5boost4asio6detail9scheduler14task_operationC2Ev:
+function _ZN5boost4asio6detail9scheduler14task_operationC2Ev called 0 returned 0% blocks executed 0%
+    #####:  208:    task_operation() : operation(0) {}
+call    0 never executed
+------------------
+_ZN5boost4asio6detail9scheduler14task_operationC2Ev:
+function _ZN5boost4asio6detail9scheduler14task_operationC2Ev called 14 returned 100% blocks executed 100%
+       14:  208:    task_operation() : operation(0) {}
+call    0 returned 100%
+------------------
+_ZN5boost4asio6detail9scheduler14task_operationC2Ev:
+function _ZN5boost4asio6detail9scheduler14task_operationC2Ev called 16 returned 100% blocks executed 100%
+       16:  208:    task_operation() : operation(0) {}
+call    0 returned 100%
+------------------
+_ZN5boost4asio6detail9scheduler14task_operationC2Ev:
+function _ZN5boost4asio6detail9scheduler14task_operationC2Ev called 5 returned 100% blocks executed 100%
+        5:  208:    task_operation() : operation(0) {}
+call    0 returned 100%
+------------------
+_ZN5boost4asio6detail9scheduler14task_operationC2Ev:
+function _ZN5boost4asio6detail9scheduler14task_operationC2Ev called 8 returned 100% blocks executed 100%
+        8:  208:    task_operation() : operation(0) {}
+call    0 returned 100%
+------------------
+_ZN5boost4asio6detail9scheduler14task_operationC2Ev:
+function _ZN5boost4asio6detail9scheduler14task_operationC2Ev called 14 returned 100% blocks executed 100%
+       14:  208:    task_operation() : operation(0) {}
+call    0 returned 100%
+------------------
+_ZN5boost4asio6detail9scheduler14task_operationC2Ev:
+function _ZN5boost4asio6detail9scheduler14task_operationC2Ev called 20 returned 100% blocks executed 100%
+       20:  208:    task_operation() : operation(0) {}
+call    0 returned 100%
+------------------
+_ZN5boost4asio6detail9scheduler14task_operationC2Ev:
+function _ZN5boost4asio6detail9scheduler14task_operationC2Ev called 0 returned 0% blocks executed 0%
+    #####:  208:    task_operation() : operation(0) {}
+call    0 never executed
+------------------
+_ZN5boost4asio6detail9scheduler14task_operationC2Ev:
+function _ZN5boost4asio6detail9scheduler14task_operationC2Ev called 0 returned 0% blocks executed 0%
+    #####:  208:    task_operation() : operation(0) {}
+call    0 never executed
+------------------
+_ZN5boost4asio6detail9scheduler14task_operationC2Ev:
+function _ZN5boost4asio6detail9scheduler14task_operationC2Ev called 0 returned 0% blocks executed 0%
+    #####:  208:    task_operation() : operation(0) {}
+call    0 never executed
+------------------
+_ZN5boost4asio6detail9scheduler14task_operationC2Ev:
+function _ZN5boost4asio6detail9scheduler14task_operationC2Ev called 0 returned 0% blocks executed 0%
+    #####:  208:    task_operation() : operation(0) {}
+call    0 never executed
+------------------
+_ZN5boost4asio6detail9scheduler14task_operationC2Ev:
+function _ZN5boost4asio6detail9scheduler14task_operationC2Ev called 0 returned 0% blocks executed 0%
+    #####:  208:    task_operation() : operation(0) {}
+call    0 never executed
+------------------
+_ZN5boost4asio6detail9scheduler14task_operationC2Ev:
+function _ZN5boost4asio6detail9scheduler14task_operationC2Ev called 0 returned 0% blocks executed 0%
+    #####:  208:    task_operation() : operation(0) {}
+call    0 never executed
+------------------
+_ZN5boost4asio6detail9scheduler14task_operationC2Ev:
+function _ZN5boost4asio6detail9scheduler14task_operationC2Ev called 0 returned 0% blocks executed 0%
+    #####:  208:    task_operation() : operation(0) {}
+call    0 never executed
+------------------
+_ZN5boost4asio6detail9scheduler14task_operationC2Ev:
+function _ZN5boost4asio6detail9scheduler14task_operationC2Ev called 0 returned 0% blocks executed 0%
+    #####:  208:    task_operation() : operation(0) {}
+call    0 never executed
+------------------
+_ZN5boost4asio6detail9scheduler14task_operationC2Ev:
+function _ZN5boost4asio6detail9scheduler14task_operationC2Ev called 0 returned 0% blocks executed 0%
+    #####:  208:    task_operation() : operation(0) {}
+call    0 never executed
+------------------
+_ZN5boost4asio6detail9scheduler14task_operationC2Ev:
+function _ZN5boost4asio6detail9scheduler14task_operationC2Ev called 18 returned 100% blocks executed 100%
+       18:  208:    task_operation() : operation(0) {}
+call    0 returned 100%
+------------------
+_ZN5boost4asio6detail9scheduler14task_operationC2Ev:
+function _ZN5boost4asio6detail9scheduler14task_operationC2Ev called 0 returned 0% blocks executed 0%
+    #####:  208:    task_operation() : operation(0) {}
+call    0 never executed
+------------------
+_ZN5boost4asio6detail9scheduler14task_operationC2Ev:
+function _ZN5boost4asio6detail9scheduler14task_operationC2Ev called 0 returned 0% blocks executed 0%
+    #####:  208:    task_operation() : operation(0) {}
+call    0 never executed
+------------------
+_ZN5boost4asio6detail9scheduler14task_operationC2Ev:
+function _ZN5boost4asio6detail9scheduler14task_operationC2Ev called 0 returned 0% blocks executed 0%
+    #####:  208:    task_operation() : operation(0) {}
+call    0 never executed
+------------------
+_ZN5boost4asio6detail9scheduler14task_operationC2Ev:
+function _ZN5boost4asio6detail9scheduler14task_operationC2Ev called 0 returned 0% blocks executed 0%
+    #####:  208:    task_operation() : operation(0) {}
+call    0 never executed
+------------------
+_ZN5boost4asio6detail9scheduler14task_operationC2Ev:
+function _ZN5boost4asio6detail9scheduler14task_operationC2Ev called 0 returned 0% blocks executed 0%
+    #####:  208:    task_operation() : operation(0) {}
+call    0 never executed
+------------------
+_ZN5boost4asio6detail9scheduler14task_operationC2Ev:
+function _ZN5boost4asio6detail9scheduler14task_operationC2Ev called 0 returned 0% blocks executed 0%
+    #####:  208:    task_operation() : operation(0) {}
+call    0 never executed
+------------------
+_ZN5boost4asio6detail9scheduler14task_operationC2Ev:
+function _ZN5boost4asio6detail9scheduler14task_operationC2Ev called 0 returned 0% blocks executed 0%
+    #####:  208:    task_operation() : operation(0) {}
+call    0 never executed
+------------------
+_ZN5boost4asio6detail9scheduler14task_operationC2Ev:
+function _ZN5boost4asio6detail9scheduler14task_operationC2Ev called 0 returned 0% blocks executed 0%
+    #####:  208:    task_operation() : operation(0) {}
+call    0 never executed
+------------------
+_ZN5boost4asio6detail9scheduler14task_operationC2Ev:
+function _ZN5boost4asio6detail9scheduler14task_operationC2Ev called 0 returned 0% blocks executed 0%
+    #####:  208:    task_operation() : operation(0) {}
+call    0 never executed
+------------------
+_ZN5boost4asio6detail9scheduler14task_operationC2Ev:
+function _ZN5boost4asio6detail9scheduler14task_operationC2Ev called 0 returned 0% blocks executed 0%
+    #####:  208:    task_operation() : operation(0) {}
+call    0 never executed
+------------------
+_ZN5boost4asio6detail9scheduler14task_operationC2Ev:
+function _ZN5boost4asio6detail9scheduler14task_operationC2Ev called 0 returned 0% blocks executed 0%
+    #####:  208:    task_operation() : operation(0) {}
+call    0 never executed
+------------------
+_ZN5boost4asio6detail9scheduler14task_operationC2Ev:
+function _ZN5boost4asio6detail9scheduler14task_operationC2Ev called 0 returned 0% blocks executed 0%
+    #####:  208:    task_operation() : operation(0) {}
+call    0 never executed
+------------------
+_ZN5boost4asio6detail9scheduler14task_operationC2Ev:
+function _ZN5boost4asio6detail9scheduler14task_operationC2Ev called 0 returned 0% blocks executed 0%
+    #####:  208:    task_operation() : operation(0) {}
+call    0 never executed
+------------------
+_ZN5boost4asio6detail9scheduler14task_operationC2Ev:
+function _ZN5boost4asio6detail9scheduler14task_operationC2Ev called 0 returned 0% blocks executed 0%
+    #####:  208:    task_operation() : operation(0) {}
+call    0 never executed
+------------------
+_ZN5boost4asio6detail9scheduler14task_operationC2Ev:
+function _ZN5boost4asio6detail9scheduler14task_operationC2Ev called 17 returned 100% blocks executed 100%
+       17:  208:    task_operation() : operation(0) {}
+call    0 returned 100%
+------------------
+_ZN5boost4asio6detail9scheduler14task_operationC2Ev:
+function _ZN5boost4asio6detail9scheduler14task_operationC2Ev called 0 returned 0% blocks executed 0%
+    #####:  208:    task_operation() : operation(0) {}
+call    0 never executed
+------------------
+_ZN5boost4asio6detail9scheduler14task_operationC2Ev:
+function _ZN5boost4asio6detail9scheduler14task_operationC2Ev called 54 returned 100% blocks executed 100%
+       54:  208:    task_operation() : operation(0) {}
+call    0 returned 100%
+------------------
+_ZN5boost4asio6detail9scheduler14task_operationC2Ev:
+function _ZN5boost4asio6detail9scheduler14task_operationC2Ev called 18 returned 100% blocks executed 100%
+       18:  208:    task_operation() : operation(0) {}
+call    0 returned 100%
+------------------
+        -:  209:  } task_operation_;
+        -:  210:
+        -:  211:  // Whether the task has been interrupted.
+        -:  212:  bool task_interrupted_;
+        -:  213:
+        -:  214:  // The count of unfinished work.
+        -:  215:  atomic_count outstanding_work_;
+        -:  216:
+        -:  217:  // The queue of handlers that are ready to be delivered.
+        -:  218:  op_queue<operation> op_queue_;
+        -:  219:
+        -:  220:  // Flag to indicate that the dispatcher has been stopped.
+        -:  221:  bool stopped_;
+        -:  222:
+        -:  223:  // Flag to indicate that the dispatcher has been shut down.
+        -:  224:  bool shutdown_;
+        -:  225:
+        -:  226:  // The concurrency hint used to initialise the scheduler.
+        -:  227:  const int concurrency_hint_;
+        -:  228:
+        -:  229:  // The thread that is running the scheduler.
+        -:  230:  boost::asio::detail::thread* thread_;
+        -:  231:};
+        -:  232:
+        -:  233:} // namespace detail
+        -:  234:} // namespace asio
+        -:  235:} // namespace boost
+        -:  236:
+        -:  237:#include <boost/asio/detail/pop_options.hpp>
+        -:  238:
+        -:  239:#if defined(BOOST_ASIO_HEADER_ONLY)
+        -:  240:# include <boost/asio/detail/impl/scheduler.ipp>
+        -:  241:#endif // defined(BOOST_ASIO_HEADER_ONLY)
+        -:  242:
+        -:  243:#endif // BOOST_ASIO_DETAIL_SCHEDULER_HPP

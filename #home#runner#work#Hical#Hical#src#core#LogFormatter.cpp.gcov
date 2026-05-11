@@ -1,0 +1,432 @@
+        -:    0:Source:/home/runner/work/Hical/Hical/src/core/LogFormatter.cpp
+        -:    1:#include "LogFormatter.h"
+        -:    2:
+        -:    3:#include "Log.h"
+        -:    4:
+        -:    5:#include <boost/json/object.hpp>
+        -:    6:#include <boost/json/serialize.hpp>
+        -:    7:#include <charconv>
+        -:    8:#include <cstdio>
+        -:    9:#include <ctime>
+        -:   10:
+        -:   11:namespace hical
+        -:   12:{
+        -:   13:
+        -:   14:	// ============ 共用：thread_local 时间戳缓存 ============
+        -:   15:
+        -:   16:	namespace
+        -:   17:	{
+function _ZN5hical12_GLOBAL__N_115extractFilenameEPKc called 458 returned 100% blocks executed 90%
+      458:   18:		const char* extractFilename(const char* file)
+        -:   19:		{
+      458:   20:			if (file == nullptr)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:   21:			{
+    #####:   22:				return "";
+        -:   23:			}
+      458:   24:			const char* fileName = file;
+    21103:   25:			for (const char* p = file; *p != '\0'; ++p)
+branch  0 taken 98%
+branch  1 taken 2% (fallthrough)
+        -:   26:			{
+    20645:   27:				if (*p == '/' || *p == '\\')
+branch  0 taken 86% (fallthrough)
+branch  1 taken 14%
+branch  2 taken 1% (fallthrough)
+branch  3 taken 100%
+        -:   28:				{
+     3015:   29:					fileName = p + 1;
+        -:   30:				}
+        -:   31:			}
+      458:   32:			return fileName;
+        -:   33:		}
+        -:   34:
+        -:   35:		/// 日志注入防护：将控制字符转义为可见形式
+        -:   36:		/// 防止 \n 伪造日志行、\r\n 注入、ANSI 转义序列攻击终端
+function _ZN5hical12_GLOBAL__N_115sanitizeForTextESt17basic_string_viewIcSt11char_traitsIcEE called 447 returned 101% blocks executed 68%
+      447:   37:		std::string sanitizeForText(std::string_view sv)
+        -:   38:		{
+      447:   39:			std::string out;
+call    0 returned 100%
+      448:   40:			out.reserve(sv.size());
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+     7215:   41:			for (unsigned char c : sv)
+call    0 returned 100%
+call    1 returned 114%
+branch  2 taken 94%
+branch  3 taken 6% (fallthrough)
+        -:   42:			{
+     6831:   43:				if (c == '\n')
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:   44:				{
+    #####:   45:					out += "\\n";
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:   46:				}
+     6831:   47:				else if (c == '\r')
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:   48:				{
+    #####:   49:					out += "\\r";
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:   50:				}
+     6831:   51:				else if (c == '\033') // ESC — ANSI 转义序列入口
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:   52:				{
+    #####:   53:					out += "\\e";
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:   54:				}
+    6831*:   55:				else if (c < 0x20 && c != '\t') // 其余控制字符（保留 tab）
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+branch  2 never executed (fallthrough)
+branch  3 never executed
+        -:   56:				{
+    #####:   57:					out += '?';
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:   58:				}
+        -:   59:				else
+        -:   60:				{
+     6831:   61:					out += static_cast<char>(c);
+call    0 returned 99%
+branch  1 taken 99% (fallthrough)
+branch  2 taken 0% (throw)
+        -:   62:				}
+        -:   63:			}
+      450:   64:			return out;
+    =====:   65:		}
+call    0 never executed
+        -:   66:
+        -:   67:		struct TsCache
+        -:   68:		{
+        -:   69:			time_t cachedSec {0};
+        -:   70:			struct tm cachedTm {};
+        -:   71:		};
+        -:   72:
+        -:   73:		// NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
+        -:   74:		thread_local TsCache tsFmtCache;
+        -:   75:
+        -:   76:		// NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
+        -:   77:
+function _ZN5hical12_GLOBAL__N_115cachedLocaltimeEl called 450 returned 100% blocks executed 100%
+      450:   78:		struct tm cachedLocaltime(time_t nowSec)
+        -:   79:		{
+      450:   80:			auto& cache = tsFmtCache;
+      450:   81:			if (nowSec != cache.cachedSec)
+branch  0 taken 9% (fallthrough)
+branch  1 taken 91%
+        -:   82:			{
+       39:   83:				cache.cachedSec = nowSec;
+        -:   84:#if defined(_WIN32)
+        -:   85:				localtime_s(&cache.cachedTm, &nowSec);
+        -:   86:#else
+       39:   87:				localtime_r(&nowSec, &cache.cachedTm);
+call    0 returned 100%
+        -:   88:#endif
+        -:   89:			}
+      450:   90:			return cache.cachedTm;
+        -:   91:		}
+        -:   92:	} // namespace
+        -:   93:
+        -:   94:	// ============ TextFormatter ============
+        -:   95:
+function _ZN5hical13TextFormatter6formatB5cxx11ERKNS_9LogRecordE called 450 returned 99% blocks executed 76%
+      450:   96:	std::string TextFormatter::format(const LogRecord& record)
+        -:   97:	{
+      450:   98:		auto nowMs = std::chrono::duration_cast<std::chrono::milliseconds>(record.timestamp.time_since_epoch()).count();
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+      450:   99:		auto nowSec = static_cast<time_t>(nowMs / 1000);
+      450:  100:		int ms = static_cast<int>(nowMs % 1000);
+        -:  101:
+        -:  102:		// 使用 thread_local 缓存的 localtime
+      450:  103:		struct tm tmInfo = cachedLocaltime(nowSec);
+call    0 returned 100%
+        -:  104:
+        -:  105:		char timeBuf[64];
+      450:  106:		snprintf(timeBuf,
+        -:  107:				 sizeof(timeBuf),
+        -:  108:				 "%04d-%02d-%02d %02d:%02d:%02d.%03d",
+      450:  109:				 tmInfo.tm_year + 1900,
+      450:  110:				 tmInfo.tm_mon + 1,
+        -:  111:				 tmInfo.tm_mday,
+        -:  112:				 tmInfo.tm_hour,
+        -:  113:				 tmInfo.tm_min,
+        -:  114:				 tmInfo.tm_sec,
+        -:  115:				 ms);
+        -:  116:
+      450:  117:		const char* fileName = extractFilename(record.file);
+call    0 returned 100%
+        -:  118:
+        -:  119:		// 格式化
+      449:  120:		std::string result;
+call    0 returned 100%
+      450:  121:		result.reserve(256);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+      449:  122:		result += '[';
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+      447:  123:		result += timeBuf;
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+      449:  124:		result += "] [";
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+      447:  125:		result += logLevelToString(record.level);
+call    0 returned 101%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+      450:  126:		result += "] [";
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  127:		{
+        -:  128:			char buf[24]; // NOLINT(cppcoreguidelines-avoid-magic-numbers)
+      448:  129:			auto [ptr, ec] = std::to_chars(buf, buf + sizeof(buf), record.threadId);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+      447:  130:			result.append(buf, static_cast<size_t>(ptr - buf));
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  131:		}
+      449:  132:		result += "] ";
+call    0 returned 99%
+branch  1 taken 99% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  133:
+        -:  134:		// traceId（可选）
+      446:  135:		if (!record.traceId.empty())
+call    0 returned 100%
+branch  1 taken 1% (fallthrough)
+branch  2 taken 100%
+        -:  136:		{
+        1:  137:			result += '[';
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  138:			result += sanitizeForText(record.traceId);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+call    7 returned 100%
+call    8 never executed
+        1:  139:			result += "] ";
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  140:		}
+        -:  141:
+      447:  142:		result += '[';
+call    0 returned 101%
+branch  1 taken 101% (fallthrough)
+branch  2 taken 0% (throw)
+      450:  143:		result += fileName;
+call    0 returned 99%
+branch  1 taken 99% (fallthrough)
+branch  2 taken 0% (throw)
+      447:  144:		result += ':';
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  145:		{
+        -:  146:			char buf[12]; // NOLINT(cppcoreguidelines-avoid-magic-numbers)
+      448:  147:			auto [ptr, ec] = std::to_chars(buf, buf + sizeof(buf), record.line);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+      448:  148:			result.append(buf, static_cast<size_t>(ptr - buf));
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  149:		}
+      449:  150:		result += "] ";
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+      447:  151:		result += sanitizeForText(record.message);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+call    7 returned 100%
+call    8 never executed
+      445:  152:		result += '\n';
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  153:
+      447:  154:		return result;
+    =====:  155:	}
+call    0 never executed
+        -:  156:
+        -:  157:	// ============ JsonFormatter ============
+        -:  158:
+function _ZN5hical13JsonFormatter6formatB5cxx11ERKNS_9LogRecordE called 8 returned 100% blocks executed 74%
+        8:  159:	std::string JsonFormatter::format(const LogRecord& record)
+        -:  160:	{
+        8:  161:		auto nowMs = std::chrono::duration_cast<std::chrono::milliseconds>(record.timestamp.time_since_epoch()).count();
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+        8:  162:		auto nowSec = static_cast<time_t>(nowMs / 1000);
+        8:  163:		int ms = static_cast<int>(nowMs % 1000);
+        -:  164:
+        -:  165:		// JSON 时间戳使用 UTC（gmtime），与 "Z" 后缀语义一致
+        8:  166:		struct tm tmInfo {};
+        -:  167:#if defined(_WIN32)
+        -:  168:		gmtime_s(&tmInfo, &nowSec);
+        -:  169:#else
+        8:  170:		gmtime_r(&nowSec, &tmInfo);
+call    0 returned 100%
+        -:  171:#endif
+        -:  172:		char timeBuf[64];
+        8:  173:		snprintf(timeBuf,
+        -:  174:				 sizeof(timeBuf),
+        -:  175:				 "%04d-%02d-%02dT%02d:%02d:%02d.%03dZ",
+        8:  176:				 tmInfo.tm_year + 1900,
+        8:  177:				 tmInfo.tm_mon + 1,
+        -:  178:				 tmInfo.tm_mday,
+        -:  179:				 tmInfo.tm_hour,
+        -:  180:				 tmInfo.tm_min,
+        -:  181:				 tmInfo.tm_sec,
+        -:  182:				 ms);
+        -:  183:
+        8:  184:		boost::json::object obj;
+call    0 returned 100%
+        8:  185:		obj["timestamp"] = timeBuf;
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+        8:  186:		obj["level"] = logLevelToString(record.level);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+        8:  187:		obj["thread_id"] = record.threadId;
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+        -:  188:
+        8:  189:		if (record.file != nullptr)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:  190:		{
+        8:  191:			obj["file"] = extractFilename(record.file);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+        8:  192:			obj["line"] = record.line;
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+        -:  193:		}
+        -:  194:
+        8:  195:		obj["message"] = record.message;
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+        -:  196:
+        8:  197:		if (!record.traceId.empty())
+call    0 returned 100%
+branch  1 taken 12% (fallthrough)
+branch  2 taken 88%
+        -:  198:		{
+        1:  199:			obj["trace_id"] = record.traceId;
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+        -:  200:		}
+        -:  201:
+        -:  202:		// 合并结构化字段
+       13:  203:		for (const auto& [key, val] : record.fields)
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+branch  4 taken 38%
+branch  5 taken 62% (fallthrough)
+        -:  204:		{
+        5:  205:			obj[key] = val;
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+        -:  206:		}
+        -:  207:
+        8:  208:		auto s = boost::json::serialize(obj);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        8:  209:		s.push_back('\n');
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        8:  210:		return s;
+        8:  211:	}
+call    0 returned 100%
+call    1 never executed
+call    2 never executed
+        -:  212:
+        -:  213:} // namespace hical

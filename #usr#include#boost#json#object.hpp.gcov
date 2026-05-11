@@ -1,0 +1,1876 @@
+        -:    0:Source:/usr/include/boost/json/object.hpp
+        -:    1://
+        -:    2:// Copyright (c) 2019 Vinnie Falco (vinnie.falco@gmail.com)
+        -:    3://
+        -:    4:// Distributed under the Boost Software License, Version 1.0. (See accompanying
+        -:    5:// file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+        -:    6://
+        -:    7:// Official repository: https://github.com/boostorg/json
+        -:    8://
+        -:    9:
+        -:   10:#ifndef BOOST_JSON_OBJECT_HPP
+        -:   11:#define BOOST_JSON_OBJECT_HPP
+        -:   12:
+        -:   13:#include <boost/json/detail/config.hpp>
+        -:   14:#include <boost/json/kind.hpp>
+        -:   15:#include <boost/json/pilfer.hpp>
+        -:   16:#include <boost/json/storage_ptr.hpp>
+        -:   17:#include <boost/json/string_view.hpp>
+        -:   18:#include <boost/json/detail/object.hpp>
+        -:   19:#include <boost/json/detail/value.hpp>
+        -:   20:#include <cstdlib>
+        -:   21:#include <initializer_list>
+        -:   22:#include <iterator>
+        -:   23:#include <type_traits>
+        -:   24:#include <utility>
+        -:   25:
+        -:   26:namespace boost {
+        -:   27:namespace json {
+        -:   28:
+        -:   29:class value;
+        -:   30:class value_ref;
+        -:   31:class key_value_pair;
+        -:   32:
+        -:   33:/** A dynamically sized associative container of JSON key/value pairs.
+        -:   34:
+        -:   35:    This is an associative container whose elements
+        -:   36:    are key/value pairs with unique keys.
+        -:   37:\n
+        -:   38:    The elements are stored contiguously; iterators are
+        -:   39:    ordinary pointers, allowing random access pointer
+        -:   40:    arithmetic for retrieving elements.
+        -:   41:    In addition, the container maintains an internal
+        -:   42:    index to speed up find operations, reducing the
+        -:   43:    average complexity for most lookups and insertions.
+        -:   44:\n
+        -:   45:    Reallocations are usually costly operations in terms of
+        -:   46:    performance, as elements are copied and the internal
+        -:   47:    index must be rebuilt. The @ref reserve function can
+        -:   48:    be used to eliminate reallocations if the number of
+        -:   49:    elements is known beforehand.
+        -:   50:
+        -:   51:    @par Allocators
+        -:   52:
+        -:   53:    All elements stored in the container, and their
+        -:   54:    children if any, will use the same memory resource that
+        -:   55:    was used to construct the container.
+        -:   56:
+        -:   57:    @par Thread Safety
+        -:   58:
+        -:   59:    Non-const member functions may not be called
+        -:   60:    concurrently with any other member functions.
+        -:   61:
+        -:   62:    @par Satisfies
+        -:   63:        <a href="https://en.cppreference.com/w/cpp/named_req/ContiguousContainer"><em>ContiguousContainer</em></a>,
+        -:   64:        <a href="https://en.cppreference.com/w/cpp/named_req/ReversibleContainer"><em>ReversibleContainer</em></a>, and
+        -:   65:        <a href="https://en.cppreference.com/w/cpp/named_req/SequenceContainer"><em>SequenceContainer</em></a>.
+        -:   66:*/
+        -:   67:class object
+        -:   68:{
+        -:   69:    struct table;
+        -:   70:    class revert_construct;
+        -:   71:    class revert_insert;
+        -:   72:    friend class value;
+        -:   73:    friend class object_test;
+        -:   74:    using access = detail::access;
+        -:   75:    using index_t = std::uint32_t;
+        -:   76:    static index_t constexpr null_index_ =
+        -:   77:        std::uint32_t(-1);
+        -:   78:
+        -:   79:    storage_ptr sp_;            // must come first
+        -:   80:    kind k_ = kind::object;     // must come second
+        -:   81:    table* t_;
+        -:   82:
+        -:   83:    BOOST_JSON_DECL
+        -:   84:    static table empty_;
+        -:   85:
+        -:   86:    template<class T>
+        -:   87:    using is_inputit = typename std::enable_if<
+        -:   88:        std::is_constructible<key_value_pair,
+        -:   89:        typename std::iterator_traits<T>::value_type
+        -:   90:            >::value>::type;
+        -:   91:
+        -:   92:    BOOST_JSON_DECL
+        -:   93:    explicit
+        -:   94:    object(detail::unchecked_object&& uo);
+        -:   95:
+        -:   96:public:
+        -:   97:    /** The type of _Allocator_ returned by @ref get_allocator
+        -:   98:
+        -:   99:        This type is a @ref polymorphic_allocator.
+        -:  100:    */
+        -:  101:#ifdef BOOST_JSON_DOCS
+        -:  102:    // VFALCO doc toolchain renders this incorrectly
+        -:  103:    using allocator_type = __see_below__;
+        -:  104:#else
+        -:  105:    using allocator_type = polymorphic_allocator<value>;
+        -:  106:#endif
+        -:  107:
+        -:  108:    /** The type of keys.
+        -:  109:
+        -:  110:        The function @ref string::max_size returns the
+        -:  111:        maximum allowed size of strings used as keys.
+        -:  112:    */
+        -:  113:    using key_type = string_view;
+        -:  114:
+        -:  115:    /// The type of mapped values
+        -:  116:    using mapped_type = value;
+        -:  117:
+        -:  118:    /// The element type
+        -:  119:    using value_type = key_value_pair;
+        -:  120:
+        -:  121:    /// The type used to represent unsigned integers
+        -:  122:    using size_type = std::size_t;
+        -:  123:
+        -:  124:    /// The type used to represent signed integers
+        -:  125:    using difference_type = std::ptrdiff_t;
+        -:  126:
+        -:  127:    /// A reference to an element
+        -:  128:    using reference = value_type&;
+        -:  129:
+        -:  130:    /// A const reference to an element
+        -:  131:    using const_reference = value_type const&;
+        -:  132:
+        -:  133:    /// A pointer to an element
+        -:  134:    using pointer = value_type*;
+        -:  135:
+        -:  136:    /// A const pointer to an element
+        -:  137:    using const_pointer = value_type const*;
+        -:  138:
+        -:  139:    /// A random access iterator to an element
+        -:  140:    using iterator = value_type*;
+        -:  141:
+        -:  142:    /// A const random access iterator to an element
+        -:  143:    using const_iterator = value_type const*;
+        -:  144:
+        -:  145:    /// A reverse random access iterator to an element
+        -:  146:    using reverse_iterator =
+        -:  147:        std::reverse_iterator<iterator>;
+        -:  148:
+        -:  149:    /// A const reverse random access iterator to an element
+        -:  150:    using const_reverse_iterator =
+        -:  151:        std::reverse_iterator<const_iterator>;
+        -:  152:
+        -:  153:    //------------------------------------------------------
+        -:  154:
+        -:  155:    /** Destructor.
+        -:  156:
+        -:  157:        The destructor for each element is called if needed,
+        -:  158:        any used memory is deallocated, and shared ownership
+        -:  159:        of the @ref memory_resource is released.
+        -:  160:
+        -:  161:        @par Complexity
+        -:  162:        Constant, or linear in @ref size().
+        -:  163:
+        -:  164:        @par Exception Safety
+        -:  165:        No-throw guarantee.
+        -:  166:    */
+        -:  167:    BOOST_JSON_DECL
+        -:  168:    ~object() noexcept;
+        -:  169:
+        -:  170:    //------------------------------------------------------
+        -:  171:
+        -:  172:    /** Default constructor.
+        -:  173:
+        -:  174:        The constructed object is empty with zero
+        -:  175:        capacity, using the [default memory resource].
+        -:  176:
+        -:  177:        @par Complexity
+        -:  178:        Constant.
+        -:  179:
+        -:  180:        @par Exception Safety
+        -:  181:        No-throw guarantee.
+        -:  182:
+        -:  183:        [default memory resource]: json/allocators/storage_ptr.html#json.allocators.storage_ptr.default_memory_resource
+        -:  184:    */
+     692*:  185:    object() noexcept
+     692*:  186:        : t_(&empty_)
+        -:  187:    {
+     693*:  188:    }
+------------------
+_ZN5boost4json6objectC2Ev:
+function _ZN5boost4json6objectC2Ev called 0 returned 0% blocks executed 0%
+    #####:  185:    object() noexcept
+    #####:  186:        : t_(&empty_)
+call    0 never executed
+        -:  187:    {
+    #####:  188:    }
+------------------
+_ZN5boost4json6objectC2Ev:
+function _ZN5boost4json6objectC2Ev called 0 returned 0% blocks executed 0%
+    #####:  185:    object() noexcept
+    #####:  186:        : t_(&empty_)
+call    0 never executed
+        -:  187:    {
+    #####:  188:    }
+------------------
+_ZN5boost4json6objectC2Ev:
+function _ZN5boost4json6objectC2Ev called 0 returned 0% blocks executed 0%
+    #####:  185:    object() noexcept
+    #####:  186:        : t_(&empty_)
+call    0 never executed
+        -:  187:    {
+    #####:  188:    }
+------------------
+_ZN5boost4json6objectC2Ev:
+function _ZN5boost4json6objectC2Ev called 0 returned 0% blocks executed 0%
+    #####:  185:    object() noexcept
+    #####:  186:        : t_(&empty_)
+call    0 never executed
+        -:  187:    {
+    #####:  188:    }
+------------------
+_ZN5boost4json6objectC2Ev:
+function _ZN5boost4json6objectC2Ev called 0 returned 0% blocks executed 0%
+    #####:  185:    object() noexcept
+    #####:  186:        : t_(&empty_)
+call    0 never executed
+        -:  187:    {
+    #####:  188:    }
+------------------
+_ZN5boost4json6objectC2Ev:
+function _ZN5boost4json6objectC2Ev called 430 returned 100% blocks executed 100%
+      430:  185:    object() noexcept
+      430:  186:        : t_(&empty_)
+call    0 returned 100%
+        -:  187:    {
+      431:  188:    }
+------------------
+_ZN5boost4json6objectC2Ev:
+function _ZN5boost4json6objectC2Ev called 12 returned 100% blocks executed 100%
+       12:  185:    object() noexcept
+       12:  186:        : t_(&empty_)
+call    0 returned 100%
+        -:  187:    {
+       12:  188:    }
+------------------
+_ZN5boost4json6objectC2Ev:
+function _ZN5boost4json6objectC2Ev called 23 returned 100% blocks executed 100%
+       23:  185:    object() noexcept
+       23:  186:        : t_(&empty_)
+call    0 returned 100%
+        -:  187:    {
+       23:  188:    }
+------------------
+_ZN5boost4json6objectC2Ev:
+function _ZN5boost4json6objectC2Ev called 211 returned 100% blocks executed 100%
+      211:  185:    object() noexcept
+      211:  186:        : t_(&empty_)
+call    0 returned 100%
+        -:  187:    {
+      211:  188:    }
+------------------
+_ZN5boost4json6objectC2Ev:
+function _ZN5boost4json6objectC2Ev called 16 returned 100% blocks executed 100%
+       16:  185:    object() noexcept
+       16:  186:        : t_(&empty_)
+call    0 returned 100%
+        -:  187:    {
+       16:  188:    }
+------------------
+_ZN5boost4json6objectC2Ev:
+function _ZN5boost4json6objectC2Ev called 0 returned 0% blocks executed 0%
+    #####:  185:    object() noexcept
+    #####:  186:        : t_(&empty_)
+call    0 never executed
+        -:  187:    {
+    #####:  188:    }
+------------------
+_ZN5boost4json6objectC2Ev:
+function _ZN5boost4json6objectC2Ev called 0 returned 0% blocks executed 0%
+    #####:  185:    object() noexcept
+    #####:  186:        : t_(&empty_)
+call    0 never executed
+        -:  187:    {
+    #####:  188:    }
+------------------
+        -:  189:
+        -:  190:    /** Constructor.
+        -:  191:
+        -:  192:        The constructed object is empty with zero
+        -:  193:        capacity, using the specified memory resource.
+        -:  194:
+        -:  195:        @par Complexity
+        -:  196:        Constant.
+        -:  197:
+        -:  198:        @par Exception Safety
+        -:  199:        No-throw guarantee.
+        -:  200:
+        -:  201:        @param sp A pointer to the @ref memory_resource
+        -:  202:        to use. The container will acquire shared
+        -:  203:        ownership of the memory resource.
+        -:  204:    */
+        -:  205:    explicit
+        -:  206:    object(storage_ptr sp) noexcept
+        -:  207:        : sp_(std::move(sp))
+        -:  208:        , t_(&empty_)
+        -:  209:    {
+        -:  210:    }
+        -:  211:
+        -:  212:    /** Constructor.
+        -:  213:
+        -:  214:        The constructed object is empty with capacity
+        -:  215:        equal to the specified minimum capacity,
+        -:  216:        using the specified memory resource.
+        -:  217:
+        -:  218:        @par Complexity
+        -:  219:        Constant.
+        -:  220:
+        -:  221:        @par Exception Safety
+        -:  222:        Strong guarantee.
+        -:  223:        Calls to `memory_resource::allocate` may throw.
+        -:  224:
+        -:  225:        @param min_capacity The minimum number
+        -:  226:        of elements for which capacity is guaranteed
+        -:  227:        without a subsequent reallocation.
+        -:  228:
+        -:  229:        @param sp A pointer to the @ref memory_resource
+        -:  230:        to use. The container will acquire shared
+        -:  231:        ownership of the memory resource.
+        -:  232:    */
+        -:  233:    BOOST_JSON_DECL
+        -:  234:    object(
+        -:  235:        std::size_t min_capacity,
+        -:  236:        storage_ptr sp = {});
+        -:  237:
+        -:  238:    /** Constructor.
+        -:  239:
+        -:  240:        The object is constructed with the elements
+        -:  241:        in the range `{first, last)`, preserving order,
+        -:  242:        using the specified memory resource.
+        -:  243:        If there are elements with duplicate keys; that
+        -:  244:        is, if multiple elements in the range have keys
+        -:  245:        that compare equal, only the first equivalent
+        -:  246:        element will be inserted.
+        -:  247:
+        -:  248:        @par Constraints
+        -:  249:        @code
+        -:  250:        std::is_constructible_v<
+        -:  251:            key_value_pair,
+        -:  252:            std::iterator_traits<InputIt>::value_type>
+        -:  253:        @endcode
+        -:  254:
+        -:  255:        @par Complexity
+        -:  256:        Linear in `std::distance(first, last)`.
+        -:  257:
+        -:  258:        @par Exception Safety
+        -:  259:        Strong guarantee.
+        -:  260:        Calls to `memory_resource::allocate` may throw.
+        -:  261:
+        -:  262:        @param first An input iterator pointing to the
+        -:  263:        first element to insert, or pointing to the end
+        -:  264:        of the range.
+        -:  265:
+        -:  266:        @param last An input iterator pointing to the end
+        -:  267:        of the range.
+        -:  268:
+        -:  269:        @param min_capacity The minimum number
+        -:  270:        of elements for which capacity is guaranteed
+        -:  271:        without a subsequent reallocation.
+        -:  272:        Upon construction, @ref capacity() will be greater
+        -:  273:        than or equal to this number.
+        -:  274:
+        -:  275:        @param sp A pointer to the @ref memory_resource
+        -:  276:        to use. The container will acquire shared
+        -:  277:        ownership of the memory resource.
+        -:  278:
+        -:  279:        @tparam InputIt a type satisfying the requirements
+        -:  280:        of __InputIterator__.
+        -:  281:    */
+        -:  282:    template<
+        -:  283:        class InputIt
+        -:  284:    #ifndef BOOST_JSON_DOCS
+        -:  285:        ,class = is_inputit<InputIt>
+        -:  286:    #endif
+        -:  287:    >
+        -:  288:    object(
+        -:  289:        InputIt first,
+        -:  290:        InputIt last,
+        -:  291:        std::size_t min_capacity = 0,
+        -:  292:        storage_ptr sp = {})
+        -:  293:        : sp_(std::move(sp))
+        -:  294:        , t_(&empty_)
+        -:  295:    {
+        -:  296:        construct(
+        -:  297:            first, last,
+        -:  298:            min_capacity,
+        -:  299:            typename std::iterator_traits<
+        -:  300:                InputIt>::iterator_category{});
+        -:  301:    }
+        -:  302:
+        -:  303:    /** Move constructor.
+        -:  304:
+        -:  305:        The object is constructed by acquiring ownership of
+        -:  306:        the contents of `other` and shared ownership
+        -:  307:        of `other`'s memory resource.
+        -:  308:
+        -:  309:        @note
+        -:  310:
+        -:  311:        After construction, the moved-from object behaves
+        -:  312:        as if newly constructed with its current memory resource.
+        -:  313:
+        -:  314:        @par Complexity
+        -:  315:        Constant.
+        -:  316:
+        -:  317:        @par Exception Safety
+        -:  318:        No-throw guarantee.
+        -:  319:
+        -:  320:        @param other The object to move.
+        -:  321:    */
+        -:  322:    BOOST_JSON_DECL
+        -:  323:    object(object&& other) noexcept;
+        -:  324:
+        -:  325:    /** Move constructor.
+        -:  326:
+        -:  327:        The object is constructed with the contents of
+        -:  328:        `other` by move semantics, using the specified
+        -:  329:        memory resource:
+        -:  330:
+        -:  331:        @li If `*other.storage() == *sp`, ownership of
+        -:  332:        the underlying memory is transferred in constant
+        -:  333:        time, with no possibility of exceptions.
+        -:  334:        After construction, the moved-from object behaves
+        -:  335:        as if newly constructed with its current storage
+        -:  336:        pointer.
+        -:  337:
+        -:  338:        @li If `*other.storage() != *sp`, an
+        -:  339:        element-wise copy is performed, which may throw.
+        -:  340:        In this case, the moved-from object is not
+        -:  341:        changed.
+        -:  342:
+        -:  343:        @par Complexity
+        -:  344:        Constant or linear in `other.size()`.
+        -:  345:
+        -:  346:        @par Exception Safety
+        -:  347:        Strong guarantee.
+        -:  348:        Calls to `memory_resource::allocate` may throw.
+        -:  349:
+        -:  350:        @param other The object to move.
+        -:  351:
+        -:  352:        @param sp A pointer to the @ref memory_resource
+        -:  353:        to use. The container will acquire shared
+        -:  354:        ownership of the memory resource.
+        -:  355:    */
+        -:  356:    BOOST_JSON_DECL
+        -:  357:    object(
+        -:  358:        object&& other,
+        -:  359:        storage_ptr sp);
+        -:  360:
+        -:  361:    /** Pilfer constructor.
+        -:  362:
+        -:  363:        The object is constructed by acquiring ownership
+        -:  364:        of the contents of `other` using pilfer semantics.
+        -:  365:        This is more efficient than move construction, when
+        -:  366:        it is known that the moved-from object will be
+        -:  367:        immediately destroyed afterwards.
+        -:  368:
+        -:  369:        @par Complexity
+        -:  370:        Constant.
+        -:  371:
+        -:  372:        @par Exception Safety
+        -:  373:        No-throw guarantee.
+        -:  374:
+        -:  375:        @param other The value to pilfer. After pilfer
+        -:  376:        construction, `other` is not in a usable state
+        -:  377:        and may only be destroyed.
+        -:  378:
+        -:  379:        @see @ref pilfer,
+        -:  380:            <a href="http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2016/p0308r0.html">
+        -:  381:                Valueless Variants Considered Harmful</a>
+        -:  382:    */
+        -:  383:    object(pilfered<object> other) noexcept
+        -:  384:        : sp_(std::move(other.get().sp_))
+        -:  385:        , t_(detail::exchange(
+        -:  386:            other.get().t_, &empty_))
+        -:  387:    {
+        -:  388:    }
+        -:  389:
+        -:  390:    /** Copy constructor.
+        -:  391:
+        -:  392:        The object is constructed with a copy of the
+        -:  393:        contents of `other`, using `other`'s memory resource.
+        -:  394:
+        -:  395:        @par Complexity
+        -:  396:        Linear in `other.size()`.
+        -:  397:
+        -:  398:        @par Exception Safety
+        -:  399:        Strong guarantee.
+        -:  400:        Calls to `memory_resource::allocate` may throw.
+        -:  401:
+        -:  402:        @param other The object to copy.
+        -:  403:    */
+       6*:  404:    object(
+        -:  405:        object const& other)
+       6*:  406:        : object(other, other.sp_)
+        -:  407:    {
+       6*:  408:    }
+------------------
+_ZN5boost4json6objectC2ERKS1_:
+function _ZN5boost4json6objectC2ERKS1_ called 0 returned 0% blocks executed 0%
+    #####:  404:    object(
+        -:  405:        object const& other)
+    #####:  406:        : object(other, other.sp_)
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+call    5 never executed
+        -:  407:    {
+    #####:  408:    }
+------------------
+_ZN5boost4json6objectC2ERKS1_:
+function _ZN5boost4json6objectC2ERKS1_ called 0 returned 0% blocks executed 0%
+    #####:  404:    object(
+        -:  405:        object const& other)
+    #####:  406:        : object(other, other.sp_)
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+call    5 never executed
+        -:  407:    {
+    #####:  408:    }
+------------------
+_ZN5boost4json6objectC2ERKS1_:
+function _ZN5boost4json6objectC2ERKS1_ called 3 returned 100% blocks executed 71%
+        3:  404:    object(
+        -:  405:        object const& other)
+        3:  406:        : object(other, other.sp_)
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 never executed
+        -:  407:    {
+        3:  408:    }
+------------------
+_ZN5boost4json6objectC2ERKS1_:
+function _ZN5boost4json6objectC2ERKS1_ called 3 returned 100% blocks executed 71%
+        3:  404:    object(
+        -:  405:        object const& other)
+        3:  406:        : object(other, other.sp_)
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 never executed
+        -:  407:    {
+        3:  408:    }
+------------------
+        -:  409:
+        -:  410:    /** Copy constructor.
+        -:  411:
+        -:  412:        The object is constructed with a copy of the
+        -:  413:        contents of `other`, using the specified memory resource.
+        -:  414:
+        -:  415:        @par Complexity
+        -:  416:        Linear in `other.size()`.
+        -:  417:
+        -:  418:        @par Exception Safety
+        -:  419:        Strong guarantee.
+        -:  420:        Calls to `memory_resource::allocate` may throw.
+        -:  421:
+        -:  422:        @param other The object to copy.
+        -:  423:
+        -:  424:        @param sp A pointer to the @ref memory_resource
+        -:  425:        to use. The container will acquire shared
+        -:  426:        ownership of the memory resource.
+        -:  427:    */
+        -:  428:    BOOST_JSON_DECL
+        -:  429:    object(
+        -:  430:        object const& other,
+        -:  431:        storage_ptr sp);
+        -:  432:
+        -:  433:    /** Construct from initializer-list.
+        -:  434:
+        -:  435:        The object is constructed with a copy of the values
+        -:  436:        in the initializer-list in order, using the
+        -:  437:        specified memory resource.
+        -:  438:        If there are elements with duplicate keys; that
+        -:  439:        is, if multiple elements in the range have keys
+        -:  440:        that compare equal, only the first equivalent
+        -:  441:        element will be inserted.
+        -:  442:
+        -:  443:        @par Complexity
+        -:  444:        Linear in `init.size()`.
+        -:  445:
+        -:  446:        @par Exception Safety
+        -:  447:        Strong guarantee.
+        -:  448:        Calls to `memory_resource::allocate` may throw.
+        -:  449:
+        -:  450:        @param init The initializer list to insert.
+        -:  451:
+        -:  452:        @param sp A pointer to the @ref memory_resource
+        -:  453:        to use. The container will acquire shared
+        -:  454:        ownership of the memory resource.
+        -:  455:    */
+      14*:  456:    object(
+        -:  457:        std::initializer_list<
+        -:  458:            std::pair<string_view, value_ref>> init,
+        -:  459:        storage_ptr sp = {})
+      14*:  460:        : object(init, 0, std::move(sp))
+        -:  461:    {
+      14*:  462:    }
+------------------
+_ZN5boost4json6objectC2ESt16initializer_listISt4pairINS_4core17basic_string_viewIcEENS0_9value_refEEENS0_11storage_ptrE:
+function _ZN5boost4json6objectC2ESt16initializer_listISt4pairINS_4core17basic_string_viewIcEENS0_9value_refEEENS0_11storage_ptrE called 14 returned 100% blocks executed 75%
+       14:  456:    object(
+        -:  457:        std::initializer_list<
+        -:  458:            std::pair<string_view, value_ref>> init,
+        -:  459:        storage_ptr sp = {})
+       14:  460:        : object(init, 0, std::move(sp))
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+call    6 never executed
+        -:  461:    {
+       14:  462:    }
+------------------
+_ZN5boost4json6objectC2ESt16initializer_listISt4pairINS_4core17basic_string_viewIcEENS0_9value_refEEENS0_11storage_ptrE:
+function _ZN5boost4json6objectC2ESt16initializer_listISt4pairINS_4core17basic_string_viewIcEENS0_9value_refEEENS0_11storage_ptrE called 0 returned 0% blocks executed 0%
+    #####:  456:    object(
+        -:  457:        std::initializer_list<
+        -:  458:            std::pair<string_view, value_ref>> init,
+        -:  459:        storage_ptr sp = {})
+    #####:  460:        : object(init, 0, std::move(sp))
+call    0 never executed
+call    1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed (throw)
+call    5 never executed
+call    6 never executed
+        -:  461:    {
+    #####:  462:    }
+------------------
+        -:  463:
+        -:  464:    /** Construct from initializer-list.
+        -:  465:
+        -:  466:        Storage for at least `min_capacity` elements is
+        -:  467:        reserved, and then
+        -:  468:        the object is constructed with a copy of the values
+        -:  469:        in the initializer-list in order, using the
+        -:  470:        specified memory resource.
+        -:  471:        If there are elements with duplicate keys; that
+        -:  472:        is, if multiple elements in the range have keys
+        -:  473:        that compare equal, only the first equivalent
+        -:  474:        element will be inserted.
+        -:  475:
+        -:  476:        @par Complexity
+        -:  477:        Linear in `init.size()`.
+        -:  478:
+        -:  479:        @par Exception Safety
+        -:  480:        Strong guarantee.
+        -:  481:        Calls to `memory_resource::allocate` may throw.
+        -:  482:
+        -:  483:        @param init The initializer list to insert.
+        -:  484:
+        -:  485:        @param min_capacity The minimum number
+        -:  486:        of elements for which capacity is guaranteed
+        -:  487:        without a subsequent reallocation.
+        -:  488:        Upon construction, @ref capacity() will be greater
+        -:  489:        than or equal to this number.
+        -:  490:
+        -:  491:        @param sp A pointer to the @ref memory_resource
+        -:  492:        to use. The container will acquire shared
+        -:  493:        ownership of the memory resource.
+        -:  494:    */
+        -:  495:    BOOST_JSON_DECL
+        -:  496:    object(
+        -:  497:        std::initializer_list<
+        -:  498:            std::pair<string_view, value_ref>> init,
+        -:  499:        std::size_t min_capacity,
+        -:  500:        storage_ptr sp = {});
+        -:  501:
+        -:  502:    //------------------------------------------------------
+        -:  503:    //
+        -:  504:    // Assignment
+        -:  505:    //
+        -:  506:    //------------------------------------------------------
+        -:  507:
+        -:  508:    /** Copy assignment.
+        -:  509:
+        -:  510:        The contents of the object are replaced with an
+        -:  511:        element-wise copy of `other`.
+        -:  512:
+        -:  513:        @par Complexity
+        -:  514:        Linear in @ref size() plus `other.size()`.
+        -:  515:
+        -:  516:        @par Exception Safety
+        -:  517:        Strong guarantee.
+        -:  518:        Calls to `memory_resource::allocate` may throw.
+        -:  519:
+        -:  520:        @param other The object to copy.
+        -:  521:    */
+        -:  522:    BOOST_JSON_DECL
+        -:  523:    object&
+        -:  524:    operator=(object const& other);
+        -:  525:
+        -:  526:    /** Move assignment.
+        -:  527:
+        -:  528:        The contents of the object are replaced with the
+        -:  529:        contents of `other` using move semantics:
+        -:  530:
+        -:  531:        @li If `*other.storage() == *sp`, ownership of
+        -:  532:        the underlying memory is transferred in constant
+        -:  533:        time, with no possibility of exceptions.
+        -:  534:        After assignment, the moved-from object behaves
+        -:  535:        as if newly constructed with its current storage
+        -:  536:        pointer.
+        -:  537:
+        -:  538:        @li If `*other.storage() != *sp`, an
+        -:  539:        element-wise copy is performed, which may throw.
+        -:  540:        In this case, the moved-from object is not
+        -:  541:        changed.
+        -:  542:
+        -:  543:        @par Complexity
+        -:  544:        Constant or linear in @ref size() plus `other.size()`.
+        -:  545:
+        -:  546:        @par Exception Safety
+        -:  547:        Strong guarantee.
+        -:  548:        Calls to `memory_resource::allocate` may throw.
+        -:  549:
+        -:  550:        @param other The object to move.
+        -:  551:    */
+        -:  552:    BOOST_JSON_DECL
+        -:  553:    object&
+        -:  554:    operator=(object&& other);
+        -:  555:
+        -:  556:    /** Assignment.
+        -:  557:
+        -:  558:        Replaces the contents with the contents of an
+        -:  559:        initializer list.
+        -:  560:
+        -:  561:        @par Complexity
+        -:  562:        Linear in @ref size() plus
+        -:  563:        average case linear in `init.size()`,
+        -:  564:        worst case quadratic in `init.size()`.
+        -:  565:
+        -:  566:        @par Exception Safety
+        -:  567:        Strong guarantee.
+        -:  568:        Calls to `memory_resource::allocate` may throw.
+        -:  569:
+        -:  570:        @param init The initializer list to copy.
+        -:  571:    */
+        -:  572:    BOOST_JSON_DECL
+        -:  573:    object&
+        -:  574:    operator=(std::initializer_list<
+        -:  575:        std::pair<string_view, value_ref>> init);
+        -:  576:
+        -:  577:    //------------------------------------------------------
+        -:  578:
+        -:  579:    /** Return the associated @ref memory_resource
+        -:  580:
+        -:  581:        This returns the @ref memory_resource used by
+        -:  582:        the container.
+        -:  583:
+        -:  584:        @par Complexity
+        -:  585:        Constant.
+        -:  586:
+        -:  587:        @par Exception Safety
+        -:  588:        No-throw guarantee.
+        -:  589:    */
+        -:  590:    storage_ptr const&
+        -:  591:    storage() const noexcept
+        -:  592:    {
+        -:  593:        return sp_;
+        -:  594:    }
+        -:  595:
+        -:  596:    /** Return the associated @ref memory_resource
+        -:  597:
+        -:  598:        This function returns an instance of
+        -:  599:        @ref polymorphic_allocator constructed from the
+        -:  600:        associated @ref memory_resource.
+        -:  601:
+        -:  602:        @par Complexity
+        -:  603:        Constant.
+        -:  604:
+        -:  605:        @par Exception Safety
+        -:  606:        No-throw guarantee.
+        -:  607:    */
+        -:  608:    allocator_type
+        -:  609:    get_allocator() const noexcept
+        -:  610:    {
+        -:  611:        return sp_.get();
+        -:  612:    }
+        -:  613:
+        -:  614:    //------------------------------------------------------
+        -:  615:    //
+        -:  616:    // Iterators
+        -:  617:    //
+        -:  618:    //------------------------------------------------------
+        -:  619:
+        -:  620:    /** Return an iterator to the first element.
+        -:  621:
+        -:  622:        If the container is empty, @ref end() is returned.
+        -:  623:
+        -:  624:        @par Complexity
+        -:  625:        Constant.
+        -:  626:
+        -:  627:        @par Exception Safety
+        -:  628:        No-throw guarantee.
+        -:  629:    */
+        -:  630:    inline
+        -:  631:    iterator
+        -:  632:    begin() noexcept;
+        -:  633:
+        -:  634:    /** Return a const iterator to the first element.
+        -:  635:
+        -:  636:        If the container is empty, @ref end() is returned.
+        -:  637:
+        -:  638:        @par Complexity
+        -:  639:        Constant.
+        -:  640:
+        -:  641:        @par Exception Safety
+        -:  642:        No-throw guarantee.
+        -:  643:    */
+        -:  644:    inline
+        -:  645:    const_iterator
+        -:  646:    begin() const noexcept;
+        -:  647:
+        -:  648:    /** Return a const iterator to the first element.
+        -:  649:
+        -:  650:        If the container is empty, @ref cend() is returned.
+        -:  651:
+        -:  652:        @par Complexity
+        -:  653:        Constant.
+        -:  654:
+        -:  655:        @par Exception Safety
+        -:  656:        No-throw guarantee.
+        -:  657:    */
+        -:  658:    inline
+        -:  659:    const_iterator
+        -:  660:    cbegin() const noexcept;
+        -:  661:
+        -:  662:    /** Return an iterator to the element following the last element.
+        -:  663:
+        -:  664:        The element acts as a placeholder; attempting
+        -:  665:        to access it results in undefined behavior.
+        -:  666:
+        -:  667:        @par Complexity
+        -:  668:        Constant.
+        -:  669:
+        -:  670:        @par Exception Safety
+        -:  671:        No-throw guarantee.
+        -:  672:    */
+        -:  673:    inline
+        -:  674:    iterator
+        -:  675:    end() noexcept;
+        -:  676:
+        -:  677:    /** Return a const iterator to the element following the last element.
+        -:  678:
+        -:  679:        The element acts as a placeholder; attempting
+        -:  680:        to access it results in undefined behavior.
+        -:  681:
+        -:  682:        @par Complexity
+        -:  683:        Constant.
+        -:  684:
+        -:  685:        @par Exception Safety
+        -:  686:        No-throw guarantee.
+        -:  687:    */
+        -:  688:    inline
+        -:  689:    const_iterator
+        -:  690:    end() const noexcept;
+        -:  691:
+        -:  692:    /** Return a const iterator to the element following the last element.
+        -:  693:
+        -:  694:        The element acts as a placeholder; attempting
+        -:  695:        to access it results in undefined behavior.
+        -:  696:
+        -:  697:        @par Complexity
+        -:  698:        Constant.
+        -:  699:
+        -:  700:        @par Exception Safety
+        -:  701:        No-throw guarantee.
+        -:  702:    */
+        -:  703:    inline
+        -:  704:    const_iterator
+        -:  705:    cend() const noexcept;
+        -:  706:
+        -:  707:    /** Return a reverse iterator to the first element of the reversed container.
+        -:  708:
+        -:  709:        The pointed-to element corresponds to the
+        -:  710:        last element of the non-reversed container.
+        -:  711:        If the container is empty, @ref rend() is returned.
+        -:  712:
+        -:  713:        @par Complexity
+        -:  714:        Constant.
+        -:  715:
+        -:  716:        @par Exception Safety
+        -:  717:        No-throw guarantee.
+        -:  718:    */
+        -:  719:    inline
+        -:  720:    reverse_iterator
+        -:  721:    rbegin() noexcept;
+        -:  722:
+        -:  723:    /** Return a const reverse iterator to the first element of the reversed container.
+        -:  724:
+        -:  725:        The pointed-to element corresponds to the
+        -:  726:        last element of the non-reversed container.
+        -:  727:        If the container is empty, @ref rend() is returned.
+        -:  728:
+        -:  729:        @par Complexity
+        -:  730:        Constant.
+        -:  731:
+        -:  732:        @par Exception Safety
+        -:  733:        No-throw guarantee.
+        -:  734:    */
+        -:  735:    inline
+        -:  736:    const_reverse_iterator
+        -:  737:    rbegin() const noexcept;
+        -:  738:
+        -:  739:    /** Return a const reverse iterator to the first element of the reversed container.
+        -:  740:
+        -:  741:        The pointed-to element corresponds to the
+        -:  742:        last element of the non-reversed container.
+        -:  743:        If the container is empty, @ref crend() is returned.
+        -:  744:
+        -:  745:        @par Complexity
+        -:  746:        Constant.
+        -:  747:
+        -:  748:        @par Exception Safety
+        -:  749:        No-throw guarantee.
+        -:  750:    */
+        -:  751:    inline
+        -:  752:    const_reverse_iterator
+        -:  753:    crbegin() const noexcept;
+        -:  754:
+        -:  755:    /** Return a reverse iterator to the element following the last element of the reversed container.
+        -:  756:
+        -:  757:        The pointed-to element corresponds to the element
+        -:  758:        preceding the first element of the non-reversed container.
+        -:  759:        This element acts as a placeholder, attempting
+        -:  760:        to access it results in undefined behavior.
+        -:  761:
+        -:  762:        @par Complexity
+        -:  763:        Constant.
+        -:  764:
+        -:  765:        @par Exception Safety
+        -:  766:        No-throw guarantee.
+        -:  767:    */
+        -:  768:    inline
+        -:  769:    reverse_iterator
+        -:  770:    rend() noexcept;
+        -:  771:
+        -:  772:    /** Return a const reverse iterator to the element following the last element of the reversed container.
+        -:  773:
+        -:  774:        The pointed-to element corresponds to the element
+        -:  775:        preceding the first element of the non-reversed container.
+        -:  776:        This element acts as a placeholder, attempting
+        -:  777:        to access it results in undefined behavior.
+        -:  778:
+        -:  779:        @par Complexity
+        -:  780:        Constant.
+        -:  781:
+        -:  782:        @par Exception Safety
+        -:  783:        No-throw guarantee.
+        -:  784:    */
+        -:  785:    inline
+        -:  786:    const_reverse_iterator
+        -:  787:    rend() const noexcept;
+        -:  788:
+        -:  789:    /** Return a const reverse iterator to the element following the last element of the reversed container.
+        -:  790:
+        -:  791:        The pointed-to element corresponds to the element
+        -:  792:        preceding the first element of the non-reversed container.
+        -:  793:        This element acts as a placeholder, attempting
+        -:  794:        to access it results in undefined behavior.
+        -:  795:
+        -:  796:        @par Complexity
+        -:  797:        Constant.
+        -:  798:
+        -:  799:        @par Exception Safety
+        -:  800:        No-throw guarantee.
+        -:  801:    */
+        -:  802:    inline
+        -:  803:    const_reverse_iterator
+        -:  804:    crend() const noexcept;
+        -:  805:
+        -:  806:    //------------------------------------------------------
+        -:  807:    //
+        -:  808:    // Capacity
+        -:  809:    //
+        -:  810:    //------------------------------------------------------
+        -:  811:
+        -:  812:    /** Return whether there are no elements.
+        -:  813:
+        -:  814:        Returns `true` if there are no elements in
+        -:  815:        the container, i.e. @ref size() returns 0.
+        -:  816:
+        -:  817:        @par Complexity
+        -:  818:        Constant.
+        -:  819:
+        -:  820:        @par Exception Safety
+        -:  821:        No-throw guarantee.
+        -:  822:    */
+        -:  823:    inline
+        -:  824:    bool
+        -:  825:    empty() const noexcept;
+        -:  826:
+        -:  827:    /** Return the number of elements.
+        -:  828:
+        -:  829:        This returns the number of elements in the container.
+        -:  830:
+        -:  831:        @par Complexity
+        -:  832:        Constant.
+        -:  833:
+        -:  834:        @par Exception Safety
+        -:  835:        No-throw guarantee.
+        -:  836:    */
+        -:  837:    inline
+        -:  838:    std::size_t
+        -:  839:    size() const noexcept;
+        -:  840:
+        -:  841:    /** Return the maximum number of elements any object can hold
+        -:  842:
+        -:  843:        The maximum is an implementation-defined number dependent
+        -:  844:        on system or library implementation. This value is a
+        -:  845:        theoretical limit; at runtime, the actual maximum size
+        -:  846:        may be less due to resource limits.
+        -:  847:
+        -:  848:        @par Complexity
+        -:  849:        Constant.
+        -:  850:
+        -:  851:        @par Exception Safety
+        -:  852:        No-throw guarantee.
+        -:  853:    */
+        -:  854:    static
+        -:  855:    constexpr
+        -:  856:    std::size_t
+        -:  857:    max_size() noexcept;
+        -:  858:
+        -:  859:    /** Return the number of elements that can be held in currently allocated memory
+        -:  860:
+        -:  861:        This number may be larger than the value returned
+        -:  862:        by @ref size().
+        -:  863:
+        -:  864:        @par Complexity
+        -:  865:        Constant.
+        -:  866:
+        -:  867:        @par Exception Safety
+        -:  868:        No-throw guarantee.
+        -:  869:    */
+        -:  870:    inline
+        -:  871:    std::size_t
+        -:  872:    capacity() const noexcept;
+        -:  873:
+        -:  874:    /** Increase the capacity to at least a certain amount.
+        -:  875:
+        -:  876:        This increases the @ref capacity() to a value
+        -:  877:        that is greater than or equal to `new_capacity`.
+        -:  878:        If `new_capacity > capacity()`, new memory is
+        -:  879:        allocated. Otherwise, the call has no effect.
+        -:  880:        The number of elements and therefore the
+        -:  881:        @ref size() of the container is not changed.
+        -:  882:    \n
+        -:  883:        If new memory is allocated, all iterators
+        -:  884:        including any past-the-end iterators, and all
+        -:  885:        references to the elements are invalidated.
+        -:  886:        Otherwise, no iterators or references are
+        -:  887:        invalidated.
+        -:  888:
+        -:  889:        @par Complexity
+        -:  890:        Constant or average case linear in
+        -:  891:        @ref size(), worst case quadratic.
+        -:  892:
+        -:  893:        @par Exception Safety
+        -:  894:        Strong guarantee.
+        -:  895:        Calls to `memory_resource::allocate` may throw.
+        -:  896:
+        -:  897:        @param new_capacity The new minimum capacity.
+        -:  898:
+        -:  899:        @throw system_error `new_capacity > max_size()`
+        -:  900:    */
+        -:  901:    inline
+        -:  902:    void
+        -:  903:    reserve(std::size_t new_capacity);
+        -:  904:
+        -:  905:    //------------------------------------------------------
+        -:  906:    //
+        -:  907:    // Modifiers
+        -:  908:    //
+        -:  909:    //------------------------------------------------------
+        -:  910:
+        -:  911:    /** Erase all elements.
+        -:  912:
+        -:  913:        Erases all elements from the container without
+        -:  914:        changing the capacity.
+        -:  915:        After this call, @ref size() returns zero.
+        -:  916:        All references, pointers, and iterators are
+        -:  917:        invalidated.
+        -:  918:
+        -:  919:        @par Complexity
+        -:  920:        Linear in @ref size().
+        -:  921:
+        -:  922:        @par Exception Safety
+        -:  923:        No-throw guarantee.
+        -:  924:    */
+        -:  925:    BOOST_JSON_DECL
+        -:  926:    void
+        -:  927:    clear() noexcept;
+        -:  928:
+        -:  929:    /** Insert elements.
+        -:  930:
+        -:  931:        Inserts `p` if `this->contains(value_type(p).key())` is `false`.
+        -:  932:        @ref value_type must be constructible from `p`.
+        -:  933:
+        -:  934:        If the insertion occurs and results in a rehashing
+        -:  935:        of the container, all iterators and references are invalidated.
+        -:  936:        Otherwise, they are not affected.
+        -:  937:        Rehashing occurs only if the new number of elements
+        -:  938:        is greater than @ref capacity().
+        -:  939:
+        -:  940:        @par Constraints
+        -:  941:        @code
+        -:  942:        std::is_constructible_v<value_type, P>
+        -:  943:        @endcode
+        -:  944:
+        -:  945:        @par Complexity
+        -:  946:        Average case amortized constant,
+        -:  947:        worst case linear in @ref size().
+        -:  948:
+        -:  949:        @par Exception Safety
+        -:  950:        Strong guarantee.
+        -:  951:        Calls to `memory_resource::allocate` may throw.
+        -:  952:
+        -:  953:        @param p The value to insert.
+        -:  954:
+        -:  955:        @throw system_error key is too long.
+        -:  956:
+        -:  957:        @throw system_error @ref size() >= max_size().
+        -:  958:
+        -:  959:        @return A pair where `first` is an iterator
+        -:  960:        to the existing or inserted element, and `second`
+        -:  961:        is `true` if the insertion took place or `false` otherwise.
+        -:  962:    */
+        -:  963:    template<class P
+        -:  964:#ifndef BOOST_JSON_DOCS
+        -:  965:        ,class = typename std::enable_if<
+        -:  966:            std::is_constructible<key_value_pair,
+        -:  967:                P, storage_ptr>::value>::type
+        -:  968:#endif
+        -:  969:    >
+        -:  970:    std::pair<iterator, bool>
+        -:  971:    insert(P&& p);
+        -:  972:
+        -:  973:    /** Insert elements.
+        -:  974:
+        -:  975:        The elements in the range `[first, last)` are inserted one at a time,
+        -:  976:        in order. Any element with key that is a duplicate of a key already
+        -:  977:        present in container will be skipped. This also means, that if there
+        -:  978:        are two keys within the range that are equal to each other, only the
+        -:  979:        first will be inserted.
+        -:  980:
+        -:  981:        Insertion may result in rehashing of the container. In that case all
+        -:  982:        iterators and references are invalidated. Otherwise, they are not
+        -:  983:        affected.
+        -:  984:
+        -:  985:        @par Precondition
+        -:  986:        `first` and `last` are not iterators into `*this`.
+        -:  987:        `first` and `last` form a valid range.
+        -:  988:
+        -:  989:        @par Constraints
+        -:  990:        @code
+        -:  991:        std::is_constructible_v<value_type, std::iterator_traits<InputIt>::value_type>
+        -:  992:        @endcode
+        -:  993:
+        -:  994:        @par Complexity
+        -:  995:        Linear in `std::distance(first, last)`.
+        -:  996:
+        -:  997:        @par Exception Safety
+        -:  998:        Strong guarantee for forward iterators, basic guarantee for input
+        -:  999:        iterators.
+        -: 1000:        Calls to `memory_resource::allocate` may throw.
+        -: 1001:
+        -: 1002:        @param first An input iterator pointing to the first
+        -: 1003:        element to insert, or pointing to the end of the range.
+        -: 1004:
+        -: 1005:        @param last An input iterator pointing to the end
+        -: 1006:        of the range.
+        -: 1007:
+        -: 1008:        @tparam InputIt a type satisfying the requirements
+        -: 1009:        of __InputIterator__.
+        -: 1010:    */
+        -: 1011:    template<
+        -: 1012:        class InputIt
+        -: 1013:    #ifndef BOOST_JSON_DOCS
+        -: 1014:        ,class = is_inputit<InputIt>
+        -: 1015:    #endif
+        -: 1016:    >
+        -: 1017:    void
+        -: 1018:    insert(InputIt first, InputIt last)
+        -: 1019:    {
+        -: 1020:        insert(first, last, typename
+        -: 1021:            std::iterator_traits<InputIt
+        -: 1022:                >::iterator_category{});
+        -: 1023:    }
+        -: 1024:
+        -: 1025:    /** Insert elements.
+        -: 1026:
+        -: 1027:        The elements in the initializer list are inserted one at a time, in
+        -: 1028:        order. Any element with key that is a duplicate of a key already
+        -: 1029:        present in container will be skipped. This also means, that if there
+        -: 1030:        are two keys within the initializer list that are equal to each other,
+        -: 1031:        only the first will be inserted.
+        -: 1032:
+        -: 1033:        Insertion may result in rehashing of the container. In that case all
+        -: 1034:        iterators and references are invalidated. Otherwise, they are not
+        -: 1035:        affected.
+        -: 1036:
+        -: 1037:        @par Complexity
+        -: 1038:        Linear in `init.size()`.
+        -: 1039:
+        -: 1040:        @par Exception Safety
+        -: 1041:        Basic guarantee.
+        -: 1042:        Calls to `memory_resource::allocate` may throw.
+        -: 1043:
+        -: 1044:        @param init The initializer list to insert
+        -: 1045:    */
+        -: 1046:    BOOST_JSON_DECL
+        -: 1047:    void
+        -: 1048:    insert(std::initializer_list<
+        -: 1049:        std::pair<string_view, value_ref>> init);
+        -: 1050:
+        -: 1051:    /** Insert an element or assign to the current element if the key already exists.
+        -: 1052:
+        -: 1053:        If the key equivalent to `key` already exists in the
+        -: 1054:        container, assigns `std::forward<M>(m)` to the
+        -: 1055:        `mapped_type` corresponding to the key. Otherwise,
+        -: 1056:        inserts the new value at the end as if by insert,
+        -: 1057:        constructing it from `value_type(key, std::forward<M>(m))`.
+        -: 1058:
+        -: 1059:        If the insertion occurs and results in a rehashing of the container,
+        -: 1060:        all iterators and references are invalidated. Otherwise, they are not
+        -: 1061:        affected. Rehashing occurs only if the new number of elements is
+        -: 1062:        greater than @ref capacity().
+        -: 1063:
+        -: 1064:        @par Complexity
+        -: 1065:        Amortized constant on average, worst case linear in @ref size().
+        -: 1066:
+        -: 1067:        @par Exception Safety
+        -: 1068:        Strong guarantee.
+        -: 1069:        Calls to `memory_resource::allocate` may throw.
+        -: 1070:
+        -: 1071:        @return A `std::pair` where `first` is an iterator
+        -: 1072:        to the existing or inserted element, and `second`
+        -: 1073:        is `true` if the insertion took place or `false` if
+        -: 1074:        the assignment took place.
+        -: 1075:
+        -: 1076:        @param key The key used for lookup and insertion
+        -: 1077:
+        -: 1078:        @param m The value to insert or assign
+        -: 1079:
+        -: 1080:        @throw system_error if key is too long
+        -: 1081:    */
+        -: 1082:    template<class M>
+        -: 1083:    std::pair<iterator, bool>
+        -: 1084:    insert_or_assign(
+        -: 1085:        string_view key, M&& m);
+        -: 1086:
+        -: 1087:    /** Construct an element in-place.
+        -: 1088:
+        -: 1089:        Inserts a new element into the container constructed
+        -: 1090:        in-place with the given argument if there is no
+        -: 1091:        element with the `key` in the container.
+        -: 1092:
+        -: 1093:        If the insertion occurs and results in a rehashing of the container,
+        -: 1094:        all iterators and references are invalidated. Otherwise, they are not
+        -: 1095:        affected. Rehashing occurs only if the new number of elements is
+        -: 1096:        greater than @ref capacity().
+        -: 1097:
+        -: 1098:        @par Complexity
+        -: 1099:        Amortized constant on average, worst case linear in @ref size().
+        -: 1100:
+        -: 1101:        @par Exception Safety
+        -: 1102:        Strong guarantee.
+        -: 1103:        Calls to `memory_resource::allocate` may throw.
+        -: 1104:
+        -: 1105:        @return A `std::pair` where `first` is an iterator
+        -: 1106:        to the existing or inserted element, and `second`
+        -: 1107:        is `true` if the insertion took place or `false` otherwise.
+        -: 1108:
+        -: 1109:        @param key The key used for lookup and insertion
+        -: 1110:
+        -: 1111:        @param arg The argument used to construct the value.
+        -: 1112:        This will be passed as `std::forward<Arg>(arg)` to
+        -: 1113:        the @ref value constructor.
+        -: 1114:
+        -: 1115:        @throw system_error if key is too long
+        -: 1116:    */
+        -: 1117:    template<class Arg>
+        -: 1118:    std::pair<iterator, bool>
+        -: 1119:    emplace(string_view key, Arg&& arg);
+        -: 1120:
+        -: 1121:    /** Erase an element
+        -: 1122:
+        -: 1123:        Remove the element pointed to by `pos`, which must
+        -: 1124:        be valid and dereferenceable.
+        -: 1125:        References and iterators to the erased element are
+        -: 1126:        invalidated. Other iterators and references are not
+        -: 1127:        invalidated.
+        -: 1128:
+        -: 1129:        @note
+        -: 1130:
+        -: 1131:        The @ref end() iterator (which is valid but cannot be
+        -: 1132:        dereferenced) cannot be used as a value for `pos`.
+        -: 1133:
+        -: 1134:        @par Complexity
+        -: 1135:        Constant on average, worst case linear in @ref size().
+        -: 1136:
+        -: 1137:        @par Exception Safety
+        -: 1138:        No-throw guarantee.
+        -: 1139:
+        -: 1140:        @return An iterator following the removed element.
+        -: 1141:
+        -: 1142:        @param pos An iterator pointing to the element to be
+        -: 1143:        removed.
+        -: 1144:    */
+        -: 1145:    BOOST_JSON_DECL
+        -: 1146:    iterator
+        -: 1147:    erase(const_iterator pos) noexcept;
+        -: 1148:
+        -: 1149:    /** Erase an element
+        -: 1150:
+        -: 1151:        Remove the element which matches `key`, if it exists.
+        -: 1152:        References and iterators to the erased element are
+        -: 1153:        invalidated. Other iterators and references are not
+        -: 1154:        invalidated.
+        -: 1155:
+        -: 1156:        @par Complexity
+        -: 1157:        Constant on average, worst case linear in @ref size().
+        -: 1158:
+        -: 1159:        @par Exception Safety
+        -: 1160:        No-throw guarantee.
+        -: 1161:
+        -: 1162:        @return The number of elements removed, which will
+        -: 1163:        be either 0 or 1.
+        -: 1164:
+        -: 1165:        @param key The key to match.
+        -: 1166:    */
+        -: 1167:    BOOST_JSON_DECL
+        -: 1168:    std::size_t
+        -: 1169:    erase(string_view key) noexcept;
+        -: 1170:
+        -: 1171:    /** Erase an element preserving order
+        -: 1172:
+        -: 1173:        Remove the element pointed to by `pos`, which must
+        -: 1174:        be valid and dereferenceable.
+        -: 1175:        References and iterators from `pos` to `end()`, both
+        -: 1176:        included, are invalidated. Other iterators and references
+        -: 1177:        are not invalidated.
+        -: 1178:        The relative order of remaining elements is preserved.
+        -: 1179:
+        -: 1180:        @note
+        -: 1181:
+        -: 1182:        The @ref end() iterator (which is valid but cannot be
+        -: 1183:        dereferenced) cannot be used as a value for `pos`.
+        -: 1184:
+        -: 1185:        @par Complexity
+        -: 1186:        Linear in @ref size().
+        -: 1187:
+        -: 1188:        @par Exception Safety
+        -: 1189:        No-throw guarantee.
+        -: 1190:
+        -: 1191:        @return An iterator following the removed element.
+        -: 1192:
+        -: 1193:        @param pos An iterator pointing to the element to be
+        -: 1194:        removed.
+        -: 1195:    */
+        -: 1196:    BOOST_JSON_DECL
+        -: 1197:    iterator
+        -: 1198:    stable_erase(const_iterator pos) noexcept;
+        -: 1199:
+        -: 1200:    /** Erase an element preserving order
+        -: 1201:
+        -: 1202:        Remove the element which matches `key`, if it exists.
+        -: 1203:        All references and iterators are invalidated.
+        -: 1204:        The relative order of remaining elements is preserved.
+        -: 1205:
+        -: 1206:        @par Complexity
+        -: 1207:        Linear in @ref size().
+        -: 1208:
+        -: 1209:        @par Exception Safety
+        -: 1210:        No-throw guarantee.
+        -: 1211:
+        -: 1212:        @return The number of elements removed, which will
+        -: 1213:        be either 0 or 1.
+        -: 1214:
+        -: 1215:        @param key The key to match.
+        -: 1216:    */
+        -: 1217:    BOOST_JSON_DECL
+        -: 1218:    std::size_t
+        -: 1219:    stable_erase(string_view key) noexcept;
+        -: 1220:
+        -: 1221:    /** Swap two objects.
+        -: 1222:
+        -: 1223:        Exchanges the contents of this object with another
+        -: 1224:        object. Ownership of the respective @ref memory_resource
+        -: 1225:        objects is not transferred.
+        -: 1226:
+        -: 1227:        @li If `*other.storage() == *this->storage()`,
+        -: 1228:        ownership of the underlying memory is swapped in
+        -: 1229:        constant time, with no possibility of exceptions.
+        -: 1230:        All iterators and references remain valid.
+        -: 1231:
+        -: 1232:        @li If `*other.storage() != *this->storage()`,
+        -: 1233:        the contents are logically swapped by making copies,
+        -: 1234:        which can throw. In this case all iterators and
+        -: 1235:        references are invalidated.
+        -: 1236:
+        -: 1237:        @par Complexity
+        -: 1238:        Constant or linear in @ref size() plus `other.size()`.
+        -: 1239:
+        -: 1240:        @par Exception Safety
+        -: 1241:        Strong guarantee.
+        -: 1242:        Calls to `memory_resource::allocate` may throw.
+        -: 1243:
+        -: 1244:        @param other The object to swap with.
+        -: 1245:        If `this == &other`, this function call has no effect.
+        -: 1246:    */
+        -: 1247:    BOOST_JSON_DECL
+        -: 1248:    void
+        -: 1249:    swap(object& other);
+        -: 1250:
+        -: 1251:    /** Swap two objects.
+        -: 1252:
+        -: 1253:        Exchanges the contents of the object `lhs` with
+        -: 1254:        another object `rhs`. Ownership of the respective
+        -: 1255:        @ref memory_resource objects is not transferred.
+        -: 1256:
+        -: 1257:        @li If `*lhs.storage() == *rhs.storage()`,
+        -: 1258:        ownership of the underlying memory is swapped in
+        -: 1259:        constant time, with no possibility of exceptions.
+        -: 1260:        All iterators and references remain valid.
+        -: 1261:
+        -: 1262:        @li If `*lhs.storage() != *rhs.storage()`,
+        -: 1263:        the contents are logically swapped by making a copy,
+        -: 1264:        which can throw. In this case all iterators and
+        -: 1265:        references are invalidated.
+        -: 1266:
+        -: 1267:        @par Effects
+        -: 1268:        @code
+        -: 1269:        lhs.swap( rhs );
+        -: 1270:        @endcode
+        -: 1271:
+        -: 1272:        @par Complexity
+        -: 1273:        Constant or linear in `lhs.size() + rhs.size()`.
+        -: 1274:
+        -: 1275:        @par Exception Safety
+        -: 1276:        Strong guarantee.
+        -: 1277:        Calls to `memory_resource::allocate` may throw.
+        -: 1278:
+        -: 1279:        @param lhs The object to exchange.
+        -: 1280:
+        -: 1281:        @param rhs The object to exchange.
+        -: 1282:        If `&lhs == &rhs`, this function call has no effect.
+        -: 1283:
+        -: 1284:        @see @ref object::swap
+        -: 1285:    */
+        -: 1286:    friend
+        -: 1287:    void
+        -: 1288:    swap(object& lhs, object& rhs)
+        -: 1289:    {
+        -: 1290:        lhs.swap(rhs);
+        -: 1291:    }
+        -: 1292:
+        -: 1293:    //------------------------------------------------------
+        -: 1294:    //
+        -: 1295:    // Lookup
+        -: 1296:    //
+        -: 1297:    //------------------------------------------------------
+        -: 1298:
+        -: 1299:    /** Access the specified element, with bounds checking.
+        -: 1300:
+        -: 1301:        Returns a reference to the mapped value of the element
+        -: 1302:        that matches `key`, otherwise throws.
+        -: 1303:
+        -: 1304:        @par Complexity
+        -: 1305:        Constant on average, worst case linear in @ref size().
+        -: 1306:
+        -: 1307:        @par Exception Safety
+        -: 1308:        Strong guarantee.
+        -: 1309:
+        -: 1310:        @return A reference to the mapped value.
+        -: 1311:
+        -: 1312:        @param key The key of the element to find.
+        -: 1313:
+        -: 1314:        @throw system_error if no such element exists.
+        -: 1315:    */
+        -: 1316:    /* @{ */
+        -: 1317:    inline
+        -: 1318:    value&
+        -: 1319:    at(string_view key) &;
+        -: 1320:
+        -: 1321:    inline
+        -: 1322:    value&&
+        -: 1323:    at(string_view key) &&;
+        -: 1324:
+        -: 1325:    inline
+        -: 1326:    value const&
+        -: 1327:    at(string_view key) const&;
+        -: 1328:    /* @} */
+        -: 1329:
+        -: 1330:    /** Access or insert the specified element
+        -: 1331:
+        -: 1332:        Returns a reference to the value that is mapped
+        -: 1333:        to a key equivalent to key, performing an insertion
+        -: 1334:        of a null value if such key does not already exist.
+        -: 1335:    \n
+        -: 1336:        If an insertion occurs and results in a rehashing of
+        -: 1337:        the container, all iterators are invalidated. Otherwise
+        -: 1338:        iterators are not affected. References are not
+        -: 1339:        invalidated. Rehashing occurs only if the new
+        -: 1340:        number of elements is greater than @ref capacity().
+        -: 1341:
+        -: 1342:        @par Complexity
+        -: 1343:        Constant on average, worst case linear in @ref size().
+        -: 1344:
+        -: 1345:        @par Exception Safety
+        -: 1346:        Strong guarantee.
+        -: 1347:        Calls to `memory_resource::allocate` may throw.
+        -: 1348:
+        -: 1349:        @return A reference to the mapped value.
+        -: 1350:
+        -: 1351:        @param key The key of the element to find.
+        -: 1352:    */
+        -: 1353:    BOOST_JSON_DECL
+        -: 1354:    value&
+        -: 1355:    operator[](string_view key);
+        -: 1356:
+        -: 1357:    /** Count the number of elements with a specific key
+        -: 1358:
+        -: 1359:        This function returns the count of the number of
+        -: 1360:        elements match `key`. The only possible return values
+        -: 1361:        are 0 and 1.
+        -: 1362:
+        -: 1363:        @par Complexity
+        -: 1364:        Constant on average, worst case linear in @ref size().
+        -: 1365:
+        -: 1366:        @par Exception Safety
+        -: 1367:        No-throw guarantee.
+        -: 1368:
+        -: 1369:        @param key The key of the element to find.
+        -: 1370:    */
+        -: 1371:    BOOST_JSON_DECL
+        -: 1372:    std::size_t
+        -: 1373:    count(string_view key) const noexcept;
+        -: 1374:
+        -: 1375:    /** Find an element with a specific key
+        -: 1376:
+        -: 1377:        This function returns an iterator to the element
+        -: 1378:        matching `key` if it exists, otherwise returns
+        -: 1379:        @ref end().
+        -: 1380:
+        -: 1381:        @par Complexity
+        -: 1382:        Constant on average, worst case linear in @ref size().
+        -: 1383:
+        -: 1384:        @par Exception Safety
+        -: 1385:        No-throw guarantee.
+        -: 1386:
+        -: 1387:        @param key The key of the element to find.
+        -: 1388:    */
+        -: 1389:    BOOST_JSON_DECL
+        -: 1390:    iterator
+        -: 1391:    find(string_view key) noexcept;
+        -: 1392:
+        -: 1393:    /** Find an element with a specific key
+        -: 1394:
+        -: 1395:        This function returns a constant iterator to
+        -: 1396:        the element matching `key` if it exists,
+        -: 1397:        otherwise returns @ref end().
+        -: 1398:
+        -: 1399:        @par Complexity
+        -: 1400:        Constant on average, worst case linear in @ref size().
+        -: 1401:
+        -: 1402:        @par Exception Safety
+        -: 1403:        No-throw guarantee.
+        -: 1404:
+        -: 1405:        @param key The key of the element to find.
+        -: 1406:    */
+        -: 1407:    BOOST_JSON_DECL
+        -: 1408:    const_iterator
+        -: 1409:    find(string_view key) const noexcept;
+        -: 1410:
+        -: 1411:    /** Return `true` if the key is found
+        -: 1412:
+        -: 1413:        This function returns `true` if a key with the
+        -: 1414:        specified string is found.
+        -: 1415:
+        -: 1416:        @par Effects
+        -: 1417:        @code
+        -: 1418:        return this->find(key) != this->end();
+        -: 1419:        @endcode
+        -: 1420:
+        -: 1421:        @par Complexity
+        -: 1422:        Constant on average, worst case linear in @ref size().
+        -: 1423:
+        -: 1424:        @par Exception Safety
+        -: 1425:        No-throw guarantee.
+        -: 1426:
+        -: 1427:        @param key The key of the element to find.
+        -: 1428:
+        -: 1429:        @see @ref find
+        -: 1430:    */
+        -: 1431:    BOOST_JSON_DECL
+        -: 1432:    bool
+        -: 1433:    contains(string_view key) const noexcept;
+        -: 1434:
+        -: 1435:    /** Return a pointer to the value if the key is found, or null
+        -: 1436:
+        -: 1437:        This function searches for a value with the given
+        -: 1438:        key, and returns a pointer to it if found. Otherwise
+        -: 1439:        it returns null.
+        -: 1440:
+        -: 1441:        @par Example
+        -: 1442:        @code
+        -: 1443:        if( auto p = obj.if_contains( "key" ) )
+        -: 1444:            std::cout << *p;
+        -: 1445:        @endcode
+        -: 1446:
+        -: 1447:        @par Complexity
+        -: 1448:        Constant on average, worst case linear in @ref size().
+        -: 1449:
+        -: 1450:        @par Exception Safety
+        -: 1451:        No-throw guarantee.
+        -: 1452:
+        -: 1453:        @param key The key of the element to find.
+        -: 1454:
+        -: 1455:        @see @ref find
+        -: 1456:    */
+        -: 1457:    BOOST_JSON_DECL
+        -: 1458:    value const*
+        -: 1459:    if_contains(string_view key) const noexcept;
+        -: 1460:
+        -: 1461:    /** Return a pointer to the value if the key is found, or null
+        -: 1462:
+        -: 1463:        This function searches for a value with the given
+        -: 1464:        key, and returns a pointer to it if found. Otherwise
+        -: 1465:        it returns null.
+        -: 1466:
+        -: 1467:        @par Example
+        -: 1468:        @code
+        -: 1469:        if( auto p = obj.if_contains( "key" ) )
+        -: 1470:            std::cout << *p;
+        -: 1471:        @endcode
+        -: 1472:
+        -: 1473:        @par Complexity
+        -: 1474:        Constant on average, worst case linear in @ref size().
+        -: 1475:
+        -: 1476:        @par Exception Safety
+        -: 1477:        No-throw guarantee.
+        -: 1478:
+        -: 1479:        @param key The key of the element to find.
+        -: 1480:
+        -: 1481:        @see @ref find
+        -: 1482:    */
+        -: 1483:    BOOST_JSON_DECL
+        -: 1484:    value*
+        -: 1485:    if_contains(string_view key) noexcept;
+        -: 1486:
+        -: 1487:    /** Return `true` if two objects are equal.
+        -: 1488:
+        -: 1489:        Objects are equal when their sizes are the same,
+        -: 1490:        and when for each key in `lhs` there is a matching
+        -: 1491:        key in `rhs` with the same value.
+        -: 1492:
+        -: 1493:        @par Complexity
+        -: 1494:        Constant, or linear (worst case quadratic) in `lhs.size()`.
+        -: 1495:
+        -: 1496:        @par Exception Safety
+        -: 1497:        No-throw guarantee.
+        -: 1498:    */
+        -: 1499:    // inline friend speeds up overload resolution
+        -: 1500:    friend
+        -: 1501:    bool
+        -: 1502:    operator==(
+        -: 1503:        object const& lhs,
+        -: 1504:        object const& rhs) noexcept
+        -: 1505:    {
+        -: 1506:        return lhs.equal(rhs);
+        -: 1507:    }
+        -: 1508:
+        -: 1509:    /** Return `true` if two objects are not equal.
+        -: 1510:
+        -: 1511:        Objects are equal when their sizes are the same,
+        -: 1512:        and when for each key in `lhs` there is a matching
+        -: 1513:        key in `rhs` with the same value.
+        -: 1514:
+        -: 1515:        @par Complexity
+        -: 1516:        Constant, or linear (worst case quadratic) in `lhs.size()`.
+        -: 1517:
+        -: 1518:        @par Exception Safety
+        -: 1519:        No-throw guarantee.
+        -: 1520:    */
+        -: 1521:    // inline friend speeds up overload resolution
+        -: 1522:    friend
+        -: 1523:    bool
+        -: 1524:    operator!=(
+        -: 1525:        object const& lhs,
+        -: 1526:        object const& rhs) noexcept
+        -: 1527:    {
+        -: 1528:        return ! (lhs == rhs);
+        -: 1529:    }
+        -: 1530:
+        -: 1531:    /** Serialize @ref object to an output stream.
+        -: 1532:
+        -: 1533:        This function serializes an `object` as JSON into the output stream.
+        -: 1534:
+        -: 1535:        @return Reference to `os`.
+        -: 1536:
+        -: 1537:        @par Complexity
+        -: 1538:        Constant or linear in the size of `obj`.
+        -: 1539:
+        -: 1540:        @par Exception Safety
+        -: 1541:        Strong guarantee.
+        -: 1542:        Calls to `memory_resource::allocate` may throw.
+        -: 1543:
+        -: 1544:        @param os The output stream to serialize to.
+        -: 1545:
+        -: 1546:        @param obj The value to serialize.
+        -: 1547:    */
+        -: 1548:    BOOST_JSON_DECL
+        -: 1549:    friend
+        -: 1550:    std::ostream&
+        -: 1551:    operator<<(
+        -: 1552:        std::ostream& os,
+        -: 1553:        object const& obj);
+        -: 1554:private:
+        -: 1555:#ifndef BOOST_JSON_DOCS
+        -: 1556:    // VFALCO friending a detail function makes it public
+        -: 1557:    template<class CharRange>
+        -: 1558:    friend
+        -: 1559:    std::pair<key_value_pair*, std::size_t>
+        -: 1560:    detail::find_in_object(
+        -: 1561:        object const& obj,
+        -: 1562:        CharRange key) noexcept;
+        -: 1563:#endif
+        -: 1564:
+        -: 1565:    template<class InputIt>
+        -: 1566:    void
+        -: 1567:    construct(
+        -: 1568:        InputIt first,
+        -: 1569:        InputIt last,
+        -: 1570:        std::size_t min_capacity,
+        -: 1571:        std::input_iterator_tag);
+        -: 1572:
+        -: 1573:    template<class InputIt>
+        -: 1574:    void
+        -: 1575:    construct(
+        -: 1576:        InputIt first,
+        -: 1577:        InputIt last,
+        -: 1578:        std::size_t min_capacity,
+        -: 1579:        std::forward_iterator_tag);
+        -: 1580:
+        -: 1581:    template<class InputIt>
+        -: 1582:    void
+        -: 1583:    insert(
+        -: 1584:        InputIt first,
+        -: 1585:        InputIt last,
+        -: 1586:        std::input_iterator_tag);
+        -: 1587:
+        -: 1588:    template<class InputIt>
+        -: 1589:    void
+        -: 1590:    insert(
+        -: 1591:        InputIt first,
+        -: 1592:        InputIt last,
+        -: 1593:        std::forward_iterator_tag);
+        -: 1594:
+        -: 1595:    template< class... Args >
+        -: 1596:    std::pair<iterator, bool>
+        -: 1597:    emplace_impl(string_view key, Args&& ... args );
+        -: 1598:
+        -: 1599:    BOOST_JSON_DECL
+        -: 1600:    key_value_pair*
+        -: 1601:    insert_impl(
+        -: 1602:        pilfered<key_value_pair> p,
+        -: 1603:        std::size_t hash);
+        -: 1604:
+        -: 1605:    BOOST_JSON_DECL
+        -: 1606:    table*
+        -: 1607:    reserve_impl(std::size_t new_capacity);
+        -: 1608:
+        -: 1609:    BOOST_JSON_DECL
+        -: 1610:    bool
+        -: 1611:    equal(object const& other) const noexcept;
+        -: 1612:
+        -: 1613:    inline
+        -: 1614:    std::size_t
+        -: 1615:    growth(
+        -: 1616:        std::size_t new_size) const;
+        -: 1617:
+        -: 1618:    inline
+        -: 1619:    void
+        -: 1620:    remove(
+        -: 1621:        index_t& head,
+        -: 1622:        key_value_pair& p) noexcept;
+        -: 1623:
+        -: 1624:    inline
+        -: 1625:    void
+        -: 1626:    destroy() noexcept;
+        -: 1627:
+        -: 1628:    inline
+        -: 1629:    void
+        -: 1630:    destroy(
+        -: 1631:        key_value_pair* first,
+        -: 1632:        key_value_pair* last) noexcept;
+        -: 1633:
+        -: 1634:    template<class FS, class FB>
+        -: 1635:    auto
+        -: 1636:    do_erase(
+        -: 1637:        const_iterator pos,
+        -: 1638:        FS small_reloc,
+        -: 1639:        FB big_reloc) noexcept
+        -: 1640:        -> iterator;
+        -: 1641:
+        -: 1642:    inline
+        -: 1643:    void
+        -: 1644:    reindex_relocate(
+        -: 1645:        key_value_pair* src,
+        -: 1646:        key_value_pair* dst) noexcept;
+        -: 1647:};
+        -: 1648:
+        -: 1649:} // namespace json
+        -: 1650:} // namespace boost
+        -: 1651:
+        -: 1652:#ifndef BOOST_JSON_DOCS
+        -: 1653:// boost::hash trait
+        -: 1654:namespace boost
+        -: 1655:{
+        -: 1656:namespace container_hash
+        -: 1657:{
+        -: 1658:
+        -: 1659:template< class T > struct is_unordered_range;
+        -: 1660:
+        -: 1661:template<>
+        -: 1662:struct is_unordered_range< json::object >
+        -: 1663:    : std::true_type
+        -: 1664:{};
+        -: 1665:
+        -: 1666:} // namespace container_hash
+        -: 1667:} // namespace boost
+        -: 1668:
+        -: 1669:// std::hash specialization
+        -: 1670:namespace std {
+        -: 1671:template <>
+        -: 1672:struct hash< ::boost::json::object > {
+        -: 1673:    BOOST_JSON_DECL
+        -: 1674:    std::size_t
+        -: 1675:    operator()(::boost::json::object const& jo) const noexcept;
+        -: 1676:};
+        -: 1677:} // std
+        -: 1678:#endif
+        -: 1679:
+        -: 1680:
+        -: 1681:// Must be included here for this file to stand alone
+        -: 1682:#include <boost/json/value.hpp>
+        -: 1683:
+        -: 1684:// includes are at the bottom of <boost/json/value.hpp>
+        -: 1685:
+        -: 1686:#endif

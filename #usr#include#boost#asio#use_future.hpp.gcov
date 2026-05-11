@@ -1,0 +1,169 @@
+        -:    0:Source:/usr/include/boost/asio/use_future.hpp
+        -:    1://
+        -:    2:// use_future.hpp
+        -:    3:// ~~~~~~~~~~~~~~
+        -:    4://
+        -:    5:// Copyright (c) 2003-2023 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+        -:    6://
+        -:    7:// Distributed under the Boost Software License, Version 1.0. (See accompanying
+        -:    8:// file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+        -:    9://
+        -:   10:
+        -:   11:#ifndef BOOST_ASIO_USE_FUTURE_HPP
+        -:   12:#define BOOST_ASIO_USE_FUTURE_HPP
+        -:   13:
+        -:   14:#if defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   15:# pragma once
+        -:   16:#endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   17:
+        -:   18:#include <boost/asio/detail/config.hpp>
+        -:   19:#include <boost/asio/detail/future.hpp>
+        -:   20:
+        -:   21:#if defined(BOOST_ASIO_HAS_STD_FUTURE_CLASS) \
+        -:   22:  || defined(GENERATING_DOCUMENTATION)
+        -:   23:
+        -:   24:#include <memory>
+        -:   25:#include <boost/asio/detail/type_traits.hpp>
+        -:   26:
+        -:   27:#include <boost/asio/detail/push_options.hpp>
+        -:   28:
+        -:   29:namespace boost {
+        -:   30:namespace asio {
+        -:   31:namespace detail {
+        -:   32:
+        -:   33:template <typename Function, typename Allocator>
+        -:   34:class packaged_token;
+        -:   35:
+        -:   36:template <typename Function, typename Allocator, typename Result>
+        -:   37:class packaged_handler;
+        -:   38:
+        -:   39:} // namespace detail
+        -:   40:
+        -:   41:/// A @ref completion_token type that causes an asynchronous operation to return
+        -:   42:/// a future.
+        -:   43:/**
+        -:   44: * The use_future_t class is a completion token type that is used to indicate
+        -:   45: * that an asynchronous operation should return a std::future object. A
+        -:   46: * use_future_t object may be passed as a completion token to an asynchronous
+        -:   47: * operation, typically using the special value @c boost::asio::use_future. For
+        -:   48: * example:
+        -:   49: *
+        -:   50: * @code std::future<std::size_t> my_future
+        -:   51: *   = my_socket.async_read_some(my_buffer, boost::asio::use_future); @endcode
+        -:   52: *
+        -:   53: * The initiating function (async_read_some in the above example) returns a
+        -:   54: * future that will receive the result of the operation. If the operation
+        -:   55: * completes with an error_code indicating failure, it is converted into a
+        -:   56: * system_error and passed back to the caller via the future.
+        -:   57: */
+        -:   58:template <typename Allocator = std::allocator<void> >
+        -:   59:class use_future_t
+        -:   60:{
+        -:   61:public:
+        -:   62:  /// The allocator type. The allocator is used when constructing the
+        -:   63:  /// @c std::promise object for a given asynchronous operation.
+        -:   64:  typedef Allocator allocator_type;
+        -:   65:
+        -:   66:  /// Construct using default-constructed allocator.
+        -:   67:  BOOST_ASIO_CONSTEXPR use_future_t()
+        -:   68:  {
+        -:   69:  }
+        -:   70:
+        -:   71:  /// Construct using specified allocator.
+        -:   72:  explicit use_future_t(const Allocator& allocator)
+        -:   73:    : allocator_(allocator)
+        -:   74:  {
+        -:   75:  }
+        -:   76:
+        -:   77:#if !defined(BOOST_ASIO_NO_DEPRECATED)
+        -:   78:  /// (Deprecated: Use rebind().) Specify an alternate allocator.
+        -:   79:  template <typename OtherAllocator>
+        -:   80:  use_future_t<OtherAllocator> operator[](const OtherAllocator& allocator) const
+        -:   81:  {
+        -:   82:    return use_future_t<OtherAllocator>(allocator);
+        -:   83:  }
+        -:   84:#endif // !defined(BOOST_ASIO_NO_DEPRECATED)
+        -:   85:
+        -:   86:  /// Specify an alternate allocator.
+        -:   87:  template <typename OtherAllocator>
+        -:   88:  use_future_t<OtherAllocator> rebind(const OtherAllocator& allocator) const
+        -:   89:  {
+        -:   90:    return use_future_t<OtherAllocator>(allocator);
+        -:   91:  }
+        -:   92:
+        -:   93:  /// Obtain allocator.
+function _ZNK5boost4asio12use_future_tISaIvEE13get_allocatorEv called 16 returned 100% blocks executed 100%
+       16:   94:  allocator_type get_allocator() const
+        -:   95:  {
+       16:   96:    return allocator_;
+call    0 returned 100%
+        -:   97:  }
+        -:   98:
+        -:   99:  /// Wrap a function object in a packaged task.
+        -:  100:  /**
+        -:  101:   * The @c package function is used to adapt a function object as a packaged
+        -:  102:   * task. When this adapter is passed as a completion token to an asynchronous
+        -:  103:   * operation, the result of the function object is retuned via a std::future.
+        -:  104:   *
+        -:  105:   * @par Example
+        -:  106:   *
+        -:  107:   * @code std::future<std::size_t> fut =
+        -:  108:   *   my_socket.async_read_some(buffer,
+        -:  109:   *     use_future([](boost::system::error_code ec, std::size_t n)
+        -:  110:   *       {
+        -:  111:   *         return ec ? 0 : n;
+        -:  112:   *       }));
+        -:  113:   * ...
+        -:  114:   * std::size_t n = fut.get(); @endcode
+        -:  115:   */
+        -:  116:  template <typename Function>
+        -:  117:#if defined(GENERATING_DOCUMENTATION)
+        -:  118:  unspecified
+        -:  119:#else // defined(GENERATING_DOCUMENTATION)
+        -:  120:  detail::packaged_token<typename decay<Function>::type, Allocator>
+        -:  121:#endif // defined(GENERATING_DOCUMENTATION)
+        -:  122:  operator()(BOOST_ASIO_MOVE_ARG(Function) f) const;
+        -:  123:
+        -:  124:private:
+        -:  125:  // Helper type to ensure that use_future can be constexpr default-constructed
+        -:  126:  // even when std::allocator<void> can't be.
+        -:  127:  struct std_allocator_void
+        -:  128:  {
+        -:  129:    BOOST_ASIO_CONSTEXPR std_allocator_void()
+        -:  130:    {
+        -:  131:    }
+        -:  132:
+function _ZNK5boost4asio12use_future_tISaIvEE18std_allocator_voidcvS2_Ev called 16 returned 100% blocks executed 100%
+       16:  133:    operator std::allocator<void>() const
+        -:  134:    {
+       16:  135:      return std::allocator<void>();
+        -:  136:    }
+        -:  137:  };
+        -:  138:
+        -:  139:  typename conditional<
+        -:  140:    is_same<std::allocator<void>, Allocator>::value,
+        -:  141:    std_allocator_void, Allocator>::type allocator_;
+        -:  142:};
+        -:  143:
+        -:  144:/// A @ref completion_token object that causes an asynchronous operation to
+        -:  145:/// return a future.
+        -:  146:/**
+        -:  147: * See the documentation for boost::asio::use_future_t for a usage example.
+        -:  148: */
+        -:  149:#if defined(BOOST_ASIO_HAS_CONSTEXPR) || defined(GENERATING_DOCUMENTATION)
+        -:  150:constexpr use_future_t<> use_future;
+        -:  151:#elif defined(BOOST_ASIO_MSVC)
+        -:  152:__declspec(selectany) use_future_t<> use_future;
+        -:  153:#endif
+        -:  154:
+        -:  155:} // namespace asio
+        -:  156:} // namespace boost
+        -:  157:
+        -:  158:#include <boost/asio/detail/pop_options.hpp>
+        -:  159:
+        -:  160:#include <boost/asio/impl/use_future.hpp>
+        -:  161:
+        -:  162:#endif // defined(BOOST_ASIO_HAS_STD_FUTURE_CLASS)
+        -:  163:       //   || defined(GENERATING_DOCUMENTATION)
+        -:  164:
+        -:  165:#endif // BOOST_ASIO_USE_FUTURE_HPP

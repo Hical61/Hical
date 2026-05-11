@@ -1,0 +1,593 @@
+        -:    0:Source:/home/runner/work/Hical/Hical/examples/pmr_poc.cpp
+        -:    1:#include "core/MemoryPool.h"
+        -:    2:#include "core/PmrBuffer.h"
+        -:    3:#include <iostream>
+        -:    4:#include <chrono>
+        -:    5:#include <vector>
+        -:    6:#include <thread>
+        -:    7:#include <memory_resource>
+        -:    8:
+        -:    9:using namespace hical;
+        -:   10:
+        -:   11:/**
+        -:   12: * @brief pmr 内存池性能验证 PoC
+        -:   13: * 场景一：复用缓冲区（模拟 HTTP 请求反复读写同一个 buffer）
+        -:   14: * 场景二：单调池批量分配（模拟一次请求生命周期内的多次分配）
+        -:   15: * 场景三：PmrBuffer 功能验证
+        -:   16: * 场景四：多线程并发
+        -:   17: */
+        -:   18:
+        -:   19:// 防止编译器优化掉结果
+        -:   20:volatile char gSink = 0;
+        -:   21:
+        -:   22:// 场景一：复用缓冲区 — 写入/读出循环
+function _Z21benchmarkReuseDefaulti called 0 returned 0% blocks executed 0%
+    #####:   23:void benchmarkReuseDefault(int iterations)
+        -:   24:{
+    #####:   25:	auto start = std::chrono::high_resolution_clock::now();
+call    0 never executed
+        -:   26:
+    #####:   27:	std::vector<char> buffer;
+    #####:   28:	buffer.reserve(4096);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:   29:	for (int i = 0; i < iterations; ++i)
+branch  0 never executed
+branch  1 never executed (fallthrough)
+        -:   30:	{
+    #####:   31:		buffer.resize(2048);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:   32:		buffer[0] = static_cast<char>(i);
+call    0 never executed
+    #####:   33:		gSink = buffer[0];
+call    0 never executed
+    #####:   34:		buffer.clear();
+call    0 never executed
+        -:   35:	}
+        -:   36:
+    #####:   37:	auto end = std::chrono::high_resolution_clock::now();
+call    0 never executed
+    #####:   38:	auto us = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+call    6 never executed
+    #####:   39:	std::cout << "  std::vector:     " << us << " us\n";
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed (throw)
+    #####:   40:}
+call    0 never executed
+call    1 never executed
+        -:   41:
+function _Z28benchmarkReusePmrThreadLocali called 0 returned 0% blocks executed 0%
+    #####:   42:void benchmarkReusePmrThreadLocal(int iterations)
+        -:   43:{
+    #####:   44:	auto allocator = MemoryPool::instance().threadLocalAllocator();
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+    #####:   45:	auto start = std::chrono::high_resolution_clock::now();
+call    0 never executed
+        -:   46:
+    #####:   47:	std::pmr::vector<char> buffer(allocator);
+call    0 never executed
+call    1 never executed
+    #####:   48:	buffer.reserve(4096);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:   49:	for (int i = 0; i < iterations; ++i)
+branch  0 never executed
+branch  1 never executed (fallthrough)
+        -:   50:	{
+    #####:   51:		buffer.resize(2048);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:   52:		buffer[0] = static_cast<char>(i);
+call    0 never executed
+    #####:   53:		gSink = buffer[0];
+call    0 never executed
+    #####:   54:		buffer.clear();
+call    0 never executed
+        -:   55:	}
+        -:   56:
+    #####:   57:	auto end = std::chrono::high_resolution_clock::now();
+call    0 never executed
+    #####:   58:	auto us = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+call    6 never executed
+    #####:   59:	std::cout << "  pmr(thread):     " << us << " us\n";
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed (throw)
+    #####:   60:}
+call    0 never executed
+call    1 never executed
+        -:   61:
+        -:   62:// 场景二：单调池批量分配 — 模拟一次 HTTP 请求中分配多个对象后整体释放
+function _Z21benchmarkBatchDefaulti called 0 returned 0% blocks executed 0%
+    #####:   63:void benchmarkBatchDefault(int iterations)
+        -:   64:{
+    #####:   65:	auto start = std::chrono::high_resolution_clock::now();
+call    0 never executed
+        -:   66:
+    #####:   67:	for (int i = 0; i < iterations; ++i)
+branch  0 never executed
+branch  1 never executed (fallthrough)
+        -:   68:	{
+        -:   69:		// 模拟一次请求：分配 header + body + json
+    #####:   70:		std::vector<char> header(128);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:   71:		std::vector<char> body(2048);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:   72:		std::vector<char> json(512);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:   73:		header[0] = 'H';
+call    0 never executed
+    #####:   74:		body[0] = 'B';
+call    0 never executed
+    #####:   75:		json[0] = 'J';
+call    0 never executed
+    #####:   76:		gSink = header[0] + body[0] + json[0];
+call    0 never executed
+call    1 never executed
+call    2 never executed
+        -:   77:		// 请求结束，三个 vector 析构各自释放
+    #####:   78:	}
+call    0 never executed
+call    1 never executed
+call    2 never executed
+call    3 never executed
+call    4 never executed
+        -:   79:
+    #####:   80:	auto end = std::chrono::high_resolution_clock::now();
+call    0 never executed
+    #####:   81:	auto us = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+call    6 never executed
+    #####:   82:	std::cout << "  std::allocator:  " << us << " us\n";
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed (throw)
+    #####:   83:}
+        -:   84:
+function _Z23benchmarkBatchMonotonici called 0 returned 0% blocks executed 0%
+    #####:   85:void benchmarkBatchMonotonic(int iterations)
+        -:   86:{
+    #####:   87:	auto start = std::chrono::high_resolution_clock::now();
+call    0 never executed
+        -:   88:
+    #####:   89:	for (int i = 0; i < iterations; ++i)
+branch  0 never executed
+branch  1 never executed (fallthrough)
+        -:   90:	{
+        -:   91:		// 单调池：一次请求共享一块内存，结束后整体释放
+    #####:   92:		auto pool = MemoryPool::instance().createRequestPool(4096);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+    #####:   93:		std::pmr::polymorphic_allocator<char> alloc(pool.get());
+call    0 never executed
+call    1 never executed
+        -:   94:
+    #####:   95:		std::pmr::vector<char> header(128, alloc);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:   96:		std::pmr::vector<char> body(2048, alloc);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:   97:		std::pmr::vector<char> json(512, alloc);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:   98:		header[0] = 'H';
+call    0 never executed
+    #####:   99:		body[0] = 'B';
+call    0 never executed
+    #####:  100:		json[0] = 'J';
+call    0 never executed
+    #####:  101:		gSink = header[0] + body[0] + json[0];
+call    0 never executed
+call    1 never executed
+call    2 never executed
+        -:  102:		// pool 析构 -> 整块内存一次性释放，无需逐个 free
+    #####:  103:	}
+call    0 never executed
+call    1 never executed
+call    2 never executed
+call    3 never executed
+call    4 never executed
+call    5 never executed
+call    6 never executed
+        -:  104:
+    #####:  105:	auto end = std::chrono::high_resolution_clock::now();
+call    0 never executed
+    #####:  106:	auto us = std::chrono::duration_cast<std::chrono::microseconds>(end - start).count();
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+call    6 never executed
+    #####:  107:	std::cout << "  pmr(monotonic):  " << us << " us\n";
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed (throw)
+    #####:  108:}
+        -:  109:
+        -:  110:// 场景三：PmrBuffer 功能测试
+function _Z13testPmrBufferv called 0 returned 0% blocks executed 0%
+    #####:  111:void testPmrBuffer()
+        -:  112:{
+    #####:  113:	std::cout << "\n[PmrBuffer]\n";
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:  114:
+    #####:  115:	auto allocator = MemoryPool::instance().threadLocalAllocator();
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+    #####:  116:	PmrBuffer buffer(allocator);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:  117:
+    #####:  118:	buffer.append("Hello, ");
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+call    6 never executed
+call    7 never executed
+    #####:  119:	buffer.append("pmr world!");
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+call    6 never executed
+call    7 never executed
+    #####:  120:	std::cout << "  write: " << buffer.readableBytes() << " bytes -> \""
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+call    4 never executed
+branch  5 never executed (fallthrough)
+branch  6 never executed (throw)
+    #####:  121:			  << std::string(buffer.peek(), buffer.readableBytes()) << "\"\n";
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+call    4 never executed
+branch  5 never executed (fallthrough)
+branch  6 never executed (throw)
+call    7 never executed
+branch  8 never executed (fallthrough)
+branch  9 never executed (throw)
+call   10 never executed
+branch 11 never executed (fallthrough)
+branch 12 never executed (throw)
+call   13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed (throw)
+call   16 never executed
+call   17 never executed
+        -:  122:
+    #####:  123:	auto data = buffer.read(7);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  124:	std::cout << "  read 7: \"" << data << "\", remaining: " << buffer.readableBytes() << " bytes\n";
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed (throw)
+call    9 never executed
+call   10 never executed
+branch 11 never executed (fallthrough)
+branch 12 never executed (throw)
+call   13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed (throw)
+        -:  125:
+    #####:  126:	buffer.append("\r\nNext line");
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+call    6 never executed
+call    7 never executed
+    #####:  127:	auto crlf = buffer.findCRLF();
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  128:	std::cout << "  findCRLF: " << (crlf ? "found" : "not found") << " at offset " << (crlf ? crlf - buffer.peek() : -1)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+branch  3 never executed (fallthrough)
+branch  4 never executed
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed (throw)
+call    8 never executed
+branch  9 never executed (fallthrough)
+branch 10 never executed (throw)
+branch 11 never executed (fallthrough)
+branch 12 never executed
+call   13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed (throw)
+call   16 never executed
+branch 17 never executed (fallthrough)
+branch 18 never executed (throw)
+    #####:  129:			  << "\n";
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  130:}
+call    0 never executed
+call    1 never executed
+call    2 never executed
+call    3 never executed
+        -:  131:
+        -:  132:// 场景四：多线程并发
+function _Z15testMultiThreadv called 0 returned 0% blocks executed 0%
+    #####:  133:void testMultiThread()
+        -:  134:{
+    #####:  135:	std::cout << "\n[MultiThread]\n";
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:  136:
+    #####:  137:	const int numThreads = 4;
+    #####:  138:	const int iterations = 50000;
+        -:  139:
+    #####:  140:	auto start = std::chrono::high_resolution_clock::now();
+call    0 never executed
+        -:  141:
+    #####:  142:	std::vector<std::thread> threads;
+    #####:  143:	for (int t = 0; t < numThreads; ++t)
+branch  0 never executed
+branch  1 never executed (fallthrough)
+        -:  144:	{
+    #####:  145:		threads.emplace_back(
+function _ZZ15testMultiThreadvENKUlvE_clEv called 0 returned 0% blocks executed 0%
+    #####:  146:			[t, iterations]()
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:  147:			{
+    #####:  148:				auto alloc = MemoryPool::instance().threadLocalAllocator();
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+    #####:  149:				PmrBuffer buf(alloc);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  150:				for (int i = 0; i < iterations; ++i)
+branch  0 never executed
+branch  1 never executed (fallthrough)
+        -:  151:				{
+    #####:  152:					buf.append("Thread " + std::to_string(t) + " msg");
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+branch  5 never executed (fallthrough)
+branch  6 never executed (throw)
+call    7 never executed
+branch  8 never executed (fallthrough)
+branch  9 never executed (throw)
+call   10 never executed
+call   11 never executed
+call   12 never executed
+call   13 never executed
+call   14 never executed
+call   15 never executed
+    #####:  153:					buf.retrieveAll();
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:  154:				}
+    #####:  155:			});
+call    0 never executed
+call    1 never executed
+        -:  156:	}
+        -:  157:
+    #####:  158:	for (auto& th : threads)
+call    0 never executed
+call    1 never executed
+call    2 never executed
+call    3 never executed
+call    4 never executed
+branch  5 never executed
+branch  6 never executed (fallthrough)
+        -:  159:	{
+    #####:  160:		th.join();
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:  161:	}
+        -:  162:
+    #####:  163:	auto end = std::chrono::high_resolution_clock::now();
+call    0 never executed
+    #####:  164:	auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+call    6 never executed
+        -:  165:
+    #####:  166:	auto stats = MemoryPool::instance().getStats();
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+    #####:  167:	std::cout << "  " << numThreads << " threads x " << iterations << " ops\n";
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed (throw)
+call    9 never executed
+branch 10 never executed (fallthrough)
+branch 11 never executed (throw)
+call   12 never executed
+branch 13 never executed (fallthrough)
+branch 14 never executed (throw)
+    #####:  168:	std::cout << "  time: " << ms << " ms\n";
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed (throw)
+    #####:  169:	std::cout << "  total allocations: " << stats.totalAllocations << "\n";
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed (throw)
+    #####:  170:	std::cout << "  peak bytes: " << stats.peakBytesAllocated << "\n";
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed (throw)
+    #####:  171:}
+call    0 never executed
+call    1 never executed
+        -:  172:
+function main called 0 returned 0% blocks executed 0%
+    #####:  173:int main()
+        -:  174:{
+    #####:  175:	const int N = 1000000;
+        -:  176:
+    #####:  177:	std::cout << "========== hical pmr PoC ==========\n\n";
+call    0 never executed
+        -:  178:
+    #####:  179:	std::cout << "[Reuse buffer] " << N << " iterations:\n";
+call    0 never executed
+call    1 never executed
+call    2 never executed
+    #####:  180:	benchmarkReuseDefault(N);
+call    0 never executed
+    #####:  181:	benchmarkReusePmrThreadLocal(N);
+call    0 never executed
+        -:  182:
+    #####:  183:	std::cout << "\n[Batch alloc per-request] " << N / 10 << " iterations:\n";
+call    0 never executed
+call    1 never executed
+call    2 never executed
+    #####:  184:	benchmarkBatchDefault(N / 10);
+call    0 never executed
+    #####:  185:	benchmarkBatchMonotonic(N / 10);
+call    0 never executed
+        -:  186:
+    #####:  187:	testPmrBuffer();
+call    0 never executed
+    #####:  188:	testMultiThread();
+call    0 never executed
+        -:  189:
+    #####:  190:	std::cout << "\n========== PoC done ==========\n";
+call    0 never executed
+    #####:  191:	return 0;
+        -:  192:}

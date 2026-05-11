@@ -1,0 +1,1274 @@
+        -:    0:Source:/home/runner/work/Hical/Hical/tests/test_websocket.cpp
+        -:    1:#include "TestHttpClient.h"
+        -:    2:#include "core/HttpServer.h"
+        -:    3:#include "core/WebSocket.h"
+        -:    4:#include <gtest/gtest.h>
+        -:    5:#include <boost/asio.hpp>
+        -:    6:#include <atomic>
+        -:    7:#include <chrono>
+        -:    8:#include <string>
+        -:    9:#include <thread>
+        -:   10:
+        -:   11:using namespace hical;
+        -:   12:using boost::asio::ip::tcp;
+        -:   13:using hical::test::TestWsClient;
+        -:   14:
+        -:   15:// 辅助：启动服务器并等待就绪，返回实际端口
+function _ZL20startWsServerAndWaitRN5hical10HttpServerERSt6thread called 5 returned 100% blocks executed 53%
+        5:   16:static uint16_t startWsServerAndWait(HttpServer& server, std::thread& serverThread)
+        -:   17:{
+        5:   18:	serverThread = std::thread(
+call    0 returned 100%
+call    1 never executed
+function _ZZL20startWsServerAndWaitRN5hical10HttpServerERSt6threadENKUlvE_clEv called 5 returned 100% blocks executed 100%
+    #####:   19:		[&server]()
+        -:   20:		{
+        5:   21:			server.start();
+call    0 returned 100%
+        5:   22:		});
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+        -:   23:
+        5:   24:	uint16_t port = 0;
+       10:   25:	for (int i = 0; i < 50; ++i)
+branch  0 taken 100%
+branch  1 taken 0% (fallthrough)
+        -:   26:	{
+       10:   27:		port = server.port();
+call    0 returned 100%
+       10:   28:		if (port != 0)
+branch  0 taken 50% (fallthrough)
+branch  1 taken 50%
+        -:   29:		{
+        5:   30:			break;
+        -:   31:		}
+        5:   32:		std::this_thread::sleep_for(std::chrono::milliseconds(20));
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 never executed
+        -:   33:	}
+        -:   34:
+        5:   35:	for (int i = 0; i < 50; ++i)
+branch  0 taken 100%
+branch  1 taken 0% (fallthrough)
+        -:   36:	{
+        -:   37:		try
+        -:   38:		{
+        5:   39:			boost::asio::io_context io;
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        5:   40:			tcp::socket sock(io);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        5:   41:			sock.connect(tcp::endpoint(boost::asio::ip::make_address("127.0.0.1"), port));
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+        5:   42:			sock.close();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        5:   43:			return port;
+        5:   44:		}
+call    0 returned 100%
+call    1 returned 100%
+call    2 never executed
+call    3 never executed
+    =====:   45:		catch (...)
+call    0 never executed
+        -:   46:		{
+    =====:   47:			std::this_thread::sleep_for(std::chrono::milliseconds(20));
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+    =====:   48:		}
+call    0 never executed
+call    1 never executed
+        -:   49:	}
+    #####:   50:	return port;
+        -:   51:}
+        -:   52:
+        -:   53:// 测试 WebSocket Echo
+        4:   54:TEST(WebSocketTest, EchoMessage)
+        -:   55:{
+        1:   56:	HttpServer server(0);
+        -:   57:
+        4:   58:	server.router().ws("/ws/echo",
+        2:   59:					   [](const std::string& msg, WebSocketSession& session) -> Awaitable<void>
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:   60:					   {
+        -:   61:						   co_await session.send("Echo: " + msg);
+        2:   62:					   });
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed
+call    8 never executed
+branch  9 never executed (fallthrough)
+branch 10 never executed
+call   11 never executed
+call   12 never executed
+branch 13 never executed (fallthrough)
+branch 14 never executed (throw)
+call   15 never executed
+call   16 never executed
+        -:   63:
+        1:   64:	std::thread serverThread;
+        1:   65:	uint16_t port = startWsServerAndWait(server, serverThread);
+        -:   66:
+        1:   67:	boost::asio::io_context ioCtx;
+        1:   68:	TestWsClient wsClient(ioCtx);
+        4:   69:	wsClient.connect("127.0.0.1", port, "/ws/echo");
+        -:   70:
+        1:   71:	wsClient.write("Hello WS");
+        1:   72:	std::string reply = wsClient.read();
+       1*:   73:	EXPECT_EQ(reply, "Echo: Hello WS");
+        -:   74:
+        1:   75:	wsClient.close();
+        1:   76:	server.stop();
+        1:   77:	serverThread.join();
+        1:   78:}
+------------------
+_ZN30WebSocketTest_EchoMessage_TestC2Ev:
+function _ZN30WebSocketTest_EchoMessage_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:   54:TEST(WebSocketTest, EchoMessage)
+call    0 returned 100%
+------------------
+_ZN30WebSocketTest_EchoMessage_TestD0Ev:
+function _ZN30WebSocketTest_EchoMessage_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:   54:TEST(WebSocketTest, EchoMessage)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN30WebSocketTest_EchoMessage_TestD2Ev:
+function _ZN30WebSocketTest_EchoMessage_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:   54:TEST(WebSocketTest, EchoMessage)
+call    0 returned 100%
+------------------
+_ZN30WebSocketTest_EchoMessage_Test8TestBodyEv:
+function _ZN30WebSocketTest_EchoMessage_Test8TestBodyEv called 1 returned 100% blocks executed 45%
+        1:   54:TEST(WebSocketTest, EchoMessage)
+        -:   55:{
+        1:   56:	HttpServer server(0);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:   57:
+        4:   58:	server.router().ws("/ws/echo",
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+call    5 returned 100%
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+call    9 returned 100%
+branch 10 taken 100% (fallthrough)
+branch 11 taken 0% (throw)
+call   12 returned 100%
+call   13 returned 100%
+call   14 returned 100%
+call   15 never executed
+call   16 never executed
+call   17 never executed
+call   18 never executed
+        1:   59:					   [](const std::string& msg, WebSocketSession& session) -> Awaitable<void>
+call    0 returned 100%
+        -:   60:					   {
+        -:   61:						   co_await session.send("Echo: " + msg);
+        -:   62:					   });
+        -:   63:
+        1:   64:	std::thread serverThread;
+call    0 returned 100%
+        1:   65:	uint16_t port = startWsServerAndWait(server, serverThread);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:   66:
+        1:   67:	boost::asio::io_context ioCtx;
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:   68:	TestWsClient wsClient(ioCtx);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        4:   69:	wsClient.connect("127.0.0.1", port, "/ws/echo");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+call    9 returned 100%
+call   10 returned 100%
+call   11 never executed
+call   12 never executed
+        -:   70:
+        1:   71:	wsClient.write("Hello WS");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+        1:   72:	std::string reply = wsClient.read();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       1*:   73:	EXPECT_EQ(reply, "Echo: Hello WS");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 0% (fallthrough)
+branch  5 taken 100%
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed (throw)
+call    9 never executed
+call   10 never executed
+branch 11 never executed (fallthrough)
+branch 12 never executed (throw)
+call   13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed (throw)
+call   16 never executed
+call   17 never executed
+call   18 returned 100%
+call   19 never executed
+call   20 never executed
+call   21 never executed
+        -:   74:
+        1:   75:	wsClient.close();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:   76:	server.stop();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:   77:	serverThread.join();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:   78:}
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+call    5 never executed
+call    6 never executed
+call    7 never executed
+call    8 never executed
+call    9 never executed
+------------------
+        -:   79:
+        -:   80:// 测试 WebSocket 连接回调
+        4:   81:TEST(WebSocketTest, ConnectCallback)
+        -:   82:{
+        1:   83:	HttpServer server(0);
+        -:   84:
+        3:   85:	server.router().ws(
+        -:   86:		"/ws/greet",
+        2:   87:		[](const std::string& msg, WebSocketSession& session) -> Awaitable<void>
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:   88:		{
+        -:   89:			co_await session.send("Got: " + msg);
+        2:   90:		},
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed
+call    8 never executed
+branch  9 never executed (fallthrough)
+branch 10 never executed
+call   11 never executed
+call   12 never executed
+branch 13 never executed (fallthrough)
+branch 14 never executed (throw)
+call   15 never executed
+call   16 never executed
+        2:   91:		[](WebSocketSession& session) -> Awaitable<void>
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:   92:		{
+        -:   93:			co_await session.send("Welcome!");
+        2:   94:		});
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed
+call    8 never executed
+branch  9 never executed (fallthrough)
+branch 10 never executed
+call   11 never executed
+call   12 never executed
+branch 13 never executed (fallthrough)
+branch 14 never executed (throw)
+call   15 never executed
+call   16 never executed
+        -:   95:
+        1:   96:	std::thread serverThread;
+        1:   97:	uint16_t port = startWsServerAndWait(server, serverThread);
+        -:   98:
+        1:   99:	boost::asio::io_context ioCtx;
+        1:  100:	TestWsClient wsClient(ioCtx);
+        3:  101:	wsClient.connect("127.0.0.1", port, "/ws/greet");
+        -:  102:
+        -:  103:	// 应先收到 Welcome 消息
+        1:  104:	std::string welcome = wsClient.read();
+       1*:  105:	EXPECT_EQ(welcome, "Welcome!");
+        -:  106:
+        -:  107:	// 发送消息并接收回复
+        1:  108:	wsClient.write("test");
+        2:  109:	std::string reply = wsClient.read();
+       1*:  110:	EXPECT_EQ(reply, "Got: test");
+        -:  111:
+        1:  112:	wsClient.close();
+        1:  113:	server.stop();
+        1:  114:	serverThread.join();
+        1:  115:}
+------------------
+_ZN34WebSocketTest_ConnectCallback_TestC2Ev:
+function _ZN34WebSocketTest_ConnectCallback_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:   81:TEST(WebSocketTest, ConnectCallback)
+call    0 returned 100%
+------------------
+_ZN34WebSocketTest_ConnectCallback_TestD0Ev:
+function _ZN34WebSocketTest_ConnectCallback_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:   81:TEST(WebSocketTest, ConnectCallback)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN34WebSocketTest_ConnectCallback_TestD2Ev:
+function _ZN34WebSocketTest_ConnectCallback_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:   81:TEST(WebSocketTest, ConnectCallback)
+call    0 returned 100%
+------------------
+_ZN34WebSocketTest_ConnectCallback_Test8TestBodyEv:
+function _ZN34WebSocketTest_ConnectCallback_Test8TestBodyEv called 1 returned 100% blocks executed 41%
+        1:   81:TEST(WebSocketTest, ConnectCallback)
+        -:   82:{
+        1:   83:	HttpServer server(0);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:   84:
+        3:   85:	server.router().ws(
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+call    5 returned 100%
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+call    9 returned 100%
+branch 10 taken 100% (fallthrough)
+branch 11 taken 0% (throw)
+call   12 returned 100%
+call   13 returned 100%
+call   14 never executed
+call   15 never executed
+call   16 never executed
+call   17 never executed
+        -:   86:		"/ws/greet",
+        1:   87:		[](const std::string& msg, WebSocketSession& session) -> Awaitable<void>
+call    0 returned 100%
+        -:   88:		{
+        -:   89:			co_await session.send("Got: " + msg);
+        -:   90:		},
+        1:   91:		[](WebSocketSession& session) -> Awaitable<void>
+call    0 returned 100%
+        -:   92:		{
+        -:   93:			co_await session.send("Welcome!");
+        -:   94:		});
+        -:   95:
+        1:   96:	std::thread serverThread;
+call    0 returned 100%
+        1:   97:	uint16_t port = startWsServerAndWait(server, serverThread);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:   98:
+        1:   99:	boost::asio::io_context ioCtx;
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  100:	TestWsClient wsClient(ioCtx);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        3:  101:	wsClient.connect("127.0.0.1", port, "/ws/greet");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+call    9 returned 100%
+call   10 returned 100%
+call   11 never executed
+call   12 never executed
+        -:  102:
+        -:  103:	// 应先收到 Welcome 消息
+        1:  104:	std::string welcome = wsClient.read();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       1*:  105:	EXPECT_EQ(welcome, "Welcome!");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 0% (fallthrough)
+branch  5 taken 100%
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed (throw)
+call    9 never executed
+call   10 never executed
+branch 11 never executed (fallthrough)
+branch 12 never executed (throw)
+call   13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed (throw)
+call   16 never executed
+call   17 never executed
+call   18 returned 100%
+call   19 never executed
+call   20 never executed
+call   21 never executed
+        -:  106:
+        -:  107:	// 发送消息并接收回复
+        1:  108:	wsClient.write("test");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+        2:  109:	std::string reply = wsClient.read();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 never executed
+       1*:  110:	EXPECT_EQ(reply, "Got: test");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 0% (fallthrough)
+branch  5 taken 100%
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed (throw)
+call    9 never executed
+call   10 never executed
+branch 11 never executed (fallthrough)
+branch 12 never executed (throw)
+call   13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed (throw)
+call   16 never executed
+call   17 never executed
+call   18 returned 100%
+call   19 never executed
+call   20 never executed
+call   21 never executed
+        -:  111:
+        1:  112:	wsClient.close();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  113:	server.stop();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  114:	serverThread.join();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  115:}
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+call    5 never executed
+call    6 never executed
+call    7 never executed
+call    8 never executed
+call    9 never executed
+------------------
+        -:  116:
+        -:  117:// 测试 WebSocket 未注册路由返回 404
+        4:  118:TEST(WebSocketTest, UnregisteredPathFallsToHttp)
+        -:  119:{
+        1:  120:	HttpServer server(0);
+        -:  121:
+        -:  122:	// 仅注册 HTTP 路由，不注册 WS 路由
+        3:  123:	server.router().get("/",
+    #####:  124:						[](const HttpRequest&) -> HttpResponse
+        -:  125:						{
+    #####:  126:							return HttpResponse::ok("http");
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+call    6 never executed
+call    7 never executed
+        -:  127:						});
+        -:  128:
+        1:  129:	std::thread serverThread;
+        1:  130:	uint16_t port = startWsServerAndWait(server, serverThread);
+        -:  131:
+        -:  132:	// 直接发 HTTP 请求验证未注册路径返回 404
+        1:  133:	boost::asio::io_context ioCtx;
+        1:  134:	tcp::socket socket(ioCtx);
+        1:  135:	socket.connect(tcp::endpoint(boost::asio::ip::make_address("127.0.0.1"), port));
+        -:  136:
+        -:  137:	std::string httpReq = "GET /ws/nonexist HTTP/1.1\r\n"
+        -:  138:						  "Host: 127.0.0.1\r\n"
+        -:  139:						  "Connection: close\r\n"
+        1:  140:						  "\r\n";
+        1:  141:	boost::asio::write(socket, boost::asio::buffer(httpReq));
+        -:  142:
+        -:  143:	char buf[1024];
+        1:  144:	auto n = socket.read_some(boost::asio::buffer(buf));
+        1:  145:	std::string response(buf, n);
+        -:  146:
+        1:  147:	auto sp = response.find(' ');
+       1*:  148:	ASSERT_NE(sp, std::string::npos);
+       1*:  149:	EXPECT_EQ(response.substr(sp + 1, 3), "404");
+        -:  150:
+        1:  151:	boost::system::error_code ec;
+        1:  152:	socket.shutdown(tcp::socket::shutdown_both, ec);
+        1:  153:	server.stop();
+        1:  154:	serverThread.join();
+        1:  155:}
+------------------
+_ZN46WebSocketTest_UnregisteredPathFallsToHttp_TestC2Ev:
+function _ZN46WebSocketTest_UnregisteredPathFallsToHttp_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:  118:TEST(WebSocketTest, UnregisteredPathFallsToHttp)
+call    0 returned 100%
+------------------
+_ZN46WebSocketTest_UnregisteredPathFallsToHttp_TestD0Ev:
+function _ZN46WebSocketTest_UnregisteredPathFallsToHttp_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:  118:TEST(WebSocketTest, UnregisteredPathFallsToHttp)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN46WebSocketTest_UnregisteredPathFallsToHttp_TestD2Ev:
+function _ZN46WebSocketTest_UnregisteredPathFallsToHttp_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:  118:TEST(WebSocketTest, UnregisteredPathFallsToHttp)
+call    0 returned 100%
+------------------
+_ZN46WebSocketTest_UnregisteredPathFallsToHttp_Test8TestBodyEv:
+function _ZN46WebSocketTest_UnregisteredPathFallsToHttp_Test8TestBodyEv called 1 returned 100% blocks executed 48%
+        1:  118:TEST(WebSocketTest, UnregisteredPathFallsToHttp)
+        -:  119:{
+        1:  120:	HttpServer server(0);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  121:
+        -:  122:	// 仅注册 HTTP 路由，不注册 WS 路由
+        3:  123:	server.router().get("/",
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+call    7 returned 100%
+branch  8 taken 100% (fallthrough)
+branch  9 taken 0% (throw)
+call   10 returned 100%
+call   11 returned 100%
+call   12 never executed
+call   13 never executed
+    #####:  124:						[](const HttpRequest&) -> HttpResponse
+        -:  125:						{
+        -:  126:							return HttpResponse::ok("http");
+        -:  127:						});
+        -:  128:
+        1:  129:	std::thread serverThread;
+call    0 returned 100%
+        1:  130:	uint16_t port = startWsServerAndWait(server, serverThread);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  131:
+        -:  132:	// 直接发 HTTP 请求验证未注册路径返回 404
+        1:  133:	boost::asio::io_context ioCtx;
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  134:	tcp::socket socket(ioCtx);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  135:	socket.connect(tcp::endpoint(boost::asio::ip::make_address("127.0.0.1"), port));
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+        -:  136:
+        -:  137:	std::string httpReq = "GET /ws/nonexist HTTP/1.1\r\n"
+        -:  138:						  "Host: 127.0.0.1\r\n"
+        -:  139:						  "Connection: close\r\n"
+        1:  140:						  "\r\n";
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  141:	boost::asio::write(socket, boost::asio::buffer(httpReq));
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:  142:
+        -:  143:	char buf[1024];
+        1:  144:	auto n = socket.read_some(boost::asio::buffer(buf));
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        1:  145:	std::string response(buf, n);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  146:
+        1:  147:	auto sp = response.find(' ');
+call    0 returned 100%
+       1*:  148:	ASSERT_NE(sp, std::string::npos);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 0% (fallthrough)
+branch  5 taken 100%
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed (throw)
+call    9 never executed
+call   10 never executed
+branch 11 never executed (fallthrough)
+branch 12 never executed (throw)
+call   13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed (throw)
+call   16 never executed
+call   17 never executed
+call   18 returned 100%
+branch 19 taken 100% (fallthrough)
+branch 20 taken 0%
+call   21 never executed
+call   22 never executed
+call   23 never executed
+       1*:  149:	EXPECT_EQ(response.substr(sp + 1, 3), "404");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 returned 100%
+branch  8 taken 0% (fallthrough)
+branch  9 taken 100%
+call   10 never executed
+branch 11 never executed (fallthrough)
+branch 12 never executed (throw)
+call   13 never executed
+call   14 never executed
+branch 15 never executed (fallthrough)
+branch 16 never executed (throw)
+call   17 never executed
+branch 18 never executed (fallthrough)
+branch 19 never executed (throw)
+call   20 never executed
+call   21 never executed
+call   22 returned 100%
+call   23 never executed
+call   24 never executed
+call   25 never executed
+call   26 never executed
+        -:  150:
+        1:  151:	boost::system::error_code ec;
+        1:  152:	socket.shutdown(tcp::socket::shutdown_both, ec);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  153:	server.stop();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  154:	serverThread.join();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  155:}
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0%
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0%
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0%
+call    9 returned 100%
+branch 10 taken 100% (fallthrough)
+branch 11 taken 0%
+call   12 returned 100%
+branch 13 taken 100% (fallthrough)
+branch 14 taken 0%
+call   15 returned 100%
+branch 16 taken 100% (fallthrough)
+branch 17 taken 0%
+call   18 never executed
+call   19 never executed
+call   20 never executed
+call   21 never executed
+call   22 never executed
+call   23 never executed
+------------------
+        -:  156:
+        -:  157:// ============ 安全：WebSocket 空闲超时不触发 use-after-free ============
+        -:  158:
+        -:  159:// 测试：WebSocket 空闲超时正常关闭连接，不 crash（UAF 修复验证）
+        4:  160:TEST(WebSocketTest, IdleTimeoutClosesCleanly)
+        -:  161:{
+        1:  162:	HttpServer server(0);
+        1:  163:	server.setIdleTimeout(1.0); // 1 秒超时
+        -:  164:
+        1:  165:	std::atomic<bool> disconnected {false};
+        -:  166:
+        5:  167:	server.router().ws(
+        -:  168:		"/ws/idle",
+       1*:  169:		[](const std::string&, WebSocketSession&) -> Awaitable<void>
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:  170:		{
+        -:  171:			co_return;
+    #####:  172:		},
+call    0 never executed
+call    1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed (throw)
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed
+call    8 never executed
+branch  9 never executed (fallthrough)
+branch 10 never executed
+call   11 never executed
+call   12 never executed
+branch 13 never executed (fallthrough)
+branch 14 never executed (throw)
+call   15 never executed
+call   16 never executed
+        -:  173:		nullptr,
+        2:  174:		[&disconnected](WebSocketSession&) -> Awaitable<void>
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  175:		{
+        -:  176:			disconnected = true;
+        -:  177:			co_return;
+        2:  178:		});
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed
+call    8 never executed
+branch  9 never executed (fallthrough)
+branch 10 never executed
+call   11 never executed
+call   12 never executed
+branch 13 never executed (fallthrough)
+branch 14 never executed (throw)
+call   15 never executed
+call   16 never executed
+        -:  179:
+        1:  180:	std::thread serverThread;
+        1:  181:	uint16_t port = startWsServerAndWait(server, serverThread);
+        -:  182:
+        -:  183:	// 客户端连接后不发任何消息，等待服务端超时关闭
+        1:  184:	boost::asio::io_context ioCtx;
+        1:  185:	TestWsClient wsClient(ioCtx);
+        3:  186:	wsClient.connect("127.0.0.1", port, "/ws/idle");
+        -:  187:
+        -:  188:	// 等待服务端超时关闭连接（1 秒超时 + 余量）
+        1:  189:	boost::system::error_code ec;
+        1:  190:	wsClient.read(ec);
+        -:  191:
+        -:  192:	// 连接应被服务端关闭（EOF 或 closed）
+       1*:  193:	EXPECT_TRUE(ec.operator bool());
+        -:  194:
+        -:  195:	// 等待 onDisconnect 回调在 io_context 中完成
+        -:  196:	// sanitizer 构建下（ASan/UBSan ~2-5x 性能惩罚），回调链需要更多时间
+        2:  197:	for (int i = 0; i < 200 && !disconnected.load(); ++i)
+        -:  198:	{
+        1:  199:		std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        -:  200:	}
+        -:  201:
+        1:  202:	server.stop();
+        1:  203:	serverThread.join();
+        -:  204:
+        -:  205:	// 关键：执行到这里没 crash 说明 UAF 已修复
+       1*:  206:	EXPECT_TRUE(disconnected.load());
+        1:  207:}
+------------------
+_ZN43WebSocketTest_IdleTimeoutClosesCleanly_TestC2Ev:
+function _ZN43WebSocketTest_IdleTimeoutClosesCleanly_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:  160:TEST(WebSocketTest, IdleTimeoutClosesCleanly)
+call    0 returned 100%
+------------------
+_ZN43WebSocketTest_IdleTimeoutClosesCleanly_TestD0Ev:
+function _ZN43WebSocketTest_IdleTimeoutClosesCleanly_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:  160:TEST(WebSocketTest, IdleTimeoutClosesCleanly)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN43WebSocketTest_IdleTimeoutClosesCleanly_TestD2Ev:
+function _ZN43WebSocketTest_IdleTimeoutClosesCleanly_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:  160:TEST(WebSocketTest, IdleTimeoutClosesCleanly)
+call    0 returned 100%
+------------------
+_ZN43WebSocketTest_IdleTimeoutClosesCleanly_Test8TestBodyEv:
+function _ZN43WebSocketTest_IdleTimeoutClosesCleanly_Test8TestBodyEv called 1 returned 100% blocks executed 42%
+        1:  160:TEST(WebSocketTest, IdleTimeoutClosesCleanly)
+        -:  161:{
+        1:  162:	HttpServer server(0);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  163:	server.setIdleTimeout(1.0); // 1 秒超时
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  164:
+        1:  165:	std::atomic<bool> disconnected {false};
+        -:  166:
+        5:  167:	server.router().ws(
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+call    8 returned 100%
+branch  9 taken 100% (fallthrough)
+branch 10 taken 0% (throw)
+call   11 returned 100%
+call   12 returned 100%
+call   13 returned 100%
+call   14 never executed
+call   15 never executed
+call   16 never executed
+call   17 never executed
+        -:  168:		"/ws/idle",
+        1:  169:		[](const std::string&, WebSocketSession&) -> Awaitable<void>
+call    0 returned 100%
+        -:  170:		{
+        -:  171:			co_return;
+        -:  172:		},
+        -:  173:		nullptr,
+        1:  174:		[&disconnected](WebSocketSession&) -> Awaitable<void>
+call    0 returned 100%
+        -:  175:		{
+        -:  176:			disconnected = true;
+        -:  177:			co_return;
+        -:  178:		});
+        -:  179:
+        1:  180:	std::thread serverThread;
+call    0 returned 100%
+        1:  181:	uint16_t port = startWsServerAndWait(server, serverThread);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  182:
+        -:  183:	// 客户端连接后不发任何消息，等待服务端超时关闭
+        1:  184:	boost::asio::io_context ioCtx;
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  185:	TestWsClient wsClient(ioCtx);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        3:  186:	wsClient.connect("127.0.0.1", port, "/ws/idle");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+call    9 returned 100%
+call   10 returned 100%
+call   11 never executed
+call   12 never executed
+        -:  187:
+        -:  188:	// 等待服务端超时关闭连接（1 秒超时 + 余量）
+        1:  189:	boost::system::error_code ec;
+        1:  190:	wsClient.read(ec);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+        -:  191:
+        -:  192:	// 连接应被服务端关闭（EOF 或 closed）
+       1*:  193:	EXPECT_TRUE(ec.operator bool());
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 0% (fallthrough)
+branch  4 taken 100%
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed (throw)
+call    8 never executed
+branch  9 never executed (fallthrough)
+branch 10 never executed (throw)
+call   11 never executed
+call   12 never executed
+branch 13 never executed (fallthrough)
+branch 14 never executed (throw)
+call   15 never executed
+branch 16 never executed (fallthrough)
+branch 17 never executed (throw)
+call   18 never executed
+call   19 never executed
+call   20 never executed
+call   21 returned 100%
+call   22 never executed
+call   23 never executed
+call   24 never executed
+call   25 never executed
+        -:  194:
+        -:  195:	// 等待 onDisconnect 回调在 io_context 中完成
+        -:  196:	// sanitizer 构建下（ASan/UBSan ~2-5x 性能惩罚），回调链需要更多时间
+        2:  197:	for (int i = 0; i < 200 && !disconnected.load(); ++i)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+call    2 returned 100%
+branch  3 taken 50% (fallthrough)
+branch  4 taken 50%
+branch  5 taken 50%
+branch  6 taken 50% (fallthrough)
+        -:  198:	{
+        1:  199:		std::this_thread::sleep_for(std::chrono::milliseconds(10));
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:  200:	}
+        -:  201:
+        1:  202:	server.stop();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  203:	serverThread.join();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  204:
+        -:  205:	// 关键：执行到这里没 crash 说明 UAF 已修复
+       1*:  206:	EXPECT_TRUE(disconnected.load());
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 0% (fallthrough)
+branch  4 taken 100%
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed (throw)
+call    8 never executed
+branch  9 never executed (fallthrough)
+branch 10 never executed (throw)
+call   11 never executed
+call   12 never executed
+branch 13 never executed (fallthrough)
+branch 14 never executed (throw)
+call   15 never executed
+branch 16 never executed (fallthrough)
+branch 17 never executed (throw)
+call   18 never executed
+call   19 never executed
+call   20 never executed
+call   21 returned 100%
+call   22 never executed
+call   23 never executed
+call   24 never executed
+call   25 never executed
+        1:  207:}
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 never executed
+call    5 never executed
+call    6 never executed
+call    7 never executed
+------------------
+        -:  208:
+        -:  209:// 测试：服务器 stop() 时 WebSocket 连接有序关闭，不 crash
+        4:  210:TEST(WebSocketTest, ServerStopDuringConnection)
+        -:  211:{
+        1:  212:	HttpServer server(0);
+        1:  213:	server.setIdleTimeout(60.0); // 长超时，确保 timer pending
+        -:  214:
+        4:  215:	server.router().ws("/ws/stop",
+        2:  216:					   [](const std::string& msg, WebSocketSession& session) -> Awaitable<void>
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  217:					   {
+        -:  218:						   co_await session.send("Echo: " + msg);
+        2:  219:					   });
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed
+call    8 never executed
+branch  9 never executed (fallthrough)
+branch 10 never executed
+call   11 never executed
+call   12 never executed
+branch 13 never executed (fallthrough)
+branch 14 never executed (throw)
+call   15 never executed
+call   16 never executed
+        -:  220:
+        1:  221:	std::thread serverThread;
+        1:  222:	uint16_t port = startWsServerAndWait(server, serverThread);
+        -:  223:
+        1:  224:	boost::asio::io_context ioCtx;
+        1:  225:	TestWsClient wsClient(ioCtx);
+        4:  226:	wsClient.connect("127.0.0.1", port, "/ws/stop");
+        -:  227:
+        -:  228:	// 发一条消息确保连接完全建立且 timer pending
+        1:  229:	wsClient.write("hello");
+        1:  230:	std::string reply = wsClient.read();
+       1*:  231:	EXPECT_EQ(reply, "Echo: hello");
+        -:  232:
+        -:  233:	// 在连接仍打开且 timer pending 时 stop 服务器
+        1:  234:	server.stop();
+        1:  235:	serverThread.join();
+        -:  236:
+        -:  237:	// 关键：执行到这里没 crash 说明 timer 回调不会访问已析构的 session
+        1:  238:}
+------------------
+_ZN45WebSocketTest_ServerStopDuringConnection_TestC2Ev:
+function _ZN45WebSocketTest_ServerStopDuringConnection_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:  210:TEST(WebSocketTest, ServerStopDuringConnection)
+call    0 returned 100%
+------------------
+_ZN45WebSocketTest_ServerStopDuringConnection_TestD0Ev:
+function _ZN45WebSocketTest_ServerStopDuringConnection_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:  210:TEST(WebSocketTest, ServerStopDuringConnection)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN45WebSocketTest_ServerStopDuringConnection_TestD2Ev:
+function _ZN45WebSocketTest_ServerStopDuringConnection_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:  210:TEST(WebSocketTest, ServerStopDuringConnection)
+call    0 returned 100%
+------------------
+_ZN45WebSocketTest_ServerStopDuringConnection_Test8TestBodyEv:
+function _ZN45WebSocketTest_ServerStopDuringConnection_Test8TestBodyEv called 1 returned 100% blocks executed 45%
+        1:  210:TEST(WebSocketTest, ServerStopDuringConnection)
+        -:  211:{
+        1:  212:	HttpServer server(0);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  213:	server.setIdleTimeout(60.0); // 长超时，确保 timer pending
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  214:
+        4:  215:	server.router().ws("/ws/stop",
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+call    5 returned 100%
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+call    9 returned 100%
+branch 10 taken 100% (fallthrough)
+branch 11 taken 0% (throw)
+call   12 returned 100%
+call   13 returned 100%
+call   14 returned 100%
+call   15 never executed
+call   16 never executed
+call   17 never executed
+call   18 never executed
+        1:  216:					   [](const std::string& msg, WebSocketSession& session) -> Awaitable<void>
+call    0 returned 100%
+        -:  217:					   {
+        -:  218:						   co_await session.send("Echo: " + msg);
+        -:  219:					   });
+        -:  220:
+        1:  221:	std::thread serverThread;
+call    0 returned 100%
+        1:  222:	uint16_t port = startWsServerAndWait(server, serverThread);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  223:
+        1:  224:	boost::asio::io_context ioCtx;
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  225:	TestWsClient wsClient(ioCtx);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        4:  226:	wsClient.connect("127.0.0.1", port, "/ws/stop");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+call    9 returned 100%
+call   10 returned 100%
+call   11 never executed
+call   12 never executed
+        -:  227:
+        -:  228:	// 发一条消息确保连接完全建立且 timer pending
+        1:  229:	wsClient.write("hello");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+        1:  230:	std::string reply = wsClient.read();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       1*:  231:	EXPECT_EQ(reply, "Echo: hello");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 0% (fallthrough)
+branch  5 taken 100%
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed (throw)
+call    9 never executed
+call   10 never executed
+branch 11 never executed (fallthrough)
+branch 12 never executed (throw)
+call   13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed (throw)
+call   16 never executed
+call   17 never executed
+call   18 returned 100%
+call   19 never executed
+call   20 never executed
+call   21 never executed
+        -:  232:
+        -:  233:	// 在连接仍打开且 timer pending 时 stop 服务器
+        1:  234:	server.stop();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  235:	serverThread.join();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  236:
+        -:  237:	// 关键：执行到这里没 crash 说明 timer 回调不会访问已析构的 session
+        1:  238:}
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+call    5 never executed
+call    6 never executed
+call    7 never executed
+call    8 never executed
+call    9 never executed
+------------------

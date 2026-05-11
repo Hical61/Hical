@@ -1,0 +1,1406 @@
+        -:    0:Source:/usr/include/boost/asio/error.hpp
+        -:    1://
+        -:    2:// error.hpp
+        -:    3:// ~~~~~~~~~
+        -:    4://
+        -:    5:// Copyright (c) 2003-2023 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+        -:    6://
+        -:    7:// Distributed under the Boost Software License, Version 1.0. (See accompanying
+        -:    8:// file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+        -:    9://
+        -:   10:
+        -:   11:#ifndef BOOST_ASIO_ERROR_HPP
+        -:   12:#define BOOST_ASIO_ERROR_HPP
+        -:   13:
+        -:   14:#if defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   15:# pragma once
+        -:   16:#endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   17:
+        -:   18:#include <boost/asio/detail/config.hpp>
+        -:   19:#include <boost/cerrno.hpp>
+        -:   20:#include <boost/system/error_code.hpp>
+        -:   21:#include <boost/system/system_error.hpp>
+        -:   22:#if defined(BOOST_ASIO_WINDOWS) \
+        -:   23:  || defined(__CYGWIN__) \
+        -:   24:  || defined(BOOST_ASIO_WINDOWS_RUNTIME)
+        -:   25:# include <winerror.h>
+        -:   26:#else
+        -:   27:# include <cerrno>
+        -:   28:# include <netdb.h>
+        -:   29:#endif
+        -:   30:
+        -:   31:#if defined(GENERATING_DOCUMENTATION)
+        -:   32:/// INTERNAL ONLY.
+        -:   33:# define BOOST_ASIO_NATIVE_ERROR(e) implementation_defined
+        -:   34:/// INTERNAL ONLY.
+        -:   35:# define BOOST_ASIO_SOCKET_ERROR(e) implementation_defined
+        -:   36:/// INTERNAL ONLY.
+        -:   37:# define BOOST_ASIO_NETDB_ERROR(e) implementation_defined
+        -:   38:/// INTERNAL ONLY.
+        -:   39:# define BOOST_ASIO_GETADDRINFO_ERROR(e) implementation_defined
+        -:   40:/// INTERNAL ONLY.
+        -:   41:# define BOOST_ASIO_WIN_OR_POSIX(e_win, e_posix) implementation_defined
+        -:   42:#elif defined(BOOST_ASIO_WINDOWS_RUNTIME)
+        -:   43:# define BOOST_ASIO_NATIVE_ERROR(e) __HRESULT_FROM_WIN32(e)
+        -:   44:# define BOOST_ASIO_SOCKET_ERROR(e) __HRESULT_FROM_WIN32(WSA ## e)
+        -:   45:# define BOOST_ASIO_NETDB_ERROR(e) __HRESULT_FROM_WIN32(WSA ## e)
+        -:   46:# define BOOST_ASIO_GETADDRINFO_ERROR(e) __HRESULT_FROM_WIN32(WSA ## e)
+        -:   47:# define BOOST_ASIO_WIN_OR_POSIX(e_win, e_posix) e_win
+        -:   48:#elif defined(BOOST_ASIO_WINDOWS) || defined(__CYGWIN__)
+        -:   49:# define BOOST_ASIO_NATIVE_ERROR(e) e
+        -:   50:# define BOOST_ASIO_SOCKET_ERROR(e) WSA ## e
+        -:   51:# define BOOST_ASIO_NETDB_ERROR(e) WSA ## e
+        -:   52:# define BOOST_ASIO_GETADDRINFO_ERROR(e) WSA ## e
+        -:   53:# define BOOST_ASIO_WIN_OR_POSIX(e_win, e_posix) e_win
+        -:   54:#else
+        -:   55:# define BOOST_ASIO_NATIVE_ERROR(e) e
+        -:   56:# define BOOST_ASIO_SOCKET_ERROR(e) e
+        -:   57:# define BOOST_ASIO_NETDB_ERROR(e) e
+        -:   58:# define BOOST_ASIO_GETADDRINFO_ERROR(e) e
+        -:   59:# define BOOST_ASIO_WIN_OR_POSIX(e_win, e_posix) e_posix
+        -:   60:#endif
+        -:   61:
+        -:   62:#include <boost/asio/detail/push_options.hpp>
+        -:   63:
+        -:   64:namespace boost {
+        -:   65:namespace asio {
+        -:   66:namespace error {
+        -:   67:
+        -:   68:enum basic_errors
+        -:   69:{
+        -:   70:  /// Permission denied.
+        -:   71:  access_denied = BOOST_ASIO_SOCKET_ERROR(EACCES),
+        -:   72:
+        -:   73:  /// Address family not supported by protocol.
+        -:   74:  address_family_not_supported = BOOST_ASIO_SOCKET_ERROR(EAFNOSUPPORT),
+        -:   75:
+        -:   76:  /// Address already in use.
+        -:   77:  address_in_use = BOOST_ASIO_SOCKET_ERROR(EADDRINUSE),
+        -:   78:
+        -:   79:  /// Transport endpoint is already connected.
+        -:   80:  already_connected = BOOST_ASIO_SOCKET_ERROR(EISCONN),
+        -:   81:
+        -:   82:  /// Operation already in progress.
+        -:   83:  already_started = BOOST_ASIO_SOCKET_ERROR(EALREADY),
+        -:   84:
+        -:   85:  /// Broken pipe.
+        -:   86:  broken_pipe = BOOST_ASIO_WIN_OR_POSIX(
+        -:   87:      BOOST_ASIO_NATIVE_ERROR(ERROR_BROKEN_PIPE),
+        -:   88:      BOOST_ASIO_NATIVE_ERROR(EPIPE)),
+        -:   89:
+        -:   90:  /// A connection has been aborted.
+        -:   91:  connection_aborted = BOOST_ASIO_SOCKET_ERROR(ECONNABORTED),
+        -:   92:
+        -:   93:  /// Connection refused.
+        -:   94:  connection_refused = BOOST_ASIO_SOCKET_ERROR(ECONNREFUSED),
+        -:   95:
+        -:   96:  /// Connection reset by peer.
+        -:   97:  connection_reset = BOOST_ASIO_SOCKET_ERROR(ECONNRESET),
+        -:   98:
+        -:   99:  /// Bad file descriptor.
+        -:  100:  bad_descriptor = BOOST_ASIO_SOCKET_ERROR(EBADF),
+        -:  101:
+        -:  102:  /// Bad address.
+        -:  103:  fault = BOOST_ASIO_SOCKET_ERROR(EFAULT),
+        -:  104:
+        -:  105:  /// No route to host.
+        -:  106:  host_unreachable = BOOST_ASIO_SOCKET_ERROR(EHOSTUNREACH),
+        -:  107:
+        -:  108:  /// Operation now in progress.
+        -:  109:  in_progress = BOOST_ASIO_SOCKET_ERROR(EINPROGRESS),
+        -:  110:
+        -:  111:  /// Interrupted system call.
+        -:  112:  interrupted = BOOST_ASIO_SOCKET_ERROR(EINTR),
+        -:  113:
+        -:  114:  /// Invalid argument.
+        -:  115:  invalid_argument = BOOST_ASIO_SOCKET_ERROR(EINVAL),
+        -:  116:
+        -:  117:  /// Message too long.
+        -:  118:  message_size = BOOST_ASIO_SOCKET_ERROR(EMSGSIZE),
+        -:  119:
+        -:  120:  /// The name was too long.
+        -:  121:  name_too_long = BOOST_ASIO_SOCKET_ERROR(ENAMETOOLONG),
+        -:  122:
+        -:  123:  /// Network is down.
+        -:  124:  network_down = BOOST_ASIO_SOCKET_ERROR(ENETDOWN),
+        -:  125:
+        -:  126:  /// Network dropped connection on reset.
+        -:  127:  network_reset = BOOST_ASIO_SOCKET_ERROR(ENETRESET),
+        -:  128:
+        -:  129:  /// Network is unreachable.
+        -:  130:  network_unreachable = BOOST_ASIO_SOCKET_ERROR(ENETUNREACH),
+        -:  131:
+        -:  132:  /// Too many open files.
+        -:  133:  no_descriptors = BOOST_ASIO_SOCKET_ERROR(EMFILE),
+        -:  134:
+        -:  135:  /// No buffer space available.
+        -:  136:  no_buffer_space = BOOST_ASIO_SOCKET_ERROR(ENOBUFS),
+        -:  137:
+        -:  138:  /// Cannot allocate memory.
+        -:  139:  no_memory = BOOST_ASIO_WIN_OR_POSIX(
+        -:  140:      BOOST_ASIO_NATIVE_ERROR(ERROR_OUTOFMEMORY),
+        -:  141:      BOOST_ASIO_NATIVE_ERROR(ENOMEM)),
+        -:  142:
+        -:  143:  /// Operation not permitted.
+        -:  144:  no_permission = BOOST_ASIO_WIN_OR_POSIX(
+        -:  145:      BOOST_ASIO_NATIVE_ERROR(ERROR_ACCESS_DENIED),
+        -:  146:      BOOST_ASIO_NATIVE_ERROR(EPERM)),
+        -:  147:
+        -:  148:  /// Protocol not available.
+        -:  149:  no_protocol_option = BOOST_ASIO_SOCKET_ERROR(ENOPROTOOPT),
+        -:  150:
+        -:  151:  /// No such device.
+        -:  152:  no_such_device = BOOST_ASIO_WIN_OR_POSIX(
+        -:  153:      BOOST_ASIO_NATIVE_ERROR(ERROR_BAD_UNIT),
+        -:  154:      BOOST_ASIO_NATIVE_ERROR(ENODEV)),
+        -:  155:
+        -:  156:  /// Transport endpoint is not connected.
+        -:  157:  not_connected = BOOST_ASIO_SOCKET_ERROR(ENOTCONN),
+        -:  158:
+        -:  159:  /// Socket operation on non-socket.
+        -:  160:  not_socket = BOOST_ASIO_SOCKET_ERROR(ENOTSOCK),
+        -:  161:
+        -:  162:  /// Operation cancelled.
+        -:  163:  operation_aborted = BOOST_ASIO_WIN_OR_POSIX(
+        -:  164:      BOOST_ASIO_NATIVE_ERROR(ERROR_OPERATION_ABORTED),
+        -:  165:      BOOST_ASIO_NATIVE_ERROR(ECANCELED)),
+        -:  166:
+        -:  167:  /// Operation not supported.
+        -:  168:  operation_not_supported = BOOST_ASIO_SOCKET_ERROR(EOPNOTSUPP),
+        -:  169:
+        -:  170:  /// Cannot send after transport endpoint shutdown.
+        -:  171:  shut_down = BOOST_ASIO_SOCKET_ERROR(ESHUTDOWN),
+        -:  172:
+        -:  173:  /// Connection timed out.
+        -:  174:  timed_out = BOOST_ASIO_SOCKET_ERROR(ETIMEDOUT),
+        -:  175:
+        -:  176:  /// Resource temporarily unavailable.
+        -:  177:  try_again = BOOST_ASIO_WIN_OR_POSIX(
+        -:  178:      BOOST_ASIO_NATIVE_ERROR(ERROR_RETRY),
+        -:  179:      BOOST_ASIO_NATIVE_ERROR(EAGAIN)),
+        -:  180:
+        -:  181:  /// The socket is marked non-blocking and the requested operation would block.
+        -:  182:  would_block = BOOST_ASIO_SOCKET_ERROR(EWOULDBLOCK)
+        -:  183:};
+        -:  184:
+        -:  185:enum netdb_errors
+        -:  186:{
+        -:  187:  /// Host not found (authoritative).
+        -:  188:  host_not_found = BOOST_ASIO_NETDB_ERROR(HOST_NOT_FOUND),
+        -:  189:
+        -:  190:  /// Host not found (non-authoritative).
+        -:  191:  host_not_found_try_again = BOOST_ASIO_NETDB_ERROR(TRY_AGAIN),
+        -:  192:
+        -:  193:  /// The query is valid but does not have associated address data.
+        -:  194:  no_data = BOOST_ASIO_NETDB_ERROR(NO_DATA),
+        -:  195:
+        -:  196:  /// A non-recoverable error occurred.
+        -:  197:  no_recovery = BOOST_ASIO_NETDB_ERROR(NO_RECOVERY)
+        -:  198:};
+        -:  199:
+        -:  200:enum addrinfo_errors
+        -:  201:{
+        -:  202:  /// The service is not supported for the given socket type.
+        -:  203:  service_not_found = BOOST_ASIO_WIN_OR_POSIX(
+        -:  204:      BOOST_ASIO_NATIVE_ERROR(WSATYPE_NOT_FOUND),
+        -:  205:      BOOST_ASIO_GETADDRINFO_ERROR(EAI_SERVICE)),
+        -:  206:
+        -:  207:  /// The socket type is not supported.
+        -:  208:  socket_type_not_supported = BOOST_ASIO_WIN_OR_POSIX(
+        -:  209:      BOOST_ASIO_NATIVE_ERROR(WSAESOCKTNOSUPPORT),
+        -:  210:      BOOST_ASIO_GETADDRINFO_ERROR(EAI_SOCKTYPE))
+        -:  211:};
+        -:  212:
+        -:  213:enum misc_errors
+        -:  214:{
+        -:  215:  /// Already open.
+        -:  216:  already_open = 1,
+        -:  217:
+        -:  218:  /// End of file or stream.
+        -:  219:  eof,
+        -:  220:
+        -:  221:  /// Element not found.
+        -:  222:  not_found,
+        -:  223:
+        -:  224:  /// The descriptor cannot fit into the select system call's fd_set.
+        -:  225:  fd_set_failure
+        -:  226:};
+        -:  227:
+        -:  228:#if !defined(BOOST_ASIO_ERROR_LOCATION) \
+        -:  229:  && !defined(BOOST_ASIO_DISABLE_ERROR_LOCATION) \
+        -:  230:  && defined(BOOST_ASIO_HAS_BOOST_CONFIG) \
+        -:  231:  && (BOOST_VERSION >= 107900)
+        -:  232:
+        -:  233:# define BOOST_ASIO_ERROR_LOCATION(e) \
+        -:  234:  do { \
+        -:  235:    BOOST_STATIC_CONSTEXPR boost::source_location loc \
+        -:  236:      = BOOST_CURRENT_LOCATION; \
+        -:  237:    (e).assign((e), &loc); \
+        -:  238:  } while (false)
+        -:  239:
+        -:  240:#else // !defined(BOOST_ASIO_ERROR_LOCATION)
+        -:  241:      //   && !defined(BOOST_ASIO_DISABLE_ERROR_LOCATION)
+        -:  242:      //   && defined(BOOST_ASIO_HAS_BOOST_CONFIG)
+        -:  243:      //   && (BOOST_VERSION >= 107900)
+        -:  244:
+        -:  245:# define BOOST_ASIO_ERROR_LOCATION(e) (void)0
+        -:  246:
+        -:  247:#endif // !defined(BOOST_ASIO_ERROR_LOCATION)
+        -:  248:       //   && !defined(BOOST_ASIO_DISABLE_ERROR_LOCATION)
+        -:  249:       //   && defined(BOOST_ASIO_HAS_BOOST_CONFIG)
+        -:  250:       //   && (BOOST_VERSION >= 107900)
+        -:  251:
+    2297*:  252:inline void clear(boost::system::error_code& ec)
+        -:  253:{
+    2297*:  254:  ec = boost::system::error_code();
+    2297*:  255:}
+------------------
+_ZN5boost4asio5error5clearERNS_6system10error_codeE:
+function _ZN5boost4asio5error5clearERNS_6system10error_codeE called 0 returned 0% blocks executed 0%
+    #####:  252:inline void clear(boost::system::error_code& ec)
+        -:  253:{
+    #####:  254:  ec = boost::system::error_code();
+call    0 never executed
+    #####:  255:}
+------------------
+_ZN5boost4asio5error5clearERNS_6system10error_codeE:
+function _ZN5boost4asio5error5clearERNS_6system10error_codeE called 0 returned 0% blocks executed 0%
+    #####:  252:inline void clear(boost::system::error_code& ec)
+        -:  253:{
+    #####:  254:  ec = boost::system::error_code();
+call    0 never executed
+    #####:  255:}
+------------------
+_ZN5boost4asio5error5clearERNS_6system10error_codeE:
+function _ZN5boost4asio5error5clearERNS_6system10error_codeE called 0 returned 0% blocks executed 0%
+    #####:  252:inline void clear(boost::system::error_code& ec)
+        -:  253:{
+    #####:  254:  ec = boost::system::error_code();
+call    0 never executed
+    #####:  255:}
+------------------
+_ZN5boost4asio5error5clearERNS_6system10error_codeE:
+function _ZN5boost4asio5error5clearERNS_6system10error_codeE called 0 returned 0% blocks executed 0%
+    #####:  252:inline void clear(boost::system::error_code& ec)
+        -:  253:{
+    #####:  254:  ec = boost::system::error_code();
+call    0 never executed
+    #####:  255:}
+------------------
+_ZN5boost4asio5error5clearERNS_6system10error_codeE:
+function _ZN5boost4asio5error5clearERNS_6system10error_codeE called 0 returned 0% blocks executed 0%
+    #####:  252:inline void clear(boost::system::error_code& ec)
+        -:  253:{
+    #####:  254:  ec = boost::system::error_code();
+call    0 never executed
+    #####:  255:}
+------------------
+_ZN5boost4asio5error5clearERNS_6system10error_codeE:
+function _ZN5boost4asio5error5clearERNS_6system10error_codeE called 0 returned 0% blocks executed 0%
+    #####:  252:inline void clear(boost::system::error_code& ec)
+        -:  253:{
+    #####:  254:  ec = boost::system::error_code();
+call    0 never executed
+    #####:  255:}
+------------------
+_ZN5boost4asio5error5clearERNS_6system10error_codeE:
+function _ZN5boost4asio5error5clearERNS_6system10error_codeE called 76 returned 100% blocks executed 100%
+       76:  252:inline void clear(boost::system::error_code& ec)
+        -:  253:{
+       76:  254:  ec = boost::system::error_code();
+call    0 returned 100%
+       76:  255:}
+------------------
+_ZN5boost4asio5error5clearERNS_6system10error_codeE:
+function _ZN5boost4asio5error5clearERNS_6system10error_codeE called 1463 returned 100% blocks executed 100%
+     1463:  252:inline void clear(boost::system::error_code& ec)
+        -:  253:{
+     1463:  254:  ec = boost::system::error_code();
+call    0 returned 100%
+     1462:  255:}
+------------------
+_ZN5boost4asio5error5clearERNS_6system10error_codeE:
+function _ZN5boost4asio5error5clearERNS_6system10error_codeE called 169 returned 100% blocks executed 100%
+      169:  252:inline void clear(boost::system::error_code& ec)
+        -:  253:{
+      169:  254:  ec = boost::system::error_code();
+call    0 returned 100%
+      169:  255:}
+------------------
+_ZN5boost4asio5error5clearERNS_6system10error_codeE:
+function _ZN5boost4asio5error5clearERNS_6system10error_codeE called 89 returned 100% blocks executed 100%
+       89:  252:inline void clear(boost::system::error_code& ec)
+        -:  253:{
+       89:  254:  ec = boost::system::error_code();
+call    0 returned 100%
+       89:  255:}
+------------------
+_ZN5boost4asio5error5clearERNS_6system10error_codeE:
+function _ZN5boost4asio5error5clearERNS_6system10error_codeE called 178 returned 99% blocks executed 100%
+      178:  252:inline void clear(boost::system::error_code& ec)
+        -:  253:{
+      178:  254:  ec = boost::system::error_code();
+call    0 returned 99%
+      177:  255:}
+------------------
+_ZN5boost4asio5error5clearERNS_6system10error_codeE:
+function _ZN5boost4asio5error5clearERNS_6system10error_codeE called 118 returned 100% blocks executed 100%
+      118:  252:inline void clear(boost::system::error_code& ec)
+        -:  253:{
+      118:  254:  ec = boost::system::error_code();
+call    0 returned 100%
+      118:  255:}
+------------------
+_ZN5boost4asio5error5clearERNS_6system10error_codeE:
+function _ZN5boost4asio5error5clearERNS_6system10error_codeE called 204 returned 101% blocks executed 100%
+      204:  252:inline void clear(boost::system::error_code& ec)
+        -:  253:{
+      204:  254:  ec = boost::system::error_code();
+call    0 returned 101%
+      206:  255:}
+------------------
+_ZN5boost4asio5error5clearERNS_6system10error_codeE:
+function _ZN5boost4asio5error5clearERNS_6system10error_codeE called 0 returned 0% blocks executed 0%
+    #####:  252:inline void clear(boost::system::error_code& ec)
+        -:  253:{
+    #####:  254:  ec = boost::system::error_code();
+call    0 never executed
+    #####:  255:}
+------------------
+_ZN5boost4asio5error5clearERNS_6system10error_codeE:
+function _ZN5boost4asio5error5clearERNS_6system10error_codeE called 0 returned 0% blocks executed 0%
+    #####:  252:inline void clear(boost::system::error_code& ec)
+        -:  253:{
+    #####:  254:  ec = boost::system::error_code();
+call    0 never executed
+    #####:  255:}
+------------------
+_ZN5boost4asio5error5clearERNS_6system10error_codeE:
+function _ZN5boost4asio5error5clearERNS_6system10error_codeE called 0 returned 0% blocks executed 0%
+    #####:  252:inline void clear(boost::system::error_code& ec)
+        -:  253:{
+    #####:  254:  ec = boost::system::error_code();
+call    0 never executed
+    #####:  255:}
+------------------
+        -:  256:
+    4402*:  257:inline const boost::system::error_category& get_system_category()
+        -:  258:{
+    4402*:  259:  return boost::system::system_category();
+        -:  260:}
+------------------
+_ZN5boost4asio5error19get_system_categoryEv:
+function _ZN5boost4asio5error19get_system_categoryEv called 165 returned 100% blocks executed 100%
+      165:  257:inline const boost::system::error_category& get_system_category()
+        -:  258:{
+      165:  259:  return boost::system::system_category();
+call    0 returned 100%
+        -:  260:}
+------------------
+_ZN5boost4asio5error19get_system_categoryEv:
+function _ZN5boost4asio5error19get_system_categoryEv called 30 returned 100% blocks executed 100%
+       30:  257:inline const boost::system::error_category& get_system_category()
+        -:  258:{
+       30:  259:  return boost::system::system_category();
+call    0 returned 100%
+        -:  260:}
+------------------
+_ZN5boost4asio5error19get_system_categoryEv:
+function _ZN5boost4asio5error19get_system_categoryEv called 286 returned 100% blocks executed 100%
+      286:  257:inline const boost::system::error_category& get_system_category()
+        -:  258:{
+      286:  259:  return boost::system::system_category();
+call    0 returned 100%
+        -:  260:}
+------------------
+_ZN5boost4asio5error19get_system_categoryEv:
+function _ZN5boost4asio5error19get_system_categoryEv called 71 returned 100% blocks executed 100%
+       71:  257:inline const boost::system::error_category& get_system_category()
+        -:  258:{
+       71:  259:  return boost::system::system_category();
+call    0 returned 100%
+        -:  260:}
+------------------
+_ZN5boost4asio5error19get_system_categoryEv:
+function _ZN5boost4asio5error19get_system_categoryEv called 24 returned 100% blocks executed 100%
+       24:  257:inline const boost::system::error_category& get_system_category()
+        -:  258:{
+       24:  259:  return boost::system::system_category();
+call    0 returned 100%
+        -:  260:}
+------------------
+_ZN5boost4asio5error19get_system_categoryEv:
+function _ZN5boost4asio5error19get_system_categoryEv called 203 returned 100% blocks executed 100%
+      203:  257:inline const boost::system::error_category& get_system_category()
+        -:  258:{
+      203:  259:  return boost::system::system_category();
+call    0 returned 100%
+        -:  260:}
+------------------
+_ZN5boost4asio5error19get_system_categoryEv:
+function _ZN5boost4asio5error19get_system_categoryEv called 307 returned 100% blocks executed 100%
+      307:  257:inline const boost::system::error_category& get_system_category()
+        -:  258:{
+      307:  259:  return boost::system::system_category();
+call    0 returned 100%
+        -:  260:}
+------------------
+_ZN5boost4asio5error19get_system_categoryEv:
+function _ZN5boost4asio5error19get_system_categoryEv called 65 returned 100% blocks executed 100%
+       65:  257:inline const boost::system::error_category& get_system_category()
+        -:  258:{
+       65:  259:  return boost::system::system_category();
+call    0 returned 100%
+        -:  260:}
+------------------
+_ZN5boost4asio5error19get_system_categoryEv:
+function _ZN5boost4asio5error19get_system_categoryEv called 71 returned 100% blocks executed 100%
+       71:  257:inline const boost::system::error_category& get_system_category()
+        -:  258:{
+       71:  259:  return boost::system::system_category();
+call    0 returned 100%
+        -:  260:}
+------------------
+_ZN5boost4asio5error19get_system_categoryEv:
+function _ZN5boost4asio5error19get_system_categoryEv called 18 returned 100% blocks executed 100%
+       18:  257:inline const boost::system::error_category& get_system_category()
+        -:  258:{
+       18:  259:  return boost::system::system_category();
+call    0 returned 100%
+        -:  260:}
+------------------
+_ZN5boost4asio5error19get_system_categoryEv:
+function _ZN5boost4asio5error19get_system_categoryEv called 120 returned 100% blocks executed 100%
+      120:  257:inline const boost::system::error_category& get_system_category()
+        -:  258:{
+      120:  259:  return boost::system::system_category();
+call    0 returned 100%
+        -:  260:}
+------------------
+_ZN5boost4asio5error19get_system_categoryEv:
+function _ZN5boost4asio5error19get_system_categoryEv called 122 returned 100% blocks executed 100%
+      122:  257:inline const boost::system::error_category& get_system_category()
+        -:  258:{
+      122:  259:  return boost::system::system_category();
+call    0 returned 100%
+        -:  260:}
+------------------
+_ZN5boost4asio5error19get_system_categoryEv:
+function _ZN5boost4asio5error19get_system_categoryEv called 128 returned 100% blocks executed 100%
+      128:  257:inline const boost::system::error_category& get_system_category()
+        -:  258:{
+      128:  259:  return boost::system::system_category();
+call    0 returned 100%
+        -:  260:}
+------------------
+_ZN5boost4asio5error19get_system_categoryEv:
+function _ZN5boost4asio5error19get_system_categoryEv called 43 returned 100% blocks executed 100%
+       43:  257:inline const boost::system::error_category& get_system_category()
+        -:  258:{
+       43:  259:  return boost::system::system_category();
+call    0 returned 100%
+        -:  260:}
+------------------
+_ZN5boost4asio5error19get_system_categoryEv:
+function _ZN5boost4asio5error19get_system_categoryEv called 295 returned 100% blocks executed 100%
+      295:  257:inline const boost::system::error_category& get_system_category()
+        -:  258:{
+      295:  259:  return boost::system::system_category();
+call    0 returned 100%
+        -:  260:}
+------------------
+_ZN5boost4asio5error19get_system_categoryEv:
+function _ZN5boost4asio5error19get_system_categoryEv called 216 returned 100% blocks executed 100%
+      216:  257:inline const boost::system::error_category& get_system_category()
+        -:  258:{
+      216:  259:  return boost::system::system_category();
+call    0 returned 100%
+        -:  260:}
+------------------
+_ZN5boost4asio5error19get_system_categoryEv:
+function _ZN5boost4asio5error19get_system_categoryEv called 98 returned 100% blocks executed 100%
+       98:  257:inline const boost::system::error_category& get_system_category()
+        -:  258:{
+       98:  259:  return boost::system::system_category();
+call    0 returned 100%
+        -:  260:}
+------------------
+_ZN5boost4asio5error19get_system_categoryEv:
+function _ZN5boost4asio5error19get_system_categoryEv called 359 returned 100% blocks executed 100%
+      359:  257:inline const boost::system::error_category& get_system_category()
+        -:  258:{
+      359:  259:  return boost::system::system_category();
+call    0 returned 100%
+        -:  260:}
+------------------
+_ZN5boost4asio5error19get_system_categoryEv:
+function _ZN5boost4asio5error19get_system_categoryEv called 5 returned 100% blocks executed 100%
+        5:  257:inline const boost::system::error_category& get_system_category()
+        -:  258:{
+        5:  259:  return boost::system::system_category();
+call    0 returned 100%
+        -:  260:}
+------------------
+_ZN5boost4asio5error19get_system_categoryEv:
+function _ZN5boost4asio5error19get_system_categoryEv called 0 returned 0% blocks executed 0%
+    #####:  257:inline const boost::system::error_category& get_system_category()
+        -:  258:{
+    #####:  259:  return boost::system::system_category();
+call    0 never executed
+        -:  260:}
+------------------
+_ZN5boost4asio5error19get_system_categoryEv:
+function _ZN5boost4asio5error19get_system_categoryEv called 0 returned 0% blocks executed 0%
+    #####:  257:inline const boost::system::error_category& get_system_category()
+        -:  258:{
+    #####:  259:  return boost::system::system_category();
+call    0 never executed
+        -:  260:}
+------------------
+_ZN5boost4asio5error19get_system_categoryEv:
+function _ZN5boost4asio5error19get_system_categoryEv called 0 returned 0% blocks executed 0%
+    #####:  257:inline const boost::system::error_category& get_system_category()
+        -:  258:{
+    #####:  259:  return boost::system::system_category();
+call    0 never executed
+        -:  260:}
+------------------
+_ZN5boost4asio5error19get_system_categoryEv:
+function _ZN5boost4asio5error19get_system_categoryEv called 0 returned 0% blocks executed 0%
+    #####:  257:inline const boost::system::error_category& get_system_category()
+        -:  258:{
+    #####:  259:  return boost::system::system_category();
+call    0 never executed
+        -:  260:}
+------------------
+_ZN5boost4asio5error19get_system_categoryEv:
+function _ZN5boost4asio5error19get_system_categoryEv called 0 returned 0% blocks executed 0%
+    #####:  257:inline const boost::system::error_category& get_system_category()
+        -:  258:{
+    #####:  259:  return boost::system::system_category();
+call    0 never executed
+        -:  260:}
+------------------
+_ZN5boost4asio5error19get_system_categoryEv:
+function _ZN5boost4asio5error19get_system_categoryEv called 0 returned 0% blocks executed 0%
+    #####:  257:inline const boost::system::error_category& get_system_category()
+        -:  258:{
+    #####:  259:  return boost::system::system_category();
+call    0 never executed
+        -:  260:}
+------------------
+_ZN5boost4asio5error19get_system_categoryEv:
+function _ZN5boost4asio5error19get_system_categoryEv called 296 returned 100% blocks executed 100%
+      296:  257:inline const boost::system::error_category& get_system_category()
+        -:  258:{
+      296:  259:  return boost::system::system_category();
+call    0 returned 100%
+        -:  260:}
+------------------
+_ZN5boost4asio5error19get_system_categoryEv:
+function _ZN5boost4asio5error19get_system_categoryEv called 0 returned 0% blocks executed 0%
+    #####:  257:inline const boost::system::error_category& get_system_category()
+        -:  258:{
+    #####:  259:  return boost::system::system_category();
+call    0 never executed
+        -:  260:}
+------------------
+_ZN5boost4asio5error19get_system_categoryEv:
+function _ZN5boost4asio5error19get_system_categoryEv called 0 returned 0% blocks executed 0%
+    #####:  257:inline const boost::system::error_category& get_system_category()
+        -:  258:{
+    #####:  259:  return boost::system::system_category();
+call    0 never executed
+        -:  260:}
+------------------
+_ZN5boost4asio5error19get_system_categoryEv:
+function _ZN5boost4asio5error19get_system_categoryEv called 0 returned 0% blocks executed 0%
+    #####:  257:inline const boost::system::error_category& get_system_category()
+        -:  258:{
+    #####:  259:  return boost::system::system_category();
+call    0 never executed
+        -:  260:}
+------------------
+_ZN5boost4asio5error19get_system_categoryEv:
+function _ZN5boost4asio5error19get_system_categoryEv called 0 returned 0% blocks executed 0%
+    #####:  257:inline const boost::system::error_category& get_system_category()
+        -:  258:{
+    #####:  259:  return boost::system::system_category();
+call    0 never executed
+        -:  260:}
+------------------
+_ZN5boost4asio5error19get_system_categoryEv:
+function _ZN5boost4asio5error19get_system_categoryEv called 0 returned 0% blocks executed 0%
+    #####:  257:inline const boost::system::error_category& get_system_category()
+        -:  258:{
+    #####:  259:  return boost::system::system_category();
+call    0 never executed
+        -:  260:}
+------------------
+_ZN5boost4asio5error19get_system_categoryEv:
+function _ZN5boost4asio5error19get_system_categoryEv called 0 returned 0% blocks executed 0%
+    #####:  257:inline const boost::system::error_category& get_system_category()
+        -:  258:{
+    #####:  259:  return boost::system::system_category();
+call    0 never executed
+        -:  260:}
+------------------
+_ZN5boost4asio5error19get_system_categoryEv:
+function _ZN5boost4asio5error19get_system_categoryEv called 0 returned 0% blocks executed 0%
+    #####:  257:inline const boost::system::error_category& get_system_category()
+        -:  258:{
+    #####:  259:  return boost::system::system_category();
+call    0 never executed
+        -:  260:}
+------------------
+_ZN5boost4asio5error19get_system_categoryEv:
+function _ZN5boost4asio5error19get_system_categoryEv called 0 returned 0% blocks executed 0%
+    #####:  257:inline const boost::system::error_category& get_system_category()
+        -:  258:{
+    #####:  259:  return boost::system::system_category();
+call    0 never executed
+        -:  260:}
+------------------
+_ZN5boost4asio5error19get_system_categoryEv:
+function _ZN5boost4asio5error19get_system_categoryEv called 0 returned 0% blocks executed 0%
+    #####:  257:inline const boost::system::error_category& get_system_category()
+        -:  258:{
+    #####:  259:  return boost::system::system_category();
+call    0 never executed
+        -:  260:}
+------------------
+_ZN5boost4asio5error19get_system_categoryEv:
+function _ZN5boost4asio5error19get_system_categoryEv called 0 returned 0% blocks executed 0%
+    #####:  257:inline const boost::system::error_category& get_system_category()
+        -:  258:{
+    #####:  259:  return boost::system::system_category();
+call    0 never executed
+        -:  260:}
+------------------
+_ZN5boost4asio5error19get_system_categoryEv:
+function _ZN5boost4asio5error19get_system_categoryEv called 0 returned 0% blocks executed 0%
+    #####:  257:inline const boost::system::error_category& get_system_category()
+        -:  258:{
+    #####:  259:  return boost::system::system_category();
+call    0 never executed
+        -:  260:}
+------------------
+_ZN5boost4asio5error19get_system_categoryEv:
+function _ZN5boost4asio5error19get_system_categoryEv called 0 returned 0% blocks executed 0%
+    #####:  257:inline const boost::system::error_category& get_system_category()
+        -:  258:{
+    #####:  259:  return boost::system::system_category();
+call    0 never executed
+        -:  260:}
+------------------
+_ZN5boost4asio5error19get_system_categoryEv:
+function _ZN5boost4asio5error19get_system_categoryEv called 0 returned 0% blocks executed 0%
+    #####:  257:inline const boost::system::error_category& get_system_category()
+        -:  258:{
+    #####:  259:  return boost::system::system_category();
+call    0 never executed
+        -:  260:}
+------------------
+_ZN5boost4asio5error19get_system_categoryEv:
+function _ZN5boost4asio5error19get_system_categoryEv called 0 returned 0% blocks executed 0%
+    #####:  257:inline const boost::system::error_category& get_system_category()
+        -:  258:{
+    #####:  259:  return boost::system::system_category();
+call    0 never executed
+        -:  260:}
+------------------
+_ZN5boost4asio5error19get_system_categoryEv:
+function _ZN5boost4asio5error19get_system_categoryEv called 0 returned 0% blocks executed 0%
+    #####:  257:inline const boost::system::error_category& get_system_category()
+        -:  258:{
+    #####:  259:  return boost::system::system_category();
+call    0 never executed
+        -:  260:}
+------------------
+_ZN5boost4asio5error19get_system_categoryEv:
+function _ZN5boost4asio5error19get_system_categoryEv called 0 returned 0% blocks executed 0%
+    #####:  257:inline const boost::system::error_category& get_system_category()
+        -:  258:{
+    #####:  259:  return boost::system::system_category();
+call    0 never executed
+        -:  260:}
+------------------
+_ZN5boost4asio5error19get_system_categoryEv:
+function _ZN5boost4asio5error19get_system_categoryEv called 0 returned 0% blocks executed 0%
+    #####:  257:inline const boost::system::error_category& get_system_category()
+        -:  258:{
+    #####:  259:  return boost::system::system_category();
+call    0 never executed
+        -:  260:}
+------------------
+_ZN5boost4asio5error19get_system_categoryEv:
+function _ZN5boost4asio5error19get_system_categoryEv called 0 returned 0% blocks executed 0%
+    #####:  257:inline const boost::system::error_category& get_system_category()
+        -:  258:{
+    #####:  259:  return boost::system::system_category();
+call    0 never executed
+        -:  260:}
+------------------
+_ZN5boost4asio5error19get_system_categoryEv:
+function _ZN5boost4asio5error19get_system_categoryEv called 20 returned 100% blocks executed 100%
+       20:  257:inline const boost::system::error_category& get_system_category()
+        -:  258:{
+       20:  259:  return boost::system::system_category();
+call    0 returned 100%
+        -:  260:}
+------------------
+_ZN5boost4asio5error19get_system_categoryEv:
+function _ZN5boost4asio5error19get_system_categoryEv called 222 returned 100% blocks executed 100%
+      222:  257:inline const boost::system::error_category& get_system_category()
+        -:  258:{
+      222:  259:  return boost::system::system_category();
+call    0 returned 100%
+        -:  260:}
+------------------
+_ZN5boost4asio5error19get_system_categoryEv:
+function _ZN5boost4asio5error19get_system_categoryEv called 252 returned 100% blocks executed 100%
+      252:  257:inline const boost::system::error_category& get_system_category()
+        -:  258:{
+      252:  259:  return boost::system::system_category();
+call    0 returned 100%
+        -:  260:}
+------------------
+_ZN5boost4asio5error19get_system_categoryEv:
+function _ZN5boost4asio5error19get_system_categoryEv called 790 returned 100% blocks executed 100%
+      790:  257:inline const boost::system::error_category& get_system_category()
+        -:  258:{
+      790:  259:  return boost::system::system_category();
+call    0 returned 100%
+        -:  260:}
+------------------
+_ZN5boost4asio5error19get_system_categoryEv:
+function _ZN5boost4asio5error19get_system_categoryEv called 196 returned 100% blocks executed 100%
+      196:  257:inline const boost::system::error_category& get_system_category()
+        -:  258:{
+      196:  259:  return boost::system::system_category();
+call    0 returned 100%
+        -:  260:}
+------------------
+        -:  261:
+        -:  262:#if !defined(BOOST_ASIO_WINDOWS) && !defined(__CYGWIN__)
+        -:  263:
+        -:  264:extern BOOST_ASIO_DECL
+        -:  265:const boost::system::error_category& get_netdb_category();
+        -:  266:
+        -:  267:extern BOOST_ASIO_DECL
+        -:  268:const boost::system::error_category& get_addrinfo_category();
+        -:  269:
+        -:  270:#else // !defined(BOOST_ASIO_WINDOWS) && !defined(__CYGWIN__)
+        -:  271:
+        -:  272:inline const boost::system::error_category& get_netdb_category()
+        -:  273:{
+        -:  274:  return get_system_category();
+        -:  275:}
+        -:  276:
+        -:  277:inline const boost::system::error_category& get_addrinfo_category()
+        -:  278:{
+        -:  279:  return get_system_category();
+        -:  280:}
+        -:  281:
+        -:  282:#endif // !defined(BOOST_ASIO_WINDOWS) && !defined(__CYGWIN__)
+        -:  283:
+        -:  284:extern BOOST_ASIO_DECL
+        -:  285:const boost::system::error_category& get_misc_category();
+        -:  286:
+        -:  287:static const boost::system::error_category&
+        -:  288:  system_category BOOST_ASIO_UNUSED_VARIABLE
+        -:  289:  = boost::asio::error::get_system_category();
+        -:  290:static const boost::system::error_category&
+        -:  291:  netdb_category BOOST_ASIO_UNUSED_VARIABLE
+        -:  292:  = boost::asio::error::get_netdb_category();
+        -:  293:static const boost::system::error_category&
+        -:  294:  addrinfo_category BOOST_ASIO_UNUSED_VARIABLE
+        -:  295:  = boost::asio::error::get_addrinfo_category();
+        -:  296:static const boost::system::error_category&
+        -:  297:  misc_category BOOST_ASIO_UNUSED_VARIABLE
+        -:  298:  = boost::asio::error::get_misc_category();
+        -:  299:
+        -:  300:} // namespace error
+        -:  301:} // namespace asio
+        -:  302:} // namespace boost
+        -:  303:
+        -:  304:namespace boost {
+        -:  305:namespace system {
+        -:  306:
+        -:  307:template<> struct is_error_code_enum<boost::asio::error::basic_errors>
+        -:  308:{
+        -:  309:  static const bool value = true;
+        -:  310:};
+        -:  311:
+        -:  312:template<> struct is_error_code_enum<boost::asio::error::netdb_errors>
+        -:  313:{
+        -:  314:  static const bool value = true;
+        -:  315:};
+        -:  316:
+        -:  317:template<> struct is_error_code_enum<boost::asio::error::addrinfo_errors>
+        -:  318:{
+        -:  319:  static const bool value = true;
+        -:  320:};
+        -:  321:
+        -:  322:template<> struct is_error_code_enum<boost::asio::error::misc_errors>
+        -:  323:{
+        -:  324:  static const bool value = true;
+        -:  325:};
+        -:  326:
+        -:  327:} // namespace system
+        -:  328:} // namespace boost
+        -:  329:
+        -:  330:namespace boost {
+        -:  331:namespace asio {
+        -:  332:namespace error {
+        -:  333:
+     771*:  334:inline boost::system::error_code make_error_code(basic_errors e)
+        -:  335:{
+        -:  336:  return boost::system::error_code(
+     771*:  337:      static_cast<int>(e), get_system_category());
+        -:  338:}
+------------------
+_ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE:
+function _ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE called 0 returned 0% blocks executed 0%
+    #####:  334:inline boost::system::error_code make_error_code(basic_errors e)
+        -:  335:{
+        -:  336:  return boost::system::error_code(
+    #####:  337:      static_cast<int>(e), get_system_category());
+call    0 never executed
+call    1 never executed
+        -:  338:}
+------------------
+_ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE:
+function _ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE called 0 returned 0% blocks executed 0%
+    #####:  334:inline boost::system::error_code make_error_code(basic_errors e)
+        -:  335:{
+        -:  336:  return boost::system::error_code(
+    #####:  337:      static_cast<int>(e), get_system_category());
+call    0 never executed
+call    1 never executed
+        -:  338:}
+------------------
+_ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE:
+function _ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE called 80 returned 100% blocks executed 100%
+       80:  334:inline boost::system::error_code make_error_code(basic_errors e)
+        -:  335:{
+        -:  336:  return boost::system::error_code(
+       80:  337:      static_cast<int>(e), get_system_category());
+call    0 returned 100%
+call    1 returned 100%
+        -:  338:}
+------------------
+_ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE:
+function _ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE called 0 returned 0% blocks executed 0%
+    #####:  334:inline boost::system::error_code make_error_code(basic_errors e)
+        -:  335:{
+        -:  336:  return boost::system::error_code(
+    #####:  337:      static_cast<int>(e), get_system_category());
+call    0 never executed
+call    1 never executed
+        -:  338:}
+------------------
+_ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE:
+function _ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE called 41 returned 100% blocks executed 100%
+       41:  334:inline boost::system::error_code make_error_code(basic_errors e)
+        -:  335:{
+        -:  336:  return boost::system::error_code(
+       41:  337:      static_cast<int>(e), get_system_category());
+call    0 returned 100%
+call    1 returned 100%
+        -:  338:}
+------------------
+_ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE:
+function _ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE called 76 returned 100% blocks executed 100%
+       76:  334:inline boost::system::error_code make_error_code(basic_errors e)
+        -:  335:{
+        -:  336:  return boost::system::error_code(
+       76:  337:      static_cast<int>(e), get_system_category());
+call    0 returned 100%
+call    1 returned 100%
+        -:  338:}
+------------------
+_ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE:
+function _ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE called 0 returned 0% blocks executed 0%
+    #####:  334:inline boost::system::error_code make_error_code(basic_errors e)
+        -:  335:{
+        -:  336:  return boost::system::error_code(
+    #####:  337:      static_cast<int>(e), get_system_category());
+call    0 never executed
+call    1 never executed
+        -:  338:}
+------------------
+_ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE:
+function _ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE called 0 returned 0% blocks executed 0%
+    #####:  334:inline boost::system::error_code make_error_code(basic_errors e)
+        -:  335:{
+        -:  336:  return boost::system::error_code(
+    #####:  337:      static_cast<int>(e), get_system_category());
+call    0 never executed
+call    1 never executed
+        -:  338:}
+------------------
+_ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE:
+function _ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE called 0 returned 0% blocks executed 0%
+    #####:  334:inline boost::system::error_code make_error_code(basic_errors e)
+        -:  335:{
+        -:  336:  return boost::system::error_code(
+    #####:  337:      static_cast<int>(e), get_system_category());
+call    0 never executed
+call    1 never executed
+        -:  338:}
+------------------
+_ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE:
+function _ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE called 0 returned 0% blocks executed 0%
+    #####:  334:inline boost::system::error_code make_error_code(basic_errors e)
+        -:  335:{
+        -:  336:  return boost::system::error_code(
+    #####:  337:      static_cast<int>(e), get_system_category());
+call    0 never executed
+call    1 never executed
+        -:  338:}
+------------------
+_ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE:
+function _ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE called 0 returned 0% blocks executed 0%
+    #####:  334:inline boost::system::error_code make_error_code(basic_errors e)
+        -:  335:{
+        -:  336:  return boost::system::error_code(
+    #####:  337:      static_cast<int>(e), get_system_category());
+call    0 never executed
+call    1 never executed
+        -:  338:}
+------------------
+_ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE:
+function _ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE called 129 returned 100% blocks executed 100%
+      129:  334:inline boost::system::error_code make_error_code(basic_errors e)
+        -:  335:{
+        -:  336:  return boost::system::error_code(
+      129:  337:      static_cast<int>(e), get_system_category());
+call    0 returned 100%
+call    1 returned 100%
+        -:  338:}
+------------------
+_ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE:
+function _ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE called 0 returned 0% blocks executed 0%
+    #####:  334:inline boost::system::error_code make_error_code(basic_errors e)
+        -:  335:{
+        -:  336:  return boost::system::error_code(
+    #####:  337:      static_cast<int>(e), get_system_category());
+call    0 never executed
+call    1 never executed
+        -:  338:}
+------------------
+_ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE:
+function _ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE called 68 returned 100% blocks executed 100%
+       68:  334:inline boost::system::error_code make_error_code(basic_errors e)
+        -:  335:{
+        -:  336:  return boost::system::error_code(
+       68:  337:      static_cast<int>(e), get_system_category());
+call    0 returned 100%
+call    1 returned 100%
+        -:  338:}
+------------------
+_ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE:
+function _ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE called 0 returned 0% blocks executed 0%
+    #####:  334:inline boost::system::error_code make_error_code(basic_errors e)
+        -:  335:{
+        -:  336:  return boost::system::error_code(
+    #####:  337:      static_cast<int>(e), get_system_category());
+call    0 never executed
+call    1 never executed
+        -:  338:}
+------------------
+_ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE:
+function _ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE called 90 returned 100% blocks executed 100%
+       90:  334:inline boost::system::error_code make_error_code(basic_errors e)
+        -:  335:{
+        -:  336:  return boost::system::error_code(
+       90:  337:      static_cast<int>(e), get_system_category());
+call    0 returned 100%
+call    1 returned 100%
+        -:  338:}
+------------------
+_ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE:
+function _ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE called 0 returned 0% blocks executed 0%
+    #####:  334:inline boost::system::error_code make_error_code(basic_errors e)
+        -:  335:{
+        -:  336:  return boost::system::error_code(
+    #####:  337:      static_cast<int>(e), get_system_category());
+call    0 never executed
+call    1 never executed
+        -:  338:}
+------------------
+_ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE:
+function _ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE called 0 returned 0% blocks executed 0%
+    #####:  334:inline boost::system::error_code make_error_code(basic_errors e)
+        -:  335:{
+        -:  336:  return boost::system::error_code(
+    #####:  337:      static_cast<int>(e), get_system_category());
+call    0 never executed
+call    1 never executed
+        -:  338:}
+------------------
+_ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE:
+function _ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE called 0 returned 0% blocks executed 0%
+    #####:  334:inline boost::system::error_code make_error_code(basic_errors e)
+        -:  335:{
+        -:  336:  return boost::system::error_code(
+    #####:  337:      static_cast<int>(e), get_system_category());
+call    0 never executed
+call    1 never executed
+        -:  338:}
+------------------
+_ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE:
+function _ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE called 0 returned 0% blocks executed 0%
+    #####:  334:inline boost::system::error_code make_error_code(basic_errors e)
+        -:  335:{
+        -:  336:  return boost::system::error_code(
+    #####:  337:      static_cast<int>(e), get_system_category());
+call    0 never executed
+call    1 never executed
+        -:  338:}
+------------------
+_ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE:
+function _ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE called 0 returned 0% blocks executed 0%
+    #####:  334:inline boost::system::error_code make_error_code(basic_errors e)
+        -:  335:{
+        -:  336:  return boost::system::error_code(
+    #####:  337:      static_cast<int>(e), get_system_category());
+call    0 never executed
+call    1 never executed
+        -:  338:}
+------------------
+_ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE:
+function _ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE called 0 returned 0% blocks executed 0%
+    #####:  334:inline boost::system::error_code make_error_code(basic_errors e)
+        -:  335:{
+        -:  336:  return boost::system::error_code(
+    #####:  337:      static_cast<int>(e), get_system_category());
+call    0 never executed
+call    1 never executed
+        -:  338:}
+------------------
+_ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE:
+function _ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE called 0 returned 0% blocks executed 0%
+    #####:  334:inline boost::system::error_code make_error_code(basic_errors e)
+        -:  335:{
+        -:  336:  return boost::system::error_code(
+    #####:  337:      static_cast<int>(e), get_system_category());
+call    0 never executed
+call    1 never executed
+        -:  338:}
+------------------
+_ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE:
+function _ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE called 0 returned 0% blocks executed 0%
+    #####:  334:inline boost::system::error_code make_error_code(basic_errors e)
+        -:  335:{
+        -:  336:  return boost::system::error_code(
+    #####:  337:      static_cast<int>(e), get_system_category());
+call    0 never executed
+call    1 never executed
+        -:  338:}
+------------------
+_ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE:
+function _ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE called 0 returned 0% blocks executed 0%
+    #####:  334:inline boost::system::error_code make_error_code(basic_errors e)
+        -:  335:{
+        -:  336:  return boost::system::error_code(
+    #####:  337:      static_cast<int>(e), get_system_category());
+call    0 never executed
+call    1 never executed
+        -:  338:}
+------------------
+_ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE:
+function _ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE called 6 returned 100% blocks executed 100%
+        6:  334:inline boost::system::error_code make_error_code(basic_errors e)
+        -:  335:{
+        -:  336:  return boost::system::error_code(
+        6:  337:      static_cast<int>(e), get_system_category());
+call    0 returned 100%
+call    1 returned 100%
+        -:  338:}
+------------------
+_ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE:
+function _ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE called 0 returned 0% blocks executed 0%
+    #####:  334:inline boost::system::error_code make_error_code(basic_errors e)
+        -:  335:{
+        -:  336:  return boost::system::error_code(
+    #####:  337:      static_cast<int>(e), get_system_category());
+call    0 never executed
+call    1 never executed
+        -:  338:}
+------------------
+_ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE:
+function _ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE called 0 returned 0% blocks executed 0%
+    #####:  334:inline boost::system::error_code make_error_code(basic_errors e)
+        -:  335:{
+        -:  336:  return boost::system::error_code(
+    #####:  337:      static_cast<int>(e), get_system_category());
+call    0 never executed
+call    1 never executed
+        -:  338:}
+------------------
+_ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE:
+function _ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE called 0 returned 0% blocks executed 0%
+    #####:  334:inline boost::system::error_code make_error_code(basic_errors e)
+        -:  335:{
+        -:  336:  return boost::system::error_code(
+    #####:  337:      static_cast<int>(e), get_system_category());
+call    0 never executed
+call    1 never executed
+        -:  338:}
+------------------
+_ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE:
+function _ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE called 0 returned 0% blocks executed 0%
+    #####:  334:inline boost::system::error_code make_error_code(basic_errors e)
+        -:  335:{
+        -:  336:  return boost::system::error_code(
+    #####:  337:      static_cast<int>(e), get_system_category());
+call    0 never executed
+call    1 never executed
+        -:  338:}
+------------------
+_ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE:
+function _ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE called 0 returned 0% blocks executed 0%
+    #####:  334:inline boost::system::error_code make_error_code(basic_errors e)
+        -:  335:{
+        -:  336:  return boost::system::error_code(
+    #####:  337:      static_cast<int>(e), get_system_category());
+call    0 never executed
+call    1 never executed
+        -:  338:}
+------------------
+_ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE:
+function _ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE called 0 returned 0% blocks executed 0%
+    #####:  334:inline boost::system::error_code make_error_code(basic_errors e)
+        -:  335:{
+        -:  336:  return boost::system::error_code(
+    #####:  337:      static_cast<int>(e), get_system_category());
+call    0 never executed
+call    1 never executed
+        -:  338:}
+------------------
+_ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE:
+function _ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE called 0 returned 0% blocks executed 0%
+    #####:  334:inline boost::system::error_code make_error_code(basic_errors e)
+        -:  335:{
+        -:  336:  return boost::system::error_code(
+    #####:  337:      static_cast<int>(e), get_system_category());
+call    0 never executed
+call    1 never executed
+        -:  338:}
+------------------
+_ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE:
+function _ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE called 0 returned 0% blocks executed 0%
+    #####:  334:inline boost::system::error_code make_error_code(basic_errors e)
+        -:  335:{
+        -:  336:  return boost::system::error_code(
+    #####:  337:      static_cast<int>(e), get_system_category());
+call    0 never executed
+call    1 never executed
+        -:  338:}
+------------------
+_ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE:
+function _ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE called 0 returned 0% blocks executed 0%
+    #####:  334:inline boost::system::error_code make_error_code(basic_errors e)
+        -:  335:{
+        -:  336:  return boost::system::error_code(
+    #####:  337:      static_cast<int>(e), get_system_category());
+call    0 never executed
+call    1 never executed
+        -:  338:}
+------------------
+_ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE:
+function _ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE called 0 returned 0% blocks executed 0%
+    #####:  334:inline boost::system::error_code make_error_code(basic_errors e)
+        -:  335:{
+        -:  336:  return boost::system::error_code(
+    #####:  337:      static_cast<int>(e), get_system_category());
+call    0 never executed
+call    1 never executed
+        -:  338:}
+------------------
+_ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE:
+function _ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE called 0 returned 0% blocks executed 0%
+    #####:  334:inline boost::system::error_code make_error_code(basic_errors e)
+        -:  335:{
+        -:  336:  return boost::system::error_code(
+    #####:  337:      static_cast<int>(e), get_system_category());
+call    0 never executed
+call    1 never executed
+        -:  338:}
+------------------
+_ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE:
+function _ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE called 0 returned 0% blocks executed 0%
+    #####:  334:inline boost::system::error_code make_error_code(basic_errors e)
+        -:  335:{
+        -:  336:  return boost::system::error_code(
+    #####:  337:      static_cast<int>(e), get_system_category());
+call    0 never executed
+call    1 never executed
+        -:  338:}
+------------------
+_ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE:
+function _ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE called 0 returned 0% blocks executed 0%
+    #####:  334:inline boost::system::error_code make_error_code(basic_errors e)
+        -:  335:{
+        -:  336:  return boost::system::error_code(
+    #####:  337:      static_cast<int>(e), get_system_category());
+call    0 never executed
+call    1 never executed
+        -:  338:}
+------------------
+_ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE:
+function _ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE called 0 returned 0% blocks executed 0%
+    #####:  334:inline boost::system::error_code make_error_code(basic_errors e)
+        -:  335:{
+        -:  336:  return boost::system::error_code(
+    #####:  337:      static_cast<int>(e), get_system_category());
+call    0 never executed
+call    1 never executed
+        -:  338:}
+------------------
+_ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE:
+function _ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE called 0 returned 0% blocks executed 0%
+    #####:  334:inline boost::system::error_code make_error_code(basic_errors e)
+        -:  335:{
+        -:  336:  return boost::system::error_code(
+    #####:  337:      static_cast<int>(e), get_system_category());
+call    0 never executed
+call    1 never executed
+        -:  338:}
+------------------
+_ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE:
+function _ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE called 49 returned 100% blocks executed 100%
+       49:  334:inline boost::system::error_code make_error_code(basic_errors e)
+        -:  335:{
+        -:  336:  return boost::system::error_code(
+       49:  337:      static_cast<int>(e), get_system_category());
+call    0 returned 100%
+call    1 returned 100%
+        -:  338:}
+------------------
+_ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE:
+function _ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE called 0 returned 0% blocks executed 0%
+    #####:  334:inline boost::system::error_code make_error_code(basic_errors e)
+        -:  335:{
+        -:  336:  return boost::system::error_code(
+    #####:  337:      static_cast<int>(e), get_system_category());
+call    0 never executed
+call    1 never executed
+        -:  338:}
+------------------
+_ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE:
+function _ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE called 232 returned 100% blocks executed 100%
+      232:  334:inline boost::system::error_code make_error_code(basic_errors e)
+        -:  335:{
+        -:  336:  return boost::system::error_code(
+      232:  337:      static_cast<int>(e), get_system_category());
+call    0 returned 100%
+call    1 returned 100%
+        -:  338:}
+------------------
+_ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE:
+function _ZN5boost4asio5error15make_error_codeENS1_12basic_errorsE called 0 returned 0% blocks executed 0%
+    #####:  334:inline boost::system::error_code make_error_code(basic_errors e)
+        -:  335:{
+        -:  336:  return boost::system::error_code(
+    #####:  337:      static_cast<int>(e), get_system_category());
+call    0 never executed
+call    1 never executed
+        -:  338:}
+------------------
+        -:  339:
+    #####:  340:inline boost::system::error_code make_error_code(netdb_errors e)
+        -:  341:{
+        -:  342:  return boost::system::error_code(
+    #####:  343:      static_cast<int>(e), get_netdb_category());
+        -:  344:}
+------------------
+_ZN5boost4asio5error15make_error_codeENS1_12netdb_errorsE:
+function _ZN5boost4asio5error15make_error_codeENS1_12netdb_errorsE called 0 returned 0% blocks executed 0%
+    #####:  340:inline boost::system::error_code make_error_code(netdb_errors e)
+        -:  341:{
+        -:  342:  return boost::system::error_code(
+    #####:  343:      static_cast<int>(e), get_netdb_category());
+call    0 never executed
+call    1 never executed
+        -:  344:}
+------------------
+_ZN5boost4asio5error15make_error_codeENS1_12netdb_errorsE:
+function _ZN5boost4asio5error15make_error_codeENS1_12netdb_errorsE called 0 returned 0% blocks executed 0%
+    #####:  340:inline boost::system::error_code make_error_code(netdb_errors e)
+        -:  341:{
+        -:  342:  return boost::system::error_code(
+    #####:  343:      static_cast<int>(e), get_netdb_category());
+call    0 never executed
+call    1 never executed
+        -:  344:}
+------------------
+        -:  345:
+    #####:  346:inline boost::system::error_code make_error_code(addrinfo_errors e)
+        -:  347:{
+        -:  348:  return boost::system::error_code(
+    #####:  349:      static_cast<int>(e), get_addrinfo_category());
+        -:  350:}
+------------------
+_ZN5boost4asio5error15make_error_codeENS1_15addrinfo_errorsE:
+function _ZN5boost4asio5error15make_error_codeENS1_15addrinfo_errorsE called 0 returned 0% blocks executed 0%
+    #####:  346:inline boost::system::error_code make_error_code(addrinfo_errors e)
+        -:  347:{
+        -:  348:  return boost::system::error_code(
+    #####:  349:      static_cast<int>(e), get_addrinfo_category());
+call    0 never executed
+call    1 never executed
+        -:  350:}
+------------------
+_ZN5boost4asio5error15make_error_codeENS1_15addrinfo_errorsE:
+function _ZN5boost4asio5error15make_error_codeENS1_15addrinfo_errorsE called 0 returned 0% blocks executed 0%
+    #####:  346:inline boost::system::error_code make_error_code(addrinfo_errors e)
+        -:  347:{
+        -:  348:  return boost::system::error_code(
+    #####:  349:      static_cast<int>(e), get_addrinfo_category());
+call    0 never executed
+call    1 never executed
+        -:  350:}
+------------------
+        -:  351:
+      72*:  352:inline boost::system::error_code make_error_code(misc_errors e)
+        -:  353:{
+        -:  354:  return boost::system::error_code(
+      72*:  355:      static_cast<int>(e), get_misc_category());
+        -:  356:}
+        -:  357:
+        -:  358:} // namespace error
+        -:  359:namespace stream_errc {
+        -:  360:  // Simulates the proposed stream_errc scoped enum.
+        -:  361:  using error::eof;
+        -:  362:  using error::not_found;
+        -:  363:} // namespace stream_errc
+        -:  364:namespace socket_errc {
+        -:  365:  // Simulates the proposed socket_errc scoped enum.
+        -:  366:  using error::already_open;
+        -:  367:  using error::not_found;
+        -:  368:} // namespace socket_errc
+        -:  369:namespace resolver_errc {
+        -:  370:  // Simulates the proposed resolver_errc scoped enum.
+        -:  371:  using error::host_not_found;
+        -:  372:  const error::netdb_errors try_again = error::host_not_found_try_again;
+        -:  373:  using error::service_not_found;
+        -:  374:} // namespace resolver_errc
+        -:  375:} // namespace asio
+        -:  376:} // namespace boost
+        -:  377:
+        -:  378:#include <boost/asio/detail/pop_options.hpp>
+        -:  379:
+        -:  380:#undef BOOST_ASIO_NATIVE_ERROR
+        -:  381:#undef BOOST_ASIO_SOCKET_ERROR
+        -:  382:#undef BOOST_ASIO_NETDB_ERROR
+        -:  383:#undef BOOST_ASIO_GETADDRINFO_ERROR
+        -:  384:#undef BOOST_ASIO_WIN_OR_POSIX
+        -:  385:
+        -:  386:#if defined(BOOST_ASIO_HEADER_ONLY)
+        -:  387:# include <boost/asio/impl/error.ipp>
+        -:  388:#endif // defined(BOOST_ASIO_HEADER_ONLY)
+        -:  389:
+        -:  390:#endif // BOOST_ASIO_ERROR_HPP

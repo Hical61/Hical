@@ -1,0 +1,606 @@
+        -:    0:Source:/home/runner/work/Hical/Hical/src/core/Error.cpp
+        -:    1:#include "Error.h"
+        -:    2:#include <boost/asio/error.hpp>
+        -:    3:#include <cerrno>
+        -:    4:
+        -:    5:#ifdef _WIN32
+        -:    6:	#include <winerror.h>
+        -:    7:#endif
+        -:    8:
+        -:    9:namespace hical
+        -:   10:{
+        -:   11:
+function _ZN5hical14fromBoostErrorERKN5boost6system10error_codeE called 18 returned 100% blocks executed 84%
+       18:   12:	ErrorCode fromBoostError(const boost::system::error_code& ec)
+        -:   13:	{
+       18:   14:		if (!ec)
+call    0 returned 100%
+branch  1 taken 6% (fallthrough)
+branch  2 taken 94%
+        -:   15:		{
+        1:   16:			return ErrorCode::hNoError;
+        -:   17:		}
+        -:   18:
+        -:   19:		// Asio 错误码（boost::asio::error 命名空间）
+       17:   20:		if (ec == boost::asio::error::eof)
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 12% (fallthrough)
+branch  3 taken 88%
+        -:   21:		{
+        2:   22:			return ErrorCode::hEof;
+        -:   23:		}
+       15:   24:		if (ec == boost::asio::error::connection_reset)
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 7% (fallthrough)
+branch  3 taken 93%
+        -:   25:		{
+        1:   26:			return ErrorCode::hConnectionReset;
+        -:   27:		}
+       14:   28:		if (ec == boost::asio::error::connection_refused)
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 7% (fallthrough)
+branch  3 taken 93%
+        -:   29:		{
+        1:   30:			return ErrorCode::hConnectionRefused;
+        -:   31:		}
+       13:   32:		if (ec == boost::asio::error::timed_out)
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 8% (fallthrough)
+branch  3 taken 92%
+        -:   33:		{
+        1:   34:			return ErrorCode::hTimedOut;
+        -:   35:		}
+       12:   36:		if (ec == boost::asio::error::operation_aborted)
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 17% (fallthrough)
+branch  3 taken 83%
+        -:   37:		{
+        2:   38:			return ErrorCode::hOperationAborted;
+        -:   39:		}
+       10:   40:		if (ec == boost::asio::error::connection_aborted)
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 10% (fallthrough)
+branch  3 taken 90%
+        -:   41:		{
+        1:   42:			return ErrorCode::hConnectionAborted;
+        -:   43:		}
+        9:   44:		if (ec == boost::asio::error::network_unreachable)
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 11% (fallthrough)
+branch  3 taken 89%
+        -:   45:		{
+        1:   46:			return ErrorCode::hNetworkUnreachable;
+        -:   47:		}
+        8:   48:		if (ec == boost::asio::error::host_unreachable)
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 12% (fallthrough)
+branch  3 taken 88%
+        -:   49:		{
+        1:   50:			return ErrorCode::hHostUnreachable;
+        -:   51:		}
+        7:   52:		if (ec == boost::asio::error::address_in_use)
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 14% (fallthrough)
+branch  3 taken 86%
+        -:   53:		{
+        1:   54:			return ErrorCode::hAddressInUse;
+        -:   55:		}
+        6:   56:		if (ec == boost::asio::error::already_started)
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 0% (fallthrough)
+branch  3 taken 100%
+        -:   57:		{
+    #####:   58:			return ErrorCode::hOperationInProgress;
+        -:   59:		}
+        6:   60:		if (ec == boost::asio::error::broken_pipe)
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 17% (fallthrough)
+branch  3 taken 83%
+        -:   61:		{
+        1:   62:			return ErrorCode::hBrokenPipe;
+        -:   63:		}
+        5:   64:		if (ec == boost::asio::error::access_denied)
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 20% (fallthrough)
+branch  3 taken 80%
+        -:   65:		{
+        1:   66:			return ErrorCode::hPermissionDenied;
+        -:   67:		}
+        4:   68:		if (ec == boost::asio::error::no_descriptors)
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 25% (fallthrough)
+branch  3 taken 75%
+        -:   69:		{
+        1:   70:			return ErrorCode::hTooManyOpenFiles;
+        -:   71:		}
+        3:   72:		if (ec == boost::asio::error::would_block || ec == boost::asio::error::try_again)
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 67% (fallthrough)
+branch  3 taken 33%
+call    4 returned 100%
+call    5 returned 100%
+branch  6 taken 0% (fallthrough)
+branch  7 taken 100%
+branch  8 taken 33% (fallthrough)
+branch  9 taken 67%
+        -:   73:		{
+        1:   74:			return ErrorCode::hWouldBlock;
+        -:   75:		}
+        2:   76:		if (ec == boost::asio::error::in_progress)
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 0% (fallthrough)
+branch  3 taken 100%
+        -:   77:		{
+    #####:   78:			return ErrorCode::hConnectionInProgress;
+        -:   79:		}
+        -:   80:
+        -:   81:		// 系统错误码补充映射
+        2:   82:		auto value = ec.value();
+call    0 returned 100%
+        2:   83:		auto& category = ec.category();
+call    0 returned 100%
+        -:   84:
+       2*:   85:		if (category == boost::system::system_category() || category == boost::system::generic_category())
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0%
+call    4 returned 100%
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0%
+branch  8 taken 100% (fallthrough)
+branch  9 taken 0%
+        -:   86:		{
+        -:   87:#ifdef _WIN32
+        -:   88:			// Windows 特有错误码
+        -:   89:			switch (value)
+        -:   90:			{
+        -:   91:				case WSAECONNRESET:
+        -:   92:					return ErrorCode::hConnectionReset;
+        -:   93:				case WSAECONNREFUSED:
+        -:   94:					return ErrorCode::hConnectionRefused;
+        -:   95:				case WSAETIMEDOUT:
+        -:   96:					return ErrorCode::hTimedOut;
+        -:   97:				case WSAECONNABORTED:
+        -:   98:					return ErrorCode::hConnectionAborted;
+        -:   99:				case WSAENETUNREACH:
+        -:  100:					return ErrorCode::hNetworkUnreachable;
+        -:  101:				case WSAEHOSTUNREACH:
+        -:  102:					return ErrorCode::hHostUnreachable;
+        -:  103:				case WSAEADDRINUSE:
+        -:  104:					return ErrorCode::hAddressInUse;
+        -:  105:				case WSAEADDRNOTAVAIL:
+        -:  106:					return ErrorCode::hAddressNotAvailable;
+        -:  107:				case WSAEACCES:
+        -:  108:					return ErrorCode::hPermissionDenied;
+        -:  109:				case WSAEWOULDBLOCK:
+        -:  110:					return ErrorCode::hWouldBlock;
+        -:  111:				case WSAEINPROGRESS:
+        -:  112:					return ErrorCode::hConnectionInProgress;
+        -:  113:				default:
+        -:  114:					break;
+        -:  115:			}
+        -:  116:#else
+        -:  117:			// POSIX 错误码
+        2:  118:			switch (value)
+branch  0 taken 0%
+branch  1 taken 0%
+branch  2 taken 0%
+branch  3 taken 0%
+branch  4 taken 0%
+branch  5 taken 0%
+branch  6 taken 0%
+branch  7 taken 0%
+branch  8 taken 0%
+branch  9 taken 0%
+branch 10 taken 0%
+branch 11 taken 0%
+branch 12 taken 0%
+branch 13 taken 100%
+        -:  119:			{
+    #####:  120:				case ECONNRESET:
+    #####:  121:					return ErrorCode::hConnectionReset;
+    #####:  122:				case ECONNREFUSED:
+    #####:  123:					return ErrorCode::hConnectionRefused;
+    #####:  124:				case ETIMEDOUT:
+    #####:  125:					return ErrorCode::hTimedOut;
+    #####:  126:				case ECONNABORTED:
+    #####:  127:					return ErrorCode::hConnectionAborted;
+    #####:  128:				case ENETUNREACH:
+    #####:  129:					return ErrorCode::hNetworkUnreachable;
+    #####:  130:				case EHOSTUNREACH:
+    #####:  131:					return ErrorCode::hHostUnreachable;
+    #####:  132:				case EADDRINUSE:
+    #####:  133:					return ErrorCode::hAddressInUse;
+    #####:  134:				case EADDRNOTAVAIL:
+    #####:  135:					return ErrorCode::hAddressNotAvailable;
+    #####:  136:				case EACCES:
+    #####:  137:					return ErrorCode::hPermissionDenied;
+    #####:  138:				case EMFILE:
+        -:  139:				case ENFILE:
+    #####:  140:					return ErrorCode::hTooManyOpenFiles;
+    #####:  141:				case EAGAIN:
+    #####:  142:					return ErrorCode::hWouldBlock;
+    #####:  143:				case EPIPE:
+    #####:  144:					return ErrorCode::hBrokenPipe;
+    #####:  145:				case EINPROGRESS:
+    #####:  146:					return ErrorCode::hConnectionInProgress;
+        2:  147:				default:
+        2:  148:					break;
+        -:  149:			}
+        -:  150:#endif
+        -:  151:		}
+        -:  152:
+        2:  153:		return ErrorCode::hUnknown;
+        -:  154:	}
+        -:  155:
+function _ZN5hical14toNetworkErrorERKN5boost6system10error_codeE called 4 returned 100% blocks executed 87%
+        4:  156:	NetworkError toNetworkError(const boost::system::error_code& ec)
+        -:  157:	{
+        4:  158:		if (!ec)
+call    0 returned 100%
+branch  1 taken 25% (fallthrough)
+branch  2 taken 75%
+        -:  159:		{
+        2:  160:			return {ErrorCode::hNoError, ""};
+        -:  161:		}
+        -:  162:
+        6:  163:		return {fromBoostError(ec), ec.message()};
+call    0 returned 100%
+        5:  164:	}
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+        -:  165:
+function _ZN5hical17errorCodeToStringENS_9ErrorCodeE called 6 returned 100% blocks executed 33%
+        6:  166:	const char* errorCodeToString(ErrorCode code)
+        -:  167:	{
+        6:  168:		switch (code)
+branch  0 taken 17%
+branch  1 taken 17%
+branch  2 taken 17%
+branch  3 taken 0%
+branch  4 taken 17%
+branch  5 taken 0%
+branch  6 taken 0%
+branch  7 taken 0%
+branch  8 taken 0%
+branch  9 taken 0%
+branch 10 taken 0%
+branch 11 taken 17%
+branch 12 taken 0%
+branch 13 taken 0%
+branch 14 taken 0%
+branch 15 taken 0%
+branch 16 taken 0%
+branch 17 taken 0%
+branch 18 taken 0%
+branch 19 taken 0%
+branch 20 taken 17%
+branch 21 taken 0%
+        -:  169:		{
+        1:  170:			case ErrorCode::hNoError:
+        1:  171:				return "No error";
+        1:  172:			case ErrorCode::hEof:
+        1:  173:				return "End of file";
+        1:  174:			case ErrorCode::hConnectionReset:
+        1:  175:				return "Connection reset by peer";
+    #####:  176:			case ErrorCode::hConnectionRefused:
+    #####:  177:				return "Connection refused";
+        1:  178:			case ErrorCode::hTimedOut:
+        1:  179:				return "Connection timed out";
+    #####:  180:			case ErrorCode::hConnectionInProgress:
+    #####:  181:				return "Connection in progress";
+    #####:  182:			case ErrorCode::hConnectionAborted:
+    #####:  183:				return "Connection aborted";
+    #####:  184:			case ErrorCode::hAddressInUse:
+    #####:  185:				return "Address already in use";
+    #####:  186:			case ErrorCode::hAddressNotAvailable:
+    #####:  187:				return "Address not available";
+    #####:  188:			case ErrorCode::hNetworkUnreachable:
+    #####:  189:				return "Network unreachable";
+    #####:  190:			case ErrorCode::hHostUnreachable:
+    #####:  191:				return "Host unreachable";
+        1:  192:			case ErrorCode::hOperationAborted:
+        1:  193:				return "Operation aborted";
+    #####:  194:			case ErrorCode::hOperationInProgress:
+    #####:  195:				return "Operation in progress";
+    #####:  196:			case ErrorCode::hBrokenPipe:
+    #####:  197:				return "Broken pipe";
+    #####:  198:			case ErrorCode::hPermissionDenied:
+    #####:  199:				return "Permission denied";
+    #####:  200:			case ErrorCode::hTooManyOpenFiles:
+    #####:  201:				return "Too many open files";
+    #####:  202:			case ErrorCode::hWouldBlock:
+    #####:  203:				return "Resource temporarily unavailable";
+    #####:  204:			case ErrorCode::hSslHandshakeError:
+    #####:  205:				return "SSL handshake error";
+    #####:  206:			case ErrorCode::hSslInvalidCertificate:
+    #####:  207:				return "SSL invalid certificate";
+    #####:  208:			case ErrorCode::hSslProtocolError:
+    #####:  209:				return "SSL protocol error";
+        1:  210:			case ErrorCode::hUnknown:
+        1:  211:				return "Unknown error";
+        -:  212:		}
+    #####:  213:		return "Unknown error";
+        -:  214:	}
+        -:  215:
+function _ZN5hical12fromStdErrorERKSt10error_code called 0 returned 0% blocks executed 0%
+    #####:  216:	ErrorCode fromStdError(const std::error_code& ec)
+        -:  217:	{
+    #####:  218:		if (!ec)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+        -:  219:		{
+    #####:  220:			return ErrorCode::hNoError;
+        -:  221:		}
+        -:  222:
+        -:  223:		// 通过 std::errc 枚举映射平台无关的 POSIX 错误码
+    #####:  224:		if (ec == std::errc::connection_reset)
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed
+        -:  225:		{
+    #####:  226:			return ErrorCode::hConnectionReset;
+        -:  227:		}
+    #####:  228:		if (ec == std::errc::connection_refused)
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed
+        -:  229:		{
+    #####:  230:			return ErrorCode::hConnectionRefused;
+        -:  231:		}
+    #####:  232:		if (ec == std::errc::timed_out)
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed
+        -:  233:		{
+    #####:  234:			return ErrorCode::hTimedOut;
+        -:  235:		}
+    #####:  236:		if (ec == std::errc::operation_canceled)
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed
+        -:  237:		{
+    #####:  238:			return ErrorCode::hOperationAborted;
+        -:  239:		}
+    #####:  240:		if (ec == std::errc::connection_aborted)
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed
+        -:  241:		{
+    #####:  242:			return ErrorCode::hConnectionAborted;
+        -:  243:		}
+    #####:  244:		if (ec == std::errc::network_unreachable)
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed
+        -:  245:		{
+    #####:  246:			return ErrorCode::hNetworkUnreachable;
+        -:  247:		}
+    #####:  248:		if (ec == std::errc::host_unreachable)
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed
+        -:  249:		{
+    #####:  250:			return ErrorCode::hHostUnreachable;
+        -:  251:		}
+    #####:  252:		if (ec == std::errc::address_in_use)
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed
+        -:  253:		{
+    #####:  254:			return ErrorCode::hAddressInUse;
+        -:  255:		}
+    #####:  256:		if (ec == std::errc::address_not_available)
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed
+        -:  257:		{
+    #####:  258:			return ErrorCode::hAddressNotAvailable;
+        -:  259:		}
+    #####:  260:		if (ec == std::errc::already_connected)
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed
+        -:  261:		{
+    #####:  262:			return ErrorCode::hOperationInProgress;
+        -:  263:		}
+    #####:  264:		if (ec == std::errc::broken_pipe)
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed
+        -:  265:		{
+    #####:  266:			return ErrorCode::hBrokenPipe;
+        -:  267:		}
+    #####:  268:		if (ec == std::errc::permission_denied)
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed
+        -:  269:		{
+    #####:  270:			return ErrorCode::hPermissionDenied;
+        -:  271:		}
+    #####:  272:		if (ec == std::errc::too_many_files_open || ec == std::errc::too_many_files_open_in_system)
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed
+call    4 never executed
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed
+branch  8 never executed (fallthrough)
+branch  9 never executed
+        -:  273:		{
+    #####:  274:			return ErrorCode::hTooManyOpenFiles;
+        -:  275:		}
+    #####:  276:		if (ec == std::errc::operation_would_block || ec == std::errc::resource_unavailable_try_again)
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed
+call    4 never executed
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed
+branch  8 never executed (fallthrough)
+branch  9 never executed
+        -:  277:		{
+    #####:  278:			return ErrorCode::hWouldBlock;
+        -:  279:		}
+    #####:  280:		if (ec == std::errc::operation_in_progress)
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed
+        -:  281:		{
+    #####:  282:			return ErrorCode::hConnectionInProgress;
+        -:  283:		}
+        -:  284:
+        -:  285:		// EOF 没有对应的 std::errc，通过原始值判断
+    #####:  286:		auto value = ec.value();
+call    0 never executed
+    #####:  287:		auto& category = ec.category();
+call    0 never executed
+        -:  288:
+    #####:  289:		if (category == std::generic_category() || category == std::system_category())
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed
+        -:  290:		{
+        -:  291:#ifdef _WIN32
+        -:  292:			switch (value)
+        -:  293:			{
+        -:  294:				case WSAECONNRESET:
+        -:  295:					return ErrorCode::hConnectionReset;
+        -:  296:				case WSAECONNREFUSED:
+        -:  297:					return ErrorCode::hConnectionRefused;
+        -:  298:				case WSAETIMEDOUT:
+        -:  299:					return ErrorCode::hTimedOut;
+        -:  300:				case WSAECONNABORTED:
+        -:  301:					return ErrorCode::hConnectionAborted;
+        -:  302:				case WSAENETUNREACH:
+        -:  303:					return ErrorCode::hNetworkUnreachable;
+        -:  304:				case WSAEHOSTUNREACH:
+        -:  305:					return ErrorCode::hHostUnreachable;
+        -:  306:				case WSAEADDRINUSE:
+        -:  307:					return ErrorCode::hAddressInUse;
+        -:  308:				case WSAEADDRNOTAVAIL:
+        -:  309:					return ErrorCode::hAddressNotAvailable;
+        -:  310:				case WSAEACCES:
+        -:  311:					return ErrorCode::hPermissionDenied;
+        -:  312:				case WSAEWOULDBLOCK:
+        -:  313:					return ErrorCode::hWouldBlock;
+        -:  314:				case WSAEINPROGRESS:
+        -:  315:					return ErrorCode::hConnectionInProgress;
+        -:  316:				default:
+        -:  317:					break;
+        -:  318:			}
+        -:  319:#else
+    #####:  320:			switch (value)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+branch  5 never executed
+branch  6 never executed
+branch  7 never executed
+branch  8 never executed
+branch  9 never executed
+branch 10 never executed
+branch 11 never executed
+branch 12 never executed
+branch 13 never executed
+        -:  321:			{
+    #####:  322:				case ECONNRESET:
+    #####:  323:					return ErrorCode::hConnectionReset;
+    #####:  324:				case ECONNREFUSED:
+    #####:  325:					return ErrorCode::hConnectionRefused;
+    #####:  326:				case ETIMEDOUT:
+    #####:  327:					return ErrorCode::hTimedOut;
+    #####:  328:				case ECONNABORTED:
+    #####:  329:					return ErrorCode::hConnectionAborted;
+    #####:  330:				case ENETUNREACH:
+    #####:  331:					return ErrorCode::hNetworkUnreachable;
+    #####:  332:				case EHOSTUNREACH:
+    #####:  333:					return ErrorCode::hHostUnreachable;
+    #####:  334:				case EADDRINUSE:
+    #####:  335:					return ErrorCode::hAddressInUse;
+    #####:  336:				case EADDRNOTAVAIL:
+    #####:  337:					return ErrorCode::hAddressNotAvailable;
+    #####:  338:				case EACCES:
+    #####:  339:					return ErrorCode::hPermissionDenied;
+    #####:  340:				case EMFILE:
+        -:  341:				case ENFILE:
+    #####:  342:					return ErrorCode::hTooManyOpenFiles;
+    #####:  343:				case EAGAIN:
+    #####:  344:					return ErrorCode::hWouldBlock;
+    #####:  345:				case EPIPE:
+    #####:  346:					return ErrorCode::hBrokenPipe;
+    #####:  347:				case EINPROGRESS:
+    #####:  348:					return ErrorCode::hConnectionInProgress;
+    #####:  349:				default:
+    #####:  350:					break;
+        -:  351:			}
+        -:  352:#endif
+        -:  353:		}
+        -:  354:
+    #####:  355:		return ErrorCode::hUnknown;
+        -:  356:	}
+        -:  357:
+function _ZN5hical14toNetworkErrorERKSt10error_code called 0 returned 0% blocks executed 0%
+    #####:  358:	NetworkError toNetworkError(const std::error_code& ec)
+        -:  359:	{
+    #####:  360:		if (!ec)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+        -:  361:		{
+    #####:  362:			return {ErrorCode::hNoError, ""};
+        -:  363:		}
+        -:  364:
+    #####:  365:		return {fromStdError(ec), ec.message()};
+call    0 never executed
+    #####:  366:	}
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+        -:  367:
+        -:  368:} // namespace hical

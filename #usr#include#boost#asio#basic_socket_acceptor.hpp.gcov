@@ -1,0 +1,3693 @@
+        -:    0:Source:/usr/include/boost/asio/basic_socket_acceptor.hpp
+        -:    1://
+        -:    2:// basic_socket_acceptor.hpp
+        -:    3:// ~~~~~~~~~~~~~~~~~~~~~~~~~
+        -:    4://
+        -:    5:// Copyright (c) 2003-2023 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+        -:    6://
+        -:    7:// Distributed under the Boost Software License, Version 1.0. (See accompanying
+        -:    8:// file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+        -:    9://
+        -:   10:
+        -:   11:#ifndef BOOST_ASIO_BASIC_SOCKET_ACCEPTOR_HPP
+        -:   12:#define BOOST_ASIO_BASIC_SOCKET_ACCEPTOR_HPP
+        -:   13:
+        -:   14:#if defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   15:# pragma once
+        -:   16:#endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   17:
+        -:   18:#include <boost/asio/detail/config.hpp>
+        -:   19:#include <boost/asio/any_io_executor.hpp>
+        -:   20:#include <boost/asio/basic_socket.hpp>
+        -:   21:#include <boost/asio/detail/handler_type_requirements.hpp>
+        -:   22:#include <boost/asio/detail/io_object_impl.hpp>
+        -:   23:#include <boost/asio/detail/non_const_lvalue.hpp>
+        -:   24:#include <boost/asio/detail/throw_error.hpp>
+        -:   25:#include <boost/asio/detail/type_traits.hpp>
+        -:   26:#include <boost/asio/error.hpp>
+        -:   27:#include <boost/asio/execution_context.hpp>
+        -:   28:#include <boost/asio/socket_base.hpp>
+        -:   29:
+        -:   30:#if defined(BOOST_ASIO_WINDOWS_RUNTIME)
+        -:   31:# include <boost/asio/detail/null_socket_service.hpp>
+        -:   32:#elif defined(BOOST_ASIO_HAS_IOCP)
+        -:   33:# include <boost/asio/detail/win_iocp_socket_service.hpp>
+        -:   34:#elif defined(BOOST_ASIO_HAS_IO_URING_AS_DEFAULT)
+        -:   35:# include <boost/asio/detail/io_uring_socket_service.hpp>
+        -:   36:#else
+        -:   37:# include <boost/asio/detail/reactive_socket_service.hpp>
+        -:   38:#endif
+        -:   39:
+        -:   40:#if defined(BOOST_ASIO_HAS_MOVE)
+        -:   41:# include <utility>
+        -:   42:#endif // defined(BOOST_ASIO_HAS_MOVE)
+        -:   43:
+        -:   44:#include <boost/asio/detail/push_options.hpp>
+        -:   45:
+        -:   46:namespace boost {
+        -:   47:namespace asio {
+        -:   48:
+        -:   49:#if !defined(BOOST_ASIO_BASIC_SOCKET_ACCEPTOR_FWD_DECL)
+        -:   50:#define BOOST_ASIO_BASIC_SOCKET_ACCEPTOR_FWD_DECL
+        -:   51:
+        -:   52:// Forward declaration with defaulted arguments.
+        -:   53:template <typename Protocol, typename Executor = any_io_executor>
+        -:   54:class basic_socket_acceptor;
+        -:   55:
+        -:   56:#endif // !defined(BOOST_ASIO_BASIC_SOCKET_ACCEPTOR_FWD_DECL)
+        -:   57:
+        -:   58:/// Provides the ability to accept new connections.
+        -:   59:/**
+        -:   60: * The basic_socket_acceptor class template is used for accepting new socket
+        -:   61: * connections.
+        -:   62: *
+        -:   63: * @par Thread Safety
+        -:   64: * @e Distinct @e objects: Safe.@n
+        -:   65: * @e Shared @e objects: Unsafe.
+        -:   66: *
+        -:   67: * Synchronous @c accept operations are thread safe, if the underlying
+        -:   68: * operating system calls are also thread safe. This means that it is permitted
+        -:   69: * to perform concurrent calls to synchronous @c accept operations on a single
+        -:   70: * socket object. Other synchronous operations, such as @c open or @c close, are
+        -:   71: * not thread safe.
+        -:   72: *
+        -:   73: * @par Example
+        -:   74: * Opening a socket acceptor with the SO_REUSEADDR option enabled:
+        -:   75: * @code
+        -:   76: * boost::asio::ip::tcp::acceptor acceptor(my_context);
+        -:   77: * boost::asio::ip::tcp::endpoint endpoint(boost::asio::ip::tcp::v4(), port);
+        -:   78: * acceptor.open(endpoint.protocol());
+        -:   79: * acceptor.set_option(boost::asio::ip::tcp::acceptor::reuse_address(true));
+        -:   80: * acceptor.bind(endpoint);
+        -:   81: * acceptor.listen();
+        -:   82: * @endcode
+        -:   83: */
+        -:   84:template <typename Protocol, typename Executor>
+        -:   85:class basic_socket_acceptor
+        -:   86:  : public socket_base
+        -:   87:{
+        -:   88:private:
+        -:   89:  class initiate_async_wait;
+        -:   90:  class initiate_async_accept;
+        -:   91:  class initiate_async_move_accept;
+        -:   92:
+        -:   93:public:
+        -:   94:  /// The type of the executor associated with the object.
+        -:   95:  typedef Executor executor_type;
+        -:   96:
+        -:   97:  /// Rebinds the acceptor type to another executor.
+        -:   98:  template <typename Executor1>
+        -:   99:  struct rebind_executor
+        -:  100:  {
+        -:  101:    /// The socket type when rebound to the specified executor.
+        -:  102:    typedef basic_socket_acceptor<Protocol, Executor1> other;
+        -:  103:  };
+        -:  104:
+        -:  105:  /// The native representation of an acceptor.
+        -:  106:#if defined(GENERATING_DOCUMENTATION)
+        -:  107:  typedef implementation_defined native_handle_type;
+        -:  108:#elif defined(BOOST_ASIO_WINDOWS_RUNTIME)
+        -:  109:  typedef typename detail::null_socket_service<
+        -:  110:    Protocol>::native_handle_type native_handle_type;
+        -:  111:#elif defined(BOOST_ASIO_HAS_IOCP)
+        -:  112:  typedef typename detail::win_iocp_socket_service<
+        -:  113:    Protocol>::native_handle_type native_handle_type;
+        -:  114:#elif defined(BOOST_ASIO_HAS_IO_URING_AS_DEFAULT)
+        -:  115:  typedef typename detail::io_uring_socket_service<
+        -:  116:    Protocol>::native_handle_type native_handle_type;
+        -:  117:#else
+        -:  118:  typedef typename detail::reactive_socket_service<
+        -:  119:    Protocol>::native_handle_type native_handle_type;
+        -:  120:#endif
+        -:  121:
+        -:  122:  /// The protocol type.
+        -:  123:  typedef Protocol protocol_type;
+        -:  124:
+        -:  125:  /// The endpoint type.
+        -:  126:  typedef typename Protocol::endpoint endpoint_type;
+        -:  127:
+        -:  128:  /// Construct an acceptor without opening it.
+        -:  129:  /**
+        -:  130:   * This constructor creates an acceptor without opening it to listen for new
+        -:  131:   * connections. The open() function must be called before the acceptor can
+        -:  132:   * accept new socket connections.
+        -:  133:   *
+        -:  134:   * @param ex The I/O executor that the acceptor will use, by default, to
+        -:  135:   * dispatch handlers for any asynchronous operations performed on the
+        -:  136:   * acceptor.
+        -:  137:   */
+        -:  138:  explicit basic_socket_acceptor(const executor_type& ex)
+        -:  139:    : impl_(0, ex)
+        -:  140:  {
+        -:  141:  }
+        -:  142:
+        -:  143:  /// Construct an acceptor without opening it.
+        -:  144:  /**
+        -:  145:   * This constructor creates an acceptor without opening it to listen for new
+        -:  146:   * connections. The open() function must be called before the acceptor can
+        -:  147:   * accept new socket connections.
+        -:  148:   *
+        -:  149:   * @param context An execution context which provides the I/O executor that
+        -:  150:   * the acceptor will use, by default, to dispatch handlers for any
+        -:  151:   * asynchronous operations performed on the acceptor.
+        -:  152:   */
+        -:  153:  template <typename ExecutionContext>
+       32:  154:  explicit basic_socket_acceptor(ExecutionContext& context,
+        -:  155:      typename constraint<
+        -:  156:        is_convertible<ExecutionContext&, execution_context&>::value
+        -:  157:      >::type = 0)
+       32:  158:    : impl_(0, 0, context)
+        -:  159:  {
+       32:  160:  }
+------------------
+_ZN5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEEC2INS0_10io_contextEEERT_NS0_10constraintIXsrSt14is_convertibleIS9_RNS0_17execution_contextEE5valueEiE4typeE:
+function _ZN5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEEC2INS0_10io_contextEEERT_NS0_10constraintIXsrSt14is_convertibleIS9_RNS0_17execution_contextEE5valueEiE4typeE called 4 returned 100% blocks executed 75%
+        4:  154:  explicit basic_socket_acceptor(ExecutionContext& context,
+        -:  155:      typename constraint<
+        -:  156:        is_convertible<ExecutionContext&, execution_context&>::value
+        -:  157:      >::type = 0)
+        4:  158:    : impl_(0, 0, context)
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  159:  {
+        4:  160:  }
+call    0 never executed
+------------------
+_ZN5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEEC2INS0_10io_contextEEERT_NS0_10constraintIXsrSt14is_convertibleIS9_RNS0_17execution_contextEE5valueEiE4typeE:
+function _ZN5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEEC2INS0_10io_contextEEERT_NS0_10constraintIXsrSt14is_convertibleIS9_RNS0_17execution_contextEE5valueEiE4typeE called 28 returned 100% blocks executed 75%
+       28:  154:  explicit basic_socket_acceptor(ExecutionContext& context,
+        -:  155:      typename constraint<
+        -:  156:        is_convertible<ExecutionContext&, execution_context&>::value
+        -:  157:      >::type = 0)
+       28:  158:    : impl_(0, 0, context)
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  159:  {
+       28:  160:  }
+call    0 never executed
+------------------
+        -:  161:
+        -:  162:  /// Construct an open acceptor.
+        -:  163:  /**
+        -:  164:   * This constructor creates an acceptor and automatically opens it.
+        -:  165:   *
+        -:  166:   * @param ex The I/O executor that the acceptor will use, by default, to
+        -:  167:   * dispatch handlers for any asynchronous operations performed on the
+        -:  168:   * acceptor.
+        -:  169:   *
+        -:  170:   * @param protocol An object specifying protocol parameters to be used.
+        -:  171:   *
+        -:  172:   * @throws boost::system::system_error Thrown on failure.
+        -:  173:   */
+        -:  174:  basic_socket_acceptor(const executor_type& ex, const protocol_type& protocol)
+        -:  175:    : impl_(0, ex)
+        -:  176:  {
+        -:  177:    boost::system::error_code ec;
+        -:  178:    impl_.get_service().open(impl_.get_implementation(), protocol, ec);
+        -:  179:    boost::asio::detail::throw_error(ec, "open");
+        -:  180:  }
+        -:  181:
+        -:  182:  /// Construct an open acceptor.
+        -:  183:  /**
+        -:  184:   * This constructor creates an acceptor and automatically opens it.
+        -:  185:   *
+        -:  186:   * @param context An execution context which provides the I/O executor that
+        -:  187:   * the acceptor will use, by default, to dispatch handlers for any
+        -:  188:   * asynchronous operations performed on the acceptor.
+        -:  189:   *
+        -:  190:   * @param protocol An object specifying protocol parameters to be used.
+        -:  191:   *
+        -:  192:   * @throws boost::system::system_error Thrown on failure.
+        -:  193:   */
+        -:  194:  template <typename ExecutionContext>
+        -:  195:  basic_socket_acceptor(ExecutionContext& context,
+        -:  196:      const protocol_type& protocol,
+        -:  197:      typename constraint<
+        -:  198:        is_convertible<ExecutionContext&, execution_context&>::value,
+        -:  199:        defaulted_constraint
+        -:  200:      >::type = defaulted_constraint())
+        -:  201:    : impl_(0, 0, context)
+        -:  202:  {
+        -:  203:    boost::system::error_code ec;
+        -:  204:    impl_.get_service().open(impl_.get_implementation(), protocol, ec);
+        -:  205:    boost::asio::detail::throw_error(ec, "open");
+        -:  206:  }
+        -:  207:
+        -:  208:  /// Construct an acceptor opened on the given endpoint.
+        -:  209:  /**
+        -:  210:   * This constructor creates an acceptor and automatically opens it to listen
+        -:  211:   * for new connections on the specified endpoint.
+        -:  212:   *
+        -:  213:   * @param ex The I/O executor that the acceptor will use, by default, to
+        -:  214:   * dispatch handlers for any asynchronous operations performed on the
+        -:  215:   * acceptor.
+        -:  216:   *
+        -:  217:   * @param endpoint An endpoint on the local machine on which the acceptor
+        -:  218:   * will listen for new connections.
+        -:  219:   *
+        -:  220:   * @param reuse_addr Whether the constructor should set the socket option
+        -:  221:   * socket_base::reuse_address.
+        -:  222:   *
+        -:  223:   * @throws boost::system::system_error Thrown on failure.
+        -:  224:   *
+        -:  225:   * @note This constructor is equivalent to the following code:
+        -:  226:   * @code
+        -:  227:   * basic_socket_acceptor<Protocol> acceptor(my_context);
+        -:  228:   * acceptor.open(endpoint.protocol());
+        -:  229:   * if (reuse_addr)
+        -:  230:   *   acceptor.set_option(socket_base::reuse_address(true));
+        -:  231:   * acceptor.bind(endpoint);
+        -:  232:   * acceptor.listen();
+        -:  233:   * @endcode
+        -:  234:   */
+        -:  235:  basic_socket_acceptor(const executor_type& ex,
+        -:  236:      const endpoint_type& endpoint, bool reuse_addr = true)
+        -:  237:    : impl_(0, ex)
+        -:  238:  {
+        -:  239:    boost::system::error_code ec;
+        -:  240:    const protocol_type protocol = endpoint.protocol();
+        -:  241:    impl_.get_service().open(impl_.get_implementation(), protocol, ec);
+        -:  242:    boost::asio::detail::throw_error(ec, "open");
+        -:  243:    if (reuse_addr)
+        -:  244:    {
+        -:  245:      impl_.get_service().set_option(impl_.get_implementation(),
+        -:  246:          socket_base::reuse_address(true), ec);
+        -:  247:      boost::asio::detail::throw_error(ec, "set_option");
+        -:  248:    }
+        -:  249:    impl_.get_service().bind(impl_.get_implementation(), endpoint, ec);
+        -:  250:    boost::asio::detail::throw_error(ec, "bind");
+        -:  251:    impl_.get_service().listen(impl_.get_implementation(),
+        -:  252:        socket_base::max_listen_connections, ec);
+        -:  253:    boost::asio::detail::throw_error(ec, "listen");
+        -:  254:  }
+        -:  255:
+        -:  256:  /// Construct an acceptor opened on the given endpoint.
+        -:  257:  /**
+        -:  258:   * This constructor creates an acceptor and automatically opens it to listen
+        -:  259:   * for new connections on the specified endpoint.
+        -:  260:   *
+        -:  261:   * @param context An execution context which provides the I/O executor that
+        -:  262:   * the acceptor will use, by default, to dispatch handlers for any
+        -:  263:   * asynchronous operations performed on the acceptor.
+        -:  264:   *
+        -:  265:   * @param endpoint An endpoint on the local machine on which the acceptor
+        -:  266:   * will listen for new connections.
+        -:  267:   *
+        -:  268:   * @param reuse_addr Whether the constructor should set the socket option
+        -:  269:   * socket_base::reuse_address.
+        -:  270:   *
+        -:  271:   * @throws boost::system::system_error Thrown on failure.
+        -:  272:   *
+        -:  273:   * @note This constructor is equivalent to the following code:
+        -:  274:   * @code
+        -:  275:   * basic_socket_acceptor<Protocol> acceptor(my_context);
+        -:  276:   * acceptor.open(endpoint.protocol());
+        -:  277:   * if (reuse_addr)
+        -:  278:   *   acceptor.set_option(socket_base::reuse_address(true));
+        -:  279:   * acceptor.bind(endpoint);
+        -:  280:   * acceptor.listen();
+        -:  281:   * @endcode
+        -:  282:   */
+        -:  283:  template <typename ExecutionContext>
+       8*:  284:  basic_socket_acceptor(ExecutionContext& context,
+        -:  285:      const endpoint_type& endpoint, bool reuse_addr = true,
+        -:  286:      typename constraint<
+        -:  287:        is_convertible<ExecutionContext&, execution_context&>::value
+        -:  288:      >::type = 0)
+       8*:  289:    : impl_(0, 0, context)
+        -:  290:  {
+       8*:  291:    boost::system::error_code ec;
+       8*:  292:    const protocol_type protocol = endpoint.protocol();
+       8*:  293:    impl_.get_service().open(impl_.get_implementation(), protocol, ec);
+       8*:  294:    boost::asio::detail::throw_error(ec, "open");
+       8*:  295:    if (reuse_addr)
+        -:  296:    {
+      16*:  297:      impl_.get_service().set_option(impl_.get_implementation(),
+       8*:  298:          socket_base::reuse_address(true), ec);
+       8*:  299:      boost::asio::detail::throw_error(ec, "set_option");
+        -:  300:    }
+       8*:  301:    impl_.get_service().bind(impl_.get_implementation(), endpoint, ec);
+       8*:  302:    boost::asio::detail::throw_error(ec, "bind");
+       8*:  303:    impl_.get_service().listen(impl_.get_implementation(),
+        -:  304:        socket_base::max_listen_connections, ec);
+       8*:  305:    boost::asio::detail::throw_error(ec, "listen");
+       8*:  306:  }
+------------------
+_ZN5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEEC2INS0_10io_contextEEERT_RKNS2_14basic_endpointIS3_EEbNS0_10constraintIXsrSt14is_convertibleIS9_RNS0_17execution_contextEE5valueEiE4typeE:
+function _ZN5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEEC2INS0_10io_contextEEERT_RKNS2_14basic_endpointIS3_EEbNS0_10constraintIXsrSt14is_convertibleIS9_RNS0_17execution_contextEE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  284:  basic_socket_acceptor(ExecutionContext& context,
+        -:  285:      const endpoint_type& endpoint, bool reuse_addr = true,
+        -:  286:      typename constraint<
+        -:  287:        is_convertible<ExecutionContext&, execution_context&>::value
+        -:  288:      >::type = 0)
+    #####:  289:    : impl_(0, 0, context)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:  290:  {
+    #####:  291:    boost::system::error_code ec;
+    #####:  292:    const protocol_type protocol = endpoint.protocol();
+call    0 never executed
+    #####:  293:    impl_.get_service().open(impl_.get_implementation(), protocol, ec);
+call    0 never executed
+call    1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed (throw)
+    #####:  294:    boost::asio::detail::throw_error(ec, "open");
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+    #####:  295:    if (reuse_addr)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  296:    {
+    #####:  297:      impl_.get_service().set_option(impl_.get_implementation(),
+call    0 never executed
+call    1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed (throw)
+    #####:  298:          socket_base::reuse_address(true), ec);
+call    0 never executed
+    #####:  299:      boost::asio::detail::throw_error(ec, "set_option");
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+        -:  300:    }
+    #####:  301:    impl_.get_service().bind(impl_.get_implementation(), endpoint, ec);
+call    0 never executed
+call    1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed (throw)
+    #####:  302:    boost::asio::detail::throw_error(ec, "bind");
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+    #####:  303:    impl_.get_service().listen(impl_.get_implementation(),
+call    0 never executed
+call    1 never executed
+call    2 never executed
+        -:  304:        socket_base::max_listen_connections, ec);
+    #####:  305:    boost::asio::detail::throw_error(ec, "listen");
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+    #####:  306:  }
+call    0 never executed
+call    1 never executed
+------------------
+_ZN5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEEC2INS0_10io_contextEEERT_RKNS2_14basic_endpointIS3_EEbNS0_10constraintIXsrSt14is_convertibleIS9_RNS0_17execution_contextEE5valueEiE4typeE:
+function _ZN5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEEC2INS0_10io_contextEEERT_RKNS2_14basic_endpointIS3_EEbNS0_10constraintIXsrSt14is_convertibleIS9_RNS0_17execution_contextEE5valueEiE4typeE called 8 returned 100% blocks executed 69%
+        8:  284:  basic_socket_acceptor(ExecutionContext& context,
+        -:  285:      const endpoint_type& endpoint, bool reuse_addr = true,
+        -:  286:      typename constraint<
+        -:  287:        is_convertible<ExecutionContext&, execution_context&>::value
+        -:  288:      >::type = 0)
+        8:  289:    : impl_(0, 0, context)
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  290:  {
+        8:  291:    boost::system::error_code ec;
+        8:  292:    const protocol_type protocol = endpoint.protocol();
+call    0 returned 100%
+        8:  293:    impl_.get_service().open(impl_.get_implementation(), protocol, ec);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+        8:  294:    boost::asio::detail::throw_error(ec, "open");
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        8:  295:    if (reuse_addr)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:  296:    {
+       16:  297:      impl_.get_service().set_option(impl_.get_implementation(),
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+        8:  298:          socket_base::reuse_address(true), ec);
+call    0 returned 100%
+        8:  299:      boost::asio::detail::throw_error(ec, "set_option");
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:  300:    }
+        8:  301:    impl_.get_service().bind(impl_.get_implementation(), endpoint, ec);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+        8:  302:    boost::asio::detail::throw_error(ec, "bind");
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        8:  303:    impl_.get_service().listen(impl_.get_implementation(),
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+        -:  304:        socket_base::max_listen_connections, ec);
+        8:  305:    boost::asio::detail::throw_error(ec, "listen");
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        8:  306:  }
+call    0 never executed
+call    1 never executed
+------------------
+_ZN5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEEC2INS0_10io_contextEEERT_RKNS2_14basic_endpointIS3_EEbNS0_10constraintIXsrSt14is_convertibleIS9_RNS0_17execution_contextEE5valueEiE4typeE:
+function _ZN5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEEC2INS0_10io_contextEEERT_RKNS2_14basic_endpointIS3_EEbNS0_10constraintIXsrSt14is_convertibleIS9_RNS0_17execution_contextEE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  284:  basic_socket_acceptor(ExecutionContext& context,
+        -:  285:      const endpoint_type& endpoint, bool reuse_addr = true,
+        -:  286:      typename constraint<
+        -:  287:        is_convertible<ExecutionContext&, execution_context&>::value
+        -:  288:      >::type = 0)
+    #####:  289:    : impl_(0, 0, context)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:  290:  {
+    #####:  291:    boost::system::error_code ec;
+    #####:  292:    const protocol_type protocol = endpoint.protocol();
+call    0 never executed
+    #####:  293:    impl_.get_service().open(impl_.get_implementation(), protocol, ec);
+call    0 never executed
+call    1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed (throw)
+    #####:  294:    boost::asio::detail::throw_error(ec, "open");
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+    #####:  295:    if (reuse_addr)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  296:    {
+    #####:  297:      impl_.get_service().set_option(impl_.get_implementation(),
+call    0 never executed
+call    1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed (throw)
+    #####:  298:          socket_base::reuse_address(true), ec);
+call    0 never executed
+    #####:  299:      boost::asio::detail::throw_error(ec, "set_option");
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+        -:  300:    }
+    #####:  301:    impl_.get_service().bind(impl_.get_implementation(), endpoint, ec);
+call    0 never executed
+call    1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed (throw)
+    #####:  302:    boost::asio::detail::throw_error(ec, "bind");
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+    #####:  303:    impl_.get_service().listen(impl_.get_implementation(),
+call    0 never executed
+call    1 never executed
+call    2 never executed
+        -:  304:        socket_base::max_listen_connections, ec);
+    #####:  305:    boost::asio::detail::throw_error(ec, "listen");
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+    #####:  306:  }
+call    0 never executed
+call    1 never executed
+------------------
+        -:  307:
+        -:  308:  /// Construct a basic_socket_acceptor on an existing native acceptor.
+        -:  309:  /**
+        -:  310:   * This constructor creates an acceptor object to hold an existing native
+        -:  311:   * acceptor.
+        -:  312:   *
+        -:  313:   * @param ex The I/O executor that the acceptor will use, by default, to
+        -:  314:   * dispatch handlers for any asynchronous operations performed on the
+        -:  315:   * acceptor.
+        -:  316:   *
+        -:  317:   * @param protocol An object specifying protocol parameters to be used.
+        -:  318:   *
+        -:  319:   * @param native_acceptor A native acceptor.
+        -:  320:   *
+        -:  321:   * @throws boost::system::system_error Thrown on failure.
+        -:  322:   */
+        -:  323:  basic_socket_acceptor(const executor_type& ex,
+        -:  324:      const protocol_type& protocol, const native_handle_type& native_acceptor)
+        -:  325:    : impl_(0, ex)
+        -:  326:  {
+        -:  327:    boost::system::error_code ec;
+        -:  328:    impl_.get_service().assign(impl_.get_implementation(),
+        -:  329:        protocol, native_acceptor, ec);
+        -:  330:    boost::asio::detail::throw_error(ec, "assign");
+        -:  331:  }
+        -:  332:
+        -:  333:  /// Construct a basic_socket_acceptor on an existing native acceptor.
+        -:  334:  /**
+        -:  335:   * This constructor creates an acceptor object to hold an existing native
+        -:  336:   * acceptor.
+        -:  337:   *
+        -:  338:   * @param context An execution context which provides the I/O executor that
+        -:  339:   * the acceptor will use, by default, to dispatch handlers for any
+        -:  340:   * asynchronous operations performed on the acceptor.
+        -:  341:   *
+        -:  342:   * @param protocol An object specifying protocol parameters to be used.
+        -:  343:   *
+        -:  344:   * @param native_acceptor A native acceptor.
+        -:  345:   *
+        -:  346:   * @throws boost::system::system_error Thrown on failure.
+        -:  347:   */
+        -:  348:  template <typename ExecutionContext>
+        -:  349:  basic_socket_acceptor(ExecutionContext& context,
+        -:  350:      const protocol_type& protocol, const native_handle_type& native_acceptor,
+        -:  351:      typename constraint<
+        -:  352:        is_convertible<ExecutionContext&, execution_context&>::value
+        -:  353:      >::type = 0)
+        -:  354:    : impl_(0, 0, context)
+        -:  355:  {
+        -:  356:    boost::system::error_code ec;
+        -:  357:    impl_.get_service().assign(impl_.get_implementation(),
+        -:  358:        protocol, native_acceptor, ec);
+        -:  359:    boost::asio::detail::throw_error(ec, "assign");
+        -:  360:  }
+        -:  361:
+        -:  362:#if defined(BOOST_ASIO_HAS_MOVE) || defined(GENERATING_DOCUMENTATION)
+        -:  363:  /// Move-construct a basic_socket_acceptor from another.
+        -:  364:  /**
+        -:  365:   * This constructor moves an acceptor from one object to another.
+        -:  366:   *
+        -:  367:   * @param other The other basic_socket_acceptor object from which the move
+        -:  368:   * will occur.
+        -:  369:   *
+        -:  370:   * @note Following the move, the moved-from object is in the same state as if
+        -:  371:   * constructed using the @c basic_socket_acceptor(const executor_type&)
+        -:  372:   * constructor.
+        -:  373:   */
+function _ZN5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEEC2EOS5_ called 0 returned 0% blocks executed 0%
+    #####:  374:  basic_socket_acceptor(basic_socket_acceptor&& other) BOOST_ASIO_NOEXCEPT
+    #####:  375:    : impl_(std::move(other.impl_))
+call    0 never executed
+call    1 never executed
+        -:  376:  {
+    #####:  377:  }
+        -:  378:
+        -:  379:  /// Move-assign a basic_socket_acceptor from another.
+        -:  380:  /**
+        -:  381:   * This assignment operator moves an acceptor from one object to another.
+        -:  382:   *
+        -:  383:   * @param other The other basic_socket_acceptor object from which the move
+        -:  384:   * will occur.
+        -:  385:   *
+        -:  386:   * @note Following the move, the moved-from object is in the same state as if
+        -:  387:   * constructed using the @c basic_socket_acceptor(const executor_type&)
+        -:  388:   * constructor.
+        -:  389:   */
+        -:  390:  basic_socket_acceptor& operator=(basic_socket_acceptor&& other)
+        -:  391:  {
+        -:  392:    impl_ = std::move(other.impl_);
+        -:  393:    return *this;
+        -:  394:  }
+        -:  395:
+        -:  396:  // All socket acceptors have access to each other's implementations.
+        -:  397:  template <typename Protocol1, typename Executor1>
+        -:  398:  friend class basic_socket_acceptor;
+        -:  399:
+        -:  400:  /// Move-construct a basic_socket_acceptor from an acceptor of another
+        -:  401:  /// protocol type.
+        -:  402:  /**
+        -:  403:   * This constructor moves an acceptor from one object to another.
+        -:  404:   *
+        -:  405:   * @param other The other basic_socket_acceptor object from which the move
+        -:  406:   * will occur.
+        -:  407:   *
+        -:  408:   * @note Following the move, the moved-from object is in the same state as if
+        -:  409:   * constructed using the @c basic_socket_acceptor(const executor_type&)
+        -:  410:   * constructor.
+        -:  411:   */
+        -:  412:  template <typename Protocol1, typename Executor1>
+        -:  413:  basic_socket_acceptor(basic_socket_acceptor<Protocol1, Executor1>&& other,
+        -:  414:      typename constraint<
+        -:  415:        is_convertible<Protocol1, Protocol>::value
+        -:  416:          && is_convertible<Executor1, Executor>::value
+        -:  417:      >::type = 0)
+        -:  418:    : impl_(std::move(other.impl_))
+        -:  419:  {
+        -:  420:  }
+        -:  421:
+        -:  422:  /// Move-assign a basic_socket_acceptor from an acceptor of another protocol
+        -:  423:  /// type.
+        -:  424:  /**
+        -:  425:   * This assignment operator moves an acceptor from one object to another.
+        -:  426:   *
+        -:  427:   * @param other The other basic_socket_acceptor object from which the move
+        -:  428:   * will occur.
+        -:  429:   *
+        -:  430:   * @note Following the move, the moved-from object is in the same state as if
+        -:  431:   * constructed using the @c basic_socket_acceptor(const executor_type&)
+        -:  432:   * constructor.
+        -:  433:   */
+        -:  434:  template <typename Protocol1, typename Executor1>
+        -:  435:  typename constraint<
+        -:  436:    is_convertible<Protocol1, Protocol>::value
+        -:  437:      && is_convertible<Executor1, Executor>::value,
+        -:  438:    basic_socket_acceptor&
+        -:  439:  >::type operator=(basic_socket_acceptor<Protocol1, Executor1>&& other)
+        -:  440:  {
+        -:  441:    basic_socket_acceptor tmp(std::move(other));
+        -:  442:    impl_ = std::move(tmp.impl_);
+        -:  443:    return *this;
+        -:  444:  }
+        -:  445:#endif // defined(BOOST_ASIO_HAS_MOVE) || defined(GENERATING_DOCUMENTATION)
+        -:  446:
+        -:  447:  /// Destroys the acceptor.
+        -:  448:  /**
+        -:  449:   * This function destroys the acceptor, cancelling any outstanding
+        -:  450:   * asynchronous operations associated with the acceptor as if by calling
+        -:  451:   * @c cancel.
+        -:  452:   */
+      40*:  453:  ~basic_socket_acceptor()
+        -:  454:  {
+      40*:  455:  }
+------------------
+_ZN5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEED2Ev:
+function _ZN5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEED2Ev called 4 returned 100% blocks executed 100%
+        4:  453:  ~basic_socket_acceptor()
+        -:  454:  {
+        4:  455:  }
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEED2Ev:
+function _ZN5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEED2Ev called 28 returned 100% blocks executed 100%
+       28:  453:  ~basic_socket_acceptor()
+        -:  454:  {
+       28:  455:  }
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEED2Ev:
+function _ZN5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEED2Ev called 0 returned 0% blocks executed 0%
+    #####:  453:  ~basic_socket_acceptor()
+        -:  454:  {
+    #####:  455:  }
+call    0 never executed
+call    1 never executed
+------------------
+_ZN5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEED2Ev:
+function _ZN5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEED2Ev called 8 returned 100% blocks executed 100%
+        8:  453:  ~basic_socket_acceptor()
+        -:  454:  {
+        8:  455:  }
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEED2Ev:
+function _ZN5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEED2Ev called 0 returned 0% blocks executed 0%
+    #####:  453:  ~basic_socket_acceptor()
+        -:  454:  {
+    #####:  455:  }
+call    0 never executed
+call    1 never executed
+------------------
+        -:  456:
+        -:  457:  /// Get the executor associated with the object.
+      28*:  458:  const executor_type& get_executor() BOOST_ASIO_NOEXCEPT
+        -:  459:  {
+      28*:  460:    return impl_.get_executor();
+        -:  461:  }
+------------------
+_ZN5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEE12get_executorEv:
+function _ZN5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEE12get_executorEv called 28 returned 100% blocks executed 100%
+       28:  458:  const executor_type& get_executor() BOOST_ASIO_NOEXCEPT
+        -:  459:  {
+       28:  460:    return impl_.get_executor();
+call    0 returned 100%
+        -:  461:  }
+------------------
+_ZN5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEE12get_executorEv:
+function _ZN5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEE12get_executorEv called 0 returned 0% blocks executed 0%
+    #####:  458:  const executor_type& get_executor() BOOST_ASIO_NOEXCEPT
+        -:  459:  {
+    #####:  460:    return impl_.get_executor();
+call    0 never executed
+        -:  461:  }
+------------------
+        -:  462:
+        -:  463:  /// Open the acceptor using the specified protocol.
+        -:  464:  /**
+        -:  465:   * This function opens the socket acceptor so that it will use the specified
+        -:  466:   * protocol.
+        -:  467:   *
+        -:  468:   * @param protocol An object specifying which protocol is to be used.
+        -:  469:   *
+        -:  470:   * @throws boost::system::system_error Thrown on failure.
+        -:  471:   *
+        -:  472:   * @par Example
+        -:  473:   * @code
+        -:  474:   * boost::asio::ip::tcp::acceptor acceptor(my_context);
+        -:  475:   * acceptor.open(boost::asio::ip::tcp::v4());
+        -:  476:   * @endcode
+        -:  477:   */
+       32:  478:  void open(const protocol_type& protocol = protocol_type())
+        -:  479:  {
+       32:  480:    boost::system::error_code ec;
+       32:  481:    impl_.get_service().open(impl_.get_implementation(), protocol, ec);
+       32:  482:    boost::asio::detail::throw_error(ec, "open");
+       32:  483:  }
+------------------
+_ZN5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEE4openERKS3_:
+function _ZN5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEE4openERKS3_ called 4 returned 100% blocks executed 78%
+        4:  478:  void open(const protocol_type& protocol = protocol_type())
+        -:  479:  {
+        4:  480:    boost::system::error_code ec;
+        4:  481:    impl_.get_service().open(impl_.get_implementation(), protocol, ec);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+        4:  482:    boost::asio::detail::throw_error(ec, "open");
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        4:  483:  }
+------------------
+_ZN5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEE4openERKS3_:
+function _ZN5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEE4openERKS3_ called 28 returned 100% blocks executed 78%
+       28:  478:  void open(const protocol_type& protocol = protocol_type())
+        -:  479:  {
+       28:  480:    boost::system::error_code ec;
+       28:  481:    impl_.get_service().open(impl_.get_implementation(), protocol, ec);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+       28:  482:    boost::asio::detail::throw_error(ec, "open");
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+       28:  483:  }
+------------------
+        -:  484:
+        -:  485:  /// Open the acceptor using the specified protocol.
+        -:  486:  /**
+        -:  487:   * This function opens the socket acceptor so that it will use the specified
+        -:  488:   * protocol.
+        -:  489:   *
+        -:  490:   * @param protocol An object specifying which protocol is to be used.
+        -:  491:   *
+        -:  492:   * @param ec Set to indicate what error occurred, if any.
+        -:  493:   *
+        -:  494:   * @par Example
+        -:  495:   * @code
+        -:  496:   * boost::asio::ip::tcp::acceptor acceptor(my_context);
+        -:  497:   * boost::system::error_code ec;
+        -:  498:   * acceptor.open(boost::asio::ip::tcp::v4(), ec);
+        -:  499:   * if (ec)
+        -:  500:   * {
+        -:  501:   *   // An error occurred.
+        -:  502:   * }
+        -:  503:   * @endcode
+        -:  504:   */
+        -:  505:  BOOST_ASIO_SYNC_OP_VOID open(const protocol_type& protocol,
+        -:  506:      boost::system::error_code& ec)
+        -:  507:  {
+        -:  508:    impl_.get_service().open(impl_.get_implementation(), protocol, ec);
+        -:  509:    BOOST_ASIO_SYNC_OP_VOID_RETURN(ec);
+        -:  510:  }
+        -:  511:
+        -:  512:  /// Assigns an existing native acceptor to the acceptor.
+        -:  513:  /*
+        -:  514:   * This function opens the acceptor to hold an existing native acceptor.
+        -:  515:   *
+        -:  516:   * @param protocol An object specifying which protocol is to be used.
+        -:  517:   *
+        -:  518:   * @param native_acceptor A native acceptor.
+        -:  519:   *
+        -:  520:   * @throws boost::system::system_error Thrown on failure.
+        -:  521:   */
+        -:  522:  void assign(const protocol_type& protocol,
+        -:  523:      const native_handle_type& native_acceptor)
+        -:  524:  {
+        -:  525:    boost::system::error_code ec;
+        -:  526:    impl_.get_service().assign(impl_.get_implementation(),
+        -:  527:        protocol, native_acceptor, ec);
+        -:  528:    boost::asio::detail::throw_error(ec, "assign");
+        -:  529:  }
+        -:  530:
+        -:  531:  /// Assigns an existing native acceptor to the acceptor.
+        -:  532:  /*
+        -:  533:   * This function opens the acceptor to hold an existing native acceptor.
+        -:  534:   *
+        -:  535:   * @param protocol An object specifying which protocol is to be used.
+        -:  536:   *
+        -:  537:   * @param native_acceptor A native acceptor.
+        -:  538:   *
+        -:  539:   * @param ec Set to indicate what error occurred, if any.
+        -:  540:   */
+        -:  541:  BOOST_ASIO_SYNC_OP_VOID assign(const protocol_type& protocol,
+        -:  542:      const native_handle_type& native_acceptor, boost::system::error_code& ec)
+        -:  543:  {
+        -:  544:    impl_.get_service().assign(impl_.get_implementation(),
+        -:  545:        protocol, native_acceptor, ec);
+        -:  546:    BOOST_ASIO_SYNC_OP_VOID_RETURN(ec);
+        -:  547:  }
+        -:  548:
+        -:  549:  /// Determine whether the acceptor is open.
+        -:  550:  bool is_open() const
+        -:  551:  {
+        -:  552:    return impl_.get_service().is_open(impl_.get_implementation());
+        -:  553:  }
+        -:  554:
+        -:  555:  /// Bind the acceptor to the given local endpoint.
+        -:  556:  /**
+        -:  557:   * This function binds the socket acceptor to the specified endpoint on the
+        -:  558:   * local machine.
+        -:  559:   *
+        -:  560:   * @param endpoint An endpoint on the local machine to which the socket
+        -:  561:   * acceptor will be bound.
+        -:  562:   *
+        -:  563:   * @throws boost::system::system_error Thrown on failure.
+        -:  564:   *
+        -:  565:   * @par Example
+        -:  566:   * @code
+        -:  567:   * boost::asio::ip::tcp::acceptor acceptor(my_context);
+        -:  568:   * boost::asio::ip::tcp::endpoint endpoint(boost::asio::ip::tcp::v4(), 12345);
+        -:  569:   * acceptor.open(endpoint.protocol());
+        -:  570:   * acceptor.bind(endpoint);
+        -:  571:   * @endcode
+        -:  572:   */
+       32:  573:  void bind(const endpoint_type& endpoint)
+        -:  574:  {
+       32:  575:    boost::system::error_code ec;
+       32:  576:    impl_.get_service().bind(impl_.get_implementation(), endpoint, ec);
+       32:  577:    boost::asio::detail::throw_error(ec, "bind");
+       32:  578:  }
+------------------
+_ZN5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEE4bindERKNS2_14basic_endpointIS3_EE:
+function _ZN5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEE4bindERKNS2_14basic_endpointIS3_EE called 4 returned 100% blocks executed 78%
+        4:  573:  void bind(const endpoint_type& endpoint)
+        -:  574:  {
+        4:  575:    boost::system::error_code ec;
+        4:  576:    impl_.get_service().bind(impl_.get_implementation(), endpoint, ec);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+        4:  577:    boost::asio::detail::throw_error(ec, "bind");
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        4:  578:  }
+------------------
+_ZN5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEE4bindERKNS2_14basic_endpointIS3_EE:
+function _ZN5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEE4bindERKNS2_14basic_endpointIS3_EE called 28 returned 100% blocks executed 78%
+       28:  573:  void bind(const endpoint_type& endpoint)
+        -:  574:  {
+       28:  575:    boost::system::error_code ec;
+       28:  576:    impl_.get_service().bind(impl_.get_implementation(), endpoint, ec);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+       28:  577:    boost::asio::detail::throw_error(ec, "bind");
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+       28:  578:  }
+------------------
+        -:  579:
+        -:  580:  /// Bind the acceptor to the given local endpoint.
+        -:  581:  /**
+        -:  582:   * This function binds the socket acceptor to the specified endpoint on the
+        -:  583:   * local machine.
+        -:  584:   *
+        -:  585:   * @param endpoint An endpoint on the local machine to which the socket
+        -:  586:   * acceptor will be bound.
+        -:  587:   *
+        -:  588:   * @param ec Set to indicate what error occurred, if any.
+        -:  589:   *
+        -:  590:   * @par Example
+        -:  591:   * @code
+        -:  592:   * boost::asio::ip::tcp::acceptor acceptor(my_context);
+        -:  593:   * boost::asio::ip::tcp::endpoint endpoint(boost::asio::ip::tcp::v4(), 12345);
+        -:  594:   * acceptor.open(endpoint.protocol());
+        -:  595:   * boost::system::error_code ec;
+        -:  596:   * acceptor.bind(endpoint, ec);
+        -:  597:   * if (ec)
+        -:  598:   * {
+        -:  599:   *   // An error occurred.
+        -:  600:   * }
+        -:  601:   * @endcode
+        -:  602:   */
+        -:  603:  BOOST_ASIO_SYNC_OP_VOID bind(const endpoint_type& endpoint,
+        -:  604:      boost::system::error_code& ec)
+        -:  605:  {
+        -:  606:    impl_.get_service().bind(impl_.get_implementation(), endpoint, ec);
+        -:  607:    BOOST_ASIO_SYNC_OP_VOID_RETURN(ec);
+        -:  608:  }
+        -:  609:
+        -:  610:  /// Place the acceptor into the state where it will listen for new
+        -:  611:  /// connections.
+        -:  612:  /**
+        -:  613:   * This function puts the socket acceptor into the state where it may accept
+        -:  614:   * new connections.
+        -:  615:   *
+        -:  616:   * @param backlog The maximum length of the queue of pending connections.
+        -:  617:   *
+        -:  618:   * @throws boost::system::system_error Thrown on failure.
+        -:  619:   */
+       32:  620:  void listen(int backlog = socket_base::max_listen_connections)
+        -:  621:  {
+       32:  622:    boost::system::error_code ec;
+       32:  623:    impl_.get_service().listen(impl_.get_implementation(), backlog, ec);
+       32:  624:    boost::asio::detail::throw_error(ec, "listen");
+       32:  625:  }
+------------------
+_ZN5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEE6listenEi:
+function _ZN5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEE6listenEi called 4 returned 100% blocks executed 88%
+        4:  620:  void listen(int backlog = socket_base::max_listen_connections)
+        -:  621:  {
+        4:  622:    boost::system::error_code ec;
+        4:  623:    impl_.get_service().listen(impl_.get_implementation(), backlog, ec);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+        4:  624:    boost::asio::detail::throw_error(ec, "listen");
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        4:  625:  }
+------------------
+_ZN5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEE6listenEi:
+function _ZN5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEE6listenEi called 28 returned 100% blocks executed 88%
+       28:  620:  void listen(int backlog = socket_base::max_listen_connections)
+        -:  621:  {
+       28:  622:    boost::system::error_code ec;
+       28:  623:    impl_.get_service().listen(impl_.get_implementation(), backlog, ec);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+       28:  624:    boost::asio::detail::throw_error(ec, "listen");
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+       28:  625:  }
+------------------
+        -:  626:
+        -:  627:  /// Place the acceptor into the state where it will listen for new
+        -:  628:  /// connections.
+        -:  629:  /**
+        -:  630:   * This function puts the socket acceptor into the state where it may accept
+        -:  631:   * new connections.
+        -:  632:   *
+        -:  633:   * @param backlog The maximum length of the queue of pending connections.
+        -:  634:   *
+        -:  635:   * @param ec Set to indicate what error occurred, if any.
+        -:  636:   *
+        -:  637:   * @par Example
+        -:  638:   * @code
+        -:  639:   * boost::asio::ip::tcp::acceptor acceptor(my_context);
+        -:  640:   * ...
+        -:  641:   * boost::system::error_code ec;
+        -:  642:   * acceptor.listen(boost::asio::socket_base::max_listen_connections, ec);
+        -:  643:   * if (ec)
+        -:  644:   * {
+        -:  645:   *   // An error occurred.
+        -:  646:   * }
+        -:  647:   * @endcode
+        -:  648:   */
+        -:  649:  BOOST_ASIO_SYNC_OP_VOID listen(int backlog, boost::system::error_code& ec)
+        -:  650:  {
+        -:  651:    impl_.get_service().listen(impl_.get_implementation(), backlog, ec);
+        -:  652:    BOOST_ASIO_SYNC_OP_VOID_RETURN(ec);
+        -:  653:  }
+        -:  654:
+        -:  655:  /// Close the acceptor.
+        -:  656:  /**
+        -:  657:   * This function is used to close the acceptor. Any asynchronous accept
+        -:  658:   * operations will be cancelled immediately.
+        -:  659:   *
+        -:  660:   * A subsequent call to open() is required before the acceptor can again be
+        -:  661:   * used to again perform socket accept operations.
+        -:  662:   *
+        -:  663:   * @throws boost::system::system_error Thrown on failure.
+        -:  664:   */
+        -:  665:  void close()
+        -:  666:  {
+        -:  667:    boost::system::error_code ec;
+        -:  668:    impl_.get_service().close(impl_.get_implementation(), ec);
+        -:  669:    boost::asio::detail::throw_error(ec, "close");
+        -:  670:  }
+        -:  671:
+        -:  672:  /// Close the acceptor.
+        -:  673:  /**
+        -:  674:   * This function is used to close the acceptor. Any asynchronous accept
+        -:  675:   * operations will be cancelled immediately.
+        -:  676:   *
+        -:  677:   * A subsequent call to open() is required before the acceptor can again be
+        -:  678:   * used to again perform socket accept operations.
+        -:  679:   *
+        -:  680:   * @param ec Set to indicate what error occurred, if any.
+        -:  681:   *
+        -:  682:   * @par Example
+        -:  683:   * @code
+        -:  684:   * boost::asio::ip::tcp::acceptor acceptor(my_context);
+        -:  685:   * ...
+        -:  686:   * boost::system::error_code ec;
+        -:  687:   * acceptor.close(ec);
+        -:  688:   * if (ec)
+        -:  689:   * {
+        -:  690:   *   // An error occurred.
+        -:  691:   * }
+        -:  692:   * @endcode
+        -:  693:   */
+        5:  694:  BOOST_ASIO_SYNC_OP_VOID close(boost::system::error_code& ec)
+        -:  695:  {
+        5:  696:    impl_.get_service().close(impl_.get_implementation(), ec);
+        5:  697:    BOOST_ASIO_SYNC_OP_VOID_RETURN(ec);
+        -:  698:  }
+------------------
+_ZN5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEE5closeERNS_6system10error_codeE:
+function _ZN5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEE5closeERNS_6system10error_codeE called 4 returned 100% blocks executed 100%
+        4:  694:  BOOST_ASIO_SYNC_OP_VOID close(boost::system::error_code& ec)
+        -:  695:  {
+        4:  696:    impl_.get_service().close(impl_.get_implementation(), ec);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+        4:  697:    BOOST_ASIO_SYNC_OP_VOID_RETURN(ec);
+        -:  698:  }
+------------------
+_ZN5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEE5closeERNS_6system10error_codeE:
+function _ZN5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEE5closeERNS_6system10error_codeE called 1 returned 100% blocks executed 100%
+        1:  694:  BOOST_ASIO_SYNC_OP_VOID close(boost::system::error_code& ec)
+        -:  695:  {
+        1:  696:    impl_.get_service().close(impl_.get_implementation(), ec);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+        1:  697:    BOOST_ASIO_SYNC_OP_VOID_RETURN(ec);
+        -:  698:  }
+------------------
+        -:  699:
+        -:  700:  /// Release ownership of the underlying native acceptor.
+        -:  701:  /**
+        -:  702:   * This function causes all outstanding asynchronous accept operations to
+        -:  703:   * finish immediately, and the handlers for cancelled operations will be
+        -:  704:   * passed the boost::asio::error::operation_aborted error. Ownership of the
+        -:  705:   * native acceptor is then transferred to the caller.
+        -:  706:   *
+        -:  707:   * @throws boost::system::system_error Thrown on failure.
+        -:  708:   *
+        -:  709:   * @note This function is unsupported on Windows versions prior to Windows
+        -:  710:   * 8.1, and will fail with boost::asio::error::operation_not_supported on
+        -:  711:   * these platforms.
+        -:  712:   */
+        -:  713:#if defined(BOOST_ASIO_MSVC) && (BOOST_ASIO_MSVC >= 1400) \
+        -:  714:  && (!defined(_WIN32_WINNT) || _WIN32_WINNT < 0x0603)
+        -:  715:  __declspec(deprecated("This function always fails with "
+        -:  716:        "operation_not_supported when used on Windows versions "
+        -:  717:        "prior to Windows 8.1."))
+        -:  718:#endif
+        -:  719:  native_handle_type release()
+        -:  720:  {
+        -:  721:    boost::system::error_code ec;
+        -:  722:    native_handle_type s = impl_.get_service().release(
+        -:  723:        impl_.get_implementation(), ec);
+        -:  724:    boost::asio::detail::throw_error(ec, "release");
+        -:  725:    return s;
+        -:  726:  }
+        -:  727:
+        -:  728:  /// Release ownership of the underlying native acceptor.
+        -:  729:  /**
+        -:  730:   * This function causes all outstanding asynchronous accept operations to
+        -:  731:   * finish immediately, and the handlers for cancelled operations will be
+        -:  732:   * passed the boost::asio::error::operation_aborted error. Ownership of the
+        -:  733:   * native acceptor is then transferred to the caller.
+        -:  734:   *
+        -:  735:   * @param ec Set to indicate what error occurred, if any.
+        -:  736:   *
+        -:  737:   * @note This function is unsupported on Windows versions prior to Windows
+        -:  738:   * 8.1, and will fail with boost::asio::error::operation_not_supported on
+        -:  739:   * these platforms.
+        -:  740:   */
+        -:  741:#if defined(BOOST_ASIO_MSVC) && (BOOST_ASIO_MSVC >= 1400) \
+        -:  742:  && (!defined(_WIN32_WINNT) || _WIN32_WINNT < 0x0603)
+        -:  743:  __declspec(deprecated("This function always fails with "
+        -:  744:        "operation_not_supported when used on Windows versions "
+        -:  745:        "prior to Windows 8.1."))
+        -:  746:#endif
+        -:  747:  native_handle_type release(boost::system::error_code& ec)
+        -:  748:  {
+        -:  749:    return impl_.get_service().release(impl_.get_implementation(), ec);
+        -:  750:  }
+        -:  751:
+        -:  752:  /// Get the native acceptor representation.
+        -:  753:  /**
+        -:  754:   * This function may be used to obtain the underlying representation of the
+        -:  755:   * acceptor. This is intended to allow access to native acceptor functionality
+        -:  756:   * that is not otherwise provided.
+        -:  757:   */
+        -:  758:  native_handle_type native_handle()
+        -:  759:  {
+        -:  760:    return impl_.get_service().native_handle(impl_.get_implementation());
+        -:  761:  }
+        -:  762:
+        -:  763:  /// Cancel all asynchronous operations associated with the acceptor.
+        -:  764:  /**
+        -:  765:   * This function causes all outstanding asynchronous connect, send and receive
+        -:  766:   * operations to finish immediately, and the handlers for cancelled operations
+        -:  767:   * will be passed the boost::asio::error::operation_aborted error.
+        -:  768:   *
+        -:  769:   * @throws boost::system::system_error Thrown on failure.
+        -:  770:   */
+        -:  771:  void cancel()
+        -:  772:  {
+        -:  773:    boost::system::error_code ec;
+        -:  774:    impl_.get_service().cancel(impl_.get_implementation(), ec);
+        -:  775:    boost::asio::detail::throw_error(ec, "cancel");
+        -:  776:  }
+        -:  777:
+        -:  778:  /// Cancel all asynchronous operations associated with the acceptor.
+        -:  779:  /**
+        -:  780:   * This function causes all outstanding asynchronous connect, send and receive
+        -:  781:   * operations to finish immediately, and the handlers for cancelled operations
+        -:  782:   * will be passed the boost::asio::error::operation_aborted error.
+        -:  783:   *
+        -:  784:   * @param ec Set to indicate what error occurred, if any.
+        -:  785:   */
+        -:  786:  BOOST_ASIO_SYNC_OP_VOID cancel(boost::system::error_code& ec)
+        -:  787:  {
+        -:  788:    impl_.get_service().cancel(impl_.get_implementation(), ec);
+        -:  789:    BOOST_ASIO_SYNC_OP_VOID_RETURN(ec);
+        -:  790:  }
+        -:  791:
+        -:  792:  /// Set an option on the acceptor.
+        -:  793:  /**
+        -:  794:   * This function is used to set an option on the acceptor.
+        -:  795:   *
+        -:  796:   * @param option The new option value to be set on the acceptor.
+        -:  797:   *
+        -:  798:   * @throws boost::system::system_error Thrown on failure.
+        -:  799:   *
+        -:  800:   * @sa SettableSocketOption @n
+        -:  801:   * boost::asio::socket_base::reuse_address
+        -:  802:   * boost::asio::socket_base::enable_connection_aborted
+        -:  803:   *
+        -:  804:   * @par Example
+        -:  805:   * Setting the SOL_SOCKET/SO_REUSEADDR option:
+        -:  806:   * @code
+        -:  807:   * boost::asio::ip::tcp::acceptor acceptor(my_context);
+        -:  808:   * ...
+        -:  809:   * boost::asio::ip::tcp::acceptor::reuse_address option(true);
+        -:  810:   * acceptor.set_option(option);
+        -:  811:   * @endcode
+        -:  812:   */
+        -:  813:  template <typename SettableSocketOption>
+       32:  814:  void set_option(const SettableSocketOption& option)
+        -:  815:  {
+       32:  816:    boost::system::error_code ec;
+       32:  817:    impl_.get_service().set_option(impl_.get_implementation(), option, ec);
+       32:  818:    boost::asio::detail::throw_error(ec, "set_option");
+       32:  819:  }
+------------------
+_ZN5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEE10set_optionINS0_6detail13socket_option7booleanILi1ELi2EEEEEvRKT_:
+function _ZN5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEE10set_optionINS0_6detail13socket_option7booleanILi1ELi2EEEEEvRKT_ called 4 returned 100% blocks executed 78%
+        4:  814:  void set_option(const SettableSocketOption& option)
+        -:  815:  {
+        4:  816:    boost::system::error_code ec;
+        4:  817:    impl_.get_service().set_option(impl_.get_implementation(), option, ec);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+        4:  818:    boost::asio::detail::throw_error(ec, "set_option");
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        4:  819:  }
+------------------
+_ZN5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEE10set_optionINS0_6detail13socket_option7booleanILi1ELi2EEEEEvRKT_:
+function _ZN5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEE10set_optionINS0_6detail13socket_option7booleanILi1ELi2EEEEEvRKT_ called 28 returned 100% blocks executed 78%
+       28:  814:  void set_option(const SettableSocketOption& option)
+        -:  815:  {
+       28:  816:    boost::system::error_code ec;
+       28:  817:    impl_.get_service().set_option(impl_.get_implementation(), option, ec);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+       28:  818:    boost::asio::detail::throw_error(ec, "set_option");
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+       28:  819:  }
+------------------
+        -:  820:
+        -:  821:  /// Set an option on the acceptor.
+        -:  822:  /**
+        -:  823:   * This function is used to set an option on the acceptor.
+        -:  824:   *
+        -:  825:   * @param option The new option value to be set on the acceptor.
+        -:  826:   *
+        -:  827:   * @param ec Set to indicate what error occurred, if any.
+        -:  828:   *
+        -:  829:   * @sa SettableSocketOption @n
+        -:  830:   * boost::asio::socket_base::reuse_address
+        -:  831:   * boost::asio::socket_base::enable_connection_aborted
+        -:  832:   *
+        -:  833:   * @par Example
+        -:  834:   * Setting the SOL_SOCKET/SO_REUSEADDR option:
+        -:  835:   * @code
+        -:  836:   * boost::asio::ip::tcp::acceptor acceptor(my_context);
+        -:  837:   * ...
+        -:  838:   * boost::asio::ip::tcp::acceptor::reuse_address option(true);
+        -:  839:   * boost::system::error_code ec;
+        -:  840:   * acceptor.set_option(option, ec);
+        -:  841:   * if (ec)
+        -:  842:   * {
+        -:  843:   *   // An error occurred.
+        -:  844:   * }
+        -:  845:   * @endcode
+        -:  846:   */
+        -:  847:  template <typename SettableSocketOption>
+function _ZN5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEE10set_optionINS0_6detail13socket_option7booleanILi1ELi15EEEEENS_6system10error_codeERKT_RSC_ called 28 returned 100% blocks executed 100%
+       28:  848:  BOOST_ASIO_SYNC_OP_VOID set_option(const SettableSocketOption& option,
+        -:  849:      boost::system::error_code& ec)
+        -:  850:  {
+       28:  851:    impl_.get_service().set_option(impl_.get_implementation(), option, ec);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+       28:  852:    BOOST_ASIO_SYNC_OP_VOID_RETURN(ec);
+        -:  853:  }
+        -:  854:
+        -:  855:  /// Get an option from the acceptor.
+        -:  856:  /**
+        -:  857:   * This function is used to get the current value of an option on the
+        -:  858:   * acceptor.
+        -:  859:   *
+        -:  860:   * @param option The option value to be obtained from the acceptor.
+        -:  861:   *
+        -:  862:   * @throws boost::system::system_error Thrown on failure.
+        -:  863:   *
+        -:  864:   * @sa GettableSocketOption @n
+        -:  865:   * boost::asio::socket_base::reuse_address
+        -:  866:   *
+        -:  867:   * @par Example
+        -:  868:   * Getting the value of the SOL_SOCKET/SO_REUSEADDR option:
+        -:  869:   * @code
+        -:  870:   * boost::asio::ip::tcp::acceptor acceptor(my_context);
+        -:  871:   * ...
+        -:  872:   * boost::asio::ip::tcp::acceptor::reuse_address option;
+        -:  873:   * acceptor.get_option(option);
+        -:  874:   * bool is_set = option.get();
+        -:  875:   * @endcode
+        -:  876:   */
+        -:  877:  template <typename GettableSocketOption>
+        -:  878:  void get_option(GettableSocketOption& option) const
+        -:  879:  {
+        -:  880:    boost::system::error_code ec;
+        -:  881:    impl_.get_service().get_option(impl_.get_implementation(), option, ec);
+        -:  882:    boost::asio::detail::throw_error(ec, "get_option");
+        -:  883:  }
+        -:  884:
+        -:  885:  /// Get an option from the acceptor.
+        -:  886:  /**
+        -:  887:   * This function is used to get the current value of an option on the
+        -:  888:   * acceptor.
+        -:  889:   *
+        -:  890:   * @param option The option value to be obtained from the acceptor.
+        -:  891:   *
+        -:  892:   * @param ec Set to indicate what error occurred, if any.
+        -:  893:   *
+        -:  894:   * @sa GettableSocketOption @n
+        -:  895:   * boost::asio::socket_base::reuse_address
+        -:  896:   *
+        -:  897:   * @par Example
+        -:  898:   * Getting the value of the SOL_SOCKET/SO_REUSEADDR option:
+        -:  899:   * @code
+        -:  900:   * boost::asio::ip::tcp::acceptor acceptor(my_context);
+        -:  901:   * ...
+        -:  902:   * boost::asio::ip::tcp::acceptor::reuse_address option;
+        -:  903:   * boost::system::error_code ec;
+        -:  904:   * acceptor.get_option(option, ec);
+        -:  905:   * if (ec)
+        -:  906:   * {
+        -:  907:   *   // An error occurred.
+        -:  908:   * }
+        -:  909:   * bool is_set = option.get();
+        -:  910:   * @endcode
+        -:  911:   */
+        -:  912:  template <typename GettableSocketOption>
+        -:  913:  BOOST_ASIO_SYNC_OP_VOID get_option(GettableSocketOption& option,
+        -:  914:      boost::system::error_code& ec) const
+        -:  915:  {
+        -:  916:    impl_.get_service().get_option(impl_.get_implementation(), option, ec);
+        -:  917:    BOOST_ASIO_SYNC_OP_VOID_RETURN(ec);
+        -:  918:  }
+        -:  919:
+        -:  920:  /// Perform an IO control command on the acceptor.
+        -:  921:  /**
+        -:  922:   * This function is used to execute an IO control command on the acceptor.
+        -:  923:   *
+        -:  924:   * @param command The IO control command to be performed on the acceptor.
+        -:  925:   *
+        -:  926:   * @throws boost::system::system_error Thrown on failure.
+        -:  927:   *
+        -:  928:   * @sa IoControlCommand @n
+        -:  929:   * boost::asio::socket_base::non_blocking_io
+        -:  930:   *
+        -:  931:   * @par Example
+        -:  932:   * Getting the number of bytes ready to read:
+        -:  933:   * @code
+        -:  934:   * boost::asio::ip::tcp::acceptor acceptor(my_context);
+        -:  935:   * ...
+        -:  936:   * boost::asio::ip::tcp::acceptor::non_blocking_io command(true);
+        -:  937:   * socket.io_control(command);
+        -:  938:   * @endcode
+        -:  939:   */
+        -:  940:  template <typename IoControlCommand>
+        -:  941:  void io_control(IoControlCommand& command)
+        -:  942:  {
+        -:  943:    boost::system::error_code ec;
+        -:  944:    impl_.get_service().io_control(impl_.get_implementation(), command, ec);
+        -:  945:    boost::asio::detail::throw_error(ec, "io_control");
+        -:  946:  }
+        -:  947:
+        -:  948:  /// Perform an IO control command on the acceptor.
+        -:  949:  /**
+        -:  950:   * This function is used to execute an IO control command on the acceptor.
+        -:  951:   *
+        -:  952:   * @param command The IO control command to be performed on the acceptor.
+        -:  953:   *
+        -:  954:   * @param ec Set to indicate what error occurred, if any.
+        -:  955:   *
+        -:  956:   * @sa IoControlCommand @n
+        -:  957:   * boost::asio::socket_base::non_blocking_io
+        -:  958:   *
+        -:  959:   * @par Example
+        -:  960:   * Getting the number of bytes ready to read:
+        -:  961:   * @code
+        -:  962:   * boost::asio::ip::tcp::acceptor acceptor(my_context);
+        -:  963:   * ...
+        -:  964:   * boost::asio::ip::tcp::acceptor::non_blocking_io command(true);
+        -:  965:   * boost::system::error_code ec;
+        -:  966:   * socket.io_control(command, ec);
+        -:  967:   * if (ec)
+        -:  968:   * {
+        -:  969:   *   // An error occurred.
+        -:  970:   * }
+        -:  971:   * @endcode
+        -:  972:   */
+        -:  973:  template <typename IoControlCommand>
+        -:  974:  BOOST_ASIO_SYNC_OP_VOID io_control(IoControlCommand& command,
+        -:  975:      boost::system::error_code& ec)
+        -:  976:  {
+        -:  977:    impl_.get_service().io_control(impl_.get_implementation(), command, ec);
+        -:  978:    BOOST_ASIO_SYNC_OP_VOID_RETURN(ec);
+        -:  979:  }
+        -:  980:
+        -:  981:  /// Gets the non-blocking mode of the acceptor.
+        -:  982:  /**
+        -:  983:   * @returns @c true if the acceptor's synchronous operations will fail with
+        -:  984:   * boost::asio::error::would_block if they are unable to perform the requested
+        -:  985:   * operation immediately. If @c false, synchronous operations will block
+        -:  986:   * until complete.
+        -:  987:   *
+        -:  988:   * @note The non-blocking mode has no effect on the behaviour of asynchronous
+        -:  989:   * operations. Asynchronous operations will never fail with the error
+        -:  990:   * boost::asio::error::would_block.
+        -:  991:   */
+        -:  992:  bool non_blocking() const
+        -:  993:  {
+        -:  994:    return impl_.get_service().non_blocking(impl_.get_implementation());
+        -:  995:  }
+        -:  996:
+        -:  997:  /// Sets the non-blocking mode of the acceptor.
+        -:  998:  /**
+        -:  999:   * @param mode If @c true, the acceptor's synchronous operations will fail
+        -: 1000:   * with boost::asio::error::would_block if they are unable to perform the
+        -: 1001:   * requested operation immediately. If @c false, synchronous operations will
+        -: 1002:   * block until complete.
+        -: 1003:   *
+        -: 1004:   * @throws boost::system::system_error Thrown on failure.
+        -: 1005:   *
+        -: 1006:   * @note The non-blocking mode has no effect on the behaviour of asynchronous
+        -: 1007:   * operations. Asynchronous operations will never fail with the error
+        -: 1008:   * boost::asio::error::would_block.
+        -: 1009:   */
+        -: 1010:  void non_blocking(bool mode)
+        -: 1011:  {
+        -: 1012:    boost::system::error_code ec;
+        -: 1013:    impl_.get_service().non_blocking(impl_.get_implementation(), mode, ec);
+        -: 1014:    boost::asio::detail::throw_error(ec, "non_blocking");
+        -: 1015:  }
+        -: 1016:
+        -: 1017:  /// Sets the non-blocking mode of the acceptor.
+        -: 1018:  /**
+        -: 1019:   * @param mode If @c true, the acceptor's synchronous operations will fail
+        -: 1020:   * with boost::asio::error::would_block if they are unable to perform the
+        -: 1021:   * requested operation immediately. If @c false, synchronous operations will
+        -: 1022:   * block until complete.
+        -: 1023:   *
+        -: 1024:   * @param ec Set to indicate what error occurred, if any.
+        -: 1025:   *
+        -: 1026:   * @note The non-blocking mode has no effect on the behaviour of asynchronous
+        -: 1027:   * operations. Asynchronous operations will never fail with the error
+        -: 1028:   * boost::asio::error::would_block.
+        -: 1029:   */
+        -: 1030:  BOOST_ASIO_SYNC_OP_VOID non_blocking(
+        -: 1031:      bool mode, boost::system::error_code& ec)
+        -: 1032:  {
+        -: 1033:    impl_.get_service().non_blocking(impl_.get_implementation(), mode, ec);
+        -: 1034:    BOOST_ASIO_SYNC_OP_VOID_RETURN(ec);
+        -: 1035:  }
+        -: 1036:
+        -: 1037:  /// Gets the non-blocking mode of the native acceptor implementation.
+        -: 1038:  /**
+        -: 1039:   * This function is used to retrieve the non-blocking mode of the underlying
+        -: 1040:   * native acceptor. This mode has no effect on the behaviour of the acceptor
+        -: 1041:   * object's synchronous operations.
+        -: 1042:   *
+        -: 1043:   * @returns @c true if the underlying acceptor is in non-blocking mode and
+        -: 1044:   * direct system calls may fail with boost::asio::error::would_block (or the
+        -: 1045:   * equivalent system error).
+        -: 1046:   *
+        -: 1047:   * @note The current non-blocking mode is cached by the acceptor object.
+        -: 1048:   * Consequently, the return value may be incorrect if the non-blocking mode
+        -: 1049:   * was set directly on the native acceptor.
+        -: 1050:   */
+        -: 1051:  bool native_non_blocking() const
+        -: 1052:  {
+        -: 1053:    return impl_.get_service().native_non_blocking(impl_.get_implementation());
+        -: 1054:  }
+        -: 1055:
+        -: 1056:  /// Sets the non-blocking mode of the native acceptor implementation.
+        -: 1057:  /**
+        -: 1058:   * This function is used to modify the non-blocking mode of the underlying
+        -: 1059:   * native acceptor. It has no effect on the behaviour of the acceptor object's
+        -: 1060:   * synchronous operations.
+        -: 1061:   *
+        -: 1062:   * @param mode If @c true, the underlying acceptor is put into non-blocking
+        -: 1063:   * mode and direct system calls may fail with boost::asio::error::would_block
+        -: 1064:   * (or the equivalent system error).
+        -: 1065:   *
+        -: 1066:   * @throws boost::system::system_error Thrown on failure. If the @c mode is
+        -: 1067:   * @c false, but the current value of @c non_blocking() is @c true, this
+        -: 1068:   * function fails with boost::asio::error::invalid_argument, as the
+        -: 1069:   * combination does not make sense.
+        -: 1070:   */
+        -: 1071:  void native_non_blocking(bool mode)
+        -: 1072:  {
+        -: 1073:    boost::system::error_code ec;
+        -: 1074:    impl_.get_service().native_non_blocking(
+        -: 1075:        impl_.get_implementation(), mode, ec);
+        -: 1076:    boost::asio::detail::throw_error(ec, "native_non_blocking");
+        -: 1077:  }
+        -: 1078:
+        -: 1079:  /// Sets the non-blocking mode of the native acceptor implementation.
+        -: 1080:  /**
+        -: 1081:   * This function is used to modify the non-blocking mode of the underlying
+        -: 1082:   * native acceptor. It has no effect on the behaviour of the acceptor object's
+        -: 1083:   * synchronous operations.
+        -: 1084:   *
+        -: 1085:   * @param mode If @c true, the underlying acceptor is put into non-blocking
+        -: 1086:   * mode and direct system calls may fail with boost::asio::error::would_block
+        -: 1087:   * (or the equivalent system error).
+        -: 1088:   *
+        -: 1089:   * @param ec Set to indicate what error occurred, if any. If the @c mode is
+        -: 1090:   * @c false, but the current value of @c non_blocking() is @c true, this
+        -: 1091:   * function fails with boost::asio::error::invalid_argument, as the
+        -: 1092:   * combination does not make sense.
+        -: 1093:   */
+        -: 1094:  BOOST_ASIO_SYNC_OP_VOID native_non_blocking(
+        -: 1095:      bool mode, boost::system::error_code& ec)
+        -: 1096:  {
+        -: 1097:    impl_.get_service().native_non_blocking(
+        -: 1098:        impl_.get_implementation(), mode, ec);
+        -: 1099:    BOOST_ASIO_SYNC_OP_VOID_RETURN(ec);
+        -: 1100:  }
+        -: 1101:
+        -: 1102:  /// Get the local endpoint of the acceptor.
+        -: 1103:  /**
+        -: 1104:   * This function is used to obtain the locally bound endpoint of the acceptor.
+        -: 1105:   *
+        -: 1106:   * @returns An object that represents the local endpoint of the acceptor.
+        -: 1107:   *
+        -: 1108:   * @throws boost::system::system_error Thrown on failure.
+        -: 1109:   *
+        -: 1110:   * @par Example
+        -: 1111:   * @code
+        -: 1112:   * boost::asio::ip::tcp::acceptor acceptor(my_context);
+        -: 1113:   * ...
+        -: 1114:   * boost::asio::ip::tcp::endpoint endpoint = acceptor.local_endpoint();
+        -: 1115:   * @endcode
+        -: 1116:   */
+      40*: 1117:  endpoint_type local_endpoint() const
+        -: 1118:  {
+      40*: 1119:    boost::system::error_code ec;
+      80*: 1120:    endpoint_type ep = impl_.get_service().local_endpoint(
+      40*: 1121:        impl_.get_implementation(), ec);
+      40*: 1122:    boost::asio::detail::throw_error(ec, "local_endpoint");
+      80*: 1123:    return ep;
+        -: 1124:  }
+------------------
+_ZNK5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEE14local_endpointEv:
+function _ZNK5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEE14local_endpointEv called 4 returned 100% blocks executed 90%
+        4: 1117:  endpoint_type local_endpoint() const
+        -: 1118:  {
+        4: 1119:    boost::system::error_code ec;
+        8: 1120:    endpoint_type ep = impl_.get_service().local_endpoint(
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        4: 1121:        impl_.get_implementation(), ec);
+call    0 returned 100%
+        4: 1122:    boost::asio::detail::throw_error(ec, "local_endpoint");
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        8: 1123:    return ep;
+        -: 1124:  }
+------------------
+_ZNK5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEE14local_endpointEv:
+function _ZNK5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEE14local_endpointEv called 28 returned 100% blocks executed 90%
+       28: 1117:  endpoint_type local_endpoint() const
+        -: 1118:  {
+       28: 1119:    boost::system::error_code ec;
+       56: 1120:    endpoint_type ep = impl_.get_service().local_endpoint(
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+       28: 1121:        impl_.get_implementation(), ec);
+call    0 returned 100%
+       28: 1122:    boost::asio::detail::throw_error(ec, "local_endpoint");
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+       56: 1123:    return ep;
+        -: 1124:  }
+------------------
+_ZNK5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEE14local_endpointEv:
+function _ZNK5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEE14local_endpointEv called 0 returned 0% blocks executed 0%
+    #####: 1117:  endpoint_type local_endpoint() const
+        -: 1118:  {
+    #####: 1119:    boost::system::error_code ec;
+    #####: 1120:    endpoint_type ep = impl_.get_service().local_endpoint(
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+    #####: 1121:        impl_.get_implementation(), ec);
+call    0 never executed
+    #####: 1122:    boost::asio::detail::throw_error(ec, "local_endpoint");
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+    #####: 1123:    return ep;
+        -: 1124:  }
+------------------
+_ZNK5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEE14local_endpointEv:
+function _ZNK5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEE14local_endpointEv called 8 returned 100% blocks executed 90%
+        8: 1117:  endpoint_type local_endpoint() const
+        -: 1118:  {
+        8: 1119:    boost::system::error_code ec;
+       16: 1120:    endpoint_type ep = impl_.get_service().local_endpoint(
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        8: 1121:        impl_.get_implementation(), ec);
+call    0 returned 100%
+        8: 1122:    boost::asio::detail::throw_error(ec, "local_endpoint");
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+       16: 1123:    return ep;
+        -: 1124:  }
+------------------
+        -: 1125:
+        -: 1126:  /// Get the local endpoint of the acceptor.
+        -: 1127:  /**
+        -: 1128:   * This function is used to obtain the locally bound endpoint of the acceptor.
+        -: 1129:   *
+        -: 1130:   * @param ec Set to indicate what error occurred, if any.
+        -: 1131:   *
+        -: 1132:   * @returns An object that represents the local endpoint of the acceptor.
+        -: 1133:   * Returns a default-constructed endpoint object if an error occurred and the
+        -: 1134:   * error handler did not throw an exception.
+        -: 1135:   *
+        -: 1136:   * @par Example
+        -: 1137:   * @code
+        -: 1138:   * boost::asio::ip::tcp::acceptor acceptor(my_context);
+        -: 1139:   * ...
+        -: 1140:   * boost::system::error_code ec;
+        -: 1141:   * boost::asio::ip::tcp::endpoint endpoint = acceptor.local_endpoint(ec);
+        -: 1142:   * if (ec)
+        -: 1143:   * {
+        -: 1144:   *   // An error occurred.
+        -: 1145:   * }
+        -: 1146:   * @endcode
+        -: 1147:   */
+        -: 1148:  endpoint_type local_endpoint(boost::system::error_code& ec) const
+        -: 1149:  {
+        -: 1150:    return impl_.get_service().local_endpoint(impl_.get_implementation(), ec);
+        -: 1151:  }
+        -: 1152:
+        -: 1153:  /// Wait for the acceptor to become ready to read, ready to write, or to have
+        -: 1154:  /// pending error conditions.
+        -: 1155:  /**
+        -: 1156:   * This function is used to perform a blocking wait for an acceptor to enter
+        -: 1157:   * a ready to read, write or error condition state.
+        -: 1158:   *
+        -: 1159:   * @param w Specifies the desired acceptor state.
+        -: 1160:   *
+        -: 1161:   * @par Example
+        -: 1162:   * Waiting for an acceptor to become readable.
+        -: 1163:   * @code
+        -: 1164:   * boost::asio::ip::tcp::acceptor acceptor(my_context);
+        -: 1165:   * ...
+        -: 1166:   * acceptor.wait(boost::asio::ip::tcp::acceptor::wait_read);
+        -: 1167:   * @endcode
+        -: 1168:   */
+        -: 1169:  void wait(wait_type w)
+        -: 1170:  {
+        -: 1171:    boost::system::error_code ec;
+        -: 1172:    impl_.get_service().wait(impl_.get_implementation(), w, ec);
+        -: 1173:    boost::asio::detail::throw_error(ec, "wait");
+        -: 1174:  }
+        -: 1175:
+        -: 1176:  /// Wait for the acceptor to become ready to read, ready to write, or to have
+        -: 1177:  /// pending error conditions.
+        -: 1178:  /**
+        -: 1179:   * This function is used to perform a blocking wait for an acceptor to enter
+        -: 1180:   * a ready to read, write or error condition state.
+        -: 1181:   *
+        -: 1182:   * @param w Specifies the desired acceptor state.
+        -: 1183:   *
+        -: 1184:   * @param ec Set to indicate what error occurred, if any.
+        -: 1185:   *
+        -: 1186:   * @par Example
+        -: 1187:   * Waiting for an acceptor to become readable.
+        -: 1188:   * @code
+        -: 1189:   * boost::asio::ip::tcp::acceptor acceptor(my_context);
+        -: 1190:   * ...
+        -: 1191:   * boost::system::error_code ec;
+        -: 1192:   * acceptor.wait(boost::asio::ip::tcp::acceptor::wait_read, ec);
+        -: 1193:   * @endcode
+        -: 1194:   */
+        -: 1195:  BOOST_ASIO_SYNC_OP_VOID wait(wait_type w, boost::system::error_code& ec)
+        -: 1196:  {
+        -: 1197:    impl_.get_service().wait(impl_.get_implementation(), w, ec);
+        -: 1198:    BOOST_ASIO_SYNC_OP_VOID_RETURN(ec);
+        -: 1199:  }
+        -: 1200:
+        -: 1201:  /// Asynchronously wait for the acceptor to become ready to read, ready to
+        -: 1202:  /// write, or to have pending error conditions.
+        -: 1203:  /**
+        -: 1204:   * This function is used to perform an asynchronous wait for an acceptor to
+        -: 1205:   * enter a ready to read, write or error condition state. It is an initiating
+        -: 1206:   * function for an @ref asynchronous_operation, and always returns
+        -: 1207:   * immediately.
+        -: 1208:   *
+        -: 1209:   * @param w Specifies the desired acceptor state.
+        -: 1210:   *
+        -: 1211:   * @param token The @ref completion_token that will be used to produce a
+        -: 1212:   * completion handler, which will be called when the wait completes.
+        -: 1213:   * Potential completion tokens include @ref use_future, @ref use_awaitable,
+        -: 1214:   * @ref yield_context, or a function object with the correct completion
+        -: 1215:   * signature. The function signature of the completion handler must be:
+        -: 1216:   * @code void handler(
+        -: 1217:   *   const boost::system::error_code& error // Result of operation.
+        -: 1218:   * ); @endcode
+        -: 1219:   * Regardless of whether the asynchronous operation completes immediately or
+        -: 1220:   * not, the completion handler will not be invoked from within this function.
+        -: 1221:   * On immediate completion, invocation of the handler will be performed in a
+        -: 1222:   * manner equivalent to using boost::asio::post().
+        -: 1223:   *
+        -: 1224:   * @par Completion Signature
+        -: 1225:   * @code void(boost::system::error_code) @endcode
+        -: 1226:   *
+        -: 1227:   * @par Example
+        -: 1228:   * @code
+        -: 1229:   * void wait_handler(const boost::system::error_code& error)
+        -: 1230:   * {
+        -: 1231:   *   if (!error)
+        -: 1232:   *   {
+        -: 1233:   *     // Wait succeeded.
+        -: 1234:   *   }
+        -: 1235:   * }
+        -: 1236:   *
+        -: 1237:   * ...
+        -: 1238:   *
+        -: 1239:   * boost::asio::ip::tcp::acceptor acceptor(my_context);
+        -: 1240:   * ...
+        -: 1241:   * acceptor.async_wait(
+        -: 1242:   *     boost::asio::ip::tcp::acceptor::wait_read,
+        -: 1243:   *     wait_handler);
+        -: 1244:   * @endcode
+        -: 1245:   *
+        -: 1246:   * @par Per-Operation Cancellation
+        -: 1247:   * On POSIX or Windows operating systems, this asynchronous operation supports
+        -: 1248:   * cancellation for the following boost::asio::cancellation_type values:
+        -: 1249:   *
+        -: 1250:   * @li @c cancellation_type::terminal
+        -: 1251:   *
+        -: 1252:   * @li @c cancellation_type::partial
+        -: 1253:   *
+        -: 1254:   * @li @c cancellation_type::total
+        -: 1255:   */
+        -: 1256:  template <
+        -: 1257:      BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code))
+        -: 1258:        WaitToken BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(executor_type)>
+        -: 1259:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(WaitToken,
+        -: 1260:      void (boost::system::error_code))
+        -: 1261:  async_wait(wait_type w,
+        -: 1262:      BOOST_ASIO_MOVE_ARG(WaitToken) token
+        -: 1263:        BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type))
+        -: 1264:    BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -: 1265:      async_initiate<WaitToken, void (boost::system::error_code)>(
+        -: 1266:          declval<initiate_async_wait>(), token, w)))
+        -: 1267:  {
+        -: 1268:    return async_initiate<WaitToken, void (boost::system::error_code)>(
+        -: 1269:        initiate_async_wait(this), token, w);
+        -: 1270:  }
+        -: 1271:
+        -: 1272:#if !defined(BOOST_ASIO_NO_EXTENSIONS)
+        -: 1273:  /// Accept a new connection.
+        -: 1274:  /**
+        -: 1275:   * This function is used to accept a new connection from a peer into the
+        -: 1276:   * given socket. The function call will block until a new connection has been
+        -: 1277:   * accepted successfully or an error occurs.
+        -: 1278:   *
+        -: 1279:   * @param peer The socket into which the new connection will be accepted.
+        -: 1280:   *
+        -: 1281:   * @throws boost::system::system_error Thrown on failure.
+        -: 1282:   *
+        -: 1283:   * @par Example
+        -: 1284:   * @code
+        -: 1285:   * boost::asio::ip::tcp::acceptor acceptor(my_context);
+        -: 1286:   * ...
+        -: 1287:   * boost::asio::ip::tcp::socket socket(my_context);
+        -: 1288:   * acceptor.accept(socket);
+        -: 1289:   * @endcode
+        -: 1290:   */
+        -: 1291:  template <typename Protocol1, typename Executor1>
+        -: 1292:  void accept(basic_socket<Protocol1, Executor1>& peer,
+        -: 1293:      typename constraint<
+        -: 1294:        is_convertible<Protocol, Protocol1>::value
+        -: 1295:      >::type = 0)
+        -: 1296:  {
+        -: 1297:    boost::system::error_code ec;
+        -: 1298:    impl_.get_service().accept(impl_.get_implementation(),
+        -: 1299:        peer, static_cast<endpoint_type*>(0), ec);
+        -: 1300:    boost::asio::detail::throw_error(ec, "accept");
+        -: 1301:  }
+        -: 1302:
+        -: 1303:  /// Accept a new connection.
+        -: 1304:  /**
+        -: 1305:   * This function is used to accept a new connection from a peer into the
+        -: 1306:   * given socket. The function call will block until a new connection has been
+        -: 1307:   * accepted successfully or an error occurs.
+        -: 1308:   *
+        -: 1309:   * @param peer The socket into which the new connection will be accepted.
+        -: 1310:   *
+        -: 1311:   * @param ec Set to indicate what error occurred, if any.
+        -: 1312:   *
+        -: 1313:   * @par Example
+        -: 1314:   * @code
+        -: 1315:   * boost::asio::ip::tcp::acceptor acceptor(my_context);
+        -: 1316:   * ...
+        -: 1317:   * boost::asio::ip::tcp::socket socket(my_context);
+        -: 1318:   * boost::system::error_code ec;
+        -: 1319:   * acceptor.accept(socket, ec);
+        -: 1320:   * if (ec)
+        -: 1321:   * {
+        -: 1322:   *   // An error occurred.
+        -: 1323:   * }
+        -: 1324:   * @endcode
+        -: 1325:   */
+        -: 1326:  template <typename Protocol1, typename Executor1>
+    #####: 1327:  BOOST_ASIO_SYNC_OP_VOID accept(
+        -: 1328:      basic_socket<Protocol1, Executor1>& peer, boost::system::error_code& ec,
+        -: 1329:      typename constraint<
+        -: 1330:        is_convertible<Protocol, Protocol1>::value
+        -: 1331:      >::type = 0)
+        -: 1332:  {
+    #####: 1333:    impl_.get_service().accept(impl_.get_implementation(),
+        -: 1334:        peer, static_cast<endpoint_type*>(0), ec);
+    #####: 1335:    BOOST_ASIO_SYNC_OP_VOID_RETURN(ec);
+        -: 1336:  }
+------------------
+_ZN5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEE6acceptIS3_S4_EENS_6system10error_codeERNS0_12basic_socketIT_T0_EERS8_NS0_10constraintIXsrSt14is_convertibleIS3_SA_E5valueEiE4typeE:
+function _ZN5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEE6acceptIS3_S4_EENS_6system10error_codeERNS0_12basic_socketIT_T0_EERS8_NS0_10constraintIXsrSt14is_convertibleIS3_SA_E5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####: 1327:  BOOST_ASIO_SYNC_OP_VOID accept(
+        -: 1328:      basic_socket<Protocol1, Executor1>& peer, boost::system::error_code& ec,
+        -: 1329:      typename constraint<
+        -: 1330:        is_convertible<Protocol, Protocol1>::value
+        -: 1331:      >::type = 0)
+        -: 1332:  {
+    #####: 1333:    impl_.get_service().accept(impl_.get_implementation(),
+call    0 never executed
+call    1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed (throw)
+        -: 1334:        peer, static_cast<endpoint_type*>(0), ec);
+    #####: 1335:    BOOST_ASIO_SYNC_OP_VOID_RETURN(ec);
+        -: 1336:  }
+------------------
+_ZN5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEE6acceptIS3_S4_EENS_6system10error_codeERNS0_12basic_socketIT_T0_EERS8_NS0_10constraintIXsrSt14is_convertibleIS3_SA_E5valueEiE4typeE:
+function _ZN5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEE6acceptIS3_S4_EENS_6system10error_codeERNS0_12basic_socketIT_T0_EERS8_NS0_10constraintIXsrSt14is_convertibleIS3_SA_E5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####: 1327:  BOOST_ASIO_SYNC_OP_VOID accept(
+        -: 1328:      basic_socket<Protocol1, Executor1>& peer, boost::system::error_code& ec,
+        -: 1329:      typename constraint<
+        -: 1330:        is_convertible<Protocol, Protocol1>::value
+        -: 1331:      >::type = 0)
+        -: 1332:  {
+    #####: 1333:    impl_.get_service().accept(impl_.get_implementation(),
+call    0 never executed
+call    1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed (throw)
+        -: 1334:        peer, static_cast<endpoint_type*>(0), ec);
+    #####: 1335:    BOOST_ASIO_SYNC_OP_VOID_RETURN(ec);
+        -: 1336:  }
+------------------
+        -: 1337:
+        -: 1338:  /// Start an asynchronous accept.
+        -: 1339:  /**
+        -: 1340:   * This function is used to asynchronously accept a new connection into a
+        -: 1341:   * socket, and additionally obtain the endpoint of the remote peer. It is an
+        -: 1342:   * initiating function for an @ref asynchronous_operation, and always returns
+        -: 1343:   * immediately.
+        -: 1344:   *
+        -: 1345:   * @param peer The socket into which the new connection will be accepted.
+        -: 1346:   * Ownership of the peer object is retained by the caller, which must
+        -: 1347:   * guarantee that it is valid until the completion handler is called.
+        -: 1348:   *
+        -: 1349:   * @param token The @ref completion_token that will be used to produce a
+        -: 1350:   * completion handler, which will be called when the accept completes.
+        -: 1351:   * Potential completion tokens include @ref use_future, @ref use_awaitable,
+        -: 1352:   * @ref yield_context, or a function object with the correct completion
+        -: 1353:   * signature. The function signature of the completion handler must be:
+        -: 1354:   * @code void handler(
+        -: 1355:   *   const boost::system::error_code& error // Result of operation.
+        -: 1356:   * ); @endcode
+        -: 1357:   * Regardless of whether the asynchronous operation completes immediately or
+        -: 1358:   * not, the completion handler will not be invoked from within this function.
+        -: 1359:   * On immediate completion, invocation of the handler will be performed in a
+        -: 1360:   * manner equivalent to using boost::asio::post().
+        -: 1361:   *
+        -: 1362:   * @par Completion Signature
+        -: 1363:   * @code void(boost::system::error_code) @endcode
+        -: 1364:   *
+        -: 1365:   * @par Example
+        -: 1366:   * @code
+        -: 1367:   * void accept_handler(const boost::system::error_code& error)
+        -: 1368:   * {
+        -: 1369:   *   if (!error)
+        -: 1370:   *   {
+        -: 1371:   *     // Accept succeeded.
+        -: 1372:   *   }
+        -: 1373:   * }
+        -: 1374:   *
+        -: 1375:   * ...
+        -: 1376:   *
+        -: 1377:   * boost::asio::ip::tcp::acceptor acceptor(my_context);
+        -: 1378:   * ...
+        -: 1379:   * boost::asio::ip::tcp::socket socket(my_context);
+        -: 1380:   * acceptor.async_accept(socket, accept_handler);
+        -: 1381:   * @endcode
+        -: 1382:   *
+        -: 1383:   * @par Per-Operation Cancellation
+        -: 1384:   * On POSIX or Windows operating systems, this asynchronous operation supports
+        -: 1385:   * cancellation for the following boost::asio::cancellation_type values:
+        -: 1386:   *
+        -: 1387:   * @li @c cancellation_type::terminal
+        -: 1388:   *
+        -: 1389:   * @li @c cancellation_type::partial
+        -: 1390:   *
+        -: 1391:   * @li @c cancellation_type::total
+        -: 1392:   */
+        -: 1393:  template <typename Protocol1, typename Executor1,
+        -: 1394:      BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code))
+        -: 1395:        AcceptToken BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(executor_type)>
+        -: 1396:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(AcceptToken,
+        -: 1397:      void (boost::system::error_code))
+       8*: 1398:  async_accept(basic_socket<Protocol1, Executor1>& peer,
+        -: 1399:      BOOST_ASIO_MOVE_ARG(AcceptToken) token
+        -: 1400:        BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type),
+        -: 1401:      typename constraint<
+        -: 1402:        is_convertible<Protocol, Protocol1>::value
+        -: 1403:      >::type = 0)
+        -: 1404:    BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -: 1405:      async_initiate<AcceptToken, void (boost::system::error_code)>(
+        -: 1406:          declval<initiate_async_accept>(), token,
+        -: 1407:          &peer, static_cast<endpoint_type*>(0))))
+        -: 1408:  {
+        8: 1409:    return async_initiate<AcceptToken, void (boost::system::error_code)>(
+    #####: 1410:        initiate_async_accept(this), token,
+      16*: 1411:        &peer, static_cast<endpoint_type*>(0));
+        -: 1412:  }
+------------------
+_ZN5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEE12async_acceptIS3_S4_RKNS0_15use_awaitable_tIS4_EEEEDaRNS0_12basic_socketIT_T0_EEOT1_NS0_10constraintIXsrSt14is_convertibleIS3_SC_E5valueEiE4typeE:
+function _ZN5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEE12async_acceptIS3_S4_RKNS0_15use_awaitable_tIS4_EEEEDaRNS0_12basic_socketIT_T0_EEOT1_NS0_10constraintIXsrSt14is_convertibleIS3_SC_E5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####: 1398:  async_accept(basic_socket<Protocol1, Executor1>& peer,
+        -: 1399:      BOOST_ASIO_MOVE_ARG(AcceptToken) token
+        -: 1400:        BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type),
+        -: 1401:      typename constraint<
+        -: 1402:        is_convertible<Protocol, Protocol1>::value
+        -: 1403:      >::type = 0)
+        -: 1404:    BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -: 1405:      async_initiate<AcceptToken, void (boost::system::error_code)>(
+        -: 1406:          declval<initiate_async_accept>(), token,
+        -: 1407:          &peer, static_cast<endpoint_type*>(0))))
+        -: 1408:  {
+        -: 1409:    return async_initiate<AcceptToken, void (boost::system::error_code)>(
+    #####: 1410:        initiate_async_accept(this), token,
+    #####: 1411:        &peer, static_cast<endpoint_type*>(0));
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+        -: 1412:  }
+------------------
+_ZN5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEE12async_acceptIS3_S4_Z22createConnectedSocketsRNS0_10io_contextES8_EUlNS_6system10error_codeEE_EEDaRNS0_12basic_socketIT_T0_EEOT1_NS0_10constraintIXsrSt14is_convertibleIS3_SD_E5valueEiE4typeE:
+function _ZN5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEE12async_acceptIS3_S4_Z22createConnectedSocketsRNS0_10io_contextES8_EUlNS_6system10error_codeEE_EEDaRNS0_12basic_socketIT_T0_EEOT1_NS0_10constraintIXsrSt14is_convertibleIS3_SD_E5valueEiE4typeE called 8 returned 100% blocks executed 71%
+        8: 1398:  async_accept(basic_socket<Protocol1, Executor1>& peer,
+        -: 1399:      BOOST_ASIO_MOVE_ARG(AcceptToken) token
+        -: 1400:        BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type),
+        -: 1401:      typename constraint<
+        -: 1402:        is_convertible<Protocol, Protocol1>::value
+        -: 1403:      >::type = 0)
+        -: 1404:    BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -: 1405:      async_initiate<AcceptToken, void (boost::system::error_code)>(
+        -: 1406:          declval<initiate_async_accept>(), token,
+        -: 1407:          &peer, static_cast<endpoint_type*>(0))))
+        -: 1408:  {
+        8: 1409:    return async_initiate<AcceptToken, void (boost::system::error_code)>(
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+    #####: 1410:        initiate_async_accept(this), token,
+       16: 1411:        &peer, static_cast<endpoint_type*>(0));
+call    0 returned 100%
+        -: 1412:  }
+------------------
+        -: 1413:
+        -: 1414:  /// Accept a new connection and obtain the endpoint of the peer
+        -: 1415:  /**
+        -: 1416:   * This function is used to accept a new connection from a peer into the
+        -: 1417:   * given socket, and additionally provide the endpoint of the remote peer.
+        -: 1418:   * The function call will block until a new connection has been accepted
+        -: 1419:   * successfully or an error occurs.
+        -: 1420:   *
+        -: 1421:   * @param peer The socket into which the new connection will be accepted.
+        -: 1422:   *
+        -: 1423:   * @param peer_endpoint An endpoint object which will receive the endpoint of
+        -: 1424:   * the remote peer.
+        -: 1425:   *
+        -: 1426:   * @throws boost::system::system_error Thrown on failure.
+        -: 1427:   *
+        -: 1428:   * @par Example
+        -: 1429:   * @code
+        -: 1430:   * boost::asio::ip::tcp::acceptor acceptor(my_context);
+        -: 1431:   * ...
+        -: 1432:   * boost::asio::ip::tcp::socket socket(my_context);
+        -: 1433:   * boost::asio::ip::tcp::endpoint endpoint;
+        -: 1434:   * acceptor.accept(socket, endpoint);
+        -: 1435:   * @endcode
+        -: 1436:   */
+        -: 1437:  template <typename Executor1>
+        -: 1438:  void accept(basic_socket<protocol_type, Executor1>& peer,
+        -: 1439:      endpoint_type& peer_endpoint)
+        -: 1440:  {
+        -: 1441:    boost::system::error_code ec;
+        -: 1442:    impl_.get_service().accept(impl_.get_implementation(),
+        -: 1443:        peer, &peer_endpoint, ec);
+        -: 1444:    boost::asio::detail::throw_error(ec, "accept");
+        -: 1445:  }
+        -: 1446:
+        -: 1447:  /// Accept a new connection and obtain the endpoint of the peer
+        -: 1448:  /**
+        -: 1449:   * This function is used to accept a new connection from a peer into the
+        -: 1450:   * given socket, and additionally provide the endpoint of the remote peer.
+        -: 1451:   * The function call will block until a new connection has been accepted
+        -: 1452:   * successfully or an error occurs.
+        -: 1453:   *
+        -: 1454:   * @param peer The socket into which the new connection will be accepted.
+        -: 1455:   *
+        -: 1456:   * @param peer_endpoint An endpoint object which will receive the endpoint of
+        -: 1457:   * the remote peer.
+        -: 1458:   *
+        -: 1459:   * @param ec Set to indicate what error occurred, if any.
+        -: 1460:   *
+        -: 1461:   * @par Example
+        -: 1462:   * @code
+        -: 1463:   * boost::asio::ip::tcp::acceptor acceptor(my_context);
+        -: 1464:   * ...
+        -: 1465:   * boost::asio::ip::tcp::socket socket(my_context);
+        -: 1466:   * boost::asio::ip::tcp::endpoint endpoint;
+        -: 1467:   * boost::system::error_code ec;
+        -: 1468:   * acceptor.accept(socket, endpoint, ec);
+        -: 1469:   * if (ec)
+        -: 1470:   * {
+        -: 1471:   *   // An error occurred.
+        -: 1472:   * }
+        -: 1473:   * @endcode
+        -: 1474:   */
+        -: 1475:  template <typename Executor1>
+        -: 1476:  BOOST_ASIO_SYNC_OP_VOID accept(basic_socket<protocol_type, Executor1>& peer,
+        -: 1477:      endpoint_type& peer_endpoint, boost::system::error_code& ec)
+        -: 1478:  {
+        -: 1479:    impl_.get_service().accept(
+        -: 1480:        impl_.get_implementation(), peer, &peer_endpoint, ec);
+        -: 1481:    BOOST_ASIO_SYNC_OP_VOID_RETURN(ec);
+        -: 1482:  }
+        -: 1483:
+        -: 1484:  /// Start an asynchronous accept.
+        -: 1485:  /**
+        -: 1486:   * This function is used to asynchronously accept a new connection into a
+        -: 1487:   * socket, and additionally obtain the endpoint of the remote peer. It is an
+        -: 1488:   * initiating function for an @ref asynchronous_operation, and always returns
+        -: 1489:   * immediately.
+        -: 1490:   *
+        -: 1491:   * @param peer The socket into which the new connection will be accepted.
+        -: 1492:   * Ownership of the peer object is retained by the caller, which must
+        -: 1493:   * guarantee that it is valid until the completion handler is called.
+        -: 1494:   *
+        -: 1495:   * @param peer_endpoint An endpoint object into which the endpoint of the
+        -: 1496:   * remote peer will be written. Ownership of the peer_endpoint object is
+        -: 1497:   * retained by the caller, which must guarantee that it is valid until the
+        -: 1498:   * handler is called.
+        -: 1499:   *
+        -: 1500:   * @param token The @ref completion_token that will be used to produce a
+        -: 1501:   * completion handler, which will be called when the accept completes.
+        -: 1502:   * Potential completion tokens include @ref use_future, @ref use_awaitable,
+        -: 1503:   * @ref yield_context, or a function object with the correct completion
+        -: 1504:   * signature. The function signature of the completion handler must be:
+        -: 1505:   * @code void handler(
+        -: 1506:   *   const boost::system::error_code& error // Result of operation.
+        -: 1507:   * ); @endcode
+        -: 1508:   * Regardless of whether the asynchronous operation completes immediately or
+        -: 1509:   * not, the completion handler will not be invoked from within this function.
+        -: 1510:   * On immediate completion, invocation of the handler will be performed in a
+        -: 1511:   * manner equivalent to using boost::asio::post().
+        -: 1512:   *
+        -: 1513:   * @par Completion Signature
+        -: 1514:   * @code void(boost::system::error_code) @endcode
+        -: 1515:   *
+        -: 1516:   * @par Per-Operation Cancellation
+        -: 1517:   * On POSIX or Windows operating systems, this asynchronous operation supports
+        -: 1518:   * cancellation for the following boost::asio::cancellation_type values:
+        -: 1519:   *
+        -: 1520:   * @li @c cancellation_type::terminal
+        -: 1521:   *
+        -: 1522:   * @li @c cancellation_type::partial
+        -: 1523:   *
+        -: 1524:   * @li @c cancellation_type::total
+        -: 1525:   */
+        -: 1526:  template <typename Executor1,
+        -: 1527:      BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code))
+        -: 1528:        AcceptToken BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(executor_type)>
+        -: 1529:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(AcceptToken,
+        -: 1530:      void (boost::system::error_code))
+        -: 1531:  async_accept(basic_socket<protocol_type, Executor1>& peer,
+        -: 1532:      endpoint_type& peer_endpoint,
+        -: 1533:      BOOST_ASIO_MOVE_ARG(AcceptToken) token
+        -: 1534:        BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type))
+        -: 1535:    BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -: 1536:      async_initiate<AcceptToken, void (boost::system::error_code)>(
+        -: 1537:          declval<initiate_async_accept>(), token, &peer, &peer_endpoint)))
+        -: 1538:  {
+        -: 1539:    return async_initiate<AcceptToken, void (boost::system::error_code)>(
+        -: 1540:        initiate_async_accept(this), token, &peer, &peer_endpoint);
+        -: 1541:  }
+        -: 1542:#endif // !defined(BOOST_ASIO_NO_EXTENSIONS)
+        -: 1543:
+        -: 1544:#if defined(BOOST_ASIO_HAS_MOVE) || defined(GENERATING_DOCUMENTATION)
+        -: 1545:  /// Accept a new connection.
+        -: 1546:  /**
+        -: 1547:   * This function is used to accept a new connection from a peer. The function
+        -: 1548:   * call will block until a new connection has been accepted successfully or
+        -: 1549:   * an error occurs.
+        -: 1550:   *
+        -: 1551:   * This overload requires that the Protocol template parameter satisfy the
+        -: 1552:   * AcceptableProtocol type requirements.
+        -: 1553:   *
+        -: 1554:   * @returns A socket object representing the newly accepted connection.
+        -: 1555:   *
+        -: 1556:   * @throws boost::system::system_error Thrown on failure.
+        -: 1557:   *
+        -: 1558:   * @par Example
+        -: 1559:   * @code
+        -: 1560:   * boost::asio::ip::tcp::acceptor acceptor(my_context);
+        -: 1561:   * ...
+        -: 1562:   * boost::asio::ip::tcp::socket socket(acceptor.accept());
+        -: 1563:   * @endcode
+        -: 1564:   */
+        -: 1565:  typename Protocol::socket::template rebind_executor<executor_type>::other
+        -: 1566:  accept()
+        -: 1567:  {
+        -: 1568:    boost::system::error_code ec;
+        -: 1569:    typename Protocol::socket::template rebind_executor<
+        -: 1570:      executor_type>::other peer(impl_.get_executor());
+        -: 1571:    impl_.get_service().accept(impl_.get_implementation(), peer, 0, ec);
+        -: 1572:    boost::asio::detail::throw_error(ec, "accept");
+        -: 1573:    return peer;
+        -: 1574:  }
+        -: 1575:
+        -: 1576:  /// Accept a new connection.
+        -: 1577:  /**
+        -: 1578:   * This function is used to accept a new connection from a peer. The function
+        -: 1579:   * call will block until a new connection has been accepted successfully or
+        -: 1580:   * an error occurs.
+        -: 1581:   *
+        -: 1582:   * This overload requires that the Protocol template parameter satisfy the
+        -: 1583:   * AcceptableProtocol type requirements.
+        -: 1584:   *
+        -: 1585:   * @param ec Set to indicate what error occurred, if any.
+        -: 1586:   *
+        -: 1587:   * @returns On success, a socket object representing the newly accepted
+        -: 1588:   * connection. On error, a socket object where is_open() is false.
+        -: 1589:   *
+        -: 1590:   * @par Example
+        -: 1591:   * @code
+        -: 1592:   * boost::asio::ip::tcp::acceptor acceptor(my_context);
+        -: 1593:   * ...
+        -: 1594:   * boost::asio::ip::tcp::socket socket(acceptor.accept(ec));
+        -: 1595:   * if (ec)
+        -: 1596:   * {
+        -: 1597:   *   // An error occurred.
+        -: 1598:   * }
+        -: 1599:   * @endcode
+        -: 1600:   */
+        -: 1601:  typename Protocol::socket::template rebind_executor<executor_type>::other
+        -: 1602:  accept(boost::system::error_code& ec)
+        -: 1603:  {
+        -: 1604:    typename Protocol::socket::template rebind_executor<
+        -: 1605:      executor_type>::other peer(impl_.get_executor());
+        -: 1606:    impl_.get_service().accept(impl_.get_implementation(), peer, 0, ec);
+        -: 1607:    return peer;
+        -: 1608:  }
+        -: 1609:
+        -: 1610:  /// Start an asynchronous accept.
+        -: 1611:  /**
+        -: 1612:   * This function is used to asynchronously accept a new connection. It is an
+        -: 1613:   * initiating function for an @ref asynchronous_operation, and always returns
+        -: 1614:   * immediately.
+        -: 1615:   *
+        -: 1616:   * This overload requires that the Protocol template parameter satisfy the
+        -: 1617:   * AcceptableProtocol type requirements.
+        -: 1618:   *
+        -: 1619:   * @param token The @ref completion_token that will be used to produce a
+        -: 1620:   * completion handler, which will be called when the accept completes.
+        -: 1621:   * Potential completion tokens include @ref use_future, @ref use_awaitable,
+        -: 1622:   * @ref yield_context, or a function object with the correct completion
+        -: 1623:   * signature. The function signature of the completion handler must be:
+        -: 1624:   * @code void handler(
+        -: 1625:   *   // Result of operation.
+        -: 1626:   *   const boost::system::error_code& error,
+        -: 1627:   *
+        -: 1628:   *   // On success, the newly accepted socket.
+        -: 1629:   *   typename Protocol::socket::template
+        -: 1630:   *     rebind_executor<executor_type>::other peer
+        -: 1631:   * ); @endcode
+        -: 1632:   * Regardless of whether the asynchronous operation completes immediately or
+        -: 1633:   * not, the completion handler will not be invoked from within this function.
+        -: 1634:   * On immediate completion, invocation of the handler will be performed in a
+        -: 1635:   * manner equivalent to using boost::asio::post().
+        -: 1636:   *
+        -: 1637:   * @par Completion Signature
+        -: 1638:   * @code void(boost::system::error_code,
+        -: 1639:   *    typename Protocol::socket::template
+        -: 1640:   *      rebind_executor<executor_type>::other)) @endcode
+        -: 1641:   *
+        -: 1642:   * @par Example
+        -: 1643:   * @code
+        -: 1644:   * void accept_handler(const boost::system::error_code& error,
+        -: 1645:   *     boost::asio::ip::tcp::socket peer)
+        -: 1646:   * {
+        -: 1647:   *   if (!error)
+        -: 1648:   *   {
+        -: 1649:   *     // Accept succeeded.
+        -: 1650:   *   }
+        -: 1651:   * }
+        -: 1652:   *
+        -: 1653:   * ...
+        -: 1654:   *
+        -: 1655:   * boost::asio::ip::tcp::acceptor acceptor(my_context);
+        -: 1656:   * ...
+        -: 1657:   * acceptor.async_accept(accept_handler);
+        -: 1658:   * @endcode
+        -: 1659:   *
+        -: 1660:   * @par Per-Operation Cancellation
+        -: 1661:   * On POSIX or Windows operating systems, this asynchronous operation supports
+        -: 1662:   * cancellation for the following boost::asio::cancellation_type values:
+        -: 1663:   *
+        -: 1664:   * @li @c cancellation_type::terminal
+        -: 1665:   *
+        -: 1666:   * @li @c cancellation_type::partial
+        -: 1667:   *
+        -: 1668:   * @li @c cancellation_type::total
+        -: 1669:   */
+        -: 1670:  template <
+        -: 1671:      BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code,
+        -: 1672:        typename Protocol::socket::template rebind_executor<
+        -: 1673:          executor_type>::other)) MoveAcceptToken
+        -: 1674:            BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(executor_type)>
+        -: 1675:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(MoveAcceptToken,
+        -: 1676:      void (boost::system::error_code,
+        -: 1677:        typename Protocol::socket::template
+        -: 1678:          rebind_executor<executor_type>::other))
+     104*: 1679:  async_accept(
+        -: 1680:      BOOST_ASIO_MOVE_ARG(MoveAcceptToken) token
+        -: 1681:        BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type))
+        -: 1682:    BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -: 1683:      async_initiate<MoveAcceptToken,
+        -: 1684:        void (boost::system::error_code, typename Protocol::socket::template
+        -: 1685:          rebind_executor<executor_type>::other)>(
+        -: 1686:            declval<initiate_async_move_accept>(), token,
+        -: 1687:            declval<executor_type>(), static_cast<endpoint_type*>(0),
+        -: 1688:            static_cast<typename Protocol::socket::template
+        -: 1689:              rebind_executor<executor_type>::other*>(0))))
+        -: 1690:  {
+        -: 1691:    return async_initiate<MoveAcceptToken,
+        -: 1692:      void (boost::system::error_code, typename Protocol::socket::template
+        -: 1693:        rebind_executor<executor_type>::other)>(
+     104*: 1694:          initiate_async_move_accept(this), token,
+     104*: 1695:          impl_.get_executor(), static_cast<endpoint_type*>(0),
+        -: 1696:          static_cast<typename Protocol::socket::template
+     312*: 1697:            rebind_executor<executor_type>::other*>(0));
+        -: 1698:  }
+------------------
+_ZN5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEE12async_acceptIRKNS0_15use_awaitable_tIS4_EEEEDaOT_:
+function _ZN5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEE12async_acceptIRKNS0_15use_awaitable_tIS4_EEEEDaOT_ called 9 returned 100% blocks executed 78%
+        9: 1679:  async_accept(
+        -: 1680:      BOOST_ASIO_MOVE_ARG(MoveAcceptToken) token
+        -: 1681:        BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type))
+        -: 1682:    BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -: 1683:      async_initiate<MoveAcceptToken,
+        -: 1684:        void (boost::system::error_code, typename Protocol::socket::template
+        -: 1685:          rebind_executor<executor_type>::other)>(
+        -: 1686:            declval<initiate_async_move_accept>(), token,
+        -: 1687:            declval<executor_type>(), static_cast<endpoint_type*>(0),
+        -: 1688:            static_cast<typename Protocol::socket::template
+        -: 1689:              rebind_executor<executor_type>::other*>(0))))
+        -: 1690:  {
+        -: 1691:    return async_initiate<MoveAcceptToken,
+        -: 1692:      void (boost::system::error_code, typename Protocol::socket::template
+        -: 1693:        rebind_executor<executor_type>::other)>(
+        9: 1694:          initiate_async_move_accept(this), token,
+call    0 returned 100%
+        9: 1695:          impl_.get_executor(), static_cast<endpoint_type*>(0),
+        -: 1696:          static_cast<typename Protocol::socket::template
+       27: 1697:            rebind_executor<executor_type>::other*>(0));
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -: 1698:  }
+------------------
+_ZN5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEE12async_acceptIRKNS0_15use_awaitable_tIS4_EEEEDaOT_:
+function _ZN5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEE12async_acceptIRKNS0_15use_awaitable_tIS4_EEEEDaOT_ called 95 returned 100% blocks executed 78%
+       95: 1679:  async_accept(
+        -: 1680:      BOOST_ASIO_MOVE_ARG(MoveAcceptToken) token
+        -: 1681:        BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type))
+        -: 1682:    BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -: 1683:      async_initiate<MoveAcceptToken,
+        -: 1684:        void (boost::system::error_code, typename Protocol::socket::template
+        -: 1685:          rebind_executor<executor_type>::other)>(
+        -: 1686:            declval<initiate_async_move_accept>(), token,
+        -: 1687:            declval<executor_type>(), static_cast<endpoint_type*>(0),
+        -: 1688:            static_cast<typename Protocol::socket::template
+        -: 1689:              rebind_executor<executor_type>::other*>(0))))
+        -: 1690:  {
+        -: 1691:    return async_initiate<MoveAcceptToken,
+        -: 1692:      void (boost::system::error_code, typename Protocol::socket::template
+        -: 1693:        rebind_executor<executor_type>::other)>(
+       95: 1694:          initiate_async_move_accept(this), token,
+call    0 returned 100%
+       95: 1695:          impl_.get_executor(), static_cast<endpoint_type*>(0),
+        -: 1696:          static_cast<typename Protocol::socket::template
+      285: 1697:            rebind_executor<executor_type>::other*>(0));
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -: 1698:  }
+------------------
+_ZN5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEE12async_acceptIRKNS0_15use_awaitable_tIS4_EEEEDaOT_:
+function _ZN5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEE12async_acceptIRKNS0_15use_awaitable_tIS4_EEEEDaOT_ called 0 returned 0% blocks executed 0%
+    #####: 1679:  async_accept(
+        -: 1680:      BOOST_ASIO_MOVE_ARG(MoveAcceptToken) token
+        -: 1681:        BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type))
+        -: 1682:    BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -: 1683:      async_initiate<MoveAcceptToken,
+        -: 1684:        void (boost::system::error_code, typename Protocol::socket::template
+        -: 1685:          rebind_executor<executor_type>::other)>(
+        -: 1686:            declval<initiate_async_move_accept>(), token,
+        -: 1687:            declval<executor_type>(), static_cast<endpoint_type*>(0),
+        -: 1688:            static_cast<typename Protocol::socket::template
+        -: 1689:              rebind_executor<executor_type>::other*>(0))))
+        -: 1690:  {
+        -: 1691:    return async_initiate<MoveAcceptToken,
+        -: 1692:      void (boost::system::error_code, typename Protocol::socket::template
+        -: 1693:        rebind_executor<executor_type>::other)>(
+    #####: 1694:          initiate_async_move_accept(this), token,
+call    0 never executed
+    #####: 1695:          impl_.get_executor(), static_cast<endpoint_type*>(0),
+        -: 1696:          static_cast<typename Protocol::socket::template
+    #####: 1697:            rebind_executor<executor_type>::other*>(0));
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+        -: 1698:  }
+------------------
+_ZN5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEE12async_acceptIRKNS0_15use_awaitable_tIS4_EEEEDaOT_:
+function _ZN5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEE12async_acceptIRKNS0_15use_awaitable_tIS4_EEEEDaOT_ called 0 returned 0% blocks executed 0%
+    #####: 1679:  async_accept(
+        -: 1680:      BOOST_ASIO_MOVE_ARG(MoveAcceptToken) token
+        -: 1681:        BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type))
+        -: 1682:    BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -: 1683:      async_initiate<MoveAcceptToken,
+        -: 1684:        void (boost::system::error_code, typename Protocol::socket::template
+        -: 1685:          rebind_executor<executor_type>::other)>(
+        -: 1686:            declval<initiate_async_move_accept>(), token,
+        -: 1687:            declval<executor_type>(), static_cast<endpoint_type*>(0),
+        -: 1688:            static_cast<typename Protocol::socket::template
+        -: 1689:              rebind_executor<executor_type>::other*>(0))))
+        -: 1690:  {
+        -: 1691:    return async_initiate<MoveAcceptToken,
+        -: 1692:      void (boost::system::error_code, typename Protocol::socket::template
+        -: 1693:        rebind_executor<executor_type>::other)>(
+    #####: 1694:          initiate_async_move_accept(this), token,
+call    0 never executed
+    #####: 1695:          impl_.get_executor(), static_cast<endpoint_type*>(0),
+        -: 1696:          static_cast<typename Protocol::socket::template
+    #####: 1697:            rebind_executor<executor_type>::other*>(0));
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+        -: 1698:  }
+------------------
+        -: 1699:
+        -: 1700:  /// Accept a new connection.
+        -: 1701:  /**
+        -: 1702:   * This function is used to accept a new connection from a peer. The function
+        -: 1703:   * call will block until a new connection has been accepted successfully or
+        -: 1704:   * an error occurs.
+        -: 1705:   *
+        -: 1706:   * This overload requires that the Protocol template parameter satisfy the
+        -: 1707:   * AcceptableProtocol type requirements.
+        -: 1708:   *
+        -: 1709:   * @param ex The I/O executor object to be used for the newly
+        -: 1710:   * accepted socket.
+        -: 1711:   *
+        -: 1712:   * @returns A socket object representing the newly accepted connection.
+        -: 1713:   *
+        -: 1714:   * @throws boost::system::system_error Thrown on failure.
+        -: 1715:   *
+        -: 1716:   * @par Example
+        -: 1717:   * @code
+        -: 1718:   * boost::asio::ip::tcp::acceptor acceptor(my_context);
+        -: 1719:   * ...
+        -: 1720:   * boost::asio::ip::tcp::socket socket(acceptor.accept());
+        -: 1721:   * @endcode
+        -: 1722:   */
+        -: 1723:  template <typename Executor1>
+        -: 1724:  typename Protocol::socket::template rebind_executor<Executor1>::other
+        -: 1725:  accept(const Executor1& ex,
+        -: 1726:      typename constraint<
+        -: 1727:        is_executor<Executor1>::value
+        -: 1728:          || execution::is_executor<Executor1>::value
+        -: 1729:      >::type = 0)
+        -: 1730:  {
+        -: 1731:    boost::system::error_code ec;
+        -: 1732:    typename Protocol::socket::template
+        -: 1733:      rebind_executor<Executor1>::other peer(ex);
+        -: 1734:    impl_.get_service().accept(impl_.get_implementation(), peer, 0, ec);
+        -: 1735:    boost::asio::detail::throw_error(ec, "accept");
+        -: 1736:    return peer;
+        -: 1737:  }
+        -: 1738:
+        -: 1739:  /// Accept a new connection.
+        -: 1740:  /**
+        -: 1741:   * This function is used to accept a new connection from a peer. The function
+        -: 1742:   * call will block until a new connection has been accepted successfully or
+        -: 1743:   * an error occurs.
+        -: 1744:   *
+        -: 1745:   * This overload requires that the Protocol template parameter satisfy the
+        -: 1746:   * AcceptableProtocol type requirements.
+        -: 1747:   *
+        -: 1748:   * @param context The I/O execution context object to be used for the newly
+        -: 1749:   * accepted socket.
+        -: 1750:   *
+        -: 1751:   * @returns A socket object representing the newly accepted connection.
+        -: 1752:   *
+        -: 1753:   * @throws boost::system::system_error Thrown on failure.
+        -: 1754:   *
+        -: 1755:   * @par Example
+        -: 1756:   * @code
+        -: 1757:   * boost::asio::ip::tcp::acceptor acceptor(my_context);
+        -: 1758:   * ...
+        -: 1759:   * boost::asio::ip::tcp::socket socket(acceptor.accept());
+        -: 1760:   * @endcode
+        -: 1761:   */
+        -: 1762:  template <typename ExecutionContext>
+        -: 1763:  typename Protocol::socket::template rebind_executor<
+        -: 1764:      typename ExecutionContext::executor_type>::other
+        -: 1765:  accept(ExecutionContext& context,
+        -: 1766:      typename constraint<
+        -: 1767:        is_convertible<ExecutionContext&, execution_context&>::value
+        -: 1768:      >::type = 0)
+        -: 1769:  {
+        -: 1770:    boost::system::error_code ec;
+        -: 1771:    typename Protocol::socket::template rebind_executor<
+        -: 1772:        typename ExecutionContext::executor_type>::other peer(context);
+        -: 1773:    impl_.get_service().accept(impl_.get_implementation(), peer, 0, ec);
+        -: 1774:    boost::asio::detail::throw_error(ec, "accept");
+        -: 1775:    return peer;
+        -: 1776:  }
+        -: 1777:
+        -: 1778:  /// Accept a new connection.
+        -: 1779:  /**
+        -: 1780:   * This function is used to accept a new connection from a peer. The function
+        -: 1781:   * call will block until a new connection has been accepted successfully or
+        -: 1782:   * an error occurs.
+        -: 1783:   *
+        -: 1784:   * This overload requires that the Protocol template parameter satisfy the
+        -: 1785:   * AcceptableProtocol type requirements.
+        -: 1786:   *
+        -: 1787:   * @param ex The I/O executor object to be used for the newly accepted
+        -: 1788:   * socket.
+        -: 1789:   *
+        -: 1790:   * @param ec Set to indicate what error occurred, if any.
+        -: 1791:   *
+        -: 1792:   * @returns On success, a socket object representing the newly accepted
+        -: 1793:   * connection. On error, a socket object where is_open() is false.
+        -: 1794:   *
+        -: 1795:   * @par Example
+        -: 1796:   * @code
+        -: 1797:   * boost::asio::ip::tcp::acceptor acceptor(my_context);
+        -: 1798:   * ...
+        -: 1799:   * boost::asio::ip::tcp::socket socket(acceptor.accept(my_context2, ec));
+        -: 1800:   * if (ec)
+        -: 1801:   * {
+        -: 1802:   *   // An error occurred.
+        -: 1803:   * }
+        -: 1804:   * @endcode
+        -: 1805:   */
+        -: 1806:  template <typename Executor1>
+        -: 1807:  typename Protocol::socket::template rebind_executor<Executor1>::other
+        -: 1808:  accept(const Executor1& ex, boost::system::error_code& ec,
+        -: 1809:      typename constraint<
+        -: 1810:        is_executor<Executor1>::value
+        -: 1811:          || execution::is_executor<Executor1>::value
+        -: 1812:      >::type = 0)
+        -: 1813:  {
+        -: 1814:    typename Protocol::socket::template
+        -: 1815:      rebind_executor<Executor1>::other peer(ex);
+        -: 1816:    impl_.get_service().accept(impl_.get_implementation(), peer, 0, ec);
+        -: 1817:    return peer;
+        -: 1818:  }
+        -: 1819:
+        -: 1820:  /// Accept a new connection.
+        -: 1821:  /**
+        -: 1822:   * This function is used to accept a new connection from a peer. The function
+        -: 1823:   * call will block until a new connection has been accepted successfully or
+        -: 1824:   * an error occurs.
+        -: 1825:   *
+        -: 1826:   * This overload requires that the Protocol template parameter satisfy the
+        -: 1827:   * AcceptableProtocol type requirements.
+        -: 1828:   *
+        -: 1829:   * @param context The I/O execution context object to be used for the newly
+        -: 1830:   * accepted socket.
+        -: 1831:   *
+        -: 1832:   * @param ec Set to indicate what error occurred, if any.
+        -: 1833:   *
+        -: 1834:   * @returns On success, a socket object representing the newly accepted
+        -: 1835:   * connection. On error, a socket object where is_open() is false.
+        -: 1836:   *
+        -: 1837:   * @par Example
+        -: 1838:   * @code
+        -: 1839:   * boost::asio::ip::tcp::acceptor acceptor(my_context);
+        -: 1840:   * ...
+        -: 1841:   * boost::asio::ip::tcp::socket socket(acceptor.accept(my_context2, ec));
+        -: 1842:   * if (ec)
+        -: 1843:   * {
+        -: 1844:   *   // An error occurred.
+        -: 1845:   * }
+        -: 1846:   * @endcode
+        -: 1847:   */
+        -: 1848:  template <typename ExecutionContext>
+        -: 1849:  typename Protocol::socket::template rebind_executor<
+        -: 1850:      typename ExecutionContext::executor_type>::other
+        -: 1851:  accept(ExecutionContext& context, boost::system::error_code& ec,
+        -: 1852:      typename constraint<
+        -: 1853:        is_convertible<ExecutionContext&, execution_context&>::value
+        -: 1854:      >::type = 0)
+        -: 1855:  {
+        -: 1856:    typename Protocol::socket::template rebind_executor<
+        -: 1857:        typename ExecutionContext::executor_type>::other peer(context);
+        -: 1858:    impl_.get_service().accept(impl_.get_implementation(), peer, 0, ec);
+        -: 1859:    return peer;
+        -: 1860:  }
+        -: 1861:
+        -: 1862:  /// Start an asynchronous accept.
+        -: 1863:  /**
+        -: 1864:   * This function is used to asynchronously accept a new connection. It is an
+        -: 1865:   * initiating function for an @ref asynchronous_operation, and always returns
+        -: 1866:   * immediately.
+        -: 1867:   *
+        -: 1868:   * This overload requires that the Protocol template parameter satisfy the
+        -: 1869:   * AcceptableProtocol type requirements.
+        -: 1870:   *
+        -: 1871:   * @param ex The I/O executor object to be used for the newly accepted
+        -: 1872:   * socket.
+        -: 1873:   *
+        -: 1874:   * @param token The @ref completion_token that will be used to produce a
+        -: 1875:   * completion handler, which will be called when the accept completes.
+        -: 1876:   * Potential completion tokens include @ref use_future, @ref use_awaitable,
+        -: 1877:   * @ref yield_context, or a function object with the correct completion
+        -: 1878:   * signature. The function signature of the completion handler must be:
+        -: 1879:   * @code void handler(
+        -: 1880:   *   // Result of operation.
+        -: 1881:   *   const boost::system::error_code& error,
+        -: 1882:   *
+        -: 1883:   *   // On success, the newly accepted socket.
+        -: 1884:   *   typename Protocol::socket::template rebind_executor<
+        -: 1885:   *     Executor1>::other peer
+        -: 1886:   * ); @endcode
+        -: 1887:   * Regardless of whether the asynchronous operation completes immediately or
+        -: 1888:   * not, the completion handler will not be invoked from within this function.
+        -: 1889:   * On immediate completion, invocation of the handler will be performed in a
+        -: 1890:   * manner equivalent to using boost::asio::post().
+        -: 1891:   *
+        -: 1892:   * @par Completion Signature
+        -: 1893:   * @code void(boost::system::error_code,
+        -: 1894:   *    typename Protocol::socket::template rebind_executor<
+        -: 1895:   *      Executor1>::other)) @endcode
+        -: 1896:   *
+        -: 1897:   * @par Example
+        -: 1898:   * @code
+        -: 1899:   * void accept_handler(const boost::system::error_code& error,
+        -: 1900:   *     boost::asio::ip::tcp::socket peer)
+        -: 1901:   * {
+        -: 1902:   *   if (!error)
+        -: 1903:   *   {
+        -: 1904:   *     // Accept succeeded.
+        -: 1905:   *   }
+        -: 1906:   * }
+        -: 1907:   *
+        -: 1908:   * ...
+        -: 1909:   *
+        -: 1910:   * boost::asio::ip::tcp::acceptor acceptor(my_context);
+        -: 1911:   * ...
+        -: 1912:   * acceptor.async_accept(my_context2, accept_handler);
+        -: 1913:   * @endcode
+        -: 1914:   *
+        -: 1915:   * @par Per-Operation Cancellation
+        -: 1916:   * On POSIX or Windows operating systems, this asynchronous operation supports
+        -: 1917:   * cancellation for the following boost::asio::cancellation_type values:
+        -: 1918:   *
+        -: 1919:   * @li @c cancellation_type::terminal
+        -: 1920:   *
+        -: 1921:   * @li @c cancellation_type::partial
+        -: 1922:   *
+        -: 1923:   * @li @c cancellation_type::total
+        -: 1924:   */
+        -: 1925:  template <typename Executor1,
+        -: 1926:      BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code,
+        -: 1927:        typename Protocol::socket::template rebind_executor<
+        -: 1928:          typename constraint<is_executor<Executor1>::value
+        -: 1929:            || execution::is_executor<Executor1>::value,
+        -: 1930:              Executor1>::type>::other)) MoveAcceptToken
+        -: 1931:                BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(executor_type)>
+        -: 1932:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(MoveAcceptToken,
+        -: 1933:      void (boost::system::error_code,
+        -: 1934:        typename Protocol::socket::template rebind_executor<
+        -: 1935:          Executor1>::other))
+        -: 1936:  async_accept(const Executor1& ex,
+        -: 1937:      BOOST_ASIO_MOVE_ARG(MoveAcceptToken) token
+        -: 1938:        BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type),
+        -: 1939:      typename constraint<
+        -: 1940:        is_executor<Executor1>::value
+        -: 1941:          || execution::is_executor<Executor1>::value
+        -: 1942:      >::type = 0)
+        -: 1943:    BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -: 1944:      async_initiate<MoveAcceptToken,
+        -: 1945:        void (boost::system::error_code,
+        -: 1946:          typename Protocol::socket::template rebind_executor<
+        -: 1947:            Executor1>::other)>(
+        -: 1948:              declval<initiate_async_move_accept>(), token,
+        -: 1949:              ex, static_cast<endpoint_type*>(0),
+        -: 1950:              static_cast<typename Protocol::socket::template
+        -: 1951:                rebind_executor<Executor1>::other*>(0))))
+        -: 1952:  {
+        -: 1953:    return async_initiate<MoveAcceptToken,
+        -: 1954:      void (boost::system::error_code,
+        -: 1955:        typename Protocol::socket::template rebind_executor<
+        -: 1956:          Executor1>::other)>(
+        -: 1957:            initiate_async_move_accept(this), token,
+        -: 1958:            ex, static_cast<endpoint_type*>(0),
+        -: 1959:            static_cast<typename Protocol::socket::template
+        -: 1960:              rebind_executor<Executor1>::other*>(0));
+        -: 1961:  }
+        -: 1962:
+        -: 1963:  /// Start an asynchronous accept.
+        -: 1964:  /**
+        -: 1965:   * This function is used to asynchronously accept a new connection. It is an
+        -: 1966:   * initiating function for an @ref asynchronous_operation, and always returns
+        -: 1967:   * immediately.
+        -: 1968:   *
+        -: 1969:   * This overload requires that the Protocol template parameter satisfy the
+        -: 1970:   * AcceptableProtocol type requirements.
+        -: 1971:   *
+        -: 1972:   * @param context The I/O execution context object to be used for the newly
+        -: 1973:   * accepted socket.
+        -: 1974:   *
+        -: 1975:   * @param token The @ref completion_token that will be used to produce a
+        -: 1976:   * completion handler, which will be called when the accept completes.
+        -: 1977:   * Potential completion tokens include @ref use_future, @ref use_awaitable,
+        -: 1978:   * @ref yield_context, or a function object with the correct completion
+        -: 1979:   * signature. The function signature of the completion handler must be:
+        -: 1980:   * @code void handler(
+        -: 1981:   *   // Result of operation.
+        -: 1982:   *   const boost::system::error_code& error,
+        -: 1983:   *
+        -: 1984:   *   // On success, the newly accepted socket.
+        -: 1985:   *   typename Protocol::socket::template rebind_executor<
+        -: 1986:   *     typename ExecutionContext::executor_type>::other peer
+        -: 1987:   * ); @endcode
+        -: 1988:   * Regardless of whether the asynchronous operation completes immediately or
+        -: 1989:   * not, the completion handler will not be invoked from within this function.
+        -: 1990:   * On immediate completion, invocation of the handler will be performed in a
+        -: 1991:   * manner equivalent to using boost::asio::post().
+        -: 1992:   *
+        -: 1993:   * @par Completion Signature
+        -: 1994:   * @code void(boost::system::error_code,
+        -: 1995:   *    typename Protocol::socket::template rebind_executor<
+        -: 1996:   *      typename ExecutionContext::executor_type>::other)) @endcode
+        -: 1997:   *
+        -: 1998:   * @par Example
+        -: 1999:   * @code
+        -: 2000:   * void accept_handler(const boost::system::error_code& error,
+        -: 2001:   *     boost::asio::ip::tcp::socket peer)
+        -: 2002:   * {
+        -: 2003:   *   if (!error)
+        -: 2004:   *   {
+        -: 2005:   *     // Accept succeeded.
+        -: 2006:   *   }
+        -: 2007:   * }
+        -: 2008:   *
+        -: 2009:   * ...
+        -: 2010:   *
+        -: 2011:   * boost::asio::ip::tcp::acceptor acceptor(my_context);
+        -: 2012:   * ...
+        -: 2013:   * acceptor.async_accept(my_context2, accept_handler);
+        -: 2014:   * @endcode
+        -: 2015:   *
+        -: 2016:   * @par Per-Operation Cancellation
+        -: 2017:   * On POSIX or Windows operating systems, this asynchronous operation supports
+        -: 2018:   * cancellation for the following boost::asio::cancellation_type values:
+        -: 2019:   *
+        -: 2020:   * @li @c cancellation_type::terminal
+        -: 2021:   *
+        -: 2022:   * @li @c cancellation_type::partial
+        -: 2023:   *
+        -: 2024:   * @li @c cancellation_type::total
+        -: 2025:   */
+        -: 2026:  template <typename ExecutionContext,
+        -: 2027:      BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code,
+        -: 2028:        typename Protocol::socket::template rebind_executor<
+        -: 2029:          typename ExecutionContext::executor_type>::other)) MoveAcceptToken
+        -: 2030:            BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(executor_type)>
+        -: 2031:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(MoveAcceptToken,
+        -: 2032:      void (boost::system::error_code,
+        -: 2033:        typename Protocol::socket::template rebind_executor<
+        -: 2034:          typename ExecutionContext::executor_type>::other))
+        -: 2035:  async_accept(ExecutionContext& context,
+        -: 2036:      BOOST_ASIO_MOVE_ARG(MoveAcceptToken) token
+        -: 2037:        BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type),
+        -: 2038:      typename constraint<
+        -: 2039:        is_convertible<ExecutionContext&, execution_context&>::value
+        -: 2040:      >::type = 0)
+        -: 2041:    BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -: 2042:      async_initiate<MoveAcceptToken,
+        -: 2043:        void (boost::system::error_code,
+        -: 2044:          typename Protocol::socket::template rebind_executor<
+        -: 2045:            typename ExecutionContext::executor_type>::other)>(
+        -: 2046:              declval<initiate_async_move_accept>(), token,
+        -: 2047:              context.get_executor(), static_cast<endpoint_type*>(0),
+        -: 2048:              static_cast<typename Protocol::socket::template rebind_executor<
+        -: 2049:                typename ExecutionContext::executor_type>::other*>(0))))
+        -: 2050:  {
+        -: 2051:    return async_initiate<MoveAcceptToken,
+        -: 2052:      void (boost::system::error_code,
+        -: 2053:        typename Protocol::socket::template rebind_executor<
+        -: 2054:          typename ExecutionContext::executor_type>::other)>(
+        -: 2055:            initiate_async_move_accept(this), token,
+        -: 2056:            context.get_executor(), static_cast<endpoint_type*>(0),
+        -: 2057:            static_cast<typename Protocol::socket::template rebind_executor<
+        -: 2058:              typename ExecutionContext::executor_type>::other*>(0));
+        -: 2059:  }
+        -: 2060:
+        -: 2061:  /// Accept a new connection.
+        -: 2062:  /**
+        -: 2063:   * This function is used to accept a new connection from a peer. The function
+        -: 2064:   * call will block until a new connection has been accepted successfully or
+        -: 2065:   * an error occurs.
+        -: 2066:   *
+        -: 2067:   * This overload requires that the Protocol template parameter satisfy the
+        -: 2068:   * AcceptableProtocol type requirements.
+        -: 2069:   *
+        -: 2070:   * @param peer_endpoint An endpoint object into which the endpoint of the
+        -: 2071:   * remote peer will be written.
+        -: 2072:   *
+        -: 2073:   * @returns A socket object representing the newly accepted connection.
+        -: 2074:   *
+        -: 2075:   * @throws boost::system::system_error Thrown on failure.
+        -: 2076:   *
+        -: 2077:   * @par Example
+        -: 2078:   * @code
+        -: 2079:   * boost::asio::ip::tcp::acceptor acceptor(my_context);
+        -: 2080:   * ...
+        -: 2081:   * boost::asio::ip::tcp::endpoint endpoint;
+        -: 2082:   * boost::asio::ip::tcp::socket socket(acceptor.accept(endpoint));
+        -: 2083:   * @endcode
+        -: 2084:   */
+        -: 2085:  typename Protocol::socket::template rebind_executor<executor_type>::other
+        -: 2086:  accept(endpoint_type& peer_endpoint)
+        -: 2087:  {
+        -: 2088:    boost::system::error_code ec;
+        -: 2089:    typename Protocol::socket::template rebind_executor<
+        -: 2090:      executor_type>::other peer(impl_.get_executor());
+        -: 2091:    impl_.get_service().accept(impl_.get_implementation(),
+        -: 2092:        peer, &peer_endpoint, ec);
+        -: 2093:    boost::asio::detail::throw_error(ec, "accept");
+        -: 2094:    return peer;
+        -: 2095:  }
+        -: 2096:
+        -: 2097:  /// Accept a new connection.
+        -: 2098:  /**
+        -: 2099:   * This function is used to accept a new connection from a peer. The function
+        -: 2100:   * call will block until a new connection has been accepted successfully or
+        -: 2101:   * an error occurs.
+        -: 2102:   *
+        -: 2103:   * This overload requires that the Protocol template parameter satisfy the
+        -: 2104:   * AcceptableProtocol type requirements.
+        -: 2105:   *
+        -: 2106:   * @param peer_endpoint An endpoint object into which the endpoint of the
+        -: 2107:   * remote peer will be written.
+        -: 2108:   *
+        -: 2109:   * @param ec Set to indicate what error occurred, if any.
+        -: 2110:   *
+        -: 2111:   * @returns On success, a socket object representing the newly accepted
+        -: 2112:   * connection. On error, a socket object where is_open() is false.
+        -: 2113:   *
+        -: 2114:   * @par Example
+        -: 2115:   * @code
+        -: 2116:   * boost::asio::ip::tcp::acceptor acceptor(my_context);
+        -: 2117:   * ...
+        -: 2118:   * boost::asio::ip::tcp::endpoint endpoint;
+        -: 2119:   * boost::asio::ip::tcp::socket socket(acceptor.accept(endpoint, ec));
+        -: 2120:   * if (ec)
+        -: 2121:   * {
+        -: 2122:   *   // An error occurred.
+        -: 2123:   * }
+        -: 2124:   * @endcode
+        -: 2125:   */
+        -: 2126:  typename Protocol::socket::template rebind_executor<executor_type>::other
+        -: 2127:  accept(endpoint_type& peer_endpoint, boost::system::error_code& ec)
+        -: 2128:  {
+        -: 2129:    typename Protocol::socket::template rebind_executor<
+        -: 2130:      executor_type>::other peer(impl_.get_executor());
+        -: 2131:    impl_.get_service().accept(impl_.get_implementation(),
+        -: 2132:        peer, &peer_endpoint, ec);
+        -: 2133:    return peer;
+        -: 2134:  }
+        -: 2135:
+        -: 2136:  /// Start an asynchronous accept.
+        -: 2137:  /**
+        -: 2138:   * This function is used to asynchronously accept a new connection. It is an
+        -: 2139:   * initiating function for an @ref asynchronous_operation, and always returns
+        -: 2140:   * immediately.
+        -: 2141:   *
+        -: 2142:   * This overload requires that the Protocol template parameter satisfy the
+        -: 2143:   * AcceptableProtocol type requirements.
+        -: 2144:   *
+        -: 2145:   * @param peer_endpoint An endpoint object into which the endpoint of the
+        -: 2146:   * remote peer will be written. Ownership of the peer_endpoint object is
+        -: 2147:   * retained by the caller, which must guarantee that it is valid until the
+        -: 2148:   * completion handler is called.
+        -: 2149:   *
+        -: 2150:   * @param token The @ref completion_token that will be used to produce a
+        -: 2151:   * completion handler, which will be called when the accept completes.
+        -: 2152:   * Potential completion tokens include @ref use_future, @ref use_awaitable,
+        -: 2153:   * @ref yield_context, or a function object with the correct completion
+        -: 2154:   * signature. The function signature of the completion handler must be:
+        -: 2155:   * @code void handler(
+        -: 2156:   *   // Result of operation.
+        -: 2157:   *   const boost::system::error_code& error,
+        -: 2158:   *
+        -: 2159:   *   // On success, the newly accepted socket.
+        -: 2160:   *   typename Protocol::socket::template
+        -: 2161:   *     rebind_executor<executor_type>::other peer
+        -: 2162:   * ); @endcode
+        -: 2163:   * Regardless of whether the asynchronous operation completes immediately or
+        -: 2164:   * not, the completion handler will not be invoked from within this function.
+        -: 2165:   * On immediate completion, invocation of the handler will be performed in a
+        -: 2166:   * manner equivalent to using boost::asio::post().
+        -: 2167:   *
+        -: 2168:   * @par Completion Signature
+        -: 2169:   * @code void(boost::system::error_code,
+        -: 2170:   *    typename Protocol::socket::template
+        -: 2171:   *      rebind_executor<executor_type>::other)) @endcode
+        -: 2172:   *
+        -: 2173:   * @par Example
+        -: 2174:   * @code
+        -: 2175:   * void accept_handler(const boost::system::error_code& error,
+        -: 2176:   *     boost::asio::ip::tcp::socket peer)
+        -: 2177:   * {
+        -: 2178:   *   if (!error)
+        -: 2179:   *   {
+        -: 2180:   *     // Accept succeeded.
+        -: 2181:   *   }
+        -: 2182:   * }
+        -: 2183:   *
+        -: 2184:   * ...
+        -: 2185:   *
+        -: 2186:   * boost::asio::ip::tcp::acceptor acceptor(my_context);
+        -: 2187:   * ...
+        -: 2188:   * boost::asio::ip::tcp::endpoint endpoint;
+        -: 2189:   * acceptor.async_accept(endpoint, accept_handler);
+        -: 2190:   * @endcode
+        -: 2191:   *
+        -: 2192:   * @par Per-Operation Cancellation
+        -: 2193:   * On POSIX or Windows operating systems, this asynchronous operation supports
+        -: 2194:   * cancellation for the following boost::asio::cancellation_type values:
+        -: 2195:   *
+        -: 2196:   * @li @c cancellation_type::terminal
+        -: 2197:   *
+        -: 2198:   * @li @c cancellation_type::partial
+        -: 2199:   *
+        -: 2200:   * @li @c cancellation_type::total
+        -: 2201:   */
+        -: 2202:  template <
+        -: 2203:      BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code,
+        -: 2204:        typename Protocol::socket::template rebind_executor<
+        -: 2205:          executor_type>::other)) MoveAcceptToken
+        -: 2206:            BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(executor_type)>
+        -: 2207:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(MoveAcceptToken,
+        -: 2208:      void (boost::system::error_code,
+        -: 2209:        typename Protocol::socket::template
+        -: 2210:          rebind_executor<executor_type>::other))
+        -: 2211:  async_accept(endpoint_type& peer_endpoint,
+        -: 2212:      BOOST_ASIO_MOVE_ARG(MoveAcceptToken) token
+        -: 2213:        BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type))
+        -: 2214:    BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -: 2215:      async_initiate<MoveAcceptToken,
+        -: 2216:        void (boost::system::error_code, typename Protocol::socket::template
+        -: 2217:          rebind_executor<executor_type>::other)>(
+        -: 2218:            declval<initiate_async_move_accept>(), token,
+        -: 2219:            declval<executor_type>(), &peer_endpoint,
+        -: 2220:            static_cast<typename Protocol::socket::template
+        -: 2221:              rebind_executor<executor_type>::other*>(0))))
+        -: 2222:  {
+        -: 2223:    return async_initiate<MoveAcceptToken,
+        -: 2224:      void (boost::system::error_code, typename Protocol::socket::template
+        -: 2225:        rebind_executor<executor_type>::other)>(
+        -: 2226:          initiate_async_move_accept(this), token,
+        -: 2227:          impl_.get_executor(), &peer_endpoint,
+        -: 2228:          static_cast<typename Protocol::socket::template
+        -: 2229:            rebind_executor<executor_type>::other*>(0));
+        -: 2230:  }
+        -: 2231:
+        -: 2232:  /// Accept a new connection.
+        -: 2233:  /**
+        -: 2234:   * This function is used to accept a new connection from a peer. The function
+        -: 2235:   * call will block until a new connection has been accepted successfully or
+        -: 2236:   * an error occurs.
+        -: 2237:   *
+        -: 2238:   * This overload requires that the Protocol template parameter satisfy the
+        -: 2239:   * AcceptableProtocol type requirements.
+        -: 2240:   *
+        -: 2241:   * @param ex The I/O executor object to be used for the newly accepted
+        -: 2242:   * socket.
+        -: 2243:   *
+        -: 2244:   * @param peer_endpoint An endpoint object into which the endpoint of the
+        -: 2245:   * remote peer will be written.
+        -: 2246:   *
+        -: 2247:   * @returns A socket object representing the newly accepted connection.
+        -: 2248:   *
+        -: 2249:   * @throws boost::system::system_error Thrown on failure.
+        -: 2250:   *
+        -: 2251:   * @par Example
+        -: 2252:   * @code
+        -: 2253:   * boost::asio::ip::tcp::acceptor acceptor(my_context);
+        -: 2254:   * ...
+        -: 2255:   * boost::asio::ip::tcp::endpoint endpoint;
+        -: 2256:   * boost::asio::ip::tcp::socket socket(
+        -: 2257:   *     acceptor.accept(my_context2, endpoint));
+        -: 2258:   * @endcode
+        -: 2259:   */
+        -: 2260:  template <typename Executor1>
+        -: 2261:  typename Protocol::socket::template rebind_executor<Executor1>::other
+        -: 2262:  accept(const Executor1& ex, endpoint_type& peer_endpoint,
+        -: 2263:      typename constraint<
+        -: 2264:        is_executor<Executor1>::value
+        -: 2265:          || execution::is_executor<Executor1>::value
+        -: 2266:      >::type = 0)
+        -: 2267:  {
+        -: 2268:    boost::system::error_code ec;
+        -: 2269:    typename Protocol::socket::template
+        -: 2270:        rebind_executor<Executor1>::other peer(ex);
+        -: 2271:    impl_.get_service().accept(impl_.get_implementation(),
+        -: 2272:        peer, &peer_endpoint, ec);
+        -: 2273:    boost::asio::detail::throw_error(ec, "accept");
+        -: 2274:    return peer;
+        -: 2275:  }
+        -: 2276:
+        -: 2277:  /// Accept a new connection.
+        -: 2278:  /**
+        -: 2279:   * This function is used to accept a new connection from a peer. The function
+        -: 2280:   * call will block until a new connection has been accepted successfully or
+        -: 2281:   * an error occurs.
+        -: 2282:   *
+        -: 2283:   * This overload requires that the Protocol template parameter satisfy the
+        -: 2284:   * AcceptableProtocol type requirements.
+        -: 2285:   *
+        -: 2286:   * @param context The I/O execution context object to be used for the newly
+        -: 2287:   * accepted socket.
+        -: 2288:   *
+        -: 2289:   * @param peer_endpoint An endpoint object into which the endpoint of the
+        -: 2290:   * remote peer will be written.
+        -: 2291:   *
+        -: 2292:   * @returns A socket object representing the newly accepted connection.
+        -: 2293:   *
+        -: 2294:   * @throws boost::system::system_error Thrown on failure.
+        -: 2295:   *
+        -: 2296:   * @par Example
+        -: 2297:   * @code
+        -: 2298:   * boost::asio::ip::tcp::acceptor acceptor(my_context);
+        -: 2299:   * ...
+        -: 2300:   * boost::asio::ip::tcp::endpoint endpoint;
+        -: 2301:   * boost::asio::ip::tcp::socket socket(
+        -: 2302:   *     acceptor.accept(my_context2, endpoint));
+        -: 2303:   * @endcode
+        -: 2304:   */
+        -: 2305:  template <typename ExecutionContext>
+        -: 2306:  typename Protocol::socket::template rebind_executor<
+        -: 2307:      typename ExecutionContext::executor_type>::other
+        -: 2308:  accept(ExecutionContext& context, endpoint_type& peer_endpoint,
+        -: 2309:      typename constraint<
+        -: 2310:        is_convertible<ExecutionContext&, execution_context&>::value
+        -: 2311:      >::type = 0)
+        -: 2312:  {
+        -: 2313:    boost::system::error_code ec;
+        -: 2314:    typename Protocol::socket::template rebind_executor<
+        -: 2315:        typename ExecutionContext::executor_type>::other peer(context);
+        -: 2316:    impl_.get_service().accept(impl_.get_implementation(),
+        -: 2317:        peer, &peer_endpoint, ec);
+        -: 2318:    boost::asio::detail::throw_error(ec, "accept");
+        -: 2319:    return peer;
+        -: 2320:  }
+        -: 2321:
+        -: 2322:  /// Accept a new connection.
+        -: 2323:  /**
+        -: 2324:   * This function is used to accept a new connection from a peer. The function
+        -: 2325:   * call will block until a new connection has been accepted successfully or
+        -: 2326:   * an error occurs.
+        -: 2327:   *
+        -: 2328:   * This overload requires that the Protocol template parameter satisfy the
+        -: 2329:   * AcceptableProtocol type requirements.
+        -: 2330:   *
+        -: 2331:   * @param ex The I/O executor object to be used for the newly accepted
+        -: 2332:   * socket.
+        -: 2333:   *
+        -: 2334:   * @param peer_endpoint An endpoint object into which the endpoint of the
+        -: 2335:   * remote peer will be written.
+        -: 2336:   *
+        -: 2337:   * @param ec Set to indicate what error occurred, if any.
+        -: 2338:   *
+        -: 2339:   * @returns On success, a socket object representing the newly accepted
+        -: 2340:   * connection. On error, a socket object where is_open() is false.
+        -: 2341:   *
+        -: 2342:   * @par Example
+        -: 2343:   * @code
+        -: 2344:   * boost::asio::ip::tcp::acceptor acceptor(my_context);
+        -: 2345:   * ...
+        -: 2346:   * boost::asio::ip::tcp::endpoint endpoint;
+        -: 2347:   * boost::asio::ip::tcp::socket socket(
+        -: 2348:   *     acceptor.accept(my_context2, endpoint, ec));
+        -: 2349:   * if (ec)
+        -: 2350:   * {
+        -: 2351:   *   // An error occurred.
+        -: 2352:   * }
+        -: 2353:   * @endcode
+        -: 2354:   */
+        -: 2355:  template <typename Executor1>
+        -: 2356:  typename Protocol::socket::template rebind_executor<Executor1>::other
+        -: 2357:  accept(const executor_type& ex,
+        -: 2358:      endpoint_type& peer_endpoint, boost::system::error_code& ec,
+        -: 2359:      typename constraint<
+        -: 2360:        is_executor<Executor1>::value
+        -: 2361:          || execution::is_executor<Executor1>::value
+        -: 2362:      >::type = 0)
+        -: 2363:  {
+        -: 2364:    typename Protocol::socket::template
+        -: 2365:      rebind_executor<Executor1>::other peer(ex);
+        -: 2366:    impl_.get_service().accept(impl_.get_implementation(),
+        -: 2367:        peer, &peer_endpoint, ec);
+        -: 2368:    return peer;
+        -: 2369:  }
+        -: 2370:
+        -: 2371:  /// Accept a new connection.
+        -: 2372:  /**
+        -: 2373:   * This function is used to accept a new connection from a peer. The function
+        -: 2374:   * call will block until a new connection has been accepted successfully or
+        -: 2375:   * an error occurs.
+        -: 2376:   *
+        -: 2377:   * This overload requires that the Protocol template parameter satisfy the
+        -: 2378:   * AcceptableProtocol type requirements.
+        -: 2379:   *
+        -: 2380:   * @param context The I/O execution context object to be used for the newly
+        -: 2381:   * accepted socket.
+        -: 2382:   *
+        -: 2383:   * @param peer_endpoint An endpoint object into which the endpoint of the
+        -: 2384:   * remote peer will be written.
+        -: 2385:   *
+        -: 2386:   * @param ec Set to indicate what error occurred, if any.
+        -: 2387:   *
+        -: 2388:   * @returns On success, a socket object representing the newly accepted
+        -: 2389:   * connection. On error, a socket object where is_open() is false.
+        -: 2390:   *
+        -: 2391:   * @par Example
+        -: 2392:   * @code
+        -: 2393:   * boost::asio::ip::tcp::acceptor acceptor(my_context);
+        -: 2394:   * ...
+        -: 2395:   * boost::asio::ip::tcp::endpoint endpoint;
+        -: 2396:   * boost::asio::ip::tcp::socket socket(
+        -: 2397:   *     acceptor.accept(my_context2, endpoint, ec));
+        -: 2398:   * if (ec)
+        -: 2399:   * {
+        -: 2400:   *   // An error occurred.
+        -: 2401:   * }
+        -: 2402:   * @endcode
+        -: 2403:   */
+        -: 2404:  template <typename ExecutionContext>
+        -: 2405:  typename Protocol::socket::template rebind_executor<
+        -: 2406:      typename ExecutionContext::executor_type>::other
+        -: 2407:  accept(ExecutionContext& context,
+        -: 2408:      endpoint_type& peer_endpoint, boost::system::error_code& ec,
+        -: 2409:      typename constraint<
+        -: 2410:        is_convertible<ExecutionContext&, execution_context&>::value
+        -: 2411:      >::type = 0)
+        -: 2412:  {
+        -: 2413:    typename Protocol::socket::template rebind_executor<
+        -: 2414:        typename ExecutionContext::executor_type>::other peer(context);
+        -: 2415:    impl_.get_service().accept(impl_.get_implementation(),
+        -: 2416:        peer, &peer_endpoint, ec);
+        -: 2417:    return peer;
+        -: 2418:  }
+        -: 2419:
+        -: 2420:  /// Start an asynchronous accept.
+        -: 2421:  /**
+        -: 2422:   * This function is used to asynchronously accept a new connection. It is an
+        -: 2423:   * initiating function for an @ref asynchronous_operation, and always returns
+        -: 2424:   * immediately.
+        -: 2425:   *
+        -: 2426:   * This overload requires that the Protocol template parameter satisfy the
+        -: 2427:   * AcceptableProtocol type requirements.
+        -: 2428:   *
+        -: 2429:   * @param ex The I/O executor object to be used for the newly accepted
+        -: 2430:   * socket.
+        -: 2431:   *
+        -: 2432:   * @param peer_endpoint An endpoint object into which the endpoint of the
+        -: 2433:   * remote peer will be written. Ownership of the peer_endpoint object is
+        -: 2434:   * retained by the caller, which must guarantee that it is valid until the
+        -: 2435:   * completion handler is called.
+        -: 2436:   *
+        -: 2437:   * @param token The @ref completion_token that will be used to produce a
+        -: 2438:   * completion handler, which will be called when the accept completes.
+        -: 2439:   * Potential completion tokens include @ref use_future, @ref use_awaitable,
+        -: 2440:   * @ref yield_context, or a function object with the correct completion
+        -: 2441:   * signature. The function signature of the completion handler must be:
+        -: 2442:   * @code void handler(
+        -: 2443:   *   // Result of operation.
+        -: 2444:   *   const boost::system::error_code& error,
+        -: 2445:   *
+        -: 2446:   *   // On success, the newly accepted socket.
+        -: 2447:   *   typename Protocol::socket::template rebind_executor<
+        -: 2448:   *     Executor1>::other peer
+        -: 2449:   * ); @endcode
+        -: 2450:   * Regardless of whether the asynchronous operation completes immediately or
+        -: 2451:   * not, the completion handler will not be invoked from within this function.
+        -: 2452:   * On immediate completion, invocation of the handler will be performed in a
+        -: 2453:   * manner equivalent to using boost::asio::post().
+        -: 2454:   *
+        -: 2455:   * @par Completion Signature
+        -: 2456:   * @code void(boost::system::error_code,
+        -: 2457:   *    typename Protocol::socket::template rebind_executor<
+        -: 2458:   *      Executor1>::other)) @endcode
+        -: 2459:   *
+        -: 2460:   * @par Example
+        -: 2461:   * @code
+        -: 2462:   * void accept_handler(const boost::system::error_code& error,
+        -: 2463:   *     boost::asio::ip::tcp::socket peer)
+        -: 2464:   * {
+        -: 2465:   *   if (!error)
+        -: 2466:   *   {
+        -: 2467:   *     // Accept succeeded.
+        -: 2468:   *   }
+        -: 2469:   * }
+        -: 2470:   *
+        -: 2471:   * ...
+        -: 2472:   *
+        -: 2473:   * boost::asio::ip::tcp::acceptor acceptor(my_context);
+        -: 2474:   * ...
+        -: 2475:   * boost::asio::ip::tcp::endpoint endpoint;
+        -: 2476:   * acceptor.async_accept(my_context2, endpoint, accept_handler);
+        -: 2477:   * @endcode
+        -: 2478:   *
+        -: 2479:   * @par Per-Operation Cancellation
+        -: 2480:   * On POSIX or Windows operating systems, this asynchronous operation supports
+        -: 2481:   * cancellation for the following boost::asio::cancellation_type values:
+        -: 2482:   *
+        -: 2483:   * @li @c cancellation_type::terminal
+        -: 2484:   *
+        -: 2485:   * @li @c cancellation_type::partial
+        -: 2486:   *
+        -: 2487:   * @li @c cancellation_type::total
+        -: 2488:   */
+        -: 2489:  template <typename Executor1,
+        -: 2490:      BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code,
+        -: 2491:        typename Protocol::socket::template rebind_executor<
+        -: 2492:          typename constraint<is_executor<Executor1>::value
+        -: 2493:            || execution::is_executor<Executor1>::value,
+        -: 2494:              Executor1>::type>::other)) MoveAcceptToken
+        -: 2495:                BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(executor_type)>
+        -: 2496:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(MoveAcceptToken,
+        -: 2497:      void (boost::system::error_code,
+        -: 2498:        typename Protocol::socket::template rebind_executor<
+        -: 2499:          Executor1>::other))
+        -: 2500:  async_accept(const Executor1& ex, endpoint_type& peer_endpoint,
+        -: 2501:      BOOST_ASIO_MOVE_ARG(MoveAcceptToken) token
+        -: 2502:        BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type),
+        -: 2503:      typename constraint<
+        -: 2504:        is_executor<Executor1>::value
+        -: 2505:          || execution::is_executor<Executor1>::value
+        -: 2506:      >::type = 0)
+        -: 2507:    BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -: 2508:      async_initiate<MoveAcceptToken,
+        -: 2509:        void (boost::system::error_code,
+        -: 2510:          typename Protocol::socket::template rebind_executor<
+        -: 2511:            Executor1>::other)>(
+        -: 2512:          declval<initiate_async_move_accept>(), token, ex, &peer_endpoint,
+        -: 2513:          static_cast<typename Protocol::socket::template
+        -: 2514:            rebind_executor<Executor1>::other*>(0))))
+        -: 2515:  {
+        -: 2516:    return async_initiate<MoveAcceptToken,
+        -: 2517:      void (boost::system::error_code,
+        -: 2518:        typename Protocol::socket::template rebind_executor<
+        -: 2519:          Executor1>::other)>(
+        -: 2520:            initiate_async_move_accept(this), token, ex, &peer_endpoint,
+        -: 2521:            static_cast<typename Protocol::socket::template
+        -: 2522:              rebind_executor<Executor1>::other*>(0));
+        -: 2523:  }
+        -: 2524:
+        -: 2525:  /// Start an asynchronous accept.
+        -: 2526:  /**
+        -: 2527:   * This function is used to asynchronously accept a new connection. It is an
+        -: 2528:   * initiating function for an @ref asynchronous_operation, and always returns
+        -: 2529:   * immediately.
+        -: 2530:   *
+        -: 2531:   * This overload requires that the Protocol template parameter satisfy the
+        -: 2532:   * AcceptableProtocol type requirements.
+        -: 2533:   *
+        -: 2534:   * @param context The I/O execution context object to be used for the newly
+        -: 2535:   * accepted socket.
+        -: 2536:   *
+        -: 2537:   * @param peer_endpoint An endpoint object into which the endpoint of the
+        -: 2538:   * remote peer will be written. Ownership of the peer_endpoint object is
+        -: 2539:   * retained by the caller, which must guarantee that it is valid until the
+        -: 2540:   * completion handler is called.
+        -: 2541:   *
+        -: 2542:   * @param token The @ref completion_token that will be used to produce a
+        -: 2543:   * completion handler, which will be called when the accept completes.
+        -: 2544:   * Potential completion tokens include @ref use_future, @ref use_awaitable,
+        -: 2545:   * @ref yield_context, or a function object with the correct completion
+        -: 2546:   * signature. The function signature of the completion handler must be:
+        -: 2547:   * @code void handler(
+        -: 2548:   *   // Result of operation.
+        -: 2549:   *   const boost::system::error_code& error,
+        -: 2550:   *
+        -: 2551:   *   // On success, the newly accepted socket.
+        -: 2552:   *   typename Protocol::socket::template rebind_executor<
+        -: 2553:   *     typename ExecutionContext::executor_type>::other peer
+        -: 2554:   * ); @endcode
+        -: 2555:   * Regardless of whether the asynchronous operation completes immediately or
+        -: 2556:   * not, the completion handler will not be invoked from within this function.
+        -: 2557:   * On immediate completion, invocation of the handler will be performed in a
+        -: 2558:   * manner equivalent to using boost::asio::post().
+        -: 2559:   *
+        -: 2560:   * @par Completion Signature
+        -: 2561:   * @code void(boost::system::error_code,
+        -: 2562:   *    typename Protocol::socket::template rebind_executor<
+        -: 2563:   *      typename ExecutionContext::executor_type>::other)) @endcode
+        -: 2564:   *
+        -: 2565:   * @par Example
+        -: 2566:   * @code
+        -: 2567:   * void accept_handler(const boost::system::error_code& error,
+        -: 2568:   *     boost::asio::ip::tcp::socket peer)
+        -: 2569:   * {
+        -: 2570:   *   if (!error)
+        -: 2571:   *   {
+        -: 2572:   *     // Accept succeeded.
+        -: 2573:   *   }
+        -: 2574:   * }
+        -: 2575:   *
+        -: 2576:   * ...
+        -: 2577:   *
+        -: 2578:   * boost::asio::ip::tcp::acceptor acceptor(my_context);
+        -: 2579:   * ...
+        -: 2580:   * boost::asio::ip::tcp::endpoint endpoint;
+        -: 2581:   * acceptor.async_accept(my_context2, endpoint, accept_handler);
+        -: 2582:   * @endcode
+        -: 2583:   *
+        -: 2584:   * @par Per-Operation Cancellation
+        -: 2585:   * On POSIX or Windows operating systems, this asynchronous operation supports
+        -: 2586:   * cancellation for the following boost::asio::cancellation_type values:
+        -: 2587:   *
+        -: 2588:   * @li @c cancellation_type::terminal
+        -: 2589:   *
+        -: 2590:   * @li @c cancellation_type::partial
+        -: 2591:   *
+        -: 2592:   * @li @c cancellation_type::total
+        -: 2593:   */
+        -: 2594:  template <typename ExecutionContext,
+        -: 2595:      BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code,
+        -: 2596:        typename Protocol::socket::template rebind_executor<
+        -: 2597:          typename ExecutionContext::executor_type>::other)) MoveAcceptToken
+        -: 2598:            BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(executor_type)>
+        -: 2599:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(MoveAcceptToken,
+        -: 2600:      void (boost::system::error_code,
+        -: 2601:        typename Protocol::socket::template rebind_executor<
+        -: 2602:          typename ExecutionContext::executor_type>::other))
+        -: 2603:  async_accept(ExecutionContext& context,
+        -: 2604:      endpoint_type& peer_endpoint,
+        -: 2605:      BOOST_ASIO_MOVE_ARG(MoveAcceptToken) token
+        -: 2606:        BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type),
+        -: 2607:      typename constraint<
+        -: 2608:        is_convertible<ExecutionContext&, execution_context&>::value
+        -: 2609:      >::type = 0)
+        -: 2610:    BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -: 2611:      async_initiate<MoveAcceptToken,
+        -: 2612:        void (boost::system::error_code,
+        -: 2613:          typename Protocol::socket::template rebind_executor<
+        -: 2614:            typename ExecutionContext::executor_type>::other)>(
+        -: 2615:              declval<initiate_async_move_accept>(), token,
+        -: 2616:              context.get_executor(), &peer_endpoint,
+        -: 2617:              static_cast<typename Protocol::socket::template rebind_executor<
+        -: 2618:                typename ExecutionContext::executor_type>::other*>(0))))
+        -: 2619:  {
+        -: 2620:    return async_initiate<MoveAcceptToken,
+        -: 2621:      void (boost::system::error_code,
+        -: 2622:        typename Protocol::socket::template rebind_executor<
+        -: 2623:          typename ExecutionContext::executor_type>::other)>(
+        -: 2624:            initiate_async_move_accept(this), token,
+        -: 2625:            context.get_executor(), &peer_endpoint,
+        -: 2626:            static_cast<typename Protocol::socket::template rebind_executor<
+        -: 2627:              typename ExecutionContext::executor_type>::other*>(0));
+        -: 2628:  }
+        -: 2629:#endif // defined(BOOST_ASIO_HAS_MOVE) || defined(GENERATING_DOCUMENTATION)
+        -: 2630:
+        -: 2631:private:
+        -: 2632:  // Disallow copying and assignment.
+        -: 2633:  basic_socket_acceptor(const basic_socket_acceptor&) BOOST_ASIO_DELETED;
+        -: 2634:  basic_socket_acceptor& operator=(
+        -: 2635:      const basic_socket_acceptor&) BOOST_ASIO_DELETED;
+        -: 2636:
+        -: 2637:  class initiate_async_wait
+        -: 2638:  {
+        -: 2639:  public:
+        -: 2640:    typedef Executor executor_type;
+        -: 2641:
+        -: 2642:    explicit initiate_async_wait(basic_socket_acceptor* self)
+        -: 2643:      : self_(self)
+        -: 2644:    {
+        -: 2645:    }
+        -: 2646:
+        -: 2647:    const executor_type& get_executor() const BOOST_ASIO_NOEXCEPT
+        -: 2648:    {
+        -: 2649:      return self_->get_executor();
+        -: 2650:    }
+        -: 2651:
+        -: 2652:    template <typename WaitHandler>
+        -: 2653:    void operator()(BOOST_ASIO_MOVE_ARG(WaitHandler) handler, wait_type w) const
+        -: 2654:    {
+        -: 2655:      // If you get an error on the following line it means that your handler
+        -: 2656:      // does not meet the documented type requirements for a WaitHandler.
+        -: 2657:      BOOST_ASIO_WAIT_HANDLER_CHECK(WaitHandler, handler) type_check;
+        -: 2658:
+        -: 2659:      detail::non_const_lvalue<WaitHandler> handler2(handler);
+        -: 2660:      self_->impl_.get_service().async_wait(
+        -: 2661:          self_->impl_.get_implementation(), w,
+        -: 2662:          handler2.value, self_->impl_.get_executor());
+        -: 2663:    }
+        -: 2664:
+        -: 2665:  private:
+        -: 2666:    basic_socket_acceptor* self_;
+        -: 2667:  };
+        -: 2668:
+        -: 2669:  class initiate_async_accept
+        -: 2670:  {
+        -: 2671:  public:
+        -: 2672:    typedef Executor executor_type;
+        -: 2673:
+       8*: 2674:    explicit initiate_async_accept(basic_socket_acceptor* self)
+       8*: 2675:      : self_(self)
+        -: 2676:    {
+       8*: 2677:    }
+------------------
+_ZN5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEE21initiate_async_acceptC2EPS5_:
+function _ZN5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEE21initiate_async_acceptC2EPS5_ called 0 returned 0% blocks executed 0%
+    #####: 2674:    explicit initiate_async_accept(basic_socket_acceptor* self)
+    #####: 2675:      : self_(self)
+        -: 2676:    {
+    #####: 2677:    }
+------------------
+_ZN5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEE21initiate_async_acceptC2EPS5_:
+function _ZN5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEE21initiate_async_acceptC2EPS5_ called 8 returned 100% blocks executed 100%
+        8: 2674:    explicit initiate_async_accept(basic_socket_acceptor* self)
+        8: 2675:      : self_(self)
+        -: 2676:    {
+        8: 2677:    }
+------------------
+        -: 2678:
+        -: 2679:    const executor_type& get_executor() const BOOST_ASIO_NOEXCEPT
+        -: 2680:    {
+        -: 2681:      return self_->get_executor();
+        -: 2682:    }
+        -: 2683:
+        -: 2684:    template <typename AcceptHandler, typename Protocol1, typename Executor1>
+       8*: 2685:    void operator()(BOOST_ASIO_MOVE_ARG(AcceptHandler) handler,
+        -: 2686:        basic_socket<Protocol1, Executor1>* peer,
+        -: 2687:        endpoint_type* peer_endpoint) const
+        -: 2688:    {
+        -: 2689:      // If you get an error on the following line it means that your handler
+        -: 2690:      // does not meet the documented type requirements for a AcceptHandler.
+        -: 2691:      BOOST_ASIO_ACCEPT_HANDLER_CHECK(AcceptHandler, handler) type_check;
+        -: 2692:
+       8*: 2693:      detail::non_const_lvalue<AcceptHandler> handler2(handler);
+      16*: 2694:      self_->impl_.get_service().async_accept(
+       8*: 2695:          self_->impl_.get_implementation(), *peer, peer_endpoint,
+       8*: 2696:          handler2.value, self_->impl_.get_executor());
+       8*: 2697:    }
+------------------
+_ZNK5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEE21initiate_async_acceptclINS0_6detail17awaitable_handlerIS4_JNS_6system10error_codeEEEES3_S4_EEvOT_PNS0_12basic_socketIT0_T1_EEPNS2_14basic_endpointIS3_EE:
+function _ZNK5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEE21initiate_async_acceptclINS0_6detail17awaitable_handlerIS4_JNS_6system10error_codeEEEES3_S4_EEvOT_PNS0_12basic_socketIT0_T1_EEPNS2_14basic_endpointIS3_EE called 0 returned 0% blocks executed 0%
+    #####: 2685:    void operator()(BOOST_ASIO_MOVE_ARG(AcceptHandler) handler,
+        -: 2686:        basic_socket<Protocol1, Executor1>* peer,
+        -: 2687:        endpoint_type* peer_endpoint) const
+        -: 2688:    {
+        -: 2689:      // If you get an error on the following line it means that your handler
+        -: 2690:      // does not meet the documented type requirements for a AcceptHandler.
+        -: 2691:      BOOST_ASIO_ACCEPT_HANDLER_CHECK(AcceptHandler, handler) type_check;
+        -: 2692:
+    #####: 2693:      detail::non_const_lvalue<AcceptHandler> handler2(handler);
+call    0 never executed
+    #####: 2694:      self_->impl_.get_service().async_accept(
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+    #####: 2695:          self_->impl_.get_implementation(), *peer, peer_endpoint,
+    #####: 2696:          handler2.value, self_->impl_.get_executor());
+call    0 never executed
+call    1 never executed
+    #####: 2697:    }
+------------------
+_ZNK5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEE21initiate_async_acceptclIZ22createConnectedSocketsRNS0_10io_contextES9_EUlNS_6system10error_codeEE_S3_S4_EEvOT_PNS0_12basic_socketIT0_T1_EEPNS2_14basic_endpointIS3_EE:
+function _ZNK5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEE21initiate_async_acceptclIZ22createConnectedSocketsRNS0_10io_contextES9_EUlNS_6system10error_codeEE_S3_S4_EEvOT_PNS0_12basic_socketIT0_T1_EEPNS2_14basic_endpointIS3_EE called 8 returned 100% blocks executed 100%
+        8: 2685:    void operator()(BOOST_ASIO_MOVE_ARG(AcceptHandler) handler,
+        -: 2686:        basic_socket<Protocol1, Executor1>* peer,
+        -: 2687:        endpoint_type* peer_endpoint) const
+        -: 2688:    {
+        -: 2689:      // If you get an error on the following line it means that your handler
+        -: 2690:      // does not meet the documented type requirements for a AcceptHandler.
+        -: 2691:      BOOST_ASIO_ACCEPT_HANDLER_CHECK(AcceptHandler, handler) type_check;
+        -: 2692:
+        8: 2693:      detail::non_const_lvalue<AcceptHandler> handler2(handler);
+call    0 returned 100%
+       16: 2694:      self_->impl_.get_service().async_accept(
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        8: 2695:          self_->impl_.get_implementation(), *peer, peer_endpoint,
+        8: 2696:          handler2.value, self_->impl_.get_executor());
+call    0 returned 100%
+call    1 returned 100%
+        8: 2697:    }
+------------------
+        -: 2698:
+        -: 2699:  private:
+        -: 2700:    basic_socket_acceptor* self_;
+        -: 2701:  };
+        -: 2702:
+        -: 2703:  class initiate_async_move_accept
+        -: 2704:  {
+        -: 2705:  public:
+        -: 2706:    typedef Executor executor_type;
+        -: 2707:
+     104*: 2708:    explicit initiate_async_move_accept(basic_socket_acceptor* self)
+     104*: 2709:      : self_(self)
+        -: 2710:    {
+     104*: 2711:    }
+------------------
+_ZN5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEE26initiate_async_move_acceptC2EPS5_:
+function _ZN5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEE26initiate_async_move_acceptC2EPS5_ called 9 returned 100% blocks executed 100%
+        9: 2708:    explicit initiate_async_move_accept(basic_socket_acceptor* self)
+        9: 2709:      : self_(self)
+        -: 2710:    {
+        9: 2711:    }
+------------------
+_ZN5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEE26initiate_async_move_acceptC2EPS5_:
+function _ZN5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEE26initiate_async_move_acceptC2EPS5_ called 95 returned 100% blocks executed 100%
+       95: 2708:    explicit initiate_async_move_accept(basic_socket_acceptor* self)
+       95: 2709:      : self_(self)
+        -: 2710:    {
+       95: 2711:    }
+------------------
+_ZN5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEE26initiate_async_move_acceptC2EPS5_:
+function _ZN5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEE26initiate_async_move_acceptC2EPS5_ called 0 returned 0% blocks executed 0%
+    #####: 2708:    explicit initiate_async_move_accept(basic_socket_acceptor* self)
+    #####: 2709:      : self_(self)
+        -: 2710:    {
+    #####: 2711:    }
+------------------
+_ZN5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEE26initiate_async_move_acceptC2EPS5_:
+function _ZN5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEE26initiate_async_move_acceptC2EPS5_ called 0 returned 0% blocks executed 0%
+    #####: 2708:    explicit initiate_async_move_accept(basic_socket_acceptor* self)
+    #####: 2709:      : self_(self)
+        -: 2710:    {
+    #####: 2711:    }
+------------------
+        -: 2712:
+        -: 2713:    const executor_type& get_executor() const BOOST_ASIO_NOEXCEPT
+        -: 2714:    {
+        -: 2715:      return self_->get_executor();
+        -: 2716:    }
+        -: 2717:
+        -: 2718:    template <typename MoveAcceptHandler, typename Executor1, typename Socket>
+     104*: 2719:    void operator()(BOOST_ASIO_MOVE_ARG(MoveAcceptHandler) handler,
+        -: 2720:        const Executor1& peer_ex, endpoint_type* peer_endpoint, Socket*) const
+        -: 2721:    {
+        -: 2722:      // If you get an error on the following line it means that your handler
+        -: 2723:      // does not meet the documented type requirements for a MoveAcceptHandler.
+        -: 2724:      BOOST_ASIO_MOVE_ACCEPT_HANDLER_CHECK(
+        -: 2725:          MoveAcceptHandler, handler, Socket) type_check;
+        -: 2726:
+     104*: 2727:      detail::non_const_lvalue<MoveAcceptHandler> handler2(handler);
+     208*: 2728:      self_->impl_.get_service().async_move_accept(
+     104*: 2729:          self_->impl_.get_implementation(), peer_ex, peer_endpoint,
+     104*: 2730:          handler2.value, self_->impl_.get_executor());
+     104*: 2731:    }
+------------------
+_ZNK5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEE26initiate_async_move_acceptclINS0_6detail17awaitable_handlerIS4_JNS_6system10error_codeENS0_19basic_stream_socketIS3_S4_EEEEES4_SD_EEvOT_RKT0_PNS2_14basic_endpointIS3_EEPT1_:
+function _ZNK5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEE26initiate_async_move_acceptclINS0_6detail17awaitable_handlerIS4_JNS_6system10error_codeENS0_19basic_stream_socketIS3_S4_EEEEES4_SD_EEvOT_RKT0_PNS2_14basic_endpointIS3_EEPT1_ called 9 returned 100% blocks executed 100%
+        9: 2719:    void operator()(BOOST_ASIO_MOVE_ARG(MoveAcceptHandler) handler,
+        -: 2720:        const Executor1& peer_ex, endpoint_type* peer_endpoint, Socket*) const
+        -: 2721:    {
+        -: 2722:      // If you get an error on the following line it means that your handler
+        -: 2723:      // does not meet the documented type requirements for a MoveAcceptHandler.
+        -: 2724:      BOOST_ASIO_MOVE_ACCEPT_HANDLER_CHECK(
+        -: 2725:          MoveAcceptHandler, handler, Socket) type_check;
+        -: 2726:
+        9: 2727:      detail::non_const_lvalue<MoveAcceptHandler> handler2(handler);
+call    0 returned 100%
+       18: 2728:      self_->impl_.get_service().async_move_accept(
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        9: 2729:          self_->impl_.get_implementation(), peer_ex, peer_endpoint,
+        9: 2730:          handler2.value, self_->impl_.get_executor());
+call    0 returned 100%
+call    1 returned 100%
+        9: 2731:    }
+------------------
+_ZNK5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEE26initiate_async_move_acceptclINS0_6detail17awaitable_handlerIS4_JNS_6system10error_codeENS0_19basic_stream_socketIS3_S4_EEEEES4_SD_EEvOT_RKT0_PNS2_14basic_endpointIS3_EEPT1_:
+function _ZNK5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEE26initiate_async_move_acceptclINS0_6detail17awaitable_handlerIS4_JNS_6system10error_codeENS0_19basic_stream_socketIS3_S4_EEEEES4_SD_EEvOT_RKT0_PNS2_14basic_endpointIS3_EEPT1_ called 95 returned 100% blocks executed 100%
+       95: 2719:    void operator()(BOOST_ASIO_MOVE_ARG(MoveAcceptHandler) handler,
+        -: 2720:        const Executor1& peer_ex, endpoint_type* peer_endpoint, Socket*) const
+        -: 2721:    {
+        -: 2722:      // If you get an error on the following line it means that your handler
+        -: 2723:      // does not meet the documented type requirements for a MoveAcceptHandler.
+        -: 2724:      BOOST_ASIO_MOVE_ACCEPT_HANDLER_CHECK(
+        -: 2725:          MoveAcceptHandler, handler, Socket) type_check;
+        -: 2726:
+       95: 2727:      detail::non_const_lvalue<MoveAcceptHandler> handler2(handler);
+call    0 returned 100%
+      190: 2728:      self_->impl_.get_service().async_move_accept(
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+       95: 2729:          self_->impl_.get_implementation(), peer_ex, peer_endpoint,
+       95: 2730:          handler2.value, self_->impl_.get_executor());
+call    0 returned 100%
+call    1 returned 100%
+       95: 2731:    }
+------------------
+_ZNK5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEE26initiate_async_move_acceptclINS0_6detail17awaitable_handlerIS4_JNS_6system10error_codeENS0_19basic_stream_socketIS3_S4_EEEEES4_SD_EEvOT_RKT0_PNS2_14basic_endpointIS3_EEPT1_:
+function _ZNK5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEE26initiate_async_move_acceptclINS0_6detail17awaitable_handlerIS4_JNS_6system10error_codeENS0_19basic_stream_socketIS3_S4_EEEEES4_SD_EEvOT_RKT0_PNS2_14basic_endpointIS3_EEPT1_ called 0 returned 0% blocks executed 0%
+    #####: 2719:    void operator()(BOOST_ASIO_MOVE_ARG(MoveAcceptHandler) handler,
+        -: 2720:        const Executor1& peer_ex, endpoint_type* peer_endpoint, Socket*) const
+        -: 2721:    {
+        -: 2722:      // If you get an error on the following line it means that your handler
+        -: 2723:      // does not meet the documented type requirements for a MoveAcceptHandler.
+        -: 2724:      BOOST_ASIO_MOVE_ACCEPT_HANDLER_CHECK(
+        -: 2725:          MoveAcceptHandler, handler, Socket) type_check;
+        -: 2726:
+    #####: 2727:      detail::non_const_lvalue<MoveAcceptHandler> handler2(handler);
+call    0 never executed
+    #####: 2728:      self_->impl_.get_service().async_move_accept(
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+    #####: 2729:          self_->impl_.get_implementation(), peer_ex, peer_endpoint,
+    #####: 2730:          handler2.value, self_->impl_.get_executor());
+call    0 never executed
+call    1 never executed
+    #####: 2731:    }
+------------------
+_ZNK5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEE26initiate_async_move_acceptclINS0_6detail17awaitable_handlerIS4_JNS_6system10error_codeENS0_19basic_stream_socketIS3_S4_EEEEES4_SD_EEvOT_RKT0_PNS2_14basic_endpointIS3_EEPT1_:
+function _ZNK5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEE26initiate_async_move_acceptclINS0_6detail17awaitable_handlerIS4_JNS_6system10error_codeENS0_19basic_stream_socketIS3_S4_EEEEES4_SD_EEvOT_RKT0_PNS2_14basic_endpointIS3_EEPT1_ called 0 returned 0% blocks executed 0%
+    #####: 2719:    void operator()(BOOST_ASIO_MOVE_ARG(MoveAcceptHandler) handler,
+        -: 2720:        const Executor1& peer_ex, endpoint_type* peer_endpoint, Socket*) const
+        -: 2721:    {
+        -: 2722:      // If you get an error on the following line it means that your handler
+        -: 2723:      // does not meet the documented type requirements for a MoveAcceptHandler.
+        -: 2724:      BOOST_ASIO_MOVE_ACCEPT_HANDLER_CHECK(
+        -: 2725:          MoveAcceptHandler, handler, Socket) type_check;
+        -: 2726:
+    #####: 2727:      detail::non_const_lvalue<MoveAcceptHandler> handler2(handler);
+call    0 never executed
+    #####: 2728:      self_->impl_.get_service().async_move_accept(
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+    #####: 2729:          self_->impl_.get_implementation(), peer_ex, peer_endpoint,
+    #####: 2730:          handler2.value, self_->impl_.get_executor());
+call    0 never executed
+call    1 never executed
+    #####: 2731:    }
+------------------
+        -: 2732:
+        -: 2733:  private:
+        -: 2734:    basic_socket_acceptor* self_;
+        -: 2735:  };
+        -: 2736:
+        -: 2737:#if defined(BOOST_ASIO_WINDOWS_RUNTIME)
+        -: 2738:  detail::io_object_impl<
+        -: 2739:    detail::null_socket_service<Protocol>, Executor> impl_;
+        -: 2740:#elif defined(BOOST_ASIO_HAS_IOCP)
+        -: 2741:  detail::io_object_impl<
+        -: 2742:    detail::win_iocp_socket_service<Protocol>, Executor> impl_;
+        -: 2743:#elif defined(BOOST_ASIO_HAS_IO_URING_AS_DEFAULT)
+        -: 2744:  detail::io_object_impl<
+        -: 2745:    detail::io_uring_socket_service<Protocol>, Executor> impl_;
+        -: 2746:#else
+        -: 2747:  detail::io_object_impl<
+        -: 2748:    detail::reactive_socket_service<Protocol>, Executor> impl_;
+        -: 2749:#endif
+        -: 2750:};
+        -: 2751:
+        -: 2752:} // namespace asio
+        -: 2753:} // namespace boost
+        -: 2754:
+        -: 2755:#include <boost/asio/detail/pop_options.hpp>
+        -: 2756:
+        -: 2757:#endif // BOOST_ASIO_BASIC_SOCKET_ACCEPTOR_HPP

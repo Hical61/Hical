@@ -1,0 +1,297 @@
+        -:    0:Source:/usr/include/boost/asio/execution/execute.hpp
+        -:    1://
+        -:    2:// execution/execute.hpp
+        -:    3:// ~~~~~~~~~~~~~~~~~~~~~
+        -:    4://
+        -:    5:// Copyright (c) 2003-2023 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+        -:    6://
+        -:    7:// Distributed under the Boost Software License, Version 1.0. (See accompanying
+        -:    8:// file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+        -:    9://
+        -:   10:
+        -:   11:#ifndef BOOST_ASIO_EXECUTION_EXECUTE_HPP
+        -:   12:#define BOOST_ASIO_EXECUTION_EXECUTE_HPP
+        -:   13:
+        -:   14:#if defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   15:# pragma once
+        -:   16:#endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   17:
+        -:   18:#include <boost/asio/detail/config.hpp>
+        -:   19:
+        -:   20:#if !defined(BOOST_ASIO_NO_DEPRECATED)
+        -:   21:
+        -:   22:#include <boost/asio/detail/type_traits.hpp>
+        -:   23:#include <boost/asio/execution/detail/as_invocable.hpp>
+        -:   24:#include <boost/asio/execution/detail/as_receiver.hpp>
+        -:   25:#include <boost/asio/traits/execute_member.hpp>
+        -:   26:#include <boost/asio/traits/execute_free.hpp>
+        -:   27:
+        -:   28:#include <boost/asio/detail/push_options.hpp>
+        -:   29:
+        -:   30:#if defined(GENERATING_DOCUMENTATION)
+        -:   31:
+        -:   32:namespace boost {
+        -:   33:namespace asio {
+        -:   34:namespace execution {
+        -:   35:
+        -:   36:/// (Deprecated: Use @c execute member function.) A customisation point that
+        -:   37:/// executes a function on an executor.
+        -:   38:/**
+        -:   39: * The name <tt>execution::execute</tt> denotes a customisation point object.
+        -:   40: *
+        -:   41: * For some subexpressions <tt>e</tt> and <tt>f</tt>, let <tt>E</tt> be a type
+        -:   42: * such that <tt>decltype((e))</tt> is <tt>E</tt> and let <tt>F</tt> be a type
+        -:   43: * such that <tt>decltype((f))</tt> is <tt>F</tt>. The expression
+        -:   44: * <tt>execution::execute(e, f)</tt> is ill-formed if <tt>F</tt> does not model
+        -:   45: * <tt>invocable</tt>, or if <tt>E</tt> does not model either <tt>executor</tt>
+        -:   46: * or <tt>sender</tt>. Otherwise, it is expression-equivalent to:
+        -:   47: *
+        -:   48: * @li <tt>e.execute(f)</tt>, if that expression is valid. If the function
+        -:   49: *   selected does not execute the function object <tt>f</tt> on the executor
+        -:   50: *   <tt>e</tt>, the program is ill-formed with no diagnostic required.
+        -:   51: *
+        -:   52: * @li Otherwise, <tt>execute(e, f)</tt>, if that expression is valid, with
+        -:   53: *   overload resolution performed in a context that includes the declaration
+        -:   54: *   <tt>void execute();</tt> and that does not include a declaration of
+        -:   55: *   <tt>execution::execute</tt>. If the function selected by overload
+        -:   56: *   resolution does not execute the function object <tt>f</tt> on the executor
+        -:   57: *   <tt>e</tt>, the program is ill-formed with no diagnostic required.
+        -:   58: */
+        -:   59:inline constexpr unspecified execute = unspecified;
+        -:   60:
+        -:   61:/// (Deprecated.) A type trait that determines whether an @c execute expression
+        -:   62:/// is well-formed.
+        -:   63:/**
+        -:   64: * Class template @c can_execute is a trait that is derived from
+        -:   65: * @c true_type if the expression <tt>execution::execute(std::declval<T>(),
+        -:   66: * std::declval<F>())</tt> is well formed; otherwise @c false_type.
+        -:   67: */
+        -:   68:template <typename T, typename F>
+        -:   69:struct can_execute :
+        -:   70:  integral_constant<bool, automatically_determined>
+        -:   71:{
+        -:   72:};
+        -:   73:
+        -:   74:} // namespace execution
+        -:   75:} // namespace asio
+        -:   76:} // namespace boost
+        -:   77:
+        -:   78:#else // defined(GENERATING_DOCUMENTATION)
+        -:   79:
+        -:   80:namespace boost {
+        -:   81:namespace asio {
+        -:   82:namespace execution {
+        -:   83:
+        -:   84:template <typename T, typename R>
+        -:   85:struct is_sender_to;
+        -:   86:
+        -:   87:namespace detail {
+        -:   88:
+        -:   89:template <typename S, typename R>
+        -:   90:void submit_helper(BOOST_ASIO_MOVE_ARG(S) s, BOOST_ASIO_MOVE_ARG(R) r);
+        -:   91:
+        -:   92:} // namespace detail
+        -:   93:} // namespace execution
+        -:   94:} // namespace asio
+        -:   95:} // namespace boost
+        -:   96:namespace boost_asio_execution_execute_fn {
+        -:   97:
+        -:   98:using boost::asio::conditional;
+        -:   99:using boost::asio::decay;
+        -:  100:using boost::asio::declval;
+        -:  101:using boost::asio::enable_if;
+        -:  102:using boost::asio::execution::detail::as_receiver;
+        -:  103:using boost::asio::execution::detail::is_as_invocable;
+        -:  104:using boost::asio::execution::is_sender_to;
+        -:  105:using boost::asio::false_type;
+        -:  106:using boost::asio::result_of;
+        -:  107:using boost::asio::traits::execute_free;
+        -:  108:using boost::asio::traits::execute_member;
+        -:  109:using boost::asio::true_type;
+        -:  110:using boost::asio::void_type;
+        -:  111:
+        -:  112:void execute();
+        -:  113:
+        -:  114:enum overload_type
+        -:  115:{
+        -:  116:  call_member,
+        -:  117:  call_free,
+        -:  118:  adapter,
+        -:  119:  ill_formed
+        -:  120:};
+        -:  121:
+        -:  122:template <typename Impl, typename T, typename F, typename = void,
+        -:  123:    typename = void, typename = void, typename = void, typename = void>
+        -:  124:struct call_traits
+        -:  125:{
+        -:  126:  BOOST_ASIO_STATIC_CONSTEXPR(overload_type, overload = ill_formed);
+        -:  127:};
+        -:  128:
+        -:  129:template <typename Impl, typename T, typename F>
+        -:  130:struct call_traits<Impl, T, void(F),
+        -:  131:  typename enable_if<
+        -:  132:    execute_member<typename Impl::template proxy<T>::type, F>::is_valid
+        -:  133:  >::type> :
+        -:  134:  execute_member<typename Impl::template proxy<T>::type, F>
+        -:  135:{
+        -:  136:  BOOST_ASIO_STATIC_CONSTEXPR(overload_type, overload = call_member);
+        -:  137:};
+        -:  138:
+        -:  139:template <typename Impl, typename T, typename F>
+        -:  140:struct call_traits<Impl, T, void(F),
+        -:  141:  typename enable_if<
+        -:  142:    !execute_member<typename Impl::template proxy<T>, F>::is_valid
+        -:  143:  >::type,
+        -:  144:  typename enable_if<
+        -:  145:    execute_free<T, F>::is_valid
+        -:  146:  >::type> :
+        -:  147:  execute_free<T, F>
+        -:  148:{
+        -:  149:  BOOST_ASIO_STATIC_CONSTEXPR(overload_type, overload = call_free);
+        -:  150:};
+        -:  151:
+        -:  152:template <typename Impl, typename T, typename F>
+        -:  153:struct call_traits<Impl, T, void(F),
+        -:  154:  typename enable_if<
+        -:  155:    !execute_member<typename Impl::template proxy<T>::type, F>::is_valid
+        -:  156:  >::type,
+        -:  157:  typename enable_if<
+        -:  158:    !execute_free<T, F>::is_valid
+        -:  159:  >::type,
+        -:  160:  typename void_type<
+        -:  161:   typename result_of<typename decay<F>::type&()>::type
+        -:  162:  >::type,
+        -:  163:  typename enable_if<
+        -:  164:    !is_as_invocable<typename decay<F>::type>::value
+        -:  165:  >::type,
+        -:  166:  typename enable_if<
+        -:  167:    is_sender_to<T, as_receiver<typename decay<F>::type, T> >::value
+        -:  168:  >::type>
+        -:  169:{
+        -:  170:  BOOST_ASIO_STATIC_CONSTEXPR(overload_type, overload = adapter);
+        -:  171:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_valid = true);
+        -:  172:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_noexcept = false);
+        -:  173:  typedef void result_type;
+        -:  174:};
+        -:  175:
+        -:  176:struct impl
+        -:  177:{
+        -:  178:  template <typename T>
+        -:  179:  struct proxy
+        -:  180:  {
+        -:  181:#if defined(BOOST_ASIO_HAS_DEDUCED_EXECUTE_MEMBER_TRAIT)
+        -:  182:    struct type
+        -:  183:    {
+        -:  184:      template <typename F>
+        -:  185:      auto execute(BOOST_ASIO_MOVE_ARG(F) f)
+        -:  186:        noexcept(
+        -:  187:          noexcept(
+        -:  188:            declval<typename conditional<true, T, F>::type>().execute(
+        -:  189:              BOOST_ASIO_MOVE_CAST(F)(f))
+        -:  190:          )
+        -:  191:        )
+        -:  192:        -> decltype(
+        -:  193:          declval<typename conditional<true, T, F>::type>().execute(
+        -:  194:            BOOST_ASIO_MOVE_CAST(F)(f))
+        -:  195:        );
+        -:  196:    };
+        -:  197:#else // defined(BOOST_ASIO_HAS_DEDUCED_EXECUTE_MEMBER_TRAIT)
+        -:  198:    typedef T type;
+        -:  199:#endif // defined(BOOST_ASIO_HAS_DEDUCED_EXECUTE_MEMBER_TRAIT)
+        -:  200:  };
+        -:  201:
+        -:  202:  template <typename T, typename F>
+        -:  203:  BOOST_ASIO_CONSTEXPR typename enable_if<
+        -:  204:    call_traits<impl, T, void(F)>::overload == call_member,
+        -:  205:    typename call_traits<impl, T, void(F)>::result_type
+        -:  206:  >::type
+   60833*:  207:  operator()(
+        -:  208:      BOOST_ASIO_MOVE_ARG(T) t,
+        -:  209:      BOOST_ASIO_MOVE_ARG(F) f) const
+        -:  210:    BOOST_ASIO_NOEXCEPT_IF((
+        -:  211:      call_traits<impl, T, void(F)>::is_noexcept))
+        -:  212:  {
+   60833*:  213:    return BOOST_ASIO_MOVE_CAST(T)(t).execute(BOOST_ASIO_MOVE_CAST(F)(f));
+        -:  214:  }
+        -:  215:
+        -:  216:  template <typename T, typename F>
+        -:  217:  BOOST_ASIO_CONSTEXPR typename enable_if<
+        -:  218:    call_traits<impl, T, void(F)>::overload == call_free,
+        -:  219:    typename call_traits<impl, T, void(F)>::result_type
+        -:  220:  >::type
+        -:  221:  operator()(
+        -:  222:      BOOST_ASIO_MOVE_ARG(T) t,
+        -:  223:      BOOST_ASIO_MOVE_ARG(F) f) const
+        -:  224:    BOOST_ASIO_NOEXCEPT_IF((
+        -:  225:      call_traits<impl, T, void(F)>::is_noexcept))
+        -:  226:  {
+        -:  227:    return execute(BOOST_ASIO_MOVE_CAST(T)(t), BOOST_ASIO_MOVE_CAST(F)(f));
+        -:  228:  }
+        -:  229:
+        -:  230:  template <typename T, typename F>
+        -:  231:  BOOST_ASIO_CONSTEXPR typename enable_if<
+        -:  232:    call_traits<impl, T, void(F)>::overload == adapter,
+        -:  233:    typename call_traits<impl, T, void(F)>::result_type
+        -:  234:  >::type
+        -:  235:  operator()(
+        -:  236:      BOOST_ASIO_MOVE_ARG(T) t,
+        -:  237:      BOOST_ASIO_MOVE_ARG(F) f) const
+        -:  238:    BOOST_ASIO_NOEXCEPT_IF((
+        -:  239:      call_traits<impl, T, void(F)>::is_noexcept))
+        -:  240:  {
+        -:  241:    return boost::asio::execution::detail::submit_helper(
+        -:  242:        BOOST_ASIO_MOVE_CAST(T)(t),
+        -:  243:        as_receiver<typename decay<F>::type, T>(
+        -:  244:          BOOST_ASIO_MOVE_CAST(F)(f), 0));
+        -:  245:  }
+        -:  246:};
+        -:  247:
+        -:  248:template <typename T = impl>
+        -:  249:struct static_instance
+        -:  250:{
+        -:  251:  static const T instance;
+        -:  252:};
+        -:  253:
+        -:  254:template <typename T>
+        -:  255:const T static_instance<T>::instance = {};
+        -:  256:
+        -:  257:} // namespace boost_asio_execution_execute_fn
+        -:  258:namespace boost {
+        -:  259:namespace asio {
+        -:  260:namespace execution {
+        -:  261:namespace {
+        -:  262:
+        -:  263:static BOOST_ASIO_CONSTEXPR const boost_asio_execution_execute_fn::impl&
+        -:  264:  execute = boost_asio_execution_execute_fn::static_instance<>::instance;
+        -:  265:
+        -:  266:} // namespace
+        -:  267:
+        -:  268:typedef boost_asio_execution_execute_fn::impl execute_t;
+        -:  269:
+        -:  270:template <typename T, typename F>
+        -:  271:struct can_execute :
+        -:  272:  integral_constant<bool,
+        -:  273:    boost_asio_execution_execute_fn::call_traits<
+        -:  274:      execute_t, T, void(F)>::overload !=
+        -:  275:        boost_asio_execution_execute_fn::ill_formed>
+        -:  276:{
+        -:  277:};
+        -:  278:
+        -:  279:#if defined(BOOST_ASIO_HAS_VARIABLE_TEMPLATES)
+        -:  280:
+        -:  281:template <typename T, typename F>
+        -:  282:constexpr bool can_execute_v = can_execute<T, F>::value;
+        -:  283:
+        -:  284:#endif // defined(BOOST_ASIO_HAS_VARIABLE_TEMPLATES)
+        -:  285:
+        -:  286:} // namespace execution
+        -:  287:} // namespace asio
+        -:  288:} // namespace boost
+        -:  289:
+        -:  290:#endif // defined(GENERATING_DOCUMENTATION)
+        -:  291:
+        -:  292:#include <boost/asio/detail/pop_options.hpp>
+        -:  293:
+        -:  294:#endif // !defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  295:
+        -:  296:#endif // BOOST_ASIO_EXECUTION_EXECUTE_HPP

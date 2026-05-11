@@ -1,0 +1,5066 @@
+        -:    0:Source:/usr/include/c++/14/bits/allocator.h
+        -:    1:// Allocators -*- C++ -*-
+        -:    2:
+        -:    3:// Copyright (C) 2001-2024 Free Software Foundation, Inc.
+        -:    4://
+        -:    5:// This file is part of the GNU ISO C++ Library.  This library is free
+        -:    6:// software; you can redistribute it and/or modify it under the
+        -:    7:// terms of the GNU General Public License as published by the
+        -:    8:// Free Software Foundation; either version 3, or (at your option)
+        -:    9:// any later version.
+        -:   10:
+        -:   11:// This library is distributed in the hope that it will be useful,
+        -:   12:// but WITHOUT ANY WARRANTY; without even the implied warranty of
+        -:   13:// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+        -:   14:// GNU General Public License for more details.
+        -:   15:
+        -:   16:// Under Section 7 of GPL version 3, you are granted additional
+        -:   17:// permissions described in the GCC Runtime Library Exception, version
+        -:   18:// 3.1, as published by the Free Software Foundation.
+        -:   19:
+        -:   20:// You should have received a copy of the GNU General Public License and
+        -:   21:// a copy of the GCC Runtime Library Exception along with this program;
+        -:   22:// see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
+        -:   23:// <http://www.gnu.org/licenses/>.
+        -:   24:
+        -:   25:/*
+        -:   26: * Copyright (c) 1996-1997
+        -:   27: * Silicon Graphics Computer Systems, Inc.
+        -:   28: *
+        -:   29: * Permission to use, copy, modify, distribute and sell this software
+        -:   30: * and its documentation for any purpose is hereby granted without fee,
+        -:   31: * provided that the above copyright notice appear in all copies and
+        -:   32: * that both that copyright notice and this permission notice appear
+        -:   33: * in supporting documentation.  Silicon Graphics makes no
+        -:   34: * representations about the suitability of this software for any
+        -:   35: * purpose.  It is provided "as is" without express or implied warranty.
+        -:   36: */
+        -:   37:
+        -:   38:/** @file bits/allocator.h
+        -:   39: *  This is an internal header file, included by other library headers.
+        -:   40: *  Do not attempt to use it directly. @headername{memory}
+        -:   41: */
+        -:   42:
+        -:   43:#ifndef _ALLOCATOR_H
+        -:   44:#define _ALLOCATOR_H 1
+        -:   45:
+        -:   46:#include <bits/c++allocator.h> // Define the base class to std::allocator.
+        -:   47:#include <bits/memoryfwd.h>
+        -:   48:#if __cplusplus >= 201103L
+        -:   49:#include <type_traits>
+        -:   50:#endif
+        -:   51:
+        -:   52:namespace std _GLIBCXX_VISIBILITY(default)
+        -:   53:{
+        -:   54:_GLIBCXX_BEGIN_NAMESPACE_VERSION
+        -:   55:
+        -:   56:  /**
+        -:   57:   *  @addtogroup allocators
+        -:   58:   *  @{
+        -:   59:   */
+        -:   60:
+        -:   61:  // Since C++20 the primary template should be used for allocator<void>,
+        -:   62:  // but then it would have a non-trivial default ctor and dtor for C++20,
+        -:   63:  // but trivial for C++98-17, which would be an ABI incompatibility between
+        -:   64:  // different standard dialects. So C++20 still uses the allocator<void>
+        -:   65:  // explicit specialization, with the historical ABI properties, but with
+        -:   66:  // the same members that are present in the primary template.
+        -:   67:
+        -:   68:  /** std::allocator<void> specialization.
+        -:   69:   *
+        -:   70:   * @headerfile memory
+        -:   71:   */
+        -:   72:  template<>
+        -:   73:    class allocator<void>
+        -:   74:    {
+        -:   75:    public:
+        -:   76:      typedef void        value_type;
+        -:   77:      typedef size_t      size_type;
+        -:   78:      typedef ptrdiff_t   difference_type;
+        -:   79:
+        -:   80:#if __cplusplus <= 201703L
+        -:   81:      // These were removed for C++20, allocator_traits does the right thing.
+        -:   82:      typedef void*       pointer;
+        -:   83:      typedef const void* const_pointer;
+        -:   84:
+        -:   85:      template<typename _Tp1>
+        -:   86:	struct rebind
+        -:   87:	{ typedef allocator<_Tp1> other; };
+        -:   88:#endif
+        -:   89:
+        -:   90:#if __cplusplus >= 201103L
+        -:   91:      // _GLIBCXX_RESOLVE_LIB_DEFECTS
+        -:   92:      // 2103. std::allocator propagate_on_container_move_assignment
+        -:   93:      using propagate_on_container_move_assignment = true_type;
+        -:   94:
+        -:   95:      using is_always_equal
+        -:   96:	_GLIBCXX20_DEPRECATED_SUGGEST("std::allocator_traits::is_always_equal")
+        -:   97:	= true_type;
+        -:   98:
+        -:   99:#if __cplusplus >= 202002L
+        -:  100:      // As noted above, these members are present for C++20 to provide the
+        -:  101:      // same API as the primary template, but still trivial as in pre-C++20.
+        -:  102:      allocator() = default;
+        -:  103:      ~allocator() = default;
+        -:  104:
+        -:  105:      template<typename _Up>
+        -:  106:	__attribute__((__always_inline__))
+        -:  107:	constexpr
+        -:  108:	allocator(const allocator<_Up>&) noexcept { }
+        -:  109:
+        -:  110:      // No allocate member because it's ill-formed by LWG 3307.
+        -:  111:      // No deallocate member because it would be undefined to call it
+        -:  112:      // with any pointer which wasn't obtained from allocate.
+        -:  113:#endif // C++20
+        -:  114:#endif // C++11
+        -:  115:    };
+        -:  116:
+        -:  117:  /**
+        -:  118:   * @brief  The @a standard allocator, as per C++03 [20.4.1].
+        -:  119:   *
+        -:  120:   *  See https://gcc.gnu.org/onlinedocs/libstdc++/manual/memory.html#std.util.memory.allocator
+        -:  121:   *  for further details.
+        -:  122:   *
+        -:  123:   *  @tparam  _Tp  Type of allocated object.
+        -:  124:   *
+        -:  125:   *  @headerfile memory
+        -:  126:   */
+        -:  127:  template<typename _Tp>
+        -:  128:    class allocator : public __allocator_base<_Tp>
+        -:  129:    {
+        -:  130:    public:
+        -:  131:      typedef _Tp        value_type;
+        -:  132:      typedef size_t     size_type;
+        -:  133:      typedef ptrdiff_t  difference_type;
+        -:  134:
+        -:  135:#if __cplusplus <= 201703L
+        -:  136:      // These were removed for C++20.
+        -:  137:      typedef _Tp*       pointer;
+        -:  138:      typedef const _Tp* const_pointer;
+        -:  139:      typedef _Tp&       reference;
+        -:  140:      typedef const _Tp& const_reference;
+        -:  141:
+        -:  142:      template<typename _Tp1>
+        -:  143:	struct rebind
+        -:  144:	{ typedef allocator<_Tp1> other; };
+        -:  145:#endif
+        -:  146:
+        -:  147:#if __cplusplus >= 201103L
+        -:  148:      // _GLIBCXX_RESOLVE_LIB_DEFECTS
+        -:  149:      // 2103. std::allocator propagate_on_container_move_assignment
+        -:  150:      using propagate_on_container_move_assignment = true_type;
+        -:  151:
+        -:  152:      using is_always_equal
+        -:  153:	_GLIBCXX20_DEPRECATED_SUGGEST("std::allocator_traits::is_always_equal")
+        -:  154:	= true_type;
+        -:  155:#endif
+        -:  156:
+        -:  157:      // _GLIBCXX_RESOLVE_LIB_DEFECTS
+        -:  158:      // 3035. std::allocator's constructors should be constexpr
+        -:  159:      __attribute__((__always_inline__))
+        -:  160:      _GLIBCXX20_CONSTEXPR
+  168613*:  161:      allocator() _GLIBCXX_NOTHROW { }
+        -:  162:
+        -:  163:      __attribute__((__always_inline__))
+        -:  164:      _GLIBCXX20_CONSTEXPR
+        -:  165:      allocator(const allocator& __a) _GLIBCXX_NOTHROW
+  333034*:  166:      : __allocator_base<_Tp>(__a) { }
+        -:  167:
+        -:  168:#if __cplusplus >= 201103L
+        -:  169:      // Avoid implicit deprecation.
+        -:  170:      allocator& operator=(const allocator&) = default;
+        -:  171:#endif
+        -:  172:
+        -:  173:      template<typename _Tp1>
+        -:  174:	__attribute__((__always_inline__))
+        -:  175:	_GLIBCXX20_CONSTEXPR
+    5141*:  176:	allocator(const allocator<_Tp1>&) _GLIBCXX_NOTHROW { }
+        -:  177:
+        -:  178:      __attribute__((__always_inline__))
+        -:  179:#if __cpp_constexpr_dynamic_alloc
+        -:  180:      constexpr
+        -:  181:#endif
+  166241*:  182:      ~allocator() _GLIBCXX_NOTHROW { }
+        -:  183:
+        -:  184:#if __cplusplus > 201703L
+        -:  185:      [[nodiscard,__gnu__::__always_inline__]]
+        -:  186:      constexpr _Tp*
+        -:  187:      allocate(size_t __n)
+        -:  188:      {
+  180501*:  189:	if (std::__is_constant_evaluated())
+branch  0 never executed (fallthrough)
+branch  1 never executed
+branch  2 taken 0% (fallthrough)
+branch  3 taken 100%
+branch  4 taken 0% (fallthrough)
+branch  5 taken 100%
+branch  6 taken 0% (fallthrough)
+branch  7 taken 100%
+branch  8 never executed (fallthrough)
+branch  9 never executed
+branch 10 taken 0% (fallthrough)
+branch 11 taken 100%
+branch 12 never executed (fallthrough)
+branch 13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed
+branch 16 never executed (fallthrough)
+branch 17 never executed
+branch 18 never executed (fallthrough)
+branch 19 never executed
+branch 20 never executed (fallthrough)
+branch 21 never executed
+branch 22 never executed (fallthrough)
+branch 23 never executed
+branch 24 taken 0% (fallthrough)
+branch 25 taken 100%
+branch 26 taken 0% (fallthrough)
+branch 27 taken 100%
+branch 28 taken 0% (fallthrough)
+branch 29 taken 100%
+branch 30 taken 0% (fallthrough)
+branch 31 taken 100%
+branch 32 never executed (fallthrough)
+branch 33 never executed
+branch 34 never executed (fallthrough)
+branch 35 never executed
+branch 36 never executed (fallthrough)
+branch 37 never executed
+branch 38 taken 0% (fallthrough)
+branch 39 taken 100%
+branch 40 taken 0% (fallthrough)
+branch 41 taken 100%
+branch 42 never executed (fallthrough)
+branch 43 never executed
+branch 44 taken 0% (fallthrough)
+branch 45 taken 100%
+branch 46 taken 0% (fallthrough)
+branch 47 taken 100%
+branch 48 taken 0% (fallthrough)
+branch 49 taken 100%
+branch 50 taken 0% (fallthrough)
+branch 51 taken 100%
+branch 52 never executed (fallthrough)
+branch 53 never executed
+branch 54 taken 0% (fallthrough)
+branch 55 taken 100%
+branch 56 never executed (fallthrough)
+branch 57 never executed
+branch 58 never executed (fallthrough)
+branch 59 never executed
+branch 60 taken 0% (fallthrough)
+branch 61 taken 100%
+branch 62 taken 0% (fallthrough)
+branch 63 taken 100%
+branch 64 taken 0% (fallthrough)
+branch 65 taken 100%
+branch 66 taken 0% (fallthrough)
+branch 67 taken 100%
+branch 68 taken 0% (fallthrough)
+branch 69 taken 100%
+branch 70 taken 0% (fallthrough)
+branch 71 taken 100%
+branch 72 taken 0% (fallthrough)
+branch 73 taken 100%
+branch 74 taken 0% (fallthrough)
+branch 75 taken 100%
+branch 76 taken 0% (fallthrough)
+branch 77 taken 100%
+branch 78 never executed (fallthrough)
+branch 79 never executed
+branch 80 never executed (fallthrough)
+branch 81 never executed
+branch 82 never executed (fallthrough)
+branch 83 never executed
+branch 84 never executed (fallthrough)
+branch 85 never executed
+branch 86 never executed (fallthrough)
+branch 87 never executed
+branch 88 taken 0% (fallthrough)
+branch 89 taken 100%
+branch 90 never executed (fallthrough)
+branch 91 never executed
+branch 92 never executed (fallthrough)
+branch 93 never executed
+branch 94 taken 0% (fallthrough)
+branch 95 taken 100%
+branch 96 never executed (fallthrough)
+branch 97 never executed
+branch 98 never executed (fallthrough)
+branch 99 never executed
+branch 100 never executed (fallthrough)
+branch 101 never executed
+branch 102 taken 0% (fallthrough)
+branch 103 taken 100%
+branch 104 taken 0% (fallthrough)
+branch 105 taken 100%
+branch 106 never executed (fallthrough)
+branch 107 never executed
+branch 108 never executed (fallthrough)
+branch 109 never executed
+branch 110 never executed (fallthrough)
+branch 111 never executed
+branch 112 taken 0% (fallthrough)
+branch 113 taken 100%
+branch 114 never executed (fallthrough)
+branch 115 never executed
+branch 116 never executed (fallthrough)
+branch 117 never executed
+branch 118 taken 0% (fallthrough)
+branch 119 taken 100%
+branch 120 never executed (fallthrough)
+branch 121 never executed
+branch 122 never executed (fallthrough)
+branch 123 never executed
+branch 124 taken 0% (fallthrough)
+branch 125 taken 100%
+branch 126 taken 0% (fallthrough)
+branch 127 taken 100%
+branch 128 taken 0% (fallthrough)
+branch 129 taken 100%
+branch 130 taken 0% (fallthrough)
+branch 131 taken 100%
+branch 132 taken 0% (fallthrough)
+branch 133 taken 100%
+branch 134 never executed (fallthrough)
+branch 135 never executed
+branch 136 never executed (fallthrough)
+branch 137 never executed
+branch 138 never executed (fallthrough)
+branch 139 never executed
+branch 140 never executed (fallthrough)
+branch 141 never executed
+branch 142 never executed (fallthrough)
+branch 143 never executed
+branch 144 never executed (fallthrough)
+branch 145 never executed
+branch 146 never executed (fallthrough)
+branch 147 never executed
+branch 148 never executed (fallthrough)
+branch 149 never executed
+branch 150 taken 0% (fallthrough)
+branch 151 taken 100%
+branch 152 never executed (fallthrough)
+branch 153 never executed
+branch 154 taken 0% (fallthrough)
+branch 155 taken 100%
+branch 156 taken 0% (fallthrough)
+branch 157 taken 100%
+branch 158 taken 0% (fallthrough)
+branch 159 taken 100%
+branch 160 never executed (fallthrough)
+branch 161 never executed
+branch 162 never executed (fallthrough)
+branch 163 never executed
+branch 164 never executed (fallthrough)
+branch 165 never executed
+branch 166 taken 0% (fallthrough)
+branch 167 taken 100%
+branch 168 taken 0% (fallthrough)
+branch 169 taken 100%
+branch 170 never executed (fallthrough)
+branch 171 never executed
+branch 172 never executed (fallthrough)
+branch 173 never executed
+branch 174 never executed (fallthrough)
+branch 175 never executed
+branch 176 never executed (fallthrough)
+branch 177 never executed
+branch 178 taken 0% (fallthrough)
+branch 179 taken 100%
+branch 180 taken 0% (fallthrough)
+branch 181 taken 100%
+branch 182 taken 0% (fallthrough)
+branch 183 taken 100%
+branch 184 taken 0% (fallthrough)
+branch 185 taken 100%
+branch 186 taken 0% (fallthrough)
+branch 187 taken 100%
+branch 188 never executed (fallthrough)
+branch 189 never executed
+branch 190 taken 0% (fallthrough)
+branch 191 taken 100%
+branch 192 never executed (fallthrough)
+branch 193 never executed
+branch 194 never executed (fallthrough)
+branch 195 never executed
+branch 196 taken 0% (fallthrough)
+branch 197 taken 100%
+branch 198 never executed (fallthrough)
+branch 199 never executed
+branch 200 never executed (fallthrough)
+branch 201 never executed
+branch 202 never executed (fallthrough)
+branch 203 never executed
+branch 204 never executed (fallthrough)
+branch 205 never executed
+branch 206 never executed (fallthrough)
+branch 207 never executed
+branch 208 never executed (fallthrough)
+branch 209 never executed
+branch 210 never executed (fallthrough)
+branch 211 never executed
+branch 212 taken 0% (fallthrough)
+branch 213 taken 100%
+branch 214 never executed (fallthrough)
+branch 215 never executed
+branch 216 taken 0% (fallthrough)
+branch 217 taken 100%
+branch 218 never executed (fallthrough)
+branch 219 never executed
+branch 220 never executed (fallthrough)
+branch 221 never executed
+branch 222 taken 0% (fallthrough)
+branch 223 taken 100%
+branch 224 taken 0% (fallthrough)
+branch 225 taken 100%
+branch 226 taken 0% (fallthrough)
+branch 227 taken 100%
+branch 228 taken 0% (fallthrough)
+branch 229 taken 100%
+branch 230 taken 0% (fallthrough)
+branch 231 taken 100%
+branch 232 taken 0% (fallthrough)
+branch 233 taken 100%
+branch 234 never executed (fallthrough)
+branch 235 never executed
+branch 236 never executed (fallthrough)
+branch 237 never executed
+branch 238 taken 0% (fallthrough)
+branch 239 taken 100%
+branch 240 taken 0% (fallthrough)
+branch 241 taken 100%
+branch 242 taken 0% (fallthrough)
+branch 243 taken 100%
+branch 244 never executed (fallthrough)
+branch 245 never executed
+branch 246 never executed (fallthrough)
+branch 247 never executed
+branch 248 never executed (fallthrough)
+branch 249 never executed
+branch 250 never executed (fallthrough)
+branch 251 never executed
+branch 252 taken 0% (fallthrough)
+branch 253 taken 100%
+branch 254 taken 0% (fallthrough)
+branch 255 taken 100%
+branch 256 taken 0% (fallthrough)
+branch 257 taken 100%
+branch 258 never executed (fallthrough)
+branch 259 never executed
+branch 260 taken 0% (fallthrough)
+branch 261 taken 100%
+branch 262 never executed (fallthrough)
+branch 263 never executed
+branch 264 taken 0% (fallthrough)
+branch 265 taken 100%
+branch 266 taken 0% (fallthrough)
+branch 267 taken 100%
+branch 268 taken 0% (fallthrough)
+branch 269 taken 100%
+branch 270 taken 0% (fallthrough)
+branch 271 taken 100%
+branch 272 never executed (fallthrough)
+branch 273 never executed
+branch 274 never executed (fallthrough)
+branch 275 never executed
+branch 276 never executed (fallthrough)
+branch 277 never executed
+branch 278 never executed (fallthrough)
+branch 279 never executed
+branch 280 never executed (fallthrough)
+branch 281 never executed
+branch 282 taken 0% (fallthrough)
+branch 283 taken 100%
+branch 284 taken 0% (fallthrough)
+branch 285 taken 100%
+branch 286 taken 0% (fallthrough)
+branch 287 taken 100%
+branch 288 taken 0% (fallthrough)
+branch 289 taken 100%
+branch 290 taken 0% (fallthrough)
+branch 291 taken 100%
+branch 292 taken 0% (fallthrough)
+branch 293 taken 100%
+branch 294 never executed (fallthrough)
+branch 295 never executed
+branch 296 taken 0% (fallthrough)
+branch 297 taken 100%
+branch 298 taken 0% (fallthrough)
+branch 299 taken 100%
+branch 300 taken 0% (fallthrough)
+branch 301 taken 100%
+branch 302 taken 0% (fallthrough)
+branch 303 taken 100%
+branch 304 taken 0% (fallthrough)
+branch 305 taken 100%
+branch 306 never executed (fallthrough)
+branch 307 never executed
+branch 308 taken 0% (fallthrough)
+branch 309 taken 100%
+branch 310 taken 0% (fallthrough)
+branch 311 taken 100%
+branch 312 taken 0% (fallthrough)
+branch 313 taken 100%
+branch 314 taken 0% (fallthrough)
+branch 315 taken 100%
+branch 316 taken 0% (fallthrough)
+branch 317 taken 100%
+branch 318 taken 0% (fallthrough)
+branch 319 taken 100%
+branch 320 taken 0% (fallthrough)
+branch 321 taken 100%
+branch 322 taken 0% (fallthrough)
+branch 323 taken 100%
+branch 324 taken 0% (fallthrough)
+branch 325 taken 100%
+branch 326 taken 0% (fallthrough)
+branch 327 taken 100%
+branch 328 taken 0% (fallthrough)
+branch 329 taken 100%
+branch 330 taken 0% (fallthrough)
+branch 331 taken 100%
+branch 332 taken 0% (fallthrough)
+branch 333 taken 100%
+branch 334 taken 0% (fallthrough)
+branch 335 taken 100%
+branch 336 taken 0% (fallthrough)
+branch 337 taken 100%
+branch 338 taken 0% (fallthrough)
+branch 339 taken 100%
+branch 340 taken 0% (fallthrough)
+branch 341 taken 100%
+branch 342 taken 0% (fallthrough)
+branch 343 taken 100%
+branch 344 taken 0% (fallthrough)
+branch 345 taken 100%
+branch 346 taken 0% (fallthrough)
+branch 347 taken 100%
+branch 348 taken 0% (fallthrough)
+branch 349 taken 100%
+branch 350 taken 0% (fallthrough)
+branch 351 taken 100%
+branch 352 taken 0% (fallthrough)
+branch 353 taken 100%
+branch 354 taken 0% (fallthrough)
+branch 355 taken 100%
+branch 356 taken 0% (fallthrough)
+branch 357 taken 100%
+branch 358 taken 0% (fallthrough)
+branch 359 taken 100%
+branch 360 never executed (fallthrough)
+branch 361 never executed
+branch 362 taken 0% (fallthrough)
+branch 363 taken 100%
+branch 364 taken 0% (fallthrough)
+branch 365 taken 100%
+branch 366 taken 0% (fallthrough)
+branch 367 taken 100%
+branch 368 taken 0% (fallthrough)
+branch 369 taken 100%
+branch 370 taken 0% (fallthrough)
+branch 371 taken 100%
+branch 372 taken 0% (fallthrough)
+branch 373 taken 100%
+branch 374 taken 0% (fallthrough)
+branch 375 taken 100%
+branch 376 taken 0% (fallthrough)
+branch 377 taken 100%
+branch 378 taken 0% (fallthrough)
+branch 379 taken 100%
+branch 380 taken 0% (fallthrough)
+branch 381 taken 100%
+branch 382 taken 0% (fallthrough)
+branch 383 taken 100%
+branch 384 taken 0% (fallthrough)
+branch 385 taken 100%
+branch 386 taken 0% (fallthrough)
+branch 387 taken 100%
+branch 388 never executed (fallthrough)
+branch 389 never executed
+branch 390 taken 0% (fallthrough)
+branch 391 taken 100%
+branch 392 taken 0% (fallthrough)
+branch 393 taken 100%
+branch 394 taken 0% (fallthrough)
+branch 395 taken 100%
+branch 396 taken 0% (fallthrough)
+branch 397 taken 100%
+branch 398 taken 0% (fallthrough)
+branch 399 taken 100%
+branch 400 taken 0% (fallthrough)
+branch 401 taken 100%
+branch 402 taken 0% (fallthrough)
+branch 403 taken 100%
+branch 404 taken 0% (fallthrough)
+branch 405 taken 100%
+branch 406 taken 0% (fallthrough)
+branch 407 taken 100%
+branch 408 never executed (fallthrough)
+branch 409 never executed
+branch 410 taken 0% (fallthrough)
+branch 411 taken 100%
+branch 412 taken 0% (fallthrough)
+branch 413 taken 100%
+branch 414 taken 0% (fallthrough)
+branch 415 taken 100%
+branch 416 taken 0% (fallthrough)
+branch 417 taken 100%
+branch 418 never executed (fallthrough)
+branch 419 never executed
+branch 420 taken 0% (fallthrough)
+branch 421 taken 100%
+branch 422 taken 0% (fallthrough)
+branch 423 taken 100%
+branch 424 never executed (fallthrough)
+branch 425 never executed
+branch 426 taken 0% (fallthrough)
+branch 427 taken 100%
+branch 428 taken 0% (fallthrough)
+branch 429 taken 100%
+branch 430 taken 0% (fallthrough)
+branch 431 taken 100%
+branch 432 taken 0% (fallthrough)
+branch 433 taken 100%
+branch 434 taken 0% (fallthrough)
+branch 435 taken 100%
+branch 436 taken 0% (fallthrough)
+branch 437 taken 100%
+branch 438 never executed (fallthrough)
+branch 439 never executed
+branch 440 taken 0% (fallthrough)
+branch 441 taken 100%
+branch 442 taken 0% (fallthrough)
+branch 443 taken 100%
+branch 444 taken 0% (fallthrough)
+branch 445 taken 100%
+branch 446 taken 0% (fallthrough)
+branch 447 taken 100%
+branch 448 taken 0% (fallthrough)
+branch 449 taken 100%
+branch 450 taken 0% (fallthrough)
+branch 451 taken 100%
+branch 452 never executed (fallthrough)
+branch 453 never executed
+branch 454 taken 0% (fallthrough)
+branch 455 taken 100%
+branch 456 taken 0% (fallthrough)
+branch 457 taken 100%
+branch 458 taken 0% (fallthrough)
+branch 459 taken 100%
+branch 460 taken 0% (fallthrough)
+branch 461 taken 100%
+branch 462 taken 0% (fallthrough)
+branch 463 taken 100%
+branch 464 taken 0% (fallthrough)
+branch 465 taken 100%
+branch 466 taken 0% (fallthrough)
+branch 467 taken 100%
+branch 468 taken 0% (fallthrough)
+branch 469 taken 100%
+branch 470 never executed (fallthrough)
+branch 471 never executed
+branch 472 taken 0% (fallthrough)
+branch 473 taken 100%
+branch 474 taken 0% (fallthrough)
+branch 475 taken 100%
+branch 476 taken 0% (fallthrough)
+branch 477 taken 100%
+branch 478 taken 0% (fallthrough)
+branch 479 taken 100%
+branch 480 never executed (fallthrough)
+branch 481 never executed
+branch 482 taken 0% (fallthrough)
+branch 483 taken 100%
+branch 484 taken 0% (fallthrough)
+branch 485 taken 100%
+branch 486 taken 0% (fallthrough)
+branch 487 taken 100%
+branch 488 never executed (fallthrough)
+branch 489 never executed
+branch 490 taken 0% (fallthrough)
+branch 491 taken 100%
+branch 492 taken 0% (fallthrough)
+branch 493 taken 100%
+branch 494 taken 0% (fallthrough)
+branch 495 taken 100%
+branch 496 taken 0% (fallthrough)
+branch 497 taken 100%
+branch 498 never executed (fallthrough)
+branch 499 never executed
+branch 500 taken 0% (fallthrough)
+branch 501 taken 100%
+branch 502 never executed (fallthrough)
+branch 503 never executed
+branch 504 never executed (fallthrough)
+branch 505 never executed
+branch 506 never executed (fallthrough)
+branch 507 never executed
+branch 508 never executed (fallthrough)
+branch 509 never executed
+branch 510 never executed (fallthrough)
+branch 511 never executed
+branch 512 never executed (fallthrough)
+branch 513 never executed
+branch 514 never executed (fallthrough)
+branch 515 never executed
+branch 516 never executed (fallthrough)
+branch 517 never executed
+branch 518 never executed (fallthrough)
+branch 519 never executed
+branch 520 never executed (fallthrough)
+branch 521 never executed
+branch 522 never executed (fallthrough)
+branch 523 never executed
+branch 524 never executed (fallthrough)
+branch 525 never executed
+branch 526 never executed (fallthrough)
+branch 527 never executed
+branch 528 never executed (fallthrough)
+branch 529 never executed
+branch 530 never executed (fallthrough)
+branch 531 never executed
+branch 532 never executed (fallthrough)
+branch 533 never executed
+branch 534 never executed (fallthrough)
+branch 535 never executed
+branch 536 never executed (fallthrough)
+branch 537 never executed
+branch 538 never executed (fallthrough)
+branch 539 never executed
+branch 540 never executed (fallthrough)
+branch 541 never executed
+branch 542 never executed (fallthrough)
+branch 543 never executed
+branch 544 never executed (fallthrough)
+branch 545 never executed
+branch 546 never executed (fallthrough)
+branch 547 never executed
+branch 548 never executed (fallthrough)
+branch 549 never executed
+branch 550 never executed (fallthrough)
+branch 551 never executed
+branch 552 never executed (fallthrough)
+branch 553 never executed
+branch 554 never executed (fallthrough)
+branch 555 never executed
+branch 556 never executed (fallthrough)
+branch 557 never executed
+branch 558 never executed (fallthrough)
+branch 559 never executed
+branch 560 never executed (fallthrough)
+branch 561 never executed
+branch 562 never executed (fallthrough)
+branch 563 never executed
+branch 564 never executed (fallthrough)
+branch 565 never executed
+branch 566 never executed (fallthrough)
+branch 567 never executed
+branch 568 never executed (fallthrough)
+branch 569 never executed
+branch 570 never executed (fallthrough)
+branch 571 never executed
+        -:  190:	  {
+    #####:  191:	    if (__builtin_mul_overflow(__n, sizeof(_Tp), &__n))
+branch  0 never executed (fallthrough)
+branch  1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed
+branch  8 never executed (fallthrough)
+branch  9 never executed
+branch 10 never executed (fallthrough)
+branch 11 never executed
+branch 12 never executed (fallthrough)
+branch 13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed
+branch 16 never executed (fallthrough)
+branch 17 never executed
+branch 18 never executed (fallthrough)
+branch 19 never executed
+branch 20 never executed (fallthrough)
+branch 21 never executed
+branch 22 never executed (fallthrough)
+branch 23 never executed
+branch 24 never executed (fallthrough)
+branch 25 never executed
+branch 26 never executed (fallthrough)
+branch 27 never executed
+branch 28 never executed (fallthrough)
+branch 29 never executed
+branch 30 never executed (fallthrough)
+branch 31 never executed
+branch 32 never executed (fallthrough)
+branch 33 never executed
+branch 34 never executed (fallthrough)
+branch 35 never executed
+branch 36 never executed (fallthrough)
+branch 37 never executed
+branch 38 never executed (fallthrough)
+branch 39 never executed
+branch 40 never executed (fallthrough)
+branch 41 never executed
+branch 42 never executed (fallthrough)
+branch 43 never executed
+branch 44 never executed (fallthrough)
+branch 45 never executed
+branch 46 never executed (fallthrough)
+branch 47 never executed
+branch 48 never executed (fallthrough)
+branch 49 never executed
+branch 50 never executed (fallthrough)
+branch 51 never executed
+branch 52 never executed (fallthrough)
+branch 53 never executed
+branch 54 never executed (fallthrough)
+branch 55 never executed
+branch 56 never executed (fallthrough)
+branch 57 never executed
+branch 58 never executed (fallthrough)
+branch 59 never executed
+branch 60 never executed (fallthrough)
+branch 61 never executed
+branch 62 never executed (fallthrough)
+branch 63 never executed
+branch 64 never executed (fallthrough)
+branch 65 never executed
+branch 66 never executed (fallthrough)
+branch 67 never executed
+branch 68 never executed (fallthrough)
+branch 69 never executed
+branch 70 never executed (fallthrough)
+branch 71 never executed
+branch 72 never executed (fallthrough)
+branch 73 never executed
+branch 74 never executed (fallthrough)
+branch 75 never executed
+branch 76 never executed (fallthrough)
+branch 77 never executed
+branch 78 never executed (fallthrough)
+branch 79 never executed
+branch 80 never executed (fallthrough)
+branch 81 never executed
+branch 82 never executed (fallthrough)
+branch 83 never executed
+branch 84 never executed (fallthrough)
+branch 85 never executed
+branch 86 never executed (fallthrough)
+branch 87 never executed
+branch 88 never executed (fallthrough)
+branch 89 never executed
+branch 90 never executed (fallthrough)
+branch 91 never executed
+branch 92 never executed (fallthrough)
+branch 93 never executed
+branch 94 never executed (fallthrough)
+branch 95 never executed
+branch 96 never executed (fallthrough)
+branch 97 never executed
+branch 98 never executed (fallthrough)
+branch 99 never executed
+branch 100 never executed (fallthrough)
+branch 101 never executed
+branch 102 never executed (fallthrough)
+branch 103 never executed
+branch 104 never executed (fallthrough)
+branch 105 never executed
+branch 106 never executed (fallthrough)
+branch 107 never executed
+branch 108 never executed (fallthrough)
+branch 109 never executed
+branch 110 never executed (fallthrough)
+branch 111 never executed
+branch 112 never executed (fallthrough)
+branch 113 never executed
+branch 114 never executed (fallthrough)
+branch 115 never executed
+branch 116 never executed (fallthrough)
+branch 117 never executed
+branch 118 never executed (fallthrough)
+branch 119 never executed
+branch 120 never executed (fallthrough)
+branch 121 never executed
+branch 122 never executed (fallthrough)
+branch 123 never executed
+branch 124 never executed (fallthrough)
+branch 125 never executed
+branch 126 never executed (fallthrough)
+branch 127 never executed
+branch 128 never executed (fallthrough)
+branch 129 never executed
+branch 130 never executed (fallthrough)
+branch 131 never executed
+branch 132 never executed (fallthrough)
+branch 133 never executed
+branch 134 never executed (fallthrough)
+branch 135 never executed
+branch 136 never executed (fallthrough)
+branch 137 never executed
+branch 138 never executed (fallthrough)
+branch 139 never executed
+branch 140 never executed (fallthrough)
+branch 141 never executed
+branch 142 never executed (fallthrough)
+branch 143 never executed
+branch 144 never executed (fallthrough)
+branch 145 never executed
+branch 146 never executed (fallthrough)
+branch 147 never executed
+branch 148 never executed (fallthrough)
+branch 149 never executed
+branch 150 never executed (fallthrough)
+branch 151 never executed
+branch 152 never executed (fallthrough)
+branch 153 never executed
+branch 154 never executed (fallthrough)
+branch 155 never executed
+branch 156 never executed (fallthrough)
+branch 157 never executed
+branch 158 never executed (fallthrough)
+branch 159 never executed
+branch 160 never executed (fallthrough)
+branch 161 never executed
+branch 162 never executed (fallthrough)
+branch 163 never executed
+branch 164 never executed (fallthrough)
+branch 165 never executed
+branch 166 never executed (fallthrough)
+branch 167 never executed
+branch 168 never executed (fallthrough)
+branch 169 never executed
+branch 170 never executed (fallthrough)
+branch 171 never executed
+branch 172 never executed (fallthrough)
+branch 173 never executed
+branch 174 never executed (fallthrough)
+branch 175 never executed
+branch 176 never executed (fallthrough)
+branch 177 never executed
+branch 178 never executed (fallthrough)
+branch 179 never executed
+branch 180 never executed (fallthrough)
+branch 181 never executed
+branch 182 never executed (fallthrough)
+branch 183 never executed
+branch 184 never executed (fallthrough)
+branch 185 never executed
+branch 186 never executed (fallthrough)
+branch 187 never executed
+branch 188 never executed (fallthrough)
+branch 189 never executed
+branch 190 never executed (fallthrough)
+branch 191 never executed
+branch 192 never executed (fallthrough)
+branch 193 never executed
+branch 194 never executed (fallthrough)
+branch 195 never executed
+branch 196 never executed (fallthrough)
+branch 197 never executed
+branch 198 never executed (fallthrough)
+branch 199 never executed
+branch 200 never executed (fallthrough)
+branch 201 never executed
+branch 202 never executed (fallthrough)
+branch 203 never executed
+branch 204 never executed (fallthrough)
+branch 205 never executed
+branch 206 never executed (fallthrough)
+branch 207 never executed
+branch 208 never executed (fallthrough)
+branch 209 never executed
+branch 210 never executed (fallthrough)
+branch 211 never executed
+branch 212 never executed (fallthrough)
+branch 213 never executed
+branch 214 never executed (fallthrough)
+branch 215 never executed
+branch 216 never executed (fallthrough)
+branch 217 never executed
+branch 218 never executed (fallthrough)
+branch 219 never executed
+branch 220 never executed (fallthrough)
+branch 221 never executed
+branch 222 never executed (fallthrough)
+branch 223 never executed
+branch 224 never executed (fallthrough)
+branch 225 never executed
+branch 226 never executed (fallthrough)
+branch 227 never executed
+branch 228 never executed (fallthrough)
+branch 229 never executed
+branch 230 never executed (fallthrough)
+branch 231 never executed
+branch 232 never executed (fallthrough)
+branch 233 never executed
+branch 234 never executed (fallthrough)
+branch 235 never executed
+branch 236 never executed (fallthrough)
+branch 237 never executed
+branch 238 never executed (fallthrough)
+branch 239 never executed
+branch 240 never executed (fallthrough)
+branch 241 never executed
+branch 242 never executed (fallthrough)
+branch 243 never executed
+branch 244 never executed (fallthrough)
+branch 245 never executed
+branch 246 never executed (fallthrough)
+branch 247 never executed
+branch 248 never executed (fallthrough)
+branch 249 never executed
+branch 250 never executed (fallthrough)
+branch 251 never executed
+branch 252 never executed (fallthrough)
+branch 253 never executed
+branch 254 never executed (fallthrough)
+branch 255 never executed
+branch 256 never executed (fallthrough)
+branch 257 never executed
+branch 258 never executed (fallthrough)
+branch 259 never executed
+branch 260 never executed (fallthrough)
+branch 261 never executed
+branch 262 never executed (fallthrough)
+branch 263 never executed
+branch 264 never executed (fallthrough)
+branch 265 never executed
+branch 266 never executed (fallthrough)
+branch 267 never executed
+branch 268 never executed (fallthrough)
+branch 269 never executed
+branch 270 never executed (fallthrough)
+branch 271 never executed
+branch 272 never executed (fallthrough)
+branch 273 never executed
+branch 274 never executed (fallthrough)
+branch 275 never executed
+branch 276 never executed (fallthrough)
+branch 277 never executed
+branch 278 never executed (fallthrough)
+branch 279 never executed
+branch 280 never executed (fallthrough)
+branch 281 never executed
+branch 282 never executed (fallthrough)
+branch 283 never executed
+branch 284 never executed (fallthrough)
+branch 285 never executed
+branch 286 never executed (fallthrough)
+branch 287 never executed
+branch 288 never executed (fallthrough)
+branch 289 never executed
+branch 290 never executed (fallthrough)
+branch 291 never executed
+branch 292 never executed (fallthrough)
+branch 293 never executed
+branch 294 never executed (fallthrough)
+branch 295 never executed
+branch 296 never executed (fallthrough)
+branch 297 never executed
+branch 298 never executed (fallthrough)
+branch 299 never executed
+branch 300 never executed (fallthrough)
+branch 301 never executed
+branch 302 never executed (fallthrough)
+branch 303 never executed
+branch 304 never executed (fallthrough)
+branch 305 never executed
+branch 306 never executed (fallthrough)
+branch 307 never executed
+branch 308 never executed (fallthrough)
+branch 309 never executed
+branch 310 never executed (fallthrough)
+branch 311 never executed
+branch 312 never executed (fallthrough)
+branch 313 never executed
+branch 314 never executed (fallthrough)
+branch 315 never executed
+branch 316 never executed (fallthrough)
+branch 317 never executed
+branch 318 never executed (fallthrough)
+branch 319 never executed
+branch 320 never executed (fallthrough)
+branch 321 never executed
+branch 322 never executed (fallthrough)
+branch 323 never executed
+branch 324 never executed (fallthrough)
+branch 325 never executed
+branch 326 never executed (fallthrough)
+branch 327 never executed
+branch 328 never executed (fallthrough)
+branch 329 never executed
+branch 330 never executed (fallthrough)
+branch 331 never executed
+branch 332 never executed (fallthrough)
+branch 333 never executed
+branch 334 never executed (fallthrough)
+branch 335 never executed
+branch 336 never executed (fallthrough)
+branch 337 never executed
+branch 338 never executed (fallthrough)
+branch 339 never executed
+branch 340 never executed (fallthrough)
+branch 341 never executed
+branch 342 never executed (fallthrough)
+branch 343 never executed
+branch 344 never executed (fallthrough)
+branch 345 never executed
+branch 346 never executed (fallthrough)
+branch 347 never executed
+branch 348 never executed (fallthrough)
+branch 349 never executed
+branch 350 never executed (fallthrough)
+branch 351 never executed
+branch 352 never executed (fallthrough)
+branch 353 never executed
+branch 354 never executed (fallthrough)
+branch 355 never executed
+branch 356 never executed (fallthrough)
+branch 357 never executed
+branch 358 never executed (fallthrough)
+branch 359 never executed
+branch 360 never executed (fallthrough)
+branch 361 never executed
+branch 362 never executed (fallthrough)
+branch 363 never executed
+branch 364 never executed (fallthrough)
+branch 365 never executed
+branch 366 never executed (fallthrough)
+branch 367 never executed
+branch 368 never executed (fallthrough)
+branch 369 never executed
+branch 370 never executed (fallthrough)
+branch 371 never executed
+branch 372 never executed (fallthrough)
+branch 373 never executed
+branch 374 never executed (fallthrough)
+branch 375 never executed
+branch 376 never executed (fallthrough)
+branch 377 never executed
+branch 378 never executed (fallthrough)
+branch 379 never executed
+branch 380 never executed (fallthrough)
+branch 381 never executed
+branch 382 never executed (fallthrough)
+branch 383 never executed
+branch 384 never executed (fallthrough)
+branch 385 never executed
+branch 386 never executed (fallthrough)
+branch 387 never executed
+branch 388 never executed (fallthrough)
+branch 389 never executed
+branch 390 never executed (fallthrough)
+branch 391 never executed
+branch 392 never executed (fallthrough)
+branch 393 never executed
+branch 394 never executed (fallthrough)
+branch 395 never executed
+branch 396 never executed (fallthrough)
+branch 397 never executed
+branch 398 never executed (fallthrough)
+branch 399 never executed
+branch 400 never executed (fallthrough)
+branch 401 never executed
+branch 402 never executed (fallthrough)
+branch 403 never executed
+branch 404 never executed (fallthrough)
+branch 405 never executed
+branch 406 never executed (fallthrough)
+branch 407 never executed
+branch 408 never executed (fallthrough)
+branch 409 never executed
+branch 410 never executed (fallthrough)
+branch 411 never executed
+branch 412 never executed (fallthrough)
+branch 413 never executed
+branch 414 never executed (fallthrough)
+branch 415 never executed
+branch 416 never executed (fallthrough)
+branch 417 never executed
+branch 418 never executed (fallthrough)
+branch 419 never executed
+branch 420 never executed (fallthrough)
+branch 421 never executed
+branch 422 never executed (fallthrough)
+branch 423 never executed
+branch 424 never executed (fallthrough)
+branch 425 never executed
+branch 426 never executed (fallthrough)
+branch 427 never executed
+branch 428 never executed (fallthrough)
+branch 429 never executed
+branch 430 never executed (fallthrough)
+branch 431 never executed
+branch 432 never executed (fallthrough)
+branch 433 never executed
+branch 434 never executed (fallthrough)
+branch 435 never executed
+branch 436 never executed (fallthrough)
+branch 437 never executed
+branch 438 never executed (fallthrough)
+branch 439 never executed
+branch 440 never executed (fallthrough)
+branch 441 never executed
+branch 442 never executed (fallthrough)
+branch 443 never executed
+branch 444 never executed (fallthrough)
+branch 445 never executed
+branch 446 never executed (fallthrough)
+branch 447 never executed
+branch 448 never executed (fallthrough)
+branch 449 never executed
+branch 450 never executed (fallthrough)
+branch 451 never executed
+branch 452 never executed (fallthrough)
+branch 453 never executed
+branch 454 never executed (fallthrough)
+branch 455 never executed
+branch 456 never executed (fallthrough)
+branch 457 never executed
+branch 458 never executed (fallthrough)
+branch 459 never executed
+branch 460 never executed (fallthrough)
+branch 461 never executed
+branch 462 never executed (fallthrough)
+branch 463 never executed
+branch 464 never executed (fallthrough)
+branch 465 never executed
+branch 466 never executed (fallthrough)
+branch 467 never executed
+branch 468 never executed (fallthrough)
+branch 469 never executed
+branch 470 never executed (fallthrough)
+branch 471 never executed
+branch 472 never executed (fallthrough)
+branch 473 never executed
+branch 474 never executed (fallthrough)
+branch 475 never executed
+branch 476 never executed (fallthrough)
+branch 477 never executed
+branch 478 never executed (fallthrough)
+branch 479 never executed
+branch 480 never executed (fallthrough)
+branch 481 never executed
+branch 482 never executed (fallthrough)
+branch 483 never executed
+branch 484 never executed (fallthrough)
+branch 485 never executed
+branch 486 never executed (fallthrough)
+branch 487 never executed
+branch 488 never executed (fallthrough)
+branch 489 never executed
+branch 490 never executed (fallthrough)
+branch 491 never executed
+branch 492 never executed (fallthrough)
+branch 493 never executed
+branch 494 never executed (fallthrough)
+branch 495 never executed
+branch 496 never executed (fallthrough)
+branch 497 never executed
+branch 498 never executed (fallthrough)
+branch 499 never executed
+branch 500 never executed (fallthrough)
+branch 501 never executed
+branch 502 never executed (fallthrough)
+branch 503 never executed
+branch 504 never executed (fallthrough)
+branch 505 never executed
+branch 506 never executed (fallthrough)
+branch 507 never executed
+branch 508 never executed (fallthrough)
+branch 509 never executed
+branch 510 never executed (fallthrough)
+branch 511 never executed
+branch 512 never executed (fallthrough)
+branch 513 never executed
+branch 514 never executed (fallthrough)
+branch 515 never executed
+branch 516 never executed (fallthrough)
+branch 517 never executed
+branch 518 never executed (fallthrough)
+branch 519 never executed
+branch 520 never executed (fallthrough)
+branch 521 never executed
+branch 522 never executed (fallthrough)
+branch 523 never executed
+branch 524 never executed (fallthrough)
+branch 525 never executed
+branch 526 never executed (fallthrough)
+branch 527 never executed
+branch 528 never executed (fallthrough)
+branch 529 never executed
+branch 530 never executed (fallthrough)
+branch 531 never executed
+branch 532 never executed (fallthrough)
+branch 533 never executed
+branch 534 never executed (fallthrough)
+branch 535 never executed
+branch 536 never executed (fallthrough)
+branch 537 never executed
+branch 538 never executed (fallthrough)
+branch 539 never executed
+branch 540 never executed (fallthrough)
+branch 541 never executed
+branch 542 never executed (fallthrough)
+branch 543 never executed
+branch 544 never executed (fallthrough)
+branch 545 never executed
+branch 546 never executed (fallthrough)
+branch 547 never executed
+branch 548 never executed (fallthrough)
+branch 549 never executed
+branch 550 never executed (fallthrough)
+branch 551 never executed
+branch 552 never executed (fallthrough)
+branch 553 never executed
+branch 554 never executed (fallthrough)
+branch 555 never executed
+branch 556 never executed (fallthrough)
+branch 557 never executed
+branch 558 never executed (fallthrough)
+branch 559 never executed
+branch 560 never executed (fallthrough)
+branch 561 never executed
+branch 562 never executed (fallthrough)
+branch 563 never executed
+branch 564 never executed (fallthrough)
+branch 565 never executed
+branch 566 never executed (fallthrough)
+branch 567 never executed
+branch 568 never executed (fallthrough)
+branch 569 never executed
+branch 570 never executed (fallthrough)
+branch 571 never executed
+    #####:  192:	      std::__throw_bad_array_new_length();
+call    0 never executed
+call    1 never executed
+call    2 never executed
+call    3 never executed
+call    4 never executed
+call    5 never executed
+call    6 never executed
+call    7 never executed
+call    8 never executed
+call    9 never executed
+call   10 never executed
+call   11 never executed
+call   12 never executed
+call   13 never executed
+call   14 never executed
+call   15 never executed
+call   16 never executed
+call   17 never executed
+call   18 never executed
+call   19 never executed
+call   20 never executed
+call   21 never executed
+call   22 never executed
+call   23 never executed
+call   24 never executed
+call   25 never executed
+call   26 never executed
+call   27 never executed
+call   28 never executed
+call   29 never executed
+call   30 never executed
+call   31 never executed
+call   32 never executed
+call   33 never executed
+call   34 never executed
+call   35 never executed
+call   36 never executed
+call   37 never executed
+call   38 never executed
+call   39 never executed
+call   40 never executed
+call   41 never executed
+call   42 never executed
+call   43 never executed
+call   44 never executed
+call   45 never executed
+call   46 never executed
+call   47 never executed
+call   48 never executed
+call   49 never executed
+call   50 never executed
+call   51 never executed
+call   52 never executed
+call   53 never executed
+call   54 never executed
+call   55 never executed
+call   56 never executed
+call   57 never executed
+call   58 never executed
+call   59 never executed
+call   60 never executed
+call   61 never executed
+call   62 never executed
+call   63 never executed
+call   64 never executed
+call   65 never executed
+call   66 never executed
+call   67 never executed
+call   68 never executed
+call   69 never executed
+call   70 never executed
+call   71 never executed
+call   72 never executed
+call   73 never executed
+call   74 never executed
+call   75 never executed
+call   76 never executed
+call   77 never executed
+call   78 never executed
+call   79 never executed
+call   80 never executed
+call   81 never executed
+call   82 never executed
+call   83 never executed
+call   84 never executed
+call   85 never executed
+call   86 never executed
+call   87 never executed
+call   88 never executed
+call   89 never executed
+call   90 never executed
+call   91 never executed
+call   92 never executed
+call   93 never executed
+call   94 never executed
+call   95 never executed
+call   96 never executed
+call   97 never executed
+call   98 never executed
+call   99 never executed
+call   100 never executed
+call   101 never executed
+call   102 never executed
+call   103 never executed
+call   104 never executed
+call   105 never executed
+call   106 never executed
+call   107 never executed
+call   108 never executed
+call   109 never executed
+call   110 never executed
+call   111 never executed
+call   112 never executed
+call   113 never executed
+call   114 never executed
+call   115 never executed
+call   116 never executed
+call   117 never executed
+call   118 never executed
+call   119 never executed
+call   120 never executed
+call   121 never executed
+call   122 never executed
+call   123 never executed
+call   124 never executed
+call   125 never executed
+call   126 never executed
+call   127 never executed
+call   128 never executed
+call   129 never executed
+call   130 never executed
+call   131 never executed
+call   132 never executed
+call   133 never executed
+call   134 never executed
+call   135 never executed
+call   136 never executed
+call   137 never executed
+call   138 never executed
+call   139 never executed
+call   140 never executed
+call   141 never executed
+call   142 never executed
+call   143 never executed
+call   144 never executed
+call   145 never executed
+call   146 never executed
+call   147 never executed
+call   148 never executed
+call   149 never executed
+call   150 never executed
+call   151 never executed
+call   152 never executed
+call   153 never executed
+call   154 never executed
+call   155 never executed
+call   156 never executed
+call   157 never executed
+call   158 never executed
+call   159 never executed
+call   160 never executed
+call   161 never executed
+call   162 never executed
+call   163 never executed
+call   164 never executed
+call   165 never executed
+call   166 never executed
+call   167 never executed
+call   168 never executed
+call   169 never executed
+call   170 never executed
+call   171 never executed
+call   172 never executed
+call   173 never executed
+call   174 never executed
+call   175 never executed
+call   176 never executed
+call   177 never executed
+call   178 never executed
+call   179 never executed
+call   180 never executed
+call   181 never executed
+call   182 never executed
+call   183 never executed
+call   184 never executed
+call   185 never executed
+call   186 never executed
+call   187 never executed
+call   188 never executed
+call   189 never executed
+call   190 never executed
+call   191 never executed
+call   192 never executed
+call   193 never executed
+call   194 never executed
+call   195 never executed
+call   196 never executed
+call   197 never executed
+call   198 never executed
+call   199 never executed
+call   200 never executed
+call   201 never executed
+call   202 never executed
+call   203 never executed
+call   204 never executed
+call   205 never executed
+call   206 never executed
+call   207 never executed
+call   208 never executed
+call   209 never executed
+call   210 never executed
+call   211 never executed
+call   212 never executed
+call   213 never executed
+call   214 never executed
+call   215 never executed
+call   216 never executed
+call   217 never executed
+call   218 never executed
+call   219 never executed
+call   220 never executed
+call   221 never executed
+call   222 never executed
+call   223 never executed
+call   224 never executed
+call   225 never executed
+call   226 never executed
+call   227 never executed
+call   228 never executed
+call   229 never executed
+call   230 never executed
+call   231 never executed
+call   232 never executed
+call   233 never executed
+call   234 never executed
+call   235 never executed
+call   236 never executed
+call   237 never executed
+call   238 never executed
+call   239 never executed
+call   240 never executed
+call   241 never executed
+call   242 never executed
+call   243 never executed
+call   244 never executed
+call   245 never executed
+call   246 never executed
+call   247 never executed
+call   248 never executed
+call   249 never executed
+call   250 never executed
+call   251 never executed
+call   252 never executed
+call   253 never executed
+call   254 never executed
+call   255 never executed
+call   256 never executed
+call   257 never executed
+call   258 never executed
+call   259 never executed
+call   260 never executed
+call   261 never executed
+call   262 never executed
+call   263 never executed
+call   264 never executed
+call   265 never executed
+call   266 never executed
+call   267 never executed
+call   268 never executed
+call   269 never executed
+call   270 never executed
+call   271 never executed
+call   272 never executed
+call   273 never executed
+call   274 never executed
+call   275 never executed
+call   276 never executed
+call   277 never executed
+call   278 never executed
+call   279 never executed
+call   280 never executed
+call   281 never executed
+call   282 never executed
+call   283 never executed
+call   284 never executed
+call   285 never executed
+    #####:  193:	    return static_cast<_Tp*>(::operator new(__n));
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+call    5 never executed
+call    6 never executed
+call    7 never executed
+call    8 never executed
+call    9 never executed
+call   10 never executed
+call   11 never executed
+call   12 never executed
+call   13 never executed
+call   14 never executed
+call   15 never executed
+call   16 never executed
+call   17 never executed
+branch 18 never executed (fallthrough)
+branch 19 never executed (throw)
+call   20 never executed
+call   21 never executed
+call   22 never executed
+call   23 never executed
+call   24 never executed
+call   25 never executed
+call   26 never executed
+call   27 never executed
+call   28 never executed
+call   29 never executed
+call   30 never executed
+call   31 never executed
+call   32 never executed
+call   33 never executed
+call   34 never executed
+branch 35 never executed (fallthrough)
+branch 36 never executed (throw)
+call   37 never executed
+branch 38 never executed (fallthrough)
+branch 39 never executed (throw)
+call   40 never executed
+branch 41 never executed (fallthrough)
+branch 42 never executed (throw)
+call   43 never executed
+call   44 never executed
+call   45 never executed
+call   46 never executed
+call   47 never executed
+call   48 never executed
+call   49 never executed
+call   50 never executed
+call   51 never executed
+call   52 never executed
+call   53 never executed
+branch 54 never executed (fallthrough)
+branch 55 never executed (throw)
+call   56 never executed
+call   57 never executed
+branch 58 never executed (fallthrough)
+branch 59 never executed (throw)
+call   60 never executed
+call   61 never executed
+call   62 never executed
+call   63 never executed
+call   64 never executed
+call   65 never executed
+branch 66 never executed (fallthrough)
+branch 67 never executed (throw)
+call   68 never executed
+call   69 never executed
+call   70 never executed
+call   71 never executed
+call   72 never executed
+call   73 never executed
+call   74 never executed
+call   75 never executed
+call   76 never executed
+call   77 never executed
+call   78 never executed
+call   79 never executed
+call   80 never executed
+branch 81 never executed (fallthrough)
+branch 82 never executed (throw)
+call   83 never executed
+call   84 never executed
+call   85 never executed
+call   86 never executed
+call   87 never executed
+call   88 never executed
+call   89 never executed
+call   90 never executed
+call   91 never executed
+call   92 never executed
+call   93 never executed
+call   94 never executed
+call   95 never executed
+branch 96 never executed (fallthrough)
+branch 97 never executed (throw)
+call   98 never executed
+call   99 never executed
+call   100 never executed
+call   101 never executed
+call   102 never executed
+call   103 never executed
+call   104 never executed
+call   105 never executed
+call   106 never executed
+call   107 never executed
+call   108 never executed
+call   109 never executed
+branch 110 never executed (fallthrough)
+branch 111 never executed (throw)
+call   112 never executed
+call   113 never executed
+branch 114 never executed (fallthrough)
+branch 115 never executed (throw)
+call   116 never executed
+call   117 never executed
+call   118 never executed
+call   119 never executed
+call   120 never executed
+call   121 never executed
+call   122 never executed
+call   123 never executed
+call   124 never executed
+call   125 never executed
+call   126 never executed
+call   127 never executed
+call   128 never executed
+call   129 never executed
+call   130 never executed
+call   131 never executed
+call   132 never executed
+call   133 never executed
+call   134 never executed
+call   135 never executed
+call   136 never executed
+call   137 never executed
+call   138 never executed
+call   139 never executed
+call   140 never executed
+call   141 never executed
+call   142 never executed
+call   143 never executed
+branch 144 never executed (fallthrough)
+branch 145 never executed (throw)
+call   146 never executed
+call   147 never executed
+call   148 never executed
+call   149 never executed
+call   150 never executed
+call   151 never executed
+call   152 never executed
+call   153 never executed
+call   154 never executed
+call   155 never executed
+call   156 never executed
+call   157 never executed
+call   158 never executed
+call   159 never executed
+call   160 never executed
+call   161 never executed
+branch 162 never executed (fallthrough)
+branch 163 never executed (throw)
+call   164 never executed
+call   165 never executed
+call   166 never executed
+call   167 never executed
+call   168 never executed
+call   169 never executed
+call   170 never executed
+call   171 never executed
+call   172 never executed
+call   173 never executed
+call   174 never executed
+call   175 never executed
+call   176 never executed
+call   177 never executed
+call   178 never executed
+call   179 never executed
+call   180 never executed
+call   181 never executed
+call   182 never executed
+call   183 never executed
+call   184 never executed
+call   185 never executed
+branch 186 never executed (fallthrough)
+branch 187 never executed (throw)
+call   188 never executed
+call   189 never executed
+branch 190 never executed (fallthrough)
+branch 191 never executed (throw)
+call   192 never executed
+call   193 never executed
+call   194 never executed
+call   195 never executed
+call   196 never executed
+call   197 never executed
+call   198 never executed
+call   199 never executed
+call   200 never executed
+call   201 never executed
+call   202 never executed
+call   203 never executed
+call   204 never executed
+call   205 never executed
+call   206 never executed
+call   207 never executed
+call   208 never executed
+call   209 never executed
+call   210 never executed
+call   211 never executed
+call   212 never executed
+call   213 never executed
+call   214 never executed
+call   215 never executed
+call   216 never executed
+call   217 never executed
+call   218 never executed
+call   219 never executed
+call   220 never executed
+call   221 never executed
+call   222 never executed
+call   223 never executed
+call   224 never executed
+call   225 never executed
+call   226 never executed
+call   227 never executed
+call   228 never executed
+call   229 never executed
+call   230 never executed
+call   231 never executed
+call   232 never executed
+call   233 never executed
+call   234 never executed
+call   235 never executed
+call   236 never executed
+call   237 never executed
+call   238 never executed
+call   239 never executed
+call   240 never executed
+call   241 never executed
+call   242 never executed
+call   243 never executed
+call   244 never executed
+call   245 never executed
+branch 246 never executed (fallthrough)
+branch 247 never executed (throw)
+call   248 never executed
+call   249 never executed
+call   250 never executed
+call   251 never executed
+call   252 never executed
+call   253 never executed
+call   254 never executed
+call   255 never executed
+call   256 never executed
+call   257 never executed
+call   258 never executed
+call   259 never executed
+call   260 never executed
+call   261 never executed
+branch 262 never executed (fallthrough)
+branch 263 never executed (throw)
+call   264 never executed
+branch 265 never executed (fallthrough)
+branch 266 never executed (throw)
+call   267 never executed
+call   268 never executed
+call   269 never executed
+call   270 never executed
+call   271 never executed
+call   272 never executed
+call   273 never executed
+call   274 never executed
+call   275 never executed
+call   276 never executed
+call   277 never executed
+call   278 never executed
+call   279 never executed
+call   280 never executed
+call   281 never executed
+call   282 never executed
+call   283 never executed
+call   284 never executed
+call   285 never executed
+call   286 never executed
+call   287 never executed
+call   288 never executed
+call   289 never executed
+call   290 never executed
+call   291 never executed
+call   292 never executed
+call   293 never executed
+call   294 never executed
+call   295 never executed
+call   296 never executed
+call   297 never executed
+call   298 never executed
+call   299 never executed
+call   300 never executed
+call   301 never executed
+call   302 never executed
+branch 303 never executed (fallthrough)
+branch 304 never executed (throw)
+call   305 never executed
+call   306 never executed
+call   307 never executed
+call   308 never executed
+branch 309 never executed (fallthrough)
+branch 310 never executed (throw)
+call   311 never executed
+call   312 never executed
+call   313 never executed
+call   314 never executed
+call   315 never executed
+call   316 never executed
+call   317 never executed
+call   318 never executed
+call   319 never executed
+call   320 never executed
+call   321 never executed
+call   322 never executed
+call   323 never executed
+call   324 never executed
+call   325 never executed
+call   326 never executed
+call   327 never executed
+        -:  194:	  }
+        -:  195:
+  180501*:  196:	return __allocator_base<_Tp>::allocate(__n, 0);
+call    0 never executed
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 returned 100%
+call    6 never executed
+call    7 returned 100%
+call    8 never executed
+call    9 never executed
+call   10 never executed
+call   11 never executed
+call   12 never executed
+call   13 never executed
+call   14 returned 100%
+call   15 returned 100%
+call   16 returned 100%
+call   17 returned 100%
+branch 18 taken 100% (fallthrough)
+branch 19 taken 0% (throw)
+call   20 never executed
+call   21 never executed
+call   22 never executed
+call   23 returned 100%
+call   24 returned 100%
+call   25 never executed
+call   26 returned 100%
+call   27 returned 100%
+call   28 returned 100%
+call   29 returned 100%
+call   30 never executed
+call   31 returned 100%
+call   32 never executed
+call   33 never executed
+call   34 returned 100%
+branch 35 taken 100% (fallthrough)
+branch 36 taken 0% (throw)
+call   37 returned 100%
+branch 38 taken 100% (fallthrough)
+branch 39 taken 0% (throw)
+call   40 returned 100%
+branch 41 taken 100% (fallthrough)
+branch 42 taken 0% (throw)
+call   43 returned 100%
+call   44 returned 100%
+call   45 returned 100%
+call   46 returned 100%
+call   47 returned 100%
+call   48 returned 100%
+call   49 never executed
+call   50 never executed
+call   51 never executed
+call   52 never executed
+call   53 never executed
+branch 54 never executed (fallthrough)
+branch 55 never executed (throw)
+call   56 returned 100%
+call   57 never executed
+branch 58 never executed (fallthrough)
+branch 59 never executed (throw)
+call   60 never executed
+call   61 returned 100%
+call   62 never executed
+call   63 never executed
+call   64 never executed
+call   65 returned 100%
+branch 66 taken 100% (fallthrough)
+branch 67 taken 0% (throw)
+call   68 returned 100%
+call   69 never executed
+call   70 never executed
+call   71 never executed
+call   72 returned 100%
+call   73 never executed
+call   74 never executed
+call   75 returned 100%
+call   76 never executed
+call   77 never executed
+call   78 returned 100%
+call   79 returned 100%
+call   80 returned 100%
+branch 81 taken 100% (fallthrough)
+branch 82 taken 0% (throw)
+call   83 returned 100%
+call   84 returned 100%
+call   85 never executed
+call   86 never executed
+call   87 never executed
+call   88 never executed
+call   89 never executed
+call   90 never executed
+call   91 never executed
+call   92 never executed
+call   93 returned 100%
+call   94 never executed
+call   95 returned 100%
+branch 96 taken 100% (fallthrough)
+branch 97 taken 0% (throw)
+call   98 returned 100%
+call   99 returned 100%
+call   100 never executed
+call   101 never executed
+call   102 never executed
+call   103 returned 100%
+call   104 returned 100%
+call   105 never executed
+call   106 never executed
+call   107 never executed
+call   108 never executed
+call   109 returned 100%
+branch 110 taken 100% (fallthrough)
+branch 111 taken 0% (throw)
+call   112 returned 100%
+call   113 returned 100%
+branch 114 taken 100% (fallthrough)
+branch 115 taken 0% (throw)
+call   116 returned 100%
+call   117 returned 100%
+call   118 never executed
+call   119 returned 100%
+call   120 never executed
+call   121 never executed
+call   122 returned 100%
+call   123 never executed
+call   124 never executed
+call   125 never executed
+call   126 never executed
+call   127 never executed
+call   128 never executed
+call   129 never executed
+call   130 returned 100%
+call   131 never executed
+call   132 returned 100%
+call   133 never executed
+call   134 never executed
+call   135 returned 100%
+call   136 returned 100%
+call   137 returned 100%
+call   138 returned 100%
+call   139 returned 100%
+call   140 returned 100%
+call   141 never executed
+call   142 never executed
+call   143 returned 100%
+branch 144 taken 100% (fallthrough)
+branch 145 taken 0% (throw)
+call   146 returned 100%
+call   147 returned 100%
+call   148 never executed
+call   149 never executed
+call   150 never executed
+call   151 never executed
+call   152 returned 100%
+call   153 returned 100%
+call   154 returned 100%
+call   155 never executed
+call   156 returned 100%
+call   157 never executed
+call   158 returned 100%
+call   159 returned 100%
+call   160 returned 100%
+call   161 returned 100%
+branch 162 taken 100% (fallthrough)
+branch 163 taken 0% (throw)
+call   164 never executed
+call   165 never executed
+call   166 never executed
+call   167 never executed
+call   168 never executed
+call   169 returned 100%
+call   170 returned 100%
+call   171 returned 100%
+call   172 returned 100%
+call   173 returned 100%
+call   174 returned 100%
+call   175 never executed
+call   176 returned 100%
+call   177 returned 100%
+call   178 returned 100%
+call   179 returned 100%
+call   180 returned 100%
+call   181 never executed
+call   182 returned 100%
+call   183 returned 100%
+call   184 returned 100%
+call   185 returned 100%
+branch 186 taken 100% (fallthrough)
+branch 187 taken 0% (throw)
+call   188 returned 100%
+call   189 returned 100%
+branch 190 taken 100% (fallthrough)
+branch 191 taken 0% (throw)
+call   192 returned 100%
+call   193 returned 100%
+call   194 returned 100%
+call   195 returned 100%
+call   196 returned 100%
+call   197 returned 100%
+call   198 returned 100%
+call   199 returned 100%
+call   200 returned 100%
+call   201 returned 100%
+call   202 returned 100%
+call   203 returned 100%
+call   204 returned 100%
+call   205 returned 100%
+call   206 returned 102%
+call   207 returned 100%
+call   208 returned 100%
+call   209 returned 100%
+call   210 returned 100%
+call   211 returned 100%
+call   212 never executed
+call   213 returned 100%
+call   214 returned 100%
+call   215 returned 100%
+call   216 returned 100%
+call   217 returned 100%
+call   218 returned 100%
+call   219 returned 100%
+call   220 returned 100%
+call   221 returned 100%
+call   222 returned 100%
+call   223 returned 100%
+call   224 returned 100%
+call   225 returned 100%
+call   226 never executed
+call   227 returned 100%
+call   228 returned 100%
+call   229 returned 100%
+call   230 returned 100%
+call   231 returned 100%
+call   232 returned 100%
+call   233 returned 100%
+call   234 returned 100%
+call   235 returned 100%
+call   236 never executed
+call   237 returned 100%
+call   238 returned 100%
+call   239 returned 100%
+call   240 returned 100%
+call   241 never executed
+call   242 returned 100%
+call   243 returned 100%
+call   244 never executed
+call   245 returned 100%
+branch 246 taken 100% (fallthrough)
+branch 247 taken 0% (throw)
+call   248 returned 100%
+call   249 returned 100%
+call   250 returned 100%
+call   251 returned 100%
+call   252 returned 100%
+call   253 never executed
+call   254 returned 100%
+call   255 returned 100%
+call   256 returned 100%
+call   257 returned 100%
+call   258 returned 100%
+call   259 returned 100%
+call   260 never executed
+call   261 returned 100%
+branch 262 taken 100% (fallthrough)
+branch 263 taken 0% (throw)
+call   264 returned 100%
+branch 265 taken 100% (fallthrough)
+branch 266 taken 0% (throw)
+call   267 returned 100%
+call   268 returned 100%
+call   269 returned 100%
+call   270 returned 100%
+call   271 returned 100%
+call   272 returned 100%
+call   273 never executed
+call   274 returned 100%
+call   275 returned 100%
+call   276 returned 100%
+call   277 returned 100%
+call   278 never executed
+call   279 returned 100%
+call   280 returned 100%
+call   281 returned 100%
+call   282 never executed
+call   283 returned 100%
+call   284 returned 100%
+call   285 returned 100%
+call   286 returned 100%
+call   287 never executed
+call   288 returned 100%
+call   289 never executed
+call   290 never executed
+call   291 never executed
+call   292 never executed
+call   293 never executed
+call   294 never executed
+call   295 never executed
+call   296 never executed
+call   297 never executed
+call   298 never executed
+call   299 never executed
+call   300 never executed
+call   301 never executed
+call   302 never executed
+branch 303 never executed (fallthrough)
+branch 304 never executed (throw)
+call   305 never executed
+call   306 never executed
+call   307 never executed
+call   308 never executed
+branch 309 never executed (fallthrough)
+branch 310 never executed (throw)
+call   311 never executed
+call   312 never executed
+call   313 never executed
+call   314 never executed
+call   315 never executed
+call   316 never executed
+call   317 never executed
+call   318 never executed
+call   319 never executed
+call   320 never executed
+call   321 never executed
+call   322 never executed
+call   323 never executed
+call   324 never executed
+call   325 never executed
+call   326 never executed
+call   327 never executed
+        -:  197:      }
+        -:  198:
+        -:  199:      [[__gnu__::__always_inline__]]
+        -:  200:      constexpr void
+        -:  201:      deallocate(_Tp* __p, size_t __n)
+        -:  202:      {
+   60569*:  203:	if (std::__is_constant_evaluated())
+branch  0 never executed (fallthrough)
+branch  1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed
+branch  4 taken 0% (fallthrough)
+branch  5 taken 100%
+branch  6 never executed (fallthrough)
+branch  7 never executed
+branch  8 taken 0% (fallthrough)
+branch  9 taken 100%
+branch 10 taken 0% (fallthrough)
+branch 11 taken 100%
+branch 12 taken 0% (fallthrough)
+branch 13 taken 100%
+branch 14 never executed (fallthrough)
+branch 15 never executed
+branch 16 never executed (fallthrough)
+branch 17 never executed
+branch 18 never executed (fallthrough)
+branch 19 never executed
+branch 20 never executed (fallthrough)
+branch 21 never executed
+branch 22 never executed (fallthrough)
+branch 23 never executed
+branch 24 never executed (fallthrough)
+branch 25 never executed
+branch 26 never executed (fallthrough)
+branch 27 never executed
+branch 28 never executed (fallthrough)
+branch 29 never executed
+branch 30 never executed (fallthrough)
+branch 31 never executed
+branch 32 never executed (fallthrough)
+branch 33 never executed
+branch 34 taken 0% (fallthrough)
+branch 35 taken 100%
+branch 36 taken 0% (fallthrough)
+branch 37 taken 100%
+branch 38 taken 0% (fallthrough)
+branch 39 taken 100%
+branch 40 never executed (fallthrough)
+branch 41 never executed
+branch 42 never executed (fallthrough)
+branch 43 never executed
+branch 44 never executed (fallthrough)
+branch 45 never executed
+branch 46 taken 0% (fallthrough)
+branch 47 taken 100%
+branch 48 never executed (fallthrough)
+branch 49 never executed
+branch 50 never executed (fallthrough)
+branch 51 never executed
+branch 52 never executed (fallthrough)
+branch 53 never executed
+branch 54 never executed (fallthrough)
+branch 55 never executed
+branch 56 taken 0% (fallthrough)
+branch 57 taken 100%
+branch 58 never executed (fallthrough)
+branch 59 never executed
+branch 60 never executed (fallthrough)
+branch 61 never executed
+branch 62 taken 0% (fallthrough)
+branch 63 taken 100%
+branch 64 taken 0% (fallthrough)
+branch 65 taken 100%
+branch 66 taken 0% (fallthrough)
+branch 67 taken 100%
+branch 68 taken 0% (fallthrough)
+branch 69 taken 100%
+branch 70 taken 0% (fallthrough)
+branch 71 taken 100%
+branch 72 never executed (fallthrough)
+branch 73 never executed
+branch 74 taken 0% (fallthrough)
+branch 75 taken 100%
+branch 76 never executed (fallthrough)
+branch 77 never executed
+branch 78 taken 0% (fallthrough)
+branch 79 taken 100%
+branch 80 taken 0% (fallthrough)
+branch 81 taken 100%
+branch 82 never executed (fallthrough)
+branch 83 never executed
+branch 84 never executed (fallthrough)
+branch 85 never executed
+branch 86 never executed (fallthrough)
+branch 87 never executed
+branch 88 taken 0% (fallthrough)
+branch 89 taken 100%
+branch 90 taken 0% (fallthrough)
+branch 91 taken 100%
+branch 92 never executed (fallthrough)
+branch 93 never executed
+branch 94 never executed (fallthrough)
+branch 95 never executed
+branch 96 taken 0% (fallthrough)
+branch 97 taken 100%
+branch 98 taken 0% (fallthrough)
+branch 99 taken 100%
+branch 100 taken 0% (fallthrough)
+branch 101 taken 100%
+branch 102 taken 0% (fallthrough)
+branch 103 taken 100%
+branch 104 taken 0% (fallthrough)
+branch 105 taken 100%
+branch 106 taken 0% (fallthrough)
+branch 107 taken 100%
+branch 108 taken 0% (fallthrough)
+branch 109 taken 100%
+branch 110 taken 0% (fallthrough)
+branch 111 taken 100%
+branch 112 never executed (fallthrough)
+branch 113 never executed
+branch 114 never executed (fallthrough)
+branch 115 never executed
+branch 116 never executed (fallthrough)
+branch 117 never executed
+branch 118 never executed (fallthrough)
+branch 119 never executed
+branch 120 never executed (fallthrough)
+branch 121 never executed
+branch 122 never executed (fallthrough)
+branch 123 never executed
+branch 124 taken 0% (fallthrough)
+branch 125 taken 100%
+branch 126 never executed (fallthrough)
+branch 127 never executed
+branch 128 taken 0% (fallthrough)
+branch 129 taken 100%
+branch 130 never executed (fallthrough)
+branch 131 never executed
+branch 132 never executed (fallthrough)
+branch 133 never executed
+branch 134 never executed (fallthrough)
+branch 135 never executed
+branch 136 never executed (fallthrough)
+branch 137 never executed
+branch 138 never executed (fallthrough)
+branch 139 never executed
+branch 140 never executed (fallthrough)
+branch 141 never executed
+branch 142 never executed (fallthrough)
+branch 143 never executed
+branch 144 never executed (fallthrough)
+branch 145 never executed
+branch 146 never executed (fallthrough)
+branch 147 never executed
+branch 148 never executed (fallthrough)
+branch 149 never executed
+branch 150 never executed (fallthrough)
+branch 151 never executed
+branch 152 never executed (fallthrough)
+branch 153 never executed
+branch 154 taken 0% (fallthrough)
+branch 155 taken 100%
+branch 156 never executed (fallthrough)
+branch 157 never executed
+branch 158 never executed (fallthrough)
+branch 159 never executed
+branch 160 never executed (fallthrough)
+branch 161 never executed
+branch 162 never executed (fallthrough)
+branch 163 never executed
+branch 164 never executed (fallthrough)
+branch 165 never executed
+branch 166 never executed (fallthrough)
+branch 167 never executed
+branch 168 never executed (fallthrough)
+branch 169 never executed
+branch 170 taken 0% (fallthrough)
+branch 171 taken 100%
+branch 172 never executed (fallthrough)
+branch 173 never executed
+branch 174 never executed (fallthrough)
+branch 175 never executed
+branch 176 never executed (fallthrough)
+branch 177 never executed
+branch 178 never executed (fallthrough)
+branch 179 never executed
+branch 180 never executed (fallthrough)
+branch 181 never executed
+branch 182 never executed (fallthrough)
+branch 183 never executed
+branch 184 never executed (fallthrough)
+branch 185 never executed
+branch 186 never executed (fallthrough)
+branch 187 never executed
+branch 188 never executed (fallthrough)
+branch 189 never executed
+branch 190 never executed (fallthrough)
+branch 191 never executed
+branch 192 taken 0% (fallthrough)
+branch 193 taken 100%
+branch 194 never executed (fallthrough)
+branch 195 never executed
+branch 196 never executed (fallthrough)
+branch 197 never executed
+branch 198 taken 0% (fallthrough)
+branch 199 taken 100%
+branch 200 never executed (fallthrough)
+branch 201 never executed
+branch 202 never executed (fallthrough)
+branch 203 never executed
+branch 204 never executed (fallthrough)
+branch 205 never executed
+branch 206 never executed (fallthrough)
+branch 207 never executed
+branch 208 never executed (fallthrough)
+branch 209 never executed
+branch 210 taken 0% (fallthrough)
+branch 211 taken 100%
+branch 212 never executed (fallthrough)
+branch 213 never executed
+branch 214 never executed (fallthrough)
+branch 215 never executed
+branch 216 never executed (fallthrough)
+branch 217 never executed
+branch 218 never executed (fallthrough)
+branch 219 never executed
+branch 220 never executed (fallthrough)
+branch 221 never executed
+branch 222 never executed (fallthrough)
+branch 223 never executed
+branch 224 never executed (fallthrough)
+branch 225 never executed
+branch 226 never executed (fallthrough)
+branch 227 never executed
+branch 228 never executed (fallthrough)
+branch 229 never executed
+branch 230 never executed (fallthrough)
+branch 231 never executed
+branch 232 never executed (fallthrough)
+branch 233 never executed
+branch 234 never executed (fallthrough)
+branch 235 never executed
+branch 236 never executed (fallthrough)
+branch 237 never executed
+branch 238 never executed (fallthrough)
+branch 239 never executed
+branch 240 never executed (fallthrough)
+branch 241 never executed
+branch 242 never executed (fallthrough)
+branch 243 never executed
+branch 244 never executed (fallthrough)
+branch 245 never executed
+branch 246 never executed (fallthrough)
+branch 247 never executed
+branch 248 never executed (fallthrough)
+branch 249 never executed
+branch 250 taken 0% (fallthrough)
+branch 251 taken 100%
+branch 252 never executed (fallthrough)
+branch 253 never executed
+branch 254 never executed (fallthrough)
+branch 255 never executed
+branch 256 never executed (fallthrough)
+branch 257 never executed
+branch 258 never executed (fallthrough)
+branch 259 never executed
+branch 260 never executed (fallthrough)
+branch 261 never executed
+branch 262 taken 0% (fallthrough)
+branch 263 taken 100%
+branch 264 never executed (fallthrough)
+branch 265 never executed
+branch 266 never executed (fallthrough)
+branch 267 never executed
+branch 268 never executed (fallthrough)
+branch 269 never executed
+branch 270 taken 0% (fallthrough)
+branch 271 taken 100%
+branch 272 taken 0% (fallthrough)
+branch 273 taken 100%
+branch 274 never executed (fallthrough)
+branch 275 never executed
+branch 276 never executed (fallthrough)
+branch 277 never executed
+branch 278 never executed (fallthrough)
+branch 279 never executed
+branch 280 never executed (fallthrough)
+branch 281 never executed
+branch 282 never executed (fallthrough)
+branch 283 never executed
+branch 284 never executed (fallthrough)
+branch 285 never executed
+branch 286 never executed (fallthrough)
+branch 287 never executed
+branch 288 never executed (fallthrough)
+branch 289 never executed
+branch 290 never executed (fallthrough)
+branch 291 never executed
+branch 292 never executed (fallthrough)
+branch 293 never executed
+branch 294 never executed (fallthrough)
+branch 295 never executed
+branch 296 taken 0% (fallthrough)
+branch 297 taken 100%
+branch 298 taken 0% (fallthrough)
+branch 299 taken 100%
+branch 300 never executed (fallthrough)
+branch 301 never executed
+branch 302 never executed (fallthrough)
+branch 303 never executed
+branch 304 taken 0% (fallthrough)
+branch 305 taken 100%
+branch 306 never executed (fallthrough)
+branch 307 never executed
+branch 308 never executed (fallthrough)
+branch 309 never executed
+branch 310 never executed (fallthrough)
+branch 311 never executed
+branch 312 never executed (fallthrough)
+branch 313 never executed
+branch 314 never executed (fallthrough)
+branch 315 never executed
+branch 316 never executed (fallthrough)
+branch 317 never executed
+branch 318 never executed (fallthrough)
+branch 319 never executed
+branch 320 never executed (fallthrough)
+branch 321 never executed
+branch 322 never executed (fallthrough)
+branch 323 never executed
+branch 324 never executed (fallthrough)
+branch 325 never executed
+branch 326 never executed (fallthrough)
+branch 327 never executed
+branch 328 never executed (fallthrough)
+branch 329 never executed
+branch 330 never executed (fallthrough)
+branch 331 never executed
+branch 332 taken 0% (fallthrough)
+branch 333 taken 100%
+branch 334 never executed (fallthrough)
+branch 335 never executed
+branch 336 taken 0% (fallthrough)
+branch 337 taken 100%
+branch 338 never executed (fallthrough)
+branch 339 never executed
+branch 340 never executed (fallthrough)
+branch 341 never executed
+branch 342 never executed (fallthrough)
+branch 343 never executed
+branch 344 never executed (fallthrough)
+branch 345 never executed
+branch 346 never executed (fallthrough)
+branch 347 never executed
+branch 348 never executed (fallthrough)
+branch 349 never executed
+branch 350 taken 0% (fallthrough)
+branch 351 taken 100%
+branch 352 never executed (fallthrough)
+branch 353 never executed
+branch 354 never executed (fallthrough)
+branch 355 never executed
+branch 356 never executed (fallthrough)
+branch 357 never executed
+branch 358 never executed (fallthrough)
+branch 359 never executed
+branch 360 never executed (fallthrough)
+branch 361 never executed
+branch 362 never executed (fallthrough)
+branch 363 never executed
+branch 364 never executed (fallthrough)
+branch 365 never executed
+branch 366 never executed (fallthrough)
+branch 367 never executed
+branch 368 never executed (fallthrough)
+branch 369 never executed
+branch 370 never executed (fallthrough)
+branch 371 never executed
+branch 372 never executed (fallthrough)
+branch 373 never executed
+branch 374 taken 0% (fallthrough)
+branch 375 taken 100%
+branch 376 taken 0% (fallthrough)
+branch 377 taken 100%
+branch 378 never executed (fallthrough)
+branch 379 never executed
+branch 380 never executed (fallthrough)
+branch 381 never executed
+branch 382 never executed (fallthrough)
+branch 383 never executed
+branch 384 never executed (fallthrough)
+branch 385 never executed
+branch 386 never executed (fallthrough)
+branch 387 never executed
+branch 388 never executed (fallthrough)
+branch 389 never executed
+branch 390 never executed (fallthrough)
+branch 391 never executed
+branch 392 never executed (fallthrough)
+branch 393 never executed
+branch 394 taken 0% (fallthrough)
+branch 395 taken 100%
+branch 396 taken 0% (fallthrough)
+branch 397 taken 100%
+branch 398 taken 0% (fallthrough)
+branch 399 taken 100%
+branch 400 taken 0% (fallthrough)
+branch 401 taken 100%
+branch 402 taken 0% (fallthrough)
+branch 403 taken 100%
+branch 404 taken 0% (fallthrough)
+branch 405 taken 100%
+branch 406 taken 0% (fallthrough)
+branch 407 taken 100%
+branch 408 taken 0% (fallthrough)
+branch 409 taken 100%
+branch 410 never executed (fallthrough)
+branch 411 never executed
+branch 412 taken 0% (fallthrough)
+branch 413 taken 100%
+branch 414 never executed (fallthrough)
+branch 415 never executed
+branch 416 never executed (fallthrough)
+branch 417 never executed
+branch 418 never executed (fallthrough)
+branch 419 never executed
+branch 420 taken 0% (fallthrough)
+branch 421 taken 100%
+branch 422 never executed (fallthrough)
+branch 423 never executed
+branch 424 never executed (fallthrough)
+branch 425 never executed
+branch 426 never executed (fallthrough)
+branch 427 never executed
+branch 428 never executed (fallthrough)
+branch 429 never executed
+branch 430 never executed (fallthrough)
+branch 431 never executed
+branch 432 never executed (fallthrough)
+branch 433 never executed
+branch 434 never executed (fallthrough)
+branch 435 never executed
+branch 436 never executed (fallthrough)
+branch 437 never executed
+branch 438 never executed (fallthrough)
+branch 439 never executed
+branch 440 never executed (fallthrough)
+branch 441 never executed
+branch 442 never executed (fallthrough)
+branch 443 never executed
+branch 444 never executed (fallthrough)
+branch 445 never executed
+branch 446 never executed (fallthrough)
+branch 447 never executed
+branch 448 never executed (fallthrough)
+branch 449 never executed
+branch 450 never executed (fallthrough)
+branch 451 never executed
+branch 452 never executed (fallthrough)
+branch 453 never executed
+branch 454 never executed (fallthrough)
+branch 455 never executed
+branch 456 never executed (fallthrough)
+branch 457 never executed
+branch 458 never executed (fallthrough)
+branch 459 never executed
+branch 460 never executed (fallthrough)
+branch 461 never executed
+branch 462 never executed (fallthrough)
+branch 463 never executed
+branch 464 never executed (fallthrough)
+branch 465 never executed
+branch 466 never executed (fallthrough)
+branch 467 never executed
+branch 468 never executed (fallthrough)
+branch 469 never executed
+branch 470 never executed (fallthrough)
+branch 471 never executed
+branch 472 never executed (fallthrough)
+branch 473 never executed
+branch 474 never executed (fallthrough)
+branch 475 never executed
+branch 476 never executed (fallthrough)
+branch 477 never executed
+branch 478 taken 0% (fallthrough)
+branch 479 taken 100%
+branch 480 never executed (fallthrough)
+branch 481 never executed
+branch 482 taken 0% (fallthrough)
+branch 483 taken 100%
+branch 484 taken 0% (fallthrough)
+branch 485 taken 100%
+branch 486 taken 0% (fallthrough)
+branch 487 taken 100%
+branch 488 never executed (fallthrough)
+branch 489 never executed
+branch 490 taken 0% (fallthrough)
+branch 491 taken 100%
+branch 492 never executed (fallthrough)
+branch 493 never executed
+branch 494 taken 0% (fallthrough)
+branch 495 taken 100%
+branch 496 never executed (fallthrough)
+branch 497 never executed
+branch 498 taken 0% (fallthrough)
+branch 499 taken 100%
+branch 500 taken 0% (fallthrough)
+branch 501 taken 100%
+branch 502 never executed (fallthrough)
+branch 503 never executed
+branch 504 taken 0% (fallthrough)
+branch 505 taken 100%
+branch 506 taken 0% (fallthrough)
+branch 507 taken 100%
+branch 508 never executed (fallthrough)
+branch 509 never executed
+branch 510 never executed (fallthrough)
+branch 511 never executed
+branch 512 never executed (fallthrough)
+branch 513 never executed
+branch 514 never executed (fallthrough)
+branch 515 never executed
+branch 516 never executed (fallthrough)
+branch 517 never executed
+branch 518 never executed (fallthrough)
+branch 519 never executed
+branch 520 never executed (fallthrough)
+branch 521 never executed
+branch 522 never executed (fallthrough)
+branch 523 never executed
+branch 524 taken 0% (fallthrough)
+branch 525 taken 100%
+branch 526 taken 0% (fallthrough)
+branch 527 taken 100%
+branch 528 taken 0% (fallthrough)
+branch 529 taken 100%
+branch 530 taken 0% (fallthrough)
+branch 531 taken 100%
+branch 532 taken 0% (fallthrough)
+branch 533 taken 100%
+branch 534 taken 0% (fallthrough)
+branch 535 taken 100%
+branch 536 never executed (fallthrough)
+branch 537 never executed
+branch 538 taken 0% (fallthrough)
+branch 539 taken 100%
+branch 540 never executed (fallthrough)
+branch 541 never executed
+branch 542 never executed (fallthrough)
+branch 543 never executed
+branch 544 taken 0% (fallthrough)
+branch 545 taken 100%
+branch 546 taken 0% (fallthrough)
+branch 547 taken 100%
+branch 548 never executed (fallthrough)
+branch 549 never executed
+branch 550 never executed (fallthrough)
+branch 551 never executed
+branch 552 taken 0% (fallthrough)
+branch 553 taken 100%
+branch 554 never executed (fallthrough)
+branch 555 never executed
+branch 556 taken 0% (fallthrough)
+branch 557 taken 100%
+branch 558 taken 0% (fallthrough)
+branch 559 taken 100%
+branch 560 taken 0% (fallthrough)
+branch 561 taken 100%
+branch 562 taken 0% (fallthrough)
+branch 563 taken 100%
+branch 564 never executed (fallthrough)
+branch 565 never executed
+branch 566 taken 0% (fallthrough)
+branch 567 taken 100%
+branch 568 never executed (fallthrough)
+branch 569 never executed
+branch 570 taken 0% (fallthrough)
+branch 571 taken 100%
+branch 572 taken 0% (fallthrough)
+branch 573 taken 100%
+branch 574 taken 0% (fallthrough)
+branch 575 taken 100%
+branch 576 taken 0% (fallthrough)
+branch 577 taken 100%
+branch 578 taken 0% (fallthrough)
+branch 579 taken 100%
+branch 580 never executed (fallthrough)
+branch 581 never executed
+branch 582 never executed (fallthrough)
+branch 583 never executed
+branch 584 taken 0% (fallthrough)
+branch 585 taken 100%
+branch 586 taken 0% (fallthrough)
+branch 587 taken 100%
+branch 588 taken 0% (fallthrough)
+branch 589 taken 100%
+branch 590 never executed (fallthrough)
+branch 591 never executed
+branch 592 taken 0% (fallthrough)
+branch 593 taken 100%
+branch 594 taken 0% (fallthrough)
+branch 595 taken 100%
+branch 596 taken 0% (fallthrough)
+branch 597 taken 100%
+branch 598 taken 0% (fallthrough)
+branch 599 taken 100%
+branch 600 taken 0% (fallthrough)
+branch 601 taken 100%
+branch 602 never executed (fallthrough)
+branch 603 never executed
+branch 604 taken 0% (fallthrough)
+branch 605 taken 100%
+branch 606 taken 0% (fallthrough)
+branch 607 taken 100%
+branch 608 taken 0% (fallthrough)
+branch 609 taken 100%
+branch 610 taken 0% (fallthrough)
+branch 611 taken 100%
+branch 612 taken 0% (fallthrough)
+branch 613 taken 100%
+branch 614 taken 0% (fallthrough)
+branch 615 taken 100%
+branch 616 taken 0% (fallthrough)
+branch 617 taken 100%
+branch 618 never executed (fallthrough)
+branch 619 never executed
+branch 620 never executed (fallthrough)
+branch 621 never executed
+branch 622 never executed (fallthrough)
+branch 623 never executed
+branch 624 taken 0% (fallthrough)
+branch 625 taken 100%
+branch 626 never executed (fallthrough)
+branch 627 never executed
+branch 628 taken 0% (fallthrough)
+branch 629 taken 100%
+branch 630 taken 0% (fallthrough)
+branch 631 taken 100%
+branch 632 taken 0% (fallthrough)
+branch 633 taken 100%
+branch 634 never executed (fallthrough)
+branch 635 never executed
+branch 636 taken 0% (fallthrough)
+branch 637 taken 100%
+branch 638 never executed (fallthrough)
+branch 639 never executed
+branch 640 taken 0% (fallthrough)
+branch 641 taken 100%
+branch 642 never executed (fallthrough)
+branch 643 never executed
+branch 644 taken 0% (fallthrough)
+branch 645 taken 100%
+branch 646 never executed (fallthrough)
+branch 647 never executed
+branch 648 taken 0% (fallthrough)
+branch 649 taken 100%
+branch 650 never executed (fallthrough)
+branch 651 never executed
+branch 652 taken 0% (fallthrough)
+branch 653 taken 100%
+branch 654 never executed (fallthrough)
+branch 655 never executed
+branch 656 taken 0% (fallthrough)
+branch 657 taken 100%
+branch 658 never executed (fallthrough)
+branch 659 never executed
+branch 660 never executed (fallthrough)
+branch 661 never executed
+branch 662 taken 0% (fallthrough)
+branch 663 taken 100%
+branch 664 taken 0% (fallthrough)
+branch 665 taken 100%
+branch 666 taken 0% (fallthrough)
+branch 667 taken 100%
+branch 668 taken 0% (fallthrough)
+branch 669 taken 100%
+branch 670 taken 0% (fallthrough)
+branch 671 taken 100%
+branch 672 taken 0% (fallthrough)
+branch 673 taken 100%
+branch 674 taken 0% (fallthrough)
+branch 675 taken 100%
+branch 676 taken 0% (fallthrough)
+branch 677 taken 100%
+branch 678 never executed (fallthrough)
+branch 679 never executed
+branch 680 never executed (fallthrough)
+branch 681 never executed
+branch 682 never executed (fallthrough)
+branch 683 never executed
+branch 684 never executed (fallthrough)
+branch 685 never executed
+branch 686 taken 0% (fallthrough)
+branch 687 taken 100%
+branch 688 taken 0% (fallthrough)
+branch 689 taken 100%
+branch 690 taken 0% (fallthrough)
+branch 691 taken 100%
+branch 692 taken 0% (fallthrough)
+branch 693 taken 100%
+branch 694 taken 0% (fallthrough)
+branch 695 taken 100%
+branch 696 taken 0% (fallthrough)
+branch 697 taken 100%
+branch 698 never executed (fallthrough)
+branch 699 never executed
+branch 700 taken 0% (fallthrough)
+branch 701 taken 100%
+branch 702 taken 0% (fallthrough)
+branch 703 taken 100%
+branch 704 taken 0% (fallthrough)
+branch 705 taken 100%
+branch 706 taken 0% (fallthrough)
+branch 707 taken 100%
+branch 708 taken 0% (fallthrough)
+branch 709 taken 100%
+branch 710 never executed (fallthrough)
+branch 711 never executed
+branch 712 taken 0% (fallthrough)
+branch 713 taken 100%
+branch 714 taken 0% (fallthrough)
+branch 715 taken 100%
+branch 716 taken 0% (fallthrough)
+branch 717 taken 100%
+branch 718 never executed (fallthrough)
+branch 719 never executed
+branch 720 taken 0% (fallthrough)
+branch 721 taken 100%
+branch 722 taken 0% (fallthrough)
+branch 723 taken 100%
+branch 724 taken 0% (fallthrough)
+branch 725 taken 100%
+branch 726 taken 0% (fallthrough)
+branch 727 taken 100%
+branch 728 taken 0% (fallthrough)
+branch 729 taken 100%
+branch 730 taken 0% (fallthrough)
+branch 731 taken 100%
+branch 732 taken 0% (fallthrough)
+branch 733 taken 100%
+branch 734 taken 0% (fallthrough)
+branch 735 taken 100%
+branch 736 never executed (fallthrough)
+branch 737 never executed
+branch 738 taken 0% (fallthrough)
+branch 739 taken 100%
+branch 740 never executed (fallthrough)
+branch 741 never executed
+branch 742 never executed (fallthrough)
+branch 743 never executed
+branch 744 never executed (fallthrough)
+branch 745 never executed
+branch 746 never executed (fallthrough)
+branch 747 never executed
+branch 748 taken 0% (fallthrough)
+branch 749 taken 100%
+branch 750 taken 0% (fallthrough)
+branch 751 taken 100%
+branch 752 taken 0% (fallthrough)
+branch 753 taken 100%
+branch 754 taken 0% (fallthrough)
+branch 755 taken 100%
+branch 756 taken 0% (fallthrough)
+branch 757 taken 100%
+branch 758 taken 0% (fallthrough)
+branch 759 taken 100%
+branch 760 never executed (fallthrough)
+branch 761 never executed
+branch 762 taken 0% (fallthrough)
+branch 763 taken 100%
+branch 764 never executed (fallthrough)
+branch 765 never executed
+branch 766 taken 0% (fallthrough)
+branch 767 taken 100%
+branch 768 taken 0% (fallthrough)
+branch 769 taken 100%
+branch 770 taken 0% (fallthrough)
+branch 771 taken 100%
+branch 772 never executed (fallthrough)
+branch 773 never executed
+branch 774 taken 0% (fallthrough)
+branch 775 taken 100%
+branch 776 taken 0% (fallthrough)
+branch 777 taken 100%
+branch 778 taken 0% (fallthrough)
+branch 779 taken 100%
+branch 780 taken 0% (fallthrough)
+branch 781 taken 100%
+branch 782 never executed (fallthrough)
+branch 783 never executed
+branch 784 never executed (fallthrough)
+branch 785 never executed
+branch 786 never executed (fallthrough)
+branch 787 never executed
+branch 788 taken 0% (fallthrough)
+branch 789 taken 100%
+branch 790 never executed (fallthrough)
+branch 791 never executed
+branch 792 taken 0% (fallthrough)
+branch 793 taken 100%
+branch 794 taken 0% (fallthrough)
+branch 795 taken 100%
+branch 796 never executed (fallthrough)
+branch 797 never executed
+branch 798 taken 0% (fallthrough)
+branch 799 taken 100%
+branch 800 never executed (fallthrough)
+branch 801 never executed
+branch 802 never executed (fallthrough)
+branch 803 never executed
+branch 804 taken 0% (fallthrough)
+branch 805 taken 100%
+branch 806 never executed (fallthrough)
+branch 807 never executed
+branch 808 taken 0% (fallthrough)
+branch 809 taken 100%
+branch 810 taken 0% (fallthrough)
+branch 811 taken 100%
+branch 812 taken 0% (fallthrough)
+branch 813 taken 100%
+branch 814 taken 0% (fallthrough)
+branch 815 taken 100%
+branch 816 taken 0% (fallthrough)
+branch 817 taken 100%
+branch 818 never executed (fallthrough)
+branch 819 never executed
+branch 820 never executed (fallthrough)
+branch 821 never executed
+branch 822 taken 0% (fallthrough)
+branch 823 taken 100%
+branch 824 taken 0% (fallthrough)
+branch 825 taken 100%
+branch 826 taken 0% (fallthrough)
+branch 827 taken 100%
+branch 828 never executed (fallthrough)
+branch 829 never executed
+branch 830 taken 0% (fallthrough)
+branch 831 taken 100%
+branch 832 never executed (fallthrough)
+branch 833 never executed
+branch 834 never executed (fallthrough)
+branch 835 never executed
+branch 836 taken 0% (fallthrough)
+branch 837 taken 100%
+branch 838 never executed (fallthrough)
+branch 839 never executed
+branch 840 never executed (fallthrough)
+branch 841 never executed
+branch 842 taken 0% (fallthrough)
+branch 843 taken 100%
+branch 844 taken 0% (fallthrough)
+branch 845 taken 100%
+branch 846 taken 0% (fallthrough)
+branch 847 taken 100%
+branch 848 taken 0% (fallthrough)
+branch 849 taken 100%
+branch 850 taken 0% (fallthrough)
+branch 851 taken 100%
+branch 852 never executed (fallthrough)
+branch 853 never executed
+branch 854 taken 0% (fallthrough)
+branch 855 taken 100%
+branch 856 taken 0% (fallthrough)
+branch 857 taken 100%
+branch 858 taken 0% (fallthrough)
+branch 859 taken 100%
+branch 860 taken 0% (fallthrough)
+branch 861 taken 100%
+branch 862 never executed (fallthrough)
+branch 863 never executed
+branch 864 never executed (fallthrough)
+branch 865 never executed
+branch 866 never executed (fallthrough)
+branch 867 never executed
+branch 868 taken 0% (fallthrough)
+branch 869 taken 100%
+branch 870 taken 0% (fallthrough)
+branch 871 taken 100%
+branch 872 taken 0% (fallthrough)
+branch 873 taken 100%
+branch 874 never executed (fallthrough)
+branch 875 never executed
+branch 876 taken 0% (fallthrough)
+branch 877 taken 100%
+branch 878 taken 0% (fallthrough)
+branch 879 taken 100%
+branch 880 taken 0% (fallthrough)
+branch 881 taken 100%
+branch 882 taken 0% (fallthrough)
+branch 883 taken 100%
+branch 884 taken 0% (fallthrough)
+branch 885 taken 100%
+branch 886 never executed (fallthrough)
+branch 887 never executed
+branch 888 taken 0% (fallthrough)
+branch 889 taken 100%
+branch 890 taken 0% (fallthrough)
+branch 891 taken 100%
+branch 892 taken 0% (fallthrough)
+branch 893 taken 100%
+branch 894 never executed (fallthrough)
+branch 895 never executed
+branch 896 never executed (fallthrough)
+branch 897 never executed
+branch 898 never executed (fallthrough)
+branch 899 never executed
+branch 900 never executed (fallthrough)
+branch 901 never executed
+branch 902 taken 0% (fallthrough)
+branch 903 taken 100%
+branch 904 taken 0% (fallthrough)
+branch 905 taken 100%
+branch 906 taken 0% (fallthrough)
+branch 907 taken 100%
+branch 908 taken 0% (fallthrough)
+branch 909 taken 100%
+branch 910 never executed (fallthrough)
+branch 911 never executed
+branch 912 never executed (fallthrough)
+branch 913 never executed
+branch 914 never executed (fallthrough)
+branch 915 never executed
+branch 916 never executed (fallthrough)
+branch 917 never executed
+branch 918 never executed (fallthrough)
+branch 919 never executed
+branch 920 never executed (fallthrough)
+branch 921 never executed
+branch 922 taken 0% (fallthrough)
+branch 923 taken 100%
+branch 924 never executed (fallthrough)
+branch 925 never executed
+branch 926 taken 0% (fallthrough)
+branch 927 taken 100%
+branch 928 taken 0% (fallthrough)
+branch 929 taken 100%
+branch 930 taken 0% (fallthrough)
+branch 931 taken 100%
+branch 932 taken 0% (fallthrough)
+branch 933 taken 100%
+branch 934 taken 0% (fallthrough)
+branch 935 taken 100%
+branch 936 taken 0% (fallthrough)
+branch 937 taken 100%
+branch 938 never executed (fallthrough)
+branch 939 never executed
+branch 940 never executed (fallthrough)
+branch 941 never executed
+branch 942 never executed (fallthrough)
+branch 943 never executed
+branch 944 taken 0% (fallthrough)
+branch 945 taken 100%
+branch 946 never executed (fallthrough)
+branch 947 never executed
+branch 948 taken 0% (fallthrough)
+branch 949 taken 100%
+branch 950 never executed (fallthrough)
+branch 951 never executed
+branch 952 never executed (fallthrough)
+branch 953 never executed
+branch 954 taken 0% (fallthrough)
+branch 955 taken 100%
+branch 956 taken 0% (fallthrough)
+branch 957 taken 100%
+branch 958 taken 0% (fallthrough)
+branch 959 taken 100%
+branch 960 never executed (fallthrough)
+branch 961 never executed
+branch 962 taken 0% (fallthrough)
+branch 963 taken 100%
+branch 964 never executed (fallthrough)
+branch 965 never executed
+branch 966 taken 0% (fallthrough)
+branch 967 taken 100%
+branch 968 taken 0% (fallthrough)
+branch 969 taken 100%
+branch 970 taken 0% (fallthrough)
+branch 971 taken 100%
+branch 972 taken 0% (fallthrough)
+branch 973 taken 100%
+branch 974 taken 0% (fallthrough)
+branch 975 taken 100%
+branch 976 taken 0% (fallthrough)
+branch 977 taken 100%
+branch 978 taken 0% (fallthrough)
+branch 979 taken 100%
+branch 980 never executed (fallthrough)
+branch 981 never executed
+branch 982 never executed (fallthrough)
+branch 983 never executed
+branch 984 never executed (fallthrough)
+branch 985 never executed
+branch 986 never executed (fallthrough)
+branch 987 never executed
+branch 988 never executed (fallthrough)
+branch 989 never executed
+branch 990 never executed (fallthrough)
+branch 991 never executed
+branch 992 never executed (fallthrough)
+branch 993 never executed
+branch 994 never executed (fallthrough)
+branch 995 never executed
+branch 996 taken 0% (fallthrough)
+branch 997 taken 100%
+branch 998 taken 0% (fallthrough)
+branch 999 taken 100%
+branch 1000 taken 0% (fallthrough)
+branch 1001 taken 100%
+branch 1002 taken 0% (fallthrough)
+branch 1003 taken 100%
+branch 1004 taken 0% (fallthrough)
+branch 1005 taken 100%
+branch 1006 never executed (fallthrough)
+branch 1007 never executed
+branch 1008 taken 0% (fallthrough)
+branch 1009 taken 100%
+branch 1010 never executed (fallthrough)
+branch 1011 never executed
+branch 1012 taken 0% (fallthrough)
+branch 1013 taken 100%
+branch 1014 taken 0% (fallthrough)
+branch 1015 taken 100%
+branch 1016 taken 0% (fallthrough)
+branch 1017 taken 100%
+branch 1018 never executed (fallthrough)
+branch 1019 never executed
+branch 1020 taken 0% (fallthrough)
+branch 1021 taken 100%
+branch 1022 never executed (fallthrough)
+branch 1023 never executed
+branch 1024 never executed (fallthrough)
+branch 1025 never executed
+branch 1026 never executed (fallthrough)
+branch 1027 never executed
+branch 1028 taken 0% (fallthrough)
+branch 1029 taken 100%
+branch 1030 never executed (fallthrough)
+branch 1031 never executed
+branch 1032 never executed (fallthrough)
+branch 1033 never executed
+branch 1034 never executed (fallthrough)
+branch 1035 never executed
+branch 1036 taken 0% (fallthrough)
+branch 1037 taken 100%
+branch 1038 never executed (fallthrough)
+branch 1039 never executed
+branch 1040 taken 0% (fallthrough)
+branch 1041 taken 100%
+branch 1042 taken 0% (fallthrough)
+branch 1043 taken 100%
+branch 1044 never executed (fallthrough)
+branch 1045 never executed
+branch 1046 taken 0% (fallthrough)
+branch 1047 taken 100%
+branch 1048 taken 0% (fallthrough)
+branch 1049 taken 100%
+branch 1050 never executed (fallthrough)
+branch 1051 never executed
+branch 1052 taken 0% (fallthrough)
+branch 1053 taken 100%
+branch 1054 never executed (fallthrough)
+branch 1055 never executed
+branch 1056 taken 0% (fallthrough)
+branch 1057 taken 100%
+branch 1058 taken 0% (fallthrough)
+branch 1059 taken 100%
+branch 1060 taken 0% (fallthrough)
+branch 1061 taken 100%
+branch 1062 taken 0% (fallthrough)
+branch 1063 taken 100%
+branch 1064 taken 0% (fallthrough)
+branch 1065 taken 100%
+branch 1066 taken 0% (fallthrough)
+branch 1067 taken 100%
+branch 1068 never executed (fallthrough)
+branch 1069 never executed
+branch 1070 never executed (fallthrough)
+branch 1071 never executed
+branch 1072 never executed (fallthrough)
+branch 1073 never executed
+branch 1074 never executed (fallthrough)
+branch 1075 never executed
+branch 1076 never executed (fallthrough)
+branch 1077 never executed
+branch 1078 taken 0% (fallthrough)
+branch 1079 taken 100%
+branch 1080 never executed (fallthrough)
+branch 1081 never executed
+branch 1082 never executed (fallthrough)
+branch 1083 never executed
+branch 1084 taken 0% (fallthrough)
+branch 1085 taken 100%
+branch 1086 taken 0% (fallthrough)
+branch 1087 taken 100%
+branch 1088 taken 0% (fallthrough)
+branch 1089 taken 100%
+branch 1090 taken 0% (fallthrough)
+branch 1091 taken 100%
+branch 1092 taken 0% (fallthrough)
+branch 1093 taken 100%
+branch 1094 taken 0% (fallthrough)
+branch 1095 taken 100%
+branch 1096 never executed (fallthrough)
+branch 1097 never executed
+branch 1098 never executed (fallthrough)
+branch 1099 never executed
+branch 1100 taken 0% (fallthrough)
+branch 1101 taken 100%
+branch 1102 taken 0% (fallthrough)
+branch 1103 taken 100%
+branch 1104 taken 0% (fallthrough)
+branch 1105 taken 100%
+branch 1106 never executed (fallthrough)
+branch 1107 never executed
+branch 1108 taken 0% (fallthrough)
+branch 1109 taken 100%
+branch 1110 never executed (fallthrough)
+branch 1111 never executed
+branch 1112 never executed (fallthrough)
+branch 1113 never executed
+branch 1114 taken 0% (fallthrough)
+branch 1115 taken 100%
+branch 1116 taken 0% (fallthrough)
+branch 1117 taken 100%
+branch 1118 never executed (fallthrough)
+branch 1119 never executed
+branch 1120 taken 0% (fallthrough)
+branch 1121 taken 100%
+branch 1122 taken 0% (fallthrough)
+branch 1123 taken 100%
+branch 1124 taken 0% (fallthrough)
+branch 1125 taken 100%
+branch 1126 taken 0% (fallthrough)
+branch 1127 taken 100%
+branch 1128 never executed (fallthrough)
+branch 1129 never executed
+branch 1130 never executed (fallthrough)
+branch 1131 never executed
+branch 1132 never executed (fallthrough)
+branch 1133 never executed
+branch 1134 never executed (fallthrough)
+branch 1135 never executed
+branch 1136 taken 0% (fallthrough)
+branch 1137 taken 100%
+branch 1138 never executed (fallthrough)
+branch 1139 never executed
+branch 1140 taken 0% (fallthrough)
+branch 1141 taken 100%
+branch 1142 taken 0% (fallthrough)
+branch 1143 taken 100%
+branch 1144 never executed (fallthrough)
+branch 1145 never executed
+branch 1146 taken 0% (fallthrough)
+branch 1147 taken 100%
+branch 1148 taken 0% (fallthrough)
+branch 1149 taken 100%
+branch 1150 never executed (fallthrough)
+branch 1151 never executed
+branch 1152 taken 0% (fallthrough)
+branch 1153 taken 100%
+branch 1154 taken 0% (fallthrough)
+branch 1155 taken 100%
+branch 1156 never executed (fallthrough)
+branch 1157 never executed
+branch 1158 taken 0% (fallthrough)
+branch 1159 taken 100%
+branch 1160 never executed (fallthrough)
+branch 1161 never executed
+branch 1162 taken 0% (fallthrough)
+branch 1163 taken 100%
+branch 1164 taken 0% (fallthrough)
+branch 1165 taken 100%
+branch 1166 taken 0% (fallthrough)
+branch 1167 taken 100%
+branch 1168 never executed (fallthrough)
+branch 1169 never executed
+branch 1170 taken 0% (fallthrough)
+branch 1171 taken 100%
+branch 1172 taken 0% (fallthrough)
+branch 1173 taken 100%
+branch 1174 taken 0% (fallthrough)
+branch 1175 taken 100%
+branch 1176 never executed (fallthrough)
+branch 1177 never executed
+branch 1178 never executed (fallthrough)
+branch 1179 never executed
+branch 1180 never executed (fallthrough)
+branch 1181 never executed
+branch 1182 never executed (fallthrough)
+branch 1183 never executed
+branch 1184 never executed (fallthrough)
+branch 1185 never executed
+branch 1186 never executed (fallthrough)
+branch 1187 never executed
+branch 1188 never executed (fallthrough)
+branch 1189 never executed
+branch 1190 never executed (fallthrough)
+branch 1191 never executed
+branch 1192 never executed (fallthrough)
+branch 1193 never executed
+branch 1194 never executed (fallthrough)
+branch 1195 never executed
+branch 1196 never executed (fallthrough)
+branch 1197 never executed
+branch 1198 never executed (fallthrough)
+branch 1199 never executed
+branch 1200 never executed (fallthrough)
+branch 1201 never executed
+branch 1202 never executed (fallthrough)
+branch 1203 never executed
+branch 1204 never executed (fallthrough)
+branch 1205 never executed
+branch 1206 never executed (fallthrough)
+branch 1207 never executed
+branch 1208 never executed (fallthrough)
+branch 1209 never executed
+branch 1210 taken 0% (fallthrough)
+branch 1211 taken 100%
+branch 1212 never executed (fallthrough)
+branch 1213 never executed
+branch 1214 never executed (fallthrough)
+branch 1215 never executed
+branch 1216 never executed (fallthrough)
+branch 1217 never executed
+branch 1218 never executed (fallthrough)
+branch 1219 never executed
+branch 1220 never executed (fallthrough)
+branch 1221 never executed
+branch 1222 never executed (fallthrough)
+branch 1223 never executed
+branch 1224 never executed (fallthrough)
+branch 1225 never executed
+branch 1226 never executed (fallthrough)
+branch 1227 never executed
+branch 1228 never executed (fallthrough)
+branch 1229 never executed
+branch 1230 never executed (fallthrough)
+branch 1231 never executed
+branch 1232 never executed (fallthrough)
+branch 1233 never executed
+branch 1234 never executed (fallthrough)
+branch 1235 never executed
+branch 1236 never executed (fallthrough)
+branch 1237 never executed
+branch 1238 never executed (fallthrough)
+branch 1239 never executed
+branch 1240 never executed (fallthrough)
+branch 1241 never executed
+branch 1242 never executed (fallthrough)
+branch 1243 never executed
+branch 1244 never executed (fallthrough)
+branch 1245 never executed
+branch 1246 never executed (fallthrough)
+branch 1247 never executed
+branch 1248 never executed (fallthrough)
+branch 1249 never executed
+branch 1250 never executed (fallthrough)
+branch 1251 never executed
+branch 1252 never executed (fallthrough)
+branch 1253 never executed
+branch 1254 never executed (fallthrough)
+branch 1255 never executed
+branch 1256 never executed (fallthrough)
+branch 1257 never executed
+branch 1258 never executed (fallthrough)
+branch 1259 never executed
+branch 1260 never executed (fallthrough)
+branch 1261 never executed
+branch 1262 never executed (fallthrough)
+branch 1263 never executed
+branch 1264 never executed (fallthrough)
+branch 1265 never executed
+branch 1266 never executed (fallthrough)
+branch 1267 never executed
+branch 1268 never executed (fallthrough)
+branch 1269 never executed
+branch 1270 never executed (fallthrough)
+branch 1271 never executed
+branch 1272 never executed (fallthrough)
+branch 1273 never executed
+branch 1274 never executed (fallthrough)
+branch 1275 never executed
+branch 1276 never executed (fallthrough)
+branch 1277 never executed
+branch 1278 never executed (fallthrough)
+branch 1279 never executed
+branch 1280 never executed (fallthrough)
+branch 1281 never executed
+branch 1282 never executed (fallthrough)
+branch 1283 never executed
+branch 1284 never executed (fallthrough)
+branch 1285 never executed
+branch 1286 never executed (fallthrough)
+branch 1287 never executed
+branch 1288 never executed (fallthrough)
+branch 1289 never executed
+branch 1290 never executed (fallthrough)
+branch 1291 never executed
+branch 1292 never executed (fallthrough)
+branch 1293 never executed
+branch 1294 never executed (fallthrough)
+branch 1295 never executed
+branch 1296 never executed (fallthrough)
+branch 1297 never executed
+branch 1298 never executed (fallthrough)
+branch 1299 never executed
+branch 1300 never executed (fallthrough)
+branch 1301 never executed
+branch 1302 never executed (fallthrough)
+branch 1303 never executed
+branch 1304 never executed (fallthrough)
+branch 1305 never executed
+branch 1306 never executed (fallthrough)
+branch 1307 never executed
+branch 1308 never executed (fallthrough)
+branch 1309 never executed
+branch 1310 never executed (fallthrough)
+branch 1311 never executed
+branch 1312 never executed (fallthrough)
+branch 1313 never executed
+branch 1314 never executed (fallthrough)
+branch 1315 never executed
+branch 1316 never executed (fallthrough)
+branch 1317 never executed
+branch 1318 never executed (fallthrough)
+branch 1319 never executed
+branch 1320 never executed (fallthrough)
+branch 1321 never executed
+branch 1322 never executed (fallthrough)
+branch 1323 never executed
+branch 1324 never executed (fallthrough)
+branch 1325 never executed
+branch 1326 never executed (fallthrough)
+branch 1327 never executed
+branch 1328 never executed (fallthrough)
+branch 1329 never executed
+branch 1330 never executed (fallthrough)
+branch 1331 never executed
+branch 1332 never executed (fallthrough)
+branch 1333 never executed
+branch 1334 never executed (fallthrough)
+branch 1335 never executed
+branch 1336 never executed (fallthrough)
+branch 1337 never executed
+branch 1338 never executed (fallthrough)
+branch 1339 never executed
+branch 1340 never executed (fallthrough)
+branch 1341 never executed
+        -:  204:	  {
+    #####:  205:	    ::operator delete(__p);
+call    0 never executed
+call    1 never executed
+call    2 never executed
+call    3 never executed
+call    4 never executed
+call    5 never executed
+call    6 never executed
+call    7 never executed
+call    8 never executed
+call    9 never executed
+call   10 never executed
+call   11 never executed
+call   12 never executed
+call   13 never executed
+call   14 never executed
+call   15 never executed
+call   16 never executed
+call   17 never executed
+call   18 never executed
+call   19 never executed
+call   20 never executed
+call   21 never executed
+call   22 never executed
+call   23 never executed
+call   24 never executed
+call   25 never executed
+call   26 never executed
+call   27 never executed
+call   28 never executed
+call   29 never executed
+call   30 never executed
+call   31 never executed
+call   32 never executed
+call   33 never executed
+call   34 never executed
+call   35 never executed
+call   36 never executed
+call   37 never executed
+call   38 never executed
+call   39 never executed
+call   40 never executed
+call   41 never executed
+call   42 never executed
+call   43 never executed
+call   44 never executed
+call   45 never executed
+call   46 never executed
+call   47 never executed
+call   48 never executed
+call   49 never executed
+call   50 never executed
+call   51 never executed
+call   52 never executed
+call   53 never executed
+call   54 never executed
+call   55 never executed
+call   56 never executed
+call   57 never executed
+call   58 never executed
+call   59 never executed
+call   60 never executed
+call   61 never executed
+call   62 never executed
+call   63 never executed
+call   64 never executed
+call   65 never executed
+call   66 never executed
+call   67 never executed
+call   68 never executed
+call   69 never executed
+call   70 never executed
+call   71 never executed
+call   72 never executed
+call   73 never executed
+call   74 never executed
+call   75 never executed
+call   76 never executed
+call   77 never executed
+call   78 never executed
+call   79 never executed
+call   80 never executed
+call   81 never executed
+call   82 never executed
+call   83 never executed
+call   84 never executed
+call   85 never executed
+call   86 never executed
+call   87 never executed
+call   88 never executed
+call   89 never executed
+call   90 never executed
+call   91 never executed
+call   92 never executed
+call   93 never executed
+call   94 never executed
+call   95 never executed
+call   96 never executed
+call   97 never executed
+call   98 never executed
+call   99 never executed
+call   100 never executed
+call   101 never executed
+call   102 never executed
+call   103 never executed
+call   104 never executed
+call   105 never executed
+call   106 never executed
+call   107 never executed
+call   108 never executed
+call   109 never executed
+call   110 never executed
+call   111 never executed
+call   112 never executed
+call   113 never executed
+call   114 never executed
+call   115 never executed
+call   116 never executed
+call   117 never executed
+call   118 never executed
+call   119 never executed
+call   120 never executed
+call   121 never executed
+call   122 never executed
+call   123 never executed
+call   124 never executed
+call   125 never executed
+call   126 never executed
+call   127 never executed
+call   128 never executed
+call   129 never executed
+call   130 never executed
+call   131 never executed
+call   132 never executed
+call   133 never executed
+call   134 never executed
+call   135 never executed
+call   136 never executed
+call   137 never executed
+call   138 never executed
+call   139 never executed
+call   140 never executed
+call   141 never executed
+call   142 never executed
+call   143 never executed
+call   144 never executed
+call   145 never executed
+call   146 never executed
+call   147 never executed
+call   148 never executed
+call   149 never executed
+call   150 never executed
+call   151 never executed
+call   152 never executed
+call   153 never executed
+call   154 never executed
+call   155 never executed
+call   156 never executed
+call   157 never executed
+call   158 never executed
+call   159 never executed
+call   160 never executed
+call   161 never executed
+call   162 never executed
+call   163 never executed
+call   164 never executed
+call   165 never executed
+call   166 never executed
+call   167 never executed
+call   168 never executed
+call   169 never executed
+call   170 never executed
+call   171 never executed
+call   172 never executed
+call   173 never executed
+call   174 never executed
+call   175 never executed
+call   176 never executed
+call   177 never executed
+call   178 never executed
+call   179 never executed
+call   180 never executed
+call   181 never executed
+call   182 never executed
+call   183 never executed
+call   184 never executed
+call   185 never executed
+call   186 never executed
+call   187 never executed
+call   188 never executed
+call   189 never executed
+call   190 never executed
+call   191 never executed
+call   192 never executed
+call   193 never executed
+call   194 never executed
+call   195 never executed
+call   196 never executed
+call   197 never executed
+call   198 never executed
+call   199 never executed
+call   200 never executed
+call   201 never executed
+call   202 never executed
+call   203 never executed
+call   204 never executed
+call   205 never executed
+call   206 never executed
+call   207 never executed
+call   208 never executed
+call   209 never executed
+call   210 never executed
+call   211 never executed
+call   212 never executed
+call   213 never executed
+call   214 never executed
+call   215 never executed
+call   216 never executed
+call   217 never executed
+call   218 never executed
+call   219 never executed
+call   220 never executed
+call   221 never executed
+call   222 never executed
+call   223 never executed
+call   224 never executed
+call   225 never executed
+call   226 never executed
+call   227 never executed
+call   228 never executed
+call   229 never executed
+call   230 never executed
+call   231 never executed
+call   232 never executed
+call   233 never executed
+call   234 never executed
+call   235 never executed
+call   236 never executed
+call   237 never executed
+call   238 never executed
+call   239 never executed
+call   240 never executed
+call   241 never executed
+call   242 never executed
+call   243 never executed
+call   244 never executed
+call   245 never executed
+call   246 never executed
+call   247 never executed
+call   248 never executed
+call   249 never executed
+call   250 never executed
+call   251 never executed
+call   252 never executed
+call   253 never executed
+call   254 never executed
+call   255 never executed
+call   256 never executed
+call   257 never executed
+call   258 never executed
+call   259 never executed
+call   260 never executed
+call   261 never executed
+call   262 never executed
+call   263 never executed
+call   264 never executed
+call   265 never executed
+call   266 never executed
+call   267 never executed
+call   268 never executed
+call   269 never executed
+call   270 never executed
+call   271 never executed
+call   272 never executed
+call   273 never executed
+call   274 never executed
+call   275 never executed
+call   276 never executed
+call   277 never executed
+call   278 never executed
+call   279 never executed
+call   280 never executed
+call   281 never executed
+call   282 never executed
+call   283 never executed
+call   284 never executed
+call   285 never executed
+call   286 never executed
+call   287 never executed
+call   288 never executed
+call   289 never executed
+call   290 never executed
+call   291 never executed
+call   292 never executed
+call   293 never executed
+call   294 never executed
+call   295 never executed
+call   296 never executed
+call   297 never executed
+call   298 never executed
+call   299 never executed
+call   300 never executed
+call   301 never executed
+call   302 never executed
+call   303 never executed
+call   304 never executed
+call   305 never executed
+call   306 never executed
+call   307 never executed
+call   308 never executed
+call   309 never executed
+call   310 never executed
+call   311 never executed
+call   312 never executed
+call   313 never executed
+call   314 never executed
+call   315 never executed
+call   316 never executed
+call   317 never executed
+call   318 never executed
+call   319 never executed
+call   320 never executed
+call   321 never executed
+call   322 never executed
+call   323 never executed
+call   324 never executed
+call   325 never executed
+call   326 never executed
+call   327 never executed
+call   328 never executed
+call   329 never executed
+call   330 never executed
+call   331 never executed
+call   332 never executed
+call   333 never executed
+call   334 never executed
+call   335 never executed
+call   336 never executed
+call   337 never executed
+call   338 never executed
+call   339 never executed
+call   340 never executed
+call   341 never executed
+call   342 never executed
+call   343 never executed
+call   344 never executed
+call   345 never executed
+call   346 never executed
+call   347 never executed
+call   348 never executed
+call   349 never executed
+call   350 never executed
+call   351 never executed
+call   352 never executed
+call   353 never executed
+call   354 never executed
+call   355 never executed
+call   356 never executed
+call   357 never executed
+call   358 never executed
+call   359 never executed
+call   360 never executed
+call   361 never executed
+call   362 never executed
+call   363 never executed
+call   364 never executed
+call   365 never executed
+call   366 never executed
+call   367 never executed
+call   368 never executed
+call   369 never executed
+call   370 never executed
+call   371 never executed
+call   372 never executed
+call   373 never executed
+call   374 never executed
+call   375 never executed
+call   376 never executed
+call   377 never executed
+call   378 never executed
+call   379 never executed
+call   380 never executed
+call   381 never executed
+call   382 never executed
+call   383 never executed
+call   384 never executed
+call   385 never executed
+call   386 never executed
+call   387 never executed
+call   388 never executed
+call   389 never executed
+call   390 never executed
+call   391 never executed
+call   392 never executed
+call   393 never executed
+call   394 never executed
+call   395 never executed
+call   396 never executed
+call   397 never executed
+call   398 never executed
+call   399 never executed
+call   400 never executed
+call   401 never executed
+call   402 never executed
+call   403 never executed
+call   404 never executed
+call   405 never executed
+call   406 never executed
+call   407 never executed
+call   408 never executed
+call   409 never executed
+call   410 never executed
+call   411 never executed
+call   412 never executed
+call   413 never executed
+call   414 never executed
+call   415 never executed
+call   416 never executed
+call   417 never executed
+call   418 never executed
+call   419 never executed
+call   420 never executed
+call   421 never executed
+call   422 never executed
+call   423 never executed
+call   424 never executed
+call   425 never executed
+call   426 never executed
+call   427 never executed
+call   428 never executed
+call   429 never executed
+call   430 never executed
+call   431 never executed
+call   432 never executed
+call   433 never executed
+call   434 never executed
+call   435 never executed
+call   436 never executed
+call   437 never executed
+call   438 never executed
+call   439 never executed
+call   440 never executed
+call   441 never executed
+call   442 never executed
+call   443 never executed
+call   444 never executed
+call   445 never executed
+call   446 never executed
+call   447 never executed
+call   448 never executed
+call   449 never executed
+call   450 never executed
+call   451 never executed
+call   452 never executed
+call   453 never executed
+call   454 never executed
+call   455 never executed
+call   456 never executed
+call   457 never executed
+call   458 never executed
+call   459 never executed
+call   460 never executed
+call   461 never executed
+call   462 never executed
+call   463 never executed
+call   464 never executed
+call   465 never executed
+call   466 never executed
+call   467 never executed
+call   468 never executed
+call   469 never executed
+call   470 never executed
+call   471 never executed
+call   472 never executed
+call   473 never executed
+call   474 never executed
+call   475 never executed
+call   476 never executed
+call   477 never executed
+call   478 never executed
+call   479 never executed
+call   480 never executed
+call   481 never executed
+call   482 never executed
+call   483 never executed
+call   484 never executed
+call   485 never executed
+call   486 never executed
+call   487 never executed
+call   488 never executed
+call   489 never executed
+call   490 never executed
+call   491 never executed
+call   492 never executed
+call   493 never executed
+call   494 never executed
+call   495 never executed
+call   496 never executed
+call   497 never executed
+call   498 never executed
+call   499 never executed
+call   500 never executed
+call   501 never executed
+call   502 never executed
+call   503 never executed
+call   504 never executed
+call   505 never executed
+call   506 never executed
+call   507 never executed
+call   508 never executed
+call   509 never executed
+call   510 never executed
+call   511 never executed
+call   512 never executed
+call   513 never executed
+call   514 never executed
+call   515 never executed
+call   516 never executed
+call   517 never executed
+call   518 never executed
+call   519 never executed
+call   520 never executed
+call   521 never executed
+call   522 never executed
+call   523 never executed
+call   524 never executed
+call   525 never executed
+call   526 never executed
+call   527 never executed
+call   528 never executed
+call   529 never executed
+call   530 never executed
+call   531 never executed
+call   532 never executed
+call   533 never executed
+call   534 never executed
+call   535 never executed
+call   536 never executed
+call   537 never executed
+call   538 never executed
+call   539 never executed
+call   540 never executed
+call   541 never executed
+call   542 never executed
+call   543 never executed
+call   544 never executed
+call   545 never executed
+call   546 never executed
+call   547 never executed
+call   548 never executed
+call   549 never executed
+call   550 never executed
+call   551 never executed
+call   552 never executed
+call   553 never executed
+call   554 never executed
+call   555 never executed
+call   556 never executed
+call   557 never executed
+call   558 never executed
+call   559 never executed
+call   560 never executed
+call   561 never executed
+call   562 never executed
+call   563 never executed
+call   564 never executed
+call   565 never executed
+call   566 never executed
+call   567 never executed
+call   568 never executed
+call   569 never executed
+call   570 never executed
+call   571 never executed
+call   572 never executed
+call   573 never executed
+call   574 never executed
+call   575 never executed
+call   576 never executed
+call   577 never executed
+call   578 never executed
+call   579 never executed
+call   580 never executed
+call   581 never executed
+call   582 never executed
+call   583 never executed
+call   584 never executed
+call   585 never executed
+call   586 never executed
+call   587 never executed
+call   588 never executed
+call   589 never executed
+call   590 never executed
+call   591 never executed
+call   592 never executed
+call   593 never executed
+call   594 never executed
+call   595 never executed
+call   596 never executed
+call   597 never executed
+call   598 never executed
+call   599 never executed
+call   600 never executed
+call   601 never executed
+call   602 never executed
+call   603 never executed
+call   604 never executed
+call   605 never executed
+call   606 never executed
+call   607 never executed
+call   608 never executed
+call   609 never executed
+call   610 never executed
+call   611 never executed
+call   612 never executed
+call   613 never executed
+call   614 never executed
+call   615 never executed
+call   616 never executed
+call   617 never executed
+call   618 never executed
+call   619 never executed
+call   620 never executed
+call   621 never executed
+call   622 never executed
+call   623 never executed
+call   624 never executed
+call   625 never executed
+call   626 never executed
+call   627 never executed
+call   628 never executed
+call   629 never executed
+call   630 never executed
+call   631 never executed
+call   632 never executed
+call   633 never executed
+call   634 never executed
+call   635 never executed
+call   636 never executed
+call   637 never executed
+call   638 never executed
+call   639 never executed
+call   640 never executed
+call   641 never executed
+call   642 never executed
+call   643 never executed
+call   644 never executed
+call   645 never executed
+call   646 never executed
+call   647 never executed
+call   648 never executed
+call   649 never executed
+call   650 never executed
+call   651 never executed
+call   652 never executed
+call   653 never executed
+call   654 never executed
+call   655 never executed
+call   656 never executed
+call   657 never executed
+call   658 never executed
+call   659 never executed
+call   660 never executed
+call   661 never executed
+call   662 never executed
+call   663 never executed
+call   664 never executed
+call   665 never executed
+call   666 never executed
+call   667 never executed
+call   668 never executed
+call   669 never executed
+call   670 never executed
+    #####:  206:	    return;
+        -:  207:	  }
+   60569*:  208:	__allocator_base<_Tp>::deallocate(__p, __n);
+call    0 never executed
+call    1 never executed
+call    2 returned 100%
+call    3 never executed
+call    4 returned 100%
+call    5 returned 100%
+call    6 returned 100%
+call    7 never executed
+call    8 never executed
+call    9 never executed
+call   10 never executed
+call   11 never executed
+call   12 never executed
+call   13 never executed
+call   14 never executed
+call   15 never executed
+call   16 never executed
+call   17 returned 100%
+call   18 returned 100%
+call   19 returned 100%
+call   20 never executed
+call   21 never executed
+call   22 never executed
+call   23 returned 100%
+call   24 never executed
+call   25 never executed
+call   26 never executed
+call   27 never executed
+call   28 returned 100%
+call   29 never executed
+call   30 never executed
+call   31 returned 100%
+call   32 returned 100%
+call   33 returned 100%
+call   34 returned 100%
+call   35 returned 100%
+call   36 never executed
+call   37 returned 100%
+call   38 never executed
+call   39 returned 100%
+call   40 returned 100%
+call   41 never executed
+call   42 never executed
+call   43 never executed
+call   44 returned 100%
+call   45 returned 100%
+call   46 never executed
+call   47 never executed
+call   48 returned 100%
+call   49 returned 100%
+call   50 returned 100%
+call   51 returned 100%
+call   52 returned 100%
+call   53 returned 100%
+call   54 returned 100%
+call   55 returned 100%
+call   56 never executed
+call   57 never executed
+call   58 never executed
+call   59 never executed
+call   60 never executed
+call   61 never executed
+call   62 returned 100%
+call   63 never executed
+call   64 returned 100%
+call   65 never executed
+call   66 never executed
+call   67 never executed
+call   68 never executed
+call   69 never executed
+call   70 never executed
+call   71 never executed
+call   72 never executed
+call   73 never executed
+call   74 never executed
+call   75 never executed
+call   76 never executed
+call   77 returned 100%
+call   78 never executed
+call   79 never executed
+call   80 never executed
+call   81 never executed
+call   82 never executed
+call   83 never executed
+call   84 never executed
+call   85 returned 100%
+call   86 never executed
+call   87 never executed
+call   88 never executed
+call   89 never executed
+call   90 never executed
+call   91 never executed
+call   92 never executed
+call   93 never executed
+call   94 never executed
+call   95 never executed
+call   96 returned 100%
+call   97 never executed
+call   98 never executed
+call   99 returned 100%
+call   100 never executed
+call   101 never executed
+call   102 never executed
+call   103 never executed
+call   104 never executed
+call   105 returned 100%
+call   106 never executed
+call   107 never executed
+call   108 never executed
+call   109 never executed
+call   110 never executed
+call   111 never executed
+call   112 never executed
+call   113 never executed
+call   114 never executed
+call   115 never executed
+call   116 never executed
+call   117 never executed
+call   118 never executed
+call   119 never executed
+call   120 never executed
+call   121 never executed
+call   122 never executed
+call   123 never executed
+call   124 never executed
+call   125 returned 100%
+call   126 never executed
+call   127 never executed
+call   128 never executed
+call   129 never executed
+call   130 never executed
+call   131 returned 100%
+call   132 never executed
+call   133 never executed
+call   134 never executed
+call   135 returned 100%
+call   136 returned 100%
+call   137 never executed
+call   138 never executed
+call   139 never executed
+call   140 never executed
+call   141 never executed
+call   142 never executed
+call   143 never executed
+call   144 never executed
+call   145 never executed
+call   146 never executed
+call   147 never executed
+call   148 returned 100%
+call   149 returned 100%
+call   150 never executed
+call   151 never executed
+call   152 returned 100%
+call   153 never executed
+call   154 never executed
+call   155 never executed
+call   156 never executed
+call   157 never executed
+call   158 never executed
+call   159 never executed
+call   160 never executed
+call   161 never executed
+call   162 never executed
+call   163 never executed
+call   164 never executed
+call   165 never executed
+call   166 returned 100%
+call   167 never executed
+call   168 returned 100%
+call   169 never executed
+call   170 never executed
+call   171 never executed
+call   172 never executed
+call   173 never executed
+call   174 never executed
+call   175 returned 100%
+call   176 never executed
+call   177 never executed
+call   178 never executed
+call   179 never executed
+call   180 never executed
+call   181 never executed
+call   182 never executed
+call   183 never executed
+call   184 never executed
+call   185 never executed
+call   186 never executed
+call   187 returned 100%
+call   188 returned 100%
+call   189 never executed
+call   190 never executed
+call   191 never executed
+call   192 never executed
+call   193 never executed
+call   194 never executed
+call   195 never executed
+call   196 never executed
+call   197 returned 100%
+call   198 returned 100%
+call   199 returned 100%
+call   200 returned 100%
+call   201 returned 100%
+call   202 returned 100%
+call   203 returned 100%
+call   204 returned 100%
+call   205 never executed
+call   206 returned 100%
+call   207 never executed
+call   208 never executed
+call   209 never executed
+call   210 returned 100%
+call   211 never executed
+call   212 never executed
+call   213 never executed
+call   214 never executed
+call   215 never executed
+call   216 never executed
+call   217 never executed
+call   218 never executed
+call   219 never executed
+call   220 never executed
+call   221 never executed
+call   222 never executed
+call   223 never executed
+call   224 never executed
+call   225 never executed
+call   226 never executed
+call   227 never executed
+call   228 never executed
+call   229 never executed
+call   230 never executed
+call   231 never executed
+call   232 never executed
+call   233 never executed
+call   234 never executed
+call   235 never executed
+call   236 never executed
+call   237 never executed
+call   238 never executed
+call   239 returned 100%
+call   240 never executed
+call   241 returned 100%
+call   242 returned 100%
+call   243 returned 100%
+call   244 never executed
+call   245 returned 100%
+call   246 never executed
+call   247 returned 100%
+call   248 never executed
+call   249 returned 100%
+call   250 returned 100%
+call   251 never executed
+call   252 returned 100%
+call   253 returned 100%
+call   254 never executed
+call   255 never executed
+call   256 never executed
+call   257 never executed
+call   258 never executed
+call   259 never executed
+call   260 never executed
+call   261 never executed
+call   262 returned 100%
+call   263 returned 100%
+call   264 returned 100%
+call   265 returned 100%
+call   266 returned 100%
+call   267 returned 100%
+call   268 never executed
+call   269 returned 100%
+call   270 never executed
+call   271 never executed
+call   272 returned 100%
+call   273 returned 100%
+call   274 never executed
+call   275 never executed
+call   276 returned 100%
+call   277 never executed
+call   278 returned 100%
+call   279 returned 100%
+call   280 returned 100%
+call   281 returned 100%
+call   282 never executed
+call   283 returned 100%
+call   284 never executed
+call   285 returned 100%
+call   286 returned 100%
+call   287 returned 100%
+call   288 returned 100%
+call   289 returned 100%
+call   290 never executed
+call   291 never executed
+call   292 returned 100%
+call   293 returned 100%
+call   294 returned 100%
+call   295 never executed
+call   296 returned 100%
+call   297 returned 100%
+call   298 returned 100%
+call   299 returned 100%
+call   300 returned 100%
+call   301 never executed
+call   302 returned 100%
+call   303 returned 100%
+call   304 returned 100%
+call   305 returned 100%
+call   306 returned 100%
+call   307 returned 100%
+call   308 returned 100%
+call   309 never executed
+call   310 never executed
+call   311 never executed
+call   312 returned 100%
+call   313 never executed
+call   314 returned 100%
+call   315 returned 100%
+call   316 returned 100%
+call   317 never executed
+call   318 returned 100%
+call   319 never executed
+call   320 returned 100%
+call   321 never executed
+call   322 returned 100%
+call   323 never executed
+call   324 returned 100%
+call   325 never executed
+call   326 returned 100%
+call   327 never executed
+call   328 returned 100%
+call   329 never executed
+call   330 never executed
+call   331 returned 100%
+call   332 returned 100%
+call   333 returned 100%
+call   334 returned 100%
+call   335 returned 100%
+call   336 returned 100%
+call   337 returned 100%
+call   338 returned 100%
+call   339 never executed
+call   340 never executed
+call   341 never executed
+call   342 never executed
+call   343 returned 100%
+call   344 returned 100%
+call   345 returned 100%
+call   346 returned 100%
+call   347 returned 100%
+call   348 returned 100%
+call   349 never executed
+call   350 returned 100%
+call   351 returned 100%
+call   352 returned 100%
+call   353 returned 100%
+call   354 returned 100%
+call   355 never executed
+call   356 returned 100%
+call   357 returned 100%
+call   358 returned 100%
+call   359 never executed
+call   360 returned 100%
+call   361 returned 100%
+call   362 returned 100%
+call   363 returned 101%
+call   364 returned 100%
+call   365 returned 100%
+call   366 returned 100%
+call   367 returned 100%
+call   368 never executed
+call   369 returned 100%
+call   370 never executed
+call   371 never executed
+call   372 never executed
+call   373 never executed
+call   374 returned 100%
+call   375 returned 100%
+call   376 returned 100%
+call   377 returned 100%
+call   378 returned 100%
+call   379 returned 100%
+call   380 never executed
+call   381 returned 100%
+call   382 never executed
+call   383 returned 100%
+call   384 returned 100%
+call   385 returned 100%
+call   386 never executed
+call   387 returned 100%
+call   388 returned 100%
+call   389 returned 100%
+call   390 returned 100%
+call   391 never executed
+call   392 never executed
+call   393 never executed
+call   394 returned 100%
+call   395 never executed
+call   396 returned 100%
+call   397 returned 100%
+call   398 never executed
+call   399 returned 100%
+call   400 never executed
+call   401 never executed
+call   402 returned 100%
+call   403 never executed
+call   404 returned 100%
+call   405 returned 100%
+call   406 returned 100%
+call   407 returned 100%
+call   408 returned 100%
+call   409 never executed
+call   410 never executed
+call   411 returned 100%
+call   412 returned 100%
+call   413 returned 100%
+call   414 never executed
+call   415 returned 100%
+call   416 never executed
+call   417 never executed
+call   418 returned 100%
+call   419 never executed
+call   420 never executed
+call   421 returned 100%
+call   422 returned 100%
+call   423 returned 100%
+call   424 returned 100%
+call   425 returned 100%
+call   426 never executed
+call   427 returned 100%
+call   428 returned 100%
+call   429 returned 100%
+call   430 returned 100%
+call   431 never executed
+call   432 never executed
+call   433 never executed
+call   434 returned 100%
+call   435 returned 100%
+call   436 returned 100%
+call   437 never executed
+call   438 returned 100%
+call   439 returned 100%
+call   440 returned 100%
+call   441 returned 100%
+call   442 returned 100%
+call   443 never executed
+call   444 returned 100%
+call   445 returned 100%
+call   446 returned 100%
+call   447 never executed
+call   448 never executed
+call   449 never executed
+call   450 never executed
+call   451 returned 100%
+call   452 returned 100%
+call   453 returned 100%
+call   454 returned 100%
+call   455 never executed
+call   456 never executed
+call   457 never executed
+call   458 never executed
+call   459 never executed
+call   460 never executed
+call   461 returned 100%
+call   462 never executed
+call   463 returned 100%
+call   464 returned 100%
+call   465 returned 100%
+call   466 returned 100%
+call   467 returned 100%
+call   468 returned 100%
+call   469 never executed
+call   470 never executed
+call   471 never executed
+call   472 returned 100%
+call   473 never executed
+call   474 returned 100%
+call   475 never executed
+call   476 never executed
+call   477 returned 100%
+call   478 returned 100%
+call   479 returned 100%
+call   480 never executed
+call   481 returned 100%
+call   482 never executed
+call   483 returned 100%
+call   484 returned 100%
+call   485 returned 100%
+call   486 returned 100%
+call   487 returned 100%
+call   488 returned 100%
+call   489 returned 100%
+call   490 never executed
+call   491 never executed
+call   492 never executed
+call   493 never executed
+call   494 never executed
+call   495 never executed
+call   496 never executed
+call   497 never executed
+call   498 returned 100%
+call   499 returned 100%
+call   500 returned 100%
+call   501 returned 100%
+call   502 returned 100%
+call   503 never executed
+call   504 returned 100%
+call   505 never executed
+call   506 returned 100%
+call   507 returned 100%
+call   508 returned 100%
+call   509 never executed
+call   510 returned 100%
+call   511 never executed
+call   512 never executed
+call   513 never executed
+call   514 returned 100%
+call   515 never executed
+call   516 never executed
+call   517 never executed
+call   518 returned 100%
+call   519 never executed
+call   520 returned 100%
+call   521 returned 100%
+call   522 never executed
+call   523 returned 100%
+call   524 returned 100%
+call   525 never executed
+call   526 returned 100%
+call   527 never executed
+call   528 returned 100%
+call   529 returned 100%
+call   530 returned 100%
+call   531 returned 100%
+call   532 returned 100%
+call   533 returned 100%
+call   534 never executed
+call   535 never executed
+call   536 never executed
+call   537 never executed
+call   538 never executed
+call   539 returned 100%
+call   540 never executed
+call   541 never executed
+call   542 returned 100%
+call   543 returned 100%
+call   544 returned 100%
+call   545 returned 100%
+call   546 returned 100%
+call   547 returned 100%
+call   548 never executed
+call   549 never executed
+call   550 returned 100%
+call   551 returned 100%
+call   552 returned 100%
+call   553 never executed
+call   554 returned 100%
+call   555 never executed
+call   556 never executed
+call   557 returned 100%
+call   558 returned 100%
+call   559 never executed
+call   560 returned 100%
+call   561 returned 100%
+call   562 returned 100%
+call   563 returned 100%
+call   564 never executed
+call   565 never executed
+call   566 never executed
+call   567 never executed
+call   568 returned 100%
+call   569 never executed
+call   570 returned 100%
+call   571 returned 100%
+call   572 never executed
+call   573 returned 100%
+call   574 returned 100%
+call   575 never executed
+call   576 returned 100%
+call   577 returned 100%
+call   578 never executed
+call   579 returned 100%
+call   580 never executed
+call   581 returned 100%
+call   582 returned 100%
+call   583 returned 100%
+call   584 never executed
+call   585 returned 100%
+call   586 returned 100%
+call   587 returned 100%
+call   588 never executed
+call   589 never executed
+call   590 never executed
+call   591 never executed
+call   592 never executed
+call   593 never executed
+call   594 never executed
+call   595 never executed
+call   596 never executed
+call   597 never executed
+call   598 never executed
+call   599 never executed
+call   600 never executed
+call   601 never executed
+call   602 never executed
+call   603 never executed
+call   604 never executed
+call   605 returned 100%
+call   606 never executed
+call   607 never executed
+call   608 never executed
+call   609 never executed
+call   610 never executed
+call   611 never executed
+call   612 never executed
+call   613 never executed
+call   614 never executed
+call   615 never executed
+call   616 never executed
+call   617 never executed
+call   618 never executed
+call   619 never executed
+call   620 never executed
+call   621 never executed
+call   622 never executed
+call   623 never executed
+call   624 never executed
+call   625 never executed
+call   626 never executed
+call   627 never executed
+call   628 never executed
+call   629 never executed
+call   630 never executed
+call   631 never executed
+call   632 never executed
+call   633 never executed
+call   634 never executed
+call   635 never executed
+call   636 never executed
+call   637 never executed
+call   638 never executed
+call   639 never executed
+call   640 never executed
+call   641 never executed
+call   642 never executed
+call   643 never executed
+call   644 never executed
+call   645 never executed
+call   646 never executed
+call   647 never executed
+call   648 never executed
+call   649 never executed
+call   650 never executed
+call   651 never executed
+call   652 never executed
+call   653 never executed
+call   654 never executed
+call   655 never executed
+call   656 never executed
+call   657 never executed
+call   658 never executed
+call   659 never executed
+call   660 never executed
+call   661 never executed
+call   662 never executed
+call   663 never executed
+call   664 never executed
+call   665 never executed
+call   666 never executed
+call   667 never executed
+call   668 never executed
+call   669 never executed
+call   670 never executed
+        -:  209:      }
+        -:  210:#endif // C++20
+        -:  211:
+        -:  212:      friend __attribute__((__always_inline__)) _GLIBCXX20_CONSTEXPR
+        -:  213:      bool
+        -:  214:      operator==(const allocator&, const allocator&) _GLIBCXX_NOTHROW
+    #####:  215:      { return true; }
+        -:  216:
+        -:  217:#if __cpp_impl_three_way_comparison < 201907L
+        -:  218:      friend __attribute__((__always_inline__)) _GLIBCXX20_CONSTEXPR
+        -:  219:      bool
+        -:  220:      operator!=(const allocator&, const allocator&) _GLIBCXX_NOTHROW
+        -:  221:      { return false; }
+        -:  222:#endif
+        -:  223:
+        -:  224:      // Inherit everything else.
+        -:  225:    };
+        -:  226:
+        -:  227:  /** Equality comparison for std::allocator objects
+        -:  228:   *
+        -:  229:   * @return true, for all std::allocator objects.
+        -:  230:   * @relates std::allocator
+        -:  231:   */
+        -:  232:  template<typename _T1, typename _T2>
+        -:  233:    __attribute__((__always_inline__))
+        -:  234:    inline _GLIBCXX20_CONSTEXPR bool
+        -:  235:    operator==(const allocator<_T1>&, const allocator<_T2>&)
+        -:  236:    _GLIBCXX_NOTHROW
+     735*:  237:    { return true; }
+        -:  238:
+        -:  239:#if __cpp_impl_three_way_comparison < 201907L
+        -:  240:  template<typename _T1, typename _T2>
+        -:  241:    __attribute__((__always_inline__))
+        -:  242:    inline _GLIBCXX20_CONSTEXPR bool
+        -:  243:    operator!=(const allocator<_T1>&, const allocator<_T2>&)
+        -:  244:    _GLIBCXX_NOTHROW
+        -:  245:    { return false; }
+        -:  246:#endif
+        -:  247:
+        -:  248:  /// @cond undocumented
+        -:  249:
+        -:  250:  // Invalid allocator<cv T> partial specializations.
+        -:  251:  // allocator_traits::rebind_alloc can be used to form a valid allocator type.
+        -:  252:  template<typename _Tp>
+        -:  253:    class allocator<const _Tp>
+        -:  254:    {
+        -:  255:    public:
+        -:  256:      typedef _Tp value_type;
+        -:  257:      allocator() { }
+        -:  258:      template<typename _Up> allocator(const allocator<_Up>&) { }
+        -:  259:    };
+        -:  260:
+        -:  261:  template<typename _Tp>
+        -:  262:    class allocator<volatile _Tp>
+        -:  263:    {
+        -:  264:    public:
+        -:  265:      typedef _Tp value_type;
+        -:  266:      allocator() { }
+        -:  267:      template<typename _Up> allocator(const allocator<_Up>&) { }
+        -:  268:    };
+        -:  269:
+        -:  270:  template<typename _Tp>
+        -:  271:    class allocator<const volatile _Tp>
+        -:  272:    {
+        -:  273:    public:
+        -:  274:      typedef _Tp value_type;
+        -:  275:      allocator() { }
+        -:  276:      template<typename _Up> allocator(const allocator<_Up>&) { }
+        -:  277:    };
+        -:  278:  /// @endcond
+        -:  279:
+        -:  280:  /// @} group allocator
+        -:  281:
+        -:  282:  // Inhibit implicit instantiations for required instantiations,
+        -:  283:  // which are defined via explicit instantiations elsewhere.
+        -:  284:#if _GLIBCXX_EXTERN_TEMPLATE
+        -:  285:  extern template class allocator<char>;
+        -:  286:  extern template class allocator<wchar_t>;
+        -:  287:#endif
+        -:  288:
+        -:  289:  // Undefine.
+        -:  290:#undef __allocator_base
+        -:  291:
+        -:  292:_GLIBCXX_END_NAMESPACE_VERSION
+        -:  293:} // namespace std
+        -:  294:
+        -:  295:#endif

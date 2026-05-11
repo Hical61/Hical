@@ -1,0 +1,1199 @@
+        -:    0:Source:/usr/include/boost/asio/ssl/detail/impl/engine.ipp
+        -:    1://
+        -:    2:// ssl/detail/impl/engine.ipp
+        -:    3:// ~~~~~~~~~~~~~~~~~~~~~~~~~~
+        -:    4://
+        -:    5:// Copyright (c) 2003-2023 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+        -:    6://
+        -:    7:// Distributed under the Boost Software License, Version 1.0. (See accompanying
+        -:    8:// file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+        -:    9://
+        -:   10:
+        -:   11:#ifndef BOOST_ASIO_SSL_DETAIL_IMPL_ENGINE_IPP
+        -:   12:#define BOOST_ASIO_SSL_DETAIL_IMPL_ENGINE_IPP
+        -:   13:
+        -:   14:#if defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   15:# pragma once
+        -:   16:#endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   17:
+        -:   18:#include <boost/asio/detail/config.hpp>
+        -:   19:
+        -:   20:#include <boost/asio/detail/throw_error.hpp>
+        -:   21:#include <boost/asio/error.hpp>
+        -:   22:#include <boost/asio/ssl/detail/engine.hpp>
+        -:   23:#include <boost/asio/ssl/error.hpp>
+        -:   24:#include <boost/asio/ssl/verify_context.hpp>
+        -:   25:
+        -:   26:#include <boost/asio/detail/push_options.hpp>
+        -:   27:
+        -:   28:namespace boost {
+        -:   29:namespace asio {
+        -:   30:namespace ssl {
+        -:   31:namespace detail {
+        -:   32:
+    #####:   33:engine::engine(SSL_CTX* context)
+    #####:   34:  : ssl_(::SSL_new(context))
+        -:   35:{
+    #####:   36:  if (!ssl_)
+        -:   37:  {
+        -:   38:    boost::system::error_code ec(
+    #####:   39:        static_cast<int>(::ERR_get_error()),
+    #####:   40:        boost::asio::error::get_ssl_category());
+    #####:   41:    boost::asio::detail::throw_error(ec, "engine");
+        -:   42:  }
+        -:   43:
+        -:   44:#if (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   45:  accept_mutex().init();
+        -:   46:#endif // (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   47:
+    #####:   48:  ::SSL_set_mode(ssl_, SSL_MODE_ENABLE_PARTIAL_WRITE);
+    #####:   49:  ::SSL_set_mode(ssl_, SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER);
+        -:   50:#if defined(SSL_MODE_RELEASE_BUFFERS)
+    #####:   51:  ::SSL_set_mode(ssl_, SSL_MODE_RELEASE_BUFFERS);
+        -:   52:#endif // defined(SSL_MODE_RELEASE_BUFFERS)
+        -:   53:
+    #####:   54:  ::BIO* int_bio = 0;
+    #####:   55:  ::BIO_new_bio_pair(&int_bio, 0, &ext_bio_, 0);
+    #####:   56:  ::SSL_set_bio(ssl_, int_bio, int_bio);
+    #####:   57:}
+------------------
+_ZN5boost4asio3ssl6detail6engineC2EP10ssl_ctx_st:
+function _ZN5boost4asio3ssl6detail6engineC2EP10ssl_ctx_st called 0 returned 0% blocks executed 0%
+    #####:   33:engine::engine(SSL_CTX* context)
+    #####:   34:  : ssl_(::SSL_new(context))
+call    0 never executed
+        -:   35:{
+    #####:   36:  if (!ssl_)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:   37:  {
+        -:   38:    boost::system::error_code ec(
+    #####:   39:        static_cast<int>(::ERR_get_error()),
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:   40:        boost::asio::error::get_ssl_category());
+call    0 never executed
+call    1 never executed
+    #####:   41:    boost::asio::detail::throw_error(ec, "engine");
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+        -:   42:  }
+        -:   43:
+        -:   44:#if (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   45:  accept_mutex().init();
+        -:   46:#endif // (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   47:
+    #####:   48:  ::SSL_set_mode(ssl_, SSL_MODE_ENABLE_PARTIAL_WRITE);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:   49:  ::SSL_set_mode(ssl_, SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:   50:#if defined(SSL_MODE_RELEASE_BUFFERS)
+    #####:   51:  ::SSL_set_mode(ssl_, SSL_MODE_RELEASE_BUFFERS);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:   52:#endif // defined(SSL_MODE_RELEASE_BUFFERS)
+        -:   53:
+    #####:   54:  ::BIO* int_bio = 0;
+    #####:   55:  ::BIO_new_bio_pair(&int_bio, 0, &ext_bio_, 0);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:   56:  ::SSL_set_bio(ssl_, int_bio, int_bio);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:   57:}
+------------------
+_ZN5boost4asio3ssl6detail6engineC2EP10ssl_ctx_st:
+function _ZN5boost4asio3ssl6detail6engineC2EP10ssl_ctx_st called 0 returned 0% blocks executed 0%
+    #####:   33:engine::engine(SSL_CTX* context)
+    #####:   34:  : ssl_(::SSL_new(context))
+call    0 never executed
+        -:   35:{
+    #####:   36:  if (!ssl_)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:   37:  {
+        -:   38:    boost::system::error_code ec(
+    #####:   39:        static_cast<int>(::ERR_get_error()),
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:   40:        boost::asio::error::get_ssl_category());
+call    0 never executed
+call    1 never executed
+    #####:   41:    boost::asio::detail::throw_error(ec, "engine");
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+        -:   42:  }
+        -:   43:
+        -:   44:#if (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   45:  accept_mutex().init();
+        -:   46:#endif // (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   47:
+    #####:   48:  ::SSL_set_mode(ssl_, SSL_MODE_ENABLE_PARTIAL_WRITE);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:   49:  ::SSL_set_mode(ssl_, SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:   50:#if defined(SSL_MODE_RELEASE_BUFFERS)
+    #####:   51:  ::SSL_set_mode(ssl_, SSL_MODE_RELEASE_BUFFERS);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:   52:#endif // defined(SSL_MODE_RELEASE_BUFFERS)
+        -:   53:
+    #####:   54:  ::BIO* int_bio = 0;
+    #####:   55:  ::BIO_new_bio_pair(&int_bio, 0, &ext_bio_, 0);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:   56:  ::SSL_set_bio(ssl_, int_bio, int_bio);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:   57:}
+------------------
+        -:   58:
+        -:   59:engine::engine(SSL* ssl_impl)
+        -:   60:  : ssl_(ssl_impl)
+        -:   61:{
+        -:   62:#if (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   63:  accept_mutex().init();
+        -:   64:#endif // (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   65:
+        -:   66:  ::SSL_set_mode(ssl_, SSL_MODE_ENABLE_PARTIAL_WRITE);
+        -:   67:  ::SSL_set_mode(ssl_, SSL_MODE_ACCEPT_MOVING_WRITE_BUFFER);
+        -:   68:#if defined(SSL_MODE_RELEASE_BUFFERS)
+        -:   69:  ::SSL_set_mode(ssl_, SSL_MODE_RELEASE_BUFFERS);
+        -:   70:#endif // defined(SSL_MODE_RELEASE_BUFFERS)
+        -:   71:
+        -:   72:  ::BIO* int_bio = 0;
+        -:   73:  ::BIO_new_bio_pair(&int_bio, 0, &ext_bio_, 0);
+        -:   74:  ::SSL_set_bio(ssl_, int_bio, int_bio);
+        -:   75:}
+        -:   76:
+        -:   77:#if defined(BOOST_ASIO_HAS_MOVE)
+    #####:   78:engine::engine(engine&& other) BOOST_ASIO_NOEXCEPT
+    #####:   79:  : ssl_(other.ssl_),
+    #####:   80:    ext_bio_(other.ext_bio_)
+        -:   81:{
+    #####:   82:  other.ssl_ = 0;
+    #####:   83:  other.ext_bio_ = 0;
+    #####:   84:}
+------------------
+_ZN5boost4asio3ssl6detail6engineC2EOS3_:
+function _ZN5boost4asio3ssl6detail6engineC2EOS3_ called 0 returned 0% blocks executed 0%
+    #####:   78:engine::engine(engine&& other) BOOST_ASIO_NOEXCEPT
+    #####:   79:  : ssl_(other.ssl_),
+    #####:   80:    ext_bio_(other.ext_bio_)
+        -:   81:{
+    #####:   82:  other.ssl_ = 0;
+    #####:   83:  other.ext_bio_ = 0;
+    #####:   84:}
+------------------
+_ZN5boost4asio3ssl6detail6engineC2EOS3_:
+function _ZN5boost4asio3ssl6detail6engineC2EOS3_ called 0 returned 0% blocks executed 0%
+    #####:   78:engine::engine(engine&& other) BOOST_ASIO_NOEXCEPT
+    #####:   79:  : ssl_(other.ssl_),
+    #####:   80:    ext_bio_(other.ext_bio_)
+        -:   81:{
+    #####:   82:  other.ssl_ = 0;
+    #####:   83:  other.ext_bio_ = 0;
+    #####:   84:}
+------------------
+        -:   85:#endif // defined(BOOST_ASIO_HAS_MOVE)
+        -:   86:
+    #####:   87:engine::~engine()
+        -:   88:{
+    #####:   89:  if (ssl_ && SSL_get_app_data(ssl_))
+        -:   90:  {
+    #####:   91:    delete static_cast<verify_callback_base*>(SSL_get_app_data(ssl_));
+    #####:   92:    SSL_set_app_data(ssl_, 0);
+        -:   93:  }
+        -:   94:
+    #####:   95:  if (ext_bio_)
+    #####:   96:    ::BIO_free(ext_bio_);
+        -:   97:
+    #####:   98:  if (ssl_)
+    #####:   99:    ::SSL_free(ssl_);
+    #####:  100:}
+------------------
+_ZN5boost4asio3ssl6detail6engineD2Ev:
+function _ZN5boost4asio3ssl6detail6engineD2Ev called 0 returned 0% blocks executed 0%
+    #####:   87:engine::~engine()
+        -:   88:{
+    #####:   89:  if (ssl_ && SSL_get_app_data(ssl_))
+branch  0 never executed (fallthrough)
+branch  1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed
+branch  5 never executed (fallthrough)
+branch  6 never executed
+        -:   90:  {
+    #####:   91:    delete static_cast<verify_callback_base*>(SSL_get_app_data(ssl_));
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+call    3 never executed
+    #####:   92:    SSL_set_app_data(ssl_, 0);
+call    0 never executed
+        -:   93:  }
+        -:   94:
+    #####:   95:  if (ext_bio_)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   96:    ::BIO_free(ext_bio_);
+call    0 never executed
+        -:   97:
+    #####:   98:  if (ssl_)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   99:    ::SSL_free(ssl_);
+call    0 never executed
+    #####:  100:}
+------------------
+_ZN5boost4asio3ssl6detail6engineD2Ev:
+function _ZN5boost4asio3ssl6detail6engineD2Ev called 0 returned 0% blocks executed 0%
+    #####:   87:engine::~engine()
+        -:   88:{
+    #####:   89:  if (ssl_ && SSL_get_app_data(ssl_))
+branch  0 never executed (fallthrough)
+branch  1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed
+branch  5 never executed (fallthrough)
+branch  6 never executed
+        -:   90:  {
+    #####:   91:    delete static_cast<verify_callback_base*>(SSL_get_app_data(ssl_));
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+call    3 never executed
+    #####:   92:    SSL_set_app_data(ssl_, 0);
+call    0 never executed
+        -:   93:  }
+        -:   94:
+    #####:   95:  if (ext_bio_)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   96:    ::BIO_free(ext_bio_);
+call    0 never executed
+        -:   97:
+    #####:   98:  if (ssl_)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   99:    ::SSL_free(ssl_);
+call    0 never executed
+    #####:  100:}
+------------------
+_ZN5boost4asio3ssl6detail6engineD2Ev:
+function _ZN5boost4asio3ssl6detail6engineD2Ev called 0 returned 0% blocks executed 0%
+    #####:   87:engine::~engine()
+        -:   88:{
+    #####:   89:  if (ssl_ && SSL_get_app_data(ssl_))
+branch  0 never executed (fallthrough)
+branch  1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed
+branch  5 never executed (fallthrough)
+branch  6 never executed
+        -:   90:  {
+    #####:   91:    delete static_cast<verify_callback_base*>(SSL_get_app_data(ssl_));
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+call    3 never executed
+    #####:   92:    SSL_set_app_data(ssl_, 0);
+call    0 never executed
+        -:   93:  }
+        -:   94:
+    #####:   95:  if (ext_bio_)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   96:    ::BIO_free(ext_bio_);
+call    0 never executed
+        -:   97:
+    #####:   98:  if (ssl_)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   99:    ::SSL_free(ssl_);
+call    0 never executed
+    #####:  100:}
+------------------
+        -:  101:
+        -:  102:#if defined(BOOST_ASIO_HAS_MOVE)
+        -:  103:engine& engine::operator=(engine&& other) BOOST_ASIO_NOEXCEPT
+        -:  104:{
+        -:  105:  if (this != &other)
+        -:  106:  {
+        -:  107:    ssl_ = other.ssl_;
+        -:  108:    ext_bio_ = other.ext_bio_;
+        -:  109:    other.ssl_ = 0;
+        -:  110:    other.ext_bio_ = 0;
+        -:  111:  }
+        -:  112:  return *this;
+        -:  113:}
+        -:  114:#endif // defined(BOOST_ASIO_HAS_MOVE)
+        -:  115:
+        -:  116:SSL* engine::native_handle()
+        -:  117:{
+        -:  118:  return ssl_;
+        -:  119:}
+        -:  120:
+        -:  121:boost::system::error_code engine::set_verify_mode(
+        -:  122:    verify_mode v, boost::system::error_code& ec)
+        -:  123:{
+        -:  124:  ::SSL_set_verify(ssl_, v, ::SSL_get_verify_callback(ssl_));
+        -:  125:
+        -:  126:  ec = boost::system::error_code();
+        -:  127:  return ec;
+        -:  128:}
+        -:  129:
+        -:  130:boost::system::error_code engine::set_verify_depth(
+        -:  131:    int depth, boost::system::error_code& ec)
+        -:  132:{
+        -:  133:  ::SSL_set_verify_depth(ssl_, depth);
+        -:  134:
+        -:  135:  ec = boost::system::error_code();
+        -:  136:  return ec;
+        -:  137:}
+        -:  138:
+        -:  139:boost::system::error_code engine::set_verify_callback(
+        -:  140:    verify_callback_base* callback, boost::system::error_code& ec)
+        -:  141:{
+        -:  142:  if (SSL_get_app_data(ssl_))
+        -:  143:    delete static_cast<verify_callback_base*>(SSL_get_app_data(ssl_));
+        -:  144:
+        -:  145:  SSL_set_app_data(ssl_, callback);
+        -:  146:
+        -:  147:  ::SSL_set_verify(ssl_, ::SSL_get_verify_mode(ssl_),
+        -:  148:      &engine::verify_callback_function);
+        -:  149:
+        -:  150:  ec = boost::system::error_code();
+        -:  151:  return ec;
+        -:  152:}
+        -:  153:
+        -:  154:int engine::verify_callback_function(int preverified, X509_STORE_CTX* ctx)
+        -:  155:{
+        -:  156:  if (ctx)
+        -:  157:  {
+        -:  158:    if (SSL* ssl = static_cast<SSL*>(
+        -:  159:          ::X509_STORE_CTX_get_ex_data(
+        -:  160:            ctx, ::SSL_get_ex_data_X509_STORE_CTX_idx())))
+        -:  161:    {
+        -:  162:      if (SSL_get_app_data(ssl))
+        -:  163:      {
+        -:  164:        verify_callback_base* callback =
+        -:  165:          static_cast<verify_callback_base*>(
+        -:  166:              SSL_get_app_data(ssl));
+        -:  167:
+        -:  168:        verify_context verify_ctx(ctx);
+        -:  169:        return callback->call(preverified != 0, verify_ctx) ? 1 : 0;
+        -:  170:      }
+        -:  171:    }
+        -:  172:  }
+        -:  173:
+        -:  174:  return 0;
+        -:  175:}
+        -:  176:
+    #####:  177:engine::want engine::handshake(
+        -:  178:    stream_base::handshake_type type, boost::system::error_code& ec)
+        -:  179:{
+    #####:  180:  return perform((type == boost::asio::ssl::stream_base::client)
+    #####:  181:      ? &engine::do_connect : &engine::do_accept, 0, 0, ec, 0);
+        -:  182:}
+------------------
+_ZN5boost4asio3ssl6detail6engine9handshakeENS1_11stream_base14handshake_typeERNS_6system10error_codeE:
+function _ZN5boost4asio3ssl6detail6engine9handshakeENS1_11stream_base14handshake_typeERNS_6system10error_codeE called 0 returned 0% blocks executed 0%
+    #####:  177:engine::want engine::handshake(
+        -:  178:    stream_base::handshake_type type, boost::system::error_code& ec)
+        -:  179:{
+    #####:  180:  return perform((type == boost::asio::ssl::stream_base::client)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+call    2 never executed
+    #####:  181:      ? &engine::do_connect : &engine::do_accept, 0, 0, ec, 0);
+        -:  182:}
+------------------
+_ZN5boost4asio3ssl6detail6engine9handshakeENS1_11stream_base14handshake_typeERNS_6system10error_codeE:
+function _ZN5boost4asio3ssl6detail6engine9handshakeENS1_11stream_base14handshake_typeERNS_6system10error_codeE called 0 returned 0% blocks executed 0%
+    #####:  177:engine::want engine::handshake(
+        -:  178:    stream_base::handshake_type type, boost::system::error_code& ec)
+        -:  179:{
+    #####:  180:  return perform((type == boost::asio::ssl::stream_base::client)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+call    2 never executed
+    #####:  181:      ? &engine::do_connect : &engine::do_accept, 0, 0, ec, 0);
+        -:  182:}
+------------------
+        -:  183:
+function _ZN5boost4asio3ssl6detail6engine8shutdownERNS_6system10error_codeE called 0 returned 0% blocks executed 0%
+    #####:  184:engine::want engine::shutdown(boost::system::error_code& ec)
+        -:  185:{
+    #####:  186:  return perform(&engine::do_shutdown, 0, 0, ec, 0);
+call    0 never executed
+        -:  187:}
+        -:  188:
+    #####:  189:engine::want engine::write(const boost::asio::const_buffer& data,
+        -:  190:    boost::system::error_code& ec, std::size_t& bytes_transferred)
+        -:  191:{
+    #####:  192:  if (data.size() == 0)
+        -:  193:  {
+    #####:  194:    ec = boost::system::error_code();
+    #####:  195:    return engine::want_nothing;
+        -:  196:  }
+        -:  197:
+    #####:  198:  return perform(&engine::do_write,
+    #####:  199:      const_cast<void*>(data.data()),
+    #####:  200:      data.size(), ec, &bytes_transferred);
+        -:  201:}
+------------------
+_ZN5boost4asio3ssl6detail6engine5writeERKNS0_12const_bufferERNS_6system10error_codeERm:
+function _ZN5boost4asio3ssl6detail6engine5writeERKNS0_12const_bufferERNS_6system10error_codeERm called 0 returned 0% blocks executed 0%
+    #####:  189:engine::want engine::write(const boost::asio::const_buffer& data,
+        -:  190:    boost::system::error_code& ec, std::size_t& bytes_transferred)
+        -:  191:{
+    #####:  192:  if (data.size() == 0)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+        -:  193:  {
+    #####:  194:    ec = boost::system::error_code();
+call    0 never executed
+    #####:  195:    return engine::want_nothing;
+        -:  196:  }
+        -:  197:
+    #####:  198:  return perform(&engine::do_write,
+call    0 never executed
+call    1 never executed
+    #####:  199:      const_cast<void*>(data.data()),
+call    0 never executed
+    #####:  200:      data.size(), ec, &bytes_transferred);
+        -:  201:}
+------------------
+_ZN5boost4asio3ssl6detail6engine5writeERKNS0_12const_bufferERNS_6system10error_codeERm:
+function _ZN5boost4asio3ssl6detail6engine5writeERKNS0_12const_bufferERNS_6system10error_codeERm called 0 returned 0% blocks executed 0%
+    #####:  189:engine::want engine::write(const boost::asio::const_buffer& data,
+        -:  190:    boost::system::error_code& ec, std::size_t& bytes_transferred)
+        -:  191:{
+    #####:  192:  if (data.size() == 0)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+        -:  193:  {
+    #####:  194:    ec = boost::system::error_code();
+call    0 never executed
+    #####:  195:    return engine::want_nothing;
+        -:  196:  }
+        -:  197:
+    #####:  198:  return perform(&engine::do_write,
+call    0 never executed
+call    1 never executed
+    #####:  199:      const_cast<void*>(data.data()),
+call    0 never executed
+    #####:  200:      data.size(), ec, &bytes_transferred);
+        -:  201:}
+------------------
+        -:  202:
+    #####:  203:engine::want engine::read(const boost::asio::mutable_buffer& data,
+        -:  204:    boost::system::error_code& ec, std::size_t& bytes_transferred)
+        -:  205:{
+    #####:  206:  if (data.size() == 0)
+        -:  207:  {
+    #####:  208:    ec = boost::system::error_code();
+    #####:  209:    return engine::want_nothing;
+        -:  210:  }
+        -:  211:
+    #####:  212:  return perform(&engine::do_read, data.data(),
+    #####:  213:      data.size(), ec, &bytes_transferred);
+        -:  214:}
+------------------
+_ZN5boost4asio3ssl6detail6engine4readERKNS0_14mutable_bufferERNS_6system10error_codeERm:
+function _ZN5boost4asio3ssl6detail6engine4readERKNS0_14mutable_bufferERNS_6system10error_codeERm called 0 returned 0% blocks executed 0%
+    #####:  203:engine::want engine::read(const boost::asio::mutable_buffer& data,
+        -:  204:    boost::system::error_code& ec, std::size_t& bytes_transferred)
+        -:  205:{
+    #####:  206:  if (data.size() == 0)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+        -:  207:  {
+    #####:  208:    ec = boost::system::error_code();
+call    0 never executed
+    #####:  209:    return engine::want_nothing;
+        -:  210:  }
+        -:  211:
+    #####:  212:  return perform(&engine::do_read, data.data(),
+call    0 never executed
+call    1 never executed
+call    2 never executed
+    #####:  213:      data.size(), ec, &bytes_transferred);
+        -:  214:}
+------------------
+_ZN5boost4asio3ssl6detail6engine4readERKNS0_14mutable_bufferERNS_6system10error_codeERm:
+function _ZN5boost4asio3ssl6detail6engine4readERKNS0_14mutable_bufferERNS_6system10error_codeERm called 0 returned 0% blocks executed 0%
+    #####:  203:engine::want engine::read(const boost::asio::mutable_buffer& data,
+        -:  204:    boost::system::error_code& ec, std::size_t& bytes_transferred)
+        -:  205:{
+    #####:  206:  if (data.size() == 0)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+        -:  207:  {
+    #####:  208:    ec = boost::system::error_code();
+call    0 never executed
+    #####:  209:    return engine::want_nothing;
+        -:  210:  }
+        -:  211:
+    #####:  212:  return perform(&engine::do_read, data.data(),
+call    0 never executed
+call    1 never executed
+call    2 never executed
+    #####:  213:      data.size(), ec, &bytes_transferred);
+        -:  214:}
+------------------
+        -:  215:
+    #####:  216:boost::asio::mutable_buffer engine::get_output(
+        -:  217:    const boost::asio::mutable_buffer& data)
+        -:  218:{
+    #####:  219:  int length = ::BIO_read(ext_bio_,
+    #####:  220:      data.data(), static_cast<int>(data.size()));
+        -:  221:
+    #####:  222:  return boost::asio::buffer(data,
+    #####:  223:      length > 0 ? static_cast<std::size_t>(length) : 0);
+        -:  224:}
+------------------
+_ZN5boost4asio3ssl6detail6engine10get_outputERKNS0_14mutable_bufferE:
+function _ZN5boost4asio3ssl6detail6engine10get_outputERKNS0_14mutable_bufferE called 0 returned 0% blocks executed 0%
+    #####:  216:boost::asio::mutable_buffer engine::get_output(
+        -:  217:    const boost::asio::mutable_buffer& data)
+        -:  218:{
+    #####:  219:  int length = ::BIO_read(ext_bio_,
+call    0 never executed
+call    1 never executed
+    #####:  220:      data.data(), static_cast<int>(data.size()));
+call    0 never executed
+        -:  221:
+    #####:  222:  return boost::asio::buffer(data,
+    #####:  223:      length > 0 ? static_cast<std::size_t>(length) : 0);
+call    0 never executed
+        -:  224:}
+------------------
+_ZN5boost4asio3ssl6detail6engine10get_outputERKNS0_14mutable_bufferE:
+function _ZN5boost4asio3ssl6detail6engine10get_outputERKNS0_14mutable_bufferE called 0 returned 0% blocks executed 0%
+    #####:  216:boost::asio::mutable_buffer engine::get_output(
+        -:  217:    const boost::asio::mutable_buffer& data)
+        -:  218:{
+    #####:  219:  int length = ::BIO_read(ext_bio_,
+call    0 never executed
+call    1 never executed
+    #####:  220:      data.data(), static_cast<int>(data.size()));
+call    0 never executed
+        -:  221:
+    #####:  222:  return boost::asio::buffer(data,
+    #####:  223:      length > 0 ? static_cast<std::size_t>(length) : 0);
+call    0 never executed
+        -:  224:}
+------------------
+        -:  225:
+    #####:  226:boost::asio::const_buffer engine::put_input(
+        -:  227:    const boost::asio::const_buffer& data)
+        -:  228:{
+    #####:  229:  int length = ::BIO_write(ext_bio_,
+    #####:  230:      data.data(), static_cast<int>(data.size()));
+        -:  231:
+    #####:  232:  return boost::asio::buffer(data +
+    #####:  233:      (length > 0 ? static_cast<std::size_t>(length) : 0));
+        -:  234:}
+------------------
+_ZN5boost4asio3ssl6detail6engine9put_inputERKNS0_12const_bufferE:
+function _ZN5boost4asio3ssl6detail6engine9put_inputERKNS0_12const_bufferE called 0 returned 0% blocks executed 0%
+    #####:  226:boost::asio::const_buffer engine::put_input(
+        -:  227:    const boost::asio::const_buffer& data)
+        -:  228:{
+    #####:  229:  int length = ::BIO_write(ext_bio_,
+call    0 never executed
+call    1 never executed
+    #####:  230:      data.data(), static_cast<int>(data.size()));
+call    0 never executed
+        -:  231:
+    #####:  232:  return boost::asio::buffer(data +
+call    0 never executed
+    #####:  233:      (length > 0 ? static_cast<std::size_t>(length) : 0));
+call    0 never executed
+        -:  234:}
+------------------
+_ZN5boost4asio3ssl6detail6engine9put_inputERKNS0_12const_bufferE:
+function _ZN5boost4asio3ssl6detail6engine9put_inputERKNS0_12const_bufferE called 0 returned 0% blocks executed 0%
+    #####:  226:boost::asio::const_buffer engine::put_input(
+        -:  227:    const boost::asio::const_buffer& data)
+        -:  228:{
+    #####:  229:  int length = ::BIO_write(ext_bio_,
+call    0 never executed
+call    1 never executed
+    #####:  230:      data.data(), static_cast<int>(data.size()));
+call    0 never executed
+        -:  231:
+    #####:  232:  return boost::asio::buffer(data +
+call    0 never executed
+    #####:  233:      (length > 0 ? static_cast<std::size_t>(length) : 0));
+call    0 never executed
+        -:  234:}
+------------------
+        -:  235:
+    #####:  236:const boost::system::error_code& engine::map_error_code(
+        -:  237:    boost::system::error_code& ec) const
+        -:  238:{
+        -:  239:  // We only want to map the error::eof code.
+    #####:  240:  if (ec != boost::asio::error::eof)
+    #####:  241:    return ec;
+        -:  242:
+        -:  243:  // If there's data yet to be read, it's an error.
+    #####:  244:  if (BIO_wpending(ext_bio_))
+        -:  245:  {
+    #####:  246:    ec = boost::asio::ssl::error::stream_truncated;
+    #####:  247:    return ec;
+        -:  248:  }
+        -:  249:
+        -:  250:  // SSL v2 doesn't provide a protocol-level shutdown, so an eof on the
+        -:  251:  // underlying transport is passed through.
+        -:  252:#if (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:  253:  if (SSL_version(ssl_) == SSL2_VERSION)
+        -:  254:    return ec;
+        -:  255:#endif // (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:  256:
+        -:  257:  // Otherwise, the peer should have negotiated a proper shutdown.
+    #####:  258:  if ((::SSL_get_shutdown(ssl_) & SSL_RECEIVED_SHUTDOWN) == 0)
+        -:  259:  {
+    #####:  260:    ec = boost::asio::ssl::error::stream_truncated;
+        -:  261:  }
+        -:  262:
+    #####:  263:  return ec;
+        -:  264:}
+------------------
+_ZNK5boost4asio3ssl6detail6engine14map_error_codeERNS_6system10error_codeE:
+function _ZNK5boost4asio3ssl6detail6engine14map_error_codeERNS_6system10error_codeE called 0 returned 0% blocks executed 0%
+    #####:  236:const boost::system::error_code& engine::map_error_code(
+        -:  237:    boost::system::error_code& ec) const
+        -:  238:{
+        -:  239:  // We only want to map the error::eof code.
+    #####:  240:  if (ec != boost::asio::error::eof)
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed
+    #####:  241:    return ec;
+        -:  242:
+        -:  243:  // If there's data yet to be read, it's an error.
+    #####:  244:  if (BIO_wpending(ext_bio_))
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+        -:  245:  {
+    #####:  246:    ec = boost::asio::ssl::error::stream_truncated;
+call    0 never executed
+    #####:  247:    return ec;
+        -:  248:  }
+        -:  249:
+        -:  250:  // SSL v2 doesn't provide a protocol-level shutdown, so an eof on the
+        -:  251:  // underlying transport is passed through.
+        -:  252:#if (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:  253:  if (SSL_version(ssl_) == SSL2_VERSION)
+        -:  254:    return ec;
+        -:  255:#endif // (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:  256:
+        -:  257:  // Otherwise, the peer should have negotiated a proper shutdown.
+    #####:  258:  if ((::SSL_get_shutdown(ssl_) & SSL_RECEIVED_SHUTDOWN) == 0)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+        -:  259:  {
+    #####:  260:    ec = boost::asio::ssl::error::stream_truncated;
+call    0 never executed
+        -:  261:  }
+        -:  262:
+    #####:  263:  return ec;
+        -:  264:}
+------------------
+_ZNK5boost4asio3ssl6detail6engine14map_error_codeERNS_6system10error_codeE:
+function _ZNK5boost4asio3ssl6detail6engine14map_error_codeERNS_6system10error_codeE called 0 returned 0% blocks executed 0%
+    #####:  236:const boost::system::error_code& engine::map_error_code(
+        -:  237:    boost::system::error_code& ec) const
+        -:  238:{
+        -:  239:  // We only want to map the error::eof code.
+    #####:  240:  if (ec != boost::asio::error::eof)
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed
+    #####:  241:    return ec;
+        -:  242:
+        -:  243:  // If there's data yet to be read, it's an error.
+    #####:  244:  if (BIO_wpending(ext_bio_))
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+        -:  245:  {
+    #####:  246:    ec = boost::asio::ssl::error::stream_truncated;
+call    0 never executed
+    #####:  247:    return ec;
+        -:  248:  }
+        -:  249:
+        -:  250:  // SSL v2 doesn't provide a protocol-level shutdown, so an eof on the
+        -:  251:  // underlying transport is passed through.
+        -:  252:#if (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:  253:  if (SSL_version(ssl_) == SSL2_VERSION)
+        -:  254:    return ec;
+        -:  255:#endif // (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:  256:
+        -:  257:  // Otherwise, the peer should have negotiated a proper shutdown.
+    #####:  258:  if ((::SSL_get_shutdown(ssl_) & SSL_RECEIVED_SHUTDOWN) == 0)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+        -:  259:  {
+    #####:  260:    ec = boost::asio::ssl::error::stream_truncated;
+call    0 never executed
+        -:  261:  }
+        -:  262:
+    #####:  263:  return ec;
+        -:  264:}
+------------------
+        -:  265:
+        -:  266:#if (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:  267:boost::asio::detail::static_mutex& engine::accept_mutex()
+        -:  268:{
+        -:  269:  static boost::asio::detail::static_mutex mutex = BOOST_ASIO_STATIC_MUTEX_INIT;
+        -:  270:  return mutex;
+        -:  271:}
+        -:  272:#endif // (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:  273:
+    #####:  274:engine::want engine::perform(int (engine::* op)(void*, std::size_t),
+        -:  275:    void* data, std::size_t length, boost::system::error_code& ec,
+        -:  276:    std::size_t* bytes_transferred)
+        -:  277:{
+    #####:  278:  std::size_t pending_output_before = ::BIO_ctrl_pending(ext_bio_);
+    #####:  279:  ::ERR_clear_error();
+    #####:  280:  int result = (this->*op)(data, length);
+    #####:  281:  int ssl_error = ::SSL_get_error(ssl_, result);
+    #####:  282:  int sys_error = static_cast<int>(::ERR_get_error());
+    #####:  283:  std::size_t pending_output_after = ::BIO_ctrl_pending(ext_bio_);
+        -:  284:
+    #####:  285:  if (ssl_error == SSL_ERROR_SSL)
+        -:  286:  {
+    #####:  287:    ec = boost::system::error_code(sys_error,
+    #####:  288:        boost::asio::error::get_ssl_category());
+        -:  289:    return pending_output_after > pending_output_before
+    #####:  290:      ? want_output : want_nothing;
+        -:  291:  }
+        -:  292:
+    #####:  293:  if (ssl_error == SSL_ERROR_SYSCALL)
+        -:  294:  {
+    #####:  295:    if (sys_error == 0)
+        -:  296:    {
+    #####:  297:      ec = boost::asio::ssl::error::unspecified_system_error;
+        -:  298:    }
+        -:  299:    else
+        -:  300:    {
+    #####:  301:      ec = boost::system::error_code(sys_error,
+    #####:  302:          boost::asio::error::get_ssl_category());
+        -:  303:    }
+        -:  304:    return pending_output_after > pending_output_before
+    #####:  305:      ? want_output : want_nothing;
+        -:  306:  }
+        -:  307:
+    #####:  308:  if (result > 0 && bytes_transferred)
+    #####:  309:    *bytes_transferred = static_cast<std::size_t>(result);
+        -:  310:
+    #####:  311:  if (ssl_error == SSL_ERROR_WANT_WRITE)
+        -:  312:  {
+    #####:  313:    ec = boost::system::error_code();
+    #####:  314:    return want_output_and_retry;
+        -:  315:  }
+    #####:  316:  else if (pending_output_after > pending_output_before)
+        -:  317:  {
+    #####:  318:    ec = boost::system::error_code();
+    #####:  319:    return result > 0 ? want_output : want_output_and_retry;
+        -:  320:  }
+    #####:  321:  else if (ssl_error == SSL_ERROR_WANT_READ)
+        -:  322:  {
+    #####:  323:    ec = boost::system::error_code();
+    #####:  324:    return want_input_and_retry;
+        -:  325:  }
+    #####:  326:  else if (ssl_error == SSL_ERROR_ZERO_RETURN)
+        -:  327:  {
+    #####:  328:    ec = boost::asio::error::eof;
+    #####:  329:    return want_nothing;
+        -:  330:  }
+    #####:  331:  else if (ssl_error == SSL_ERROR_NONE)
+        -:  332:  {
+    #####:  333:    ec = boost::system::error_code();
+    #####:  334:    return want_nothing;
+        -:  335:  }
+        -:  336:  else
+        -:  337:  {
+    #####:  338:    ec = boost::asio::ssl::error::unexpected_result;
+    #####:  339:    return want_nothing;
+        -:  340:  }
+        -:  341:}
+------------------
+_ZN5boost4asio3ssl6detail6engine7performEMS3_FiPvmES4_mRNS_6system10error_codeEPm:
+function _ZN5boost4asio3ssl6detail6engine7performEMS3_FiPvmES4_mRNS_6system10error_codeEPm called 0 returned 0% blocks executed 0%
+    #####:  274:engine::want engine::perform(int (engine::* op)(void*, std::size_t),
+        -:  275:    void* data, std::size_t length, boost::system::error_code& ec,
+        -:  276:    std::size_t* bytes_transferred)
+        -:  277:{
+    #####:  278:  std::size_t pending_output_before = ::BIO_ctrl_pending(ext_bio_);
+call    0 never executed
+    #####:  279:  ::ERR_clear_error();
+call    0 never executed
+    #####:  280:  int result = (this->*op)(data, length);
+branch  0 never executed (fallthrough)
+branch  1 never executed
+call    2 never executed
+    #####:  281:  int ssl_error = ::SSL_get_error(ssl_, result);
+call    0 never executed
+    #####:  282:  int sys_error = static_cast<int>(::ERR_get_error());
+call    0 never executed
+    #####:  283:  std::size_t pending_output_after = ::BIO_ctrl_pending(ext_bio_);
+call    0 never executed
+        -:  284:
+    #####:  285:  if (ssl_error == SSL_ERROR_SSL)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  286:  {
+    #####:  287:    ec = boost::system::error_code(sys_error,
+    #####:  288:        boost::asio::error::get_ssl_category());
+call    0 never executed
+call    1 never executed
+        -:  289:    return pending_output_after > pending_output_before
+    #####:  290:      ? want_output : want_nothing;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  291:  }
+        -:  292:
+    #####:  293:  if (ssl_error == SSL_ERROR_SYSCALL)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  294:  {
+    #####:  295:    if (sys_error == 0)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  296:    {
+    #####:  297:      ec = boost::asio::ssl::error::unspecified_system_error;
+call    0 never executed
+        -:  298:    }
+        -:  299:    else
+        -:  300:    {
+    #####:  301:      ec = boost::system::error_code(sys_error,
+    #####:  302:          boost::asio::error::get_ssl_category());
+call    0 never executed
+call    1 never executed
+        -:  303:    }
+        -:  304:    return pending_output_after > pending_output_before
+    #####:  305:      ? want_output : want_nothing;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  306:  }
+        -:  307:
+    #####:  308:  if (result > 0 && bytes_transferred)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed
+    #####:  309:    *bytes_transferred = static_cast<std::size_t>(result);
+        -:  310:
+    #####:  311:  if (ssl_error == SSL_ERROR_WANT_WRITE)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  312:  {
+    #####:  313:    ec = boost::system::error_code();
+call    0 never executed
+    #####:  314:    return want_output_and_retry;
+        -:  315:  }
+    #####:  316:  else if (pending_output_after > pending_output_before)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  317:  {
+    #####:  318:    ec = boost::system::error_code();
+call    0 never executed
+    #####:  319:    return result > 0 ? want_output : want_output_and_retry;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  320:  }
+    #####:  321:  else if (ssl_error == SSL_ERROR_WANT_READ)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  322:  {
+    #####:  323:    ec = boost::system::error_code();
+call    0 never executed
+    #####:  324:    return want_input_and_retry;
+        -:  325:  }
+    #####:  326:  else if (ssl_error == SSL_ERROR_ZERO_RETURN)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  327:  {
+    #####:  328:    ec = boost::asio::error::eof;
+call    0 never executed
+    #####:  329:    return want_nothing;
+        -:  330:  }
+    #####:  331:  else if (ssl_error == SSL_ERROR_NONE)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  332:  {
+    #####:  333:    ec = boost::system::error_code();
+call    0 never executed
+    #####:  334:    return want_nothing;
+        -:  335:  }
+        -:  336:  else
+        -:  337:  {
+    #####:  338:    ec = boost::asio::ssl::error::unexpected_result;
+call    0 never executed
+    #####:  339:    return want_nothing;
+        -:  340:  }
+        -:  341:}
+------------------
+_ZN5boost4asio3ssl6detail6engine7performEMS3_FiPvmES4_mRNS_6system10error_codeEPm:
+function _ZN5boost4asio3ssl6detail6engine7performEMS3_FiPvmES4_mRNS_6system10error_codeEPm called 0 returned 0% blocks executed 0%
+    #####:  274:engine::want engine::perform(int (engine::* op)(void*, std::size_t),
+        -:  275:    void* data, std::size_t length, boost::system::error_code& ec,
+        -:  276:    std::size_t* bytes_transferred)
+        -:  277:{
+    #####:  278:  std::size_t pending_output_before = ::BIO_ctrl_pending(ext_bio_);
+call    0 never executed
+    #####:  279:  ::ERR_clear_error();
+call    0 never executed
+    #####:  280:  int result = (this->*op)(data, length);
+branch  0 never executed (fallthrough)
+branch  1 never executed
+call    2 never executed
+    #####:  281:  int ssl_error = ::SSL_get_error(ssl_, result);
+call    0 never executed
+    #####:  282:  int sys_error = static_cast<int>(::ERR_get_error());
+call    0 never executed
+    #####:  283:  std::size_t pending_output_after = ::BIO_ctrl_pending(ext_bio_);
+call    0 never executed
+        -:  284:
+    #####:  285:  if (ssl_error == SSL_ERROR_SSL)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  286:  {
+    #####:  287:    ec = boost::system::error_code(sys_error,
+    #####:  288:        boost::asio::error::get_ssl_category());
+call    0 never executed
+call    1 never executed
+        -:  289:    return pending_output_after > pending_output_before
+    #####:  290:      ? want_output : want_nothing;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  291:  }
+        -:  292:
+    #####:  293:  if (ssl_error == SSL_ERROR_SYSCALL)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  294:  {
+    #####:  295:    if (sys_error == 0)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  296:    {
+    #####:  297:      ec = boost::asio::ssl::error::unspecified_system_error;
+call    0 never executed
+        -:  298:    }
+        -:  299:    else
+        -:  300:    {
+    #####:  301:      ec = boost::system::error_code(sys_error,
+    #####:  302:          boost::asio::error::get_ssl_category());
+call    0 never executed
+call    1 never executed
+        -:  303:    }
+        -:  304:    return pending_output_after > pending_output_before
+    #####:  305:      ? want_output : want_nothing;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  306:  }
+        -:  307:
+    #####:  308:  if (result > 0 && bytes_transferred)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed
+    #####:  309:    *bytes_transferred = static_cast<std::size_t>(result);
+        -:  310:
+    #####:  311:  if (ssl_error == SSL_ERROR_WANT_WRITE)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  312:  {
+    #####:  313:    ec = boost::system::error_code();
+call    0 never executed
+    #####:  314:    return want_output_and_retry;
+        -:  315:  }
+    #####:  316:  else if (pending_output_after > pending_output_before)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  317:  {
+    #####:  318:    ec = boost::system::error_code();
+call    0 never executed
+    #####:  319:    return result > 0 ? want_output : want_output_and_retry;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  320:  }
+    #####:  321:  else if (ssl_error == SSL_ERROR_WANT_READ)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  322:  {
+    #####:  323:    ec = boost::system::error_code();
+call    0 never executed
+    #####:  324:    return want_input_and_retry;
+        -:  325:  }
+    #####:  326:  else if (ssl_error == SSL_ERROR_ZERO_RETURN)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  327:  {
+    #####:  328:    ec = boost::asio::error::eof;
+call    0 never executed
+    #####:  329:    return want_nothing;
+        -:  330:  }
+    #####:  331:  else if (ssl_error == SSL_ERROR_NONE)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  332:  {
+    #####:  333:    ec = boost::system::error_code();
+call    0 never executed
+    #####:  334:    return want_nothing;
+        -:  335:  }
+        -:  336:  else
+        -:  337:  {
+    #####:  338:    ec = boost::asio::ssl::error::unexpected_result;
+call    0 never executed
+    #####:  339:    return want_nothing;
+        -:  340:  }
+        -:  341:}
+------------------
+        -:  342:
+    #####:  343:int engine::do_accept(void*, std::size_t)
+        -:  344:{
+        -:  345:#if (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:  346:  boost::asio::detail::static_mutex::scoped_lock lock(accept_mutex());
+        -:  347:#endif // (OPENSSL_VERSION_NUMBER < 0x10000000L)
+    #####:  348:  return ::SSL_accept(ssl_);
+        -:  349:}
+------------------
+_ZN5boost4asio3ssl6detail6engine9do_acceptEPvm:
+function _ZN5boost4asio3ssl6detail6engine9do_acceptEPvm called 0 returned 0% blocks executed 0%
+    #####:  343:int engine::do_accept(void*, std::size_t)
+        -:  344:{
+        -:  345:#if (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:  346:  boost::asio::detail::static_mutex::scoped_lock lock(accept_mutex());
+        -:  347:#endif // (OPENSSL_VERSION_NUMBER < 0x10000000L)
+    #####:  348:  return ::SSL_accept(ssl_);
+call    0 never executed
+        -:  349:}
+------------------
+_ZN5boost4asio3ssl6detail6engine9do_acceptEPvm:
+function _ZN5boost4asio3ssl6detail6engine9do_acceptEPvm called 0 returned 0% blocks executed 0%
+    #####:  343:int engine::do_accept(void*, std::size_t)
+        -:  344:{
+        -:  345:#if (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:  346:  boost::asio::detail::static_mutex::scoped_lock lock(accept_mutex());
+        -:  347:#endif // (OPENSSL_VERSION_NUMBER < 0x10000000L)
+    #####:  348:  return ::SSL_accept(ssl_);
+call    0 never executed
+        -:  349:}
+------------------
+        -:  350:
+    #####:  351:int engine::do_connect(void*, std::size_t)
+        -:  352:{
+    #####:  353:  return ::SSL_connect(ssl_);
+        -:  354:}
+------------------
+_ZN5boost4asio3ssl6detail6engine10do_connectEPvm:
+function _ZN5boost4asio3ssl6detail6engine10do_connectEPvm called 0 returned 0% blocks executed 0%
+    #####:  351:int engine::do_connect(void*, std::size_t)
+        -:  352:{
+    #####:  353:  return ::SSL_connect(ssl_);
+call    0 never executed
+        -:  354:}
+------------------
+_ZN5boost4asio3ssl6detail6engine10do_connectEPvm:
+function _ZN5boost4asio3ssl6detail6engine10do_connectEPvm called 0 returned 0% blocks executed 0%
+    #####:  351:int engine::do_connect(void*, std::size_t)
+        -:  352:{
+    #####:  353:  return ::SSL_connect(ssl_);
+call    0 never executed
+        -:  354:}
+------------------
+        -:  355:
+function _ZN5boost4asio3ssl6detail6engine11do_shutdownEPvm called 0 returned 0% blocks executed 0%
+    #####:  356:int engine::do_shutdown(void*, std::size_t)
+        -:  357:{
+    #####:  358:  int result = ::SSL_shutdown(ssl_);
+call    0 never executed
+    #####:  359:  if (result == 0)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  360:    result = ::SSL_shutdown(ssl_);
+call    0 never executed
+    #####:  361:  return result;
+        -:  362:}
+        -:  363:
+    #####:  364:int engine::do_read(void* data, std::size_t length)
+        -:  365:{
+    #####:  366:  return ::SSL_read(ssl_, data,
+    #####:  367:      length < INT_MAX ? static_cast<int>(length) : INT_MAX);
+        -:  368:}
+------------------
+_ZN5boost4asio3ssl6detail6engine7do_readEPvm:
+function _ZN5boost4asio3ssl6detail6engine7do_readEPvm called 0 returned 0% blocks executed 0%
+    #####:  364:int engine::do_read(void* data, std::size_t length)
+        -:  365:{
+    #####:  366:  return ::SSL_read(ssl_, data,
+branch  0 never executed (fallthrough)
+branch  1 never executed
+call    2 never executed
+    #####:  367:      length < INT_MAX ? static_cast<int>(length) : INT_MAX);
+        -:  368:}
+------------------
+_ZN5boost4asio3ssl6detail6engine7do_readEPvm:
+function _ZN5boost4asio3ssl6detail6engine7do_readEPvm called 0 returned 0% blocks executed 0%
+    #####:  364:int engine::do_read(void* data, std::size_t length)
+        -:  365:{
+    #####:  366:  return ::SSL_read(ssl_, data,
+branch  0 never executed (fallthrough)
+branch  1 never executed
+call    2 never executed
+    #####:  367:      length < INT_MAX ? static_cast<int>(length) : INT_MAX);
+        -:  368:}
+------------------
+        -:  369:
+    #####:  370:int engine::do_write(void* data, std::size_t length)
+        -:  371:{
+    #####:  372:  return ::SSL_write(ssl_, data,
+    #####:  373:      length < INT_MAX ? static_cast<int>(length) : INT_MAX);
+        -:  374:}
+        -:  375:
+        -:  376:} // namespace detail
+        -:  377:} // namespace ssl
+        -:  378:} // namespace asio
+        -:  379:} // namespace boost
+        -:  380:
+        -:  381:#include <boost/asio/detail/pop_options.hpp>
+        -:  382:
+        -:  383:#endif // BOOST_ASIO_SSL_DETAIL_IMPL_ENGINE_IPP

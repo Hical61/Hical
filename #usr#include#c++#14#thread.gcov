@@ -1,0 +1,426 @@
+        -:    0:Source:/usr/include/c++/14/thread
+        -:    1:// <thread> -*- C++ -*-
+        -:    2:
+        -:    3:// Copyright (C) 2008-2024 Free Software Foundation, Inc.
+        -:    4://
+        -:    5:// This file is part of the GNU ISO C++ Library.  This library is free
+        -:    6:// software; you can redistribute it and/or modify it under the
+        -:    7:// terms of the GNU General Public License as published by the
+        -:    8:// Free Software Foundation; either version 3, or (at your option)
+        -:    9:// any later version.
+        -:   10:
+        -:   11:// This library is distributed in the hope that it will be useful,
+        -:   12:// but WITHOUT ANY WARRANTY; without even the implied warranty of
+        -:   13:// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+        -:   14:// GNU General Public License for more details.
+        -:   15:
+        -:   16:// Under Section 7 of GPL version 3, you are granted additional
+        -:   17:// permissions described in the GCC Runtime Library Exception, version
+        -:   18:// 3.1, as published by the Free Software Foundation.
+        -:   19:
+        -:   20:// You should have received a copy of the GNU General Public License and
+        -:   21:// a copy of the GCC Runtime Library Exception along with this program;
+        -:   22:// see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
+        -:   23:// <http://www.gnu.org/licenses/>.
+        -:   24:
+        -:   25:/** @file include/thread
+        -:   26: *  This is a Standard C++ Library header.
+        -:   27: */
+        -:   28:
+        -:   29:#ifndef _GLIBCXX_THREAD
+        -:   30:#define _GLIBCXX_THREAD 1
+        -:   31:
+        -:   32:#pragma GCC system_header
+        -:   33:
+        -:   34:#include <bits/requires_hosted.h> // concurrency
+        -:   35:
+        -:   36:#if __cplusplus < 201103L
+        -:   37:# include <bits/c++0x_warning.h>
+        -:   38:#else
+        -:   39:
+        -:   40:#if __cplusplus > 201703L
+        -:   41:# include <compare>	// std::strong_ordering
+        -:   42:# include <stop_token>	// std::stop_source, std::stop_token, std::nostopstate
+        -:   43:#endif
+        -:   44:
+        -:   45:#include <bits/std_thread.h> // std::thread, get_id, yield
+        -:   46:#include <bits/this_thread_sleep.h> // std::this_thread::sleep_for, sleep_until
+        -:   47:
+        -:   48:#define __glibcxx_want_jthread
+        -:   49:#define __glibcxx_want_formatters
+        -:   50:#include <bits/version.h>
+        -:   51:
+        -:   52:#if __cpp_lib_formatters
+        -:   53:# include <format>
+        -:   54:#endif
+        -:   55:
+        -:   56:namespace std _GLIBCXX_VISIBILITY(default)
+        -:   57:{
+        -:   58:_GLIBCXX_BEGIN_NAMESPACE_VERSION
+        -:   59:
+        -:   60:  /**
+        -:   61:   * @defgroup threads Threads
+        -:   62:   * @ingroup concurrency
+        -:   63:   * @since C++11
+        -:   64:   *
+        -:   65:   * Classes for thread support.
+        -:   66:   * @{
+        -:   67:   */
+        -:   68:
+        -:   69:  // std::thread is defined in <bits/std_thread.h>
+        -:   70:
+        -:   71:  /// @relates std::thread::id @{
+        -:   72:
+        -:   73:#if __cpp_lib_three_way_comparison
+        -:   74:  inline strong_ordering
+        -:   75:  operator<=>(thread::id __x, thread::id __y) noexcept
+        -:   76:  { return __x._M_thread <=> __y._M_thread; }
+        -:   77:#else
+        -:   78:  inline bool
+        -:   79:  operator!=(thread::id __x, thread::id __y) noexcept
+        -:   80:  { return !(__x == __y); }
+        -:   81:
+        -:   82:  inline bool
+        -:   83:  operator<(thread::id __x, thread::id __y) noexcept
+        -:   84:  {
+        -:   85:    // Pthreads doesn't define any way to do this, so we just have to
+        -:   86:    // assume native_handle_type is LessThanComparable.
+        -:   87:    return __x._M_thread < __y._M_thread;
+        -:   88:  }
+        -:   89:
+        -:   90:  inline bool
+        -:   91:  operator<=(thread::id __x, thread::id __y) noexcept
+        -:   92:  { return !(__y < __x); }
+        -:   93:
+        -:   94:  inline bool
+        -:   95:  operator>(thread::id __x, thread::id __y) noexcept
+        -:   96:  { return __y < __x; }
+        -:   97:
+        -:   98:  inline bool
+        -:   99:  operator>=(thread::id __x, thread::id __y) noexcept
+        -:  100:  { return !(__x < __y); }
+        -:  101:#endif // __cpp_lib_three_way_comparison
+        -:  102:
+        -:  103:  template<class _CharT, class _Traits>
+        -:  104:    inline basic_ostream<_CharT, _Traits>&
+function _ZStlsIcSt11char_traitsIcEERSt13basic_ostreamIT_T0_ES6_NSt6thread2idE called 28 returned 100% blocks executed 75%
+       28:  105:    operator<<(basic_ostream<_CharT, _Traits>& __out, thread::id __id)
+        -:  106:    {
+        -:  107:      // Convert non-void pointers to const void* for formatted output.
+        -:  108:      using __output_type
+        -:  109:	= __conditional_t<is_pointer<thread::native_handle_type>::value,
+        -:  110:			  const void*,
+        -:  111:			  thread::native_handle_type>;
+        -:  112:
+       28:  113:      if (__id == thread::id())
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 0% (fallthrough)
+branch  3 taken 100%
+    #####:  114:	return __out << "thread::id of a non-executing thread";
+call    0 never executed
+        -:  115:      else
+       28:  116:	return __out << static_cast<__output_type>(__id._M_thread);
+call    0 returned 100%
+        -:  117:    }
+        -:  118:  /// @}
+        -:  119:
+        -:  120:#ifdef __cpp_lib_jthread // C++ >= 20
+        -:  121:
+        -:  122:  /// @cond undocumented
+        -:  123:#ifndef __STRICT_ANSI__
+        -:  124:    template<typename _Callable, typename... _Args>
+        -:  125:      constexpr bool __pmf_expects_stop_token = false;
+        -:  126:
+        -:  127:    template<typename _Callable, typename _Obj, typename... _Args>
+        -:  128:      constexpr bool __pmf_expects_stop_token<_Callable, _Obj, _Args...>
+        -:  129:	= __and_<is_member_function_pointer<remove_reference_t<_Callable>>,
+        -:  130:		 is_invocable<_Callable, _Obj, stop_token, _Args...>>::value;
+        -:  131:#endif
+        -:  132:    /// @endcond
+        -:  133:
+        -:  134:  /** A thread with cancellation and automatic joining.
+        -:  135:   *
+        -:  136:   * Unlike `std::thread`, destroying a joinable `std::jthread` will not
+        -:  137:   * terminate the process. Instead, it will try to request its thread to
+        -:  138:   * stop, then will join it.
+        -:  139:   *
+        -:  140:   * A `std::jthread` has a `std::stop_source` member which will be passed
+        -:  141:   * as the first argument to the callable that runs in the new thread
+        -:  142:   * (as long as the callable will accept that argument). That can then
+        -:  143:   * be used to send a stop request that the new thread can test for.
+        -:  144:   *
+        -:  145:   * @headerfile thread
+        -:  146:   * @since C++20
+        -:  147:   */
+        -:  148:  class jthread
+        -:  149:  {
+        -:  150:  public:
+        -:  151:    using id = thread::id;
+        -:  152:    using native_handle_type = thread::native_handle_type;
+        -:  153:
+function _ZNSt7jthreadC2Ev called 7 returned 100% blocks executed 100%
+        7:  154:    jthread() noexcept
+        7:  155:    : _M_stop_source{nostopstate}
+call    0 returned 100%
+call    1 returned 100%
+        7:  156:    { }
+        -:  157:
+        -:  158:    template<typename _Callable, typename... _Args,
+        -:  159:	     typename = enable_if_t<!is_same_v<remove_cvref_t<_Callable>,
+        -:  160:					       jthread>>>
+        -:  161:      explicit
+function _ZNSt7jthreadC2IZN5hical13AsyncFileSinkC4ENS2_7OptionsEEUlSt10stop_tokenE_JEvEEOT_DpOT0_ called 7 returned 100% blocks executed 83%
+        7:  162:      jthread(_Callable&& __f, _Args&&... __args)
+        7:  163:      : _M_thread{_S_create(_M_stop_source, std::forward<_Callable>(__f),
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        7:  164:			    std::forward<_Args>(__args)...)}
+call    0 returned 100%
+        7:  165:      { }
+call    0 never executed
+        -:  166:
+        -:  167:    jthread(const jthread&) = delete;
+function _ZNSt7jthreadC2EOS_ called 7 returned 100% blocks executed 100%
+        7:  168:    jthread(jthread&&) noexcept = default;
+call    0 returned 100%
+call    1 returned 100%
+        -:  169:
+function _ZNSt7jthreadD2Ev called 21 returned 100% blocks executed 100%
+       21:  170:    ~jthread()
+        -:  171:    {
+       21:  172:      if (joinable())
+call    0 returned 100%
+branch  1 taken 33% (fallthrough)
+branch  2 taken 67%
+        -:  173:        {
+        7:  174:          request_stop();
+call    0 returned 100%
+        7:  175:          join();
+call    0 returned 100%
+        -:  176:        }
+       21:  177:    }
+call    0 returned 100%
+call    1 returned 100%
+        -:  178:
+        -:  179:    jthread&
+        -:  180:    operator=(const jthread&) = delete;
+        -:  181:
+        -:  182:    jthread&
+function _ZNSt7jthreadaSEOS_ called 7 returned 100% blocks executed 100%
+        7:  183:    operator=(jthread&& __other) noexcept
+        -:  184:    {
+        7:  185:      std::jthread(std::move(__other)).swap(*this);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+        7:  186:      return *this;
+        -:  187:    }
+        -:  188:
+        -:  189:    void
+function _ZNSt7jthread4swapERS_ called 7 returned 100% blocks executed 100%
+        7:  190:    swap(jthread& __other) noexcept
+        -:  191:    {
+        7:  192:      std::swap(_M_stop_source, __other._M_stop_source);
+call    0 returned 100%
+        7:  193:      std::swap(_M_thread, __other._M_thread);
+call    0 returned 100%
+        7:  194:    }
+        -:  195:
+        -:  196:    [[nodiscard]] bool
+function _ZNKSt7jthread8joinableEv called 21 returned 100% blocks executed 100%
+       21:  197:    joinable() const noexcept
+        -:  198:    {
+       21:  199:      return _M_thread.joinable();
+call    0 returned 100%
+        -:  200:    }
+        -:  201:
+        -:  202:    void
+function _ZNSt7jthread4joinEv called 7 returned 100% blocks executed 100%
+        7:  203:    join()
+        -:  204:    {
+        7:  205:      _M_thread.join();
+call    0 returned 100%
+        7:  206:    }
+        -:  207:
+        -:  208:    void
+        -:  209:    detach()
+        -:  210:    {
+        -:  211:      _M_thread.detach();
+        -:  212:    }
+        -:  213:
+        -:  214:    [[nodiscard]] id
+        -:  215:    get_id() const noexcept
+        -:  216:    {
+        -:  217:      return _M_thread.get_id();
+        -:  218:    }
+        -:  219:
+        -:  220:    [[nodiscard]] native_handle_type
+        -:  221:    native_handle()
+        -:  222:    {
+        -:  223:      return _M_thread.native_handle();
+        -:  224:    }
+        -:  225:
+        -:  226:    [[nodiscard]] static unsigned
+        -:  227:    hardware_concurrency() noexcept
+        -:  228:    {
+        -:  229:      return thread::hardware_concurrency();
+        -:  230:    }
+        -:  231:
+        -:  232:    [[nodiscard]] stop_source
+        -:  233:    get_stop_source() noexcept
+        -:  234:    {
+        -:  235:      return _M_stop_source;
+        -:  236:    }
+        -:  237:
+        -:  238:    [[nodiscard]] stop_token
+        -:  239:    get_stop_token() const noexcept
+        -:  240:    {
+        -:  241:      return _M_stop_source.get_token();
+        -:  242:    }
+        -:  243:
+function _ZNSt7jthread12request_stopEv called 7 returned 100% blocks executed 100%
+        7:  244:    bool request_stop() noexcept
+        -:  245:    {
+        7:  246:      return _M_stop_source.request_stop();
+call    0 returned 100%
+        -:  247:    }
+        -:  248:
+        -:  249:    friend void swap(jthread& __lhs, jthread& __rhs) noexcept
+        -:  250:    {
+        -:  251:      __lhs.swap(__rhs);
+        -:  252:    }
+        -:  253:
+        -:  254:  private:
+        -:  255:    template<typename _Callable, typename... _Args>
+        -:  256:      static thread
+function _ZNSt7jthread9_S_createIZN5hical13AsyncFileSinkC4ENS2_7OptionsEEUlSt10stop_tokenE_JEEESt6threadRSt11stop_sourceOT_DpOT0_ called 7 returned 100% blocks executed 80%
+        7:  257:      _S_create(stop_source& __ssrc, _Callable&& __f, _Args&&... __args)
+        -:  258:      {
+        -:  259:#ifndef __STRICT_ANSI__
+        -:  260:	if constexpr (__pmf_expects_stop_token<_Callable, _Args...>)
+        -:  261:	  return _S_create_pmf(__ssrc, __f, std::forward<_Args>(__args)...);
+        -:  262:	else
+        -:  263:#endif
+        -:  264:	if constexpr(is_invocable_v<decay_t<_Callable>, stop_token,
+        -:  265:				    decay_t<_Args>...>)
+       14:  266:	  return thread{std::forward<_Callable>(__f), __ssrc.get_token(),
+call    0 returned 100%
+call    1 returned 100%
+call    2 never executed
+       21:  267:			std::forward<_Args>(__args)...};
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:  268:	else
+        -:  269:	  {
+        -:  270:	    static_assert(is_invocable_v<decay_t<_Callable>,
+        -:  271:					 decay_t<_Args>...>,
+        -:  272:			  "std::jthread arguments must be invocable after"
+        -:  273:			  " conversion to rvalues");
+        -:  274:	    return thread{std::forward<_Callable>(__f),
+        -:  275:			  std::forward<_Args>(__args)...};
+        -:  276:	  }
+        -:  277:      }
+        -:  278:
+        -:  279:#ifndef __STRICT_ANSI__
+        -:  280:    template<typename _Callable, typename _Obj, typename... _Args>
+        -:  281:      static thread
+        -:  282:      _S_create_pmf(stop_source& __ssrc, _Callable __f, _Obj&& __obj,
+        -:  283:		    _Args&&... __args)
+        -:  284:      {
+        -:  285:	return thread{__f, std::forward<_Obj>(__obj), __ssrc.get_token(),
+        -:  286:		      std::forward<_Args>(__args)...};
+        -:  287:      }
+        -:  288:#endif
+        -:  289:
+        -:  290:    stop_source _M_stop_source;
+        -:  291:    thread _M_thread;
+        -:  292:  };
+        -:  293:#endif // __cpp_lib_jthread
+        -:  294:
+        -:  295:#ifdef __cpp_lib_formatters // C++ >= 23
+        -:  296:  template<typename _CharT>
+        -:  297:    requires is_pointer_v<thread::native_handle_type>
+        -:  298:      || is_integral_v<thread::native_handle_type>
+        -:  299:    class formatter<thread::id, _CharT>
+        -:  300:    {
+        -:  301:    public:
+        -:  302:      constexpr typename basic_format_parse_context<_CharT>::iterator
+        -:  303:      parse(basic_format_parse_context<_CharT>& __pc)
+        -:  304:      {
+        -:  305:	__format::_Spec<_CharT> __spec{};
+        -:  306:	const auto __last = __pc.end();
+        -:  307:	auto __first = __pc.begin();
+        -:  308:
+        -:  309:	auto __finalize = [this, &__spec] {
+        -:  310:	  _M_spec = __spec;
+        -:  311:	};
+        -:  312:
+        -:  313:	auto __finished = [&] {
+        -:  314:	  if (__first == __last || *__first == '}')
+        -:  315:	    {
+        -:  316:	      __finalize();
+        -:  317:	      return true;
+        -:  318:	    }
+        -:  319:	  return false;
+        -:  320:	};
+        -:  321:
+        -:  322:	if (__finished())
+        -:  323:	  return __first;
+        -:  324:
+        -:  325:	__first = __spec._M_parse_fill_and_align(__first, __last);
+        -:  326:	if (__finished())
+        -:  327:	  return __first;
+        -:  328:
+        -:  329:	__first = __spec._M_parse_width(__first, __last, __pc);
+        -:  330:	if (__finished())
+        -:  331:	  return __first;
+        -:  332:
+        -:  333:	__throw_format_error("format error: invalid format-spec for "
+        -:  334:			     "std::thread::id");
+        -:  335:      }
+        -:  336:
+        -:  337:      template<typename _Out>
+        -:  338:	typename basic_format_context<_Out, _CharT>::iterator
+        -:  339:	format(thread::id __id, basic_format_context<_Out, _CharT>& __fc) const
+        -:  340:	{
+        -:  341:	  basic_string_view<_CharT> __sv;
+        -:  342:	  if constexpr (is_same_v<_CharT, char>)
+        -:  343:	    __sv = "{}thread::id of a non-executing thread";
+        -:  344:	  else
+        -:  345:	    __sv = L"{}thread::id of a non-executing thread";
+        -:  346:	  basic_string<_CharT> __str;
+        -:  347:	  if (__id == thread::id())
+        -:  348:	    __sv.remove_prefix(2);
+        -:  349:	  else
+        -:  350:	    {
+        -:  351:	      using _FmtStr = __format::_Runtime_format_string<_CharT>;
+        -:  352:	      // Convert non-void pointers to const void* for formatted output.
+        -:  353:	      using __output_type
+        -:  354:		= __conditional_t<is_pointer_v<thread::native_handle_type>,
+        -:  355:				  const void*,
+        -:  356:				  thread::native_handle_type>;
+        -:  357:	      auto __o = static_cast<__output_type>(__id._M_thread);
+        -:  358:	      __sv = __str = std::format(_FmtStr(__sv.substr(0, 2)), __o);
+        -:  359:	    }
+        -:  360:	  return __format::__write_padded_as_spec(__sv, __sv.size(),
+        -:  361:						  __fc, _M_spec,
+        -:  362:						  __format::_Align_right);
+        -:  363:	}
+        -:  364:
+        -:  365:    private:
+        -:  366:      __format::_Spec<_CharT> _M_spec;
+        -:  367:    };
+        -:  368:#endif // __cpp_lib_formatters
+        -:  369:
+        -:  370:  /// @} group threads
+        -:  371:
+        -:  372:_GLIBCXX_END_NAMESPACE_VERSION
+        -:  373:} // namespace
+        -:  374:#endif // C++11
+        -:  375:#endif // _GLIBCXX_THREAD

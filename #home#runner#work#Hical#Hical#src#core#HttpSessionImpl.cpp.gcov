@@ -1,0 +1,1052 @@
+        -:    0:Source:/home/runner/work/Hical/Hical/src/core/HttpSessionImpl.cpp
+        -:    1:/**
+        -:    2: * @file HttpSessionImpl.cpp
+        -:    3: * @brief HttpServer 的会话处理实现（编译防火墙）
+        -:    4: * 将 picohttpparser HTTP 解析器和 WebSocket 帧处理代码隔离在此翻译单元，
+        -:    5: * 修改 HttpServer 配置逻辑时不会触发重模板编译。
+        -:    6: */
+        -:    7:
+        -:    8:#include "HttpServer.h"
+        -:    9:#include "FixedBuffer.h"
+        -:   10:#include "MemoryPool.h"
+        -:   11:#include "core/Version.h"
+        -:   12:#include "WebSocket.h"
+        -:   13:#include "WsHandshake.h"
+        -:   14:#include <charconv>
+        -:   15:#include <chrono>
+        -:   16:#include <optional>
+        -:   17:
+        -:   18:// picohttpparser（C 库）
+        -:   19:extern "C"
+        -:   20:{
+        -:   21:#include "picohttpparser.h"
+        -:   22:}
+        -:   23:
+        -:   24:namespace hical
+        -:   25:{
+        -:   26:
+        -:   27:	using boost::asio::ip::tcp;
+        -:   28:
+        -:   29:	namespace
+        -:   30:	{
+        -:   31:
+        -:   32:		/// 将方法字符串映射到 HttpMethod 枚举
+function _ZN5hical12_GLOBAL__N_120methodFromStringViewESt17basic_string_viewIcSt11char_traitsIcEE called 225 returned 100% blocks executed 32%
+      225:   33:		HttpMethod methodFromStringView(std::string_view sv)
+        -:   34:		{
+      225:   35:			if (sv.size() < 3)
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+        -:   36:			{
+    #####:   37:				return HttpMethod::hUnknown;
+        -:   38:			}
+      225:   39:			switch (sv[0])
+call    0 returned 100%
+branch  1 taken 99%
+branch  2 taken 1%
+branch  3 taken 0%
+branch  4 taken 0%
+branch  5 taken 0%
+branch  6 taken 0%
+        -:   40:			{
+      222:   41:				case 'G':
+      222:   42:					if (sv == "GET")
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0%
+        -:   43:					{
+      222:   44:						return HttpMethod::hGet;
+        -:   45:					}
+    #####:   46:					break;
+        3:   47:				case 'P':
+        3:   48:					if (sv == "POST")
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0%
+        -:   49:					{
+        3:   50:						return HttpMethod::hPost;
+        -:   51:					}
+    #####:   52:					if (sv == "PUT")
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed
+        -:   53:					{
+    #####:   54:						return HttpMethod::hPut;
+        -:   55:					}
+    #####:   56:					if (sv == "PATCH")
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed
+        -:   57:					{
+    #####:   58:						return HttpMethod::hPatch;
+        -:   59:					}
+    #####:   60:					break;
+    #####:   61:				case 'D':
+    #####:   62:					if (sv == "DELETE")
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed
+        -:   63:					{
+    #####:   64:						return HttpMethod::hDelete;
+        -:   65:					}
+    #####:   66:					break;
+    #####:   67:				case 'H':
+    #####:   68:					if (sv == "HEAD")
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed
+        -:   69:					{
+    #####:   70:						return HttpMethod::hHead;
+        -:   71:					}
+    #####:   72:					break;
+    #####:   73:				case 'O':
+    #####:   74:					if (sv == "OPTIONS")
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed
+        -:   75:					{
+    #####:   76:						return HttpMethod::hOptions;
+        -:   77:					}
+    #####:   78:					break;
+        -:   79:			}
+    #####:   80:			return HttpMethod::hUnknown;
+        -:   81:		}
+        -:   82:
+        -:   83:		/// 快速发送错误响应（栈缓冲区，零堆分配）
+function _ZN5hical12_GLOBAL__N_115sendRawResponseERN5boost4asio19basic_stream_socketINS2_2ip3tcpENS2_15any_io_executorEEEjSt17basic_string_viewIcSt11char_traitsIcEESC_ called 0 returned 0% blocks executed 0%
+    #####:   84:		Awaitable<void> sendRawResponse(tcp::socket& socket,
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:   85:										unsigned statusCode,
+        -:   86:										std::string_view reason,
+        -:   87:										std::string_view body)
+        -:   88:		{
+        -:   89:			FixedBuffer<512> buf;
+        -:   90:			buf << "HTTP/1.1 ";
+        -:   91:
+        -:   92:			char codeBuf[4];
+        -:   93:			auto [ptr, ec] = std::to_chars(codeBuf, codeBuf + 4, statusCode);
+        -:   94:			buf.append(codeBuf, static_cast<size_t>(ptr - codeBuf));
+        -:   95:			buf << ' ';
+        -:   96:			buf << reason;
+        -:   97:			buf << "\r\nContent-Length: ";
+        -:   98:
+        -:   99:			char lenBuf[16];
+        -:  100:			auto [ptr2, ec2] = std::to_chars(lenBuf, lenBuf + 16, body.size());
+        -:  101:			buf.append(lenBuf, static_cast<size_t>(ptr2 - lenBuf));
+        -:  102:			buf << "\r\nConnection: close\r\n\r\n";
+        -:  103:			buf << body;
+        -:  104:
+        -:  105:			boost::system::error_code writeEc;
+        -:  106:			co_await boost::asio::async_write(socket,
+        -:  107:											  boost::asio::buffer(buf.data(), buf.size()),
+        -:  108:											  boost::asio::redirect_error(boost::asio::use_awaitable, writeEc));
+    #####:  109:		}
+call    0 never executed
+call    1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed (throw)
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed
+call    8 never executed
+branch  9 never executed (fallthrough)
+branch 10 never executed
+call   11 never executed
+call   12 never executed
+branch 13 never executed (fallthrough)
+branch 14 never executed (throw)
+call   15 never executed
+call   16 never executed
+        -:  110:
+        -:  111:		/// 发送 HttpResponse 对象（内部辅助）
+        -:  112:		/// @param skipBody 为 true 时仅发送头部（HEAD 方法响应）
+function _ZN5hical12_GLOBAL__N_113writeResponseERN5boost4asio19basic_stream_socketINS2_2ip3tcpENS2_15any_io_executorEEERNS_14NativeResponseEb called 221 returned 100% blocks executed 44%
+      221:  113:		Awaitable<void> writeResponse(tcp::socket& socket, NativeResponse& nativeRes, bool skipBody = false)
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  114:		{
+        -:  115:			nativeRes.preparePayload();
+        -:  116:
+        -:  117:			// 序列化头部到栈缓冲区（响应头通常 150-300 字节，512 足够）
+        -:  118:			FixedBuffer<512> headBuf;
+        -:  119:			nativeRes.serializeHeadTo(headBuf);
+        -:  120:
+        -:  121:			if (skipBody || nativeRes.body.empty())
+        -:  122:			{
+        -:  123:				// HEAD 方法或空 body：仅发送头部
+        -:  124:				co_await boost::asio::async_write(socket,
+        -:  125:												  boost::asio::buffer(headBuf.data(), headBuf.size()),
+        -:  126:												  boost::asio::use_awaitable);
+        -:  127:			}
+        -:  128:			else if (headBuf.size() + nativeRes.body.size() <= 512 && !headBuf.overflowed())
+        -:  129:			{
+        -:  130:				// 小响应（head + body <= 512）：合并到栈缓冲区，单次 write，零堆分配
+        -:  131:				headBuf.append(nativeRes.body.data(), nativeRes.body.size());
+        -:  132:				co_await boost::asio::async_write(socket,
+        -:  133:												  boost::asio::buffer(headBuf.data(), headBuf.size()),
+        -:  134:												  boost::asio::use_awaitable);
+        -:  135:			}
+        -:  136:			else
+        -:  137:			{
+        -:  138:				// 大响应：scatter-gather I/O，head 在栈上 + body 零拷贝引用
+        -:  139:				// 一次 writev 系统调用，消除 body 的额外 memcpy
+        -:  140:				std::array<boost::asio::const_buffer, 2> bufs = {boost::asio::buffer(headBuf.data(), headBuf.size()),
+        -:  141:																 boost::asio::buffer(nativeRes.body)};
+        -:  142:				co_await boost::asio::async_write(socket, bufs, boost::asio::use_awaitable);
+        -:  143:			}
+      442:  144:		}
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed
+call    8 never executed
+branch  9 never executed (fallthrough)
+branch 10 never executed
+call   11 never executed
+call   12 never executed
+branch 13 never executed (fallthrough)
+branch 14 never executed (throw)
+call   15 never executed
+call   16 never executed
+        -:  145:
+        -:  146:	} // namespace
+        -:  147:
+        -:  148:	/// 连接级空闲超时协程：替代 shared_ptr<function> 自引用回调链
+        -:  149:	/// 仅启动一次，循环检查 atomic 时间戳判断是否真正超时
+function _ZN5hicalL13idleTimerLoopERN5boost4asio20basic_waitable_timerINSt6chrono3_V212steady_clockENS1_11wait_traitsIS5_EENS1_15any_io_executorEEERNS1_19basic_stream_socketINS1_2ip3tcpES8_EESt10shared_ptrISt6atomicIbEESG_ISH_IlEEl called 68 returned 100% blocks executed 41%
+       68:  150:	static Awaitable<void> idleTimerLoop(boost::asio::steady_timer& timer,
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  151:										 tcp::socket& socket,
+        -:  152:										 std::shared_ptr<std::atomic<bool>> alive,
+        -:  153:										 std::shared_ptr<std::atomic<int64_t>> lastActive,
+        -:  154:										 int64_t timeoutMs)
+        -:  155:	{
+        -:  156:		while (alive->load())
+        -:  157:		{
+        -:  158:			timer.expires_after(std::chrono::milliseconds(timeoutMs));
+        -:  159:			boost::system::error_code ec;
+        -:  160:			co_await timer.async_wait(boost::asio::redirect_error(boost::asio::use_awaitable, ec));
+        -:  161:			if (ec || !alive->load())
+        -:  162:			{
+        -:  163:				break;
+        -:  164:			}
+        -:  165:
+        -:  166:			auto now = std::chrono::duration_cast<std::chrono::milliseconds>(
+        -:  167:						   std::chrono::steady_clock::now().time_since_epoch())
+        -:  168:						   .count();
+        -:  169:			auto elapsed = now - lastActive->load(std::memory_order_relaxed);
+        -:  170:
+        -:  171:			if (elapsed >= timeoutMs)
+        -:  172:			{
+        -:  173:				// 真正超时：关闭 socket 中断 async_read
+        -:  174:				boost::asio::dispatch(socket.get_executor(),
+function _ZZN5hicalL13idleTimerLoopERN5boost4asio20basic_waitable_timerINSt6chrono3_V212steady_clockENS1_11wait_traitsIS5_EENS1_15any_io_executorEEERNS1_19basic_stream_socketINS1_2ip3tcpES8_EESt10shared_ptrISt6atomicIbEESG_ISH_IlEElENKUlvE_clEv called 1 returned 100% blocks executed 88%
+        1:  175:									  [&socket, alive]()
+        -:  176:									  {
+        1:  177:										  if (alive->load())
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0%
+        -:  178:										  {
+        1:  179:											  boost::system::error_code closeEc;
+        1:  180:											  socket.close(closeEc);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  181:										  }
+        1:  182:									  });
+        -:  183:				break;
+        -:  184:			}
+        -:  185:			// 有活动：继续循环（协程自然续期，无 shared_ptr<function> 开销）
+        -:  186:		}
+      136:  187:	}
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+call    7 never executed
+branch  8 never executed (fallthrough)
+branch  9 never executed
+call   10 never executed
+branch 11 never executed (fallthrough)
+branch 12 never executed
+call   13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed
+call   16 never executed
+branch 17 never executed (fallthrough)
+branch 18 never executed
+call   19 never executed
+call   20 never executed
+branch 21 never executed (fallthrough)
+branch 22 never executed (throw)
+call   23 never executed
+call   24 never executed
+        -:  188:
+function _ZN5hical10HttpServer13handleSessionEN5boost4asio19basic_stream_socketINS2_2ip3tcpENS2_15any_io_executorEEE called 68 returned 100% blocks executed 42%
+       68:  189:	Awaitable<void> HttpServer::handleSession(tcp::socket socket)
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  190:	{
+        -:  191:		// 连接计数 RAII 守卫
+        -:  192:		activeConnections_.fetch_add(1);
+        -:  193:
+        -:  194:		struct ConnectionCounter
+        -:  195:		{
+        -:  196:			std::atomic<size_t>& count;
+        -:  197:			std::atomic<bool>& draining;
+        -:  198:			HttpServer& server;
+        -:  199:
+function _ZZN5hical10HttpServer13handleSessionEPZNS0_13handleSessionEN5boost4asio19basic_stream_socketINS2_2ip3tcpENS2_15any_io_executorEEEE113_ZN5hical10HttpServer13handleSessionEN5boost4asio19basic_stream_socketINS2_2ip3tcpENS2_15any_io_executorEEE.FrameEN17ConnectionCounterD2Ev called 68 returned 100% blocks executed 100%
+       68:  200:			~ConnectionCounter()
+        -:  201:			{
+        -:  202:				// fetch_sub 返回旧值；旧值为 1 表示减到 0（最后一个连接）
+      136:  203:				if (count.fetch_sub(1) == 1 && draining.load())
+branch  0 taken 72% (fallthrough)
+branch  1 taken 28%
+call    2 returned 100%
+branch  3 taken 10% (fallthrough)
+branch  4 taken 90%
+branch  5 taken 7% (fallthrough)
+branch  6 taken 93%
+        -:  204:				{
+        5:  205:					server.stopAllLoops();
+call    0 returned 100%
+        -:  206:				}
+       68:  207:			}
+        -:  208:		} connCounter {activeConnections_, draining_, *this};
+        -:  209:
+        -:  210:		// RAII 守卫：确保 socket 在任何退出路径（含异常）都被正确关闭
+        -:  211:		// transferred 标志：当 socket 被 move 给 WebSocket 会话后，跳过析构
+        -:  212:		struct SocketGuard
+        -:  213:		{
+        -:  214:			tcp::socket& sock;
+        -:  215:			bool transferred {false};
+        -:  216:
+function _ZZN5hical10HttpServer13handleSessionEPZNS0_13handleSessionEN5boost4asio19basic_stream_socketINS2_2ip3tcpENS2_15any_io_executorEEEE113_ZN5hical10HttpServer13handleSessionEN5boost4asio19basic_stream_socketINS2_2ip3tcpENS2_15any_io_executorEEE.FrameEN11SocketGuardD2Ev called 68 returned 100% blocks executed 100%
+       68:  217:			~SocketGuard()
+        -:  218:			{
+       68:  219:				if (!transferred && sock.is_open())
+branch  0 taken 94% (fallthrough)
+branch  1 taken 6%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0%
+branch  5 taken 94% (fallthrough)
+branch  6 taken 6%
+        -:  220:				{
+       64:  221:					boost::system::error_code ec;
+       64:  222:					sock.shutdown(tcp::socket::shutdown_send, ec);
+call    0 returned 100%
+       64:  223:					sock.close(ec);
+call    0 returned 100%
+        -:  224:				}
+       68:  225:			}
+        -:  226:		} guard {socket};
+        -:  227:
+        -:  228:		// 空闲超时 timer 在 try 外声明，catch 块需要访问以取消 timer 防竞态
+        -:  229:		std::optional<boost::asio::steady_timer> deadline;
+        -:  230:		if (idleTimeout_ > 0)
+        -:  231:		{
+        -:  232:			deadline.emplace(socket.get_executor());
+        -:  233:		}
+        -:  234:
+        -:  235:		try
+        -:  236:		{
+        -:  237:			// 使用 alive 标志防止 timer 回调在 socket 销毁后访问悬空引用
+        -:  238:			auto socketAlive = std::make_shared<std::atomic<bool>>(true);
+        -:  239:
+        -:  240:			// RAII：确保协程退出时标记 socket 已失效，timer 回调不再操作 socket
+        -:  241:			struct AliveGuard
+        -:  242:			{
+        -:  243:				std::shared_ptr<std::atomic<bool>> alive;
+        -:  244:
+function _ZZN5hical10HttpServer13handleSessionEPZNS0_13handleSessionEN5boost4asio19basic_stream_socketINS2_2ip3tcpENS2_15any_io_executorEEEE113_ZN5hical10HttpServer13handleSessionEN5boost4asio19basic_stream_socketINS2_2ip3tcpENS2_15any_io_executorEEE.FrameEN10AliveGuardD2Ev called 68 returned 100% blocks executed 100%
+       68:  245:				~AliveGuard()
+        -:  246:				{
+       68:  247:					alive->store(false);
+call    0 returned 100%
+call    1 returned 100%
+       68:  248:				}
+call    0 returned 100%
+        -:  249:			} aliveGuard {socketAlive};
+        -:  250:
+        -:  251:			// 连接级 atomic 活跃时间戳（毫秒精度）
+        -:  252:			// 替代 per-request 的 expires_after + cancel，消除 keep-alive 场景的 timer epoll_ctl
+        -:  253:			auto lastActiveMs =
+        -:  254:				std::make_shared<std::atomic<int64_t>>(std::chrono::duration_cast<std::chrono::milliseconds>(
+        -:  255:														   std::chrono::steady_clock::now().time_since_epoch())
+        -:  256:														   .count());
+        -:  257:			auto timeoutMs = static_cast<int64_t>(idleTimeout_ * 1000);
+        -:  258:
+        -:  259:			// 连接级 timer 超时协程：替代 shared_ptr<function> 自引用回调链
+        -:  260:			// 协程自然循环续期，消除每连接 2 次堆分配 + shared_ptr 环形引用
+        -:  261:			if (deadline)
+        -:  262:			{
+        -:  263:				boost::asio::co_spawn(socket.get_executor(),
+        -:  264:									  idleTimerLoop(*deadline, socket, socketAlive, lastActiveMs, timeoutMs),
+        -:  265:									  boost::asio::detached);
+        -:  266:			}
+        -:  267:
+        -:  268:			// 连接级读取缓冲区（跨 keep-alive 请求复用，零初始化开销）
+        -:  269:			// picohttpparser 不要求 buffer 初始化为零，只读 [0, bufUsed) 范围
+        -:  270:			std::string readBuf;
+        -:  271:			readBuf.resize(8192);
+        -:  272:			size_t bufUsed = 0; // 跨请求保留：TCP 粘包时残留下一请求的数据
+        -:  273:
+        -:  274:			for (;;)
+        -:  275:			{
+        -:  276:				// picohttpparser 输出
+        -:  277:				const char* method = nullptr;
+        -:  278:				size_t methodLen = 0;
+        -:  279:				const char* path = nullptr;
+        -:  280:				size_t pathLen = 0;
+        -:  281:				int minorVersion = 0;
+        -:  282:				struct phr_header headers[64];
+        -:  283:				size_t numHeaders = 64;
+        -:  284:				int parseResult = -2; // -2 = 不完整
+        -:  285:
+        -:  286:				// ====== 阶段 A：读取并解析 HTTP 头部 ======
+        -:  287:				size_t prevBufLen = 0;
+        -:  288:				for (;;)
+        -:  289:				{
+        -:  290:					// 确保缓冲区有空间
+        -:  291:					if (bufUsed >= readBuf.size())
+        -:  292:					{
+        -:  293:						if (readBuf.size() >= maxHeaderSize_)
+        -:  294:						{
+        -:  295:							// 头部过大
+        -:  296:							co_await sendRawResponse(socket,
+        -:  297:													 431,
+        -:  298:													 "Request Header Fields Too Large",
+        -:  299:													 "Request header too large");
+        -:  300:							co_return;
+        -:  301:						}
+        -:  302:						readBuf.resize(readBuf.size() * 2);
+        -:  303:					}
+        -:  304:
+        -:  305:					auto bytesRead = co_await socket.async_read_some(
+        -:  306:						boost::asio::buffer(readBuf.data() + bufUsed, readBuf.size() - bufUsed),
+        -:  307:						boost::asio::use_awaitable);
+        -:  308:					bufUsed += bytesRead;
+        -:  309:
+        -:  310:					// 头部大小检查
+        -:  311:					if (bufUsed > maxHeaderSize_)
+        -:  312:					{
+        -:  313:						co_await sendRawResponse(socket,
+        -:  314:												 431,
+        -:  315:												 "Request Header Fields Too Large",
+        -:  316:												 "Request header too large");
+        -:  317:						co_return;
+        -:  318:					}
+        -:  319:
+        -:  320:					numHeaders = 64;
+        -:  321:					parseResult = phr_parse_request(readBuf.data(),
+        -:  322:													bufUsed,
+        -:  323:													&method,
+        -:  324:													&methodLen,
+        -:  325:													&path,
+        -:  326:													&pathLen,
+        -:  327:													&minorVersion,
+        -:  328:													headers,
+        -:  329:													&numHeaders,
+        -:  330:													prevBufLen);
+        -:  331:					prevBufLen = bufUsed;
+        -:  332:
+        -:  333:					if (parseResult > 0)
+        -:  334:					{
+        -:  335:						break; // 头部解析完成
+        -:  336:					}
+        -:  337:					if (parseResult == -1)
+        -:  338:					{
+        -:  339:						// 解析错误
+        -:  340:						co_await sendRawResponse(socket, 400, "Bad Request", "Malformed HTTP request");
+        -:  341:						co_return;
+        -:  342:					}
+        -:  343:					// parseResult == -2：数据不完整，继续读取
+        -:  344:				}
+        -:  345:
+        -:  346:				// 读完头部后更新活跃时间戳
+        -:  347:				lastActiveMs->store(std::chrono::duration_cast<std::chrono::milliseconds>(
+        -:  348:										std::chrono::steady_clock::now().time_since_epoch())
+        -:  349:										.count(),
+        -:  350:									std::memory_order_relaxed);
+        -:  351:
+        -:  352:				// ====== 阶段 B：构建 NativeRequest ======
+        -:  353:				NativeRequest nativeReq;
+        -:  354:				nativeReq.method = methodFromStringView(std::string_view(method, methodLen));
+        -:  355:				nativeReq.target = std::string_view(path, pathLen);
+        -:  356:				nativeReq.httpVersionMajor = 1;
+        -:  357:				nativeReq.httpVersionMinor = minorVersion;
+        -:  358:
+        -:  359:				// 复制头部，同时检测关键头部
+        -:  360:				size_t contentLength = 0;
+        -:  361:				bool hasContentLength = false;
+        -:  362:				bool isChunked = false;
+        -:  363:				bool hasTransferEncoding = false;
+        -:  364:
+        -:  365:				nativeReq.headers.clear();
+        -:  366:				for (size_t i = 0; i < numHeaders; ++i)
+        -:  367:				{
+        -:  368:					std::string_view hname(headers[i].name, headers[i].name_len);
+        -:  369:					std::string_view hvalue(headers[i].value, headers[i].value_len);
+        -:  370:
+        -:  371:					nativeReq.headers.add(hname, hvalue);
+        -:  372:
+        -:  373:					// 按长度+首字符快速过滤，将 20 次 iequals 降到 ~2 次
+        -:  374:					// Content-Length: 长度 14，首字符 C/c
+        -:  375:					// Transfer-Encoding: 长度 17，首字符 T/t
+        -:  376:					if (hname.size() == 14 && (hname[0] == 'C' || hname[0] == 'c'))
+        -:  377:					{
+        -:  378:						if (HeaderMap::iequals(hname, "Content-Length"))
+        -:  379:						{
+        -:  380:							auto [ptr, ec] =
+        -:  381:								std::from_chars(hvalue.data(), hvalue.data() + hvalue.size(), contentLength);
+        -:  382:							hasContentLength = (ec == std::errc {});
+        -:  383:						}
+        -:  384:					}
+        -:  385:					else if (hname.size() == 17 && (hname[0] == 'T' || hname[0] == 't'))
+        -:  386:					{
+        -:  387:						if (HeaderMap::iequals(hname, "Transfer-Encoding"))
+        -:  388:						{
+        -:  389:							hasTransferEncoding = true;
+        -:  390:							// RFC 7230 ：chunked 必须是最后一个编码
+        -:  391:							auto lastComma = hvalue.rfind(',');
+        -:  392:							std::string_view lastToken =
+        -:  393:								(lastComma != std::string_view::npos) ? hvalue.substr(lastComma + 1) : hvalue;
+        -:  394:							while (!lastToken.empty() && lastToken.front() == ' ')
+        -:  395:							{
+        -:  396:								lastToken.remove_prefix(1);
+        -:  397:							}
+        -:  398:							while (!lastToken.empty() && lastToken.back() == ' ')
+        -:  399:							{
+        -:  400:								lastToken.remove_suffix(1);
+        -:  401:							}
+        -:  402:							if (HeaderMap::iequals(lastToken, "chunked"))
+        -:  403:							{
+        -:  404:								isChunked = true;
+        -:  405:							}
+        -:  406:						}
+        -:  407:					}
+        -:  408:				}
+        -:  409:
+        -:  410:				// RFC 7230 ：不认识的 Transfer-Encoding 返回 501
+        -:  411:				if (hasTransferEncoding && !isChunked)
+        -:  412:				{
+        -:  413:					co_await sendRawResponse(socket, 501, "Not Implemented", "Unsupported Transfer-Encoding");
+        -:  414:					co_return;
+        -:  415:				}
+        -:  416:
+        -:  417:				// 计算 keep-alive
+        -:  418:				auto connHeader = nativeReq.headers.find("Connection");
+        -:  419:				if (!connHeader.empty())
+        -:  420:				{
+        -:  421:					nativeReq.keepAlive = !HeaderMap::iequals(connHeader, "close");
+        -:  422:				}
+        -:  423:				else
+        -:  424:				{
+        -:  425:					// HTTP/1.1 默认 keep-alive，HTTP/1.0 默认 close
+        -:  426:					nativeReq.keepAlive = (minorVersion >= 1);
+        -:  427:				}
+        -:  428:
+        -:  429:				// ====== 阶段 C：读取 Body ======
+        -:  430:				size_t headerBytes = static_cast<size_t>(parseResult);
+        -:  431:				size_t remainingInBuf = bufUsed - headerBytes;
+        -:  432:
+        -:  433:				if (hasContentLength && contentLength > 0)
+        -:  434:				{
+        -:  435:					// Content-Length body 读取
+        -:  436:					if (contentLength > maxBodySize_)
+        -:  437:					{
+        -:  438:						co_await sendRawResponse(socket, 413, "Payload Too Large", "Request body too large");
+        -:  439:						co_return;
+        -:  440:					}
+        -:  441:
+        -:  442:					nativeReq.body.resize(contentLength);
+        -:  443:					size_t bodyCopied = std::min(remainingInBuf, contentLength);
+        -:  444:					if (bodyCopied > 0)
+        -:  445:					{
+        -:  446:						std::memcpy(nativeReq.body.data(), readBuf.data() + headerBytes, bodyCopied);
+        -:  447:					}
+        -:  448:
+        -:  449:					// 保留 readBuf 中超出当前 body 的残留数据（TCP 粘包：下一请求已到达）
+        -:  450:					size_t tailLen = remainingInBuf - bodyCopied;
+        -:  451:					if (tailLen > 0)
+        -:  452:					{
+        -:  453:						std::memmove(readBuf.data(), readBuf.data() + headerBytes + bodyCopied, tailLen);
+        -:  454:					}
+        -:  455:					bufUsed = tailLen;
+        -:  456:
+        -:  457:					size_t bodyRemaining = contentLength - bodyCopied;
+        -:  458:					size_t offset = bodyCopied;
+        -:  459:					while (bodyRemaining > 0)
+        -:  460:					{
+        -:  461:						auto bytesRead = co_await socket.async_read_some(
+        -:  462:							boost::asio::buffer(nativeReq.body.data() + offset, bodyRemaining),
+        -:  463:							boost::asio::use_awaitable);
+        -:  464:						offset += bytesRead;
+        -:  465:						bodyRemaining -= bytesRead;
+        -:  466:					}
+        -:  467:				}
+        -:  468:				else if (isChunked)
+        -:  469:				{
+        -:  470:					// Chunked transfer-encoding 解码
+        -:  471:					// phr_decode_chunked 是原地解码：将编码帧头剥离，解码数据覆写到同一缓冲区
+        -:  472:					// 返回值：>= 0 表示完成（值为尾部长度），-2 表示需要更多数据，-1 表示错误
+        -:  473:					// decodeBufLen 输入为待解码字节数，输出为本次解码产出的字节数
+        -:  474:					std::string chunkBuf;
+        -:  475:					if (remainingInBuf > 0)
+        -:  476:					{
+        -:  477:						chunkBuf.assign(readBuf.data() + headerBytes, remainingInBuf);
+        -:  478:					}
+        -:  479:					// chunked 路径消费了 readBuf 所有残留数据，清零
+        -:  480:					bufUsed = 0;
+        -:  481:
+        -:  482:					struct phr_chunked_decoder decoder = {};
+        -:  483:					// encodeStart: 下一次 decode 的起始偏移
+        -:  484:					// 解码产出的数据在 chunkBuf[encodeStart .. encodeStart+decodeBufLen)
+        -:  485:					size_t encodeStart = 0;
+        -:  486:
+        -:  487:					for (;;)
+        -:  488:					{
+        -:  489:						size_t available = chunkBuf.size() - encodeStart;
+        -:  490:						if (available == 0)
+        -:  491:						{
+        -:  492:							// 缓冲区无数据，读取更多
+        -:  493:							size_t oldSize = chunkBuf.size();
+        -:  494:							chunkBuf.resize(oldSize + 4096);
+        -:  495:							auto bytesRead =
+        -:  496:								co_await socket.async_read_some(boost::asio::buffer(chunkBuf.data() + oldSize, 4096),
+        -:  497:																boost::asio::use_awaitable);
+        -:  498:							chunkBuf.resize(oldSize + bytesRead);
+        -:  499:							continue;
+        -:  500:						}
+        -:  501:
+        -:  502:						size_t decodeBufLen = available;
+        -:  503:						auto decodeRet = phr_decode_chunked(&decoder, chunkBuf.data() + encodeStart, &decodeBufLen);
+        -:  504:
+        -:  505:						// decodeBufLen = 本次解码产出字节数，数据位于 chunkBuf[encodeStart..]
+        -:  506:						nativeReq.body.append(chunkBuf.data() + encodeStart, decodeBufLen);
+        -:  507:						encodeStart += decodeBufLen;
+        -:  508:
+        -:  509:						if (nativeReq.body.size() > maxBodySize_)
+        -:  510:						{
+        -:  511:							co_await sendRawResponse(socket, 413, "Payload Too Large", "Request body too large");
+        -:  512:							co_return;
+        -:  513:						}
+        -:  514:
+        -:  515:						if (decodeRet >= 0)
+        -:  516:						{
+        -:  517:							// 解码完成
+        -:  518:							break;
+        -:  519:						}
+        -:  520:						if (decodeRet == -1)
+        -:  521:						{
+        -:  522:							// 解码错误
+        -:  523:							co_await sendRawResponse(socket, 400, "Bad Request", "Malformed chunked encoding");
+        -:  524:							co_return;
+        -:  525:						}
+        -:  526:						// decodeRet == -2：需要更多数据
+        -:  527:						size_t oldSize = chunkBuf.size();
+        -:  528:						chunkBuf.resize(oldSize + 4096);
+        -:  529:						auto bytesRead =
+        -:  530:							co_await socket.async_read_some(boost::asio::buffer(chunkBuf.data() + oldSize, 4096),
+        -:  531:															boost::asio::use_awaitable);
+        -:  532:						chunkBuf.resize(oldSize + bytesRead);
+        -:  533:					}
+        -:  534:				}
+        -:  535:				else
+        -:  536:				{
+        -:  537:					// 无 body（GET/HEAD 等）：保留 readBuf 中头部之后的残留数据
+        -:  538:					if (remainingInBuf > 0)
+        -:  539:					{
+        -:  540:						std::memmove(readBuf.data(), readBuf.data() + headerBytes, remainingInBuf);
+        -:  541:					}
+        -:  542:					bufUsed = remainingInBuf;
+        -:  543:				}
+        -:  544:
+        -:  545:				// ====== 阶段 D：构建 HttpRequest 并分发 ======
+        -:  546:				HttpRequest req = HttpRequest::fromParsed(std::move(nativeReq));
+        -:  547:
+        -:  548:				// 检查 WebSocket 升级请求
+        -:  549:				if (req.native().isUpgrade())
+        -:  550:				{
+        -:  551:					auto reqPath = req.path();
+        -:  552:
+        -:  553:					auto* wsRoute = router_.findWsRoute(reqPath);
+        -:  554:					if (wsRoute)
+        -:  555:					{
+        -:  556:						// Origin 白名单校验（CSWSH 防护）
+        -:  557:						if (!wsRoute->allowedOrigins.empty())
+        -:  558:						{
+        -:  559:							auto origin = std::string(req.header("Origin"));
+        -:  560:							if (wsRoute->allowedOrigins.count(origin) == 0)
+        -:  561:							{
+        -:  562:								HttpResponse forbiddenRes;
+        -:  563:								forbiddenRes.setStatus(HttpStatusCode::hForbidden);
+        -:  564:								forbiddenRes.setBody("403 Forbidden: Origin not allowed");
+        -:  565:								auto& nativeRes = forbiddenRes.native();
+        -:  566:								nativeRes.httpVersionMinor = 1;
+        -:  567:								nativeRes.headers.set("Connection", "close");
+        -:  568:								co_await writeResponse(socket, nativeRes);
+        -:  569:								co_return;
+        -:  570:							}
+        -:  571:						}
+        -:  572:
+        -:  573:						// WebSocket 升级也走中间件管道（认证/限流/日志等）
+        -:  574:						if (wsMiddlewareChain_)
+        -:  575:						{
+        -:  576:							auto wsAuthRes = co_await wsMiddlewareChain_(req);
+        -:  577:
+        -:  578:							auto wsAuthCode = wsAuthRes.statusCode();
+        -:  579:							if (wsAuthCode != HttpStatusCode::hOk)
+        -:  580:							{
+        -:  581:								// 中间件拦截（如 401/403），返回 HTTP 响应拒绝升级
+        -:  582:								auto& nativeRes = wsAuthRes.native();
+        -:  583:								nativeRes.httpVersionMinor = 1;
+        -:  584:								nativeRes.headers.set("Connection", "close");
+        -:  585:								co_await writeResponse(socket, nativeRes);
+        -:  586:								co_return;
+        -:  587:							}
+        -:  588:						}
+        -:  589:
+        -:  590:						// socket 所有权转移给 WebSocket 会话，标记 guard 跳过析构
+        -:  591:						guard.transferred = true;
+        -:  592:						co_await handleWebSocket(std::move(socket), req.native(), *wsRoute);
+        -:  593:						co_return;
+        -:  594:					}
+        -:  595:				}
+        -:  596:
+        -:  597:				// 通过中间件管道 + 路由器分发（带全局错误处理）
+        -:  598:				HttpResponse res;
+        -:  599:				try
+        -:  600:				{
+        -:  601:					if (middlewarePipeline_.size() > 0)
+        -:  602:					{
+        -:  603:						// build() 已在 start() 中调用，使用无参版本避免每请求构造 std::function
+        -:  604:						res = co_await middlewarePipeline_.execute(req);
+        -:  605:					}
+        -:  606:					else
+        -:  607:					{
+        -:  608:						// 同步快速路径：handler 是同步注册时直接调用，跳过协程帧分配
+        -:  609:						auto syncResult = router_.dispatchSync(req);
+        -:  610:						if (syncResult)
+        -:  611:						{
+        -:  612:							res = std::move(*syncResult);
+        -:  613:						}
+        -:  614:						else
+        -:  615:						{
+        -:  616:							res = co_await router_.dispatch(req);
+        -:  617:						}
+        -:  618:					}
+        -:  619:				}
+        -:  620:				catch (const std::exception& e)
+        -:  621:				{
+        -:  622:					if (errorHandler_)
+        -:  623:					{
+        -:  624:						try
+        -:  625:						{
+        -:  626:							res = errorHandler_(e, req);
+        -:  627:						}
+        -:  628:						catch (...)
+        -:  629:						{
+        -:  630:							// errorHandler 自身抛异常时 fallback
+        -:  631:							res = HttpResponse::serverError();
+        -:  632:						}
+        -:  633:					}
+        -:  634:					else
+        -:  635:					{
+        -:  636:						res = HttpResponse::serverError();
+        -:  637:					}
+        -:  638:				}
+        -:  639:				catch (...)
+        -:  640:				{
+        -:  641:					res = HttpResponse::serverError();
+        -:  642:				}
+        -:  643:
+        -:  644:				// 设置通用头部（insert 替代 set：用户 handler 不会预设 Server/Connection，
+        -:  645:				// 直接 push_back O(1)，省去线性扫描）
+        -:  646:				auto& nativeRes = res.native();
+        -:  647:				nativeRes.httpVersionMinor = 1;
+        -:  648:				nativeRes.headers.insert("Server", HICAL_VERSION_STRING);
+        -:  649:				bool shouldKeepAlive = req.native().keepAlive && !draining_.load();
+        -:  650:				nativeRes.keepAlive = shouldKeepAlive;
+        -:  651:				nativeRes.headers.insert("Connection", shouldKeepAlive ? "keep-alive" : "close");
+        -:  652:
+        -:  653:				// 发送响应（scatter-gather I/O：状态行+头部在栈，body 零拷贝）
+        -:  654:				// HEAD 方法：仅发送头部，不发送 body（RFC 7231 §4.3.2）
+        -:  655:				bool isHead = (req.method() == HttpMethod::hHead);
+        -:  656:				co_await writeResponse(socket, nativeRes, isHead);
+        -:  657:
+        -:  658:				// 写完后更新活跃时间戳
+        -:  659:				lastActiveMs->store(std::chrono::duration_cast<std::chrono::milliseconds>(
+        -:  660:										std::chrono::steady_clock::now().time_since_epoch())
+        -:  661:										.count(),
+        -:  662:									std::memory_order_relaxed);
+        -:  663:
+        -:  664:				if (!shouldKeepAlive)
+        -:  665:				{
+        -:  666:					break;
+        -:  667:				}
+        -:  668:			}
+        -:  669:		}
+        -:  670:		catch (const boost::system::system_error& e)
+        -:  671:		{
+        -:  672:			if (e.code() != boost::asio::error::eof && e.code() != boost::asio::error::connection_reset
+        -:  673:				&& e.code() != boost::asio::error::operation_aborted)
+        -:  674:			{
+        -:  675:				// 忽略正常的连接关闭
+        -:  676:			}
+        -:  677:		}
+        -:  678:
+        -:  679:		// 取消 idleTimerLoop 协程：cancel timer 使其 co_await 收到 operation_aborted 并退出
+        -:  680:		// 必须在 AliveGuard 析构前执行（timer cancel 后协程 resume 时检查 alive 标志退出）
+        -:  681:		if (deadline)
+        -:  682:		{
+        -:  683:			deadline->cancel();
+        -:  684:		}
+        -:  685:		// AliveGuard 析构设 alive=false → SocketGuard 析构关闭 socket
+      136:  686:	}
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed
+call    9 never executed
+branch 10 never executed (fallthrough)
+branch 11 never executed
+call   12 never executed
+branch 13 never executed (fallthrough)
+branch 14 never executed
+call   15 never executed
+call   16 never executed
+branch 17 never executed (fallthrough)
+branch 18 never executed (throw)
+call   19 never executed
+call   20 never executed
+        -:  687:
+function _ZN5hical10HttpServer15handleWebSocketEN5boost4asio19basic_stream_socketINS2_2ip3tcpENS2_15any_io_executorEEERKNS_13NativeRequestERKNS_6Router7WsRouteE called 4 returned 100% blocks executed 42%
+        4:  688:	Awaitable<void> HttpServer::handleWebSocket(tcp::socket socket,
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  689:												const NativeRequest& req,
+        -:  690:												const Router::WsRoute& wsRoute)
+        -:  691:	{
+        -:  692:		std::unique_ptr<WebSocketSession> session;
+        -:  693:
+        -:  694:		// WebSocket 空闲超时 timer 在 try 外声明，catch 块需要访问以取消 timer 防竞态
+        -:  695:		std::optional<boost::asio::steady_timer> wsDeadline;
+        -:  696:		auto wsTimeoutDuration = std::chrono::milliseconds(static_cast<int64_t>(idleTimeout_ * 1000));
+        -:  697:		if (idleTimeout_ > 0)
+        -:  698:		{
+        -:  699:			wsDeadline.emplace(socket.get_executor());
+        -:  700:		}
+        -:  701:
+        -:  702:		try
+        -:  703:		{
+        -:  704:			// 防御性复制关键头部值（NativeRequest 的 string_view 引用 handleSession 的 readBuf，
+        -:  705:			// 虽然此路径下 readBuf 生命周期足够，但防御性拷贝更安全）
+        -:  706:			std::string clientKeyStr(req.headers.find("Sec-WebSocket-Key"));
+        -:  707:			std::string extHeaderStr(req.headers.find("Sec-WebSocket-Extensions"));
+        -:  708:
+        -:  709:			// 1. 验证 WS 握手头部
+        -:  710:			auto clientKey = validateWsUpgrade(req);
+        -:  711:			if (clientKey.empty())
+        -:  712:			{
+        -:  713:				co_return;
+        -:  714:			}
+        -:  715:
+        -:  716:			// 2. 计算 Sec-WebSocket-Accept
+        -:  717:			auto acceptKey = computeWsAcceptKey(clientKeyStr);
+        -:  718:
+        -:  719:			// 3. 协商 permessage-deflate
+        -:  720:			WsDeflateNegotiation deflateNeg;
+        -:  721:			WsCompressionConfig compressionCfg;
+        -:  722:			compressionCfg.enabled = wsRoute.enableCompression;
+        -:  723:			compressionCfg.serverMaxWindowBits = wsRoute.serverMaxWindowBits;
+        -:  724:			compressionCfg.clientMaxWindowBits = wsRoute.clientMaxWindowBits;
+        -:  725:			compressionCfg.serverNoContextTakeover = wsRoute.serverNoContextTakeover;
+        -:  726:
+        -:  727:			if (wsRoute.enableCompression && !extHeaderStr.empty())
+        -:  728:			{
+        -:  729:				deflateNeg = negotiateDeflate(extHeaderStr, compressionCfg);
+        -:  730:			}
+        -:  731:
+        -:  732:			// 4. 发送 101 Switching Protocols（FixedBuffer<512> 栈上零堆分配）
+        -:  733:			FixedBuffer<512> responseBuf;
+        -:  734:			buildWsAcceptResponse(responseBuf, acceptKey, deflateNeg.accepted ? &deflateNeg : nullptr);
+        -:  735:			co_await boost::asio::async_write(socket,
+        -:  736:											  boost::asio::buffer(responseBuf.data(), responseBuf.size()),
+        -:  737:											  boost::asio::use_awaitable);
+        -:  738:
+        -:  739:			// 5. 创建 WebSocketSession
+        -:  740:			session = std::make_unique<WebSocketSession>(std::move(socket),
+        -:  741:														 WebSocketSession::hDefaultMaxMessageSize,
+        -:  742:														 compressionCfg,
+        -:  743:														 deflateNeg.accepted ? &deflateNeg : nullptr);
+        -:  744:
+        -:  745:			// 使用 alive 标志防止 timer 回调在 session 销毁后访问悬空引用
+        -:  746:			auto wsAlive = std::make_shared<std::atomic<bool>>(true);
+        -:  747:
+        -:  748:			// RAII：确保协程退出时标记 session 已失效，timer 回调不再操作 session
+        -:  749:			struct WsAliveGuard
+        -:  750:			{
+        -:  751:				std::shared_ptr<std::atomic<bool>> alive;
+        -:  752:
+function _ZZN5hical10HttpServer15handleWebSocketEPZNS0_15handleWebSocketEN5boost4asio19basic_stream_socketINS2_2ip3tcpENS2_15any_io_executorEEERKNS_13NativeRequestERKNS_6Router7WsRouteEE157_ZN5hical10HttpServer15handleWebSocketEN5boost4asio19basic_stream_socketINS2_2ip3tcpENS2_15any_io_executorEEERKNS_13NativeRequestERKNS_6Router7WsRouteE.FrameEN12WsAliveGuardD2Ev called 4 returned 100% blocks executed 100%
+        4:  753:				~WsAliveGuard()
+        -:  754:				{
+        4:  755:					alive->store(false);
+call    0 returned 100%
+call    1 returned 100%
+        4:  756:				}
+call    0 returned 100%
+        -:  757:			} wsAliveGuard {wsAlive};
+        -:  758:
+        -:  759:			// 调用连接回调
+        -:  760:			if (wsRoute.onConnect)
+        -:  761:			{
+        -:  762:				co_await wsRoute.onConnect(*session);
+        -:  763:			}
+        -:  764:
+        -:  765:			// 消息循环
+        -:  766:			while (session->isOpen())
+        -:  767:			{
+        -:  768:				// 设置空闲超时（每次读取前重置）
+        -:  769:				if (wsDeadline)
+        -:  770:				{
+        -:  771:					wsDeadline->expires_after(wsTimeoutDuration);
+        -:  772:					wsDeadline->async_wait(
+function _ZZN5hical10HttpServer15handleWebSocketEN5boost4asio19basic_stream_socketINS2_2ip3tcpENS2_15any_io_executorEEERKNS_13NativeRequestERKNS_6Router7WsRouteEENKUlRKNS1_6system10error_codeEE_clESI_ called 4 returned 100% blocks executed 95%
+        4:  773:						[&session, aliveFlag = wsAlive](const boost::system::error_code& ec)
+        -:  774:						{
+        4:  775:							if (!ec && aliveFlag->load() && session && session->isOpen())
+call    0 returned 100%
+branch  1 taken 25% (fallthrough)
+branch  2 taken 75%
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0%
+call    7 returned 100%
+branch  8 taken 100% (fallthrough)
+branch  9 taken 0%
+call   10 returned 100%
+call   11 returned 100%
+branch 12 taken 100% (fallthrough)
+branch 13 taken 0%
+branch 14 taken 25% (fallthrough)
+branch 15 taken 75%
+        -:  776:							{
+        -:  777:								// 超时：关闭底层 socket 以中断 async_read
+        1:  778:								boost::system::error_code closeEc;
+        1:  779:								session->socket().close(closeEc);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+        -:  780:							}
+        4:  781:						});
+        -:  782:				}
+        -:  783:
+        -:  784:				auto msg = co_await session->receive();
+        -:  785:
+        -:  786:				// 收到消息后取消超时
+        -:  787:				if (wsDeadline)
+        -:  788:				{
+        -:  789:					wsDeadline->cancel();
+        -:  790:				}
+        -:  791:
+        -:  792:				if (!msg.has_value())
+        -:  793:				{
+        -:  794:					break;
+        -:  795:				}
+        -:  796:
+        -:  797:				if (wsRoute.onMessage)
+        -:  798:				{
+        -:  799:					co_await wsRoute.onMessage(*msg, *session);
+        -:  800:				}
+        -:  801:			}
+        -:  802:		}
+        -:  803:		catch (const boost::system::system_error& e)
+        -:  804:		{
+        -:  805:			// 异常路径先取消 timer，防止 timer 回调在 session 析构后访问悬空引用
+        -:  806:			if (wsDeadline)
+        -:  807:			{
+        -:  808:				wsDeadline->cancel();
+        -:  809:			}
+        -:  810:
+        -:  811:			if (e.code() != boost::asio::error::eof && e.code() != boost::asio::error::connection_reset
+        -:  812:				&& e.code() != boost::asio::error::operation_aborted)
+        -:  813:			{
+        -:  814:				// 忽略正常关闭
+        -:  815:			}
+        -:  816:		}
+        -:  817:
+        -:  818:		// 连接断开回调（正常退出和异常退出都会触发）
+        -:  819:		if (session && wsRoute.onDisconnect)
+        -:  820:		{
+        -:  821:			try
+        -:  822:			{
+        -:  823:				co_await wsRoute.onDisconnect(*session);
+        -:  824:			}
+        -:  825:			catch (...)
+        -:  826:			{
+        -:  827:				// 忽略断开回调中的异常
+        -:  828:			}
+        -:  829:		}
+        8:  830:	}
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed
+call    9 never executed
+branch 10 never executed (fallthrough)
+branch 11 never executed
+call   12 never executed
+branch 13 never executed (fallthrough)
+branch 14 never executed
+call   15 never executed
+call   16 never executed
+branch 17 never executed (fallthrough)
+branch 18 never executed (throw)
+call   19 never executed
+call   20 never executed
+        -:  831:
+        -:  832:} // namespace hical

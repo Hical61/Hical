@@ -1,0 +1,1306 @@
+        -:    0:Source:/home/runner/work/Hical/Hical/src/core/OpenApiRegistry.h
+        -:    1:#pragma once
+        -:    2:
+        -:    3:/**
+        -:    4: * @brief OpenAPI 路由元数据注册表 + 用户标注宏
+        -:    5: * 提供：
+        -:    6: *   1. RouteApiInfo 数据结构 — 存储单个路由的 OpenAPI 标注（summary/tags/requestBody/responses）
+        -:    7: *   2. OpenApiRegistry 类 — 线程安全的路由和 schema 注册表
+        -:    8: *   3. HICAL_API() 宏 — 综合标注（summary/tags/request/response 一次性声明）
+        -:    9: *   4. builder::* 辅助函数 — 类型安全的标注构建器
+        -:   10: *   5. HICAL_ROUTES_WITH_API() 宏 — 增强版路由收集，自动收集 OpenAPI 标注
+        -:   11: *   6. registerRoutesWithOpenApi() — 注册路由同时收集 OpenAPI 元数据
+        -:   12: */
+        -:   13:
+        -:   14:#include "Reflection.h"
+        -:   15:#include "MetaRoutes.h"
+        -:   16:#include "OpenApiSchema.h"
+        -:   17:#include <boost/json.hpp>
+        -:   18:#include <functional>
+        -:   19:#include <mutex>
+        -:   20:#include <string>
+        -:   21:#include <string_view>
+        -:   22:#include <unordered_map>
+        -:   23:#include <vector>
+        -:   24:
+        -:   25:namespace hical::meta::openapi
+        -:   26:{
+        -:   27:
+        -:   28:	// ============ 数据结构 ============
+        -:   29:
+        -:   30:	/**
+        -:   31:	 * @brief 单个路由的 OpenAPI 标注信息
+        -:   32:	 */
+        -:   33:	struct RouteApiInfo
+        -:   34:	{
+        -:   35:		std::string summary;
+        -:   36:		std::string description;
+        -:   37:		std::string operationId;
+        -:   38:		std::vector<std::string> tags;
+        -:   39:
+        -:   40:		// 请求体
+        -:   41:		std::function<boost::json::object()> requestBodySchema; // 惰性求值
+        -:   42:		std::string requestBodyDescription;
+        -:   43:		bool requestBodyRequired = false;
+        -:   44:
+        -:   45:		// 响应
+        -:   46:		struct ResponseInfo
+        -:   47:		{
+        -:   48:			std::string description;
+        -:   49:			std::function<boost::json::object()> schema; // 可为空
+        -:   50:		};
+        -:   51:
+        -:   52:		std::unordered_map<int, ResponseInfo> responses;
+        -:   53:
+        -:   54:		// 路径参数覆盖
+        -:   55:		struct ParamInfo
+        -:   56:		{
+        -:   57:			std::string name;
+        -:   58:			std::string description;
+        -:   59:			std::string schemaType = "string";
+        -:   60:		};
+        -:   61:
+        -:   62:		std::vector<ParamInfo> parameters;
+        -:   63:	};
+        -:   64:
+        -:   65:	/**
+        -:   66:	 * @brief 已注册的路由条目（含 OpenAPI 标注）
+        -:   67:	 */
+        -:   68:	struct RegisteredRoute
+        -:   69:	{
+        -:   70:		HttpMethod method;
+        -:   71:		std::string path;
+        -:   72:		std::string handlerName;
+        -:   73:		RouteApiInfo apiInfo;
+        -:   74:	};
+        -:   75:
+        -:   76:	// ============ Registry 类 ============
+        -:   77:
+        -:   78:	/**
+        -:   79:	 * @brief OpenAPI 路由和 Schema 注册表
+        -:   80:	 * 线程安全：所有读写操作均通过 mutex 保护。
+        -:   81:	 * 注意：读操作返回快照副本（by value），避免跨线程引用悬挂。
+        -:   82:	 */
+        -:   83:	class OpenApiRegistry
+        -:   84:	{
+        -:   85:	public:
+        -:   86:		void addRoute(HttpMethod method, std::string path, std::string handlerName, RouteApiInfo apiInfo = {});
+        -:   87:
+        -:   88:		void addSchema(const std::string& name, boost::json::object schema);
+        -:   89:
+        -:   90:		bool hasSchema(const std::string& name) const;
+        -:   91:
+        -:   92:		/**
+        -:   93:		 * @brief 获取所有已注册路由的快照（线程安全，返回副本）
+        -:   94:		 */
+        -:   95:		std::vector<RegisteredRoute> routes() const;
+        -:   96:
+        -:   97:		/**
+        -:   98:		 * @brief 获取所有已注册 schema 的快照（线程安全，返回副本）
+        -:   99:		 */
+        -:  100:		std::unordered_map<std::string, boost::json::object> schemas() const;
+        -:  101:
+        -:  102:	private:
+        -:  103:		mutable std::mutex m_mutex;
+        -:  104:		std::vector<RegisteredRoute> m_routes;
+        -:  105:		std::unordered_map<std::string, boost::json::object> m_schemas;
+        -:  106:	};
+        -:  107:
+        -:  108:	// ============ builder 辅助函数 ============
+        -:  109:
+        -:  110:	namespace builder
+        -:  111:	{
+        -:  112:
+     144*:  113:		inline void summary(RouteApiInfo& info, std::string_view s)
+        -:  114:		{
+     144*:  115:			info.summary = std::string(s);
+     144*:  116:		}
+------------------
+_ZN5hical4meta7openapi7builder7summaryERNS1_12RouteApiInfoESt17basic_string_viewIcSt11char_traitsIcEE:
+function _ZN5hical4meta7openapi7builder7summaryERNS1_12RouteApiInfoESt17basic_string_viewIcSt11char_traitsIcEE called 144 returned 100% blocks executed 73%
+      144:  113:		inline void summary(RouteApiInfo& info, std::string_view s)
+        -:  114:		{
+      144:  115:			info.summary = std::string(s);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+      144:  116:		}
+------------------
+_ZN5hical4meta7openapi7builder7summaryERNS1_12RouteApiInfoESt17basic_string_viewIcSt11char_traitsIcEE:
+function _ZN5hical4meta7openapi7builder7summaryERNS1_12RouteApiInfoESt17basic_string_viewIcSt11char_traitsIcEE called 0 returned 0% blocks executed 0%
+    #####:  113:		inline void summary(RouteApiInfo& info, std::string_view s)
+        -:  114:		{
+    #####:  115:			info.summary = std::string(s);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+call    4 never executed
+    #####:  116:		}
+------------------
+        -:  117:
+        -:  118:		inline void description(RouteApiInfo& info, std::string_view d)
+        -:  119:		{
+        -:  120:			info.description = std::string(d);
+        -:  121:		}
+        -:  122:
+      36*:  123:		inline void tags(RouteApiInfo& info, std::initializer_list<std::string_view> t)
+        -:  124:		{
+      36*:  125:			info.tags.clear();
+      72*:  126:			for (auto sv : t)
+        -:  127:			{
+      36*:  128:				info.tags.emplace_back(sv);
+        -:  129:			}
+      36*:  130:		}
+------------------
+_ZN5hical4meta7openapi7builder4tagsERNS1_12RouteApiInfoESt16initializer_listISt17basic_string_viewIcSt11char_traitsIcEEE:
+function _ZN5hical4meta7openapi7builder4tagsERNS1_12RouteApiInfoESt16initializer_listISt17basic_string_viewIcSt11char_traitsIcEEE called 36 returned 100% blocks executed 100%
+       36:  123:		inline void tags(RouteApiInfo& info, std::initializer_list<std::string_view> t)
+        -:  124:		{
+       36:  125:			info.tags.clear();
+call    0 returned 100%
+       72:  126:			for (auto sv : t)
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 50%
+branch  3 taken 50% (fallthrough)
+        -:  127:			{
+       36:  128:				info.tags.emplace_back(sv);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  129:			}
+       36:  130:		}
+------------------
+_ZN5hical4meta7openapi7builder4tagsERNS1_12RouteApiInfoESt16initializer_listISt17basic_string_viewIcSt11char_traitsIcEEE:
+function _ZN5hical4meta7openapi7builder4tagsERNS1_12RouteApiInfoESt16initializer_listISt17basic_string_viewIcSt11char_traitsIcEEE called 0 returned 0% blocks executed 0%
+    #####:  123:		inline void tags(RouteApiInfo& info, std::initializer_list<std::string_view> t)
+        -:  124:		{
+    #####:  125:			info.tags.clear();
+call    0 never executed
+    #####:  126:			for (auto sv : t)
+call    0 never executed
+call    1 never executed
+branch  2 never executed
+branch  3 never executed (fallthrough)
+        -:  127:			{
+    #####:  128:				info.tags.emplace_back(sv);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:  129:			}
+    #####:  130:		}
+------------------
+        -:  131:
+        -:  132:		/**
+        -:  133:		 * @brief 声明请求体的 DTO 类型
+        -:  134:		 * @tparam T 标注了 HICAL_JSON 的 DTO 类型
+        -:  135:		 */
+        -:  136:		template <typename T>
+      37*:  137:		inline void request(RouteApiInfo& info, std::string_view desc = "", bool required = true)
+        -:  138:		{
+        -:  139:			static_assert(HasJsonFields<T>::value, "Request body type must use HICAL_JSON() macro");
+      39*:  140:			info.requestBodySchema = []() -> boost::json::object
+        -:  141:			{
+        -:  142:				if constexpr (SchemaName<T>::value != nullptr)
+        -:  143:				{
+       2*:  144:					boost::json::object ref;
+call    0 returned 100%
+branch  1 never executed (fallthrough)
+branch  2 never executed
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed
+       2*:  145:					ref["$ref"] = std::string("#/components/schemas/") + SchemaName<T>::value;
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 returned 100%
+call    8 returned 100%
+branch  9 taken 100% (fallthrough)
+branch 10 taken 0% (throw)
+call   11 returned 100%
+branch 12 taken 100% (fallthrough)
+branch 13 taken 0% (throw)
+call   14 returned 100%
+call   15 returned 100%
+call   16 never executed
+call   17 never executed
+call   18 never executed
+branch 19 never executed (fallthrough)
+branch 20 never executed (throw)
+call   21 never executed
+branch 22 never executed (fallthrough)
+branch 23 never executed (throw)
+call   24 never executed
+call   25 never executed
+call   26 never executed
+branch 27 never executed (fallthrough)
+branch 28 never executed (throw)
+call   29 never executed
+branch 30 never executed (fallthrough)
+branch 31 never executed (throw)
+call   32 never executed
+call   33 never executed
+call   34 never executed
+call   35 never executed
+       4*:  146:					return ref;
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+branch  2 never executed (fallthrough)
+branch  3 never executed
+    #####:  147:				}
+call    0 never executed
+call    1 never executed
+call    2 never executed
+call    3 never executed
+        -:  148:				else
+        -:  149:				{
+        -:  150:					return jsonSchema<T>();
+        -:  151:				}
+        -:  152:			};
+      37*:  153:			info.requestBodyDescription = std::string(desc);
+      37*:  154:			info.requestBodyRequired = required;
+      37*:  155:		}
+------------------
+_ZN5hical4meta7openapi7builder7requestI9SimpleDTOEEvRNS1_12RouteApiInfoESt17basic_string_viewIcSt11char_traitsIcEEb:
+function _ZN5hical4meta7openapi7builder7requestI9SimpleDTOEEvRNS1_12RouteApiInfoESt17basic_string_viewIcSt11char_traitsIcEEb called 37 returned 100% blocks executed 75%
+       37:  137:		inline void request(RouteApiInfo& info, std::string_view desc = "", bool required = true)
+        -:  138:		{
+        -:  139:			static_assert(HasJsonFields<T>::value, "Request body type must use HICAL_JSON() macro");
+       37:  140:			info.requestBodySchema = []() -> boost::json::object
+call    0 returned 100%
+        -:  141:			{
+        -:  142:				if constexpr (SchemaName<T>::value != nullptr)
+        -:  143:				{
+        -:  144:					boost::json::object ref;
+        -:  145:					ref["$ref"] = std::string("#/components/schemas/") + SchemaName<T>::value;
+        -:  146:					return ref;
+        -:  147:				}
+        -:  148:				else
+        -:  149:				{
+        -:  150:					return jsonSchema<T>();
+        -:  151:				}
+        -:  152:			};
+       37:  153:			info.requestBodyDescription = std::string(desc);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+       37:  154:			info.requestBodyRequired = required;
+       37:  155:		}
+------------------
+_ZN5hical4meta7openapi7builder7requestI17CreateUserRequestEEvRNS1_12RouteApiInfoESt17basic_string_viewIcSt11char_traitsIcEEb:
+function _ZN5hical4meta7openapi7builder7requestI17CreateUserRequestEEvRNS1_12RouteApiInfoESt17basic_string_viewIcSt11char_traitsIcEEb called 0 returned 0% blocks executed 0%
+    #####:  137:		inline void request(RouteApiInfo& info, std::string_view desc = "", bool required = true)
+        -:  138:		{
+        -:  139:			static_assert(HasJsonFields<T>::value, "Request body type must use HICAL_JSON() macro");
+    #####:  140:			info.requestBodySchema = []() -> boost::json::object
+call    0 never executed
+        -:  141:			{
+        -:  142:				if constexpr (SchemaName<T>::value != nullptr)
+        -:  143:				{
+        -:  144:					boost::json::object ref;
+        -:  145:					ref["$ref"] = std::string("#/components/schemas/") + SchemaName<T>::value;
+        -:  146:					return ref;
+        -:  147:				}
+        -:  148:				else
+        -:  149:				{
+        -:  150:					return jsonSchema<T>();
+        -:  151:				}
+        -:  152:			};
+    #####:  153:			info.requestBodyDescription = std::string(desc);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+call    4 never executed
+    #####:  154:			info.requestBodyRequired = required;
+    #####:  155:		}
+------------------
+        -:  156:
+        -:  157:		/**
+        -:  158:		 * @brief 声明响应的 DTO 类型
+        -:  159:		 * @tparam T 标注了 HICAL_JSON 的 DTO 类型
+        -:  160:		 */
+        -:  161:		template <typename T>
+      72*:  162:		inline void response(RouteApiInfo& info, int statusCode, std::string_view desc)
+        -:  163:		{
+        -:  164:			static_assert(HasJsonFields<T>::value, "Response body type must use HICAL_JSON() macro");
+        -:  165:			info.responses[statusCode] =
+    #####:  166:				RouteApiInfo::ResponseInfo {std::string(desc),
+      74*:  167:											[]() -> boost::json::object
+        -:  168:											{
+        -:  169:												if constexpr (SchemaName<T>::value != nullptr)
+        -:  170:												{
+       2*:  171:													boost::json::object ref;
+call    0 returned 100%
+branch  1 never executed (fallthrough)
+branch  2 never executed
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed
+       2*:  172:													ref["$ref"] =
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+call    8 never executed
+call    9 never executed
+call   10 never executed
+branch 11 never executed (fallthrough)
+branch 12 never executed (throw)
+call   13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed (throw)
+call   16 never executed
+call   17 never executed
+call   18 never executed
+branch 19 never executed (fallthrough)
+branch 20 never executed (throw)
+call   21 never executed
+branch 22 never executed (fallthrough)
+branch 23 never executed (throw)
+       4*:  173:														std::string("#/components/schemas/") + SchemaName<T>::value;
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 returned 100%
+call    8 never executed
+call    9 never executed
+call   10 never executed
+branch 11 never executed (fallthrough)
+branch 12 never executed (throw)
+call   13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed (throw)
+call   16 never executed
+call   17 never executed
+call   18 never executed
+call   19 never executed
+call   20 never executed
+branch 21 never executed (fallthrough)
+branch 22 never executed (throw)
+call   23 never executed
+branch 24 never executed (fallthrough)
+branch 25 never executed (throw)
+call   26 never executed
+call   27 never executed
+call   28 never executed
+call   29 never executed
+       4*:  174:													return ref;
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+branch  2 never executed (fallthrough)
+branch  3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed
+    #####:  175:												}
+call    0 never executed
+call    1 never executed
+call    2 never executed
+call    3 never executed
+call    4 never executed
+call    5 never executed
+        -:  176:												else
+        -:  177:												{
+        -:  178:													return jsonSchema<T>();
+        -:  179:												}
+      72*:  180:											}};
+     144*:  181:		}
+------------------
+_ZN5hical4meta7openapi7builder8responseI9SimpleDTOEEvRNS1_12RouteApiInfoEiSt17basic_string_viewIcSt11char_traitsIcEE:
+function _ZN5hical4meta7openapi7builder8responseI9SimpleDTOEEvRNS1_12RouteApiInfoEiSt17basic_string_viewIcSt11char_traitsIcEE called 72 returned 100% blocks executed 53%
+       72:  162:		inline void response(RouteApiInfo& info, int statusCode, std::string_view desc)
+        -:  163:		{
+        -:  164:			static_assert(HasJsonFields<T>::value, "Response body type must use HICAL_JSON() macro");
+        -:  165:			info.responses[statusCode] =
+    #####:  166:				RouteApiInfo::ResponseInfo {std::string(desc),
+       72:  167:											[]() -> boost::json::object
+        -:  168:											{
+        -:  169:												if constexpr (SchemaName<T>::value != nullptr)
+        -:  170:												{
+        -:  171:													boost::json::object ref;
+        -:  172:													ref["$ref"] =
+        -:  173:														std::string("#/components/schemas/") + SchemaName<T>::value;
+        -:  174:													return ref;
+        -:  175:												}
+        -:  176:												else
+        -:  177:												{
+        -:  178:													return jsonSchema<T>();
+        -:  179:												}
+       72:  180:											}};
+call    0 returned 100%
+call    1 returned 100%
+call    2 never executed
+      144:  181:		}
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+branch  7 never executed (fallthrough)
+branch  8 never executed
+call    9 never executed
+------------------
+_ZN5hical4meta7openapi7builder8responseI7UserDTOEEvRNS1_12RouteApiInfoEiSt17basic_string_viewIcSt11char_traitsIcEE:
+function _ZN5hical4meta7openapi7builder8responseI7UserDTOEEvRNS1_12RouteApiInfoEiSt17basic_string_viewIcSt11char_traitsIcEE called 0 returned 0% blocks executed 0%
+    #####:  162:		inline void response(RouteApiInfo& info, int statusCode, std::string_view desc)
+        -:  163:		{
+        -:  164:			static_assert(HasJsonFields<T>::value, "Response body type must use HICAL_JSON() macro");
+        -:  165:			info.responses[statusCode] =
+    #####:  166:				RouteApiInfo::ResponseInfo {std::string(desc),
+    #####:  167:											[]() -> boost::json::object
+        -:  168:											{
+        -:  169:												if constexpr (SchemaName<T>::value != nullptr)
+        -:  170:												{
+        -:  171:													boost::json::object ref;
+        -:  172:													ref["$ref"] =
+        -:  173:														std::string("#/components/schemas/") + SchemaName<T>::value;
+        -:  174:													return ref;
+        -:  175:												}
+        -:  176:												else
+        -:  177:												{
+        -:  178:													return jsonSchema<T>();
+        -:  179:												}
+    #####:  180:											}};
+call    0 never executed
+call    1 never executed
+call    2 never executed
+    #####:  181:		}
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+call    4 never executed
+branch  5 never executed (fallthrough)
+branch  6 never executed (throw)
+branch  7 never executed (fallthrough)
+branch  8 never executed
+call    9 never executed
+------------------
+_ZN5hical4meta7openapi7builder8responseI9StatusDTOEEvRNS1_12RouteApiInfoEiSt17basic_string_viewIcSt11char_traitsIcEE:
+function _ZN5hical4meta7openapi7builder8responseI9StatusDTOEEvRNS1_12RouteApiInfoEiSt17basic_string_viewIcSt11char_traitsIcEE called 0 returned 0% blocks executed 0%
+    #####:  162:		inline void response(RouteApiInfo& info, int statusCode, std::string_view desc)
+        -:  163:		{
+        -:  164:			static_assert(HasJsonFields<T>::value, "Response body type must use HICAL_JSON() macro");
+        -:  165:			info.responses[statusCode] =
+    #####:  166:				RouteApiInfo::ResponseInfo {std::string(desc),
+    #####:  167:											[]() -> boost::json::object
+        -:  168:											{
+        -:  169:												if constexpr (SchemaName<T>::value != nullptr)
+        -:  170:												{
+        -:  171:													boost::json::object ref;
+        -:  172:													ref["$ref"] =
+        -:  173:														std::string("#/components/schemas/") + SchemaName<T>::value;
+        -:  174:													return ref;
+        -:  175:												}
+        -:  176:												else
+        -:  177:												{
+        -:  178:													return jsonSchema<T>();
+        -:  179:												}
+    #####:  180:											}};
+call    0 never executed
+call    1 never executed
+call    2 never executed
+    #####:  181:		}
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+call    4 never executed
+branch  5 never executed (fallthrough)
+branch  6 never executed (throw)
+branch  7 never executed (fallthrough)
+branch  8 never executed
+call    9 never executed
+------------------
+        -:  182:
+        -:  183:		/**
+        -:  184:		 * @brief 声明无 body 的响应（仅描述）
+        -:  185:		 */
+      36*:  186:		inline void responseDesc(RouteApiInfo& info, int statusCode, std::string_view desc)
+        -:  187:		{
+      36*:  188:			info.responses[statusCode] = RouteApiInfo::ResponseInfo {std::string(desc), nullptr};
+      36*:  189:		}
+------------------
+_ZN5hical4meta7openapi7builder12responseDescERNS1_12RouteApiInfoEiSt17basic_string_viewIcSt11char_traitsIcEE:
+function _ZN5hical4meta7openapi7builder12responseDescERNS1_12RouteApiInfoEiSt17basic_string_viewIcSt11char_traitsIcEE called 36 returned 100% blocks executed 56%
+       36:  186:		inline void responseDesc(RouteApiInfo& info, int statusCode, std::string_view desc)
+        -:  187:		{
+       36:  188:			info.responses[statusCode] = RouteApiInfo::ResponseInfo {std::string(desc), nullptr};
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+call    7 returned 100%
+call    8 returned 100%
+call    9 never executed
+branch 10 never executed (fallthrough)
+branch 11 never executed
+call   12 never executed
+       36:  189:		}
+------------------
+_ZN5hical4meta7openapi7builder12responseDescERNS1_12RouteApiInfoEiSt17basic_string_viewIcSt11char_traitsIcEE:
+function _ZN5hical4meta7openapi7builder12responseDescERNS1_12RouteApiInfoEiSt17basic_string_viewIcSt11char_traitsIcEE called 0 returned 0% blocks executed 0%
+    #####:  186:		inline void responseDesc(RouteApiInfo& info, int statusCode, std::string_view desc)
+        -:  187:		{
+    #####:  188:			info.responses[statusCode] = RouteApiInfo::ResponseInfo {std::string(desc), nullptr};
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+call    4 never executed
+branch  5 never executed (fallthrough)
+branch  6 never executed (throw)
+call    7 never executed
+call    8 never executed
+call    9 never executed
+branch 10 never executed (fallthrough)
+branch 11 never executed
+call   12 never executed
+    #####:  189:		}
+------------------
+        -:  190:
+        -:  191:		/**
+        -:  192:		 * @brief 声明路径参数的类型和描述
+        -:  193:		 */
+      36*:  194:		inline void pathParam(RouteApiInfo& info,
+        -:  195:							  std::string_view name,
+        -:  196:							  std::string_view type,
+        -:  197:							  std::string_view desc = "")
+        -:  198:		{
+      36*:  199:			info.parameters.push_back(
+     144*:  200:				RouteApiInfo::ParamInfo {std::string(name), std::string(desc), std::string(type)});
+      36*:  201:		}
+------------------
+_ZN5hical4meta7openapi7builder9pathParamERNS1_12RouteApiInfoESt17basic_string_viewIcSt11char_traitsIcEES8_S8_:
+function _ZN5hical4meta7openapi7builder9pathParamERNS1_12RouteApiInfoESt17basic_string_viewIcSt11char_traitsIcEES8_S8_ called 36 returned 100% blocks executed 48%
+       36:  194:		inline void pathParam(RouteApiInfo& info,
+        -:  195:							  std::string_view name,
+        -:  196:							  std::string_view type,
+        -:  197:							  std::string_view desc = "")
+        -:  198:		{
+       36:  199:			info.parameters.push_back(
+      144:  200:				RouteApiInfo::ParamInfo {std::string(name), std::string(desc), std::string(type)});
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+call    9 returned 100%
+branch 10 taken 100% (fallthrough)
+branch 11 taken 0% (throw)
+call   12 returned 100%
+call   13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed
+call   16 never executed
+branch 17 never executed (fallthrough)
+branch 18 never executed
+call   19 never executed
+       36:  201:		}
+------------------
+_ZN5hical4meta7openapi7builder9pathParamERNS1_12RouteApiInfoESt17basic_string_viewIcSt11char_traitsIcEES8_S8_:
+function _ZN5hical4meta7openapi7builder9pathParamERNS1_12RouteApiInfoESt17basic_string_viewIcSt11char_traitsIcEES8_S8_ called 0 returned 0% blocks executed 0%
+    #####:  194:		inline void pathParam(RouteApiInfo& info,
+        -:  195:							  std::string_view name,
+        -:  196:							  std::string_view type,
+        -:  197:							  std::string_view desc = "")
+        -:  198:		{
+    #####:  199:			info.parameters.push_back(
+    #####:  200:				RouteApiInfo::ParamInfo {std::string(name), std::string(desc), std::string(type)});
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed (throw)
+call    9 never executed
+branch 10 never executed (fallthrough)
+branch 11 never executed (throw)
+call   12 never executed
+call   13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed
+call   16 never executed
+branch 17 never executed (fallthrough)
+branch 18 never executed
+call   19 never executed
+    #####:  201:		}
+------------------
+        -:  202:
+        -:  203:	} // namespace builder
+        -:  204:
+        -:  205:	// ============ registerRoutesWithOpenApi ============
+        -:  206:
+        -:  207:	namespace detail
+        -:  208:	{
+        -:  209:
+        -:  210:		/**
+        -:  211:		 * @brief 从 hicalRouteTable + hicalApiInfoTable 同步收集路由元数据
+        -:  212:		 */
+        -:  213:		template <typename Handler, typename RouteTable, typename ApiTable, size_t... I>
+       3*:  214:		void collectWithApi(OpenApiRegistry& registry,
+        -:  215:							const RouteTable& routeTable,
+        -:  216:							const ApiTable& apiTable,
+        -:  217:							std::index_sequence<I...>)
+        -:  218:		{
+        -:  219:			(...,
+      16*:  220:			 registry.addRoute(std::get<I>(routeTable).info.method,
+      16*:  221:							   std::string(std::get<I>(routeTable).info.path),
+      24*:  222:							   std::string(std::get<I>(routeTable).info.handlerName),
+       8*:  223:							   std::get<I>(apiTable)));
+       3*:  224:		}
+------------------
+_ZN5hical4meta7openapi6detail14collectWithApiI12MixedHandlerSt5tupleIJNS0_6detail14RouteRegistrarIS4_MS4_FNS_12HttpResponseERKNS_11HttpRequestEEEESE_EES5_IJNS1_12RouteApiInfoESG_EEJLm0ELm1EEEEvRNS1_15OpenApiRegistryERKT0_RKT1_St16integer_sequenceImJXspT2_EEE:
+function _ZN5hical4meta7openapi6detail14collectWithApiI12MixedHandlerSt5tupleIJNS0_6detail14RouteRegistrarIS4_MS4_FNS_12HttpResponseERKNS_11HttpRequestEEEESE_EES5_IJNS1_12RouteApiInfoESG_EEJLm0ELm1EEEEvRNS1_15OpenApiRegistryERKT0_RKT1_St16integer_sequenceImJXspT2_EEE called 1 returned 100% blocks executed 55%
+        1:  214:		void collectWithApi(OpenApiRegistry& registry,
+        -:  215:							const RouteTable& routeTable,
+        -:  216:							const ApiTable& apiTable,
+        -:  217:							std::index_sequence<I...>)
+        -:  218:		{
+        -:  219:			(...,
+        4:  220:			 registry.addRoute(std::get<I>(routeTable).info.method,
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+call    7 returned 100%
+branch  8 taken 100% (fallthrough)
+branch  9 taken 0% (throw)
+call   10 returned 100%
+call   11 returned 100%
+branch 12 taken 100% (fallthrough)
+branch 13 taken 0% (throw)
+call   14 never executed
+call   15 never executed
+        4:  221:							   std::string(std::get<I>(routeTable).info.path),
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+call    8 returned 100%
+call    9 returned 100%
+call   10 never executed
+call   11 never executed
+        6:  222:							   std::string(std::get<I>(routeTable).info.handlerName),
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+call    8 returned 100%
+call    9 returned 100%
+call   10 returned 100%
+call   11 returned 100%
+call   12 never executed
+call   13 never executed
+        2:  223:							   std::get<I>(apiTable)));
+call    0 returned 100%
+call    1 returned 100%
+        1:  224:		}
+------------------
+_ZN5hical4meta7openapi6detail14collectWithApiI16AnnotatedHandlerSt5tupleIJNS0_6detail14RouteRegistrarIS4_MS4_FNS_12HttpResponseERKNS_11HttpRequestEEEESE_SE_EES5_IJNS1_12RouteApiInfoESG_SG_EEJLm0ELm1ELm2EEEEvRNS1_15OpenApiRegistryERKT0_RKT1_St16integer_sequenceImJXspT2_EEE:
+function _ZN5hical4meta7openapi6detail14collectWithApiI16AnnotatedHandlerSt5tupleIJNS0_6detail14RouteRegistrarIS4_MS4_FNS_12HttpResponseERKNS_11HttpRequestEEEESE_SE_EES5_IJNS1_12RouteApiInfoESG_SG_EEJLm0ELm1ELm2EEEEvRNS1_15OpenApiRegistryERKT0_RKT1_St16integer_sequenceImJXspT2_EEE called 2 returned 100% blocks executed 55%
+        2:  214:		void collectWithApi(OpenApiRegistry& registry,
+        -:  215:							const RouteTable& routeTable,
+        -:  216:							const ApiTable& apiTable,
+        -:  217:							std::index_sequence<I...>)
+        -:  218:		{
+        -:  219:			(...,
+       12:  220:			 registry.addRoute(std::get<I>(routeTable).info.method,
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+call    7 returned 100%
+branch  8 taken 100% (fallthrough)
+branch  9 taken 0% (throw)
+call   10 returned 100%
+call   11 returned 100%
+branch 12 taken 100% (fallthrough)
+branch 13 taken 0% (throw)
+call   14 returned 100%
+branch 15 taken 100% (fallthrough)
+branch 16 taken 0% (throw)
+call   17 returned 100%
+call   18 returned 100%
+branch 19 taken 100% (fallthrough)
+branch 20 taken 0% (throw)
+call   21 never executed
+call   22 never executed
+call   23 never executed
+       12:  221:							   std::string(std::get<I>(routeTable).info.path),
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+call    8 returned 100%
+call    9 returned 100%
+branch 10 taken 100% (fallthrough)
+branch 11 taken 0% (throw)
+call   12 returned 100%
+call   13 returned 100%
+call   14 returned 100%
+call   15 never executed
+call   16 never executed
+call   17 never executed
+       18:  222:							   std::string(std::get<I>(routeTable).info.handlerName),
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+call    8 returned 100%
+call    9 returned 100%
+branch 10 taken 100% (fallthrough)
+branch 11 taken 0% (throw)
+call   12 returned 100%
+call   13 returned 100%
+call   14 returned 100%
+call   15 returned 100%
+call   16 returned 100%
+call   17 returned 100%
+call   18 never executed
+call   19 never executed
+call   20 never executed
+        6:  223:							   std::get<I>(apiTable)));
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+        2:  224:		}
+------------------
+_ZN5hical4meta7openapi6detail14collectWithApiI10ApiHandlerSt5tupleIJNS0_6detail14RouteRegistrarIS4_MS4_FNS_12HttpResponseERKNS_11HttpRequestEEEESE_SE_SE_SE_EES5_IJNS1_12RouteApiInfoESG_SG_SG_SG_EEJLm0ELm1ELm2ELm3ELm4EEEEvRNS1_15OpenApiRegistryERKT0_RKT1_St16integer_sequenceImJXspT2_EEE:
+function _ZN5hical4meta7openapi6detail14collectWithApiI10ApiHandlerSt5tupleIJNS0_6detail14RouteRegistrarIS4_MS4_FNS_12HttpResponseERKNS_11HttpRequestEEEESE_SE_SE_SE_EES5_IJNS1_12RouteApiInfoESG_SG_SG_SG_EEJLm0ELm1ELm2ELm3ELm4EEEEvRNS1_15OpenApiRegistryERKT0_RKT1_St16integer_sequenceImJXspT2_EEE called 0 returned 0% blocks executed 0%
+    #####:  214:		void collectWithApi(OpenApiRegistry& registry,
+        -:  215:							const RouteTable& routeTable,
+        -:  216:							const ApiTable& apiTable,
+        -:  217:							std::index_sequence<I...>)
+        -:  218:		{
+        -:  219:			(...,
+    #####:  220:			 registry.addRoute(std::get<I>(routeTable).info.method,
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+call    4 never executed
+branch  5 never executed (fallthrough)
+branch  6 never executed (throw)
+call    7 never executed
+branch  8 never executed (fallthrough)
+branch  9 never executed (throw)
+call   10 never executed
+call   11 never executed
+branch 12 never executed (fallthrough)
+branch 13 never executed (throw)
+call   14 never executed
+branch 15 never executed (fallthrough)
+branch 16 never executed (throw)
+call   17 never executed
+call   18 never executed
+branch 19 never executed (fallthrough)
+branch 20 never executed (throw)
+call   21 never executed
+branch 22 never executed (fallthrough)
+branch 23 never executed (throw)
+call   24 never executed
+call   25 never executed
+branch 26 never executed (fallthrough)
+branch 27 never executed (throw)
+call   28 never executed
+branch 29 never executed (fallthrough)
+branch 30 never executed (throw)
+call   31 never executed
+call   32 never executed
+branch 33 never executed (fallthrough)
+branch 34 never executed (throw)
+call   35 never executed
+call   36 never executed
+call   37 never executed
+call   38 never executed
+call   39 never executed
+    #####:  221:							   std::string(std::get<I>(routeTable).info.path),
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed (throw)
+call    8 never executed
+call    9 never executed
+branch 10 never executed (fallthrough)
+branch 11 never executed (throw)
+call   12 never executed
+call   13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed (throw)
+call   16 never executed
+call   17 never executed
+branch 18 never executed (fallthrough)
+branch 19 never executed (throw)
+call   20 never executed
+call   21 never executed
+call   22 never executed
+call   23 never executed
+call   24 never executed
+call   25 never executed
+call   26 never executed
+call   27 never executed
+call   28 never executed
+call   29 never executed
+    #####:  222:							   std::string(std::get<I>(routeTable).info.handlerName),
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed (throw)
+call    8 never executed
+call    9 never executed
+branch 10 never executed (fallthrough)
+branch 11 never executed (throw)
+call   12 never executed
+call   13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed (throw)
+call   16 never executed
+call   17 never executed
+branch 18 never executed (fallthrough)
+branch 19 never executed (throw)
+call   20 never executed
+call   21 never executed
+call   22 never executed
+call   23 never executed
+call   24 never executed
+call   25 never executed
+call   26 never executed
+call   27 never executed
+call   28 never executed
+call   29 never executed
+call   30 never executed
+call   31 never executed
+call   32 never executed
+call   33 never executed
+call   34 never executed
+    #####:  223:							   std::get<I>(apiTable)));
+call    0 never executed
+call    1 never executed
+call    2 never executed
+call    3 never executed
+call    4 never executed
+    #####:  224:		}
+------------------
+        -:  225:
+        -:  226:		/**
+        -:  227:		 * @brief 仅从 hicalRouteTable 收集路由基础信息（无 API 标注）
+        -:  228:		 */
+        -:  229:		template <typename Handler, typename RouteTable, size_t... I>
+function _ZN5hical4meta7openapi6detail17collectWithoutApiI12BasicHandlerSt5tupleIJNS0_6detail14RouteRegistrarIS4_MS4_FNS_12HttpResponseERKNS_11HttpRequestEEEEEEJLm0EEEEvRNS1_15OpenApiRegistryERKT0_St16integer_sequenceImJXspT1_EEE called 1 returned 100% blocks executed 40%
+        1:  230:		void collectWithoutApi(OpenApiRegistry& registry, const RouteTable& routeTable, std::index_sequence<I...>)
+        -:  231:		{
+        -:  232:			(...,
+        1:  233:			 registry.addRoute(std::get<I>(routeTable).info.method,
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 never executed
+        2:  234:							   std::string(std::get<I>(routeTable).info.path),
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 never executed
+        3:  235:							   std::string(std::get<I>(routeTable).info.handlerName)));
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 returned 100%
+call    6 never executed
+        2:  236:		}
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+call    5 returned 100%
+branch  6 never executed (fallthrough)
+branch  7 never executed
+call    8 never executed
+branch  9 never executed (fallthrough)
+branch 10 never executed
+call   11 never executed
+branch 12 never executed (fallthrough)
+branch 13 never executed
+call   14 never executed
+branch 15 never executed (fallthrough)
+branch 16 never executed
+call   17 never executed
+branch 18 never executed (fallthrough)
+branch 19 never executed
+call   20 never executed
+branch 21 never executed (fallthrough)
+branch 22 never executed
+call   23 never executed
+branch 24 never executed (fallthrough)
+branch 25 never executed
+call   26 never executed
+        -:  237:
+        -:  238:	} // namespace detail
+        -:  239:
+        -:  240:	/**
+        -:  241:	 * @brief 注册路由到 Router 并同时收集 OpenAPI 元数据到 Registry
+        -:  242:	 * @param router 路由器
+        -:  243:	 * @param handler Handler 实例（引用版本）
+        -:  244:	 * @param registry OpenAPI 注册表
+        -:  245:	 */
+        -:  246:	template <typename Handler>
+       4*:  247:	void registerRoutesWithOpenApi(Router& router, Handler& handler, OpenApiRegistry& registry)
+        -:  248:	{
+        -:  249:		static_assert(HasRouteTable<Handler>::value,
+        -:  250:					  "Handler must use HICAL_ROUTES() or HICAL_ROUTES_WITH_API() macro");
+        -:  251:
+        -:  252:		// 1. 正常注册路由
+       4*:  253:		registerRoutes(router, handler);
+        -:  254:
+        -:  255:		// 2. 收集路由元数据
+       4*:  256:		auto routeTable = Handler::hicalRouteTable();
+       4*:  257:		constexpr auto count = std::tuple_size_v<decltype(routeTable)>;
+        -:  258:
+        -:  259:		if constexpr (requires { Handler::hicalApiInfoTable(); })
+        -:  260:		{
+       3*:  261:			auto apiTable = Handler::hicalApiInfoTable();
+       3*:  262:			detail::collectWithApi<Handler>(registry, routeTable, apiTable, std::make_index_sequence<count> {});
+       3*:  263:		}
+        -:  264:		else
+        -:  265:		{
+        1:  266:			detail::collectWithoutApi<Handler>(registry, routeTable, std::make_index_sequence<count> {});
+        -:  267:		}
+       4*:  268:	}
+------------------
+_ZN5hical4meta7openapi25registerRoutesWithOpenApiI12MixedHandlerEEvRNS_6RouterERT_RNS1_15OpenApiRegistryE:
+function _ZN5hical4meta7openapi25registerRoutesWithOpenApiI12MixedHandlerEEvRNS_6RouterERT_RNS1_15OpenApiRegistryE called 1 returned 100% blocks executed 70%
+        1:  247:	void registerRoutesWithOpenApi(Router& router, Handler& handler, OpenApiRegistry& registry)
+        -:  248:	{
+        -:  249:		static_assert(HasRouteTable<Handler>::value,
+        -:  250:					  "Handler must use HICAL_ROUTES() or HICAL_ROUTES_WITH_API() macro");
+        -:  251:
+        -:  252:		// 1. 正常注册路由
+        1:  253:		registerRoutes(router, handler);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  254:
+        -:  255:		// 2. 收集路由元数据
+        1:  256:		auto routeTable = Handler::hicalRouteTable();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  257:		constexpr auto count = std::tuple_size_v<decltype(routeTable)>;
+        -:  258:
+        -:  259:		if constexpr (requires { Handler::hicalApiInfoTable(); })
+        -:  260:		{
+        1:  261:			auto apiTable = Handler::hicalApiInfoTable();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  262:			detail::collectWithApi<Handler>(registry, routeTable, apiTable, std::make_index_sequence<count> {});
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  263:		}
+call    0 returned 100%
+call    1 never executed
+        -:  264:		else
+        -:  265:		{
+        -:  266:			detail::collectWithoutApi<Handler>(registry, routeTable, std::make_index_sequence<count> {});
+        -:  267:		}
+        1:  268:	}
+------------------
+_ZN5hical4meta7openapi25registerRoutesWithOpenApiI16AnnotatedHandlerEEvRNS_6RouterERT_RNS1_15OpenApiRegistryE:
+function _ZN5hical4meta7openapi25registerRoutesWithOpenApiI16AnnotatedHandlerEEvRNS_6RouterERT_RNS1_15OpenApiRegistryE called 2 returned 100% blocks executed 70%
+        2:  247:	void registerRoutesWithOpenApi(Router& router, Handler& handler, OpenApiRegistry& registry)
+        -:  248:	{
+        -:  249:		static_assert(HasRouteTable<Handler>::value,
+        -:  250:					  "Handler must use HICAL_ROUTES() or HICAL_ROUTES_WITH_API() macro");
+        -:  251:
+        -:  252:		// 1. 正常注册路由
+        2:  253:		registerRoutes(router, handler);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  254:
+        -:  255:		// 2. 收集路由元数据
+        2:  256:		auto routeTable = Handler::hicalRouteTable();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        2:  257:		constexpr auto count = std::tuple_size_v<decltype(routeTable)>;
+        -:  258:
+        -:  259:		if constexpr (requires { Handler::hicalApiInfoTable(); })
+        -:  260:		{
+        2:  261:			auto apiTable = Handler::hicalApiInfoTable();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        2:  262:			detail::collectWithApi<Handler>(registry, routeTable, apiTable, std::make_index_sequence<count> {});
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        2:  263:		}
+call    0 returned 100%
+call    1 never executed
+        -:  264:		else
+        -:  265:		{
+        -:  266:			detail::collectWithoutApi<Handler>(registry, routeTable, std::make_index_sequence<count> {});
+        -:  267:		}
+        2:  268:	}
+------------------
+_ZN5hical4meta7openapi25registerRoutesWithOpenApiI12BasicHandlerEEvRNS_6RouterERT_RNS1_15OpenApiRegistryE:
+function _ZN5hical4meta7openapi25registerRoutesWithOpenApiI12BasicHandlerEEvRNS_6RouterERT_RNS1_15OpenApiRegistryE called 1 returned 100% blocks executed 100%
+        1:  247:	void registerRoutesWithOpenApi(Router& router, Handler& handler, OpenApiRegistry& registry)
+        -:  248:	{
+        -:  249:		static_assert(HasRouteTable<Handler>::value,
+        -:  250:					  "Handler must use HICAL_ROUTES() or HICAL_ROUTES_WITH_API() macro");
+        -:  251:
+        -:  252:		// 1. 正常注册路由
+        1:  253:		registerRoutes(router, handler);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  254:
+        -:  255:		// 2. 收集路由元数据
+        1:  256:		auto routeTable = Handler::hicalRouteTable();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  257:		constexpr auto count = std::tuple_size_v<decltype(routeTable)>;
+        -:  258:
+        -:  259:		if constexpr (requires { Handler::hicalApiInfoTable(); })
+        -:  260:		{
+        -:  261:			auto apiTable = Handler::hicalApiInfoTable();
+        -:  262:			detail::collectWithApi<Handler>(registry, routeTable, apiTable, std::make_index_sequence<count> {});
+        -:  263:		}
+        -:  264:		else
+        -:  265:		{
+        1:  266:			detail::collectWithoutApi<Handler>(registry, routeTable, std::make_index_sequence<count> {});
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  267:		}
+        1:  268:	}
+------------------
+_ZN5hical4meta7openapi25registerRoutesWithOpenApiI10ApiHandlerEEvRNS_6RouterERT_RNS1_15OpenApiRegistryE:
+function _ZN5hical4meta7openapi25registerRoutesWithOpenApiI10ApiHandlerEEvRNS_6RouterERT_RNS1_15OpenApiRegistryE called 0 returned 0% blocks executed 0%
+    #####:  247:	void registerRoutesWithOpenApi(Router& router, Handler& handler, OpenApiRegistry& registry)
+        -:  248:	{
+        -:  249:		static_assert(HasRouteTable<Handler>::value,
+        -:  250:					  "Handler must use HICAL_ROUTES() or HICAL_ROUTES_WITH_API() macro");
+        -:  251:
+        -:  252:		// 1. 正常注册路由
+    #####:  253:		registerRoutes(router, handler);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:  254:
+        -:  255:		// 2. 收集路由元数据
+    #####:  256:		auto routeTable = Handler::hicalRouteTable();
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  257:		constexpr auto count = std::tuple_size_v<decltype(routeTable)>;
+        -:  258:
+        -:  259:		if constexpr (requires { Handler::hicalApiInfoTable(); })
+        -:  260:		{
+    #####:  261:			auto apiTable = Handler::hicalApiInfoTable();
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  262:			detail::collectWithApi<Handler>(registry, routeTable, apiTable, std::make_index_sequence<count> {});
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  263:		}
+call    0 never executed
+call    1 never executed
+        -:  264:		else
+        -:  265:		{
+        -:  266:			detail::collectWithoutApi<Handler>(registry, routeTable, std::make_index_sequence<count> {});
+        -:  267:		}
+    #####:  268:	}
+------------------
+        -:  269:
+        -:  270:	/**
+        -:  271:	 * @brief shared_ptr 版本
+        -:  272:	 */
+        -:  273:	template <typename Handler>
+        -:  274:	void registerRoutesWithOpenApi(Router& router, std::shared_ptr<Handler> pHandler, OpenApiRegistry& registry)
+        -:  275:	{
+        -:  276:		static_assert(HasRouteTable<Handler>::value,
+        -:  277:					  "Handler must use HICAL_ROUTES() or HICAL_ROUTES_WITH_API() macro");
+        -:  278:
+        -:  279:		registerRoutes(router, pHandler);
+        -:  280:
+        -:  281:		auto routeTable = Handler::hicalRouteTable();
+        -:  282:		constexpr auto count = std::tuple_size_v<decltype(routeTable)>;
+        -:  283:
+        -:  284:		if constexpr (requires { Handler::hicalApiInfoTable(); })
+        -:  285:		{
+        -:  286:			auto apiTable = Handler::hicalApiInfoTable();
+        -:  287:			detail::collectWithApi<Handler>(registry, routeTable, apiTable, std::make_index_sequence<count> {});
+        -:  288:		}
+        -:  289:		else
+        -:  290:		{
+        -:  291:			detail::collectWithoutApi<Handler>(registry, routeTable, std::make_index_sequence<count> {});
+        -:  292:		}
+        -:  293:	}
+        -:  294:
+        -:  295:} // namespace hical::meta::openapi
+        -:  296:
+        -:  297:// ============ C++20 回退宏 ============
+        -:  298:
+        -:  299:#if !HICAL_HAS_REFLECTION
+        -:  300:
+        -:  301:	// NOLINTBEGIN(cppcoreguidelines-macro-usage)
+        -:  302:
+        -:  303:	/**
+        -:  304:	 * @brief 为单个路由添加 OpenAPI 标注（综合标注宏）
+        -:  305:	 * 在 Handler 类中使用，配合 builder::* 函数声明路由的元数据。
+        -:  306:	 * 用法：
+        -:  307:	 * ```cpp
+        -:  308:	 * HICAL_API(listUsers,
+        -:  309:	 *     builder::summary(info, "List all users");
+        -:  310:	 *     builder::tags(info, {"users"});
+        -:  311:	 *     builder::response<UserDTO>(info, 200, "User list"))
+        -:  312:	 * ```
+        -:  313:	 */
+        -:  314:	#define HICAL_API(func, ...)                                                            \
+        -:  315:		inline static const ::hical::meta::openapi::RouteApiInfo hicalApiInfo_##func = []() \
+        -:  316:		{                                                                                   \
+        -:  317:			using namespace ::hical::meta::openapi;                                         \
+        -:  318:			::hical::meta::openapi::RouteApiInfo info;                                      \
+        -:  319:			info.operationId = #func;                                                       \
+        -:  320:			__VA_ARGS__;                                                                    \
+        -:  321:			return info;                                                                    \
+        -:  322:		}();
+        -:  323:
+        -:  324:	// ---- HICAL_ROUTES_WITH_API 增强版路由收集 ----
+        -:  325:
+        -:  326:	// 叶子宏：直接引用 hicalApiInfo_<func>
+        -:  327:	// 要求所有在 HICAL_ROUTES_WITH_API 中列出的 func 都必须有 HICAL_API 标注
+        -:  328:	// 未标注的 func 使用 HICAL_API_DEFAULT 宏生成空标注
+        -:  329:	#define HICAL_OA_INFO_(T, func) T::hicalApiInfo_##func
+        -:  330:
+        -:  331:	/**
+        -:  332:	 * @brief 为未标注 HICAL_API 的路由生成默认空标注
+        -:  333:	 * 必须在 Handler 类定义内部使用，位置在 HICAL_HANDLER 之后、HICAL_ROUTES_WITH_API 之前。
+        -:  334:	 * 用法：
+        -:  335:	 * ```cpp
+        -:  336:	 * struct MyHandler
+        -:  337:	 * {
+        -:  338:	 *     HttpResponse plain(const HttpRequest& req) { ... }
+        -:  339:	 *     HICAL_HANDLER(Get, "/plain", plain)
+        -:  340:	 *     HICAL_API_DEFAULT(plain)  // 生成默认空标注（operationId = "plain"）
+        -:  341:	 *     HICAL_ROUTES_WITH_API(MyHandler, plain)
+        -:  342:	 * };
+        -:  343:	 * ```
+        -:  344:	 */
+        -:  345:	#define HICAL_API_DEFAULT(func)                                                         \
+        -:  346:		inline static const ::hical::meta::openapi::RouteApiInfo hicalApiInfo_##func = []() \
+        -:  347:		{                                                                                   \
+        -:  348:			::hical::meta::openapi::RouteApiInfo info;                                      \
+        -:  349:			info.operationId = #func;                                                       \
+        -:  350:			return info;                                                                    \
+        -:  351:		}();
+        -:  352:
+        -:  353:	// __VA_OPT__ 递归展开（复用 HICAL_ROUTES 的模式）
+        -:  354:	#define HICAL_OA_PARENS_ ()
+        -:  355:
+        -:  356:	#define HICAL_OA_FOR_EACH_(T, a, ...) \
+        -:  357:		HICAL_OA_INFO_(T, a) __VA_OPT__(, HICAL_OA_FE_AGAIN_ HICAL_OA_PARENS_(T, __VA_ARGS__))
+        -:  358:
+        -:  359:	#define HICAL_OA_FE_AGAIN_() HICAL_OA_FOR_EACH_
+        -:  360:
+        -:  361:	#define HICAL_OA_EXPAND_(...) HICAL_OA_EXP4_(HICAL_OA_EXP4_(__VA_ARGS__))
+        -:  362:	#define HICAL_OA_EXP4_(...) HICAL_OA_EXP3_(HICAL_OA_EXP3_(__VA_ARGS__))
+        -:  363:	#define HICAL_OA_EXP3_(...) HICAL_OA_EXP2_(HICAL_OA_EXP2_(__VA_ARGS__))
+        -:  364:	#define HICAL_OA_EXP2_(...) HICAL_OA_EXP1_(HICAL_OA_EXP1_(__VA_ARGS__))
+        -:  365:	#define HICAL_OA_EXP1_(...) __VA_ARGS__
+        -:  366:
+        -:  367:	/**
+        -:  368:	 * @brief 增强版路由收集宏，同时生成 API 标注表
+        -:  369:	 * 在 HICAL_ROUTES 的基础上额外生成 hicalApiInfoTable() 方法。
+        -:  370:	 * 用法：HICAL_ROUTES_WITH_API(MyHandler, listUsers, createUser, getUser)
+        -:  371:	 */
+        -:  372:	#define HICAL_ROUTES_WITH_API(Type, ...)                                                 \
+        -:  373:		HICAL_ROUTES(Type, __VA_ARGS__)                                                      \
+        -:  374:		static auto hicalApiInfoTable()                                                      \
+        -:  375:		{                                                                                    \
+        -:  376:			return std::make_tuple(HICAL_OA_EXPAND_(HICAL_OA_FOR_EACH_(Type, __VA_ARGS__))); \
+        -:  377:		}
+        -:  378:
+        -:  379:// NOLINTEND(cppcoreguidelines-macro-usage)
+        -:  380:
+        -:  381:#else
+        -:  382:	// C++26 反射模式下为空操作
+        -:  383:	#define HICAL_API(func, ...)
+        -:  384:	#define HICAL_ROUTES_WITH_API(Type, ...) HICAL_ROUTES(Type, __VA_ARGS__)
+        -:  385:#endif

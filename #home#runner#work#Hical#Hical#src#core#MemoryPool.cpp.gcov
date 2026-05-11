@@ -1,0 +1,323 @@
+        -:    0:Source:/home/runner/work/Hical/Hical/src/core/MemoryPool.cpp
+        -:    1:#include "MemoryPool.h"
+        -:    2:#include <cassert>
+        -:    3:#include <stdexcept>
+        -:    4:
+        -:    5:namespace hical
+        -:    6:{
+        -:    7:
+function _ZN5hical10MemoryPoolC2Ev called 26 returned 100% blocks executed 83%
+       26:    8:	MemoryPool::MemoryPool()
+       26:    9:		: trackedResource_(std::pmr::new_delete_resource())
+call    0 returned 100%
+    #####:   10:		, globalPool_(std::pmr::pool_options {.max_blocks_per_chunk = config_.globalMaxBlocksPerChunk,
+       26:   11:											  .largest_required_pool_block = config_.globalLargestPoolBlock},
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       52:   12:					  &trackedResource_)
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+call    5 returned 100%
+        -:   13:	{
+       26:   14:	}
+call    0 never executed
+        -:   15:
+function _ZN5hical10MemoryPoolD2Ev called 26 returned 100% blocks executed 100%
+       26:   16:	MemoryPool::~MemoryPool()
+        -:   17:	{
+        -:   18:		// 先清理所有线程本地池（它们引用 globalPool_ 作为上游）
+       26:   19:		std::lock_guard<std::mutex> lock(threadPoolsMutex_);
+call    0 returned 100%
+       26:   20:		threadPools_.clear();
+call    0 returned 100%
+       26:   21:	}
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+        -:   22:
+function _ZN5hical10MemoryPool8instanceEv called 10050 returned 100% blocks executed 82%
+    10050:   23:	MemoryPool& MemoryPool::instance()
+        -:   24:	{
+    10050:   25:		static MemoryPool instance;
+branch  0 taken 1% (fallthrough)
+branch  1 taken 100%
+call    2 returned 100%
+branch  3 taken 96% (fallthrough)
+branch  4 taken 4%
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+call    8 returned 100%
+call    9 returned 100%
+branch 10 never executed (fallthrough)
+branch 11 never executed
+call   12 never executed
+    10050:   26:		return instance;
+        -:   27:	}
+        -:   28:
+function _ZN5hical10MemoryPool9configureERKNS_10PoolConfigE called 0 returned 0% blocks executed 0%
+    #####:   29:	void MemoryPool::configure(const PoolConfig& config)
+        -:   30:	{
+        -:   31:		// 安全检查：configure() 必须在服务器启动前、单线程环境中调用。
+        -:   32:		// 如果有通过 createRequestPool() 创建的 monotonic_buffer_resource 仍在使用中，
+        -:   33:		// 析构旧 globalPool_ 会导致 use-after-free。
+    #####:   34:		assert(generation_.load(std::memory_order_relaxed) == 0
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+call    3 never executed
+        -:   35:			   || !"configure() should only be called before server starts");
+        -:   36:
+    #####:   37:		config_ = config;
+        -:   38:
+        -:   39:		// 先清理所有线程本地池（它们引用 globalPool_ 作为上游）
+        -:   40:		{
+    #####:   41:			std::lock_guard<std::mutex> lock(threadPoolsMutex_);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:   42:			threadPools_.clear();
+call    0 never executed
+    #####:   43:		}
+call    0 never executed
+        -:   44:
+        -:   45:		// 重建全局池（placement new 原地重建）
+        -:   46:		// 安全前提：此时无其他线程通过 globalAllocator()/threadLocalAllocator() 分配内存，
+        -:   47:		// 且无通过 createRequestPool() 创建的存活 monotonic_buffer_resource。
+    #####:   48:		globalPool_.~synchronized_pool_resource();
+call    0 never executed
+    #####:   49:		new (&globalPool_) std::pmr::synchronized_pool_resource(
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   50:			std::pmr::pool_options {.max_blocks_per_chunk = config_.globalMaxBlocksPerChunk,
+    #####:   51:									.largest_required_pool_block = config_.globalLargestPoolBlock},
+    #####:   52:			&trackedResource_);
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+        -:   53:
+        -:   54:		// 递增代际计数器，使所有 thread_local 缓存失效
+    #####:   55:		generation_.fetch_add(1, std::memory_order_release);
+    #####:   56:	}
+        -:   57:
+function _ZN5hical10MemoryPool15globalAllocatorEv called 1 returned 100% blocks executed 100%
+        1:   58:	std::pmr::polymorphic_allocator<std::byte> MemoryPool::globalAllocator()
+        -:   59:	{
+        1:   60:		return std::pmr::polymorphic_allocator<std::byte>(&globalPool_);
+call    0 returned 100%
+        -:   61:	}
+        -:   62:
+function _ZN5hical10MemoryPool20threadLocalAllocatorEv called 41 returned 100% blocks executed 100%
+       41:   63:	std::pmr::polymorphic_allocator<std::byte> MemoryPool::threadLocalAllocator()
+        -:   64:	{
+       41:   65:		auto* pool = getOrCreateThreadPool();
+call    0 returned 100%
+       41:   66:		return std::pmr::polymorphic_allocator<std::byte>(pool);
+call    0 returned 100%
+        -:   67:	}
+        -:   68:
+function _ZN5hical10MemoryPool15threadLocalPoolEv called 0 returned 0% blocks executed 0%
+    #####:   69:	std::pmr::unsynchronized_pool_resource* MemoryPool::threadLocalPool()
+        -:   70:	{
+    #####:   71:		return getOrCreateThreadPool();
+call    0 never executed
+        -:   72:	}
+        -:   73:
+function _ZN5hical10MemoryPool17createRequestPoolEm called 10001 returned 100% blocks executed 86%
+    10001:   74:	std::unique_ptr<std::pmr::monotonic_buffer_resource> MemoryPool::createRequestPool(size_t initialSize)
+        -:   75:	{
+    10001:   76:		if (initialSize == 0)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:   77:		{
+    #####:   78:			initialSize = config_.requestPoolInitialSize;
+        -:   79:		}
+    20002:   80:		return std::make_unique<std::pmr::monotonic_buffer_resource>(initialSize, &globalPool_);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:   81:	}
+        -:   82:
+function _ZN5hical10MemoryPool21getOrCreateThreadPoolEv called 41 returned 100% blocks executed 65%
+       41:   83:	std::pmr::unsynchronized_pool_resource* MemoryPool::getOrCreateThreadPool()
+        -:   84:	{
+        -:   85:		// 代际感知的 thread_local 缓存：configure() 后自动失效重建
+        -:   86:		struct ThreadCache
+        -:   87:		{
+        -:   88:			std::pmr::unsynchronized_pool_resource* pool = nullptr;
+        -:   89:			ThreadPoolEntry* entry = nullptr;
+        -:   90:			uint64_t generation = 0;
+        -:   91:		};
+        -:   92:
+        -:   93:		thread_local ThreadCache cache;
+        -:   94:
+       41:   95:		auto currentGen = generation_.load(std::memory_order_acquire);
+call    0 returned 100%
+       41:   96:		if (cache.pool != nullptr && cache.generation == currentGen)
+branch  0 taken 7% (fallthrough)
+branch  1 taken 93%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0%
+        -:   97:		{
+        -:   98:			// 检查 GC 是否标记了此池需要释放（延迟释放策略：由拥有线程自行执行 release，
+        -:   99:			// 避免跨线程操作 unsynchronized_pool_resource 导致 UB）
+        3:  100:			if (cache.entry->needsRelease.exchange(false, std::memory_order_acquire))
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+        -:  101:			{
+    #####:  102:				cache.pool->release();
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:  103:			}
+        -:  104:			// 更新活跃时间戳（无锁）
+        3:  105:			cache.entry->lastAllocTime.store(std::chrono::steady_clock::now(), std::memory_order_relaxed);
+call    0 returned 100%
+call    1 returned 100%
+        3:  106:			return cache.pool;
+        -:  107:		}
+        -:  108:
+        -:  109:		auto pool = std::make_unique<std::pmr::unsynchronized_pool_resource>(
+    #####:  110:			std::pmr::pool_options {.max_blocks_per_chunk = config_.threadLocalMaxBlocksPerChunk,
+       38:  111:									.largest_required_pool_block = config_.threadLocalLargestPoolBlock},
+       38:  112:			&globalPool_);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  113:
+       38:  114:		auto* poolPtr = pool.get();
+call    0 returned 100%
+       38:  115:		auto entry = std::make_unique<ThreadPoolEntry>(std::move(pool));
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+       38:  116:		auto* entryPtr = entry.get();
+call    0 returned 100%
+        -:  117:
+        -:  118:		{
+       38:  119:			std::lock_guard<std::mutex> lock(threadPoolsMutex_);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       38:  120:			threadPools_.push_back(std::move(entry));
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+       38:  121:		}
+call    0 returned 100%
+call    1 never executed
+        -:  122:
+       38:  123:		cache.pool = poolPtr;
+       38:  124:		cache.entry = entryPtr;
+       38:  125:		cache.generation = currentGen;
+       38:  126:		return poolPtr;
+       38:  127:	}
+call    0 returned 100%
+call    1 returned 100%
+call    2 never executed
+call    3 never executed
+        -:  128:
+function _ZNK5hical10MemoryPool8getStatsEv called 8 returned 100% blocks executed 70%
+        8:  129:	MemoryPool::Stats MemoryPool::getStats() const
+        -:  130:	{
+        8:  131:		size_t poolCount = 0;
+        -:  132:		{
+        8:  133:			std::lock_guard<std::mutex> lock(threadPoolsMutex_);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        8:  134:			poolCount = threadPools_.size();
+call    0 returned 100%
+        8:  135:		}
+call    0 returned 100%
+        -:  136:
+        -:  137:		return Stats {
+        8:  138:			.totalAllocations = trackedResource_.totalAllocations(),
+call    0 returned 100%
+        8:  139:			.totalDeallocations = trackedResource_.totalDeallocations(),
+        8:  140:			.currentBytesAllocated = trackedResource_.currentBytes(),
+        8:  141:			.peakBytesAllocated = trackedResource_.peakBytes(),
+        -:  142:			.threadPoolCount = poolCount,
+       16:  143:			.gcCycles = gcCycles_.load(std::memory_order_relaxed),
+       16:  144:			.gcReclaimedPools = gcReclaimedPools_.load(std::memory_order_relaxed),
+       24:  145:		};
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+        -:  146:	}
+        -:  147:
+function _ZN5hical10MemoryPool10resetStatsEv called 3 returned 100% blocks executed 57%
+        3:  148:	void MemoryPool::resetStats()
+        -:  149:	{
+        3:  150:		trackedResource_.resetStats();
+call    0 returned 100%
+        3:  151:		gcCycles_.store(0, std::memory_order_relaxed);
+call    0 returned 100%
+        3:  152:		gcReclaimedPools_.store(0, std::memory_order_relaxed);
+call    0 returned 100%
+        3:  153:	}
+        -:  154:
+function _ZN5hical10MemoryPool2gcENSt6chrono8durationIlSt5ratioILl1ELl1EEEE called 2 returned 100% blocks executed 80%
+        2:  155:	void MemoryPool::gc(std::chrono::seconds maxIdleSeconds)
+        -:  156:	{
+        2:  157:		auto now = std::chrono::steady_clock::now();
+call    0 returned 100%
+        2:  158:		size_t reclaimed = 0;
+        -:  159:
+        -:  160:		{
+        2:  161:			std::lock_guard<std::mutex> lock(threadPoolsMutex_);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        7:  162:			for (auto& entry : threadPools_)
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 71%
+branch  6 taken 29% (fallthrough)
+        -:  163:			{
+        5:  164:				auto lastActive = entry->lastAllocTime.load(std::memory_order_relaxed);
+call    0 returned 100%
+call    1 returned 100%
+        5:  165:				if (now - lastActive > maxIdleSeconds)
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0%
+        -:  166:				{
+        -:  167:					// 标记需要释放，由拥有线程在下次分配时安全执行 release()。
+        -:  168:					// 不直接调用 release()，因为 unsynchronized_pool_resource 不是线程安全的。
+        5:  169:					entry->needsRelease.store(true, std::memory_order_release);
+call    0 returned 100%
+call    1 returned 100%
+        5:  170:					++reclaimed;
+        -:  171:				}
+        -:  172:			}
+        2:  173:		}
+call    0 returned 100%
+call    1 never executed
+        -:  174:
+        2:  175:		gcCycles_.fetch_add(1, std::memory_order_relaxed);
+        2:  176:		gcReclaimedPools_.fetch_add(reclaimed, std::memory_order_relaxed);
+        2:  177:	}
+        -:  178:
+        -:  179:} // namespace hical

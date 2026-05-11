@@ -1,0 +1,401 @@
+        -:    0:Source:/home/runner/work/Hical/Hical/src/core/AsyncFileSink.cpp
+        -:    1:#include "AsyncFileSink.h"
+        -:    2:
+        -:    3:#include <utility>
+        -:    4:
+        -:    5:namespace hical
+        -:    6:{
+        -:    7:
+function _ZN5hical13AsyncFileSinkC2ENS0_7OptionsE called 7 returned 100% blocks executed 50%
+        7:    8:	AsyncFileSink::AsyncFileSink(Options opts) : m_opts(std::move(opts)), m_logFile(m_opts.file)
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+call    9 returned 100%
+call   10 returned 100%
+call   11 returned 100%
+call   12 returned 100%
+call   13 returned 100%
+branch 14 taken 100% (fallthrough)
+branch 15 taken 0% (throw)
+call   16 returned 100%
+call   17 returned 100%
+call   18 returned 100%
+branch 19 taken 100% (fallthrough)
+branch 20 taken 0% (throw)
+call   21 never executed
+        -:    9:	{
+        7:   10:		m_curBuf.reserve(m_opts.bufferSize);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        7:   11:		m_flushBuf.reserve(m_opts.bufferSize);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:   12:
+        7:   13:		m_bgThread = std::jthread(
+call    0 returned 100%
+function _ZZN5hical13AsyncFileSinkC4ENS0_7OptionsEENKUlSt10stop_tokenE_clES2_ called 7 returned 100% blocks executed 75%
+    #####:   14:			[this](std::stop_token stopToken)
+        -:   15:			{
+        7:   16:				backgroundLoop(std::move(stopToken));
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+call    6 never executed
+       14:   17:			});
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+        7:   18:	}
+call    0 never executed
+call    1 never executed
+call    2 never executed
+call    3 never executed
+call    4 never executed
+call    5 never executed
+call    6 never executed
+call    7 never executed
+        -:   19:
+       7*:   20:	AsyncFileSink::~AsyncFileSink()
+        -:   21:	{
+        -:   22:		// jthread 析构自动 request_stop() + join()
+        -:   23:		// 析构前先 flush 残余数据
+        -:   24:		{
+        7:   25:			std::lock_guard<std::mutex> lock(m_bufMutex);
+        -:   26:			// 用条件变量唤醒后台线程处理剩余数据
+        7:   27:			m_cond.notify_one();
+        7:   28:		}
+        -:   29:		// jthread 析构时自动 request_stop + join，后台线程会处理最后一批数据
+       7*:   30:	}
+------------------
+_ZN5hical13AsyncFileSinkD0Ev:
+function _ZN5hical13AsyncFileSinkD0Ev called 0 returned 0% blocks executed 0%
+    #####:   20:	AsyncFileSink::~AsyncFileSink()
+        -:   21:	{
+        -:   22:		// jthread 析构自动 request_stop() + join()
+        -:   23:		// 析构前先 flush 残余数据
+        -:   24:		{
+        -:   25:			std::lock_guard<std::mutex> lock(m_bufMutex);
+        -:   26:			// 用条件变量唤醒后台线程处理剩余数据
+        -:   27:			m_cond.notify_one();
+        -:   28:		}
+        -:   29:		// jthread 析构时自动 request_stop + join，后台线程会处理最后一批数据
+    #####:   30:	}
+call    0 never executed
+call    1 never executed
+------------------
+_ZN5hical13AsyncFileSinkD2Ev:
+function _ZN5hical13AsyncFileSinkD2Ev called 7 returned 100% blocks executed 100%
+        7:   20:	AsyncFileSink::~AsyncFileSink()
+        -:   21:	{
+        -:   22:		// jthread 析构自动 request_stop() + join()
+        -:   23:		// 析构前先 flush 残余数据
+        -:   24:		{
+        7:   25:			std::lock_guard<std::mutex> lock(m_bufMutex);
+call    0 returned 100%
+        -:   26:			// 用条件变量唤醒后台线程处理剩余数据
+        7:   27:			m_cond.notify_one();
+call    0 returned 100%
+        7:   28:		}
+call    0 returned 100%
+        -:   29:		// jthread 析构时自动 request_stop + join，后台线程会处理最后一批数据
+        7:   30:	}
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+call    5 returned 100%
+call    6 returned 100%
+call    7 returned 100%
+------------------
+        -:   31:
+function _ZN5hical13AsyncFileSink5writeESt17basic_string_viewIcSt11char_traitsIcEE called 352 returned 100% blocks executed 77%
+      352:   32:	void AsyncFileSink::write(std::string_view formattedLine)
+        -:   33:	{
+      352:   34:		bool shouldNotify = false;
+        -:   35:		{
+      352:   36:			std::lock_guard<std::mutex> lock(m_bufMutex);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:   37:
+        -:   38:			// 背压保护：缓冲区过大时丢弃
+      352:   39:			if (m_curBuf.size() > m_opts.backpressureLimit)
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+        -:   40:			{
+    #####:   41:				m_dropped.fetch_add(1, std::memory_order_relaxed);
+    #####:   42:				return;
+        -:   43:			}
+        -:   44:
+      352:   45:			auto wasBufEmpty = m_curBuf.empty();
+call    0 returned 100%
+      352:   46:			m_curBuf.append(formattedLine.data(), formattedLine.size());
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+        -:   47:
+        -:   48:			// 从空到非空，或缓冲区接近满时通知后台线程
+      352:   49:			shouldNotify = wasBufEmpty || m_curBuf.size() >= m_opts.bufferSize;
+branch  0 taken 98% (fallthrough)
+branch  1 taken 2%
+call    2 returned 100%
+branch  3 taken 0% (fallthrough)
+branch  4 taken 100%
+      352:   50:		}
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0%
+call    3 never executed
+        -:   51:
+      352:   52:		if (shouldNotify)
+branch  0 taken 2%
+branch  1 taken 98%
+        -:   53:		{
+        6:   54:			m_cond.notify_one();
+call    0 returned 100%
+        -:   55:		}
+        -:   56:	}
+        -:   57:
+function _ZN5hical13AsyncFileSink5flushEv called 1 returned 100% blocks executed 63%
+        1:   58:	void AsyncFileSink::flush()
+        -:   59:	{
+        -:   60:		// 同步 flush：通过 promise/future 握手，确保后台线程完成写盘
+        1:   61:		std::promise<void> p;
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:   62:		auto f = p.get_future();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:   63:		{
+        1:   64:			std::lock_guard<std::mutex> lock(m_bufMutex);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:   65:			m_flushRequests.push_back(std::move(p));
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        1:   66:			m_cond.notify_one();
+call    0 returned 100%
+        1:   67:		}
+call    0 returned 100%
+call    1 never executed
+        1:   68:		f.wait();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:   69:	}
+call    0 returned 100%
+call    1 returned 100%
+call    2 never executed
+call    3 never executed
+        -:   70:
+function _ZNK5hical13AsyncFileSink12droppedCountEv called 1 returned 100% blocks executed 65%
+        1:   71:	uint64_t AsyncFileSink::droppedCount() const
+        -:   72:	{
+        2:   73:		return m_dropped.load(std::memory_order_relaxed);
+call    0 returned 100%
+        -:   74:	}
+        -:   75:
+function _ZN5hical13AsyncFileSink14backgroundLoopESt10stop_token called 7 returned 100% blocks executed 70%
+        7:   76:	void AsyncFileSink::backgroundLoop(std::stop_token stopToken)
+        -:   77:	{
+        -:   78:		while (true)
+        -:   79:		{
+        -:   80:			{
+       26:   81:				std::unique_lock<std::mutex> lock(m_bufMutex);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:   82:
+        -:   83:				// 等待数据到达、超时、或停止请求
+       26:   84:				m_cond.wait_for(lock,
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 never executed
+        -:   85:								stopToken,
+       26:   86:								m_opts.flushInterval,
+call    0 returned 100%
+function _ZZN5hical13AsyncFileSink14backgroundLoopESt10stop_tokenENKUlvE_clEv called 45 returned 100% blocks executed 100%
+       45:   87:								[this]()
+        -:   88:								{
+       45:   89:									return !m_curBuf.empty();
+call    0 returned 100%
+        -:   90:								});
+        -:   91:
+       26:   92:				if (stopToken.stop_requested() && m_curBuf.empty())
+call    0 returned 100%
+branch  1 taken 31% (fallthrough)
+branch  2 taken 69%
+call    3 returned 100%
+branch  4 taken 88% (fallthrough)
+branch  5 taken 12%
+branch  6 taken 27% (fallthrough)
+branch  7 taken 73%
+        -:   93:				{
+        7:   94:					break;
+        -:   95:				}
+        -:   96:
+       19:   97:				if (!m_curBuf.empty())
+call    0 returned 100%
+branch  1 taken 32% (fallthrough)
+branch  2 taken 68%
+        -:   98:				{
+        -:   99:					// 双缓冲交换
+        6:  100:					m_curBuf.swap(m_flushBuf);
+call    0 returned 100%
+        6:  101:					m_curBuf.clear();
+call    0 returned 100%
+        -:  102:				}
+        -:  103:				else
+        -:  104:				{
+       13:  105:					continue;
+        -:  106:				}
+       26:  107:			}
+call    0 returned 100%
+branch  1 taken 23%
+branch  2 taken 27%
+branch  3 taken 50%
+call    4 never executed
+        -:  108:
+        -:  109:			// 锁外批量写盘
+        6:  110:			if (!m_flushBuf.empty())
+call    0 returned 100%
+branch  1 taken 100%
+branch  2 taken 0%
+        -:  111:			{
+        -:  112:				// 插入丢弃统计
+        6:  113:				auto dropped = m_dropped.exchange(0, std::memory_order_relaxed);
+        6:  114:				if (dropped > 0)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:  115:				{
+        -:  116:					char dropMsg[128];
+    #####:  117:					auto n = snprintf(dropMsg,
+        -:  118:									  sizeof(dropMsg),
+        -:  119:									  "[WARN] AsyncFileSink: %llu log lines dropped due to backpressure\n",
+        -:  120:									  static_cast<unsigned long long>(dropped));
+    #####:  121:					m_logFile.append(dropMsg, static_cast<size_t>(n));
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:  122:				}
+        -:  123:
+        6:  124:				m_logFile.append(m_flushBuf.data(), m_flushBuf.size());
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+        6:  125:				m_logFile.flush();
+call    0 returned 100%
+        6:  126:				m_flushBuf.clear();
+call    0 returned 100%
+        -:  127:			}
+        -:  128:
+        -:  129:			// 通知所有等待同步 flush 的调用方
+        -:  130:			{
+        6:  131:				std::lock_guard<std::mutex> lock(m_bufMutex);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        7:  132:				for (auto& req : m_flushRequests)
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 14%
+branch  6 taken 86% (fallthrough)
+        -:  133:				{
+        1:  134:					req.set_value();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  135:				}
+        6:  136:				m_flushRequests.clear();
+call    0 returned 100%
+        6:  137:			}
+call    0 returned 100%
+call    1 never executed
+       19:  138:		}
+        -:  139:
+        -:  140:		// 停止前确保 m_curBuf 残余数据也被写入
+        -:  141:		{
+        7:  142:			std::lock_guard<std::mutex> lock(m_bufMutex);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        7:  143:			if (!m_curBuf.empty())
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+        -:  144:			{
+    #####:  145:				m_curBuf.swap(m_flushBuf);
+call    0 never executed
+    #####:  146:				m_curBuf.clear();
+call    0 never executed
+        -:  147:			}
+        7:  148:		}
+call    0 returned 100%
+        7:  149:		if (!m_flushBuf.empty())
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+        -:  150:		{
+    #####:  151:			m_logFile.append(m_flushBuf.data(), m_flushBuf.size());
+call    0 never executed
+call    1 never executed
+call    2 never executed
+    #####:  152:			m_logFile.flush();
+call    0 never executed
+        -:  153:		}
+        -:  154:
+        -:  155:		// 关闭前通知所有残留的 flush 等待者
+        -:  156:		{
+        7:  157:			std::lock_guard<std::mutex> lock(m_bufMutex);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       7*:  158:			for (auto& req : m_flushRequests)
+call    0 returned 100%
+call    1 returned 100%
+call    2 never executed
+call    3 never executed
+call    4 returned 100%
+branch  5 taken 0%
+branch  6 taken 100% (fallthrough)
+        -:  159:			{
+    #####:  160:				req.set_value();
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:  161:			}
+        7:  162:			m_flushRequests.clear();
+call    0 returned 100%
+        7:  163:		}
+call    0 returned 100%
+call    1 never executed
+        7:  164:	}
+        -:  165:
+        -:  166:} // namespace hical

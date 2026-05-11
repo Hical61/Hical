@@ -1,0 +1,1641 @@
+        -:    0:Source:/usr/include/boost/asio/impl/connect.hpp
+        -:    1://
+        -:    2:// impl/connect.hpp
+        -:    3:// ~~~~~~~~~~~~~~~~
+        -:    4://
+        -:    5:// Copyright (c) 2003-2023 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+        -:    6://
+        -:    7:// Distributed under the Boost Software License, Version 1.0. (See accompanying
+        -:    8:// file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+        -:    9://
+        -:   10:
+        -:   11:#ifndef BOOST_ASIO_IMPL_CONNECT_HPP
+        -:   12:#define BOOST_ASIO_IMPL_CONNECT_HPP
+        -:   13:
+        -:   14:#if defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   15:# pragma once
+        -:   16:#endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   17:
+        -:   18:#include <algorithm>
+        -:   19:#include <boost/asio/associator.hpp>
+        -:   20:#include <boost/asio/detail/base_from_cancellation_state.hpp>
+        -:   21:#include <boost/asio/detail/bind_handler.hpp>
+        -:   22:#include <boost/asio/detail/handler_alloc_helpers.hpp>
+        -:   23:#include <boost/asio/detail/handler_cont_helpers.hpp>
+        -:   24:#include <boost/asio/detail/handler_invoke_helpers.hpp>
+        -:   25:#include <boost/asio/detail/handler_tracking.hpp>
+        -:   26:#include <boost/asio/detail/handler_type_requirements.hpp>
+        -:   27:#include <boost/asio/detail/non_const_lvalue.hpp>
+        -:   28:#include <boost/asio/detail/throw_error.hpp>
+        -:   29:#include <boost/asio/detail/type_traits.hpp>
+        -:   30:#include <boost/asio/error.hpp>
+        -:   31:#include <boost/asio/post.hpp>
+        -:   32:
+        -:   33:#include <boost/asio/detail/push_options.hpp>
+        -:   34:
+        -:   35:namespace boost {
+        -:   36:namespace asio {
+        -:   37:
+        -:   38:namespace detail
+        -:   39:{
+        -:   40:  struct default_connect_condition
+        -:   41:  {
+        -:   42:    template <typename Endpoint>
+        -:   43:    bool operator()(const boost::system::error_code&, const Endpoint&)
+        -:   44:    {
+        -:   45:      return true;
+        -:   46:    }
+        -:   47:  };
+        -:   48:
+        -:   49:  template <typename Protocol, typename Iterator>
+        -:   50:  inline typename Protocol::endpoint deref_connect_result(
+        -:   51:      Iterator iter, boost::system::error_code& ec)
+        -:   52:  {
+        -:   53:    return ec ? typename Protocol::endpoint() : *iter;
+        -:   54:  }
+        -:   55:
+        -:   56:  template <typename T, typename Iterator>
+        -:   57:  struct legacy_connect_condition_helper : T
+        -:   58:  {
+        -:   59:    typedef char (*fallback_func_type)(...);
+        -:   60:    operator fallback_func_type() const;
+        -:   61:  };
+        -:   62:
+        -:   63:  template <typename R, typename Arg1, typename Arg2, typename Iterator>
+        -:   64:  struct legacy_connect_condition_helper<R (*)(Arg1, Arg2), Iterator>
+        -:   65:  {
+        -:   66:    R operator()(Arg1, Arg2) const;
+        -:   67:    char operator()(...) const;
+        -:   68:  };
+        -:   69:
+        -:   70:  template <typename T, typename Iterator>
+        -:   71:  struct is_legacy_connect_condition
+        -:   72:  {
+        -:   73:    static char asio_connect_condition_check(char);
+        -:   74:    static char (&asio_connect_condition_check(Iterator))[2];
+        -:   75:
+        -:   76:    static const bool value =
+        -:   77:      sizeof(asio_connect_condition_check(
+        -:   78:        (declval<legacy_connect_condition_helper<T, Iterator> >())(
+        -:   79:          declval<const boost::system::error_code>(),
+        -:   80:          declval<const Iterator>()))) != 1;
+        -:   81:  };
+        -:   82:
+        -:   83:  template <typename ConnectCondition, typename Iterator>
+        -:   84:  inline Iterator call_connect_condition(ConnectCondition& connect_condition,
+        -:   85:      const boost::system::error_code& ec, Iterator next, Iterator end,
+        -:   86:      typename enable_if<is_legacy_connect_condition<
+        -:   87:        ConnectCondition, Iterator>::value>::type* = 0)
+        -:   88:  {
+        -:   89:    if (next != end)
+        -:   90:      return connect_condition(ec, next);
+        -:   91:    return end;
+        -:   92:  }
+        -:   93:
+        -:   94:  template <typename ConnectCondition, typename Iterator>
+        -:   95:  inline Iterator call_connect_condition(ConnectCondition& connect_condition,
+        -:   96:      const boost::system::error_code& ec, Iterator next, Iterator end,
+        -:   97:      typename enable_if<!is_legacy_connect_condition<
+        -:   98:        ConnectCondition, Iterator>::value>::type* = 0)
+        -:   99:  {
+        -:  100:    for (;next != end; ++next)
+        -:  101:      if (connect_condition(ec, *next))
+        -:  102:        return next;
+        -:  103:    return end;
+        -:  104:  }
+        -:  105:}
+        -:  106:
+        -:  107:template <typename Protocol, typename Executor, typename EndpointSequence>
+        -:  108:typename Protocol::endpoint connect(basic_socket<Protocol, Executor>& s,
+        -:  109:    const EndpointSequence& endpoints,
+        -:  110:    typename constraint<is_endpoint_sequence<
+        -:  111:        EndpointSequence>::value>::type)
+        -:  112:{
+        -:  113:  boost::system::error_code ec;
+        -:  114:  typename Protocol::endpoint result = connect(s, endpoints, ec);
+        -:  115:  boost::asio::detail::throw_error(ec, "connect");
+        -:  116:  return result;
+        -:  117:}
+        -:  118:
+        -:  119:template <typename Protocol, typename Executor, typename EndpointSequence>
+        -:  120:typename Protocol::endpoint connect(basic_socket<Protocol, Executor>& s,
+        -:  121:    const EndpointSequence& endpoints, boost::system::error_code& ec,
+        -:  122:    typename constraint<is_endpoint_sequence<
+        -:  123:        EndpointSequence>::value>::type)
+        -:  124:{
+        -:  125:  return detail::deref_connect_result<Protocol>(
+        -:  126:      connect(s, endpoints.begin(), endpoints.end(),
+        -:  127:        detail::default_connect_condition(), ec), ec);
+        -:  128:}
+        -:  129:
+        -:  130:#if !defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  131:template <typename Protocol, typename Executor, typename Iterator>
+        -:  132:Iterator connect(basic_socket<Protocol, Executor>& s, Iterator begin,
+        -:  133:    typename constraint<!is_endpoint_sequence<Iterator>::value>::type)
+        -:  134:{
+        -:  135:  boost::system::error_code ec;
+        -:  136:  Iterator result = connect(s, begin, ec);
+        -:  137:  boost::asio::detail::throw_error(ec, "connect");
+        -:  138:  return result;
+        -:  139:}
+        -:  140:
+        -:  141:template <typename Protocol, typename Executor, typename Iterator>
+        -:  142:inline Iterator connect(basic_socket<Protocol, Executor>& s,
+        -:  143:    Iterator begin, boost::system::error_code& ec,
+        -:  144:    typename constraint<!is_endpoint_sequence<Iterator>::value>::type)
+        -:  145:{
+        -:  146:  return connect(s, begin, Iterator(), detail::default_connect_condition(), ec);
+        -:  147:}
+        -:  148:#endif // !defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  149:
+        -:  150:template <typename Protocol, typename Executor, typename Iterator>
+        -:  151:Iterator connect(basic_socket<Protocol, Executor>& s,
+        -:  152:    Iterator begin, Iterator end)
+        -:  153:{
+        -:  154:  boost::system::error_code ec;
+        -:  155:  Iterator result = connect(s, begin, end, ec);
+        -:  156:  boost::asio::detail::throw_error(ec, "connect");
+        -:  157:  return result;
+        -:  158:}
+        -:  159:
+        -:  160:template <typename Protocol, typename Executor, typename Iterator>
+        -:  161:inline Iterator connect(basic_socket<Protocol, Executor>& s,
+        -:  162:    Iterator begin, Iterator end, boost::system::error_code& ec)
+        -:  163:{
+        -:  164:  return connect(s, begin, end, detail::default_connect_condition(), ec);
+        -:  165:}
+        -:  166:
+        -:  167:template <typename Protocol, typename Executor,
+        -:  168:    typename EndpointSequence, typename ConnectCondition>
+        -:  169:typename Protocol::endpoint connect(basic_socket<Protocol, Executor>& s,
+        -:  170:    const EndpointSequence& endpoints, ConnectCondition connect_condition,
+        -:  171:    typename constraint<is_endpoint_sequence<
+        -:  172:        EndpointSequence>::value>::type)
+        -:  173:{
+        -:  174:  boost::system::error_code ec;
+        -:  175:  typename Protocol::endpoint result = connect(
+        -:  176:      s, endpoints, connect_condition, ec);
+        -:  177:  boost::asio::detail::throw_error(ec, "connect");
+        -:  178:  return result;
+        -:  179:}
+        -:  180:
+        -:  181:template <typename Protocol, typename Executor,
+        -:  182:    typename EndpointSequence, typename ConnectCondition>
+        -:  183:typename Protocol::endpoint connect(basic_socket<Protocol, Executor>& s,
+        -:  184:    const EndpointSequence& endpoints, ConnectCondition connect_condition,
+        -:  185:    boost::system::error_code& ec,
+        -:  186:    typename constraint<is_endpoint_sequence<
+        -:  187:        EndpointSequence>::value>::type)
+        -:  188:{
+        -:  189:  return detail::deref_connect_result<Protocol>(
+        -:  190:      connect(s, endpoints.begin(), endpoints.end(),
+        -:  191:        connect_condition, ec), ec);
+        -:  192:}
+        -:  193:
+        -:  194:#if !defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  195:template <typename Protocol, typename Executor,
+        -:  196:    typename Iterator, typename ConnectCondition>
+        -:  197:Iterator connect(basic_socket<Protocol, Executor>& s,
+        -:  198:    Iterator begin, ConnectCondition connect_condition,
+        -:  199:    typename constraint<!is_endpoint_sequence<Iterator>::value>::type)
+        -:  200:{
+        -:  201:  boost::system::error_code ec;
+        -:  202:  Iterator result = connect(s, begin, connect_condition, ec);
+        -:  203:  boost::asio::detail::throw_error(ec, "connect");
+        -:  204:  return result;
+        -:  205:}
+        -:  206:
+        -:  207:template <typename Protocol, typename Executor,
+        -:  208:    typename Iterator, typename ConnectCondition>
+        -:  209:inline Iterator connect(basic_socket<Protocol, Executor>& s,
+        -:  210:    Iterator begin, ConnectCondition connect_condition,
+        -:  211:    boost::system::error_code& ec,
+        -:  212:    typename constraint<!is_endpoint_sequence<Iterator>::value>::type)
+        -:  213:{
+        -:  214:  return connect(s, begin, Iterator(), connect_condition, ec);
+        -:  215:}
+        -:  216:#endif // !defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  217:
+        -:  218:template <typename Protocol, typename Executor,
+        -:  219:    typename Iterator, typename ConnectCondition>
+        -:  220:Iterator connect(basic_socket<Protocol, Executor>& s, Iterator begin,
+        -:  221:    Iterator end, ConnectCondition connect_condition)
+        -:  222:{
+        -:  223:  boost::system::error_code ec;
+        -:  224:  Iterator result = connect(s, begin, end, connect_condition, ec);
+        -:  225:  boost::asio::detail::throw_error(ec, "connect");
+        -:  226:  return result;
+        -:  227:}
+        -:  228:
+        -:  229:template <typename Protocol, typename Executor,
+        -:  230:    typename Iterator, typename ConnectCondition>
+        -:  231:Iterator connect(basic_socket<Protocol, Executor>& s, Iterator begin,
+        -:  232:    Iterator end, ConnectCondition connect_condition,
+        -:  233:    boost::system::error_code& ec)
+        -:  234:{
+        -:  235:  ec = boost::system::error_code();
+        -:  236:
+        -:  237:  for (Iterator iter = begin; iter != end; ++iter)
+        -:  238:  {
+        -:  239:    iter = (detail::call_connect_condition(connect_condition, ec, iter, end));
+        -:  240:    if (iter != end)
+        -:  241:    {
+        -:  242:      s.close(ec);
+        -:  243:      s.connect(*iter, ec);
+        -:  244:      if (!ec)
+        -:  245:        return iter;
+        -:  246:    }
+        -:  247:    else
+        -:  248:      break;
+        -:  249:  }
+        -:  250:
+        -:  251:  if (!ec)
+        -:  252:    ec = boost::asio::error::not_found;
+        -:  253:
+        -:  254:  return end;
+        -:  255:}
+        -:  256:
+        -:  257:namespace detail
+        -:  258:{
+        -:  259:  // Enable the empty base class optimisation for the connect condition.
+        -:  260:  template <typename ConnectCondition>
+        -:  261:  class base_from_connect_condition
+        -:  262:  {
+        -:  263:  protected:
+        -:  264:    explicit base_from_connect_condition(
+        -:  265:        const ConnectCondition& connect_condition)
+        -:  266:      : connect_condition_(connect_condition)
+        -:  267:    {
+        -:  268:    }
+        -:  269:
+        -:  270:    template <typename Iterator>
+        -:  271:    void check_condition(const boost::system::error_code& ec,
+        -:  272:        Iterator& iter, Iterator& end)
+        -:  273:    {
+        -:  274:      iter = detail::call_connect_condition(connect_condition_, ec, iter, end);
+        -:  275:    }
+        -:  276:
+        -:  277:  private:
+        -:  278:    ConnectCondition connect_condition_;
+        -:  279:  };
+        -:  280:
+        -:  281:  // The default_connect_condition implementation is essentially a no-op. This
+        -:  282:  // template specialisation lets us eliminate all costs associated with it.
+        -:  283:  template <>
+        -:  284:  class base_from_connect_condition<default_connect_condition>
+        -:  285:  {
+        -:  286:  protected:
+    #####:  287:    explicit base_from_connect_condition(const default_connect_condition&)
+        -:  288:    {
+    #####:  289:    }
+------------------
+_ZN5boost4asio6detail27base_from_connect_conditionINS1_25default_connect_conditionEEC2ERKS3_:
+function _ZN5boost4asio6detail27base_from_connect_conditionINS1_25default_connect_conditionEEC2ERKS3_ called 0 returned 0% blocks executed 0%
+    #####:  287:    explicit base_from_connect_condition(const default_connect_condition&)
+        -:  288:    {
+    #####:  289:    }
+------------------
+_ZN5boost4asio6detail27base_from_connect_conditionINS1_25default_connect_conditionEEC2ERKS3_:
+function _ZN5boost4asio6detail27base_from_connect_conditionINS1_25default_connect_conditionEEC2ERKS3_ called 0 returned 0% blocks executed 0%
+    #####:  287:    explicit base_from_connect_condition(const default_connect_condition&)
+        -:  288:    {
+    #####:  289:    }
+------------------
+        -:  290:
+        -:  291:    template <typename Iterator>
+    #####:  292:    void check_condition(const boost::system::error_code&, Iterator&, Iterator&)
+        -:  293:    {
+    #####:  294:    }
+------------------
+_ZN5boost4asio6detail27base_from_connect_conditionINS1_25default_connect_conditionEE15check_conditionINS0_2ip23basic_resolver_iteratorINS6_3tcpEEEEEvRKNS_6system10error_codeERT_SF_:
+function _ZN5boost4asio6detail27base_from_connect_conditionINS1_25default_connect_conditionEE15check_conditionINS0_2ip23basic_resolver_iteratorINS6_3tcpEEEEEvRKNS_6system10error_codeERT_SF_ called 0 returned 0% blocks executed 0%
+    #####:  292:    void check_condition(const boost::system::error_code&, Iterator&, Iterator&)
+        -:  293:    {
+    #####:  294:    }
+------------------
+_ZN5boost4asio6detail27base_from_connect_conditionINS1_25default_connect_conditionEE15check_conditionINS0_2ip23basic_resolver_iteratorINS6_3tcpEEEEEvRKNS_6system10error_codeERT_SF_:
+function _ZN5boost4asio6detail27base_from_connect_conditionINS1_25default_connect_conditionEE15check_conditionINS0_2ip23basic_resolver_iteratorINS6_3tcpEEEEEvRKNS_6system10error_codeERT_SF_ called 0 returned 0% blocks executed 0%
+    #####:  292:    void check_condition(const boost::system::error_code&, Iterator&, Iterator&)
+        -:  293:    {
+    #####:  294:    }
+------------------
+        -:  295:  };
+        -:  296:
+        -:  297:  template <typename Protocol, typename Executor, typename EndpointSequence,
+        -:  298:      typename ConnectCondition, typename RangeConnectHandler>
+        -:  299:  class range_connect_op
+        -:  300:    : public base_from_cancellation_state<RangeConnectHandler>,
+        -:  301:      base_from_connect_condition<ConnectCondition>
+        -:  302:  {
+        -:  303:  public:
+    #####:  304:    range_connect_op(basic_socket<Protocol, Executor>& sock,
+        -:  305:        const EndpointSequence& endpoints,
+        -:  306:        const ConnectCondition& connect_condition,
+        -:  307:        RangeConnectHandler& handler)
+        -:  308:      : base_from_cancellation_state<RangeConnectHandler>(
+        -:  309:          handler, enable_partial_cancellation()),
+        -:  310:        base_from_connect_condition<ConnectCondition>(connect_condition),
+    #####:  311:        socket_(sock),
+    #####:  312:        endpoints_(endpoints),
+    #####:  313:        index_(0),
+    #####:  314:        start_(0),
+    #####:  315:        handler_(BOOST_ASIO_MOVE_CAST(RangeConnectHandler)(handler))
+        -:  316:    {
+    #####:  317:    }
+------------------
+_ZN5boost4asio6detail16range_connect_opINS0_2ip3tcpENS0_15any_io_executorENS3_22basic_resolver_resultsIS4_EENS1_25default_connect_conditionENS1_17awaitable_handlerIS5_JNS_6system10error_codeENS3_14basic_endpointIS4_EEEEEEC2ERNS0_12basic_socketIS4_S5_EERKS7_RKS8_RSE_:
+function _ZN5boost4asio6detail16range_connect_opINS0_2ip3tcpENS0_15any_io_executorENS3_22basic_resolver_resultsIS4_EENS1_25default_connect_conditionENS1_17awaitable_handlerIS5_JNS_6system10error_codeENS3_14basic_endpointIS4_EEEEEEC2ERNS0_12basic_socketIS4_S5_EERKS7_RKS8_RSE_ called 0 returned 0% blocks executed 0%
+    #####:  304:    range_connect_op(basic_socket<Protocol, Executor>& sock,
+        -:  305:        const EndpointSequence& endpoints,
+        -:  306:        const ConnectCondition& connect_condition,
+        -:  307:        RangeConnectHandler& handler)
+        -:  308:      : base_from_cancellation_state<RangeConnectHandler>(
+        -:  309:          handler, enable_partial_cancellation()),
+        -:  310:        base_from_connect_condition<ConnectCondition>(connect_condition),
+    #####:  311:        socket_(sock),
+    #####:  312:        endpoints_(endpoints),
+call    0 never executed
+    #####:  313:        index_(0),
+    #####:  314:        start_(0),
+    #####:  315:        handler_(BOOST_ASIO_MOVE_CAST(RangeConnectHandler)(handler))
+call    0 never executed
+call    1 never executed
+call    2 never executed
+        -:  316:    {
+    #####:  317:    }
+------------------
+_ZN5boost4asio6detail16range_connect_opINS0_2ip3tcpENS0_15any_io_executorENS3_22basic_resolver_resultsIS4_EENS1_25default_connect_conditionEZN15BenchmarkClientC4ERNS0_10io_contextERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEESJ_iRSt6atomicIiESM_EUlNS_6system10error_codeENS3_14basic_endpointIS4_EEE_EC2ERNS0_12basic_socketIS4_S5_EERKS7_RKS8_RSR_:
+function _ZN5boost4asio6detail16range_connect_opINS0_2ip3tcpENS0_15any_io_executorENS3_22basic_resolver_resultsIS4_EENS1_25default_connect_conditionEZN15BenchmarkClientC4ERNS0_10io_contextERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEESJ_iRSt6atomicIiESM_EUlNS_6system10error_codeENS3_14basic_endpointIS4_EEE_EC2ERNS0_12basic_socketIS4_S5_EERKS7_RKS8_RSR_ called 0 returned 0% blocks executed 0%
+    #####:  304:    range_connect_op(basic_socket<Protocol, Executor>& sock,
+        -:  305:        const EndpointSequence& endpoints,
+        -:  306:        const ConnectCondition& connect_condition,
+        -:  307:        RangeConnectHandler& handler)
+        -:  308:      : base_from_cancellation_state<RangeConnectHandler>(
+        -:  309:          handler, enable_partial_cancellation()),
+        -:  310:        base_from_connect_condition<ConnectCondition>(connect_condition),
+    #####:  311:        socket_(sock),
+    #####:  312:        endpoints_(endpoints),
+call    0 never executed
+    #####:  313:        index_(0),
+    #####:  314:        start_(0),
+    #####:  315:        handler_(BOOST_ASIO_MOVE_CAST(RangeConnectHandler)(handler))
+call    0 never executed
+call    1 never executed
+        -:  316:    {
+    #####:  317:    }
+------------------
+        -:  318:
+        -:  319:#if defined(BOOST_ASIO_HAS_MOVE)
+        -:  320:    range_connect_op(const range_connect_op& other)
+        -:  321:      : base_from_cancellation_state<RangeConnectHandler>(other),
+        -:  322:        base_from_connect_condition<ConnectCondition>(other),
+        -:  323:        socket_(other.socket_),
+        -:  324:        endpoints_(other.endpoints_),
+        -:  325:        index_(other.index_),
+        -:  326:        start_(other.start_),
+        -:  327:        handler_(other.handler_)
+        -:  328:    {
+        -:  329:    }
+        -:  330:
+    #####:  331:    range_connect_op(range_connect_op&& other)
+        -:  332:      : base_from_cancellation_state<RangeConnectHandler>(
+        -:  333:          BOOST_ASIO_MOVE_CAST(base_from_cancellation_state<
+        -:  334:            RangeConnectHandler>)(other)),
+        -:  335:        base_from_connect_condition<ConnectCondition>(other),
+    #####:  336:        socket_(other.socket_),
+    #####:  337:        endpoints_(other.endpoints_),
+    #####:  338:        index_(other.index_),
+    #####:  339:        start_(other.start_),
+    #####:  340:        handler_(BOOST_ASIO_MOVE_CAST(RangeConnectHandler)(other.handler_))
+        -:  341:    {
+    #####:  342:    }
+------------------
+_ZN5boost4asio6detail16range_connect_opINS0_2ip3tcpENS0_15any_io_executorENS3_22basic_resolver_resultsIS4_EENS1_25default_connect_conditionENS1_17awaitable_handlerIS5_JNS_6system10error_codeENS3_14basic_endpointIS4_EEEEEEC2EOSF_:
+function _ZN5boost4asio6detail16range_connect_opINS0_2ip3tcpENS0_15any_io_executorENS3_22basic_resolver_resultsIS4_EENS1_25default_connect_conditionENS1_17awaitable_handlerIS5_JNS_6system10error_codeENS3_14basic_endpointIS4_EEEEEEC2EOSF_ called 0 returned 0% blocks executed 0%
+    #####:  331:    range_connect_op(range_connect_op&& other)
+        -:  332:      : base_from_cancellation_state<RangeConnectHandler>(
+        -:  333:          BOOST_ASIO_MOVE_CAST(base_from_cancellation_state<
+        -:  334:            RangeConnectHandler>)(other)),
+        -:  335:        base_from_connect_condition<ConnectCondition>(other),
+    #####:  336:        socket_(other.socket_),
+    #####:  337:        endpoints_(other.endpoints_),
+    #####:  338:        index_(other.index_),
+    #####:  339:        start_(other.start_),
+    #####:  340:        handler_(BOOST_ASIO_MOVE_CAST(RangeConnectHandler)(other.handler_))
+call    0 never executed
+call    1 never executed
+        -:  341:    {
+    #####:  342:    }
+------------------
+_ZN5boost4asio6detail16range_connect_opINS0_2ip3tcpENS0_15any_io_executorENS3_22basic_resolver_resultsIS4_EENS1_25default_connect_conditionEZN15BenchmarkClientC4ERNS0_10io_contextERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEESJ_iRSt6atomicIiESM_EUlNS_6system10error_codeENS3_14basic_endpointIS4_EEE_EC2EOSS_:
+function _ZN5boost4asio6detail16range_connect_opINS0_2ip3tcpENS0_15any_io_executorENS3_22basic_resolver_resultsIS4_EENS1_25default_connect_conditionEZN15BenchmarkClientC4ERNS0_10io_contextERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEESJ_iRSt6atomicIiESM_EUlNS_6system10error_codeENS3_14basic_endpointIS4_EEE_EC2EOSS_ called 0 returned 0% blocks executed 0%
+    #####:  331:    range_connect_op(range_connect_op&& other)
+        -:  332:      : base_from_cancellation_state<RangeConnectHandler>(
+        -:  333:          BOOST_ASIO_MOVE_CAST(base_from_cancellation_state<
+        -:  334:            RangeConnectHandler>)(other)),
+        -:  335:        base_from_connect_condition<ConnectCondition>(other),
+    #####:  336:        socket_(other.socket_),
+    #####:  337:        endpoints_(other.endpoints_),
+call    0 never executed
+    #####:  338:        index_(other.index_),
+    #####:  339:        start_(other.start_),
+    #####:  340:        handler_(BOOST_ASIO_MOVE_CAST(RangeConnectHandler)(other.handler_))
+        -:  341:    {
+    #####:  342:    }
+------------------
+        -:  343:#endif // defined(BOOST_ASIO_HAS_MOVE)
+        -:  344:
+    #####:  345:    void operator()(boost::system::error_code ec, int start = 0)
+        -:  346:    {
+    #####:  347:      this->process(ec, start,
+    #####:  348:          const_cast<const EndpointSequence&>(endpoints_).begin(),
+    #####:  349:          const_cast<const EndpointSequence&>(endpoints_).end());
+    #####:  350:    }
+------------------
+_ZN5boost4asio6detail16range_connect_opINS0_2ip3tcpENS0_15any_io_executorENS3_22basic_resolver_resultsIS4_EENS1_25default_connect_conditionENS1_17awaitable_handlerIS5_JNS_6system10error_codeENS3_14basic_endpointIS4_EEEEEEclESB_i:
+function _ZN5boost4asio6detail16range_connect_opINS0_2ip3tcpENS0_15any_io_executorENS3_22basic_resolver_resultsIS4_EENS1_25default_connect_conditionENS1_17awaitable_handlerIS5_JNS_6system10error_codeENS3_14basic_endpointIS4_EEEEEEclESB_i called 0 returned 0% blocks executed 0%
+    #####:  345:    void operator()(boost::system::error_code ec, int start = 0)
+        -:  346:    {
+    #####:  347:      this->process(ec, start,
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  348:          const_cast<const EndpointSequence&>(endpoints_).begin(),
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+call    4 never executed
+    #####:  349:          const_cast<const EndpointSequence&>(endpoints_).end());
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+call    4 never executed
+    #####:  350:    }
+------------------
+_ZN5boost4asio6detail16range_connect_opINS0_2ip3tcpENS0_15any_io_executorENS3_22basic_resolver_resultsIS4_EENS1_25default_connect_conditionEZN15BenchmarkClientC4ERNS0_10io_contextERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEESJ_iRSt6atomicIiESM_EUlNS_6system10error_codeENS3_14basic_endpointIS4_EEE_EclESO_i:
+function _ZN5boost4asio6detail16range_connect_opINS0_2ip3tcpENS0_15any_io_executorENS3_22basic_resolver_resultsIS4_EENS1_25default_connect_conditionEZN15BenchmarkClientC4ERNS0_10io_contextERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEESJ_iRSt6atomicIiESM_EUlNS_6system10error_codeENS3_14basic_endpointIS4_EEE_EclESO_i called 0 returned 0% blocks executed 0%
+    #####:  345:    void operator()(boost::system::error_code ec, int start = 0)
+        -:  346:    {
+    #####:  347:      this->process(ec, start,
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  348:          const_cast<const EndpointSequence&>(endpoints_).begin(),
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+call    4 never executed
+    #####:  349:          const_cast<const EndpointSequence&>(endpoints_).end());
+call    0 never executed
+call    1 never executed
+call    2 never executed
+    #####:  350:    }
+------------------
+        -:  351:
+        -:  352:  //private:
+        -:  353:    template <typename Iterator>
+    #####:  354:    void process(boost::system::error_code ec,
+        -:  355:        int start, Iterator begin, Iterator end)
+        -:  356:    {
+    #####:  357:      Iterator iter = begin;
+    #####:  358:      std::advance(iter, index_);
+        -:  359:
+    #####:  360:      switch (start_ = start)
+        -:  361:      {
+    #####:  362:        case 1:
+        -:  363:        for (;;)
+        -:  364:        {
+    #####:  365:          this->check_condition(ec, iter, end);
+    #####:  366:          index_ = std::distance(begin, iter);
+        -:  367:
+    #####:  368:          if (iter != end)
+        -:  369:          {
+    #####:  370:            socket_.close(ec);
+        -:  371:            BOOST_ASIO_HANDLER_LOCATION((__FILE__, __LINE__, "async_connect"));
+    #####:  372:            socket_.async_connect(*iter,
+        -:  373:                BOOST_ASIO_MOVE_CAST(range_connect_op)(*this));
+    #####:  374:            return;
+        -:  375:          }
+        -:  376:
+    #####:  377:          if (start)
+        -:  378:          {
+    #####:  379:            ec = boost::asio::error::not_found;
+        -:  380:            BOOST_ASIO_HANDLER_LOCATION((__FILE__, __LINE__, "async_connect"));
+    #####:  381:            boost::asio::post(socket_.get_executor(),
+    #####:  382:                detail::bind_handler(
+        -:  383:                  BOOST_ASIO_MOVE_CAST(range_connect_op)(*this), ec));
+    #####:  384:            return;
+        -:  385:          }
+        -:  386:
+        -:  387:          /* fall-through */ default:
+        -:  388:
+    #####:  389:          if (iter == end)
+    #####:  390:            break;
+        -:  391:
+    #####:  392:          if (!socket_.is_open())
+        -:  393:          {
+    #####:  394:            ec = boost::asio::error::operation_aborted;
+    #####:  395:            break;
+        -:  396:          }
+        -:  397:
+    #####:  398:          if (!ec)
+    #####:  399:            break;
+        -:  400:
+    #####:  401:          if (this->cancelled() != cancellation_type::none)
+        -:  402:          {
+    #####:  403:            ec = boost::asio::error::operation_aborted;
+    #####:  404:            break;
+        -:  405:          }
+        -:  406:
+    #####:  407:          ++iter;
+    #####:  408:          ++index_;
+        -:  409:        }
+        -:  410:
+    #####:  411:        BOOST_ASIO_MOVE_OR_LVALUE(RangeConnectHandler)(handler_)(
+    #####:  412:            static_cast<const boost::system::error_code&>(ec),
+        -:  413:            static_cast<const typename Protocol::endpoint&>(
+    #####:  414:              ec || iter == end ? typename Protocol::endpoint() : *iter));
+        -:  415:      }
+    #####:  416:    }
+------------------
+_ZN5boost4asio6detail16range_connect_opINS0_2ip3tcpENS0_15any_io_executorENS3_22basic_resolver_resultsIS4_EENS1_25default_connect_conditionENS1_17awaitable_handlerIS5_JNS_6system10error_codeENS3_14basic_endpointIS4_EEEEEE7processINS3_23basic_resolver_iteratorIS4_EEEEvSB_iT_SJ_:
+function _ZN5boost4asio6detail16range_connect_opINS0_2ip3tcpENS0_15any_io_executorENS3_22basic_resolver_resultsIS4_EENS1_25default_connect_conditionENS1_17awaitable_handlerIS5_JNS_6system10error_codeENS3_14basic_endpointIS4_EEEEEE7processINS3_23basic_resolver_iteratorIS4_EEEEvSB_iT_SJ_ called 0 returned 0% blocks executed 0%
+    #####:  354:    void process(boost::system::error_code ec,
+        -:  355:        int start, Iterator begin, Iterator end)
+        -:  356:    {
+    #####:  357:      Iterator iter = begin;
+call    0 never executed
+    #####:  358:      std::advance(iter, index_);
+        -:  359:
+    #####:  360:      switch (start_ = start)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  361:      {
+    #####:  362:        case 1:
+        -:  363:        for (;;)
+        -:  364:        {
+    #####:  365:          this->check_condition(ec, iter, end);
+call    0 never executed
+    #####:  366:          index_ = std::distance(begin, iter);
+call    0 never executed
+call    1 never executed
+call    2 never executed
+call    3 never executed
+call    4 never executed
+call    5 never executed
+        -:  367:
+    #####:  368:          if (iter != end)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+branch  3 never executed (fallthrough)
+branch  4 never executed
+        -:  369:          {
+    #####:  370:            socket_.close(ec);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:  371:            BOOST_ASIO_HANDLER_LOCATION((__FILE__, __LINE__, "async_connect"));
+    #####:  372:            socket_.async_connect(*iter,
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+call    4 never executed
+branch  5 never executed (fallthrough)
+branch  6 never executed (throw)
+        -:  373:                BOOST_ASIO_MOVE_CAST(range_connect_op)(*this));
+    #####:  374:            return;
+        -:  375:          }
+        -:  376:
+    #####:  377:          if (start)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  378:          {
+    #####:  379:            ec = boost::asio::error::not_found;
+call    0 never executed
+        -:  380:            BOOST_ASIO_HANDLER_LOCATION((__FILE__, __LINE__, "async_connect"));
+    #####:  381:            boost::asio::post(socket_.get_executor(),
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+    #####:  382:                detail::bind_handler(
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+call    4 never executed
+        -:  383:                  BOOST_ASIO_MOVE_CAST(range_connect_op)(*this), ec));
+    #####:  384:            return;
+        -:  385:          }
+        -:  386:
+        -:  387:          /* fall-through */ default:
+        -:  388:
+    #####:  389:          if (iter == end)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+branch  3 never executed (fallthrough)
+branch  4 never executed
+    #####:  390:            break;
+        -:  391:
+    #####:  392:          if (!socket_.is_open())
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+branch  3 never executed (fallthrough)
+branch  4 never executed
+        -:  393:          {
+    #####:  394:            ec = boost::asio::error::operation_aborted;
+call    0 never executed
+    #####:  395:            break;
+        -:  396:          }
+        -:  397:
+    #####:  398:          if (!ec)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+    #####:  399:            break;
+        -:  400:
+    #####:  401:          if (this->cancelled() != cancellation_type::none)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+        -:  402:          {
+    #####:  403:            ec = boost::asio::error::operation_aborted;
+call    0 never executed
+    #####:  404:            break;
+        -:  405:          }
+        -:  406:
+    #####:  407:          ++iter;
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  408:          ++index_;
+        -:  409:        }
+        -:  410:
+    #####:  411:        BOOST_ASIO_MOVE_OR_LVALUE(RangeConnectHandler)(handler_)(
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:  412:            static_cast<const boost::system::error_code&>(ec),
+        -:  413:            static_cast<const typename Protocol::endpoint&>(
+    #####:  414:              ec || iter == end ? typename Protocol::endpoint() : *iter));
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+branch  6 never executed (fallthrough)
+branch  7 never executed
+call    8 never executed
+call    9 never executed
+branch 10 never executed (fallthrough)
+branch 11 never executed (throw)
+call   12 never executed
+        -:  415:      }
+    #####:  416:    }
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+call    3 never executed
+------------------
+_ZN5boost4asio6detail16range_connect_opINS0_2ip3tcpENS0_15any_io_executorENS3_22basic_resolver_resultsIS4_EENS1_25default_connect_conditionEZN15BenchmarkClientC4ERNS0_10io_contextERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEESJ_iRSt6atomicIiESM_EUlNS_6system10error_codeENS3_14basic_endpointIS4_EEE_E7processINS3_23basic_resolver_iteratorIS4_EEEEvSO_iT_SW_:
+function _ZN5boost4asio6detail16range_connect_opINS0_2ip3tcpENS0_15any_io_executorENS3_22basic_resolver_resultsIS4_EENS1_25default_connect_conditionEZN15BenchmarkClientC4ERNS0_10io_contextERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEESJ_iRSt6atomicIiESM_EUlNS_6system10error_codeENS3_14basic_endpointIS4_EEE_E7processINS3_23basic_resolver_iteratorIS4_EEEEvSO_iT_SW_ called 0 returned 0% blocks executed 0%
+    #####:  354:    void process(boost::system::error_code ec,
+        -:  355:        int start, Iterator begin, Iterator end)
+        -:  356:    {
+    #####:  357:      Iterator iter = begin;
+call    0 never executed
+    #####:  358:      std::advance(iter, index_);
+        -:  359:
+    #####:  360:      switch (start_ = start)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  361:      {
+    #####:  362:        case 1:
+        -:  363:        for (;;)
+        -:  364:        {
+    #####:  365:          this->check_condition(ec, iter, end);
+call    0 never executed
+    #####:  366:          index_ = std::distance(begin, iter);
+call    0 never executed
+call    1 never executed
+call    2 never executed
+call    3 never executed
+call    4 never executed
+call    5 never executed
+        -:  367:
+    #####:  368:          if (iter != end)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+branch  3 never executed (fallthrough)
+branch  4 never executed
+        -:  369:          {
+    #####:  370:            socket_.close(ec);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:  371:            BOOST_ASIO_HANDLER_LOCATION((__FILE__, __LINE__, "async_connect"));
+    #####:  372:            socket_.async_connect(*iter,
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+call    4 never executed
+branch  5 never executed (fallthrough)
+branch  6 never executed (throw)
+        -:  373:                BOOST_ASIO_MOVE_CAST(range_connect_op)(*this));
+    #####:  374:            return;
+        -:  375:          }
+        -:  376:
+    #####:  377:          if (start)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  378:          {
+    #####:  379:            ec = boost::asio::error::not_found;
+call    0 never executed
+        -:  380:            BOOST_ASIO_HANDLER_LOCATION((__FILE__, __LINE__, "async_connect"));
+    #####:  381:            boost::asio::post(socket_.get_executor(),
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+    #####:  382:                detail::bind_handler(
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+call    4 never executed
+        -:  383:                  BOOST_ASIO_MOVE_CAST(range_connect_op)(*this), ec));
+    #####:  384:            return;
+        -:  385:          }
+        -:  386:
+        -:  387:          /* fall-through */ default:
+        -:  388:
+    #####:  389:          if (iter == end)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+branch  3 never executed (fallthrough)
+branch  4 never executed
+    #####:  390:            break;
+        -:  391:
+    #####:  392:          if (!socket_.is_open())
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+branch  3 never executed (fallthrough)
+branch  4 never executed
+        -:  393:          {
+    #####:  394:            ec = boost::asio::error::operation_aborted;
+call    0 never executed
+    #####:  395:            break;
+        -:  396:          }
+        -:  397:
+    #####:  398:          if (!ec)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+    #####:  399:            break;
+        -:  400:
+    #####:  401:          if (this->cancelled() != cancellation_type::none)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+        -:  402:          {
+    #####:  403:            ec = boost::asio::error::operation_aborted;
+call    0 never executed
+    #####:  404:            break;
+        -:  405:          }
+        -:  406:
+    #####:  407:          ++iter;
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  408:          ++index_;
+        -:  409:        }
+        -:  410:
+    #####:  411:        BOOST_ASIO_MOVE_OR_LVALUE(RangeConnectHandler)(handler_)(
+call    0 never executed
+    #####:  412:            static_cast<const boost::system::error_code&>(ec),
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:  413:            static_cast<const typename Protocol::endpoint&>(
+    #####:  414:              ec || iter == end ? typename Protocol::endpoint() : *iter));
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+branch  6 never executed (fallthrough)
+branch  7 never executed
+call    8 never executed
+call    9 never executed
+branch 10 never executed (fallthrough)
+branch 11 never executed (throw)
+call   12 never executed
+        -:  415:      }
+    #####:  416:    }
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+call    3 never executed
+------------------
+        -:  417:
+        -:  418:    basic_socket<Protocol, Executor>& socket_;
+        -:  419:    EndpointSequence endpoints_;
+        -:  420:    std::size_t index_;
+        -:  421:    int start_;
+        -:  422:    RangeConnectHandler handler_;
+        -:  423:  };
+        -:  424:
+        -:  425:  template <typename Protocol, typename Executor, typename EndpointSequence,
+        -:  426:      typename ConnectCondition, typename RangeConnectHandler>
+        -:  427:  inline asio_handler_allocate_is_deprecated
+    #####:  428:  asio_handler_allocate(std::size_t size,
+        -:  429:      range_connect_op<Protocol, Executor, EndpointSequence,
+        -:  430:        ConnectCondition, RangeConnectHandler>* this_handler)
+        -:  431:  {
+        -:  432:#if defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  433:    boost_asio_handler_alloc_helpers::allocate(size, this_handler->handler_);
+        -:  434:    return asio_handler_allocate_is_no_longer_used();
+        -:  435:#else // defined(BOOST_ASIO_NO_DEPRECATED)
+    #####:  436:    return boost_asio_handler_alloc_helpers::allocate(
+    #####:  437:        size, this_handler->handler_);
+        -:  438:#endif // defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  439:  }
+------------------
+_ZN5boost4asio6detail21asio_handler_allocateINS0_2ip3tcpENS0_15any_io_executorENS3_22basic_resolver_resultsIS4_EENS1_25default_connect_conditionENS1_17awaitable_handlerIS5_JNS_6system10error_codeENS3_14basic_endpointIS4_EEEEEEEPvmPNS1_16range_connect_opIT_T0_T1_T2_T3_EE:
+function _ZN5boost4asio6detail21asio_handler_allocateINS0_2ip3tcpENS0_15any_io_executorENS3_22basic_resolver_resultsIS4_EENS1_25default_connect_conditionENS1_17awaitable_handlerIS5_JNS_6system10error_codeENS3_14basic_endpointIS4_EEEEEEEPvmPNS1_16range_connect_opIT_T0_T1_T2_T3_EE called 0 returned 0% blocks executed 0%
+    #####:  428:  asio_handler_allocate(std::size_t size,
+        -:  429:      range_connect_op<Protocol, Executor, EndpointSequence,
+        -:  430:        ConnectCondition, RangeConnectHandler>* this_handler)
+        -:  431:  {
+        -:  432:#if defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  433:    boost_asio_handler_alloc_helpers::allocate(size, this_handler->handler_);
+        -:  434:    return asio_handler_allocate_is_no_longer_used();
+        -:  435:#else // defined(BOOST_ASIO_NO_DEPRECATED)
+    #####:  436:    return boost_asio_handler_alloc_helpers::allocate(
+    #####:  437:        size, this_handler->handler_);
+call    0 never executed
+        -:  438:#endif // defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  439:  }
+------------------
+_ZN5boost4asio6detail21asio_handler_allocateINS0_2ip3tcpENS0_15any_io_executorENS3_22basic_resolver_resultsIS4_EENS1_25default_connect_conditionEZN15BenchmarkClientC4ERNS0_10io_contextERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEESJ_iRSt6atomicIiESM_EUlNS_6system10error_codeENS3_14basic_endpointIS4_EEE_EEPvmPNS1_16range_connect_opIT_T0_T1_T2_T3_EE:
+function _ZN5boost4asio6detail21asio_handler_allocateINS0_2ip3tcpENS0_15any_io_executorENS3_22basic_resolver_resultsIS4_EENS1_25default_connect_conditionEZN15BenchmarkClientC4ERNS0_10io_contextERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEESJ_iRSt6atomicIiESM_EUlNS_6system10error_codeENS3_14basic_endpointIS4_EEE_EEPvmPNS1_16range_connect_opIT_T0_T1_T2_T3_EE called 0 returned 0% blocks executed 0%
+    #####:  428:  asio_handler_allocate(std::size_t size,
+        -:  429:      range_connect_op<Protocol, Executor, EndpointSequence,
+        -:  430:        ConnectCondition, RangeConnectHandler>* this_handler)
+        -:  431:  {
+        -:  432:#if defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  433:    boost_asio_handler_alloc_helpers::allocate(size, this_handler->handler_);
+        -:  434:    return asio_handler_allocate_is_no_longer_used();
+        -:  435:#else // defined(BOOST_ASIO_NO_DEPRECATED)
+    #####:  436:    return boost_asio_handler_alloc_helpers::allocate(
+    #####:  437:        size, this_handler->handler_);
+call    0 never executed
+        -:  438:#endif // defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  439:  }
+------------------
+        -:  440:
+        -:  441:  template <typename Protocol, typename Executor, typename EndpointSequence,
+        -:  442:      typename ConnectCondition, typename RangeConnectHandler>
+        -:  443:  inline asio_handler_deallocate_is_deprecated
+    #####:  444:  asio_handler_deallocate(void* pointer, std::size_t size,
+        -:  445:      range_connect_op<Protocol, Executor, EndpointSequence,
+        -:  446:        ConnectCondition, RangeConnectHandler>* this_handler)
+        -:  447:  {
+    #####:  448:    boost_asio_handler_alloc_helpers::deallocate(
+    #####:  449:        pointer, size, this_handler->handler_);
+        -:  450:#if defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  451:    return asio_handler_deallocate_is_no_longer_used();
+        -:  452:#endif // defined(BOOST_ASIO_NO_DEPRECATED)
+    #####:  453:  }
+------------------
+_ZN5boost4asio6detail23asio_handler_deallocateINS0_2ip3tcpENS0_15any_io_executorENS3_22basic_resolver_resultsIS4_EENS1_25default_connect_conditionENS1_17awaitable_handlerIS5_JNS_6system10error_codeENS3_14basic_endpointIS4_EEEEEEEvPvmPNS1_16range_connect_opIT_T0_T1_T2_T3_EE:
+function _ZN5boost4asio6detail23asio_handler_deallocateINS0_2ip3tcpENS0_15any_io_executorENS3_22basic_resolver_resultsIS4_EENS1_25default_connect_conditionENS1_17awaitable_handlerIS5_JNS_6system10error_codeENS3_14basic_endpointIS4_EEEEEEEvPvmPNS1_16range_connect_opIT_T0_T1_T2_T3_EE called 0 returned 0% blocks executed 0%
+    #####:  444:  asio_handler_deallocate(void* pointer, std::size_t size,
+        -:  445:      range_connect_op<Protocol, Executor, EndpointSequence,
+        -:  446:        ConnectCondition, RangeConnectHandler>* this_handler)
+        -:  447:  {
+    #####:  448:    boost_asio_handler_alloc_helpers::deallocate(
+    #####:  449:        pointer, size, this_handler->handler_);
+call    0 never executed
+        -:  450:#if defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  451:    return asio_handler_deallocate_is_no_longer_used();
+        -:  452:#endif // defined(BOOST_ASIO_NO_DEPRECATED)
+    #####:  453:  }
+------------------
+_ZN5boost4asio6detail23asio_handler_deallocateINS0_2ip3tcpENS0_15any_io_executorENS3_22basic_resolver_resultsIS4_EENS1_25default_connect_conditionEZN15BenchmarkClientC4ERNS0_10io_contextERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEESJ_iRSt6atomicIiESM_EUlNS_6system10error_codeENS3_14basic_endpointIS4_EEE_EEvPvmPNS1_16range_connect_opIT_T0_T1_T2_T3_EE:
+function _ZN5boost4asio6detail23asio_handler_deallocateINS0_2ip3tcpENS0_15any_io_executorENS3_22basic_resolver_resultsIS4_EENS1_25default_connect_conditionEZN15BenchmarkClientC4ERNS0_10io_contextERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEESJ_iRSt6atomicIiESM_EUlNS_6system10error_codeENS3_14basic_endpointIS4_EEE_EEvPvmPNS1_16range_connect_opIT_T0_T1_T2_T3_EE called 0 returned 0% blocks executed 0%
+    #####:  444:  asio_handler_deallocate(void* pointer, std::size_t size,
+        -:  445:      range_connect_op<Protocol, Executor, EndpointSequence,
+        -:  446:        ConnectCondition, RangeConnectHandler>* this_handler)
+        -:  447:  {
+    #####:  448:    boost_asio_handler_alloc_helpers::deallocate(
+    #####:  449:        pointer, size, this_handler->handler_);
+call    0 never executed
+        -:  450:#if defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  451:    return asio_handler_deallocate_is_no_longer_used();
+        -:  452:#endif // defined(BOOST_ASIO_NO_DEPRECATED)
+    #####:  453:  }
+------------------
+        -:  454:
+        -:  455:  template <typename Protocol, typename Executor, typename EndpointSequence,
+        -:  456:      typename ConnectCondition, typename RangeConnectHandler>
+    #####:  457:  inline bool asio_handler_is_continuation(
+        -:  458:      range_connect_op<Protocol, Executor, EndpointSequence,
+        -:  459:        ConnectCondition, RangeConnectHandler>* this_handler)
+        -:  460:  {
+    #####:  461:    return boost_asio_handler_cont_helpers::is_continuation(
+    #####:  462:        this_handler->handler_);
+        -:  463:  }
+------------------
+_ZN5boost4asio6detail28asio_handler_is_continuationINS0_2ip3tcpENS0_15any_io_executorENS3_22basic_resolver_resultsIS4_EENS1_25default_connect_conditionENS1_17awaitable_handlerIS5_JNS_6system10error_codeENS3_14basic_endpointIS4_EEEEEEEbPNS1_16range_connect_opIT_T0_T1_T2_T3_EE:
+function _ZN5boost4asio6detail28asio_handler_is_continuationINS0_2ip3tcpENS0_15any_io_executorENS3_22basic_resolver_resultsIS4_EENS1_25default_connect_conditionENS1_17awaitable_handlerIS5_JNS_6system10error_codeENS3_14basic_endpointIS4_EEEEEEEbPNS1_16range_connect_opIT_T0_T1_T2_T3_EE called 0 returned 0% blocks executed 0%
+    #####:  457:  inline bool asio_handler_is_continuation(
+        -:  458:      range_connect_op<Protocol, Executor, EndpointSequence,
+        -:  459:        ConnectCondition, RangeConnectHandler>* this_handler)
+        -:  460:  {
+    #####:  461:    return boost_asio_handler_cont_helpers::is_continuation(
+    #####:  462:        this_handler->handler_);
+call    0 never executed
+        -:  463:  }
+------------------
+_ZN5boost4asio6detail28asio_handler_is_continuationINS0_2ip3tcpENS0_15any_io_executorENS3_22basic_resolver_resultsIS4_EENS1_25default_connect_conditionEZN15BenchmarkClientC4ERNS0_10io_contextERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEESJ_iRSt6atomicIiESM_EUlNS_6system10error_codeENS3_14basic_endpointIS4_EEE_EEbPNS1_16range_connect_opIT_T0_T1_T2_T3_EE:
+function _ZN5boost4asio6detail28asio_handler_is_continuationINS0_2ip3tcpENS0_15any_io_executorENS3_22basic_resolver_resultsIS4_EENS1_25default_connect_conditionEZN15BenchmarkClientC4ERNS0_10io_contextERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEESJ_iRSt6atomicIiESM_EUlNS_6system10error_codeENS3_14basic_endpointIS4_EEE_EEbPNS1_16range_connect_opIT_T0_T1_T2_T3_EE called 0 returned 0% blocks executed 0%
+    #####:  457:  inline bool asio_handler_is_continuation(
+        -:  458:      range_connect_op<Protocol, Executor, EndpointSequence,
+        -:  459:        ConnectCondition, RangeConnectHandler>* this_handler)
+        -:  460:  {
+    #####:  461:    return boost_asio_handler_cont_helpers::is_continuation(
+    #####:  462:        this_handler->handler_);
+call    0 never executed
+        -:  463:  }
+------------------
+        -:  464:
+        -:  465:  template <typename Function, typename Executor, typename Protocol,
+        -:  466:      typename EndpointSequence, typename ConnectCondition,
+        -:  467:      typename RangeConnectHandler>
+        -:  468:  inline asio_handler_invoke_is_deprecated
+    #####:  469:  asio_handler_invoke(Function& function,
+        -:  470:      range_connect_op<Protocol, Executor, EndpointSequence,
+        -:  471:        ConnectCondition, RangeConnectHandler>* this_handler)
+        -:  472:  {
+    #####:  473:    boost_asio_handler_invoke_helpers::invoke(
+    #####:  474:        function, this_handler->handler_);
+        -:  475:#if defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  476:    return asio_handler_invoke_is_no_longer_used();
+        -:  477:#endif // defined(BOOST_ASIO_NO_DEPRECATED)
+    #####:  478:  }
+------------------
+_ZN5boost4asio6detail19asio_handler_invokeINS1_7binder0INS1_7binder1INS1_16range_connect_opINS0_2ip3tcpENS0_15any_io_executorENS6_22basic_resolver_resultsIS7_EENS1_25default_connect_conditionENS1_17awaitable_handlerIS8_JNS_6system10error_codeENS6_14basic_endpointIS7_EEEEEEESE_EEEES8_S7_SA_SB_SH_EEvRT_PNS5_IT1_T0_T2_T3_T4_EE:
+function _ZN5boost4asio6detail19asio_handler_invokeINS1_7binder0INS1_7binder1INS1_16range_connect_opINS0_2ip3tcpENS0_15any_io_executorENS6_22basic_resolver_resultsIS7_EENS1_25default_connect_conditionENS1_17awaitable_handlerIS8_JNS_6system10error_codeENS6_14basic_endpointIS7_EEEEEEESE_EEEES8_S7_SA_SB_SH_EEvRT_PNS5_IT1_T0_T2_T3_T4_EE called 0 returned 0% blocks executed 0%
+    #####:  469:  asio_handler_invoke(Function& function,
+        -:  470:      range_connect_op<Protocol, Executor, EndpointSequence,
+        -:  471:        ConnectCondition, RangeConnectHandler>* this_handler)
+        -:  472:  {
+    #####:  473:    boost_asio_handler_invoke_helpers::invoke(
+    #####:  474:        function, this_handler->handler_);
+call    0 never executed
+        -:  475:#if defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  476:    return asio_handler_invoke_is_no_longer_used();
+        -:  477:#endif // defined(BOOST_ASIO_NO_DEPRECATED)
+    #####:  478:  }
+------------------
+_ZN5boost4asio6detail19asio_handler_invokeINS1_7binder1INS1_16range_connect_opINS0_2ip3tcpENS0_15any_io_executorENS5_22basic_resolver_resultsIS6_EENS1_25default_connect_conditionENS1_17awaitable_handlerIS7_JNS_6system10error_codeENS5_14basic_endpointIS6_EEEEEEESD_EES7_S6_S9_SA_SG_EEvRT_PNS4_IT1_T0_T2_T3_T4_EE:
+function _ZN5boost4asio6detail19asio_handler_invokeINS1_7binder1INS1_16range_connect_opINS0_2ip3tcpENS0_15any_io_executorENS5_22basic_resolver_resultsIS6_EENS1_25default_connect_conditionENS1_17awaitable_handlerIS7_JNS_6system10error_codeENS5_14basic_endpointIS6_EEEEEEESD_EES7_S6_S9_SA_SG_EEvRT_PNS4_IT1_T0_T2_T3_T4_EE called 0 returned 0% blocks executed 0%
+    #####:  469:  asio_handler_invoke(Function& function,
+        -:  470:      range_connect_op<Protocol, Executor, EndpointSequence,
+        -:  471:        ConnectCondition, RangeConnectHandler>* this_handler)
+        -:  472:  {
+    #####:  473:    boost_asio_handler_invoke_helpers::invoke(
+    #####:  474:        function, this_handler->handler_);
+call    0 never executed
+        -:  475:#if defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  476:    return asio_handler_invoke_is_no_longer_used();
+        -:  477:#endif // defined(BOOST_ASIO_NO_DEPRECATED)
+    #####:  478:  }
+------------------
+_ZN5boost4asio6detail19asio_handler_invokeINS1_7binder0INS1_7binder1INS1_16range_connect_opINS0_2ip3tcpENS0_15any_io_executorENS6_22basic_resolver_resultsIS7_EENS1_25default_connect_conditionEZN15BenchmarkClientC4ERNS0_10io_contextERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEESM_iRSt6atomicIiESP_EUlNS_6system10error_codeENS6_14basic_endpointIS7_EEE_EESR_EEEES8_S7_SA_SB_SU_EEvRT_PNS5_IT1_T0_T2_T3_T4_EE:
+function _ZN5boost4asio6detail19asio_handler_invokeINS1_7binder0INS1_7binder1INS1_16range_connect_opINS0_2ip3tcpENS0_15any_io_executorENS6_22basic_resolver_resultsIS7_EENS1_25default_connect_conditionEZN15BenchmarkClientC4ERNS0_10io_contextERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEESM_iRSt6atomicIiESP_EUlNS_6system10error_codeENS6_14basic_endpointIS7_EEE_EESR_EEEES8_S7_SA_SB_SU_EEvRT_PNS5_IT1_T0_T2_T3_T4_EE called 0 returned 0% blocks executed 0%
+    #####:  469:  asio_handler_invoke(Function& function,
+        -:  470:      range_connect_op<Protocol, Executor, EndpointSequence,
+        -:  471:        ConnectCondition, RangeConnectHandler>* this_handler)
+        -:  472:  {
+    #####:  473:    boost_asio_handler_invoke_helpers::invoke(
+    #####:  474:        function, this_handler->handler_);
+call    0 never executed
+        -:  475:#if defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  476:    return asio_handler_invoke_is_no_longer_used();
+        -:  477:#endif // defined(BOOST_ASIO_NO_DEPRECATED)
+    #####:  478:  }
+------------------
+_ZN5boost4asio6detail19asio_handler_invokeINS1_7binder1INS1_16range_connect_opINS0_2ip3tcpENS0_15any_io_executorENS5_22basic_resolver_resultsIS6_EENS1_25default_connect_conditionEZN15BenchmarkClientC4ERNS0_10io_contextERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEESL_iRSt6atomicIiESO_EUlNS_6system10error_codeENS5_14basic_endpointIS6_EEE_EESQ_EES7_S6_S9_SA_ST_EEvRT_PNS4_IT1_T0_T2_T3_T4_EE:
+function _ZN5boost4asio6detail19asio_handler_invokeINS1_7binder1INS1_16range_connect_opINS0_2ip3tcpENS0_15any_io_executorENS5_22basic_resolver_resultsIS6_EENS1_25default_connect_conditionEZN15BenchmarkClientC4ERNS0_10io_contextERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEESL_iRSt6atomicIiESO_EUlNS_6system10error_codeENS5_14basic_endpointIS6_EEE_EESQ_EES7_S6_S9_SA_ST_EEvRT_PNS4_IT1_T0_T2_T3_T4_EE called 0 returned 0% blocks executed 0%
+    #####:  469:  asio_handler_invoke(Function& function,
+        -:  470:      range_connect_op<Protocol, Executor, EndpointSequence,
+        -:  471:        ConnectCondition, RangeConnectHandler>* this_handler)
+        -:  472:  {
+    #####:  473:    boost_asio_handler_invoke_helpers::invoke(
+    #####:  474:        function, this_handler->handler_);
+call    0 never executed
+        -:  475:#if defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  476:    return asio_handler_invoke_is_no_longer_used();
+        -:  477:#endif // defined(BOOST_ASIO_NO_DEPRECATED)
+    #####:  478:  }
+------------------
+        -:  479:
+        -:  480:  template <typename Function, typename Executor, typename Protocol,
+        -:  481:      typename EndpointSequence, typename ConnectCondition,
+        -:  482:      typename RangeConnectHandler>
+        -:  483:  inline asio_handler_invoke_is_deprecated
+        -:  484:  asio_handler_invoke(const Function& function,
+        -:  485:      range_connect_op<Protocol, Executor, EndpointSequence,
+        -:  486:        ConnectCondition, RangeConnectHandler>* this_handler)
+        -:  487:  {
+        -:  488:    boost_asio_handler_invoke_helpers::invoke(
+        -:  489:        function, this_handler->handler_);
+        -:  490:#if defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  491:    return asio_handler_invoke_is_no_longer_used();
+        -:  492:#endif // defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  493:  }
+        -:  494:
+        -:  495:  template <typename Protocol, typename Executor>
+        -:  496:  class initiate_async_range_connect
+        -:  497:  {
+        -:  498:  public:
+        -:  499:    typedef Executor executor_type;
+        -:  500:
+    #####:  501:    explicit initiate_async_range_connect(basic_socket<Protocol, Executor>& s)
+    #####:  502:      : socket_(s)
+        -:  503:    {
+    #####:  504:    }
+------------------
+_ZN5boost4asio6detail28initiate_async_range_connectINS0_2ip3tcpENS0_15any_io_executorEEC2ERNS0_12basic_socketIS4_S5_EE:
+function _ZN5boost4asio6detail28initiate_async_range_connectINS0_2ip3tcpENS0_15any_io_executorEEC2ERNS0_12basic_socketIS4_S5_EE called 0 returned 0% blocks executed 0%
+    #####:  501:    explicit initiate_async_range_connect(basic_socket<Protocol, Executor>& s)
+    #####:  502:      : socket_(s)
+        -:  503:    {
+    #####:  504:    }
+------------------
+_ZN5boost4asio6detail28initiate_async_range_connectINS0_2ip3tcpENS0_15any_io_executorEEC2ERNS0_12basic_socketIS4_S5_EE:
+function _ZN5boost4asio6detail28initiate_async_range_connectINS0_2ip3tcpENS0_15any_io_executorEEC2ERNS0_12basic_socketIS4_S5_EE called 0 returned 0% blocks executed 0%
+    #####:  501:    explicit initiate_async_range_connect(basic_socket<Protocol, Executor>& s)
+    #####:  502:      : socket_(s)
+        -:  503:    {
+    #####:  504:    }
+------------------
+        -:  505:
+        -:  506:    executor_type get_executor() const BOOST_ASIO_NOEXCEPT
+        -:  507:    {
+        -:  508:      return socket_.get_executor();
+        -:  509:    }
+        -:  510:
+        -:  511:    template <typename RangeConnectHandler,
+        -:  512:        typename EndpointSequence, typename ConnectCondition>
+    #####:  513:    void operator()(BOOST_ASIO_MOVE_ARG(RangeConnectHandler) handler,
+        -:  514:        const EndpointSequence& endpoints,
+        -:  515:        const ConnectCondition& connect_condition) const
+        -:  516:    {
+        -:  517:      // If you get an error on the following line it means that your
+        -:  518:      // handler does not meet the documented type requirements for an
+        -:  519:      // RangeConnectHandler.
+        -:  520:      BOOST_ASIO_RANGE_CONNECT_HANDLER_CHECK(RangeConnectHandler,
+        -:  521:          handler, typename Protocol::endpoint) type_check;
+        -:  522:
+    #####:  523:      non_const_lvalue<RangeConnectHandler> handler2(handler);
+    #####:  524:      range_connect_op<Protocol, Executor, EndpointSequence, ConnectCondition,
+        -:  525:        typename decay<RangeConnectHandler>::type>(socket_, endpoints,
+    #####:  526:          connect_condition, handler2.value)(boost::system::error_code(), 1);
+    #####:  527:    }
+------------------
+_ZNK5boost4asio6detail28initiate_async_range_connectINS0_2ip3tcpENS0_15any_io_executorEEclINS1_17awaitable_handlerIS5_JNS_6system10error_codeENS3_14basic_endpointIS4_EEEEENS3_22basic_resolver_resultsIS4_EENS1_25default_connect_conditionEEEvOT_RKT0_RKT1_:
+function _ZNK5boost4asio6detail28initiate_async_range_connectINS0_2ip3tcpENS0_15any_io_executorEEclINS1_17awaitable_handlerIS5_JNS_6system10error_codeENS3_14basic_endpointIS4_EEEEENS3_22basic_resolver_resultsIS4_EENS1_25default_connect_conditionEEEvOT_RKT0_RKT1_ called 0 returned 0% blocks executed 0%
+    #####:  513:    void operator()(BOOST_ASIO_MOVE_ARG(RangeConnectHandler) handler,
+        -:  514:        const EndpointSequence& endpoints,
+        -:  515:        const ConnectCondition& connect_condition) const
+        -:  516:    {
+        -:  517:      // If you get an error on the following line it means that your
+        -:  518:      // handler does not meet the documented type requirements for an
+        -:  519:      // RangeConnectHandler.
+        -:  520:      BOOST_ASIO_RANGE_CONNECT_HANDLER_CHECK(RangeConnectHandler,
+        -:  521:          handler, typename Protocol::endpoint) type_check;
+        -:  522:
+    #####:  523:      non_const_lvalue<RangeConnectHandler> handler2(handler);
+call    0 never executed
+    #####:  524:      range_connect_op<Protocol, Executor, EndpointSequence, ConnectCondition,
+call    0 never executed
+        -:  525:        typename decay<RangeConnectHandler>::type>(socket_, endpoints,
+    #####:  526:          connect_condition, handler2.value)(boost::system::error_code(), 1);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+call    4 never executed
+branch  5 never executed (fallthrough)
+branch  6 never executed (throw)
+call    7 never executed
+    #####:  527:    }
+------------------
+_ZNK5boost4asio6detail28initiate_async_range_connectINS0_2ip3tcpENS0_15any_io_executorEEclIZN15BenchmarkClientC4ERNS0_10io_contextERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEESI_iRSt6atomicIiESL_EUlNS_6system10error_codeENS3_14basic_endpointIS4_EEE_NS3_22basic_resolver_resultsIS4_EENS1_25default_connect_conditionEEEvOT_RKT0_RKT1_:
+function _ZNK5boost4asio6detail28initiate_async_range_connectINS0_2ip3tcpENS0_15any_io_executorEEclIZN15BenchmarkClientC4ERNS0_10io_contextERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEESI_iRSt6atomicIiESL_EUlNS_6system10error_codeENS3_14basic_endpointIS4_EEE_NS3_22basic_resolver_resultsIS4_EENS1_25default_connect_conditionEEEvOT_RKT0_RKT1_ called 0 returned 0% blocks executed 0%
+    #####:  513:    void operator()(BOOST_ASIO_MOVE_ARG(RangeConnectHandler) handler,
+        -:  514:        const EndpointSequence& endpoints,
+        -:  515:        const ConnectCondition& connect_condition) const
+        -:  516:    {
+        -:  517:      // If you get an error on the following line it means that your
+        -:  518:      // handler does not meet the documented type requirements for an
+        -:  519:      // RangeConnectHandler.
+        -:  520:      BOOST_ASIO_RANGE_CONNECT_HANDLER_CHECK(RangeConnectHandler,
+        -:  521:          handler, typename Protocol::endpoint) type_check;
+        -:  522:
+    #####:  523:      non_const_lvalue<RangeConnectHandler> handler2(handler);
+call    0 never executed
+    #####:  524:      range_connect_op<Protocol, Executor, EndpointSequence, ConnectCondition,
+call    0 never executed
+        -:  525:        typename decay<RangeConnectHandler>::type>(socket_, endpoints,
+    #####:  526:          connect_condition, handler2.value)(boost::system::error_code(), 1);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+call    4 never executed
+branch  5 never executed (fallthrough)
+branch  6 never executed (throw)
+call    7 never executed
+    #####:  527:    }
+------------------
+        -:  528:
+        -:  529:  private:
+        -:  530:    basic_socket<Protocol, Executor>& socket_;
+        -:  531:  };
+        -:  532:
+        -:  533:  template <typename Protocol, typename Executor, typename Iterator,
+        -:  534:      typename ConnectCondition, typename IteratorConnectHandler>
+        -:  535:  class iterator_connect_op
+        -:  536:    : public base_from_cancellation_state<IteratorConnectHandler>,
+        -:  537:      base_from_connect_condition<ConnectCondition>
+        -:  538:  {
+        -:  539:  public:
+        -:  540:    iterator_connect_op(basic_socket<Protocol, Executor>& sock,
+        -:  541:        const Iterator& begin, const Iterator& end,
+        -:  542:        const ConnectCondition& connect_condition,
+        -:  543:        IteratorConnectHandler& handler)
+        -:  544:      : base_from_cancellation_state<IteratorConnectHandler>(
+        -:  545:          handler, enable_partial_cancellation()),
+        -:  546:        base_from_connect_condition<ConnectCondition>(connect_condition),
+        -:  547:        socket_(sock),
+        -:  548:        iter_(begin),
+        -:  549:        end_(end),
+        -:  550:        start_(0),
+        -:  551:        handler_(BOOST_ASIO_MOVE_CAST(IteratorConnectHandler)(handler))
+        -:  552:    {
+        -:  553:    }
+        -:  554:
+        -:  555:#if defined(BOOST_ASIO_HAS_MOVE)
+        -:  556:    iterator_connect_op(const iterator_connect_op& other)
+        -:  557:      : base_from_cancellation_state<IteratorConnectHandler>(other),
+        -:  558:        base_from_connect_condition<ConnectCondition>(other),
+        -:  559:        socket_(other.socket_),
+        -:  560:        iter_(other.iter_),
+        -:  561:        end_(other.end_),
+        -:  562:        start_(other.start_),
+        -:  563:        handler_(other.handler_)
+        -:  564:    {
+        -:  565:    }
+        -:  566:
+        -:  567:    iterator_connect_op(iterator_connect_op&& other)
+        -:  568:      : base_from_cancellation_state<IteratorConnectHandler>(
+        -:  569:          BOOST_ASIO_MOVE_CAST(base_from_cancellation_state<
+        -:  570:            IteratorConnectHandler>)(other)),
+        -:  571:        base_from_connect_condition<ConnectCondition>(other),
+        -:  572:        socket_(other.socket_),
+        -:  573:        iter_(other.iter_),
+        -:  574:        end_(other.end_),
+        -:  575:        start_(other.start_),
+        -:  576:        handler_(BOOST_ASIO_MOVE_CAST(IteratorConnectHandler)(other.handler_))
+        -:  577:    {
+        -:  578:    }
+        -:  579:#endif // defined(BOOST_ASIO_HAS_MOVE)
+        -:  580:
+        -:  581:    void operator()(boost::system::error_code ec, int start = 0)
+        -:  582:    {
+        -:  583:      switch (start_ = start)
+        -:  584:      {
+        -:  585:        case 1:
+        -:  586:        for (;;)
+        -:  587:        {
+        -:  588:          this->check_condition(ec, iter_, end_);
+        -:  589:
+        -:  590:          if (iter_ != end_)
+        -:  591:          {
+        -:  592:            socket_.close(ec);
+        -:  593:            BOOST_ASIO_HANDLER_LOCATION((__FILE__, __LINE__, "async_connect"));
+        -:  594:            socket_.async_connect(*iter_,
+        -:  595:                BOOST_ASIO_MOVE_CAST(iterator_connect_op)(*this));
+        -:  596:            return;
+        -:  597:          }
+        -:  598:
+        -:  599:          if (start)
+        -:  600:          {
+        -:  601:            ec = boost::asio::error::not_found;
+        -:  602:            BOOST_ASIO_HANDLER_LOCATION((__FILE__, __LINE__, "async_connect"));
+        -:  603:            boost::asio::post(socket_.get_executor(),
+        -:  604:                detail::bind_handler(
+        -:  605:                  BOOST_ASIO_MOVE_CAST(iterator_connect_op)(*this), ec));
+        -:  606:            return;
+        -:  607:          }
+        -:  608:
+        -:  609:          /* fall-through */ default:
+        -:  610:
+        -:  611:          if (iter_ == end_)
+        -:  612:            break;
+        -:  613:
+        -:  614:          if (!socket_.is_open())
+        -:  615:          {
+        -:  616:            ec = boost::asio::error::operation_aborted;
+        -:  617:            break;
+        -:  618:          }
+        -:  619:
+        -:  620:          if (!ec)
+        -:  621:            break;
+        -:  622:
+        -:  623:          if (this->cancelled() != cancellation_type::none)
+        -:  624:          {
+        -:  625:            ec = boost::asio::error::operation_aborted;
+        -:  626:            break;
+        -:  627:          }
+        -:  628:
+        -:  629:          ++iter_;
+        -:  630:        }
+        -:  631:
+        -:  632:        BOOST_ASIO_MOVE_OR_LVALUE(IteratorConnectHandler)(handler_)(
+        -:  633:            static_cast<const boost::system::error_code&>(ec),
+        -:  634:            static_cast<const Iterator&>(iter_));
+        -:  635:      }
+        -:  636:    }
+        -:  637:
+        -:  638:  //private:
+        -:  639:    basic_socket<Protocol, Executor>& socket_;
+        -:  640:    Iterator iter_;
+        -:  641:    Iterator end_;
+        -:  642:    int start_;
+        -:  643:    IteratorConnectHandler handler_;
+        -:  644:  };
+        -:  645:
+        -:  646:  template <typename Protocol, typename Executor, typename Iterator,
+        -:  647:      typename ConnectCondition, typename IteratorConnectHandler>
+        -:  648:  inline asio_handler_allocate_is_deprecated
+        -:  649:  asio_handler_allocate(std::size_t size,
+        -:  650:      iterator_connect_op<Protocol, Executor, Iterator,
+        -:  651:        ConnectCondition, IteratorConnectHandler>* this_handler)
+        -:  652:  {
+        -:  653:#if defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  654:    boost_asio_handler_alloc_helpers::allocate(size, this_handler->handler_);
+        -:  655:    return asio_handler_allocate_is_no_longer_used();
+        -:  656:#else // defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  657:    return boost_asio_handler_alloc_helpers::allocate(
+        -:  658:        size, this_handler->handler_);
+        -:  659:#endif // defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  660:  }
+        -:  661:
+        -:  662:  template <typename Protocol, typename Executor, typename Iterator,
+        -:  663:      typename ConnectCondition, typename IteratorConnectHandler>
+        -:  664:  inline asio_handler_deallocate_is_deprecated
+        -:  665:  asio_handler_deallocate(void* pointer, std::size_t size,
+        -:  666:      iterator_connect_op<Protocol, Executor, Iterator,
+        -:  667:        ConnectCondition, IteratorConnectHandler>* this_handler)
+        -:  668:  {
+        -:  669:    boost_asio_handler_alloc_helpers::deallocate(
+        -:  670:        pointer, size, this_handler->handler_);
+        -:  671:#if defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  672:    return asio_handler_deallocate_is_no_longer_used();
+        -:  673:#endif // defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  674:  }
+        -:  675:
+        -:  676:  template <typename Protocol, typename Executor, typename Iterator,
+        -:  677:      typename ConnectCondition, typename IteratorConnectHandler>
+        -:  678:  inline bool asio_handler_is_continuation(
+        -:  679:      iterator_connect_op<Protocol, Executor, Iterator,
+        -:  680:        ConnectCondition, IteratorConnectHandler>* this_handler)
+        -:  681:  {
+        -:  682:    return boost_asio_handler_cont_helpers::is_continuation(
+        -:  683:        this_handler->handler_);
+        -:  684:  }
+        -:  685:
+        -:  686:  template <typename Function, typename Executor, typename Protocol,
+        -:  687:      typename Iterator, typename ConnectCondition,
+        -:  688:      typename IteratorConnectHandler>
+        -:  689:  inline asio_handler_invoke_is_deprecated
+        -:  690:  asio_handler_invoke(Function& function,
+        -:  691:      iterator_connect_op<Protocol, Executor, Iterator,
+        -:  692:        ConnectCondition, IteratorConnectHandler>* this_handler)
+        -:  693:  {
+        -:  694:    boost_asio_handler_invoke_helpers::invoke(
+        -:  695:        function, this_handler->handler_);
+        -:  696:#if defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  697:    return asio_handler_invoke_is_no_longer_used();
+        -:  698:#endif // defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  699:  }
+        -:  700:
+        -:  701:  template <typename Function, typename Executor, typename Protocol,
+        -:  702:      typename Iterator, typename ConnectCondition,
+        -:  703:      typename IteratorConnectHandler>
+        -:  704:  inline asio_handler_invoke_is_deprecated
+        -:  705:  asio_handler_invoke(const Function& function,
+        -:  706:      iterator_connect_op<Protocol, Executor, Iterator,
+        -:  707:        ConnectCondition, IteratorConnectHandler>* this_handler)
+        -:  708:  {
+        -:  709:    boost_asio_handler_invoke_helpers::invoke(
+        -:  710:        function, this_handler->handler_);
+        -:  711:#if defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  712:    return asio_handler_invoke_is_no_longer_used();
+        -:  713:#endif // defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  714:  }
+        -:  715:
+        -:  716:  template <typename Protocol, typename Executor>
+        -:  717:  class initiate_async_iterator_connect
+        -:  718:  {
+        -:  719:  public:
+        -:  720:    typedef Executor executor_type;
+        -:  721:
+        -:  722:    explicit initiate_async_iterator_connect(
+        -:  723:        basic_socket<Protocol, Executor>& s)
+        -:  724:      : socket_(s)
+        -:  725:    {
+        -:  726:    }
+        -:  727:
+        -:  728:    executor_type get_executor() const BOOST_ASIO_NOEXCEPT
+        -:  729:    {
+        -:  730:      return socket_.get_executor();
+        -:  731:    }
+        -:  732:
+        -:  733:    template <typename IteratorConnectHandler,
+        -:  734:        typename Iterator, typename ConnectCondition>
+        -:  735:    void operator()(BOOST_ASIO_MOVE_ARG(IteratorConnectHandler) handler,
+        -:  736:        Iterator begin, Iterator end,
+        -:  737:        const ConnectCondition& connect_condition) const
+        -:  738:    {
+        -:  739:      // If you get an error on the following line it means that your
+        -:  740:      // handler does not meet the documented type requirements for an
+        -:  741:      // IteratorConnectHandler.
+        -:  742:      BOOST_ASIO_ITERATOR_CONNECT_HANDLER_CHECK(
+        -:  743:          IteratorConnectHandler, handler, Iterator) type_check;
+        -:  744:
+        -:  745:      non_const_lvalue<IteratorConnectHandler> handler2(handler);
+        -:  746:      iterator_connect_op<Protocol, Executor, Iterator, ConnectCondition,
+        -:  747:        typename decay<IteratorConnectHandler>::type>(socket_, begin, end,
+        -:  748:          connect_condition, handler2.value)(boost::system::error_code(), 1);
+        -:  749:    }
+        -:  750:
+        -:  751:  private:
+        -:  752:    basic_socket<Protocol, Executor>& socket_;
+        -:  753:  };
+        -:  754:} // namespace detail
+        -:  755:
+        -:  756:#if !defined(GENERATING_DOCUMENTATION)
+        -:  757:
+        -:  758:template <template <typename, typename> class Associator,
+        -:  759:    typename Protocol, typename Executor, typename EndpointSequence,
+        -:  760:    typename ConnectCondition, typename RangeConnectHandler,
+        -:  761:    typename DefaultCandidate>
+        -:  762:struct associator<Associator,
+        -:  763:    detail::range_connect_op<Protocol, Executor,
+        -:  764:      EndpointSequence, ConnectCondition, RangeConnectHandler>,
+        -:  765:    DefaultCandidate>
+        -:  766:  : Associator<RangeConnectHandler, DefaultCandidate>
+        -:  767:{
+        -:  768:  static typename Associator<RangeConnectHandler, DefaultCandidate>::type
+    #####:  769:  get(const detail::range_connect_op<Protocol, Executor, EndpointSequence,
+        -:  770:        ConnectCondition, RangeConnectHandler>& h) BOOST_ASIO_NOEXCEPT
+        -:  771:  {
+    #####:  772:    return Associator<RangeConnectHandler, DefaultCandidate>::get(h.handler_);
+        -:  773:  }
+------------------
+_ZN5boost4asio10associatorINS0_20associated_allocatorENS0_6detail16range_connect_opINS0_2ip3tcpENS0_15any_io_executorENS5_22basic_resolver_resultsIS6_EENS3_25default_connect_conditionENS3_17awaitable_handlerIS7_JNS_6system10error_codeENS5_14basic_endpointIS6_EEEEEEESaIvEE3getERKSH_:
+function _ZN5boost4asio10associatorINS0_20associated_allocatorENS0_6detail16range_connect_opINS0_2ip3tcpENS0_15any_io_executorENS5_22basic_resolver_resultsIS6_EENS3_25default_connect_conditionENS3_17awaitable_handlerIS7_JNS_6system10error_codeENS5_14basic_endpointIS6_EEEEEEESaIvEE3getERKSH_ called 0 returned 0% blocks executed 0%
+    #####:  769:  get(const detail::range_connect_op<Protocol, Executor, EndpointSequence,
+        -:  770:        ConnectCondition, RangeConnectHandler>& h) BOOST_ASIO_NOEXCEPT
+        -:  771:  {
+    #####:  772:    return Associator<RangeConnectHandler, DefaultCandidate>::get(h.handler_);
+call    0 never executed
+        -:  773:  }
+------------------
+_ZN5boost4asio10associatorINS0_20associated_allocatorENS0_6detail16range_connect_opINS0_2ip3tcpENS0_15any_io_executorENS5_22basic_resolver_resultsIS6_EENS3_25default_connect_conditionEZN15BenchmarkClientC4ERNS0_10io_contextERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEESL_iRSt6atomicIiESO_EUlNS_6system10error_codeENS5_14basic_endpointIS6_EEE_EESaIvEE3getERKSU_:
+function _ZN5boost4asio10associatorINS0_20associated_allocatorENS0_6detail16range_connect_opINS0_2ip3tcpENS0_15any_io_executorENS5_22basic_resolver_resultsIS6_EENS3_25default_connect_conditionEZN15BenchmarkClientC4ERNS0_10io_contextERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEESL_iRSt6atomicIiESO_EUlNS_6system10error_codeENS5_14basic_endpointIS6_EEE_EESaIvEE3getERKSU_ called 0 returned 0% blocks executed 0%
+    #####:  769:  get(const detail::range_connect_op<Protocol, Executor, EndpointSequence,
+        -:  770:        ConnectCondition, RangeConnectHandler>& h) BOOST_ASIO_NOEXCEPT
+        -:  771:  {
+    #####:  772:    return Associator<RangeConnectHandler, DefaultCandidate>::get(h.handler_);
+call    0 never executed
+        -:  773:  }
+------------------
+_ZN5boost4asio10associatorINS0_28associated_cancellation_slotENS0_6detail16range_connect_opINS0_2ip3tcpENS0_15any_io_executorENS5_22basic_resolver_resultsIS6_EENS3_25default_connect_conditionEZN15BenchmarkClientC4ERNS0_10io_contextERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEESL_iRSt6atomicIiESO_EUlNS_6system10error_codeENS5_14basic_endpointIS6_EEE_EENS0_17cancellation_slotEE3getERKSU_:
+function _ZN5boost4asio10associatorINS0_28associated_cancellation_slotENS0_6detail16range_connect_opINS0_2ip3tcpENS0_15any_io_executorENS5_22basic_resolver_resultsIS6_EENS3_25default_connect_conditionEZN15BenchmarkClientC4ERNS0_10io_contextERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEESL_iRSt6atomicIiESO_EUlNS_6system10error_codeENS5_14basic_endpointIS6_EEE_EENS0_17cancellation_slotEE3getERKSU_ called 0 returned 0% blocks executed 0%
+    #####:  769:  get(const detail::range_connect_op<Protocol, Executor, EndpointSequence,
+        -:  770:        ConnectCondition, RangeConnectHandler>& h) BOOST_ASIO_NOEXCEPT
+        -:  771:  {
+    #####:  772:    return Associator<RangeConnectHandler, DefaultCandidate>::get(h.handler_);
+call    0 never executed
+        -:  773:  }
+------------------
+        -:  774:
+        -:  775:  static BOOST_ASIO_AUTO_RETURN_TYPE_PREFIX2(
+        -:  776:      typename Associator<RangeConnectHandler, DefaultCandidate>::type)
+function _ZN5boost4asio10associatorINS0_19associated_executorENS0_6detail16range_connect_opINS0_2ip3tcpENS0_15any_io_executorENS5_22basic_resolver_resultsIS6_EENS3_25default_connect_conditionENS3_17awaitable_handlerIS7_JNS_6system10error_codeENS5_14basic_endpointIS6_EEEEEEES7_E3getERKSH_RKS7_ called 0 returned 0% blocks executed 0%
+    #####:  777:  get(const detail::range_connect_op<Protocol, Executor,
+        -:  778:        EndpointSequence, ConnectCondition, RangeConnectHandler>& h,
+        -:  779:      const DefaultCandidate& c) BOOST_ASIO_NOEXCEPT
+        -:  780:    BOOST_ASIO_AUTO_RETURN_TYPE_SUFFIX((
+        -:  781:      Associator<RangeConnectHandler, DefaultCandidate>::get(
+        -:  782:        h.handler_, c)))
+        -:  783:  {
+        -:  784:    return Associator<RangeConnectHandler, DefaultCandidate>::get(
+    #####:  785:        h.handler_, c);
+call    0 never executed
+        -:  786:  }
+        -:  787:};
+        -:  788:
+        -:  789:template <template <typename, typename> class Associator,
+        -:  790:    typename Protocol, typename Executor, typename Iterator,
+        -:  791:    typename ConnectCondition, typename IteratorConnectHandler,
+        -:  792:    typename DefaultCandidate>
+        -:  793:struct associator<Associator,
+        -:  794:    detail::iterator_connect_op<Protocol, Executor,
+        -:  795:      Iterator, ConnectCondition, IteratorConnectHandler>,
+        -:  796:    DefaultCandidate>
+        -:  797:  : Associator<IteratorConnectHandler, DefaultCandidate>
+        -:  798:{
+        -:  799:  static typename Associator<IteratorConnectHandler, DefaultCandidate>::type
+        -:  800:  get(const detail::iterator_connect_op<Protocol, Executor, Iterator,
+        -:  801:        ConnectCondition, IteratorConnectHandler>& h) BOOST_ASIO_NOEXCEPT
+        -:  802:  {
+        -:  803:    return Associator<IteratorConnectHandler, DefaultCandidate>::get(
+        -:  804:        h.handler_);
+        -:  805:  }
+        -:  806:
+        -:  807:  static BOOST_ASIO_AUTO_RETURN_TYPE_PREFIX2(
+        -:  808:      typename Associator<IteratorConnectHandler, DefaultCandidate>::type)
+        -:  809:  get(const detail::iterator_connect_op<Protocol, Executor,
+        -:  810:        Iterator, ConnectCondition, IteratorConnectHandler>& h,
+        -:  811:      const DefaultCandidate& c) BOOST_ASIO_NOEXCEPT
+        -:  812:    BOOST_ASIO_AUTO_RETURN_TYPE_SUFFIX((
+        -:  813:      Associator<IteratorConnectHandler, DefaultCandidate>::get(
+        -:  814:        h.handler_, c)))
+        -:  815:  {
+        -:  816:    return Associator<IteratorConnectHandler, DefaultCandidate>::get(
+        -:  817:        h.handler_, c);
+        -:  818:  }
+        -:  819:};
+        -:  820:
+        -:  821:#endif // !defined(GENERATING_DOCUMENTATION)
+        -:  822:
+        -:  823:template <typename Protocol, typename Executor, typename EndpointSequence,
+        -:  824:    BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code,
+        -:  825:      typename Protocol::endpoint)) RangeConnectToken>
+        -:  826:inline BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(RangeConnectToken,
+        -:  827:    void (boost::system::error_code, typename Protocol::endpoint))
+    #####:  828:async_connect(basic_socket<Protocol, Executor>& s,
+        -:  829:    const EndpointSequence& endpoints,
+        -:  830:    BOOST_ASIO_MOVE_ARG(RangeConnectToken) token,
+        -:  831:    typename constraint<is_endpoint_sequence<
+        -:  832:        EndpointSequence>::value>::type)
+        -:  833:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:  834:    async_initiate<RangeConnectToken,
+        -:  835:      void (boost::system::error_code, typename Protocol::endpoint)>(
+        -:  836:        declval<detail::initiate_async_range_connect<Protocol, Executor> >(),
+        -:  837:        token, endpoints, declval<detail::default_connect_condition>())))
+        -:  838:{
+        -:  839:  return async_initiate<RangeConnectToken,
+    #####:  840:    void (boost::system::error_code, typename Protocol::endpoint)>(
+    #####:  841:      detail::initiate_async_range_connect<Protocol, Executor>(s),
+    #####:  842:      token, endpoints, detail::default_connect_condition());
+        -:  843:}
+        -:  844:
+        -:  845:#if !defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  846:template <typename Protocol, typename Executor, typename Iterator,
+        -:  847:    BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code,
+        -:  848:      Iterator)) IteratorConnectToken>
+        -:  849:inline BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(IteratorConnectToken,
+        -:  850:    void (boost::system::error_code, Iterator))
+        -:  851:async_connect(basic_socket<Protocol, Executor>& s, Iterator begin,
+        -:  852:    BOOST_ASIO_MOVE_ARG(IteratorConnectToken) token,
+        -:  853:    typename constraint<!is_endpoint_sequence<Iterator>::value>::type)
+        -:  854:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:  855:    async_initiate<IteratorConnectToken,
+        -:  856:      void (boost::system::error_code, Iterator)>(
+        -:  857:        declval<detail::initiate_async_iterator_connect<Protocol, Executor> >(),
+        -:  858:        token, begin, Iterator(),
+        -:  859:        declval<detail::default_connect_condition>())))
+        -:  860:{
+        -:  861:  return async_initiate<IteratorConnectToken,
+        -:  862:    void (boost::system::error_code, Iterator)>(
+        -:  863:      detail::initiate_async_iterator_connect<Protocol, Executor>(s),
+        -:  864:      token, begin, Iterator(),
+        -:  865:      detail::default_connect_condition());
+        -:  866:}
+        -:  867:#endif // !defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  868:
+        -:  869:template <typename Protocol, typename Executor, typename Iterator,
+        -:  870:    BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code,
+        -:  871:      Iterator)) IteratorConnectToken>
+        -:  872:inline BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(IteratorConnectToken,
+        -:  873:    void (boost::system::error_code, Iterator))
+        -:  874:async_connect(basic_socket<Protocol, Executor>& s, Iterator begin, Iterator end,
+        -:  875:    BOOST_ASIO_MOVE_ARG(IteratorConnectToken) token)
+        -:  876:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:  877:    async_initiate<IteratorConnectToken,
+        -:  878:      void (boost::system::error_code, Iterator)>(
+        -:  879:        declval<detail::initiate_async_iterator_connect<Protocol, Executor> >(),
+        -:  880:        token, begin, end, declval<detail::default_connect_condition>())))
+        -:  881:{
+        -:  882:  return async_initiate<IteratorConnectToken,
+        -:  883:    void (boost::system::error_code, Iterator)>(
+        -:  884:      detail::initiate_async_iterator_connect<Protocol, Executor>(s),
+        -:  885:      token, begin, end, detail::default_connect_condition());
+        -:  886:}
+        -:  887:
+        -:  888:template <typename Protocol, typename Executor,
+        -:  889:    typename EndpointSequence, typename ConnectCondition,
+        -:  890:    BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code,
+        -:  891:      typename Protocol::endpoint)) RangeConnectToken>
+        -:  892:inline BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(RangeConnectToken,
+        -:  893:    void (boost::system::error_code, typename Protocol::endpoint))
+        -:  894:async_connect(basic_socket<Protocol, Executor>& s,
+        -:  895:    const EndpointSequence& endpoints, ConnectCondition connect_condition,
+        -:  896:    BOOST_ASIO_MOVE_ARG(RangeConnectToken) token,
+        -:  897:    typename constraint<is_endpoint_sequence<
+        -:  898:        EndpointSequence>::value>::type)
+        -:  899:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:  900:    async_initiate<RangeConnectToken,
+        -:  901:      void (boost::system::error_code, typename Protocol::endpoint)>(
+        -:  902:        declval<detail::initiate_async_range_connect<Protocol, Executor> >(),
+        -:  903:        token, endpoints, connect_condition)))
+        -:  904:{
+        -:  905:  return async_initiate<RangeConnectToken,
+        -:  906:    void (boost::system::error_code, typename Protocol::endpoint)>(
+        -:  907:      detail::initiate_async_range_connect<Protocol, Executor>(s),
+        -:  908:      token, endpoints, connect_condition);
+        -:  909:}
+        -:  910:
+        -:  911:#if !defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  912:template <typename Protocol, typename Executor,
+        -:  913:    typename Iterator, typename ConnectCondition,
+        -:  914:    BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code,
+        -:  915:      Iterator)) IteratorConnectToken>
+        -:  916:inline BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(IteratorConnectToken,
+        -:  917:    void (boost::system::error_code, Iterator))
+        -:  918:async_connect(basic_socket<Protocol, Executor>& s, Iterator begin,
+        -:  919:    ConnectCondition connect_condition,
+        -:  920:    BOOST_ASIO_MOVE_ARG(IteratorConnectToken) token,
+        -:  921:    typename constraint<!is_endpoint_sequence<Iterator>::value>::type)
+        -:  922:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:  923:    async_initiate<IteratorConnectToken,
+        -:  924:      void (boost::system::error_code, Iterator)>(
+        -:  925:        declval<detail::initiate_async_iterator_connect<Protocol, Executor> >(),
+        -:  926:        token, begin, Iterator(), connect_condition)))
+        -:  927:{
+        -:  928:  return async_initiate<IteratorConnectToken,
+        -:  929:    void (boost::system::error_code, Iterator)>(
+        -:  930:      detail::initiate_async_iterator_connect<Protocol, Executor>(s),
+        -:  931:      token, begin, Iterator(), connect_condition);
+        -:  932:}
+        -:  933:#endif // !defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  934:
+        -:  935:template <typename Protocol, typename Executor,
+        -:  936:    typename Iterator, typename ConnectCondition,
+        -:  937:    BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code,
+        -:  938:      Iterator)) IteratorConnectToken>
+        -:  939:inline BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(IteratorConnectToken,
+        -:  940:    void (boost::system::error_code, Iterator))
+        -:  941:async_connect(basic_socket<Protocol, Executor>& s, Iterator begin,
+        -:  942:    Iterator end, ConnectCondition connect_condition,
+        -:  943:    BOOST_ASIO_MOVE_ARG(IteratorConnectToken) token)
+        -:  944:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:  945:    async_initiate<IteratorConnectToken,
+        -:  946:      void (boost::system::error_code, Iterator)>(
+        -:  947:        declval<detail::initiate_async_iterator_connect<Protocol, Executor> >(),
+        -:  948:        token, begin, end, connect_condition)))
+        -:  949:{
+        -:  950:  return async_initiate<IteratorConnectToken,
+        -:  951:    void (boost::system::error_code, Iterator)>(
+        -:  952:      detail::initiate_async_iterator_connect<Protocol, Executor>(s),
+        -:  953:      token, begin, end, connect_condition);
+        -:  954:}
+        -:  955:
+        -:  956:} // namespace asio
+        -:  957:} // namespace boost
+        -:  958:
+        -:  959:#include <boost/asio/detail/pop_options.hpp>
+        -:  960:
+        -:  961:#endif // BOOST_ASIO_IMPL_CONNECT_HPP

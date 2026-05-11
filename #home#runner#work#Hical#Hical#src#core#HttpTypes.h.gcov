@@ -1,0 +1,142 @@
+        -:    0:Source:/home/runner/work/Hical/Hical/src/core/HttpTypes.h
+        -:    1:#pragma once
+        -:    2:
+        -:    3:#include <cstdint>
+        -:    4:#include <functional>
+        -:    5:#include <string>
+        -:    6:#include <string_view>
+        -:    7:
+        -:    8:namespace hical
+        -:    9:{
+        -:   10:
+        -:   11:	/**
+        -:   12:	 * @brief 透明字符串哈希（支持 string_view 异构查找，避免构造临时 std::string）
+        -:   13:	 */
+        -:   14:	struct StringHash
+        -:   15:	{
+        -:   16:		using is_transparent = void;
+        -:   17:
+      514:   18:		size_t operator()(std::string_view sv) const noexcept
+        -:   19:		{
+      514:   20:			return std::hash<std::string_view> {}(sv);
+        -:   21:		}
+------------------
+_ZNK5hical10StringHashclESt17basic_string_viewIcSt11char_traitsIcEE:
+function _ZNK5hical10StringHashclESt17basic_string_viewIcSt11char_traitsIcEE called 25 returned 100% blocks executed 100%
+       25:   18:		size_t operator()(std::string_view sv) const noexcept
+        -:   19:		{
+       25:   20:			return std::hash<std::string_view> {}(sv);
+call    0 returned 100%
+        -:   21:		}
+------------------
+_ZNK5hical10StringHashclESt17basic_string_viewIcSt11char_traitsIcEE:
+function _ZNK5hical10StringHashclESt17basic_string_viewIcSt11char_traitsIcEE called 431 returned 100% blocks executed 100%
+      431:   18:		size_t operator()(std::string_view sv) const noexcept
+        -:   19:		{
+      431:   20:			return std::hash<std::string_view> {}(sv);
+call    0 returned 100%
+        -:   21:		}
+------------------
+_ZNK5hical10StringHashclESt17basic_string_viewIcSt11char_traitsIcEE:
+function _ZNK5hical10StringHashclESt17basic_string_viewIcSt11char_traitsIcEE called 31 returned 100% blocks executed 100%
+       31:   18:		size_t operator()(std::string_view sv) const noexcept
+        -:   19:		{
+       31:   20:			return std::hash<std::string_view> {}(sv);
+call    0 returned 100%
+        -:   21:		}
+------------------
+_ZNK5hical10StringHashclESt17basic_string_viewIcSt11char_traitsIcEE:
+function _ZNK5hical10StringHashclESt17basic_string_viewIcSt11char_traitsIcEE called 27 returned 100% blocks executed 100%
+       27:   18:		size_t operator()(std::string_view sv) const noexcept
+        -:   19:		{
+       27:   20:			return std::hash<std::string_view> {}(sv);
+call    0 returned 100%
+        -:   21:		}
+------------------
+        -:   22:	};
+        -:   23:
+        -:   24:	/**
+        -:   25:	 * @brief 透明字符串相等比较（配合 StringHash 使用）
+        -:   26:	 */
+        -:   27:	struct StringEqual
+        -:   28:	{
+        -:   29:		using is_transparent = void;
+        -:   30:
+      129:   31:		bool operator()(std::string_view a, std::string_view b) const
+        -:   32:		{
+      129:   33:			return a == b;
+        -:   34:		}
+        -:   35:	};
+        -:   36:
+        -:   37:	/**
+        -:   38:	 * @brief HTTP 请求方法枚举
+        -:   39:	 */
+        -:   40:	enum class HttpMethod : uint8_t
+        -:   41:	{
+        -:   42:		hGet,
+        -:   43:		hPost,
+        -:   44:		hPut,
+        -:   45:		hDelete,
+        -:   46:		hPatch,
+        -:   47:		hHead,
+        -:   48:		hOptions,
+        -:   49:		hUnknown
+        -:   50:	};
+        -:   51:
+        -:   52:	/**
+        -:   53:	 * @brief HTTP 状态码枚举
+        -:   54:	 */
+        -:   55:	enum class HttpStatusCode : uint16_t
+        -:   56:	{
+        -:   57:		// 2xx 成功
+        -:   58:		hOk = 200,
+        -:   59:		hCreated = 201,
+        -:   60:		hAccepted = 202,
+        -:   61:		hNoContent = 204,
+        -:   62:
+        -:   63:		// 3xx 重定向
+        -:   64:		hMovedPermanently = 301,
+        -:   65:		hFound = 302,
+        -:   66:		hNotModified = 304,
+        -:   67:		hTemporaryRedirect = 307,
+        -:   68:		hPermanentRedirect = 308,
+        -:   69:
+        -:   70:		// 4xx 客户端错误
+        -:   71:		hBadRequest = 400,
+        -:   72:		hUnauthorized = 401,
+        -:   73:		hForbidden = 403,
+        -:   74:		hNotFound = 404,
+        -:   75:		hMethodNotAllowed = 405,
+        -:   76:		hConflict = 409,
+        -:   77:		hPayloadTooLarge = 413,
+        -:   78:		hTooManyRequests = 429,
+        -:   79:
+        -:   80:		// 5xx 服务端错误
+        -:   81:		hInternalServerError = 500,
+        -:   82:		hNotImplemented = 501,
+        -:   83:		hBadGateway = 502,
+        -:   84:		hServiceUnavailable = 503
+        -:   85:	};
+        -:   86:
+        -:   87:	/**
+        -:   88:	 * @brief 将 HttpMethod 转换为字符串
+        -:   89:	 * @param method HTTP 方法
+        -:   90:	 * @return 方法名字符串（如 "GET"）
+        -:   91:	 */
+        -:   92:	const char* httpMethodToString(HttpMethod method);
+        -:   93:
+        -:   94:	/**
+        -:   95:	 * @brief 将字符串转换为 HttpMethod
+        -:   96:	 * @param str 方法名字符串
+        -:   97:	 * @return HTTP 方法枚举值
+        -:   98:	 */
+        -:   99:	HttpMethod stringToHttpMethod(const std::string& str);
+        -:  100:
+        -:  101:	/**
+        -:  102:	 * @brief 获取状态码的默认描述文本
+        -:  103:	 * @param code 状态码
+        -:  104:	 * @return 描述文本（如 "OK"）
+        -:  105:	 */
+        -:  106:	const char* httpStatusCodeToString(HttpStatusCode code);
+        -:  107:
+        -:  108:} // namespace hical

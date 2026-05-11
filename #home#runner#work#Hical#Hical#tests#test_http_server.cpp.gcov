@@ -1,0 +1,1254 @@
+        -:    0:Source:/home/runner/work/Hical/Hical/tests/test_http_server.cpp
+        -:    1:#include "TestHttpClient.h"
+        -:    2:#include "core/HttpServer.h"
+        -:    3:#include <boost/asio.hpp>
+        -:    4:#include <boost/json.hpp>
+        -:    5:#include <gtest/gtest.h>
+        -:    6:#include <atomic>
+        -:    7:#include <chrono>
+        -:    8:#include <string>
+        -:    9:#include <thread>
+        -:   10:
+        -:   11:using namespace hical;
+        -:   12:using boost::asio::ip::tcp;
+        -:   13:using hical::test::httpGet;
+        -:   14:using hical::test::httpPost;
+        -:   15:
+        -:   16:// 辅助：启动服务器并等待就绪，返回实际端口
+function _Z18startServerAndWaitRN5hical10HttpServerERSt6thread called 7 returned 100% blocks executed 53%
+        7:   17:uint16_t startServerAndWait(HttpServer& server, std::thread& serverThread)
+        -:   18:{
+        7:   19:	serverThread = std::thread(
+call    0 returned 100%
+call    1 never executed
+function _ZZ18startServerAndWaitRN5hical10HttpServerERSt6threadENKUlvE_clEv called 7 returned 100% blocks executed 100%
+    #####:   20:		[&server]()
+        -:   21:		{
+        7:   22:			server.start();
+call    0 returned 100%
+        7:   23:		});
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+        -:   24:
+        -:   25:	// 等待端口分配
+        7:   26:	uint16_t port = 0;
+       14:   27:	for (int i = 0; i < 50; ++i)
+branch  0 taken 100%
+branch  1 taken 0% (fallthrough)
+        -:   28:	{
+       14:   29:		port = server.port();
+call    0 returned 100%
+       14:   30:		if (port != 0)
+branch  0 taken 50% (fallthrough)
+branch  1 taken 50%
+        -:   31:		{
+        7:   32:			break;
+        -:   33:		}
+        7:   34:		std::this_thread::sleep_for(std::chrono::milliseconds(20));
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 never executed
+        -:   35:	}
+        -:   36:
+        -:   37:	// 等待可连接
+        7:   38:	for (int i = 0; i < 50; ++i)
+branch  0 taken 100%
+branch  1 taken 0% (fallthrough)
+        -:   39:	{
+        -:   40:		try
+        -:   41:		{
+        7:   42:			boost::asio::io_context io;
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        7:   43:			tcp::socket sock(io);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        7:   44:			sock.connect(tcp::endpoint(boost::asio::ip::make_address("127.0.0.1"), port));
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+        7:   45:			sock.close();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        7:   46:			return port;
+        7:   47:		}
+call    0 returned 100%
+call    1 returned 100%
+call    2 never executed
+call    3 never executed
+    =====:   48:		catch (...)
+call    0 never executed
+        -:   49:		{
+    =====:   50:			std::this_thread::sleep_for(std::chrono::milliseconds(20));
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+    =====:   51:		}
+call    0 never executed
+call    1 never executed
+        -:   52:	}
+    #####:   53:	return port;
+        -:   54:}
+        -:   55:
+        -:   56:// 测试 HttpServer 基本启动
+        4:   57:TEST(HttpServerTest, StartAndStop)
+        -:   58:{
+        1:   59:	HttpServer server(0); // 端口 0 = 系统分配
+        3:   60:	server.router().get("/",
+    #####:   61:						[](const HttpRequest&) -> HttpResponse
+        -:   62:						{
+    #####:   63:							return HttpResponse::ok("hello");
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+call    6 never executed
+call    7 never executed
+        -:   64:						});
+        -:   65:
+        1:   66:	std::thread serverThread;
+        1:   67:	startServerAndWait(server, serverThread);
+       1*:   68:	EXPECT_TRUE(server.isRunning());
+        -:   69:
+        1:   70:	server.stop();
+        1:   71:	serverThread.join();
+        1:   72:}
+------------------
+_ZN32HttpServerTest_StartAndStop_TestC2Ev:
+function _ZN32HttpServerTest_StartAndStop_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:   57:TEST(HttpServerTest, StartAndStop)
+call    0 returned 100%
+------------------
+_ZN32HttpServerTest_StartAndStop_TestD0Ev:
+function _ZN32HttpServerTest_StartAndStop_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:   57:TEST(HttpServerTest, StartAndStop)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN32HttpServerTest_StartAndStop_TestD2Ev:
+function _ZN32HttpServerTest_StartAndStop_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:   57:TEST(HttpServerTest, StartAndStop)
+call    0 returned 100%
+------------------
+_ZN32HttpServerTest_StartAndStop_Test8TestBodyEv:
+function _ZN32HttpServerTest_StartAndStop_Test8TestBodyEv called 1 returned 100% blocks executed 39%
+        1:   57:TEST(HttpServerTest, StartAndStop)
+        -:   58:{
+        1:   59:	HttpServer server(0); // 端口 0 = 系统分配
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        3:   60:	server.router().get("/",
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+call    7 returned 100%
+branch  8 taken 100% (fallthrough)
+branch  9 taken 0% (throw)
+call   10 returned 100%
+call   11 returned 100%
+call   12 never executed
+call   13 never executed
+    #####:   61:						[](const HttpRequest&) -> HttpResponse
+        -:   62:						{
+        -:   63:							return HttpResponse::ok("hello");
+        -:   64:						});
+        -:   65:
+        1:   66:	std::thread serverThread;
+call    0 returned 100%
+        1:   67:	startServerAndWait(server, serverThread);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       1*:   68:	EXPECT_TRUE(server.isRunning());
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 0% (fallthrough)
+branch  6 taken 100%
+call    7 never executed
+branch  8 never executed (fallthrough)
+branch  9 never executed (throw)
+call   10 never executed
+branch 11 never executed (fallthrough)
+branch 12 never executed (throw)
+call   13 never executed
+call   14 never executed
+branch 15 never executed (fallthrough)
+branch 16 never executed (throw)
+call   17 never executed
+branch 18 never executed (fallthrough)
+branch 19 never executed (throw)
+call   20 never executed
+call   21 never executed
+call   22 never executed
+call   23 returned 100%
+call   24 never executed
+call   25 never executed
+call   26 never executed
+call   27 never executed
+        -:   69:
+        1:   70:	server.stop();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:   71:	serverThread.join();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:   72:}
+call    0 returned 100%
+call    1 returned 100%
+call    2 never executed
+call    3 never executed
+------------------
+        -:   73:
+        -:   74:// 测试 HttpServer GET 请求
+        4:   75:TEST(HttpServerTest, GetRequest)
+        -:   76:{
+        1:   77:	HttpServer server(0);
+        -:   78:
+        3:   79:	server.router().get("/api/hello",
+        1:   80:						[](const HttpRequest&) -> HttpResponse
+        -:   81:						{
+        2:   82:							return HttpResponse::ok("Hello from hical!");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+        -:   83:						});
+        -:   84:
+        1:   85:	std::thread serverThread;
+        1:   86:	uint16_t port = startServerAndWait(server, serverThread);
+        -:   87:
+        4:   88:	auto [status, body] = httpGet("127.0.0.1", port, "/api/hello");
+       1*:   89:	EXPECT_EQ(status, 200u);
+       1*:   90:	EXPECT_EQ(body, "Hello from hical!");
+        -:   91:
+        1:   92:	server.stop();
+        1:   93:	serverThread.join();
+        1:   94:}
+------------------
+_ZN30HttpServerTest_GetRequest_TestC2Ev:
+function _ZN30HttpServerTest_GetRequest_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:   75:TEST(HttpServerTest, GetRequest)
+call    0 returned 100%
+------------------
+_ZN30HttpServerTest_GetRequest_TestD0Ev:
+function _ZN30HttpServerTest_GetRequest_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:   75:TEST(HttpServerTest, GetRequest)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN30HttpServerTest_GetRequest_TestD2Ev:
+function _ZN30HttpServerTest_GetRequest_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:   75:TEST(HttpServerTest, GetRequest)
+call    0 returned 100%
+------------------
+_ZN30HttpServerTest_GetRequest_Test8TestBodyEv:
+function _ZN30HttpServerTest_GetRequest_Test8TestBodyEv called 1 returned 100% blocks executed 40%
+        1:   75:TEST(HttpServerTest, GetRequest)
+        -:   76:{
+        1:   77:	HttpServer server(0);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:   78:
+        3:   79:	server.router().get("/api/hello",
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+call    7 returned 100%
+branch  8 taken 100% (fallthrough)
+branch  9 taken 0% (throw)
+call   10 returned 100%
+call   11 returned 100%
+call   12 never executed
+call   13 never executed
+    #####:   80:						[](const HttpRequest&) -> HttpResponse
+        -:   81:						{
+        -:   82:							return HttpResponse::ok("Hello from hical!");
+        -:   83:						});
+        -:   84:
+        1:   85:	std::thread serverThread;
+call    0 returned 100%
+        1:   86:	uint16_t port = startServerAndWait(server, serverThread);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:   87:
+        4:   88:	auto [status, body] = httpGet("127.0.0.1", port, "/api/hello");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+call    9 returned 100%
+call   10 returned 100%
+call   11 returned 100%
+call   12 returned 100%
+call   13 never executed
+call   14 never executed
+       1*:   89:	EXPECT_EQ(status, 200u);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 0% (fallthrough)
+branch  5 taken 100%
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed (throw)
+call    9 never executed
+call   10 never executed
+branch 11 never executed (fallthrough)
+branch 12 never executed (throw)
+call   13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed (throw)
+call   16 never executed
+call   17 never executed
+call   18 returned 100%
+call   19 never executed
+call   20 never executed
+call   21 never executed
+       1*:   90:	EXPECT_EQ(body, "Hello from hical!");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 0% (fallthrough)
+branch  5 taken 100%
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed (throw)
+call    9 never executed
+call   10 never executed
+branch 11 never executed (fallthrough)
+branch 12 never executed (throw)
+call   13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed (throw)
+call   16 never executed
+call   17 never executed
+call   18 returned 100%
+call   19 never executed
+call   20 never executed
+call   21 never executed
+        -:   91:
+        1:   92:	server.stop();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:   93:	serverThread.join();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:   94:}
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 never executed
+call    4 never executed
+call    5 never executed
+------------------
+        -:   95:
+        -:   96:// 测试 HttpServer POST 请求
+        4:   97:TEST(HttpServerTest, PostRequest)
+        -:   98:{
+        1:   99:	HttpServer server(0);
+        -:  100:
+        3:  101:	server.router().post("/api/echo",
+        1:  102:						 [](const HttpRequest& req) -> HttpResponse
+        -:  103:						 {
+        1:  104:							 return HttpResponse::ok(req.body());
+call    0 returned 100%
+call    1 returned 100%
+        -:  105:						 });
+        -:  106:
+        1:  107:	std::thread serverThread;
+        1:  108:	uint16_t port = startServerAndWait(server, serverThread);
+        -:  109:
+        6:  110:	auto [status, body] = httpPost("127.0.0.1", port, "/api/echo", "Echo this!");
+       1*:  111:	EXPECT_EQ(status, 200u);
+       1*:  112:	EXPECT_EQ(body, "Echo this!");
+        -:  113:
+        1:  114:	server.stop();
+        1:  115:	serverThread.join();
+        1:  116:}
+------------------
+_ZN31HttpServerTest_PostRequest_TestC2Ev:
+function _ZN31HttpServerTest_PostRequest_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:   97:TEST(HttpServerTest, PostRequest)
+call    0 returned 100%
+------------------
+_ZN31HttpServerTest_PostRequest_TestD0Ev:
+function _ZN31HttpServerTest_PostRequest_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:   97:TEST(HttpServerTest, PostRequest)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN31HttpServerTest_PostRequest_TestD2Ev:
+function _ZN31HttpServerTest_PostRequest_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:   97:TEST(HttpServerTest, PostRequest)
+call    0 returned 100%
+------------------
+_ZN31HttpServerTest_PostRequest_Test8TestBodyEv:
+function _ZN31HttpServerTest_PostRequest_Test8TestBodyEv called 1 returned 100% blocks executed 40%
+        1:   97:TEST(HttpServerTest, PostRequest)
+        -:   98:{
+        1:   99:	HttpServer server(0);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  100:
+        3:  101:	server.router().post("/api/echo",
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+call    7 returned 100%
+branch  8 taken 100% (fallthrough)
+branch  9 taken 0% (throw)
+call   10 returned 100%
+call   11 returned 100%
+call   12 never executed
+call   13 never executed
+    #####:  102:						 [](const HttpRequest& req) -> HttpResponse
+        -:  103:						 {
+        -:  104:							 return HttpResponse::ok(req.body());
+        -:  105:						 });
+        -:  106:
+        1:  107:	std::thread serverThread;
+call    0 returned 100%
+        1:  108:	uint16_t port = startServerAndWait(server, serverThread);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  109:
+        6:  110:	auto [status, body] = httpPost("127.0.0.1", port, "/api/echo", "Echo this!");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+call    9 returned 100%
+branch 10 taken 100% (fallthrough)
+branch 11 taken 0% (throw)
+call   12 returned 100%
+call   13 returned 100%
+call   14 returned 100%
+call   15 returned 100%
+call   16 returned 100%
+call   17 never executed
+call   18 never executed
+call   19 never executed
+       1*:  111:	EXPECT_EQ(status, 200u);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 0% (fallthrough)
+branch  5 taken 100%
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed (throw)
+call    9 never executed
+call   10 never executed
+branch 11 never executed (fallthrough)
+branch 12 never executed (throw)
+call   13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed (throw)
+call   16 never executed
+call   17 never executed
+call   18 returned 100%
+call   19 never executed
+call   20 never executed
+call   21 never executed
+       1*:  112:	EXPECT_EQ(body, "Echo this!");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 0% (fallthrough)
+branch  5 taken 100%
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed (throw)
+call    9 never executed
+call   10 never executed
+branch 11 never executed (fallthrough)
+branch 12 never executed (throw)
+call   13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed (throw)
+call   16 never executed
+call   17 never executed
+call   18 returned 100%
+call   19 never executed
+call   20 never executed
+call   21 never executed
+        -:  113:
+        1:  114:	server.stop();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  115:	serverThread.join();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  116:}
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 never executed
+call    4 never executed
+call    5 never executed
+------------------
+        -:  117:
+        -:  118:// 测试 404
+        4:  119:TEST(HttpServerTest, NotFound)
+        -:  120:{
+        1:  121:	HttpServer server(0);
+        -:  122:
+        1:  123:	std::thread serverThread;
+        1:  124:	uint16_t port = startServerAndWait(server, serverThread);
+        -:  125:
+        4:  126:	auto [status, body] = httpGet("127.0.0.1", port, "/nonexistent");
+       1*:  127:	EXPECT_EQ(status, 404u);
+        -:  128:
+        1:  129:	server.stop();
+        1:  130:	serverThread.join();
+        1:  131:}
+------------------
+_ZN28HttpServerTest_NotFound_TestC2Ev:
+function _ZN28HttpServerTest_NotFound_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:  119:TEST(HttpServerTest, NotFound)
+call    0 returned 100%
+------------------
+_ZN28HttpServerTest_NotFound_TestD0Ev:
+function _ZN28HttpServerTest_NotFound_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:  119:TEST(HttpServerTest, NotFound)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN28HttpServerTest_NotFound_TestD2Ev:
+function _ZN28HttpServerTest_NotFound_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:  119:TEST(HttpServerTest, NotFound)
+call    0 returned 100%
+------------------
+_ZN28HttpServerTest_NotFound_Test8TestBodyEv:
+function _ZN28HttpServerTest_NotFound_Test8TestBodyEv called 1 returned 100% blocks executed 44%
+        1:  119:TEST(HttpServerTest, NotFound)
+        -:  120:{
+        1:  121:	HttpServer server(0);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  122:
+        1:  123:	std::thread serverThread;
+call    0 returned 100%
+        1:  124:	uint16_t port = startServerAndWait(server, serverThread);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  125:
+        4:  126:	auto [status, body] = httpGet("127.0.0.1", port, "/nonexistent");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+call    9 returned 100%
+call   10 returned 100%
+call   11 returned 100%
+call   12 returned 100%
+call   13 never executed
+call   14 never executed
+       1*:  127:	EXPECT_EQ(status, 404u);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 0% (fallthrough)
+branch  5 taken 100%
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed (throw)
+call    9 never executed
+call   10 never executed
+branch 11 never executed (fallthrough)
+branch 12 never executed (throw)
+call   13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed (throw)
+call   16 never executed
+call   17 never executed
+call   18 returned 100%
+call   19 never executed
+call   20 never executed
+call   21 never executed
+        -:  128:
+        1:  129:	server.stop();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  130:	serverThread.join();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  131:}
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 never executed
+call    4 never executed
+call    5 never executed
+------------------
+        -:  132:
+        -:  133:// 测试路径参数
+        4:  134:TEST(HttpServerTest, PathParam)
+        -:  135:{
+        1:  136:	HttpServer server(0);
+        -:  137:
+        3:  138:	server.router().get("/users/{id}",
+        1:  139:						[](const HttpRequest& req) -> HttpResponse
+        -:  140:						{
+        1:  141:							return HttpResponse::ok("User " + req.param("id"));
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+call    7 returned 100%
+branch  8 taken 100% (fallthrough)
+branch  9 taken 0% (throw)
+call   10 returned 100%
+call   11 never executed
+        -:  142:						});
+        -:  143:
+        1:  144:	std::thread serverThread;
+        1:  145:	uint16_t port = startServerAndWait(server, serverThread);
+        -:  146:
+        4:  147:	auto [status, body] = httpGet("127.0.0.1", port, "/users/42");
+       1*:  148:	EXPECT_EQ(status, 200u);
+       1*:  149:	EXPECT_EQ(body, "User 42");
+        -:  150:
+        1:  151:	server.stop();
+        1:  152:	serverThread.join();
+        1:  153:}
+------------------
+_ZN29HttpServerTest_PathParam_TestC2Ev:
+function _ZN29HttpServerTest_PathParam_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:  134:TEST(HttpServerTest, PathParam)
+call    0 returned 100%
+------------------
+_ZN29HttpServerTest_PathParam_TestD0Ev:
+function _ZN29HttpServerTest_PathParam_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:  134:TEST(HttpServerTest, PathParam)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN29HttpServerTest_PathParam_TestD2Ev:
+function _ZN29HttpServerTest_PathParam_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:  134:TEST(HttpServerTest, PathParam)
+call    0 returned 100%
+------------------
+_ZN29HttpServerTest_PathParam_Test8TestBodyEv:
+function _ZN29HttpServerTest_PathParam_Test8TestBodyEv called 1 returned 100% blocks executed 40%
+        1:  134:TEST(HttpServerTest, PathParam)
+        -:  135:{
+        1:  136:	HttpServer server(0);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  137:
+        3:  138:	server.router().get("/users/{id}",
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+call    7 returned 100%
+branch  8 taken 100% (fallthrough)
+branch  9 taken 0% (throw)
+call   10 returned 100%
+call   11 returned 100%
+call   12 never executed
+call   13 never executed
+    #####:  139:						[](const HttpRequest& req) -> HttpResponse
+        -:  140:						{
+        -:  141:							return HttpResponse::ok("User " + req.param("id"));
+        -:  142:						});
+        -:  143:
+        1:  144:	std::thread serverThread;
+call    0 returned 100%
+        1:  145:	uint16_t port = startServerAndWait(server, serverThread);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  146:
+        4:  147:	auto [status, body] = httpGet("127.0.0.1", port, "/users/42");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+call    9 returned 100%
+call   10 returned 100%
+call   11 returned 100%
+call   12 returned 100%
+call   13 never executed
+call   14 never executed
+       1*:  148:	EXPECT_EQ(status, 200u);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 0% (fallthrough)
+branch  5 taken 100%
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed (throw)
+call    9 never executed
+call   10 never executed
+branch 11 never executed (fallthrough)
+branch 12 never executed (throw)
+call   13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed (throw)
+call   16 never executed
+call   17 never executed
+call   18 returned 100%
+call   19 never executed
+call   20 never executed
+call   21 never executed
+       1*:  149:	EXPECT_EQ(body, "User 42");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 0% (fallthrough)
+branch  5 taken 100%
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed (throw)
+call    9 never executed
+call   10 never executed
+branch 11 never executed (fallthrough)
+branch 12 never executed (throw)
+call   13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed (throw)
+call   16 never executed
+call   17 never executed
+call   18 returned 100%
+call   19 never executed
+call   20 never executed
+call   21 never executed
+        -:  150:
+        1:  151:	server.stop();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  152:	serverThread.join();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  153:}
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 never executed
+call    4 never executed
+call    5 never executed
+------------------
+        -:  154:
+        -:  155:// 测试中间件
+        4:  156:TEST(HttpServerTest, Middleware)
+        -:  157:{
+        1:  158:	HttpServer server(0);
+        -:  159:
+        1:  160:	server.use(
+        1:  161:		[](HttpRequest& req, MiddlewareNext next) -> Awaitable<HttpResponse>
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  162:		{
+        -:  163:			auto res = co_await next(req);
+        -:  164:			res.setHeader("X-Powered-By", "hical");
+        -:  165:			co_return res;
+        2:  166:		});
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 never executed
+branch  5 never executed (fallthrough)
+branch  6 never executed
+call    7 never executed
+branch  8 never executed (fallthrough)
+branch  9 never executed
+call   10 never executed
+branch 11 never executed (fallthrough)
+branch 12 never executed
+call   13 never executed
+call   14 never executed
+branch 15 never executed (fallthrough)
+branch 16 never executed (throw)
+call   17 never executed
+call   18 never executed
+        -:  167:
+        3:  168:	server.router().get("/api/test",
+        1:  169:						[](const HttpRequest&) -> HttpResponse
+        -:  170:						{
+        2:  171:							return HttpResponse::ok("test");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+        -:  172:						});
+        -:  173:
+        1:  174:	std::thread serverThread;
+        1:  175:	uint16_t port = startServerAndWait(server, serverThread);
+        -:  176:
+        3:  177:	auto result = hical::test::httpGetFull("127.0.0.1", port, "/api/test");
+       1*:  178:	EXPECT_EQ(result.status, 200u);
+       2*:  179:	EXPECT_EQ(result.findHeader("X-Powered-By"), "hical");
+        -:  180:
+        1:  181:	server.stop();
+        1:  182:	serverThread.join();
+        1:  183:}
+------------------
+_ZN30HttpServerTest_Middleware_TestC2Ev:
+function _ZN30HttpServerTest_Middleware_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:  156:TEST(HttpServerTest, Middleware)
+call    0 returned 100%
+------------------
+_ZN30HttpServerTest_Middleware_TestD0Ev:
+function _ZN30HttpServerTest_Middleware_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:  156:TEST(HttpServerTest, Middleware)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN30HttpServerTest_Middleware_TestD2Ev:
+function _ZN30HttpServerTest_Middleware_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:  156:TEST(HttpServerTest, Middleware)
+call    0 returned 100%
+------------------
+_ZN30HttpServerTest_Middleware_Test8TestBodyEv:
+function _ZN30HttpServerTest_Middleware_Test8TestBodyEv called 1 returned 100% blocks executed 39%
+        1:  156:TEST(HttpServerTest, Middleware)
+        -:  157:{
+        1:  158:	HttpServer server(0);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  159:
+        1:  160:	server.use(
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 never executed
+    #####:  161:		[](HttpRequest& req, MiddlewareNext next) -> Awaitable<HttpResponse>
+        -:  162:		{
+        -:  163:			auto res = co_await next(req);
+        -:  164:			res.setHeader("X-Powered-By", "hical");
+        -:  165:			co_return res;
+        -:  166:		});
+        -:  167:
+        3:  168:	server.router().get("/api/test",
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+call    7 returned 100%
+branch  8 taken 100% (fallthrough)
+branch  9 taken 0% (throw)
+call   10 returned 100%
+call   11 returned 100%
+call   12 never executed
+call   13 never executed
+    #####:  169:						[](const HttpRequest&) -> HttpResponse
+        -:  170:						{
+        -:  171:							return HttpResponse::ok("test");
+        -:  172:						});
+        -:  173:
+        1:  174:	std::thread serverThread;
+call    0 returned 100%
+        1:  175:	uint16_t port = startServerAndWait(server, serverThread);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  176:
+        3:  177:	auto result = hical::test::httpGetFull("127.0.0.1", port, "/api/test");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+call    9 returned 100%
+call   10 returned 100%
+call   11 never executed
+call   12 never executed
+       1*:  178:	EXPECT_EQ(result.status, 200u);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 0% (fallthrough)
+branch  5 taken 100%
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed (throw)
+call    9 never executed
+call   10 never executed
+branch 11 never executed (fallthrough)
+branch 12 never executed (throw)
+call   13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed (throw)
+call   16 never executed
+call   17 never executed
+call   18 returned 100%
+call   19 never executed
+call   20 never executed
+call   21 never executed
+       2*:  179:	EXPECT_EQ(result.findHeader("X-Powered-By"), "hical");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+call    9 returned 100%
+call   10 returned 100%
+call   11 returned 100%
+branch 12 taken 0% (fallthrough)
+branch 13 taken 100%
+call   14 never executed
+branch 15 never executed (fallthrough)
+branch 16 never executed (throw)
+call   17 never executed
+call   18 never executed
+branch 19 never executed (fallthrough)
+branch 20 never executed (throw)
+call   21 never executed
+branch 22 never executed (fallthrough)
+branch 23 never executed (throw)
+call   24 never executed
+call   25 never executed
+call   26 returned 100%
+call   27 never executed
+call   28 never executed
+call   29 never executed
+call   30 never executed
+call   31 never executed
+        -:  180:
+        1:  181:	server.stop();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  182:	serverThread.join();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  183:}
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 never executed
+call    4 never executed
+call    5 never executed
+------------------
+        -:  184:
+        -:  185:// 测试 JSON 响应
+        4:  186:TEST(HttpServerTest, JsonResponse)
+        -:  187:{
+        1:  188:	HttpServer server(0);
+        -:  189:
+        3:  190:	server.router().get("/api/status",
+        1:  191:						[](const HttpRequest&) -> HttpResponse
+        -:  192:						{
+        1:  193:							return HttpResponse::json({{"status", "ok"}, {"version", "0.2.0"}});
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+call    5 returned 100%
+call    6 returned 100%
+call    7 returned 100%
+branch  8 taken 100% (fallthrough)
+branch  9 taken 0% (throw)
+call   10 returned 100%
+branch 11 taken 100% (fallthrough)
+branch 12 taken 0% (throw)
+call   13 returned 100%
+call   14 returned 100%
+call   15 never executed
+call   16 never executed
+        -:  194:						});
+        -:  195:
+        1:  196:	std::thread serverThread;
+        1:  197:	uint16_t port = startServerAndWait(server, serverThread);
+        -:  198:
+        3:  199:	auto result = hical::test::httpGetFull("127.0.0.1", port, "/api/status");
+       1*:  200:	EXPECT_EQ(result.status, 200u);
+       2*:  201:	EXPECT_EQ(result.findHeader("content-type"), "application/json");
+        -:  202:
+        1:  203:	auto json = boost::json::parse(result.body);
+       1*:  204:	EXPECT_EQ(json.at("status").as_string(), "ok");
+        -:  205:
+        1:  206:	server.stop();
+        1:  207:	serverThread.join();
+        1:  208:}
+------------------
+_ZN32HttpServerTest_JsonResponse_TestC2Ev:
+function _ZN32HttpServerTest_JsonResponse_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:  186:TEST(HttpServerTest, JsonResponse)
+call    0 returned 100%
+------------------
+_ZN32HttpServerTest_JsonResponse_TestD0Ev:
+function _ZN32HttpServerTest_JsonResponse_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:  186:TEST(HttpServerTest, JsonResponse)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN32HttpServerTest_JsonResponse_TestD2Ev:
+function _ZN32HttpServerTest_JsonResponse_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:  186:TEST(HttpServerTest, JsonResponse)
+call    0 returned 100%
+------------------
+_ZN32HttpServerTest_JsonResponse_Test8TestBodyEv:
+function _ZN32HttpServerTest_JsonResponse_Test8TestBodyEv called 1 returned 100% blocks executed 38%
+        1:  186:TEST(HttpServerTest, JsonResponse)
+        -:  187:{
+        1:  188:	HttpServer server(0);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  189:
+        3:  190:	server.router().get("/api/status",
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+call    7 returned 100%
+branch  8 taken 100% (fallthrough)
+branch  9 taken 0% (throw)
+call   10 returned 100%
+call   11 returned 100%
+call   12 never executed
+call   13 never executed
+    #####:  191:						[](const HttpRequest&) -> HttpResponse
+        -:  192:						{
+        -:  193:							return HttpResponse::json({{"status", "ok"}, {"version", "0.2.0"}});
+        -:  194:						});
+        -:  195:
+        1:  196:	std::thread serverThread;
+call    0 returned 100%
+        1:  197:	uint16_t port = startServerAndWait(server, serverThread);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  198:
+        3:  199:	auto result = hical::test::httpGetFull("127.0.0.1", port, "/api/status");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+call    9 returned 100%
+call   10 returned 100%
+call   11 never executed
+call   12 never executed
+       1*:  200:	EXPECT_EQ(result.status, 200u);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 0% (fallthrough)
+branch  5 taken 100%
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed (throw)
+call    9 never executed
+call   10 never executed
+branch 11 never executed (fallthrough)
+branch 12 never executed (throw)
+call   13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed (throw)
+call   16 never executed
+call   17 never executed
+call   18 returned 100%
+call   19 never executed
+call   20 never executed
+call   21 never executed
+       2*:  201:	EXPECT_EQ(result.findHeader("content-type"), "application/json");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+call    9 returned 100%
+call   10 returned 100%
+call   11 returned 100%
+branch 12 taken 0% (fallthrough)
+branch 13 taken 100%
+call   14 never executed
+branch 15 never executed (fallthrough)
+branch 16 never executed (throw)
+call   17 never executed
+call   18 never executed
+branch 19 never executed (fallthrough)
+branch 20 never executed (throw)
+call   21 never executed
+branch 22 never executed (fallthrough)
+branch 23 never executed (throw)
+call   24 never executed
+call   25 never executed
+call   26 returned 100%
+call   27 never executed
+call   28 never executed
+call   29 never executed
+call   30 never executed
+call   31 never executed
+        -:  202:
+        1:  203:	auto json = boost::json::parse(result.body);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+call    6 never executed
+       1*:  204:	EXPECT_EQ(json.at("status").as_string(), "ok");
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+call    7 returned 100%
+branch  8 taken 100% (fallthrough)
+branch  9 taken 0% (throw)
+call   10 returned 100%
+branch 11 taken 0% (fallthrough)
+branch 12 taken 100%
+call   13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed (throw)
+call   16 never executed
+call   17 never executed
+branch 18 never executed (fallthrough)
+branch 19 never executed (throw)
+call   20 never executed
+branch 21 never executed (fallthrough)
+branch 22 never executed (throw)
+call   23 never executed
+call   24 never executed
+call   25 returned 100%
+call   26 never executed
+call   27 never executed
+call   28 never executed
+        -:  205:
+        1:  206:	server.stop();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  207:	serverThread.join();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  208:}
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 never executed
+call    5 never executed
+call    6 never executed
+call    7 never executed
+------------------

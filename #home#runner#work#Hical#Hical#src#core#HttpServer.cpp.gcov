@@ -1,0 +1,945 @@
+        -:    0:Source:/home/runner/work/Hical/Hical/src/core/HttpServer.cpp
+        -:    1:#include "HttpServer.h"
+        -:    2:#include "MemoryPool.h"
+        -:    3:#include "core/Version.h"
+        -:    4:#include <iostream>
+        -:    5:#include <optional>
+        -:    6:#include <stdexcept>
+        -:    7:#include <thread>
+        -:    8:#include <vector>
+        -:    9:
+        -:   10:namespace hical
+        -:   11:{
+        -:   12:
+        -:   13:	using boost::asio::ip::tcp;
+        -:   14:
+function _ZN5hical10HttpServerC2Etm called 34 returned 100% blocks executed 94%
+      34*:   15:	HttpServer::HttpServer(uint16_t port, size_t ioThreads) : port_(port), ioThreads_(ioThreads > 0 ? ioThreads : 1)
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0%
+call    3 returned 100%
+call    4 returned 100%
+call    5 returned 100%
+call    6 returned 100%
+call    7 returned 100%
+call    8 returned 100%
+call    9 returned 100%
+call   10 returned 100%
+call   11 returned 100%
+call   12 returned 100%
+call   13 returned 100%
+call   14 returned 100%
+call   15 returned 100%
+        -:   16:	{
+       34:   17:	}
+        -:   18:
+function _ZN5hical10HttpServerD2Ev called 34 returned 100% blocks executed 92%
+       34:   19:	HttpServer::~HttpServer()
+        -:   20:	{
+       34:   21:		if (running_.load())
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+        -:   22:		{
+    #####:   23:			stop();
+call    0 never executed
+        -:   24:		}
+       34:   25:	}
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+call    5 returned 100%
+call    6 returned 100%
+call    7 returned 100%
+call    8 returned 100%
+        -:   26:
+function _ZN5hical10HttpServer6routerEv called 54 returned 100% blocks executed 56%
+       54:   27:	Router& HttpServer::router()
+        -:   28:	{
+       54:   29:		if (started_)
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+        -:   30:		{
+    #####:   31:			throw std::logic_error("HttpServer: cannot modify router after start()");
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+call    5 never executed
+        -:   32:		}
+       54:   33:		return router_;
+        -:   34:	}
+        -:   35:
+function _ZN5hical10HttpServer3useESt8functionIFN5boost4asio9awaitableINS_12HttpResponseENS3_15any_io_executorEEERNS_11HttpRequestES1_IFS7_S9_EEEE called 2 returned 100% blocks executed 53%
+        2:   36:	void HttpServer::use(MiddlewareHandler middleware)
+        -:   37:	{
+        2:   38:		if (started_)
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+        -:   39:		{
+    #####:   40:			throw std::logic_error("HttpServer: cannot add middleware after start()");
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+call    5 never executed
+        -:   41:		}
+        2:   42:		middlewarePipeline_.use(std::move(middleware));
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+call    6 never executed
+        2:   43:	}
+        -:   44:
+function _ZN5hical10HttpServer3useERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEESt8functionIFN5boost4asio9awaitableINS_12HttpResponseENSB_15any_io_executorEEERNS_11HttpRequestES9_IFSF_SH_EEEE called 0 returned 0% blocks executed 0%
+    #####:   45:	void HttpServer::use(const std::string& name, MiddlewareHandler middleware)
+        -:   46:	{
+    #####:   47:		if (started_)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+        -:   48:		{
+    #####:   49:			throw std::logic_error("HttpServer: cannot add middleware after start()");
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+call    5 never executed
+        -:   50:		}
+    #####:   51:		middlewarePipeline_.use(name, std::move(middleware));
+call    0 never executed
+call    1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed (throw)
+call    5 never executed
+call    6 never executed
+    #####:   52:	}
+        -:   53:
+        -:   54:#ifdef HICAL_ENABLE_MIDDLEWARE_PROFILING
+        -:   55:	std::vector<MiddlewarePipeline::TimingSnapshot> HttpServer::middlewareStats() const
+        -:   56:	{
+        -:   57:		return middlewarePipeline_.getTimingStats();
+        -:   58:	}
+        -:   59:#endif
+        -:   60:
+function _ZN5hical10HttpServer14setMaxBodySizeEm called 0 returned 0% blocks executed 0%
+    #####:   61:	void HttpServer::setMaxBodySize(size_t bytes)
+        -:   62:	{
+    #####:   63:		maxBodySize_ = bytes;
+    #####:   64:	}
+        -:   65:
+function _ZN5hical10HttpServer16setMaxHeaderSizeEm called 0 returned 0% blocks executed 0%
+    #####:   66:	void HttpServer::setMaxHeaderSize(size_t bytes)
+        -:   67:	{
+    #####:   68:		maxHeaderSize_ = bytes;
+    #####:   69:	}
+        -:   70:
+function _ZN5hical10HttpServer17setMaxConnectionsEm called 0 returned 0% blocks executed 0%
+    #####:   71:	void HttpServer::setMaxConnections(size_t maxConns)
+        -:   72:	{
+    #####:   73:		maxConnections_ = maxConns;
+    #####:   74:	}
+        -:   75:
+function _ZN5hical10HttpServer25recommendedMaxConnectionsEm called 0 returned 0% blocks executed 0%
+    #####:   76:	size_t HttpServer::recommendedMaxConnections(size_t availableMemoryMB)
+        -:   77:	{
+        -:   78:		// 每连接约 25KB（PMR 缓冲 4KB + HTTP parser ~8KB + socket 缓冲 ~8KB + 开销 ~5KB）
+        -:   79:		// 预留 30% 内存给业务逻辑和系统开销
+    #####:   80:		constexpr size_t hBytesPerConnection = 25 * 1024;
+    #####:   81:		size_t usableBytes = availableMemoryMB * 1024 * 1024 * 7 / 10;
+    #####:   82:		size_t recommended = usableBytes / hBytesPerConnection;
+    #####:   83:		return std::min(recommended, size_t(65535));
+call    0 never executed
+        -:   84:	}
+        -:   85:
+function _ZN5hical10HttpServer14setIdleTimeoutEd called 2 returned 100% blocks executed 100%
+        2:   86:	void HttpServer::setIdleTimeout(double seconds)
+        -:   87:	{
+        2:   88:		idleTimeout_ = seconds;
+        2:   89:	}
+        -:   90:
+function _ZN5hical10HttpServer13setGcIntervalEd called 0 returned 0% blocks executed 0%
+    #####:   91:	void HttpServer::setGcInterval(double seconds)
+        -:   92:	{
+    #####:   93:		gcInterval_ = seconds;
+    #####:   94:	}
+        -:   95:
+function _ZN5hical10HttpServer18setShutdownTimeoutEd called 5 returned 100% blocks executed 100%
+        5:   96:	void HttpServer::setShutdownTimeout(double seconds)
+        -:   97:	{
+        5:   98:		shutdownTimeout_ = seconds;
+        5:   99:	}
+        -:  100:
+function _ZN5hical10HttpServer15setErrorHandlerESt8functionIFNS_12HttpResponseERKSt9exceptionRKNS_11HttpRequestEEE called 5 returned 80% blocks executed 90%
+        5:  101:	void HttpServer::setErrorHandler(ErrorHandler handler)
+        -:  102:	{
+        5:  103:		if (started_)
+call    0 returned 100%
+branch  1 taken 20% (fallthrough)
+branch  2 taken 80%
+        -:  104:		{
+        1:  105:			throw std::logic_error("HttpServer: cannot set error handler after start()");
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 0%
+call    5 never executed
+        -:  106:		}
+        4:  107:		errorHandler_ = std::move(handler);
+call    0 returned 100%
+call    1 returned 100%
+        4:  108:	}
+        -:  109:
+function _ZN5hical10HttpServer9enableSslERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEES8_ called 0 returned 0% blocks executed 0%
+    #####:  110:	void HttpServer::enableSsl(const std::string& certFile, const std::string& keyFile)
+        -:  111:	{
+    #####:  112:		sslCtx_ = std::make_shared<SslContext>(boost::asio::ssl::context::tls_server);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+call    4 never executed
+    #####:  113:		sslCtx_->loadCertificate(certFile);
+call    0 never executed
+call    1 never executed
+    #####:  114:		sslCtx_->loadPrivateKey(keyFile);
+call    0 never executed
+call    1 never executed
+    #####:  115:	}
+        -:  116:
+function _ZN5hical10HttpServer5startEv called 28 returned 100% blocks executed 52%
+       28:  117:	void HttpServer::start()
+        -:  118:	{
+       28:  119:		running_.store(true);
+call    0 returned 100%
+       28:  120:		started_ = true;
+call    0 returned 100%
+        -:  121:
+        -:  122:		// 预构建中间件调用链，避免每请求重建
+       28:  123:		if (middlewarePipeline_.size() > 0)
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+branch  3 taken 7% (fallthrough)
+branch  4 taken 93%
+        -:  124:		{
+        2:  125:			middlewarePipeline_.build(
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 never executed
+function _ZZN5hical10HttpServer5startEvENKUlRNS_11HttpRequestEE_clES2_ called 2 returned 100% blocks executed 44%
+        4:  126:				[this](HttpRequest& req) -> Awaitable<HttpResponse>
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:  127:				{
+        -:  128:					co_return co_await router_.dispatch(req);
+        4:  129:				});
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed
+call    9 never executed
+call   10 never executed
+branch 11 never executed (fallthrough)
+branch 12 never executed (throw)
+call   13 never executed
+call   14 never executed
+        -:  130:
+        -:  131:			// 预构建 WebSocket 升级专用中间件链（finalHandler 返回 200 占位）
+        -:  132:			// 避免每次 WS 升级都动态 buildChain 导致 N 次 std::function 堆分配
+        4:  133:			wsMiddlewareChain_ = middlewarePipeline_.buildFor(
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 returned 100%
+call    6 never executed
+function _ZZN5hical10HttpServer5startEvENKUlRNS_11HttpRequestEE0_clES2_ called 0 returned 0% blocks executed 0%
+       2*:  134:				[](HttpRequest&) -> Awaitable<HttpResponse>
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:  135:				{
+        -:  136:					co_return HttpResponse::ok("");
+       2*:  137:				});
+call    0 returned 100%
+call    1 never executed
+call    2 never executed
+call    3 never executed
+call    4 never executed
+branch  5 never executed (fallthrough)
+branch  6 never executed
+call    7 never executed
+branch  8 never executed (fallthrough)
+branch  9 never executed
+call   10 never executed
+call   11 never executed
+branch 12 never executed (fallthrough)
+branch 13 never executed (throw)
+call   14 never executed
+call   15 never executed
+        -:  138:		}
+        -:  139:
+        -:  140:		// 创建 IO 线程池（提前到 acceptor 创建前，SO_REUSEPORT 需要所有 loop 就绪）
+       28:  141:		if (ioThreads_ > 1)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:  142:		{
+    #####:  143:			ioPool_ = std::make_unique<EventLoopPool>(ioThreads_ - 1);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+call    4 never executed
+    #####:  144:			ioPool_->start();
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+        -:  145:		}
+        -:  146:
+        -:  147:		// 收集所有 loop（baseLoop + workers）
+       28:  148:		std::vector<AsioEventLoop*> allLoops;
+       28:  149:		allLoops.push_back(&baseLoop_);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       28:  150:		if (ioPool_)
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+        -:  151:		{
+    #####:  152:			for (auto* loop : ioPool_->getAllLoops())
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+call    5 never executed
+call    6 never executed
+call    7 never executed
+call    8 never executed
+branch  9 never executed
+branch 10 never executed (fallthrough)
+        -:  153:			{
+    #####:  154:				allLoops.push_back(loop);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  155:			}
+call    0 never executed
+call    1 never executed
+        -:  156:		}
+        -:  157:
+       56:  158:		auto endpoint = tcp::endpoint(tcp::v4(), port_.load());
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+        -:  159:
+        -:  160:		// 尝试 SO_REUSEPORT 多 acceptor 模式（Linux / macOS / BSD）：
+        -:  161:		// 每个 worker loop 持有独立 acceptor，内核自动均衡分发连接，
+        -:  162:		// accept 和 I/O 在同一线程完成，消除跨线程调度开销（火焰图 14.5%）。
+        -:  163:		// Windows 不支持 SO_REUSEPORT，回退为单 acceptor + 跨线程分发。
+        -:  164:#if defined(__linux__) || defined(__APPLE__) || defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__)
+        -:  165:		{
+       28:  166:			bool allOk = true;
+       28:  167:			std::vector<std::unique_ptr<tcp::acceptor>> tempAcceptors;
+        -:  168:
+       56:  169:			for (auto* loop : allLoops)
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 50%
+branch  6 taken 50% (fallthrough)
+        -:  170:			{
+       28:  171:				auto acc = std::make_unique<tcp::acceptor>(loop->getIoContext());
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+       28:  172:				acc->open(endpoint.protocol());
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+       28:  173:				acc->set_option(boost::asio::socket_base::reuse_address(true));
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+        -:  174:
+       28:  175:				boost::system::error_code ec;
+        -:  176:				using reuse_port = boost::asio::detail::socket_option::boolean<SOL_SOCKET, SO_REUSEPORT>;
+       28:  177:				acc->set_option(reuse_port(true), ec);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+       28:  178:				if (ec)
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+        -:  179:				{
+    #####:  180:					allOk = false;
+    #####:  181:					break;
+        -:  182:				}
+        -:  183:
+       28:  184:				acc->bind(endpoint);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+       28:  185:				acc->listen();
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+       28:  186:				tempAcceptors.push_back(std::move(acc));
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+       28:  187:			}
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0%
+call    3 never executed
+        -:  188:
+      28*:  189:			if (allOk && tempAcceptors.size() == allLoops.size())
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+call    2 returned 100%
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0%
+        -:  190:			{
+       28:  191:				reusePortEnabled_ = true;
+       28:  192:				acceptors_ = std::move(tempAcceptors);
+call    0 returned 100%
+call    1 returned 100%
+        -:  193:			}
+       28:  194:		}
+call    0 returned 100%
+call    1 never executed
+        -:  195:#endif
+        -:  196:
+        -:  197:		// 回退：单 acceptor（Windows / SO_REUSEPORT 不可用）
+       28:  198:		if (!reusePortEnabled_)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:  199:		{
+    #####:  200:			auto acc = std::make_unique<tcp::acceptor>(baseLoop_.getIoContext());
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+    #####:  201:			acc->open(endpoint.protocol());
+call    0 never executed
+call    1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed (throw)
+    #####:  202:			acc->set_option(boost::asio::socket_base::reuse_address(true));
+call    0 never executed
+call    1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed (throw)
+    #####:  203:			acc->bind(endpoint);
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+    #####:  204:			acc->listen();
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+    #####:  205:			acceptors_.push_back(std::move(acc));
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+    #####:  206:		}
+call    0 never executed
+call    1 never executed
+        -:  207:
+        -:  208:		// 端口 0 时由系统分配，更新实际端口
+       28:  209:		port_.store(acceptors_[0]->local_endpoint().port());
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+call    6 returned 100%
+        -:  210:
+        -:  211:		// 每个 acceptor 配独立 IdleFd（EMFILE 保护）
+       56:  212:		for (size_t i = 0; i < acceptors_.size(); ++i)
+call    0 returned 100%
+branch  1 taken 50%
+branch  2 taken 50% (fallthrough)
+        -:  213:		{
+       28:  214:			idleFds_.push_back(std::make_unique<IdleFd>());
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+        -:  215:		}
+        -:  216:
+       28:  217:		auto& baseIoCtx = baseLoop_.getIoContext();
+call    0 returned 100%
+        -:  218:
+        -:  219:		// 注册信号处理（SIGINT/SIGTERM → 优雅关机）
+       28:  220:		boost::asio::signal_set signals(baseIoCtx, SIGINT, SIGTERM);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+       28:  221:		signals.async_wait(
+function _ZZN5hical10HttpServer5startEvENKUlRKN5boost6system10error_codeEiE_clES5_i called 0 returned 0% blocks executed 0%
+      28*:  222:			[this](const boost::system::error_code& ec, int)
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  223:			{
+    #####:  224:				if (!ec)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+        -:  225:				{
+    #####:  226:					gracefulStop();
+call    0 never executed
+        -:  227:				}
+    #####:  228:			});
+        -:  229:
+        -:  230:		// 在每个 loop 上启动独立 acceptLoop
+       28:  231:		if (reusePortEnabled_)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:  232:		{
+       56:  233:			for (size_t i = 0; i < allLoops.size(); ++i)
+call    0 returned 100%
+branch  1 taken 50%
+branch  2 taken 50%
+        -:  234:			{
+       28:  235:				coSpawn(allLoops[i]->getIoContext(), acceptLoop(*acceptors_[i], *idleFds_[i]));
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+call    7 returned 100%
+call    8 returned 100%
+call    9 returned 100%
+branch 10 taken 100% (fallthrough)
+branch 11 taken 0% (throw)
+call   12 returned 100%
+call   13 never executed
+        -:  236:			}
+        -:  237:		}
+        -:  238:		else
+        -:  239:		{
+    #####:  240:			coSpawn(baseIoCtx, acceptLoop(*acceptors_[0], *idleFds_[0]));
+call    0 never executed
+call    1 never executed
+call    2 never executed
+call    3 never executed
+call    4 never executed
+branch  5 never executed (fallthrough)
+branch  6 never executed (throw)
+call    7 never executed
+branch  8 never executed (fallthrough)
+branch  9 never executed (throw)
+call   10 never executed
+call   11 never executed
+        -:  241:		}
+        -:  242:
+        -:  243:		// 启动内存池 GC 定时器协程
+       28:  244:		if (gcInterval_ > 0)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:  245:		{
+       28:  246:			coSpawn(baseIoCtx, gcLoop());
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+        -:  247:		}
+        -:  248:
+        -:  249:		// 主线程运行 baseLoop（阻塞）
+       28:  250:		baseLoop_.run();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  251:
+        -:  252:		// baseLoop 退出后，停止并等待 ioPool 中的 worker 线程
+       28:  253:		if (ioPool_)
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+        -:  254:		{
+    #####:  255:			ioPool_->stop();
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+        -:  256:		}
+        -:  257:
+       28:  258:		running_.store(false);
+call    0 returned 100%
+       28:  259:	}
+call    0 returned 100%
+call    1 returned 100%
+call    2 never executed
+call    3 never executed
+        -:  260:
+function _ZN5hical10HttpServer4stopEv called 34 returned 100% blocks executed 100%
+       34:  261:	void HttpServer::stop()
+        -:  262:	{
+       34:  263:		if (!running_.exchange(false))
+call    0 returned 100%
+branch  1 taken 18% (fallthrough)
+branch  2 taken 82%
+        -:  264:		{
+        6:  265:			return;
+        -:  266:		}
+        -:  267:
+       28:  268:		draining_.store(true);
+call    0 returned 100%
+       28:  269:		closeAllAcceptors();
+call    0 returned 100%
+       28:  270:		stopAllLoops();
+call    0 returned 100%
+        -:  271:	}
+        -:  272:
+function _ZNK5hical10HttpServer9isRunningEv called 1 returned 100% blocks executed 100%
+        1:  273:	bool HttpServer::isRunning() const
+        -:  274:	{
+        1:  275:		return running_.load();
+call    0 returned 100%
+        -:  276:	}
+        -:  277:
+function _ZNK5hical10HttpServer4portEv called 56 returned 100% blocks executed 65%
+       56:  278:	uint16_t HttpServer::port() const
+        -:  279:	{
+      112:  280:		return port_.load();
+call    0 returned 100%
+        -:  281:	}
+        -:  282:
+function _ZN5hical10HttpServer9ioContextEv called 0 returned 0% blocks executed 0%
+    #####:  283:	boost::asio::io_context& HttpServer::ioContext()
+        -:  284:	{
+    #####:  285:		return baseLoop_.getIoContext();
+call    0 never executed
+        -:  286:	}
+        -:  287:
+function _ZN5hical10HttpServer10acceptLoopERN5boost4asio21basic_socket_acceptorINS2_2ip3tcpENS2_15any_io_executorEEERNS_6IdleFdE called 28 returned 100% blocks executed 44%
+       28:  288:	Awaitable<void> HttpServer::acceptLoop(tcp::acceptor& acceptor, IdleFd& idleFd)
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  289:	{
+        -:  290:		while (running_.load())
+        -:  291:		{
+        -:  292:			bool needSleep = false;
+        -:  293:
+        -:  294:			try
+        -:  295:			{
+        -:  296:				if (reusePortEnabled_)
+        -:  297:				{
+        -:  298:					// SO_REUSEPORT 路径：socket 已在当前 loop 上，零跨线程调度
+        -:  299:					auto socket = co_await acceptor.async_accept(boost::asio::use_awaitable);
+        -:  300:
+        -:  301:					if (!running_.load())
+        -:  302:					{
+        -:  303:						break;
+        -:  304:					}
+        -:  305:
+        -:  306:					if (maxConnections_ > 0 && activeConnections_.load() >= maxConnections_)
+        -:  307:					{
+        -:  308:						boost::system::error_code ec;
+        -:  309:						socket.close(ec);
+        -:  310:						continue;
+        -:  311:					}
+        -:  312:
+        -:  313:					socket.set_option(boost::asio::ip::tcp::no_delay(true));
+        -:  314:
+        -:  315:					coSpawn(co_await boost::asio::this_coro::executor, handleSession(std::move(socket)));
+        -:  316:				}
+        -:  317:				else
+        -:  318:				{
+        -:  319:					// 回退路径（Windows 等无 SO_REUSEPORT 平台）：
+        -:  320:					// 借鉴 Cinatra 策略——socket 直接创建在目标 worker 的 io_context 上，
+        -:  321:					// 使 socket 的 IOCP/epoll 关联从一开始就在正确的线程，减少迁移开销。
+        -:  322:					auto& targetIoCtx = ioPool_ ? ioPool_->getNextLoop()->getIoContext() : baseLoop_.getIoContext();
+        -:  323:					tcp::socket socket(targetIoCtx.get_executor());
+        -:  324:
+        -:  325:					co_await acceptor.async_accept(socket, boost::asio::use_awaitable);
+        -:  326:
+        -:  327:					if (!running_.load())
+        -:  328:					{
+        -:  329:						break;
+        -:  330:					}
+        -:  331:
+        -:  332:					if (maxConnections_ > 0 && activeConnections_.load() >= maxConnections_)
+        -:  333:					{
+        -:  334:						boost::system::error_code ec;
+        -:  335:						socket.close(ec);
+        -:  336:						continue;
+        -:  337:					}
+        -:  338:
+        -:  339:					socket.set_option(boost::asio::ip::tcp::no_delay(true));
+        -:  340:
+        -:  341:					coSpawn(targetIoCtx.get_executor(), handleSession(std::move(socket)));
+        -:  342:				}
+        -:  343:			}
+        -:  344:			catch (const boost::system::system_error& e)
+        -:  345:			{
+        -:  346:				if (e.code() == boost::asio::error::operation_aborted || e.code() == boost::asio::error::bad_descriptor)
+        -:  347:				{
+        -:  348:					break;
+        -:  349:				}
+        -:  350:
+        -:  351:				// fd 耗尽处理：释放预留 fd → accept 并关闭 → 重新预留
+        -:  352:				if (e.code() == boost::asio::error::no_descriptors)
+        -:  353:				{
+        -:  354:					idleFd.temporaryRelease();
+        -:  355:					{
+        -:  356:						boost::system::error_code acceptEc;
+        -:  357:						boost::asio::ip::tcp::socket tmpSocket(acceptor.get_executor());
+        -:  358:						acceptor.accept(tmpSocket, acceptEc);
+        -:  359:					}
+        -:  360:					idleFd.reacquire();
+        -:  361:				}
+        -:  362:
+        -:  363:				needSleep = true;
+        -:  364:			}
+        -:  365:
+        -:  366:			// MSVC 不允许在 catch 块内 co_await，延迟到块外
+        -:  367:			if (needSleep)
+        -:  368:			{
+        -:  369:				co_await hical::sleep(0.05);
+        -:  370:			}
+        -:  371:		}
+       56:  372:	}
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed
+call    8 never executed
+branch  9 never executed (fallthrough)
+branch 10 never executed
+call   11 never executed
+call   12 never executed
+branch 13 never executed (fallthrough)
+branch 14 never executed (throw)
+call   15 never executed
+call   16 never executed
+        -:  373:
+function _ZN5hical10HttpServer6gcLoopEv called 28 returned 100% blocks executed 44%
+       28:  374:	Awaitable<void> HttpServer::gcLoop()
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  375:	{
+        -:  376:		while (running_.load())
+        -:  377:		{
+        -:  378:			co_await hical::sleep(gcInterval_);
+        -:  379:			if (!running_.load())
+        -:  380:			{
+        -:  381:				break;
+        -:  382:			}
+        -:  383:			MemoryPool::instance().gc();
+        -:  384:		}
+       56:  385:	}
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed
+call    8 never executed
+branch  9 never executed (fallthrough)
+branch 10 never executed
+call   11 never executed
+call   12 never executed
+branch 13 never executed (fallthrough)
+branch 14 never executed (throw)
+call   15 never executed
+call   16 never executed
+        -:  386:
+function _ZN5hical10HttpServer12gracefulStopEv called 0 returned 0% blocks executed 0%
+    #####:  387:	void HttpServer::gracefulStop()
+        -:  388:	{
+    #####:  389:		if (draining_.exchange(true))
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+        -:  390:		{
+    #####:  391:			return;
+        -:  392:		}
+        -:  393:
+    #####:  394:		closeAllAcceptors();
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:  395:
+        -:  396:		// 超时后强制停止（防止活跃连接迟迟不退出）
+    #####:  397:		auto& baseIoCtx = baseLoop_.getIoContext();
+call    0 never executed
+    #####:  398:		auto timer = std::make_shared<boost::asio::steady_timer>(baseIoCtx);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  399:		timer->expires_after(std::chrono::milliseconds(static_cast<int64_t>(shutdownTimeout_ * 1000)));
+call    0 never executed
+call    1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed (throw)
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed (throw)
+    #####:  400:		timer->async_wait(
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+function _ZZN5hical10HttpServer12gracefulStopEvENKUlRKN5boost6system10error_codeEE_clES5_ called 0 returned 0% blocks executed 0%
+    #####:  401:			[this, timer](const boost::system::error_code& ec)
+call    0 never executed
+call    1 never executed
+call    2 never executed
+        -:  402:			{
+    #####:  403:				if (!ec)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+        -:  404:				{
+    #####:  405:					running_.store(false);
+call    0 never executed
+    #####:  406:					stopAllLoops();
+call    0 never executed
+        -:  407:				}
+    #####:  408:			});
+    #####:  409:	}
+call    0 never executed
+call    1 never executed
+        -:  410:
+function _ZN5hical10HttpServer17closeAllAcceptorsEv called 28 returned 100% blocks executed 92%
+       28:  411:	void HttpServer::closeAllAcceptors()
+        -:  412:	{
+        -:  413:		// 将每个 acceptor 的关闭调度到其所在 loop 线程内，与 acceptLoop 串行执行，消除竞态
+       56:  414:		for (auto& acc : acceptors_)
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+branch  4 taken 50%
+branch  5 taken 50% (fallthrough)
+        -:  415:		{
+       28:  416:			boost::asio::post(acc->get_executor(),
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+function _ZZN5hical10HttpServer17closeAllAcceptorsEvENKUlvE_clEv called 1 returned 100% blocks executed 80%
+       56:  417:							  [&acc]()
+call    0 returned 100%
+call    1 returned 100%
+        -:  418:							  {
+        1:  419:								  boost::system::error_code ec;
+        1:  420:								  acc->close(ec);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        1:  421:							  });
+        -:  422:		}
+       28:  423:	}
+        -:  424:
+function _ZN5hical10HttpServer12stopAllLoopsEv called 33 returned 100% blocks executed 28%
+       33:  425:	void HttpServer::stopAllLoops()
+        -:  426:	{
+        -:  427:		// baseLoop_.stop() 和 AsioEventLoop::stop() 都是幂等的（内部 atomic + ioContext_.stop()），
+        -:  428:		// 多线程并发调用此函数是安全的（ConnectionCounter 析构 / gracefulStop 超时可能同时触发）。
+        -:  429:		// ioPool_ 生命周期由 start() 保证：ioPool_->stop() 在 baseLoop_.run() 返回后才执行，
+        -:  430:		// 而 baseLoop_.run() 返回前 ioPool_ 必然存活。
+       33:  431:		baseLoop_.stop();
+call    0 returned 100%
+       33:  432:		if (ioPool_)
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+        -:  433:		{
+    #####:  434:			for (auto* loop : ioPool_->getAllLoops())
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+call    5 never executed
+call    6 never executed
+call    7 never executed
+call    8 never executed
+branch  9 never executed
+branch 10 never executed (fallthrough)
+        -:  435:			{
+    #####:  436:				loop->stop();
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  437:			}
+call    0 never executed
+call    1 never executed
+        -:  438:		}
+       33:  439:	}
+        -:  440:
+        -:  441:} // namespace hical

@@ -1,0 +1,577 @@
+        -:    0:Source:/usr/include/boost/asio/require.hpp
+        -:    1://
+        -:    2:// require.hpp
+        -:    3:// ~~~~~~~~~~~
+        -:    4://
+        -:    5:// Copyright (c) 2003-2023 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+        -:    6://
+        -:    7:// Distributed under the Boost Software License, Version 1.0. (See accompanying
+        -:    8:// file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+        -:    9://
+        -:   10:
+        -:   11:#ifndef BOOST_ASIO_REQUIRE_HPP
+        -:   12:#define BOOST_ASIO_REQUIRE_HPP
+        -:   13:
+        -:   14:#if defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   15:# pragma once
+        -:   16:#endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   17:
+        -:   18:#include <boost/asio/detail/config.hpp>
+        -:   19:#include <boost/asio/detail/type_traits.hpp>
+        -:   20:#include <boost/asio/is_applicable_property.hpp>
+        -:   21:#include <boost/asio/traits/require_member.hpp>
+        -:   22:#include <boost/asio/traits/require_free.hpp>
+        -:   23:#include <boost/asio/traits/static_require.hpp>
+        -:   24:
+        -:   25:#include <boost/asio/detail/push_options.hpp>
+        -:   26:
+        -:   27:#if defined(GENERATING_DOCUMENTATION)
+        -:   28:
+        -:   29:namespace boost {
+        -:   30:namespace asio {
+        -:   31:
+        -:   32:/// A customisation point that applies a concept-preserving property to an
+        -:   33:/// object.
+        -:   34:/**
+        -:   35: * The name <tt>require</tt> denotes a customisation point object. The
+        -:   36: * expression <tt>boost::asio::require(E, P0, Pn...)</tt> for some
+        -:   37: * subexpressions <tt>E</tt> and <tt>P0</tt>, and where <tt>Pn...</tt>
+        -:   38: * represents <tt>N</tt> subexpressions (where <tt>N</tt> is 0 or more, and with
+        -:   39: * types <tt>T = decay_t<decltype(E)></tt> and <tt>Prop0 =
+        -:   40: * decay_t<decltype(P0)></tt>) is expression-equivalent to:
+        -:   41: *
+        -:   42: * @li If <tt>is_applicable_property_v<T, Prop0> && Prop0::is_requirable</tt> is
+        -:   43: *   not a well-formed constant expression with value <tt>true</tt>,
+        -:   44: *   <tt>boost::asio::require(E, P0, Pn...)</tt> is ill-formed.
+        -:   45: *
+        -:   46: * @li Otherwise, <tt>E</tt> if <tt>N == 0</tt> and the expression
+        -:   47: *   <tt>Prop0::template static_query_v<T> == Prop0::value()</tt> is a
+        -:   48: *   well-formed constant expression with value <tt>true</tt>.
+        -:   49: *
+        -:   50: * @li Otherwise, <tt>(E).require(P0)</tt> if <tt>N == 0</tt> and the expression
+        -:   51: *   <tt>(E).require(P0)</tt> is a valid expression.
+        -:   52: *
+        -:   53: * @li Otherwise, <tt>require(E, P0)</tt> if <tt>N == 0</tt> and the expression
+        -:   54: *   <tt>require(E, P0)</tt> is a valid expression with overload resolution
+        -:   55: *   performed in a context that does not include the declaration of the
+        -:   56: *   <tt>require</tt> customization point object.
+        -:   57: *
+        -:   58: * @li Otherwise,
+        -:   59: *   <tt>boost::asio::require(boost::asio::require(E, P0), Pn...)</tt>
+        -:   60: *   if <tt>N > 0</tt> and the expression
+        -:   61: *   <tt>boost::asio::require(boost::asio::require(E, P0), Pn...)</tt>
+        -:   62: *   is a valid expression.
+        -:   63: *
+        -:   64: * @li Otherwise, <tt>boost::asio::require(E, P0, Pn...)</tt> is ill-formed.
+        -:   65: */
+        -:   66:inline constexpr unspecified require = unspecified;
+        -:   67:
+        -:   68:/// A type trait that determines whether a @c require expression is well-formed.
+        -:   69:/**
+        -:   70: * Class template @c can_require is a trait that is derived from
+        -:   71: * @c true_type if the expression <tt>boost::asio::require(std::declval<T>(),
+        -:   72: * std::declval<Properties>()...)</tt> is well formed; otherwise @c false_type.
+        -:   73: */
+        -:   74:template <typename T, typename... Properties>
+        -:   75:struct can_require :
+        -:   76:  integral_constant<bool, automatically_determined>
+        -:   77:{
+        -:   78:};
+        -:   79:
+        -:   80:/// A type trait that determines whether a @c require expression will not throw.
+        -:   81:/**
+        -:   82: * Class template @c is_nothrow_require is a trait that is derived from
+        -:   83: * @c true_type if the expression <tt>boost::asio::require(std::declval<T>(),
+        -:   84: * std::declval<Properties>()...)</tt> is @c noexcept; otherwise @c false_type.
+        -:   85: */
+        -:   86:template <typename T, typename... Properties>
+        -:   87:struct is_nothrow_require :
+        -:   88:  integral_constant<bool, automatically_determined>
+        -:   89:{
+        -:   90:};
+        -:   91:
+        -:   92:/// A type trait that determines the result type of a @c require expression.
+        -:   93:/**
+        -:   94: * Class template @c require_result is a trait that determines the result
+        -:   95: * type of the expression <tt>boost::asio::require(std::declval<T>(),
+        -:   96: * std::declval<Properties>()...)</tt>.
+        -:   97: */
+        -:   98:template <typename T, typename... Properties>
+        -:   99:struct require_result
+        -:  100:{
+        -:  101:  /// The result of the @c require expression.
+        -:  102:  typedef automatically_determined type;
+        -:  103:};
+        -:  104:
+        -:  105:} // namespace asio
+        -:  106:} // namespace boost
+        -:  107:
+        -:  108:#else // defined(GENERATING_DOCUMENTATION)
+        -:  109:
+        -:  110:namespace boost_asio_require_fn {
+        -:  111:
+        -:  112:using boost::asio::conditional;
+        -:  113:using boost::asio::decay;
+        -:  114:using boost::asio::declval;
+        -:  115:using boost::asio::enable_if;
+        -:  116:using boost::asio::is_applicable_property;
+        -:  117:using boost::asio::traits::require_free;
+        -:  118:using boost::asio::traits::require_member;
+        -:  119:using boost::asio::traits::static_require;
+        -:  120:
+        -:  121:void require();
+        -:  122:
+        -:  123:enum overload_type
+        -:  124:{
+        -:  125:  identity,
+        -:  126:  call_member,
+        -:  127:  call_free,
+        -:  128:  two_props,
+        -:  129:  n_props,
+        -:  130:  ill_formed
+        -:  131:};
+        -:  132:
+        -:  133:template <typename Impl, typename T, typename Properties, typename = void,
+        -:  134:    typename = void, typename = void, typename = void, typename = void>
+        -:  135:struct call_traits
+        -:  136:{
+        -:  137:  BOOST_ASIO_STATIC_CONSTEXPR(overload_type, overload = ill_formed);
+        -:  138:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_noexcept = false);
+        -:  139:  typedef void result_type;
+        -:  140:};
+        -:  141:
+        -:  142:template <typename Impl, typename T, typename Property>
+        -:  143:struct call_traits<Impl, T, void(Property),
+        -:  144:  typename enable_if<
+        -:  145:    is_applicable_property<
+        -:  146:      typename decay<T>::type,
+        -:  147:      typename decay<Property>::type
+        -:  148:    >::value
+        -:  149:  >::type,
+        -:  150:  typename enable_if<
+        -:  151:    decay<Property>::type::is_requirable
+        -:  152:  >::type,
+        -:  153:  typename enable_if<
+        -:  154:    static_require<T, Property>::is_valid
+        -:  155:  >::type>
+        -:  156:{
+        -:  157:  BOOST_ASIO_STATIC_CONSTEXPR(overload_type, overload = identity);
+        -:  158:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_noexcept = true);
+        -:  159:
+        -:  160:#if defined(BOOST_ASIO_HAS_MOVE)
+        -:  161:  typedef BOOST_ASIO_MOVE_ARG(T) result_type;
+        -:  162:#else // defined(BOOST_ASIO_HAS_MOVE)
+        -:  163:  typedef BOOST_ASIO_MOVE_ARG(typename decay<T>::type) result_type;
+        -:  164:#endif // defined(BOOST_ASIO_HAS_MOVE)
+        -:  165:};
+        -:  166:
+        -:  167:template <typename Impl, typename T, typename Property>
+        -:  168:struct call_traits<Impl, T, void(Property),
+        -:  169:  typename enable_if<
+        -:  170:    is_applicable_property<
+        -:  171:      typename decay<T>::type,
+        -:  172:      typename decay<Property>::type
+        -:  173:    >::value
+        -:  174:  >::type,
+        -:  175:  typename enable_if<
+        -:  176:    decay<Property>::type::is_requirable
+        -:  177:  >::type,
+        -:  178:  typename enable_if<
+        -:  179:    !static_require<T, Property>::is_valid
+        -:  180:  >::type,
+        -:  181:  typename enable_if<
+        -:  182:    require_member<typename Impl::template proxy<T>::type, Property>::is_valid
+        -:  183:  >::type> :
+        -:  184:  require_member<typename Impl::template proxy<T>::type, Property>
+        -:  185:{
+        -:  186:  BOOST_ASIO_STATIC_CONSTEXPR(overload_type, overload = call_member);
+        -:  187:};
+        -:  188:
+        -:  189:template <typename Impl, typename T, typename Property>
+        -:  190:struct call_traits<Impl, T, void(Property),
+        -:  191:  typename enable_if<
+        -:  192:    is_applicable_property<
+        -:  193:      typename decay<T>::type,
+        -:  194:      typename decay<Property>::type
+        -:  195:    >::value
+        -:  196:  >::type,
+        -:  197:  typename enable_if<
+        -:  198:    decay<Property>::type::is_requirable
+        -:  199:  >::type,
+        -:  200:  typename enable_if<
+        -:  201:    !static_require<T, Property>::is_valid
+        -:  202:  >::type,
+        -:  203:  typename enable_if<
+        -:  204:    !require_member<typename Impl::template proxy<T>::type, Property>::is_valid
+        -:  205:  >::type,
+        -:  206:  typename enable_if<
+        -:  207:    require_free<T, Property>::is_valid
+        -:  208:  >::type> :
+        -:  209:  require_free<T, Property>
+        -:  210:{
+        -:  211:  BOOST_ASIO_STATIC_CONSTEXPR(overload_type, overload = call_free);
+        -:  212:};
+        -:  213:
+        -:  214:template <typename Impl, typename T, typename P0, typename P1>
+        -:  215:struct call_traits<Impl, T, void(P0, P1),
+        -:  216:  typename enable_if<
+        -:  217:    call_traits<Impl, T, void(P0)>::overload != ill_formed
+        -:  218:  >::type,
+        -:  219:  typename enable_if<
+        -:  220:    call_traits<
+        -:  221:      Impl,
+        -:  222:      typename call_traits<Impl, T, void(P0)>::result_type,
+        -:  223:      void(P1)
+        -:  224:    >::overload != ill_formed
+        -:  225:  >::type>
+        -:  226:{
+        -:  227:  BOOST_ASIO_STATIC_CONSTEXPR(overload_type, overload = two_props);
+        -:  228:
+        -:  229:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_noexcept =
+        -:  230:    (
+        -:  231:      call_traits<Impl, T, void(P0)>::is_noexcept
+        -:  232:      &&
+        -:  233:      call_traits<
+        -:  234:        Impl,
+        -:  235:        typename call_traits<Impl, T, void(P0)>::result_type,
+        -:  236:        void(P1)
+        -:  237:      >::is_noexcept
+        -:  238:    ));
+        -:  239:
+        -:  240:  typedef typename decay<
+        -:  241:    typename call_traits<
+        -:  242:      Impl,
+        -:  243:      typename call_traits<Impl, T, void(P0)>::result_type,
+        -:  244:      void(P1)
+        -:  245:    >::result_type
+        -:  246:  >::type result_type;
+        -:  247:};
+        -:  248:
+        -:  249:template <typename Impl, typename T, typename P0,
+        -:  250:    typename P1, typename BOOST_ASIO_ELLIPSIS PN>
+        -:  251:struct call_traits<Impl, T, void(P0, P1, PN BOOST_ASIO_ELLIPSIS),
+        -:  252:  typename enable_if<
+        -:  253:    call_traits<Impl, T, void(P0)>::overload != ill_formed
+        -:  254:  >::type,
+        -:  255:  typename enable_if<
+        -:  256:    call_traits<
+        -:  257:      Impl,
+        -:  258:      typename call_traits<Impl, T, void(P0)>::result_type,
+        -:  259:      void(P1, PN BOOST_ASIO_ELLIPSIS)
+        -:  260:    >::overload != ill_formed
+        -:  261:  >::type>
+        -:  262:{
+        -:  263:  BOOST_ASIO_STATIC_CONSTEXPR(overload_type, overload = n_props);
+        -:  264:
+        -:  265:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_noexcept =
+        -:  266:    (
+        -:  267:      call_traits<Impl, T, void(P0)>::is_noexcept
+        -:  268:      &&
+        -:  269:      call_traits<
+        -:  270:        Impl,
+        -:  271:        typename call_traits<Impl, T, void(P0)>::result_type,
+        -:  272:        void(P1, PN BOOST_ASIO_ELLIPSIS)
+        -:  273:      >::is_noexcept
+        -:  274:    ));
+        -:  275:
+        -:  276:  typedef typename decay<
+        -:  277:    typename call_traits<
+        -:  278:      Impl,
+        -:  279:      typename call_traits<Impl, T, void(P0)>::result_type,
+        -:  280:      void(P1, PN BOOST_ASIO_ELLIPSIS)
+        -:  281:    >::result_type
+        -:  282:  >::type result_type;
+        -:  283:};
+        -:  284:
+        -:  285:struct impl
+        -:  286:{
+        -:  287:  template <typename T>
+        -:  288:  struct proxy
+        -:  289:  {
+        -:  290:#if defined(BOOST_ASIO_HAS_DEDUCED_REQUIRE_MEMBER_TRAIT)
+        -:  291:    struct type
+        -:  292:    {
+        -:  293:      template <typename P>
+        -:  294:      auto require(BOOST_ASIO_MOVE_ARG(P) p)
+        -:  295:        noexcept(
+        -:  296:          noexcept(
+        -:  297:            declval<typename conditional<true, T, P>::type>().require(
+        -:  298:              BOOST_ASIO_MOVE_CAST(P)(p))
+        -:  299:          )
+        -:  300:        )
+        -:  301:        -> decltype(
+        -:  302:          declval<typename conditional<true, T, P>::type>().require(
+        -:  303:            BOOST_ASIO_MOVE_CAST(P)(p))
+        -:  304:        );
+        -:  305:    };
+        -:  306:#else // defined(BOOST_ASIO_HAS_DEDUCED_REQUIRE_MEMBER_TRAIT)
+        -:  307:    typedef T type;
+        -:  308:#endif // defined(BOOST_ASIO_HAS_DEDUCED_REQUIRE_MEMBER_TRAIT)
+        -:  309:  };
+        -:  310:
+        -:  311:  template <typename T, typename Property>
+        -:  312:  BOOST_ASIO_NODISCARD BOOST_ASIO_CONSTEXPR typename enable_if<
+        -:  313:    call_traits<impl, T, void(Property)>::overload == identity,
+        -:  314:    typename call_traits<impl, T, void(Property)>::result_type
+        -:  315:  >::type
+function _ZNK21boost_asio_require_fn4implclIN5boost4asio21basic_system_executorINS3_9execution6detail8blocking10possibly_tILi0EEENS6_12relationship6fork_tILi0EEESaIvEEES9_EENSt9enable_ifIXeqsrNS_11call_traitsIS0_T_FvT0_EvvvvvEE8overloadLNS_13overload_typeE0EENSK_11result_typeEE4typeEOSH_OSI_ called 16 returned 100% blocks executed 100%
+       16:  316:  operator()(
+        -:  317:      BOOST_ASIO_MOVE_ARG(T) t,
+        -:  318:      BOOST_ASIO_MOVE_ARG(Property)) const
+        -:  319:    BOOST_ASIO_NOEXCEPT_IF((
+        -:  320:      call_traits<impl, T, void(Property)>::is_noexcept))
+        -:  321:  {
+       16:  322:    return BOOST_ASIO_MOVE_CAST(T)(t);
+        -:  323:  }
+        -:  324:
+        -:  325:  template <typename T, typename Property>
+        -:  326:  BOOST_ASIO_NODISCARD BOOST_ASIO_CONSTEXPR typename enable_if<
+        -:  327:    call_traits<impl, T, void(Property)>::overload == call_member,
+        -:  328:    typename call_traits<impl, T, void(Property)>::result_type
+        -:  329:  >::type
+   20003*:  330:  operator()(
+        -:  331:      BOOST_ASIO_MOVE_ARG(T) t,
+        -:  332:      BOOST_ASIO_MOVE_ARG(Property) p) const
+        -:  333:    BOOST_ASIO_NOEXCEPT_IF((
+        -:  334:      call_traits<impl, T, void(Property)>::is_noexcept))
+        -:  335:  {
+        -:  336:    return BOOST_ASIO_MOVE_CAST(T)(t).require(
+   20003*:  337:        BOOST_ASIO_MOVE_CAST(Property)(p));
+        -:  338:  }
+        -:  339:
+        -:  340:  template <typename T, typename Property>
+        -:  341:  BOOST_ASIO_NODISCARD BOOST_ASIO_CONSTEXPR typename enable_if<
+        -:  342:    call_traits<impl, T, void(Property)>::overload == call_free,
+        -:  343:    typename call_traits<impl, T, void(Property)>::result_type
+        -:  344:  >::type
+        -:  345:  operator()(
+        -:  346:      BOOST_ASIO_MOVE_ARG(T) t,
+        -:  347:      BOOST_ASIO_MOVE_ARG(Property) p) const
+        -:  348:    BOOST_ASIO_NOEXCEPT_IF((
+        -:  349:      call_traits<impl, T, void(Property)>::is_noexcept))
+        -:  350:  {
+        -:  351:    return require(
+        -:  352:        BOOST_ASIO_MOVE_CAST(T)(t),
+        -:  353:        BOOST_ASIO_MOVE_CAST(Property)(p));
+        -:  354:  }
+        -:  355:
+        -:  356:  template <typename T, typename P0, typename P1>
+        -:  357:  BOOST_ASIO_NODISCARD BOOST_ASIO_CONSTEXPR typename enable_if<
+        -:  358:    call_traits<impl, T, void(P0, P1)>::overload == two_props,
+        -:  359:    typename call_traits<impl, T, void(P0, P1)>::result_type
+        -:  360:  >::type
+        -:  361:  operator()(
+        -:  362:      BOOST_ASIO_MOVE_ARG(T) t,
+        -:  363:      BOOST_ASIO_MOVE_ARG(P0) p0,
+        -:  364:      BOOST_ASIO_MOVE_ARG(P1) p1) const
+        -:  365:    BOOST_ASIO_NOEXCEPT_IF((
+        -:  366:      call_traits<impl, T, void(P0, P1)>::is_noexcept))
+        -:  367:  {
+        -:  368:    return (*this)(
+        -:  369:        (*this)(
+        -:  370:          BOOST_ASIO_MOVE_CAST(T)(t),
+        -:  371:          BOOST_ASIO_MOVE_CAST(P0)(p0)),
+        -:  372:        BOOST_ASIO_MOVE_CAST(P1)(p1));
+        -:  373:  }
+        -:  374:
+        -:  375:  template <typename T, typename P0, typename P1,
+        -:  376:    typename BOOST_ASIO_ELLIPSIS PN>
+        -:  377:  BOOST_ASIO_NODISCARD BOOST_ASIO_CONSTEXPR typename enable_if<
+        -:  378:    call_traits<impl, T,
+        -:  379:      void(P0, P1, PN BOOST_ASIO_ELLIPSIS)>::overload == n_props,
+        -:  380:    typename call_traits<impl, T,
+        -:  381:      void(P0, P1, PN BOOST_ASIO_ELLIPSIS)>::result_type
+        -:  382:  >::type
+        -:  383:  operator()(
+        -:  384:      BOOST_ASIO_MOVE_ARG(T) t,
+        -:  385:      BOOST_ASIO_MOVE_ARG(P0) p0,
+        -:  386:      BOOST_ASIO_MOVE_ARG(P1) p1,
+        -:  387:      BOOST_ASIO_MOVE_ARG(PN) BOOST_ASIO_ELLIPSIS pn) const
+        -:  388:    BOOST_ASIO_NOEXCEPT_IF((
+        -:  389:      call_traits<impl, T, void(P0, P1, PN BOOST_ASIO_ELLIPSIS)>::is_noexcept))
+        -:  390:  {
+        -:  391:    return (*this)(
+        -:  392:        (*this)(
+        -:  393:          BOOST_ASIO_MOVE_CAST(T)(t),
+        -:  394:          BOOST_ASIO_MOVE_CAST(P0)(p0)),
+        -:  395:        BOOST_ASIO_MOVE_CAST(P1)(p1),
+        -:  396:        BOOST_ASIO_MOVE_CAST(PN)(pn) BOOST_ASIO_ELLIPSIS);
+        -:  397:  }
+        -:  398:};
+        -:  399:
+        -:  400:template <typename T = impl>
+        -:  401:struct static_instance
+        -:  402:{
+        -:  403:  static const T instance;
+        -:  404:};
+        -:  405:
+        -:  406:template <typename T>
+        -:  407:const T static_instance<T>::instance = {};
+        -:  408:
+        -:  409:} // namespace boost_asio_require_fn
+        -:  410:namespace boost {
+        -:  411:namespace asio {
+        -:  412:namespace {
+        -:  413:
+        -:  414:static BOOST_ASIO_CONSTEXPR const boost_asio_require_fn::impl&
+        -:  415:  require = boost_asio_require_fn::static_instance<>::instance;
+        -:  416:
+        -:  417:} // namespace
+        -:  418:
+        -:  419:typedef boost_asio_require_fn::impl require_t;
+        -:  420:
+        -:  421:#if defined(BOOST_ASIO_HAS_VARIADIC_TEMPLATES)
+        -:  422:
+        -:  423:template <typename T, typename... Properties>
+        -:  424:struct can_require :
+        -:  425:  integral_constant<bool,
+        -:  426:    boost_asio_require_fn::call_traits<
+        -:  427:      require_t, T, void(Properties...)>::overload
+        -:  428:        != boost_asio_require_fn::ill_formed>
+        -:  429:{
+        -:  430:};
+        -:  431:
+        -:  432:#else // defined(BOOST_ASIO_HAS_VARIADIC_TEMPLATES)
+        -:  433:
+        -:  434:template <typename T, typename P0 = void,
+        -:  435:    typename P1 = void, typename P2 = void>
+        -:  436:struct can_require :
+        -:  437:  integral_constant<bool,
+        -:  438:    boost_asio_require_fn::call_traits<require_t, T, void(P0, P1, P2)>::overload
+        -:  439:      != boost_asio_require_fn::ill_formed>
+        -:  440:{
+        -:  441:};
+        -:  442:
+        -:  443:template <typename T, typename P0, typename P1>
+        -:  444:struct can_require<T, P0, P1> :
+        -:  445:  integral_constant<bool,
+        -:  446:    boost_asio_require_fn::call_traits<require_t, T, void(P0, P1)>::overload
+        -:  447:      != boost_asio_require_fn::ill_formed>
+        -:  448:{
+        -:  449:};
+        -:  450:
+        -:  451:template <typename T, typename P0>
+        -:  452:struct can_require<T, P0> :
+        -:  453:  integral_constant<bool,
+        -:  454:    boost_asio_require_fn::call_traits<require_t, T, void(P0)>::overload
+        -:  455:      != boost_asio_require_fn::ill_formed>
+        -:  456:{
+        -:  457:};
+        -:  458:
+        -:  459:template <typename T>
+        -:  460:struct can_require<T> :
+        -:  461:  false_type
+        -:  462:{
+        -:  463:};
+        -:  464:
+        -:  465:#endif // defined(BOOST_ASIO_HAS_VARIADIC_TEMPLATES)
+        -:  466:
+        -:  467:#if defined(BOOST_ASIO_HAS_VARIABLE_TEMPLATES)
+        -:  468:
+        -:  469:template <typename T, typename BOOST_ASIO_ELLIPSIS Properties>
+        -:  470:constexpr bool can_require_v
+        -:  471:  = can_require<T, Properties BOOST_ASIO_ELLIPSIS>::value;
+        -:  472:
+        -:  473:#endif // defined(BOOST_ASIO_HAS_VARIABLE_TEMPLATES)
+        -:  474:
+        -:  475:#if defined(BOOST_ASIO_HAS_VARIADIC_TEMPLATES)
+        -:  476:
+        -:  477:template <typename T, typename... Properties>
+        -:  478:struct is_nothrow_require :
+        -:  479:  integral_constant<bool,
+        -:  480:    boost_asio_require_fn::call_traits<
+        -:  481:      require_t, T, void(Properties...)>::is_noexcept>
+        -:  482:{
+        -:  483:};
+        -:  484:
+        -:  485:#else // defined(BOOST_ASIO_HAS_VARIADIC_TEMPLATES)
+        -:  486:
+        -:  487:template <typename T, typename P0 = void,
+        -:  488:    typename P1 = void, typename P2 = void>
+        -:  489:struct is_nothrow_require :
+        -:  490:  integral_constant<bool,
+        -:  491:    boost_asio_require_fn::call_traits<
+        -:  492:      require_t, T, void(P0, P1, P2)>::is_noexcept>
+        -:  493:{
+        -:  494:};
+        -:  495:
+        -:  496:template <typename T, typename P0, typename P1>
+        -:  497:struct is_nothrow_require<T, P0, P1> :
+        -:  498:  integral_constant<bool,
+        -:  499:    boost_asio_require_fn::call_traits<
+        -:  500:      require_t, T, void(P0, P1)>::is_noexcept>
+        -:  501:{
+        -:  502:};
+        -:  503:
+        -:  504:template <typename T, typename P0>
+        -:  505:struct is_nothrow_require<T, P0> :
+        -:  506:  integral_constant<bool,
+        -:  507:    boost_asio_require_fn::call_traits<
+        -:  508:      require_t, T, void(P0)>::is_noexcept>
+        -:  509:{
+        -:  510:};
+        -:  511:
+        -:  512:template <typename T>
+        -:  513:struct is_nothrow_require<T> :
+        -:  514:  false_type
+        -:  515:{
+        -:  516:};
+        -:  517:
+        -:  518:#endif // defined(BOOST_ASIO_HAS_VARIADIC_TEMPLATES)
+        -:  519:
+        -:  520:#if defined(BOOST_ASIO_HAS_VARIABLE_TEMPLATES)
+        -:  521:
+        -:  522:template <typename T, typename BOOST_ASIO_ELLIPSIS Properties>
+        -:  523:constexpr bool is_nothrow_require_v
+        -:  524:  = is_nothrow_require<T, Properties BOOST_ASIO_ELLIPSIS>::value;
+        -:  525:
+        -:  526:#endif // defined(BOOST_ASIO_HAS_VARIABLE_TEMPLATES)
+        -:  527:
+        -:  528:#if defined(BOOST_ASIO_HAS_VARIADIC_TEMPLATES)
+        -:  529:
+        -:  530:template <typename T, typename... Properties>
+        -:  531:struct require_result
+        -:  532:{
+        -:  533:  typedef typename boost_asio_require_fn::call_traits<
+        -:  534:      require_t, T, void(Properties...)>::result_type type;
+        -:  535:};
+        -:  536:
+        -:  537:#else // defined(BOOST_ASIO_HAS_VARIADIC_TEMPLATES)
+        -:  538:
+        -:  539:template <typename T, typename P0 = void,
+        -:  540:    typename P1 = void, typename P2 = void>
+        -:  541:struct require_result
+        -:  542:{
+        -:  543:  typedef typename boost_asio_require_fn::call_traits<
+        -:  544:      require_t, T, void(P0, P1, P2)>::result_type type;
+        -:  545:};
+        -:  546:
+        -:  547:template <typename T, typename P0, typename P1>
+        -:  548:struct require_result<T, P0, P1>
+        -:  549:{
+        -:  550:  typedef typename boost_asio_require_fn::call_traits<
+        -:  551:      require_t, T, void(P0, P1)>::result_type type;
+        -:  552:};
+        -:  553:
+        -:  554:template <typename T, typename P0>
+        -:  555:struct require_result<T, P0>
+        -:  556:{
+        -:  557:  typedef typename boost_asio_require_fn::call_traits<
+        -:  558:      require_t, T, void(P0)>::result_type type;
+        -:  559:};
+        -:  560:
+        -:  561:template <typename T>
+        -:  562:struct require_result<T>
+        -:  563:{
+        -:  564:};
+        -:  565:
+        -:  566:#endif // defined(BOOST_ASIO_HAS_VARIADIC_TEMPLATES)
+        -:  567:
+        -:  568:} // namespace asio
+        -:  569:} // namespace boost
+        -:  570:
+        -:  571:#endif // defined(GENERATING_DOCUMENTATION)
+        -:  572:
+        -:  573:#include <boost/asio/detail/pop_options.hpp>
+        -:  574:
+        -:  575:#endif // BOOST_ASIO_REQUIRE_HPP

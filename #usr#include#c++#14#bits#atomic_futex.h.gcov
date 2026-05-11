@@ -1,0 +1,482 @@
+        -:    0:Source:/usr/include/c++/14/bits/atomic_futex.h
+        -:    1:// -*- C++ -*- header.
+        -:    2:
+        -:    3:// Copyright (C) 2015-2024 Free Software Foundation, Inc.
+        -:    4://
+        -:    5:// This file is part of the GNU ISO C++ Library.  This library is free
+        -:    6:// software; you can redistribute it and/or modify it under the
+        -:    7:// terms of the GNU General Public License as published by the
+        -:    8:// Free Software Foundation; either version 3, or (at your option)
+        -:    9:// any later version.
+        -:   10:
+        -:   11:// This library is distributed in the hope that it will be useful,
+        -:   12:// but WITHOUT ANY WARRANTY; without even the implied warranty of
+        -:   13:// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+        -:   14:// GNU General Public License for more details.
+        -:   15:
+        -:   16:// Under Section 7 of GPL version 3, you are granted additional
+        -:   17:// permissions described in the GCC Runtime Library Exception, version
+        -:   18:// 3.1, as published by the Free Software Foundation.
+        -:   19:
+        -:   20:// You should have received a copy of the GNU General Public License and
+        -:   21:// a copy of the GCC Runtime Library Exception along with this program;
+        -:   22:// see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
+        -:   23:// <http://www.gnu.org/licenses/>.
+        -:   24:
+        -:   25:/** @file bits/atomic_futex.h
+        -:   26: *  This is an internal header file, included by other library headers.
+        -:   27: *  Do not attempt to use it directly.
+        -:   28: */
+        -:   29:
+        -:   30:#ifndef _GLIBCXX_ATOMIC_FUTEX_H
+        -:   31:#define _GLIBCXX_ATOMIC_FUTEX_H 1
+        -:   32:
+        -:   33:#pragma GCC system_header
+        -:   34:
+        -:   35:#include <atomic>
+        -:   36:#if ! (defined(_GLIBCXX_HAVE_LINUX_FUTEX) && ATOMIC_INT_LOCK_FREE > 1)
+        -:   37:#include <mutex>
+        -:   38:#include <condition_variable>
+        -:   39:#endif
+        -:   40:#include <bits/chrono.h>
+        -:   41:
+        -:   42:#ifndef _GLIBCXX_ALWAYS_INLINE
+        -:   43:#define _GLIBCXX_ALWAYS_INLINE inline __attribute__((__always_inline__))
+        -:   44:#endif
+        -:   45:
+        -:   46:namespace std _GLIBCXX_VISIBILITY(default)
+        -:   47:{
+        -:   48:_GLIBCXX_BEGIN_NAMESPACE_VERSION
+        -:   49:
+        -:   50:#ifdef _GLIBCXX_HAS_GTHREADS
+        -:   51:#if defined(_GLIBCXX_HAVE_LINUX_FUTEX) && ATOMIC_INT_LOCK_FREE > 1
+        -:   52:  struct __atomic_futex_unsigned_base
+        -:   53:  {
+        -:   54:    // __s and __ns are measured against CLOCK_REALTIME. Returns false
+        -:   55:    // iff a timeout occurred.
+        -:   56:    bool
+        -:   57:    _M_futex_wait_until(unsigned *__addr, unsigned __val, bool __has_timeout,
+        -:   58:	chrono::seconds __s, chrono::nanoseconds __ns);
+        -:   59:
+        -:   60:    // __s and __ns are measured against CLOCK_MONOTONIC. Returns
+        -:   61:    // false iff a timeout occurred.
+        -:   62:    bool
+        -:   63:    _M_futex_wait_until_steady(unsigned *__addr, unsigned __val,
+        -:   64:	bool __has_timeout, chrono::seconds __s, chrono::nanoseconds __ns);
+        -:   65:
+        -:   66:    // This can be executed after the object has been destroyed.
+        -:   67:    static void _M_futex_notify_all(unsigned* __addr);
+        -:   68:  };
+        -:   69:
+        -:   70:  template <unsigned _Waiter_bit = 0x80000000>
+        -:   71:  class __atomic_futex_unsigned : __atomic_futex_unsigned_base
+        -:   72:  {
+        -:   73:    typedef chrono::steady_clock __clock_t;
+        -:   74:
+        -:   75:    // This must be lock-free and at offset 0.
+        -:   76:    atomic<unsigned> _M_data;
+        -:   77:
+        -:   78:  public:
+        -:   79:    explicit
+       17:   80:    __atomic_futex_unsigned(unsigned __data) : _M_data(__data)
+       17:   81:    { }
+------------------
+_ZNSt23__atomic_futex_unsignedILj2147483648EEC2Ej:
+function _ZNSt23__atomic_futex_unsignedILj2147483648EEC2Ej called 1 returned 100% blocks executed 100%
+        1:   80:    __atomic_futex_unsigned(unsigned __data) : _M_data(__data)
+call    0 returned 100%
+        1:   81:    { }
+------------------
+_ZNSt23__atomic_futex_unsignedILj2147483648EEC2Ej:
+function _ZNSt23__atomic_futex_unsignedILj2147483648EEC2Ej called 16 returned 100% blocks executed 100%
+       16:   80:    __atomic_futex_unsigned(unsigned __data) : _M_data(__data)
+call    0 returned 100%
+       16:   81:    { }
+------------------
+        -:   82:
+        -:   83:    _GLIBCXX_ALWAYS_INLINE unsigned
+        -:   84:    _M_load(memory_order __mo)
+        -:   85:    {
+      35*:   86:      return _M_data.load(__mo) & ~_Waiter_bit;
+call    0 returned 100%
+call    1 returned 100%
+        -:   87:    }
+        -:   88:
+        -:   89:  private:
+        -:   90:    // If a timeout occurs, returns a current value after the timeout;
+        -:   91:    // otherwise, returns the operand's value if equal is true or a different
+        -:   92:    // value if equal is false.
+        -:   93:    // The assumed value is the caller's assumption about the current value
+        -:   94:    // when making the call.
+        -:   95:    // __s and __ns are measured against CLOCK_REALTIME.
+        -:   96:    unsigned
+       1*:   97:    _M_load_and_test_until(unsigned __assumed, unsigned __operand,
+        -:   98:	bool __equal, memory_order __mo, bool __has_timeout,
+        -:   99:	chrono::seconds __s, chrono::nanoseconds __ns)
+        -:  100:    {
+    #####:  101:      for (;;)
+        -:  102:	{
+        -:  103:	  // Don't bother checking the value again because we expect the caller
+        -:  104:	  // to have done it recently.
+        -:  105:	  // memory_order_relaxed is sufficient because we can rely on just the
+        -:  106:	  // modification order (store_notify uses an atomic RMW operation too),
+        -:  107:	  // and the futex syscalls synchronize between themselves.
+       1*:  108:	  _M_data.fetch_or(_Waiter_bit, memory_order_relaxed);
+       1*:  109:	  bool __ret = _M_futex_wait_until((unsigned*)(void*)&_M_data,
+        -:  110:					   __assumed | _Waiter_bit,
+        -:  111:					   __has_timeout, __s, __ns);
+        -:  112:	  // Fetch the current value after waiting (clears _Waiter_bit).
+       1*:  113:	  __assumed = _M_load(__mo);
+       1*:  114:	  if (!__ret || ((__operand == __assumed) == __equal))
+       1*:  115:	    return __assumed;
+        -:  116:	  // TODO adapt wait time
+        -:  117:	}
+        -:  118:    }
+------------------
+_ZNSt23__atomic_futex_unsignedILj2147483648EE22_M_load_and_test_untilEjjbSt12memory_orderbNSt6chrono8durationIlSt5ratioILl1ELl1EEEENS3_IlS4_ILl1ELl1000000000EEEE:
+function _ZNSt23__atomic_futex_unsignedILj2147483648EE22_M_load_and_test_untilEjjbSt12memory_orderbNSt6chrono8durationIlSt5ratioILl1ELl1EEEENS3_IlS4_ILl1ELl1000000000EEEE called 1 returned 100% blocks executed 73%
+        1:   97:    _M_load_and_test_until(unsigned __assumed, unsigned __operand,
+        -:   98:	bool __equal, memory_order __mo, bool __has_timeout,
+        -:   99:	chrono::seconds __s, chrono::nanoseconds __ns)
+        -:  100:    {
+    #####:  101:      for (;;)
+        -:  102:	{
+        -:  103:	  // Don't bother checking the value again because we expect the caller
+        -:  104:	  // to have done it recently.
+        -:  105:	  // memory_order_relaxed is sufficient because we can rely on just the
+        -:  106:	  // modification order (store_notify uses an atomic RMW operation too),
+        -:  107:	  // and the futex syscalls synchronize between themselves.
+        1:  108:	  _M_data.fetch_or(_Waiter_bit, memory_order_relaxed);
+        1:  109:	  bool __ret = _M_futex_wait_until((unsigned*)(void*)&_M_data,
+call    0 returned 100%
+call    1 returned 100%
+        -:  110:					   __assumed | _Waiter_bit,
+        -:  111:					   __has_timeout, __s, __ns);
+        -:  112:	  // Fetch the current value after waiting (clears _Waiter_bit).
+        1:  113:	  __assumed = _M_load(__mo);
+        1:  114:	  if (!__ret || ((__operand == __assumed) == __equal))
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0%
+        1:  115:	    return __assumed;
+        -:  116:	  // TODO adapt wait time
+        -:  117:	}
+        -:  118:    }
+------------------
+_ZNSt23__atomic_futex_unsignedILj2147483648EE22_M_load_and_test_untilEjjbSt12memory_orderbNSt6chrono8durationIlSt5ratioILl1ELl1EEEENS3_IlS4_ILl1ELl1000000000EEEE:
+function _ZNSt23__atomic_futex_unsignedILj2147483648EE22_M_load_and_test_untilEjjbSt12memory_orderbNSt6chrono8durationIlSt5ratioILl1ELl1EEEENS3_IlS4_ILl1ELl1000000000EEEE called 0 returned 0% blocks executed 0%
+    #####:   97:    _M_load_and_test_until(unsigned __assumed, unsigned __operand,
+        -:   98:	bool __equal, memory_order __mo, bool __has_timeout,
+        -:   99:	chrono::seconds __s, chrono::nanoseconds __ns)
+        -:  100:    {
+    #####:  101:      for (;;)
+        -:  102:	{
+        -:  103:	  // Don't bother checking the value again because we expect the caller
+        -:  104:	  // to have done it recently.
+        -:  105:	  // memory_order_relaxed is sufficient because we can rely on just the
+        -:  106:	  // modification order (store_notify uses an atomic RMW operation too),
+        -:  107:	  // and the futex syscalls synchronize between themselves.
+    #####:  108:	  _M_data.fetch_or(_Waiter_bit, memory_order_relaxed);
+    #####:  109:	  bool __ret = _M_futex_wait_until((unsigned*)(void*)&_M_data,
+call    0 never executed
+call    1 never executed
+        -:  110:					   __assumed | _Waiter_bit,
+        -:  111:					   __has_timeout, __s, __ns);
+        -:  112:	  // Fetch the current value after waiting (clears _Waiter_bit).
+    #####:  113:	  __assumed = _M_load(__mo);
+    #####:  114:	  if (!__ret || ((__operand == __assumed) == __equal))
+branch  0 never executed (fallthrough)
+branch  1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed
+    #####:  115:	    return __assumed;
+        -:  116:	  // TODO adapt wait time
+        -:  117:	}
+        -:  118:    }
+------------------
+        -:  119:
+        -:  120:    // If a timeout occurs, returns a current value after the timeout;
+        -:  121:    // otherwise, returns the operand's value if equal is true or a different
+        -:  122:    // value if equal is false.
+        -:  123:    // The assumed value is the caller's assumption about the current value
+        -:  124:    // when making the call.
+        -:  125:    // __s and __ns are measured against CLOCK_MONOTONIC.
+        -:  126:    unsigned
+        -:  127:    _M_load_and_test_until_steady(unsigned __assumed, unsigned __operand,
+        -:  128:	bool __equal, memory_order __mo, bool __has_timeout,
+        -:  129:	chrono::seconds __s, chrono::nanoseconds __ns)
+        -:  130:    {
+        -:  131:      for (;;)
+        -:  132:	{
+        -:  133:	  // Don't bother checking the value again because we expect the caller
+        -:  134:	  // to have done it recently.
+        -:  135:	  // memory_order_relaxed is sufficient because we can rely on just the
+        -:  136:	  // modification order (store_notify uses an atomic RMW operation too),
+        -:  137:	  // and the futex syscalls synchronize between themselves.
+        -:  138:	  _M_data.fetch_or(_Waiter_bit, memory_order_relaxed);
+        -:  139:	  bool __ret = _M_futex_wait_until_steady((unsigned*)(void*)&_M_data,
+        -:  140:					   __assumed | _Waiter_bit,
+        -:  141:					   __has_timeout, __s, __ns);
+        -:  142:	  // Fetch the current value after waiting (clears _Waiter_bit).
+        -:  143:	  __assumed = _M_load(__mo);
+        -:  144:	  if (!__ret || ((__operand == __assumed) == __equal))
+        -:  145:	    return __assumed;
+        -:  146:	  // TODO adapt wait time
+        -:  147:	}
+        -:  148:    }
+        -:  149:
+        -:  150:    // Returns the operand's value if equal is true or a different value if
+        -:  151:    // equal is false.
+        -:  152:    // The assumed value is the caller's assumption about the current value
+        -:  153:    // when making the call.
+        -:  154:    unsigned
+       1*:  155:    _M_load_and_test(unsigned __assumed, unsigned __operand,
+        -:  156:	bool __equal, memory_order __mo)
+        -:  157:    {
+       1*:  158:      return _M_load_and_test_until(__assumed, __operand, __equal, __mo,
+       1*:  159:				    false, {}, {});
+        -:  160:    }
+------------------
+_ZNSt23__atomic_futex_unsignedILj2147483648EE16_M_load_and_testEjjbSt12memory_order:
+function _ZNSt23__atomic_futex_unsignedILj2147483648EE16_M_load_and_testEjjbSt12memory_order called 1 returned 100% blocks executed 100%
+        1:  155:    _M_load_and_test(unsigned __assumed, unsigned __operand,
+        -:  156:	bool __equal, memory_order __mo)
+        -:  157:    {
+        1:  158:      return _M_load_and_test_until(__assumed, __operand, __equal, __mo,
+call    0 returned 100%
+        1:  159:				    false, {}, {});
+        -:  160:    }
+------------------
+_ZNSt23__atomic_futex_unsignedILj2147483648EE16_M_load_and_testEjjbSt12memory_order:
+function _ZNSt23__atomic_futex_unsignedILj2147483648EE16_M_load_and_testEjjbSt12memory_order called 0 returned 0% blocks executed 0%
+    #####:  155:    _M_load_and_test(unsigned __assumed, unsigned __operand,
+        -:  156:	bool __equal, memory_order __mo)
+        -:  157:    {
+    #####:  158:      return _M_load_and_test_until(__assumed, __operand, __equal, __mo,
+call    0 never executed
+    #####:  159:				    false, {}, {});
+        -:  160:    }
+------------------
+        -:  161:
+        -:  162:    // If a timeout occurs, returns a current value after the timeout;
+        -:  163:    // otherwise, returns the operand's value if equal is true or a different
+        -:  164:    // value if equal is false.
+        -:  165:    // The assumed value is the caller's assumption about the current value
+        -:  166:    // when making the call.
+        -:  167:    template<typename _Dur>
+        -:  168:    unsigned
+        -:  169:    _M_load_and_test_until_impl(unsigned __assumed, unsigned __operand,
+        -:  170:	bool __equal, memory_order __mo,
+        -:  171:	const chrono::time_point<std::chrono::system_clock, _Dur>& __atime)
+        -:  172:    {
+        -:  173:      auto __s = chrono::time_point_cast<chrono::seconds>(__atime);
+        -:  174:      auto __ns = chrono::duration_cast<chrono::nanoseconds>(__atime - __s);
+        -:  175:      // XXX correct?
+        -:  176:      return _M_load_and_test_until(__assumed, __operand, __equal, __mo,
+        -:  177:	  true, __s.time_since_epoch(), __ns);
+        -:  178:    }
+        -:  179:
+        -:  180:    template<typename _Dur>
+        -:  181:    unsigned
+        -:  182:    _M_load_and_test_until_impl(unsigned __assumed, unsigned __operand,
+        -:  183:	bool __equal, memory_order __mo,
+        -:  184:	const chrono::time_point<std::chrono::steady_clock, _Dur>& __atime)
+        -:  185:    {
+        -:  186:      auto __s = chrono::time_point_cast<chrono::seconds>(__atime);
+        -:  187:      auto __ns = chrono::duration_cast<chrono::nanoseconds>(__atime - __s);
+        -:  188:      // XXX correct?
+        -:  189:      return _M_load_and_test_until_steady(__assumed, __operand, __equal, __mo,
+        -:  190:	  true, __s.time_since_epoch(), __ns);
+        -:  191:    }
+        -:  192:
+        -:  193:  public:
+        -:  194:
+        -:  195:    _GLIBCXX_ALWAYS_INLINE unsigned
+        -:  196:    _M_load_when_not_equal(unsigned __val, memory_order __mo)
+        -:  197:    {
+        -:  198:      unsigned __i = _M_load(__mo);
+        -:  199:      if ((__i & ~_Waiter_bit) != __val)
+        -:  200:	return (__i & ~_Waiter_bit);
+        -:  201:      // TODO Spin-wait first.
+        -:  202:      return _M_load_and_test(__i, __val, false, __mo);
+        -:  203:    }
+        -:  204:
+        -:  205:    _GLIBCXX_ALWAYS_INLINE void
+        -:  206:    _M_load_when_equal(unsigned __val, memory_order __mo)
+        -:  207:    {
+       17:  208:      unsigned __i = _M_load(__mo);
+       17:  209:      if ((__i & ~_Waiter_bit) == __val)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0%
+      16*:  210:	return;
+        -:  211:      // TODO Spin-wait first.
+       1*:  212:      _M_load_and_test(__i, __val, true, __mo);
+call    0 returned 100%
+call    1 never executed
+        -:  213:    }
+        -:  214:
+        -:  215:    // Returns false iff a timeout occurred.
+        -:  216:    template<typename _Rep, typename _Period>
+        -:  217:      _GLIBCXX_ALWAYS_INLINE bool
+        -:  218:      _M_load_when_equal_for(unsigned __val, memory_order __mo,
+        -:  219:	  const chrono::duration<_Rep, _Period>& __rtime)
+        -:  220:      {
+        -:  221:	using __dur = typename __clock_t::duration;
+        -:  222:	return _M_load_when_equal_until(__val, __mo,
+        -:  223:		    __clock_t::now() + chrono::__detail::ceil<__dur>(__rtime));
+        -:  224:      }
+        -:  225:
+        -:  226:    // Returns false iff a timeout occurred.
+        -:  227:    template<typename _Clock, typename _Duration>
+        -:  228:      _GLIBCXX_ALWAYS_INLINE bool
+        -:  229:      _M_load_when_equal_until(unsigned __val, memory_order __mo,
+        -:  230:	  const chrono::time_point<_Clock, _Duration>& __atime)
+        -:  231:      {
+        -:  232:	typename _Clock::time_point __c_entry = _Clock::now();
+        -:  233:	do {
+        -:  234:	  const __clock_t::time_point __s_entry = __clock_t::now();
+        -:  235:	  const auto __delta = __atime - __c_entry;
+        -:  236:	  const auto __s_atime = __s_entry +
+        -:  237:	      chrono::__detail::ceil<__clock_t::duration>(__delta);
+        -:  238:	  if (_M_load_when_equal_until(__val, __mo, __s_atime))
+        -:  239:	    return true;
+        -:  240:	  __c_entry = _Clock::now();
+        -:  241:	} while (__c_entry < __atime);
+        -:  242:	return false;
+        -:  243:      }
+        -:  244:
+        -:  245:    // Returns false iff a timeout occurred.
+        -:  246:    template<typename _Duration>
+        -:  247:    _GLIBCXX_ALWAYS_INLINE bool
+        -:  248:    _M_load_when_equal_until(unsigned __val, memory_order __mo,
+        -:  249:	const chrono::time_point<std::chrono::system_clock, _Duration>& __atime)
+        -:  250:    {
+        -:  251:      unsigned __i = _M_load(__mo);
+        -:  252:      if ((__i & ~_Waiter_bit) == __val)
+        -:  253:	return true;
+        -:  254:      // TODO Spin-wait first.  Ignore effect on timeout.
+        -:  255:      __i = _M_load_and_test_until_impl(__i, __val, true, __mo, __atime);
+        -:  256:      return (__i & ~_Waiter_bit) == __val;
+        -:  257:    }
+        -:  258:
+        -:  259:    // Returns false iff a timeout occurred.
+        -:  260:    template<typename _Duration>
+        -:  261:    _GLIBCXX_ALWAYS_INLINE bool
+        -:  262:    _M_load_when_equal_until(unsigned __val, memory_order __mo,
+        -:  263:	const chrono::time_point<std::chrono::steady_clock, _Duration>& __atime)
+        -:  264:    {
+        -:  265:      unsigned __i = _M_load(__mo);
+        -:  266:      if ((__i & ~_Waiter_bit) == __val)
+        -:  267:	return true;
+        -:  268:      // TODO Spin-wait first.  Ignore effect on timeout.
+        -:  269:      __i = _M_load_and_test_until_impl(__i, __val, true, __mo, __atime);
+        -:  270:      return (__i & ~_Waiter_bit) == __val;
+        -:  271:    }
+        -:  272:
+        -:  273:    _GLIBCXX_ALWAYS_INLINE void
+        -:  274:    _M_store_notify_all(unsigned __val, memory_order __mo)
+        -:  275:    {
+      17*:  276:      unsigned* __futex = (unsigned *)(void *)&_M_data;
+      34*:  277:      if (_M_data.exchange(__val, __mo) & _Waiter_bit)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0%
+branch  4 never executed (fallthrough)
+branch  5 never executed
+branch  6 taken 0% (fallthrough)
+branch  7 taken 100%
+       1*:  278:	_M_futex_notify_all(__futex);
+call    0 never executed
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 never executed
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed (throw)
+      17*:  279:    }
+        -:  280:  };
+        -:  281:
+        -:  282:#else // ! (_GLIBCXX_HAVE_LINUX_FUTEX && ATOMIC_INT_LOCK_FREE > 1)
+        -:  283:
+        -:  284:  // If futexes are not available, use a mutex and a condvar to wait.
+        -:  285:  // Because we access the data only within critical sections, all accesses
+        -:  286:  // are sequentially consistent; thus, we satisfy any provided memory_order.
+        -:  287:  template <unsigned _Waiter_bit = 0x80000000>
+        -:  288:  class __atomic_futex_unsigned
+        -:  289:  {
+        -:  290:    typedef chrono::system_clock __clock_t;
+        -:  291:
+        -:  292:    unsigned _M_data;
+        -:  293:    mutex _M_mutex;
+        -:  294:    condition_variable _M_condvar;
+        -:  295:
+        -:  296:  public:
+        -:  297:    explicit
+        -:  298:    __atomic_futex_unsigned(unsigned __data) : _M_data(__data)
+        -:  299:    { }
+        -:  300:
+        -:  301:    _GLIBCXX_ALWAYS_INLINE unsigned
+        -:  302:    _M_load(memory_order __mo)
+        -:  303:    {
+        -:  304:      unique_lock<mutex> __lock(_M_mutex);
+        -:  305:      return _M_data;
+        -:  306:    }
+        -:  307:
+        -:  308:    _GLIBCXX_ALWAYS_INLINE unsigned
+        -:  309:    _M_load_when_not_equal(unsigned __val, memory_order __mo)
+        -:  310:    {
+        -:  311:      unique_lock<mutex> __lock(_M_mutex);
+        -:  312:      while (_M_data == __val)
+        -:  313:	_M_condvar.wait(__lock);
+        -:  314:      return _M_data;
+        -:  315:    }
+        -:  316:
+        -:  317:    _GLIBCXX_ALWAYS_INLINE void
+        -:  318:    _M_load_when_equal(unsigned __val, memory_order __mo)
+        -:  319:    {
+        -:  320:      unique_lock<mutex> __lock(_M_mutex);
+        -:  321:      while (_M_data != __val)
+        -:  322:	_M_condvar.wait(__lock);
+        -:  323:    }
+        -:  324:
+        -:  325:    template<typename _Rep, typename _Period>
+        -:  326:      _GLIBCXX_ALWAYS_INLINE bool
+        -:  327:      _M_load_when_equal_for(unsigned __val, memory_order __mo,
+        -:  328:	  const chrono::duration<_Rep, _Period>& __rtime)
+        -:  329:      {
+        -:  330:	unique_lock<mutex> __lock(_M_mutex);
+        -:  331:	return _M_condvar.wait_for(__lock, __rtime,
+        -:  332:				   [&] { return _M_data == __val;});
+        -:  333:      }
+        -:  334:
+        -:  335:    template<typename _Clock, typename _Duration>
+        -:  336:      _GLIBCXX_ALWAYS_INLINE bool
+        -:  337:      _M_load_when_equal_until(unsigned __val, memory_order __mo,
+        -:  338:	  const chrono::time_point<_Clock, _Duration>& __atime)
+        -:  339:      {
+        -:  340:	unique_lock<mutex> __lock(_M_mutex);
+        -:  341:	return _M_condvar.wait_until(__lock, __atime,
+        -:  342:				     [&] { return _M_data == __val;});
+        -:  343:      }
+        -:  344:
+        -:  345:    _GLIBCXX_ALWAYS_INLINE void
+        -:  346:    _M_store_notify_all(unsigned __val, memory_order __mo)
+        -:  347:    {
+        -:  348:      unique_lock<mutex> __lock(_M_mutex);
+        -:  349:      _M_data = __val;
+        -:  350:      _M_condvar.notify_all();
+        -:  351:    }
+        -:  352:  };
+        -:  353:
+        -:  354:#endif // _GLIBCXX_HAVE_LINUX_FUTEX && ATOMIC_INT_LOCK_FREE > 1
+        -:  355:#endif // _GLIBCXX_HAS_GTHREADS
+        -:  356:
+        -:  357:_GLIBCXX_END_NAMESPACE_VERSION
+        -:  358:} // namespace std
+        -:  359:
+        -:  360:#endif

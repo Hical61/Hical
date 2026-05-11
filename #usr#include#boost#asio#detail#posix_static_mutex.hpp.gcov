@@ -1,0 +1,72 @@
+        -:    0:Source:/usr/include/boost/asio/detail/posix_static_mutex.hpp
+        -:    1://
+        -:    2:// detail/posix_static_mutex.hpp
+        -:    3:// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        -:    4://
+        -:    5:// Copyright (c) 2003-2023 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+        -:    6://
+        -:    7:// Distributed under the Boost Software License, Version 1.0. (See accompanying
+        -:    8:// file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+        -:    9://
+        -:   10:
+        -:   11:#ifndef BOOST_ASIO_DETAIL_POSIX_STATIC_MUTEX_HPP
+        -:   12:#define BOOST_ASIO_DETAIL_POSIX_STATIC_MUTEX_HPP
+        -:   13:
+        -:   14:#if defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   15:# pragma once
+        -:   16:#endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   17:
+        -:   18:#include <boost/asio/detail/config.hpp>
+        -:   19:
+        -:   20:#if defined(BOOST_ASIO_HAS_PTHREADS)
+        -:   21:
+        -:   22:#include <pthread.h>
+        -:   23:#include <boost/asio/detail/scoped_lock.hpp>
+        -:   24:
+        -:   25:#include <boost/asio/detail/push_options.hpp>
+        -:   26:
+        -:   27:namespace boost {
+        -:   28:namespace asio {
+        -:   29:namespace detail {
+        -:   30:
+        -:   31:struct posix_static_mutex
+        -:   32:{
+        -:   33:  typedef boost::asio::detail::scoped_lock<posix_static_mutex> scoped_lock;
+        -:   34:
+        -:   35:  // Initialise the mutex.
+function _ZN5boost4asio6detail18posix_static_mutex4initEv called 28 returned 100% blocks executed 100%
+       28:   36:  void init()
+        -:   37:  {
+        -:   38:    // Nothing to do.
+       28:   39:  }
+        -:   40:
+        -:   41:  // Lock the mutex.
+function _ZN5boost4asio6detail18posix_static_mutex4lockEv called 280 returned 100% blocks executed 100%
+      280:   42:  void lock()
+        -:   43:  {
+      280:   44:    (void)::pthread_mutex_lock(&mutex_); // Ignore EINVAL.
+call    0 returned 100%
+      280:   45:  }
+        -:   46:
+        -:   47:  // Unlock the mutex.
+function _ZN5boost4asio6detail18posix_static_mutex6unlockEv called 280 returned 100% blocks executed 100%
+      280:   48:  void unlock()
+        -:   49:  {
+      280:   50:    (void)::pthread_mutex_unlock(&mutex_); // Ignore EINVAL.
+call    0 returned 100%
+      280:   51:  }
+        -:   52:
+        -:   53:  ::pthread_mutex_t mutex_;
+        -:   54:};
+        -:   55:
+        -:   56:#define BOOST_ASIO_POSIX_STATIC_MUTEX_INIT { PTHREAD_MUTEX_INITIALIZER }
+        -:   57:
+        -:   58:} // namespace detail
+        -:   59:} // namespace asio
+        -:   60:} // namespace boost
+        -:   61:
+        -:   62:#include <boost/asio/detail/pop_options.hpp>
+        -:   63:
+        -:   64:#endif // defined(BOOST_ASIO_HAS_PTHREADS)
+        -:   65:
+        -:   66:#endif // BOOST_ASIO_DETAIL_POSIX_STATIC_MUTEX_HPP

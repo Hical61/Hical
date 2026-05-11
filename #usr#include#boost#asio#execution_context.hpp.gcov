@@ -1,0 +1,1969 @@
+        -:    0:Source:/usr/include/boost/asio/execution_context.hpp
+        -:    1://
+        -:    2:// execution_context.hpp
+        -:    3:// ~~~~~~~~~~~~~~~~~~~~~
+        -:    4://
+        -:    5:// Copyright (c) 2003-2023 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+        -:    6://
+        -:    7:// Distributed under the Boost Software License, Version 1.0. (See accompanying
+        -:    8:// file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+        -:    9://
+        -:   10:
+        -:   11:#ifndef BOOST_ASIO_EXECUTION_CONTEXT_HPP
+        -:   12:#define BOOST_ASIO_EXECUTION_CONTEXT_HPP
+        -:   13:
+        -:   14:#if defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   15:# pragma once
+        -:   16:#endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   17:
+        -:   18:#include <boost/asio/detail/config.hpp>
+        -:   19:#include <cstddef>
+        -:   20:#include <stdexcept>
+        -:   21:#include <typeinfo>
+        -:   22:#include <boost/asio/detail/noncopyable.hpp>
+        -:   23:#include <boost/asio/detail/variadic_templates.hpp>
+        -:   24:
+        -:   25:#include <boost/asio/detail/push_options.hpp>
+        -:   26:
+        -:   27:namespace boost {
+        -:   28:namespace asio {
+        -:   29:
+        -:   30:class execution_context;
+        -:   31:class io_context;
+        -:   32:
+        -:   33:#if !defined(GENERATING_DOCUMENTATION)
+        -:   34:template <typename Service> Service& use_service(execution_context&);
+        -:   35:template <typename Service> Service& use_service(io_context&);
+        -:   36:template <typename Service> void add_service(execution_context&, Service*);
+        -:   37:template <typename Service> bool has_service(execution_context&);
+        -:   38:#endif // !defined(GENERATING_DOCUMENTATION)
+        -:   39:
+        -:   40:namespace detail { class service_registry; }
+        -:   41:
+        -:   42:/// A context for function object execution.
+        -:   43:/**
+        -:   44: * An execution context represents a place where function objects will be
+        -:   45: * executed. An @c io_context is an example of an execution context.
+        -:   46: *
+        -:   47: * @par The execution_context class and services
+        -:   48: *
+        -:   49: * Class execution_context implements an extensible, type-safe, polymorphic set
+        -:   50: * of services, indexed by service type.
+        -:   51: *
+        -:   52: * Services exist to manage the resources that are shared across an execution
+        -:   53: * context. For example, timers may be implemented in terms of a single timer
+        -:   54: * queue, and this queue would be stored in a service.
+        -:   55: *
+        -:   56: * Access to the services of an execution_context is via three function
+        -:   57: * templates, use_service(), add_service() and has_service().
+        -:   58: *
+        -:   59: * In a call to @c use_service<Service>(), the type argument chooses a service,
+        -:   60: * making available all members of the named type. If @c Service is not present
+        -:   61: * in an execution_context, an object of type @c Service is created and added
+        -:   62: * to the execution_context. A C++ program can check if an execution_context
+        -:   63: * implements a particular service with the function template @c
+        -:   64: * has_service<Service>().
+        -:   65: *
+        -:   66: * Service objects may be explicitly added to an execution_context using the
+        -:   67: * function template @c add_service<Service>(). If the @c Service is already
+        -:   68: * present, the service_already_exists exception is thrown. If the owner of the
+        -:   69: * service is not the same object as the execution_context parameter, the
+        -:   70: * invalid_service_owner exception is thrown.
+        -:   71: *
+        -:   72: * Once a service reference is obtained from an execution_context object by
+        -:   73: * calling use_service(), that reference remains usable as long as the owning
+        -:   74: * execution_context object exists.
+        -:   75: *
+        -:   76: * All service implementations have execution_context::service as a public base
+        -:   77: * class. Custom services may be implemented by deriving from this class and
+        -:   78: * then added to an execution_context using the facilities described above.
+        -:   79: *
+        -:   80: * @par The execution_context as a base class
+        -:   81: *
+        -:   82: * Class execution_context may be used only as a base class for concrete
+        -:   83: * execution context types. The @c io_context is an example of such a derived
+        -:   84: * type.
+        -:   85: *
+        -:   86: * On destruction, a class that is derived from execution_context must perform
+        -:   87: * <tt>execution_context::shutdown()</tt> followed by
+        -:   88: * <tt>execution_context::destroy()</tt>.
+        -:   89: *
+        -:   90: * This destruction sequence permits programs to simplify their resource
+        -:   91: * management by using @c shared_ptr<>. Where an object's lifetime is tied to
+        -:   92: * the lifetime of a connection (or some other sequence of asynchronous
+        -:   93: * operations), a @c shared_ptr to the object would be bound into the handlers
+        -:   94: * for all asynchronous operations associated with it. This works as follows:
+        -:   95: *
+        -:   96: * @li When a single connection ends, all associated asynchronous operations
+        -:   97: * complete. The corresponding handler objects are destroyed, and all @c
+        -:   98: * shared_ptr references to the objects are destroyed.
+        -:   99: *
+        -:  100: * @li To shut down the whole program, the io_context function stop() is called
+        -:  101: * to terminate any run() calls as soon as possible. The io_context destructor
+        -:  102: * calls @c shutdown() and @c destroy() to destroy all pending handlers,
+        -:  103: * causing all @c shared_ptr references to all connection objects to be
+        -:  104: * destroyed.
+        -:  105: */
+        -:  106:class execution_context
+        -:  107:  : private noncopyable
+        -:  108:{
+        -:  109:public:
+        -:  110:  class id;
+        -:  111:  class service;
+        -:  112:
+        -:  113:public:
+        -:  114:  /// Constructor.
+        -:  115:  BOOST_ASIO_DECL execution_context();
+        -:  116:
+        -:  117:  /// Destructor.
+        -:  118:  BOOST_ASIO_DECL ~execution_context();
+        -:  119:
+        -:  120:protected:
+        -:  121:  /// Shuts down all services in the context.
+        -:  122:  /**
+        -:  123:   * This function is implemented as follows:
+        -:  124:   *
+        -:  125:   * @li For each service object @c svc in the execution_context set, in
+        -:  126:   * reverse order of the beginning of service object lifetime, performs @c
+        -:  127:   * svc->shutdown().
+        -:  128:   */
+        -:  129:  BOOST_ASIO_DECL void shutdown();
+        -:  130:
+        -:  131:  /// Destroys all services in the context.
+        -:  132:  /**
+        -:  133:   * This function is implemented as follows:
+        -:  134:   *
+        -:  135:   * @li For each service object @c svc in the execution_context set, in
+        -:  136:   * reverse order * of the beginning of service object lifetime, performs
+        -:  137:   * <tt>delete static_cast<execution_context::service*>(svc)</tt>.
+        -:  138:   */
+        -:  139:  BOOST_ASIO_DECL void destroy();
+        -:  140:
+        -:  141:public:
+        -:  142:  /// Fork-related event notifications.
+        -:  143:  enum fork_event
+        -:  144:  {
+        -:  145:    /// Notify the context that the process is about to fork.
+        -:  146:    fork_prepare,
+        -:  147:
+        -:  148:    /// Notify the context that the process has forked and is the parent.
+        -:  149:    fork_parent,
+        -:  150:
+        -:  151:    /// Notify the context that the process has forked and is the child.
+        -:  152:    fork_child
+        -:  153:  };
+        -:  154:
+        -:  155:  /// Notify the execution_context of a fork-related event.
+        -:  156:  /**
+        -:  157:   * This function is used to inform the execution_context that the process is
+        -:  158:   * about to fork, or has just forked. This allows the execution_context, and
+        -:  159:   * the services it contains, to perform any necessary housekeeping to ensure
+        -:  160:   * correct operation following a fork.
+        -:  161:   *
+        -:  162:   * This function must not be called while any other execution_context
+        -:  163:   * function, or any function associated with the execution_context's derived
+        -:  164:   * class, is being called in another thread. It is, however, safe to call
+        -:  165:   * this function from within a completion handler, provided no other thread
+        -:  166:   * is accessing the execution_context or its derived class.
+        -:  167:   *
+        -:  168:   * @param event A fork-related event.
+        -:  169:   *
+        -:  170:   * @throws boost::system::system_error Thrown on failure. If the notification
+        -:  171:   * fails the execution_context object should no longer be used and should be
+        -:  172:   * destroyed.
+        -:  173:   *
+        -:  174:   * @par Example
+        -:  175:   * The following code illustrates how to incorporate the notify_fork()
+        -:  176:   * function:
+        -:  177:   * @code my_execution_context.notify_fork(execution_context::fork_prepare);
+        -:  178:   * if (fork() == 0)
+        -:  179:   * {
+        -:  180:   *   // This is the child process.
+        -:  181:   *   my_execution_context.notify_fork(execution_context::fork_child);
+        -:  182:   * }
+        -:  183:   * else
+        -:  184:   * {
+        -:  185:   *   // This is the parent process.
+        -:  186:   *   my_execution_context.notify_fork(execution_context::fork_parent);
+        -:  187:   * } @endcode
+        -:  188:   *
+        -:  189:   * @note For each service object @c svc in the execution_context set,
+        -:  190:   * performs <tt>svc->notify_fork();</tt>. When processing the fork_prepare
+        -:  191:   * event, services are visited in reverse order of the beginning of service
+        -:  192:   * object lifetime. Otherwise, services are visited in order of the beginning
+        -:  193:   * of service object lifetime.
+        -:  194:   */
+        -:  195:  BOOST_ASIO_DECL void notify_fork(fork_event event);
+        -:  196:
+        -:  197:  /// Obtain the service object corresponding to the given type.
+        -:  198:  /**
+        -:  199:   * This function is used to locate a service object that corresponds to the
+        -:  200:   * given service type. If there is no existing implementation of the service,
+        -:  201:   * then the execution_context will create a new instance of the service.
+        -:  202:   *
+        -:  203:   * @param e The execution_context object that owns the service.
+        -:  204:   *
+        -:  205:   * @return The service interface implementing the specified service type.
+        -:  206:   * Ownership of the service interface is not transferred to the caller.
+        -:  207:   */
+        -:  208:  template <typename Service>
+        -:  209:  friend Service& use_service(execution_context& e);
+        -:  210:
+        -:  211:  /// Obtain the service object corresponding to the given type.
+        -:  212:  /**
+        -:  213:   * This function is used to locate a service object that corresponds to the
+        -:  214:   * given service type. If there is no existing implementation of the service,
+        -:  215:   * then the io_context will create a new instance of the service.
+        -:  216:   *
+        -:  217:   * @param ioc The io_context object that owns the service.
+        -:  218:   *
+        -:  219:   * @return The service interface implementing the specified service type.
+        -:  220:   * Ownership of the service interface is not transferred to the caller.
+        -:  221:   *
+        -:  222:   * @note This overload is preserved for backwards compatibility with services
+        -:  223:   * that inherit from io_context::service.
+        -:  224:   */
+        -:  225:  template <typename Service>
+        -:  226:  friend Service& use_service(io_context& ioc);
+        -:  227:
+        -:  228:#if defined(GENERATING_DOCUMENTATION)
+        -:  229:
+        -:  230:  /// Creates a service object and adds it to the execution_context.
+        -:  231:  /**
+        -:  232:   * This function is used to add a service to the execution_context.
+        -:  233:   *
+        -:  234:   * @param e The execution_context object that owns the service.
+        -:  235:   *
+        -:  236:   * @param args Zero or more arguments to be passed to the service
+        -:  237:   * constructor.
+        -:  238:   *
+        -:  239:   * @throws boost::asio::service_already_exists Thrown if a service of the
+        -:  240:   * given type is already present in the execution_context.
+        -:  241:   */
+        -:  242:  template <typename Service, typename... Args>
+        -:  243:  friend Service& make_service(execution_context& e, Args&&... args);
+        -:  244:
+        -:  245:#elif defined(BOOST_ASIO_HAS_VARIADIC_TEMPLATES)
+        -:  246:
+        -:  247:  template <typename Service, typename... Args>
+        -:  248:  friend Service& make_service(execution_context& e,
+        -:  249:      BOOST_ASIO_MOVE_ARG(Args)... args);
+        -:  250:
+        -:  251:#else // defined(BOOST_ASIO_HAS_VARIADIC_TEMPLATES)
+        -:  252:
+        -:  253:  template <typename Service>
+        -:  254:  friend Service& make_service(execution_context& e);
+        -:  255:
+        -:  256:#define BOOST_ASIO_PRIVATE_MAKE_SERVICE_DEF(n) \
+        -:  257:  template <typename Service, BOOST_ASIO_VARIADIC_TPARAMS(n)> \
+        -:  258:  friend Service& make_service(execution_context& e, \
+        -:  259:      BOOST_ASIO_VARIADIC_MOVE_PARAMS(n)); \
+        -:  260:  /**/
+        -:  261:  BOOST_ASIO_VARIADIC_GENERATE(BOOST_ASIO_PRIVATE_MAKE_SERVICE_DEF)
+        -:  262:#undef BOOST_ASIO_PRIVATE_MAKE_SERVICE_DEF
+        -:  263:
+        -:  264:#endif // defined(BOOST_ASIO_HAS_VARIADIC_TEMPLATES)
+        -:  265:
+        -:  266:  /// (Deprecated: Use make_service().) Add a service object to the
+        -:  267:  /// execution_context.
+        -:  268:  /**
+        -:  269:   * This function is used to add a service to the execution_context.
+        -:  270:   *
+        -:  271:   * @param e The execution_context object that owns the service.
+        -:  272:   *
+        -:  273:   * @param svc The service object. On success, ownership of the service object
+        -:  274:   * is transferred to the execution_context. When the execution_context object
+        -:  275:   * is destroyed, it will destroy the service object by performing: @code
+        -:  276:   * delete static_cast<execution_context::service*>(svc) @endcode
+        -:  277:   *
+        -:  278:   * @throws boost::asio::service_already_exists Thrown if a service of the
+        -:  279:   * given type is already present in the execution_context.
+        -:  280:   *
+        -:  281:   * @throws boost::asio::invalid_service_owner Thrown if the service's owning
+        -:  282:   * execution_context is not the execution_context object specified by the
+        -:  283:   * @c e parameter.
+        -:  284:   */
+        -:  285:  template <typename Service>
+        -:  286:  friend void add_service(execution_context& e, Service* svc);
+        -:  287:
+        -:  288:  /// Determine if an execution_context contains a specified service type.
+        -:  289:  /**
+        -:  290:   * This function is used to determine whether the execution_context contains a
+        -:  291:   * service object corresponding to the given service type.
+        -:  292:   *
+        -:  293:   * @param e The execution_context object that owns the service.
+        -:  294:   *
+        -:  295:   * @return A boolean indicating whether the execution_context contains the
+        -:  296:   * service.
+        -:  297:   */
+        -:  298:  template <typename Service>
+        -:  299:  friend bool has_service(execution_context& e);
+        -:  300:
+        -:  301:private:
+        -:  302:  // The service registry.
+        -:  303:  boost::asio::detail::service_registry* service_registry_;
+        -:  304:};
+        -:  305:
+        -:  306:/// Class used to uniquely identify a service.
+        -:  307:class execution_context::id
+        -:  308:  : private noncopyable
+        -:  309:{
+        -:  310:public:
+        -:  311:  /// Constructor.
+    1511*:  312:  id() {}
+------------------
+_ZN5boost4asio17execution_context2idC2Ev:
+function _ZN5boost4asio17execution_context2idC2Ev called 64 returned 100% blocks executed 100%
+       64:  312:  id() {}
+call    0 returned 100%
+------------------
+_ZN5boost4asio17execution_context2idC2Ev:
+function _ZN5boost4asio17execution_context2idC2Ev called 20 returned 100% blocks executed 100%
+       20:  312:  id() {}
+call    0 returned 100%
+------------------
+_ZN5boost4asio17execution_context2idC2Ev:
+function _ZN5boost4asio17execution_context2idC2Ev called 36 returned 100% blocks executed 100%
+       36:  312:  id() {}
+call    0 returned 100%
+------------------
+_ZN5boost4asio17execution_context2idC2Ev:
+function _ZN5boost4asio17execution_context2idC2Ev called 44 returned 100% blocks executed 100%
+       44:  312:  id() {}
+call    0 returned 100%
+------------------
+_ZN5boost4asio17execution_context2idC2Ev:
+function _ZN5boost4asio17execution_context2idC2Ev called 16 returned 100% blocks executed 100%
+       16:  312:  id() {}
+call    0 returned 100%
+------------------
+_ZN5boost4asio17execution_context2idC2Ev:
+function _ZN5boost4asio17execution_context2idC2Ev called 36 returned 100% blocks executed 100%
+       36:  312:  id() {}
+call    0 returned 100%
+------------------
+_ZN5boost4asio17execution_context2idC2Ev:
+function _ZN5boost4asio17execution_context2idC2Ev called 42 returned 100% blocks executed 100%
+       42:  312:  id() {}
+call    0 returned 100%
+------------------
+_ZN5boost4asio17execution_context2idC2Ev:
+function _ZN5boost4asio17execution_context2idC2Ev called 40 returned 100% blocks executed 100%
+       40:  312:  id() {}
+call    0 returned 100%
+------------------
+_ZN5boost4asio17execution_context2idC2Ev:
+function _ZN5boost4asio17execution_context2idC2Ev called 36 returned 100% blocks executed 100%
+       36:  312:  id() {}
+call    0 returned 100%
+------------------
+_ZN5boost4asio17execution_context2idC2Ev:
+function _ZN5boost4asio17execution_context2idC2Ev called 20 returned 100% blocks executed 100%
+       20:  312:  id() {}
+call    0 returned 100%
+------------------
+_ZN5boost4asio17execution_context2idC2Ev:
+function _ZN5boost4asio17execution_context2idC2Ev called 80 returned 100% blocks executed 100%
+       80:  312:  id() {}
+call    0 returned 100%
+------------------
+_ZN5boost4asio17execution_context2idC2Ev:
+function _ZN5boost4asio17execution_context2idC2Ev called 64 returned 100% blocks executed 100%
+       64:  312:  id() {}
+call    0 returned 100%
+------------------
+_ZN5boost4asio17execution_context2idC2Ev:
+function _ZN5boost4asio17execution_context2idC2Ev called 24 returned 100% blocks executed 100%
+       24:  312:  id() {}
+call    0 returned 100%
+------------------
+_ZN5boost4asio17execution_context2idC2Ev:
+function _ZN5boost4asio17execution_context2idC2Ev called 160 returned 100% blocks executed 100%
+      160:  312:  id() {}
+call    0 returned 100%
+------------------
+_ZN5boost4asio17execution_context2idC2Ev:
+function _ZN5boost4asio17execution_context2idC2Ev called 45 returned 100% blocks executed 100%
+       45:  312:  id() {}
+call    0 returned 100%
+------------------
+_ZN5boost4asio17execution_context2idC2Ev:
+function _ZN5boost4asio17execution_context2idC2Ev called 32 returned 100% blocks executed 100%
+       32:  312:  id() {}
+call    0 returned 100%
+------------------
+_ZN5boost4asio17execution_context2idC2Ev:
+function _ZN5boost4asio17execution_context2idC2Ev called 48 returned 100% blocks executed 100%
+       48:  312:  id() {}
+call    0 returned 100%
+------------------
+_ZN5boost4asio17execution_context2idC2Ev:
+function _ZN5boost4asio17execution_context2idC2Ev called 4 returned 100% blocks executed 100%
+        4:  312:  id() {}
+call    0 returned 100%
+------------------
+_ZN5boost4asio17execution_context2idC2Ev:
+function _ZN5boost4asio17execution_context2idC2Ev called 0 returned 0% blocks executed 0%
+    #####:  312:  id() {}
+call    0 never executed
+------------------
+_ZN5boost4asio17execution_context2idC2Ev:
+function _ZN5boost4asio17execution_context2idC2Ev called 0 returned 0% blocks executed 0%
+    #####:  312:  id() {}
+call    0 never executed
+------------------
+_ZN5boost4asio17execution_context2idC2Ev:
+function _ZN5boost4asio17execution_context2idC2Ev called 0 returned 0% blocks executed 0%
+    #####:  312:  id() {}
+call    0 never executed
+------------------
+_ZN5boost4asio17execution_context2idC2Ev:
+function _ZN5boost4asio17execution_context2idC2Ev called 0 returned 0% blocks executed 0%
+    #####:  312:  id() {}
+call    0 never executed
+------------------
+_ZN5boost4asio17execution_context2idC2Ev:
+function _ZN5boost4asio17execution_context2idC2Ev called 0 returned 0% blocks executed 0%
+    #####:  312:  id() {}
+call    0 never executed
+------------------
+_ZN5boost4asio17execution_context2idC2Ev:
+function _ZN5boost4asio17execution_context2idC2Ev called 0 returned 0% blocks executed 0%
+    #####:  312:  id() {}
+call    0 never executed
+------------------
+_ZN5boost4asio17execution_context2idC2Ev:
+function _ZN5boost4asio17execution_context2idC2Ev called 296 returned 100% blocks executed 100%
+      296:  312:  id() {}
+call    0 returned 100%
+------------------
+_ZN5boost4asio17execution_context2idC2Ev:
+function _ZN5boost4asio17execution_context2idC2Ev called 0 returned 0% blocks executed 0%
+    #####:  312:  id() {}
+call    0 never executed
+------------------
+_ZN5boost4asio17execution_context2idC2Ev:
+function _ZN5boost4asio17execution_context2idC2Ev called 0 returned 0% blocks executed 0%
+    #####:  312:  id() {}
+call    0 never executed
+------------------
+_ZN5boost4asio17execution_context2idC2Ev:
+function _ZN5boost4asio17execution_context2idC2Ev called 0 returned 0% blocks executed 0%
+    #####:  312:  id() {}
+call    0 never executed
+------------------
+_ZN5boost4asio17execution_context2idC2Ev:
+function _ZN5boost4asio17execution_context2idC2Ev called 0 returned 0% blocks executed 0%
+    #####:  312:  id() {}
+call    0 never executed
+------------------
+_ZN5boost4asio17execution_context2idC2Ev:
+function _ZN5boost4asio17execution_context2idC2Ev called 0 returned 0% blocks executed 0%
+    #####:  312:  id() {}
+call    0 never executed
+------------------
+_ZN5boost4asio17execution_context2idC2Ev:
+function _ZN5boost4asio17execution_context2idC2Ev called 0 returned 0% blocks executed 0%
+    #####:  312:  id() {}
+call    0 never executed
+------------------
+_ZN5boost4asio17execution_context2idC2Ev:
+function _ZN5boost4asio17execution_context2idC2Ev called 0 returned 0% blocks executed 0%
+    #####:  312:  id() {}
+call    0 never executed
+------------------
+_ZN5boost4asio17execution_context2idC2Ev:
+function _ZN5boost4asio17execution_context2idC2Ev called 0 returned 0% blocks executed 0%
+    #####:  312:  id() {}
+call    0 never executed
+------------------
+_ZN5boost4asio17execution_context2idC2Ev:
+function _ZN5boost4asio17execution_context2idC2Ev called 0 returned 0% blocks executed 0%
+    #####:  312:  id() {}
+call    0 never executed
+------------------
+_ZN5boost4asio17execution_context2idC2Ev:
+function _ZN5boost4asio17execution_context2idC2Ev called 0 returned 0% blocks executed 0%
+    #####:  312:  id() {}
+call    0 never executed
+------------------
+_ZN5boost4asio17execution_context2idC2Ev:
+function _ZN5boost4asio17execution_context2idC2Ev called 0 returned 0% blocks executed 0%
+    #####:  312:  id() {}
+call    0 never executed
+------------------
+_ZN5boost4asio17execution_context2idC2Ev:
+function _ZN5boost4asio17execution_context2idC2Ev called 0 returned 0% blocks executed 0%
+    #####:  312:  id() {}
+call    0 never executed
+------------------
+_ZN5boost4asio17execution_context2idC2Ev:
+function _ZN5boost4asio17execution_context2idC2Ev called 0 returned 0% blocks executed 0%
+    #####:  312:  id() {}
+call    0 never executed
+------------------
+_ZN5boost4asio17execution_context2idC2Ev:
+function _ZN5boost4asio17execution_context2idC2Ev called 0 returned 0% blocks executed 0%
+    #####:  312:  id() {}
+call    0 never executed
+------------------
+_ZN5boost4asio17execution_context2idC2Ev:
+function _ZN5boost4asio17execution_context2idC2Ev called 0 returned 0% blocks executed 0%
+    #####:  312:  id() {}
+call    0 never executed
+------------------
+_ZN5boost4asio17execution_context2idC2Ev:
+function _ZN5boost4asio17execution_context2idC2Ev called 0 returned 0% blocks executed 0%
+    #####:  312:  id() {}
+call    0 never executed
+------------------
+_ZN5boost4asio17execution_context2idC2Ev:
+function _ZN5boost4asio17execution_context2idC2Ev called 0 returned 0% blocks executed 0%
+    #####:  312:  id() {}
+call    0 never executed
+------------------
+_ZN5boost4asio17execution_context2idC2Ev:
+function _ZN5boost4asio17execution_context2idC2Ev called 54 returned 100% blocks executed 100%
+       54:  312:  id() {}
+call    0 returned 100%
+------------------
+_ZN5boost4asio17execution_context2idC2Ev:
+function _ZN5boost4asio17execution_context2idC2Ev called 54 returned 100% blocks executed 100%
+       54:  312:  id() {}
+call    0 returned 100%
+------------------
+_ZN5boost4asio17execution_context2idC2Ev:
+function _ZN5boost4asio17execution_context2idC2Ev called 144 returned 100% blocks executed 100%
+      144:  312:  id() {}
+call    0 returned 100%
+------------------
+_ZN5boost4asio17execution_context2idC2Ev:
+function _ZN5boost4asio17execution_context2idC2Ev called 72 returned 100% blocks executed 100%
+       72:  312:  id() {}
+call    0 returned 100%
+------------------
+_ZN5boost4asio17execution_context2idC2Ev:
+function _ZN5boost4asio17execution_context2idC2Ev called 80 returned 100% blocks executed 100%
+       80:  312:  id() {}
+call    0 returned 100%
+------------------
+        -:  313:};
+        -:  314:
+        -:  315:/// Base class for all io_context services.
+        -:  316:class execution_context::service
+        -:  317:  : private noncopyable
+        -:  318:{
+        -:  319:public:
+        -:  320:  /// Get the context object that owns the service.
+        -:  321:  execution_context& context();
+        -:  322:
+        -:  323:protected:
+        -:  324:  /// Constructor.
+        -:  325:  /**
+        -:  326:   * @param owner The execution_context object that owns the service.
+        -:  327:   */
+        -:  328:  BOOST_ASIO_DECL service(execution_context& owner);
+        -:  329:
+        -:  330:  /// Destructor.
+        -:  331:  BOOST_ASIO_DECL virtual ~service();
+        -:  332:
+        -:  333:private:
+        -:  334:  /// Destroy all user-defined handler objects owned by the service.
+        -:  335:  virtual void shutdown() = 0;
+        -:  336:
+        -:  337:  /// Handle notification of a fork-related event to perform any necessary
+        -:  338:  /// housekeeping.
+        -:  339:  /**
+        -:  340:   * This function is not a pure virtual so that services only have to
+        -:  341:   * implement it if necessary. The default implementation does nothing.
+        -:  342:   */
+        -:  343:  BOOST_ASIO_DECL virtual void notify_fork(
+        -:  344:      execution_context::fork_event event);
+        -:  345:
+        -:  346:  friend class boost::asio::detail::service_registry;
+        -:  347:  struct key
+        -:  348:  {
+    1641*:  349:    key() : type_info_(0), id_(0) {}
+------------------
+_ZN5boost4asio17execution_context7service3keyC2Ev:
+function _ZN5boost4asio17execution_context7service3keyC2Ev called 10 returned 100% blocks executed 100%
+       10:  349:    key() : type_info_(0), id_(0) {}
+------------------
+_ZN5boost4asio17execution_context7service3keyC2Ev:
+function _ZN5boost4asio17execution_context7service3keyC2Ev called 0 returned 0% blocks executed 0%
+    #####:  349:    key() : type_info_(0), id_(0) {}
+------------------
+_ZN5boost4asio17execution_context7service3keyC2Ev:
+function _ZN5boost4asio17execution_context7service3keyC2Ev called 184 returned 100% blocks executed 100%
+      184:  349:    key() : type_info_(0), id_(0) {}
+------------------
+_ZN5boost4asio17execution_context7service3keyC2Ev:
+function _ZN5boost4asio17execution_context7service3keyC2Ev called 0 returned 0% blocks executed 0%
+    #####:  349:    key() : type_info_(0), id_(0) {}
+------------------
+_ZN5boost4asio17execution_context7service3keyC2Ev:
+function _ZN5boost4asio17execution_context7service3keyC2Ev called 122 returned 100% blocks executed 100%
+      122:  349:    key() : type_info_(0), id_(0) {}
+------------------
+_ZN5boost4asio17execution_context7service3keyC2Ev:
+function _ZN5boost4asio17execution_context7service3keyC2Ev called 205 returned 100% blocks executed 100%
+      205:  349:    key() : type_info_(0), id_(0) {}
+------------------
+_ZN5boost4asio17execution_context7service3keyC2Ev:
+function _ZN5boost4asio17execution_context7service3keyC2Ev called 10 returned 100% blocks executed 100%
+       10:  349:    key() : type_info_(0), id_(0) {}
+------------------
+_ZN5boost4asio17execution_context7service3keyC2Ev:
+function _ZN5boost4asio17execution_context7service3keyC2Ev called 2 returned 100% blocks executed 100%
+        2:  349:    key() : type_info_(0), id_(0) {}
+------------------
+_ZN5boost4asio17execution_context7service3keyC2Ev:
+function _ZN5boost4asio17execution_context7service3keyC2Ev called 0 returned 0% blocks executed 0%
+    #####:  349:    key() : type_info_(0), id_(0) {}
+------------------
+_ZN5boost4asio17execution_context7service3keyC2Ev:
+function _ZN5boost4asio17execution_context7service3keyC2Ev called 28 returned 100% blocks executed 100%
+       28:  349:    key() : type_info_(0), id_(0) {}
+------------------
+_ZN5boost4asio17execution_context7service3keyC2Ev:
+function _ZN5boost4asio17execution_context7service3keyC2Ev called 32 returned 100% blocks executed 100%
+       32:  349:    key() : type_info_(0), id_(0) {}
+------------------
+_ZN5boost4asio17execution_context7service3keyC2Ev:
+function _ZN5boost4asio17execution_context7service3keyC2Ev called 44 returned 100% blocks executed 100%
+       44:  349:    key() : type_info_(0), id_(0) {}
+------------------
+_ZN5boost4asio17execution_context7service3keyC2Ev:
+function _ZN5boost4asio17execution_context7service3keyC2Ev called 80 returned 100% blocks executed 100%
+       80:  349:    key() : type_info_(0), id_(0) {}
+------------------
+_ZN5boost4asio17execution_context7service3keyC2Ev:
+function _ZN5boost4asio17execution_context7service3keyC2Ev called 28 returned 100% blocks executed 100%
+       28:  349:    key() : type_info_(0), id_(0) {}
+------------------
+_ZN5boost4asio17execution_context7service3keyC2Ev:
+function _ZN5boost4asio17execution_context7service3keyC2Ev called 240 returned 100% blocks executed 100%
+      240:  349:    key() : type_info_(0), id_(0) {}
+------------------
+_ZN5boost4asio17execution_context7service3keyC2Ev:
+function _ZN5boost4asio17execution_context7service3keyC2Ev called 0 returned 0% blocks executed 0%
+    #####:  349:    key() : type_info_(0), id_(0) {}
+------------------
+_ZN5boost4asio17execution_context7service3keyC2Ev:
+function _ZN5boost4asio17execution_context7service3keyC2Ev called 0 returned 0% blocks executed 0%
+    #####:  349:    key() : type_info_(0), id_(0) {}
+------------------
+_ZN5boost4asio17execution_context7service3keyC2Ev:
+function _ZN5boost4asio17execution_context7service3keyC2Ev called 0 returned 0% blocks executed 0%
+    #####:  349:    key() : type_info_(0), id_(0) {}
+------------------
+_ZN5boost4asio17execution_context7service3keyC2Ev:
+function _ZN5boost4asio17execution_context7service3keyC2Ev called 0 returned 0% blocks executed 0%
+    #####:  349:    key() : type_info_(0), id_(0) {}
+------------------
+_ZN5boost4asio17execution_context7service3keyC2Ev:
+function _ZN5boost4asio17execution_context7service3keyC2Ev called 0 returned 0% blocks executed 0%
+    #####:  349:    key() : type_info_(0), id_(0) {}
+------------------
+_ZN5boost4asio17execution_context7service3keyC2Ev:
+function _ZN5boost4asio17execution_context7service3keyC2Ev called 0 returned 0% blocks executed 0%
+    #####:  349:    key() : type_info_(0), id_(0) {}
+------------------
+_ZN5boost4asio17execution_context7service3keyC2Ev:
+function _ZN5boost4asio17execution_context7service3keyC2Ev called 0 returned 0% blocks executed 0%
+    #####:  349:    key() : type_info_(0), id_(0) {}
+------------------
+_ZN5boost4asio17execution_context7service3keyC2Ev:
+function _ZN5boost4asio17execution_context7service3keyC2Ev called 0 returned 0% blocks executed 0%
+    #####:  349:    key() : type_info_(0), id_(0) {}
+------------------
+_ZN5boost4asio17execution_context7service3keyC2Ev:
+function _ZN5boost4asio17execution_context7service3keyC2Ev called 0 returned 0% blocks executed 0%
+    #####:  349:    key() : type_info_(0), id_(0) {}
+------------------
+_ZN5boost4asio17execution_context7service3keyC2Ev:
+function _ZN5boost4asio17execution_context7service3keyC2Ev called 102 returned 100% blocks executed 100%
+      102:  349:    key() : type_info_(0), id_(0) {}
+------------------
+_ZN5boost4asio17execution_context7service3keyC2Ev:
+function _ZN5boost4asio17execution_context7service3keyC2Ev called 0 returned 0% blocks executed 0%
+    #####:  349:    key() : type_info_(0), id_(0) {}
+------------------
+_ZN5boost4asio17execution_context7service3keyC2Ev:
+function _ZN5boost4asio17execution_context7service3keyC2Ev called 0 returned 0% blocks executed 0%
+    #####:  349:    key() : type_info_(0), id_(0) {}
+------------------
+_ZN5boost4asio17execution_context7service3keyC2Ev:
+function _ZN5boost4asio17execution_context7service3keyC2Ev called 0 returned 0% blocks executed 0%
+    #####:  349:    key() : type_info_(0), id_(0) {}
+------------------
+_ZN5boost4asio17execution_context7service3keyC2Ev:
+function _ZN5boost4asio17execution_context7service3keyC2Ev called 0 returned 0% blocks executed 0%
+    #####:  349:    key() : type_info_(0), id_(0) {}
+------------------
+_ZN5boost4asio17execution_context7service3keyC2Ev:
+function _ZN5boost4asio17execution_context7service3keyC2Ev called 0 returned 0% blocks executed 0%
+    #####:  349:    key() : type_info_(0), id_(0) {}
+------------------
+_ZN5boost4asio17execution_context7service3keyC2Ev:
+function _ZN5boost4asio17execution_context7service3keyC2Ev called 0 returned 0% blocks executed 0%
+    #####:  349:    key() : type_info_(0), id_(0) {}
+------------------
+_ZN5boost4asio17execution_context7service3keyC2Ev:
+function _ZN5boost4asio17execution_context7service3keyC2Ev called 0 returned 0% blocks executed 0%
+    #####:  349:    key() : type_info_(0), id_(0) {}
+------------------
+_ZN5boost4asio17execution_context7service3keyC2Ev:
+function _ZN5boost4asio17execution_context7service3keyC2Ev called 0 returned 0% blocks executed 0%
+    #####:  349:    key() : type_info_(0), id_(0) {}
+------------------
+_ZN5boost4asio17execution_context7service3keyC2Ev:
+function _ZN5boost4asio17execution_context7service3keyC2Ev called 0 returned 0% blocks executed 0%
+    #####:  349:    key() : type_info_(0), id_(0) {}
+------------------
+_ZN5boost4asio17execution_context7service3keyC2Ev:
+function _ZN5boost4asio17execution_context7service3keyC2Ev called 0 returned 0% blocks executed 0%
+    #####:  349:    key() : type_info_(0), id_(0) {}
+------------------
+_ZN5boost4asio17execution_context7service3keyC2Ev:
+function _ZN5boost4asio17execution_context7service3keyC2Ev called 0 returned 0% blocks executed 0%
+    #####:  349:    key() : type_info_(0), id_(0) {}
+------------------
+_ZN5boost4asio17execution_context7service3keyC2Ev:
+function _ZN5boost4asio17execution_context7service3keyC2Ev called 0 returned 0% blocks executed 0%
+    #####:  349:    key() : type_info_(0), id_(0) {}
+------------------
+_ZN5boost4asio17execution_context7service3keyC2Ev:
+function _ZN5boost4asio17execution_context7service3keyC2Ev called 0 returned 0% blocks executed 0%
+    #####:  349:    key() : type_info_(0), id_(0) {}
+------------------
+_ZN5boost4asio17execution_context7service3keyC2Ev:
+function _ZN5boost4asio17execution_context7service3keyC2Ev called 0 returned 0% blocks executed 0%
+    #####:  349:    key() : type_info_(0), id_(0) {}
+------------------
+_ZN5boost4asio17execution_context7service3keyC2Ev:
+function _ZN5boost4asio17execution_context7service3keyC2Ev called 72 returned 100% blocks executed 100%
+       72:  349:    key() : type_info_(0), id_(0) {}
+------------------
+_ZN5boost4asio17execution_context7service3keyC2Ev:
+function _ZN5boost4asio17execution_context7service3keyC2Ev called 0 returned 0% blocks executed 0%
+    #####:  349:    key() : type_info_(0), id_(0) {}
+------------------
+_ZN5boost4asio17execution_context7service3keyC2Ev:
+function _ZN5boost4asio17execution_context7service3keyC2Ev called 440 returned 100% blocks executed 100%
+      440:  349:    key() : type_info_(0), id_(0) {}
+------------------
+_ZN5boost4asio17execution_context7service3keyC2Ev:
+function _ZN5boost4asio17execution_context7service3keyC2Ev called 42 returned 100% blocks executed 100%
+       42:  349:    key() : type_info_(0), id_(0) {}
+------------------
+        -:  350:    const std::type_info* type_info_;
+        -:  351:    const execution_context::id* id_;
+        -:  352:  } key_;
+        -:  353:
+        -:  354:  execution_context& owner_;
+        -:  355:  service* next_;
+        -:  356:};
+        -:  357:
+        -:  358:/// Exception thrown when trying to add a duplicate service to an
+        -:  359:/// execution_context.
+        -:  360:class service_already_exists
+        -:  361:  : public std::logic_error
+        -:  362:{
+        -:  363:public:
+        -:  364:  BOOST_ASIO_DECL service_already_exists();
+        -:  365:};
+        -:  366:
+        -:  367:/// Exception thrown when trying to add a service object to an
+        -:  368:/// execution_context where the service has a different owner.
+        -:  369:class invalid_service_owner
+        -:  370:  : public std::logic_error
+        -:  371:{
+        -:  372:public:
+        -:  373:  BOOST_ASIO_DECL invalid_service_owner();
+        -:  374:};
+        -:  375:
+        -:  376:namespace detail {
+        -:  377:
+        -:  378:// Special derived service id type to keep classes header-file only.
+        -:  379:template <typename Type>
+        -:  380:class service_id
+        -:  381:  : public execution_context::id
+        -:  382:{
+        -:  383:};
+        -:  384:
+        -:  385:// Special service base class to keep classes header-file only.
+        -:  386:template <typename Type>
+        -:  387:class execution_context_service_base
+        -:  388:  : public execution_context::service
+        -:  389:{
+        -:  390:public:
+        -:  391:  static service_id<Type> id;
+        -:  392:
+        -:  393:  // Constructor.
+     550*:  394:  execution_context_service_base(execution_context& e)
+     550*:  395:    : execution_context::service(e)
+        -:  396:  {
+     550*:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_9schedulerEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_9schedulerEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_13epoll_reactorEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_13epoll_reactorEEC2ERNS0_17execution_contextE called 17 returned 100% blocks executed 100%
+       17:  394:  execution_context_service_base(execution_context& e)
+       17:  395:    : execution_context::service(e)
+call    0 returned 100%
+        -:  396:  {
+       17:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_22deadline_timer_serviceINS1_18chrono_time_traitsINSt6chrono3_V212steady_clockENS0_11wait_traitsIS7_EEEEEEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_22deadline_timer_serviceINS1_18chrono_time_traitsINSt6chrono3_V212steady_clockENS0_11wait_traitsIS7_EEEEEEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_9schedulerEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_9schedulerEEC2ERNS0_17execution_contextE called 5 returned 100% blocks executed 100%
+        5:  394:  execution_context_service_base(execution_context& e)
+        5:  395:    : execution_context::service(e)
+call    0 returned 100%
+        -:  396:  {
+        5:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_13epoll_reactorEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_13epoll_reactorEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_22deadline_timer_serviceINS1_18chrono_time_traitsINSt6chrono3_V212steady_clockENS0_11wait_traitsIS7_EEEEEEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_22deadline_timer_serviceINS1_18chrono_time_traitsINSt6chrono3_V212steady_clockENS0_11wait_traitsIS7_EEEEEEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_9schedulerEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_9schedulerEEC2ERNS0_17execution_contextE called 1 returned 100% blocks executed 100%
+        1:  394:  execution_context_service_base(execution_context& e)
+        1:  395:    : execution_context::service(e)
+call    0 returned 100%
+        -:  396:  {
+        1:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_13epoll_reactorEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_13epoll_reactorEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_22deadline_timer_serviceINS1_18chrono_time_traitsINSt6chrono3_V212steady_clockENS0_11wait_traitsIS7_EEEEEEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_22deadline_timer_serviceINS1_18chrono_time_traitsINSt6chrono3_V212steady_clockENS0_11wait_traitsIS7_EEEEEEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_9schedulerEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_9schedulerEEC2ERNS0_17execution_contextE called 17 returned 100% blocks executed 100%
+       17:  394:  execution_context_service_base(execution_context& e)
+       17:  395:    : execution_context::service(e)
+call    0 returned 100%
+        -:  396:  {
+       17:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_13epoll_reactorEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_13epoll_reactorEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_22deadline_timer_serviceINS1_18chrono_time_traitsINSt6chrono3_V212steady_clockENS0_11wait_traitsIS7_EEEEEEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_22deadline_timer_serviceINS1_18chrono_time_traitsINSt6chrono3_V212steady_clockENS0_11wait_traitsIS7_EEEEEEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_9schedulerEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_9schedulerEEC2ERNS0_17execution_contextE called 14 returned 100% blocks executed 100%
+       14:  394:  execution_context_service_base(execution_context& e)
+       14:  395:    : execution_context::service(e)
+call    0 returned 100%
+        -:  396:  {
+       14:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_13epoll_reactorEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_13epoll_reactorEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_22deadline_timer_serviceINS1_18chrono_time_traitsINSt6chrono3_V212steady_clockENS0_11wait_traitsIS7_EEEEEEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_22deadline_timer_serviceINS1_18chrono_time_traitsINSt6chrono3_V212steady_clockENS0_11wait_traitsIS7_EEEEEEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_9schedulerEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_9schedulerEEC2ERNS0_17execution_contextE called 16 returned 100% blocks executed 100%
+       16:  394:  execution_context_service_base(execution_context& e)
+       16:  395:    : execution_context::service(e)
+call    0 returned 100%
+        -:  396:  {
+       16:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_13epoll_reactorEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_13epoll_reactorEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_22deadline_timer_serviceINS1_18chrono_time_traitsINSt6chrono3_V212steady_clockENS0_11wait_traitsIS7_EEEEEEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_22deadline_timer_serviceINS1_18chrono_time_traitsINSt6chrono3_V212steady_clockENS0_11wait_traitsIS7_EEEEEEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_22deadline_timer_serviceINS1_18chrono_time_traitsINSt6chrono3_V212steady_clockENS0_11wait_traitsIS7_EEEEEEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_22deadline_timer_serviceINS1_18chrono_time_traitsINSt6chrono3_V212steady_clockENS0_11wait_traitsIS7_EEEEEEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_13epoll_reactorEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_13epoll_reactorEEC2ERNS0_17execution_contextE called 5 returned 100% blocks executed 100%
+        5:  394:  execution_context_service_base(execution_context& e)
+        5:  395:    : execution_context::service(e)
+call    0 returned 100%
+        -:  396:  {
+        5:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_22deadline_timer_serviceINS1_18chrono_time_traitsINSt6chrono3_V212steady_clockENS0_11wait_traitsIS7_EEEEEEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_22deadline_timer_serviceINS1_18chrono_time_traitsINSt6chrono3_V212steady_clockENS0_11wait_traitsIS7_EEEEEEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_9schedulerEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_9schedulerEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_13epoll_reactorEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_13epoll_reactorEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_23reactive_socket_serviceINS0_2ip3tcpEEEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_23reactive_socket_serviceINS0_2ip3tcpEEEEC2ERNS0_17execution_contextE called 15 returned 100% blocks executed 100%
+       15:  394:  execution_context_service_base(execution_context& e)
+       15:  395:    : execution_context::service(e)
+call    0 returned 100%
+        -:  396:  {
+       15:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_22deadline_timer_serviceINS1_18chrono_time_traitsINSt6chrono3_V212steady_clockENS0_11wait_traitsIS7_EEEEEEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_22deadline_timer_serviceINS1_18chrono_time_traitsINSt6chrono3_V212steady_clockENS0_11wait_traitsIS7_EEEEEEEC2ERNS0_17execution_contextE called 5 returned 100% blocks executed 100%
+        5:  394:  execution_context_service_base(execution_context& e)
+        5:  395:    : execution_context::service(e)
+call    0 returned 100%
+        -:  396:  {
+        5:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_9schedulerEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_9schedulerEEC2ERNS0_17execution_contextE called 15 returned 100% blocks executed 100%
+       15:  394:  execution_context_service_base(execution_context& e)
+       15:  395:    : execution_context::service(e)
+call    0 returned 100%
+        -:  396:  {
+       15:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_13epoll_reactorEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_13epoll_reactorEEC2ERNS0_17execution_contextE called 15 returned 100% blocks executed 100%
+       15:  394:  execution_context_service_base(execution_context& e)
+       15:  395:    : execution_context::service(e)
+call    0 returned 100%
+        -:  396:  {
+       15:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_9schedulerEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_9schedulerEEC2ERNS0_17execution_contextE called 5 returned 100% blocks executed 100%
+        5:  394:  execution_context_service_base(execution_context& e)
+        5:  395:    : execution_context::service(e)
+call    0 returned 100%
+        -:  396:  {
+        5:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_9schedulerEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_9schedulerEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_13epoll_reactorEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_13epoll_reactorEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_23reactive_socket_serviceINS0_2ip3tcpEEEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_23reactive_socket_serviceINS0_2ip3tcpEEEEC2ERNS0_17execution_contextE called 10 returned 100% blocks executed 100%
+       10:  394:  execution_context_service_base(execution_context& e)
+       10:  395:    : execution_context::service(e)
+call    0 returned 100%
+        -:  396:  {
+       10:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_22deadline_timer_serviceINS1_18chrono_time_traitsINSt6chrono3_V212steady_clockENS0_11wait_traitsIS7_EEEEEEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_22deadline_timer_serviceINS1_18chrono_time_traitsINSt6chrono3_V212steady_clockENS0_11wait_traitsIS7_EEEEEEEC2ERNS0_17execution_contextE called 4 returned 100% blocks executed 100%
+        4:  394:  execution_context_service_base(execution_context& e)
+        4:  395:    : execution_context::service(e)
+call    0 returned 100%
+        -:  396:  {
+        4:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_9schedulerEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_9schedulerEEC2ERNS0_17execution_contextE called 11 returned 100% blocks executed 100%
+       11:  394:  execution_context_service_base(execution_context& e)
+       11:  395:    : execution_context::service(e)
+call    0 returned 100%
+        -:  396:  {
+       11:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_13epoll_reactorEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_13epoll_reactorEEC2ERNS0_17execution_contextE called 10 returned 100% blocks executed 100%
+       10:  394:  execution_context_service_base(execution_context& e)
+       10:  395:    : execution_context::service(e)
+call    0 returned 100%
+        -:  396:  {
+       10:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_23reactive_socket_serviceINS0_2ip3tcpEEEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_23reactive_socket_serviceINS0_2ip3tcpEEEEC2ERNS0_17execution_contextE called 17 returned 100% blocks executed 100%
+       17:  394:  execution_context_service_base(execution_context& e)
+       17:  395:    : execution_context::service(e)
+call    0 returned 100%
+        -:  396:  {
+       17:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_22deadline_timer_serviceINS1_18chrono_time_traitsINSt6chrono3_V212steady_clockENS0_11wait_traitsIS7_EEEEEEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_22deadline_timer_serviceINS1_18chrono_time_traitsINSt6chrono3_V212steady_clockENS0_11wait_traitsIS7_EEEEEEEC2ERNS0_17execution_contextE called 6 returned 100% blocks executed 100%
+        6:  394:  execution_context_service_base(execution_context& e)
+        6:  395:    : execution_context::service(e)
+call    0 returned 100%
+        -:  396:  {
+        6:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_9schedulerEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_9schedulerEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_13epoll_reactorEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_13epoll_reactorEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_22deadline_timer_serviceINS1_18chrono_time_traitsINSt6chrono3_V212steady_clockENS0_11wait_traitsIS7_EEEEEEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_22deadline_timer_serviceINS1_18chrono_time_traitsINSt6chrono3_V212steady_clockENS0_11wait_traitsIS7_EEEEEEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_9schedulerEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_9schedulerEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_13epoll_reactorEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_13epoll_reactorEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_22deadline_timer_serviceINS1_18chrono_time_traitsINSt6chrono3_V212steady_clockENS0_11wait_traitsIS7_EEEEEEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_22deadline_timer_serviceINS1_18chrono_time_traitsINSt6chrono3_V212steady_clockENS0_11wait_traitsIS7_EEEEEEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_9schedulerEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_9schedulerEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_13epoll_reactorEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_13epoll_reactorEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_23reactive_socket_serviceINS0_2ip3tcpEEEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_23reactive_socket_serviceINS0_2ip3tcpEEEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_9schedulerEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_9schedulerEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_13epoll_reactorEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_13epoll_reactorEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_22deadline_timer_serviceINS1_18chrono_time_traitsINSt6chrono3_V212steady_clockENS0_11wait_traitsIS7_EEEEEEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_22deadline_timer_serviceINS1_18chrono_time_traitsINSt6chrono3_V212steady_clockENS0_11wait_traitsIS7_EEEEEEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_9schedulerEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_9schedulerEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_13epoll_reactorEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_13epoll_reactorEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_23reactive_socket_serviceINS0_2ip3tcpEEEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_23reactive_socket_serviceINS0_2ip3tcpEEEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_16resolver_serviceINS0_2ip3tcpEEEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_16resolver_serviceINS0_2ip3tcpEEEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_9schedulerEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_9schedulerEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_13epoll_reactorEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_13epoll_reactorEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_23reactive_socket_serviceINS0_2ip3tcpEEEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_23reactive_socket_serviceINS0_2ip3tcpEEEEC2ERNS0_17execution_contextE called 20 returned 100% blocks executed 100%
+       20:  394:  execution_context_service_base(execution_context& e)
+       20:  395:    : execution_context::service(e)
+call    0 returned 100%
+        -:  396:  {
+       20:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_13epoll_reactorEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_13epoll_reactorEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_23reactive_socket_serviceINS0_2ip3tcpEEEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_23reactive_socket_serviceINS0_2ip3tcpEEEEC2ERNS0_17execution_contextE called 8 returned 100% blocks executed 100%
+        8:  394:  execution_context_service_base(execution_context& e)
+        8:  395:    : execution_context::service(e)
+call    0 returned 100%
+        -:  396:  {
+        8:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_22deadline_timer_serviceINS1_18chrono_time_traitsINSt6chrono3_V212steady_clockENS0_11wait_traitsIS7_EEEEEEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_22deadline_timer_serviceINS1_18chrono_time_traitsINSt6chrono3_V212steady_clockENS0_11wait_traitsIS7_EEEEEEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_9schedulerEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_9schedulerEEC2ERNS0_17execution_contextE called 8 returned 100% blocks executed 100%
+        8:  394:  execution_context_service_base(execution_context& e)
+        8:  395:    : execution_context::service(e)
+call    0 returned 100%
+        -:  396:  {
+        8:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_13epoll_reactorEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_13epoll_reactorEEC2ERNS0_17execution_contextE called 8 returned 100% blocks executed 100%
+        8:  394:  execution_context_service_base(execution_context& e)
+        8:  395:    : execution_context::service(e)
+call    0 returned 100%
+        -:  396:  {
+        8:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_22deadline_timer_serviceINS1_18chrono_time_traitsINSt6chrono3_V212steady_clockENS0_11wait_traitsIS7_EEEEEEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_22deadline_timer_serviceINS1_18chrono_time_traitsINSt6chrono3_V212steady_clockENS0_11wait_traitsIS7_EEEEEEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_9schedulerEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_9schedulerEEC2ERNS0_17execution_contextE called 14 returned 100% blocks executed 100%
+       14:  394:  execution_context_service_base(execution_context& e)
+       14:  395:    : execution_context::service(e)
+call    0 returned 100%
+        -:  396:  {
+       14:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_13epoll_reactorEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_13epoll_reactorEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_9schedulerEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_9schedulerEEC2ERNS0_17execution_contextE called 5 returned 100% blocks executed 100%
+        5:  394:  execution_context_service_base(execution_context& e)
+        5:  395:    : execution_context::service(e)
+call    0 returned 100%
+        -:  396:  {
+        5:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_22deadline_timer_serviceINS1_18chrono_time_traitsINSt6chrono3_V212steady_clockENS0_11wait_traitsIS7_EEEEEEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_22deadline_timer_serviceINS1_18chrono_time_traitsINSt6chrono3_V212steady_clockENS0_11wait_traitsIS7_EEEEEEEC2ERNS0_17execution_contextE called 7 returned 100% blocks executed 100%
+        7:  394:  execution_context_service_base(execution_context& e)
+        7:  395:    : execution_context::service(e)
+call    0 returned 100%
+        -:  396:  {
+        7:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_9schedulerEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_9schedulerEEC2ERNS0_17execution_contextE called 20 returned 100% blocks executed 100%
+       20:  394:  execution_context_service_base(execution_context& e)
+       20:  395:    : execution_context::service(e)
+call    0 returned 100%
+        -:  396:  {
+       20:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_13epoll_reactorEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_13epoll_reactorEEC2ERNS0_17execution_contextE called 20 returned 100% blocks executed 100%
+       20:  394:  execution_context_service_base(execution_context& e)
+       20:  395:    : execution_context::service(e)
+call    0 returned 100%
+        -:  396:  {
+       20:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_22deadline_timer_serviceINS1_18chrono_time_traitsINSt6chrono3_V212steady_clockENS0_11wait_traitsIS7_EEEEEEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_22deadline_timer_serviceINS1_18chrono_time_traitsINSt6chrono3_V212steady_clockENS0_11wait_traitsIS7_EEEEEEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_9schedulerEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_9schedulerEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_13epoll_reactorEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_13epoll_reactorEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_23reactive_socket_serviceINS0_2ip3tcpEEEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_23reactive_socket_serviceINS0_2ip3tcpEEEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_16resolver_serviceINS0_2ip3tcpEEEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_16resolver_serviceINS0_2ip3tcpEEEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_13epoll_reactorEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_13epoll_reactorEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_22deadline_timer_serviceINS1_18chrono_time_traitsINSt6chrono3_V212steady_clockENS0_11wait_traitsIS7_EEEEEEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_22deadline_timer_serviceINS1_18chrono_time_traitsINSt6chrono3_V212steady_clockENS0_11wait_traitsIS7_EEEEEEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_9schedulerEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_9schedulerEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_13epoll_reactorEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_13epoll_reactorEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_22deadline_timer_serviceINS1_18chrono_time_traitsINSt6chrono3_V212steady_clockENS0_11wait_traitsIS7_EEEEEEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_22deadline_timer_serviceINS1_18chrono_time_traitsINSt6chrono3_V212steady_clockENS0_11wait_traitsIS7_EEEEEEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_9schedulerEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_9schedulerEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_13epoll_reactorEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_13epoll_reactorEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_22deadline_timer_serviceINS1_18chrono_time_traitsINSt6chrono3_V212steady_clockENS0_11wait_traitsIS7_EEEEEEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_22deadline_timer_serviceINS1_18chrono_time_traitsINSt6chrono3_V212steady_clockENS0_11wait_traitsIS7_EEEEEEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_9schedulerEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_9schedulerEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_13epoll_reactorEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_13epoll_reactorEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_22deadline_timer_serviceINS1_18chrono_time_traitsINSt6chrono3_V212steady_clockENS0_11wait_traitsIS7_EEEEEEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_22deadline_timer_serviceINS1_18chrono_time_traitsINSt6chrono3_V212steady_clockENS0_11wait_traitsIS7_EEEEEEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_9schedulerEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_9schedulerEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_13epoll_reactorEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_13epoll_reactorEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_22deadline_timer_serviceINS1_18chrono_time_traitsINSt6chrono3_V212steady_clockENS0_11wait_traitsIS7_EEEEEEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_22deadline_timer_serviceINS1_18chrono_time_traitsINSt6chrono3_V212steady_clockENS0_11wait_traitsIS7_EEEEEEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_9schedulerEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_9schedulerEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_13epoll_reactorEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_13epoll_reactorEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_22deadline_timer_serviceINS1_18chrono_time_traitsINSt6chrono3_V212steady_clockENS0_11wait_traitsIS7_EEEEEEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_22deadline_timer_serviceINS1_18chrono_time_traitsINSt6chrono3_V212steady_clockENS0_11wait_traitsIS7_EEEEEEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_9schedulerEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_9schedulerEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_13epoll_reactorEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_13epoll_reactorEEC2ERNS0_17execution_contextE called 11 returned 100% blocks executed 100%
+       11:  394:  execution_context_service_base(execution_context& e)
+       11:  395:    : execution_context::service(e)
+call    0 returned 100%
+        -:  396:  {
+       11:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_23reactive_socket_serviceINS0_2ip3tcpEEEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_23reactive_socket_serviceINS0_2ip3tcpEEEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_22deadline_timer_serviceINS1_18chrono_time_traitsINSt6chrono3_V212steady_clockENS0_11wait_traitsIS7_EEEEEEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_22deadline_timer_serviceINS1_18chrono_time_traitsINSt6chrono3_V212steady_clockENS0_11wait_traitsIS7_EEEEEEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_9schedulerEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_9schedulerEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_13epoll_reactorEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_13epoll_reactorEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_22deadline_timer_serviceINS1_18chrono_time_traitsINSt6chrono3_V212steady_clockENS0_11wait_traitsIS7_EEEEEEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_22deadline_timer_serviceINS1_18chrono_time_traitsINSt6chrono3_V212steady_clockENS0_11wait_traitsIS7_EEEEEEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_9schedulerEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_9schedulerEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_13epoll_reactorEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_13epoll_reactorEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_9schedulerEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_9schedulerEEC2ERNS0_17execution_contextE called 18 returned 100% blocks executed 100%
+       18:  394:  execution_context_service_base(execution_context& e)
+       18:  395:    : execution_context::service(e)
+call    0 returned 100%
+        -:  396:  {
+       18:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_13epoll_reactorEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_13epoll_reactorEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_22deadline_timer_serviceINS1_18chrono_time_traitsINSt6chrono3_V212steady_clockENS0_11wait_traitsIS7_EEEEEEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_22deadline_timer_serviceINS1_18chrono_time_traitsINSt6chrono3_V212steady_clockENS0_11wait_traitsIS7_EEEEEEEC2ERNS0_17execution_contextE called 11 returned 100% blocks executed 100%
+       11:  394:  execution_context_service_base(execution_context& e)
+       11:  395:    : execution_context::service(e)
+call    0 returned 100%
+        -:  396:  {
+       11:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_9schedulerEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_9schedulerEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_13epoll_reactorEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_13epoll_reactorEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_22deadline_timer_serviceINS1_18chrono_time_traitsINSt6chrono3_V212steady_clockENS0_11wait_traitsIS7_EEEEEEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_22deadline_timer_serviceINS1_18chrono_time_traitsINSt6chrono3_V212steady_clockENS0_11wait_traitsIS7_EEEEEEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_9schedulerEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_9schedulerEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_13epoll_reactorEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_13epoll_reactorEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_22deadline_timer_serviceINS1_18chrono_time_traitsINSt6chrono3_V212steady_clockENS0_11wait_traitsIS7_EEEEEEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_22deadline_timer_serviceINS1_18chrono_time_traitsINSt6chrono3_V212steady_clockENS0_11wait_traitsIS7_EEEEEEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_9schedulerEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_9schedulerEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_13epoll_reactorEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_13epoll_reactorEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_9schedulerEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_9schedulerEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_13epoll_reactorEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_13epoll_reactorEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_23reactive_socket_serviceINS0_2ip3tcpEEEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_23reactive_socket_serviceINS0_2ip3tcpEEEEC2ERNS0_17execution_contextE called 4 returned 100% blocks executed 100%
+        4:  394:  execution_context_service_base(execution_context& e)
+        4:  395:    : execution_context::service(e)
+call    0 returned 100%
+        -:  396:  {
+        4:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_22deadline_timer_serviceINS1_18chrono_time_traitsINSt6chrono3_V212steady_clockENS0_11wait_traitsIS7_EEEEEEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_22deadline_timer_serviceINS1_18chrono_time_traitsINSt6chrono3_V212steady_clockENS0_11wait_traitsIS7_EEEEEEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_9schedulerEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_9schedulerEEC2ERNS0_17execution_contextE called 17 returned 100% blocks executed 100%
+       17:  394:  execution_context_service_base(execution_context& e)
+       17:  395:    : execution_context::service(e)
+call    0 returned 100%
+        -:  396:  {
+       17:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_13epoll_reactorEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_13epoll_reactorEEC2ERNS0_17execution_contextE called 4 returned 100% blocks executed 100%
+        4:  394:  execution_context_service_base(execution_context& e)
+        4:  395:    : execution_context::service(e)
+call    0 returned 100%
+        -:  396:  {
+        4:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_22deadline_timer_serviceINS1_18chrono_time_traitsINSt6chrono3_V212steady_clockENS0_11wait_traitsIS7_EEEEEEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_22deadline_timer_serviceINS1_18chrono_time_traitsINSt6chrono3_V212steady_clockENS0_11wait_traitsIS7_EEEEEEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_9schedulerEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_9schedulerEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_22deadline_timer_serviceINS1_18chrono_time_traitsINSt6chrono3_V212steady_clockENS0_11wait_traitsIS7_EEEEEEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_22deadline_timer_serviceINS1_18chrono_time_traitsINSt6chrono3_V212steady_clockENS0_11wait_traitsIS7_EEEEEEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_23reactive_socket_serviceINS0_2ip3tcpEEEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_23reactive_socket_serviceINS0_2ip3tcpEEEEC2ERNS0_17execution_contextE called 37 returned 100% blocks executed 100%
+       37:  394:  execution_context_service_base(execution_context& e)
+       37:  395:    : execution_context::service(e)
+call    0 returned 100%
+        -:  396:  {
+       37:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_22deadline_timer_serviceINS1_18chrono_time_traitsINSt6chrono3_V212steady_clockENS0_11wait_traitsIS7_EEEEEEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_22deadline_timer_serviceINS1_18chrono_time_traitsINSt6chrono3_V212steady_clockENS0_11wait_traitsIS7_EEEEEEEC2ERNS0_17execution_contextE called 6 returned 100% blocks executed 100%
+        6:  394:  execution_context_service_base(execution_context& e)
+        6:  395:    : execution_context::service(e)
+call    0 returned 100%
+        -:  396:  {
+        6:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_9schedulerEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_9schedulerEEC2ERNS0_17execution_contextE called 54 returned 100% blocks executed 100%
+       54:  394:  execution_context_service_base(execution_context& e)
+       54:  395:    : execution_context::service(e)
+call    0 returned 100%
+        -:  396:  {
+       54:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_13epoll_reactorEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_13epoll_reactorEEC2ERNS0_17execution_contextE called 37 returned 100% blocks executed 100%
+       37:  394:  execution_context_service_base(execution_context& e)
+       37:  395:    : execution_context::service(e)
+call    0 returned 100%
+        -:  396:  {
+       37:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_22deadline_timer_serviceINS1_18chrono_time_traitsINSt6chrono3_V212steady_clockENS0_11wait_traitsIS7_EEEEEEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_22deadline_timer_serviceINS1_18chrono_time_traitsINSt6chrono3_V212steady_clockENS0_11wait_traitsIS7_EEEEEEEC2ERNS0_17execution_contextE called 1 returned 100% blocks executed 100%
+        1:  394:  execution_context_service_base(execution_context& e)
+        1:  395:    : execution_context::service(e)
+call    0 returned 100%
+        -:  396:  {
+        1:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_9schedulerEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_9schedulerEEC2ERNS0_17execution_contextE called 18 returned 100% blocks executed 100%
+       18:  394:  execution_context_service_base(execution_context& e)
+       18:  395:    : execution_context::service(e)
+call    0 returned 100%
+        -:  396:  {
+       18:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_13epoll_reactorEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_13epoll_reactorEEC2ERNS0_17execution_contextE called 1 returned 100% blocks executed 100%
+        1:  394:  execution_context_service_base(execution_context& e)
+        1:  395:    : execution_context::service(e)
+call    0 returned 100%
+        -:  396:  {
+        1:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_22deadline_timer_serviceINS1_18chrono_time_traitsINSt6chrono3_V212steady_clockENS0_11wait_traitsIS7_EEEEEEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_22deadline_timer_serviceINS1_18chrono_time_traitsINSt6chrono3_V212steady_clockENS0_11wait_traitsIS7_EEEEEEEC2ERNS0_17execution_contextE called 5 returned 100% blocks executed 100%
+        5:  394:  execution_context_service_base(execution_context& e)
+        5:  395:    : execution_context::service(e)
+call    0 returned 100%
+        -:  396:  {
+        5:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_13epoll_reactorEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_13epoll_reactorEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_22deadline_timer_serviceINS1_18chrono_time_traitsINSt6chrono3_V212steady_clockENS0_11wait_traitsIS7_EEEEEEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_22deadline_timer_serviceINS1_18chrono_time_traitsINSt6chrono3_V212steady_clockENS0_11wait_traitsIS7_EEEEEEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_9schedulerEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_9schedulerEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_13epoll_reactorEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_13epoll_reactorEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_22deadline_timer_serviceINS1_18chrono_time_traitsINSt6chrono3_V212steady_clockENS0_11wait_traitsIS7_EEEEEEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_22deadline_timer_serviceINS1_18chrono_time_traitsINSt6chrono3_V212steady_clockENS0_11wait_traitsIS7_EEEEEEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_9schedulerEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_9schedulerEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_13epoll_reactorEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_13epoll_reactorEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_22deadline_timer_serviceINS1_18chrono_time_traitsINSt6chrono3_V212steady_clockENS0_11wait_traitsIS7_EEEEEEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_22deadline_timer_serviceINS1_18chrono_time_traitsINSt6chrono3_V212steady_clockENS0_11wait_traitsIS7_EEEEEEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_9schedulerEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_9schedulerEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_22deadline_timer_serviceINS0_11time_traitsINS_10posix_time5ptimeEEEEEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_22deadline_timer_serviceINS0_11time_traitsINS_10posix_time5ptimeEEEEEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_23reactive_socket_serviceINS0_2ip3tcpEEEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_23reactive_socket_serviceINS0_2ip3tcpEEEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_22deadline_timer_serviceINS1_18chrono_time_traitsINSt6chrono3_V212steady_clockENS0_11wait_traitsIS7_EEEEEEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_22deadline_timer_serviceINS1_18chrono_time_traitsINSt6chrono3_V212steady_clockENS0_11wait_traitsIS7_EEEEEEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_18signal_set_serviceEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_18signal_set_serviceEEC2ERNS0_17execution_contextE called 28 returned 100% blocks executed 100%
+       28:  394:  execution_context_service_base(execution_context& e)
+       28:  395:    : execution_context::service(e)
+call    0 returned 100%
+        -:  396:  {
+       28:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_9schedulerEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_9schedulerEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_13epoll_reactorEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_13epoll_reactorEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_22deadline_timer_serviceINS0_11time_traitsINS_10posix_time5ptimeEEEEEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_22deadline_timer_serviceINS0_11time_traitsINS_10posix_time5ptimeEEEEEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+_ZN5boost4asio6detail30execution_context_service_baseINS1_23reactive_socket_serviceINS0_2ip3tcpEEEEC2ERNS0_17execution_contextE:
+function _ZN5boost4asio6detail30execution_context_service_baseINS1_23reactive_socket_serviceINS0_2ip3tcpEEEEC2ERNS0_17execution_contextE called 0 returned 0% blocks executed 0%
+    #####:  394:  execution_context_service_base(execution_context& e)
+    #####:  395:    : execution_context::service(e)
+call    0 never executed
+        -:  396:  {
+    #####:  397:  }
+------------------
+        -:  398:};
+        -:  399:
+        -:  400:template <typename Type>
+        -:  401:service_id<Type> execution_context_service_base<Type>::id;
+        -:  402:
+        -:  403:} // namespace detail
+        -:  404:} // namespace asio
+        -:  405:} // namespace boost
+        -:  406:
+        -:  407:#include <boost/asio/detail/pop_options.hpp>
+        -:  408:
+        -:  409:#include <boost/asio/impl/execution_context.hpp>
+        -:  410:#if defined(BOOST_ASIO_HEADER_ONLY)
+        -:  411:# include <boost/asio/impl/execution_context.ipp>
+        -:  412:#endif // defined(BOOST_ASIO_HEADER_ONLY)
+        -:  413:
+        -:  414:#endif // BOOST_ASIO_EXECUTION_CONTEXT_HPP

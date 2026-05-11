@@ -1,0 +1,2379 @@
+        -:    0:Source:/home/runner/work/Hical/Hical/tests/TestHttpClient.h
+        -:    1:#pragma once
+        -:    2:
+        -:    3:/**
+        -:    4: * @file TestHttpClient.h
+        -:    5: * @brief 自研轻量级测试客户端（HTTP + WebSocket）
+        -:    6: * 轻量级测试客户端（HTTP + WebSocket），使用 raw socket + picohttpparser 解析响应。
+        -:    7: * 仅用于测试，不追求工业级健壮性。
+        -:    8: */
+        -:    9:
+        -:   10:#include "core/WsFrame.h"
+        -:   11:#include <boost/asio.hpp>
+        -:   12:#include <charconv>
+        -:   13:#include <cstring>
+        -:   14:#include <stdexcept>
+        -:   15:#include <string>
+        -:   16:#include <utility>
+        -:   17:#include <vector>
+        -:   18:
+        -:   19:// picohttpparser（C 库）
+        -:   20:extern "C"
+        -:   21:{
+        -:   22:#include "picohttpparser.h"
+        -:   23:}
+        -:   24:
+        -:   25:namespace hical::test
+        -:   26:{
+        -:   27:
+        -:   28:	using boost::asio::ip::tcp;
+        -:   29:
+        -:   30:	namespace detail
+        -:   31:	{
+        -:   32:
+        -:   33:		/// 辅助：读取直到 buf 中包含 "\r\n\r\n"，返回 header_end 位置
+function _ZN5hical4test6detail18readUntilHeaderEndERN5boost4asio19basic_stream_socketINS3_2ip3tcpENS3_15any_io_executorEEERNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEE called 4 returned 100% blocks executed 91%
+        4:   34:		inline size_t readUntilHeaderEnd(tcp::socket& sock, std::string& buf)
+        -:   35:		{
+        -:   36:			for (;;)
+        -:   37:			{
+        8:   38:				auto pos = buf.find("\r\n\r\n");
+call    0 returned 100%
+        8:   39:				if (pos != std::string::npos)
+branch  0 taken 50% (fallthrough)
+branch  1 taken 50%
+        -:   40:				{
+        4:   41:					return pos + 4;
+        -:   42:				}
+        -:   43:				char tmp[4096];
+        4:   44:				auto n = sock.read_some(boost::asio::buffer(tmp));
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        4:   45:				buf.append(tmp, n);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        4:   46:			}
+        -:   47:		}
+        -:   48:
+        -:   49:		struct ParsedResponse
+        -:   50:		{
+        -:   51:			unsigned status = 0;
+        -:   52:			std::string body;
+        -:   53:			// 简易头部存储
+        -:   54:			std::vector<std::pair<std::string, std::string>> headers;
+        -:   55:
+function _ZNK5hical4test6detail14ParsedResponse10findHeaderERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEE called 2 returned 100% blocks executed 96%
+        2:   56:			std::string findHeader(const std::string& name) const
+        -:   57:			{
+        4:   58:				for (const auto& [k, v] : headers)
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+call    5 returned 100%
+call    6 returned 100%
+branch  7 taken 100%
+branch  8 taken 0% (fallthrough)
+        -:   59:				{
+        4:   60:					if (k.size() == name.size())
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 75% (fallthrough)
+branch  3 taken 25%
+        -:   61:					{
+        3:   62:						bool match = true;
+       27:   63:						for (size_t i = 0; i < k.size(); ++i)
+call    0 returned 100%
+branch  1 taken 93%
+branch  2 taken 7% (fallthrough)
+        -:   64:						{
+       25:   65:							if (std::tolower(static_cast<unsigned char>(k[i]))
+call    0 returned 100%
+       25:   66:								!= std::tolower(static_cast<unsigned char>(name[i])))
+call    0 returned 100%
+branch  1 taken 4% (fallthrough)
+branch  2 taken 96%
+        -:   67:							{
+        1:   68:								match = false;
+        1:   69:								break;
+        -:   70:							}
+        -:   71:						}
+        3:   72:						if (match)
+branch  0 taken 67% (fallthrough)
+branch  1 taken 33%
+        -:   73:						{
+        4:   74:							return v;
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:   75:						}
+        -:   76:					}
+        -:   77:				}
+    #####:   78:				return {};
+call    0 never executed
+        -:   79:			}
+        -:   80:		};
+        -:   81:
+        -:   82:		/// 从 socket 读取完整 HTTP 响应（头部 + body）
+      218:   83:		inline ParsedResponse readHttpResponse(tcp::socket& sock, std::string& residual)
+        -:   84:		{
+        -:   85:			// 读取到头部结束
+      218:   86:			size_t headerEnd = 0;
+        -:   87:			for (;;)
+        -:   88:			{
+      437:   89:				auto pos = residual.find("\r\n\r\n");
+      437:   90:				if (pos != std::string::npos)
+        -:   91:				{
+      218:   92:					headerEnd = pos + 4;
+      218:   93:					break;
+        -:   94:				}
+        -:   95:				char tmp[4096];
+      219:   96:				auto n = sock.read_some(boost::asio::buffer(tmp));
+      219:   97:				residual.append(tmp, n);
+      219:   98:			}
+        -:   99:
+        -:  100:			// 解析响应头（使用 picohttpparser）
+      218:  101:			int minorVersion = 0;
+      218:  102:			int status = 0;
+      218:  103:			const char* msg = nullptr;
+      218:  104:			size_t msgLen = 0;
+        -:  105:			struct phr_header headers[64];
+      218:  106:			size_t numHeaders = 64;
+        -:  107:
+      218:  108:			int ret = phr_parse_response(residual.data(),
+        -:  109:										 headerEnd,
+        -:  110:										 &minorVersion,
+        -:  111:										 &status,
+        -:  112:										 &msg,
+        -:  113:										 &msgLen,
+        -:  114:										 headers,
+        -:  115:										 &numHeaders,
+        -:  116:										 0);
+        -:  117:
+      219:  118:			if (ret < 0)
+        -:  119:			{
+    #####:  120:				throw std::runtime_error("Failed to parse HTTP response");
+        -:  121:			}
+        -:  122:
+      219:  123:			ParsedResponse result;
+      219:  124:			result.status = static_cast<unsigned>(status);
+        -:  125:
+      219:  126:			size_t contentLength = 0;
+      219:  127:			bool isChunked = false;
+        -:  128:
+     1101:  129:			for (size_t i = 0; i < numHeaders; ++i)
+        -:  130:			{
+     1761:  131:				std::string name(headers[i].name, headers[i].name_len);
+      879:  132:				std::string value(headers[i].value, headers[i].value_len);
+      880:  133:				result.headers.emplace_back(name, value);
+        -:  134:
+        -:  135:				// 检测 Content-Length
+      881:  136:				if (name.size() == 14)
+        -:  137:				{
+      219:  138:					bool match = true;
+      219:  139:					const char* cl = "content-length";
+     3275:  140:					for (size_t j = 0; j < 14; ++j)
+        -:  141:					{
+     3056:  142:						if (std::tolower(static_cast<unsigned char>(name[j])) != cl[j])
+        -:  143:						{
+    #####:  144:							match = false;
+    #####:  145:							break;
+        -:  146:						}
+        -:  147:					}
+      219:  148:					if (match)
+        -:  149:					{
+      219:  150:						std::from_chars(value.data(), value.data() + value.size(), contentLength);
+        -:  151:					}
+        -:  152:				}
+        -:  153:				// 检测 Transfer-Encoding: chunked
+      881:  154:				if (name.size() == 17)
+        -:  155:				{
+    #####:  156:					bool match = true;
+    #####:  157:					const char* te = "transfer-encoding";
+    #####:  158:					for (size_t j = 0; j < 17; ++j)
+        -:  159:					{
+    #####:  160:						if (std::tolower(static_cast<unsigned char>(name[j])) != te[j])
+        -:  161:						{
+    #####:  162:							match = false;
+    #####:  163:							break;
+        -:  164:						}
+        -:  165:					}
+    #####:  166:					if (match && value.find("chunked") != std::string::npos)
+        -:  167:					{
+    #####:  168:						isChunked = true;
+        -:  169:					}
+        -:  170:				}
+      881:  171:			}
+        -:  172:
+        -:  173:			// 读取 body
+      219:  174:			std::string bodyData;
+      219:  175:			size_t residualBody = residual.size() - headerEnd;
+        -:  176:
+      219:  177:			if (!isChunked && contentLength > 0)
+        -:  178:			{
+      218:  179:				bodyData.append(residual.data() + headerEnd, residualBody);
+      480:  180:				while (bodyData.size() < contentLength)
+        -:  181:				{
+        -:  182:					char tmp[4096];
+     262*:  183:					auto n = sock.read_some(boost::asio::buffer(tmp));
+     262*:  184:					bodyData.append(tmp, n);
+        -:  185:				}
+      218:  186:				bodyData.resize(contentLength);
+      218:  187:			}
+       1*:  188:			else if (!isChunked)
+        -:  189:			{
+        -:  190:				// Connection: close 模式或无 body
+       1*:  191:				bodyData.append(residual.data() + headerEnd, residualBody);
+        -:  192:			}
+        -:  193:
+      219:  194:			result.body = std::move(bodyData);
+        -:  195:
+        -:  196:			// 保留 body 之后的残余数据（keep-alive 场景下可能包含下一个响应的开头）
+      219:  197:			if (!isChunked && contentLength > 0)
+        -:  198:			{
+      218:  199:				size_t totalConsumed = headerEnd + contentLength;
+      218:  200:				if (totalConsumed < residual.size())
+        -:  201:				{
+    #####:  202:					residual = residual.substr(totalConsumed);
+        -:  203:				}
+        -:  204:				else
+        -:  205:				{
+      218:  206:					residual.clear();
+        -:  207:				}
+      218:  208:			}
+        -:  209:			else
+        -:  210:			{
+       1*:  211:				residual.clear();
+        -:  212:			}
+      219:  213:			return result;
+      219:  214:		}
+------------------
+_ZN5hical4test6detail16readHttpResponseERN5boost4asio19basic_stream_socketINS3_2ip3tcpENS3_15any_io_executorEEERNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEE:
+function _ZN5hical4test6detail16readHttpResponseERN5boost4asio19basic_stream_socketINS3_2ip3tcpENS3_15any_io_executorEEERNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEE called 205 returned 100% blocks executed 62%
+      205:   83:		inline ParsedResponse readHttpResponse(tcp::socket& sock, std::string& residual)
+        -:   84:		{
+        -:   85:			// 读取到头部结束
+      205:   86:			size_t headerEnd = 0;
+        -:   87:			for (;;)
+        -:   88:			{
+      411:   89:				auto pos = residual.find("\r\n\r\n");
+call    0 returned 100%
+      411:   90:				if (pos != std::string::npos)
+branch  0 taken 50% (fallthrough)
+branch  1 taken 50%
+        -:   91:				{
+      205:   92:					headerEnd = pos + 4;
+      205:   93:					break;
+        -:   94:				}
+        -:   95:				char tmp[4096];
+      206:   96:				auto n = sock.read_some(boost::asio::buffer(tmp));
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+      206:   97:				residual.append(tmp, n);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+      206:   98:			}
+        -:   99:
+        -:  100:			// 解析响应头（使用 picohttpparser）
+      205:  101:			int minorVersion = 0;
+      205:  102:			int status = 0;
+      205:  103:			const char* msg = nullptr;
+      205:  104:			size_t msgLen = 0;
+        -:  105:			struct phr_header headers[64];
+      205:  106:			size_t numHeaders = 64;
+        -:  107:
+      205:  108:			int ret = phr_parse_response(residual.data(),
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:  109:										 headerEnd,
+        -:  110:										 &minorVersion,
+        -:  111:										 &status,
+        -:  112:										 &msg,
+        -:  113:										 &msgLen,
+        -:  114:										 headers,
+        -:  115:										 &numHeaders,
+        -:  116:										 0);
+        -:  117:
+      206:  118:			if (ret < 0)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:  119:			{
+    #####:  120:				throw std::runtime_error("Failed to parse HTTP response");
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+call    5 never executed
+        -:  121:			}
+        -:  122:
+      206:  123:			ParsedResponse result;
+call    0 returned 100%
+      206:  124:			result.status = static_cast<unsigned>(status);
+        -:  125:
+      206:  126:			size_t contentLength = 0;
+      206:  127:			bool isChunked = false;
+        -:  128:
+     1030:  129:			for (size_t i = 0; i < numHeaders; ++i)
+branch  0 taken 80%
+branch  1 taken 20% (fallthrough)
+        -:  130:			{
+     1645:  131:				std::string name(headers[i].name, headers[i].name_len);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+      821:  132:				std::string value(headers[i].value, headers[i].value_len);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+      822:  133:				result.headers.emplace_back(name, value);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  134:
+        -:  135:				// 检测 Content-Length
+      823:  136:				if (name.size() == 14)
+call    0 returned 100%
+branch  1 taken 25% (fallthrough)
+branch  2 taken 75%
+        -:  137:				{
+      206:  138:					bool match = true;
+      206:  139:					const char* cl = "content-length";
+     3080:  140:					for (size_t j = 0; j < 14; ++j)
+branch  0 taken 93%
+branch  1 taken 7% (fallthrough)
+        -:  141:					{
+     2874:  142:						if (std::tolower(static_cast<unsigned char>(name[j])) != cl[j])
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+        -:  143:						{
+    #####:  144:							match = false;
+    #####:  145:							break;
+        -:  146:						}
+        -:  147:					}
+      206:  148:					if (match)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:  149:					{
+      206:  150:						std::from_chars(value.data(), value.data() + value.size(), contentLength);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+        -:  151:					}
+        -:  152:				}
+        -:  153:				// 检测 Transfer-Encoding: chunked
+      823:  154:				if (name.size() == 17)
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+        -:  155:				{
+    #####:  156:					bool match = true;
+    #####:  157:					const char* te = "transfer-encoding";
+    #####:  158:					for (size_t j = 0; j < 17; ++j)
+branch  0 never executed
+branch  1 never executed (fallthrough)
+        -:  159:					{
+    #####:  160:						if (std::tolower(static_cast<unsigned char>(name[j])) != te[j])
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+        -:  161:						{
+    #####:  162:							match = false;
+    #####:  163:							break;
+        -:  164:						}
+        -:  165:					}
+    #####:  166:					if (match && value.find("chunked") != std::string::npos)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed
+branch  5 never executed (fallthrough)
+branch  6 never executed
+        -:  167:					{
+    #####:  168:						isChunked = true;
+        -:  169:					}
+        -:  170:				}
+      823:  171:			}
+call    0 returned 100%
+call    1 returned 100%
+call    2 never executed
+call    3 never executed
+        -:  172:
+        -:  173:			// 读取 body
+      206:  174:			std::string bodyData;
+call    0 returned 100%
+      206:  175:			size_t residualBody = residual.size() - headerEnd;
+call    0 returned 100%
+        -:  176:
+      206:  177:			if (!isChunked && contentLength > 0)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 1%
+        -:  178:			{
+      205:  179:				bodyData.append(residual.data() + headerEnd, residualBody);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+      467:  180:				while (bodyData.size() < contentLength)
+call    0 returned 100%
+branch  1 taken 56%
+branch  2 taken 44% (fallthrough)
+        -:  181:				{
+        -:  182:					char tmp[4096];
+      262:  183:					auto n = sock.read_some(boost::asio::buffer(tmp));
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+      262:  184:					bodyData.append(tmp, n);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  185:				}
+      205:  186:				bodyData.resize(contentLength);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+      205:  187:			}
+        1:  188:			else if (!isChunked)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:  189:			{
+        -:  190:				// Connection: close 模式或无 body
+        1:  191:				bodyData.append(residual.data() + headerEnd, residualBody);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:  192:			}
+        -:  193:
+      206:  194:			result.body = std::move(bodyData);
+call    0 returned 100%
+call    1 returned 100%
+        -:  195:
+        -:  196:			// 保留 body 之后的残余数据（keep-alive 场景下可能包含下一个响应的开头）
+      206:  197:			if (!isChunked && contentLength > 0)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 1%
+        -:  198:			{
+      205:  199:				size_t totalConsumed = headerEnd + contentLength;
+      205:  200:				if (totalConsumed < residual.size())
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+        -:  201:				{
+    #####:  202:					residual = residual.substr(totalConsumed);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+call    4 never executed
+        -:  203:				}
+        -:  204:				else
+        -:  205:				{
+      205:  206:					residual.clear();
+call    0 returned 100%
+        -:  207:				}
+      205:  208:			}
+        -:  209:			else
+        -:  210:			{
+        1:  211:				residual.clear();
+call    0 returned 100%
+        -:  212:			}
+      206:  213:			return result;
+      206:  214:		}
+call    0 returned 100%
+call    1 never executed
+call    2 never executed
+------------------
+_ZN5hical4test6detail16readHttpResponseERN5boost4asio19basic_stream_socketINS3_2ip3tcpENS3_15any_io_executorEEERNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEE:
+function _ZN5hical4test6detail16readHttpResponseERN5boost4asio19basic_stream_socketINS3_2ip3tcpENS3_15any_io_executorEEERNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEE called 2 returned 100% blocks executed 55%
+        2:   83:		inline ParsedResponse readHttpResponse(tcp::socket& sock, std::string& residual)
+        -:   84:		{
+        -:   85:			// 读取到头部结束
+        2:   86:			size_t headerEnd = 0;
+        -:   87:			for (;;)
+        -:   88:			{
+        4:   89:				auto pos = residual.find("\r\n\r\n");
+call    0 returned 100%
+        4:   90:				if (pos != std::string::npos)
+branch  0 taken 50% (fallthrough)
+branch  1 taken 50%
+        -:   91:				{
+        2:   92:					headerEnd = pos + 4;
+        2:   93:					break;
+        -:   94:				}
+        -:   95:				char tmp[4096];
+        2:   96:				auto n = sock.read_some(boost::asio::buffer(tmp));
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        2:   97:				residual.append(tmp, n);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        2:   98:			}
+        -:   99:
+        -:  100:			// 解析响应头（使用 picohttpparser）
+        2:  101:			int minorVersion = 0;
+        2:  102:			int status = 0;
+        2:  103:			const char* msg = nullptr;
+        2:  104:			size_t msgLen = 0;
+        -:  105:			struct phr_header headers[64];
+        2:  106:			size_t numHeaders = 64;
+        -:  107:
+        2:  108:			int ret = phr_parse_response(residual.data(),
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:  109:										 headerEnd,
+        -:  110:										 &minorVersion,
+        -:  111:										 &status,
+        -:  112:										 &msg,
+        -:  113:										 &msgLen,
+        -:  114:										 headers,
+        -:  115:										 &numHeaders,
+        -:  116:										 0);
+        -:  117:
+        2:  118:			if (ret < 0)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:  119:			{
+    #####:  120:				throw std::runtime_error("Failed to parse HTTP response");
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+call    5 never executed
+        -:  121:			}
+        -:  122:
+        2:  123:			ParsedResponse result;
+call    0 returned 100%
+        2:  124:			result.status = static_cast<unsigned>(status);
+        -:  125:
+        2:  126:			size_t contentLength = 0;
+        2:  127:			bool isChunked = false;
+        -:  128:
+       10:  129:			for (size_t i = 0; i < numHeaders; ++i)
+branch  0 taken 80%
+branch  1 taken 20% (fallthrough)
+        -:  130:			{
+       16:  131:				std::string name(headers[i].name, headers[i].name_len);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        8:  132:				std::string value(headers[i].value, headers[i].value_len);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        8:  133:				result.headers.emplace_back(name, value);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  134:
+        -:  135:				// 检测 Content-Length
+        8:  136:				if (name.size() == 14)
+call    0 returned 100%
+branch  1 taken 25% (fallthrough)
+branch  2 taken 75%
+        -:  137:				{
+        2:  138:					bool match = true;
+        2:  139:					const char* cl = "content-length";
+       30:  140:					for (size_t j = 0; j < 14; ++j)
+branch  0 taken 93%
+branch  1 taken 7% (fallthrough)
+        -:  141:					{
+       28:  142:						if (std::tolower(static_cast<unsigned char>(name[j])) != cl[j])
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+        -:  143:						{
+    #####:  144:							match = false;
+    #####:  145:							break;
+        -:  146:						}
+        -:  147:					}
+        2:  148:					if (match)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:  149:					{
+        2:  150:						std::from_chars(value.data(), value.data() + value.size(), contentLength);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+        -:  151:					}
+        -:  152:				}
+        -:  153:				// 检测 Transfer-Encoding: chunked
+        8:  154:				if (name.size() == 17)
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+        -:  155:				{
+    #####:  156:					bool match = true;
+    #####:  157:					const char* te = "transfer-encoding";
+    #####:  158:					for (size_t j = 0; j < 17; ++j)
+branch  0 never executed
+branch  1 never executed (fallthrough)
+        -:  159:					{
+    #####:  160:						if (std::tolower(static_cast<unsigned char>(name[j])) != te[j])
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+        -:  161:						{
+    #####:  162:							match = false;
+    #####:  163:							break;
+        -:  164:						}
+        -:  165:					}
+    #####:  166:					if (match && value.find("chunked") != std::string::npos)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed
+branch  5 never executed (fallthrough)
+branch  6 never executed
+        -:  167:					{
+    #####:  168:						isChunked = true;
+        -:  169:					}
+        -:  170:				}
+        8:  171:			}
+call    0 returned 100%
+call    1 returned 100%
+call    2 never executed
+call    3 never executed
+        -:  172:
+        -:  173:			// 读取 body
+        2:  174:			std::string bodyData;
+call    0 returned 100%
+        2:  175:			size_t residualBody = residual.size() - headerEnd;
+call    0 returned 100%
+        -:  176:
+        2:  177:			if (!isChunked && contentLength > 0)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0%
+        -:  178:			{
+        2:  179:				bodyData.append(residual.data() + headerEnd, residualBody);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        2:  180:				while (bodyData.size() < contentLength)
+call    0 returned 100%
+branch  1 taken 0%
+branch  2 taken 100% (fallthrough)
+        -:  181:				{
+        -:  182:					char tmp[4096];
+    #####:  183:					auto n = sock.read_some(boost::asio::buffer(tmp));
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+    #####:  184:					bodyData.append(tmp, n);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:  185:				}
+        2:  186:				bodyData.resize(contentLength);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        2:  187:			}
+    #####:  188:			else if (!isChunked)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  189:			{
+        -:  190:				// Connection: close 模式或无 body
+    #####:  191:				bodyData.append(residual.data() + headerEnd, residualBody);
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+        -:  192:			}
+        -:  193:
+        2:  194:			result.body = std::move(bodyData);
+call    0 returned 100%
+call    1 returned 100%
+        -:  195:
+        -:  196:			// 保留 body 之后的残余数据（keep-alive 场景下可能包含下一个响应的开头）
+        2:  197:			if (!isChunked && contentLength > 0)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0%
+        -:  198:			{
+        2:  199:				size_t totalConsumed = headerEnd + contentLength;
+        2:  200:				if (totalConsumed < residual.size())
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+        -:  201:				{
+    #####:  202:					residual = residual.substr(totalConsumed);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+call    4 never executed
+        -:  203:				}
+        -:  204:				else
+        -:  205:				{
+        2:  206:					residual.clear();
+call    0 returned 100%
+        -:  207:				}
+        2:  208:			}
+        -:  209:			else
+        -:  210:			{
+    #####:  211:				residual.clear();
+call    0 never executed
+        -:  212:			}
+        2:  213:			return result;
+        2:  214:		}
+call    0 returned 100%
+call    1 never executed
+call    2 never executed
+------------------
+_ZN5hical4test6detail16readHttpResponseERN5boost4asio19basic_stream_socketINS3_2ip3tcpENS3_15any_io_executorEEERNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEE:
+function _ZN5hical4test6detail16readHttpResponseERN5boost4asio19basic_stream_socketINS3_2ip3tcpENS3_15any_io_executorEEERNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEE called 5 returned 100% blocks executed 55%
+        5:   83:		inline ParsedResponse readHttpResponse(tcp::socket& sock, std::string& residual)
+        -:   84:		{
+        -:   85:			// 读取到头部结束
+        5:   86:			size_t headerEnd = 0;
+        -:   87:			for (;;)
+        -:   88:			{
+       10:   89:				auto pos = residual.find("\r\n\r\n");
+call    0 returned 100%
+       10:   90:				if (pos != std::string::npos)
+branch  0 taken 50% (fallthrough)
+branch  1 taken 50%
+        -:   91:				{
+        5:   92:					headerEnd = pos + 4;
+        5:   93:					break;
+        -:   94:				}
+        -:   95:				char tmp[4096];
+        5:   96:				auto n = sock.read_some(boost::asio::buffer(tmp));
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        5:   97:				residual.append(tmp, n);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        5:   98:			}
+        -:   99:
+        -:  100:			// 解析响应头（使用 picohttpparser）
+        5:  101:			int minorVersion = 0;
+        5:  102:			int status = 0;
+        5:  103:			const char* msg = nullptr;
+        5:  104:			size_t msgLen = 0;
+        -:  105:			struct phr_header headers[64];
+        5:  106:			size_t numHeaders = 64;
+        -:  107:
+        5:  108:			int ret = phr_parse_response(residual.data(),
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:  109:										 headerEnd,
+        -:  110:										 &minorVersion,
+        -:  111:										 &status,
+        -:  112:										 &msg,
+        -:  113:										 &msgLen,
+        -:  114:										 headers,
+        -:  115:										 &numHeaders,
+        -:  116:										 0);
+        -:  117:
+        5:  118:			if (ret < 0)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:  119:			{
+    #####:  120:				throw std::runtime_error("Failed to parse HTTP response");
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+call    5 never executed
+        -:  121:			}
+        -:  122:
+        5:  123:			ParsedResponse result;
+call    0 returned 100%
+        5:  124:			result.status = static_cast<unsigned>(status);
+        -:  125:
+        5:  126:			size_t contentLength = 0;
+        5:  127:			bool isChunked = false;
+        -:  128:
+       29:  129:			for (size_t i = 0; i < numHeaders; ++i)
+branch  0 taken 83%
+branch  1 taken 17% (fallthrough)
+        -:  130:			{
+       48:  131:				std::string name(headers[i].name, headers[i].name_len);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       24:  132:				std::string value(headers[i].value, headers[i].value_len);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       24:  133:				result.headers.emplace_back(name, value);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  134:
+        -:  135:				// 检测 Content-Length
+       24:  136:				if (name.size() == 14)
+call    0 returned 100%
+branch  1 taken 21% (fallthrough)
+branch  2 taken 79%
+        -:  137:				{
+        5:  138:					bool match = true;
+        5:  139:					const char* cl = "content-length";
+       75:  140:					for (size_t j = 0; j < 14; ++j)
+branch  0 taken 93%
+branch  1 taken 7% (fallthrough)
+        -:  141:					{
+       70:  142:						if (std::tolower(static_cast<unsigned char>(name[j])) != cl[j])
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+        -:  143:						{
+    #####:  144:							match = false;
+    #####:  145:							break;
+        -:  146:						}
+        -:  147:					}
+        5:  148:					if (match)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:  149:					{
+        5:  150:						std::from_chars(value.data(), value.data() + value.size(), contentLength);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+        -:  151:					}
+        -:  152:				}
+        -:  153:				// 检测 Transfer-Encoding: chunked
+       24:  154:				if (name.size() == 17)
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+        -:  155:				{
+    #####:  156:					bool match = true;
+    #####:  157:					const char* te = "transfer-encoding";
+    #####:  158:					for (size_t j = 0; j < 17; ++j)
+branch  0 never executed
+branch  1 never executed (fallthrough)
+        -:  159:					{
+    #####:  160:						if (std::tolower(static_cast<unsigned char>(name[j])) != te[j])
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+        -:  161:						{
+    #####:  162:							match = false;
+    #####:  163:							break;
+        -:  164:						}
+        -:  165:					}
+    #####:  166:					if (match && value.find("chunked") != std::string::npos)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed
+branch  5 never executed (fallthrough)
+branch  6 never executed
+        -:  167:					{
+    #####:  168:						isChunked = true;
+        -:  169:					}
+        -:  170:				}
+       24:  171:			}
+call    0 returned 100%
+call    1 returned 100%
+call    2 never executed
+call    3 never executed
+        -:  172:
+        -:  173:			// 读取 body
+        5:  174:			std::string bodyData;
+call    0 returned 100%
+        5:  175:			size_t residualBody = residual.size() - headerEnd;
+call    0 returned 100%
+        -:  176:
+        5:  177:			if (!isChunked && contentLength > 0)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0%
+        -:  178:			{
+        5:  179:				bodyData.append(residual.data() + headerEnd, residualBody);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        5:  180:				while (bodyData.size() < contentLength)
+call    0 returned 100%
+branch  1 taken 0%
+branch  2 taken 100% (fallthrough)
+        -:  181:				{
+        -:  182:					char tmp[4096];
+    #####:  183:					auto n = sock.read_some(boost::asio::buffer(tmp));
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+    #####:  184:					bodyData.append(tmp, n);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:  185:				}
+        5:  186:				bodyData.resize(contentLength);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        5:  187:			}
+    #####:  188:			else if (!isChunked)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  189:			{
+        -:  190:				// Connection: close 模式或无 body
+    #####:  191:				bodyData.append(residual.data() + headerEnd, residualBody);
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+        -:  192:			}
+        -:  193:
+        5:  194:			result.body = std::move(bodyData);
+call    0 returned 100%
+call    1 returned 100%
+        -:  195:
+        -:  196:			// 保留 body 之后的残余数据（keep-alive 场景下可能包含下一个响应的开头）
+        5:  197:			if (!isChunked && contentLength > 0)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0%
+        -:  198:			{
+        5:  199:				size_t totalConsumed = headerEnd + contentLength;
+        5:  200:				if (totalConsumed < residual.size())
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+        -:  201:				{
+    #####:  202:					residual = residual.substr(totalConsumed);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+call    4 never executed
+        -:  203:				}
+        -:  204:				else
+        -:  205:				{
+        5:  206:					residual.clear();
+call    0 returned 100%
+        -:  207:				}
+        5:  208:			}
+        -:  209:			else
+        -:  210:			{
+    #####:  211:				residual.clear();
+call    0 never executed
+        -:  212:			}
+        5:  213:			return result;
+        5:  214:		}
+call    0 returned 100%
+call    1 never executed
+call    2 never executed
+------------------
+_ZN5hical4test6detail16readHttpResponseERN5boost4asio19basic_stream_socketINS3_2ip3tcpENS3_15any_io_executorEEERNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEE:
+function _ZN5hical4test6detail16readHttpResponseERN5boost4asio19basic_stream_socketINS3_2ip3tcpENS3_15any_io_executorEEERNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEE called 6 returned 100% blocks executed 55%
+        6:   83:		inline ParsedResponse readHttpResponse(tcp::socket& sock, std::string& residual)
+        -:   84:		{
+        -:   85:			// 读取到头部结束
+        6:   86:			size_t headerEnd = 0;
+        -:   87:			for (;;)
+        -:   88:			{
+       12:   89:				auto pos = residual.find("\r\n\r\n");
+call    0 returned 100%
+       12:   90:				if (pos != std::string::npos)
+branch  0 taken 50% (fallthrough)
+branch  1 taken 50%
+        -:   91:				{
+        6:   92:					headerEnd = pos + 4;
+        6:   93:					break;
+        -:   94:				}
+        -:   95:				char tmp[4096];
+        6:   96:				auto n = sock.read_some(boost::asio::buffer(tmp));
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        6:   97:				residual.append(tmp, n);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        6:   98:			}
+        -:   99:
+        -:  100:			// 解析响应头（使用 picohttpparser）
+        6:  101:			int minorVersion = 0;
+        6:  102:			int status = 0;
+        6:  103:			const char* msg = nullptr;
+        6:  104:			size_t msgLen = 0;
+        -:  105:			struct phr_header headers[64];
+        6:  106:			size_t numHeaders = 64;
+        -:  107:
+        6:  108:			int ret = phr_parse_response(residual.data(),
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:  109:										 headerEnd,
+        -:  110:										 &minorVersion,
+        -:  111:										 &status,
+        -:  112:										 &msg,
+        -:  113:										 &msgLen,
+        -:  114:										 headers,
+        -:  115:										 &numHeaders,
+        -:  116:										 0);
+        -:  117:
+        6:  118:			if (ret < 0)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:  119:			{
+    #####:  120:				throw std::runtime_error("Failed to parse HTTP response");
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+call    5 never executed
+        -:  121:			}
+        -:  122:
+        6:  123:			ParsedResponse result;
+call    0 returned 100%
+        6:  124:			result.status = static_cast<unsigned>(status);
+        -:  125:
+        6:  126:			size_t contentLength = 0;
+        6:  127:			bool isChunked = false;
+        -:  128:
+       32:  129:			for (size_t i = 0; i < numHeaders; ++i)
+branch  0 taken 81%
+branch  1 taken 19% (fallthrough)
+        -:  130:			{
+       52:  131:				std::string name(headers[i].name, headers[i].name_len);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       26:  132:				std::string value(headers[i].value, headers[i].value_len);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       26:  133:				result.headers.emplace_back(name, value);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  134:
+        -:  135:				// 检测 Content-Length
+       26:  136:				if (name.size() == 14)
+call    0 returned 100%
+branch  1 taken 23% (fallthrough)
+branch  2 taken 77%
+        -:  137:				{
+        6:  138:					bool match = true;
+        6:  139:					const char* cl = "content-length";
+       90:  140:					for (size_t j = 0; j < 14; ++j)
+branch  0 taken 93%
+branch  1 taken 7% (fallthrough)
+        -:  141:					{
+       84:  142:						if (std::tolower(static_cast<unsigned char>(name[j])) != cl[j])
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+        -:  143:						{
+    #####:  144:							match = false;
+    #####:  145:							break;
+        -:  146:						}
+        -:  147:					}
+        6:  148:					if (match)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:  149:					{
+        6:  150:						std::from_chars(value.data(), value.data() + value.size(), contentLength);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+        -:  151:					}
+        -:  152:				}
+        -:  153:				// 检测 Transfer-Encoding: chunked
+       26:  154:				if (name.size() == 17)
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+        -:  155:				{
+    #####:  156:					bool match = true;
+    #####:  157:					const char* te = "transfer-encoding";
+    #####:  158:					for (size_t j = 0; j < 17; ++j)
+branch  0 never executed
+branch  1 never executed (fallthrough)
+        -:  159:					{
+    #####:  160:						if (std::tolower(static_cast<unsigned char>(name[j])) != te[j])
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+        -:  161:						{
+    #####:  162:							match = false;
+    #####:  163:							break;
+        -:  164:						}
+        -:  165:					}
+    #####:  166:					if (match && value.find("chunked") != std::string::npos)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed
+branch  5 never executed (fallthrough)
+branch  6 never executed
+        -:  167:					{
+    #####:  168:						isChunked = true;
+        -:  169:					}
+        -:  170:				}
+       26:  171:			}
+call    0 returned 100%
+call    1 returned 100%
+call    2 never executed
+call    3 never executed
+        -:  172:
+        -:  173:			// 读取 body
+        6:  174:			std::string bodyData;
+call    0 returned 100%
+        6:  175:			size_t residualBody = residual.size() - headerEnd;
+call    0 returned 100%
+        -:  176:
+        6:  177:			if (!isChunked && contentLength > 0)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0%
+        -:  178:			{
+        6:  179:				bodyData.append(residual.data() + headerEnd, residualBody);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        6:  180:				while (bodyData.size() < contentLength)
+call    0 returned 100%
+branch  1 taken 0%
+branch  2 taken 100% (fallthrough)
+        -:  181:				{
+        -:  182:					char tmp[4096];
+    #####:  183:					auto n = sock.read_some(boost::asio::buffer(tmp));
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+    #####:  184:					bodyData.append(tmp, n);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:  185:				}
+        6:  186:				bodyData.resize(contentLength);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        6:  187:			}
+    #####:  188:			else if (!isChunked)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  189:			{
+        -:  190:				// Connection: close 模式或无 body
+    #####:  191:				bodyData.append(residual.data() + headerEnd, residualBody);
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+        -:  192:			}
+        -:  193:
+        6:  194:			result.body = std::move(bodyData);
+call    0 returned 100%
+call    1 returned 100%
+        -:  195:
+        -:  196:			// 保留 body 之后的残余数据（keep-alive 场景下可能包含下一个响应的开头）
+        6:  197:			if (!isChunked && contentLength > 0)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0%
+        -:  198:			{
+        6:  199:				size_t totalConsumed = headerEnd + contentLength;
+        6:  200:				if (totalConsumed < residual.size())
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+        -:  201:				{
+    #####:  202:					residual = residual.substr(totalConsumed);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+call    4 never executed
+        -:  203:				}
+        -:  204:				else
+        -:  205:				{
+        6:  206:					residual.clear();
+call    0 returned 100%
+        -:  207:				}
+        6:  208:			}
+        -:  209:			else
+        -:  210:			{
+    #####:  211:				residual.clear();
+call    0 never executed
+        -:  212:			}
+        6:  213:			return result;
+        6:  214:		}
+call    0 returned 100%
+call    1 never executed
+call    2 never executed
+------------------
+        -:  215:
+        -:  216:	} // namespace detail
+        -:  217:
+        -:  218:	/**
+        -:  219:	 * @brief 发送 HTTP GET 请求并返回 {状态码, 响应体}
+        -:  220:	 */
+       10:  221:	inline std::pair<unsigned, std::string> httpGet(const std::string& host, uint16_t port, const std::string& target)
+        -:  222:	{
+       10:  223:		boost::asio::io_context ioCtx;
+       10:  224:		tcp::socket sock(ioCtx);
+       10:  225:		sock.connect(tcp::endpoint(boost::asio::ip::make_address(host), port));
+        -:  226:
+       20:  227:		std::string req = "GET " + target
+       10:  228:						  + " HTTP/1.1\r\n"
+       10:  229:							"Host: "
+       20:  230:						  + host
+        -:  231:						  + "\r\n"
+        -:  232:							"Connection: close\r\n"
+       10:  233:							"\r\n";
+       10:  234:		boost::asio::write(sock, boost::asio::buffer(req));
+        -:  235:
+       10:  236:		std::string buf;
+       10:  237:		auto result = detail::readHttpResponse(sock, buf);
+        -:  238:
+       10:  239:		boost::system::error_code ec;
+       10:  240:		sock.shutdown(tcp::socket::shutdown_both, ec);
+       20:  241:		return {result.status, result.body};
+       10:  242:	}
+------------------
+_ZN5hical4test7httpGetERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEtS8_:
+function _ZN5hical4test7httpGetERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEtS8_ called 1 returned 100% blocks executed 54%
+        1:  221:	inline std::pair<unsigned, std::string> httpGet(const std::string& host, uint16_t port, const std::string& target)
+        -:  222:	{
+        1:  223:		boost::asio::io_context ioCtx;
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  224:		tcp::socket sock(ioCtx);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  225:		sock.connect(tcp::endpoint(boost::asio::ip::make_address(host), port));
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+        -:  226:
+        2:  227:		std::string req = "GET " + target
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 never executed
+        1:  228:						  + " HTTP/1.1\r\n"
+call    0 returned 100%
+call    1 never executed
+        1:  229:							"Host: "
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        2:  230:						  + host
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 never executed
+        -:  231:						  + "\r\n"
+        -:  232:							"Connection: close\r\n"
+        1:  233:							"\r\n";
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  234:		boost::asio::write(sock, boost::asio::buffer(req));
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:  235:
+        1:  236:		std::string buf;
+call    0 returned 100%
+        1:  237:		auto result = detail::readHttpResponse(sock, buf);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  238:
+        1:  239:		boost::system::error_code ec;
+        1:  240:		sock.shutdown(tcp::socket::shutdown_both, ec);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        2:  241:		return {result.status, result.body};
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  242:	}
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+call    5 never executed
+call    6 never executed
+call    7 never executed
+call    8 never executed
+call    9 never executed
+------------------
+_ZN5hical4test7httpGetERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEtS8_:
+function _ZN5hical4test7httpGetERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEtS8_ called 1 returned 100% blocks executed 54%
+        1:  221:	inline std::pair<unsigned, std::string> httpGet(const std::string& host, uint16_t port, const std::string& target)
+        -:  222:	{
+        1:  223:		boost::asio::io_context ioCtx;
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  224:		tcp::socket sock(ioCtx);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  225:		sock.connect(tcp::endpoint(boost::asio::ip::make_address(host), port));
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+        -:  226:
+        2:  227:		std::string req = "GET " + target
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 never executed
+        1:  228:						  + " HTTP/1.1\r\n"
+call    0 returned 100%
+call    1 never executed
+        1:  229:							"Host: "
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        2:  230:						  + host
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 never executed
+        -:  231:						  + "\r\n"
+        -:  232:							"Connection: close\r\n"
+        1:  233:							"\r\n";
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  234:		boost::asio::write(sock, boost::asio::buffer(req));
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:  235:
+        1:  236:		std::string buf;
+call    0 returned 100%
+        1:  237:		auto result = detail::readHttpResponse(sock, buf);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  238:
+        1:  239:		boost::system::error_code ec;
+        1:  240:		sock.shutdown(tcp::socket::shutdown_both, ec);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        2:  241:		return {result.status, result.body};
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  242:	}
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+call    5 never executed
+call    6 never executed
+call    7 never executed
+call    8 never executed
+call    9 never executed
+------------------
+_ZN5hical4test7httpGetERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEtS8_:
+function _ZN5hical4test7httpGetERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEtS8_ called 5 returned 100% blocks executed 54%
+        5:  221:	inline std::pair<unsigned, std::string> httpGet(const std::string& host, uint16_t port, const std::string& target)
+        -:  222:	{
+        5:  223:		boost::asio::io_context ioCtx;
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        5:  224:		tcp::socket sock(ioCtx);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        5:  225:		sock.connect(tcp::endpoint(boost::asio::ip::make_address(host), port));
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+        -:  226:
+       10:  227:		std::string req = "GET " + target
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 never executed
+        5:  228:						  + " HTTP/1.1\r\n"
+call    0 returned 100%
+call    1 never executed
+        5:  229:							"Host: "
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       10:  230:						  + host
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 never executed
+        -:  231:						  + "\r\n"
+        -:  232:							"Connection: close\r\n"
+        5:  233:							"\r\n";
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        5:  234:		boost::asio::write(sock, boost::asio::buffer(req));
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:  235:
+        5:  236:		std::string buf;
+call    0 returned 100%
+        5:  237:		auto result = detail::readHttpResponse(sock, buf);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  238:
+        5:  239:		boost::system::error_code ec;
+        5:  240:		sock.shutdown(tcp::socket::shutdown_both, ec);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       10:  241:		return {result.status, result.body};
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        5:  242:	}
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+call    5 never executed
+call    6 never executed
+call    7 never executed
+call    8 never executed
+call    9 never executed
+------------------
+_ZN5hical4test7httpGetERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEtS8_:
+function _ZN5hical4test7httpGetERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEtS8_ called 3 returned 100% blocks executed 54%
+        3:  221:	inline std::pair<unsigned, std::string> httpGet(const std::string& host, uint16_t port, const std::string& target)
+        -:  222:	{
+        3:  223:		boost::asio::io_context ioCtx;
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        3:  224:		tcp::socket sock(ioCtx);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        3:  225:		sock.connect(tcp::endpoint(boost::asio::ip::make_address(host), port));
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+        -:  226:
+        6:  227:		std::string req = "GET " + target
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 never executed
+        3:  228:						  + " HTTP/1.1\r\n"
+call    0 returned 100%
+call    1 never executed
+        3:  229:							"Host: "
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        6:  230:						  + host
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 never executed
+        -:  231:						  + "\r\n"
+        -:  232:							"Connection: close\r\n"
+        3:  233:							"\r\n";
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        3:  234:		boost::asio::write(sock, boost::asio::buffer(req));
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:  235:
+        3:  236:		std::string buf;
+call    0 returned 100%
+        3:  237:		auto result = detail::readHttpResponse(sock, buf);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  238:
+        3:  239:		boost::system::error_code ec;
+        3:  240:		sock.shutdown(tcp::socket::shutdown_both, ec);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        6:  241:		return {result.status, result.body};
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        3:  242:	}
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+call    5 never executed
+call    6 never executed
+call    7 never executed
+call    8 never executed
+call    9 never executed
+------------------
+        -:  243:
+        -:  244:	/**
+        -:  245:	 * @brief 发送 HTTP GET 请求并返回完整 ParsedResponse（含头部）
+        -:  246:	 */
+function _ZN5hical4test11httpGetFullERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEtS8_ called 2 returned 100% blocks executed 51%
+        2:  247:	inline detail::ParsedResponse httpGetFull(const std::string& host, uint16_t port, const std::string& target)
+        -:  248:	{
+        2:  249:		boost::asio::io_context ioCtx;
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        2:  250:		tcp::socket sock(ioCtx);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        2:  251:		sock.connect(tcp::endpoint(boost::asio::ip::make_address(host), port));
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+        -:  252:
+        4:  253:		std::string req = "GET " + target
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 never executed
+        2:  254:						  + " HTTP/1.1\r\n"
+call    0 returned 100%
+call    1 never executed
+        2:  255:							"Host: "
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        4:  256:						  + host
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 never executed
+        -:  257:						  + "\r\n"
+        -:  258:							"Connection: close\r\n"
+        2:  259:							"\r\n";
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        2:  260:		boost::asio::write(sock, boost::asio::buffer(req));
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:  261:
+        2:  262:		std::string buf;
+call    0 returned 100%
+        2:  263:		auto result = detail::readHttpResponse(sock, buf);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  264:
+        2:  265:		boost::system::error_code ec;
+        2:  266:		sock.shutdown(tcp::socket::shutdown_both, ec);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        2:  267:		return result;
+        2:  268:	}
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 never executed
+call    5 never executed
+call    6 never executed
+call    7 never executed
+call    8 never executed
+        -:  269:
+        -:  270:	/**
+        -:  271:	 * @brief 发送 HTTP POST 请求并返回 {状态码, 响应体}
+        -:  272:	 */
+        3:  273:	inline std::pair<unsigned, std::string> httpPost(const std::string& host,
+        -:  274:													 uint16_t port,
+        -:  275:													 const std::string& target,
+        -:  276:													 const std::string& body)
+        -:  277:	{
+        3:  278:		boost::asio::io_context ioCtx;
+        3:  279:		tcp::socket sock(ioCtx);
+        3:  280:		sock.connect(tcp::endpoint(boost::asio::ip::make_address(host), port));
+        -:  281:
+        3:  282:		std::string clStr = std::to_string(body.size());
+        6:  283:		std::string req = "POST " + target
+        3:  284:						  + " HTTP/1.1\r\n"
+        3:  285:							"Host: "
+        6:  286:						  + host
+        3:  287:						  + "\r\n"
+        3:  288:							"Content-Length: "
+        6:  289:						  + clStr
+        3:  290:						  + "\r\n"
+        -:  291:							"Connection: close\r\n"
+        3:  292:							"\r\n"
+        3:  293:						  + body;
+        3:  294:		boost::asio::write(sock, boost::asio::buffer(req));
+        -:  295:
+        3:  296:		std::string buf;
+        3:  297:		auto result = detail::readHttpResponse(sock, buf);
+        -:  298:
+        3:  299:		boost::system::error_code ec;
+        3:  300:		sock.shutdown(tcp::socket::shutdown_both, ec);
+        6:  301:		return {result.status, result.body};
+        3:  302:	}
+------------------
+_ZN5hical4test8httpPostERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEtS8_S8_:
+function _ZN5hical4test8httpPostERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEtS8_S8_ called 2 returned 100% blocks executed 51%
+        2:  273:	inline std::pair<unsigned, std::string> httpPost(const std::string& host,
+        -:  274:													 uint16_t port,
+        -:  275:													 const std::string& target,
+        -:  276:													 const std::string& body)
+        -:  277:	{
+        2:  278:		boost::asio::io_context ioCtx;
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        2:  279:		tcp::socket sock(ioCtx);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        2:  280:		sock.connect(tcp::endpoint(boost::asio::ip::make_address(host), port));
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+        -:  281:
+        2:  282:		std::string clStr = std::to_string(body.size());
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        4:  283:		std::string req = "POST " + target
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 never executed
+        2:  284:						  + " HTTP/1.1\r\n"
+call    0 returned 100%
+call    1 never executed
+        2:  285:							"Host: "
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        4:  286:						  + host
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 never executed
+        2:  287:						  + "\r\n"
+call    0 returned 100%
+call    1 never executed
+        2:  288:							"Content-Length: "
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        4:  289:						  + clStr
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 never executed
+        2:  290:						  + "\r\n"
+call    0 returned 100%
+call    1 never executed
+        -:  291:							"Connection: close\r\n"
+        2:  292:							"\r\n"
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        2:  293:						  + body;
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        2:  294:		boost::asio::write(sock, boost::asio::buffer(req));
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:  295:
+        2:  296:		std::string buf;
+call    0 returned 100%
+        2:  297:		auto result = detail::readHttpResponse(sock, buf);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  298:
+        2:  299:		boost::system::error_code ec;
+        2:  300:		sock.shutdown(tcp::socket::shutdown_both, ec);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        4:  301:		return {result.status, result.body};
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        2:  302:	}
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+call    5 returned 100%
+call    6 never executed
+call    7 never executed
+call    8 never executed
+call    9 never executed
+call   10 never executed
+call   11 never executed
+------------------
+_ZN5hical4test8httpPostERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEtS8_S8_:
+function _ZN5hical4test8httpPostERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEtS8_S8_ called 1 returned 100% blocks executed 51%
+        1:  273:	inline std::pair<unsigned, std::string> httpPost(const std::string& host,
+        -:  274:													 uint16_t port,
+        -:  275:													 const std::string& target,
+        -:  276:													 const std::string& body)
+        -:  277:	{
+        1:  278:		boost::asio::io_context ioCtx;
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  279:		tcp::socket sock(ioCtx);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  280:		sock.connect(tcp::endpoint(boost::asio::ip::make_address(host), port));
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+        -:  281:
+        1:  282:		std::string clStr = std::to_string(body.size());
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        2:  283:		std::string req = "POST " + target
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 never executed
+        1:  284:						  + " HTTP/1.1\r\n"
+call    0 returned 100%
+call    1 never executed
+        1:  285:							"Host: "
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        2:  286:						  + host
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 never executed
+        1:  287:						  + "\r\n"
+call    0 returned 100%
+call    1 never executed
+        1:  288:							"Content-Length: "
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        2:  289:						  + clStr
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 never executed
+        1:  290:						  + "\r\n"
+call    0 returned 100%
+call    1 never executed
+        -:  291:							"Connection: close\r\n"
+        1:  292:							"\r\n"
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  293:						  + body;
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  294:		boost::asio::write(sock, boost::asio::buffer(req));
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:  295:
+        1:  296:		std::string buf;
+call    0 returned 100%
+        1:  297:		auto result = detail::readHttpResponse(sock, buf);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  298:
+        1:  299:		boost::system::error_code ec;
+        1:  300:		sock.shutdown(tcp::socket::shutdown_both, ec);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        2:  301:		return {result.status, result.body};
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  302:	}
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+call    5 returned 100%
+call    6 never executed
+call    7 never executed
+call    8 never executed
+call    9 never executed
+call   10 never executed
+call   11 never executed
+------------------
+        -:  303:
+        -:  304:	/**
+        -:  305:	 * @brief 在同一连接上发送多个 GET 请求（Keep-Alive）
+        -:  306:	 */
+function _ZN5hical4test21httpKeepAliveRequestsERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEtRKSt6vectorISt4pairIS6_S6_ESaISB_EE called 1 returned 100% blocks executed 55%
+        1:  307:	inline std::vector<detail::ParsedResponse> httpKeepAliveRequests(
+        -:  308:		const std::string& host,
+        -:  309:		uint16_t port,
+        -:  310:		const std::vector<std::pair<std::string, std::string>>& requests) // {method, target}
+        -:  311:	{
+        1:  312:		boost::asio::io_context ioCtx;
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  313:		tcp::socket sock(ioCtx);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  314:		sock.connect(tcp::endpoint(boost::asio::ip::make_address(host), port));
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+        -:  315:
+        1:  316:		std::vector<detail::ParsedResponse> results;
+        1:  317:		std::string buf;
+call    0 returned 100%
+        -:  318:
+        4:  319:		for (size_t i = 0; i < requests.size(); ++i)
+call    0 returned 100%
+branch  1 taken 75%
+branch  2 taken 25% (fallthrough)
+        -:  320:		{
+        3:  321:			bool isLast = (i == requests.size() - 1);
+call    0 returned 100%
+        3:  322:			auto& [method, target] = requests[i];
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+        -:  323:
+        6:  324:			std::string req = method + " " + target
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 returned 100%
+call    8 never executed
+call    9 never executed
+        3:  325:							  + " HTTP/1.1\r\n"
+call    0 returned 100%
+call    1 never executed
+        3:  326:								"Host: "
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        6:  327:							  + host
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 never executed
+        3:  328:							  + "\r\n"
+call    0 returned 100%
+call    1 never executed
+        3:  329:								"Connection: "
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        9:  330:							  + (isLast ? "close" : "keep-alive")
+branch  0 taken 33% (fallthrough)
+branch  1 taken 67%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+call    6 never executed
+        -:  331:							  + "\r\n"
+        3:  332:								"\r\n";
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        3:  333:			boost::asio::write(sock, boost::asio::buffer(req));
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:  334:
+        3:  335:			results.push_back(detail::readHttpResponse(sock, buf));
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+        3:  336:		}
+call    0 returned 100%
+call    1 never executed
+        -:  337:
+        1:  338:		return results;
+        1:  339:	}
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 never executed
+call    4 never executed
+call    5 never executed
+call    6 never executed
+        -:  340:
+        -:  341:	/**
+        -:  342:	 * @brief 轻量级 WebSocket 测试客户端
+        -:  343:	 * 使用 raw socket 实现 WS 握手和帧收发。
+        -:  344:	 */
+        -:  345:	class TestWsClient
+        -:  346:	{
+        -:  347:	public:
+function _ZN5hical4test12TestWsClientC2ERN5boost4asio10io_contextE called 4 returned 100% blocks executed 100%
+        4:  348:		explicit TestWsClient(boost::asio::io_context& ioc) : m_socket(ioc)
+call    0 returned 100%
+call    1 returned 100%
+        -:  349:		{
+        4:  350:		}
+        -:  351:
+        -:  352:		/**
+        -:  353:		 * @brief TCP 连接 + HTTP 升级握手
+        -:  354:		 */
+function _ZN5hical4test12TestWsClient7connectERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEtS9_ called 4 returned 100% blocks executed 39%
+        4:  355:		void connect(const std::string& host, uint16_t port, const std::string& path)
+        -:  356:		{
+        4:  357:			m_socket.connect(tcp::endpoint(boost::asio::ip::make_address(host), port));
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+        -:  358:
+        -:  359:			// 固定的 Sec-WebSocket-Key（测试用，不需要随机）
+        -:  360:			static constexpr const char* kTestKey = "dGVzdC13ZWJzb2NrZXQta2V5";
+        -:  361:
+        8:  362:			std::string req = "GET " + path
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 never executed
+        4:  363:							  + " HTTP/1.1\r\n"
+call    0 returned 100%
+call    1 never executed
+        4:  364:								"Host: "
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       16:  365:							  + host + ":" + std::to_string(port)
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+call    7 returned 100%
+branch  8 taken 100% (fallthrough)
+branch  9 taken 0% (throw)
+call   10 returned 100%
+call   11 returned 100%
+call   12 returned 100%
+call   13 returned 100%
+call   14 never executed
+call   15 never executed
+call   16 never executed
+call   17 never executed
+        4:  366:							  + "\r\n"
+call    0 returned 100%
+call    1 never executed
+        -:  367:								"Upgrade: websocket\r\n"
+        -:  368:								"Connection: Upgrade\r\n"
+        -:  369:								"Sec-WebSocket-Version: 13\r\n"
+        4:  370:								"Sec-WebSocket-Key: "
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        8:  371:							  + kTestKey
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 never executed
+        -:  372:							  + "\r\n"
+        4:  373:								"\r\n";
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  374:
+        4:  375:			boost::asio::write(m_socket, boost::asio::buffer(req));
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:  376:
+        -:  377:			// 读取 101 响应
+        4:  378:			std::string buf;
+call    0 returned 100%
+        4:  379:			detail::readUntilHeaderEnd(m_socket, buf);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  380:
+        -:  381:			// 简单验证包含 "101"
+        4:  382:			if (buf.find("101") == std::string::npos)
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+        -:  383:			{
+    #####:  384:				throw std::runtime_error("WebSocket handshake failed: " + buf.substr(0, 80));
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+branch  5 never executed (fallthrough)
+branch  6 never executed (throw)
+call    7 never executed
+branch  8 never executed (fallthrough)
+branch  9 never executed (throw)
+call   10 never executed
+call   11 never executed
+call   12 never executed
+call   13 never executed
+call   14 never executed
+call   15 never executed
+        -:  385:			}
+        -:  386:
+        -:  387:			// 保存 101 响应后的残余数据
+        4:  388:			auto headerEnd = buf.find("\r\n\r\n") + 4;
+call    0 returned 100%
+        4:  389:			if (headerEnd < buf.size())
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+        -:  390:			{
+    #####:  391:				m_readBuf.assign(buf.begin() + static_cast<std::string::difference_type>(headerEnd), buf.end());
+call    0 never executed
+call    1 never executed
+call    2 never executed
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+        -:  392:			}
+        4:  393:		}
+call    0 returned 100%
+call    1 returned 100%
+call    2 never executed
+call    3 never executed
+        -:  394:
+        -:  395:		/**
+        -:  396:		 * @brief 发送文本消息（客户端必须 mask）
+        -:  397:		 */
+function _ZN5hical4test12TestWsClient5writeERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEE called 3 returned 100% blocks executed 70%
+        3:  398:		void write(const std::string& msg)
+        -:  399:		{
+        -:  400:			// 测试用固定 mask key
+        -:  401:			static constexpr uint8_t kMaskKey[4] = {0x12, 0x34, 0x56, 0x78};
+        3:  402:			auto frame = hical::buildMaskedWsFrame(hical::WsOpcode::hText, msg, kMaskKey);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        3:  403:			boost::asio::write(m_socket, boost::asio::buffer(frame));
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        3:  404:		}
+call    0 returned 100%
+call    1 never executed
+        -:  405:
+        -:  406:		/**
+        -:  407:		 * @brief 同步读取一条完整消息
+        -:  408:		 */
+function _ZN5hical4test12TestWsClient4readB5cxx11Ev called 5 returned 80% blocks executed 73%
+        5:  409:		std::string read()
+        -:  410:		{
+        -:  411:			for (;;)
+        -:  412:			{
+        9:  413:				auto hdr = tryParseFrame();
+call    0 returned 100%
+        9:  414:				if (hdr)
+call    0 returned 100%
+branch  1 taken 44% (fallthrough)
+branch  2 taken 56%
+        -:  415:				{
+        4:  416:					size_t frameSize = hdr->headerSize + static_cast<size_t>(hdr->payloadLength);
+call    0 returned 100%
+call    1 returned 100%
+        4:  417:					if (m_readBuf.size() >= frameSize)
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0%
+        -:  418:					{
+        -:  419:						// 提取载荷（服务端发送不 mask，无需 unmask）
+        4:  420:						std::string payload(m_readBuf.data() + hdr->headerSize,
+call    0 returned 100%
+        4:  421:											m_readBuf.data() + hdr->headerSize
+call    0 returned 100%
+call    1 returned 100%
+        8:  422:												+ static_cast<size_t>(hdr->payloadLength));
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+branch  5 never executed (fallthrough)
+branch  6 never executed
+        -:  423:
+        4:  424:						m_readBuf.erase(m_readBuf.begin(), m_readBuf.begin() + static_cast<long>(frameSize));
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+        8:  425:						return payload;
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  426:					}
+call    0 never executed
+call    1 never executed
+        -:  427:				}
+        -:  428:
+        -:  429:				// 需要更多数据
+        -:  430:				char tmp[4096];
+        5:  431:				auto n = m_socket.read_some(boost::asio::buffer(tmp));
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 80% (fallthrough)
+branch  3 taken 20% (throw)
+        4:  432:				m_readBuf.append(tmp, n);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        4:  433:			}
+        -:  434:		}
+        -:  435:
+        -:  436:		/**
+        -:  437:		 * @brief 带 error_code 版本的 read（超时/连接关闭检测用）
+        -:  438:		 */
+function _ZN5hical4test12TestWsClient4readB5cxx11ERN5boost6system10error_codeE called 1 returned 100% blocks executed 78%
+        1:  439:		std::string read(boost::system::error_code& ec)
+        -:  440:		{
+        -:  441:			try
+        -:  442:			{
+        1:  443:				return read();
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100% (throw)
+        -:  444:			}
+        1:  445:			catch (const boost::system::system_error& e)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+call    2 returned 100%
+        -:  446:			{
+        1:  447:				ec = e.code();
+call    0 returned 100%
+        1:  448:				return {};
+call    0 returned 100%
+        1:  449:			}
+        -:  450:		}
+        -:  451:
+        -:  452:		/**
+        -:  453:		 * @brief 发送 close 帧
+        -:  454:		 */
+function _ZN5hical4test12TestWsClient5closeENS_11WsCloseCodeE called 2 returned 100% blocks executed 62%
+        2:  455:		void close(hical::WsCloseCode code = hical::WsCloseCode::hNormal)
+        -:  456:		{
+        2:  457:			auto closePayload = hical::buildClosePayload(code);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:  458:			static constexpr uint8_t kMaskKey[4] = {0xAA, 0xBB, 0xCC, 0xDD};
+        2:  459:			auto frame = hical::buildMaskedWsFrame(hical::WsOpcode::hClose, closePayload, kMaskKey);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:  460:
+        2:  461:			boost::system::error_code ec;
+        2:  462:			boost::asio::write(m_socket, boost::asio::buffer(frame), ec);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        2:  463:		}
+call    0 returned 100%
+call    1 returned 100%
+call    2 never executed
+call    3 never executed
+        -:  464:
+        -:  465:		tcp::socket& socket()
+        -:  466:		{
+        -:  467:			return m_socket;
+        -:  468:		}
+        -:  469:
+        -:  470:	private:
+function _ZN5hical4test12TestWsClient13tryParseFrameEv called 9 returned 100% blocks executed 100%
+        9:  471:		std::optional<hical::WsFrameHeader> tryParseFrame()
+        -:  472:		{
+        9:  473:			if (m_readBuf.size() < 2)
+call    0 returned 100%
+branch  1 taken 56% (fallthrough)
+branch  2 taken 44%
+        -:  474:			{
+        5:  475:				return std::nullopt;
+call    0 returned 100%
+        -:  476:			}
+        4:  477:			return hical::parseWsFrameHeader(reinterpret_cast<const uint8_t*>(m_readBuf.data()), m_readBuf.size());
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+        -:  478:		}
+        -:  479:
+        -:  480:		tcp::socket m_socket;
+        -:  481:		std::string m_readBuf;
+        -:  482:	};
+        -:  483:
+        -:  484:} // namespace hical::test

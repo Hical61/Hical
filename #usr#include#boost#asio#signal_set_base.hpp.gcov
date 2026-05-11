@@ -1,0 +1,186 @@
+        -:    0:Source:/usr/include/boost/asio/signal_set_base.hpp
+        -:    1://
+        -:    2:// signal_set_base.hpp
+        -:    3:// ~~~~~~~~~~~~~~~~~~~
+        -:    4://
+        -:    5:// Copyright (c) 2003-2023 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+        -:    6://
+        -:    7:// Distributed under the Boost Software License, Version 1.0. (See accompanying
+        -:    8:// file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+        -:    9://
+        -:   10:
+        -:   11:#ifndef BOOST_ASIO_SIGNAL_SET_BASE_HPP
+        -:   12:#define BOOST_ASIO_SIGNAL_SET_BASE_HPP
+        -:   13:
+        -:   14:#if defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   15:# pragma once
+        -:   16:#endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   17:
+        -:   18:#include <boost/asio/detail/config.hpp>
+        -:   19:#include <boost/asio/detail/socket_types.hpp>
+        -:   20:
+        -:   21:#include <boost/asio/detail/push_options.hpp>
+        -:   22:
+        -:   23:namespace boost {
+        -:   24:namespace asio {
+        -:   25:
+        -:   26:/// The signal_set_base class is used as a base for the basic_signal_set class
+        -:   27:/// templates so that we have a common place to define the flags enum.
+        -:   28:class signal_set_base
+        -:   29:{
+        -:   30:public:
+        -:   31:# if defined(GENERATING_DOCUMENTATION)
+        -:   32:  /// Enumeration representing the different types of flags that may specified
+        -:   33:  /// when adding a signal to a set.
+        -:   34:  enum flags
+        -:   35:  {
+        -:   36:    /// Bitmask representing no flags.
+        -:   37:    none = 0,
+        -:   38:
+        -:   39:    /// Affects the behaviour of interruptible functions such that, if the
+        -:   40:    /// function would have failed with error::interrupted when interrupted by
+        -:   41:    /// the specified signal, the function shall instead be restarted and not
+        -:   42:    /// fail with error::interrupted.
+        -:   43:    restart = implementation_defined,
+        -:   44:
+        -:   45:    /// Do not generate SIGCHLD when child processes stop or stopped child
+        -:   46:    /// processes continue.
+        -:   47:    no_child_stop = implementation_defined,
+        -:   48:
+        -:   49:    /// Do not transform child processes into zombies when they terminate.
+        -:   50:    no_child_wait = implementation_defined,
+        -:   51:
+        -:   52:    /// Special value to indicate that the signal registration does not care
+        -:   53:    /// which flags are set, and so will not conflict with any prior
+        -:   54:    /// registrations of the same signal.
+        -:   55:    dont_care = -1
+        -:   56:  };
+        -:   57:
+        -:   58:  /// Portability typedef.
+        -:   59:  typedef flags flags_t;
+        -:   60:#elif defined(BOOST_ASIO_HAS_ENUM_CLASS)
+        -:   61:  enum class flags : int
+        -:   62:  {
+        -:   63:    none = 0,
+        -:   64:    restart = BOOST_ASIO_OS_DEF(SA_RESTART),
+        -:   65:    no_child_stop = BOOST_ASIO_OS_DEF(SA_NOCLDSTOP),
+        -:   66:    no_child_wait = BOOST_ASIO_OS_DEF(SA_NOCLDWAIT),
+        -:   67:    dont_care = -1
+        -:   68:  };
+        -:   69:
+        -:   70:  typedef flags flags_t;
+        -:   71:#else // defined(BOOST_ASIO_HAS_ENUM_CLASS)
+        -:   72:  struct flags
+        -:   73:  {
+        -:   74:    enum flags_t
+        -:   75:    {
+        -:   76:      none = 0,
+        -:   77:      restart = BOOST_ASIO_OS_DEF(SA_RESTART),
+        -:   78:      no_child_stop = BOOST_ASIO_OS_DEF(SA_NOCLDSTOP),
+        -:   79:      no_child_wait = BOOST_ASIO_OS_DEF(SA_NOCLDWAIT),
+        -:   80:      dont_care = -1
+        -:   81:    };
+        -:   82:  };
+        -:   83:
+        -:   84:  typedef flags::flags_t flags_t;
+        -:   85:#endif // defined(BOOST_ASIO_HAS_ENUM_CLASS)
+        -:   86:
+        -:   87:protected:
+        -:   88:  /// Protected destructor to prevent deletion through this type.
+function _ZN5boost4asio15signal_set_baseD2Ev called 28 returned 100% blocks executed 100%
+       28:   89:  ~signal_set_base()
+        -:   90:  {
+       28:   91:  }
+        -:   92:};
+        -:   93:
+        -:   94:/// Negation operator.
+        -:   95:/**
+        -:   96: * @relates signal_set_base::flags
+        -:   97: */
+        -:   98:inline BOOST_ASIO_CONSTEXPR bool operator!(signal_set_base::flags_t x)
+        -:   99:{
+        -:  100:  return static_cast<int>(x) == 0;
+        -:  101:}
+        -:  102:
+        -:  103:/// Bitwise and operator.
+        -:  104:/**
+        -:  105: * @relates signal_set_base::flags
+        -:  106: */
+        -:  107:inline BOOST_ASIO_CONSTEXPR signal_set_base::flags_t operator&(
+        -:  108:    signal_set_base::flags_t x, signal_set_base::flags_t y)
+        -:  109:{
+        -:  110:  return static_cast<signal_set_base::flags_t>(
+        -:  111:      static_cast<int>(x) & static_cast<int>(y));
+        -:  112:}
+        -:  113:
+        -:  114:/// Bitwise or operator.
+        -:  115:/**
+        -:  116: * @relates signal_set_base::flags
+        -:  117: */
+        -:  118:inline BOOST_ASIO_CONSTEXPR signal_set_base::flags_t operator|(
+        -:  119:    signal_set_base::flags_t x, signal_set_base::flags_t y)
+        -:  120:{
+        -:  121:  return static_cast<signal_set_base::flags_t>(
+        -:  122:      static_cast<int>(x) | static_cast<int>(y));
+        -:  123:}
+        -:  124:
+        -:  125:/// Bitwise xor operator.
+        -:  126:/**
+        -:  127: * @relates signal_set_base::flags
+        -:  128: */
+        -:  129:inline BOOST_ASIO_CONSTEXPR signal_set_base::flags_t operator^(
+        -:  130:    signal_set_base::flags_t x, signal_set_base::flags_t y)
+        -:  131:{
+        -:  132:  return static_cast<signal_set_base::flags_t>(
+        -:  133:      static_cast<int>(x) ^ static_cast<int>(y));
+        -:  134:}
+        -:  135:
+        -:  136:/// Bitwise negation operator.
+        -:  137:/**
+        -:  138: * @relates signal_set_base::flags
+        -:  139: */
+        -:  140:inline BOOST_ASIO_CONSTEXPR signal_set_base::flags_t operator~(
+        -:  141:    signal_set_base::flags_t x)
+        -:  142:{
+        -:  143:  return static_cast<signal_set_base::flags_t>(~static_cast<int>(x));
+        -:  144:}
+        -:  145:
+        -:  146:/// Bitwise and-assignment operator.
+        -:  147:/**
+        -:  148: * @relates signal_set_base::flags
+        -:  149: */
+        -:  150:inline signal_set_base::flags_t& operator&=(
+        -:  151:    signal_set_base::flags_t& x, signal_set_base::flags_t y)
+        -:  152:{
+        -:  153:  x = x & y;
+        -:  154:  return x;
+        -:  155:}
+        -:  156:
+        -:  157:/// Bitwise or-assignment operator.
+        -:  158:/**
+        -:  159: * @relates signal_set_base::flags
+        -:  160: */
+        -:  161:inline signal_set_base::flags_t& operator|=(
+        -:  162:    signal_set_base::flags_t& x, signal_set_base::flags_t y)
+        -:  163:{
+        -:  164:  x = x | y;
+        -:  165:  return x;
+        -:  166:}
+        -:  167:
+        -:  168:/// Bitwise xor-assignment operator.
+        -:  169:/**
+        -:  170: * @relates signal_set_base::flags
+        -:  171: */
+        -:  172:inline signal_set_base::flags_t& operator^=(
+        -:  173:    signal_set_base::flags_t& x, signal_set_base::flags_t y)
+        -:  174:{
+        -:  175:  x = x ^ y;
+        -:  176:  return x;
+        -:  177:}
+        -:  178:
+        -:  179:} // namespace asio
+        -:  180:} // namespace boost
+        -:  181:
+        -:  182:#include <boost/asio/detail/pop_options.hpp>
+        -:  183:
+        -:  184:#endif // BOOST_ASIO_SIGNAL_SET_BASE_HPP

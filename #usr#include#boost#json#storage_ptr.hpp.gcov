@@ -1,0 +1,1551 @@
+        -:    0:Source:/usr/include/boost/json/storage_ptr.hpp
+        -:    1://
+        -:    2:// Copyright (c) 2019 Vinnie Falco (vinnie.falco@gmail.com)
+        -:    3://
+        -:    4:// Distributed under the Boost Software License, Version 1.0. (See accompanying
+        -:    5:// file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+        -:    6://
+        -:    7:// Official repository: https://github.com/boostorg/json
+        -:    8://
+        -:    9:
+        -:   10:#ifndef BOOST_JSON_STORAGE_PTR_HPP
+        -:   11:#define BOOST_JSON_STORAGE_PTR_HPP
+        -:   12:
+        -:   13:#include <boost/json/detail/config.hpp>
+        -:   14:#include <boost/json/memory_resource.hpp>
+        -:   15:#include <boost/json/detail/shared_resource.hpp>
+        -:   16:#include <boost/json/detail/default_resource.hpp>
+        -:   17:#include <cstddef>
+        -:   18:#include <new>
+        -:   19:#include <type_traits>
+        -:   20:#include <utility>
+        -:   21:
+        -:   22:namespace boost {
+        -:   23:namespace json {
+        -:   24:
+        -:   25:/** A smart pointer to a @ref memory_resource
+        -:   26:
+        -:   27:    This container is used to hold a pointer to a memory resource. The
+        -:   28:    pointed-to resource is always valid. Depending on the means of
+        -:   29:    construction, the ownership will be either:
+        -:   30:
+        -:   31:    @li Non-owning, when constructing from a raw
+        -:   32:    pointer to @ref memory_resource or from a
+        -:   33:    @ref polymorphic_allocator. In this case the
+        -:   34:    caller is responsible for ensuring that the
+        -:   35:    lifetime of the memory resource extends until
+        -:   36:    there are no more calls to allocate or
+        -:   37:    deallocate.
+        -:   38:
+        -:   39:    @li Owning, when constructing using the function
+        -:   40:    @ref make_shared_resource. In this case
+        -:   41:    ownership is shared; the lifetime of the memory
+        -:   42:    resource extends until the last copy of the
+        -:   43:    @ref storage_ptr is destroyed.
+        -:   44:
+        -:   45:    @par Examples
+        -:   46:
+        -:   47:    These statements create a memory resource on the
+        -:   48:    stack and construct a pointer from it without
+        -:   49:    taking ownership:
+        -:   50:    @code
+        -:   51:    monotonic_resource mr;                  // Create our memory resource on the stack
+        -:   52:    storage_ptr sp( &mr );                  // Construct a non-owning pointer to the resource
+        -:   53:    @endcode
+        -:   54:
+        -:   55:    This function creates a pointer to a memory
+        -:   56:    resource using shared ownership and returns it.
+        -:   57:    The lifetime of the memory resource extends until
+        -:   58:    the last copy of the pointer is destroyed:
+        -:   59:    @code
+        -:   60:    // Create a counted memory resource and return it
+        -:   61:    storage_ptr make_storage()
+        -:   62:    {
+        -:   63:        return make_shared_resource< monotonic_resource >();
+        -:   64:    }
+        -:   65:    @endcode
+        -:   66:
+        -:   67:    @par Thread Safety
+        -:   68:
+        -:   69:    Instances of this type provide the default level of
+        -:   70:    thread safety for all C++ objects. Specifically, it
+        -:   71:    conforms to
+        -:   72:    <a href="http://eel.is/c++draft/res.on.data.races">
+        -:   73:        16.4.6.10 Data race avoidance</a>.
+        -:   74:
+        -:   75:    @see
+        -:   76:        @ref make_shared_resource,
+        -:   77:        @ref memory_resource,
+        -:   78:        @ref polymorphic_allocator
+        -:   79:*/
+        -:   80:class storage_ptr
+        -:   81:{
+        -:   82:#ifndef BOOST_JSON_DOCS
+        -:   83:    // VFALCO doc toolchain shows this when it shouldn't
+        -:   84:    friend struct detail::shared_resource;
+        -:   85:#endif
+        -:   86:    using shared_resource =
+        -:   87:        detail::shared_resource;
+        -:   88:
+        -:   89:    using default_resource =
+        -:   90:        detail::default_resource;
+        -:   91:
+        -:   92:    std::uintptr_t i_;
+        -:   93:
+        -:   94:    shared_resource*
+    #####:   95:    get_shared() const noexcept
+        -:   96:    {
+        -:   97:        return static_cast<shared_resource*>(
+        -:   98:            reinterpret_cast<memory_resource*>(
+    #####:   99:                i_ & ~3));
+        -:  100:    }
+------------------
+_ZNK5boost4json11storage_ptr10get_sharedEv:
+function _ZNK5boost4json11storage_ptr10get_sharedEv called 0 returned 0% blocks executed 0%
+    #####:   95:    get_shared() const noexcept
+        -:   96:    {
+        -:   97:        return static_cast<shared_resource*>(
+        -:   98:            reinterpret_cast<memory_resource*>(
+    #####:   99:                i_ & ~3));
+        -:  100:    }
+------------------
+_ZNK5boost4json11storage_ptr10get_sharedEv:
+function _ZNK5boost4json11storage_ptr10get_sharedEv called 0 returned 0% blocks executed 0%
+    #####:   95:    get_shared() const noexcept
+        -:   96:    {
+        -:   97:        return static_cast<shared_resource*>(
+        -:   98:            reinterpret_cast<memory_resource*>(
+    #####:   99:                i_ & ~3));
+        -:  100:    }
+------------------
+_ZNK5boost4json11storage_ptr10get_sharedEv:
+function _ZNK5boost4json11storage_ptr10get_sharedEv called 0 returned 0% blocks executed 0%
+    #####:   95:    get_shared() const noexcept
+        -:   96:    {
+        -:   97:        return static_cast<shared_resource*>(
+        -:   98:            reinterpret_cast<memory_resource*>(
+    #####:   99:                i_ & ~3));
+        -:  100:    }
+------------------
+_ZNK5boost4json11storage_ptr10get_sharedEv:
+function _ZNK5boost4json11storage_ptr10get_sharedEv called 0 returned 0% blocks executed 0%
+    #####:   95:    get_shared() const noexcept
+        -:   96:    {
+        -:   97:        return static_cast<shared_resource*>(
+        -:   98:            reinterpret_cast<memory_resource*>(
+    #####:   99:                i_ & ~3));
+        -:  100:    }
+------------------
+_ZNK5boost4json11storage_ptr10get_sharedEv:
+function _ZNK5boost4json11storage_ptr10get_sharedEv called 0 returned 0% blocks executed 0%
+    #####:   95:    get_shared() const noexcept
+        -:   96:    {
+        -:   97:        return static_cast<shared_resource*>(
+        -:   98:            reinterpret_cast<memory_resource*>(
+    #####:   99:                i_ & ~3));
+        -:  100:    }
+------------------
+_ZNK5boost4json11storage_ptr10get_sharedEv:
+function _ZNK5boost4json11storage_ptr10get_sharedEv called 0 returned 0% blocks executed 0%
+    #####:   95:    get_shared() const noexcept
+        -:   96:    {
+        -:   97:        return static_cast<shared_resource*>(
+        -:   98:            reinterpret_cast<memory_resource*>(
+    #####:   99:                i_ & ~3));
+        -:  100:    }
+------------------
+_ZNK5boost4json11storage_ptr10get_sharedEv:
+function _ZNK5boost4json11storage_ptr10get_sharedEv called 0 returned 0% blocks executed 0%
+    #####:   95:    get_shared() const noexcept
+        -:   96:    {
+        -:   97:        return static_cast<shared_resource*>(
+        -:   98:            reinterpret_cast<memory_resource*>(
+    #####:   99:                i_ & ~3));
+        -:  100:    }
+------------------
+_ZNK5boost4json11storage_ptr10get_sharedEv:
+function _ZNK5boost4json11storage_ptr10get_sharedEv called 0 returned 0% blocks executed 0%
+    #####:   95:    get_shared() const noexcept
+        -:   96:    {
+        -:   97:        return static_cast<shared_resource*>(
+        -:   98:            reinterpret_cast<memory_resource*>(
+    #####:   99:                i_ & ~3));
+        -:  100:    }
+------------------
+_ZNK5boost4json11storage_ptr10get_sharedEv:
+function _ZNK5boost4json11storage_ptr10get_sharedEv called 0 returned 0% blocks executed 0%
+    #####:   95:    get_shared() const noexcept
+        -:   96:    {
+        -:   97:        return static_cast<shared_resource*>(
+        -:   98:            reinterpret_cast<memory_resource*>(
+    #####:   99:                i_ & ~3));
+        -:  100:    }
+------------------
+_ZNK5boost4json11storage_ptr10get_sharedEv:
+function _ZNK5boost4json11storage_ptr10get_sharedEv called 0 returned 0% blocks executed 0%
+    #####:   95:    get_shared() const noexcept
+        -:   96:    {
+        -:   97:        return static_cast<shared_resource*>(
+        -:   98:            reinterpret_cast<memory_resource*>(
+    #####:   99:                i_ & ~3));
+        -:  100:    }
+------------------
+_ZNK5boost4json11storage_ptr10get_sharedEv:
+function _ZNK5boost4json11storage_ptr10get_sharedEv called 0 returned 0% blocks executed 0%
+    #####:   95:    get_shared() const noexcept
+        -:   96:    {
+        -:   97:        return static_cast<shared_resource*>(
+        -:   98:            reinterpret_cast<memory_resource*>(
+    #####:   99:                i_ & ~3));
+        -:  100:    }
+------------------
+_ZNK5boost4json11storage_ptr10get_sharedEv:
+function _ZNK5boost4json11storage_ptr10get_sharedEv called 0 returned 0% blocks executed 0%
+    #####:   95:    get_shared() const noexcept
+        -:   96:    {
+        -:   97:        return static_cast<shared_resource*>(
+        -:   98:            reinterpret_cast<memory_resource*>(
+    #####:   99:                i_ & ~3));
+        -:  100:    }
+------------------
+_ZNK5boost4json11storage_ptr10get_sharedEv:
+function _ZNK5boost4json11storage_ptr10get_sharedEv called 0 returned 0% blocks executed 0%
+    #####:   95:    get_shared() const noexcept
+        -:   96:    {
+        -:   97:        return static_cast<shared_resource*>(
+        -:   98:            reinterpret_cast<memory_resource*>(
+    #####:   99:                i_ & ~3));
+        -:  100:    }
+------------------
+_ZNK5boost4json11storage_ptr10get_sharedEv:
+function _ZNK5boost4json11storage_ptr10get_sharedEv called 0 returned 0% blocks executed 0%
+    #####:   95:    get_shared() const noexcept
+        -:   96:    {
+        -:   97:        return static_cast<shared_resource*>(
+        -:   98:            reinterpret_cast<memory_resource*>(
+    #####:   99:                i_ & ~3));
+        -:  100:    }
+------------------
+_ZNK5boost4json11storage_ptr10get_sharedEv:
+function _ZNK5boost4json11storage_ptr10get_sharedEv called 0 returned 0% blocks executed 0%
+    #####:   95:    get_shared() const noexcept
+        -:   96:    {
+        -:   97:        return static_cast<shared_resource*>(
+        -:   98:            reinterpret_cast<memory_resource*>(
+    #####:   99:                i_ & ~3));
+        -:  100:    }
+------------------
+_ZNK5boost4json11storage_ptr10get_sharedEv:
+function _ZNK5boost4json11storage_ptr10get_sharedEv called 0 returned 0% blocks executed 0%
+    #####:   95:    get_shared() const noexcept
+        -:   96:    {
+        -:   97:        return static_cast<shared_resource*>(
+        -:   98:            reinterpret_cast<memory_resource*>(
+    #####:   99:                i_ & ~3));
+        -:  100:    }
+------------------
+_ZNK5boost4json11storage_ptr10get_sharedEv:
+function _ZNK5boost4json11storage_ptr10get_sharedEv called 0 returned 0% blocks executed 0%
+    #####:   95:    get_shared() const noexcept
+        -:   96:    {
+        -:   97:        return static_cast<shared_resource*>(
+        -:   98:            reinterpret_cast<memory_resource*>(
+    #####:   99:                i_ & ~3));
+        -:  100:    }
+------------------
+        -:  101:
+        -:  102:    void
+       9*:  103:    addref() const noexcept
+        -:  104:    {
+       9*:  105:        if(is_shared())
+    #####:  106:            get_shared()->refs.fetch_add(
+        -:  107:                1, std::memory_order_relaxed);
+       9*:  108:    }
+------------------
+_ZNK5boost4json11storage_ptr6addrefEv:
+function _ZNK5boost4json11storage_ptr6addrefEv called 0 returned 0% blocks executed 0%
+    #####:  103:    addref() const noexcept
+        -:  104:    {
+    #####:  105:        if(is_shared())
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+    #####:  106:            get_shared()->refs.fetch_add(
+call    0 never executed
+        -:  107:                1, std::memory_order_relaxed);
+    #####:  108:    }
+------------------
+_ZNK5boost4json11storage_ptr6addrefEv:
+function _ZNK5boost4json11storage_ptr6addrefEv called 0 returned 0% blocks executed 0%
+    #####:  103:    addref() const noexcept
+        -:  104:    {
+    #####:  105:        if(is_shared())
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+    #####:  106:            get_shared()->refs.fetch_add(
+call    0 never executed
+        -:  107:                1, std::memory_order_relaxed);
+    #####:  108:    }
+------------------
+_ZNK5boost4json11storage_ptr6addrefEv:
+function _ZNK5boost4json11storage_ptr6addrefEv called 3 returned 100% blocks executed 43%
+        3:  103:    addref() const noexcept
+        -:  104:    {
+        3:  105:        if(is_shared())
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+    #####:  106:            get_shared()->refs.fetch_add(
+call    0 never executed
+        -:  107:                1, std::memory_order_relaxed);
+        3:  108:    }
+------------------
+_ZNK5boost4json11storage_ptr6addrefEv:
+function _ZNK5boost4json11storage_ptr6addrefEv called 1 returned 100% blocks executed 43%
+        1:  103:    addref() const noexcept
+        -:  104:    {
+        1:  105:        if(is_shared())
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+    #####:  106:            get_shared()->refs.fetch_add(
+call    0 never executed
+        -:  107:                1, std::memory_order_relaxed);
+        1:  108:    }
+------------------
+_ZNK5boost4json11storage_ptr6addrefEv:
+function _ZNK5boost4json11storage_ptr6addrefEv called 5 returned 100% blocks executed 43%
+        5:  103:    addref() const noexcept
+        -:  104:    {
+        5:  105:        if(is_shared())
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+    #####:  106:            get_shared()->refs.fetch_add(
+call    0 never executed
+        -:  107:                1, std::memory_order_relaxed);
+        5:  108:    }
+------------------
+        -:  109:
+        -:  110:    void
+     327*:  111:    release() const noexcept
+        -:  112:    {
+     327*:  113:        if(is_shared())
+        -:  114:        {
+    #####:  115:            auto const p = get_shared();
+    #####:  116:            if(p->refs.fetch_sub(1,
+    #####:  117:                    std::memory_order_acq_rel) == 1)
+    #####:  118:                delete p;
+        -:  119:        }
+     327*:  120:    }
+------------------
+_ZNK5boost4json11storage_ptr7releaseEv:
+function _ZNK5boost4json11storage_ptr7releaseEv called 99 returned 100% blocks executed 33%
+       99:  111:    release() const noexcept
+        -:  112:    {
+       99:  113:        if(is_shared())
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+        -:  114:        {
+    #####:  115:            auto const p = get_shared();
+call    0 never executed
+    #####:  116:            if(p->refs.fetch_sub(1,
+    #####:  117:                    std::memory_order_acq_rel) == 1)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  118:                delete p;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+call    2 never executed
+        -:  119:        }
+       99:  120:    }
+------------------
+_ZNK5boost4json11storage_ptr7releaseEv:
+function _ZNK5boost4json11storage_ptr7releaseEv called 0 returned 0% blocks executed 0%
+    #####:  111:    release() const noexcept
+        -:  112:    {
+    #####:  113:        if(is_shared())
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+        -:  114:        {
+    #####:  115:            auto const p = get_shared();
+call    0 never executed
+    #####:  116:            if(p->refs.fetch_sub(1,
+    #####:  117:                    std::memory_order_acq_rel) == 1)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  118:                delete p;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+call    2 never executed
+        -:  119:        }
+    #####:  120:    }
+------------------
+_ZNK5boost4json11storage_ptr7releaseEv:
+function _ZNK5boost4json11storage_ptr7releaseEv called 0 returned 0% blocks executed 0%
+    #####:  111:    release() const noexcept
+        -:  112:    {
+    #####:  113:        if(is_shared())
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+        -:  114:        {
+    #####:  115:            auto const p = get_shared();
+call    0 never executed
+    #####:  116:            if(p->refs.fetch_sub(1,
+    #####:  117:                    std::memory_order_acq_rel) == 1)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  118:                delete p;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+call    2 never executed
+        -:  119:        }
+    #####:  120:    }
+------------------
+_ZNK5boost4json11storage_ptr7releaseEv:
+function _ZNK5boost4json11storage_ptr7releaseEv called 0 returned 0% blocks executed 0%
+    #####:  111:    release() const noexcept
+        -:  112:    {
+    #####:  113:        if(is_shared())
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+        -:  114:        {
+    #####:  115:            auto const p = get_shared();
+call    0 never executed
+    #####:  116:            if(p->refs.fetch_sub(1,
+    #####:  117:                    std::memory_order_acq_rel) == 1)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  118:                delete p;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+call    2 never executed
+        -:  119:        }
+    #####:  120:    }
+------------------
+_ZNK5boost4json11storage_ptr7releaseEv:
+function _ZNK5boost4json11storage_ptr7releaseEv called 2 returned 100% blocks executed 33%
+        2:  111:    release() const noexcept
+        -:  112:    {
+        2:  113:        if(is_shared())
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+        -:  114:        {
+    #####:  115:            auto const p = get_shared();
+call    0 never executed
+    #####:  116:            if(p->refs.fetch_sub(1,
+    #####:  117:                    std::memory_order_acq_rel) == 1)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  118:                delete p;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+call    2 never executed
+        -:  119:        }
+        2:  120:    }
+------------------
+_ZNK5boost4json11storage_ptr7releaseEv:
+function _ZNK5boost4json11storage_ptr7releaseEv called 215 returned 100% blocks executed 33%
+      215:  111:    release() const noexcept
+        -:  112:    {
+      215:  113:        if(is_shared())
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+        -:  114:        {
+    #####:  115:            auto const p = get_shared();
+call    0 never executed
+    #####:  116:            if(p->refs.fetch_sub(1,
+    #####:  117:                    std::memory_order_acq_rel) == 1)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  118:                delete p;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+call    2 never executed
+        -:  119:        }
+      215:  120:    }
+------------------
+_ZNK5boost4json11storage_ptr7releaseEv:
+function _ZNK5boost4json11storage_ptr7releaseEv called 7 returned 100% blocks executed 33%
+        7:  111:    release() const noexcept
+        -:  112:    {
+        7:  113:        if(is_shared())
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+        -:  114:        {
+    #####:  115:            auto const p = get_shared();
+call    0 never executed
+    #####:  116:            if(p->refs.fetch_sub(1,
+    #####:  117:                    std::memory_order_acq_rel) == 1)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  118:                delete p;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+call    2 never executed
+        -:  119:        }
+        7:  120:    }
+------------------
+_ZNK5boost4json11storage_ptr7releaseEv:
+function _ZNK5boost4json11storage_ptr7releaseEv called 2 returned 100% blocks executed 33%
+        2:  111:    release() const noexcept
+        -:  112:    {
+        2:  113:        if(is_shared())
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+        -:  114:        {
+    #####:  115:            auto const p = get_shared();
+call    0 never executed
+    #####:  116:            if(p->refs.fetch_sub(1,
+    #####:  117:                    std::memory_order_acq_rel) == 1)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  118:                delete p;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+call    2 never executed
+        -:  119:        }
+        2:  120:    }
+------------------
+_ZNK5boost4json11storage_ptr7releaseEv:
+function _ZNK5boost4json11storage_ptr7releaseEv called 1 returned 100% blocks executed 33%
+        1:  111:    release() const noexcept
+        -:  112:    {
+        1:  113:        if(is_shared())
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+        -:  114:        {
+    #####:  115:            auto const p = get_shared();
+call    0 never executed
+    #####:  116:            if(p->refs.fetch_sub(1,
+    #####:  117:                    std::memory_order_acq_rel) == 1)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  118:                delete p;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+call    2 never executed
+        -:  119:        }
+        1:  120:    }
+------------------
+_ZNK5boost4json11storage_ptr7releaseEv:
+function _ZNK5boost4json11storage_ptr7releaseEv called 0 returned 0% blocks executed 0%
+    #####:  111:    release() const noexcept
+        -:  112:    {
+    #####:  113:        if(is_shared())
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+        -:  114:        {
+    #####:  115:            auto const p = get_shared();
+call    0 never executed
+    #####:  116:            if(p->refs.fetch_sub(1,
+    #####:  117:                    std::memory_order_acq_rel) == 1)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  118:                delete p;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+call    2 never executed
+        -:  119:        }
+    #####:  120:    }
+------------------
+_ZNK5boost4json11storage_ptr7releaseEv:
+function _ZNK5boost4json11storage_ptr7releaseEv called 1 returned 100% blocks executed 33%
+        1:  111:    release() const noexcept
+        -:  112:    {
+        1:  113:        if(is_shared())
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+        -:  114:        {
+    #####:  115:            auto const p = get_shared();
+call    0 never executed
+    #####:  116:            if(p->refs.fetch_sub(1,
+    #####:  117:                    std::memory_order_acq_rel) == 1)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  118:                delete p;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+call    2 never executed
+        -:  119:        }
+        1:  120:    }
+------------------
+_ZNK5boost4json11storage_ptr7releaseEv:
+function _ZNK5boost4json11storage_ptr7releaseEv called 0 returned 0% blocks executed 0%
+    #####:  111:    release() const noexcept
+        -:  112:    {
+    #####:  113:        if(is_shared())
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+        -:  114:        {
+    #####:  115:            auto const p = get_shared();
+call    0 never executed
+    #####:  116:            if(p->refs.fetch_sub(1,
+    #####:  117:                    std::memory_order_acq_rel) == 1)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  118:                delete p;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+call    2 never executed
+        -:  119:        }
+    #####:  120:    }
+------------------
+_ZNK5boost4json11storage_ptr7releaseEv:
+function _ZNK5boost4json11storage_ptr7releaseEv called 0 returned 0% blocks executed 0%
+    #####:  111:    release() const noexcept
+        -:  112:    {
+    #####:  113:        if(is_shared())
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+        -:  114:        {
+    #####:  115:            auto const p = get_shared();
+call    0 never executed
+    #####:  116:            if(p->refs.fetch_sub(1,
+    #####:  117:                    std::memory_order_acq_rel) == 1)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  118:                delete p;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+call    2 never executed
+        -:  119:        }
+    #####:  120:    }
+------------------
+_ZNK5boost4json11storage_ptr7releaseEv:
+function _ZNK5boost4json11storage_ptr7releaseEv called 0 returned 0% blocks executed 0%
+    #####:  111:    release() const noexcept
+        -:  112:    {
+    #####:  113:        if(is_shared())
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+        -:  114:        {
+    #####:  115:            auto const p = get_shared();
+call    0 never executed
+    #####:  116:            if(p->refs.fetch_sub(1,
+    #####:  117:                    std::memory_order_acq_rel) == 1)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  118:                delete p;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+call    2 never executed
+        -:  119:        }
+    #####:  120:    }
+------------------
+_ZNK5boost4json11storage_ptr7releaseEv:
+function _ZNK5boost4json11storage_ptr7releaseEv called 0 returned 0% blocks executed 0%
+    #####:  111:    release() const noexcept
+        -:  112:    {
+    #####:  113:        if(is_shared())
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+        -:  114:        {
+    #####:  115:            auto const p = get_shared();
+call    0 never executed
+    #####:  116:            if(p->refs.fetch_sub(1,
+    #####:  117:                    std::memory_order_acq_rel) == 1)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  118:                delete p;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+call    2 never executed
+        -:  119:        }
+    #####:  120:    }
+------------------
+_ZNK5boost4json11storage_ptr7releaseEv:
+function _ZNK5boost4json11storage_ptr7releaseEv called 0 returned 0% blocks executed 0%
+    #####:  111:    release() const noexcept
+        -:  112:    {
+    #####:  113:        if(is_shared())
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+        -:  114:        {
+    #####:  115:            auto const p = get_shared();
+call    0 never executed
+    #####:  116:            if(p->refs.fetch_sub(1,
+    #####:  117:                    std::memory_order_acq_rel) == 1)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  118:                delete p;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+call    2 never executed
+        -:  119:        }
+    #####:  120:    }
+------------------
+_ZNK5boost4json11storage_ptr7releaseEv:
+function _ZNK5boost4json11storage_ptr7releaseEv called 0 returned 0% blocks executed 0%
+    #####:  111:    release() const noexcept
+        -:  112:    {
+    #####:  113:        if(is_shared())
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+        -:  114:        {
+    #####:  115:            auto const p = get_shared();
+call    0 never executed
+    #####:  116:            if(p->refs.fetch_sub(1,
+    #####:  117:                    std::memory_order_acq_rel) == 1)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  118:                delete p;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+call    2 never executed
+        -:  119:        }
+    #####:  120:    }
+------------------
+        -:  121:
+        -:  122:    template<class T>
+        -:  123:    storage_ptr(
+        -:  124:        detail::shared_resource_impl<T>* p) noexcept
+        -:  125:        : i_(reinterpret_cast<std::uintptr_t>(
+        -:  126:                static_cast<memory_resource*>(p)) + 1 +
+        -:  127:            (json::is_deallocate_trivial<T>::value ? 2 : 0))
+        -:  128:    {
+        -:  129:        BOOST_ASSERT(p);
+        -:  130:    }
+        -:  131:
+        -:  132:public:
+        -:  133:    /** Destructor
+        -:  134:
+        -:  135:        If the pointer has shared ownership of the
+        -:  136:        resource, the shared ownership is released.
+        -:  137:        If this is the last owned copy, the memory
+        -:  138:        resource is destroyed.
+        -:  139:
+        -:  140:        @par Complexity
+        -:  141:        Constant.
+        -:  142:
+        -:  143:        @par Exception Safety
+        -:  144:        No-throw guarantee.
+        -:  145:    */
+     327*:  146:    ~storage_ptr() noexcept
+        -:  147:    {
+     327*:  148:        release();
+     327*:  149:    }
+------------------
+_ZN5boost4json11storage_ptrD2Ev:
+function _ZN5boost4json11storage_ptrD2Ev called 99 returned 100% blocks executed 100%
+       99:  146:    ~storage_ptr() noexcept
+        -:  147:    {
+       99:  148:        release();
+call    0 returned 100%
+       99:  149:    }
+------------------
+_ZN5boost4json11storage_ptrD2Ev:
+function _ZN5boost4json11storage_ptrD2Ev called 0 returned 0% blocks executed 0%
+    #####:  146:    ~storage_ptr() noexcept
+        -:  147:    {
+    #####:  148:        release();
+call    0 never executed
+    #####:  149:    }
+------------------
+_ZN5boost4json11storage_ptrD2Ev:
+function _ZN5boost4json11storage_ptrD2Ev called 0 returned 0% blocks executed 0%
+    #####:  146:    ~storage_ptr() noexcept
+        -:  147:    {
+    #####:  148:        release();
+call    0 never executed
+    #####:  149:    }
+------------------
+_ZN5boost4json11storage_ptrD2Ev:
+function _ZN5boost4json11storage_ptrD2Ev called 0 returned 0% blocks executed 0%
+    #####:  146:    ~storage_ptr() noexcept
+        -:  147:    {
+    #####:  148:        release();
+call    0 never executed
+    #####:  149:    }
+------------------
+_ZN5boost4json11storage_ptrD2Ev:
+function _ZN5boost4json11storage_ptrD2Ev called 2 returned 100% blocks executed 100%
+        2:  146:    ~storage_ptr() noexcept
+        -:  147:    {
+        2:  148:        release();
+call    0 returned 100%
+        2:  149:    }
+------------------
+_ZN5boost4json11storage_ptrD2Ev:
+function _ZN5boost4json11storage_ptrD2Ev called 215 returned 100% blocks executed 100%
+      215:  146:    ~storage_ptr() noexcept
+        -:  147:    {
+      215:  148:        release();
+call    0 returned 100%
+      215:  149:    }
+------------------
+_ZN5boost4json11storage_ptrD2Ev:
+function _ZN5boost4json11storage_ptrD2Ev called 7 returned 100% blocks executed 100%
+        7:  146:    ~storage_ptr() noexcept
+        -:  147:    {
+        7:  148:        release();
+call    0 returned 100%
+        7:  149:    }
+------------------
+_ZN5boost4json11storage_ptrD2Ev:
+function _ZN5boost4json11storage_ptrD2Ev called 2 returned 100% blocks executed 100%
+        2:  146:    ~storage_ptr() noexcept
+        -:  147:    {
+        2:  148:        release();
+call    0 returned 100%
+        2:  149:    }
+------------------
+_ZN5boost4json11storage_ptrD2Ev:
+function _ZN5boost4json11storage_ptrD2Ev called 1 returned 100% blocks executed 100%
+        1:  146:    ~storage_ptr() noexcept
+        -:  147:    {
+        1:  148:        release();
+call    0 returned 100%
+        1:  149:    }
+------------------
+_ZN5boost4json11storage_ptrD2Ev:
+function _ZN5boost4json11storage_ptrD2Ev called 0 returned 0% blocks executed 0%
+    #####:  146:    ~storage_ptr() noexcept
+        -:  147:    {
+    #####:  148:        release();
+call    0 never executed
+    #####:  149:    }
+------------------
+_ZN5boost4json11storage_ptrD2Ev:
+function _ZN5boost4json11storage_ptrD2Ev called 1 returned 100% blocks executed 100%
+        1:  146:    ~storage_ptr() noexcept
+        -:  147:    {
+        1:  148:        release();
+call    0 returned 100%
+        1:  149:    }
+------------------
+_ZN5boost4json11storage_ptrD2Ev:
+function _ZN5boost4json11storage_ptrD2Ev called 0 returned 0% blocks executed 0%
+    #####:  146:    ~storage_ptr() noexcept
+        -:  147:    {
+    #####:  148:        release();
+call    0 never executed
+    #####:  149:    }
+------------------
+_ZN5boost4json11storage_ptrD2Ev:
+function _ZN5boost4json11storage_ptrD2Ev called 0 returned 0% blocks executed 0%
+    #####:  146:    ~storage_ptr() noexcept
+        -:  147:    {
+    #####:  148:        release();
+call    0 never executed
+    #####:  149:    }
+------------------
+_ZN5boost4json11storage_ptrD2Ev:
+function _ZN5boost4json11storage_ptrD2Ev called 0 returned 0% blocks executed 0%
+    #####:  146:    ~storage_ptr() noexcept
+        -:  147:    {
+    #####:  148:        release();
+call    0 never executed
+    #####:  149:    }
+------------------
+_ZN5boost4json11storage_ptrD2Ev:
+function _ZN5boost4json11storage_ptrD2Ev called 0 returned 0% blocks executed 0%
+    #####:  146:    ~storage_ptr() noexcept
+        -:  147:    {
+    #####:  148:        release();
+call    0 never executed
+    #####:  149:    }
+------------------
+_ZN5boost4json11storage_ptrD2Ev:
+function _ZN5boost4json11storage_ptrD2Ev called 0 returned 0% blocks executed 0%
+    #####:  146:    ~storage_ptr() noexcept
+        -:  147:    {
+    #####:  148:        release();
+call    0 never executed
+    #####:  149:    }
+------------------
+_ZN5boost4json11storage_ptrD2Ev:
+function _ZN5boost4json11storage_ptrD2Ev called 0 returned 0% blocks executed 0%
+    #####:  146:    ~storage_ptr() noexcept
+        -:  147:    {
+    #####:  148:        release();
+call    0 never executed
+    #####:  149:    }
+------------------
+        -:  150:
+        -:  151:    /** Constructor
+        -:  152:
+        -:  153:        This constructs a non-owning pointer that refers
+        -:  154:        to the [default memory resource].
+        -:  155:
+        -:  156:        @par Complexity
+        -:  157:        Constant.
+        -:  158:
+        -:  159:        @par Exception Safety
+        -:  160:        No-throw guarantee.
+        -:  161:
+        -:  162:        [default memory resource]: json/allocators/storage_ptr.html#json.allocators.storage_ptr.default_memory_resource
+        -:  163:    */
+     892*:  164:    storage_ptr() noexcept
+     892*:  165:        : i_(0)
+        -:  166:    {
+     892*:  167:    }
+------------------
+_ZN5boost4json11storage_ptrC2Ev:
+function _ZN5boost4json11storage_ptrC2Ev called 300 returned 100% blocks executed 100%
+      300:  164:    storage_ptr() noexcept
+      300:  165:        : i_(0)
+        -:  166:    {
+      300:  167:    }
+------------------
+_ZN5boost4json11storage_ptrC2Ev:
+function _ZN5boost4json11storage_ptrC2Ev called 0 returned 0% blocks executed 0%
+    #####:  164:    storage_ptr() noexcept
+    #####:  165:        : i_(0)
+        -:  166:    {
+    #####:  167:    }
+------------------
+_ZN5boost4json11storage_ptrC2Ev:
+function _ZN5boost4json11storage_ptrC2Ev called 0 returned 0% blocks executed 0%
+    #####:  164:    storage_ptr() noexcept
+    #####:  165:        : i_(0)
+        -:  166:    {
+    #####:  167:    }
+------------------
+_ZN5boost4json11storage_ptrC2Ev:
+function _ZN5boost4json11storage_ptrC2Ev called 0 returned 0% blocks executed 0%
+    #####:  164:    storage_ptr() noexcept
+    #####:  165:        : i_(0)
+        -:  166:    {
+    #####:  167:    }
+------------------
+_ZN5boost4json11storage_ptrC2Ev:
+function _ZN5boost4json11storage_ptrC2Ev called 2 returned 100% blocks executed 100%
+        2:  164:    storage_ptr() noexcept
+        2:  165:        : i_(0)
+        -:  166:    {
+        2:  167:    }
+------------------
+_ZN5boost4json11storage_ptrC2Ev:
+function _ZN5boost4json11storage_ptrC2Ev called 116 returned 100% blocks executed 100%
+      116:  164:    storage_ptr() noexcept
+      116:  165:        : i_(0)
+        -:  166:    {
+      116:  167:    }
+------------------
+_ZN5boost4json11storage_ptrC2Ev:
+function _ZN5boost4json11storage_ptrC2Ev called 4 returned 100% blocks executed 100%
+        4:  164:    storage_ptr() noexcept
+        4:  165:        : i_(0)
+        -:  166:    {
+        4:  167:    }
+------------------
+_ZN5boost4json11storage_ptrC2Ev:
+function _ZN5boost4json11storage_ptrC2Ev called 2 returned 100% blocks executed 100%
+        2:  164:    storage_ptr() noexcept
+        2:  165:        : i_(0)
+        -:  166:    {
+        2:  167:    }
+------------------
+_ZN5boost4json11storage_ptrC2Ev:
+function _ZN5boost4json11storage_ptrC2Ev called 1 returned 100% blocks executed 100%
+        1:  164:    storage_ptr() noexcept
+        1:  165:        : i_(0)
+        -:  166:    {
+        1:  167:    }
+------------------
+_ZN5boost4json11storage_ptrC2Ev:
+function _ZN5boost4json11storage_ptrC2Ev called 0 returned 0% blocks executed 0%
+    #####:  164:    storage_ptr() noexcept
+    #####:  165:        : i_(0)
+        -:  166:    {
+    #####:  167:    }
+------------------
+_ZN5boost4json11storage_ptrC2Ev:
+function _ZN5boost4json11storage_ptrC2Ev called 24 returned 100% blocks executed 100%
+       24:  164:    storage_ptr() noexcept
+       24:  165:        : i_(0)
+        -:  166:    {
+       24:  167:    }
+------------------
+_ZN5boost4json11storage_ptrC2Ev:
+function _ZN5boost4json11storage_ptrC2Ev called 12 returned 100% blocks executed 100%
+       12:  164:    storage_ptr() noexcept
+       12:  165:        : i_(0)
+        -:  166:    {
+       12:  167:    }
+------------------
+_ZN5boost4json11storage_ptrC2Ev:
+function _ZN5boost4json11storage_ptrC2Ev called 431 returned 100% blocks executed 100%
+      431:  164:    storage_ptr() noexcept
+      431:  165:        : i_(0)
+        -:  166:    {
+      431:  167:    }
+------------------
+_ZN5boost4json11storage_ptrC2Ev:
+function _ZN5boost4json11storage_ptrC2Ev called 0 returned 0% blocks executed 0%
+    #####:  164:    storage_ptr() noexcept
+    #####:  165:        : i_(0)
+        -:  166:    {
+    #####:  167:    }
+------------------
+_ZN5boost4json11storage_ptrC2Ev:
+function _ZN5boost4json11storage_ptrC2Ev called 0 returned 0% blocks executed 0%
+    #####:  164:    storage_ptr() noexcept
+    #####:  165:        : i_(0)
+        -:  166:    {
+    #####:  167:    }
+------------------
+_ZN5boost4json11storage_ptrC2Ev:
+function _ZN5boost4json11storage_ptrC2Ev called 0 returned 0% blocks executed 0%
+    #####:  164:    storage_ptr() noexcept
+    #####:  165:        : i_(0)
+        -:  166:    {
+    #####:  167:    }
+------------------
+_ZN5boost4json11storage_ptrC2Ev:
+function _ZN5boost4json11storage_ptrC2Ev called 0 returned 0% blocks executed 0%
+    #####:  164:    storage_ptr() noexcept
+    #####:  165:        : i_(0)
+        -:  166:    {
+    #####:  167:    }
+------------------
+_ZN5boost4json11storage_ptrC2Ev:
+function _ZN5boost4json11storage_ptrC2Ev called 0 returned 0% blocks executed 0%
+    #####:  164:    storage_ptr() noexcept
+    #####:  165:        : i_(0)
+        -:  166:    {
+    #####:  167:    }
+------------------
+        -:  168:
+        -:  169:    /** Constructor
+        -:  170:
+        -:  171:        This constructs a non-owning pointer that
+        -:  172:        points to the memory resource `r`.
+        -:  173:        The caller is responsible for maintaining the
+        -:  174:        lifetime of the pointed-to @ref memory_resource.
+        -:  175:
+        -:  176:        @par Constraints
+        -:  177:        @code
+        -:  178:        std::is_convertible< T*, memory_resource* >::value == true
+        -:  179:        @endcode
+        -:  180:
+        -:  181:        @par Preconditions
+        -:  182:        @code
+        -:  183:        r != nullptr
+        -:  184:        @endcode
+        -:  185:
+        -:  186:        @par Exception Safety
+        -:  187:        No-throw guarantee.
+        -:  188:
+        -:  189:        @param r A pointer to the memory resource to use.
+        -:  190:        This may not be null.
+        -:  191:    */
+        -:  192:    template<class T
+        -:  193:#ifndef BOOST_JSON_DOCS
+        -:  194:        , class = typename std::enable_if<
+        -:  195:            std::is_convertible<T*,
+        -:  196:                memory_resource*>::value>::type
+        -:  197:#endif
+        -:  198:    >
+        -:  199:    storage_ptr(T* r) noexcept
+        -:  200:        : i_(reinterpret_cast<std::uintptr_t>(
+        -:  201:                static_cast<memory_resource *>(r)) +
+        -:  202:            (json::is_deallocate_trivial<T>::value ? 2 : 0))
+        -:  203:    {
+        -:  204:        BOOST_ASSERT(r);
+        -:  205:    }
+        -:  206:
+        -:  207:    /** Constructor
+        -:  208:
+        -:  209:        This constructs a non-owning pointer that
+        -:  210:        points to the same memory resource as `alloc`,
+        -:  211:        obtained by calling `alloc.resource()`.
+        -:  212:        The caller is responsible for maintaining the
+        -:  213:        lifetime of the pointed-to @ref memory_resource.
+        -:  214:
+        -:  215:        @par Constraints
+        -:  216:        @code
+        -:  217:        std::is_convertible< T*, memory_resource* >::value == true
+        -:  218:        @endcode
+        -:  219:
+        -:  220:        @par Exception Safety
+        -:  221:        No-throw guarantee.
+        -:  222:
+        -:  223:        @param alloc A @ref polymorphic_allocator to
+        -:  224:        construct from.
+        -:  225:    */
+        -:  226:    template<class T>
+        -:  227:    storage_ptr(
+        -:  228:        polymorphic_allocator<T> const& alloc) noexcept
+        -:  229:        : i_(reinterpret_cast<std::uintptr_t>(
+        -:  230:            alloc.resource()))
+        -:  231:    {
+        -:  232:    }
+        -:  233:
+        -:  234:    /** Move constructor
+        -:  235:
+        -:  236:        This function constructs a pointer that
+        -:  237:        points to the same memory resource as `other`,
+        -:  238:        with the same ownership:
+        -:  239:
+        -:  240:        @li If `other` is non-owning, then `*this`
+        -:  241:        will be be non-owning.
+        -:  242:
+        -:  243:        @li If `other` has shared ownership, then
+        -:  244:        ownership will be transferred to `*this`.
+        -:  245:
+        -:  246:        After construction, `other` will point
+        -:  247:        to the [default memory resource].
+        -:  248:
+        -:  249:        @par Complexity
+        -:  250:        Constant.
+        -:  251:
+        -:  252:        @par Exception Safety
+        -:  253:        No-throw guarantee.
+        -:  254:
+        -:  255:        @param other The pointer to construct from.
+        -:  256:
+        -:  257:        [default memory resource]: json/allocators/storage_ptr.html#json.allocators.storage_ptr.default_memory_resource
+        -:  258:    */
+     232*:  259:    storage_ptr(
+        -:  260:        storage_ptr&& other) noexcept
+     232*:  261:        : i_(detail::exchange(other.i_, 0))
+        -:  262:    {
+     232*:  263:    }
+------------------
+_ZN5boost4json11storage_ptrC2EOS1_:
+function _ZN5boost4json11storage_ptrC2EOS1_ called 0 returned 0% blocks executed 0%
+    #####:  259:    storage_ptr(
+        -:  260:        storage_ptr&& other) noexcept
+    #####:  261:        : i_(detail::exchange(other.i_, 0))
+call    0 never executed
+        -:  262:    {
+    #####:  263:    }
+------------------
+_ZN5boost4json11storage_ptrC2EOS1_:
+function _ZN5boost4json11storage_ptrC2EOS1_ called 0 returned 0% blocks executed 0%
+    #####:  259:    storage_ptr(
+        -:  260:        storage_ptr&& other) noexcept
+    #####:  261:        : i_(detail::exchange(other.i_, 0))
+call    0 never executed
+        -:  262:    {
+    #####:  263:    }
+------------------
+_ZN5boost4json11storage_ptrC2EOS1_:
+function _ZN5boost4json11storage_ptrC2EOS1_ called 0 returned 0% blocks executed 0%
+    #####:  259:    storage_ptr(
+        -:  260:        storage_ptr&& other) noexcept
+    #####:  261:        : i_(detail::exchange(other.i_, 0))
+call    0 never executed
+        -:  262:    {
+    #####:  263:    }
+------------------
+_ZN5boost4json11storage_ptrC2EOS1_:
+function _ZN5boost4json11storage_ptrC2EOS1_ called 0 returned 0% blocks executed 0%
+    #####:  259:    storage_ptr(
+        -:  260:        storage_ptr&& other) noexcept
+    #####:  261:        : i_(detail::exchange(other.i_, 0))
+call    0 never executed
+        -:  262:    {
+    #####:  263:    }
+------------------
+_ZN5boost4json11storage_ptrC2EOS1_:
+function _ZN5boost4json11storage_ptrC2EOS1_ called 0 returned 0% blocks executed 0%
+    #####:  259:    storage_ptr(
+        -:  260:        storage_ptr&& other) noexcept
+    #####:  261:        : i_(detail::exchange(other.i_, 0))
+call    0 never executed
+        -:  262:    {
+    #####:  263:    }
+------------------
+_ZN5boost4json11storage_ptrC2EOS1_:
+function _ZN5boost4json11storage_ptrC2EOS1_ called 0 returned 0% blocks executed 0%
+    #####:  259:    storage_ptr(
+        -:  260:        storage_ptr&& other) noexcept
+    #####:  261:        : i_(detail::exchange(other.i_, 0))
+call    0 never executed
+        -:  262:    {
+    #####:  263:    }
+------------------
+_ZN5boost4json11storage_ptrC2EOS1_:
+function _ZN5boost4json11storage_ptrC2EOS1_ called 46 returned 100% blocks executed 100%
+       46:  259:    storage_ptr(
+        -:  260:        storage_ptr&& other) noexcept
+       46:  261:        : i_(detail::exchange(other.i_, 0))
+call    0 returned 100%
+        -:  262:    {
+       46:  263:    }
+------------------
+_ZN5boost4json11storage_ptrC2EOS1_:
+function _ZN5boost4json11storage_ptrC2EOS1_ called 3 returned 100% blocks executed 100%
+        3:  259:    storage_ptr(
+        -:  260:        storage_ptr&& other) noexcept
+        3:  261:        : i_(detail::exchange(other.i_, 0))
+call    0 returned 100%
+        -:  262:    {
+        3:  263:    }
+------------------
+_ZN5boost4json11storage_ptrC2EOS1_:
+function _ZN5boost4json11storage_ptrC2EOS1_ called 183 returned 100% blocks executed 100%
+      183:  259:    storage_ptr(
+        -:  260:        storage_ptr&& other) noexcept
+      183:  261:        : i_(detail::exchange(other.i_, 0))
+call    0 returned 100%
+        -:  262:    {
+      183:  263:    }
+------------------
+_ZN5boost4json11storage_ptrC2EOS1_:
+function _ZN5boost4json11storage_ptrC2EOS1_ called 0 returned 0% blocks executed 0%
+    #####:  259:    storage_ptr(
+        -:  260:        storage_ptr&& other) noexcept
+    #####:  261:        : i_(detail::exchange(other.i_, 0))
+call    0 never executed
+        -:  262:    {
+    #####:  263:    }
+------------------
+_ZN5boost4json11storage_ptrC2EOS1_:
+function _ZN5boost4json11storage_ptrC2EOS1_ called 0 returned 0% blocks executed 0%
+    #####:  259:    storage_ptr(
+        -:  260:        storage_ptr&& other) noexcept
+    #####:  261:        : i_(detail::exchange(other.i_, 0))
+call    0 never executed
+        -:  262:    {
+    #####:  263:    }
+------------------
+        -:  264:
+        -:  265:    /** Copy constructor
+        -:  266:
+        -:  267:        This function constructs a pointer that
+        -:  268:        points to the same memory resource as `other`,
+        -:  269:        with the same ownership:
+        -:  270:
+        -:  271:        @li If `other` is non-owning, then `*this`
+        -:  272:        will be be non-owning.
+        -:  273:
+        -:  274:        @li If `other` has shared ownership, then
+        -:  275:        `*this` will acquire shared ownership.
+        -:  276:
+        -:  277:        @par Complexity
+        -:  278:        Constant.
+        -:  279:
+        -:  280:        @par Exception Safety
+        -:  281:        No-throw guarantee.
+        -:  282:
+        -:  283:        @param other The pointer to construct from.
+        -:  284:    */
+       9*:  285:    storage_ptr(
+        -:  286:        storage_ptr const& other) noexcept
+       9*:  287:        : i_(other.i_)
+        -:  288:    {
+       9*:  289:        addref();
+       9*:  290:    }
+------------------
+_ZN5boost4json11storage_ptrC2ERKS1_:
+function _ZN5boost4json11storage_ptrC2ERKS1_ called 0 returned 0% blocks executed 0%
+    #####:  285:    storage_ptr(
+        -:  286:        storage_ptr const& other) noexcept
+    #####:  287:        : i_(other.i_)
+        -:  288:    {
+    #####:  289:        addref();
+call    0 never executed
+    #####:  290:    }
+------------------
+_ZN5boost4json11storage_ptrC2ERKS1_:
+function _ZN5boost4json11storage_ptrC2ERKS1_ called 0 returned 0% blocks executed 0%
+    #####:  285:    storage_ptr(
+        -:  286:        storage_ptr const& other) noexcept
+    #####:  287:        : i_(other.i_)
+        -:  288:    {
+    #####:  289:        addref();
+call    0 never executed
+    #####:  290:    }
+------------------
+_ZN5boost4json11storage_ptrC2ERKS1_:
+function _ZN5boost4json11storage_ptrC2ERKS1_ called 3 returned 100% blocks executed 100%
+        3:  285:    storage_ptr(
+        -:  286:        storage_ptr const& other) noexcept
+        3:  287:        : i_(other.i_)
+        -:  288:    {
+        3:  289:        addref();
+call    0 returned 100%
+        3:  290:    }
+------------------
+_ZN5boost4json11storage_ptrC2ERKS1_:
+function _ZN5boost4json11storage_ptrC2ERKS1_ called 1 returned 100% blocks executed 100%
+        1:  285:    storage_ptr(
+        -:  286:        storage_ptr const& other) noexcept
+        1:  287:        : i_(other.i_)
+        -:  288:    {
+        1:  289:        addref();
+call    0 returned 100%
+        1:  290:    }
+------------------
+_ZN5boost4json11storage_ptrC2ERKS1_:
+function _ZN5boost4json11storage_ptrC2ERKS1_ called 5 returned 100% blocks executed 100%
+        5:  285:    storage_ptr(
+        -:  286:        storage_ptr const& other) noexcept
+        5:  287:        : i_(other.i_)
+        -:  288:    {
+        5:  289:        addref();
+call    0 returned 100%
+        5:  290:    }
+------------------
+        -:  291:
+        -:  292:    /** Move assignment
+        -:  293:
+        -:  294:        This function assigns a pointer that
+        -:  295:        points to the same memory resource as `other`,
+        -:  296:        with the same ownership:
+        -:  297:
+        -:  298:        @li If `other` is non-owning, then `*this`
+        -:  299:        will be be non-owning.
+        -:  300:
+        -:  301:        @li If `other` has shared ownership, then
+        -:  302:        ownership will be transferred to `*this`.
+        -:  303:
+        -:  304:        After assignment, `other` will point
+        -:  305:        to the [default memory resource].
+        -:  306:        If `*this` previously had shared ownership,
+        -:  307:        it is released before the function returns.
+        -:  308:
+        -:  309:        @par Complexity
+        -:  310:        Constant.
+        -:  311:
+        -:  312:        @par Exception Safety
+        -:  313:        No-throw guarantee.
+        -:  314:
+        -:  315:        @param other The storage pointer to move.
+        -:  316:
+        -:  317:        [default memory resource]: json/allocators/storage_ptr.html#json.allocators.storage_ptr.default_memory_resource
+        -:  318:    */
+        -:  319:    storage_ptr&
+        -:  320:    operator=(
+        -:  321:        storage_ptr&& other) noexcept
+        -:  322:    {
+        -:  323:        release();
+        -:  324:        i_ = detail::exchange(other.i_, 0);
+        -:  325:        return *this;
+        -:  326:    }
+        -:  327:
+        -:  328:    /** Copy assignment.
+        -:  329:
+        -:  330:        This function assigns a pointer that
+        -:  331:        points to the same memory resource as `other`,
+        -:  332:        with the same ownership:
+        -:  333:
+        -:  334:        @li If `other` is non-owning, then `*this`
+        -:  335:        will be be non-owning.
+        -:  336:
+        -:  337:        @li If `other` has shared ownership, then
+        -:  338:        `*this` will acquire shared ownership.
+        -:  339:
+        -:  340:        If `*this` previously had shared ownership,
+        -:  341:        it is released before the function returns.
+        -:  342:
+        -:  343:        @par Complexity
+        -:  344:        Constant.
+        -:  345:
+        -:  346:        @par Exception Safety
+        -:  347:        No-throw guarantee.
+        -:  348:
+        -:  349:        @param other The storage pointer to copy.
+        -:  350:    */
+        -:  351:    storage_ptr&
+        -:  352:    operator=(
+        -:  353:        storage_ptr const& other) noexcept
+        -:  354:    {
+        -:  355:        other.addref();
+        -:  356:        release();
+        -:  357:        i_ = other.i_;
+        -:  358:        return *this;
+        -:  359:    }
+        -:  360:
+        -:  361:    /** Return `true` if ownership of the memory resource is shared.
+        -:  362:
+        -:  363:        This function returns true for memory resources
+        -:  364:        created using @ref make_shared_resource.
+        -:  365:    */
+        -:  366:    bool
+     336*:  367:    is_shared() const noexcept
+        -:  368:    {
+     336*:  369:        return (i_ & 1) != 0;
+        -:  370:    }
+        -:  371:
+        -:  372:    /** Return `true` if calling `deallocate` on the memory resource has no effect.
+        -:  373:
+        -:  374:        This function is used to determine if the deallocate
+        -:  375:        function of the pointed to memory resource is trivial.
+        -:  376:        The value of @ref is_deallocate_trivial is evaluated
+        -:  377:        and saved when the memory resource is constructed
+        -:  378:        and the type is known, before the type is erased.
+        -:  379:    */
+        -:  380:    bool
+        -:  381:    is_deallocate_trivial() const noexcept
+        -:  382:    {
+        -:  383:        return (i_ & 2) != 0;
+        -:  384:    }
+        -:  385:
+        -:  386:    /** Return `true` if ownership of the memory resource is not shared and deallocate is trivial.
+        -:  387:
+        -:  388:        This function is used to determine if calls to deallocate
+        -:  389:        can effectively be skipped.
+        -:  390:
+        -:  391:        @par Effects
+        -:  392:        Returns `! this->is_shared() && this->is_deallocate_trivial()`
+        -:  393:    */
+        -:  394:    bool
+        -:  395:    is_not_shared_and_deallocate_is_trivial() const noexcept
+        -:  396:    {
+        -:  397:        return (i_ & 3) == 2;
+        -:  398:    }
+        -:  399:
+        -:  400:    /** Return a pointer to the memory resource.
+        -:  401:
+        -:  402:        This function returns a pointer to the
+        -:  403:        referenced @ref memory_resource.
+        -:  404:
+        -:  405:        @par Complexity
+        -:  406:        Constant.
+        -:  407:
+        -:  408:        @par Exception Safety
+        -:  409:        No-throw guarantee.
+        -:  410:    */
+        -:  411:    memory_resource*
+        -:  412:    get() const noexcept
+        -:  413:    {
+        -:  414:        if(i_ != 0)
+        -:  415:            return reinterpret_cast<
+        -:  416:                memory_resource*>(i_ & ~3);
+        -:  417:        return default_resource::get();
+        -:  418:    }
+        -:  419:
+        -:  420:    /** Return a pointer to the memory resource.
+        -:  421:
+        -:  422:        This function returns a pointer to the
+        -:  423:        referenced @ref memory_resource.
+        -:  424:
+        -:  425:        @par Complexity
+        -:  426:        Constant.
+        -:  427:
+        -:  428:        @par Exception Safety
+        -:  429:        No-throw guarantee.
+        -:  430:    */
+        -:  431:    memory_resource*
+        -:  432:    operator->() const noexcept
+        -:  433:    {
+        -:  434:        return get();
+        -:  435:    }
+        -:  436:
+        -:  437:    /** Return a reference to the memory resource.
+        -:  438:
+        -:  439:        This function returns a reference to the
+        -:  440:        pointed-to @ref memory_resource.
+        -:  441:
+        -:  442:        @par Complexity
+        -:  443:
+        -:  444:        Constant.
+        -:  445:
+        -:  446:        @par Exception Safety
+        -:  447:
+        -:  448:        No-throw guarantee.
+        -:  449:    */
+        -:  450:    memory_resource&
+        -:  451:    operator*() const noexcept
+        -:  452:    {
+        -:  453:        return *get();
+        -:  454:    }
+        -:  455:
+        -:  456:    template<class U, class... Args>
+        -:  457:    friend
+        -:  458:    storage_ptr
+        -:  459:    make_shared_resource(Args&&... args);
+        -:  460:};
+        -:  461:
+        -:  462:#if defined(_MSC_VER)
+        -:  463:# pragma warning( push )
+        -:  464:# if !defined(__clang__) && _MSC_VER <= 1900
+        -:  465:#  pragma warning( disable : 4702 )
+        -:  466:# endif
+        -:  467:#endif
+        -:  468:/** Return shared ownership of a new, dynamically allocated memory resource.
+        -:  469:
+        -:  470:    This function dynamically allocates a new memory resource
+        -:  471:    as if by `operator new` that uses shared ownership. The
+        -:  472:    lifetime of the memory resource will be extended until
+        -:  473:    the last @ref storage_ptr which points to it is destroyed.
+        -:  474:
+        -:  475:    @par Mandates
+        -:  476:    @code
+        -:  477:    std::is_base_of< memory_resource, U >::value == true
+        -:  478:    @endcode
+        -:  479:
+        -:  480:    @par Complexity
+        -:  481:    Same as `new U( std::forward<Args>(args)... )`.
+        -:  482:
+        -:  483:    @par Exception Safety
+        -:  484:    Strong guarantee.
+        -:  485:
+        -:  486:    @tparam U The type of memory resource to create.
+        -:  487:
+        -:  488:    @param args Parameters forwarded to the constructor of `U`.
+        -:  489:*/
+        -:  490:template<class U, class... Args>
+        -:  491:storage_ptr
+        -:  492:make_shared_resource(Args&&... args)
+        -:  493:{
+        -:  494:    // If this generates an error, it means that
+        -:  495:    // `T` is not a memory resource.
+        -:  496:    BOOST_STATIC_ASSERT(
+        -:  497:        std::is_base_of<
+        -:  498:            memory_resource, U>::value);
+        -:  499:    return storage_ptr(new
+        -:  500:        detail::shared_resource_impl<U>(
+        -:  501:            std::forward<Args>(args)...));
+        -:  502:}
+        -:  503:#if defined(_MSC_VER)
+        -:  504:# pragma warning( pop )
+        -:  505:#endif
+        -:  506:
+        -:  507:/** Return true if two storage pointers point to the same memory resource.
+        -:  508:
+        -:  509:    This function returns `true` if the @ref memory_resource
+        -:  510:    objects pointed to by `lhs` and `rhs` have the
+        -:  511:    same address.
+        -:  512:*/
+        -:  513:inline
+        -:  514:bool
+        -:  515:operator==(
+        -:  516:    storage_ptr const& lhs,
+        -:  517:    storage_ptr const& rhs) noexcept
+        -:  518:{
+        -:  519:    return lhs.get() == rhs.get();
+        -:  520:}
+        -:  521:
+        -:  522:/** Return true if two storage pointers point to different memory resources.
+        -:  523:
+        -:  524:    This function returns `true` if the @ref memory_resource
+        -:  525:    objects pointed to by `lhs` and `rhs` have different
+        -:  526:    addresses.
+        -:  527:*/
+        -:  528:inline
+        -:  529:bool
+        -:  530:operator!=(
+        -:  531:    storage_ptr const& lhs,
+        -:  532:    storage_ptr const& rhs) noexcept
+        -:  533:{
+        -:  534:    return lhs.get() != rhs.get();
+        -:  535:}
+        -:  536:
+        -:  537:} // namespace json
+        -:  538:} // namespace boost
+        -:  539:
+        -:  540:#endif

@@ -1,0 +1,2826 @@
+        -:    0:Source:/usr/include/boost/asio/execution/blocking.hpp
+        -:    1://
+        -:    2:// execution/blocking.hpp
+        -:    3:// ~~~~~~~~~~~~~~~~~~~~~~
+        -:    4://
+        -:    5:// Copyright (c) 2003-2023 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+        -:    6://
+        -:    7:// Distributed under the Boost Software License, Version 1.0. (See accompanying
+        -:    8:// file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+        -:    9://
+        -:   10:
+        -:   11:#ifndef BOOST_ASIO_EXECUTION_BLOCKING_HPP
+        -:   12:#define BOOST_ASIO_EXECUTION_BLOCKING_HPP
+        -:   13:
+        -:   14:#if defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   15:# pragma once
+        -:   16:#endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   17:
+        -:   18:#include <boost/asio/detail/config.hpp>
+        -:   19:#include <boost/asio/detail/type_traits.hpp>
+        -:   20:#include <boost/asio/execution/execute.hpp>
+        -:   21:#include <boost/asio/execution/executor.hpp>
+        -:   22:#include <boost/asio/execution/scheduler.hpp>
+        -:   23:#include <boost/asio/execution/sender.hpp>
+        -:   24:#include <boost/asio/is_applicable_property.hpp>
+        -:   25:#include <boost/asio/prefer.hpp>
+        -:   26:#include <boost/asio/query.hpp>
+        -:   27:#include <boost/asio/require.hpp>
+        -:   28:#include <boost/asio/traits/execute_member.hpp>
+        -:   29:#include <boost/asio/traits/query_free.hpp>
+        -:   30:#include <boost/asio/traits/query_member.hpp>
+        -:   31:#include <boost/asio/traits/query_static_constexpr_member.hpp>
+        -:   32:#include <boost/asio/traits/static_query.hpp>
+        -:   33:#include <boost/asio/traits/static_require.hpp>
+        -:   34:
+        -:   35:#include <boost/asio/detail/push_options.hpp>
+        -:   36:
+        -:   37:namespace boost {
+        -:   38:namespace asio {
+        -:   39:
+        -:   40:#if defined(GENERATING_DOCUMENTATION)
+        -:   41:
+        -:   42:namespace execution {
+        -:   43:
+        -:   44:/// A property to describe what guarantees an executor makes about the blocking
+        -:   45:/// behaviour of their execution functions.
+        -:   46:struct blocking_t
+        -:   47:{
+        -:   48:  /// The blocking_t property applies to executors, senders, and schedulers.
+        -:   49:  template <typename T>
+        -:   50:  static constexpr bool is_applicable_property_v =
+        -:   51:    is_executor_v<T> || is_sender_v<T> || is_scheduler_v<T>;
+        -:   52:
+        -:   53:  /// The top-level blocking_t property cannot be required.
+        -:   54:  static constexpr bool is_requirable = false;
+        -:   55:
+        -:   56:  /// The top-level blocking_t property cannot be preferred.
+        -:   57:  static constexpr bool is_preferable = false;
+        -:   58:
+        -:   59:  /// The type returned by queries against an @c any_executor.
+        -:   60:  typedef blocking_t polymorphic_query_result_type;
+        -:   61:
+        -:   62:  /// A sub-property that indicates that invocation of an executor's execution
+        -:   63:  /// function may block pending completion of one or more invocations of the
+        -:   64:  /// submitted function object.
+        -:   65:  struct possibly_t
+        -:   66:  {
+        -:   67:    /// The blocking_t::possibly_t property applies to executors, senders, and
+        -:   68:    /// schedulers.
+        -:   69:    template <typename T>
+        -:   70:    static constexpr bool is_applicable_property_v =
+        -:   71:      is_executor_v<T> || is_sender_v<T> || is_scheduler_v<T>;
+        -:   72:
+        -:   73:    /// The blocking_t::possibly_t property can be required.
+        -:   74:    static constexpr bool is_requirable = true;
+        -:   75:
+        -:   76:    /// The blocking_t::possibly_t property can be preferred.
+        -:   77:    static constexpr bool is_preferable = true;
+        -:   78:
+        -:   79:    /// The type returned by queries against an @c any_executor.
+        -:   80:    typedef blocking_t polymorphic_query_result_type;
+        -:   81:
+        -:   82:    /// Default constructor.
+        -:   83:    constexpr possibly_t();
+        -:   84:
+        -:   85:    /// Get the value associated with a property object.
+        -:   86:    /**
+        -:   87:     * @returns possibly_t();
+        -:   88:     */
+        -:   89:    static constexpr blocking_t value();
+        -:   90:  };
+        -:   91:
+        -:   92:  /// A sub-property that indicates that invocation of an executor's execution
+        -:   93:  /// function shall block until completion of all invocations of the submitted
+        -:   94:  /// function object.
+        -:   95:  struct always_t
+        -:   96:  {
+        -:   97:    /// The blocking_t::always_t property applies to executors, senders, and
+        -:   98:    /// schedulers.
+        -:   99:    template <typename T>
+        -:  100:    static constexpr bool is_applicable_property_v =
+        -:  101:      is_executor_v<T> || is_sender_v<T> || is_scheduler_v<T>;
+        -:  102:
+        -:  103:    /// The blocking_t::always_t property can be required.
+        -:  104:    static constexpr bool is_requirable = true;
+        -:  105:
+        -:  106:    /// The blocking_t::always_t property can be preferred.
+        -:  107:    static constexpr bool is_preferable = false;
+        -:  108:
+        -:  109:    /// The type returned by queries against an @c any_executor.
+        -:  110:    typedef blocking_t polymorphic_query_result_type;
+        -:  111:
+        -:  112:    /// Default constructor.
+        -:  113:    constexpr always_t();
+        -:  114:
+        -:  115:    /// Get the value associated with a property object.
+        -:  116:    /**
+        -:  117:     * @returns always_t();
+        -:  118:     */
+        -:  119:    static constexpr blocking_t value();
+        -:  120:  };
+        -:  121:
+        -:  122:  /// A sub-property that indicates that invocation of an executor's execution
+        -:  123:  /// function shall not block pending completion of the invocations of the
+        -:  124:  /// submitted function object.
+        -:  125:  struct never_t
+        -:  126:  {
+        -:  127:    /// The blocking_t::never_t property applies to executors, senders, and
+        -:  128:    /// schedulers.
+        -:  129:    template <typename T>
+        -:  130:    static constexpr bool is_applicable_property_v =
+        -:  131:      is_executor_v<T> || is_sender_v<T> || is_scheduler_v<T>;
+        -:  132:
+        -:  133:    /// The blocking_t::never_t property can be required.
+        -:  134:    static constexpr bool is_requirable = true;
+        -:  135:
+        -:  136:    /// The blocking_t::never_t property can be preferred.
+        -:  137:    static constexpr bool is_preferable = true;
+        -:  138:
+        -:  139:    /// The type returned by queries against an @c any_executor.
+        -:  140:    typedef blocking_t polymorphic_query_result_type;
+        -:  141:
+        -:  142:    /// Default constructor.
+        -:  143:    constexpr never_t();
+        -:  144:
+        -:  145:    /// Get the value associated with a property object.
+        -:  146:    /**
+        -:  147:     * @returns never_t();
+        -:  148:     */
+        -:  149:    static constexpr blocking_t value();
+        -:  150:  };
+        -:  151:
+        -:  152:  /// A special value used for accessing the blocking_t::possibly_t property.
+        -:  153:  static constexpr possibly_t possibly;
+        -:  154:
+        -:  155:  /// A special value used for accessing the blocking_t::always_t property.
+        -:  156:  static constexpr always_t always;
+        -:  157:
+        -:  158:  /// A special value used for accessing the blocking_t::never_t property.
+        -:  159:  static constexpr never_t never;
+        -:  160:
+        -:  161:  /// Default constructor.
+        -:  162:  constexpr blocking_t();
+        -:  163:
+        -:  164:  /// Construct from a sub-property value.
+        -:  165:  constexpr blocking_t(possibly_t);
+        -:  166:
+        -:  167:  /// Construct from a sub-property value.
+        -:  168:  constexpr blocking_t(always_t);
+        -:  169:
+        -:  170:  /// Construct from a sub-property value.
+        -:  171:  constexpr blocking_t(never_t);
+        -:  172:
+        -:  173:  /// Compare property values for equality.
+        -:  174:  friend constexpr bool operator==(
+        -:  175:      const blocking_t& a, const blocking_t& b) noexcept;
+        -:  176:
+        -:  177:  /// Compare property values for inequality.
+        -:  178:  friend constexpr bool operator!=(
+        -:  179:      const blocking_t& a, const blocking_t& b) noexcept;
+        -:  180:};
+        -:  181:
+        -:  182:/// A special value used for accessing the blocking_t property.
+        -:  183:constexpr blocking_t blocking;
+        -:  184:
+        -:  185:} // namespace execution
+        -:  186:
+        -:  187:#else // defined(GENERATING_DOCUMENTATION)
+        -:  188:
+        -:  189:namespace execution {
+        -:  190:namespace detail {
+        -:  191:namespace blocking {
+        -:  192:
+        -:  193:template <int I> struct possibly_t;
+        -:  194:template <int I> struct always_t;
+        -:  195:template <int I> struct never_t;
+        -:  196:
+        -:  197:} // namespace blocking
+        -:  198:namespace blocking_adaptation {
+        -:  199:
+        -:  200:template <int I> struct allowed_t;
+        -:  201:
+        -:  202:template <typename Executor, typename Function>
+        -:  203:void blocking_execute(
+        -:  204:    BOOST_ASIO_MOVE_ARG(Executor) ex,
+        -:  205:    BOOST_ASIO_MOVE_ARG(Function) func);
+        -:  206:
+        -:  207:} // namespace blocking_adaptation
+        -:  208:
+        -:  209:template <int I = 0>
+        -:  210:struct blocking_t
+        -:  211:{
+        -:  212:#if defined(BOOST_ASIO_HAS_VARIABLE_TEMPLATES)
+        -:  213:# if defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  214:  template <typename T>
+        -:  215:  BOOST_ASIO_STATIC_CONSTEXPR(bool,
+        -:  216:    is_applicable_property_v = (
+        -:  217:      is_executor<T>::value));
+        -:  218:# else // defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  219:  template <typename T>
+        -:  220:  BOOST_ASIO_STATIC_CONSTEXPR(bool,
+        -:  221:    is_applicable_property_v = (
+        -:  222:      is_executor<T>::value
+        -:  223:        || conditional<
+        -:  224:            is_executor<T>::value,
+        -:  225:            false_type,
+        -:  226:            is_sender<T>
+        -:  227:          >::type::value
+        -:  228:        || conditional<
+        -:  229:            is_executor<T>::value,
+        -:  230:            false_type,
+        -:  231:            is_scheduler<T>
+        -:  232:          >::type::value
+        -:  233:      ));
+        -:  234:# endif // defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  235:#endif // defined(BOOST_ASIO_HAS_VARIABLE_TEMPLATES)
+        -:  236:
+        -:  237:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_requirable = false);
+        -:  238:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_preferable = false);
+        -:  239:  typedef blocking_t polymorphic_query_result_type;
+        -:  240:
+        -:  241:  typedef detail::blocking::possibly_t<I> possibly_t;
+        -:  242:  typedef detail::blocking::always_t<I> always_t;
+        -:  243:  typedef detail::blocking::never_t<I> never_t;
+        -:  244:
+        -:  245:  BOOST_ASIO_CONSTEXPR blocking_t()
+        -:  246:    : value_(-1)
+        -:  247:  {
+        -:  248:  }
+        -:  249:
+   19795*:  250:  BOOST_ASIO_CONSTEXPR blocking_t(possibly_t)
+   19795*:  251:    : value_(0)
+        -:  252:  {
+   19795*:  253:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking10possibly_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking10possibly_tILi0EEE called 32 returned 100% blocks executed 100%
+       32:  250:  BOOST_ASIO_CONSTEXPR blocking_t(possibly_t)
+       32:  251:    : value_(0)
+        -:  252:  {
+       32:  253:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking10possibly_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking10possibly_tILi0EEE called 60 returned 100% blocks executed 100%
+       60:  250:  BOOST_ASIO_CONSTEXPR blocking_t(possibly_t)
+       60:  251:    : value_(0)
+        -:  252:  {
+       60:  253:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking10possibly_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking10possibly_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  250:  BOOST_ASIO_CONSTEXPR blocking_t(possibly_t)
+    #####:  251:    : value_(0)
+        -:  252:  {
+    #####:  253:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking10possibly_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking10possibly_tILi0EEE called 38 returned 100% blocks executed 100%
+       38:  250:  BOOST_ASIO_CONSTEXPR blocking_t(possibly_t)
+       38:  251:    : value_(0)
+        -:  252:  {
+       38:  253:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking10possibly_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking10possibly_tILi0EEE called 69 returned 100% blocks executed 100%
+       69:  250:  BOOST_ASIO_CONSTEXPR blocking_t(possibly_t)
+       69:  251:    : value_(0)
+        -:  252:  {
+       69:  253:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking10possibly_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking10possibly_tILi0EEE called 10 returned 100% blocks executed 100%
+       10:  250:  BOOST_ASIO_CONSTEXPR blocking_t(possibly_t)
+       10:  251:    : value_(0)
+        -:  252:  {
+       10:  253:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking10possibly_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking10possibly_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  250:  BOOST_ASIO_CONSTEXPR blocking_t(possibly_t)
+    #####:  251:    : value_(0)
+        -:  252:  {
+    #####:  253:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking10possibly_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking10possibly_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  250:  BOOST_ASIO_CONSTEXPR blocking_t(possibly_t)
+    #####:  251:    : value_(0)
+        -:  252:  {
+    #####:  253:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking10possibly_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking10possibly_tILi0EEE called 28 returned 100% blocks executed 100%
+       28:  250:  BOOST_ASIO_CONSTEXPR blocking_t(possibly_t)
+       28:  251:    : value_(0)
+        -:  252:  {
+       28:  253:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking10possibly_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking10possibly_tILi0EEE called 32 returned 100% blocks executed 100%
+       32:  250:  BOOST_ASIO_CONSTEXPR blocking_t(possibly_t)
+       32:  251:    : value_(0)
+        -:  252:  {
+       32:  253:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking10possibly_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking10possibly_tILi0EEE called 10 returned 100% blocks executed 100%
+       10:  250:  BOOST_ASIO_CONSTEXPR blocking_t(possibly_t)
+       10:  251:    : value_(0)
+        -:  252:  {
+       10:  253:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking10possibly_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking10possibly_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  250:  BOOST_ASIO_CONSTEXPR blocking_t(possibly_t)
+    #####:  251:    : value_(0)
+        -:  252:  {
+    #####:  253:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking10possibly_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking10possibly_tILi0EEE called 24 returned 100% blocks executed 100%
+       24:  250:  BOOST_ASIO_CONSTEXPR blocking_t(possibly_t)
+       24:  251:    : value_(0)
+        -:  252:  {
+       24:  253:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking10possibly_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking10possibly_tILi0EEE called 79 returned 100% blocks executed 100%
+       79:  250:  BOOST_ASIO_CONSTEXPR blocking_t(possibly_t)
+       79:  251:    : value_(0)
+        -:  252:  {
+       79:  253:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking10possibly_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking10possibly_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  250:  BOOST_ASIO_CONSTEXPR blocking_t(possibly_t)
+    #####:  251:    : value_(0)
+        -:  252:  {
+    #####:  253:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking10possibly_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking10possibly_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  250:  BOOST_ASIO_CONSTEXPR blocking_t(possibly_t)
+    #####:  251:    : value_(0)
+        -:  252:  {
+    #####:  253:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking10possibly_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking10possibly_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  250:  BOOST_ASIO_CONSTEXPR blocking_t(possibly_t)
+    #####:  251:    : value_(0)
+        -:  252:  {
+    #####:  253:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking10possibly_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking10possibly_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  250:  BOOST_ASIO_CONSTEXPR blocking_t(possibly_t)
+    #####:  251:    : value_(0)
+        -:  252:  {
+    #####:  253:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking10possibly_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking10possibly_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  250:  BOOST_ASIO_CONSTEXPR blocking_t(possibly_t)
+    #####:  251:    : value_(0)
+        -:  252:  {
+    #####:  253:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking10possibly_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking10possibly_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  250:  BOOST_ASIO_CONSTEXPR blocking_t(possibly_t)
+    #####:  251:    : value_(0)
+        -:  252:  {
+    #####:  253:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking10possibly_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking10possibly_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  250:  BOOST_ASIO_CONSTEXPR blocking_t(possibly_t)
+    #####:  251:    : value_(0)
+        -:  252:  {
+    #####:  253:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking10possibly_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking10possibly_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  250:  BOOST_ASIO_CONSTEXPR blocking_t(possibly_t)
+    #####:  251:    : value_(0)
+        -:  252:  {
+    #####:  253:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking10possibly_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking10possibly_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  250:  BOOST_ASIO_CONSTEXPR blocking_t(possibly_t)
+    #####:  251:    : value_(0)
+        -:  252:  {
+    #####:  253:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking10possibly_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking10possibly_tILi0EEE called 11 returned 100% blocks executed 100%
+       11:  250:  BOOST_ASIO_CONSTEXPR blocking_t(possibly_t)
+       11:  251:    : value_(0)
+        -:  252:  {
+       11:  253:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking10possibly_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking10possibly_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  250:  BOOST_ASIO_CONSTEXPR blocking_t(possibly_t)
+    #####:  251:    : value_(0)
+        -:  252:  {
+    #####:  253:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking10possibly_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking10possibly_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  250:  BOOST_ASIO_CONSTEXPR blocking_t(possibly_t)
+    #####:  251:    : value_(0)
+        -:  252:  {
+    #####:  253:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking10possibly_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking10possibly_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  250:  BOOST_ASIO_CONSTEXPR blocking_t(possibly_t)
+    #####:  251:    : value_(0)
+        -:  252:  {
+    #####:  253:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking10possibly_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking10possibly_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  250:  BOOST_ASIO_CONSTEXPR blocking_t(possibly_t)
+    #####:  251:    : value_(0)
+        -:  252:  {
+    #####:  253:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking10possibly_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking10possibly_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  250:  BOOST_ASIO_CONSTEXPR blocking_t(possibly_t)
+    #####:  251:    : value_(0)
+        -:  252:  {
+    #####:  253:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking10possibly_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking10possibly_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  250:  BOOST_ASIO_CONSTEXPR blocking_t(possibly_t)
+    #####:  251:    : value_(0)
+        -:  252:  {
+    #####:  253:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking10possibly_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking10possibly_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  250:  BOOST_ASIO_CONSTEXPR blocking_t(possibly_t)
+    #####:  251:    : value_(0)
+        -:  252:  {
+    #####:  253:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking10possibly_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking10possibly_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  250:  BOOST_ASIO_CONSTEXPR blocking_t(possibly_t)
+    #####:  251:    : value_(0)
+        -:  252:  {
+    #####:  253:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking10possibly_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking10possibly_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  250:  BOOST_ASIO_CONSTEXPR blocking_t(possibly_t)
+    #####:  251:    : value_(0)
+        -:  252:  {
+    #####:  253:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking10possibly_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking10possibly_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  250:  BOOST_ASIO_CONSTEXPR blocking_t(possibly_t)
+    #####:  251:    : value_(0)
+        -:  252:  {
+    #####:  253:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking10possibly_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking10possibly_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  250:  BOOST_ASIO_CONSTEXPR blocking_t(possibly_t)
+    #####:  251:    : value_(0)
+        -:  252:  {
+    #####:  253:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking10possibly_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking10possibly_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  250:  BOOST_ASIO_CONSTEXPR blocking_t(possibly_t)
+    #####:  251:    : value_(0)
+        -:  252:  {
+    #####:  253:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking10possibly_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking10possibly_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  250:  BOOST_ASIO_CONSTEXPR blocking_t(possibly_t)
+    #####:  251:    : value_(0)
+        -:  252:  {
+    #####:  253:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking10possibly_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking10possibly_tILi0EEE called 22 returned 100% blocks executed 100%
+       22:  250:  BOOST_ASIO_CONSTEXPR blocking_t(possibly_t)
+       22:  251:    : value_(0)
+        -:  252:  {
+       22:  253:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking10possibly_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking10possibly_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  250:  BOOST_ASIO_CONSTEXPR blocking_t(possibly_t)
+    #####:  251:    : value_(0)
+        -:  252:  {
+    #####:  253:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking10possibly_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking10possibly_tILi0EEE called 19324 returned 100% blocks executed 100%
+    19324:  250:  BOOST_ASIO_CONSTEXPR blocking_t(possibly_t)
+    19324:  251:    : value_(0)
+        -:  252:  {
+    19324:  253:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking10possibly_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking10possibly_tILi0EEE called 36 returned 100% blocks executed 100%
+       36:  250:  BOOST_ASIO_CONSTEXPR blocking_t(possibly_t)
+       36:  251:    : value_(0)
+        -:  252:  {
+       36:  253:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking10possibly_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking10possibly_tILi0EEE called 20 returned 100% blocks executed 100%
+       20:  250:  BOOST_ASIO_CONSTEXPR blocking_t(possibly_t)
+       20:  251:    : value_(0)
+        -:  252:  {
+       20:  253:  }
+------------------
+        -:  254:
+   38493*:  255:  BOOST_ASIO_CONSTEXPR blocking_t(always_t)
+   38493*:  256:    : value_(1)
+        -:  257:  {
+   38493*:  258:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking8always_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking8always_tILi0EEE called 40 returned 100% blocks executed 100%
+       40:  255:  BOOST_ASIO_CONSTEXPR blocking_t(always_t)
+       40:  256:    : value_(1)
+        -:  257:  {
+       40:  258:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking8always_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking8always_tILi0EEE called 102 returned 100% blocks executed 100%
+      102:  255:  BOOST_ASIO_CONSTEXPR blocking_t(always_t)
+      102:  256:    : value_(1)
+        -:  257:  {
+      102:  258:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking8always_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking8always_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  255:  BOOST_ASIO_CONSTEXPR blocking_t(always_t)
+    #####:  256:    : value_(1)
+        -:  257:  {
+    #####:  258:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking8always_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking8always_tILi0EEE called 62 returned 100% blocks executed 100%
+       62:  255:  BOOST_ASIO_CONSTEXPR blocking_t(always_t)
+       62:  256:    : value_(1)
+        -:  257:  {
+       62:  258:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking8always_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking8always_tILi0EEE called 107 returned 100% blocks executed 100%
+      107:  255:  BOOST_ASIO_CONSTEXPR blocking_t(always_t)
+      107:  256:    : value_(1)
+        -:  257:  {
+      107:  258:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking8always_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking8always_tILi0EEE called 20 returned 100% blocks executed 100%
+       20:  255:  BOOST_ASIO_CONSTEXPR blocking_t(always_t)
+       20:  256:    : value_(1)
+        -:  257:  {
+       20:  258:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking8always_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking8always_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  255:  BOOST_ASIO_CONSTEXPR blocking_t(always_t)
+    #####:  256:    : value_(1)
+        -:  257:  {
+    #####:  258:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking8always_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking8always_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  255:  BOOST_ASIO_CONSTEXPR blocking_t(always_t)
+    #####:  256:    : value_(1)
+        -:  257:  {
+    #####:  258:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking8always_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking8always_tILi0EEE called 56 returned 100% blocks executed 100%
+       56:  255:  BOOST_ASIO_CONSTEXPR blocking_t(always_t)
+       56:  256:    : value_(1)
+        -:  257:  {
+       56:  258:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking8always_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking8always_tILi0EEE called 64 returned 100% blocks executed 100%
+       64:  255:  BOOST_ASIO_CONSTEXPR blocking_t(always_t)
+       64:  256:    : value_(1)
+        -:  257:  {
+       64:  258:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking8always_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking8always_tILi0EEE called 20 returned 100% blocks executed 100%
+       20:  255:  BOOST_ASIO_CONSTEXPR blocking_t(always_t)
+       20:  256:    : value_(1)
+        -:  257:  {
+       20:  258:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking8always_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking8always_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  255:  BOOST_ASIO_CONSTEXPR blocking_t(always_t)
+    #####:  256:    : value_(1)
+        -:  257:  {
+    #####:  258:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking8always_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking8always_tILi0EEE called 48 returned 100% blocks executed 100%
+       48:  255:  BOOST_ASIO_CONSTEXPR blocking_t(always_t)
+       48:  256:    : value_(1)
+        -:  257:  {
+       48:  258:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking8always_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking8always_tILi0EEE called 119 returned 100% blocks executed 100%
+      119:  255:  BOOST_ASIO_CONSTEXPR blocking_t(always_t)
+      119:  256:    : value_(1)
+        -:  257:  {
+      119:  258:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking8always_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking8always_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  255:  BOOST_ASIO_CONSTEXPR blocking_t(always_t)
+    #####:  256:    : value_(1)
+        -:  257:  {
+    #####:  258:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking8always_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking8always_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  255:  BOOST_ASIO_CONSTEXPR blocking_t(always_t)
+    #####:  256:    : value_(1)
+        -:  257:  {
+    #####:  258:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking8always_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking8always_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  255:  BOOST_ASIO_CONSTEXPR blocking_t(always_t)
+    #####:  256:    : value_(1)
+        -:  257:  {
+    #####:  258:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking8always_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking8always_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  255:  BOOST_ASIO_CONSTEXPR blocking_t(always_t)
+    #####:  256:    : value_(1)
+        -:  257:  {
+    #####:  258:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking8always_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking8always_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  255:  BOOST_ASIO_CONSTEXPR blocking_t(always_t)
+    #####:  256:    : value_(1)
+        -:  257:  {
+    #####:  258:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking8always_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking8always_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  255:  BOOST_ASIO_CONSTEXPR blocking_t(always_t)
+    #####:  256:    : value_(1)
+        -:  257:  {
+    #####:  258:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking8always_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking8always_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  255:  BOOST_ASIO_CONSTEXPR blocking_t(always_t)
+    #####:  256:    : value_(1)
+        -:  257:  {
+    #####:  258:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking8always_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking8always_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  255:  BOOST_ASIO_CONSTEXPR blocking_t(always_t)
+    #####:  256:    : value_(1)
+        -:  257:  {
+    #####:  258:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking8always_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking8always_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  255:  BOOST_ASIO_CONSTEXPR blocking_t(always_t)
+    #####:  256:    : value_(1)
+        -:  257:  {
+    #####:  258:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking8always_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking8always_tILi0EEE called 11 returned 100% blocks executed 100%
+       11:  255:  BOOST_ASIO_CONSTEXPR blocking_t(always_t)
+       11:  256:    : value_(1)
+        -:  257:  {
+       11:  258:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking8always_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking8always_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  255:  BOOST_ASIO_CONSTEXPR blocking_t(always_t)
+    #####:  256:    : value_(1)
+        -:  257:  {
+    #####:  258:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking8always_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking8always_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  255:  BOOST_ASIO_CONSTEXPR blocking_t(always_t)
+    #####:  256:    : value_(1)
+        -:  257:  {
+    #####:  258:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking8always_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking8always_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  255:  BOOST_ASIO_CONSTEXPR blocking_t(always_t)
+    #####:  256:    : value_(1)
+        -:  257:  {
+    #####:  258:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking8always_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking8always_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  255:  BOOST_ASIO_CONSTEXPR blocking_t(always_t)
+    #####:  256:    : value_(1)
+        -:  257:  {
+    #####:  258:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking8always_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking8always_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  255:  BOOST_ASIO_CONSTEXPR blocking_t(always_t)
+    #####:  256:    : value_(1)
+        -:  257:  {
+    #####:  258:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking8always_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking8always_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  255:  BOOST_ASIO_CONSTEXPR blocking_t(always_t)
+    #####:  256:    : value_(1)
+        -:  257:  {
+    #####:  258:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking8always_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking8always_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  255:  BOOST_ASIO_CONSTEXPR blocking_t(always_t)
+    #####:  256:    : value_(1)
+        -:  257:  {
+    #####:  258:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking8always_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking8always_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  255:  BOOST_ASIO_CONSTEXPR blocking_t(always_t)
+    #####:  256:    : value_(1)
+        -:  257:  {
+    #####:  258:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking8always_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking8always_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  255:  BOOST_ASIO_CONSTEXPR blocking_t(always_t)
+    #####:  256:    : value_(1)
+        -:  257:  {
+    #####:  258:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking8always_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking8always_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  255:  BOOST_ASIO_CONSTEXPR blocking_t(always_t)
+    #####:  256:    : value_(1)
+        -:  257:  {
+    #####:  258:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking8always_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking8always_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  255:  BOOST_ASIO_CONSTEXPR blocking_t(always_t)
+    #####:  256:    : value_(1)
+        -:  257:  {
+    #####:  258:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking8always_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking8always_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  255:  BOOST_ASIO_CONSTEXPR blocking_t(always_t)
+    #####:  256:    : value_(1)
+        -:  257:  {
+    #####:  258:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking8always_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking8always_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  255:  BOOST_ASIO_CONSTEXPR blocking_t(always_t)
+    #####:  256:    : value_(1)
+        -:  257:  {
+    #####:  258:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking8always_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking8always_tILi0EEE called 32 returned 100% blocks executed 100%
+       32:  255:  BOOST_ASIO_CONSTEXPR blocking_t(always_t)
+       32:  256:    : value_(1)
+        -:  257:  {
+       32:  258:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking8always_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking8always_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  255:  BOOST_ASIO_CONSTEXPR blocking_t(always_t)
+    #####:  256:    : value_(1)
+        -:  257:  {
+    #####:  258:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking8always_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking8always_tILi0EEE called 37722 returned 100% blocks executed 100%
+    37722:  255:  BOOST_ASIO_CONSTEXPR blocking_t(always_t)
+    37722:  256:    : value_(1)
+        -:  257:  {
+    37722:  258:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking8always_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking8always_tILi0EEE called 70 returned 100% blocks executed 100%
+       70:  255:  BOOST_ASIO_CONSTEXPR blocking_t(always_t)
+       70:  256:    : value_(1)
+        -:  257:  {
+       70:  258:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking8always_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking8always_tILi0EEE called 20 returned 100% blocks executed 100%
+       20:  255:  BOOST_ASIO_CONSTEXPR blocking_t(always_t)
+       20:  256:    : value_(1)
+        -:  257:  {
+       20:  258:  }
+------------------
+        -:  259:
+   19274*:  260:  BOOST_ASIO_CONSTEXPR blocking_t(never_t)
+   19274*:  261:    : value_(2)
+        -:  262:  {
+   19274*:  263:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking7never_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking7never_tILi0EEE called 8 returned 100% blocks executed 100%
+        8:  260:  BOOST_ASIO_CONSTEXPR blocking_t(never_t)
+        8:  261:    : value_(2)
+        -:  262:  {
+        8:  263:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking7never_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking7never_tILi0EEE called 42 returned 100% blocks executed 100%
+       42:  260:  BOOST_ASIO_CONSTEXPR blocking_t(never_t)
+       42:  261:    : value_(2)
+        -:  262:  {
+       42:  263:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking7never_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking7never_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  260:  BOOST_ASIO_CONSTEXPR blocking_t(never_t)
+    #####:  261:    : value_(2)
+        -:  262:  {
+    #####:  263:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking7never_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking7never_tILi0EEE called 24 returned 100% blocks executed 100%
+       24:  260:  BOOST_ASIO_CONSTEXPR blocking_t(never_t)
+       24:  261:    : value_(2)
+        -:  262:  {
+       24:  263:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking7never_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking7never_tILi0EEE called 38 returned 100% blocks executed 100%
+       38:  260:  BOOST_ASIO_CONSTEXPR blocking_t(never_t)
+       38:  261:    : value_(2)
+        -:  262:  {
+       38:  263:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking7never_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking7never_tILi0EEE called 10 returned 100% blocks executed 100%
+       10:  260:  BOOST_ASIO_CONSTEXPR blocking_t(never_t)
+       10:  261:    : value_(2)
+        -:  262:  {
+       10:  263:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking7never_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking7never_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  260:  BOOST_ASIO_CONSTEXPR blocking_t(never_t)
+    #####:  261:    : value_(2)
+        -:  262:  {
+    #####:  263:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking7never_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking7never_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  260:  BOOST_ASIO_CONSTEXPR blocking_t(never_t)
+    #####:  261:    : value_(2)
+        -:  262:  {
+    #####:  263:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking7never_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking7never_tILi0EEE called 28 returned 100% blocks executed 100%
+       28:  260:  BOOST_ASIO_CONSTEXPR blocking_t(never_t)
+       28:  261:    : value_(2)
+        -:  262:  {
+       28:  263:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking7never_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking7never_tILi0EEE called 32 returned 100% blocks executed 100%
+       32:  260:  BOOST_ASIO_CONSTEXPR blocking_t(never_t)
+       32:  261:    : value_(2)
+        -:  262:  {
+       32:  263:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking7never_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking7never_tILi0EEE called 10 returned 100% blocks executed 100%
+       10:  260:  BOOST_ASIO_CONSTEXPR blocking_t(never_t)
+       10:  261:    : value_(2)
+        -:  262:  {
+       10:  263:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking7never_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking7never_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  260:  BOOST_ASIO_CONSTEXPR blocking_t(never_t)
+    #####:  261:    : value_(2)
+        -:  262:  {
+    #####:  263:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking7never_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking7never_tILi0EEE called 24 returned 100% blocks executed 100%
+       24:  260:  BOOST_ASIO_CONSTEXPR blocking_t(never_t)
+       24:  261:    : value_(2)
+        -:  262:  {
+       24:  263:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking7never_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking7never_tILi0EEE called 40 returned 100% blocks executed 100%
+       40:  260:  BOOST_ASIO_CONSTEXPR blocking_t(never_t)
+       40:  261:    : value_(2)
+        -:  262:  {
+       40:  263:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking7never_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking7never_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  260:  BOOST_ASIO_CONSTEXPR blocking_t(never_t)
+    #####:  261:    : value_(2)
+        -:  262:  {
+    #####:  263:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking7never_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking7never_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  260:  BOOST_ASIO_CONSTEXPR blocking_t(never_t)
+    #####:  261:    : value_(2)
+        -:  262:  {
+    #####:  263:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking7never_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking7never_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  260:  BOOST_ASIO_CONSTEXPR blocking_t(never_t)
+    #####:  261:    : value_(2)
+        -:  262:  {
+    #####:  263:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking7never_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking7never_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  260:  BOOST_ASIO_CONSTEXPR blocking_t(never_t)
+    #####:  261:    : value_(2)
+        -:  262:  {
+    #####:  263:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking7never_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking7never_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  260:  BOOST_ASIO_CONSTEXPR blocking_t(never_t)
+    #####:  261:    : value_(2)
+        -:  262:  {
+    #####:  263:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking7never_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking7never_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  260:  BOOST_ASIO_CONSTEXPR blocking_t(never_t)
+    #####:  261:    : value_(2)
+        -:  262:  {
+    #####:  263:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking7never_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking7never_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  260:  BOOST_ASIO_CONSTEXPR blocking_t(never_t)
+    #####:  261:    : value_(2)
+        -:  262:  {
+    #####:  263:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking7never_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking7never_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  260:  BOOST_ASIO_CONSTEXPR blocking_t(never_t)
+    #####:  261:    : value_(2)
+        -:  262:  {
+    #####:  263:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking7never_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking7never_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  260:  BOOST_ASIO_CONSTEXPR blocking_t(never_t)
+    #####:  261:    : value_(2)
+        -:  262:  {
+    #####:  263:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking7never_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking7never_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  260:  BOOST_ASIO_CONSTEXPR blocking_t(never_t)
+    #####:  261:    : value_(2)
+        -:  262:  {
+    #####:  263:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking7never_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking7never_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  260:  BOOST_ASIO_CONSTEXPR blocking_t(never_t)
+    #####:  261:    : value_(2)
+        -:  262:  {
+    #####:  263:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking7never_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking7never_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  260:  BOOST_ASIO_CONSTEXPR blocking_t(never_t)
+    #####:  261:    : value_(2)
+        -:  262:  {
+    #####:  263:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking7never_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking7never_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  260:  BOOST_ASIO_CONSTEXPR blocking_t(never_t)
+    #####:  261:    : value_(2)
+        -:  262:  {
+    #####:  263:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking7never_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking7never_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  260:  BOOST_ASIO_CONSTEXPR blocking_t(never_t)
+    #####:  261:    : value_(2)
+        -:  262:  {
+    #####:  263:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking7never_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking7never_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  260:  BOOST_ASIO_CONSTEXPR blocking_t(never_t)
+    #####:  261:    : value_(2)
+        -:  262:  {
+    #####:  263:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking7never_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking7never_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  260:  BOOST_ASIO_CONSTEXPR blocking_t(never_t)
+    #####:  261:    : value_(2)
+        -:  262:  {
+    #####:  263:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking7never_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking7never_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  260:  BOOST_ASIO_CONSTEXPR blocking_t(never_t)
+    #####:  261:    : value_(2)
+        -:  262:  {
+    #####:  263:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking7never_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking7never_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  260:  BOOST_ASIO_CONSTEXPR blocking_t(never_t)
+    #####:  261:    : value_(2)
+        -:  262:  {
+    #####:  263:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking7never_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking7never_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  260:  BOOST_ASIO_CONSTEXPR blocking_t(never_t)
+    #####:  261:    : value_(2)
+        -:  262:  {
+    #####:  263:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking7never_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking7never_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  260:  BOOST_ASIO_CONSTEXPR blocking_t(never_t)
+    #####:  261:    : value_(2)
+        -:  262:  {
+    #####:  263:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking7never_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking7never_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  260:  BOOST_ASIO_CONSTEXPR blocking_t(never_t)
+    #####:  261:    : value_(2)
+        -:  262:  {
+    #####:  263:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking7never_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking7never_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  260:  BOOST_ASIO_CONSTEXPR blocking_t(never_t)
+    #####:  261:    : value_(2)
+        -:  262:  {
+    #####:  263:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking7never_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking7never_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  260:  BOOST_ASIO_CONSTEXPR blocking_t(never_t)
+    #####:  261:    : value_(2)
+        -:  262:  {
+    #####:  263:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking7never_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking7never_tILi0EEE called 10 returned 100% blocks executed 100%
+       10:  260:  BOOST_ASIO_CONSTEXPR blocking_t(never_t)
+       10:  261:    : value_(2)
+        -:  262:  {
+       10:  263:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking7never_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking7never_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  260:  BOOST_ASIO_CONSTEXPR blocking_t(never_t)
+    #####:  261:    : value_(2)
+        -:  262:  {
+    #####:  263:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking7never_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking7never_tILi0EEE called 18974 returned 100% blocks executed 100%
+    18974:  260:  BOOST_ASIO_CONSTEXPR blocking_t(never_t)
+    18974:  261:    : value_(2)
+        -:  262:  {
+    18974:  263:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking7never_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking7never_tILi0EEE called 34 returned 100% blocks executed 100%
+       34:  260:  BOOST_ASIO_CONSTEXPR blocking_t(never_t)
+       34:  261:    : value_(2)
+        -:  262:  {
+       34:  263:  }
+------------------
+_ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking7never_tILi0EEE:
+function _ZN5boost4asio9execution6detail10blocking_tILi0EEC2ENS2_8blocking7never_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  260:  BOOST_ASIO_CONSTEXPR blocking_t(never_t)
+    #####:  261:    : value_(2)
+        -:  262:  {
+    #####:  263:  }
+------------------
+        -:  264:
+        -:  265:  template <typename T>
+        -:  266:  struct proxy
+        -:  267:  {
+        -:  268:#if defined(BOOST_ASIO_HAS_DEDUCED_QUERY_MEMBER_TRAIT)
+        -:  269:    struct type
+        -:  270:    {
+        -:  271:      template <typename P>
+        -:  272:      auto query(BOOST_ASIO_MOVE_ARG(P) p) const
+        -:  273:        noexcept(
+        -:  274:          noexcept(
+        -:  275:            declval<typename conditional<true, T, P>::type>().query(
+        -:  276:              BOOST_ASIO_MOVE_CAST(P)(p))
+        -:  277:          )
+        -:  278:        )
+        -:  279:        -> decltype(
+        -:  280:          declval<typename conditional<true, T, P>::type>().query(
+        -:  281:            BOOST_ASIO_MOVE_CAST(P)(p))
+        -:  282:        );
+        -:  283:    };
+        -:  284:#else // defined(BOOST_ASIO_HAS_DEDUCED_QUERY_MEMBER_TRAIT)
+        -:  285:    typedef T type;
+        -:  286:#endif // defined(BOOST_ASIO_HAS_DEDUCED_QUERY_MEMBER_TRAIT)
+        -:  287:  };
+        -:  288:
+        -:  289:  template <typename T>
+        -:  290:  struct static_proxy
+        -:  291:  {
+        -:  292:#if defined(BOOST_ASIO_HAS_DEDUCED_QUERY_STATIC_CONSTEXPR_MEMBER_TRAIT)
+        -:  293:    struct type
+        -:  294:    {
+        -:  295:      template <typename P>
+        -:  296:      static constexpr auto query(BOOST_ASIO_MOVE_ARG(P) p)
+        -:  297:        noexcept(
+        -:  298:          noexcept(
+        -:  299:            conditional<true, T, P>::type::query(BOOST_ASIO_MOVE_CAST(P)(p))
+        -:  300:          )
+        -:  301:        )
+        -:  302:        -> decltype(
+        -:  303:          conditional<true, T, P>::type::query(BOOST_ASIO_MOVE_CAST(P)(p))
+        -:  304:        )
+        -:  305:      {
+        -:  306:        return T::query(BOOST_ASIO_MOVE_CAST(P)(p));
+        -:  307:      }
+        -:  308:    };
+        -:  309:#else // defined(BOOST_ASIO_HAS_DEDUCED_QUERY_STATIC_CONSTEXPR_MEMBER_TRAIT)
+        -:  310:    typedef T type;
+        -:  311:#endif // defined(BOOST_ASIO_HAS_DEDUCED_QUERY_STATIC_CONSTEXPR_MEMBER_TRAIT)
+        -:  312:  };
+        -:  313:
+        -:  314:  template <typename T>
+        -:  315:  struct query_member :
+        -:  316:    traits::query_member<typename proxy<T>::type, blocking_t> {};
+        -:  317:
+        -:  318:  template <typename T>
+        -:  319:  struct query_static_constexpr_member :
+        -:  320:    traits::query_static_constexpr_member<
+        -:  321:      typename static_proxy<T>::type, blocking_t> {};
+        -:  322:
+        -:  323:#if defined(BOOST_ASIO_HAS_DEDUCED_STATIC_QUERY_TRAIT) \
+        -:  324:  && defined(BOOST_ASIO_HAS_SFINAE_VARIABLE_TEMPLATES)
+        -:  325:  template <typename T>
+        -:  326:  static BOOST_ASIO_CONSTEXPR
+        -:  327:  typename query_static_constexpr_member<T>::result_type
+        -:  328:  static_query()
+        -:  329:    BOOST_ASIO_NOEXCEPT_IF((
+        -:  330:      query_static_constexpr_member<T>::is_noexcept))
+        -:  331:  {
+        -:  332:    return query_static_constexpr_member<T>::value();
+        -:  333:  }
+        -:  334:
+        -:  335:  template <typename T>
+        -:  336:  static BOOST_ASIO_CONSTEXPR
+        -:  337:  typename traits::static_query<T, possibly_t>::result_type
+        -:  338:  static_query(
+        -:  339:      typename enable_if<
+        -:  340:        !query_static_constexpr_member<T>::is_valid
+        -:  341:      >::type* = 0,
+        -:  342:      typename enable_if<
+        -:  343:        !query_member<T>::is_valid
+        -:  344:      >::type* = 0,
+        -:  345:      typename enable_if<
+        -:  346:        traits::static_query<T, possibly_t>::is_valid
+        -:  347:      >::type* = 0) BOOST_ASIO_NOEXCEPT
+        -:  348:  {
+        -:  349:    return traits::static_query<T, possibly_t>::value();
+        -:  350:  }
+        -:  351:
+        -:  352:  template <typename T>
+        -:  353:  static BOOST_ASIO_CONSTEXPR
+        -:  354:  typename traits::static_query<T, always_t>::result_type
+        -:  355:  static_query(
+        -:  356:      typename enable_if<
+        -:  357:        !query_static_constexpr_member<T>::is_valid
+        -:  358:      >::type* = 0,
+        -:  359:      typename enable_if<
+        -:  360:        !query_member<T>::is_valid
+        -:  361:      >::type* = 0,
+        -:  362:      typename enable_if<
+        -:  363:        !traits::static_query<T, possibly_t>::is_valid
+        -:  364:      >::type* = 0,
+        -:  365:      typename enable_if<
+        -:  366:        traits::static_query<T, always_t>::is_valid
+        -:  367:      >::type* = 0) BOOST_ASIO_NOEXCEPT
+        -:  368:  {
+        -:  369:    return traits::static_query<T, always_t>::value();
+        -:  370:  }
+        -:  371:
+        -:  372:  template <typename T>
+        -:  373:  static BOOST_ASIO_CONSTEXPR
+        -:  374:  typename traits::static_query<T, never_t>::result_type
+        -:  375:  static_query(
+        -:  376:      typename enable_if<
+        -:  377:        !query_static_constexpr_member<T>::is_valid
+        -:  378:      >::type* = 0,
+        -:  379:      typename enable_if<
+        -:  380:        !query_member<T>::is_valid
+        -:  381:      >::type* = 0,
+        -:  382:      typename enable_if<
+        -:  383:        !traits::static_query<T, possibly_t>::is_valid
+        -:  384:      >::type* = 0,
+        -:  385:      typename enable_if<
+        -:  386:        !traits::static_query<T, always_t>::is_valid
+        -:  387:      >::type* = 0,
+        -:  388:      typename enable_if<
+        -:  389:        traits::static_query<T, never_t>::is_valid
+        -:  390:      >::type* = 0) BOOST_ASIO_NOEXCEPT
+        -:  391:  {
+        -:  392:    return traits::static_query<T, never_t>::value();
+        -:  393:  }
+        -:  394:
+        -:  395:  template <typename E, typename T = decltype(blocking_t::static_query<E>())>
+        -:  396:  static BOOST_ASIO_CONSTEXPR const T static_query_v
+        -:  397:    = blocking_t::static_query<E>();
+        -:  398:#endif // defined(BOOST_ASIO_HAS_DEDUCED_STATIC_QUERY_TRAIT)
+        -:  399:       //   && defined(BOOST_ASIO_HAS_SFINAE_VARIABLE_TEMPLATES)
+        -:  400:
+   38658*:  401:  friend BOOST_ASIO_CONSTEXPR bool operator==(
+        -:  402:      const blocking_t& a, const blocking_t& b)
+        -:  403:  {
+   38658*:  404:    return a.value_ == b.value_;
+        -:  405:  }
+------------------
+_ZN5boost4asio9execution6detaileqERKNS2_10blocking_tILi0EEES6_:
+function _ZN5boost4asio9execution6detaileqERKNS2_10blocking_tILi0EEES6_ called 40 returned 100% blocks executed 100%
+       40:  401:  friend BOOST_ASIO_CONSTEXPR bool operator==(
+        -:  402:      const blocking_t& a, const blocking_t& b)
+        -:  403:  {
+       40:  404:    return a.value_ == b.value_;
+        -:  405:  }
+------------------
+_ZN5boost4asio9execution6detaileqERKNS2_10blocking_tILi0EEES6_:
+function _ZN5boost4asio9execution6detaileqERKNS2_10blocking_tILi0EEES6_ called 102 returned 100% blocks executed 100%
+      102:  401:  friend BOOST_ASIO_CONSTEXPR bool operator==(
+        -:  402:      const blocking_t& a, const blocking_t& b)
+        -:  403:  {
+      102:  404:    return a.value_ == b.value_;
+        -:  405:  }
+------------------
+_ZN5boost4asio9execution6detaileqERKNS2_10blocking_tILi0EEES6_:
+function _ZN5boost4asio9execution6detaileqERKNS2_10blocking_tILi0EEES6_ called 0 returned 0% blocks executed 0%
+    #####:  401:  friend BOOST_ASIO_CONSTEXPR bool operator==(
+        -:  402:      const blocking_t& a, const blocking_t& b)
+        -:  403:  {
+    #####:  404:    return a.value_ == b.value_;
+        -:  405:  }
+------------------
+_ZN5boost4asio9execution6detaileqERKNS2_10blocking_tILi0EEES6_:
+function _ZN5boost4asio9execution6detaileqERKNS2_10blocking_tILi0EEES6_ called 62 returned 100% blocks executed 100%
+       62:  401:  friend BOOST_ASIO_CONSTEXPR bool operator==(
+        -:  402:      const blocking_t& a, const blocking_t& b)
+        -:  403:  {
+       62:  404:    return a.value_ == b.value_;
+        -:  405:  }
+------------------
+_ZN5boost4asio9execution6detaileqERKNS2_10blocking_tILi0EEES6_:
+function _ZN5boost4asio9execution6detaileqERKNS2_10blocking_tILi0EEES6_ called 107 returned 100% blocks executed 100%
+      107:  401:  friend BOOST_ASIO_CONSTEXPR bool operator==(
+        -:  402:      const blocking_t& a, const blocking_t& b)
+        -:  403:  {
+      107:  404:    return a.value_ == b.value_;
+        -:  405:  }
+------------------
+_ZN5boost4asio9execution6detaileqERKNS2_10blocking_tILi0EEES6_:
+function _ZN5boost4asio9execution6detaileqERKNS2_10blocking_tILi0EEES6_ called 20 returned 100% blocks executed 100%
+       20:  401:  friend BOOST_ASIO_CONSTEXPR bool operator==(
+        -:  402:      const blocking_t& a, const blocking_t& b)
+        -:  403:  {
+       20:  404:    return a.value_ == b.value_;
+        -:  405:  }
+------------------
+_ZN5boost4asio9execution6detaileqERKNS2_10blocking_tILi0EEES6_:
+function _ZN5boost4asio9execution6detaileqERKNS2_10blocking_tILi0EEES6_ called 0 returned 0% blocks executed 0%
+    #####:  401:  friend BOOST_ASIO_CONSTEXPR bool operator==(
+        -:  402:      const blocking_t& a, const blocking_t& b)
+        -:  403:  {
+    #####:  404:    return a.value_ == b.value_;
+        -:  405:  }
+------------------
+_ZN5boost4asio9execution6detaileqERKNS2_10blocking_tILi0EEES6_:
+function _ZN5boost4asio9execution6detaileqERKNS2_10blocking_tILi0EEES6_ called 0 returned 0% blocks executed 0%
+    #####:  401:  friend BOOST_ASIO_CONSTEXPR bool operator==(
+        -:  402:      const blocking_t& a, const blocking_t& b)
+        -:  403:  {
+    #####:  404:    return a.value_ == b.value_;
+        -:  405:  }
+------------------
+_ZN5boost4asio9execution6detaileqERKNS2_10blocking_tILi0EEES6_:
+function _ZN5boost4asio9execution6detaileqERKNS2_10blocking_tILi0EEES6_ called 56 returned 100% blocks executed 100%
+       56:  401:  friend BOOST_ASIO_CONSTEXPR bool operator==(
+        -:  402:      const blocking_t& a, const blocking_t& b)
+        -:  403:  {
+       56:  404:    return a.value_ == b.value_;
+        -:  405:  }
+------------------
+_ZN5boost4asio9execution6detaileqERKNS2_10blocking_tILi0EEES6_:
+function _ZN5boost4asio9execution6detaileqERKNS2_10blocking_tILi0EEES6_ called 64 returned 100% blocks executed 100%
+       64:  401:  friend BOOST_ASIO_CONSTEXPR bool operator==(
+        -:  402:      const blocking_t& a, const blocking_t& b)
+        -:  403:  {
+       64:  404:    return a.value_ == b.value_;
+        -:  405:  }
+------------------
+_ZN5boost4asio9execution6detaileqERKNS2_10blocking_tILi0EEES6_:
+function _ZN5boost4asio9execution6detaileqERKNS2_10blocking_tILi0EEES6_ called 20 returned 100% blocks executed 100%
+       20:  401:  friend BOOST_ASIO_CONSTEXPR bool operator==(
+        -:  402:      const blocking_t& a, const blocking_t& b)
+        -:  403:  {
+       20:  404:    return a.value_ == b.value_;
+        -:  405:  }
+------------------
+_ZN5boost4asio9execution6detaileqERKNS2_10blocking_tILi0EEES6_:
+function _ZN5boost4asio9execution6detaileqERKNS2_10blocking_tILi0EEES6_ called 0 returned 0% blocks executed 0%
+    #####:  401:  friend BOOST_ASIO_CONSTEXPR bool operator==(
+        -:  402:      const blocking_t& a, const blocking_t& b)
+        -:  403:  {
+    #####:  404:    return a.value_ == b.value_;
+        -:  405:  }
+------------------
+_ZN5boost4asio9execution6detaileqERKNS2_10blocking_tILi0EEES6_:
+function _ZN5boost4asio9execution6detaileqERKNS2_10blocking_tILi0EEES6_ called 48 returned 100% blocks executed 100%
+       48:  401:  friend BOOST_ASIO_CONSTEXPR bool operator==(
+        -:  402:      const blocking_t& a, const blocking_t& b)
+        -:  403:  {
+       48:  404:    return a.value_ == b.value_;
+        -:  405:  }
+------------------
+_ZN5boost4asio9execution6detaileqERKNS2_10blocking_tILi0EEES6_:
+function _ZN5boost4asio9execution6detaileqERKNS2_10blocking_tILi0EEES6_ called 119 returned 100% blocks executed 100%
+      119:  401:  friend BOOST_ASIO_CONSTEXPR bool operator==(
+        -:  402:      const blocking_t& a, const blocking_t& b)
+        -:  403:  {
+      119:  404:    return a.value_ == b.value_;
+        -:  405:  }
+------------------
+_ZN5boost4asio9execution6detaileqERKNS2_10blocking_tILi0EEES6_:
+function _ZN5boost4asio9execution6detaileqERKNS2_10blocking_tILi0EEES6_ called 0 returned 0% blocks executed 0%
+    #####:  401:  friend BOOST_ASIO_CONSTEXPR bool operator==(
+        -:  402:      const blocking_t& a, const blocking_t& b)
+        -:  403:  {
+    #####:  404:    return a.value_ == b.value_;
+        -:  405:  }
+------------------
+_ZN5boost4asio9execution6detaileqERKNS2_10blocking_tILi0EEES6_:
+function _ZN5boost4asio9execution6detaileqERKNS2_10blocking_tILi0EEES6_ called 0 returned 0% blocks executed 0%
+    #####:  401:  friend BOOST_ASIO_CONSTEXPR bool operator==(
+        -:  402:      const blocking_t& a, const blocking_t& b)
+        -:  403:  {
+    #####:  404:    return a.value_ == b.value_;
+        -:  405:  }
+------------------
+_ZN5boost4asio9execution6detaileqERKNS2_10blocking_tILi0EEES6_:
+function _ZN5boost4asio9execution6detaileqERKNS2_10blocking_tILi0EEES6_ called 0 returned 0% blocks executed 0%
+    #####:  401:  friend BOOST_ASIO_CONSTEXPR bool operator==(
+        -:  402:      const blocking_t& a, const blocking_t& b)
+        -:  403:  {
+    #####:  404:    return a.value_ == b.value_;
+        -:  405:  }
+------------------
+_ZN5boost4asio9execution6detaileqERKNS2_10blocking_tILi0EEES6_:
+function _ZN5boost4asio9execution6detaileqERKNS2_10blocking_tILi0EEES6_ called 0 returned 0% blocks executed 0%
+    #####:  401:  friend BOOST_ASIO_CONSTEXPR bool operator==(
+        -:  402:      const blocking_t& a, const blocking_t& b)
+        -:  403:  {
+    #####:  404:    return a.value_ == b.value_;
+        -:  405:  }
+------------------
+_ZN5boost4asio9execution6detaileqERKNS2_10blocking_tILi0EEES6_:
+function _ZN5boost4asio9execution6detaileqERKNS2_10blocking_tILi0EEES6_ called 0 returned 0% blocks executed 0%
+    #####:  401:  friend BOOST_ASIO_CONSTEXPR bool operator==(
+        -:  402:      const blocking_t& a, const blocking_t& b)
+        -:  403:  {
+    #####:  404:    return a.value_ == b.value_;
+        -:  405:  }
+------------------
+_ZN5boost4asio9execution6detaileqERKNS2_10blocking_tILi0EEES6_:
+function _ZN5boost4asio9execution6detaileqERKNS2_10blocking_tILi0EEES6_ called 0 returned 0% blocks executed 0%
+    #####:  401:  friend BOOST_ASIO_CONSTEXPR bool operator==(
+        -:  402:      const blocking_t& a, const blocking_t& b)
+        -:  403:  {
+    #####:  404:    return a.value_ == b.value_;
+        -:  405:  }
+------------------
+_ZN5boost4asio9execution6detaileqERKNS2_10blocking_tILi0EEES6_:
+function _ZN5boost4asio9execution6detaileqERKNS2_10blocking_tILi0EEES6_ called 0 returned 0% blocks executed 0%
+    #####:  401:  friend BOOST_ASIO_CONSTEXPR bool operator==(
+        -:  402:      const blocking_t& a, const blocking_t& b)
+        -:  403:  {
+    #####:  404:    return a.value_ == b.value_;
+        -:  405:  }
+------------------
+_ZN5boost4asio9execution6detaileqERKNS2_10blocking_tILi0EEES6_:
+function _ZN5boost4asio9execution6detaileqERKNS2_10blocking_tILi0EEES6_ called 0 returned 0% blocks executed 0%
+    #####:  401:  friend BOOST_ASIO_CONSTEXPR bool operator==(
+        -:  402:      const blocking_t& a, const blocking_t& b)
+        -:  403:  {
+    #####:  404:    return a.value_ == b.value_;
+        -:  405:  }
+------------------
+_ZN5boost4asio9execution6detaileqERKNS2_10blocking_tILi0EEES6_:
+function _ZN5boost4asio9execution6detaileqERKNS2_10blocking_tILi0EEES6_ called 0 returned 0% blocks executed 0%
+    #####:  401:  friend BOOST_ASIO_CONSTEXPR bool operator==(
+        -:  402:      const blocking_t& a, const blocking_t& b)
+        -:  403:  {
+    #####:  404:    return a.value_ == b.value_;
+        -:  405:  }
+------------------
+_ZN5boost4asio9execution6detaileqERKNS2_10blocking_tILi0EEES6_:
+function _ZN5boost4asio9execution6detaileqERKNS2_10blocking_tILi0EEES6_ called 11 returned 100% blocks executed 100%
+       11:  401:  friend BOOST_ASIO_CONSTEXPR bool operator==(
+        -:  402:      const blocking_t& a, const blocking_t& b)
+        -:  403:  {
+       11:  404:    return a.value_ == b.value_;
+        -:  405:  }
+------------------
+_ZN5boost4asio9execution6detaileqERKNS2_10blocking_tILi0EEES6_:
+function _ZN5boost4asio9execution6detaileqERKNS2_10blocking_tILi0EEES6_ called 0 returned 0% blocks executed 0%
+    #####:  401:  friend BOOST_ASIO_CONSTEXPR bool operator==(
+        -:  402:      const blocking_t& a, const blocking_t& b)
+        -:  403:  {
+    #####:  404:    return a.value_ == b.value_;
+        -:  405:  }
+------------------
+_ZN5boost4asio9execution6detaileqERKNS2_10blocking_tILi0EEES6_:
+function _ZN5boost4asio9execution6detaileqERKNS2_10blocking_tILi0EEES6_ called 0 returned 0% blocks executed 0%
+    #####:  401:  friend BOOST_ASIO_CONSTEXPR bool operator==(
+        -:  402:      const blocking_t& a, const blocking_t& b)
+        -:  403:  {
+    #####:  404:    return a.value_ == b.value_;
+        -:  405:  }
+------------------
+_ZN5boost4asio9execution6detaileqERKNS2_10blocking_tILi0EEES6_:
+function _ZN5boost4asio9execution6detaileqERKNS2_10blocking_tILi0EEES6_ called 0 returned 0% blocks executed 0%
+    #####:  401:  friend BOOST_ASIO_CONSTEXPR bool operator==(
+        -:  402:      const blocking_t& a, const blocking_t& b)
+        -:  403:  {
+    #####:  404:    return a.value_ == b.value_;
+        -:  405:  }
+------------------
+_ZN5boost4asio9execution6detaileqERKNS2_10blocking_tILi0EEES6_:
+function _ZN5boost4asio9execution6detaileqERKNS2_10blocking_tILi0EEES6_ called 0 returned 0% blocks executed 0%
+    #####:  401:  friend BOOST_ASIO_CONSTEXPR bool operator==(
+        -:  402:      const blocking_t& a, const blocking_t& b)
+        -:  403:  {
+    #####:  404:    return a.value_ == b.value_;
+        -:  405:  }
+------------------
+_ZN5boost4asio9execution6detaileqERKNS2_10blocking_tILi0EEES6_:
+function _ZN5boost4asio9execution6detaileqERKNS2_10blocking_tILi0EEES6_ called 0 returned 0% blocks executed 0%
+    #####:  401:  friend BOOST_ASIO_CONSTEXPR bool operator==(
+        -:  402:      const blocking_t& a, const blocking_t& b)
+        -:  403:  {
+    #####:  404:    return a.value_ == b.value_;
+        -:  405:  }
+------------------
+_ZN5boost4asio9execution6detaileqERKNS2_10blocking_tILi0EEES6_:
+function _ZN5boost4asio9execution6detaileqERKNS2_10blocking_tILi0EEES6_ called 0 returned 0% blocks executed 0%
+    #####:  401:  friend BOOST_ASIO_CONSTEXPR bool operator==(
+        -:  402:      const blocking_t& a, const blocking_t& b)
+        -:  403:  {
+    #####:  404:    return a.value_ == b.value_;
+        -:  405:  }
+------------------
+_ZN5boost4asio9execution6detaileqERKNS2_10blocking_tILi0EEES6_:
+function _ZN5boost4asio9execution6detaileqERKNS2_10blocking_tILi0EEES6_ called 0 returned 0% blocks executed 0%
+    #####:  401:  friend BOOST_ASIO_CONSTEXPR bool operator==(
+        -:  402:      const blocking_t& a, const blocking_t& b)
+        -:  403:  {
+    #####:  404:    return a.value_ == b.value_;
+        -:  405:  }
+------------------
+_ZN5boost4asio9execution6detaileqERKNS2_10blocking_tILi0EEES6_:
+function _ZN5boost4asio9execution6detaileqERKNS2_10blocking_tILi0EEES6_ called 0 returned 0% blocks executed 0%
+    #####:  401:  friend BOOST_ASIO_CONSTEXPR bool operator==(
+        -:  402:      const blocking_t& a, const blocking_t& b)
+        -:  403:  {
+    #####:  404:    return a.value_ == b.value_;
+        -:  405:  }
+------------------
+_ZN5boost4asio9execution6detaileqERKNS2_10blocking_tILi0EEES6_:
+function _ZN5boost4asio9execution6detaileqERKNS2_10blocking_tILi0EEES6_ called 0 returned 0% blocks executed 0%
+    #####:  401:  friend BOOST_ASIO_CONSTEXPR bool operator==(
+        -:  402:      const blocking_t& a, const blocking_t& b)
+        -:  403:  {
+    #####:  404:    return a.value_ == b.value_;
+        -:  405:  }
+------------------
+_ZN5boost4asio9execution6detaileqERKNS2_10blocking_tILi0EEES6_:
+function _ZN5boost4asio9execution6detaileqERKNS2_10blocking_tILi0EEES6_ called 0 returned 0% blocks executed 0%
+    #####:  401:  friend BOOST_ASIO_CONSTEXPR bool operator==(
+        -:  402:      const blocking_t& a, const blocking_t& b)
+        -:  403:  {
+    #####:  404:    return a.value_ == b.value_;
+        -:  405:  }
+------------------
+_ZN5boost4asio9execution6detaileqERKNS2_10blocking_tILi0EEES6_:
+function _ZN5boost4asio9execution6detaileqERKNS2_10blocking_tILi0EEES6_ called 0 returned 0% blocks executed 0%
+    #####:  401:  friend BOOST_ASIO_CONSTEXPR bool operator==(
+        -:  402:      const blocking_t& a, const blocking_t& b)
+        -:  403:  {
+    #####:  404:    return a.value_ == b.value_;
+        -:  405:  }
+------------------
+_ZN5boost4asio9execution6detaileqERKNS2_10blocking_tILi0EEES6_:
+function _ZN5boost4asio9execution6detaileqERKNS2_10blocking_tILi0EEES6_ called 0 returned 0% blocks executed 0%
+    #####:  401:  friend BOOST_ASIO_CONSTEXPR bool operator==(
+        -:  402:      const blocking_t& a, const blocking_t& b)
+        -:  403:  {
+    #####:  404:    return a.value_ == b.value_;
+        -:  405:  }
+------------------
+_ZN5boost4asio9execution6detaileqERKNS2_10blocking_tILi0EEES6_:
+function _ZN5boost4asio9execution6detaileqERKNS2_10blocking_tILi0EEES6_ called 0 returned 0% blocks executed 0%
+    #####:  401:  friend BOOST_ASIO_CONSTEXPR bool operator==(
+        -:  402:      const blocking_t& a, const blocking_t& b)
+        -:  403:  {
+    #####:  404:    return a.value_ == b.value_;
+        -:  405:  }
+------------------
+_ZN5boost4asio9execution6detaileqERKNS2_10blocking_tILi0EEES6_:
+function _ZN5boost4asio9execution6detaileqERKNS2_10blocking_tILi0EEES6_ called 32 returned 100% blocks executed 100%
+       32:  401:  friend BOOST_ASIO_CONSTEXPR bool operator==(
+        -:  402:      const blocking_t& a, const blocking_t& b)
+        -:  403:  {
+       32:  404:    return a.value_ == b.value_;
+        -:  405:  }
+------------------
+_ZN5boost4asio9execution6detaileqERKNS2_10blocking_tILi0EEES6_:
+function _ZN5boost4asio9execution6detaileqERKNS2_10blocking_tILi0EEES6_ called 0 returned 0% blocks executed 0%
+    #####:  401:  friend BOOST_ASIO_CONSTEXPR bool operator==(
+        -:  402:      const blocking_t& a, const blocking_t& b)
+        -:  403:  {
+    #####:  404:    return a.value_ == b.value_;
+        -:  405:  }
+------------------
+_ZN5boost4asio9execution6detaileqERKNS2_10blocking_tILi0EEES6_:
+function _ZN5boost4asio9execution6detaileqERKNS2_10blocking_tILi0EEES6_ called 37887 returned 100% blocks executed 100%
+    37887:  401:  friend BOOST_ASIO_CONSTEXPR bool operator==(
+        -:  402:      const blocking_t& a, const blocking_t& b)
+        -:  403:  {
+    37887:  404:    return a.value_ == b.value_;
+        -:  405:  }
+------------------
+_ZN5boost4asio9execution6detaileqERKNS2_10blocking_tILi0EEES6_:
+function _ZN5boost4asio9execution6detaileqERKNS2_10blocking_tILi0EEES6_ called 70 returned 100% blocks executed 100%
+       70:  401:  friend BOOST_ASIO_CONSTEXPR bool operator==(
+        -:  402:      const blocking_t& a, const blocking_t& b)
+        -:  403:  {
+       70:  404:    return a.value_ == b.value_;
+        -:  405:  }
+------------------
+_ZN5boost4asio9execution6detaileqERKNS2_10blocking_tILi0EEES6_:
+function _ZN5boost4asio9execution6detaileqERKNS2_10blocking_tILi0EEES6_ called 20 returned 100% blocks executed 100%
+       20:  401:  friend BOOST_ASIO_CONSTEXPR bool operator==(
+        -:  402:      const blocking_t& a, const blocking_t& b)
+        -:  403:  {
+       20:  404:    return a.value_ == b.value_;
+        -:  405:  }
+------------------
+        -:  406:
+        -:  407:  friend BOOST_ASIO_CONSTEXPR bool operator!=(
+        -:  408:      const blocking_t& a, const blocking_t& b)
+        -:  409:  {
+        -:  410:    return a.value_ != b.value_;
+        -:  411:  }
+        -:  412:
+        -:  413:  struct convertible_from_blocking_t
+        -:  414:  {
+        -:  415:    BOOST_ASIO_CONSTEXPR convertible_from_blocking_t(blocking_t) {}
+        -:  416:  };
+        -:  417:
+        -:  418:  template <typename Executor>
+        -:  419:  friend BOOST_ASIO_CONSTEXPR blocking_t query(
+        -:  420:      const Executor& ex, convertible_from_blocking_t,
+        -:  421:      typename enable_if<
+        -:  422:        can_query<const Executor&, possibly_t>::value
+        -:  423:      >::type* = 0)
+        -:  424:#if !defined(__clang__) // Clang crashes if noexcept is used here.
+        -:  425:#if defined(BOOST_ASIO_MSVC) // Visual C++ wants the type to be qualified.
+        -:  426:    BOOST_ASIO_NOEXCEPT_IF((
+        -:  427:      is_nothrow_query<const Executor&, blocking_t<>::possibly_t>::value))
+        -:  428:#else // defined(BOOST_ASIO_MSVC)
+        -:  429:    BOOST_ASIO_NOEXCEPT_IF((
+        -:  430:      is_nothrow_query<const Executor&, possibly_t>::value))
+        -:  431:#endif // defined(BOOST_ASIO_MSVC)
+        -:  432:#endif // !defined(__clang__)
+        -:  433:  {
+        -:  434:    return boost::asio::query(ex, possibly_t());
+        -:  435:  }
+        -:  436:
+        -:  437:  template <typename Executor>
+        -:  438:  friend BOOST_ASIO_CONSTEXPR blocking_t query(
+        -:  439:      const Executor& ex, convertible_from_blocking_t,
+        -:  440:      typename enable_if<
+        -:  441:        !can_query<const Executor&, possibly_t>::value
+        -:  442:      >::type* = 0,
+        -:  443:      typename enable_if<
+        -:  444:        can_query<const Executor&, always_t>::value
+        -:  445:      >::type* = 0)
+        -:  446:#if !defined(__clang__) // Clang crashes if noexcept is used here.
+        -:  447:#if defined(BOOST_ASIO_MSVC) // Visual C++ wants the type to be qualified.
+        -:  448:    BOOST_ASIO_NOEXCEPT_IF((
+        -:  449:      is_nothrow_query<const Executor&, blocking_t<>::always_t>::value))
+        -:  450:#else // defined(BOOST_ASIO_MSVC)
+        -:  451:    BOOST_ASIO_NOEXCEPT_IF((
+        -:  452:      is_nothrow_query<const Executor&, always_t>::value))
+        -:  453:#endif // defined(BOOST_ASIO_MSVC)
+        -:  454:#endif // !defined(__clang__)
+        -:  455:  {
+        -:  456:    return boost::asio::query(ex, always_t());
+        -:  457:  }
+        -:  458:
+        -:  459:  template <typename Executor>
+        -:  460:  friend BOOST_ASIO_CONSTEXPR blocking_t query(
+        -:  461:      const Executor& ex, convertible_from_blocking_t,
+        -:  462:      typename enable_if<
+        -:  463:        !can_query<const Executor&, possibly_t>::value
+        -:  464:      >::type* = 0,
+        -:  465:      typename enable_if<
+        -:  466:        !can_query<const Executor&, always_t>::value
+        -:  467:      >::type* = 0,
+        -:  468:      typename enable_if<
+        -:  469:        can_query<const Executor&, never_t>::value
+        -:  470:      >::type* = 0)
+        -:  471:#if !defined(__clang__) // Clang crashes if noexcept is used here.
+        -:  472:#if defined(BOOST_ASIO_MSVC) // Visual C++ wants the type to be qualified.
+        -:  473:    BOOST_ASIO_NOEXCEPT_IF((
+        -:  474:      is_nothrow_query<const Executor&, blocking_t<>::never_t>::value))
+        -:  475:#else // defined(BOOST_ASIO_MSVC)
+        -:  476:    BOOST_ASIO_NOEXCEPT_IF((
+        -:  477:      is_nothrow_query<const Executor&, never_t>::value))
+        -:  478:#endif // defined(BOOST_ASIO_MSVC)
+        -:  479:#endif // !defined(__clang__)
+        -:  480:  {
+        -:  481:    return boost::asio::query(ex, never_t());
+        -:  482:  }
+        -:  483:
+        -:  484:  BOOST_ASIO_STATIC_CONSTEXPR_DEFAULT_INIT(possibly_t, possibly);
+        -:  485:  BOOST_ASIO_STATIC_CONSTEXPR_DEFAULT_INIT(always_t, always);
+        -:  486:  BOOST_ASIO_STATIC_CONSTEXPR_DEFAULT_INIT(never_t, never);
+        -:  487:
+        -:  488:#if !defined(BOOST_ASIO_HAS_CONSTEXPR)
+        -:  489:  static const blocking_t instance;
+        -:  490:#endif // !defined(BOOST_ASIO_HAS_CONSTEXPR)
+        -:  491:
+        -:  492:private:
+        -:  493:  int value_;
+        -:  494:};
+        -:  495:
+        -:  496:#if defined(BOOST_ASIO_HAS_DEDUCED_STATIC_QUERY_TRAIT) \
+        -:  497:  && defined(BOOST_ASIO_HAS_SFINAE_VARIABLE_TEMPLATES)
+        -:  498:template <int I> template <typename E, typename T>
+        -:  499:const T blocking_t<I>::static_query_v;
+        -:  500:#endif // defined(BOOST_ASIO_HAS_DEDUCED_STATIC_QUERY_TRAIT)
+        -:  501:       //   && defined(BOOST_ASIO_HAS_SFINAE_VARIABLE_TEMPLATES)
+        -:  502:
+        -:  503:#if !defined(BOOST_ASIO_HAS_CONSTEXPR)
+        -:  504:template <int I>
+        -:  505:const blocking_t<I> blocking_t<I>::instance;
+        -:  506:#endif
+        -:  507:
+        -:  508:template <int I>
+        -:  509:const typename blocking_t<I>::possibly_t blocking_t<I>::possibly;
+        -:  510:
+        -:  511:template <int I>
+        -:  512:const typename blocking_t<I>::always_t blocking_t<I>::always;
+        -:  513:
+        -:  514:template <int I>
+        -:  515:const typename blocking_t<I>::never_t blocking_t<I>::never;
+        -:  516:
+        -:  517:namespace blocking {
+        -:  518:
+        -:  519:template <int I = 0>
+        -:  520:struct possibly_t
+        -:  521:{
+        -:  522:#if defined(BOOST_ASIO_HAS_VARIABLE_TEMPLATES)
+        -:  523:# if defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  524:  template <typename T>
+        -:  525:  BOOST_ASIO_STATIC_CONSTEXPR(bool,
+        -:  526:    is_applicable_property_v = (
+        -:  527:      is_executor<T>::value));
+        -:  528:# else // defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  529:  template <typename T>
+        -:  530:  BOOST_ASIO_STATIC_CONSTEXPR(bool,
+        -:  531:    is_applicable_property_v = (
+        -:  532:      is_executor<T>::value
+        -:  533:        || conditional<
+        -:  534:            is_executor<T>::value,
+        -:  535:            false_type,
+        -:  536:            is_sender<T>
+        -:  537:          >::type::value
+        -:  538:        || conditional<
+        -:  539:            is_executor<T>::value,
+        -:  540:            false_type,
+        -:  541:            is_scheduler<T>
+        -:  542:          >::type::value
+        -:  543:      ));
+        -:  544:# endif // defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  545:#endif // defined(BOOST_ASIO_HAS_VARIABLE_TEMPLATES)
+        -:  546:
+        -:  547:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_requirable = true);
+        -:  548:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_preferable = true);
+        -:  549:  typedef blocking_t<I> polymorphic_query_result_type;
+        -:  550:
+function _ZN5boost4asio9execution6detail8blocking10possibly_tILi0EEC2Ev called 32 returned 100% blocks executed 100%
+       32:  551:  BOOST_ASIO_CONSTEXPR possibly_t()
+        -:  552:  {
+       32:  553:  }
+        -:  554:
+        -:  555:  template <typename T>
+        -:  556:  struct query_member :
+        -:  557:    traits::query_member<
+        -:  558:      typename blocking_t<I>::template proxy<T>::type, possibly_t> {};
+        -:  559:
+        -:  560:  template <typename T>
+        -:  561:  struct query_static_constexpr_member :
+        -:  562:    traits::query_static_constexpr_member<
+        -:  563:      typename blocking_t<I>::template static_proxy<T>::type, possibly_t> {};
+        -:  564:
+        -:  565:#if defined(BOOST_ASIO_HAS_DEDUCED_STATIC_QUERY_TRAIT) \
+        -:  566:  && defined(BOOST_ASIO_HAS_SFINAE_VARIABLE_TEMPLATES)
+        -:  567:  template <typename T>
+        -:  568:  static BOOST_ASIO_CONSTEXPR
+        -:  569:  typename query_static_constexpr_member<T>::result_type
+        -:  570:  static_query()
+        -:  571:    BOOST_ASIO_NOEXCEPT_IF((
+        -:  572:      query_static_constexpr_member<T>::is_noexcept))
+        -:  573:  {
+        -:  574:    return query_static_constexpr_member<T>::value();
+        -:  575:  }
+        -:  576:
+        -:  577:  template <typename T>
+        -:  578:  static BOOST_ASIO_CONSTEXPR possibly_t static_query(
+        -:  579:      typename enable_if<
+        -:  580:        !query_static_constexpr_member<T>::is_valid
+        -:  581:      >::type* = 0,
+        -:  582:      typename enable_if<
+        -:  583:        !query_member<T>::is_valid
+        -:  584:      >::type* = 0,
+        -:  585:      typename enable_if<
+        -:  586:        !traits::query_free<T, possibly_t>::is_valid
+        -:  587:      >::type* = 0,
+        -:  588:      typename enable_if<
+        -:  589:        !can_query<T, always_t<I> >::value
+        -:  590:      >::type* = 0,
+        -:  591:      typename enable_if<
+        -:  592:        !can_query<T, never_t<I> >::value
+        -:  593:      >::type* = 0) BOOST_ASIO_NOEXCEPT
+        -:  594:  {
+        -:  595:    return possibly_t();
+        -:  596:  }
+        -:  597:
+        -:  598:  template <typename E, typename T = decltype(possibly_t::static_query<E>())>
+        -:  599:  static BOOST_ASIO_CONSTEXPR const T static_query_v
+        -:  600:    = possibly_t::static_query<E>();
+        -:  601:#endif // defined(BOOST_ASIO_HAS_SFINAE_VARIABLE_TEMPLATES)
+        -:  602:       //   && defined(BOOST_ASIO_HAS_SFINAE_VARIABLE_TEMPLATES)
+        -:  603:
+        -:  604:  static BOOST_ASIO_CONSTEXPR blocking_t<I> value()
+        -:  605:  {
+        -:  606:    return possibly_t();
+        -:  607:  }
+        -:  608:
+        -:  609:  friend BOOST_ASIO_CONSTEXPR bool operator==(
+        -:  610:      const possibly_t&, const possibly_t&)
+        -:  611:  {
+        -:  612:    return true;
+        -:  613:  }
+        -:  614:
+        -:  615:  friend BOOST_ASIO_CONSTEXPR bool operator!=(
+        -:  616:      const possibly_t&, const possibly_t&)
+        -:  617:  {
+        -:  618:    return false;
+        -:  619:  }
+        -:  620:
+        -:  621:  friend BOOST_ASIO_CONSTEXPR bool operator==(
+        -:  622:      const possibly_t&, const always_t<I>&)
+        -:  623:  {
+        -:  624:    return false;
+        -:  625:  }
+        -:  626:
+        -:  627:  friend BOOST_ASIO_CONSTEXPR bool operator!=(
+        -:  628:      const possibly_t&, const always_t<I>&)
+        -:  629:  {
+        -:  630:    return true;
+        -:  631:  }
+        -:  632:
+        -:  633:  friend BOOST_ASIO_CONSTEXPR bool operator==(
+        -:  634:      const possibly_t&, const never_t<I>&)
+        -:  635:  {
+        -:  636:    return false;
+        -:  637:  }
+        -:  638:
+        -:  639:  friend BOOST_ASIO_CONSTEXPR bool operator!=(
+        -:  640:      const possibly_t&, const never_t<I>&)
+        -:  641:  {
+        -:  642:    return true;
+        -:  643:  }
+        -:  644:};
+        -:  645:
+        -:  646:#if defined(BOOST_ASIO_HAS_DEDUCED_STATIC_QUERY_TRAIT) \
+        -:  647:  && defined(BOOST_ASIO_HAS_SFINAE_VARIABLE_TEMPLATES)
+        -:  648:template <int I> template <typename E, typename T>
+        -:  649:const T possibly_t<I>::static_query_v;
+        -:  650:#endif // defined(BOOST_ASIO_HAS_DEDUCED_STATIC_QUERY_TRAIT)
+        -:  651:       //   && defined(BOOST_ASIO_HAS_SFINAE_VARIABLE_TEMPLATES)
+        -:  652:
+        -:  653:template <typename Executor>
+        -:  654:class adapter
+        -:  655:{
+        -:  656:public:
+        -:  657:  adapter(int, const Executor& e) BOOST_ASIO_NOEXCEPT
+        -:  658:    : executor_(e)
+        -:  659:  {
+        -:  660:  }
+        -:  661:
+        -:  662:  adapter(const adapter& other) BOOST_ASIO_NOEXCEPT
+        -:  663:    : executor_(other.executor_)
+        -:  664:  {
+        -:  665:  }
+        -:  666:
+        -:  667:#if defined(BOOST_ASIO_HAS_MOVE)
+        -:  668:  adapter(adapter&& other) BOOST_ASIO_NOEXCEPT
+        -:  669:    : executor_(BOOST_ASIO_MOVE_CAST(Executor)(other.executor_))
+        -:  670:  {
+        -:  671:  }
+        -:  672:#endif // defined(BOOST_ASIO_HAS_MOVE) || defined(GENERATING_DOCUMENTATION)
+        -:  673:
+        -:  674:  template <int I>
+        -:  675:  static BOOST_ASIO_CONSTEXPR always_t<I> query(
+        -:  676:      blocking_t<I>) BOOST_ASIO_NOEXCEPT
+        -:  677:  {
+        -:  678:    return always_t<I>();
+        -:  679:  }
+        -:  680:
+        -:  681:  template <int I>
+        -:  682:  static BOOST_ASIO_CONSTEXPR always_t<I> query(
+        -:  683:      possibly_t<I>) BOOST_ASIO_NOEXCEPT
+        -:  684:  {
+        -:  685:    return always_t<I>();
+        -:  686:  }
+        -:  687:
+        -:  688:  template <int I>
+        -:  689:  static BOOST_ASIO_CONSTEXPR always_t<I> query(
+        -:  690:      always_t<I>) BOOST_ASIO_NOEXCEPT
+        -:  691:  {
+        -:  692:    return always_t<I>();
+        -:  693:  }
+        -:  694:
+        -:  695:  template <int I>
+        -:  696:  static BOOST_ASIO_CONSTEXPR always_t<I> query(
+        -:  697:      never_t<I>) BOOST_ASIO_NOEXCEPT
+        -:  698:  {
+        -:  699:    return always_t<I>();
+        -:  700:  }
+        -:  701:
+        -:  702:  template <typename Property>
+        -:  703:  typename enable_if<
+        -:  704:    can_query<const Executor&, Property>::value,
+        -:  705:    typename query_result<const Executor&, Property>::type
+        -:  706:  >::type query(const Property& p) const
+        -:  707:    BOOST_ASIO_NOEXCEPT_IF((
+        -:  708:      is_nothrow_query<const Executor&, Property>::value))
+        -:  709:  {
+        -:  710:    return boost::asio::query(executor_, p);
+        -:  711:  }
+        -:  712:
+        -:  713:  template <int I>
+        -:  714:  typename enable_if<
+        -:  715:    can_require<const Executor&, possibly_t<I> >::value,
+        -:  716:    typename require_result<const Executor&, possibly_t<I> >::type
+        -:  717:  >::type require(possibly_t<I>) const BOOST_ASIO_NOEXCEPT
+        -:  718:  {
+        -:  719:    return boost::asio::require(executor_, possibly_t<I>());
+        -:  720:  }
+        -:  721:
+        -:  722:  template <int I>
+        -:  723:  typename enable_if<
+        -:  724:    can_require<const Executor&, never_t<I> >::value,
+        -:  725:    typename require_result<const Executor&, never_t<I> >::type
+        -:  726:  >::type require(never_t<I>) const BOOST_ASIO_NOEXCEPT
+        -:  727:  {
+        -:  728:    return boost::asio::require(executor_, never_t<I>());
+        -:  729:  }
+        -:  730:
+        -:  731:  template <typename Property>
+        -:  732:  typename enable_if<
+        -:  733:    can_require<const Executor&, Property>::value,
+        -:  734:    adapter<typename decay<
+        -:  735:      typename require_result<const Executor&, Property>::type
+        -:  736:    >::type>
+        -:  737:  >::type require(const Property& p) const
+        -:  738:    BOOST_ASIO_NOEXCEPT_IF((
+        -:  739:      is_nothrow_require<const Executor&, Property>::value))
+        -:  740:  {
+        -:  741:    return adapter<typename decay<
+        -:  742:      typename require_result<const Executor&, Property>::type
+        -:  743:        >::type>(0, boost::asio::require(executor_, p));
+        -:  744:  }
+        -:  745:
+        -:  746:  template <typename Property>
+        -:  747:  typename enable_if<
+        -:  748:    can_prefer<const Executor&, Property>::value,
+        -:  749:    adapter<typename decay<
+        -:  750:      typename prefer_result<const Executor&, Property>::type
+        -:  751:    >::type>
+        -:  752:  >::type prefer(const Property& p) const
+        -:  753:    BOOST_ASIO_NOEXCEPT_IF((
+        -:  754:      is_nothrow_prefer<const Executor&, Property>::value))
+        -:  755:  {
+        -:  756:    return adapter<typename decay<
+        -:  757:      typename prefer_result<const Executor&, Property>::type
+        -:  758:        >::type>(0, boost::asio::prefer(executor_, p));
+        -:  759:  }
+        -:  760:
+        -:  761:  template <typename Function>
+        -:  762:  typename enable_if<
+        -:  763:#if defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  764:    traits::execute_member<const Executor&, Function>::is_valid
+        -:  765:#else // defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  766:    execution::can_execute<const Executor&, Function>::value
+        -:  767:#endif // defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  768:  >::type execute(BOOST_ASIO_MOVE_ARG(Function) f) const
+        -:  769:  {
+        -:  770:    blocking_adaptation::blocking_execute(
+        -:  771:        executor_, BOOST_ASIO_MOVE_CAST(Function)(f));
+        -:  772:  }
+        -:  773:
+        -:  774:  friend bool operator==(const adapter& a, const adapter& b) BOOST_ASIO_NOEXCEPT
+        -:  775:  {
+        -:  776:    return a.executor_ == b.executor_;
+        -:  777:  }
+        -:  778:
+        -:  779:  friend bool operator!=(const adapter& a, const adapter& b) BOOST_ASIO_NOEXCEPT
+        -:  780:  {
+        -:  781:    return a.executor_ != b.executor_;
+        -:  782:  }
+        -:  783:
+        -:  784:private:
+        -:  785:  Executor executor_;
+        -:  786:};
+        -:  787:
+        -:  788:template <int I = 0>
+        -:  789:struct always_t
+        -:  790:{
+        -:  791:#if defined(BOOST_ASIO_HAS_VARIABLE_TEMPLATES)
+        -:  792:# if defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  793:  template <typename T>
+        -:  794:  BOOST_ASIO_STATIC_CONSTEXPR(bool,
+        -:  795:    is_applicable_property_v = (
+        -:  796:      is_executor<T>::value));
+        -:  797:# else // defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  798:  template <typename T>
+        -:  799:  BOOST_ASIO_STATIC_CONSTEXPR(bool,
+        -:  800:    is_applicable_property_v = (
+        -:  801:      is_executor<T>::value
+        -:  802:        || conditional<
+        -:  803:            is_executor<T>::value,
+        -:  804:            false_type,
+        -:  805:            is_sender<T>
+        -:  806:          >::type::value
+        -:  807:        || conditional<
+        -:  808:            is_executor<T>::value,
+        -:  809:            false_type,
+        -:  810:            is_scheduler<T>
+        -:  811:          >::type::value
+        -:  812:      ));
+        -:  813:# endif // defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  814:#endif // defined(BOOST_ASIO_HAS_VARIABLE_TEMPLATES)
+        -:  815:
+        -:  816:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_requirable = true);
+        -:  817:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_preferable = false);
+        -:  818:  typedef blocking_t<I> polymorphic_query_result_type;
+        -:  819:
+        -:  820:  BOOST_ASIO_CONSTEXPR always_t()
+        -:  821:  {
+        -:  822:  }
+        -:  823:
+        -:  824:  template <typename T>
+        -:  825:  struct query_member :
+        -:  826:    traits::query_member<
+        -:  827:      typename blocking_t<I>::template proxy<T>::type, always_t> {};
+        -:  828:
+        -:  829:  template <typename T>
+        -:  830:  struct query_static_constexpr_member :
+        -:  831:    traits::query_static_constexpr_member<
+        -:  832:      typename blocking_t<I>::template static_proxy<T>::type, always_t> {};
+        -:  833:
+        -:  834:#if defined(BOOST_ASIO_HAS_DEDUCED_STATIC_QUERY_TRAIT) \
+        -:  835:  && defined(BOOST_ASIO_HAS_SFINAE_VARIABLE_TEMPLATES)
+        -:  836:  template <typename T>
+        -:  837:  static BOOST_ASIO_CONSTEXPR
+        -:  838:  typename query_static_constexpr_member<T>::result_type
+        -:  839:  static_query()
+        -:  840:    BOOST_ASIO_NOEXCEPT_IF((
+        -:  841:      query_static_constexpr_member<T>::is_noexcept))
+        -:  842:  {
+        -:  843:    return query_static_constexpr_member<T>::value();
+        -:  844:  }
+        -:  845:
+        -:  846:  template <typename E, typename T = decltype(always_t::static_query<E>())>
+        -:  847:  static BOOST_ASIO_CONSTEXPR const T static_query_v
+        -:  848:    = always_t::static_query<E>();
+        -:  849:#endif // defined(BOOST_ASIO_HAS_SFINAE_VARIABLE_TEMPLATES)
+        -:  850:       //   && defined(BOOST_ASIO_HAS_SFINAE_VARIABLE_TEMPLATES)
+        -:  851:
+        -:  852:  static BOOST_ASIO_CONSTEXPR blocking_t<I> value()
+        -:  853:  {
+        -:  854:    return always_t();
+        -:  855:  }
+        -:  856:
+        -:  857:  friend BOOST_ASIO_CONSTEXPR bool operator==(
+        -:  858:      const always_t&, const always_t&)
+        -:  859:  {
+        -:  860:    return true;
+        -:  861:  }
+        -:  862:
+        -:  863:  friend BOOST_ASIO_CONSTEXPR bool operator!=(
+        -:  864:      const always_t&, const always_t&)
+        -:  865:  {
+        -:  866:    return false;
+        -:  867:  }
+        -:  868:
+        -:  869:  friend BOOST_ASIO_CONSTEXPR bool operator==(
+        -:  870:      const always_t&, const possibly_t<I>&)
+        -:  871:  {
+        -:  872:    return false;
+        -:  873:  }
+        -:  874:
+        -:  875:  friend BOOST_ASIO_CONSTEXPR bool operator!=(
+        -:  876:      const always_t&, const possibly_t<I>&)
+        -:  877:  {
+        -:  878:    return true;
+        -:  879:  }
+        -:  880:
+        -:  881:  friend BOOST_ASIO_CONSTEXPR bool operator==(
+        -:  882:      const always_t&, const never_t<I>&)
+        -:  883:  {
+        -:  884:    return false;
+        -:  885:  }
+        -:  886:
+        -:  887:  friend BOOST_ASIO_CONSTEXPR bool operator!=(
+        -:  888:      const always_t&, const never_t<I>&)
+        -:  889:  {
+        -:  890:    return true;
+        -:  891:  }
+        -:  892:
+        -:  893:  template <typename Executor>
+        -:  894:  friend adapter<Executor> require(
+        -:  895:      const Executor& e, const always_t&,
+        -:  896:      typename enable_if<
+        -:  897:        is_executor<Executor>::value
+        -:  898:      >::type* = 0,
+        -:  899:      typename enable_if<
+        -:  900:        traits::static_require<
+        -:  901:          const Executor&,
+        -:  902:          blocking_adaptation::allowed_t<0>
+        -:  903:        >::is_valid
+        -:  904:      >::type* = 0)
+        -:  905:  {
+        -:  906:    return adapter<Executor>(0, e);
+        -:  907:  }
+        -:  908:};
+        -:  909:
+        -:  910:#if defined(BOOST_ASIO_HAS_DEDUCED_STATIC_QUERY_TRAIT) \
+        -:  911:  && defined(BOOST_ASIO_HAS_SFINAE_VARIABLE_TEMPLATES)
+        -:  912:template <int I> template <typename E, typename T>
+        -:  913:const T always_t<I>::static_query_v;
+        -:  914:#endif // defined(BOOST_ASIO_HAS_DEDUCED_STATIC_QUERY_TRAIT)
+        -:  915:       //   && defined(BOOST_ASIO_HAS_SFINAE_VARIABLE_TEMPLATES)
+        -:  916:
+        -:  917:template <int I>
+        -:  918:struct never_t
+        -:  919:{
+        -:  920:#if defined(BOOST_ASIO_HAS_VARIABLE_TEMPLATES)
+        -:  921:# if defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  922:  template <typename T>
+        -:  923:  BOOST_ASIO_STATIC_CONSTEXPR(bool,
+        -:  924:    is_applicable_property_v = (
+        -:  925:      is_executor<T>::value));
+        -:  926:# else // defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  927:  template <typename T>
+        -:  928:  BOOST_ASIO_STATIC_CONSTEXPR(bool,
+        -:  929:    is_applicable_property_v = (
+        -:  930:      is_executor<T>::value
+        -:  931:        || conditional<
+        -:  932:            is_executor<T>::value,
+        -:  933:            false_type,
+        -:  934:            is_sender<T>
+        -:  935:          >::type::value
+        -:  936:        || conditional<
+        -:  937:            is_executor<T>::value,
+        -:  938:            false_type,
+        -:  939:            is_scheduler<T>
+        -:  940:          >::type::value
+        -:  941:      ));
+        -:  942:# endif // defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  943:#endif // defined(BOOST_ASIO_HAS_VARIABLE_TEMPLATES)
+        -:  944:
+        -:  945:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_requirable = true);
+        -:  946:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_preferable = true);
+        -:  947:  typedef blocking_t<I> polymorphic_query_result_type;
+        -:  948:
+        -:  949:  BOOST_ASIO_CONSTEXPR never_t()
+        -:  950:  {
+        -:  951:  }
+        -:  952:
+        -:  953:  template <typename T>
+        -:  954:  struct query_member :
+        -:  955:    traits::query_member<
+        -:  956:      typename blocking_t<I>::template proxy<T>::type, never_t> {};
+        -:  957:
+        -:  958:  template <typename T>
+        -:  959:  struct query_static_constexpr_member :
+        -:  960:    traits::query_static_constexpr_member<
+        -:  961:      typename blocking_t<I>::template static_proxy<T>::type, never_t> {};
+        -:  962:
+        -:  963:#if defined(BOOST_ASIO_HAS_DEDUCED_STATIC_QUERY_TRAIT) \
+        -:  964:  && defined(BOOST_ASIO_HAS_SFINAE_VARIABLE_TEMPLATES)
+        -:  965:  template <typename T>
+        -:  966:  static BOOST_ASIO_CONSTEXPR
+        -:  967:  typename query_static_constexpr_member<T>::result_type
+        -:  968:  static_query()
+        -:  969:    BOOST_ASIO_NOEXCEPT_IF((
+        -:  970:      query_static_constexpr_member<T>::is_noexcept))
+        -:  971:  {
+        -:  972:    return query_static_constexpr_member<T>::value();
+        -:  973:  }
+        -:  974:
+        -:  975:  template <typename E, typename T = decltype(never_t::static_query<E>())>
+        -:  976:  static BOOST_ASIO_CONSTEXPR const T static_query_v
+        -:  977:    = never_t::static_query<E>();
+        -:  978:#endif // defined(BOOST_ASIO_HAS_DEDUCED_STATIC_QUERY_TRAIT)
+        -:  979:       //   && defined(BOOST_ASIO_HAS_SFINAE_VARIABLE_TEMPLATES)
+        -:  980:
+        -:  981:  static BOOST_ASIO_CONSTEXPR blocking_t<I> value()
+        -:  982:  {
+        -:  983:    return never_t();
+        -:  984:  }
+        -:  985:
+        -:  986:  friend BOOST_ASIO_CONSTEXPR bool operator==(
+        -:  987:      const never_t&, const never_t&)
+        -:  988:  {
+        -:  989:    return true;
+        -:  990:  }
+        -:  991:
+        -:  992:  friend BOOST_ASIO_CONSTEXPR bool operator!=(
+        -:  993:      const never_t&, const never_t&)
+        -:  994:  {
+        -:  995:    return false;
+        -:  996:  }
+        -:  997:
+        -:  998:  friend BOOST_ASIO_CONSTEXPR bool operator==(
+        -:  999:      const never_t&, const possibly_t<I>&)
+        -: 1000:  {
+        -: 1001:    return false;
+        -: 1002:  }
+        -: 1003:
+        -: 1004:  friend BOOST_ASIO_CONSTEXPR bool operator!=(
+        -: 1005:      const never_t&, const possibly_t<I>&)
+        -: 1006:  {
+        -: 1007:    return true;
+        -: 1008:  }
+        -: 1009:
+        -: 1010:  friend BOOST_ASIO_CONSTEXPR bool operator==(
+        -: 1011:      const never_t&, const always_t<I>&)
+        -: 1012:  {
+        -: 1013:    return false;
+        -: 1014:  }
+        -: 1015:
+        -: 1016:  friend BOOST_ASIO_CONSTEXPR bool operator!=(
+        -: 1017:      const never_t&, const always_t<I>&)
+        -: 1018:  {
+        -: 1019:    return true;
+        -: 1020:  }
+        -: 1021:};
+        -: 1022:
+        -: 1023:#if defined(BOOST_ASIO_HAS_DEDUCED_STATIC_QUERY_TRAIT) \
+        -: 1024:  && defined(BOOST_ASIO_HAS_SFINAE_VARIABLE_TEMPLATES)
+        -: 1025:template <int I> template <typename E, typename T>
+        -: 1026:const T never_t<I>::static_query_v;
+        -: 1027:#endif // defined(BOOST_ASIO_HAS_SFINAE_VARIABLE_TEMPLATES)
+        -: 1028:
+        -: 1029:} // namespace blocking
+        -: 1030:} // namespace detail
+        -: 1031:
+        -: 1032:typedef detail::blocking_t<> blocking_t;
+        -: 1033:
+        -: 1034:#if defined(BOOST_ASIO_HAS_CONSTEXPR) || defined(GENERATING_DOCUMENTATION)
+        -: 1035:constexpr blocking_t blocking;
+        -: 1036:#else // defined(BOOST_ASIO_HAS_CONSTEXPR) || defined(GENERATING_DOCUMENTATION)
+        -: 1037:namespace { static const blocking_t& blocking = blocking_t::instance; }
+        -: 1038:#endif
+        -: 1039:
+        -: 1040:} // namespace execution
+        -: 1041:
+        -: 1042:#if !defined(BOOST_ASIO_HAS_VARIABLE_TEMPLATES)
+        -: 1043:
+        -: 1044:template <typename T>
+        -: 1045:struct is_applicable_property<T, execution::blocking_t>
+        -: 1046:  : integral_constant<bool,
+        -: 1047:      execution::is_executor<T>::value
+        -: 1048:#if !defined(BOOST_ASIO_NO_DEPRECATED)
+        -: 1049:        || conditional<
+        -: 1050:            execution::is_executor<T>::value,
+        -: 1051:            false_type,
+        -: 1052:            execution::is_sender<T>
+        -: 1053:          >::type::value
+        -: 1054:        || conditional<
+        -: 1055:            execution::is_executor<T>::value,
+        -: 1056:            false_type,
+        -: 1057:            execution::is_scheduler<T>
+        -: 1058:          >::type::value
+        -: 1059:#endif // !defined(BOOST_ASIO_NO_DEPRECATED)
+        -: 1060:    >
+        -: 1061:{
+        -: 1062:};
+        -: 1063:
+        -: 1064:template <typename T>
+        -: 1065:struct is_applicable_property<T, execution::blocking_t::possibly_t>
+        -: 1066:  : integral_constant<bool,
+        -: 1067:      execution::is_executor<T>::value
+        -: 1068:#if !defined(BOOST_ASIO_NO_DEPRECATED)
+        -: 1069:        || conditional<
+        -: 1070:            execution::is_executor<T>::value,
+        -: 1071:            false_type,
+        -: 1072:            execution::is_sender<T>
+        -: 1073:          >::type::value
+        -: 1074:        || conditional<
+        -: 1075:            execution::is_executor<T>::value,
+        -: 1076:            false_type,
+        -: 1077:            execution::is_scheduler<T>
+        -: 1078:          >::type::value
+        -: 1079:#endif // !defined(BOOST_ASIO_NO_DEPRECATED)
+        -: 1080:    >
+        -: 1081:{
+        -: 1082:};
+        -: 1083:
+        -: 1084:template <typename T>
+        -: 1085:struct is_applicable_property<T, execution::blocking_t::always_t>
+        -: 1086:  : integral_constant<bool,
+        -: 1087:      execution::is_executor<T>::value
+        -: 1088:#if !defined(BOOST_ASIO_NO_DEPRECATED)
+        -: 1089:        || conditional<
+        -: 1090:            execution::is_executor<T>::value,
+        -: 1091:            false_type,
+        -: 1092:            execution::is_sender<T>
+        -: 1093:          >::type::value
+        -: 1094:        || conditional<
+        -: 1095:            execution::is_executor<T>::value,
+        -: 1096:            false_type,
+        -: 1097:            execution::is_scheduler<T>
+        -: 1098:          >::type::value
+        -: 1099:#endif // !defined(BOOST_ASIO_NO_DEPRECATED)
+        -: 1100:    >
+        -: 1101:{
+        -: 1102:};
+        -: 1103:
+        -: 1104:template <typename T>
+        -: 1105:struct is_applicable_property<T, execution::blocking_t::never_t>
+        -: 1106:  : integral_constant<bool,
+        -: 1107:      execution::is_executor<T>::value
+        -: 1108:#if !defined(BOOST_ASIO_NO_DEPRECATED)
+        -: 1109:        || conditional<
+        -: 1110:            execution::is_executor<T>::value,
+        -: 1111:            false_type,
+        -: 1112:            execution::is_sender<T>
+        -: 1113:          >::type::value
+        -: 1114:        || conditional<
+        -: 1115:            execution::is_executor<T>::value,
+        -: 1116:            false_type,
+        -: 1117:            execution::is_scheduler<T>
+        -: 1118:          >::type::value
+        -: 1119:#endif // !defined(BOOST_ASIO_NO_DEPRECATED)
+        -: 1120:    >
+        -: 1121:{
+        -: 1122:};
+        -: 1123:
+        -: 1124:#endif // !defined(BOOST_ASIO_HAS_VARIABLE_TEMPLATES)
+        -: 1125:
+        -: 1126:namespace traits {
+        -: 1127:
+        -: 1128:#if !defined(BOOST_ASIO_HAS_DEDUCED_QUERY_FREE_TRAIT)
+        -: 1129:
+        -: 1130:template <typename T>
+        -: 1131:struct query_free_default<T, execution::blocking_t,
+        -: 1132:  typename enable_if<
+        -: 1133:    can_query<T, execution::blocking_t::possibly_t>::value
+        -: 1134:  >::type>
+        -: 1135:{
+        -: 1136:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_valid = true);
+        -: 1137:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_noexcept =
+        -: 1138:    (is_nothrow_query<T, execution::blocking_t::possibly_t>::value));
+        -: 1139:
+        -: 1140:  typedef execution::blocking_t result_type;
+        -: 1141:};
+        -: 1142:
+        -: 1143:template <typename T>
+        -: 1144:struct query_free_default<T, execution::blocking_t,
+        -: 1145:  typename enable_if<
+        -: 1146:    !can_query<T, execution::blocking_t::possibly_t>::value
+        -: 1147:      && can_query<T, execution::blocking_t::always_t>::value
+        -: 1148:  >::type>
+        -: 1149:{
+        -: 1150:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_valid = true);
+        -: 1151:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_noexcept =
+        -: 1152:    (is_nothrow_query<T, execution::blocking_t::always_t>::value));
+        -: 1153:
+        -: 1154:  typedef execution::blocking_t result_type;
+        -: 1155:};
+        -: 1156:
+        -: 1157:template <typename T>
+        -: 1158:struct query_free_default<T, execution::blocking_t,
+        -: 1159:  typename enable_if<
+        -: 1160:    !can_query<T, execution::blocking_t::possibly_t>::value
+        -: 1161:      && !can_query<T, execution::blocking_t::always_t>::value
+        -: 1162:      && can_query<T, execution::blocking_t::never_t>::value
+        -: 1163:  >::type>
+        -: 1164:{
+        -: 1165:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_valid = true);
+        -: 1166:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_noexcept =
+        -: 1167:    (is_nothrow_query<T, execution::blocking_t::never_t>::value));
+        -: 1168:
+        -: 1169:  typedef execution::blocking_t result_type;
+        -: 1170:};
+        -: 1171:
+        -: 1172:#endif // !defined(BOOST_ASIO_HAS_DEDUCED_QUERY_FREE_TRAIT)
+        -: 1173:
+        -: 1174:#if !defined(BOOST_ASIO_HAS_DEDUCED_STATIC_QUERY_TRAIT) \
+        -: 1175:  || !defined(BOOST_ASIO_HAS_SFINAE_VARIABLE_TEMPLATES)
+        -: 1176:
+        -: 1177:template <typename T>
+        -: 1178:struct static_query<T, execution::blocking_t,
+        -: 1179:  typename enable_if<
+        -: 1180:    execution::detail::blocking_t<0>::
+        -: 1181:      query_static_constexpr_member<T>::is_valid
+        -: 1182:  >::type>
+        -: 1183:{
+        -: 1184:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_valid = true);
+        -: 1185:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_noexcept = true);
+        -: 1186:
+        -: 1187:  typedef typename execution::detail::blocking_t<0>::
+        -: 1188:    query_static_constexpr_member<T>::result_type result_type;
+        -: 1189:
+        -: 1190:  static BOOST_ASIO_CONSTEXPR result_type value()
+        -: 1191:  {
+        -: 1192:    return execution::blocking_t::query_static_constexpr_member<T>::value();
+        -: 1193:  }
+        -: 1194:};
+        -: 1195:
+        -: 1196:template <typename T>
+        -: 1197:struct static_query<T, execution::blocking_t,
+        -: 1198:  typename enable_if<
+        -: 1199:    !execution::detail::blocking_t<0>::
+        -: 1200:        query_static_constexpr_member<T>::is_valid
+        -: 1201:      && !execution::detail::blocking_t<0>::
+        -: 1202:        query_member<T>::is_valid
+        -: 1203:      && traits::static_query<T, execution::blocking_t::possibly_t>::is_valid
+        -: 1204:  >::type>
+        -: 1205:{
+        -: 1206:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_valid = true);
+        -: 1207:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_noexcept = true);
+        -: 1208:
+        -: 1209:  typedef typename traits::static_query<T,
+        -: 1210:    execution::blocking_t::possibly_t>::result_type result_type;
+        -: 1211:
+        -: 1212:  static BOOST_ASIO_CONSTEXPR result_type value()
+        -: 1213:  {
+        -: 1214:    return traits::static_query<T, execution::blocking_t::possibly_t>::value();
+        -: 1215:  }
+        -: 1216:};
+        -: 1217:
+        -: 1218:template <typename T>
+        -: 1219:struct static_query<T, execution::blocking_t,
+        -: 1220:  typename enable_if<
+        -: 1221:    !execution::detail::blocking_t<0>::
+        -: 1222:        query_static_constexpr_member<T>::is_valid
+        -: 1223:      && !execution::detail::blocking_t<0>::
+        -: 1224:        query_member<T>::is_valid
+        -: 1225:      && !traits::static_query<T, execution::blocking_t::possibly_t>::is_valid
+        -: 1226:      && traits::static_query<T, execution::blocking_t::always_t>::is_valid
+        -: 1227:  >::type>
+        -: 1228:{
+        -: 1229:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_valid = true);
+        -: 1230:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_noexcept = true);
+        -: 1231:
+        -: 1232:  typedef typename traits::static_query<T,
+        -: 1233:    execution::blocking_t::always_t>::result_type result_type;
+        -: 1234:
+        -: 1235:  static BOOST_ASIO_CONSTEXPR result_type value()
+        -: 1236:  {
+        -: 1237:    return traits::static_query<T, execution::blocking_t::always_t>::value();
+        -: 1238:  }
+        -: 1239:};
+        -: 1240:
+        -: 1241:template <typename T>
+        -: 1242:struct static_query<T, execution::blocking_t,
+        -: 1243:  typename enable_if<
+        -: 1244:    !execution::detail::blocking_t<0>::
+        -: 1245:        query_static_constexpr_member<T>::is_valid
+        -: 1246:      && !execution::detail::blocking_t<0>::
+        -: 1247:        query_member<T>::is_valid
+        -: 1248:      && !traits::static_query<T, execution::blocking_t::possibly_t>::is_valid
+        -: 1249:      && !traits::static_query<T, execution::blocking_t::always_t>::is_valid
+        -: 1250:      && traits::static_query<T, execution::blocking_t::never_t>::is_valid
+        -: 1251:  >::type>
+        -: 1252:{
+        -: 1253:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_valid = true);
+        -: 1254:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_noexcept = true);
+        -: 1255:
+        -: 1256:  typedef typename traits::static_query<T,
+        -: 1257:    execution::blocking_t::never_t>::result_type result_type;
+        -: 1258:
+        -: 1259:  static BOOST_ASIO_CONSTEXPR result_type value()
+        -: 1260:  {
+        -: 1261:    return traits::static_query<T, execution::blocking_t::never_t>::value();
+        -: 1262:  }
+        -: 1263:};
+        -: 1264:
+        -: 1265:template <typename T>
+        -: 1266:struct static_query<T, execution::blocking_t::possibly_t,
+        -: 1267:  typename enable_if<
+        -: 1268:    execution::detail::blocking::possibly_t<0>::
+        -: 1269:      query_static_constexpr_member<T>::is_valid
+        -: 1270:  >::type>
+        -: 1271:{
+        -: 1272:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_valid = true);
+        -: 1273:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_noexcept = true);
+        -: 1274:
+        -: 1275:  typedef typename execution::detail::blocking::possibly_t<0>::
+        -: 1276:    query_static_constexpr_member<T>::result_type result_type;
+        -: 1277:
+        -: 1278:  static BOOST_ASIO_CONSTEXPR result_type value()
+        -: 1279:  {
+        -: 1280:    return execution::detail::blocking::possibly_t<0>::
+        -: 1281:      query_static_constexpr_member<T>::value();
+        -: 1282:  }
+        -: 1283:};
+        -: 1284:
+        -: 1285:template <typename T>
+        -: 1286:struct static_query<T, execution::blocking_t::possibly_t,
+        -: 1287:  typename enable_if<
+        -: 1288:    !execution::detail::blocking::possibly_t<0>::
+        -: 1289:        query_static_constexpr_member<T>::is_valid
+        -: 1290:      && !execution::detail::blocking::possibly_t<0>::
+        -: 1291:        query_member<T>::is_valid
+        -: 1292:      && !traits::query_free<T, execution::blocking_t::possibly_t>::is_valid
+        -: 1293:      && !can_query<T, execution::blocking_t::always_t>::value
+        -: 1294:      && !can_query<T, execution::blocking_t::never_t>::value
+        -: 1295:  >::type>
+        -: 1296:{
+        -: 1297:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_valid = true);
+        -: 1298:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_noexcept = true);
+        -: 1299:
+        -: 1300:  typedef execution::blocking_t::possibly_t result_type;
+        -: 1301:
+        -: 1302:  static BOOST_ASIO_CONSTEXPR result_type value()
+        -: 1303:  {
+        -: 1304:    return result_type();
+        -: 1305:  }
+        -: 1306:};
+        -: 1307:
+        -: 1308:template <typename T>
+        -: 1309:struct static_query<T, execution::blocking_t::always_t,
+        -: 1310:  typename enable_if<
+        -: 1311:    execution::detail::blocking::always_t<0>::
+        -: 1312:      query_static_constexpr_member<T>::is_valid
+        -: 1313:  >::type>
+        -: 1314:{
+        -: 1315:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_valid = true);
+        -: 1316:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_noexcept = true);
+        -: 1317:
+        -: 1318:  typedef typename execution::detail::blocking::always_t<0>::
+        -: 1319:    query_static_constexpr_member<T>::result_type result_type;
+        -: 1320:
+        -: 1321:  static BOOST_ASIO_CONSTEXPR result_type value()
+        -: 1322:  {
+        -: 1323:    return execution::detail::blocking::always_t<0>::
+        -: 1324:      query_static_constexpr_member<T>::value();
+        -: 1325:  }
+        -: 1326:};
+        -: 1327:
+        -: 1328:template <typename T>
+        -: 1329:struct static_query<T, execution::blocking_t::never_t,
+        -: 1330:  typename enable_if<
+        -: 1331:    execution::detail::blocking::never_t<0>::
+        -: 1332:      query_static_constexpr_member<T>::is_valid
+        -: 1333:  >::type>
+        -: 1334:{
+        -: 1335:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_valid = true);
+        -: 1336:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_noexcept = true);
+        -: 1337:
+        -: 1338:  typedef typename execution::detail::blocking::never_t<0>::
+        -: 1339:    query_static_constexpr_member<T>::result_type result_type;
+        -: 1340:
+        -: 1341:  static BOOST_ASIO_CONSTEXPR result_type value()
+        -: 1342:  {
+        -: 1343:    return execution::detail::blocking::never_t<0>::
+        -: 1344:      query_static_constexpr_member<T>::value();
+        -: 1345:  }
+        -: 1346:};
+        -: 1347:
+        -: 1348:#endif // !defined(BOOST_ASIO_HAS_DEDUCED_STATIC_QUERY_TRAIT)
+        -: 1349:       //   || !defined(BOOST_ASIO_HAS_SFINAE_VARIABLE_TEMPLATES)
+        -: 1350:
+        -: 1351:#if !defined(BOOST_ASIO_HAS_DEDUCED_STATIC_REQUIRE_TRAIT)
+        -: 1352:
+        -: 1353:template <typename T>
+        -: 1354:struct static_require<T, execution::blocking_t::possibly_t,
+        -: 1355:  typename enable_if<
+        -: 1356:    static_query<T, execution::blocking_t::possibly_t>::is_valid
+        -: 1357:  >::type>
+        -: 1358:{
+        -: 1359:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_valid =
+        -: 1360:    (is_same<typename static_query<T,
+        -: 1361:      execution::blocking_t::possibly_t>::result_type,
+        -: 1362:        execution::blocking_t::possibly_t>::value));
+        -: 1363:};
+        -: 1364:
+        -: 1365:template <typename T>
+        -: 1366:struct static_require<T, execution::blocking_t::always_t,
+        -: 1367:  typename enable_if<
+        -: 1368:    static_query<T, execution::blocking_t::always_t>::is_valid
+        -: 1369:  >::type>
+        -: 1370:{
+        -: 1371:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_valid =
+        -: 1372:    (is_same<typename static_query<T,
+        -: 1373:      execution::blocking_t::always_t>::result_type,
+        -: 1374:        execution::blocking_t::always_t>::value));
+        -: 1375:};
+        -: 1376:
+        -: 1377:template <typename T>
+        -: 1378:struct static_require<T, execution::blocking_t::never_t,
+        -: 1379:  typename enable_if<
+        -: 1380:    static_query<T, execution::blocking_t::never_t>::is_valid
+        -: 1381:  >::type>
+        -: 1382:{
+        -: 1383:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_valid =
+        -: 1384:    (is_same<typename static_query<T,
+        -: 1385:      execution::blocking_t::never_t>::result_type,
+        -: 1386:        execution::blocking_t::never_t>::value));
+        -: 1387:};
+        -: 1388:
+        -: 1389:#endif // !defined(BOOST_ASIO_HAS_DEDUCED_STATIC_REQUIRE_TRAIT)
+        -: 1390:
+        -: 1391:#if !defined(BOOST_ASIO_HAS_DEDUCED_REQUIRE_FREE_TRAIT)
+        -: 1392:
+        -: 1393:template <typename T>
+        -: 1394:struct require_free_default<T, execution::blocking_t::always_t,
+        -: 1395:  typename enable_if<
+        -: 1396:    is_same<T, typename decay<T>::type>::value
+        -: 1397:      && execution::is_executor<T>::value
+        -: 1398:      && traits::static_require<
+        -: 1399:          const T&,
+        -: 1400:          execution::detail::blocking_adaptation::allowed_t<0>
+        -: 1401:        >::is_valid
+        -: 1402:  >::type>
+        -: 1403:{
+        -: 1404:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_valid = true);
+        -: 1405:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_noexcept = false);
+        -: 1406:  typedef execution::detail::blocking::adapter<T> result_type;
+        -: 1407:};
+        -: 1408:
+        -: 1409:#endif // !defined(BOOST_ASIO_HAS_DEDUCED_REQUIRE_FREE_TRAIT)
+        -: 1410:
+        -: 1411:#if !defined(BOOST_ASIO_HAS_DEDUCED_EQUALITY_COMPARABLE_TRAIT)
+        -: 1412:
+        -: 1413:template <typename Executor>
+        -: 1414:struct equality_comparable<
+        -: 1415:  execution::detail::blocking::adapter<Executor> >
+        -: 1416:{
+        -: 1417:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_valid = true);
+        -: 1418:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_noexcept = true);
+        -: 1419:};
+        -: 1420:
+        -: 1421:#endif // !defined(BOOST_ASIO_HAS_DEDUCED_EQUALITY_COMPARABLE_TRAIT)
+        -: 1422:
+        -: 1423:#if !defined(BOOST_ASIO_HAS_DEDUCED_EXECUTE_MEMBER_TRAIT)
+        -: 1424:
+        -: 1425:template <typename Executor, typename Function>
+        -: 1426:struct execute_member<
+        -: 1427:  execution::detail::blocking::adapter<Executor>, Function>
+        -: 1428:{
+        -: 1429:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_valid = true);
+        -: 1430:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_noexcept = false);
+        -: 1431:  typedef void result_type;
+        -: 1432:};
+        -: 1433:
+        -: 1434:#endif // !defined(BOOST_ASIO_HAS_DEDUCED_EXECUTE_MEMBER_TRAIT)
+        -: 1435:
+        -: 1436:#if !defined(BOOST_ASIO_HAS_DEDUCED_QUERY_STATIC_CONSTEXPR_MEMBER_TRAIT)
+        -: 1437:
+        -: 1438:template <typename Executor, int I>
+        -: 1439:struct query_static_constexpr_member<
+        -: 1440:  execution::detail::blocking::adapter<Executor>,
+        -: 1441:  execution::detail::blocking_t<I> >
+        -: 1442:{
+        -: 1443:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_valid = true);
+        -: 1444:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_noexcept = true);
+        -: 1445:  typedef execution::blocking_t::always_t result_type;
+        -: 1446:
+        -: 1447:  static BOOST_ASIO_CONSTEXPR result_type value() BOOST_ASIO_NOEXCEPT
+        -: 1448:  {
+        -: 1449:    return result_type();
+        -: 1450:  }
+        -: 1451:};
+        -: 1452:
+        -: 1453:template <typename Executor, int I>
+        -: 1454:struct query_static_constexpr_member<
+        -: 1455:  execution::detail::blocking::adapter<Executor>,
+        -: 1456:  execution::detail::blocking::always_t<I> >
+        -: 1457:{
+        -: 1458:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_valid = true);
+        -: 1459:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_noexcept = true);
+        -: 1460:  typedef execution::blocking_t::always_t result_type;
+        -: 1461:
+        -: 1462:  static BOOST_ASIO_CONSTEXPR result_type value() BOOST_ASIO_NOEXCEPT
+        -: 1463:  {
+        -: 1464:    return result_type();
+        -: 1465:  }
+        -: 1466:};
+        -: 1467:
+        -: 1468:template <typename Executor, int I>
+        -: 1469:struct query_static_constexpr_member<
+        -: 1470:  execution::detail::blocking::adapter<Executor>,
+        -: 1471:  execution::detail::blocking::possibly_t<I> >
+        -: 1472:{
+        -: 1473:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_valid = true);
+        -: 1474:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_noexcept = true);
+        -: 1475:  typedef execution::blocking_t::always_t result_type;
+        -: 1476:
+        -: 1477:  static BOOST_ASIO_CONSTEXPR result_type value() BOOST_ASIO_NOEXCEPT
+        -: 1478:  {
+        -: 1479:    return result_type();
+        -: 1480:  }
+        -: 1481:};
+        -: 1482:
+        -: 1483:template <typename Executor, int I>
+        -: 1484:struct query_static_constexpr_member<
+        -: 1485:  execution::detail::blocking::adapter<Executor>,
+        -: 1486:  execution::detail::blocking::never_t<I> >
+        -: 1487:{
+        -: 1488:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_valid = true);
+        -: 1489:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_noexcept = true);
+        -: 1490:  typedef execution::blocking_t::always_t result_type;
+        -: 1491:
+        -: 1492:  static BOOST_ASIO_CONSTEXPR result_type value() BOOST_ASIO_NOEXCEPT
+        -: 1493:  {
+        -: 1494:    return result_type();
+        -: 1495:  }
+        -: 1496:};
+        -: 1497:
+        -: 1498:#endif // !defined(BOOST_ASIO_HAS_DEDUCED_QUERY_STATIC_CONSTEXPR_MEMBER_TRAIT)
+        -: 1499:
+        -: 1500:#if !defined(BOOST_ASIO_HAS_DEDUCED_QUERY_MEMBER_TRAIT)
+        -: 1501:
+        -: 1502:template <typename Executor, typename Property>
+        -: 1503:struct query_member<
+        -: 1504:  execution::detail::blocking::adapter<Executor>, Property,
+        -: 1505:  typename enable_if<
+        -: 1506:    can_query<const Executor&, Property>::value
+        -: 1507:  >::type>
+        -: 1508:{
+        -: 1509:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_valid = true);
+        -: 1510:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_noexcept =
+        -: 1511:      (is_nothrow_query<Executor, Property>::value));
+        -: 1512:  typedef typename query_result<Executor, Property>::type result_type;
+        -: 1513:};
+        -: 1514:
+        -: 1515:#endif // !defined(BOOST_ASIO_HAS_DEDUCED_QUERY_MEMBER_TRAIT)
+        -: 1516:
+        -: 1517:#if !defined(BOOST_ASIO_HAS_DEDUCED_REQUIRE_MEMBER_TRAIT)
+        -: 1518:
+        -: 1519:template <typename Executor, int I>
+        -: 1520:struct require_member<
+        -: 1521:  execution::detail::blocking::adapter<Executor>,
+        -: 1522:  execution::detail::blocking::possibly_t<I>,
+        -: 1523:  typename enable_if<
+        -: 1524:    can_require<
+        -: 1525:      const Executor&,
+        -: 1526:      execution::detail::blocking::possibly_t<I>
+        -: 1527:    >::value
+        -: 1528:  >::type>
+        -: 1529:{
+        -: 1530:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_valid = true);
+        -: 1531:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_noexcept =
+        -: 1532:      (is_nothrow_require<const Executor&,
+        -: 1533:        execution::detail::blocking::possibly_t<I> >::value));
+        -: 1534:  typedef typename require_result<const Executor&,
+        -: 1535:    execution::detail::blocking::possibly_t<I> >::type result_type;
+        -: 1536:};
+        -: 1537:
+        -: 1538:template <typename Executor, int I>
+        -: 1539:struct require_member<
+        -: 1540:  execution::detail::blocking::adapter<Executor>,
+        -: 1541:  execution::detail::blocking::never_t<I>,
+        -: 1542:  typename enable_if<
+        -: 1543:    can_require<
+        -: 1544:      const Executor&,
+        -: 1545:      execution::detail::blocking::never_t<I>
+        -: 1546:    >::value
+        -: 1547:  >::type>
+        -: 1548:{
+        -: 1549:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_valid = true);
+        -: 1550:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_noexcept =
+        -: 1551:      (is_nothrow_require<const Executor&,
+        -: 1552:        execution::detail::blocking::never_t<I> >::value));
+        -: 1553:  typedef typename require_result<const Executor&,
+        -: 1554:    execution::detail::blocking::never_t<I> >::type result_type;
+        -: 1555:};
+        -: 1556:
+        -: 1557:template <typename Executor, typename Property>
+        -: 1558:struct require_member<
+        -: 1559:  execution::detail::blocking::adapter<Executor>, Property,
+        -: 1560:  typename enable_if<
+        -: 1561:    can_require<const Executor&, Property>::value
+        -: 1562:  >::type>
+        -: 1563:{
+        -: 1564:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_valid = true);
+        -: 1565:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_noexcept =
+        -: 1566:      (is_nothrow_require<Executor, Property>::value));
+        -: 1567:  typedef execution::detail::blocking::adapter<typename decay<
+        -: 1568:    typename require_result<Executor, Property>::type
+        -: 1569:      >::type> result_type;
+        -: 1570:};
+        -: 1571:
+        -: 1572:#endif // !defined(BOOST_ASIO_HAS_DEDUCED_REQUIRE_MEMBER_TRAIT)
+        -: 1573:
+        -: 1574:#if !defined(BOOST_ASIO_HAS_DEDUCED_PREFER_MEMBER_TRAIT)
+        -: 1575:
+        -: 1576:template <typename Executor, typename Property>
+        -: 1577:struct prefer_member<
+        -: 1578:  execution::detail::blocking::adapter<Executor>, Property,
+        -: 1579:  typename enable_if<
+        -: 1580:    can_prefer<const Executor&, Property>::value
+        -: 1581:  >::type>
+        -: 1582:{
+        -: 1583:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_valid = true);
+        -: 1584:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_noexcept =
+        -: 1585:      (is_nothrow_prefer<Executor, Property>::value));
+        -: 1586:  typedef execution::detail::blocking::adapter<typename decay<
+        -: 1587:    typename prefer_result<Executor, Property>::type
+        -: 1588:      >::type> result_type;
+        -: 1589:};
+        -: 1590:
+        -: 1591:#endif // !defined(BOOST_ASIO_HAS_DEDUCED_PREFER_MEMBER_TRAIT)
+        -: 1592:
+        -: 1593:} // namespace traits
+        -: 1594:
+        -: 1595:#endif // defined(GENERATING_DOCUMENTATION)
+        -: 1596:
+        -: 1597:} // namespace asio
+        -: 1598:} // namespace boost
+        -: 1599:
+        -: 1600:#include <boost/asio/detail/pop_options.hpp>
+        -: 1601:
+        -: 1602:#endif // BOOST_ASIO_EXECUTION_BLOCKING_HPP

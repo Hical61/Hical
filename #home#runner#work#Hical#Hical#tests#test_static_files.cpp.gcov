@@ -1,0 +1,2502 @@
+        -:    0:Source:/home/runner/work/Hical/Hical/tests/test_static_files.cpp
+        -:    1:#include "core/HttpRequest.h"
+        -:    2:#include "core/HttpResponse.h"
+        -:    3:#include "core/StaticFiles.h"
+        -:    4:#include <boost/asio.hpp>
+        -:    5:#include <boost/asio/use_future.hpp>
+        -:    6:#include <filesystem>
+        -:    7:#include <fstream>
+        -:    8:#include <gtest/gtest.h>
+        -:    9:#include <random>
+        -:   10:#include <string>
+        -:   11:
+        -:   12:using namespace hical;
+        -:   13:namespace fs = std::filesystem;
+        -:   14:
+        -:   15:// ============ 协程测试辅助：在 io_context 中运行协程并返回结果 ============
+        -:   16:
+        -:   17:template <typename T>
+function _Z12runAwaitableIN5hical12HttpResponseEET_N5boost4asio9awaitableIS2_NS4_15any_io_executorEEE called 16 returned 100% blocks executed 65%
+       16:   18:T runAwaitable(boost::asio::awaitable<T> aw)
+        -:   19:{
+       16:   20:	boost::asio::io_context ioc;
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       16:   21:	auto fut = boost::asio::co_spawn(ioc, std::move(aw), boost::asio::use_future);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+call    6 never executed
+       16:   22:	ioc.run();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       32:   23:	return fut.get(); // 重新抛出协程内的异常
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       16:   24:}
+call    0 returned 100%
+call    1 returned 100%
+call    2 never executed
+call    3 never executed
+        -:   25:
+        -:   26:// ============ 测试辅助：创建临时目录 ============
+        -:   27:
+function _ZL15uniqueDirSuffixv called 14 returned 100% blocks executed 77%
+       14:   28:static std::string uniqueDirSuffix()
+        -:   29:{
+       14:   30:	thread_local std::mt19937_64 rng(std::random_device {}());
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+call    8 returned 100%
+branch  9 taken 100% (fallthrough)
+branch 10 taken 0% (throw)
+call   11 returned 100%
+call   12 never executed
+       14:   31:	std::uniform_int_distribution<uint64_t> dist;
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       14:   32:	std::ostringstream oss;
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       14:   33:	oss << std::hex << dist(rng);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+       28:   34:	return oss.str();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       14:   35:}
+call    0 returned 100%
+call    1 never executed
+        -:   36:
+        -:   37:class StaticFilesTest : public ::testing::Test
+        -:   38:{
+        -:   39:protected:
+        -:   40:	fs::path tmpDir;
+        -:   41:
+function _ZN15StaticFilesTest5SetUpEv called 14 returned 100% blocks executed 48%
+       14:   42:	void SetUp() override
+        -:   43:	{
+        -:   44:		// 使用唯一后缀避免并行测试进程冲突
+       14:   45:		tmpDir = fs::temp_directory_path() / ("hical_static_test_" + uniqueDirSuffix());
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+call    9 returned 100%
+branch 10 taken 100% (fallthrough)
+branch 11 taken 0% (throw)
+call   12 returned 100%
+branch 13 taken 100% (fallthrough)
+branch 14 taken 0% (throw)
+call   15 returned 100%
+call   16 returned 100%
+call   17 returned 100%
+call   18 returned 100%
+call   19 returned 100%
+call   20 returned 100%
+call   21 never executed
+call   22 never executed
+call   23 never executed
+call   24 never executed
+call   25 never executed
+       14:   46:		fs::create_directories(tmpDir);
+call    0 returned 100%
+        -:   47:
+        -:   48:		// 创建测试文件
+       56:   49:		writeFile("index.html", "<html><body>Hello</body></html>");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+call    9 returned 100%
+call   10 returned 100%
+call   11 never executed
+call   12 never executed
+call   13 never executed
+       56:   50:		writeFile("style.css", "body { color: red; }");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+call    9 returned 100%
+call   10 returned 100%
+call   11 never executed
+call   12 never executed
+call   13 never executed
+       56:   51:		writeFile("app.js", "console.log('hi');");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+call    9 returned 100%
+call   10 returned 100%
+call   11 never executed
+call   12 never executed
+call   13 never executed
+       56:   52:		writeFile("data.json", "{\"key\": \"value\"}");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+call    9 returned 100%
+call   10 returned 100%
+call   11 never executed
+call   12 never executed
+call   13 never executed
+       42:   53:		writeFile("image.png", "\x89PNG\r\n");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+call    9 returned 100%
+call   10 returned 100%
+call   11 never executed
+call   12 never executed
+call   13 never executed
+        -:   54:
+        -:   55:		// 创建子目录
+       14:   56:		fs::create_directories(tmpDir / "sub");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+call    9 returned 100%
+call   10 returned 100%
+call   11 never executed
+call   12 never executed
+call   13 never executed
+       56:   57:		writeFile("sub/page.html", "<p>subdir</p>");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+call    9 returned 100%
+call   10 returned 100%
+call   11 never executed
+call   12 never executed
+call   13 never executed
+       42:   58:		writeFile("sub/index.html", "<p>sub index</p>");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+call    9 returned 100%
+call   10 returned 100%
+call   11 never executed
+call   12 never executed
+       14:   59:	}
+        -:   60:
+function _ZN15StaticFilesTest8TearDownEv called 14 returned 100% blocks executed 100%
+       14:   61:	void TearDown() override
+        -:   62:	{
+       14:   63:		fs::remove_all(tmpDir);
+call    0 returned 100%
+       14:   64:	}
+        -:   65:
+function _ZN15StaticFilesTest9writeFileERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEES7_ called 100 returned 100% blocks executed 53%
+      100:   66:	void writeFile(const std::string& name, const std::string& content)
+        -:   67:	{
+      100:   68:		std::ofstream f(tmpDir / name, std::ios::binary);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+call    9 returned 100%
+call   10 returned 100%
+call   11 never executed
+call   12 never executed
+      100:   69:		f << content;
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+      100:   70:	}
+call    0 returned 100%
+call    1 never executed
+        -:   71:
+function _ZN15StaticFilesTest11makeRequestERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEE called 16 returned 100% blocks executed 86%
+       16:   72:	HttpRequest makeRequest(const std::string& path)
+        -:   73:	{
+       16:   74:		HttpRequest req;
+call    0 returned 100%
+       16:   75:		req.setMethod(HttpMethod::hGet);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       16:   76:		req.setTarget(path);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       16:   77:		return req;
+    =====:   78:	}
+call    0 never executed
+        -:   79:
+function _ZN15StaticFilesTest6invokeERKSt8functionIFN5boost4asio9awaitableIN5hical12HttpResponseENS2_15any_io_executorEEERKNS4_11HttpRequestEEESA_ called 16 returned 100% blocks executed 78%
+       16:   80:	HttpResponse invoke(const std::function<Awaitable<HttpResponse>(const HttpRequest&)>& handler,
+        -:   81:						const HttpRequest& req)
+        -:   82:	{
+       16:   83:		return runAwaitable(handler(req));
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+        -:   84:	}
+        -:   85:};
+        -:   86:
+        -:   87:// ============ MIME 类型测试 ============
+        -:   88:
+        4:   89:TEST(MimeTypeTest, CommonTypes)
+        -:   90:{
+       2*:   91:	EXPECT_EQ(detail::mimeType(".html"), "text/html; charset=utf-8");
+       2*:   92:	EXPECT_EQ(detail::mimeType(".css"), "text/css; charset=utf-8");
+       2*:   93:	EXPECT_EQ(detail::mimeType(".js"), "application/javascript; charset=utf-8");
+       2*:   94:	EXPECT_EQ(detail::mimeType(".json"), "application/json; charset=utf-8");
+       2*:   95:	EXPECT_EQ(detail::mimeType(".png"), "image/png");
+       2*:   96:	EXPECT_EQ(detail::mimeType(".jpg"), "image/jpeg");
+       2*:   97:	EXPECT_EQ(detail::mimeType(".svg"), "image/svg+xml");
+       2*:   98:	EXPECT_EQ(detail::mimeType(".unknown"), "application/octet-stream");
+        1:   99:}
+------------------
+_ZN29MimeTypeTest_CommonTypes_TestC2Ev:
+function _ZN29MimeTypeTest_CommonTypes_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:   89:TEST(MimeTypeTest, CommonTypes)
+call    0 returned 100%
+------------------
+_ZN29MimeTypeTest_CommonTypes_TestD0Ev:
+function _ZN29MimeTypeTest_CommonTypes_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:   89:TEST(MimeTypeTest, CommonTypes)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN29MimeTypeTest_CommonTypes_TestD2Ev:
+function _ZN29MimeTypeTest_CommonTypes_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:   89:TEST(MimeTypeTest, CommonTypes)
+call    0 returned 100%
+------------------
+_ZN29MimeTypeTest_CommonTypes_Test8TestBodyEv:
+function _ZN29MimeTypeTest_CommonTypes_Test8TestBodyEv called 1 returned 100% blocks executed 31%
+        1:   89:TEST(MimeTypeTest, CommonTypes)
+        -:   90:{
+       2*:   91:	EXPECT_EQ(detail::mimeType(".html"), "text/html; charset=utf-8");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+call    9 returned 100%
+call   10 returned 100%
+call   11 returned 100%
+branch 12 taken 0% (fallthrough)
+branch 13 taken 100%
+call   14 never executed
+branch 15 never executed (fallthrough)
+branch 16 never executed (throw)
+call   17 never executed
+call   18 never executed
+branch 19 never executed (fallthrough)
+branch 20 never executed (throw)
+call   21 never executed
+branch 22 never executed (fallthrough)
+branch 23 never executed (throw)
+call   24 never executed
+call   25 never executed
+call   26 returned 100%
+call   27 never executed
+call   28 never executed
+call   29 never executed
+call   30 never executed
+call   31 never executed
+       2*:   92:	EXPECT_EQ(detail::mimeType(".css"), "text/css; charset=utf-8");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+call    9 returned 100%
+call   10 returned 100%
+call   11 returned 100%
+branch 12 taken 0% (fallthrough)
+branch 13 taken 100%
+call   14 never executed
+branch 15 never executed (fallthrough)
+branch 16 never executed (throw)
+call   17 never executed
+call   18 never executed
+branch 19 never executed (fallthrough)
+branch 20 never executed (throw)
+call   21 never executed
+branch 22 never executed (fallthrough)
+branch 23 never executed (throw)
+call   24 never executed
+call   25 never executed
+call   26 returned 100%
+call   27 never executed
+call   28 never executed
+call   29 never executed
+call   30 never executed
+call   31 never executed
+       2*:   93:	EXPECT_EQ(detail::mimeType(".js"), "application/javascript; charset=utf-8");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+call    9 returned 100%
+call   10 returned 100%
+call   11 returned 100%
+branch 12 taken 0% (fallthrough)
+branch 13 taken 100%
+call   14 never executed
+branch 15 never executed (fallthrough)
+branch 16 never executed (throw)
+call   17 never executed
+call   18 never executed
+branch 19 never executed (fallthrough)
+branch 20 never executed (throw)
+call   21 never executed
+branch 22 never executed (fallthrough)
+branch 23 never executed (throw)
+call   24 never executed
+call   25 never executed
+call   26 returned 100%
+call   27 never executed
+call   28 never executed
+call   29 never executed
+call   30 never executed
+call   31 never executed
+       2*:   94:	EXPECT_EQ(detail::mimeType(".json"), "application/json; charset=utf-8");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+call    9 returned 100%
+call   10 returned 100%
+call   11 returned 100%
+branch 12 taken 0% (fallthrough)
+branch 13 taken 100%
+call   14 never executed
+branch 15 never executed (fallthrough)
+branch 16 never executed (throw)
+call   17 never executed
+call   18 never executed
+branch 19 never executed (fallthrough)
+branch 20 never executed (throw)
+call   21 never executed
+branch 22 never executed (fallthrough)
+branch 23 never executed (throw)
+call   24 never executed
+call   25 never executed
+call   26 returned 100%
+call   27 never executed
+call   28 never executed
+call   29 never executed
+call   30 never executed
+call   31 never executed
+       2*:   95:	EXPECT_EQ(detail::mimeType(".png"), "image/png");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+call    9 returned 100%
+call   10 returned 100%
+call   11 returned 100%
+branch 12 taken 0% (fallthrough)
+branch 13 taken 100%
+call   14 never executed
+branch 15 never executed (fallthrough)
+branch 16 never executed (throw)
+call   17 never executed
+call   18 never executed
+branch 19 never executed (fallthrough)
+branch 20 never executed (throw)
+call   21 never executed
+branch 22 never executed (fallthrough)
+branch 23 never executed (throw)
+call   24 never executed
+call   25 never executed
+call   26 returned 100%
+call   27 never executed
+call   28 never executed
+call   29 never executed
+call   30 never executed
+call   31 never executed
+       2*:   96:	EXPECT_EQ(detail::mimeType(".jpg"), "image/jpeg");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+call    9 returned 100%
+call   10 returned 100%
+call   11 returned 100%
+branch 12 taken 0% (fallthrough)
+branch 13 taken 100%
+call   14 never executed
+branch 15 never executed (fallthrough)
+branch 16 never executed (throw)
+call   17 never executed
+call   18 never executed
+branch 19 never executed (fallthrough)
+branch 20 never executed (throw)
+call   21 never executed
+branch 22 never executed (fallthrough)
+branch 23 never executed (throw)
+call   24 never executed
+call   25 never executed
+call   26 returned 100%
+call   27 never executed
+call   28 never executed
+call   29 never executed
+call   30 never executed
+call   31 never executed
+       2*:   97:	EXPECT_EQ(detail::mimeType(".svg"), "image/svg+xml");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+call    9 returned 100%
+call   10 returned 100%
+call   11 returned 100%
+branch 12 taken 0% (fallthrough)
+branch 13 taken 100%
+call   14 never executed
+branch 15 never executed (fallthrough)
+branch 16 never executed (throw)
+call   17 never executed
+call   18 never executed
+branch 19 never executed (fallthrough)
+branch 20 never executed (throw)
+call   21 never executed
+branch 22 never executed (fallthrough)
+branch 23 never executed (throw)
+call   24 never executed
+call   25 never executed
+call   26 returned 100%
+call   27 never executed
+call   28 never executed
+call   29 never executed
+call   30 never executed
+call   31 never executed
+       2*:   98:	EXPECT_EQ(detail::mimeType(".unknown"), "application/octet-stream");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+call    9 returned 100%
+call   10 returned 100%
+call   11 returned 100%
+branch 12 taken 0% (fallthrough)
+branch 13 taken 100%
+call   14 never executed
+branch 15 never executed (fallthrough)
+branch 16 never executed (throw)
+call   17 never executed
+call   18 never executed
+branch 19 never executed (fallthrough)
+branch 20 never executed (throw)
+call   21 never executed
+branch 22 never executed (fallthrough)
+branch 23 never executed (throw)
+call   24 never executed
+call   25 never executed
+call   26 returned 100%
+call   27 never executed
+call   28 never executed
+call   29 never executed
+call   30 never executed
+call   31 never executed
+        1:   99:}
+------------------
+        -:  100:
+        -:  101:// ============ serveStatic 功能测试 ============
+        -:  102:
+        4:  103:TEST_F(StaticFilesTest, ServeHtmlFile)
+        -:  104:{
+        1:  105:	auto handler = serveStatic(tmpDir.string(), "/static/");
+        2:  106:	auto req = makeRequest("/static/index.html");
+        1:  107:	auto res = invoke(handler, req);
+        -:  108:
+       1*:  109:	EXPECT_EQ(static_cast<int>(res.statusCode()), 200);
+       1*:  110:	EXPECT_NE(res.body().find("Hello"), std::string::npos);
+       1*:  111:	EXPECT_NE(res.header("Content-Type").find("text/html"), std::string::npos);
+        1:  112:}
+------------------
+_ZN34StaticFilesTest_ServeHtmlFile_TestC2Ev:
+function _ZN34StaticFilesTest_ServeHtmlFile_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:  103:TEST_F(StaticFilesTest, ServeHtmlFile)
+call    0 returned 100%
+------------------
+_ZN34StaticFilesTest_ServeHtmlFile_TestD0Ev:
+function _ZN34StaticFilesTest_ServeHtmlFile_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:  103:TEST_F(StaticFilesTest, ServeHtmlFile)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN34StaticFilesTest_ServeHtmlFile_TestD2Ev:
+function _ZN34StaticFilesTest_ServeHtmlFile_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:  103:TEST_F(StaticFilesTest, ServeHtmlFile)
+call    0 returned 100%
+------------------
+_ZN34StaticFilesTest_ServeHtmlFile_Test8TestBodyEv:
+function _ZN34StaticFilesTest_ServeHtmlFile_Test8TestBodyEv called 1 returned 100% blocks executed 34%
+        1:  103:TEST_F(StaticFilesTest, ServeHtmlFile)
+        -:  104:{
+        1:  105:	auto handler = serveStatic(tmpDir.string(), "/static/");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+call    9 returned 100%
+call   10 returned 100%
+call   11 never executed
+call   12 never executed
+        2:  106:	auto req = makeRequest("/static/index.html");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+        1:  107:	auto res = invoke(handler, req);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  108:
+       1*:  109:	EXPECT_EQ(static_cast<int>(res.statusCode()), 200);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 0% (fallthrough)
+branch  8 taken 100%
+call    9 never executed
+branch 10 never executed (fallthrough)
+branch 11 never executed (throw)
+call   12 never executed
+call   13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed (throw)
+call   16 never executed
+branch 17 never executed (fallthrough)
+branch 18 never executed (throw)
+call   19 never executed
+call   20 never executed
+call   21 returned 100%
+call   22 never executed
+call   23 never executed
+call   24 never executed
+       1*:  110:	EXPECT_NE(res.body().find("Hello"), std::string::npos);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+call    7 returned 100%
+branch  8 taken 0% (fallthrough)
+branch  9 taken 100%
+call   10 never executed
+branch 11 never executed (fallthrough)
+branch 12 never executed (throw)
+call   13 never executed
+call   14 never executed
+branch 15 never executed (fallthrough)
+branch 16 never executed (throw)
+call   17 never executed
+branch 18 never executed (fallthrough)
+branch 19 never executed (throw)
+call   20 never executed
+call   21 never executed
+call   22 returned 100%
+call   23 never executed
+call   24 never executed
+call   25 never executed
+       1*:  111:	EXPECT_NE(res.header("Content-Type").find("text/html"), std::string::npos);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+call    8 returned 100%
+branch  9 taken 0% (fallthrough)
+branch 10 taken 100%
+call   11 never executed
+branch 12 never executed (fallthrough)
+branch 13 never executed (throw)
+call   14 never executed
+call   15 never executed
+branch 16 never executed (fallthrough)
+branch 17 never executed (throw)
+call   18 never executed
+branch 19 never executed (fallthrough)
+branch 20 never executed (throw)
+call   21 never executed
+call   22 never executed
+call   23 returned 100%
+call   24 never executed
+call   25 never executed
+call   26 never executed
+        1:  112:}
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 never executed
+call    4 never executed
+call    5 never executed
+------------------
+        -:  113:
+        4:  114:TEST_F(StaticFilesTest, ServeCssFile)
+        -:  115:{
+        1:  116:	auto handler = serveStatic(tmpDir.string(), "/static/");
+        2:  117:	auto req = makeRequest("/static/style.css");
+        1:  118:	auto res = invoke(handler, req);
+        -:  119:
+       1*:  120:	EXPECT_EQ(static_cast<int>(res.statusCode()), 200);
+       1*:  121:	EXPECT_NE(res.header("Content-Type").find("text/css"), std::string::npos);
+       1*:  122:	EXPECT_EQ(res.body(), "body { color: red; }");
+        1:  123:}
+------------------
+_ZN33StaticFilesTest_ServeCssFile_TestC2Ev:
+function _ZN33StaticFilesTest_ServeCssFile_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:  114:TEST_F(StaticFilesTest, ServeCssFile)
+call    0 returned 100%
+------------------
+_ZN33StaticFilesTest_ServeCssFile_TestD0Ev:
+function _ZN33StaticFilesTest_ServeCssFile_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:  114:TEST_F(StaticFilesTest, ServeCssFile)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN33StaticFilesTest_ServeCssFile_TestD2Ev:
+function _ZN33StaticFilesTest_ServeCssFile_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:  114:TEST_F(StaticFilesTest, ServeCssFile)
+call    0 returned 100%
+------------------
+_ZN33StaticFilesTest_ServeCssFile_Test8TestBodyEv:
+function _ZN33StaticFilesTest_ServeCssFile_Test8TestBodyEv called 1 returned 100% blocks executed 33%
+        1:  114:TEST_F(StaticFilesTest, ServeCssFile)
+        -:  115:{
+        1:  116:	auto handler = serveStatic(tmpDir.string(), "/static/");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+call    9 returned 100%
+call   10 returned 100%
+call   11 never executed
+call   12 never executed
+        2:  117:	auto req = makeRequest("/static/style.css");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+        1:  118:	auto res = invoke(handler, req);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  119:
+       1*:  120:	EXPECT_EQ(static_cast<int>(res.statusCode()), 200);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 0% (fallthrough)
+branch  8 taken 100%
+call    9 never executed
+branch 10 never executed (fallthrough)
+branch 11 never executed (throw)
+call   12 never executed
+call   13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed (throw)
+call   16 never executed
+branch 17 never executed (fallthrough)
+branch 18 never executed (throw)
+call   19 never executed
+call   20 never executed
+call   21 returned 100%
+call   22 never executed
+call   23 never executed
+call   24 never executed
+       1*:  121:	EXPECT_NE(res.header("Content-Type").find("text/css"), std::string::npos);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+call    8 returned 100%
+branch  9 taken 0% (fallthrough)
+branch 10 taken 100%
+call   11 never executed
+branch 12 never executed (fallthrough)
+branch 13 never executed (throw)
+call   14 never executed
+call   15 never executed
+branch 16 never executed (fallthrough)
+branch 17 never executed (throw)
+call   18 never executed
+branch 19 never executed (fallthrough)
+branch 20 never executed (throw)
+call   21 never executed
+call   22 never executed
+call   23 returned 100%
+call   24 never executed
+call   25 never executed
+call   26 never executed
+       1*:  122:	EXPECT_EQ(res.body(), "body { color: red; }");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 0% (fallthrough)
+branch  8 taken 100%
+call    9 never executed
+branch 10 never executed (fallthrough)
+branch 11 never executed (throw)
+call   12 never executed
+call   13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed (throw)
+call   16 never executed
+branch 17 never executed (fallthrough)
+branch 18 never executed (throw)
+call   19 never executed
+call   20 never executed
+call   21 returned 100%
+call   22 never executed
+call   23 never executed
+call   24 never executed
+        1:  123:}
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 never executed
+call    4 never executed
+call    5 never executed
+------------------
+        -:  124:
+        4:  125:TEST_F(StaticFilesTest, ServeJsFile)
+        -:  126:{
+        1:  127:	auto handler = serveStatic(tmpDir.string(), "/static/");
+        2:  128:	auto req = makeRequest("/static/app.js");
+        1:  129:	auto res = invoke(handler, req);
+        -:  130:
+       1*:  131:	EXPECT_EQ(static_cast<int>(res.statusCode()), 200);
+       1*:  132:	EXPECT_NE(res.header("Content-Type").find("javascript"), std::string::npos);
+        1:  133:}
+------------------
+_ZN32StaticFilesTest_ServeJsFile_TestC2Ev:
+function _ZN32StaticFilesTest_ServeJsFile_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:  125:TEST_F(StaticFilesTest, ServeJsFile)
+call    0 returned 100%
+------------------
+_ZN32StaticFilesTest_ServeJsFile_TestD0Ev:
+function _ZN32StaticFilesTest_ServeJsFile_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:  125:TEST_F(StaticFilesTest, ServeJsFile)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN32StaticFilesTest_ServeJsFile_TestD2Ev:
+function _ZN32StaticFilesTest_ServeJsFile_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:  125:TEST_F(StaticFilesTest, ServeJsFile)
+call    0 returned 100%
+------------------
+_ZN32StaticFilesTest_ServeJsFile_Test8TestBodyEv:
+function _ZN32StaticFilesTest_ServeJsFile_Test8TestBodyEv called 1 returned 100% blocks executed 36%
+        1:  125:TEST_F(StaticFilesTest, ServeJsFile)
+        -:  126:{
+        1:  127:	auto handler = serveStatic(tmpDir.string(), "/static/");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+call    9 returned 100%
+call   10 returned 100%
+call   11 never executed
+call   12 never executed
+        2:  128:	auto req = makeRequest("/static/app.js");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+        1:  129:	auto res = invoke(handler, req);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  130:
+       1*:  131:	EXPECT_EQ(static_cast<int>(res.statusCode()), 200);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 0% (fallthrough)
+branch  8 taken 100%
+call    9 never executed
+branch 10 never executed (fallthrough)
+branch 11 never executed (throw)
+call   12 never executed
+call   13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed (throw)
+call   16 never executed
+branch 17 never executed (fallthrough)
+branch 18 never executed (throw)
+call   19 never executed
+call   20 never executed
+call   21 returned 100%
+call   22 never executed
+call   23 never executed
+call   24 never executed
+       1*:  132:	EXPECT_NE(res.header("Content-Type").find("javascript"), std::string::npos);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+call    8 returned 100%
+branch  9 taken 0% (fallthrough)
+branch 10 taken 100%
+call   11 never executed
+branch 12 never executed (fallthrough)
+branch 13 never executed (throw)
+call   14 never executed
+call   15 never executed
+branch 16 never executed (fallthrough)
+branch 17 never executed (throw)
+call   18 never executed
+branch 19 never executed (fallthrough)
+branch 20 never executed (throw)
+call   21 never executed
+call   22 never executed
+call   23 returned 100%
+call   24 never executed
+call   25 never executed
+call   26 never executed
+        1:  133:}
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 never executed
+call    4 never executed
+call    5 never executed
+------------------
+        -:  134:
+        4:  135:TEST_F(StaticFilesTest, ServeJsonFile)
+        -:  136:{
+        1:  137:	auto handler = serveStatic(tmpDir.string(), "/static/");
+        2:  138:	auto req = makeRequest("/static/data.json");
+        1:  139:	auto res = invoke(handler, req);
+        -:  140:
+       1*:  141:	EXPECT_EQ(static_cast<int>(res.statusCode()), 200);
+       1*:  142:	EXPECT_NE(res.header("Content-Type").find("application/json"), std::string::npos);
+        1:  143:}
+------------------
+_ZN34StaticFilesTest_ServeJsonFile_TestC2Ev:
+function _ZN34StaticFilesTest_ServeJsonFile_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:  135:TEST_F(StaticFilesTest, ServeJsonFile)
+call    0 returned 100%
+------------------
+_ZN34StaticFilesTest_ServeJsonFile_TestD0Ev:
+function _ZN34StaticFilesTest_ServeJsonFile_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:  135:TEST_F(StaticFilesTest, ServeJsonFile)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN34StaticFilesTest_ServeJsonFile_TestD2Ev:
+function _ZN34StaticFilesTest_ServeJsonFile_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:  135:TEST_F(StaticFilesTest, ServeJsonFile)
+call    0 returned 100%
+------------------
+_ZN34StaticFilesTest_ServeJsonFile_Test8TestBodyEv:
+function _ZN34StaticFilesTest_ServeJsonFile_Test8TestBodyEv called 1 returned 100% blocks executed 36%
+        1:  135:TEST_F(StaticFilesTest, ServeJsonFile)
+        -:  136:{
+        1:  137:	auto handler = serveStatic(tmpDir.string(), "/static/");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+call    9 returned 100%
+call   10 returned 100%
+call   11 never executed
+call   12 never executed
+        2:  138:	auto req = makeRequest("/static/data.json");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+        1:  139:	auto res = invoke(handler, req);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  140:
+       1*:  141:	EXPECT_EQ(static_cast<int>(res.statusCode()), 200);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 0% (fallthrough)
+branch  8 taken 100%
+call    9 never executed
+branch 10 never executed (fallthrough)
+branch 11 never executed (throw)
+call   12 never executed
+call   13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed (throw)
+call   16 never executed
+branch 17 never executed (fallthrough)
+branch 18 never executed (throw)
+call   19 never executed
+call   20 never executed
+call   21 returned 100%
+call   22 never executed
+call   23 never executed
+call   24 never executed
+       1*:  142:	EXPECT_NE(res.header("Content-Type").find("application/json"), std::string::npos);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+call    8 returned 100%
+branch  9 taken 0% (fallthrough)
+branch 10 taken 100%
+call   11 never executed
+branch 12 never executed (fallthrough)
+branch 13 never executed (throw)
+call   14 never executed
+call   15 never executed
+branch 16 never executed (fallthrough)
+branch 17 never executed (throw)
+call   18 never executed
+branch 19 never executed (fallthrough)
+branch 20 never executed (throw)
+call   21 never executed
+call   22 never executed
+call   23 returned 100%
+call   24 never executed
+call   25 never executed
+call   26 never executed
+        1:  143:}
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 never executed
+call    4 never executed
+call    5 never executed
+------------------
+        -:  144:
+        4:  145:TEST_F(StaticFilesTest, FileNotFound)
+        -:  146:{
+        1:  147:	auto handler = serveStatic(tmpDir.string(), "/static/");
+        2:  148:	auto req = makeRequest("/static/nonexistent.html");
+        1:  149:	auto res = invoke(handler, req);
+        -:  150:
+       1*:  151:	EXPECT_EQ(static_cast<int>(res.statusCode()), 404);
+        1:  152:}
+------------------
+_ZN33StaticFilesTest_FileNotFound_TestC2Ev:
+function _ZN33StaticFilesTest_FileNotFound_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:  145:TEST_F(StaticFilesTest, FileNotFound)
+call    0 returned 100%
+------------------
+_ZN33StaticFilesTest_FileNotFound_TestD0Ev:
+function _ZN33StaticFilesTest_FileNotFound_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:  145:TEST_F(StaticFilesTest, FileNotFound)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN33StaticFilesTest_FileNotFound_TestD2Ev:
+function _ZN33StaticFilesTest_FileNotFound_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:  145:TEST_F(StaticFilesTest, FileNotFound)
+call    0 returned 100%
+------------------
+_ZN33StaticFilesTest_FileNotFound_Test8TestBodyEv:
+function _ZN33StaticFilesTest_FileNotFound_Test8TestBodyEv called 1 returned 100% blocks executed 39%
+        1:  145:TEST_F(StaticFilesTest, FileNotFound)
+        -:  146:{
+        1:  147:	auto handler = serveStatic(tmpDir.string(), "/static/");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+call    9 returned 100%
+call   10 returned 100%
+call   11 never executed
+call   12 never executed
+        2:  148:	auto req = makeRequest("/static/nonexistent.html");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+        1:  149:	auto res = invoke(handler, req);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  150:
+       1*:  151:	EXPECT_EQ(static_cast<int>(res.statusCode()), 404);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 0% (fallthrough)
+branch  8 taken 100%
+call    9 never executed
+branch 10 never executed (fallthrough)
+branch 11 never executed (throw)
+call   12 never executed
+call   13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed (throw)
+call   16 never executed
+branch 17 never executed (fallthrough)
+branch 18 never executed (throw)
+call   19 never executed
+call   20 never executed
+call   21 returned 100%
+call   22 never executed
+call   23 never executed
+call   24 never executed
+        1:  152:}
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 never executed
+call    4 never executed
+call    5 never executed
+------------------
+        -:  153:
+        4:  154:TEST_F(StaticFilesTest, DirectoryServesIndexHtml)
+        -:  155:{
+        1:  156:	auto handler = serveStatic(tmpDir.string(), "/static/");
+        -:  157:	// 访问 /static/sub/ 应返回 sub/index.html
+        3:  158:	auto req = makeRequest("/static/sub/");
+        3:  159:	req.setParam("path", "sub/");
+        1:  160:	auto res = invoke(handler, req);
+        -:  161:
+       1*:  162:	EXPECT_EQ(static_cast<int>(res.statusCode()), 200);
+       1*:  163:	EXPECT_NE(res.body().find("sub index"), std::string::npos);
+        1:  164:}
+------------------
+_ZN45StaticFilesTest_DirectoryServesIndexHtml_TestC2Ev:
+function _ZN45StaticFilesTest_DirectoryServesIndexHtml_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:  154:TEST_F(StaticFilesTest, DirectoryServesIndexHtml)
+call    0 returned 100%
+------------------
+_ZN45StaticFilesTest_DirectoryServesIndexHtml_TestD0Ev:
+function _ZN45StaticFilesTest_DirectoryServesIndexHtml_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:  154:TEST_F(StaticFilesTest, DirectoryServesIndexHtml)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN45StaticFilesTest_DirectoryServesIndexHtml_TestD2Ev:
+function _ZN45StaticFilesTest_DirectoryServesIndexHtml_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:  154:TEST_F(StaticFilesTest, DirectoryServesIndexHtml)
+call    0 returned 100%
+------------------
+_ZN45StaticFilesTest_DirectoryServesIndexHtml_Test8TestBodyEv:
+function _ZN45StaticFilesTest_DirectoryServesIndexHtml_Test8TestBodyEv called 1 returned 100% blocks executed 38%
+        1:  154:TEST_F(StaticFilesTest, DirectoryServesIndexHtml)
+        -:  155:{
+        1:  156:	auto handler = serveStatic(tmpDir.string(), "/static/");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+call    9 returned 100%
+call   10 returned 100%
+call   11 never executed
+call   12 never executed
+        -:  157:	// 访问 /static/sub/ 应返回 sub/index.html
+        3:  158:	auto req = makeRequest("/static/sub/");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+        3:  159:	req.setParam("path", "sub/");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+call    9 returned 100%
+call   10 returned 100%
+call   11 never executed
+call   12 never executed
+        1:  160:	auto res = invoke(handler, req);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  161:
+       1*:  162:	EXPECT_EQ(static_cast<int>(res.statusCode()), 200);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 0% (fallthrough)
+branch  8 taken 100%
+call    9 never executed
+branch 10 never executed (fallthrough)
+branch 11 never executed (throw)
+call   12 never executed
+call   13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed (throw)
+call   16 never executed
+branch 17 never executed (fallthrough)
+branch 18 never executed (throw)
+call   19 never executed
+call   20 never executed
+call   21 returned 100%
+call   22 never executed
+call   23 never executed
+call   24 never executed
+       1*:  163:	EXPECT_NE(res.body().find("sub index"), std::string::npos);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+call    7 returned 100%
+branch  8 taken 0% (fallthrough)
+branch  9 taken 100%
+call   10 never executed
+branch 11 never executed (fallthrough)
+branch 12 never executed (throw)
+call   13 never executed
+call   14 never executed
+branch 15 never executed (fallthrough)
+branch 16 never executed (throw)
+call   17 never executed
+branch 18 never executed (fallthrough)
+branch 19 never executed (throw)
+call   20 never executed
+call   21 never executed
+call   22 returned 100%
+call   23 never executed
+call   24 never executed
+call   25 never executed
+        1:  164:}
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 never executed
+call    4 never executed
+call    5 never executed
+------------------
+        -:  165:
+        4:  166:TEST_F(StaticFilesTest, SubdirectoryFile)
+        -:  167:{
+        1:  168:	auto handler = serveStatic(tmpDir.string(), "/static/");
+        2:  169:	auto req = makeRequest("/static/sub/page.html");
+        1:  170:	auto res = invoke(handler, req);
+        -:  171:
+       1*:  172:	EXPECT_EQ(static_cast<int>(res.statusCode()), 200);
+       1*:  173:	EXPECT_NE(res.body().find("subdir"), std::string::npos);
+        1:  174:}
+------------------
+_ZN37StaticFilesTest_SubdirectoryFile_TestC2Ev:
+function _ZN37StaticFilesTest_SubdirectoryFile_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:  166:TEST_F(StaticFilesTest, SubdirectoryFile)
+call    0 returned 100%
+------------------
+_ZN37StaticFilesTest_SubdirectoryFile_TestD0Ev:
+function _ZN37StaticFilesTest_SubdirectoryFile_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:  166:TEST_F(StaticFilesTest, SubdirectoryFile)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN37StaticFilesTest_SubdirectoryFile_TestD2Ev:
+function _ZN37StaticFilesTest_SubdirectoryFile_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:  166:TEST_F(StaticFilesTest, SubdirectoryFile)
+call    0 returned 100%
+------------------
+_ZN37StaticFilesTest_SubdirectoryFile_Test8TestBodyEv:
+function _ZN37StaticFilesTest_SubdirectoryFile_Test8TestBodyEv called 1 returned 100% blocks executed 36%
+        1:  166:TEST_F(StaticFilesTest, SubdirectoryFile)
+        -:  167:{
+        1:  168:	auto handler = serveStatic(tmpDir.string(), "/static/");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+call    9 returned 100%
+call   10 returned 100%
+call   11 never executed
+call   12 never executed
+        2:  169:	auto req = makeRequest("/static/sub/page.html");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+        1:  170:	auto res = invoke(handler, req);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  171:
+       1*:  172:	EXPECT_EQ(static_cast<int>(res.statusCode()), 200);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 0% (fallthrough)
+branch  8 taken 100%
+call    9 never executed
+branch 10 never executed (fallthrough)
+branch 11 never executed (throw)
+call   12 never executed
+call   13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed (throw)
+call   16 never executed
+branch 17 never executed (fallthrough)
+branch 18 never executed (throw)
+call   19 never executed
+call   20 never executed
+call   21 returned 100%
+call   22 never executed
+call   23 never executed
+call   24 never executed
+       1*:  173:	EXPECT_NE(res.body().find("subdir"), std::string::npos);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+call    7 returned 100%
+branch  8 taken 0% (fallthrough)
+branch  9 taken 100%
+call   10 never executed
+branch 11 never executed (fallthrough)
+branch 12 never executed (throw)
+call   13 never executed
+call   14 never executed
+branch 15 never executed (fallthrough)
+branch 16 never executed (throw)
+call   17 never executed
+branch 18 never executed (fallthrough)
+branch 19 never executed (throw)
+call   20 never executed
+call   21 never executed
+call   22 returned 100%
+call   23 never executed
+call   24 never executed
+call   25 never executed
+        1:  174:}
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 never executed
+call    4 never executed
+call    5 never executed
+------------------
+        -:  175:
+        4:  176:TEST_F(StaticFilesTest, ETagIsPresent)
+        -:  177:{
+        1:  178:	auto handler = serveStatic(tmpDir.string(), "/static/");
+        2:  179:	auto req = makeRequest("/static/index.html");
+        1:  180:	auto res = invoke(handler, req);
+        -:  181:
+       1*:  182:	EXPECT_FALSE(res.header("ETag").empty());
+        -:  183:	// ETag 应带引号（RFC 7232）
+        1:  184:	auto etag = std::string(res.header("ETag"));
+       1*:  185:	EXPECT_EQ(etag.front(), '"');
+       1*:  186:	EXPECT_EQ(etag.back(), '"');
+        1:  187:}
+------------------
+_ZN34StaticFilesTest_ETagIsPresent_TestC2Ev:
+function _ZN34StaticFilesTest_ETagIsPresent_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:  176:TEST_F(StaticFilesTest, ETagIsPresent)
+call    0 returned 100%
+------------------
+_ZN34StaticFilesTest_ETagIsPresent_TestD0Ev:
+function _ZN34StaticFilesTest_ETagIsPresent_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:  176:TEST_F(StaticFilesTest, ETagIsPresent)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN34StaticFilesTest_ETagIsPresent_TestD2Ev:
+function _ZN34StaticFilesTest_ETagIsPresent_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:  176:TEST_F(StaticFilesTest, ETagIsPresent)
+call    0 returned 100%
+------------------
+_ZN34StaticFilesTest_ETagIsPresent_Test8TestBodyEv:
+function _ZN34StaticFilesTest_ETagIsPresent_Test8TestBodyEv called 1 returned 100% blocks executed 34%
+        1:  176:TEST_F(StaticFilesTest, ETagIsPresent)
+        -:  177:{
+        1:  178:	auto handler = serveStatic(tmpDir.string(), "/static/");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+call    9 returned 100%
+call   10 returned 100%
+call   11 never executed
+call   12 never executed
+        2:  179:	auto req = makeRequest("/static/index.html");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+        1:  180:	auto res = invoke(handler, req);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  181:
+       1*:  182:	EXPECT_FALSE(res.header("ETag").empty());
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 returned 100%
+call    6 returned 100%
+branch  7 taken 0% (fallthrough)
+branch  8 taken 100%
+call    9 never executed
+branch 10 never executed (fallthrough)
+branch 11 never executed (throw)
+call   12 never executed
+branch 13 never executed (fallthrough)
+branch 14 never executed (throw)
+call   15 never executed
+call   16 never executed
+branch 17 never executed (fallthrough)
+branch 18 never executed (throw)
+call   19 never executed
+branch 20 never executed (fallthrough)
+branch 21 never executed (throw)
+call   22 never executed
+call   23 never executed
+call   24 never executed
+call   25 returned 100%
+call   26 never executed
+call   27 never executed
+call   28 never executed
+call   29 never executed
+        -:  183:	// ETag 应带引号（RFC 7232）
+        1:  184:	auto etag = std::string(res.header("ETag"));
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+       1*:  185:	EXPECT_EQ(etag.front(), '"');
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 0% (fallthrough)
+branch  6 taken 100%
+call    7 never executed
+branch  8 never executed (fallthrough)
+branch  9 never executed (throw)
+call   10 never executed
+call   11 never executed
+branch 12 never executed (fallthrough)
+branch 13 never executed (throw)
+call   14 never executed
+branch 15 never executed (fallthrough)
+branch 16 never executed (throw)
+call   17 never executed
+call   18 never executed
+call   19 returned 100%
+call   20 never executed
+call   21 never executed
+call   22 never executed
+       1*:  186:	EXPECT_EQ(etag.back(), '"');
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 0% (fallthrough)
+branch  6 taken 100%
+call    7 never executed
+branch  8 never executed (fallthrough)
+branch  9 never executed (throw)
+call   10 never executed
+call   11 never executed
+branch 12 never executed (fallthrough)
+branch 13 never executed (throw)
+call   14 never executed
+branch 15 never executed (fallthrough)
+branch 16 never executed (throw)
+call   17 never executed
+call   18 never executed
+call   19 returned 100%
+call   20 never executed
+call   21 never executed
+call   22 never executed
+        1:  187:}
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 never executed
+call    5 never executed
+call    6 never executed
+call    7 never executed
+------------------
+        -:  188:
+        4:  189:TEST_F(StaticFilesTest, NotModifiedWhenETagMatches)
+        -:  190:{
+        1:  191:	auto handler = serveStatic(tmpDir.string(), "/static/");
+        -:  192:
+        -:  193:	// 首次请求获取 ETag
+        2:  194:	auto req1 = makeRequest("/static/index.html");
+        1:  195:	auto res1 = invoke(handler, req1);
+       1*:  196:	EXPECT_EQ(static_cast<int>(res1.statusCode()), 200);
+        1:  197:	auto etag = std::string(res1.header("ETag"));
+        -:  198:
+        -:  199:	// 携带 If-None-Match 请求
+        3:  200:	auto req2 = makeRequest("/static/index.html");
+        1:  201:	req2.setHeader("If-None-Match", etag);
+        1:  202:	auto res2 = invoke(handler, req2);
+       1*:  203:	EXPECT_EQ(static_cast<int>(res2.statusCode()), 304);
+       1*:  204:	EXPECT_TRUE(res2.body().empty());
+        1:  205:}
+------------------
+_ZN47StaticFilesTest_NotModifiedWhenETagMatches_TestC2Ev:
+function _ZN47StaticFilesTest_NotModifiedWhenETagMatches_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:  189:TEST_F(StaticFilesTest, NotModifiedWhenETagMatches)
+call    0 returned 100%
+------------------
+_ZN47StaticFilesTest_NotModifiedWhenETagMatches_TestD0Ev:
+function _ZN47StaticFilesTest_NotModifiedWhenETagMatches_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:  189:TEST_F(StaticFilesTest, NotModifiedWhenETagMatches)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN47StaticFilesTest_NotModifiedWhenETagMatches_TestD2Ev:
+function _ZN47StaticFilesTest_NotModifiedWhenETagMatches_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:  189:TEST_F(StaticFilesTest, NotModifiedWhenETagMatches)
+call    0 returned 100%
+------------------
+_ZN47StaticFilesTest_NotModifiedWhenETagMatches_Test8TestBodyEv:
+function _ZN47StaticFilesTest_NotModifiedWhenETagMatches_Test8TestBodyEv called 1 returned 100% blocks executed 36%
+        1:  189:TEST_F(StaticFilesTest, NotModifiedWhenETagMatches)
+        -:  190:{
+        1:  191:	auto handler = serveStatic(tmpDir.string(), "/static/");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+call    9 returned 100%
+call   10 returned 100%
+call   11 never executed
+call   12 never executed
+        -:  192:
+        -:  193:	// 首次请求获取 ETag
+        2:  194:	auto req1 = makeRequest("/static/index.html");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+        1:  195:	auto res1 = invoke(handler, req1);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       1*:  196:	EXPECT_EQ(static_cast<int>(res1.statusCode()), 200);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 0% (fallthrough)
+branch  8 taken 100%
+call    9 never executed
+branch 10 never executed (fallthrough)
+branch 11 never executed (throw)
+call   12 never executed
+call   13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed (throw)
+call   16 never executed
+branch 17 never executed (fallthrough)
+branch 18 never executed (throw)
+call   19 never executed
+call   20 never executed
+call   21 returned 100%
+call   22 never executed
+call   23 never executed
+call   24 never executed
+        1:  197:	auto etag = std::string(res1.header("ETag"));
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+        -:  198:
+        -:  199:	// 携带 If-None-Match 请求
+        3:  200:	auto req2 = makeRequest("/static/index.html");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+        1:  201:	req2.setHeader("If-None-Match", etag);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+        1:  202:	auto res2 = invoke(handler, req2);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       1*:  203:	EXPECT_EQ(static_cast<int>(res2.statusCode()), 304);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 0% (fallthrough)
+branch  8 taken 100%
+call    9 never executed
+branch 10 never executed (fallthrough)
+branch 11 never executed (throw)
+call   12 never executed
+call   13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed (throw)
+call   16 never executed
+branch 17 never executed (fallthrough)
+branch 18 never executed (throw)
+call   19 never executed
+call   20 never executed
+call   21 returned 100%
+call   22 never executed
+call   23 never executed
+call   24 never executed
+       1*:  204:	EXPECT_TRUE(res2.body().empty());
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+call    5 returned 100%
+branch  6 taken 0% (fallthrough)
+branch  7 taken 100%
+call    8 never executed
+branch  9 never executed (fallthrough)
+branch 10 never executed (throw)
+call   11 never executed
+branch 12 never executed (fallthrough)
+branch 13 never executed (throw)
+call   14 never executed
+call   15 never executed
+branch 16 never executed (fallthrough)
+branch 17 never executed (throw)
+call   18 never executed
+branch 19 never executed (fallthrough)
+branch 20 never executed (throw)
+call   21 never executed
+call   22 never executed
+call   23 never executed
+call   24 returned 100%
+call   25 never executed
+call   26 never executed
+call   27 never executed
+call   28 never executed
+        1:  205:}
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+call    5 returned 100%
+call    6 never executed
+call    7 never executed
+call    8 never executed
+call    9 never executed
+call   10 never executed
+call   11 never executed
+------------------
+        -:  206:
+        4:  207:TEST_F(StaticFilesTest, PathTraversalPrevention)
+        -:  208:{
+        1:  209:	auto handler = serveStatic(tmpDir.string(), "/static/");
+        -:  210:	// 尝试路径穿越
+        2:  211:	auto req = makeRequest("/static/../../etc/passwd");
+        1:  212:	auto res = invoke(handler, req);
+        -:  213:
+        -:  214:	// 应返回 403 或 404，不能是 200
+       1*:  215:	EXPECT_NE(static_cast<int>(res.statusCode()), 200);
+        1:  216:}
+------------------
+_ZN44StaticFilesTest_PathTraversalPrevention_TestC2Ev:
+function _ZN44StaticFilesTest_PathTraversalPrevention_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:  207:TEST_F(StaticFilesTest, PathTraversalPrevention)
+call    0 returned 100%
+------------------
+_ZN44StaticFilesTest_PathTraversalPrevention_TestD0Ev:
+function _ZN44StaticFilesTest_PathTraversalPrevention_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:  207:TEST_F(StaticFilesTest, PathTraversalPrevention)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN44StaticFilesTest_PathTraversalPrevention_TestD2Ev:
+function _ZN44StaticFilesTest_PathTraversalPrevention_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:  207:TEST_F(StaticFilesTest, PathTraversalPrevention)
+call    0 returned 100%
+------------------
+_ZN44StaticFilesTest_PathTraversalPrevention_Test8TestBodyEv:
+function _ZN44StaticFilesTest_PathTraversalPrevention_Test8TestBodyEv called 1 returned 100% blocks executed 39%
+        1:  207:TEST_F(StaticFilesTest, PathTraversalPrevention)
+        -:  208:{
+        1:  209:	auto handler = serveStatic(tmpDir.string(), "/static/");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+call    9 returned 100%
+call   10 returned 100%
+call   11 never executed
+call   12 never executed
+        -:  210:	// 尝试路径穿越
+        2:  211:	auto req = makeRequest("/static/../../etc/passwd");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+        1:  212:	auto res = invoke(handler, req);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  213:
+        -:  214:	// 应返回 403 或 404，不能是 200
+       1*:  215:	EXPECT_NE(static_cast<int>(res.statusCode()), 200);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 0% (fallthrough)
+branch  8 taken 100%
+call    9 never executed
+branch 10 never executed (fallthrough)
+branch 11 never executed (throw)
+call   12 never executed
+call   13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed (throw)
+call   16 never executed
+branch 17 never executed (fallthrough)
+branch 18 never executed (throw)
+call   19 never executed
+call   20 never executed
+call   21 returned 100%
+call   22 never executed
+call   23 never executed
+call   24 never executed
+        1:  216:}
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 never executed
+call    4 never executed
+call    5 never executed
+------------------
+        -:  217:
+        4:  218:TEST_F(StaticFilesTest, InvalidRootDirReturns404)
+        -:  219:{
+        3:  220:	auto handler = serveStatic("/nonexistent/path/xyz", "/static/");
+        2:  221:	auto req = makeRequest("/static/any.html");
+        1:  222:	auto res = invoke(handler, req);
+        -:  223:
+       1*:  224:	EXPECT_EQ(static_cast<int>(res.statusCode()), 404);
+        1:  225:}
+------------------
+_ZN45StaticFilesTest_InvalidRootDirReturns404_TestC2Ev:
+function _ZN45StaticFilesTest_InvalidRootDirReturns404_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:  218:TEST_F(StaticFilesTest, InvalidRootDirReturns404)
+call    0 returned 100%
+------------------
+_ZN45StaticFilesTest_InvalidRootDirReturns404_TestD0Ev:
+function _ZN45StaticFilesTest_InvalidRootDirReturns404_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:  218:TEST_F(StaticFilesTest, InvalidRootDirReturns404)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN45StaticFilesTest_InvalidRootDirReturns404_TestD2Ev:
+function _ZN45StaticFilesTest_InvalidRootDirReturns404_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:  218:TEST_F(StaticFilesTest, InvalidRootDirReturns404)
+call    0 returned 100%
+------------------
+_ZN45StaticFilesTest_InvalidRootDirReturns404_Test8TestBodyEv:
+function _ZN45StaticFilesTest_InvalidRootDirReturns404_Test8TestBodyEv called 1 returned 100% blocks executed 40%
+        1:  218:TEST_F(StaticFilesTest, InvalidRootDirReturns404)
+        -:  219:{
+        3:  220:	auto handler = serveStatic("/nonexistent/path/xyz", "/static/");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+call    9 returned 100%
+call   10 returned 100%
+call   11 never executed
+call   12 never executed
+        2:  221:	auto req = makeRequest("/static/any.html");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+        1:  222:	auto res = invoke(handler, req);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  223:
+       1*:  224:	EXPECT_EQ(static_cast<int>(res.statusCode()), 404);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 0% (fallthrough)
+branch  8 taken 100%
+call    9 never executed
+branch 10 never executed (fallthrough)
+branch 11 never executed (throw)
+call   12 never executed
+call   13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed (throw)
+call   16 never executed
+branch 17 never executed (fallthrough)
+branch 18 never executed (throw)
+call   19 never executed
+call   20 never executed
+call   21 returned 100%
+call   22 never executed
+call   23 never executed
+call   24 never executed
+        1:  225:}
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 never executed
+call    4 never executed
+call    5 never executed
+------------------
+        -:  226:
+        -:  227:// ============ 大文件限制测试 ============
+        -:  228:
+        4:  229:TEST_F(StaticFilesTest, LargeFileReturns413)
+        -:  230:{
+        -:  231:	// 写一个 10 字节的文件，但把 maxFileSize 设为 5，触发 413
+        5:  232:	writeFile("big.txt", "0123456789");
+        1:  233:	auto handler = serveStatic(tmpDir.string(), "/static/", 5);
+        2:  234:	auto req = makeRequest("/static/big.txt");
+        1:  235:	auto res = invoke(handler, req);
+        -:  236:
+       1*:  237:	EXPECT_EQ(static_cast<int>(res.statusCode()), 413);
+        1:  238:}
+------------------
+_ZN40StaticFilesTest_LargeFileReturns413_TestC2Ev:
+function _ZN40StaticFilesTest_LargeFileReturns413_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:  229:TEST_F(StaticFilesTest, LargeFileReturns413)
+call    0 returned 100%
+------------------
+_ZN40StaticFilesTest_LargeFileReturns413_TestD0Ev:
+function _ZN40StaticFilesTest_LargeFileReturns413_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:  229:TEST_F(StaticFilesTest, LargeFileReturns413)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN40StaticFilesTest_LargeFileReturns413_TestD2Ev:
+function _ZN40StaticFilesTest_LargeFileReturns413_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:  229:TEST_F(StaticFilesTest, LargeFileReturns413)
+call    0 returned 100%
+------------------
+_ZN40StaticFilesTest_LargeFileReturns413_Test8TestBodyEv:
+function _ZN40StaticFilesTest_LargeFileReturns413_Test8TestBodyEv called 1 returned 100% blocks executed 41%
+        1:  229:TEST_F(StaticFilesTest, LargeFileReturns413)
+        -:  230:{
+        -:  231:	// 写一个 10 字节的文件，但把 maxFileSize 设为 5，触发 413
+        5:  232:	writeFile("big.txt", "0123456789");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+call    9 returned 100%
+call   10 returned 100%
+call   11 never executed
+call   12 never executed
+        1:  233:	auto handler = serveStatic(tmpDir.string(), "/static/", 5);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+call    9 returned 100%
+call   10 returned 100%
+call   11 never executed
+call   12 never executed
+        2:  234:	auto req = makeRequest("/static/big.txt");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+        1:  235:	auto res = invoke(handler, req);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  236:
+       1*:  237:	EXPECT_EQ(static_cast<int>(res.statusCode()), 413);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 0% (fallthrough)
+branch  8 taken 100%
+call    9 never executed
+branch 10 never executed (fallthrough)
+branch 11 never executed (throw)
+call   12 never executed
+call   13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed (throw)
+call   16 never executed
+branch 17 never executed (fallthrough)
+branch 18 never executed (throw)
+call   19 never executed
+call   20 never executed
+call   21 returned 100%
+call   22 never executed
+call   23 never executed
+call   24 never executed
+        1:  238:}
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 never executed
+call    4 never executed
+call    5 never executed
+------------------
+        -:  239:
+        4:  240:TEST_F(StaticFilesTest, FileWithinLimitServedNormally)
+        -:  241:{
+        5:  242:	writeFile("small.txt", "hi");
+        1:  243:	auto handler = serveStatic(tmpDir.string(), "/static/", 1024);
+        2:  244:	auto req = makeRequest("/static/small.txt");
+        1:  245:	auto res = invoke(handler, req);
+        -:  246:
+       1*:  247:	EXPECT_EQ(static_cast<int>(res.statusCode()), 200);
+       1*:  248:	EXPECT_EQ(res.body(), "hi");
+        1:  249:}
+------------------
+_ZN50StaticFilesTest_FileWithinLimitServedNormally_TestC2Ev:
+function _ZN50StaticFilesTest_FileWithinLimitServedNormally_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:  240:TEST_F(StaticFilesTest, FileWithinLimitServedNormally)
+call    0 returned 100%
+------------------
+_ZN50StaticFilesTest_FileWithinLimitServedNormally_TestD0Ev:
+function _ZN50StaticFilesTest_FileWithinLimitServedNormally_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:  240:TEST_F(StaticFilesTest, FileWithinLimitServedNormally)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN50StaticFilesTest_FileWithinLimitServedNormally_TestD2Ev:
+function _ZN50StaticFilesTest_FileWithinLimitServedNormally_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:  240:TEST_F(StaticFilesTest, FileWithinLimitServedNormally)
+call    0 returned 100%
+------------------
+_ZN50StaticFilesTest_FileWithinLimitServedNormally_Test8TestBodyEv:
+function _ZN50StaticFilesTest_FileWithinLimitServedNormally_Test8TestBodyEv called 1 returned 100% blocks executed 38%
+        1:  240:TEST_F(StaticFilesTest, FileWithinLimitServedNormally)
+        -:  241:{
+        5:  242:	writeFile("small.txt", "hi");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+call    9 returned 100%
+call   10 returned 100%
+call   11 never executed
+call   12 never executed
+        1:  243:	auto handler = serveStatic(tmpDir.string(), "/static/", 1024);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+call    9 returned 100%
+call   10 returned 100%
+call   11 never executed
+call   12 never executed
+        2:  244:	auto req = makeRequest("/static/small.txt");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+        1:  245:	auto res = invoke(handler, req);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  246:
+       1*:  247:	EXPECT_EQ(static_cast<int>(res.statusCode()), 200);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 0% (fallthrough)
+branch  8 taken 100%
+call    9 never executed
+branch 10 never executed (fallthrough)
+branch 11 never executed (throw)
+call   12 never executed
+call   13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed (throw)
+call   16 never executed
+branch 17 never executed (fallthrough)
+branch 18 never executed (throw)
+call   19 never executed
+call   20 never executed
+call   21 returned 100%
+call   22 never executed
+call   23 never executed
+call   24 never executed
+       1*:  248:	EXPECT_EQ(res.body(), "hi");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 0% (fallthrough)
+branch  8 taken 100%
+call    9 never executed
+branch 10 never executed (fallthrough)
+branch 11 never executed (throw)
+call   12 never executed
+call   13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed (throw)
+call   16 never executed
+branch 17 never executed (fallthrough)
+branch 18 never executed (throw)
+call   19 never executed
+call   20 never executed
+call   21 returned 100%
+call   22 never executed
+call   23 never executed
+call   24 never executed
+        1:  249:}
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 never executed
+call    4 never executed
+call    5 never executed
+------------------
+        -:  250:
+        -:  251:// ============ 304 响应 prepare_payload 测试 ============
+        -:  252:
+        4:  253:TEST_F(StaticFilesTest, NotModifiedResponseHasEmptyBody)
+        -:  254:{
+        1:  255:	auto handler = serveStatic(tmpDir.string(), "/static/");
+        -:  256:
+        2:  257:	auto req1 = makeRequest("/static/index.html");
+        1:  258:	auto res1 = invoke(handler, req1);
+        1:  259:	auto etag = std::string(res1.header("ETag"));
+        -:  260:
+        3:  261:	auto req2 = makeRequest("/static/index.html");
+        1:  262:	req2.setHeader("If-None-Match", etag);
+        1:  263:	auto res2 = invoke(handler, req2);
+        -:  264:
+       1*:  265:	EXPECT_EQ(static_cast<int>(res2.statusCode()), 304);
+       1*:  266:	EXPECT_TRUE(res2.body().empty());
+        -:  267:	// 304 应包含 ETag 头
+       1*:  268:	EXPECT_FALSE(res2.header("ETag").empty());
+        1:  269:}
+------------------
+_ZN52StaticFilesTest_NotModifiedResponseHasEmptyBody_TestC2Ev:
+function _ZN52StaticFilesTest_NotModifiedResponseHasEmptyBody_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:  253:TEST_F(StaticFilesTest, NotModifiedResponseHasEmptyBody)
+call    0 returned 100%
+------------------
+_ZN52StaticFilesTest_NotModifiedResponseHasEmptyBody_TestD0Ev:
+function _ZN52StaticFilesTest_NotModifiedResponseHasEmptyBody_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:  253:TEST_F(StaticFilesTest, NotModifiedResponseHasEmptyBody)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN52StaticFilesTest_NotModifiedResponseHasEmptyBody_TestD2Ev:
+function _ZN52StaticFilesTest_NotModifiedResponseHasEmptyBody_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:  253:TEST_F(StaticFilesTest, NotModifiedResponseHasEmptyBody)
+call    0 returned 100%
+------------------
+_ZN52StaticFilesTest_NotModifiedResponseHasEmptyBody_Test8TestBodyEv:
+function _ZN52StaticFilesTest_NotModifiedResponseHasEmptyBody_Test8TestBodyEv called 1 returned 100% blocks executed 36%
+        1:  253:TEST_F(StaticFilesTest, NotModifiedResponseHasEmptyBody)
+        -:  254:{
+        1:  255:	auto handler = serveStatic(tmpDir.string(), "/static/");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+call    9 returned 100%
+call   10 returned 100%
+call   11 never executed
+call   12 never executed
+        -:  256:
+        2:  257:	auto req1 = makeRequest("/static/index.html");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+        1:  258:	auto res1 = invoke(handler, req1);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  259:	auto etag = std::string(res1.header("ETag"));
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+        -:  260:
+        3:  261:	auto req2 = makeRequest("/static/index.html");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+        1:  262:	req2.setHeader("If-None-Match", etag);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+        1:  263:	auto res2 = invoke(handler, req2);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  264:
+       1*:  265:	EXPECT_EQ(static_cast<int>(res2.statusCode()), 304);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 0% (fallthrough)
+branch  8 taken 100%
+call    9 never executed
+branch 10 never executed (fallthrough)
+branch 11 never executed (throw)
+call   12 never executed
+call   13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed (throw)
+call   16 never executed
+branch 17 never executed (fallthrough)
+branch 18 never executed (throw)
+call   19 never executed
+call   20 never executed
+call   21 returned 100%
+call   22 never executed
+call   23 never executed
+call   24 never executed
+       1*:  266:	EXPECT_TRUE(res2.body().empty());
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+call    5 returned 100%
+branch  6 taken 0% (fallthrough)
+branch  7 taken 100%
+call    8 never executed
+branch  9 never executed (fallthrough)
+branch 10 never executed (throw)
+call   11 never executed
+branch 12 never executed (fallthrough)
+branch 13 never executed (throw)
+call   14 never executed
+call   15 never executed
+branch 16 never executed (fallthrough)
+branch 17 never executed (throw)
+call   18 never executed
+branch 19 never executed (fallthrough)
+branch 20 never executed (throw)
+call   21 never executed
+call   22 never executed
+call   23 never executed
+call   24 returned 100%
+call   25 never executed
+call   26 never executed
+call   27 never executed
+call   28 never executed
+        -:  267:	// 304 应包含 ETag 头
+       1*:  268:	EXPECT_FALSE(res2.header("ETag").empty());
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 returned 100%
+call    6 returned 100%
+branch  7 taken 0% (fallthrough)
+branch  8 taken 100%
+call    9 never executed
+branch 10 never executed (fallthrough)
+branch 11 never executed (throw)
+call   12 never executed
+branch 13 never executed (fallthrough)
+branch 14 never executed (throw)
+call   15 never executed
+call   16 never executed
+branch 17 never executed (fallthrough)
+branch 18 never executed (throw)
+call   19 never executed
+branch 20 never executed (fallthrough)
+branch 21 never executed (throw)
+call   22 never executed
+call   23 never executed
+call   24 never executed
+call   25 returned 100%
+call   26 never executed
+call   27 never executed
+call   28 never executed
+call   29 never executed
+        1:  269:}
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+call    5 returned 100%
+call    6 never executed
+call    7 never executed
+call    8 never executed
+call    9 never executed
+call   10 never executed
+call   11 never executed
+------------------

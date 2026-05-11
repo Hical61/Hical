@@ -1,0 +1,1143 @@
+        -:    0:Source:/usr/include/c++/14/mutex
+        -:    1:// <mutex> -*- C++ -*-
+        -:    2:
+        -:    3:// Copyright (C) 2003-2024 Free Software Foundation, Inc.
+        -:    4://
+        -:    5:// This file is part of the GNU ISO C++ Library.  This library is free
+        -:    6:// software; you can redistribute it and/or modify it under the
+        -:    7:// terms of the GNU General Public License as published by the
+        -:    8:// Free Software Foundation; either version 3, or (at your option)
+        -:    9:// any later version.
+        -:   10:
+        -:   11:// This library is distributed in the hope that it will be useful,
+        -:   12:// but WITHOUT ANY WARRANTY; without even the implied warranty of
+        -:   13:// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+        -:   14:// GNU General Public License for more details.
+        -:   15:
+        -:   16:// Under Section 7 of GPL version 3, you are granted additional
+        -:   17:// permissions described in the GCC Runtime Library Exception, version
+        -:   18:// 3.1, as published by the Free Software Foundation.
+        -:   19:
+        -:   20:// You should have received a copy of the GNU General Public License and
+        -:   21:// a copy of the GCC Runtime Library Exception along with this program;
+        -:   22:// see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
+        -:   23:// <http://www.gnu.org/licenses/>.
+        -:   24:
+        -:   25:/** @file include/mutex
+        -:   26: *  This is a Standard C++ Library header.
+        -:   27: */
+        -:   28:
+        -:   29:#ifndef _GLIBCXX_MUTEX
+        -:   30:#define _GLIBCXX_MUTEX 1
+        -:   31:
+        -:   32:#pragma GCC system_header
+        -:   33:
+        -:   34:#include <bits/requires_hosted.h> // concurrency
+        -:   35:
+        -:   36:#if __cplusplus < 201103L
+        -:   37:# include <bits/c++0x_warning.h>
+        -:   38:#else
+        -:   39:
+        -:   40:#include <tuple>	      // std::tuple
+        -:   41:#include <type_traits>        // is_same_v
+        -:   42:#include <errno.h>	      // EAGAIN, EDEADLK
+        -:   43:#include <bits/chrono.h>      // duration, time_point, is_clock_v
+        -:   44:#include <bits/functexcept.h> // __throw_system_error
+        -:   45:#include <bits/invoke.h>      // __invoke
+        -:   46:#include <bits/move.h>	      // std::forward
+        -:   47:#include <bits/std_mutex.h>
+        -:   48:#include <bits/unique_lock.h>
+        -:   49:#if ! _GTHREAD_USE_MUTEX_TIMEDLOCK
+        -:   50:# include <condition_variable>
+        -:   51:# include <thread>
+        -:   52:#endif
+        -:   53:#include <ext/atomicity.h>     // __gnu_cxx::__is_single_threaded
+        -:   54:
+        -:   55:#if defined _GLIBCXX_HAS_GTHREADS && ! defined _GLIBCXX_HAVE_TLS
+        -:   56:# include <bits/std_function.h>  // std::function
+        -:   57:#endif
+        -:   58:
+        -:   59:#define __glibcxx_want_scoped_lock
+        -:   60:#include <bits/version.h>
+        -:   61:
+        -:   62:namespace std _GLIBCXX_VISIBILITY(default)
+        -:   63:{
+        -:   64:_GLIBCXX_BEGIN_NAMESPACE_VERSION
+        -:   65:
+        -:   66:  /**
+        -:   67:   * @addtogroup mutexes
+        -:   68:   * @{
+        -:   69:   */
+        -:   70:
+        -:   71:#ifdef _GLIBCXX_HAS_GTHREADS
+        -:   72:  /// @cond undocumented
+        -:   73:
+        -:   74:  // Common base class for std::recursive_mutex and std::recursive_timed_mutex
+        -:   75:  class __recursive_mutex_base
+        -:   76:  {
+        -:   77:  protected:
+        -:   78:    typedef __gthread_recursive_mutex_t		__native_type;
+        -:   79:
+        -:   80:    __recursive_mutex_base(const __recursive_mutex_base&) = delete;
+        -:   81:    __recursive_mutex_base& operator=(const __recursive_mutex_base&) = delete;
+        -:   82:
+        -:   83:#ifdef __GTHREAD_RECURSIVE_MUTEX_INIT
+        -:   84:    __native_type  _M_mutex = __GTHREAD_RECURSIVE_MUTEX_INIT;
+        -:   85:
+        -:   86:    __recursive_mutex_base() = default;
+        -:   87:#else
+        -:   88:    __native_type  _M_mutex;
+        -:   89:
+        -:   90:    __recursive_mutex_base()
+        -:   91:    {
+        -:   92:      // XXX EAGAIN, ENOMEM, EPERM, EBUSY(may), EINVAL(may)
+        -:   93:      __GTHREAD_RECURSIVE_MUTEX_INIT_FUNCTION(&_M_mutex);
+        -:   94:    }
+        -:   95:
+        -:   96:    ~__recursive_mutex_base()
+        -:   97:    { __gthread_recursive_mutex_destroy(&_M_mutex); }
+        -:   98:#endif
+        -:   99:  };
+        -:  100:  /// @endcond
+        -:  101:
+        -:  102:  /** The standard recursive mutex type.
+        -:  103:   *
+        -:  104:   * A recursive mutex can be locked more than once by the same thread.
+        -:  105:   * Other threads cannot lock the mutex until the owning thread unlocks it
+        -:  106:   * as many times as it was locked.
+        -:  107:   *
+        -:  108:   * @headerfile mutex
+        -:  109:   * @since C++11
+        -:  110:   */
+        -:  111:  class recursive_mutex : private __recursive_mutex_base
+        -:  112:  {
+        -:  113:  public:
+        -:  114:    typedef __native_type* 			native_handle_type;
+        -:  115:
+        -:  116:    recursive_mutex() = default;
+        -:  117:    ~recursive_mutex() = default;
+        -:  118:
+        -:  119:    recursive_mutex(const recursive_mutex&) = delete;
+        -:  120:    recursive_mutex& operator=(const recursive_mutex&) = delete;
+        -:  121:
+        -:  122:    void
+        -:  123:    lock()
+        -:  124:    {
+        -:  125:      int __e = __gthread_recursive_mutex_lock(&_M_mutex);
+        -:  126:
+        -:  127:      // EINVAL, EAGAIN, EBUSY, EINVAL, EDEADLK(may)
+        -:  128:      if (__e)
+        -:  129:	__throw_system_error(__e);
+        -:  130:    }
+        -:  131:
+        -:  132:    _GLIBCXX_NODISCARD
+        -:  133:    bool
+        -:  134:    try_lock() noexcept
+        -:  135:    {
+        -:  136:      // XXX EINVAL, EAGAIN, EBUSY
+        -:  137:      return !__gthread_recursive_mutex_trylock(&_M_mutex);
+        -:  138:    }
+        -:  139:
+        -:  140:    void
+        -:  141:    unlock()
+        -:  142:    {
+        -:  143:      // XXX EINVAL, EAGAIN, EBUSY
+        -:  144:      __gthread_recursive_mutex_unlock(&_M_mutex);
+        -:  145:    }
+        -:  146:
+        -:  147:    native_handle_type
+        -:  148:    native_handle() noexcept
+        -:  149:    { return &_M_mutex; }
+        -:  150:  };
+        -:  151:
+        -:  152:#if _GTHREAD_USE_MUTEX_TIMEDLOCK
+        -:  153:  /// @cond undocumented
+        -:  154:
+        -:  155:  template<typename _Derived>
+        -:  156:    class __timed_mutex_impl
+        -:  157:    {
+        -:  158:    protected:
+        -:  159:      template<typename _Rep, typename _Period>
+        -:  160:	bool
+        -:  161:	_M_try_lock_for(const chrono::duration<_Rep, _Period>& __rtime)
+        -:  162:	{
+        -:  163:#if _GLIBCXX_USE_PTHREAD_MUTEX_CLOCKLOCK
+        -:  164:	  using __clock = chrono::steady_clock;
+        -:  165:#else
+        -:  166:	  using __clock = chrono::system_clock;
+        -:  167:#endif
+        -:  168:
+        -:  169:	  auto __rt = chrono::duration_cast<__clock::duration>(__rtime);
+        -:  170:	  if (ratio_greater<__clock::period, _Period>())
+        -:  171:	    ++__rt;
+        -:  172:	  return _M_try_lock_until(__clock::now() + __rt);
+        -:  173:	}
+        -:  174:
+        -:  175:      template<typename _Duration>
+        -:  176:	bool
+        -:  177:	_M_try_lock_until(const chrono::time_point<chrono::system_clock,
+        -:  178:						   _Duration>& __atime)
+        -:  179:	{
+        -:  180:	  auto __s = chrono::time_point_cast<chrono::seconds>(__atime);
+        -:  181:	  auto __ns = chrono::duration_cast<chrono::nanoseconds>(__atime - __s);
+        -:  182:
+        -:  183:	  __gthread_time_t __ts = {
+        -:  184:	    static_cast<std::time_t>(__s.time_since_epoch().count()),
+        -:  185:	    static_cast<long>(__ns.count())
+        -:  186:	  };
+        -:  187:
+        -:  188:	  return static_cast<_Derived*>(this)->_M_timedlock(__ts);
+        -:  189:	}
+        -:  190:
+        -:  191:#ifdef _GLIBCXX_USE_PTHREAD_MUTEX_CLOCKLOCK
+        -:  192:      template<typename _Duration>
+        -:  193:	bool
+        -:  194:	_M_try_lock_until(const chrono::time_point<chrono::steady_clock,
+        -:  195:						   _Duration>& __atime)
+        -:  196:	{
+        -:  197:	  auto __s = chrono::time_point_cast<chrono::seconds>(__atime);
+        -:  198:	  auto __ns = chrono::duration_cast<chrono::nanoseconds>(__atime - __s);
+        -:  199:
+        -:  200:	  __gthread_time_t __ts = {
+        -:  201:	    static_cast<std::time_t>(__s.time_since_epoch().count()),
+        -:  202:	    static_cast<long>(__ns.count())
+        -:  203:	  };
+        -:  204:
+        -:  205:	  return static_cast<_Derived*>(this)->_M_clocklock(CLOCK_MONOTONIC,
+        -:  206:							    __ts);
+        -:  207:	}
+        -:  208:#endif
+        -:  209:
+        -:  210:      template<typename _Clock, typename _Duration>
+        -:  211:	bool
+        -:  212:	_M_try_lock_until(const chrono::time_point<_Clock, _Duration>& __atime)
+        -:  213:	{
+        -:  214:#if __cplusplus > 201703L
+        -:  215:	  static_assert(chrono::is_clock_v<_Clock>);
+        -:  216:#endif
+        -:  217:	  // The user-supplied clock may not tick at the same rate as
+        -:  218:	  // steady_clock, so we must loop in order to guarantee that
+        -:  219:	  // the timeout has expired before returning false.
+        -:  220:	  auto __now = _Clock::now();
+        -:  221:	  do {
+        -:  222:	    auto __rtime = __atime - __now;
+        -:  223:	    if (_M_try_lock_for(__rtime))
+        -:  224:	      return true;
+        -:  225:	    __now = _Clock::now();
+        -:  226:	  } while (__atime > __now);
+        -:  227:	  return false;
+        -:  228:	}
+        -:  229:    };
+        -:  230:  /// @endcond
+        -:  231:
+        -:  232:  /** The standard timed mutex type.
+        -:  233:   *
+        -:  234:   * A non-recursive mutex that supports a timeout when trying to acquire the
+        -:  235:   * lock.
+        -:  236:   *
+        -:  237:   * @headerfile mutex
+        -:  238:   * @since C++11
+        -:  239:   */
+        -:  240:  class timed_mutex
+        -:  241:  : private __mutex_base, public __timed_mutex_impl<timed_mutex>
+        -:  242:  {
+        -:  243:  public:
+        -:  244:    typedef __native_type* 		  	native_handle_type;
+        -:  245:
+        -:  246:    timed_mutex() = default;
+        -:  247:    ~timed_mutex() = default;
+        -:  248:
+        -:  249:    timed_mutex(const timed_mutex&) = delete;
+        -:  250:    timed_mutex& operator=(const timed_mutex&) = delete;
+        -:  251:
+        -:  252:    void
+        -:  253:    lock()
+        -:  254:    {
+        -:  255:      int __e = __gthread_mutex_lock(&_M_mutex);
+        -:  256:
+        -:  257:      // EINVAL, EAGAIN, EBUSY, EINVAL, EDEADLK(may)
+        -:  258:      if (__e)
+        -:  259:	__throw_system_error(__e);
+        -:  260:    }
+        -:  261:
+        -:  262:    _GLIBCXX_NODISCARD
+        -:  263:    bool
+        -:  264:    try_lock() noexcept
+        -:  265:    {
+        -:  266:      // XXX EINVAL, EAGAIN, EBUSY
+        -:  267:      return !__gthread_mutex_trylock(&_M_mutex);
+        -:  268:    }
+        -:  269:
+        -:  270:    template <class _Rep, class _Period>
+        -:  271:      _GLIBCXX_NODISCARD
+        -:  272:      bool
+        -:  273:      try_lock_for(const chrono::duration<_Rep, _Period>& __rtime)
+        -:  274:      { return _M_try_lock_for(__rtime); }
+        -:  275:
+        -:  276:    template <class _Clock, class _Duration>
+        -:  277:      _GLIBCXX_NODISCARD
+        -:  278:      bool
+        -:  279:      try_lock_until(const chrono::time_point<_Clock, _Duration>& __atime)
+        -:  280:      { return _M_try_lock_until(__atime); }
+        -:  281:
+        -:  282:    void
+        -:  283:    unlock()
+        -:  284:    {
+        -:  285:      // XXX EINVAL, EAGAIN, EBUSY
+        -:  286:      __gthread_mutex_unlock(&_M_mutex);
+        -:  287:    }
+        -:  288:
+        -:  289:    native_handle_type
+        -:  290:    native_handle() noexcept
+        -:  291:    { return &_M_mutex; }
+        -:  292:
+        -:  293:    private:
+        -:  294:      friend class __timed_mutex_impl<timed_mutex>;
+        -:  295:
+        -:  296:      bool
+        -:  297:      _M_timedlock(const __gthread_time_t& __ts)
+        -:  298:      { return !__gthread_mutex_timedlock(&_M_mutex, &__ts); }
+        -:  299:
+        -:  300:#if _GLIBCXX_USE_PTHREAD_MUTEX_CLOCKLOCK
+        -:  301:      bool
+        -:  302:      _M_clocklock(clockid_t __clockid, const __gthread_time_t& __ts)
+        -:  303:      { return !pthread_mutex_clocklock(&_M_mutex, __clockid, &__ts); }
+        -:  304:#endif
+        -:  305:  };
+        -:  306:
+        -:  307:  /** The standard recursive timed mutex type.
+        -:  308:   *
+        -:  309:   * A recursive mutex that supports a timeout when trying to acquire the
+        -:  310:   * lock. A recursive mutex can be locked more than once by the same thread.
+        -:  311:   * Other threads cannot lock the mutex until the owning thread unlocks it
+        -:  312:   * as many times as it was locked.
+        -:  313:   *
+        -:  314:   * @headerfile mutex
+        -:  315:   * @since C++11
+        -:  316:   */
+        -:  317:  class recursive_timed_mutex
+        -:  318:  : private __recursive_mutex_base,
+        -:  319:    public __timed_mutex_impl<recursive_timed_mutex>
+        -:  320:  {
+        -:  321:  public:
+        -:  322:    typedef __native_type* 			native_handle_type;
+        -:  323:
+        -:  324:    recursive_timed_mutex() = default;
+        -:  325:    ~recursive_timed_mutex() = default;
+        -:  326:
+        -:  327:    recursive_timed_mutex(const recursive_timed_mutex&) = delete;
+        -:  328:    recursive_timed_mutex& operator=(const recursive_timed_mutex&) = delete;
+        -:  329:
+        -:  330:    void
+        -:  331:    lock()
+        -:  332:    {
+        -:  333:      int __e = __gthread_recursive_mutex_lock(&_M_mutex);
+        -:  334:
+        -:  335:      // EINVAL, EAGAIN, EBUSY, EINVAL, EDEADLK(may)
+        -:  336:      if (__e)
+        -:  337:	__throw_system_error(__e);
+        -:  338:    }
+        -:  339:
+        -:  340:    _GLIBCXX_NODISCARD
+        -:  341:    bool
+        -:  342:    try_lock() noexcept
+        -:  343:    {
+        -:  344:      // XXX EINVAL, EAGAIN, EBUSY
+        -:  345:      return !__gthread_recursive_mutex_trylock(&_M_mutex);
+        -:  346:    }
+        -:  347:
+        -:  348:    template <class _Rep, class _Period>
+        -:  349:      _GLIBCXX_NODISCARD
+        -:  350:      bool
+        -:  351:      try_lock_for(const chrono::duration<_Rep, _Period>& __rtime)
+        -:  352:      { return _M_try_lock_for(__rtime); }
+        -:  353:
+        -:  354:    template <class _Clock, class _Duration>
+        -:  355:      _GLIBCXX_NODISCARD
+        -:  356:      bool
+        -:  357:      try_lock_until(const chrono::time_point<_Clock, _Duration>& __atime)
+        -:  358:      { return _M_try_lock_until(__atime); }
+        -:  359:
+        -:  360:    void
+        -:  361:    unlock()
+        -:  362:    {
+        -:  363:      // XXX EINVAL, EAGAIN, EBUSY
+        -:  364:      __gthread_recursive_mutex_unlock(&_M_mutex);
+        -:  365:    }
+        -:  366:
+        -:  367:    native_handle_type
+        -:  368:    native_handle() noexcept
+        -:  369:    { return &_M_mutex; }
+        -:  370:
+        -:  371:    private:
+        -:  372:      friend class __timed_mutex_impl<recursive_timed_mutex>;
+        -:  373:
+        -:  374:      bool
+        -:  375:      _M_timedlock(const __gthread_time_t& __ts)
+        -:  376:      { return !__gthread_recursive_mutex_timedlock(&_M_mutex, &__ts); }
+        -:  377:
+        -:  378:#ifdef _GLIBCXX_USE_PTHREAD_MUTEX_CLOCKLOCK
+        -:  379:      bool
+        -:  380:      _M_clocklock(clockid_t __clockid, const __gthread_time_t& __ts)
+        -:  381:      { return !pthread_mutex_clocklock(&_M_mutex, __clockid, &__ts); }
+        -:  382:#endif
+        -:  383:  };
+        -:  384:
+        -:  385:#else // !_GTHREAD_USE_MUTEX_TIMEDLOCK
+        -:  386:
+        -:  387:  /// timed_mutex
+        -:  388:  class timed_mutex
+        -:  389:  {
+        -:  390:    mutex		_M_mut;
+        -:  391:    condition_variable	_M_cv;
+        -:  392:    bool		_M_locked = false;
+        -:  393:
+        -:  394:  public:
+        -:  395:
+        -:  396:    timed_mutex() = default;
+        -:  397:    ~timed_mutex() { __glibcxx_assert( !_M_locked ); }
+        -:  398:
+        -:  399:    timed_mutex(const timed_mutex&) = delete;
+        -:  400:    timed_mutex& operator=(const timed_mutex&) = delete;
+        -:  401:
+        -:  402:    void
+        -:  403:    lock()
+        -:  404:    {
+        -:  405:      unique_lock<mutex> __lk(_M_mut);
+        -:  406:      _M_cv.wait(__lk, [&]{ return !_M_locked; });
+        -:  407:      _M_locked = true;
+        -:  408:    }
+        -:  409:
+        -:  410:    _GLIBCXX_NODISCARD
+        -:  411:    bool
+        -:  412:    try_lock()
+        -:  413:    {
+        -:  414:      lock_guard<mutex> __lk(_M_mut);
+        -:  415:      if (_M_locked)
+        -:  416:	return false;
+        -:  417:      _M_locked = true;
+        -:  418:      return true;
+        -:  419:    }
+        -:  420:
+        -:  421:    template<typename _Rep, typename _Period>
+        -:  422:      _GLIBCXX_NODISCARD
+        -:  423:      bool
+        -:  424:      try_lock_for(const chrono::duration<_Rep, _Period>& __rtime)
+        -:  425:      {
+        -:  426:	unique_lock<mutex> __lk(_M_mut);
+        -:  427:	if (!_M_cv.wait_for(__lk, __rtime, [&]{ return !_M_locked; }))
+        -:  428:	  return false;
+        -:  429:	_M_locked = true;
+        -:  430:	return true;
+        -:  431:      }
+        -:  432:
+        -:  433:    template<typename _Clock, typename _Duration>
+        -:  434:      _GLIBCXX_NODISCARD
+        -:  435:      bool
+        -:  436:      try_lock_until(const chrono::time_point<_Clock, _Duration>& __atime)
+        -:  437:      {
+        -:  438:	unique_lock<mutex> __lk(_M_mut);
+        -:  439:	if (!_M_cv.wait_until(__lk, __atime, [&]{ return !_M_locked; }))
+        -:  440:	  return false;
+        -:  441:	_M_locked = true;
+        -:  442:	return true;
+        -:  443:      }
+        -:  444:
+        -:  445:    void
+        -:  446:    unlock()
+        -:  447:    {
+        -:  448:      lock_guard<mutex> __lk(_M_mut);
+        -:  449:      __glibcxx_assert( _M_locked );
+        -:  450:      _M_locked = false;
+        -:  451:      _M_cv.notify_one();
+        -:  452:    }
+        -:  453:  };
+        -:  454:
+        -:  455:  /// recursive_timed_mutex
+        -:  456:  class recursive_timed_mutex
+        -:  457:  {
+        -:  458:    mutex		_M_mut;
+        -:  459:    condition_variable	_M_cv;
+        -:  460:    thread::id		_M_owner;
+        -:  461:    unsigned		_M_count = 0;
+        -:  462:
+        -:  463:    // Predicate type that tests whether the current thread can lock a mutex.
+        -:  464:    struct _Can_lock
+        -:  465:    {
+        -:  466:      // Returns true if the mutex is unlocked or is locked by _M_caller.
+        -:  467:      bool
+        -:  468:      operator()() const noexcept
+        -:  469:      { return _M_mx->_M_count == 0 || _M_mx->_M_owner == _M_caller; }
+        -:  470:
+        -:  471:      const recursive_timed_mutex* _M_mx;
+        -:  472:      thread::id _M_caller;
+        -:  473:    };
+        -:  474:
+        -:  475:  public:
+        -:  476:
+        -:  477:    recursive_timed_mutex() = default;
+        -:  478:    ~recursive_timed_mutex() { __glibcxx_assert( _M_count == 0 ); }
+        -:  479:
+        -:  480:    recursive_timed_mutex(const recursive_timed_mutex&) = delete;
+        -:  481:    recursive_timed_mutex& operator=(const recursive_timed_mutex&) = delete;
+        -:  482:
+        -:  483:    void
+        -:  484:    lock()
+        -:  485:    {
+        -:  486:      auto __id = this_thread::get_id();
+        -:  487:      _Can_lock __can_lock{this, __id};
+        -:  488:      unique_lock<mutex> __lk(_M_mut);
+        -:  489:      _M_cv.wait(__lk, __can_lock);
+        -:  490:      if (_M_count == -1u)
+        -:  491:	__throw_system_error(EAGAIN); // [thread.timedmutex.recursive]/3
+        -:  492:      _M_owner = __id;
+        -:  493:      ++_M_count;
+        -:  494:    }
+        -:  495:
+        -:  496:    _GLIBCXX_NODISCARD
+        -:  497:    bool
+        -:  498:    try_lock()
+        -:  499:    {
+        -:  500:      auto __id = this_thread::get_id();
+        -:  501:      _Can_lock __can_lock{this, __id};
+        -:  502:      lock_guard<mutex> __lk(_M_mut);
+        -:  503:      if (!__can_lock())
+        -:  504:	return false;
+        -:  505:      if (_M_count == -1u)
+        -:  506:	return false;
+        -:  507:      _M_owner = __id;
+        -:  508:      ++_M_count;
+        -:  509:      return true;
+        -:  510:    }
+        -:  511:
+        -:  512:    template<typename _Rep, typename _Period>
+        -:  513:      _GLIBCXX_NODISCARD
+        -:  514:      bool
+        -:  515:      try_lock_for(const chrono::duration<_Rep, _Period>& __rtime)
+        -:  516:      {
+        -:  517:	auto __id = this_thread::get_id();
+        -:  518:	_Can_lock __can_lock{this, __id};
+        -:  519:	unique_lock<mutex> __lk(_M_mut);
+        -:  520:	if (!_M_cv.wait_for(__lk, __rtime, __can_lock))
+        -:  521:	  return false;
+        -:  522:	if (_M_count == -1u)
+        -:  523:	  return false;
+        -:  524:	_M_owner = __id;
+        -:  525:	++_M_count;
+        -:  526:	return true;
+        -:  527:      }
+        -:  528:
+        -:  529:    template<typename _Clock, typename _Duration>
+        -:  530:      _GLIBCXX_NODISCARD
+        -:  531:      bool
+        -:  532:      try_lock_until(const chrono::time_point<_Clock, _Duration>& __atime)
+        -:  533:      {
+        -:  534:	auto __id = this_thread::get_id();
+        -:  535:	_Can_lock __can_lock{this, __id};
+        -:  536:	unique_lock<mutex> __lk(_M_mut);
+        -:  537:	if (!_M_cv.wait_until(__lk, __atime, __can_lock))
+        -:  538:	  return false;
+        -:  539:	if (_M_count == -1u)
+        -:  540:	  return false;
+        -:  541:	_M_owner = __id;
+        -:  542:	++_M_count;
+        -:  543:	return true;
+        -:  544:      }
+        -:  545:
+        -:  546:    void
+        -:  547:    unlock()
+        -:  548:    {
+        -:  549:      lock_guard<mutex> __lk(_M_mut);
+        -:  550:      __glibcxx_assert( _M_owner == this_thread::get_id() );
+        -:  551:      __glibcxx_assert( _M_count > 0 );
+        -:  552:      if (--_M_count == 0)
+        -:  553:	{
+        -:  554:	  _M_owner = {};
+        -:  555:	  _M_cv.notify_one();
+        -:  556:	}
+        -:  557:    }
+        -:  558:  };
+        -:  559:
+        -:  560:#endif
+        -:  561:#endif // _GLIBCXX_HAS_GTHREADS
+        -:  562:
+        -:  563:  /// @cond undocumented
+        -:  564:  namespace __detail
+        -:  565:  {
+        -:  566:    // Lock the last lockable, after all previous ones are locked.
+        -:  567:    template<typename _Lockable>
+        -:  568:      inline int
+        -:  569:      __try_lock_impl(_Lockable& __l)
+        -:  570:      {
+        -:  571:	if (unique_lock<_Lockable> __lock{__l, try_to_lock})
+        -:  572:	  {
+        -:  573:	    __lock.release();
+        -:  574:	    return -1;
+        -:  575:	  }
+        -:  576:	else
+        -:  577:	  return 0;
+        -:  578:      }
+        -:  579:
+        -:  580:    // Lock each lockable in turn.
+        -:  581:    // Use iteration if all lockables are the same type, recursion otherwise.
+        -:  582:    template<typename _L0, typename... _Lockables>
+        -:  583:      inline int
+        -:  584:      __try_lock_impl(_L0& __l0, _Lockables&... __lockables)
+        -:  585:      {
+        -:  586:#if __cplusplus >= 201703L
+        -:  587:	if constexpr ((is_same_v<_L0, _Lockables> && ...))
+        -:  588:	  {
+        -:  589:	    constexpr int _Np = 1 + sizeof...(_Lockables);
+        -:  590:	    unique_lock<_L0> __locks[_Np] = {
+        -:  591:		{__l0, defer_lock}, {__lockables, defer_lock}...
+        -:  592:	    };
+        -:  593:	    for (int __i = 0; __i < _Np; ++__i)
+        -:  594:	      {
+        -:  595:		if (!__locks[__i].try_lock())
+        -:  596:		  {
+        -:  597:		    const int __failed = __i;
+        -:  598:		    while (__i--)
+        -:  599:		      __locks[__i].unlock();
+        -:  600:		    return __failed;
+        -:  601:		  }
+        -:  602:	      }
+        -:  603:	    for (auto& __l : __locks)
+        -:  604:	      __l.release();
+        -:  605:	    return -1;
+        -:  606:	  }
+        -:  607:	else
+        -:  608:#endif
+        -:  609:	if (unique_lock<_L0> __lock{__l0, try_to_lock})
+        -:  610:	  {
+        -:  611:	    int __idx = __detail::__try_lock_impl(__lockables...);
+        -:  612:	    if (__idx == -1)
+        -:  613:	      {
+        -:  614:		__lock.release();
+        -:  615:		return -1;
+        -:  616:	      }
+        -:  617:	    return __idx + 1;
+        -:  618:	  }
+        -:  619:	else
+        -:  620:	  return 0;
+        -:  621:      }
+        -:  622:
+        -:  623:  } // namespace __detail
+        -:  624:  /// @endcond
+        -:  625:
+        -:  626:  /** @brief Generic try_lock.
+        -:  627:   *  @param __l1 Meets Lockable requirements (try_lock() may throw).
+        -:  628:   *  @param __l2 Meets Lockable requirements (try_lock() may throw).
+        -:  629:   *  @param __l3 Meets Lockable requirements (try_lock() may throw).
+        -:  630:   *  @return Returns -1 if all try_lock() calls return true. Otherwise returns
+        -:  631:   *          a 0-based index corresponding to the argument that returned false.
+        -:  632:   *  @post Either all arguments are locked, or none will be.
+        -:  633:   *
+        -:  634:   *  Sequentially calls try_lock() on each argument.
+        -:  635:   */
+        -:  636:  template<typename _L1, typename _L2, typename... _L3>
+        -:  637:    _GLIBCXX_NODISCARD
+        -:  638:    inline int
+        -:  639:    try_lock(_L1& __l1, _L2& __l2, _L3&... __l3)
+        -:  640:    {
+        -:  641:      return __detail::__try_lock_impl(__l1, __l2, __l3...);
+        -:  642:    }
+        -:  643:
+        -:  644:  /// @cond undocumented
+        -:  645:  namespace __detail
+        -:  646:  {
+        -:  647:    // This function can recurse up to N levels deep, for N = 1+sizeof...(L1).
+        -:  648:    // On each recursion the lockables are rotated left one position,
+        -:  649:    // e.g. depth 0: l0, l1, l2; depth 1: l1, l2, l0; depth 2: l2, l0, l1.
+        -:  650:    // When a call to l_i.try_lock() fails it recurses/returns to depth=i
+        -:  651:    // so that l_i is the first argument, and then blocks until l_i is locked.
+        -:  652:    template<typename _L0, typename... _L1>
+        -:  653:      void
+        -:  654:      __lock_impl(int& __i, int __depth, _L0& __l0, _L1&... __l1)
+        -:  655:      {
+        -:  656:	while (__i >= __depth)
+        -:  657:	  {
+        -:  658:	    if (__i == __depth)
+        -:  659:	      {
+        -:  660:		int __failed = 1; // index that couldn't be locked
+        -:  661:		{
+        -:  662:		  unique_lock<_L0> __first(__l0);
+        -:  663:		  __failed += __detail::__try_lock_impl(__l1...);
+        -:  664:		  if (!__failed)
+        -:  665:		    {
+        -:  666:		      __i = -1; // finished
+        -:  667:		      __first.release();
+        -:  668:		      return;
+        -:  669:		    }
+        -:  670:		}
+        -:  671:#if defined _GLIBCXX_HAS_GTHREADS && defined _GLIBCXX_USE_SCHED_YIELD
+        -:  672:		__gthread_yield();
+        -:  673:#endif
+        -:  674:		constexpr auto __n = 1 + sizeof...(_L1);
+        -:  675:		__i = (__depth + __failed) % __n;
+        -:  676:	      }
+        -:  677:	    else // rotate left until l_i is first.
+        -:  678:	      __detail::__lock_impl(__i, __depth + 1, __l1..., __l0);
+        -:  679:	  }
+        -:  680:      }
+        -:  681:
+        -:  682:  } // namespace __detail
+        -:  683:  /// @endcond
+        -:  684:
+        -:  685:  /** @brief Generic lock.
+        -:  686:   *  @param __l1 Meets Lockable requirements (try_lock() may throw).
+        -:  687:   *  @param __l2 Meets Lockable requirements (try_lock() may throw).
+        -:  688:   *  @param __l3 Meets Lockable requirements (try_lock() may throw).
+        -:  689:   *  @throw An exception thrown by an argument's lock() or try_lock() member.
+        -:  690:   *  @post All arguments are locked.
+        -:  691:   *
+        -:  692:   *  All arguments are locked via a sequence of calls to lock(), try_lock()
+        -:  693:   *  and unlock().  If this function exits via an exception any locks that
+        -:  694:   *  were obtained will be released.
+        -:  695:   */
+        -:  696:  template<typename _L1, typename _L2, typename... _L3>
+        -:  697:    void
+        -:  698:    lock(_L1& __l1, _L2& __l2, _L3&... __l3)
+        -:  699:    {
+        -:  700:#if __cplusplus >= 201703L
+        -:  701:      if constexpr (is_same_v<_L1, _L2> && (is_same_v<_L1, _L3> && ...))
+        -:  702:	{
+        -:  703:	  constexpr int _Np = 2 + sizeof...(_L3);
+        -:  704:	  unique_lock<_L1> __locks[] = {
+        -:  705:	      {__l1, defer_lock}, {__l2, defer_lock}, {__l3, defer_lock}...
+        -:  706:	  };
+        -:  707:	  int __first = 0;
+        -:  708:	  do {
+        -:  709:	    __locks[__first].lock();
+        -:  710:	    for (int __j = 1; __j < _Np; ++__j)
+        -:  711:	      {
+        -:  712:		const int __idx = (__first + __j) % _Np;
+        -:  713:		if (!__locks[__idx].try_lock())
+        -:  714:		  {
+        -:  715:		    for (int __k = __j; __k != 0; --__k)
+        -:  716:		      __locks[(__first + __k - 1) % _Np].unlock();
+        -:  717:		    __first = __idx;
+        -:  718:		    break;
+        -:  719:		  }
+        -:  720:	      }
+        -:  721:	  } while (!__locks[__first].owns_lock());
+        -:  722:
+        -:  723:	  for (auto& __l : __locks)
+        -:  724:	    __l.release();
+        -:  725:	}
+        -:  726:      else
+        -:  727:#endif
+        -:  728:	{
+        -:  729:	  int __i = 0;
+        -:  730:	  __detail::__lock_impl(__i, 0, __l1, __l2, __l3...);
+        -:  731:	}
+        -:  732:    }
+        -:  733:
+        -:  734:#ifdef __cpp_lib_scoped_lock // C++ >= 17 && hosted && gthread
+        -:  735:  /** @brief A scoped lock type for multiple lockable objects.
+        -:  736:   *
+        -:  737:   * A scoped_lock controls mutex ownership within a scope, releasing
+        -:  738:   * ownership in the destructor.
+        -:  739:   *
+        -:  740:   * @headerfile mutex
+        -:  741:   * @since C++17
+        -:  742:   */
+        -:  743:  template<typename... _MutexTypes>
+        -:  744:    class scoped_lock
+        -:  745:    {
+        -:  746:    public:
+        -:  747:
+        -:  748:      [[nodiscard]]
+        -:  749:      explicit scoped_lock(_MutexTypes&... __m) : _M_devices(std::tie(__m...))
+        -:  750:      { std::lock(__m...); }
+        -:  751:
+        -:  752:      [[nodiscard]]
+        -:  753:      explicit scoped_lock(adopt_lock_t, _MutexTypes&... __m) noexcept
+        -:  754:      : _M_devices(std::tie(__m...))
+        -:  755:      { } // calling thread owns mutex
+        -:  756:
+        -:  757:      ~scoped_lock()
+        -:  758:      { std::apply([](auto&... __m) { (__m.unlock(), ...); }, _M_devices); }
+        -:  759:
+        -:  760:      scoped_lock(const scoped_lock&) = delete;
+        -:  761:      scoped_lock& operator=(const scoped_lock&) = delete;
+        -:  762:
+        -:  763:    private:
+        -:  764:      tuple<_MutexTypes&...> _M_devices;
+        -:  765:    };
+        -:  766:
+        -:  767:  template<>
+        -:  768:    class scoped_lock<>
+        -:  769:    {
+        -:  770:    public:
+        -:  771:      explicit scoped_lock() = default;
+        -:  772:      explicit scoped_lock(adopt_lock_t) noexcept { }
+        -:  773:      ~scoped_lock() = default;
+        -:  774:
+        -:  775:      scoped_lock(const scoped_lock&) = delete;
+        -:  776:      scoped_lock& operator=(const scoped_lock&) = delete;
+        -:  777:    };
+        -:  778:
+        -:  779:  template<typename _Mutex>
+        -:  780:    class scoped_lock<_Mutex>
+        -:  781:    {
+        -:  782:    public:
+        -:  783:      using mutex_type = _Mutex;
+        -:  784:
+        -:  785:      [[nodiscard]]
+        -:  786:      explicit scoped_lock(mutex_type& __m) : _M_device(__m)
+        -:  787:      { _M_device.lock(); }
+        -:  788:
+        -:  789:      [[nodiscard]]
+        -:  790:      explicit scoped_lock(adopt_lock_t, mutex_type& __m) noexcept
+        -:  791:      : _M_device(__m)
+        -:  792:      { } // calling thread owns mutex
+        -:  793:
+        -:  794:      ~scoped_lock()
+        -:  795:      { _M_device.unlock(); }
+        -:  796:
+        -:  797:      scoped_lock(const scoped_lock&) = delete;
+        -:  798:      scoped_lock& operator=(const scoped_lock&) = delete;
+        -:  799:
+        -:  800:    private:
+        -:  801:      mutex_type&  _M_device;
+        -:  802:    };
+        -:  803:#endif // __cpp_lib_scoped_lock
+        -:  804:
+        -:  805:#ifdef _GLIBCXX_HAS_GTHREADS
+        -:  806:  /// Flag type used by std::call_once
+        -:  807:  struct once_flag
+        -:  808:  {
+       17:  809:    constexpr once_flag() noexcept = default;
+------------------
+_ZNSt9once_flagC2Ev:
+function _ZNSt9once_flagC2Ev called 1 returned 100% blocks executed 100%
+        1:  809:    constexpr once_flag() noexcept = default;
+------------------
+_ZNSt9once_flagC2Ev:
+function _ZNSt9once_flagC2Ev called 16 returned 100% blocks executed 100%
+       16:  809:    constexpr once_flag() noexcept = default;
+------------------
+        -:  810:
+        -:  811:    /// Deleted copy constructor
+        -:  812:    once_flag(const once_flag&) = delete;
+        -:  813:    /// Deleted assignment operator
+        -:  814:    once_flag& operator=(const once_flag&) = delete;
+        -:  815:
+        -:  816:  private:
+        -:  817:    // For gthreads targets a pthread_once_t is used with pthread_once, but
+        -:  818:    // for most targets this doesn't work correctly for exceptional executions.
+        -:  819:    __gthread_once_t _M_once = __GTHREAD_ONCE_INIT;
+        -:  820:
+        -:  821:    struct _Prepare_execution;
+        -:  822:
+        -:  823:    template<typename _Callable, typename... _Args>
+        -:  824:      friend void
+        -:  825:      call_once(once_flag& __once, _Callable&& __f, _Args&&... __args);
+        -:  826:  };
+        -:  827:
+        -:  828:  /// @cond undocumented
+        -:  829:# ifdef _GLIBCXX_HAVE_TLS
+        -:  830:  // If TLS is available use thread-local state for the type-erased callable
+        -:  831:  // that is being run by std::call_once in the current thread.
+        -:  832:  extern __thread void* __once_callable;
+        -:  833:  extern __thread void (*__once_call)();
+        -:  834:
+        -:  835:  // RAII type to set up state for pthread_once call.
+        -:  836:  struct once_flag::_Prepare_execution
+        -:  837:  {
+        -:  838:    template<typename _Callable>
+        -:  839:      explicit
+       17:  840:      _Prepare_execution(_Callable& __c)
+        -:  841:      {
+        -:  842:	// Store address in thread-local pointer:
+       17:  843:	__once_callable = std::__addressof(__c);
+        -:  844:	// Trampoline function to invoke the closure via thread-local pointer:
+       34:  845:	__once_call = [] { (*static_cast<_Callable*>(__once_callable))(); };
+       17:  846:      }
+------------------
+_ZNSt9once_flag18_Prepare_executionC2IZSt9call_onceIMNSt13__future_base13_State_baseV2EFvPSt8functionIFSt10unique_ptrINS3_12_Result_baseENS7_8_DeleterEEvEEPbEJPS4_SC_SD_EEvRS_OT_DpOT0_EUlvE_EERSI_:
+function _ZNSt9once_flag18_Prepare_executionC2IZSt9call_onceIMNSt13__future_base13_State_baseV2EFvPSt8functionIFSt10unique_ptrINS3_12_Result_baseENS7_8_DeleterEEvEEPbEJPS4_SC_SD_EEvRS_OT_DpOT0_EUlvE_EERSI_ called 1 returned 100% blocks executed 100%
+        1:  840:      _Prepare_execution(_Callable& __c)
+        -:  841:      {
+        -:  842:	// Store address in thread-local pointer:
+        1:  843:	__once_callable = std::__addressof(__c);
+call    0 returned 100%
+        -:  844:	// Trampoline function to invoke the closure via thread-local pointer:
+        1:  845:	__once_call = [] { (*static_cast<_Callable*>(__once_callable))(); };
+call    0 returned 100%
+        1:  846:      }
+------------------
+_ZNSt9once_flag18_Prepare_executionC2IZSt9call_onceIMNSt13__future_base13_State_baseV2EFvPSt8functionIFSt10unique_ptrINS3_12_Result_baseENS7_8_DeleterEEvEEPbEJPS4_SC_SD_EEvRS_OT_DpOT0_EUlvE_EERSI_:
+function _ZNSt9once_flag18_Prepare_executionC2IZSt9call_onceIMNSt13__future_base13_State_baseV2EFvPSt8functionIFSt10unique_ptrINS3_12_Result_baseENS7_8_DeleterEEvEEPbEJPS4_SC_SD_EEvRS_OT_DpOT0_EUlvE_EERSI_ called 16 returned 100% blocks executed 100%
+       16:  840:      _Prepare_execution(_Callable& __c)
+        -:  841:      {
+        -:  842:	// Store address in thread-local pointer:
+       16:  843:	__once_callable = std::__addressof(__c);
+call    0 returned 100%
+        -:  844:	// Trampoline function to invoke the closure via thread-local pointer:
+       16:  845:	__once_call = [] { (*static_cast<_Callable*>(__once_callable))(); };
+call    0 returned 100%
+       16:  846:      }
+------------------
+        -:  847:
+       17:  848:    ~_Prepare_execution()
+        -:  849:    {
+        -:  850:      // PR libstdc++/82481
+       17:  851:      __once_callable = nullptr;
+       17:  852:      __once_call = nullptr;
+       17:  853:    }
+------------------
+_ZNSt9once_flag18_Prepare_executionD2Ev:
+function _ZNSt9once_flag18_Prepare_executionD2Ev called 1 returned 100% blocks executed 100%
+        1:  848:    ~_Prepare_execution()
+        -:  849:    {
+        -:  850:      // PR libstdc++/82481
+        1:  851:      __once_callable = nullptr;
+        1:  852:      __once_call = nullptr;
+        1:  853:    }
+------------------
+_ZNSt9once_flag18_Prepare_executionD2Ev:
+function _ZNSt9once_flag18_Prepare_executionD2Ev called 16 returned 100% blocks executed 100%
+       16:  848:    ~_Prepare_execution()
+        -:  849:    {
+        -:  850:      // PR libstdc++/82481
+       16:  851:      __once_callable = nullptr;
+       16:  852:      __once_call = nullptr;
+       16:  853:    }
+------------------
+        -:  854:
+        -:  855:    _Prepare_execution(const _Prepare_execution&) = delete;
+        -:  856:    _Prepare_execution& operator=(const _Prepare_execution&) = delete;
+        -:  857:  };
+        -:  858:
+        -:  859:# else
+        -:  860:  // Without TLS use a global std::mutex and store the callable in a
+        -:  861:  // global std::function.
+        -:  862:  extern function<void()> __once_functor;
+        -:  863:
+        -:  864:  extern void
+        -:  865:  __set_once_functor_lock_ptr(unique_lock<mutex>*);
+        -:  866:
+        -:  867:  extern mutex&
+        -:  868:  __get_once_mutex();
+        -:  869:
+        -:  870:  // RAII type to set up state for pthread_once call.
+        -:  871:  struct once_flag::_Prepare_execution
+        -:  872:  {
+        -:  873:    template<typename _Callable>
+        -:  874:      explicit
+        -:  875:      _Prepare_execution(_Callable& __c)
+        -:  876:      {
+        -:  877:	// Store the callable in the global std::function
+        -:  878:	__once_functor = __c;
+        -:  879:	__set_once_functor_lock_ptr(&_M_functor_lock);
+        -:  880:      }
+        -:  881:
+        -:  882:    ~_Prepare_execution()
+        -:  883:    {
+        -:  884:      if (_M_functor_lock)
+        -:  885:	__set_once_functor_lock_ptr(nullptr);
+        -:  886:    }
+        -:  887:
+        -:  888:  private:
+        -:  889:    // XXX This deadlocks if used recursively (PR 97949)
+        -:  890:    unique_lock<mutex> _M_functor_lock{__get_once_mutex()};
+        -:  891:
+        -:  892:    _Prepare_execution(const _Prepare_execution&) = delete;
+        -:  893:    _Prepare_execution& operator=(const _Prepare_execution&) = delete;
+        -:  894:  };
+        -:  895:# endif
+        -:  896:  /// @endcond
+        -:  897:
+        -:  898:  // This function is passed to pthread_once by std::call_once.
+        -:  899:  // It runs __once_call() or __once_functor().
+        -:  900:  extern "C" void __once_proxy(void);
+        -:  901:
+        -:  902:  /// Invoke a callable and synchronize with other calls using the same flag
+        -:  903:  template<typename _Callable, typename... _Args>
+        -:  904:    void
+       17:  905:    call_once(once_flag& __once, _Callable&& __f, _Args&&... __args)
+        -:  906:    {
+        -:  907:      // Closure type that runs the function
+       51:  908:      auto __callable = [&] {
+       17:  909:	  std::__invoke(std::forward<_Callable>(__f),
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+call    5 returned 100%
+call    6 returned 100%
+call    7 returned 100%
+call    8 returned 100%
+call    9 returned 100%
+        -:  910:			std::forward<_Args>(__args)...);
+        -:  911:      };
+        -:  912:
+       17:  913:      once_flag::_Prepare_execution __exec(__callable);
+        -:  914:
+        -:  915:      // XXX pthread_once does not reset the flag if an exception is thrown.
+       17:  916:      if (int __e = __gthread_once(&__once._M_once, &__once_proxy))
+    #####:  917:	__throw_system_error(__e);
+       17:  918:    }
+------------------
+_ZSt9call_onceIMNSt13__future_base13_State_baseV2EFvPSt8functionIFSt10unique_ptrINS0_12_Result_baseENS4_8_DeleterEEvEEPbEJPS1_S9_SA_EEvRSt9once_flagOT_DpOT0_:
+function _ZSt9call_onceIMNSt13__future_base13_State_baseV2EFvPSt8functionIFSt10unique_ptrINS0_12_Result_baseENS4_8_DeleterEEvEEPbEJPS1_S9_SA_EEvRSt9once_flagOT_DpOT0_ called 1 returned 100% blocks executed 67%
+        1:  905:    call_once(once_flag& __once, _Callable&& __f, _Args&&... __args)
+        -:  906:    {
+        -:  907:      // Closure type that runs the function
+        1:  908:      auto __callable = [&] {
+        -:  909:	  std::__invoke(std::forward<_Callable>(__f),
+        -:  910:			std::forward<_Args>(__args)...);
+        -:  911:      };
+        -:  912:
+        1:  913:      once_flag::_Prepare_execution __exec(__callable);
+call    0 returned 100%
+        -:  914:
+        -:  915:      // XXX pthread_once does not reset the flag if an exception is thrown.
+        1:  916:      if (int __e = __gthread_once(&__once._M_once, &__once_proxy))
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+branch  3 taken 0% (fallthrough)
+branch  4 taken 100%
+    #####:  917:	__throw_system_error(__e);
+call    0 never executed
+        1:  918:    }
+call    0 returned 100%
+call    1 never executed
+------------------
+_ZSt9call_onceIMNSt13__future_base13_State_baseV2EFvPSt8functionIFSt10unique_ptrINS0_12_Result_baseENS4_8_DeleterEEvEEPbEJPS1_S9_SA_EEvRSt9once_flagOT_DpOT0_:
+function _ZSt9call_onceIMNSt13__future_base13_State_baseV2EFvPSt8functionIFSt10unique_ptrINS0_12_Result_baseENS4_8_DeleterEEvEEPbEJPS1_S9_SA_EEvRSt9once_flagOT_DpOT0_ called 16 returned 100% blocks executed 67%
+       16:  905:    call_once(once_flag& __once, _Callable&& __f, _Args&&... __args)
+        -:  906:    {
+        -:  907:      // Closure type that runs the function
+       16:  908:      auto __callable = [&] {
+        -:  909:	  std::__invoke(std::forward<_Callable>(__f),
+        -:  910:			std::forward<_Args>(__args)...);
+        -:  911:      };
+        -:  912:
+       16:  913:      once_flag::_Prepare_execution __exec(__callable);
+call    0 returned 100%
+        -:  914:
+        -:  915:      // XXX pthread_once does not reset the flag if an exception is thrown.
+       16:  916:      if (int __e = __gthread_once(&__once._M_once, &__once_proxy))
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+branch  3 taken 0% (fallthrough)
+branch  4 taken 100%
+    #####:  917:	__throw_system_error(__e);
+call    0 never executed
+       16:  918:    }
+call    0 returned 100%
+call    1 never executed
+------------------
+        -:  919:
+        -:  920:#else // _GLIBCXX_HAS_GTHREADS
+        -:  921:
+        -:  922:  /// Flag type used by std::call_once
+        -:  923:  struct once_flag
+        -:  924:  {
+        -:  925:    constexpr once_flag() noexcept = default;
+        -:  926:
+        -:  927:    /// Deleted copy constructor
+        -:  928:    once_flag(const once_flag&) = delete;
+        -:  929:    /// Deleted assignment operator
+        -:  930:    once_flag& operator=(const once_flag&) = delete;
+        -:  931:
+        -:  932:  private:
+        -:  933:    // There are two different std::once_flag interfaces, abstracting four
+        -:  934:    // different implementations.
+        -:  935:    // The single-threaded interface uses the _M_activate() and _M_finish(bool)
+        -:  936:    // functions, which start and finish an active execution respectively.
+        -:  937:    // See [thread.once.callonce] in C++11 for the definition of
+        -:  938:    // active/passive/returning/exceptional executions.
+        -:  939:    enum _Bits : int { _Init = 0, _Active = 1, _Done = 2 };
+        -:  940:
+        -:  941:    int _M_once = _Bits::_Init;
+        -:  942:
+        -:  943:    // Check to see if all executions will be passive now.
+        -:  944:    bool
+        -:  945:    _M_passive() const noexcept;
+        -:  946:
+        -:  947:    // Attempts to begin an active execution.
+        -:  948:    bool _M_activate();
+        -:  949:
+        -:  950:    // Must be called to complete an active execution.
+        -:  951:    // The argument is true if the active execution was a returning execution,
+        -:  952:    // false if it was an exceptional execution.
+        -:  953:    void _M_finish(bool __returning) noexcept;
+        -:  954:
+        -:  955:    // RAII helper to call _M_finish.
+        -:  956:    struct _Active_execution
+        -:  957:    {
+        -:  958:      explicit _Active_execution(once_flag& __flag) : _M_flag(__flag) { }
+        -:  959:
+        -:  960:      ~_Active_execution() { _M_flag._M_finish(_M_returning); }
+        -:  961:
+        -:  962:      _Active_execution(const _Active_execution&) = delete;
+        -:  963:      _Active_execution& operator=(const _Active_execution&) = delete;
+        -:  964:
+        -:  965:      once_flag& _M_flag;
+        -:  966:      bool _M_returning = false;
+        -:  967:    };
+        -:  968:
+        -:  969:    template<typename _Callable, typename... _Args>
+        -:  970:      friend void
+        -:  971:      call_once(once_flag& __once, _Callable&& __f, _Args&&... __args);
+        -:  972:  };
+        -:  973:
+        -:  974:  // Inline definitions of std::once_flag members for single-threaded targets.
+        -:  975:
+        -:  976:  inline bool
+        -:  977:  once_flag::_M_passive() const noexcept
+        -:  978:  { return _M_once == _Bits::_Done; }
+        -:  979:
+        -:  980:  inline bool
+        -:  981:  once_flag::_M_activate()
+        -:  982:  {
+        -:  983:    if (_M_once == _Bits::_Init) [[__likely__]]
+        -:  984:      {
+        -:  985:	_M_once = _Bits::_Active;
+        -:  986:	return true;
+        -:  987:      }
+        -:  988:    else if (_M_passive()) // Caller should have checked this already.
+        -:  989:      return false;
+        -:  990:    else
+        -:  991:      __throw_system_error(EDEADLK);
+        -:  992:  }
+        -:  993:
+        -:  994:  inline void
+        -:  995:  once_flag::_M_finish(bool __returning) noexcept
+        -:  996:  { _M_once = __returning ? _Bits::_Done : _Bits::_Init; }
+        -:  997:
+        -:  998:  /// Invoke a callable and synchronize with other calls using the same flag
+        -:  999:  template<typename _Callable, typename... _Args>
+        -: 1000:    inline void
+        -: 1001:    call_once(once_flag& __once, _Callable&& __f, _Args&&... __args)
+        -: 1002:    {
+        -: 1003:      if (__once._M_passive())
+        -: 1004:	return;
+        -: 1005:      else if (__once._M_activate())
+        -: 1006:	{
+        -: 1007:	  once_flag::_Active_execution __exec(__once);
+        -: 1008:
+        -: 1009:	  // _GLIBCXX_RESOLVE_LIB_DEFECTS
+        -: 1010:	  // 2442. call_once() shouldn't DECAY_COPY()
+        -: 1011:	  std::__invoke(std::forward<_Callable>(__f),
+        -: 1012:			std::forward<_Args>(__args)...);
+        -: 1013:
+        -: 1014:	  // __f(__args...) did not throw
+        -: 1015:	  __exec._M_returning = true;
+        -: 1016:	}
+        -: 1017:    }
+        -: 1018:#endif // _GLIBCXX_HAS_GTHREADS
+        -: 1019:
+        -: 1020:  /// @} group mutexes
+        -: 1021:_GLIBCXX_END_NAMESPACE_VERSION
+        -: 1022:} // namespace
+        -: 1023:
+        -: 1024:#endif // C++11
+        -: 1025:
+        -: 1026:#endif // _GLIBCXX_MUTEX

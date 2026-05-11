@@ -1,0 +1,632 @@
+        -:    0:Source:/home/runner/work/Hical/Hical/src/core/HttpResponse.cpp
+        -:    1:#include "HttpResponse.h"
+        -:    2:
+        -:    3:namespace hical
+        -:    4:{
+        -:    5:
+        -:    6:	namespace
+        -:    7:	{
+        -:    8:
+        -:    9:		/// HTTP Response Splitting 防护：检测字符串是否包含 CR/LF（单次遍历）
+function _ZN5hical12_GLOBAL__N_112containsCRLFERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEE called 9663 returned 140% blocks executed 100%
+     9663:   10:		bool containsCRLF(const std::string& s)
+        -:   11:		{
+   105237:   12:			for (char c : s)
+call    0 returned 104%
+call    1 returned 101%
+call    2 returned 100%
+call    3 returned 103%
+call    4 returned 100%
+branch  5 taken 91%
+branch  6 taken 9% (fallthrough)
+        -:   13:			{
+    98785:   14:				if (c == '\r' || c == '\n')
+branch  0 taken 100% (fallthrough)
+branch  1 taken 1%
+branch  2 taken 3% (fallthrough)
+branch  3 taken 97%
+        -:   15:				{
+     3211:   16:					return true;
+        -:   17:				}
+        -:   18:			}
+    10343:   19:			return false;
+        -:   20:		}
+        -:   21:
+        -:   22:		/// RFC 6265 cookie-name 合法性校验：必须是 RFC 2616 token 字符
+        -:   23:		/// token = 1*<any CHAR except CTLs or separators>
+        -:   24:		/// separators = "(" | ")" | "<" | ">" | "@" | "," | ";" | ":" | "\" | <"> | "/" | "[" | "]" | "?" | "="
+        -:   25:		///              | "{" | "}" | SP | HT
+function _ZN5hical12_GLOBAL__N_117isValidCookieNameERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEE called 15 returned 100% blocks executed 97%
+       15:   26:		bool isValidCookieName(const std::string& name)
+        -:   27:		{
+       15:   28:			if (name.empty())
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+        -:   29:			{
+    #####:   30:				return false;
+        -:   31:			}
+       88:   32:			for (unsigned char c : name)
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 84%
+branch  6 taken 16% (fallthrough)
+        -:   33:			{
+        -:   34:				// CTLs (0-31, 127) 和分隔符
+       74:   35:				if (c <= 0x20 || c == 0x7F || c == '(' || c == ')' || c == '<' || c == '>' || c == '@' || c == ','
+branch  0 taken 99% (fallthrough)
+branch  1 taken 1%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0%
+branch  8 taken 100% (fallthrough)
+branch  9 taken 0%
+branch 10 taken 100% (fallthrough)
+branch 11 taken 0%
+branch 12 taken 100% (fallthrough)
+branch 13 taken 0%
+branch 14 taken 100% (fallthrough)
+branch 15 taken 0%
+       73:   36:					|| c == ';' || c == ':' || c == '\\' || c == '"' || c == '/' || c == '[' || c == ']' || c == '?'
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0%
+branch  8 taken 100% (fallthrough)
+branch  9 taken 0%
+branch 10 taken 100% (fallthrough)
+branch 11 taken 0%
+branch 12 taken 100% (fallthrough)
+branch 13 taken 0%
+branch 14 taken 100% (fallthrough)
+branch 15 taken 0%
+       73:   37:					|| c == '=' || c == '{' || c == '}')
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0%
+branch  4 taken 0% (fallthrough)
+branch  5 taken 100%
+        -:   38:				{
+        1:   39:					return false;
+        -:   40:				}
+        -:   41:			}
+       14:   42:			return true;
+        -:   43:		}
+        -:   44:
+        -:   45:	} // namespace
+        -:   46:
+function _ZN5hical12HttpResponseC2Ev called 9987 returned 101% blocks executed 100%
+     9987:   47:	HttpResponse::HttpResponse()
+call    0 returned 101%
+        -:   48:	{
+    10102:   49:		m_res.httpVersionMinor = 1;
+    10102:   50:		m_res.status = HttpStatusCode::hOk;
+    10102:   51:	}
+        -:   52:
+function _ZNK5hical12HttpResponse10statusCodeEv called 50 returned 100% blocks executed 100%
+       50:   53:	HttpStatusCode HttpResponse::statusCode() const
+        -:   54:	{
+       50:   55:		return m_res.status;
+        -:   56:	}
+        -:   57:
+function _ZN5hical12HttpResponse9setStatusENS_14HttpStatusCodeE called 9863 returned 100% blocks executed 100%
+     9863:   58:	void HttpResponse::setStatus(HttpStatusCode code)
+        -:   59:	{
+     9863:   60:		m_res.status = code;
+     9863:   61:	}
+        -:   62:
+function _ZNK5hical12HttpResponse6headerESt17basic_string_viewIcSt11char_traitsIcEE called 52 returned 100% blocks executed 100%
+       52:   63:	std::string_view HttpResponse::header(std::string_view name) const
+        -:   64:	{
+       52:   65:		return m_res.headers.find(name);
+call    0 returned 100%
+        -:   66:	}
+        -:   67:
+function _ZN5hical12HttpResponse9setHeaderERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEES8_ called 88 returned 100% blocks executed 100%
+       88:   68:	void HttpResponse::setHeader(const std::string& name, const std::string& value)
+        -:   69:	{
+        -:   70:		// HTTP Response Splitting 防护：拒绝含 CR/LF 的头部
+       88:   71:		if (containsCRLF(name) || containsCRLF(value))
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0%
+call    3 returned 100%
+branch  4 taken 1% (fallthrough)
+branch  5 taken 99%
+branch  6 taken 1% (fallthrough)
+branch  7 taken 99%
+        -:   72:		{
+        1:   73:			return;
+        -:   74:		}
+       87:   75:		m_res.headers.set(name, value);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+        -:   76:	}
+        -:   77:
+function _ZNK5hical12HttpResponse4bodyB5cxx11Ev called 7623 returned 100% blocks executed 100%
+     7623:   78:	const std::string& HttpResponse::body() const
+        -:   79:	{
+     7623:   80:		return m_res.body;
+        -:   81:	}
+        -:   82:
+function _ZN5hical12HttpResponse7setBodyERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEES8_ called 9748 returned 103% blocks executed 90%
+     9748:   83:	void HttpResponse::setBody(const std::string& body, const std::string& contentType)
+        -:   84:	{
+        -:   85:		// HTTP Response Splitting 防护：contentType 也需检查 CR/LF
+     9748:   86:		if (containsCRLF(contentType))
+call    0 returned 104%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+        -:   87:		{
+    #####:   88:			return;
+        -:   89:		}
+    10121:   90:		m_res.body = body;
+call    0 returned 98%
+     9907:   91:		m_res.headers.set("Content-Type", contentType);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 101%
+branch  3 taken 101% (fallthrough)
+branch  4 taken 0% (throw)
+    10007:   92:		m_res.preparePayload();
+call    0 returned 100%
+        -:   93:	}
+        -:   94:
+function _ZN5hical12HttpResponse11setJsonBodyERKN5boost4json5valueE called 8 returned 100% blocks executed 75%
+        8:   95:	void HttpResponse::setJsonBody(const boost::json::value& json)
+        -:   96:	{
+        8:   97:		m_res.body = boost::json::serialize(json);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+call    5 never executed
+        8:   98:		m_res.headers.set("Content-Type", "application/json");
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+        8:   99:		m_res.preparePayload();
+call    0 returned 100%
+        8:  100:	}
+        -:  101:
+function _ZN5hical12HttpResponse9setCookieERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEES8_RKNS_13CookieOptionsE called 15 returned 100% blocks executed 86%
+       15:  102:	void HttpResponse::setCookie(const std::string& name, const std::string& value, const CookieOptions& options)
+        -:  103:	{
+        -:  104:		// RFC 6265 cookie-name 合法性校验：必须是 token 字符（含 CRLF 检测）
+       15:  105:		if (!isValidCookieName(name))
+call    0 returned 100%
+branch  1 taken 7% (fallthrough)
+branch  2 taken 93%
+        -:  106:		{
+        5:  107:			return;
+        -:  108:		}
+        -:  109:
+        -:  110:		// HTTP Response Splitting 防护：value 不允许包含 CR/LF
+       14:  111:		if (containsCRLF(value))
+call    0 returned 100%
+branch  1 taken 7% (fallthrough)
+branch  2 taken 93%
+        -:  112:		{
+        1:  113:			return;
+        -:  114:		}
+        -:  115:
+        -:  116:		// HTTP Response Splitting 防护：path/domain/sameSite 不允许包含 CR/LF
+       13:  117:		if (containsCRLF(options.path) || containsCRLF(options.domain) || containsCRLF(options.sameSite))
+call    0 returned 100%
+branch  1 taken 92% (fallthrough)
+branch  2 taken 8%
+call    3 returned 100%
+branch  4 taken 92% (fallthrough)
+branch  5 taken 8%
+call    6 returned 100%
+branch  7 taken 9% (fallthrough)
+branch  8 taken 91%
+branch  9 taken 23% (fallthrough)
+branch 10 taken 77%
+        -:  118:		{
+        3:  119:			return;
+        -:  120:		}
+        -:  121:
+        -:  122:		// RFC 6265 cookie-value 合法字符百分号编码
+        -:  123:		// 合法: %x21 / %x23-2B / %x2D-3A / %x3C-5B / %x5D-7E
+        -:  124:		static constexpr char kHexDigits[] = "0123456789ABCDEF";
+function _ZZN5hical12HttpResponse9setCookieERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEES8_RKNS_13CookieOptionsEENKUlS8_E_clES8_ called 10 returned 100% blocks executed 93%
+       10:  125:		auto encodeCookieValue = [](const std::string& raw) -> std::string
+        -:  126:		{
+       10:  127:			std::string encoded;
+call    0 returned 100%
+       10:  128:			encoded.reserve(raw.size());
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+       73:  129:			for (unsigned char c : raw)
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 86%
+branch  6 taken 14% (fallthrough)
+        -:  130:			{
+       62:  131:				bool safe = (c == 0x21) || (c >= 0x23 && c <= 0x2B) || (c >= 0x2D && c <= 0x3A)
+branch  0 taken 92% (fallthrough)
+branch  1 taken 8%
+branch  2 taken 86% (fallthrough)
+branch  3 taken 14%
+branch  4 taken 91% (fallthrough)
+branch  5 taken 9%
+branch  6 taken 73% (fallthrough)
+branch  7 taken 27%
+      125:  132:							|| (c >= 0x3C && c <= 0x5B) || (c >= 0x5D && c <= 0x7E);
+branch  0 taken 98% (fallthrough)
+branch  1 taken 2%
+branch  2 taken 85% (fallthrough)
+branch  3 taken 15%
+branch  4 taken 89% (fallthrough)
+branch  5 taken 11%
+branch  6 taken 84% (fallthrough)
+branch  7 taken 16%
+branch  8 taken 100% (fallthrough)
+branch  9 taken 0%
+       63:  133:				if (safe)
+branch  0 taken 90% (fallthrough)
+branch  1 taken 10%
+        -:  134:				{
+       57:  135:					encoded += static_cast<char>(c);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  136:				}
+        -:  137:				else
+        -:  138:				{
+        6:  139:					encoded += '%';
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        6:  140:					encoded += kHexDigits[c >> 4];
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        6:  141:					encoded += kHexDigits[c & 0x0F];
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  142:				}
+        -:  143:			}
+       10:  144:			return encoded;
+    =====:  145:		};
+call    0 never executed
+        -:  146:
+       10:  147:		std::string cookie;
+call    0 returned 100%
+       10:  148:		cookie.reserve(name.size() + value.size() * 3 + 128);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+       10:  149:		cookie += name;
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       10:  150:		cookie += '=';
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       10:  151:		cookie += encodeCookieValue(value);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+        -:  152:
+       10:  153:		if (!options.path.empty())
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0%
+        -:  154:		{
+       10:  155:			cookie += "; Path=";
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       10:  156:			cookie += options.path;
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  157:		}
+       10:  158:		if (!options.domain.empty())
+call    0 returned 100%
+branch  1 taken 10% (fallthrough)
+branch  2 taken 90%
+        -:  159:		{
+        1:  160:			cookie += "; Domain=";
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  161:			cookie += options.domain;
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  162:		}
+       10:  163:		if (options.maxAge >= 0)
+branch  0 taken 10% (fallthrough)
+branch  1 taken 90%
+        -:  164:		{
+        1:  165:			cookie += "; Max-Age=";
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  166:			cookie += std::to_string(options.maxAge);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 never executed
+        -:  167:		}
+       10:  168:		if (options.httpOnly)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:  169:		{
+       10:  170:			cookie += "; HttpOnly";
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  171:		}
+       10:  172:		if (options.secure)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:  173:		{
+       10:  174:			cookie += "; Secure";
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  175:		}
+       10:  176:		if (!options.sameSite.empty())
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0%
+        -:  177:		{
+       10:  178:			cookie += "; SameSite=";
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       10:  179:			cookie += options.sameSite;
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  180:		}
+        -:  181:
+        -:  182:		// insert 追加多个 Set-Cookie（不覆写）
+       10:  183:		m_res.headers.insert("Set-Cookie", cookie);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+       10:  184:	}
+call    0 returned 100%
+call    1 never executed
+        -:  185:
+function _ZN5hical12HttpResponse6nativeEv called 229 returned 100% blocks executed 100%
+      229:  186:	NativeResponse& HttpResponse::native()
+        -:  187:	{
+      229:  188:		return m_res;
+        -:  189:	}
+        -:  190:
+function _ZNK5hical12HttpResponse6nativeEv called 0 returned 0% blocks executed 0%
+    #####:  191:	const NativeResponse& HttpResponse::native() const
+        -:  192:	{
+    #####:  193:		return m_res;
+        -:  194:	}
+        -:  195:
+        -:  196:	// ============ 快捷工厂方法 ============
+        -:  197:
+function _ZN5hical12HttpResponse2okERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEE called 9768 returned 102% blocks executed 67%
+     9768:  198:	HttpResponse HttpResponse::ok(const std::string& body)
+        -:  199:	{
+     9768:  200:		HttpResponse res;
+call    0 returned 100%
+     9800:  201:		res.setStatus(HttpStatusCode::hOk);
+call    0 returned 101%
+     9892:  202:		if (!body.empty())
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 1%
+        -:  203:		{
+    19849:  204:			res.setBody(body);
+call    0 returned 99%
+branch  1 taken 99% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 101%
+branch  4 taken 101% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+        -:  205:		}
+     9952:  206:		return res;
+    =====:  207:	}
+call    0 never executed
+        -:  208:
+function _ZN5hical12HttpResponse4jsonERKN5boost4json5valueE called 7 returned 100% blocks executed 86%
+        7:  209:	HttpResponse HttpResponse::json(const boost::json::value& json)
+        -:  210:	{
+        7:  211:		HttpResponse res;
+call    0 returned 100%
+        7:  212:		res.setStatus(HttpStatusCode::hOk);
+call    0 returned 100%
+        7:  213:		res.setJsonBody(json);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        7:  214:		return res;
+    =====:  215:	}
+call    0 never executed
+        -:  216:
+function _ZN5hical12HttpResponse8notFoundEv called 11 returned 100% blocks executed 52%
+       11:  217:	HttpResponse HttpResponse::notFound()
+        -:  218:	{
+       11:  219:		HttpResponse res;
+call    0 returned 100%
+       11:  220:		res.setStatus(HttpStatusCode::hNotFound);
+call    0 returned 100%
+       44:  221:		res.setBody("Not Found");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+call    9 returned 100%
+call   10 returned 100%
+call   11 never executed
+call   12 never executed
+       33:  222:		res.setHeader("X-Content-Type-Options", "nosniff");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+call    9 returned 100%
+call   10 returned 100%
+call   11 never executed
+call   12 never executed
+       11:  223:		return res;
+    =====:  224:	}
+call    0 never executed
+        -:  225:
+function _ZN5hical12HttpResponse10badRequestERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEE called 1 returned 100% blocks executed 54%
+        1:  226:	HttpResponse HttpResponse::badRequest(const std::string& message)
+        -:  227:	{
+        1:  228:		HttpResponse res;
+call    0 returned 100%
+        1:  229:		res.setStatus(HttpStatusCode::hBadRequest);
+call    0 returned 100%
+        2:  230:		res.setBody(message);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+        3:  231:		res.setHeader("X-Content-Type-Options", "nosniff");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+call    9 returned 100%
+call   10 returned 100%
+call   11 never executed
+call   12 never executed
+        1:  232:		return res;
+    =====:  233:	}
+call    0 never executed
+        -:  234:
+function _ZN5hical12HttpResponse11serverErrorEv called 5 returned 100% blocks executed 52%
+        5:  235:	HttpResponse HttpResponse::serverError()
+        -:  236:	{
+        5:  237:		HttpResponse res;
+call    0 returned 100%
+        5:  238:		res.setStatus(HttpStatusCode::hInternalServerError);
+call    0 returned 100%
+       20:  239:		res.setBody("Internal Server Error");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+call    9 returned 100%
+call   10 returned 100%
+call   11 never executed
+call   12 never executed
+       15:  240:		res.setHeader("X-Content-Type-Options", "nosniff");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+call    9 returned 100%
+call   10 returned 100%
+call   11 never executed
+call   12 never executed
+        5:  241:		return res;
+    =====:  242:	}
+call    0 never executed
+        -:  243:
+function _ZN5hical12HttpResponse8redirectERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEENS_14HttpStatusCodeE called 6 returned 100% blocks executed 54%
+        6:  244:	HttpResponse HttpResponse::redirect(const std::string& location, HttpStatusCode code)
+        -:  245:	{
+        6:  246:		HttpResponse res;
+call    0 returned 100%
+        6:  247:		res.setStatus(code);
+call    0 returned 100%
+        -:  248:		// Location 头经过 CRLF 注入检查（setHeader 内部处理）
+       12:  249:		res.setHeader("Location", location);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+       18:  250:		res.setBody("");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+call    9 returned 100%
+call   10 returned 100%
+call   11 never executed
+call   12 never executed
+        6:  251:		return res;
+    =====:  252:	}
+call    0 never executed
+        -:  253:
+        -:  254:} // namespace hical

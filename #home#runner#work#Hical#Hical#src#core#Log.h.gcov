@@ -1,0 +1,859 @@
+        -:    0:Source:/home/runner/work/Hical/Hical/src/core/Log.h
+        -:    1:#pragma once
+        -:    2:
+        -:    3:#include "FixedBuffer.h"
+        -:    4:
+        -:    5:#include <boost/json/object.hpp>
+        -:    6:
+        -:    7:#include <atomic>
+        -:    8:#include <chrono>
+        -:    9:#include <cstdio>
+        -:   10:#include <cstdlib>
+        -:   11:#include <format>
+        -:   12:#include <memory>
+        -:   13:#include <mutex>
+        -:   14:#include <ostream>
+        -:   15:#include <string_view>
+        -:   16:#include <vector>
+        -:   17:
+        -:   18:namespace hical
+        -:   19:{
+        -:   20:
+        -:   21:	class LogSink;
+        -:   22:	class LogFormatter;
+        -:   23:	class LogChannelRegistry;
+        -:   24:	struct LogRecord;
+        -:   25:
+        -:   26:	/**
+        -:   27:	 * @brief 日志级别枚举（6 级）
+        -:   28:	 * hTrace 最细粒度，在 NDEBUG 下编译期完全消除
+        -:   29:	 * hDebug 调试信息
+        -:   30:	 * hInfo 正常运行信息（生产环境默认级别）
+        -:   31:	 * hWarn 警告，需要关注
+        -:   32:	 * hError 错误，但服务仍可继续运行
+        -:   33:	 * hFatal 致命错误，自动 flush + abort()
+        -:   34:	 */
+        -:   35:	enum class LogLevel : uint8_t
+        -:   36:	{
+        -:   37:		hTrace = 0,
+        -:   38:		hDebug = 1,
+        -:   39:		hInfo = 2,
+        -:   40:		hWarn = 3,
+        -:   41:		hError = 4,
+        -:   42:		hFatal = 5
+        -:   43:	};
+        -:   44:
+        -:   45:	/**
+        -:   46:	 * @brief 日志级别转字符串
+        -:   47:	 * @param level 日志级别
+        -:   48:	 * @return 级别名称字符串（固定 5 字符宽度，便于对齐）
+        -:   49:	 */
+     473*:   50:	inline const char* logLevelToString(LogLevel level)
+        -:   51:	{
+     473*:   52:		switch (level)
+        -:   53:		{
+       6*:   54:			case LogLevel::hTrace:
+       6*:   55:				return "TRACE";
+       8*:   56:			case LogLevel::hDebug:
+       8*:   57:				return "DEBUG";
+     440*:   58:			case LogLevel::hInfo:
+     440*:   59:				return "INFO";
+      10*:   60:			case LogLevel::hWarn:
+      10*:   61:				return "WARN";
+       8*:   62:			case LogLevel::hError:
+       8*:   63:				return "ERROR";
+       4*:   64:			case LogLevel::hFatal:
+       4*:   65:				return "FATAL";
+        -:   66:		}
+    #####:   67:		return "UNKNOWN";
+        -:   68:	}
+------------------
+_ZN5hical16logLevelToStringENS_8LogLevelE:
+function _ZN5hical16logLevelToStringENS_8LogLevelE called 9 returned 100% blocks executed 56%
+        9:   50:	inline const char* logLevelToString(LogLevel level)
+        -:   51:	{
+        9:   52:		switch (level)
+branch  0 taken 0%
+branch  1 taken 11%
+branch  2 taken 78%
+branch  3 taken 11%
+branch  4 taken 0%
+branch  5 taken 0%
+branch  6 taken 0%
+        -:   53:		{
+    #####:   54:			case LogLevel::hTrace:
+    #####:   55:				return "TRACE";
+        1:   56:			case LogLevel::hDebug:
+        1:   57:				return "DEBUG";
+        7:   58:			case LogLevel::hInfo:
+        7:   59:				return "INFO";
+        1:   60:			case LogLevel::hWarn:
+        1:   61:				return "WARN";
+    #####:   62:			case LogLevel::hError:
+    #####:   63:				return "ERROR";
+    #####:   64:			case LogLevel::hFatal:
+    #####:   65:				return "FATAL";
+        -:   66:		}
+    #####:   67:		return "UNKNOWN";
+        -:   68:	}
+------------------
+_ZN5hical16logLevelToStringENS_8LogLevelE:
+function _ZN5hical16logLevelToStringENS_8LogLevelE called 0 returned 0% blocks executed 0%
+    #####:   50:	inline const char* logLevelToString(LogLevel level)
+        -:   51:	{
+    #####:   52:		switch (level)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+branch  5 never executed
+branch  6 never executed
+        -:   53:		{
+    #####:   54:			case LogLevel::hTrace:
+    #####:   55:				return "TRACE";
+    #####:   56:			case LogLevel::hDebug:
+    #####:   57:				return "DEBUG";
+    #####:   58:			case LogLevel::hInfo:
+    #####:   59:				return "INFO";
+    #####:   60:			case LogLevel::hWarn:
+    #####:   61:				return "WARN";
+    #####:   62:			case LogLevel::hError:
+    #####:   63:				return "ERROR";
+    #####:   64:			case LogLevel::hFatal:
+    #####:   65:				return "FATAL";
+        -:   66:		}
+    #####:   67:		return "UNKNOWN";
+        -:   68:	}
+------------------
+_ZN5hical16logLevelToStringENS_8LogLevelE:
+function _ZN5hical16logLevelToStringENS_8LogLevelE called 23 returned 100% blocks executed 89%
+       23:   50:	inline const char* logLevelToString(LogLevel level)
+        -:   51:	{
+       23:   52:		switch (level)
+branch  0 taken 9%
+branch  1 taken 9%
+branch  2 taken 57%
+branch  3 taken 9%
+branch  4 taken 9%
+branch  5 taken 9%
+branch  6 taken 0%
+        -:   53:		{
+        2:   54:			case LogLevel::hTrace:
+        2:   55:				return "TRACE";
+        2:   56:			case LogLevel::hDebug:
+        2:   57:				return "DEBUG";
+       13:   58:			case LogLevel::hInfo:
+       13:   59:				return "INFO";
+        2:   60:			case LogLevel::hWarn:
+        2:   61:				return "WARN";
+        2:   62:			case LogLevel::hError:
+        2:   63:				return "ERROR";
+        2:   64:			case LogLevel::hFatal:
+        2:   65:				return "FATAL";
+        -:   66:		}
+    #####:   67:		return "UNKNOWN";
+        -:   68:	}
+------------------
+_ZN5hical16logLevelToStringENS_8LogLevelE:
+function _ZN5hical16logLevelToStringENS_8LogLevelE called 6 returned 100% blocks executed 89%
+        6:   50:	inline const char* logLevelToString(LogLevel level)
+        -:   51:	{
+        6:   52:		switch (level)
+branch  0 taken 17%
+branch  1 taken 17%
+branch  2 taken 17%
+branch  3 taken 17%
+branch  4 taken 17%
+branch  5 taken 17%
+branch  6 taken 0%
+        -:   53:		{
+        1:   54:			case LogLevel::hTrace:
+        1:   55:				return "TRACE";
+        1:   56:			case LogLevel::hDebug:
+        1:   57:				return "DEBUG";
+        1:   58:			case LogLevel::hInfo:
+        1:   59:				return "INFO";
+        1:   60:			case LogLevel::hWarn:
+        1:   61:				return "WARN";
+        1:   62:			case LogLevel::hError:
+        1:   63:				return "ERROR";
+        1:   64:			case LogLevel::hFatal:
+        1:   65:				return "FATAL";
+        -:   66:		}
+    #####:   67:		return "UNKNOWN";
+        -:   68:	}
+------------------
+_ZN5hical16logLevelToStringENS_8LogLevelE:
+function _ZN5hical16logLevelToStringENS_8LogLevelE called 435 returned 100% blocks executed 100%
+      435:   50:	inline const char* logLevelToString(LogLevel level)
+        -:   51:	{
+      435:   52:		switch (level)
+branch  0 taken 1%
+branch  1 taken 1%
+branch  2 taken 96%
+branch  3 taken 1%
+branch  4 taken 1%
+branch  5 taken 1%
+branch  6 taken -1%
+        -:   53:		{
+        3:   54:			case LogLevel::hTrace:
+        3:   55:				return "TRACE";
+        4:   56:			case LogLevel::hDebug:
+        4:   57:				return "DEBUG";
+      419:   58:			case LogLevel::hInfo:
+      419:   59:				return "INFO";
+        6:   60:			case LogLevel::hWarn:
+        6:   61:				return "WARN";
+        5:   62:			case LogLevel::hError:
+        5:   63:				return "ERROR";
+        1:   64:			case LogLevel::hFatal:
+        1:   65:				return "FATAL";
+        -:   66:		}
+    #####:   67:		return "UNKNOWN";
+        -:   68:	}
+------------------
+        -:   69:
+        -:   70:	/**
+        -:   71:	 * @brief 日志系统（线程安全）
+        -:   72:	 * 单例模式，支持日志级别过滤和多种输出目标。
+        -:   73:	 * 级别判断使用 atomic load（零开销跳过），mutex 仅在实际写入时持有。
+        -:   74:	 * 支持 std::format 风格 API 和流式 API。
+        -:   75:	 */
+        -:   76:	class Logger
+        -:   77:	{
+        -:   78:	public:
+        -:   79:		/**
+        -:   80:		 * @brief 获取全局 Logger 实例（Meyer's singleton）
+        -:   81:		 * @return Logger 引用
+        -:   82:		 */
+        -:   83:		static Logger& instance();
+        -:   84:
+        -:   85:		/**
+        -:   86:		 * @brief 设置日志级别
+        -:   87:		 * @param level 最低输出级别（低于此级别的日志将被过滤）
+        -:   88:		 */
+        -:   89:		void setLevel(LogLevel level);
+        -:   90:
+        -:   91:		/**
+        -:   92:		 * @brief 获取当前日志级别
+        -:   93:		 * @return 当前级别
+        -:   94:		 */
+        -:   95:		LogLevel level() const;
+        -:   96:
+        -:   97:		/**
+        -:   98:		 * @brief 设置 flush 阈值级别（>= 此级别的日志自动 flush）
+        -:   99:		 * @param level flush 阈值（默认 hError）
+        -:  100:		 */
+        -:  101:		void setFlushLevel(LogLevel level);
+        -:  102:
+        -:  103:		/**
+        -:  104:		 * @brief 获取当前 flush 阈值级别
+        -:  105:		 * @return flush 阈值
+        -:  106:		 */
+        -:  107:		LogLevel flushLevel() const;
+        -:  108:
+        -:  109:		/**
+        -:  110:		 * @brief 设置输出到指定流（如 std::cerr、stringstream 等）
+        -:  111:		 * @param os 输出流引用（调用方需保证生命周期）
+        -:  112:		 */
+        -:  113:		void setOutput(std::ostream& os);
+        -:  114:
+        -:  115:		/**
+        -:  116:		 * @brief 设置输出到文件
+        -:  117:		 * @param filePath 日志文件路径
+        -:  118:		 */
+        -:  119:		void setOutput(const std::string& filePath);
+        -:  120:
+        -:  121:		/**
+        -:  122:		 * @brief 统一输出入口（logFmt/log/LogStream 析构均调用此方法）
+        -:  123:		 * @param lvl 日志级别
+        -:  124:		 * @param file 源文件名
+        -:  125:		 * @param line 行号
+        -:  126:		 * @param msg 已格式化的日志消息
+        -:  127:		 */
+        -:  128:		void output(LogLevel lvl, const char* file, int line, std::string_view msg);
+        -:  129:
+        -:  130:		/**
+        -:  131:		 * @brief std::format 风格日志输出
+        -:  132:		 * @param lvl 日志级别
+        -:  133:		 * @param file 源文件名
+        -:  134:		 * @param line 行号
+        -:  135:		 * @param fmt 格式字符串（编译期校验）
+        -:  136:		 * @param args 格式化参数
+        -:  137:		 */
+        -:  138:		template <typename... Args>
+     431*:  139:		void logFmt(LogLevel lvl, const char* file, int line, std::format_string<Args...> fmt, Args&&... args)
+        -:  140:		{
+     431*:  141:			output(lvl, file, line, std::format(fmt, std::forward<Args>(args)...));
+     429*:  142:		}
+------------------
+_ZN5hical6Logger6logFmtIJPKcEEEvNS_8LogLevelES3_iSt19basic_format_stringIcJDpNSt13type_identityIT_E4typeEEEDpOS7_:
+function _ZN5hical6Logger6logFmtIJPKcEEEvNS_8LogLevelES3_iSt19basic_format_stringIcJDpNSt13type_identityIT_E4typeEEEDpOS7_ called 0 returned 0% blocks executed 0%
+    #####:  139:		void logFmt(LogLevel lvl, const char* file, int line, std::format_string<Args...> fmt, Args&&... args)
+        -:  140:		{
+    #####:  141:			output(lvl, file, line, std::format(fmt, std::forward<Args>(args)...));
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed (throw)
+call    8 never executed
+call    9 never executed
+    #####:  142:		}
+------------------
+_ZN5hical6Logger6logFmtIJRNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEPKcEEEvNS_8LogLevelESA_iSt19basic_format_stringIcJDpNSt13type_identityIT_E4typeEEEDpOSE_:
+function _ZN5hical6Logger6logFmtIJRNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEPKcEEEvNS_8LogLevelESA_iSt19basic_format_stringIcJDpNSt13type_identityIT_E4typeEEEDpOSE_ called 0 returned 0% blocks executed 0%
+    #####:  139:		void logFmt(LogLevel lvl, const char* file, int line, std::format_string<Args...> fmt, Args&&... args)
+        -:  140:		{
+    #####:  141:			output(lvl, file, line, std::format(fmt, std::forward<Args>(args)...));
+call    0 never executed
+call    1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed (throw)
+call    5 never executed
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed (throw)
+call    9 never executed
+call   10 never executed
+    #####:  142:		}
+------------------
+_ZN5hical6Logger6logFmtIJEEEvNS_8LogLevelEPKciSt19basic_format_stringIcJDpNSt13type_identityIT_E4typeEEEDpOS7_:
+function _ZN5hical6Logger6logFmtIJEEEvNS_8LogLevelEPKciSt19basic_format_stringIcJDpNSt13type_identityIT_E4typeEEEDpOS7_ called 1 returned 100% blocks executed 75%
+        1:  139:		void logFmt(LogLevel lvl, const char* file, int line, std::format_string<Args...> fmt, Args&&... args)
+        -:  140:		{
+        1:  141:			output(lvl, file, line, std::format(fmt, std::forward<Args>(args)...));
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+call    7 returned 100%
+call    8 never executed
+        1:  142:		}
+------------------
+_ZN5hical6Logger6logFmtIJRKiRiEEEvNS_8LogLevelEPKciSt19basic_format_stringIcJDpNSt13type_identityIT_E4typeEEEDpOSA_:
+function _ZN5hical6Logger6logFmtIJRKiRiEEEvNS_8LogLevelEPKciSt19basic_format_stringIcJDpNSt13type_identityIT_E4typeEEEDpOSA_ called 400 returned 100% blocks executed 80%
+      400:  139:		void logFmt(LogLevel lvl, const char* file, int line, std::format_string<Args...> fmt, Args&&... args)
+        -:  140:		{
+      400:  141:			output(lvl, file, line, std::format(fmt, std::forward<Args>(args)...));
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 99%
+branch  3 taken 99% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+call    6 returned 101%
+branch  7 taken 101% (fallthrough)
+branch  8 taken 0% (throw)
+call    9 returned 100%
+call   10 never executed
+      398:  142:		}
+------------------
+_ZN5hical6Logger6logFmtIJRiEEEvNS_8LogLevelEPKciSt19basic_format_stringIcJDpNSt13type_identityIT_E4typeEEEDpOS8_:
+function _ZN5hical6Logger6logFmtIJRiEEEvNS_8LogLevelEPKciSt19basic_format_stringIcJDpNSt13type_identityIT_E4typeEEEDpOS8_ called 1 returned 100% blocks executed 78%
+        1:  139:		void logFmt(LogLevel lvl, const char* file, int line, std::format_string<Args...> fmt, Args&&... args)
+        -:  140:		{
+        1:  141:			output(lvl, file, line, std::format(fmt, std::forward<Args>(args)...));
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+call    8 returned 100%
+call    9 never executed
+        1:  142:		}
+------------------
+_ZN5hical6Logger6logFmtIJidbEEEvNS_8LogLevelEPKciSt19basic_format_stringIcJDpNSt13type_identityIT_E4typeEEEDpOS7_:
+function _ZN5hical6Logger6logFmtIJidbEEEvNS_8LogLevelEPKciSt19basic_format_stringIcJDpNSt13type_identityIT_E4typeEEEDpOS7_ called 1 returned 100% blocks executed 82%
+        1:  139:		void logFmt(LogLevel lvl, const char* file, int line, std::format_string<Args...> fmt, Args&&... args)
+        -:  140:		{
+        1:  141:			output(lvl, file, line, std::format(fmt, std::forward<Args>(args)...));
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 returned 100%
+branch  8 taken 100% (fallthrough)
+branch  9 taken 0% (throw)
+call   10 returned 100%
+call   11 never executed
+        1:  142:		}
+------------------
+_ZN5hical6Logger6logFmtIJRA10_KciEEEvNS_8LogLevelEPS2_iSt19basic_format_stringIcJDpNSt13type_identityIT_E4typeEEEDpOS9_:
+function _ZN5hical6Logger6logFmtIJRA10_KciEEEvNS_8LogLevelEPS2_iSt19basic_format_stringIcJDpNSt13type_identityIT_E4typeEEEDpOS9_ called 1 returned 100% blocks executed 80%
+        1:  139:		void logFmt(LogLevel lvl, const char* file, int line, std::format_string<Args...> fmt, Args&&... args)
+        -:  140:		{
+        1:  141:			output(lvl, file, line, std::format(fmt, std::forward<Args>(args)...));
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+call    9 returned 100%
+call   10 never executed
+        1:  142:		}
+------------------
+_ZN5hical6Logger6logFmtIJiEEEvNS_8LogLevelEPKciSt19basic_format_stringIcJDpNSt13type_identityIT_E4typeEEEDpOS7_:
+function _ZN5hical6Logger6logFmtIJiEEEvNS_8LogLevelEPKciSt19basic_format_stringIcJDpNSt13type_identityIT_E4typeEEEDpOS7_ called 1 returned 100% blocks executed 78%
+        1:  139:		void logFmt(LogLevel lvl, const char* file, int line, std::format_string<Args...> fmt, Args&&... args)
+        -:  140:		{
+        1:  141:			output(lvl, file, line, std::format(fmt, std::forward<Args>(args)...));
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+call    8 returned 100%
+call    9 never executed
+        1:  142:		}
+------------------
+_ZN5hical6Logger6logFmtIJEEEvNS_8LogLevelEPKciSt19basic_format_stringIcJDpNSt13type_identityIT_E4typeEEEDpOS7_:
+function _ZN5hical6Logger6logFmtIJEEEvNS_8LogLevelEPKciSt19basic_format_stringIcJDpNSt13type_identityIT_E4typeEEEDpOS7_ called 26 returned 100% blocks executed 75%
+       26:  139:		void logFmt(LogLevel lvl, const char* file, int line, std::format_string<Args...> fmt, Args&&... args)
+        -:  140:		{
+       26:  141:			output(lvl, file, line, std::format(fmt, std::forward<Args>(args)...));
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+call    7 returned 100%
+call    8 never executed
+       26:  142:		}
+------------------
+        -:  143:
+        -:  144:		/**
+        -:  145:		 * @brief 输出一条日志（内部转调 output()）
+        -:  146:		 * @param lvl 日志级别
+        -:  147:		 * @param file 源文件名
+        -:  148:		 * @param line 行号
+        -:  149:		 * @param msg 日志消息
+        -:  150:		 */
+        -:  151:		void log(LogLevel lvl, const char* file, int line, std::string_view msg);
+        -:  152:
+        -:  153:		// ============ Sink 管理 API ============
+        -:  154:
+        -:  155:		/**
+        -:  156:		 * @brief 添加一个日志输出后端
+        -:  157:		 * @param sink Sink 的 shared_ptr（Logger 与调用方共享所有权）
+        -:  158:		 */
+        -:  159:		void addSink(std::shared_ptr<LogSink> sink);
+        -:  160:
+        -:  161:		/**
+        -:  162:		 * @brief 设置唯一的 Sink（清除已有 Sink 后添加）
+        -:  163:		 * @param sink Sink 的 shared_ptr
+        -:  164:		 */
+        -:  165:		void setSink(std::shared_ptr<LogSink> sink);
+        -:  166:
+        -:  167:		/**
+        -:  168:		 * @brief 清除所有已注册的 Sink
+        -:  169:		 */
+        -:  170:		void clearSinks();
+        -:  171:
+        -:  172:		// ============ Formatter 管理 API ============
+        -:  173:
+        -:  174:		/**
+        -:  175:		 * @brief 设置默认通道的日志格式化器
+        -:  176:		 * @param formatter Formatter 的 shared_ptr（默认 TextFormatter）
+        -:  177:		 */
+        -:  178:		void setFormatter(std::shared_ptr<LogFormatter> formatter);
+        -:  179:
+        -:  180:		// ============ Channel 管理 API ============
+        -:  181:
+        -:  182:		/**
+        -:  183:		 * @brief 获取通道注册表
+        -:  184:		 * @return 通道注册表引用
+        -:  185:		 */
+        -:  186:		LogChannelRegistry& channels();
+        -:  187:
+        -:  188:		/**
+        -:  189:		 * @brief 发射结构化日志到指定通道
+        -:  190:		 * @param channelName 通道名称
+        -:  191:		 * @param record 日志条目
+        -:  192:		 */
+        -:  193:		void emitTo(const std::string& channelName, const LogRecord& record);
+        -:  194:
+        -:  195:		/**
+        -:  196:		 * @brief 发射结构化日志到默认通道
+        -:  197:		 * @param record 日志条目
+        -:  198:		 */
+        -:  199:		void emit(const LogRecord& record);
+        -:  200:
+        -:  201:		/**
+        -:  202:		 * @brief 带结构化字段的 std::format 风格日志输出
+        -:  203:		 * @param lvl 日志级别
+        -:  204:		 * @param file 源文件名
+        -:  205:		 * @param line 行号
+        -:  206:		 * @param fields 结构化字段
+        -:  207:		 * @param fmt 格式字符串
+        -:  208:		 * @param args 格式化参数
+        -:  209:		 */
+        -:  210:		template <typename... Args>
+        -:  211:		void logFmtWithFields(LogLevel lvl,
+        -:  212:							  const char* file,
+        -:  213:							  int line,
+        -:  214:							  boost::json::object fields,
+        -:  215:							  std::format_string<Args...> fmt,
+        -:  216:							  Args&&... args)
+        -:  217:		{
+        -:  218:			outputWithFields(lvl, file, line, std::move(fields), std::format(fmt, std::forward<Args>(args)...));
+        -:  219:		}
+        -:  220:
+        -:  221:		/**
+        -:  222:		 * @brief 带结构化字段的统一输出入口
+        -:  223:		 */
+        -:  224:		void outputWithFields(LogLevel lvl,
+        -:  225:							  const char* file,
+        -:  226:							  int line,
+        -:  227:							  boost::json::object fields,
+        -:  228:							  std::string_view msg);
+        -:  229:
+        -:  230:	private:
+        -:  231:		Logger();
+        -:  232:		Logger(const Logger&) = delete;
+        -:  233:		Logger& operator=(const Logger&) = delete;
+        -:  234:
+        -:  235:		std::atomic<LogLevel> m_level {LogLevel::hInfo};
+        -:  236:		std::atomic<LogLevel> m_flushLevel {LogLevel::hError};
+        -:  237:		std::mutex m_mutex;
+        -:  238:		std::shared_ptr<const std::vector<std::shared_ptr<LogSink>>> m_sinks;
+        -:  239:		std::shared_ptr<LogFormatter> m_formatter;
+        -:  240:		std::unique_ptr<LogChannelRegistry> m_channels;
+        -:  241:	};
+        -:  242:
+        -:  243:	// ============ 流式日志辅助类 ============
+        -:  244:
+        -:  245:	/**
+        -:  246:	 * @brief 流式日志收集器（RAII）
+        -:  247:	 * 析构时调用 Logger::output() 输出收集到的日志消息。
+        -:  248:	 */
+        -:  249:	class LogStream
+        -:  250:	{
+        -:  251:	public:
+function _ZN5hical9LogStreamC2ENS_8LogLevelEPKci called 2 returned 100% blocks executed 100%
+        2:  252:		LogStream(LogLevel lvl, const char* file, int line) : m_lvl(lvl), m_file(file), m_line(line)
+call    0 returned 100%
+        -:  253:		{
+        2:  254:		}
+        -:  255:
+function _ZN5hical9LogStreamD2Ev called 2 returned 100% blocks executed 100%
+        2:  256:		~LogStream()
+        -:  257:		{
+        2:  258:			if (m_buf.size() > 0)
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0%
+        -:  259:			{
+        2:  260:				Logger::instance().output(m_lvl, m_file, m_line, m_buf.view());
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+        -:  261:			}
+        2:  262:		}
+call    0 returned 100%
+        -:  263:
+        -:  264:		LogStream(const LogStream&) = delete;
+        -:  265:		LogStream& operator=(const LogStream&) = delete;
+        -:  266:		LogStream(LogStream&&) noexcept = default;
+        -:  267:		LogStream& operator=(LogStream&&) noexcept = default;
+        -:  268:
+        -:  269:		template <typename T>
+        6:  270:		LogStream& operator<<(const T& val)
+        -:  271:		{
+        6:  272:			m_buf << val;
+        6:  273:			return *this;
+        -:  274:		}
+------------------
+_ZN5hical9LogStreamlsIA13_cEERS0_RKT_:
+function _ZN5hical9LogStreamlsIA13_cEERS0_RKT_ called 1 returned 100% blocks executed 100%
+        1:  270:		LogStream& operator<<(const T& val)
+        -:  271:		{
+        1:  272:			m_buf << val;
+call    0 returned 100%
+        1:  273:			return *this;
+        -:  274:		}
+------------------
+_ZN5hical9LogStreamlsIiEERS0_RKT_:
+function _ZN5hical9LogStreamlsIiEERS0_RKT_ called 2 returned 100% blocks executed 100%
+        2:  270:		LogStream& operator<<(const T& val)
+        -:  271:		{
+        2:  272:			m_buf << val;
+call    0 returned 100%
+        2:  273:			return *this;
+        -:  274:		}
+------------------
+_ZN5hical9LogStreamlsIA6_cEERS0_RKT_:
+function _ZN5hical9LogStreamlsIA6_cEERS0_RKT_ called 3 returned 100% blocks executed 100%
+        3:  270:		LogStream& operator<<(const T& val)
+        -:  271:		{
+        3:  272:			m_buf << val;
+call    0 returned 100%
+        3:  273:			return *this;
+        -:  274:		}
+------------------
+        -:  275:
+        -:  276:	private:
+        -:  277:		LogLevel m_lvl;
+        -:  278:		const char* m_file;
+        -:  279:		int m_line;
+        -:  280:		FixedBuffer<4096> m_buf;
+        -:  281:	};
+        -:  282:
+        -:  283:	/**
+        -:  284:	 * @brief 辅助类，用于在流式宏的 if-else 分支中消耗 LogStream 对象
+        -:  285:	 */
+        -:  286:	struct LogMessageVoid
+        -:  287:	{
+function _ZNK5hical14LogMessageVoidanERKNS_9LogStreamE called 2 returned 100% blocks executed 100%
+        2:  288:		void operator&(const LogStream& /*unused*/) const
+        -:  289:		{
+        2:  290:		}
+        -:  291:	};
+        -:  292:
+        -:  293:} // namespace hical
+        -:  294:
+        -:  295:// ============ 日志宏 ============
+        -:  296:// 级别短路：先 atomic load 判断级别，不满足时零开销跳过
+        -:  297:
+        -:  298:// NOLINTBEGIN(cppcoreguidelines-macro-usage)
+        -:  299:
+        -:  300:// 内部实现宏：级别判断 + logFmt 调用
+        -:  301:#define HICAL_LOG_IMPL_(lvl, fmt, ...)                                                                     \
+        -:  302:	do                                                                                                     \
+        -:  303:	{                                                                                                      \
+        -:  304:		if (::hical::Logger::instance().level() <= (lvl))                                                  \
+        -:  305:		{                                                                                                  \
+        -:  306:			::hical::Logger::instance().logFmt((lvl), __FILE__, __LINE__, fmt __VA_OPT__(, ) __VA_ARGS__); \
+        -:  307:		}                                                                                                  \
+        -:  308:	}                                                                                                      \
+        -:  309:	while (0)
+        -:  310:
+        -:  311:// ---- TRACE：NDEBUG 下编译期完全消除 ----
+        -:  312:#ifdef NDEBUG
+        -:  313:	#define HICAL_LOG_TRACE(fmt, ...) ((void)0)
+        -:  314:	#define HICAL_LOG_TRACE_IF(cond, fmt, ...) ((void)0)
+        -:  315:	#define HICAL_LOG_TRACE_F(fields, fmt, ...) ((void)0)
+        -:  316:	// NOLINTNEXTLINE(bugprone-macro-parentheses)
+        -:  317:	#define HICAL_LOG_TRACE_STREAM \
+        -:  318:		if (true)                  \
+        -:  319:		{                          \
+        -:  320:		}                          \
+        -:  321:		else                       \
+        -:  322:			::hical::LogMessageVoid() & ::hical::LogStream(::hical::LogLevel::hTrace, __FILE__, __LINE__)
+        -:  323:#else
+        -:  324:	#define HICAL_LOG_TRACE(fmt, ...) HICAL_LOG_IMPL_(::hical::LogLevel::hTrace, fmt __VA_OPT__(, ) __VA_ARGS__)
+        -:  325:	#define HICAL_LOG_TRACE_IF(cond, fmt, ...)                   \
+        -:  326:		do                                                       \
+        -:  327:		{                                                        \
+        -:  328:			if (cond)                                            \
+        -:  329:			{                                                    \
+        -:  330:				HICAL_LOG_TRACE(fmt __VA_OPT__(, ) __VA_ARGS__); \
+        -:  331:			}                                                    \
+        -:  332:		}                                                        \
+        -:  333:		while (0)
+        -:  334:	// NOLINTNEXTLINE(bugprone-macro-parentheses)
+        -:  335:	#define HICAL_LOG_TRACE_STREAM                                           \
+        -:  336:		if (::hical::Logger::instance().level() > ::hical::LogLevel::hTrace) \
+        -:  337:		{                                                                    \
+        -:  338:		}                                                                    \
+        -:  339:		else                                                                 \
+        -:  340:			::hical::LogMessageVoid() & ::hical::LogStream(::hical::LogLevel::hTrace, __FILE__, __LINE__)
+        -:  341:#endif
+        -:  342:
+        -:  343:// ---- DEBUG ----
+        -:  344:#define HICAL_LOG_DEBUG(fmt, ...) HICAL_LOG_IMPL_(::hical::LogLevel::hDebug, fmt __VA_OPT__(, ) __VA_ARGS__)
+        -:  345:#define HICAL_LOG_DEBUG_IF(cond, fmt, ...)                   \
+        -:  346:	do                                                       \
+        -:  347:	{                                                        \
+        -:  348:		if (cond)                                            \
+        -:  349:		{                                                    \
+        -:  350:			HICAL_LOG_DEBUG(fmt __VA_OPT__(, ) __VA_ARGS__); \
+        -:  351:		}                                                    \
+        -:  352:	}                                                        \
+        -:  353:	while (0)
+        -:  354:// NOLINTNEXTLINE(bugprone-macro-parentheses)
+        -:  355:#define HICAL_LOG_DEBUG_STREAM                                           \
+        -:  356:	if (::hical::Logger::instance().level() > ::hical::LogLevel::hDebug) \
+        -:  357:	{                                                                    \
+        -:  358:	}                                                                    \
+        -:  359:	else                                                                 \
+        -:  360:		::hical::LogMessageVoid() & ::hical::LogStream(::hical::LogLevel::hDebug, __FILE__, __LINE__)
+        -:  361:
+        -:  362:// ---- INFO ----
+        -:  363:#define HICAL_LOG_INFO(fmt, ...) HICAL_LOG_IMPL_(::hical::LogLevel::hInfo, fmt __VA_OPT__(, ) __VA_ARGS__)
+        -:  364:#define HICAL_LOG_INFO_IF(cond, fmt, ...)                   \
+        -:  365:	do                                                      \
+        -:  366:	{                                                       \
+        -:  367:		if (cond)                                           \
+        -:  368:		{                                                   \
+        -:  369:			HICAL_LOG_INFO(fmt __VA_OPT__(, ) __VA_ARGS__); \
+        -:  370:		}                                                   \
+        -:  371:	}                                                       \
+        -:  372:	while (0)
+        -:  373:// NOLINTNEXTLINE(bugprone-macro-parentheses)
+        -:  374:#define HICAL_LOG_INFO_STREAM                                           \
+        -:  375:	if (::hical::Logger::instance().level() > ::hical::LogLevel::hInfo) \
+        -:  376:	{                                                                   \
+        -:  377:	}                                                                   \
+        -:  378:	else                                                                \
+        -:  379:		::hical::LogMessageVoid() & ::hical::LogStream(::hical::LogLevel::hInfo, __FILE__, __LINE__)
+        -:  380:
+        -:  381:// ---- WARN ----
+        -:  382:#define HICAL_LOG_WARN(fmt, ...) HICAL_LOG_IMPL_(::hical::LogLevel::hWarn, fmt __VA_OPT__(, ) __VA_ARGS__)
+        -:  383:#define HICAL_LOG_WARN_IF(cond, fmt, ...)                   \
+        -:  384:	do                                                      \
+        -:  385:	{                                                       \
+        -:  386:		if (cond)                                           \
+        -:  387:		{                                                   \
+        -:  388:			HICAL_LOG_WARN(fmt __VA_OPT__(, ) __VA_ARGS__); \
+        -:  389:		}                                                   \
+        -:  390:	}                                                       \
+        -:  391:	while (0)
+        -:  392:// NOLINTNEXTLINE(bugprone-macro-parentheses)
+        -:  393:#define HICAL_LOG_WARN_STREAM                                           \
+        -:  394:	if (::hical::Logger::instance().level() > ::hical::LogLevel::hWarn) \
+        -:  395:	{                                                                   \
+        -:  396:	}                                                                   \
+        -:  397:	else                                                                \
+        -:  398:		::hical::LogMessageVoid() & ::hical::LogStream(::hical::LogLevel::hWarn, __FILE__, __LINE__)
+        -:  399:
+        -:  400:// ---- ERROR ----
+        -:  401:#define HICAL_LOG_ERROR(fmt, ...) HICAL_LOG_IMPL_(::hical::LogLevel::hError, fmt __VA_OPT__(, ) __VA_ARGS__)
+        -:  402:#define HICAL_LOG_ERROR_IF(cond, fmt, ...)                   \
+        -:  403:	do                                                       \
+        -:  404:	{                                                        \
+        -:  405:		if (cond)                                            \
+        -:  406:		{                                                    \
+        -:  407:			HICAL_LOG_ERROR(fmt __VA_OPT__(, ) __VA_ARGS__); \
+        -:  408:		}                                                    \
+        -:  409:	}                                                        \
+        -:  410:	while (0)
+        -:  411:// NOLINTNEXTLINE(bugprone-macro-parentheses)
+        -:  412:#define HICAL_LOG_ERROR_STREAM                                           \
+        -:  413:	if (::hical::Logger::instance().level() > ::hical::LogLevel::hError) \
+        -:  414:	{                                                                    \
+        -:  415:	}                                                                    \
+        -:  416:	else                                                                 \
+        -:  417:		::hical::LogMessageVoid() & ::hical::LogStream(::hical::LogLevel::hError, __FILE__, __LINE__)
+        -:  418:
+        -:  419:// ---- FATAL ----
+        -:  420:#define HICAL_LOG_FATAL(fmt, ...) HICAL_LOG_IMPL_(::hical::LogLevel::hFatal, fmt __VA_OPT__(, ) __VA_ARGS__)
+        -:  421:#define HICAL_LOG_FATAL_IF(cond, fmt, ...)                   \
+        -:  422:	do                                                       \
+        -:  423:	{                                                        \
+        -:  424:		if (cond)                                            \
+        -:  425:		{                                                    \
+        -:  426:			HICAL_LOG_FATAL(fmt __VA_OPT__(, ) __VA_ARGS__); \
+        -:  427:		}                                                    \
+        -:  428:	}                                                        \
+        -:  429:	while (0)
+        -:  430:// NOLINTNEXTLINE(bugprone-macro-parentheses)
+        -:  431:#define HICAL_LOG_FATAL_STREAM                                           \
+        -:  432:	if (::hical::Logger::instance().level() > ::hical::LogLevel::hFatal) \
+        -:  433:	{                                                                    \
+        -:  434:	}                                                                    \
+        -:  435:	else                                                                 \
+        -:  436:		::hical::LogMessageVoid() & ::hical::LogStream(::hical::LogLevel::hFatal, __FILE__, __LINE__)
+        -:  437:
+        -:  438:// ---- 结构化字段日志宏（带 boost::json::object fields）----
+        -:  439:// 需要完整的 LogRecord 定义，用户使用前需 include LogRecord.h
+        -:  440:// 或者直接 include LogChannel.h（其中包含 LogRecord.h）
+        -:  441:#include "LogChannel.h"
+        -:  442:#include "LogRecord.h"
+        -:  443:
+        -:  444:#define HICAL_LOG_IMPL_F_(lvl, fields, fmt, ...)                                          \
+        -:  445:	do                                                                                    \
+        -:  446:	{                                                                                     \
+        -:  447:		if (::hical::Logger::instance().level() <= (lvl))                                 \
+        -:  448:		{                                                                                 \
+        -:  449:			::hical::Logger::instance().logFmtWithFields((lvl),                           \
+        -:  450:														 __FILE__,                        \
+        -:  451:														 __LINE__,                        \
+        -:  452:														 (fields),                        \
+        -:  453:														 fmt __VA_OPT__(, ) __VA_ARGS__); \
+        -:  454:		}                                                                                 \
+        -:  455:	}                                                                                     \
+        -:  456:	while (0)
+        -:  457:
+        -:  458:#ifndef NDEBUG
+        -:  459:	#define HICAL_LOG_TRACE_F(fields, fmt, ...) \
+        -:  460:		HICAL_LOG_IMPL_F_(::hical::LogLevel::hTrace, fields, fmt __VA_OPT__(, ) __VA_ARGS__)
+        -:  461:#endif
+        -:  462:#define HICAL_LOG_DEBUG_F(fields, fmt, ...) \
+        -:  463:	HICAL_LOG_IMPL_F_(::hical::LogLevel::hDebug, fields, fmt __VA_OPT__(, ) __VA_ARGS__)
+        -:  464:#define HICAL_LOG_INFO_F(fields, fmt, ...) \
+        -:  465:	HICAL_LOG_IMPL_F_(::hical::LogLevel::hInfo, fields, fmt __VA_OPT__(, ) __VA_ARGS__)
+        -:  466:#define HICAL_LOG_WARN_F(fields, fmt, ...) \
+        -:  467:	HICAL_LOG_IMPL_F_(::hical::LogLevel::hWarn, fields, fmt __VA_OPT__(, ) __VA_ARGS__)
+        -:  468:#define HICAL_LOG_ERROR_F(fields, fmt, ...) \
+        -:  469:	HICAL_LOG_IMPL_F_(::hical::LogLevel::hError, fields, fmt __VA_OPT__(, ) __VA_ARGS__)
+        -:  470:#define HICAL_LOG_FATAL_F(fields, fmt, ...) \
+        -:  471:	HICAL_LOG_IMPL_F_(::hical::LogLevel::hFatal, fields, fmt __VA_OPT__(, ) __VA_ARGS__)
+        -:  472:
+        -:  473:// 辅助拼接宏（需要间接层以确保参数先展开再拼接）
+        -:  474:#define HICAL_LOG_CONCAT_(prefix, suffix) prefix##suffix
+        -:  475:#define HICAL_LOG_LEVEL_(level) HICAL_LOG_CONCAT_(h, level)
+        -:  476:
+        -:  477:// ---- 通道日志宏 ----
+        -:  478:// 用法: HICAL_LOG_TO("access", Info, "GET /api status={}", 200)
+        -:  479:#define HICAL_LOG_TO(channel, lvlName, fmt, ...)                                   \
+        -:  480:	do                                                                             \
+        -:  481:	{                                                                              \
+        -:  482:		auto hCh_ = ::hical::Logger::instance().channels().get(channel);           \
+        -:  483:		if (hCh_ && hCh_->level() <= ::hical::LogLevel::HICAL_LOG_LEVEL_(lvlName)) \
+        -:  484:		{                                                                          \
+        -:  485:			::hical::LogRecord hRec_;                                              \
+        -:  486:			hRec_.level = ::hical::LogLevel::HICAL_LOG_LEVEL_(lvlName);            \
+        -:  487:			hRec_.timestamp = std::chrono::system_clock::now();                    \
+        -:  488:			hRec_.file = __FILE__;                                                 \
+        -:  489:			hRec_.line = __LINE__;                                                 \
+        -:  490:			hRec_.message = std::format(fmt __VA_OPT__(, ) __VA_ARGS__);           \
+        -:  491:			hCh_->emit(hRec_);                                                     \
+        -:  492:		}                                                                          \
+        -:  493:	}                                                                              \
+        -:  494:	while (0)
+        -:  495:
+        -:  496:// ---- 通道 + 结构化字段日志宏 ----
+        -:  497:// 用法: HICAL_LOG_TO_F("access", Info, {{"status", 200}}, "GET /api")
+        -:  498:#define HICAL_LOG_TO_F(channel, lvlName, fields, fmt, ...)                         \
+        -:  499:	do                                                                             \
+        -:  500:	{                                                                              \
+        -:  501:		auto hCh_ = ::hical::Logger::instance().channels().get(channel);           \
+        -:  502:		if (hCh_ && hCh_->level() <= ::hical::LogLevel::HICAL_LOG_LEVEL_(lvlName)) \
+        -:  503:		{                                                                          \
+        -:  504:			::hical::LogRecord hRec_;                                              \
+        -:  505:			hRec_.level = ::hical::LogLevel::HICAL_LOG_LEVEL_(lvlName);            \
+        -:  506:			hRec_.timestamp = std::chrono::system_clock::now();                    \
+        -:  507:			hRec_.file = __FILE__;                                                 \
+        -:  508:			hRec_.line = __LINE__;                                                 \
+        -:  509:			hRec_.message = std::format(fmt __VA_OPT__(, ) __VA_ARGS__);           \
+        -:  510:			hRec_.fields = (fields);                                               \
+        -:  511:			hCh_->emit(hRec_);                                                     \
+        -:  512:		}                                                                          \
+        -:  513:	}                                                                              \
+        -:  514:	while (0)
+        -:  515:
+        -:  516:// NOLINTEND(cppcoreguidelines-macro-usage)

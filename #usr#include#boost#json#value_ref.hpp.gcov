@@ -1,0 +1,1210 @@
+        -:    0:Source:/usr/include/boost/json/value_ref.hpp
+        -:    1://
+        -:    2:// Copyright (c) 2019 Vinnie Falco (vinnie.falco@gmail.com)
+        -:    3://
+        -:    4:// Distributed under the Boost Software License, Version 1.0. (See accompanying
+        -:    5:// file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+        -:    6://
+        -:    7:// Official repository: https://github.com/boostorg/json
+        -:    8://
+        -:    9:
+        -:   10:#ifndef BOOST_JSON_VALUE_REF_HPP
+        -:   11:#define BOOST_JSON_VALUE_REF_HPP
+        -:   12:
+        -:   13:#include <boost/json/detail/config.hpp>
+        -:   14:#include <boost/json/storage_ptr.hpp>
+        -:   15:#include <boost/json/string.hpp>
+        -:   16:#include <initializer_list>
+        -:   17:#include <type_traits>
+        -:   18:#include <utility>
+        -:   19:
+        -:   20:namespace boost {
+        -:   21:namespace json {
+        -:   22:
+        -:   23:#ifndef BOOST_JSON_DOCS
+        -:   24:class value;
+        -:   25:class object;
+        -:   26:class array;
+        -:   27:class string;
+        -:   28:#endif
+        -:   29:
+        -:   30://----------------------------------------------------------
+        -:   31:
+        -:   32:/** The type used in initializer lists.
+        -:   33:
+        -:   34:    This type is used in initializer lists for
+        -:   35:    lazy construction of and assignment to the
+        -:   36:    container types @ref value, @ref array,
+        -:   37:    and @ref object. The two types of initializer
+        -:   38:    lists used are:
+        -:   39:
+        -:   40:    @li `std::initializer_list< value_ref >` for
+        -:   41:    constructing or assigning a @ref value or
+        -:   42:    @ref array, and
+        -:   43:
+        -:   44:    @li `std::initializer_list< std::pair< string_view, value_ref > >`
+        -:   45:    for constructing or assigning an @ref object.
+        -:   46:
+        -:   47:    A `value_ref` uses reference semantics. Creation
+        -:   48:    of the actual container from the initializer
+        -:   49:    list is lazily deferred until the list is used.
+        -:   50:    This means that the @ref memory_resource used to
+        -:   51:    construct a container can be specified after the
+        -:   52:    point where the initializer list is specified.
+        -:   53:
+        -:   54:    @par Example
+        -:   55:
+        -:   56:    This example demonstrates how a user-defined type
+        -:   57:    containing a JSON value can be constructed from
+        -:   58:    an initializer list:
+        -:   59:
+        -:   60:    @code
+        -:   61:
+        -:   62:    class my_type
+        -:   63:    {
+        -:   64:        value jv_;
+        -:   65:
+        -:   66:    public:
+        -:   67:        my_type( std::initializer_list< value_ref > init )
+        -:   68:            : jv_(init)
+        -:   69:        {
+        -:   70:        }
+        -:   71:    };
+        -:   72:
+        -:   73:    @endcode
+        -:   74:
+        -:   75:    @note Never declare a variable of type
+        -:   76:    `std::initializer_list` except in function
+        -:   77:    parameter lists, otherwise the behavior may
+        -:   78:    be undefined.
+        -:   79:
+        -:   80:    @see
+        -:   81:        @ref value,
+        -:   82:        @ref array,
+        -:   83:        @ref object
+        -:   84:*/
+        -:   85:class value_ref
+        -:   86:{
+        -:   87:    friend class value;
+        -:   88:    friend class object;
+        -:   89:    friend class array;
+        -:   90:
+        -:   91:    friend class value_ref_test;
+        -:   92:
+        -:   93:    enum class what
+        -:   94:    {
+        -:   95:        str,
+        -:   96:        ini,
+        -:   97:        func,
+        -:   98:        cfunc,
+        -:   99:        strfunc,
+        -:  100:    };
+        -:  101:
+        -:  102:    using init_list =
+        -:  103:        std::initializer_list<value_ref>;
+        -:  104:
+        -:  105:    struct func_type
+        -:  106:    {
+        -:  107:        value(*f)(void*, storage_ptr);
+        -:  108:        void* p;
+        -:  109:    };
+        -:  110:
+        -:  111:    struct cfunc_type
+        -:  112:    {
+        -:  113:        value(*f)(void const*, storage_ptr);
+        -:  114:        void const* p;
+        -:  115:    };
+        -:  116:
+        -:  117:    union arg_type
+        -:  118:    {
+        -:  119:        string_view         str_;
+        -:  120:        init_list           init_list_;
+        -:  121:
+        -:  122:        signed char         schar_;
+        -:  123:        short               short_;
+        -:  124:        int                 int_;
+        -:  125:        long                long_;
+        -:  126:        long long           long_long_;
+        -:  127:        unsigned char       uchar_;
+        -:  128:        unsigned short      ushort_;
+        -:  129:        unsigned int        uint_;
+        -:  130:        unsigned long       ulong_;
+        -:  131:        unsigned long long  ulong_long_;
+        -:  132:        float               float_;
+        -:  133:        double              double_;
+        -:  134:        bool                bool_;
+        -:  135:        std::nullptr_t      nullptr_;
+        -:  136:
+    #####:  137:        arg_type() {}
+------------------
+_ZN5boost4json9value_ref8arg_typeC2Ev:
+function _ZN5boost4json9value_ref8arg_typeC2Ev called 0 returned 0% blocks executed 0%
+    #####:  137:        arg_type() {}
+------------------
+_ZN5boost4json9value_ref8arg_typeC2Ev:
+function _ZN5boost4json9value_ref8arg_typeC2Ev called 0 returned 0% blocks executed 0%
+    #####:  137:        arg_type() {}
+------------------
+      44*:  138:        explicit arg_type(string_view t) noexcept : str_(t) {}
+------------------
+_ZN5boost4json9value_ref8arg_typeC2ENS_4core17basic_string_viewIcEE:
+function _ZN5boost4json9value_ref8arg_typeC2ENS_4core17basic_string_viewIcEE called 2 returned 100% blocks executed 100%
+        2:  138:        explicit arg_type(string_view t) noexcept : str_(t) {}
+------------------
+_ZN5boost4json9value_ref8arg_typeC2ENS_4core17basic_string_viewIcEE:
+function _ZN5boost4json9value_ref8arg_typeC2ENS_4core17basic_string_viewIcEE called 4 returned 100% blocks executed 100%
+        4:  138:        explicit arg_type(string_view t) noexcept : str_(t) {}
+------------------
+_ZN5boost4json9value_ref8arg_typeC2ENS_4core17basic_string_viewIcEE:
+function _ZN5boost4json9value_ref8arg_typeC2ENS_4core17basic_string_viewIcEE called 5 returned 100% blocks executed 100%
+        5:  138:        explicit arg_type(string_view t) noexcept : str_(t) {}
+------------------
+_ZN5boost4json9value_ref8arg_typeC2ENS_4core17basic_string_viewIcEE:
+function _ZN5boost4json9value_ref8arg_typeC2ENS_4core17basic_string_viewIcEE called 29 returned 100% blocks executed 100%
+       29:  138:        explicit arg_type(string_view t) noexcept : str_(t) {}
+------------------
+_ZN5boost4json9value_ref8arg_typeC2ENS_4core17basic_string_viewIcEE:
+function _ZN5boost4json9value_ref8arg_typeC2ENS_4core17basic_string_viewIcEE called 4 returned 100% blocks executed 100%
+        4:  138:        explicit arg_type(string_view t) noexcept : str_(t) {}
+------------------
+_ZN5boost4json9value_ref8arg_typeC2ENS_4core17basic_string_viewIcEE:
+function _ZN5boost4json9value_ref8arg_typeC2ENS_4core17basic_string_viewIcEE called 0 returned 0% blocks executed 0%
+    #####:  138:        explicit arg_type(string_view t) noexcept : str_(t) {}
+------------------
+_ZN5boost4json9value_ref8arg_typeC2ENS_4core17basic_string_viewIcEE:
+function _ZN5boost4json9value_ref8arg_typeC2ENS_4core17basic_string_viewIcEE called 0 returned 0% blocks executed 0%
+    #####:  138:        explicit arg_type(string_view t) noexcept : str_(t) {}
+------------------
+_ZN5boost4json9value_ref8arg_typeC2ENS_4core17basic_string_viewIcEE:
+function _ZN5boost4json9value_ref8arg_typeC2ENS_4core17basic_string_viewIcEE called 0 returned 0% blocks executed 0%
+    #####:  138:        explicit arg_type(string_view t) noexcept : str_(t) {}
+------------------
+      11*:  139:        explicit arg_type(init_list t) noexcept : init_list_(t) {}
+------------------
+_ZN5boost4json9value_ref8arg_typeC2ESt16initializer_listIS1_E:
+function _ZN5boost4json9value_ref8arg_typeC2ESt16initializer_listIS1_E called 1 returned 100% blocks executed 100%
+        1:  139:        explicit arg_type(init_list t) noexcept : init_list_(t) {}
+------------------
+_ZN5boost4json9value_ref8arg_typeC2ESt16initializer_listIS1_E:
+function _ZN5boost4json9value_ref8arg_typeC2ESt16initializer_listIS1_E called 2 returned 100% blocks executed 100%
+        2:  139:        explicit arg_type(init_list t) noexcept : init_list_(t) {}
+------------------
+_ZN5boost4json9value_ref8arg_typeC2ESt16initializer_listIS1_E:
+function _ZN5boost4json9value_ref8arg_typeC2ESt16initializer_listIS1_E called 3 returned 100% blocks executed 100%
+        3:  139:        explicit arg_type(init_list t) noexcept : init_list_(t) {}
+------------------
+_ZN5boost4json9value_ref8arg_typeC2ESt16initializer_listIS1_E:
+function _ZN5boost4json9value_ref8arg_typeC2ESt16initializer_listIS1_E called 3 returned 100% blocks executed 100%
+        3:  139:        explicit arg_type(init_list t) noexcept : init_list_(t) {}
+------------------
+_ZN5boost4json9value_ref8arg_typeC2ESt16initializer_listIS1_E:
+function _ZN5boost4json9value_ref8arg_typeC2ESt16initializer_listIS1_E called 2 returned 100% blocks executed 100%
+        2:  139:        explicit arg_type(init_list t) noexcept : init_list_(t) {}
+------------------
+_ZN5boost4json9value_ref8arg_typeC2ESt16initializer_listIS1_E:
+function _ZN5boost4json9value_ref8arg_typeC2ESt16initializer_listIS1_E called 0 returned 0% blocks executed 0%
+    #####:  139:        explicit arg_type(init_list t) noexcept : init_list_(t) {}
+------------------
+_ZN5boost4json9value_ref8arg_typeC2ESt16initializer_listIS1_E:
+function _ZN5boost4json9value_ref8arg_typeC2ESt16initializer_listIS1_E called 0 returned 0% blocks executed 0%
+    #####:  139:        explicit arg_type(init_list t) noexcept : init_list_(t) {}
+------------------
+_ZN5boost4json9value_ref8arg_typeC2ESt16initializer_listIS1_E:
+function _ZN5boost4json9value_ref8arg_typeC2ESt16initializer_listIS1_E called 0 returned 0% blocks executed 0%
+    #####:  139:        explicit arg_type(init_list t) noexcept : init_list_(t) {}
+------------------
+        -:  140:        explicit arg_type(signed char t) noexcept : schar_(t) {}
+        -:  141:        explicit arg_type(short t) noexcept : short_(t) {}
+      10*:  142:        explicit arg_type(int t) noexcept : int_(t) {}
+------------------
+_ZN5boost4json9value_ref8arg_typeC2Ei:
+function _ZN5boost4json9value_ref8arg_typeC2Ei called 1 returned 100% blocks executed 100%
+        1:  142:        explicit arg_type(int t) noexcept : int_(t) {}
+------------------
+_ZN5boost4json9value_ref8arg_typeC2Ei:
+function _ZN5boost4json9value_ref8arg_typeC2Ei called 9 returned 100% blocks executed 100%
+        9:  142:        explicit arg_type(int t) noexcept : int_(t) {}
+------------------
+_ZN5boost4json9value_ref8arg_typeC2Ei:
+function _ZN5boost4json9value_ref8arg_typeC2Ei called 0 returned 0% blocks executed 0%
+    #####:  142:        explicit arg_type(int t) noexcept : int_(t) {}
+------------------
+_ZN5boost4json9value_ref8arg_typeC2Ei:
+function _ZN5boost4json9value_ref8arg_typeC2Ei called 0 returned 0% blocks executed 0%
+    #####:  142:        explicit arg_type(int t) noexcept : int_(t) {}
+------------------
+        -:  143:        explicit arg_type(long t) noexcept : long_(t) {}
+        -:  144:        explicit arg_type(long long t) noexcept : long_long_(t) {}
+        -:  145:        explicit arg_type(unsigned char t) noexcept : uchar_(t) {}
+        -:  146:        explicit arg_type(unsigned short t) noexcept : ushort_(t) {}
+        -:  147:        explicit arg_type(unsigned int t) noexcept : uint_(t) {}
+        -:  148:        explicit arg_type(unsigned long t) noexcept : ulong_(t) {}
+function _ZN5boost4json9value_ref8arg_typeC2Ey called 2 returned 100% blocks executed 100%
+        2:  149:        explicit arg_type(unsigned long long t) noexcept : ulong_long_(t) {}
+        -:  150:        explicit arg_type(float t) noexcept : float_(t) {}
+        -:  151:        explicit arg_type(double t) noexcept : double_(t) {}
+        -:  152:        explicit arg_type(bool t) noexcept : bool_(t) {}
+        -:  153:        explicit arg_type(std::nullptr_t) noexcept : nullptr_() {}
+        -:  154:    };
+        -:  155:
+        -:  156:    arg_type arg_;
+        -:  157:#ifndef BOOST_JSON_DOCS
+        -:  158:    // VFALCO doc toolchain erroneously
+        -:  159:    // displays private, anonymous unions as public
+        -:  160:    union
+        -:  161:    {
+        -:  162:        func_type f_;
+        -:  163:        cfunc_type cf_;
+        -:  164:    };
+        -:  165:#endif
+        -:  166:    what what_;
+        -:  167:
+        -:  168:public:
+        -:  169:    /// Constructor
+        -:  170:    value_ref(
+        -:  171:        value_ref const&) = default;
+        -:  172:
+        -:  173:    /// Constructor
+        -:  174:#ifdef BOOST_JSON_DOCS
+        -:  175:    value_ref(string_view s) noexcept;
+        -:  176:#else
+        -:  177:    template<
+        -:  178:        class T
+        -:  179:        ,class = typename
+        -:  180:            std::enable_if<
+        -:  181:                std::is_constructible<
+        -:  182:                    string_view, T>::value>::type
+        -:  183:    >
+      44*:  184:    value_ref(
+        -:  185:        T const& t) noexcept
+      44*:  186:        : arg_(string_view(t))
+      44*:  187:        , what_(what::str)
+        -:  188:    {
+        -:  189:
+      44*:  190:    }
+------------------
+_ZN5boost4json9value_refC2IA6_cvEERKT_:
+function _ZN5boost4json9value_refC2IA6_cvEERKT_ called 0 returned 0% blocks executed 0%
+    #####:  184:    value_ref(
+        -:  185:        T const& t) noexcept
+    #####:  186:        : arg_(string_view(t))
+call    0 never executed
+call    1 never executed
+    #####:  187:        , what_(what::str)
+        -:  188:    {
+        -:  189:
+    #####:  190:    }
+------------------
+_ZN5boost4json9value_refC2IA8_cvEERKT_:
+function _ZN5boost4json9value_refC2IA8_cvEERKT_ called 1 returned 100% blocks executed 100%
+        1:  184:    value_ref(
+        -:  185:        T const& t) noexcept
+        1:  186:        : arg_(string_view(t))
+call    0 returned 100%
+call    1 returned 100%
+        1:  187:        , what_(what::str)
+        -:  188:    {
+        -:  189:
+        1:  190:    }
+------------------
+_ZN5boost4json9value_refC2IA3_cvEERKT_:
+function _ZN5boost4json9value_refC2IA3_cvEERKT_ called 1 returned 100% blocks executed 100%
+        1:  184:    value_ref(
+        -:  185:        T const& t) noexcept
+        1:  186:        : arg_(string_view(t))
+call    0 returned 100%
+call    1 returned 100%
+        1:  187:        , what_(what::str)
+        -:  188:    {
+        -:  189:
+        1:  190:    }
+------------------
+_ZN5boost4json9value_refC2IA7_cvEERKT_:
+function _ZN5boost4json9value_refC2IA7_cvEERKT_ called 1 returned 100% blocks executed 100%
+        1:  184:    value_ref(
+        -:  185:        T const& t) noexcept
+        1:  186:        : arg_(string_view(t))
+call    0 returned 100%
+call    1 returned 100%
+        1:  187:        , what_(what::str)
+        -:  188:    {
+        -:  189:
+        1:  190:    }
+------------------
+_ZN5boost4json9value_refC2INSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEvEERKT_:
+function _ZN5boost4json9value_refC2INSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEvEERKT_ called 0 returned 0% blocks executed 0%
+    #####:  184:    value_ref(
+        -:  185:        T const& t) noexcept
+    #####:  186:        : arg_(string_view(t))
+call    0 never executed
+call    1 never executed
+    #####:  187:        , what_(what::str)
+        -:  188:    {
+        -:  189:
+    #####:  190:    }
+------------------
+_ZN5boost4json9value_refC2IA8_cvEERKT_:
+function _ZN5boost4json9value_refC2IA8_cvEERKT_ called 0 returned 0% blocks executed 0%
+    #####:  184:    value_ref(
+        -:  185:        T const& t) noexcept
+    #####:  186:        : arg_(string_view(t))
+call    0 never executed
+call    1 never executed
+    #####:  187:        , what_(what::str)
+        -:  188:    {
+        -:  189:
+    #####:  190:    }
+------------------
+_ZN5boost4json9value_refC2IA6_cvEERKT_:
+function _ZN5boost4json9value_refC2IA6_cvEERKT_ called 0 returned 0% blocks executed 0%
+    #####:  184:    value_ref(
+        -:  185:        T const& t) noexcept
+    #####:  186:        : arg_(string_view(t))
+call    0 never executed
+call    1 never executed
+    #####:  187:        , what_(what::str)
+        -:  188:    {
+        -:  189:
+    #####:  190:    }
+------------------
+_ZN5boost4json9value_refC2IA5_cvEERKT_:
+function _ZN5boost4json9value_refC2IA5_cvEERKT_ called 0 returned 0% blocks executed 0%
+    #####:  184:    value_ref(
+        -:  185:        T const& t) noexcept
+    #####:  186:        : arg_(string_view(t))
+call    0 never executed
+call    1 never executed
+    #####:  187:        , what_(what::str)
+        -:  188:    {
+        -:  189:
+    #####:  190:    }
+------------------
+_ZN5boost4json9value_refC2INSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEvEERKT_:
+function _ZN5boost4json9value_refC2INSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEvEERKT_ called 0 returned 0% blocks executed 0%
+    #####:  184:    value_ref(
+        -:  185:        T const& t) noexcept
+    #####:  186:        : arg_(string_view(t))
+call    0 never executed
+call    1 never executed
+    #####:  187:        , what_(what::str)
+        -:  188:    {
+        -:  189:
+    #####:  190:    }
+------------------
+_ZN5boost4json9value_refC2IA10_cvEERKT_:
+function _ZN5boost4json9value_refC2IA10_cvEERKT_ called 0 returned 0% blocks executed 0%
+    #####:  184:    value_ref(
+        -:  185:        T const& t) noexcept
+    #####:  186:        : arg_(string_view(t))
+call    0 never executed
+call    1 never executed
+    #####:  187:        , what_(what::str)
+        -:  188:    {
+        -:  189:
+    #####:  190:    }
+------------------
+_ZN5boost4json9value_refC2IA6_cvEERKT_:
+function _ZN5boost4json9value_refC2IA6_cvEERKT_ called 1 returned 100% blocks executed 100%
+        1:  184:    value_ref(
+        -:  185:        T const& t) noexcept
+        1:  186:        : arg_(string_view(t))
+call    0 returned 100%
+call    1 returned 100%
+        1:  187:        , what_(what::str)
+        -:  188:    {
+        -:  189:
+        1:  190:    }
+------------------
+_ZN5boost4json9value_refC2IA8_cvEERKT_:
+function _ZN5boost4json9value_refC2IA8_cvEERKT_ called 0 returned 0% blocks executed 0%
+    #####:  184:    value_ref(
+        -:  185:        T const& t) noexcept
+    #####:  186:        : arg_(string_view(t))
+call    0 never executed
+call    1 never executed
+    #####:  187:        , what_(what::str)
+        -:  188:    {
+        -:  189:
+    #####:  190:    }
+------------------
+_ZN5boost4json9value_refC2IA7_cvEERKT_:
+function _ZN5boost4json9value_refC2IA7_cvEERKT_ called 0 returned 0% blocks executed 0%
+    #####:  184:    value_ref(
+        -:  185:        T const& t) noexcept
+    #####:  186:        : arg_(string_view(t))
+call    0 never executed
+call    1 never executed
+    #####:  187:        , what_(what::str)
+        -:  188:    {
+        -:  189:
+    #####:  190:    }
+------------------
+_ZN5boost4json9value_refC2INSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEvEERKT_:
+function _ZN5boost4json9value_refC2INSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEvEERKT_ called 0 returned 0% blocks executed 0%
+    #####:  184:    value_ref(
+        -:  185:        T const& t) noexcept
+    #####:  186:        : arg_(string_view(t))
+call    0 never executed
+call    1 never executed
+    #####:  187:        , what_(what::str)
+        -:  188:    {
+        -:  189:
+    #####:  190:    }
+------------------
+_ZN5boost4json9value_refC2IA5_cvEERKT_:
+function _ZN5boost4json9value_refC2IA5_cvEERKT_ called 0 returned 0% blocks executed 0%
+    #####:  184:    value_ref(
+        -:  185:        T const& t) noexcept
+    #####:  186:        : arg_(string_view(t))
+call    0 never executed
+call    1 never executed
+    #####:  187:        , what_(what::str)
+        -:  188:    {
+        -:  189:
+    #####:  190:    }
+------------------
+_ZN5boost4json9value_refC2IA13_cvEERKT_:
+function _ZN5boost4json9value_refC2IA13_cvEERKT_ called 0 returned 0% blocks executed 0%
+    #####:  184:    value_ref(
+        -:  185:        T const& t) noexcept
+    #####:  186:        : arg_(string_view(t))
+call    0 never executed
+call    1 never executed
+    #####:  187:        , what_(what::str)
+        -:  188:    {
+        -:  189:
+    #####:  190:    }
+------------------
+_ZN5boost4json9value_refC2IA8_cvEERKT_:
+function _ZN5boost4json9value_refC2IA8_cvEERKT_ called 0 returned 0% blocks executed 0%
+    #####:  184:    value_ref(
+        -:  185:        T const& t) noexcept
+    #####:  186:        : arg_(string_view(t))
+call    0 never executed
+call    1 never executed
+    #####:  187:        , what_(what::str)
+        -:  188:    {
+        -:  189:
+    #####:  190:    }
+------------------
+_ZN5boost4json9value_refC2IA4_cvEERKT_:
+function _ZN5boost4json9value_refC2IA4_cvEERKT_ called 0 returned 0% blocks executed 0%
+    #####:  184:    value_ref(
+        -:  185:        T const& t) noexcept
+    #####:  186:        : arg_(string_view(t))
+call    0 never executed
+call    1 never executed
+    #####:  187:        , what_(what::str)
+        -:  188:    {
+        -:  189:
+    #####:  190:    }
+------------------
+_ZN5boost4json9value_refC2IA6_cvEERKT_:
+function _ZN5boost4json9value_refC2IA6_cvEERKT_ called 0 returned 0% blocks executed 0%
+    #####:  184:    value_ref(
+        -:  185:        T const& t) noexcept
+    #####:  186:        : arg_(string_view(t))
+call    0 never executed
+call    1 never executed
+    #####:  187:        , what_(what::str)
+        -:  188:    {
+        -:  189:
+    #####:  190:    }
+------------------
+_ZN5boost4json9value_refC2IA18_cvEERKT_:
+function _ZN5boost4json9value_refC2IA18_cvEERKT_ called 1 returned 100% blocks executed 100%
+        1:  184:    value_ref(
+        -:  185:        T const& t) noexcept
+        1:  186:        : arg_(string_view(t))
+call    0 returned 100%
+call    1 returned 100%
+        1:  187:        , what_(what::str)
+        -:  188:    {
+        -:  189:
+        1:  190:    }
+------------------
+_ZN5boost4json9value_refC2IA3_cvEERKT_:
+function _ZN5boost4json9value_refC2IA3_cvEERKT_ called 1 returned 100% blocks executed 100%
+        1:  184:    value_ref(
+        -:  185:        T const& t) noexcept
+        1:  186:        : arg_(string_view(t))
+call    0 returned 100%
+call    1 returned 100%
+        1:  187:        , what_(what::str)
+        -:  188:    {
+        -:  189:
+        1:  190:    }
+------------------
+_ZN5boost4json9value_refC2IA5_cvEERKT_:
+function _ZN5boost4json9value_refC2IA5_cvEERKT_ called 1 returned 100% blocks executed 100%
+        1:  184:    value_ref(
+        -:  185:        T const& t) noexcept
+        1:  186:        : arg_(string_view(t))
+call    0 returned 100%
+call    1 returned 100%
+        1:  187:        , what_(what::str)
+        -:  188:    {
+        -:  189:
+        1:  190:    }
+------------------
+_ZN5boost4json9value_refC2IA6_cvEERKT_:
+function _ZN5boost4json9value_refC2IA6_cvEERKT_ called 2 returned 100% blocks executed 100%
+        2:  184:    value_ref(
+        -:  185:        T const& t) noexcept
+        2:  186:        : arg_(string_view(t))
+call    0 returned 100%
+call    1 returned 100%
+        2:  187:        , what_(what::str)
+        -:  188:    {
+        -:  189:
+        2:  190:    }
+------------------
+_ZN5boost4json9value_refC2IA8_cvEERKT_:
+function _ZN5boost4json9value_refC2IA8_cvEERKT_ called 1 returned 100% blocks executed 100%
+        1:  184:    value_ref(
+        -:  185:        T const& t) noexcept
+        1:  186:        : arg_(string_view(t))
+call    0 returned 100%
+call    1 returned 100%
+        1:  187:        , what_(what::str)
+        -:  188:    {
+        -:  189:
+        1:  190:    }
+------------------
+_ZN5boost4json9value_refC2IA4_cvEERKT_:
+function _ZN5boost4json9value_refC2IA4_cvEERKT_ called 1 returned 100% blocks executed 100%
+        1:  184:    value_ref(
+        -:  185:        T const& t) noexcept
+        1:  186:        : arg_(string_view(t))
+call    0 returned 100%
+call    1 returned 100%
+        1:  187:        , what_(what::str)
+        -:  188:    {
+        -:  189:
+        1:  190:    }
+------------------
+_ZN5boost4json9value_refC2IA6_cvEERKT_:
+function _ZN5boost4json9value_refC2IA6_cvEERKT_ called 2 returned 100% blocks executed 100%
+        2:  184:    value_ref(
+        -:  185:        T const& t) noexcept
+        2:  186:        : arg_(string_view(t))
+call    0 returned 100%
+call    1 returned 100%
+        2:  187:        , what_(what::str)
+        -:  188:    {
+        -:  189:
+        2:  190:    }
+------------------
+_ZN5boost4json9value_refC2IA3_cvEERKT_:
+function _ZN5boost4json9value_refC2IA3_cvEERKT_ called 1 returned 100% blocks executed 100%
+        1:  184:    value_ref(
+        -:  185:        T const& t) noexcept
+        1:  186:        : arg_(string_view(t))
+call    0 returned 100%
+call    1 returned 100%
+        1:  187:        , what_(what::str)
+        -:  188:    {
+        -:  189:
+        1:  190:    }
+------------------
+_ZN5boost4json9value_refC2IA7_cvEERKT_:
+function _ZN5boost4json9value_refC2IA7_cvEERKT_ called 1 returned 100% blocks executed 100%
+        1:  184:    value_ref(
+        -:  185:        T const& t) noexcept
+        1:  186:        : arg_(string_view(t))
+call    0 returned 100%
+call    1 returned 100%
+        1:  187:        , what_(what::str)
+        -:  188:    {
+        -:  189:
+        1:  190:    }
+------------------
+_ZN5boost4json9value_refC2IA10_cvEERKT_:
+function _ZN5boost4json9value_refC2IA10_cvEERKT_ called 1 returned 100% blocks executed 100%
+        1:  184:    value_ref(
+        -:  185:        T const& t) noexcept
+        1:  186:        : arg_(string_view(t))
+call    0 returned 100%
+call    1 returned 100%
+        1:  187:        , what_(what::str)
+        -:  188:    {
+        -:  189:
+        1:  190:    }
+------------------
+_ZN5boost4json9value_refC2INSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEvEERKT_:
+function _ZN5boost4json9value_refC2INSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEvEERKT_ called 1 returned 100% blocks executed 100%
+        1:  184:    value_ref(
+        -:  185:        T const& t) noexcept
+        1:  186:        : arg_(string_view(t))
+call    0 returned 100%
+call    1 returned 100%
+        1:  187:        , what_(what::str)
+        -:  188:    {
+        -:  189:
+        1:  190:    }
+------------------
+_ZN5boost4json9value_refC2IA11_cvEERKT_:
+function _ZN5boost4json9value_refC2IA11_cvEERKT_ called 1 returned 100% blocks executed 100%
+        1:  184:    value_ref(
+        -:  185:        T const& t) noexcept
+        1:  186:        : arg_(string_view(t))
+call    0 returned 100%
+call    1 returned 100%
+        1:  187:        , what_(what::str)
+        -:  188:    {
+        -:  189:
+        1:  190:    }
+------------------
+_ZN5boost4json9value_refC2IA13_cvEERKT_:
+function _ZN5boost4json9value_refC2IA13_cvEERKT_ called 2 returned 100% blocks executed 100%
+        2:  184:    value_ref(
+        -:  185:        T const& t) noexcept
+        2:  186:        : arg_(string_view(t))
+call    0 returned 100%
+call    1 returned 100%
+        2:  187:        , what_(what::str)
+        -:  188:    {
+        -:  189:
+        2:  190:    }
+------------------
+_ZN5boost4json9value_refC2INSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEvEERKT_:
+function _ZN5boost4json9value_refC2INSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEvEERKT_ called 2 returned 100% blocks executed 100%
+        2:  184:    value_ref(
+        -:  185:        T const& t) noexcept
+        2:  186:        : arg_(string_view(t))
+call    0 returned 100%
+call    1 returned 100%
+        2:  187:        , what_(what::str)
+        -:  188:    {
+        -:  189:
+        2:  190:    }
+------------------
+_ZN5boost4json9value_refC2IA5_cvEERKT_:
+function _ZN5boost4json9value_refC2IA5_cvEERKT_ called 5 returned 100% blocks executed 100%
+        5:  184:    value_ref(
+        -:  185:        T const& t) noexcept
+        5:  186:        : arg_(string_view(t))
+call    0 returned 100%
+call    1 returned 100%
+        5:  187:        , what_(what::str)
+        -:  188:    {
+        -:  189:
+        5:  190:    }
+------------------
+_ZN5boost4json9value_refC2IA7_cvEERKT_:
+function _ZN5boost4json9value_refC2IA7_cvEERKT_ called 2 returned 100% blocks executed 100%
+        2:  184:    value_ref(
+        -:  185:        T const& t) noexcept
+        2:  186:        : arg_(string_view(t))
+call    0 returned 100%
+call    1 returned 100%
+        2:  187:        , what_(what::str)
+        -:  188:    {
+        -:  189:
+        2:  190:    }
+------------------
+_ZN5boost4json9value_refC2IA8_cvEERKT_:
+function _ZN5boost4json9value_refC2IA8_cvEERKT_ called 3 returned 100% blocks executed 100%
+        3:  184:    value_ref(
+        -:  185:        T const& t) noexcept
+        3:  186:        : arg_(string_view(t))
+call    0 returned 100%
+call    1 returned 100%
+        3:  187:        , what_(what::str)
+        -:  188:    {
+        -:  189:
+        3:  190:    }
+------------------
+_ZN5boost4json9value_refC2IA6_cvEERKT_:
+function _ZN5boost4json9value_refC2IA6_cvEERKT_ called 5 returned 100% blocks executed 100%
+        5:  184:    value_ref(
+        -:  185:        T const& t) noexcept
+        5:  186:        : arg_(string_view(t))
+call    0 returned 100%
+call    1 returned 100%
+        5:  187:        , what_(what::str)
+        -:  188:    {
+        -:  189:
+        5:  190:    }
+------------------
+_ZN5boost4json9value_refC2IA4_cvEERKT_:
+function _ZN5boost4json9value_refC2IA4_cvEERKT_ called 7 returned 100% blocks executed 100%
+        7:  184:    value_ref(
+        -:  185:        T const& t) noexcept
+        7:  186:        : arg_(string_view(t))
+call    0 returned 100%
+call    1 returned 100%
+        7:  187:        , what_(what::str)
+        -:  188:    {
+        -:  189:
+        7:  190:    }
+------------------
+        -:  191:#endif
+        -:  192:
+        -:  193:    /// Constructor
+        -:  194:    template<class T>
+function _ZN5boost4json9value_refC2INS0_5arrayEEERKT_PNSt9enable_ifIXaantsrSt16is_constructibleINS_4core17basic_string_viewIcEEJS4_EE5valuentsrSt7is_sameIbS4_E5valueEvE4typeE called 0 returned 0% blocks executed 0%
+    #####:  195:    value_ref(
+        -:  196:        T const& t
+        -:  197:#ifndef BOOST_JSON_DOCS
+        -:  198:        ,typename std::enable_if<
+        -:  199:            ! std::is_constructible<
+        -:  200:                string_view, T>::value &&
+        -:  201:            ! std::is_same<bool, T>::value
+        -:  202:                >::type* = 0
+        -:  203:#endif
+        -:  204:        ) noexcept
+    #####:  205:        : cf_{&from_const<T>, &t}
+    #####:  206:        , what_(what::cfunc)
+call    0 never executed
+        -:  207:    {
+    #####:  208:    }
+        -:  209:
+        -:  210:    /// Constructor
+        -:  211:    template<class T>
+    #####:  212:    value_ref(
+        -:  213:        T&& t
+        -:  214:#ifndef BOOST_JSON_DOCS
+        -:  215:        ,typename std::enable_if<
+        -:  216:            (! std::is_constructible<
+        -:  217:                string_view, T>::value ||
+        -:  218:            std::is_same<string, T>::value) &&
+        -:  219:            ! std::is_same<bool,
+        -:  220:                detail::remove_cvref<T>>::value &&
+        -:  221:            std::is_same<T, detail::remove_cvref<T>>
+        -:  222:                ::value>::type* = 0
+        -:  223:#endif
+        -:  224:        ) noexcept
+    #####:  225:        : f_{&from_rvalue<
+        -:  226:            detail::remove_cvref<T>>, &t}
+    #####:  227:        , what_(std::is_same<string, T>::value ?
+    #####:  228:                what::strfunc : what::func)
+        -:  229:    {
+    #####:  230:    }
+------------------
+_ZN5boost4json9value_refC2INS0_5arrayEEEOT_PNSt9enable_ifIXaaaaoontsrSt16is_constructibleINS_4core17basic_string_viewIcEEJS4_EE5valuesrSt7is_sameINS0_6stringES4_E5valuentsrSC_IbNSt9remove_cvINSt16remove_referenceIS4_E4typeEE4typeEE5valuesrSC_IS4_SK_E5valueEvE4typeE:
+function _ZN5boost4json9value_refC2INS0_5arrayEEEOT_PNSt9enable_ifIXaaaaoontsrSt16is_constructibleINS_4core17basic_string_viewIcEEJS4_EE5valuesrSt7is_sameINS0_6stringES4_E5valuentsrSC_IbNSt9remove_cvINSt16remove_referenceIS4_E4typeEE4typeEE5valuesrSC_IS4_SK_E5valueEvE4typeE called 0 returned 0% blocks executed 0%
+    #####:  212:    value_ref(
+        -:  213:        T&& t
+        -:  214:#ifndef BOOST_JSON_DOCS
+        -:  215:        ,typename std::enable_if<
+        -:  216:            (! std::is_constructible<
+        -:  217:                string_view, T>::value ||
+        -:  218:            std::is_same<string, T>::value) &&
+        -:  219:            ! std::is_same<bool,
+        -:  220:                detail::remove_cvref<T>>::value &&
+        -:  221:            std::is_same<T, detail::remove_cvref<T>>
+        -:  222:                ::value>::type* = 0
+        -:  223:#endif
+        -:  224:        ) noexcept
+    #####:  225:        : f_{&from_rvalue<
+        -:  226:            detail::remove_cvref<T>>, &t}
+    #####:  227:        , what_(std::is_same<string, T>::value ?
+    #####:  228:                what::strfunc : what::func)
+call    0 never executed
+        -:  229:    {
+    #####:  230:    }
+------------------
+_ZN5boost4json9value_refC2INS0_6objectEEEOT_PNSt9enable_ifIXaaaaoontsrSt16is_constructibleINS_4core17basic_string_viewIcEEJS4_EE5valuesrSt7is_sameINS0_6stringES4_E5valuentsrSC_IbNSt9remove_cvINSt16remove_referenceIS4_E4typeEE4typeEE5valuesrSC_IS4_SK_E5valueEvE4typeE:
+function _ZN5boost4json9value_refC2INS0_6objectEEEOT_PNSt9enable_ifIXaaaaoontsrSt16is_constructibleINS_4core17basic_string_viewIcEEJS4_EE5valuesrSt7is_sameINS0_6stringES4_E5valuentsrSC_IbNSt9remove_cvINSt16remove_referenceIS4_E4typeEE4typeEE5valuesrSC_IS4_SK_E5valueEvE4typeE called 0 returned 0% blocks executed 0%
+    #####:  212:    value_ref(
+        -:  213:        T&& t
+        -:  214:#ifndef BOOST_JSON_DOCS
+        -:  215:        ,typename std::enable_if<
+        -:  216:            (! std::is_constructible<
+        -:  217:                string_view, T>::value ||
+        -:  218:            std::is_same<string, T>::value) &&
+        -:  219:            ! std::is_same<bool,
+        -:  220:                detail::remove_cvref<T>>::value &&
+        -:  221:            std::is_same<T, detail::remove_cvref<T>>
+        -:  222:                ::value>::type* = 0
+        -:  223:#endif
+        -:  224:        ) noexcept
+    #####:  225:        : f_{&from_rvalue<
+        -:  226:            detail::remove_cvref<T>>, &t}
+    #####:  227:        , what_(std::is_same<string, T>::value ?
+    #####:  228:                what::strfunc : what::func)
+call    0 never executed
+        -:  229:    {
+    #####:  230:    }
+------------------
+        -:  231:
+        -:  232:    /// Constructor
+        -:  233:#ifdef BOOST_JSON_DOCS
+        -:  234:    value_ref(bool b) noexcept;
+        -:  235:#else
+        -:  236:    template<
+        -:  237:        class T
+        -:  238:        ,class = typename std::enable_if<
+        -:  239:            std::is_same<T, bool>::value>::type
+        -:  240:    >
+        -:  241:    value_ref(
+        -:  242:        T b) noexcept
+        -:  243:        : arg_(b)
+        -:  244:        , cf_{&from_builtin<bool>, &arg_.bool_}
+        -:  245:        , what_(what::cfunc)
+        -:  246:    {
+        -:  247:    }
+        -:  248:#endif
+        -:  249:
+        -:  250:    /// Constructor
+      11*:  251:    value_ref(
+        -:  252:        std::initializer_list<
+        -:  253:            value_ref> t) noexcept
+      11*:  254:        : arg_(t)
+      11*:  255:        , what_(what::ini)
+        -:  256:    {
+      11*:  257:    }
+------------------
+_ZN5boost4json9value_refC2ESt16initializer_listIS1_E:
+function _ZN5boost4json9value_refC2ESt16initializer_listIS1_E called 1 returned 100% blocks executed 100%
+        1:  251:    value_ref(
+        -:  252:        std::initializer_list<
+        -:  253:            value_ref> t) noexcept
+        1:  254:        : arg_(t)
+call    0 returned 100%
+        1:  255:        , what_(what::ini)
+        -:  256:    {
+        1:  257:    }
+------------------
+_ZN5boost4json9value_refC2ESt16initializer_listIS1_E:
+function _ZN5boost4json9value_refC2ESt16initializer_listIS1_E called 2 returned 100% blocks executed 100%
+        2:  251:    value_ref(
+        -:  252:        std::initializer_list<
+        -:  253:            value_ref> t) noexcept
+        2:  254:        : arg_(t)
+call    0 returned 100%
+        2:  255:        , what_(what::ini)
+        -:  256:    {
+        2:  257:    }
+------------------
+_ZN5boost4json9value_refC2ESt16initializer_listIS1_E:
+function _ZN5boost4json9value_refC2ESt16initializer_listIS1_E called 3 returned 100% blocks executed 100%
+        3:  251:    value_ref(
+        -:  252:        std::initializer_list<
+        -:  253:            value_ref> t) noexcept
+        3:  254:        : arg_(t)
+call    0 returned 100%
+        3:  255:        , what_(what::ini)
+        -:  256:    {
+        3:  257:    }
+------------------
+_ZN5boost4json9value_refC2ESt16initializer_listIS1_E:
+function _ZN5boost4json9value_refC2ESt16initializer_listIS1_E called 3 returned 100% blocks executed 100%
+        3:  251:    value_ref(
+        -:  252:        std::initializer_list<
+        -:  253:            value_ref> t) noexcept
+        3:  254:        : arg_(t)
+call    0 returned 100%
+        3:  255:        , what_(what::ini)
+        -:  256:    {
+        3:  257:    }
+------------------
+_ZN5boost4json9value_refC2ESt16initializer_listIS1_E:
+function _ZN5boost4json9value_refC2ESt16initializer_listIS1_E called 2 returned 100% blocks executed 100%
+        2:  251:    value_ref(
+        -:  252:        std::initializer_list<
+        -:  253:            value_ref> t) noexcept
+        2:  254:        : arg_(t)
+call    0 returned 100%
+        2:  255:        , what_(what::ini)
+        -:  256:    {
+        2:  257:    }
+------------------
+_ZN5boost4json9value_refC2ESt16initializer_listIS1_E:
+function _ZN5boost4json9value_refC2ESt16initializer_listIS1_E called 0 returned 0% blocks executed 0%
+    #####:  251:    value_ref(
+        -:  252:        std::initializer_list<
+        -:  253:            value_ref> t) noexcept
+    #####:  254:        : arg_(t)
+call    0 never executed
+    #####:  255:        , what_(what::ini)
+        -:  256:    {
+    #####:  257:    }
+------------------
+_ZN5boost4json9value_refC2ESt16initializer_listIS1_E:
+function _ZN5boost4json9value_refC2ESt16initializer_listIS1_E called 0 returned 0% blocks executed 0%
+    #####:  251:    value_ref(
+        -:  252:        std::initializer_list<
+        -:  253:            value_ref> t) noexcept
+    #####:  254:        : arg_(t)
+call    0 never executed
+    #####:  255:        , what_(what::ini)
+        -:  256:    {
+    #####:  257:    }
+------------------
+_ZN5boost4json9value_refC2ESt16initializer_listIS1_E:
+function _ZN5boost4json9value_refC2ESt16initializer_listIS1_E called 0 returned 0% blocks executed 0%
+    #####:  251:    value_ref(
+        -:  252:        std::initializer_list<
+        -:  253:            value_ref> t) noexcept
+    #####:  254:        : arg_(t)
+call    0 never executed
+    #####:  255:        , what_(what::ini)
+        -:  256:    {
+    #####:  257:    }
+------------------
+        -:  258:
+        -:  259:    /// Constructor
+        -:  260:    value_ref(signed char t) noexcept
+        -:  261:        : arg_(t)
+        -:  262:        , cf_{&from_builtin<signed char>, &arg_.schar_}
+        -:  263:        , what_(what::cfunc)
+        -:  264:    {
+        -:  265:    }
+        -:  266:
+        -:  267:    /// Constructor
+        -:  268:    value_ref(short t) noexcept
+        -:  269:        : arg_(t)
+        -:  270:        , cf_{&from_builtin<short>, &arg_.short_}
+        -:  271:        , what_(what::cfunc)
+        -:  272:    {
+        -:  273:    }
+        -:  274:
+        -:  275:    /// Constructor
+      10*:  276:    value_ref(int t) noexcept
+      10*:  277:        : arg_(t)
+      10*:  278:        , cf_{&from_builtin<int>, &arg_.int_}
+      10*:  279:        , what_(what::cfunc)
+        -:  280:    {
+      10*:  281:    }
+------------------
+_ZN5boost4json9value_refC2Ei:
+function _ZN5boost4json9value_refC2Ei called 1 returned 100% blocks executed 100%
+        1:  276:    value_ref(int t) noexcept
+        1:  277:        : arg_(t)
+call    0 returned 100%
+        1:  278:        , cf_{&from_builtin<int>, &arg_.int_}
+        1:  279:        , what_(what::cfunc)
+        -:  280:    {
+        1:  281:    }
+------------------
+_ZN5boost4json9value_refC2Ei:
+function _ZN5boost4json9value_refC2Ei called 9 returned 100% blocks executed 100%
+        9:  276:    value_ref(int t) noexcept
+        9:  277:        : arg_(t)
+call    0 returned 100%
+        9:  278:        , cf_{&from_builtin<int>, &arg_.int_}
+        9:  279:        , what_(what::cfunc)
+        -:  280:    {
+        9:  281:    }
+------------------
+_ZN5boost4json9value_refC2Ei:
+function _ZN5boost4json9value_refC2Ei called 0 returned 0% blocks executed 0%
+    #####:  276:    value_ref(int t) noexcept
+    #####:  277:        : arg_(t)
+call    0 never executed
+    #####:  278:        , cf_{&from_builtin<int>, &arg_.int_}
+    #####:  279:        , what_(what::cfunc)
+        -:  280:    {
+    #####:  281:    }
+------------------
+_ZN5boost4json9value_refC2Ei:
+function _ZN5boost4json9value_refC2Ei called 0 returned 0% blocks executed 0%
+    #####:  276:    value_ref(int t) noexcept
+    #####:  277:        : arg_(t)
+call    0 never executed
+    #####:  278:        , cf_{&from_builtin<int>, &arg_.int_}
+    #####:  279:        , what_(what::cfunc)
+        -:  280:    {
+    #####:  281:    }
+------------------
+        -:  282:
+        -:  283:    /// Constructor
+        -:  284:    value_ref(long t) noexcept
+        -:  285:        : arg_(t)
+        -:  286:        , cf_{&from_builtin<
+        -:  287:            long>, &arg_.long_}
+        -:  288:        , what_(what::cfunc)
+        -:  289:    {
+        -:  290:    }
+        -:  291:
+        -:  292:    /// Constructor
+        -:  293:    value_ref(long long t) noexcept
+        -:  294:        : arg_(t)
+        -:  295:        , cf_{&from_builtin<
+        -:  296:            long long>, &arg_.long_long_}
+        -:  297:        , what_(what::cfunc)
+        -:  298:    {
+        -:  299:    }
+        -:  300:
+        -:  301:    /// Constructor
+        -:  302:    value_ref(unsigned char t) noexcept
+        -:  303:        : arg_(t)
+        -:  304:        , cf_{&from_builtin<
+        -:  305:            unsigned char>, &arg_.uchar_}
+        -:  306:        , what_(what::cfunc)
+        -:  307:    {
+        -:  308:    }
+        -:  309:
+        -:  310:    /// Constructor
+        -:  311:    value_ref(unsigned short t) noexcept
+        -:  312:        : arg_(t)
+        -:  313:        , cf_{&from_builtin<
+        -:  314:            unsigned short>, &arg_.ushort_}
+        -:  315:        , what_(what::cfunc)
+        -:  316:    {
+        -:  317:    }
+        -:  318:
+        -:  319:    /// Constructor
+        -:  320:    value_ref(unsigned int t) noexcept
+        -:  321:        : arg_(t)
+        -:  322:        , cf_{&from_builtin<
+        -:  323:            unsigned int>, &arg_.uint_}
+        -:  324:        , what_(what::cfunc)
+        -:  325:    {
+        -:  326:    }
+        -:  327:
+        -:  328:    /// Constructor
+        -:  329:    value_ref(unsigned long t) noexcept
+        -:  330:        : arg_(t)
+        -:  331:        , cf_{&from_builtin<
+        -:  332:            unsigned long>, &arg_.ulong_}
+        -:  333:        , what_(what::cfunc)
+        -:  334:    {
+        -:  335:    }
+        -:  336:
+        -:  337:    /// Constructor
+function _ZN5boost4json9value_refC2Ey called 2 returned 100% blocks executed 100%
+        2:  338:    value_ref(unsigned long long t) noexcept
+        2:  339:        : arg_(t)
+call    0 returned 100%
+        2:  340:        , cf_{&from_builtin<
+        2:  341:            unsigned long long>, &arg_.ulong_long_}
+        2:  342:        , what_(what::cfunc)
+        -:  343:    {
+        2:  344:    }
+        -:  345:
+        -:  346:    /// Constructor
+        -:  347:    value_ref(float t) noexcept
+        -:  348:        : arg_(t)
+        -:  349:        , cf_{&from_builtin<
+        -:  350:            float>, &arg_.float_}
+        -:  351:        , what_(what::cfunc)
+        -:  352:    {
+        -:  353:    }
+        -:  354:
+        -:  355:    /// Constructor
+        -:  356:    value_ref(double t) noexcept
+        -:  357:        : arg_(t)
+        -:  358:        , cf_{&from_builtin<
+        -:  359:            double>, &arg_.double_}
+        -:  360:        , what_(what::cfunc)
+        -:  361:    {
+        -:  362:    }
+        -:  363:
+        -:  364:    /// Constructor
+        -:  365:    value_ref(std::nullptr_t) noexcept
+        -:  366:        : arg_(nullptr)
+        -:  367:        , cf_{&from_builtin<
+        -:  368:            std::nullptr_t>, &arg_.nullptr_}
+        -:  369:        , what_(what::cfunc)
+        -:  370:    {
+        -:  371:    }
+        -:  372:
+        -:  373:#ifndef BOOST_JSON_DOCS
+        -:  374:// Not public
+        -:  375://private:
+        -:  376:    // VFALCO Why is this needed?
+        -:  377:    /** Operator conversion to @ref value
+        -:  378:
+        -:  379:        This allows creation of a @ref value from
+        -:  380:        an initializer list element.
+        -:  381:    */
+        -:  382:    BOOST_JSON_DECL
+        -:  383:    operator value() const;
+        -:  384:#endif
+        -:  385:
+        -:  386:private:
+        -:  387:    template<class T>
+        -:  388:    static
+        -:  389:    value
+        -:  390:    from_builtin(
+        -:  391:        void const* p,
+        -:  392:        storage_ptr sp) noexcept;
+        -:  393:
+        -:  394:    template<class T>
+        -:  395:    static
+        -:  396:    value
+        -:  397:    from_const(
+        -:  398:        void const* p,
+        -:  399:        storage_ptr sp);
+        -:  400:
+        -:  401:    template<class T>
+        -:  402:    static
+        -:  403:    value
+        -:  404:    from_rvalue(
+        -:  405:        void* p,
+        -:  406:        storage_ptr sp);
+        -:  407:
+        -:  408:    static
+        -:  409:    BOOST_JSON_DECL
+        -:  410:    value
+        -:  411:    from_init_list(
+        -:  412:        void const* p,
+        -:  413:        storage_ptr sp);
+        -:  414:
+        -:  415:    inline
+        -:  416:    bool
+        -:  417:    is_key_value_pair() const noexcept;
+        -:  418:
+        -:  419:    static
+        -:  420:    inline
+        -:  421:    bool
+        -:  422:    maybe_object(
+        -:  423:        std::initializer_list<
+        -:  424:            value_ref> init) noexcept;
+        -:  425:
+        -:  426:    inline
+        -:  427:    string_view
+        -:  428:    get_string() const noexcept;
+        -:  429:
+        -:  430:    BOOST_JSON_DECL
+        -:  431:    value
+        -:  432:    make_value(
+        -:  433:        storage_ptr sp) const;
+        -:  434:
+        -:  435:    BOOST_JSON_DECL
+        -:  436:    static
+        -:  437:    value
+        -:  438:    make_value(
+        -:  439:        std::initializer_list<
+        -:  440:            value_ref> init,
+        -:  441:        storage_ptr sp);
+        -:  442:
+        -:  443:    BOOST_JSON_DECL
+        -:  444:    static
+        -:  445:    object
+        -:  446:    make_object(
+        -:  447:        std::initializer_list<value_ref> init,
+        -:  448:        storage_ptr sp);
+        -:  449:
+        -:  450:    BOOST_JSON_DECL
+        -:  451:    static
+        -:  452:    array
+        -:  453:    make_array(
+        -:  454:        std::initializer_list<
+        -:  455:            value_ref> init,
+        -:  456:        storage_ptr sp);
+        -:  457:
+        -:  458:    BOOST_JSON_DECL
+        -:  459:    static
+        -:  460:    void
+        -:  461:    write_array(
+        -:  462:        value* dest,
+        -:  463:        std::initializer_list<
+        -:  464:            value_ref> init,
+        -:  465:        storage_ptr const& sp);
+        -:  466:};
+        -:  467:
+        -:  468:} // namespace json
+        -:  469:} // namespace boost
+        -:  470:
+        -:  471:// Must be included here for this file to stand alone
+        -:  472:#include <boost/json/value.hpp>
+        -:  473:
+        -:  474:// includes are at the bottom of <boost/json/value.hpp>
+        -:  475://#include <boost/json/impl/value.hpp>
+        -:  476://#include <boost/json/impl/value.ipp>
+        -:  477:
+        -:  478:#endif

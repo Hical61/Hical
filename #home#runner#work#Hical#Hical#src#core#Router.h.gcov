@@ -1,0 +1,430 @@
+        -:    0:Source:/home/runner/work/Hical/Hical/src/core/Router.h
+        -:    1:#pragma once
+        -:    2:
+        -:    3:#include "HttpTypes.h"
+        -:    4:#include "HttpRequest.h"
+        -:    5:#include "HttpResponse.h"
+        -:    6:#include "Coroutine.h"
+        -:    7:#include <concepts>
+        -:    8:#include <functional>
+        -:    9:#include <optional>
+        -:   10:#include <string>
+        -:   11:#include <string_view>
+        -:   12:#include <unordered_map>
+        -:   13:#include <unordered_set>
+        -:   14:#include <utility>
+        -:   15:#include <vector>
+        -:   16:
+        -:   17:namespace hical
+        -:   18:{
+        -:   19:
+        -:   20:	class RouteGroup; // 前向声明
+        -:   21:
+        -:   22:	/**
+        -:   23:	 * @brief 路由处理器类型（协程版）
+        -:   24:	 * 接收请求，返回协程化的响应。
+        -:   25:	 */
+        -:   26:	using RouteHandler = std::function<Awaitable<HttpResponse>(const HttpRequest&)>;
+        -:   27:
+        -:   28:	/**
+        -:   29:	 * @brief 同步路由处理器类型
+        -:   30:	 * 接收请求，直接返回响应（非协程）。
+        -:   31:	 */
+        -:   32:	using SyncRouteHandler = std::function<HttpResponse(const HttpRequest&)>;
+        -:   33:
+        -:   34:	class WebSocketSession; // 前向声明
+        -:   35:
+        -:   36:	/**
+        -:   37:	 * @brief WebSocket 消息回调类型
+        -:   38:	 */
+        -:   39:	using WsMessageCallback = std::function<Awaitable<void>(const std::string&, WebSocketSession&)>;
+        -:   40:
+        -:   41:	/**
+        -:   42:	 * @brief WebSocket 连接回调类型
+        -:   43:	 */
+        -:   44:	using WsConnectCallback = std::function<Awaitable<void>(WebSocketSession&)>;
+        -:   45:
+        -:   46:	/**
+        -:   47:	 * @brief WebSocket 断开回调类型
+        -:   48:	 */
+        -:   49:	using WsDisconnectCallback = std::function<Awaitable<void>(WebSocketSession&)>;
+        -:   50:
+        -:   51:	/**
+        -:   52:	 * @brief HTTP 路由器
+        -:   53:	 * 管理路由注册和请求分发。
+        -:   54:	 * 静态路由使用哈希表 O(1) 查找，参数路由线性匹配。
+        -:   55:	 * 支持协程和同步两种处理器风格。
+        -:   56:	 */
+        -:   57:	class Router
+        -:   58:	{
+        -:   59:	public:
+        -:   60:		// 路径参数安全限制
+        -:   61:		static constexpr size_t hMaxPathSegments = 32;
+        -:   62:		static constexpr size_t hMaxParamValueLength = 1024;
+        -:   63:
+        -:   64:		// 参数列表类型：用 vector<pair> 替代 unordered_map，减少堆分配
+        -:   65:		using ParamList = std::vector<std::pair<std::string, std::string>>;
+        -:   66:
+      75*:   67:		Router() = default;
+------------------
+_ZN5hical6RouterC2Ev:
+function _ZN5hical6RouterC2Ev called 23 returned 100% blocks executed 100%
+       23:   67:		Router() = default;
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+------------------
+_ZN5hical6RouterC2Ev:
+function _ZN5hical6RouterC2Ev called 6 returned 100% blocks executed 100%
+        6:   67:		Router() = default;
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+------------------
+_ZN5hical6RouterC2Ev:
+function _ZN5hical6RouterC2Ev called 12 returned 100% blocks executed 100%
+       12:   67:		Router() = default;
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+------------------
+_ZN5hical6RouterC2Ev:
+function _ZN5hical6RouterC2Ev called 19 returned 100% blocks executed 100%
+       19:   67:		Router() = default;
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+------------------
+_ZN5hical6RouterC2Ev:
+function _ZN5hical6RouterC2Ev called 2 returned 100% blocks executed 100%
+        2:   67:		Router() = default;
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+------------------
+_ZN5hical6RouterC2Ev:
+function _ZN5hical6RouterC2Ev called 6 returned 100% blocks executed 100%
+        6:   67:		Router() = default;
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+------------------
+_ZN5hical6RouterC2Ev:
+function _ZN5hical6RouterC2Ev called 7 returned 100% blocks executed 100%
+        7:   67:		Router() = default;
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+------------------
+_ZN5hical6RouterC2Ev:
+function _ZN5hical6RouterC2Ev called 0 returned 0% blocks executed 0%
+    #####:   67:		Router() = default;
+call    0 never executed
+call    1 never executed
+call    2 never executed
+call    3 never executed
+------------------
+        -:   68:
+        -:   69:		/**
+        -:   70:		 * @brief 注册协程路由处理器
+        -:   71:		 * @param method HTTP 方法
+        -:   72:		 * @param path 路由路径（如 "/api/users"）
+        -:   73:		 * @param handler 协程处理器
+        -:   74:		 */
+        -:   75:		void route(HttpMethod method, const std::string& path, RouteHandler handler);
+        -:   76:
+        -:   77:		/**
+        -:   78:		 * @brief 注册同步路由处理器（自动包装为协程）
+        -:   79:		 * @param method HTTP 方法
+        -:   80:		 * @param path 路由路径
+        -:   81:		 * @param handler 同步处理器
+        -:   82:		 */
+        -:   83:		void route(HttpMethod method, const std::string& path, SyncRouteHandler handler);
+        -:   84:
+        -:   85:		// ============ 便捷方法 ============
+        -:   86:
+        -:   87:		void get(const std::string& path, RouteHandler handler);
+        -:   88:		void get(const std::string& path, SyncRouteHandler handler);
+        -:   89:
+        -:   90:		void post(const std::string& path, RouteHandler handler);
+        -:   91:		void post(const std::string& path, SyncRouteHandler handler);
+        -:   92:
+        -:   93:		void put(const std::string& path, RouteHandler handler);
+        -:   94:		void put(const std::string& path, SyncRouteHandler handler);
+        -:   95:
+        -:   96:		void del(const std::string& path, RouteHandler handler);
+        -:   97:		void del(const std::string& path, SyncRouteHandler handler);
+        -:   98:
+        -:   99:		/**
+        -:  100:		 * @brief WebSocket 路由选项
+        -:  101:		 */
+        -:  102:		struct WsOptions
+        -:  103:		{
+        -:  104:			/// 允许的 Origin 列表（防 CSWSH）。为空时不校验 Origin。
+        -:  105:			std::unordered_set<std::string> allowedOrigins;
+        -:  106:
+        -:  107:			/// 是否启用 permessage-deflate 压缩（默认关闭，向后兼容）
+        -:  108:			bool enableCompression = false;
+        -:  109:
+        -:  110:			/// zlib 服务端最大窗口位数 (9-15，默认 15)
+        -:  111:			int serverMaxWindowBits = 15;
+        -:  112:
+        -:  113:			/// zlib 客户端最大窗口位数 (9-15，默认 15)
+        -:  114:			int clientMaxWindowBits = 15;
+        -:  115:
+        -:  116:			/// 每消息独立压缩（省内存但降低压缩率）
+        -:  117:			bool serverNoContextTakeover = false;
+        -:  118:		};
+        -:  119:
+        -:  120:		struct WsRoute
+        -:  121:		{
+        -:  122:			std::string path;
+        -:  123:			WsMessageCallback onMessage;
+        -:  124:			WsConnectCallback onConnect;
+        -:  125:			WsDisconnectCallback onDisconnect;
+        -:  126:			std::unordered_set<std::string> allowedOrigins; ///< 允许的 Origin 列表（空 = 不校验）
+        -:  127:
+        -:  128:			/// 压缩配置（从 WsOptions 复制）
+        -:  129:			bool enableCompression = false;
+        -:  130:			int serverMaxWindowBits = 15;
+        -:  131:			int clientMaxWindowBits = 15;
+        -:  132:			bool serverNoContextTakeover = false;
+        -:  133:		};
+        -:  134:
+        -:  135:		/**
+        -:  136:		 * @brief 注册 WebSocket 路由
+        -:  137:		 * @param path 路由路径
+        -:  138:		 * @param onMessage 消息回调
+        -:  139:		 * @param onConnect 连接建立回调（可选）
+        -:  140:		 * @param onDisconnect 连接断开回调（可选）
+        -:  141:		 */
+        -:  142:		void ws(const std::string& path,
+        -:  143:				WsMessageCallback onMessage,
+        -:  144:				WsConnectCallback onConnect = nullptr,
+        -:  145:				WsDisconnectCallback onDisconnect = nullptr);
+        -:  146:
+        -:  147:		/**
+        -:  148:		 * @brief 注册 WebSocket 路由（带安全选项）
+        -:  149:		 * @param path 路由路径
+        -:  150:		 * @param options WebSocket 选项（Origin 白名单等）
+        -:  151:		 * @param onMessage 消息回调
+        -:  152:		 * @param onConnect 连接建立回调（可选）
+        -:  153:		 * @param onDisconnect 连接断开回调（可选）
+        -:  154:		 */
+        -:  155:		void ws(const std::string& path,
+        -:  156:				WsOptions options,
+        -:  157:				WsMessageCallback onMessage,
+        -:  158:				WsConnectCallback onConnect = nullptr,
+        -:  159:				WsDisconnectCallback onDisconnect = nullptr);
+        -:  160:
+        -:  161:		/**
+        -:  162:		 * @brief 分发请求到匹配的路由处理器
+        -:  163:		 * @param req HTTP 请求（路径参数会被写入 req 中）
+        -:  164:		 * @return 协程化的 HTTP 响应
+        -:  165:		 * 如果没有匹配的路由，返回 404 Not Found。
+        -:  166:		 */
+        -:  167:		Awaitable<HttpResponse> dispatch(HttpRequest& req);
+        -:  168:
+        -:  169:		/**
+        -:  170:		 * @brief 同步快速路径分发（零协程帧开销）
+        -:  171:		 * 当 handler 是同步注册且无路由级中间件时，直接调用返回结果。
+        -:  172:		 * @param req HTTP 请求
+        -:  173:		 * @return 有值 = 同步处理完成；nullopt = 需要 fallback 到 co_await dispatch()
+        -:  174:		 */
+        -:  175:		std::optional<HttpResponse> dispatchSync(HttpRequest& req);
+        -:  176:
+        -:  177:		/**
+        -:  178:		 * @brief 检查路径是否为 WebSocket 路由
+        -:  179:		 * @param path 请求路径
+        -:  180:		 * @return 如果是 ws 路由返回对应的 WsRoute 指针，否则 nullptr
+        -:  181:		 */
+        -:  182:
+        -:  183:		const WsRoute* findWsRoute(std::string_view path) const;
+        -:  184:
+        -:  185:		/**
+        -:  186:		 * @brief 获取已注册路由数量（HTTP + WebSocket）
+        -:  187:		 * @return 路由数量
+        -:  188:		 */
+        -:  189:		size_t routeCount() const;
+        -:  190:
+        -:  191:		/**
+        -:  192:		 * @brief 创建路由组（前缀分组）
+        -:  193:		 * @param prefix 路由前缀（如 "/api/v1"）
+        -:  194:		 * @return 路由组对象
+        -:  195:		 */
+        -:  196:		RouteGroup group(const std::string& prefix);
+        -:  197:
+        -:  198:		/**
+        -:  199:		 * @brief URL 解码（百分号编码 -> 原始字符，'+' -> 空格）
+        -:  200:		 * @param encoded 编码后的字符串
+        -:  201:		 * @return 解码后的字符串
+        -:  202:		 */
+        -:  203:		static std::string urlDecode(std::string_view encoded);
+        -:  204:
+        -:  205:	private:
+        -:  206:		// ============ 静态路由（哈希表 O(1) 查找） ============
+        -:  207:
+        -:  208:		/**
+        -:  209:		 * @brief 组合键：method + path，用于静态路由哈希查找
+        -:  210:		 */
+        -:  211:		struct RouteKey
+        -:  212:		{
+        -:  213:			HttpMethod method;
+        -:  214:			std::string path;
+        -:  215:
+        -:  216:			bool operator==(const RouteKey& other) const
+        -:  217:			{
+        -:  218:				return method == other.method && path == other.path;
+        -:  219:			}
+        -:  220:		};
+        -:  221:
+        -:  222:		/// 轻量级 view 类型，用于 find() 异构查找，避免构造临时 std::string
+        -:  223:		struct RouteKeyView
+        -:  224:		{
+        -:  225:			HttpMethod method;
+        -:  226:			std::string_view path;
+        -:  227:		};
+        -:  228:
+        -:  229:		struct RouteKeyHash
+        -:  230:		{
+        -:  231:			using is_transparent = void;
+        -:  232:
+function _ZN5hical6Router12RouteKeyHash7combineEmm called 7842 returned 100% blocks executed 100%
+     7842:  233:			static size_t combine(size_t h1, size_t h2)
+        -:  234:			{
+     7842:  235:				h1 ^= h2 + 0x9e3779b9 + (h1 << 6) + (h1 >> 2);
+     7842:  236:				return h1;
+        -:  237:			}
+        -:  238:
+function _ZNK5hical6Router12RouteKeyHashclERKNS0_8RouteKeyE called 192 returned 100% blocks executed 100%
+      192:  239:			size_t operator()(const RouteKey& key) const
+        -:  240:			{
+      192:  241:				return combine(std::hash<int> {}(static_cast<int>(key.method)), std::hash<std::string> {}(key.path));
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+        -:  242:			}
+        -:  243:
+function _ZNK5hical6Router12RouteKeyHashclERKNS0_12RouteKeyViewE called 7745 returned 99% blocks executed 100%
+     7745:  244:			size_t operator()(const RouteKeyView& key) const
+        -:  245:			{
+     7892:  246:				return combine(std::hash<int> {}(static_cast<int>(key.method)),
+call    0 returned 97%
+call    1 returned 100%
+    15436:  247:							   std::hash<std::string_view> {}(key.path));
+call    0 returned 102%
+        -:  248:			}
+        -:  249:		};
+        -:  250:
+        -:  251:		struct RouteKeyEqual
+        -:  252:		{
+        -:  253:			using is_transparent = void;
+        -:  254:
+function _ZNK5hical6Router13RouteKeyEqualclERKNS0_8RouteKeyES4_ called 0 returned 0% blocks executed 0%
+    #####:  255:			bool operator()(const RouteKey& a, const RouteKey& b) const
+        -:  256:			{
+    #####:  257:				return a.method == b.method && a.path == b.path;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed
+        -:  258:			}
+        -:  259:
+function _ZNK5hical6Router13RouteKeyEqualclERKNS0_12RouteKeyViewERKNS0_8RouteKeyE called 7902 returned 99% blocks executed 88%
+     7902:  260:			bool operator()(const RouteKeyView& a, const RouteKey& b) const
+        -:  261:			{
+    7902*:  262:				return a.method == b.method && a.path == b.path;
+branch  0 taken 101% (fallthrough)
+branch  1 taken -1%
+call    2 returned 99%
+call    3 returned 100%
+branch  4 taken 99% (fallthrough)
+branch  5 taken 1%
+        -:  263:			}
+        -:  264:
+        -:  265:			bool operator()(const RouteKey& a, const RouteKeyView& b) const
+        -:  266:			{
+        -:  267:				return a.method == b.method && a.path == b.path;
+        -:  268:			}
+        -:  269:		};
+        -:  270:
+        -:  271:		struct RouteEntry
+        -:  272:		{
+        -:  273:			RouteHandler asyncHandler;
+        -:  274:			SyncRouteHandler syncHandler; ///< 可选，同步注册时保留原始 handler
+        -:  275:		};
+        -:  276:
+        -:  277:		std::unordered_map<RouteKey, RouteEntry, RouteKeyHash, RouteKeyEqual> staticRoutes_;
+        -:  278:
+        -:  279:		// ============ 参数路由（按 method 分组，减少线性扫描范围） ============
+        -:  280:
+        -:  281:		struct ParamRouteEntry
+        -:  282:		{
+        -:  283:			HttpMethod method;
+        -:  284:			std::string path;
+        -:  285:			RouteHandler handler;
+        -:  286:			SyncRouteHandler syncHandler; ///< 可选
+        -:  287:		};
+        -:  288:
+        -:  289:		std::unordered_map<HttpMethod, std::vector<ParamRouteEntry>> paramRoutesByMethod_;
+        -:  290:
+        -:  291:		// ============ 路由查找结果（dispatch/dispatchSync 共用） ============
+        -:  292:
+        -:  293:		struct ResolveResult
+        -:  294:		{
+        -:  295:			const RouteEntry* staticEntry = nullptr;     ///< 静态路由命中
+        -:  296:			const ParamRouteEntry* paramEntry = nullptr; ///< 参数路由命中
+        -:  297:			std::string allowedMethods;                  ///< 405 时的 Allow 头值
+        -:  298:			bool pathTooDeep = false;                    ///< 路径深度超限
+        -:  299:		};
+        -:  300:
+        -:  301:		/**
+        -:  302:		 * @brief 统一的路由查找（dispatch/dispatchSync 共用）
+        -:  303:		 * 执行 URL 解码、路径深度校验、静态路由查找、参数路由匹配、405 检测。
+        -:  304:		 * 匹配成功时将路径参数写入 req。
+        -:  305:		 */
+        -:  306:		ResolveResult resolveRoute(HttpRequest& req) const;
+        -:  307:
+        -:  308:		// ============ 静态路由路径 → 方法集反向索引（405 检测 O(1)） ============
+        -:  309:
+        -:  310:		std::unordered_map<std::string, std::vector<HttpMethod>, StringHash, StringEqual> staticPathMethods_;
+        -:  311:
+        -:  312:		// ============ WebSocket 路由 ============
+        -:  313:
+        -:  314:		std::vector<WsRoute> wsRoutes_;
+        -:  315:
+        -:  316:		/**
+        -:  317:		 * @brief 判断路径模式是否包含参数（如 {id}）
+        -:  318:		 * @param path 路径模式
+        -:  319:		 * @return true 如果是参数路由
+        -:  320:		 */
+        -:  321:		static bool isParamRoute(const std::string& path);
+        -:  322:
+        -:  323:		/**
+        -:  324:		 * @brief 匹配参数路径并提取参数（零分配 string_view 版本）
+        -:  325:		 * @param pattern 注册的路径模式（可含 {param}）
+        -:  326:		 * @param path 请求路径
+        -:  327:		 * @param params 提取的路径参数（输出）
+        -:  328:		 * @return true 如果匹配
+        -:  329:		 */
+        -:  330:		static bool matchParamPath(std::string_view pattern, std::string_view path, ParamList& params);
+        -:  331:	};
+        -:  332:
+        -:  333:/**
+        -:  334: * @brief 路由注册宏（手动注册的便捷方式）
+        -:  335: * 用法：HICAL_ROUTE(router, Get, "/api/users", myHandler)
+        -:  336: * 等价于 router.route(HttpMethod::hGet, "/api/users", myHandler);
+        -:  337: * 如需自动路由注册，请参考 MetaRoutes.h 中的反射方案：
+        -:  338: *   hical::meta::registerRoutes<UserHandler>(router);
+        -:  339: */
+        -:  340:#define HICAL_ROUTE(router, method, path, handler) (router).route(::hical::HttpMethod::h##method, path, handler)
+        -:  341:
+        -:  342:} // namespace hical

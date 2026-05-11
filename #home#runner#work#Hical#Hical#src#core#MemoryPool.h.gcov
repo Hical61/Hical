@@ -1,0 +1,310 @@
+        -:    0:Source:/home/runner/work/Hical/Hical/src/core/MemoryPool.h
+        -:    1:#pragma once
+        -:    2:
+        -:    3:#include <atomic>
+        -:    4:#include <chrono>
+        -:    5:#include <memory>
+        -:    6:#include <memory_resource>
+        -:    7:#include <mutex>
+        -:    8:#include <vector>
+        -:    9:
+        -:   10:namespace hical
+        -:   11:{
+        -:   12:
+        -:   13:	/**
+        -:   14:	 * @brief 池参数配置
+        -:   15:	 */
+        -:   16:	struct PoolConfig
+        -:   17:	{
+        -:   18:		// 全局同步池参数
+        -:   19:		size_t globalMaxBlocksPerChunk = 128;
+        -:   20:		size_t globalLargestPoolBlock = 1024 * 1024; // 1MB
+        -:   21:
+        -:   22:		// 线程本地池参数
+        -:   23:		size_t threadLocalMaxBlocksPerChunk = 64;
+        -:   24:		size_t threadLocalLargestPoolBlock = 512 * 1024; // 512KB
+        -:   25:
+        -:   26:		// 请求级池默认初始大小
+        -:   27:		size_t requestPoolInitialSize = 4096;
+        -:   28:	};
+        -:   29:
+        -:   30:	/**
+        -:   31:	 * @brief 追踪型内存资源包装器
+        -:   32:	 * 包装一个上游 memory_resource，在 allocate/deallocate 时
+        -:   33:	 * 做原子计数统计，零额外开销（仅原子操作）。
+        -:   34:	 */
+        -:   35:	class TrackedResource : public std::pmr::memory_resource
+        -:   36:	{
+        -:   37:	public:
+        -:   38:		/**
+        -:   39:		 * @brief 构造追踪型资源
+        -:   40:		 * @param upstream 上游内存资源
+        -:   41:		 */
+function _ZN5hical15TrackedResourceC2EPNSt3pmr15memory_resourceE called 26 returned 100% blocks executed 100%
+       26:   42:		explicit TrackedResource(std::pmr::memory_resource* upstream) : upstream_(upstream)
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+        -:   43:		{
+       26:   44:		}
+        -:   45:
+function _ZNK5hical15TrackedResource16totalAllocationsEv called 8 returned 100% blocks executed 65%
+        8:   46:		size_t totalAllocations() const
+        -:   47:		{
+       16:   48:			return totalAllocations_.load(std::memory_order_relaxed);
+call    0 returned 100%
+        -:   49:		}
+        -:   50:
+function _ZNK5hical15TrackedResource18totalDeallocationsEv called 8 returned 100% blocks executed 65%
+        8:   51:		size_t totalDeallocations() const
+        -:   52:		{
+       16:   53:			return totalDeallocations_.load(std::memory_order_relaxed);
+call    0 returned 100%
+        -:   54:		}
+        -:   55:
+function _ZNK5hical15TrackedResource12currentBytesEv called 8 returned 100% blocks executed 65%
+        8:   56:		size_t currentBytes() const
+        -:   57:		{
+       16:   58:			return currentBytes_.load(std::memory_order_relaxed);
+call    0 returned 100%
+        -:   59:		}
+        -:   60:
+function _ZNK5hical15TrackedResource9peakBytesEv called 8 returned 100% blocks executed 65%
+        8:   61:		size_t peakBytes() const
+        -:   62:		{
+       16:   63:			return peakBytes_.load(std::memory_order_relaxed);
+call    0 returned 100%
+        -:   64:		}
+        -:   65:
+        -:   66:		/**
+        -:   67:		 * @brief 重置统计数据
+        -:   68:		 */
+function _ZN5hical15TrackedResource10resetStatsEv called 3 returned 100% blocks executed 56%
+        3:   69:		void resetStats()
+        -:   70:		{
+        3:   71:			totalAllocations_.store(0, std::memory_order_relaxed);
+call    0 returned 100%
+        3:   72:			totalDeallocations_.store(0, std::memory_order_relaxed);
+call    0 returned 100%
+        3:   73:			currentBytes_.store(0, std::memory_order_relaxed);
+call    0 returned 100%
+        3:   74:			peakBytes_.store(0, std::memory_order_relaxed);
+call    0 returned 100%
+        3:   75:		}
+        -:   76:
+        -:   77:	protected:
+function _ZN5hical15TrackedResource11do_allocateEmm called 480 returned 100% blocks executed 73%
+      480:   78:		void* do_allocate(size_t bytes, size_t alignment) override
+        -:   79:		{
+      480:   80:			void* p = upstream_->allocate(bytes, alignment);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+      480:   81:			totalAllocations_.fetch_add(1, std::memory_order_relaxed);
+      480:   82:			auto current = currentBytes_.fetch_add(bytes, std::memory_order_relaxed) + bytes;
+        -:   83:			// 更新峰值（无锁 CAS）
+      480:   84:			auto peak = peakBytes_.load(std::memory_order_relaxed);
+call    0 returned 100%
+     952*:   85:			while (current > peak && !peakBytes_.compare_exchange_weak(peak, current, std::memory_order_relaxed))
+branch  0 taken 98% (fallthrough)
+branch  1 taken 2%
+call    2 returned 100%
+branch  3 taken 0% (fallthrough)
+branch  4 taken 100%
+branch  5 taken 0%
+branch  6 taken 100% (fallthrough)
+        -:   86:			{
+        -:   87:			}
+      480:   88:			return p;
+        -:   89:		}
+        -:   90:
+function _ZN5hical15TrackedResource13do_deallocateEPvmm called 480 returned 100% blocks executed 100%
+      480:   91:		void do_deallocate(void* p, size_t bytes, size_t alignment) override
+        -:   92:		{
+      480:   93:			upstream_->deallocate(p, bytes, alignment);
+call    0 returned 100%
+      480:   94:			totalDeallocations_.fetch_add(1, std::memory_order_relaxed);
+      480:   95:			currentBytes_.fetch_sub(bytes, std::memory_order_relaxed);
+      480:   96:		}
+        -:   97:
+function _ZNK5hical15TrackedResource11do_is_equalERKNSt3pmr15memory_resourceE called 0 returned 0% blocks executed 0%
+    #####:   98:		bool do_is_equal(const memory_resource& other) const noexcept override
+        -:   99:		{
+    #####:  100:			return this == &other;
+        -:  101:		}
+        -:  102:
+        -:  103:	private:
+        -:  104:		std::pmr::memory_resource* upstream_;
+        -:  105:		std::atomic<size_t> totalAllocations_ {0};
+        -:  106:		std::atomic<size_t> totalDeallocations_ {0};
+        -:  107:		std::atomic<size_t> currentBytes_ {0};
+        -:  108:		std::atomic<size_t> peakBytes_ {0};
+        -:  109:	};
+        -:  110:
+        -:  111:	/**
+        -:  112:	 * @brief 全局 pmr 内存池管理器
+        -:  113:	 * 提供三层内存分配策略：
+        -:  114:	 * 1. 全局同步池（synchronized_pool_resource）— 跨线程共享，带追踪统计
+        -:  115:	 * 2. 线程本地池（unsynchronized_pool_resource）— thread_local 无锁访问
+        -:  116:	 * 3. 请求级单调池（monotonic_buffer_resource）— 请求结束后整体释放
+        -:  117:	 * @note 线程模型
+        -:  118:	 * 线程本地池为每个调用 threadLocalAllocator() 的线程创建独立的 unsynchronized_pool_resource。
+        -:  119:	 * 这些池对象由 MemoryPool 持有所有权（通过 threadPools_ vector），线程退出后池仍在内存中。
+        -:  120:	 * 对于固定线程池（如 Web 服务器的 IO 线程池），这不是问题。
+        -:  121:	 * 但在频繁创建/销毁短命线程的场景下，threadPools_ 会单调增长。
+        -:  122:	 * 如有此类需求，可通过 configure() 重置或在服务器启动前固定线程池大小。
+        -:  123:	 */
+        -:  124:	class MemoryPool
+        -:  125:	{
+        -:  126:	public:
+        -:  127:		/**
+        -:  128:		 * @brief 获取全局单例
+        -:  129:		 * @return 内存池管理器引用
+        -:  130:		 */
+        -:  131:		static MemoryPool& instance();
+        -:  132:
+        -:  133:		/**
+        -:  134:		 * @brief 使用指定配置初始化（必须在首次使用前调用，否则使用默认配置）
+        -:  135:		 * @param config 池配置
+        -:  136:		 * @warning 线程安全约束：此方法必须在服务器启动前、单线程环境中调用。
+        -:  137:		 * 如果在多线程运行期间调用，会导致 use-after-free（globalPool_ 被重建时
+        -:  138:		 * 其他线程可能正在通过 globalAllocator()/threadLocalAllocator() 分配内存）。
+        -:  139:		 * 同样，调用时不应有通过 threadLocalAllocator() 分配的存活对象。
+        -:  140:		 */
+        -:  141:		void configure(const PoolConfig& config);
+        -:  142:
+        -:  143:		/**
+        -:  144:		 * @brief 获取全局同步池（线程安全，跨线程共享）
+        -:  145:		 * @return pmr 分配器
+        -:  146:		 */
+        -:  147:		std::pmr::polymorphic_allocator<std::byte> globalAllocator();
+        -:  148:
+        -:  149:		/**
+        -:  150:		 * @brief 获取当前线程的本地池（thread_local 无锁高性能）
+        -:  151:		 * @return pmr 分配器
+        -:  152:		 */
+        -:  153:		std::pmr::polymorphic_allocator<std::byte> threadLocalAllocator();
+        -:  154:
+        -:  155:		/**
+        -:  156:		 * @brief 获取当前线程的本地池资源指针
+        -:  157:		 * 适合作为 monotonic_buffer_resource 的 upstream（无锁，单线程环境下使用）。
+        -:  158:		 * @return 本地池资源指针
+        -:  159:		 */
+        -:  160:		std::pmr::unsynchronized_pool_resource* threadLocalPool();
+        -:  161:
+        -:  162:		/**
+        -:  163:		 * @brief 创建请求级单调池（用于 HTTP 请求生命周期）
+        -:  164:		 * @param initialSize 初始缓冲区大小（字节，0 则使用配置默认值）
+        -:  165:		 * @return 单调池资源（需手动管理生命周期）
+        -:  166:		 */
+        -:  167:		std::unique_ptr<std::pmr::monotonic_buffer_resource> createRequestPool(size_t initialSize = 0);
+        -:  168:
+        -:  169:		/**
+        -:  170:		 * @brief 内存池统计信息
+        -:  171:		 */
+        -:  172:		struct Stats
+        -:  173:		{
+        -:  174:			size_t totalAllocations {0};      // 总分配次数
+        -:  175:			size_t totalDeallocations {0};    // 总释放次数
+        -:  176:			size_t currentBytesAllocated {0}; // 当前已分配字节数
+        -:  177:			size_t peakBytesAllocated {0};    // 峰值字节数
+        -:  178:			size_t threadPoolCount {0};       // 当前 thread-local 池数量
+        -:  179:			size_t gcCycles {0};              // GC 运行次数
+        -:  180:			size_t gcReclaimedPools {0};      // GC 回收的池数量
+        -:  181:		};
+        -:  182:
+        -:  183:		/**
+        -:  184:		 * @brief 获取全局池统计信息
+        -:  185:		 * @return Stats 结构
+        -:  186:		 */
+        -:  187:		Stats getStats() const;
+        -:  188:
+        -:  189:		/**
+        -:  190:		 * @brief 重置统计数据
+        -:  191:		 */
+        -:  192:		void resetStats();
+        -:  193:
+        -:  194:		/**
+        -:  195:		 * @brief 释放空闲线程池资源
+        -:  196:		 * 设计目标：
+        -:  197:		 * 遍历所有 thread-local 池，若超过 maxIdleSeconds 未分配则调用 release() 释放内部块。
+        -:  198:		 * 不删除池对象（避免 thread_local 悬垂），仅释放池持有的上游内存块。
+        -:  199:		 * @param maxIdleSeconds 最大空闲时间（默认 60 秒）
+        -:  200:		 * @note 线程安全：内部加锁，可从任意线程调用。
+        -:  201:		 */
+        -:  202:		void gc(std::chrono::seconds maxIdleSeconds = std::chrono::seconds(60));
+        -:  203:
+        -:  204:		/**
+        -:  205:		 * @brief 获取追踪资源的直接引用（用于高级诊断）
+        -:  206:		 * @return TrackedResource 引用
+        -:  207:		 */
+function _ZN5hical10MemoryPool15trackedResourceEv called 1 returned 100% blocks executed 100%
+        1:  208:		TrackedResource& trackedResource()
+        -:  209:		{
+        1:  210:			return trackedResource_;
+        -:  211:		}
+        -:  212:
+        -:  213:		/**
+        -:  214:		 * @brief 获取当前配置
+        -:  215:		 * @return 配置引用
+        -:  216:		 */
+        -:  217:		const PoolConfig& config() const
+        -:  218:		{
+        -:  219:			return config_;
+        -:  220:		}
+        -:  221:
+        -:  222:		// 禁止拷贝和移动
+        -:  223:		MemoryPool(const MemoryPool&) = delete;
+        -:  224:		MemoryPool& operator=(const MemoryPool&) = delete;
+        -:  225:
+        -:  226:	private:
+        -:  227:		MemoryPool();
+        -:  228:		~MemoryPool();
+        -:  229:
+        -:  230:		PoolConfig config_;
+        -:  231:
+        -:  232:		// 追踪层（包装 new_delete_resource 作为最终上游）
+        -:  233:		TrackedResource trackedResource_;
+        -:  234:
+        -:  235:		// 全局同步池（上游为 trackedResource_）
+        -:  236:		std::pmr::synchronized_pool_resource globalPool_;
+        -:  237:
+        -:  238:		// 获取当前线程的本地池（thread_local 缓存 + mutex 注册）
+        -:  239:		std::pmr::unsynchronized_pool_resource* getOrCreateThreadPool();
+        -:  240:
+        -:  241:		// thread-local 池及其活跃时间戳
+        -:  242:		struct ThreadPoolEntry
+        -:  243:		{
+        -:  244:			std::unique_ptr<std::pmr::unsynchronized_pool_resource> pool;
+        -:  245:			std::atomic<std::chrono::steady_clock::time_point> lastAllocTime {std::chrono::steady_clock::now()};
+        -:  246:			std::atomic<bool> needsRelease {false}; // GC 标记，由拥有线程在下次分配时执行 release
+        -:  247:
+function _ZN5hical10MemoryPool15ThreadPoolEntryC2ESt10unique_ptrINSt3pmr28unsynchronized_pool_resourceESt14default_deleteIS4_EE called 38 returned 100% blocks executed 100%
+       38:  248:			explicit ThreadPoolEntry(std::unique_ptr<std::pmr::unsynchronized_pool_resource> p) : pool(std::move(p))
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+        -:  249:			{
+       38:  250:			}
+        -:  251:
+        -:  252:			ThreadPoolEntry(const ThreadPoolEntry&) = delete;
+        -:  253:			ThreadPoolEntry& operator=(const ThreadPoolEntry&) = delete;
+        -:  254:		};
+        -:  255:
+        -:  256:		// MemoryPool 持有所有线程本地池的所有权（避免 thread_local 析构顺序问题）
+        -:  257:		mutable std::mutex threadPoolsMutex_;
+        -:  258:		std::vector<std::unique_ptr<ThreadPoolEntry>> threadPools_;
+        -:  259:
+        -:  260:		// GC 统计
+        -:  261:		std::atomic<size_t> gcCycles_ {0};
+        -:  262:		std::atomic<size_t> gcReclaimedPools_ {0};
+        -:  263:
+        -:  264:		// 代际计数器：configure() 时递增，使 thread_local 缓存自动失效
+        -:  265:		std::atomic<uint64_t> generation_ {0};
+        -:  266:	};
+        -:  267:
+        -:  268:} // namespace hical

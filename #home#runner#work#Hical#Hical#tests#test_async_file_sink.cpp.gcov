@@ -1,0 +1,1113 @@
+        -:    0:Source:/home/runner/work/Hical/Hical/tests/test_async_file_sink.cpp
+        -:    1:#include "core/AsyncFileSink.h"
+        -:    2:#include "core/LogSink.h"
+        -:    3:#include <gtest/gtest.h>
+        -:    4:#include <chrono>
+        -:    5:#include <filesystem>
+        -:    6:#include <fstream>
+        -:    7:#include <string>
+        -:    8:#include <thread>
+        -:    9:
+        -:   10:using namespace hical;
+        -:   11:
+        -:   12:namespace fs = std::filesystem;
+        -:   13:
+        -:   14:class AsyncFileSinkTest : public ::testing::Test
+        -:   15:{
+        -:   16:protected:
+function _ZN17AsyncFileSinkTest5SetUpEv called 7 returned 100% blocks executed 55%
+        7:   17:	void SetUp() override
+        -:   18:	{
+       14:   19:		m_testDir = fs::temp_directory_path()
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 never executed
+       21:   20:					/ ("hical_async_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+call    9 returned 100%
+branch 10 taken 100% (fallthrough)
+branch 11 taken 0% (throw)
+call   12 returned 100%
+branch 13 taken 100% (fallthrough)
+branch 14 taken 0% (throw)
+call   15 returned 100%
+call   16 returned 100%
+call   17 returned 100%
+call   18 returned 100%
+call   19 returned 100%
+call   20 never executed
+call   21 never executed
+call   22 never executed
+        7:   21:		fs::create_directories(m_testDir);
+call    0 returned 100%
+        7:   22:	}
+        -:   23:
+function _ZN17AsyncFileSinkTest8TearDownEv called 7 returned 100% blocks executed 100%
+        7:   24:	void TearDown() override
+        -:   25:	{
+        7:   26:		std::error_code ec;
+call    0 returned 100%
+        7:   27:		fs::remove_all(m_testDir, ec);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        7:   28:	}
+        -:   29:
+function _ZN17AsyncFileSinkTest8readFileERKNSt10filesystem7__cxx114pathE called 4 returned 100% blocks executed 61%
+        4:   30:	std::string readFile(const fs::path& path)
+        -:   31:	{
+        4:   32:		std::ifstream ifs(path);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       12:   33:		return {std::istreambuf_iterator<char>(ifs), std::istreambuf_iterator<char>()};
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+        4:   34:	}
+call    0 returned 100%
+call    1 never executed
+        -:   35:
+        -:   36:	fs::path m_testDir;
+        -:   37:};
+        -:   38:
+        4:   39:TEST_F(AsyncFileSinkTest, BasicWrite)
+        -:   40:{
+        1:   41:	auto logPath = (m_testDir / "async.log").string();
+        -:   42:	{
+        -:   43:		AsyncFileSink sink(
+        1:   44:			AsyncFileSink::Options {.file = {.basePath = logPath}, .flushInterval = std::chrono::milliseconds(100)});
+        -:   45:
+        1:   46:		sink.write("[INFO] hello async\n");
+        -:   47:		// 同步握手：返回即表示后台线程已完成写盘
+        1:   48:		sink.flush();
+        -:   49:		// 析构时 jthread stop+join
+        1:   50:	}
+        -:   51:
+        1:   52:	auto content = readFile(logPath);
+       1*:   53:	EXPECT_NE(content.find("hello async"), std::string::npos) << "Content: " << content;
+        1:   54:}
+------------------
+_ZN33AsyncFileSinkTest_BasicWrite_TestC2Ev:
+function _ZN33AsyncFileSinkTest_BasicWrite_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:   39:TEST_F(AsyncFileSinkTest, BasicWrite)
+call    0 returned 100%
+------------------
+_ZN33AsyncFileSinkTest_BasicWrite_TestD0Ev:
+function _ZN33AsyncFileSinkTest_BasicWrite_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:   39:TEST_F(AsyncFileSinkTest, BasicWrite)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN33AsyncFileSinkTest_BasicWrite_TestD2Ev:
+function _ZN33AsyncFileSinkTest_BasicWrite_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:   39:TEST_F(AsyncFileSinkTest, BasicWrite)
+call    0 returned 100%
+------------------
+_ZN33AsyncFileSinkTest_BasicWrite_Test8TestBodyEv:
+function _ZN33AsyncFileSinkTest_BasicWrite_Test8TestBodyEv called 1 returned 100% blocks executed 36%
+        1:   39:TEST_F(AsyncFileSinkTest, BasicWrite)
+        -:   40:{
+        1:   41:	auto logPath = (m_testDir / "async.log").string();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+call    9 returned 100%
+call   10 returned 100%
+call   11 never executed
+call   12 never executed
+        -:   42:	{
+        -:   43:		AsyncFileSink sink(
+        1:   44:			AsyncFileSink::Options {.file = {.basePath = logPath}, .flushInterval = std::chrono::milliseconds(100)});
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+branch  8 never executed (fallthrough)
+branch  9 never executed
+call   10 never executed
+        -:   45:
+        1:   46:		sink.write("[INFO] hello async\n");
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:   47:		// 同步握手：返回即表示后台线程已完成写盘
+        1:   48:		sink.flush();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:   49:		// 析构时 jthread stop+join
+        1:   50:	}
+call    0 returned 100%
+call    1 never executed
+        -:   51:
+        1:   52:	auto content = readFile(logPath);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+       1*:   53:	EXPECT_NE(content.find("hello async"), std::string::npos) << "Content: " << content;
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 0% (fallthrough)
+branch  6 taken 100%
+call    7 never executed
+branch  8 never executed (fallthrough)
+branch  9 never executed (throw)
+call   10 never executed
+branch 11 never executed (fallthrough)
+branch 12 never executed (throw)
+call   13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed (throw)
+call   16 never executed
+call   17 never executed
+branch 18 never executed (fallthrough)
+branch 19 never executed (throw)
+call   20 never executed
+branch 21 never executed (fallthrough)
+branch 22 never executed (throw)
+call   23 never executed
+call   24 never executed
+call   25 returned 100%
+call   26 never executed
+call   27 never executed
+call   28 never executed
+        1:   54:}
+call    0 returned 100%
+call    1 returned 100%
+call    2 never executed
+call    3 never executed
+------------------
+        -:   55:
+        4:   56:TEST_F(AsyncFileSinkTest, MultipleWrites)
+        -:   57:{
+        1:   58:	auto logPath = (m_testDir / "multi.log").string();
+        -:   59:	{
+        -:   60:		AsyncFileSink sink(
+        1:   61:			AsyncFileSink::Options {.file = {.basePath = logPath}, .flushInterval = std::chrono::milliseconds(100)});
+        -:   62:
+      101:   63:		for (int i = 0; i < 100; ++i)
+        -:   64:		{
+      100:   65:			auto msg = "[INFO] line " + std::to_string(i) + "\n";
+      100:   66:			sink.write(msg);
+      100:   67:		}
+        -:   68:		// 等后台线程处理
+        1:   69:		std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        1:   70:	}
+        -:   71:
+        1:   72:	auto content = readFile(logPath);
+        -:   73:	// 检查第一行和最后一行
+       1*:   74:	EXPECT_NE(content.find("line 0"), std::string::npos);
+       1*:   75:	EXPECT_NE(content.find("line 99"), std::string::npos);
+        1:   76:}
+------------------
+_ZN37AsyncFileSinkTest_MultipleWrites_TestC2Ev:
+function _ZN37AsyncFileSinkTest_MultipleWrites_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:   56:TEST_F(AsyncFileSinkTest, MultipleWrites)
+call    0 returned 100%
+------------------
+_ZN37AsyncFileSinkTest_MultipleWrites_TestD0Ev:
+function _ZN37AsyncFileSinkTest_MultipleWrites_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:   56:TEST_F(AsyncFileSinkTest, MultipleWrites)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN37AsyncFileSinkTest_MultipleWrites_TestD2Ev:
+function _ZN37AsyncFileSinkTest_MultipleWrites_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:   56:TEST_F(AsyncFileSinkTest, MultipleWrites)
+call    0 returned 100%
+------------------
+_ZN37AsyncFileSinkTest_MultipleWrites_Test8TestBodyEv:
+function _ZN37AsyncFileSinkTest_MultipleWrites_Test8TestBodyEv called 1 returned 100% blocks executed 37%
+        1:   56:TEST_F(AsyncFileSinkTest, MultipleWrites)
+        -:   57:{
+        1:   58:	auto logPath = (m_testDir / "multi.log").string();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+call    9 returned 100%
+call   10 returned 100%
+call   11 never executed
+call   12 never executed
+        -:   59:	{
+        -:   60:		AsyncFileSink sink(
+        1:   61:			AsyncFileSink::Options {.file = {.basePath = logPath}, .flushInterval = std::chrono::milliseconds(100)});
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+branch  8 never executed (fallthrough)
+branch  9 never executed
+call   10 never executed
+        -:   62:
+      101:   63:		for (int i = 0; i < 100; ++i)
+branch  0 taken 99%
+branch  1 taken 1% (fallthrough)
+        -:   64:		{
+      100:   65:			auto msg = "[INFO] line " + std::to_string(i) + "\n";
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+call    7 returned 100%
+call    8 returned 100%
+call    9 never executed
+call   10 never executed
+      100:   66:			sink.write(msg);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+      100:   67:		}
+call    0 returned 100%
+call    1 never executed
+        -:   68:		// 等后台线程处理
+        1:   69:		std::this_thread::sleep_for(std::chrono::milliseconds(500));
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        1:   70:	}
+call    0 returned 100%
+call    1 never executed
+        -:   71:
+        1:   72:	auto content = readFile(logPath);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+        -:   73:	// 检查第一行和最后一行
+       1*:   74:	EXPECT_NE(content.find("line 0"), std::string::npos);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 0% (fallthrough)
+branch  6 taken 100%
+call    7 never executed
+branch  8 never executed (fallthrough)
+branch  9 never executed (throw)
+call   10 never executed
+call   11 never executed
+branch 12 never executed (fallthrough)
+branch 13 never executed (throw)
+call   14 never executed
+branch 15 never executed (fallthrough)
+branch 16 never executed (throw)
+call   17 never executed
+call   18 never executed
+call   19 returned 100%
+call   20 never executed
+call   21 never executed
+call   22 never executed
+       1*:   75:	EXPECT_NE(content.find("line 99"), std::string::npos);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 0% (fallthrough)
+branch  6 taken 100%
+call    7 never executed
+branch  8 never executed (fallthrough)
+branch  9 never executed (throw)
+call   10 never executed
+call   11 never executed
+branch 12 never executed (fallthrough)
+branch 13 never executed (throw)
+call   14 never executed
+branch 15 never executed (fallthrough)
+branch 16 never executed (throw)
+call   17 never executed
+call   18 never executed
+call   19 returned 100%
+call   20 never executed
+call   21 never executed
+call   22 never executed
+        1:   76:}
+call    0 returned 100%
+call    1 returned 100%
+call    2 never executed
+call    3 never executed
+------------------
+        -:   77:
+        4:   78:TEST_F(AsyncFileSinkTest, MultiThreadWrite)
+        -:   79:{
+        1:   80:	auto logPath = (m_testDir / "mt.log").string();
+        -:   81:	{
+        -:   82:		AsyncFileSink sink(
+        1:   83:			AsyncFileSink::Options {.file = {.basePath = logPath}, .flushInterval = std::chrono::milliseconds(100)});
+        -:   84:
+        1:   85:		constexpr int kThreads = 4;
+        1:   86:		constexpr int kLinesPerThread = 50;
+        -:   87:
+        1:   88:		std::vector<std::thread> threads;
+        1:   89:		threads.reserve(kThreads);
+        -:   90:
+        5:   91:		for (int t = 0; t < kThreads; ++t)
+        -:   92:		{
+        4:   93:			threads.emplace_back(
+        8:   94:				[&sink, t]()
+        -:   95:				{
+      204:   96:					for (int i = 0; i < kLinesPerThread; ++i)
+branch  0 taken 98%
+branch  1 taken 2% (fallthrough)
+        -:   97:					{
+      200:   98:						auto msg = "[INFO] t" + std::to_string(t) + " i" + std::to_string(i) + "\n";
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+call    8 returned 100%
+branch  9 taken 100% (fallthrough)
+branch 10 taken 0% (throw)
+call   11 returned 100%
+branch 12 taken 100% (fallthrough)
+branch 13 taken 0% (throw)
+call   14 returned 100%
+call   15 returned 100%
+call   16 returned 100%
+call   17 returned 100%
+call   18 returned 100%
+call   19 never executed
+call   20 never executed
+call   21 never executed
+call   22 never executed
+call   23 never executed
+      200:   99:						sink.write(msg);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+      200:  100:					}
+call    0 returned 100%
+call    1 never executed
+        4:  101:				});
+        -:  102:		}
+        5:  103:		for (auto& th : threads)
+        -:  104:		{
+        4:  105:			th.join();
+        -:  106:		}
+        1:  107:		std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        1:  108:	}
+        -:  109:
+        1:  110:	auto content = readFile(logPath);
+        -:  111:	// 验证所有线程都有输出
+        5:  112:	for (int t = 0; t < 4; ++t)
+        -:  113:	{
+        4:  114:		auto needle = "t" + std::to_string(t) + " i0";
+       4*:  115:		EXPECT_NE(content.find(needle), std::string::npos) << "Missing thread " << t;
+        4:  116:	}
+        1:  117:}
+------------------
+_ZN39AsyncFileSinkTest_MultiThreadWrite_TestC2Ev:
+function _ZN39AsyncFileSinkTest_MultiThreadWrite_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:   78:TEST_F(AsyncFileSinkTest, MultiThreadWrite)
+call    0 returned 100%
+------------------
+_ZN39AsyncFileSinkTest_MultiThreadWrite_TestD0Ev:
+function _ZN39AsyncFileSinkTest_MultiThreadWrite_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:   78:TEST_F(AsyncFileSinkTest, MultiThreadWrite)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN39AsyncFileSinkTest_MultiThreadWrite_TestD2Ev:
+function _ZN39AsyncFileSinkTest_MultiThreadWrite_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:   78:TEST_F(AsyncFileSinkTest, MultiThreadWrite)
+call    0 returned 100%
+------------------
+_ZN39AsyncFileSinkTest_MultiThreadWrite_Test8TestBodyEv:
+function _ZN39AsyncFileSinkTest_MultiThreadWrite_Test8TestBodyEv called 1 returned 100% blocks executed 44%
+        1:   78:TEST_F(AsyncFileSinkTest, MultiThreadWrite)
+        -:   79:{
+        1:   80:	auto logPath = (m_testDir / "mt.log").string();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+call    9 returned 100%
+call   10 returned 100%
+call   11 never executed
+call   12 never executed
+        -:   81:	{
+        -:   82:		AsyncFileSink sink(
+        1:   83:			AsyncFileSink::Options {.file = {.basePath = logPath}, .flushInterval = std::chrono::milliseconds(100)});
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+branch  8 never executed (fallthrough)
+branch  9 never executed
+call   10 never executed
+        -:   84:
+        1:   85:		constexpr int kThreads = 4;
+        1:   86:		constexpr int kLinesPerThread = 50;
+        -:   87:
+        1:   88:		std::vector<std::thread> threads;
+        1:   89:		threads.reserve(kThreads);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:   90:
+        5:   91:		for (int t = 0; t < kThreads; ++t)
+branch  0 taken 80%
+branch  1 taken 20% (fallthrough)
+        -:   92:		{
+        4:   93:			threads.emplace_back(
+        4:   94:				[&sink, t]()
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:   95:				{
+        -:   96:					for (int i = 0; i < kLinesPerThread; ++i)
+        -:   97:					{
+        -:   98:						auto msg = "[INFO] t" + std::to_string(t) + " i" + std::to_string(i) + "\n";
+        -:   99:						sink.write(msg);
+        -:  100:					}
+        -:  101:				});
+        -:  102:		}
+        5:  103:		for (auto& th : threads)
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 80%
+branch  6 taken 20% (fallthrough)
+        -:  104:		{
+        4:  105:			th.join();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  106:		}
+        1:  107:		std::this_thread::sleep_for(std::chrono::milliseconds(500));
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        1:  108:	}
+call    0 returned 100%
+call    1 returned 100%
+call    2 never executed
+call    3 never executed
+        -:  109:
+        1:  110:	auto content = readFile(logPath);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+        -:  111:	// 验证所有线程都有输出
+        5:  112:	for (int t = 0; t < 4; ++t)
+branch  0 taken 80%
+branch  1 taken 20% (fallthrough)
+        -:  113:	{
+        4:  114:		auto needle = "t" + std::to_string(t) + " i0";
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+call    7 returned 100%
+call    8 returned 100%
+call    9 never executed
+call   10 never executed
+       4*:  115:		EXPECT_NE(content.find(needle), std::string::npos) << "Missing thread " << t;
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 0% (fallthrough)
+branch  6 taken 100%
+call    7 never executed
+branch  8 never executed (fallthrough)
+branch  9 never executed (throw)
+call   10 never executed
+branch 11 never executed (fallthrough)
+branch 12 never executed (throw)
+call   13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed (throw)
+call   16 never executed
+call   17 never executed
+branch 18 never executed (fallthrough)
+branch 19 never executed (throw)
+call   20 never executed
+branch 21 never executed (fallthrough)
+branch 22 never executed (throw)
+call   23 never executed
+call   24 never executed
+call   25 returned 100%
+call   26 never executed
+call   27 never executed
+call   28 never executed
+        4:  116:	}
+call    0 returned 100%
+call    1 never executed
+        1:  117:}
+call    0 returned 100%
+call    1 returned 100%
+call    2 never executed
+call    3 never executed
+------------------
+        -:  118:
+        4:  119:TEST_F(AsyncFileSinkTest, GracefulShutdown)
+        -:  120:{
+        1:  121:	auto logPath = (m_testDir / "shutdown.log").string();
+        -:  122:	{
+        2:  123:		AsyncFileSink sink(AsyncFileSink::Options {
+        -:  124:			.file = {.basePath = logPath},
+        -:  125:			.flushInterval = std::chrono::milliseconds(5000) // 长 interval
+        1:  126:		});
+        -:  127:
+        1:  128:		sink.write("[INFO] before shutdown\n");
+        -:  129:		// 不手动 flush，依赖析构时的 jthread stop+join
+        1:  130:	}
+        -:  131:
+        1:  132:	auto content = readFile(logPath);
+       1*:  133:	EXPECT_NE(content.find("before shutdown"), std::string::npos)
+       1*:  134:		<< "Data should be flushed on shutdown. Content: " << content;
+        1:  135:}
+------------------
+_ZN39AsyncFileSinkTest_GracefulShutdown_TestC2Ev:
+function _ZN39AsyncFileSinkTest_GracefulShutdown_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:  119:TEST_F(AsyncFileSinkTest, GracefulShutdown)
+call    0 returned 100%
+------------------
+_ZN39AsyncFileSinkTest_GracefulShutdown_TestD0Ev:
+function _ZN39AsyncFileSinkTest_GracefulShutdown_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:  119:TEST_F(AsyncFileSinkTest, GracefulShutdown)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN39AsyncFileSinkTest_GracefulShutdown_TestD2Ev:
+function _ZN39AsyncFileSinkTest_GracefulShutdown_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:  119:TEST_F(AsyncFileSinkTest, GracefulShutdown)
+call    0 returned 100%
+------------------
+_ZN39AsyncFileSinkTest_GracefulShutdown_Test8TestBodyEv:
+function _ZN39AsyncFileSinkTest_GracefulShutdown_Test8TestBodyEv called 1 returned 100% blocks executed 35%
+        1:  119:TEST_F(AsyncFileSinkTest, GracefulShutdown)
+        -:  120:{
+        1:  121:	auto logPath = (m_testDir / "shutdown.log").string();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+call    9 returned 100%
+call   10 returned 100%
+call   11 never executed
+call   12 never executed
+        -:  122:	{
+        2:  123:		AsyncFileSink sink(AsyncFileSink::Options {
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 never executed
+branch  5 never executed (fallthrough)
+branch  6 never executed
+call    7 never executed
+        -:  124:			.file = {.basePath = logPath},
+        -:  125:			.flushInterval = std::chrono::milliseconds(5000) // 长 interval
+        1:  126:		});
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  127:
+        1:  128:		sink.write("[INFO] before shutdown\n");
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:  129:		// 不手动 flush，依赖析构时的 jthread stop+join
+        1:  130:	}
+call    0 returned 100%
+call    1 never executed
+        -:  131:
+        1:  132:	auto content = readFile(logPath);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+       1*:  133:	EXPECT_NE(content.find("before shutdown"), std::string::npos)
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 0% (fallthrough)
+branch  6 taken 100%
+call    7 never executed
+branch  8 never executed (fallthrough)
+branch  9 never executed (throw)
+call   10 never executed
+branch 11 never executed (fallthrough)
+branch 12 never executed (throw)
+call   13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed (throw)
+call   16 never executed
+call   17 never executed
+call   18 never executed
+call   19 never executed
+       1*:  134:		<< "Data should be flushed on shutdown. Content: " << content;
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+call    6 never executed
+call    7 returned 100%
+call    8 never executed
+        1:  135:}
+call    0 returned 100%
+call    1 returned 100%
+call    2 never executed
+call    3 never executed
+------------------
+        -:  136:
+        4:  137:TEST_F(AsyncFileSinkTest, DroppedCountInitiallyZero)
+        -:  138:{
+        1:  139:	auto logPath = (m_testDir / "drop.log").string();
+        -:  140:	AsyncFileSink sink(
+        1:  141:		AsyncFileSink::Options {.file = {.basePath = logPath}, .flushInterval = std::chrono::milliseconds(100)});
+       1*:  142:	EXPECT_EQ(sink.droppedCount(), 0u);
+        1:  143:}
+------------------
+_ZN48AsyncFileSinkTest_DroppedCountInitiallyZero_TestC2Ev:
+function _ZN48AsyncFileSinkTest_DroppedCountInitiallyZero_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:  137:TEST_F(AsyncFileSinkTest, DroppedCountInitiallyZero)
+call    0 returned 100%
+------------------
+_ZN48AsyncFileSinkTest_DroppedCountInitiallyZero_TestD0Ev:
+function _ZN48AsyncFileSinkTest_DroppedCountInitiallyZero_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:  137:TEST_F(AsyncFileSinkTest, DroppedCountInitiallyZero)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN48AsyncFileSinkTest_DroppedCountInitiallyZero_TestD2Ev:
+function _ZN48AsyncFileSinkTest_DroppedCountInitiallyZero_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:  137:TEST_F(AsyncFileSinkTest, DroppedCountInitiallyZero)
+call    0 returned 100%
+------------------
+_ZN48AsyncFileSinkTest_DroppedCountInitiallyZero_Test8TestBodyEv:
+function _ZN48AsyncFileSinkTest_DroppedCountInitiallyZero_Test8TestBodyEv called 1 returned 100% blocks executed 33%
+        1:  137:TEST_F(AsyncFileSinkTest, DroppedCountInitiallyZero)
+        -:  138:{
+        1:  139:	auto logPath = (m_testDir / "drop.log").string();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+call    9 returned 100%
+call   10 returned 100%
+call   11 never executed
+call   12 never executed
+        -:  140:	AsyncFileSink sink(
+        1:  141:		AsyncFileSink::Options {.file = {.basePath = logPath}, .flushInterval = std::chrono::milliseconds(100)});
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+branch  8 never executed (fallthrough)
+branch  9 never executed
+call   10 never executed
+       1*:  142:	EXPECT_EQ(sink.droppedCount(), 0u);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 0% (fallthrough)
+branch  8 taken 100%
+call    9 never executed
+branch 10 never executed (fallthrough)
+branch 11 never executed (throw)
+call   12 never executed
+call   13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed (throw)
+call   16 never executed
+branch 17 never executed (fallthrough)
+branch 18 never executed (throw)
+call   19 never executed
+call   20 never executed
+call   21 returned 100%
+call   22 never executed
+call   23 never executed
+call   24 never executed
+        1:  143:}
+call    0 returned 100%
+call    1 returned 100%
+call    2 never executed
+call    3 never executed
+------------------
+        -:  144:
+        4:  145:TEST_F(AsyncFileSinkTest, FileRotationWithAsync)
+        -:  146:{
+        1:  147:	auto logPath = (m_testDir / "rotate.log").string();
+        -:  148:	{
+        2:  149:		AsyncFileSink sink(AsyncFileSink::Options {.file = {.basePath = logPath, .maxFileSize = 100, .maxFiles = 3},
+        1:  150:												   .flushInterval = std::chrono::milliseconds(50)});
+        -:  151:
+        -:  152:		// 写入足够多的数据触发轮转
+       51:  153:		for (int i = 0; i < 50; ++i)
+        -:  154:		{
+       50:  155:			auto msg = "[INFO] rotation test line " + std::to_string(i) + " with extra padding data\n";
+       50:  156:			sink.write(msg);
+       50:  157:		}
+        1:  158:		std::this_thread::sleep_for(std::chrono::milliseconds(300));
+        1:  159:	}
+        -:  160:
+        -:  161:	// 检查有轮转文件
+        1:  162:	int logFileCount = 0;
+        5:  163:	for (const auto& entry : fs::directory_iterator(m_testDir))
+        -:  164:	{
+        2:  165:		if (entry.path().extension() == ".log")
+        -:  166:		{
+        2:  167:			++logFileCount;
+        -:  168:		}
+        1:  169:	}
+       1*:  170:	EXPECT_GE(logFileCount, 2) << "Should have rotated files";
+        1:  171:}
+------------------
+_ZN44AsyncFileSinkTest_FileRotationWithAsync_TestC2Ev:
+function _ZN44AsyncFileSinkTest_FileRotationWithAsync_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:  145:TEST_F(AsyncFileSinkTest, FileRotationWithAsync)
+call    0 returned 100%
+------------------
+_ZN44AsyncFileSinkTest_FileRotationWithAsync_TestD0Ev:
+function _ZN44AsyncFileSinkTest_FileRotationWithAsync_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:  145:TEST_F(AsyncFileSinkTest, FileRotationWithAsync)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN44AsyncFileSinkTest_FileRotationWithAsync_TestD2Ev:
+function _ZN44AsyncFileSinkTest_FileRotationWithAsync_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:  145:TEST_F(AsyncFileSinkTest, FileRotationWithAsync)
+call    0 returned 100%
+------------------
+_ZN44AsyncFileSinkTest_FileRotationWithAsync_Test8TestBodyEv:
+function _ZN44AsyncFileSinkTest_FileRotationWithAsync_Test8TestBodyEv called 1 returned 100% blocks executed 48%
+        1:  145:TEST_F(AsyncFileSinkTest, FileRotationWithAsync)
+        -:  146:{
+        1:  147:	auto logPath = (m_testDir / "rotate.log").string();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+call    9 returned 100%
+call   10 returned 100%
+call   11 never executed
+call   12 never executed
+        -:  148:	{
+        2:  149:		AsyncFileSink sink(AsyncFileSink::Options {.file = {.basePath = logPath, .maxFileSize = 100, .maxFiles = 3},
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 never executed
+branch  5 never executed (fallthrough)
+branch  6 never executed
+call    7 never executed
+        1:  150:												   .flushInterval = std::chrono::milliseconds(50)});
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  151:
+        -:  152:		// 写入足够多的数据触发轮转
+       51:  153:		for (int i = 0; i < 50; ++i)
+branch  0 taken 98%
+branch  1 taken 2% (fallthrough)
+        -:  154:		{
+       50:  155:			auto msg = "[INFO] rotation test line " + std::to_string(i) + " with extra padding data\n";
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+call    7 returned 100%
+call    8 returned 100%
+call    9 never executed
+call   10 never executed
+       50:  156:			sink.write(msg);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+       50:  157:		}
+call    0 returned 100%
+call    1 never executed
+        1:  158:		std::this_thread::sleep_for(std::chrono::milliseconds(300));
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        1:  159:	}
+call    0 returned 100%
+call    1 never executed
+        -:  160:
+        -:  161:	// 检查有轮转文件
+        1:  162:	int logFileCount = 0;
+        5:  163:	for (const auto& entry : fs::directory_iterator(m_testDir))
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+call    5 returned 100%
+call    6 returned 100%
+call    7 returned 100%
+call    8 returned 100%
+call    9 returned 100%
+call   10 returned 100%
+branch 11 taken 100% (fallthrough)
+branch 12 taken 0% (throw)
+call   13 returned 100%
+branch 14 taken 67%
+branch 15 taken 33% (fallthrough)
+        -:  164:	{
+        2:  165:		if (entry.path().extension() == ".log")
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+call    7 returned 100%
+call    8 returned 100%
+call    9 returned 100%
+branch 10 taken 100% (fallthrough)
+branch 11 taken 0%
+call   12 never executed
+        -:  166:		{
+        2:  167:			++logFileCount;
+        -:  168:		}
+        1:  169:	}
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 never executed
+call    4 never executed
+call    5 never executed
+       1*:  170:	EXPECT_GE(logFileCount, 2) << "Should have rotated files";
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 0% (fallthrough)
+branch  5 taken 100%
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed (throw)
+call    9 never executed
+branch 10 never executed (fallthrough)
+branch 11 never executed (throw)
+call   12 never executed
+call   13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed (throw)
+call   16 never executed
+branch 17 never executed (fallthrough)
+branch 18 never executed (throw)
+call   19 never executed
+call   20 never executed
+call   21 returned 100%
+call   22 never executed
+call   23 never executed
+call   24 never executed
+        1:  171:}
+call    0 returned 100%
+call    1 never executed
+------------------
+        -:  172:
+        4:  173:TEST_F(AsyncFileSinkTest, SinkLevelFilter)
+        -:  174:{
+        1:  175:	auto logPath = (m_testDir / "level.log").string();
+        -:  176:	{
+        -:  177:		AsyncFileSink sink(
+        1:  178:			AsyncFileSink::Options {.file = {.basePath = logPath}, .flushInterval = std::chrono::milliseconds(100)});
+        1:  179:		sink.setLevel(LogLevel::hError);
+       1*:  180:		EXPECT_EQ(sink.sinkLevel(), LogLevel::hError);
+        1:  181:	}
+        1:  182:}
+------------------
+_ZN38AsyncFileSinkTest_SinkLevelFilter_TestC2Ev:
+function _ZN38AsyncFileSinkTest_SinkLevelFilter_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:  173:TEST_F(AsyncFileSinkTest, SinkLevelFilter)
+call    0 returned 100%
+------------------
+_ZN38AsyncFileSinkTest_SinkLevelFilter_TestD0Ev:
+function _ZN38AsyncFileSinkTest_SinkLevelFilter_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:  173:TEST_F(AsyncFileSinkTest, SinkLevelFilter)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN38AsyncFileSinkTest_SinkLevelFilter_TestD2Ev:
+function _ZN38AsyncFileSinkTest_SinkLevelFilter_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:  173:TEST_F(AsyncFileSinkTest, SinkLevelFilter)
+call    0 returned 100%
+------------------
+_ZN38AsyncFileSinkTest_SinkLevelFilter_Test8TestBodyEv:
+function _ZN38AsyncFileSinkTest_SinkLevelFilter_Test8TestBodyEv called 1 returned 100% blocks executed 34%
+        1:  173:TEST_F(AsyncFileSinkTest, SinkLevelFilter)
+        -:  174:{
+        1:  175:	auto logPath = (m_testDir / "level.log").string();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+call    9 returned 100%
+call   10 returned 100%
+call   11 never executed
+call   12 never executed
+        -:  176:	{
+        -:  177:		AsyncFileSink sink(
+        1:  178:			AsyncFileSink::Options {.file = {.basePath = logPath}, .flushInterval = std::chrono::milliseconds(100)});
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+branch  8 never executed (fallthrough)
+branch  9 never executed
+call   10 never executed
+        1:  179:		sink.setLevel(LogLevel::hError);
+call    0 returned 100%
+       1*:  180:		EXPECT_EQ(sink.sinkLevel(), LogLevel::hError);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 0% (fallthrough)
+branch  6 taken 100%
+call    7 never executed
+branch  8 never executed (fallthrough)
+branch  9 never executed (throw)
+call   10 never executed
+call   11 never executed
+branch 12 never executed (fallthrough)
+branch 13 never executed (throw)
+call   14 never executed
+branch 15 never executed (fallthrough)
+branch 16 never executed (throw)
+call   17 never executed
+call   18 never executed
+call   19 returned 100%
+call   20 never executed
+call   21 never executed
+call   22 never executed
+        1:  181:	}
+call    0 returned 100%
+call    1 never executed
+        1:  182:}
+call    0 returned 100%
+call    1 never executed
+------------------

@@ -1,0 +1,129 @@
+        -:    0:Source:/usr/include/boost/date_time/c_time.hpp
+        -:    1:#ifndef DATE_TIME_C_TIME_HPP___
+        -:    2:#define DATE_TIME_C_TIME_HPP___
+        -:    3:
+        -:    4:/* Copyright (c) 2002,2003,2005 CrystalClear Software, Inc.
+        -:    5: * Use, modification and distribution is subject to the
+        -:    6: * Boost Software License, Version 1.0. (See accompanying
+        -:    7: * file LICENSE_1_0.txt or http://www.boost.org/LICENSE_1_0.txt)
+        -:    8: * Author: Jeff Garland, Bart Garst
+        -:    9: * $Date$
+        -:   10: */
+        -:   11:
+        -:   12:
+        -:   13:/*! @file c_time.hpp
+        -:   14:  Provide workarounds related to the ctime header
+        -:   15:*/
+        -:   16:
+        -:   17:#include <ctime>
+        -:   18:#include <string> // to be able to convert from string literals to exceptions
+        -:   19:#include <stdexcept>
+        -:   20:#include <boost/throw_exception.hpp>
+        -:   21:#include <boost/date_time/compiler_config.hpp>
+        -:   22:
+        -:   23://Work around libraries that don't put time_t and time in namespace std
+        -:   24:#ifdef BOOST_NO_STDC_NAMESPACE
+        -:   25:namespace std { using ::time_t; using ::time; using ::localtime;
+        -:   26:                using ::tm;  using ::gmtime; }
+        -:   27:#endif // BOOST_NO_STDC_NAMESPACE
+        -:   28:
+        -:   29://The following is used to support high precision time clocks
+        -:   30:#ifdef BOOST_HAS_GETTIMEOFDAY
+        -:   31:#include <sys/time.h>
+        -:   32:#endif
+        -:   33:
+        -:   34:#ifdef BOOST_HAS_FTIME
+        -:   35:#include <time.h>
+        -:   36:#endif
+        -:   37:
+        -:   38:namespace boost {
+        -:   39:namespace date_time {
+        -:   40:  //! Provides a uniform interface to some 'ctime' functions
+        -:   41:  /*! Provides a uniform interface to some ctime functions and
+        -:   42:   * their '_r' counterparts. The '_r' functions require a pointer to a
+        -:   43:   * user created std::tm struct whereas the regular functions use a
+        -:   44:   * staticly created struct and return a pointer to that. These wrapper
+        -:   45:   * functions require the user to create a std::tm struct and send in a
+        -:   46:   * pointer to it. This struct may be used to store the resulting time.
+        -:   47:   * The returned pointer may or may not point to this struct, however,
+        -:   48:   * it will point to the result of the corresponding function.
+        -:   49:   * All functions do proper checking of the C function results and throw
+        -:   50:   * exceptions on error. Therefore the functions will never return NULL.
+        -:   51:   */
+        -:   52:  struct c_time {
+        -:   53:    public:
+        -:   54:#if defined(BOOST_DATE_TIME_HAS_REENTRANT_STD_FUNCTIONS)
+        -:   55:      //! requires a pointer to a user created std::tm struct
+        -:   56:      inline
+        -:   57:      static std::tm* localtime(const std::time_t* t, std::tm* result)
+        -:   58:      {
+        -:   59:        // localtime_r() not in namespace std???
+        -:   60:#if defined(__VMS) && __INITIAL_POINTER_SIZE == 64
+        -:   61:        std::tm tmp;
+        -:   62:        if(!localtime_r(t,&tmp))
+        -:   63:            result = 0;
+        -:   64:        else
+        -:   65:            *result = tmp;
+        -:   66:#else
+        -:   67:        result = localtime_r(t, result);
+        -:   68:#endif
+        -:   69:        if (!result)
+        -:   70:          boost::throw_exception(std::runtime_error("could not convert calendar time to local time"));
+        -:   71:        return result;
+        -:   72:      }
+        -:   73:      //! requires a pointer to a user created std::tm struct
+        -:   74:      inline
+    #####:   75:      static std::tm* gmtime(const std::time_t* t, std::tm* result)
+        -:   76:      {
+        -:   77:        // gmtime_r() not in namespace std???
+        -:   78:#if defined(__VMS) && __INITIAL_POINTER_SIZE == 64
+        -:   79:        std::tm tmp;
+        -:   80:        if(!gmtime_r(t,&tmp))
+        -:   81:          result = 0;
+        -:   82:        else
+        -:   83:          *result = tmp;
+        -:   84:#else
+    #####:   85:        result = gmtime_r(t, result);
+        -:   86:#endif
+    #####:   87:        if (!result)
+    #####:   88:          boost::throw_exception(std::runtime_error("could not convert calendar time to UTC time"));
+    #####:   89:        return result;
+        -:   90:      }
+        -:   91:#else // BOOST_DATE_TIME_HAS_REENTRANT_STD_FUNCTIONS
+        -:   92:
+        -:   93:#if defined(__clang__) // Clang has to be checked before MSVC
+        -:   94:#pragma clang diagnostic push
+        -:   95:#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+        -:   96:#elif (defined(_MSC_VER) && (_MSC_VER >= 1400))
+        -:   97:#pragma warning(push) // preserve warning settings
+        -:   98:#pragma warning(disable : 4996) // disable depricated localtime/gmtime warning on vc8
+        -:   99:#endif
+        -:  100:      //! requires a pointer to a user created std::tm struct
+        -:  101:      inline
+        -:  102:      static std::tm* localtime(const std::time_t* t, std::tm* result)
+        -:  103:      {
+        -:  104:        result = std::localtime(t);
+        -:  105:        if (!result)
+        -:  106:          boost::throw_exception(std::runtime_error("could not convert calendar time to local time"));
+        -:  107:        return result;
+        -:  108:      }
+        -:  109:      //! requires a pointer to a user created std::tm struct
+        -:  110:      inline
+        -:  111:      static std::tm* gmtime(const std::time_t* t, std::tm* result)
+        -:  112:      {
+        -:  113:        result = std::gmtime(t);
+        -:  114:        if (!result)
+        -:  115:          boost::throw_exception(std::runtime_error("could not convert calendar time to UTC time"));
+        -:  116:        return result;
+        -:  117:      }
+        -:  118:#if defined(__clang__) // Clang has to be checked before MSVC
+        -:  119:#pragma clang diagnostic pop
+        -:  120:#elif (defined(_MSC_VER) && (_MSC_VER >= 1400))
+        -:  121:#pragma warning(pop) // restore warnings to previous state
+        -:  122:#endif
+        -:  123:
+        -:  124:#endif // BOOST_DATE_TIME_HAS_REENTRANT_STD_FUNCTIONS
+        -:  125:  };
+        -:  126:}} // namespaces
+        -:  127:
+        -:  128:#endif // DATE_TIME_C_TIME_HPP___

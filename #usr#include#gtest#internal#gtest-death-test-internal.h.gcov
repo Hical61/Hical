@@ -1,0 +1,320 @@
+        -:    0:Source:/usr/include/gtest/internal/gtest-death-test-internal.h
+        -:    1:// Copyright 2005, Google Inc.
+        -:    2:// All rights reserved.
+        -:    3://
+        -:    4:// Redistribution and use in source and binary forms, with or without
+        -:    5:// modification, are permitted provided that the following conditions are
+        -:    6:// met:
+        -:    7://
+        -:    8://     * Redistributions of source code must retain the above copyright
+        -:    9:// notice, this list of conditions and the following disclaimer.
+        -:   10://     * Redistributions in binary form must reproduce the above
+        -:   11:// copyright notice, this list of conditions and the following disclaimer
+        -:   12:// in the documentation and/or other materials provided with the
+        -:   13:// distribution.
+        -:   14://     * Neither the name of Google Inc. nor the names of its
+        -:   15:// contributors may be used to endorse or promote products derived from
+        -:   16:// this software without specific prior written permission.
+        -:   17://
+        -:   18:// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+        -:   19:// "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+        -:   20:// LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+        -:   21:// A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+        -:   22:// OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+        -:   23:// SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+        -:   24:// LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+        -:   25:// DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+        -:   26:// THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+        -:   27:// (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+        -:   28:// OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+        -:   29:
+        -:   30:// The Google C++ Testing and Mocking Framework (Google Test)
+        -:   31://
+        -:   32:// This header file defines internal utilities needed for implementing
+        -:   33:// death tests.  They are subject to change without notice.
+        -:   34:
+        -:   35:// IWYU pragma: private, include "gtest/gtest.h"
+        -:   36:// IWYU pragma: friend gtest/.*
+        -:   37:// IWYU pragma: friend gmock/.*
+        -:   38:
+        -:   39:#ifndef GOOGLETEST_INCLUDE_GTEST_INTERNAL_GTEST_DEATH_TEST_INTERNAL_H_
+        -:   40:#define GOOGLETEST_INCLUDE_GTEST_INTERNAL_GTEST_DEATH_TEST_INTERNAL_H_
+        -:   41:
+        -:   42:#include <stdio.h>
+        -:   43:
+        -:   44:#include <memory>
+        -:   45:#include <string>
+        -:   46:
+        -:   47:#include "gtest/gtest-matchers.h"
+        -:   48:#include "gtest/internal/gtest-internal.h"
+        -:   49:
+        -:   50:GTEST_DECLARE_string_(internal_run_death_test);
+        -:   51:
+        -:   52:namespace testing {
+        -:   53:namespace internal {
+        -:   54:
+        -:   55:// Names of the flags (needed for parsing Google Test flags).
+        -:   56:const char kDeathTestStyleFlag[] = "death_test_style";
+        -:   57:const char kDeathTestUseFork[] = "death_test_use_fork";
+        -:   58:const char kInternalRunDeathTestFlag[] = "internal_run_death_test";
+        -:   59:
+        -:   60:#ifdef GTEST_HAS_DEATH_TEST
+        -:   61:
+        -:   62:GTEST_DISABLE_MSC_WARNINGS_PUSH_(4251 \
+        -:   63:/* class A needs to have dll-interface to be used by clients of class B */)
+        -:   64:
+        -:   65:// DeathTest is a class that hides much of the complexity of the
+        -:   66:// GTEST_DEATH_TEST_ macro.  It is abstract; its static Create method
+        -:   67:// returns a concrete class that depends on the prevailing death test
+        -:   68:// style, as defined by the --gtest_death_test_style and/or
+        -:   69:// --gtest_internal_run_death_test flags.
+        -:   70:
+        -:   71:// In describing the results of death tests, these terms are used with
+        -:   72:// the corresponding definitions:
+        -:   73://
+        -:   74:// exit status:  The integer exit information in the format specified
+        -:   75://               by wait(2)
+        -:   76:// exit code:    The integer code passed to exit(3), _exit(2), or
+        -:   77://               returned from main()
+        -:   78:class GTEST_API_ DeathTest {
+        -:   79: public:
+        -:   80:  // Create returns false if there was an error determining the
+        -:   81:  // appropriate action to take for the current death test; for example,
+        -:   82:  // if the gtest_death_test_style flag is set to an invalid value.
+        -:   83:  // The LastMessage method will return a more detailed message in that
+        -:   84:  // case.  Otherwise, the DeathTest pointer pointed to by the "test"
+        -:   85:  // argument is set.  If the death test should be skipped, the pointer
+        -:   86:  // is set to NULL; otherwise, it is set to the address of a new concrete
+        -:   87:  // DeathTest object that controls the execution of the current test.
+        -:   88:  static bool Create(const char* statement, Matcher<const std::string&> matcher,
+        -:   89:                     const char* file, int line, DeathTest** test);
+        -:   90:  DeathTest();
+        -:   91:  virtual ~DeathTest() = default;
+        -:   92:
+        -:   93:  // A helper class that aborts a death test when it's deleted.
+        -:   94:  class ReturnSentinel {
+        -:   95:   public:
+function _ZN7testing8internal9DeathTest14ReturnSentinelC2EPS1_ called 0 returned 0% blocks executed 0%
+    #####:   96:    explicit ReturnSentinel(DeathTest* test) : test_(test) {}
+function _ZN7testing8internal9DeathTest14ReturnSentinelD2Ev called 0 returned 0% blocks executed 0%
+    #####:   97:    ~ReturnSentinel() { test_->Abort(TEST_ENCOUNTERED_RETURN_STATEMENT); }
+call    0 never executed
+        -:   98:
+        -:   99:   private:
+        -:  100:    DeathTest* const test_;
+        -:  101:    ReturnSentinel(const ReturnSentinel&) = delete;
+        -:  102:    ReturnSentinel& operator=(const ReturnSentinel&) = delete;
+        -:  103:  };
+        -:  104:
+        -:  105:  // An enumeration of possible roles that may be taken when a death
+        -:  106:  // test is encountered.  EXECUTE means that the death test logic should
+        -:  107:  // be executed immediately.  OVERSEE means that the program should prepare
+        -:  108:  // the appropriate environment for a child process to execute the death
+        -:  109:  // test, then wait for it to complete.
+        -:  110:  enum TestRole { OVERSEE_TEST, EXECUTE_TEST };
+        -:  111:
+        -:  112:  // An enumeration of the three reasons that a test might be aborted.
+        -:  113:  enum AbortReason {
+        -:  114:    TEST_ENCOUNTERED_RETURN_STATEMENT,
+        -:  115:    TEST_THREW_EXCEPTION,
+        -:  116:    TEST_DID_NOT_DIE
+        -:  117:  };
+        -:  118:
+        -:  119:  // Assumes one of the above roles.
+        -:  120:  virtual TestRole AssumeRole() = 0;
+        -:  121:
+        -:  122:  // Waits for the death test to finish and returns its status.
+        -:  123:  virtual int Wait() = 0;
+        -:  124:
+        -:  125:  // Returns true if the death test passed; that is, the test process
+        -:  126:  // exited during the test, its exit status matches a user-supplied
+        -:  127:  // predicate, and its stderr output matches a user-supplied regular
+        -:  128:  // expression.
+        -:  129:  // The user-supplied predicate may be a macro expression rather
+        -:  130:  // than a function pointer or functor, or else Wait and Passed could
+        -:  131:  // be combined.
+        -:  132:  virtual bool Passed(bool exit_status_ok) = 0;
+        -:  133:
+        -:  134:  // Signals that the death test did not die as expected.
+        -:  135:  virtual void Abort(AbortReason reason) = 0;
+        -:  136:
+        -:  137:  // Returns a human-readable outcome message regarding the outcome of
+        -:  138:  // the last death test.
+        -:  139:  static const char* LastMessage();
+        -:  140:
+        -:  141:  static void set_last_death_test_message(const std::string& message);
+        -:  142:
+        -:  143: private:
+        -:  144:  // A string containing a description of the outcome of the last death test.
+        -:  145:  static std::string last_death_test_message_;
+        -:  146:
+        -:  147:  DeathTest(const DeathTest&) = delete;
+        -:  148:  DeathTest& operator=(const DeathTest&) = delete;
+        -:  149:};
+        -:  150:
+        -:  151:GTEST_DISABLE_MSC_WARNINGS_POP_()  //  4251
+        -:  152:
+        -:  153:// Factory interface for death tests.  May be mocked out for testing.
+        -:  154:class DeathTestFactory {
+        -:  155: public:
+        -:  156:  virtual ~DeathTestFactory() = default;
+        -:  157:  virtual bool Create(const char* statement,
+        -:  158:                      Matcher<const std::string&> matcher, const char* file,
+        -:  159:                      int line, DeathTest** test) = 0;
+        -:  160:};
+        -:  161:
+        -:  162:// A concrete DeathTestFactory implementation for normal use.
+        -:  163:class DefaultDeathTestFactory : public DeathTestFactory {
+        -:  164: public:
+        -:  165:  bool Create(const char* statement, Matcher<const std::string&> matcher,
+        -:  166:              const char* file, int line, DeathTest** test) override;
+        -:  167:};
+        -:  168:
+        -:  169:// Returns true if exit_status describes a process that was terminated
+        -:  170:// by a signal, or exited normally with a nonzero exit code.
+        -:  171:GTEST_API_ bool ExitedUnsuccessfully(int exit_status);
+        -:  172:
+        -:  173:// A string passed to EXPECT_DEATH (etc.) is caught by one of these overloads
+        -:  174:// and interpreted as a regex (rather than an Eq matcher) for legacy
+        -:  175:// compatibility.
+        -:  176:inline Matcher<const ::std::string&> MakeDeathTestMatcher(
+        -:  177:    ::testing::internal::RE regex) {
+        -:  178:  return ContainsRegex(regex.pattern());
+        -:  179:}
+function _ZN7testing8internal20MakeDeathTestMatcherB5cxx11EPKc called 2 returned 100% blocks executed 78%
+        2:  180:inline Matcher<const ::std::string&> MakeDeathTestMatcher(const char* regex) {
+        2:  181:  return ContainsRegex(regex);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+        -:  182:}
+        -:  183:inline Matcher<const ::std::string&> MakeDeathTestMatcher(
+        -:  184:    const ::std::string& regex) {
+        -:  185:  return ContainsRegex(regex);
+        -:  186:}
+        -:  187:
+        -:  188:// If a Matcher<const ::std::string&> is passed to EXPECT_DEATH (etc.), it's
+        -:  189:// used directly.
+        -:  190:inline Matcher<const ::std::string&> MakeDeathTestMatcher(
+        -:  191:    Matcher<const ::std::string&> matcher) {
+        -:  192:  return matcher;
+        -:  193:}
+        -:  194:
+        -:  195:// Traps C++ exceptions escaping statement and reports them as test
+        -:  196:// failures. Note that trapping SEH exceptions is not implemented here.
+        -:  197:#if GTEST_HAS_EXCEPTIONS
+        -:  198:#define GTEST_EXECUTE_DEATH_TEST_STATEMENT_(statement, death_test)           \
+        -:  199:  try {                                                                      \
+        -:  200:    GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement);               \
+        -:  201:  } catch (const ::std::exception& gtest_exception) {                        \
+        -:  202:    fprintf(                                                                 \
+        -:  203:        stderr,                                                              \
+        -:  204:        "\n%s: Caught std::exception-derived exception escaping the "        \
+        -:  205:        "death test statement. Exception message: %s\n",                     \
+        -:  206:        ::testing::internal::FormatFileLocation(__FILE__, __LINE__).c_str(), \
+        -:  207:        gtest_exception.what());                                             \
+        -:  208:    fflush(stderr);                                                          \
+        -:  209:    death_test->Abort(::testing::internal::DeathTest::TEST_THREW_EXCEPTION); \
+        -:  210:  } catch (...) {                                                            \
+        -:  211:    death_test->Abort(::testing::internal::DeathTest::TEST_THREW_EXCEPTION); \
+        -:  212:  }
+        -:  213:
+        -:  214:#else
+        -:  215:#define GTEST_EXECUTE_DEATH_TEST_STATEMENT_(statement, death_test) \
+        -:  216:  GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement)
+        -:  217:
+        -:  218:#endif
+        -:  219:
+        -:  220:// This macro is for implementing ASSERT_DEATH*, EXPECT_DEATH*,
+        -:  221:// ASSERT_EXIT*, and EXPECT_EXIT*.
+        -:  222:#define GTEST_DEATH_TEST_(statement, predicate, regex_or_matcher, fail)        \
+        -:  223:  GTEST_AMBIGUOUS_ELSE_BLOCKER_                                                \
+        -:  224:  if (::testing::internal::AlwaysTrue()) {                                     \
+        -:  225:    ::testing::internal::DeathTest* gtest_dt;                                  \
+        -:  226:    if (!::testing::internal::DeathTest::Create(                               \
+        -:  227:            #statement,                                                        \
+        -:  228:            ::testing::internal::MakeDeathTestMatcher(regex_or_matcher),       \
+        -:  229:            __FILE__, __LINE__, &gtest_dt)) {                                  \
+        -:  230:      goto GTEST_CONCAT_TOKEN_(gtest_label_, __LINE__);                        \
+        -:  231:    }                                                                          \
+        -:  232:    if (gtest_dt != nullptr) {                                                 \
+        -:  233:      std::unique_ptr< ::testing::internal::DeathTest> gtest_dt_ptr(gtest_dt); \
+        -:  234:      switch (gtest_dt->AssumeRole()) {                                        \
+        -:  235:        case ::testing::internal::DeathTest::OVERSEE_TEST:                     \
+        -:  236:          if (!gtest_dt->Passed(predicate(gtest_dt->Wait()))) {                \
+        -:  237:            goto GTEST_CONCAT_TOKEN_(gtest_label_, __LINE__);                  \
+        -:  238:          }                                                                    \
+        -:  239:          break;                                                               \
+        -:  240:        case ::testing::internal::DeathTest::EXECUTE_TEST: {                   \
+        -:  241:          const ::testing::internal::DeathTest::ReturnSentinel gtest_sentinel( \
+        -:  242:              gtest_dt);                                                       \
+        -:  243:          GTEST_EXECUTE_DEATH_TEST_STATEMENT_(statement, gtest_dt);            \
+        -:  244:          gtest_dt->Abort(::testing::internal::DeathTest::TEST_DID_NOT_DIE);   \
+        -:  245:          break;                                                               \
+        -:  246:        }                                                                      \
+        -:  247:      }                                                                        \
+        -:  248:    }                                                                          \
+        -:  249:  } else                                                                       \
+        -:  250:    GTEST_CONCAT_TOKEN_(gtest_label_, __LINE__)                                \
+        -:  251:        : fail(::testing::internal::DeathTest::LastMessage())
+        -:  252:// The symbol "fail" here expands to something into which a message
+        -:  253:// can be streamed.
+        -:  254:
+        -:  255:// This macro is for implementing ASSERT/EXPECT_DEBUG_DEATH when compiled in
+        -:  256:// NDEBUG mode. In this case we need the statements to be executed and the macro
+        -:  257:// must accept a streamed message even though the message is never printed.
+        -:  258:// The regex object is not evaluated, but it is used to prevent "unused"
+        -:  259:// warnings and to avoid an expression that doesn't compile in debug mode.
+        -:  260:#define GTEST_EXECUTE_STATEMENT_(statement, regex_or_matcher)    \
+        -:  261:  GTEST_AMBIGUOUS_ELSE_BLOCKER_                                  \
+        -:  262:  if (::testing::internal::AlwaysTrue()) {                       \
+        -:  263:    GTEST_SUPPRESS_UNREACHABLE_CODE_WARNING_BELOW_(statement);   \
+        -:  264:  } else if (!::testing::internal::AlwaysTrue()) {               \
+        -:  265:    ::testing::internal::MakeDeathTestMatcher(regex_or_matcher); \
+        -:  266:  } else                                                         \
+        -:  267:    ::testing::Message()
+        -:  268:
+        -:  269:// A class representing the parsed contents of the
+        -:  270:// --gtest_internal_run_death_test flag, as it existed when
+        -:  271:// RUN_ALL_TESTS was called.
+        -:  272:class InternalRunDeathTestFlag {
+        -:  273: public:
+        -:  274:  InternalRunDeathTestFlag(const std::string& a_file, int a_line, int an_index,
+        -:  275:                           int a_write_fd)
+        -:  276:      : file_(a_file), line_(a_line), index_(an_index), write_fd_(a_write_fd) {}
+        -:  277:
+        -:  278:  ~InternalRunDeathTestFlag() {
+        -:  279:    if (write_fd_ >= 0) posix::Close(write_fd_);
+        -:  280:  }
+        -:  281:
+        -:  282:  const std::string& file() const { return file_; }
+        -:  283:  int line() const { return line_; }
+        -:  284:  int index() const { return index_; }
+        -:  285:  int write_fd() const { return write_fd_; }
+        -:  286:
+        -:  287: private:
+        -:  288:  std::string file_;
+        -:  289:  int line_;
+        -:  290:  int index_;
+        -:  291:  int write_fd_;
+        -:  292:
+        -:  293:  InternalRunDeathTestFlag(const InternalRunDeathTestFlag&) = delete;
+        -:  294:  InternalRunDeathTestFlag& operator=(const InternalRunDeathTestFlag&) = delete;
+        -:  295:};
+        -:  296:
+        -:  297:// Returns a newly created InternalRunDeathTestFlag object with fields
+        -:  298:// initialized from the GTEST_FLAG(internal_run_death_test) flag if
+        -:  299:// the flag is specified; otherwise returns NULL.
+        -:  300:InternalRunDeathTestFlag* ParseInternalRunDeathTestFlag();
+        -:  301:
+        -:  302:#endif  // GTEST_HAS_DEATH_TEST
+        -:  303:
+        -:  304:}  // namespace internal
+        -:  305:}  // namespace testing
+        -:  306:
+        -:  307:#endif  // GOOGLETEST_INCLUDE_GTEST_INTERNAL_GTEST_DEATH_TEST_INTERNAL_H_

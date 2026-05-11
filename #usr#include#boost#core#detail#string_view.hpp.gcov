@@ -1,0 +1,1701 @@
+        -:    0:Source:/usr/include/boost/core/detail/string_view.hpp
+        -:    1:#ifndef BOOST_CORE_STRING_VIEW_HPP_INCLUDED
+        -:    2:#define BOOST_CORE_STRING_VIEW_HPP_INCLUDED
+        -:    3:
+        -:    4:// MS compatible compilers support #pragma once
+        -:    5:
+        -:    6:#if defined(_MSC_VER) && (_MSC_VER >= 1020)
+        -:    7:# pragma once
+        -:    8:#endif
+        -:    9:
+        -:   10:// boost::core::basic_string_view<Ch>
+        -:   11://
+        -:   12:// Copyright 2021 Peter Dimov
+        -:   13:// Distributed under the Boost Software License, Version 1.0.
+        -:   14:// https://www.boost.org/LICENSE_1_0.txt
+        -:   15:
+        -:   16:#include <boost/core/enable_if.hpp>
+        -:   17:#include <boost/core/detail/is_same.hpp>
+        -:   18:#include <boost/assert.hpp>
+        -:   19:#include <boost/assert/source_location.hpp>
+        -:   20:#include <boost/throw_exception.hpp>
+        -:   21:#include <boost/config.hpp>
+        -:   22:#include <string>
+        -:   23:#include <algorithm>
+        -:   24:#include <utility>
+        -:   25:#include <stdexcept>
+        -:   26:#include <cstddef>
+        -:   27:#include <cstring>
+        -:   28:#include <climits>
+        -:   29:#include <iosfwd>
+        -:   30:#include <ios>
+        -:   31:#if !defined(BOOST_NO_CXX17_HDR_STRING_VIEW)
+        -:   32:# include <string_view>
+        -:   33:#endif
+        -:   34:#if !defined(BOOST_NO_CXX20_HDR_CONCEPTS) // std::common_reference_with
+        -:   35:# include <type_traits>
+        -:   36:#endif
+        -:   37:
+        -:   38:namespace boost
+        -:   39:{
+        -:   40:
+        -:   41:// forward declaration of boost::basic_string_view from Utility
+        -:   42:template<class Ch, class Tr> class basic_string_view;
+        -:   43:
+        -:   44:// forward declaration of boost::hash_range from ContainerHash
+        -:   45:template<class It> std::size_t hash_range( It, It );
+        -:   46:
+        -:   47:namespace core
+        -:   48:{
+        -:   49:namespace detail
+        -:   50:{
+        -:   51:
+        -:   52:template<class Ch> struct sv_to_uchar
+        -:   53:{
+        -:   54:    typedef Ch type;
+        -:   55:};
+        -:   56:
+        -:   57:template<> struct sv_to_uchar<char>
+        -:   58:{
+        -:   59:    typedef unsigned char type;
+        -:   60:};
+        -:   61:
+        -:   62:#if defined(__GNUC__) && __GNUC__ * 100 + __GNUC_MINOR__ >= 406
+        -:   63:# pragma GCC diagnostic push
+        -:   64:# pragma GCC diagnostic ignored "-Wtype-limits"
+        -:   65:#endif
+        -:   66:
+        -:   67:template<class Ch> BOOST_CXX14_CONSTEXPR std::size_t find_first_of( Ch const* p_, std::size_t n_, Ch const* s, std::size_t pos, std::size_t n ) BOOST_NOEXCEPT
+        -:   68:{
+        -:   69:    typedef typename sv_to_uchar<Ch>::type UCh;
+        -:   70:
+        -:   71:    unsigned char table[ 256 ] = {};
+        -:   72:
+        -:   73:    bool use_table = true;
+        -:   74:
+        -:   75:    for( std::size_t j = 0; j < n; ++j )
+        -:   76:    {
+        -:   77:        UCh ch = s[ j ];
+        -:   78:
+        -:   79:        if( ch >= 0 && ch < 256 )
+        -:   80:        {
+        -:   81:            table[ ch ] = 1;
+        -:   82:        }
+        -:   83:        else
+        -:   84:        {
+        -:   85:            use_table = false;
+        -:   86:            break;
+        -:   87:        }
+        -:   88:    }
+        -:   89:
+        -:   90:    if( use_table )
+        -:   91:    {
+        -:   92:        for( std::size_t i = pos; i < n_; ++i )
+        -:   93:        {
+        -:   94:            UCh ch = p_[ i ];
+        -:   95:            if( ch >= 0 && ch < 256 && table[ ch ] ) return i;
+        -:   96:        }
+        -:   97:    }
+        -:   98:    else if( n >= 16 )
+        -:   99:    {
+        -:  100:        for( std::size_t i = pos; i < n_; ++i )
+        -:  101:        {
+        -:  102:            Ch ch = p_[ i ];
+        -:  103:            if( std::char_traits<Ch>::find( s, n, ch ) != 0 ) return i;
+        -:  104:        }
+        -:  105:    }
+        -:  106:    else
+        -:  107:    {
+        -:  108:        for( std::size_t i = pos; i < n_; ++i )
+        -:  109:        {
+        -:  110:            Ch ch = p_[ i ];
+        -:  111:
+        -:  112:            for( std::size_t j = 0; j < n; ++j )
+        -:  113:            {
+        -:  114:                if( s[ j ] == ch ) return i;
+        -:  115:            }
+        -:  116:        }
+        -:  117:    }
+        -:  118:
+        -:  119:    return static_cast<std::size_t>( -1 );
+        -:  120:}
+        -:  121:
+        -:  122:template<class Ch> BOOST_CXX14_CONSTEXPR std::size_t find_last_of( Ch const* p_, Ch const* s, std::size_t pos, std::size_t n ) BOOST_NOEXCEPT
+        -:  123:{
+        -:  124:    typedef typename sv_to_uchar<Ch>::type UCh;
+        -:  125:
+        -:  126:    unsigned char table[ 256 ] = {};
+        -:  127:
+        -:  128:    bool use_table = true;
+        -:  129:
+        -:  130:    for( std::size_t j = 0; j < n; ++j )
+        -:  131:    {
+        -:  132:        UCh ch = s[ j ];
+        -:  133:
+        -:  134:        if( ch >= 0 && ch < 256 )
+        -:  135:        {
+        -:  136:            table[ ch ] = 1;
+        -:  137:        }
+        -:  138:        else
+        -:  139:        {
+        -:  140:            use_table = false;
+        -:  141:            break;
+        -:  142:        }
+        -:  143:    }
+        -:  144:
+        -:  145:    std::size_t const npos = static_cast< std::size_t >( -1 );
+        -:  146:
+        -:  147:    std::size_t i = pos;
+        -:  148:
+        -:  149:    if( use_table )
+        -:  150:    {
+        -:  151:        do
+        -:  152:        {
+        -:  153:            UCh ch = p_[ i ];
+        -:  154:
+        -:  155:            if( ch >= 0 && ch < 256 && table[ ch ] ) return i;
+        -:  156:
+        -:  157:            --i;
+        -:  158:        }
+        -:  159:        while( i != npos );
+        -:  160:    }
+        -:  161:    else if( n >= 16 )
+        -:  162:    {
+        -:  163:        do
+        -:  164:        {
+        -:  165:            Ch ch = p_[ i ];
+        -:  166:
+        -:  167:            if( std::char_traits<Ch>::find( s, n, ch ) != 0 ) return i;
+        -:  168:
+        -:  169:            --i;
+        -:  170:        }
+        -:  171:        while( i != npos );
+        -:  172:    }
+        -:  173:    else
+        -:  174:    {
+        -:  175:        do
+        -:  176:        {
+        -:  177:            Ch ch = p_[ i ];
+        -:  178:
+        -:  179:            for( std::size_t j = 0; j < n; ++j )
+        -:  180:            {
+        -:  181:                if( s[ j ] == ch ) return i;
+        -:  182:            }
+        -:  183:
+        -:  184:            --i;
+        -:  185:        }
+        -:  186:        while( i != npos );
+        -:  187:    }
+        -:  188:
+        -:  189:    return npos;
+        -:  190:}
+        -:  191:
+        -:  192:template<class Ch> BOOST_CXX14_CONSTEXPR std::size_t find_first_not_of( Ch const* p_, std::size_t n_, Ch const* s, std::size_t pos, std::size_t n ) BOOST_NOEXCEPT
+        -:  193:{
+        -:  194:    typedef typename sv_to_uchar<Ch>::type UCh;
+        -:  195:
+        -:  196:    unsigned char table[ 256 ] = {};
+        -:  197:
+        -:  198:    bool use_table = true;
+        -:  199:
+        -:  200:    for( std::size_t j = 0; j < n; ++j )
+        -:  201:    {
+        -:  202:        UCh ch = s[ j ];
+        -:  203:
+        -:  204:        if( ch >= 0 && ch < 256 )
+        -:  205:        {
+        -:  206:            table[ ch ] = 1;
+        -:  207:        }
+        -:  208:        else
+        -:  209:        {
+        -:  210:            use_table = false;
+        -:  211:            break;
+        -:  212:        }
+        -:  213:    }
+        -:  214:
+        -:  215:    if( use_table )
+        -:  216:    {
+        -:  217:        for( std::size_t i = pos; i < n_; ++i )
+        -:  218:        {
+        -:  219:            UCh ch = p_[ i ];
+        -:  220:            if( !( ch >= 0 && ch < 256 && table[ ch ] ) ) return i;
+        -:  221:        }
+        -:  222:    }
+        -:  223:    else if( n >= 16 )
+        -:  224:    {
+        -:  225:        for( std::size_t i = pos; i < n_; ++i )
+        -:  226:        {
+        -:  227:            Ch ch = p_[ i ];
+        -:  228:            if( std::char_traits<Ch>::find( s, n, ch ) == 0 ) return i;
+        -:  229:        }
+        -:  230:    }
+        -:  231:    else
+        -:  232:    {
+        -:  233:        for( std::size_t i = pos; i < n_; ++i )
+        -:  234:        {
+        -:  235:            Ch ch = p_[ i ];
+        -:  236:
+        -:  237:            bool r = false;
+        -:  238:
+        -:  239:            for( std::size_t j = 0; j < n; ++j )
+        -:  240:            {
+        -:  241:                if( s[ j ] == ch )
+        -:  242:                {
+        -:  243:                    r = true;
+        -:  244:                    break;
+        -:  245:                }
+        -:  246:            }
+        -:  247:
+        -:  248:            if( !r ) return i;
+        -:  249:        }
+        -:  250:    }
+        -:  251:
+        -:  252:    return static_cast<std::size_t>( -1 );
+        -:  253:}
+        -:  254:
+        -:  255:template<class Ch> BOOST_CXX14_CONSTEXPR std::size_t find_last_not_of( Ch const* p_, Ch const* s, std::size_t pos, std::size_t n ) BOOST_NOEXCEPT
+        -:  256:{
+        -:  257:    typedef typename sv_to_uchar<Ch>::type UCh;
+        -:  258:
+        -:  259:    unsigned char table[ 256 ] = {};
+        -:  260:
+        -:  261:    bool use_table = true;
+        -:  262:
+        -:  263:    for( std::size_t j = 0; j < n; ++j )
+        -:  264:    {
+        -:  265:        UCh ch = s[ j ];
+        -:  266:
+        -:  267:        if( ch >= 0 && ch < 256 )
+        -:  268:        {
+        -:  269:            table[ ch ] = 1;
+        -:  270:        }
+        -:  271:        else
+        -:  272:        {
+        -:  273:            use_table = false;
+        -:  274:            break;
+        -:  275:        }
+        -:  276:    }
+        -:  277:
+        -:  278:    std::size_t const npos = static_cast< std::size_t >( -1 );
+        -:  279:
+        -:  280:    std::size_t i = pos;
+        -:  281:
+        -:  282:    if( use_table )
+        -:  283:    {
+        -:  284:        do
+        -:  285:        {
+        -:  286:            UCh ch = p_[ i ];
+        -:  287:
+        -:  288:            if( !( ch >= 0 && ch < 256 && table[ ch ] ) ) return i;
+        -:  289:
+        -:  290:            --i;
+        -:  291:        }
+        -:  292:        while( i != npos );
+        -:  293:    }
+        -:  294:    else if( n >= 16 )
+        -:  295:    {
+        -:  296:        do
+        -:  297:        {
+        -:  298:            Ch ch = p_[ i ];
+        -:  299:
+        -:  300:            if( std::char_traits<Ch>::find( s, n, ch ) == 0 ) return i;
+        -:  301:
+        -:  302:            --i;
+        -:  303:        }
+        -:  304:        while( i != npos );
+        -:  305:    }
+        -:  306:    else
+        -:  307:    {
+        -:  308:        do
+        -:  309:        {
+        -:  310:            Ch ch = p_[ i ];
+        -:  311:
+        -:  312:            bool r = false;
+        -:  313:
+        -:  314:            for( std::size_t j = 0; j < n; ++j )
+        -:  315:            {
+        -:  316:                if( s[ j ] == ch )
+        -:  317:                {
+        -:  318:                    r = true;
+        -:  319:                    break;
+        -:  320:                }
+        -:  321:            }
+        -:  322:
+        -:  323:            if( !r ) return i;
+        -:  324:
+        -:  325:            --i;
+        -:  326:        }
+        -:  327:        while( i != npos );
+        -:  328:    }
+        -:  329:
+        -:  330:    return npos;
+        -:  331:}
+        -:  332:
+        -:  333:#if defined(__GNUC__) && __GNUC__ * 100 + __GNUC_MINOR__ >= 406
+        -:  334:# pragma GCC diagnostic pop
+        -:  335:#endif
+        -:  336:
+        -:  337:} // namespace detail
+        -:  338:
+        -:  339:template<class Ch> class basic_string_view
+        -:  340:{
+        -:  341:private:
+        -:  342:
+        -:  343:    Ch const* p_;
+        -:  344:    std::size_t n_;
+        -:  345:
+        -:  346:public:
+        -:  347:
+        -:  348:    // types
+        -:  349:
+        -:  350:    typedef std::char_traits<Ch> traits_type;
+        -:  351:    typedef Ch value_type;
+        -:  352:    typedef Ch* pointer;
+        -:  353:    typedef Ch const* const_pointer;
+        -:  354:    typedef Ch& reference;
+        -:  355:    typedef Ch const& const_reference;
+        -:  356:    typedef Ch const* const_iterator;
+        -:  357:    typedef const_iterator iterator;
+        -:  358:    typedef std::reverse_iterator<const_iterator> const_reverse_iterator;
+        -:  359:    typedef const_reverse_iterator reverse_iterator;
+        -:  360:    typedef std::size_t size_type;
+        -:  361:    typedef std::ptrdiff_t difference_type;
+        -:  362:
+        -:  363:    // npos
+        -:  364:
+        -:  365:    BOOST_STATIC_CONSTEXPR size_type npos = static_cast<size_type>( -1 );
+        -:  366:
+        -:  367:public:
+        -:  368:
+        -:  369:    // construction and assignment
+        -:  370:
+        -:  371:    BOOST_CONSTEXPR basic_string_view() BOOST_NOEXCEPT: p_(), n_()
+        -:  372:    {
+        -:  373:    }
+        -:  374:
+     594*:  375:    BOOST_CONSTEXPR basic_string_view( Ch const* str ) BOOST_NOEXCEPT: p_( str ), n_( traits_type::length( str ) )
+        -:  376:    {
+     594*:  377:    }
+------------------
+_ZN5boost4core17basic_string_viewIcEC2EPKc:
+function _ZN5boost4core17basic_string_viewIcEC2EPKc called 0 returned 0% blocks executed 0%
+    #####:  375:    BOOST_CONSTEXPR basic_string_view( Ch const* str ) BOOST_NOEXCEPT: p_( str ), n_( traits_type::length( str ) )
+call    0 never executed
+        -:  376:    {
+    #####:  377:    }
+------------------
+_ZN5boost4core17basic_string_viewIcEC2EPKc:
+function _ZN5boost4core17basic_string_viewIcEC2EPKc called 0 returned 0% blocks executed 0%
+    #####:  375:    BOOST_CONSTEXPR basic_string_view( Ch const* str ) BOOST_NOEXCEPT: p_( str ), n_( traits_type::length( str ) )
+call    0 never executed
+        -:  376:    {
+    #####:  377:    }
+------------------
+_ZN5boost4core17basic_string_viewIcEC2EPKc:
+function _ZN5boost4core17basic_string_viewIcEC2EPKc called 0 returned 0% blocks executed 0%
+    #####:  375:    BOOST_CONSTEXPR basic_string_view( Ch const* str ) BOOST_NOEXCEPT: p_( str ), n_( traits_type::length( str ) )
+call    0 never executed
+        -:  376:    {
+    #####:  377:    }
+------------------
+_ZN5boost4core17basic_string_viewIcEC2EPKc:
+function _ZN5boost4core17basic_string_viewIcEC2EPKc called 0 returned 0% blocks executed 0%
+    #####:  375:    BOOST_CONSTEXPR basic_string_view( Ch const* str ) BOOST_NOEXCEPT: p_( str ), n_( traits_type::length( str ) )
+call    0 never executed
+        -:  376:    {
+    #####:  377:    }
+------------------
+_ZN5boost4core17basic_string_viewIcEC2EPKc:
+function _ZN5boost4core17basic_string_viewIcEC2EPKc called 14 returned 100% blocks executed 100%
+       14:  375:    BOOST_CONSTEXPR basic_string_view( Ch const* str ) BOOST_NOEXCEPT: p_( str ), n_( traits_type::length( str ) )
+call    0 returned 100%
+        -:  376:    {
+       14:  377:    }
+------------------
+_ZN5boost4core17basic_string_viewIcEC2EPKc:
+function _ZN5boost4core17basic_string_viewIcEC2EPKc called 40 returned 100% blocks executed 100%
+       40:  375:    BOOST_CONSTEXPR basic_string_view( Ch const* str ) BOOST_NOEXCEPT: p_( str ), n_( traits_type::length( str ) )
+call    0 returned 100%
+        -:  376:    {
+       40:  377:    }
+------------------
+_ZN5boost4core17basic_string_viewIcEC2EPKc:
+function _ZN5boost4core17basic_string_viewIcEC2EPKc called 399 returned 100% blocks executed 100%
+      399:  375:    BOOST_CONSTEXPR basic_string_view( Ch const* str ) BOOST_NOEXCEPT: p_( str ), n_( traits_type::length( str ) )
+call    0 returned 100%
+        -:  376:    {
+      399:  377:    }
+------------------
+_ZN5boost4core17basic_string_viewIcEC2EPKc:
+function _ZN5boost4core17basic_string_viewIcEC2EPKc called 1 returned 100% blocks executed 100%
+        1:  375:    BOOST_CONSTEXPR basic_string_view( Ch const* str ) BOOST_NOEXCEPT: p_( str ), n_( traits_type::length( str ) )
+call    0 returned 100%
+        -:  376:    {
+        1:  377:    }
+------------------
+_ZN5boost4core17basic_string_viewIcEC2EPKc:
+function _ZN5boost4core17basic_string_viewIcEC2EPKc called 6 returned 100% blocks executed 100%
+        6:  375:    BOOST_CONSTEXPR basic_string_view( Ch const* str ) BOOST_NOEXCEPT: p_( str ), n_( traits_type::length( str ) )
+call    0 returned 100%
+        -:  376:    {
+        6:  377:    }
+------------------
+_ZN5boost4core17basic_string_viewIcEC2EPKc:
+function _ZN5boost4core17basic_string_viewIcEC2EPKc called 10 returned 100% blocks executed 100%
+       10:  375:    BOOST_CONSTEXPR basic_string_view( Ch const* str ) BOOST_NOEXCEPT: p_( str ), n_( traits_type::length( str ) )
+call    0 returned 100%
+        -:  376:    {
+       10:  377:    }
+------------------
+_ZN5boost4core17basic_string_viewIcEC2EPKc:
+function _ZN5boost4core17basic_string_viewIcEC2EPKc called 118 returned 100% blocks executed 100%
+      118:  375:    BOOST_CONSTEXPR basic_string_view( Ch const* str ) BOOST_NOEXCEPT: p_( str ), n_( traits_type::length( str ) )
+call    0 returned 100%
+        -:  376:    {
+      118:  377:    }
+------------------
+_ZN5boost4core17basic_string_viewIcEC2EPKc:
+function _ZN5boost4core17basic_string_viewIcEC2EPKc called 6 returned 100% blocks executed 100%
+        6:  375:    BOOST_CONSTEXPR basic_string_view( Ch const* str ) BOOST_NOEXCEPT: p_( str ), n_( traits_type::length( str ) )
+call    0 returned 100%
+        -:  376:    {
+        6:  377:    }
+------------------
+_ZN5boost4core17basic_string_viewIcEC2EPKc:
+function _ZN5boost4core17basic_string_viewIcEC2EPKc called 0 returned 0% blocks executed 0%
+    #####:  375:    BOOST_CONSTEXPR basic_string_view( Ch const* str ) BOOST_NOEXCEPT: p_( str ), n_( traits_type::length( str ) )
+call    0 never executed
+        -:  376:    {
+    #####:  377:    }
+------------------
+_ZN5boost4core17basic_string_viewIcEC2EPKc:
+function _ZN5boost4core17basic_string_viewIcEC2EPKc called 0 returned 0% blocks executed 0%
+    #####:  375:    BOOST_CONSTEXPR basic_string_view( Ch const* str ) BOOST_NOEXCEPT: p_( str ), n_( traits_type::length( str ) )
+call    0 never executed
+        -:  376:    {
+    #####:  377:    }
+------------------
+_ZN5boost4core17basic_string_viewIcEC2EPKc:
+function _ZN5boost4core17basic_string_viewIcEC2EPKc called 0 returned 0% blocks executed 0%
+    #####:  375:    BOOST_CONSTEXPR basic_string_view( Ch const* str ) BOOST_NOEXCEPT: p_( str ), n_( traits_type::length( str ) )
+call    0 never executed
+        -:  376:    {
+    #####:  377:    }
+------------------
+        -:  378:
+       30:  379:    BOOST_CONSTEXPR basic_string_view( Ch const* str, size_type len ) BOOST_NOEXCEPT: p_( str ), n_( len )
+        -:  380:    {
+       30:  381:    }
+------------------
+_ZN5boost4core17basic_string_viewIcEC2EPKcm:
+function _ZN5boost4core17basic_string_viewIcEC2EPKcm called 5 returned 100% blocks executed 100%
+        5:  379:    BOOST_CONSTEXPR basic_string_view( Ch const* str, size_type len ) BOOST_NOEXCEPT: p_( str ), n_( len )
+        -:  380:    {
+        5:  381:    }
+------------------
+_ZN5boost4core17basic_string_viewIcEC2EPKcm:
+function _ZN5boost4core17basic_string_viewIcEC2EPKcm called 4 returned 100% blocks executed 100%
+        4:  379:    BOOST_CONSTEXPR basic_string_view( Ch const* str, size_type len ) BOOST_NOEXCEPT: p_( str ), n_( len )
+        -:  380:    {
+        4:  381:    }
+------------------
+_ZN5boost4core17basic_string_viewIcEC2EPKcm:
+function _ZN5boost4core17basic_string_viewIcEC2EPKcm called 1 returned 100% blocks executed 100%
+        1:  379:    BOOST_CONSTEXPR basic_string_view( Ch const* str, size_type len ) BOOST_NOEXCEPT: p_( str ), n_( len )
+        -:  380:    {
+        1:  381:    }
+------------------
+_ZN5boost4core17basic_string_viewIcEC2EPKcm:
+function _ZN5boost4core17basic_string_viewIcEC2EPKcm called 2 returned 100% blocks executed 100%
+        2:  379:    BOOST_CONSTEXPR basic_string_view( Ch const* str, size_type len ) BOOST_NOEXCEPT: p_( str ), n_( len )
+        -:  380:    {
+        2:  381:    }
+------------------
+_ZN5boost4core17basic_string_viewIcEC2EPKcm:
+function _ZN5boost4core17basic_string_viewIcEC2EPKcm called 17 returned 100% blocks executed 100%
+       17:  379:    BOOST_CONSTEXPR basic_string_view( Ch const* str, size_type len ) BOOST_NOEXCEPT: p_( str ), n_( len )
+        -:  380:    {
+       17:  381:    }
+------------------
+_ZN5boost4core17basic_string_viewIcEC2EPKcm:
+function _ZN5boost4core17basic_string_viewIcEC2EPKcm called 1 returned 100% blocks executed 100%
+        1:  379:    BOOST_CONSTEXPR basic_string_view( Ch const* str, size_type len ) BOOST_NOEXCEPT: p_( str ), n_( len )
+        -:  380:    {
+        1:  381:    }
+------------------
+        -:  382:
+        -:  383:    template<class End> BOOST_CXX14_CONSTEXPR basic_string_view( Ch const* first, End last,
+        -:  384:        typename boost::enable_if<boost::core::detail::is_same<End, Ch const*> >::type* = 0 ) BOOST_NOEXCEPT: p_( first ), n_( last - first )
+        -:  385:    {
+        -:  386:        BOOST_ASSERT( last - first >= 0 );
+        -:  387:    }
+        -:  388:
+     152*:  389:    template<class A> basic_string_view( std::basic_string<Ch, std::char_traits<Ch>, A> const& str ) BOOST_NOEXCEPT: p_( str.data() ), n_( str.size() )
+        -:  390:    {
+     152*:  391:    }
+------------------
+_ZN5boost4core17basic_string_viewIcEC2ISaIcEEERKNSt7__cxx1112basic_stringIcSt11char_traitsIcET_EE:
+function _ZN5boost4core17basic_string_viewIcEC2ISaIcEEERKNSt7__cxx1112basic_stringIcSt11char_traitsIcET_EE called 0 returned 0% blocks executed 0%
+    #####:  389:    template<class A> basic_string_view( std::basic_string<Ch, std::char_traits<Ch>, A> const& str ) BOOST_NOEXCEPT: p_( str.data() ), n_( str.size() )
+call    0 never executed
+call    1 never executed
+        -:  390:    {
+    #####:  391:    }
+------------------
+_ZN5boost4core17basic_string_viewIcEC2ISaIcEEERKNSt7__cxx1112basic_stringIcSt11char_traitsIcET_EE:
+function _ZN5boost4core17basic_string_viewIcEC2ISaIcEEERKNSt7__cxx1112basic_stringIcSt11char_traitsIcET_EE called 0 returned 0% blocks executed 0%
+    #####:  389:    template<class A> basic_string_view( std::basic_string<Ch, std::char_traits<Ch>, A> const& str ) BOOST_NOEXCEPT: p_( str.data() ), n_( str.size() )
+call    0 never executed
+call    1 never executed
+        -:  390:    {
+    #####:  391:    }
+------------------
+_ZN5boost4core17basic_string_viewIcEC2ISaIcEEERKNSt7__cxx1112basic_stringIcSt11char_traitsIcET_EE:
+function _ZN5boost4core17basic_string_viewIcEC2ISaIcEEERKNSt7__cxx1112basic_stringIcSt11char_traitsIcET_EE called 0 returned 0% blocks executed 0%
+    #####:  389:    template<class A> basic_string_view( std::basic_string<Ch, std::char_traits<Ch>, A> const& str ) BOOST_NOEXCEPT: p_( str.data() ), n_( str.size() )
+call    0 never executed
+call    1 never executed
+        -:  390:    {
+    #####:  391:    }
+------------------
+_ZN5boost4core17basic_string_viewIcEC2ISaIcEEERKNSt7__cxx1112basic_stringIcSt11char_traitsIcET_EE:
+function _ZN5boost4core17basic_string_viewIcEC2ISaIcEEERKNSt7__cxx1112basic_stringIcSt11char_traitsIcET_EE called 2 returned 100% blocks executed 100%
+        2:  389:    template<class A> basic_string_view( std::basic_string<Ch, std::char_traits<Ch>, A> const& str ) BOOST_NOEXCEPT: p_( str.data() ), n_( str.size() )
+call    0 returned 100%
+call    1 returned 100%
+        -:  390:    {
+        2:  391:    }
+------------------
+_ZN5boost4core17basic_string_viewIcEC2ISaIcEEERKNSt7__cxx1112basic_stringIcSt11char_traitsIcET_EE:
+function _ZN5boost4core17basic_string_viewIcEC2ISaIcEEERKNSt7__cxx1112basic_stringIcSt11char_traitsIcET_EE called 0 returned 0% blocks executed 0%
+    #####:  389:    template<class A> basic_string_view( std::basic_string<Ch, std::char_traits<Ch>, A> const& str ) BOOST_NOEXCEPT: p_( str.data() ), n_( str.size() )
+call    0 never executed
+call    1 never executed
+        -:  390:    {
+    #####:  391:    }
+------------------
+_ZN5boost4core17basic_string_viewIcEC2ISaIcEEERKNSt7__cxx1112basic_stringIcSt11char_traitsIcET_EE:
+function _ZN5boost4core17basic_string_viewIcEC2ISaIcEEERKNSt7__cxx1112basic_stringIcSt11char_traitsIcET_EE called 8 returned 100% blocks executed 100%
+        8:  389:    template<class A> basic_string_view( std::basic_string<Ch, std::char_traits<Ch>, A> const& str ) BOOST_NOEXCEPT: p_( str.data() ), n_( str.size() )
+call    0 returned 100%
+call    1 returned 100%
+        -:  390:    {
+        8:  391:    }
+------------------
+_ZN5boost4core17basic_string_viewIcEC2ISaIcEEERKNSt7__cxx1112basic_stringIcSt11char_traitsIcET_EE:
+function _ZN5boost4core17basic_string_viewIcEC2ISaIcEEERKNSt7__cxx1112basic_stringIcSt11char_traitsIcET_EE called 112 returned 100% blocks executed 100%
+      112:  389:    template<class A> basic_string_view( std::basic_string<Ch, std::char_traits<Ch>, A> const& str ) BOOST_NOEXCEPT: p_( str.data() ), n_( str.size() )
+call    0 returned 100%
+call    1 returned 100%
+        -:  390:    {
+      112:  391:    }
+------------------
+_ZN5boost4core17basic_string_viewIcEC2ISaIcEEERKNSt7__cxx1112basic_stringIcSt11char_traitsIcET_EE:
+function _ZN5boost4core17basic_string_viewIcEC2ISaIcEEERKNSt7__cxx1112basic_stringIcSt11char_traitsIcET_EE called 1 returned 100% blocks executed 100%
+        1:  389:    template<class A> basic_string_view( std::basic_string<Ch, std::char_traits<Ch>, A> const& str ) BOOST_NOEXCEPT: p_( str.data() ), n_( str.size() )
+call    0 returned 100%
+call    1 returned 100%
+        -:  390:    {
+        1:  391:    }
+------------------
+_ZN5boost4core17basic_string_viewIcEC2ISaIcEEERKNSt7__cxx1112basic_stringIcSt11char_traitsIcET_EE:
+function _ZN5boost4core17basic_string_viewIcEC2ISaIcEEERKNSt7__cxx1112basic_stringIcSt11char_traitsIcET_EE called 1 returned 100% blocks executed 100%
+        1:  389:    template<class A> basic_string_view( std::basic_string<Ch, std::char_traits<Ch>, A> const& str ) BOOST_NOEXCEPT: p_( str.data() ), n_( str.size() )
+call    0 returned 100%
+call    1 returned 100%
+        -:  390:    {
+        1:  391:    }
+------------------
+_ZN5boost4core17basic_string_viewIcEC2ISaIcEEERKNSt7__cxx1112basic_stringIcSt11char_traitsIcET_EE:
+function _ZN5boost4core17basic_string_viewIcEC2ISaIcEEERKNSt7__cxx1112basic_stringIcSt11char_traitsIcET_EE called 2 returned 100% blocks executed 100%
+        2:  389:    template<class A> basic_string_view( std::basic_string<Ch, std::char_traits<Ch>, A> const& str ) BOOST_NOEXCEPT: p_( str.data() ), n_( str.size() )
+call    0 returned 100%
+call    1 returned 100%
+        -:  390:    {
+        2:  391:    }
+------------------
+_ZN5boost4core17basic_string_viewIcEC2ISaIcEEERKNSt7__cxx1112basic_stringIcSt11char_traitsIcET_EE:
+function _ZN5boost4core17basic_string_viewIcEC2ISaIcEEERKNSt7__cxx1112basic_stringIcSt11char_traitsIcET_EE called 25 returned 100% blocks executed 100%
+       25:  389:    template<class A> basic_string_view( std::basic_string<Ch, std::char_traits<Ch>, A> const& str ) BOOST_NOEXCEPT: p_( str.data() ), n_( str.size() )
+call    0 returned 100%
+call    1 returned 100%
+        -:  390:    {
+       25:  391:    }
+------------------
+_ZN5boost4core17basic_string_viewIcEC2ISaIcEEERKNSt7__cxx1112basic_stringIcSt11char_traitsIcET_EE:
+function _ZN5boost4core17basic_string_viewIcEC2ISaIcEEERKNSt7__cxx1112basic_stringIcSt11char_traitsIcET_EE called 1 returned 100% blocks executed 100%
+        1:  389:    template<class A> basic_string_view( std::basic_string<Ch, std::char_traits<Ch>, A> const& str ) BOOST_NOEXCEPT: p_( str.data() ), n_( str.size() )
+call    0 returned 100%
+call    1 returned 100%
+        -:  390:    {
+        1:  391:    }
+------------------
+_ZN5boost4core17basic_string_viewIcEC2ISaIcEEERKNSt7__cxx1112basic_stringIcSt11char_traitsIcET_EE:
+function _ZN5boost4core17basic_string_viewIcEC2ISaIcEEERKNSt7__cxx1112basic_stringIcSt11char_traitsIcET_EE called 0 returned 0% blocks executed 0%
+    #####:  389:    template<class A> basic_string_view( std::basic_string<Ch, std::char_traits<Ch>, A> const& str ) BOOST_NOEXCEPT: p_( str.data() ), n_( str.size() )
+call    0 never executed
+call    1 never executed
+        -:  390:    {
+    #####:  391:    }
+------------------
+_ZN5boost4core17basic_string_viewIcEC2ISaIcEEERKNSt7__cxx1112basic_stringIcSt11char_traitsIcET_EE:
+function _ZN5boost4core17basic_string_viewIcEC2ISaIcEEERKNSt7__cxx1112basic_stringIcSt11char_traitsIcET_EE called 0 returned 0% blocks executed 0%
+    #####:  389:    template<class A> basic_string_view( std::basic_string<Ch, std::char_traits<Ch>, A> const& str ) BOOST_NOEXCEPT: p_( str.data() ), n_( str.size() )
+call    0 never executed
+call    1 never executed
+        -:  390:    {
+    #####:  391:    }
+------------------
+_ZN5boost4core17basic_string_viewIcEC2ISaIcEEERKNSt7__cxx1112basic_stringIcSt11char_traitsIcET_EE:
+function _ZN5boost4core17basic_string_viewIcEC2ISaIcEEERKNSt7__cxx1112basic_stringIcSt11char_traitsIcET_EE called 0 returned 0% blocks executed 0%
+    #####:  389:    template<class A> basic_string_view( std::basic_string<Ch, std::char_traits<Ch>, A> const& str ) BOOST_NOEXCEPT: p_( str.data() ), n_( str.size() )
+call    0 never executed
+call    1 never executed
+        -:  390:    {
+    #####:  391:    }
+------------------
+        -:  392:
+        -:  393:#if !defined(BOOST_NO_CXX17_HDR_STRING_VIEW)
+        -:  394:
+     188*:  395:    basic_string_view( std::basic_string_view<Ch, std::char_traits<Ch> > const& str ) BOOST_NOEXCEPT: p_( str.data() ), n_( str.size() )
+        -:  396:    {
+     188*:  397:    }
+------------------
+_ZN5boost4core17basic_string_viewIcEC2ERKSt17basic_string_viewIcSt11char_traitsIcEE:
+function _ZN5boost4core17basic_string_viewIcEC2ERKSt17basic_string_viewIcSt11char_traitsIcEE called 37 returned 100% blocks executed 100%
+       37:  395:    basic_string_view( std::basic_string_view<Ch, std::char_traits<Ch> > const& str ) BOOST_NOEXCEPT: p_( str.data() ), n_( str.size() )
+call    0 returned 100%
+call    1 returned 100%
+        -:  396:    {
+       37:  397:    }
+------------------
+_ZN5boost4core17basic_string_viewIcEC2ERKSt17basic_string_viewIcSt11char_traitsIcEE:
+function _ZN5boost4core17basic_string_viewIcEC2ERKSt17basic_string_viewIcSt11char_traitsIcEE called 151 returned 100% blocks executed 100%
+      151:  395:    basic_string_view( std::basic_string_view<Ch, std::char_traits<Ch> > const& str ) BOOST_NOEXCEPT: p_( str.data() ), n_( str.size() )
+call    0 returned 100%
+call    1 returned 100%
+        -:  396:    {
+      151:  397:    }
+------------------
+_ZN5boost4core17basic_string_viewIcEC2ERKSt17basic_string_viewIcSt11char_traitsIcEE:
+function _ZN5boost4core17basic_string_viewIcEC2ERKSt17basic_string_viewIcSt11char_traitsIcEE called 0 returned 0% blocks executed 0%
+    #####:  395:    basic_string_view( std::basic_string_view<Ch, std::char_traits<Ch> > const& str ) BOOST_NOEXCEPT: p_( str.data() ), n_( str.size() )
+call    0 never executed
+call    1 never executed
+        -:  396:    {
+    #####:  397:    }
+------------------
+_ZN5boost4core17basic_string_viewIcEC2ERKSt17basic_string_viewIcSt11char_traitsIcEE:
+function _ZN5boost4core17basic_string_viewIcEC2ERKSt17basic_string_viewIcSt11char_traitsIcEE called 0 returned 0% blocks executed 0%
+    #####:  395:    basic_string_view( std::basic_string_view<Ch, std::char_traits<Ch> > const& str ) BOOST_NOEXCEPT: p_( str.data() ), n_( str.size() )
+call    0 never executed
+call    1 never executed
+        -:  396:    {
+    #####:  397:    }
+------------------
+        -:  398:
+        -:  399:#endif
+        -:  400:
+        -:  401:    template<class Ch2> basic_string_view( boost::basic_string_view<Ch2, std::char_traits<Ch2> > const& str,
+        -:  402:        typename boost::enable_if<boost::core::detail::is_same<Ch, Ch2> >::type* = 0 ) BOOST_NOEXCEPT: p_( str.data() ), n_( str.size() )
+        -:  403:    {
+        -:  404:    }
+        -:  405:
+        -:  406:#if !defined(BOOST_NO_CXX11_NULLPTR)
+        -:  407:# if !defined(BOOST_NO_CXX11_DELETED_FUNCTIONS)
+        -:  408:
+        -:  409:    basic_string_view( std::nullptr_t ) = delete;
+        -:  410:
+        -:  411:# else
+        -:  412:
+        -:  413:private:
+        -:  414:
+        -:  415:    basic_string_view( std::nullptr_t );
+        -:  416:
+        -:  417:public:
+        -:  418:
+        -:  419:# endif
+        -:  420:#endif
+        -:  421:
+        -:  422:    // BOOST_CONSTEXPR basic_string_view& operator=( basic_string_view const& ) BOOST_NOEXCEPT & = default;
+        -:  423:
+        -:  424:    // conversions
+        -:  425:
+        -:  426:    template<class A> operator std::basic_string<Ch, std::char_traits<Ch>, A>() const
+        -:  427:    {
+        -:  428:        return std::basic_string<Ch, std::char_traits<Ch>, A>( data(), size() );
+        -:  429:    }
+        -:  430:
+        -:  431:#if !defined(BOOST_NO_CXX17_HDR_STRING_VIEW)
+        -:  432:
+        -:  433:    template<class Ch2, class En = typename boost::enable_if<boost::core::detail::is_same<Ch2, Ch> >::type>
+    #####:  434:    operator std::basic_string_view<Ch2>() const BOOST_NOEXCEPT
+        -:  435:    {
+    #####:  436:        return std::basic_string_view<Ch>( data(), size() );
+        -:  437:    }
+------------------
+_ZNK5boost4core17basic_string_viewIcEcvSt17basic_string_viewIT_St11char_traitsIS4_EEIcvEEv:
+function _ZNK5boost4core17basic_string_viewIcEcvSt17basic_string_viewIT_St11char_traitsIS4_EEIcvEEv called 0 returned 0% blocks executed 0%
+    #####:  434:    operator std::basic_string_view<Ch2>() const BOOST_NOEXCEPT
+        -:  435:    {
+    #####:  436:        return std::basic_string_view<Ch>( data(), size() );
+call    0 never executed
+call    1 never executed
+call    2 never executed
+        -:  437:    }
+------------------
+_ZNK5boost4core17basic_string_viewIcEcvSt17basic_string_viewIT_St11char_traitsIS4_EEIcvEEv:
+function _ZNK5boost4core17basic_string_viewIcEcvSt17basic_string_viewIT_St11char_traitsIS4_EEIcvEEv called 0 returned 0% blocks executed 0%
+    #####:  434:    operator std::basic_string_view<Ch2>() const BOOST_NOEXCEPT
+        -:  435:    {
+    #####:  436:        return std::basic_string_view<Ch>( data(), size() );
+call    0 never executed
+call    1 never executed
+call    2 never executed
+        -:  437:    }
+------------------
+_ZNK5boost4core17basic_string_viewIcEcvSt17basic_string_viewIT_St11char_traitsIS4_EEIcvEEv:
+function _ZNK5boost4core17basic_string_viewIcEcvSt17basic_string_viewIT_St11char_traitsIS4_EEIcvEEv called 0 returned 0% blocks executed 0%
+    #####:  434:    operator std::basic_string_view<Ch2>() const BOOST_NOEXCEPT
+        -:  435:    {
+    #####:  436:        return std::basic_string_view<Ch>( data(), size() );
+call    0 never executed
+call    1 never executed
+call    2 never executed
+        -:  437:    }
+------------------
+        -:  438:
+        -:  439:#endif
+        -:  440:
+        -:  441:    template<class Ch2> operator boost::basic_string_view<Ch2,
+        -:  442:        typename boost::enable_if<boost::core::detail::is_same<Ch2, Ch>, std::char_traits<Ch> >::type> () const BOOST_NOEXCEPT
+        -:  443:    {
+        -:  444:        return boost::basic_string_view< Ch, std::char_traits<Ch> >( data(), size() );
+        -:  445:    }
+        -:  446:
+        -:  447:    // iterator support
+        -:  448:
+        -:  449:    BOOST_CONSTEXPR const_iterator begin() const BOOST_NOEXCEPT
+        -:  450:    {
+        -:  451:        return p_;
+        -:  452:    }
+        -:  453:
+        -:  454:    BOOST_CONSTEXPR const_iterator end() const BOOST_NOEXCEPT
+        -:  455:    {
+        -:  456:        return p_ + n_;
+        -:  457:    }
+        -:  458:
+        -:  459:    BOOST_CONSTEXPR const_iterator cbegin() const BOOST_NOEXCEPT
+        -:  460:    {
+        -:  461:        return p_;
+        -:  462:    }
+        -:  463:
+        -:  464:    BOOST_CONSTEXPR const_iterator cend() const BOOST_NOEXCEPT
+        -:  465:    {
+        -:  466:        return p_ + n_;
+        -:  467:    }
+        -:  468:
+        -:  469:    BOOST_CONSTEXPR const_reverse_iterator rbegin() const BOOST_NOEXCEPT
+        -:  470:    {
+        -:  471:        return const_reverse_iterator( end() );
+        -:  472:    }
+        -:  473:
+        -:  474:    BOOST_CONSTEXPR const_reverse_iterator rend() const BOOST_NOEXCEPT
+        -:  475:    {
+        -:  476:        return const_reverse_iterator( begin() );
+        -:  477:    }
+        -:  478:
+        -:  479:    BOOST_CONSTEXPR const_reverse_iterator crbegin() const BOOST_NOEXCEPT
+        -:  480:    {
+        -:  481:        return const_reverse_iterator( end() );
+        -:  482:    }
+        -:  483:
+        -:  484:    BOOST_CONSTEXPR const_reverse_iterator crend() const BOOST_NOEXCEPT
+        -:  485:    {
+        -:  486:        return const_reverse_iterator( begin() );
+        -:  487:    }
+        -:  488:
+        -:  489:    // capacity
+        -:  490:
+      73*:  491:    BOOST_CONSTEXPR size_type size() const BOOST_NOEXCEPT
+        -:  492:    {
+      73*:  493:        return n_;
+        -:  494:    }
+------------------
+_ZNK5boost4core17basic_string_viewIcE4sizeEv:
+function _ZNK5boost4core17basic_string_viewIcE4sizeEv called 10 returned 100% blocks executed 100%
+       10:  491:    BOOST_CONSTEXPR size_type size() const BOOST_NOEXCEPT
+        -:  492:    {
+       10:  493:        return n_;
+        -:  494:    }
+------------------
+_ZNK5boost4core17basic_string_viewIcE4sizeEv:
+function _ZNK5boost4core17basic_string_viewIcE4sizeEv called 3 returned 100% blocks executed 100%
+        3:  491:    BOOST_CONSTEXPR size_type size() const BOOST_NOEXCEPT
+        -:  492:    {
+        3:  493:        return n_;
+        -:  494:    }
+------------------
+_ZNK5boost4core17basic_string_viewIcE4sizeEv:
+function _ZNK5boost4core17basic_string_viewIcE4sizeEv called 6 returned 100% blocks executed 100%
+        6:  491:    BOOST_CONSTEXPR size_type size() const BOOST_NOEXCEPT
+        -:  492:    {
+        6:  493:        return n_;
+        -:  494:    }
+------------------
+_ZNK5boost4core17basic_string_viewIcE4sizeEv:
+function _ZNK5boost4core17basic_string_viewIcE4sizeEv called 51 returned 100% blocks executed 100%
+       51:  491:    BOOST_CONSTEXPR size_type size() const BOOST_NOEXCEPT
+        -:  492:    {
+       51:  493:        return n_;
+        -:  494:    }
+------------------
+_ZNK5boost4core17basic_string_viewIcE4sizeEv:
+function _ZNK5boost4core17basic_string_viewIcE4sizeEv called 3 returned 100% blocks executed 100%
+        3:  491:    BOOST_CONSTEXPR size_type size() const BOOST_NOEXCEPT
+        -:  492:    {
+        3:  493:        return n_;
+        -:  494:    }
+------------------
+_ZNK5boost4core17basic_string_viewIcE4sizeEv:
+function _ZNK5boost4core17basic_string_viewIcE4sizeEv called 0 returned 0% blocks executed 0%
+    #####:  491:    BOOST_CONSTEXPR size_type size() const BOOST_NOEXCEPT
+        -:  492:    {
+    #####:  493:        return n_;
+        -:  494:    }
+------------------
+_ZNK5boost4core17basic_string_viewIcE4sizeEv:
+function _ZNK5boost4core17basic_string_viewIcE4sizeEv called 0 returned 0% blocks executed 0%
+    #####:  491:    BOOST_CONSTEXPR size_type size() const BOOST_NOEXCEPT
+        -:  492:    {
+    #####:  493:        return n_;
+        -:  494:    }
+------------------
+        -:  495:
+        -:  496:    BOOST_CONSTEXPR size_type length() const BOOST_NOEXCEPT
+        -:  497:    {
+        -:  498:        return n_;
+        -:  499:    }
+        -:  500:
+        -:  501:    BOOST_CONSTEXPR size_type max_size() const BOOST_NOEXCEPT
+        -:  502:    {
+        -:  503:        return npos / sizeof( Ch );
+        -:  504:    }
+        -:  505:
+        -:  506:    BOOST_CONSTEXPR bool empty() const BOOST_NOEXCEPT
+        -:  507:    {
+        -:  508:        return n_ == 0;
+        -:  509:    }
+        -:  510:
+        -:  511:    // element access
+        -:  512:
+        -:  513:    BOOST_CXX14_CONSTEXPR const_reference operator[]( size_type pos ) const BOOST_NOEXCEPT
+        -:  514:    {
+        -:  515:        BOOST_ASSERT( pos < size() );
+        -:  516:        return p_[ pos ];
+        -:  517:    }
+        -:  518:
+        -:  519:    BOOST_CXX14_CONSTEXPR const_reference at( size_type pos ) const
+        -:  520:    {
+        -:  521:        if( pos >= size() )
+        -:  522:        {
+        -:  523:            boost::throw_exception( std::out_of_range( "basic_string_view::at" ), BOOST_CURRENT_LOCATION );
+        -:  524:        }
+        -:  525:
+        -:  526:        return p_[ pos ];
+        -:  527:    }
+        -:  528:
+        -:  529:    BOOST_CXX14_CONSTEXPR const_reference front() const BOOST_NOEXCEPT
+        -:  530:    {
+        -:  531:        BOOST_ASSERT( !empty() );
+        -:  532:        return p_[ 0 ];
+        -:  533:    }
+        -:  534:
+        -:  535:    BOOST_CXX14_CONSTEXPR const_reference back() const BOOST_NOEXCEPT
+        -:  536:    {
+        -:  537:        BOOST_ASSERT( !empty() );
+        -:  538:        return p_[ n_ - 1 ];
+        -:  539:    }
+        -:  540:
+      46*:  541:    BOOST_CONSTEXPR const_pointer data() const BOOST_NOEXCEPT
+        -:  542:    {
+      46*:  543:        return p_;
+        -:  544:    }
+------------------
+_ZNK5boost4core17basic_string_viewIcE4dataEv:
+function _ZNK5boost4core17basic_string_viewIcE4dataEv called 4 returned 100% blocks executed 100%
+        4:  541:    BOOST_CONSTEXPR const_pointer data() const BOOST_NOEXCEPT
+        -:  542:    {
+        4:  543:        return p_;
+        -:  544:    }
+------------------
+_ZNK5boost4core17basic_string_viewIcE4dataEv:
+function _ZNK5boost4core17basic_string_viewIcE4dataEv called 2 returned 100% blocks executed 100%
+        2:  541:    BOOST_CONSTEXPR const_pointer data() const BOOST_NOEXCEPT
+        -:  542:    {
+        2:  543:        return p_;
+        -:  544:    }
+------------------
+_ZNK5boost4core17basic_string_viewIcE4dataEv:
+function _ZNK5boost4core17basic_string_viewIcE4dataEv called 4 returned 100% blocks executed 100%
+        4:  541:    BOOST_CONSTEXPR const_pointer data() const BOOST_NOEXCEPT
+        -:  542:    {
+        4:  543:        return p_;
+        -:  544:    }
+------------------
+_ZNK5boost4core17basic_string_viewIcE4dataEv:
+function _ZNK5boost4core17basic_string_viewIcE4dataEv called 34 returned 100% blocks executed 100%
+       34:  541:    BOOST_CONSTEXPR const_pointer data() const BOOST_NOEXCEPT
+        -:  542:    {
+       34:  543:        return p_;
+        -:  544:    }
+------------------
+_ZNK5boost4core17basic_string_viewIcE4dataEv:
+function _ZNK5boost4core17basic_string_viewIcE4dataEv called 2 returned 100% blocks executed 100%
+        2:  541:    BOOST_CONSTEXPR const_pointer data() const BOOST_NOEXCEPT
+        -:  542:    {
+        2:  543:        return p_;
+        -:  544:    }
+------------------
+_ZNK5boost4core17basic_string_viewIcE4dataEv:
+function _ZNK5boost4core17basic_string_viewIcE4dataEv called 0 returned 0% blocks executed 0%
+    #####:  541:    BOOST_CONSTEXPR const_pointer data() const BOOST_NOEXCEPT
+        -:  542:    {
+    #####:  543:        return p_;
+        -:  544:    }
+------------------
+_ZNK5boost4core17basic_string_viewIcE4dataEv:
+function _ZNK5boost4core17basic_string_viewIcE4dataEv called 0 returned 0% blocks executed 0%
+    #####:  541:    BOOST_CONSTEXPR const_pointer data() const BOOST_NOEXCEPT
+        -:  542:    {
+    #####:  543:        return p_;
+        -:  544:    }
+------------------
+        -:  545:
+        -:  546:    // modifiers
+        -:  547:
+        -:  548:    BOOST_CXX14_CONSTEXPR void remove_prefix( size_type n ) BOOST_NOEXCEPT
+        -:  549:    {
+        -:  550:        BOOST_ASSERT( n <= size() );
+        -:  551:
+        -:  552:        p_ += n;
+        -:  553:        n_ -= n;
+        -:  554:    }
+        -:  555:
+        -:  556:    BOOST_CXX14_CONSTEXPR void remove_suffix( size_type n ) BOOST_NOEXCEPT
+        -:  557:    {
+        -:  558:        BOOST_ASSERT( n <= size() );
+        -:  559:
+        -:  560:        n_ -= n;
+        -:  561:    }
+        -:  562:
+        -:  563:    BOOST_CXX14_CONSTEXPR void swap( basic_string_view& s ) BOOST_NOEXCEPT
+        -:  564:    {
+        -:  565:        std::swap( p_, s.p_ );
+        -:  566:        std::swap( n_, s.n_ );
+        -:  567:    }
+        -:  568:
+        -:  569:    // string operations
+        -:  570:
+        -:  571:    BOOST_CXX14_CONSTEXPR size_type copy( Ch* s, size_type n, size_type pos = 0 ) const
+        -:  572:    {
+        -:  573:        if( pos > size() )
+        -:  574:        {
+        -:  575:            boost::throw_exception( std::out_of_range( "basic_string_view::copy" ), BOOST_CURRENT_LOCATION );
+        -:  576:        }
+        -:  577:
+        -:  578:        std::size_t rlen = (std::min)( n, size() - pos );
+        -:  579:
+        -:  580:        traits_type::copy( s, data() + pos, rlen );
+        -:  581:
+        -:  582:        return rlen;
+        -:  583:    }
+        -:  584:
+        -:  585:    BOOST_CXX14_CONSTEXPR basic_string_view substr( size_type pos = 0, size_type n = npos ) const
+        -:  586:    {
+        -:  587:        if( pos > size() )
+        -:  588:        {
+        -:  589:            boost::throw_exception( std::out_of_range( "basic_string_view::substr" ), BOOST_CURRENT_LOCATION );
+        -:  590:        }
+        -:  591:
+        -:  592:        std::size_t rlen = (std::min)( n, size() - pos );
+        -:  593:
+        -:  594:        return basic_string_view( data() + pos, rlen );
+        -:  595:    }
+        -:  596:
+        -:  597:    // compare
+        -:  598:
+        -:  599:    BOOST_CXX14_CONSTEXPR int compare( basic_string_view str ) const BOOST_NOEXCEPT
+        -:  600:    {
+        -:  601:        std::size_t rlen = (std::min)( size(), str.size() );
+        -:  602:
+        -:  603:        int cmp = traits_type::compare( data(), str.data(), rlen );
+        -:  604:
+        -:  605:        if( cmp != 0 ) return cmp;
+        -:  606:
+        -:  607:        if( size() == str.size() ) return 0;
+        -:  608:
+        -:  609:        return size() < str.size()? -1: +1;
+        -:  610:    }
+        -:  611:
+        -:  612:    BOOST_CONSTEXPR int compare( size_type pos1, size_type n1, basic_string_view str ) const
+        -:  613:    {
+        -:  614:        return substr( pos1, n1 ).compare( str );
+        -:  615:    }
+        -:  616:
+        -:  617:    BOOST_CONSTEXPR int compare( size_type pos1, size_type n1, basic_string_view str, size_type pos2, size_type n2 ) const
+        -:  618:    {
+        -:  619:        return substr( pos1, n1 ).compare( str.substr( pos2, n2 ) );
+        -:  620:    }
+        -:  621:
+        -:  622:    BOOST_CONSTEXPR int compare( Ch const* s ) const BOOST_NOEXCEPT
+        -:  623:    {
+        -:  624:        return compare( basic_string_view( s ) );
+        -:  625:    }
+        -:  626:
+        -:  627:    BOOST_CONSTEXPR int compare( size_type pos1, size_type n1, Ch const* s ) const
+        -:  628:    {
+        -:  629:        return substr( pos1, n1 ).compare( basic_string_view( s ) );
+        -:  630:    }
+        -:  631:
+        -:  632:    BOOST_CONSTEXPR int compare( size_type pos1, size_type n1, Ch const* s, size_type n2 ) const
+        -:  633:    {
+        -:  634:        return substr( pos1, n1 ).compare( basic_string_view( s, n2 ) );
+        -:  635:    }
+        -:  636:
+        -:  637:    // starts_with
+        -:  638:
+        -:  639:    BOOST_CONSTEXPR bool starts_with( basic_string_view x ) const BOOST_NOEXCEPT
+        -:  640:    {
+        -:  641:        return size() >= x.size() && traits_type::compare( data(), x.data(), x.size() ) == 0;
+        -:  642:    }
+        -:  643:
+        -:  644:    BOOST_CONSTEXPR bool starts_with( Ch x ) const BOOST_NOEXCEPT
+        -:  645:    {
+        -:  646:        return !empty() && front() == x;
+        -:  647:    }
+        -:  648:
+        -:  649:    BOOST_CONSTEXPR bool starts_with( Ch const* x ) const BOOST_NOEXCEPT
+        -:  650:    {
+        -:  651:        return starts_with( basic_string_view( x ) );
+        -:  652:    }
+        -:  653:
+        -:  654:    // ends_with
+        -:  655:
+        -:  656:    BOOST_CONSTEXPR bool ends_with( basic_string_view x ) const BOOST_NOEXCEPT
+        -:  657:    {
+        -:  658:        return size() >= x.size() && traits_type::compare( data() + size() - x.size(), x.data(), x.size() ) == 0;
+        -:  659:    }
+        -:  660:
+        -:  661:    BOOST_CONSTEXPR bool ends_with( Ch x ) const BOOST_NOEXCEPT
+        -:  662:    {
+        -:  663:        return !empty() && back() == x;
+        -:  664:    }
+        -:  665:
+        -:  666:    BOOST_CONSTEXPR bool ends_with( Ch const* x ) const BOOST_NOEXCEPT
+        -:  667:    {
+        -:  668:        return ends_with( basic_string_view( x ) );
+        -:  669:    }
+        -:  670:
+        -:  671:    // find
+        -:  672:
+        -:  673:    BOOST_CONSTEXPR size_type find( basic_string_view str, size_type pos = 0 ) const BOOST_NOEXCEPT
+        -:  674:    {
+        -:  675:        return find( str.data(), pos, str.size() );
+        -:  676:    }
+        -:  677:
+        -:  678:    BOOST_CXX14_CONSTEXPR size_type find( Ch c, size_type pos = 0 ) const BOOST_NOEXCEPT
+        -:  679:    {
+        -:  680:        if( pos >= size() ) return npos;
+        -:  681:
+        -:  682:        Ch const* r = traits_type::find( data() + pos, size() - pos, c );
+        -:  683:
+        -:  684:        return r? r - data(): npos;
+        -:  685:    }
+        -:  686:
+        -:  687:    BOOST_CXX14_CONSTEXPR size_type find( Ch const* s, size_type pos, size_type n ) const BOOST_NOEXCEPT
+        -:  688:    {
+        -:  689:        if( n == 1 ) return find( s[0], pos );
+        -:  690:
+        -:  691:        if( pos + n > size() ) return npos;
+        -:  692:        if( n == 0 ) return pos;
+        -:  693:
+        -:  694:        Ch const* p = data() + pos;
+        -:  695:        Ch const* last = data() + size() - n + 1;
+        -:  696:
+        -:  697:        for( ;; )
+        -:  698:        {
+        -:  699:            p = traits_type::find( p, last - p, s[0] );
+        -:  700:
+        -:  701:            if( p == 0 ) break;
+        -:  702:
+        -:  703:            if( traits_type::compare( p + 1, s + 1, n - 1 ) == 0 ) return p - data();
+        -:  704:
+        -:  705:            ++p;
+        -:  706:        }
+        -:  707:
+        -:  708:        return npos;
+        -:  709:    }
+        -:  710:
+        -:  711:    BOOST_CONSTEXPR size_type find( Ch const* s, size_type pos = 0 ) const BOOST_NOEXCEPT
+        -:  712:    {
+        -:  713:        return find( s, pos, traits_type::length( s ) );
+        -:  714:    }
+        -:  715:
+        -:  716:    // rfind
+        -:  717:
+        -:  718:    BOOST_CONSTEXPR size_type rfind( basic_string_view str, size_type pos = npos ) const BOOST_NOEXCEPT
+        -:  719:    {
+        -:  720:        return rfind( str.data(), pos, str.size() );
+        -:  721:    }
+        -:  722:
+        -:  723:    BOOST_CXX14_CONSTEXPR size_type rfind( Ch c, size_type pos = npos ) const BOOST_NOEXCEPT
+        -:  724:    {
+        -:  725:        size_type n = size();
+        -:  726:
+        -:  727:        if( n == 0 )
+        -:  728:        {
+        -:  729:            return npos;
+        -:  730:        }
+        -:  731:
+        -:  732:        if( pos > n - 1 )
+        -:  733:        {
+        -:  734:            pos = n - 1;
+        -:  735:        }
+        -:  736:
+        -:  737:        do
+        -:  738:        {
+        -:  739:            if( p_[ pos ] == c ) return pos;
+        -:  740:            --pos;
+        -:  741:        }
+        -:  742:        while( pos != npos );
+        -:  743:
+        -:  744:        return npos;
+        -:  745:    }
+        -:  746:
+        -:  747:    BOOST_CXX14_CONSTEXPR size_type rfind( Ch const* s, size_type pos, size_type n ) const BOOST_NOEXCEPT
+        -:  748:    {
+        -:  749:        if( n > size() ) return npos;
+        -:  750:
+        -:  751:        if( pos > size() - n )
+        -:  752:        {
+        -:  753:            pos = size() - n;
+        -:  754:        }
+        -:  755:
+        -:  756:        if( n == 0 ) return pos;
+        -:  757:
+        -:  758:        for( ;; )
+        -:  759:        {
+        -:  760:            size_type xpos = rfind( s[0], pos );
+        -:  761:
+        -:  762:            if( xpos == npos ) return npos;
+        -:  763:
+        -:  764:            if( traits_type::compare( data() + xpos, s, n ) == 0 ) return xpos;
+        -:  765:
+        -:  766:            if( xpos == 0 ) return npos;
+        -:  767:
+        -:  768:            pos = xpos - 1;
+        -:  769:        }
+        -:  770:    }
+        -:  771:
+        -:  772:    BOOST_CONSTEXPR size_type rfind( Ch const* s, size_type pos = npos ) const BOOST_NOEXCEPT
+        -:  773:    {
+        -:  774:        return rfind( s, pos, traits_type::length( s ) );
+        -:  775:    }
+        -:  776:
+        -:  777:    // find_first_of
+        -:  778:
+        -:  779:    BOOST_CXX14_CONSTEXPR size_type find_first_of( basic_string_view str, size_type pos = 0 ) const BOOST_NOEXCEPT
+        -:  780:    {
+        -:  781:        return find_first_of( str.data(), pos, str.size() );
+        -:  782:    }
+        -:  783:
+        -:  784:    BOOST_CONSTEXPR size_type find_first_of( Ch c, size_type pos = 0 ) const BOOST_NOEXCEPT
+        -:  785:    {
+        -:  786:        return find( c, pos );
+        -:  787:    }
+        -:  788:
+        -:  789:    BOOST_CXX14_CONSTEXPR size_type find_first_of( Ch const* s, size_type pos, size_type n ) const BOOST_NOEXCEPT
+        -:  790:    {
+        -:  791:        if( n == 0 || pos >= size() ) return npos;
+        -:  792:        if( n == 1 ) return find( s[0], pos );
+        -:  793:
+        -:  794:        return detail::find_first_of( data(), size(), s, pos, n );
+        -:  795:    }
+        -:  796:
+        -:  797:    BOOST_CXX14_CONSTEXPR size_type find_first_of( Ch const* s, size_type pos = 0 ) const BOOST_NOEXCEPT
+        -:  798:    {
+        -:  799:        return find_first_of( s, pos, traits_type::length( s ) );
+        -:  800:    }
+        -:  801:
+        -:  802:    // find_last_of
+        -:  803:
+        -:  804:    BOOST_CXX14_CONSTEXPR size_type find_last_of( basic_string_view str, size_type pos = npos ) const BOOST_NOEXCEPT
+        -:  805:    {
+        -:  806:        return find_last_of( str.data(), pos, str.size() );
+        -:  807:    }
+        -:  808:
+        -:  809:    BOOST_CONSTEXPR size_type find_last_of( Ch c, size_type pos = npos ) const BOOST_NOEXCEPT
+        -:  810:    {
+        -:  811:        return rfind( c, pos );
+        -:  812:    }
+        -:  813:
+        -:  814:    BOOST_CXX14_CONSTEXPR size_type find_last_of( Ch const* s, size_type pos, size_type n ) const BOOST_NOEXCEPT
+        -:  815:    {
+        -:  816:        if( n == 1 )
+        -:  817:        {
+        -:  818:            return rfind( s[0], pos );
+        -:  819:        }
+        -:  820:
+        -:  821:        size_type m = size();
+        -:  822:
+        -:  823:        if( m == 0 )
+        -:  824:        {
+        -:  825:            return npos;
+        -:  826:        }
+        -:  827:
+        -:  828:        if( pos > m - 1 )
+        -:  829:        {
+        -:  830:            pos = m - 1;
+        -:  831:        }
+        -:  832:
+        -:  833:        return detail::find_last_of( data(), s, pos, n );
+        -:  834:    }
+        -:  835:
+        -:  836:    BOOST_CXX14_CONSTEXPR size_type find_last_of( Ch const* s, size_type pos = npos ) const BOOST_NOEXCEPT
+        -:  837:    {
+        -:  838:        return find_last_of( s, pos, traits_type::length( s ) );
+        -:  839:    }
+        -:  840:
+        -:  841:    // find_first_not_of
+        -:  842:
+        -:  843:    BOOST_CXX14_CONSTEXPR size_type find_first_not_of( basic_string_view str, size_type pos = 0 ) const BOOST_NOEXCEPT
+        -:  844:    {
+        -:  845:        return find_first_not_of( str.data(), pos, str.size() );
+        -:  846:    }
+        -:  847:
+        -:  848:    BOOST_CXX14_CONSTEXPR size_type find_first_not_of( Ch c, size_type pos = 0 ) const BOOST_NOEXCEPT
+        -:  849:    {
+        -:  850:        for( std::size_t i = pos; i < n_; ++i )
+        -:  851:        {
+        -:  852:            if( p_[ i ] != c ) return i;
+        -:  853:        }
+        -:  854:
+        -:  855:        return npos;
+        -:  856:    }
+        -:  857:
+        -:  858:    BOOST_CXX14_CONSTEXPR size_type find_first_not_of( Ch const* s, size_type pos, size_type n ) const BOOST_NOEXCEPT
+        -:  859:    {
+        -:  860:        if( pos >= size() ) return npos;
+        -:  861:        if( n == 1 ) return find_first_not_of( s[0], pos );
+        -:  862:
+        -:  863:        return detail::find_first_not_of( data(), size(), s, pos, n );
+        -:  864:    }
+        -:  865:
+        -:  866:    BOOST_CXX14_CONSTEXPR size_type find_first_not_of( Ch const* s, size_type pos = 0 ) const BOOST_NOEXCEPT
+        -:  867:    {
+        -:  868:        return find_first_not_of( s, pos, traits_type::length( s ) );
+        -:  869:    }
+        -:  870:
+        -:  871:    // find_last_not_of
+        -:  872:
+        -:  873:    BOOST_CXX14_CONSTEXPR size_type find_last_not_of( basic_string_view str, size_type pos = npos ) const BOOST_NOEXCEPT
+        -:  874:    {
+        -:  875:        return find_last_not_of( str.data(), pos, str.size() );
+        -:  876:    }
+        -:  877:
+        -:  878:    BOOST_CXX14_CONSTEXPR size_type find_last_not_of( Ch c, size_type pos = npos ) const BOOST_NOEXCEPT
+        -:  879:    {
+        -:  880:        size_type m = size();
+        -:  881:
+        -:  882:        if( m == 0 )
+        -:  883:        {
+        -:  884:            return npos;
+        -:  885:        }
+        -:  886:
+        -:  887:        if( pos > m - 1 )
+        -:  888:        {
+        -:  889:            pos = m - 1;
+        -:  890:        }
+        -:  891:
+        -:  892:        do
+        -:  893:        {
+        -:  894:            if( p_[ pos ] != c ) return pos;
+        -:  895:            --pos;
+        -:  896:        }
+        -:  897:        while( pos != npos );
+        -:  898:
+        -:  899:        return npos;
+        -:  900:    }
+        -:  901:
+        -:  902:    BOOST_CXX14_CONSTEXPR size_type find_last_not_of( Ch const* s, size_type pos, size_type n ) const BOOST_NOEXCEPT
+        -:  903:    {
+        -:  904:        if( n == 1 )
+        -:  905:        {
+        -:  906:            return find_last_not_of( s[0], pos );
+        -:  907:        }
+        -:  908:
+        -:  909:        size_type m = size();
+        -:  910:
+        -:  911:        if( m == 0 )
+        -:  912:        {
+        -:  913:            return npos;
+        -:  914:        }
+        -:  915:
+        -:  916:        if( pos > m - 1 )
+        -:  917:        {
+        -:  918:            pos = m - 1;
+        -:  919:        }
+        -:  920:
+        -:  921:        return detail::find_last_not_of( data(), s, pos, n );
+        -:  922:    }
+        -:  923:
+        -:  924:    BOOST_CXX14_CONSTEXPR size_type find_last_not_of( Ch const* s, size_type pos = npos ) const BOOST_NOEXCEPT
+        -:  925:    {
+        -:  926:        return find_last_not_of( s, pos, traits_type::length( s ) );
+        -:  927:    }
+        -:  928:
+        -:  929:    // contains
+        -:  930:
+        -:  931:    BOOST_CONSTEXPR bool contains( basic_string_view sv ) const BOOST_NOEXCEPT
+        -:  932:    {
+        -:  933:        return find( sv ) != npos;
+        -:  934:    }
+        -:  935:
+        -:  936:    BOOST_CXX14_CONSTEXPR bool contains( Ch c ) const BOOST_NOEXCEPT
+        -:  937:    {
+        -:  938:        Ch const* p = data();
+        -:  939:        size_type n = size();
+        -:  940:
+        -:  941:        if( n >= 16 )
+        -:  942:        {
+        -:  943:            return traits_type::find( p, n, c ) != 0;
+        -:  944:        }
+        -:  945:        else
+        -:  946:        {
+        -:  947:            for( size_type i = 0; i < n; ++i )
+        -:  948:            {
+        -:  949:                if( p[ i ] == c ) return true;
+        -:  950:            }
+        -:  951:
+        -:  952:            return false;
+        -:  953:        }
+        -:  954:    }
+        -:  955:
+        -:  956:    BOOST_CONSTEXPR bool contains( Ch const* s ) const BOOST_NOEXCEPT
+        -:  957:    {
+        -:  958:        return find( s ) != npos;
+        -:  959:    }
+        -:  960:
+        -:  961:    // relational operators
+        -:  962:
+       25:  963:    BOOST_CXX14_CONSTEXPR friend bool operator==( basic_string_view sv1, basic_string_view sv2 ) BOOST_NOEXCEPT
+        -:  964:    {
+      25*:  965:        return sv1.size() == sv2.size() && traits_type::compare( sv1.data(), sv2.data(), sv1.size() ) == 0;
+        -:  966:    }
+        -:  967:
+        -:  968:    BOOST_CXX14_CONSTEXPR friend bool operator!=( basic_string_view sv1, basic_string_view sv2 ) BOOST_NOEXCEPT
+        -:  969:    {
+        -:  970:        return !( sv1 == sv2 );
+        -:  971:    }
+        -:  972:
+        -:  973:    BOOST_CXX14_CONSTEXPR friend bool operator<( basic_string_view sv1, basic_string_view sv2 ) BOOST_NOEXCEPT
+        -:  974:    {
+        -:  975:        return sv1.compare( sv2 ) < 0;
+        -:  976:    }
+        -:  977:
+        -:  978:    BOOST_CXX14_CONSTEXPR friend bool operator<=( basic_string_view sv1, basic_string_view sv2 ) BOOST_NOEXCEPT
+        -:  979:    {
+        -:  980:        return sv1.compare( sv2 ) <= 0;
+        -:  981:    }
+        -:  982:
+        -:  983:    BOOST_CXX14_CONSTEXPR friend bool operator>( basic_string_view sv1, basic_string_view sv2 ) BOOST_NOEXCEPT
+        -:  984:    {
+        -:  985:        return sv1.compare( sv2 ) > 0;
+        -:  986:    }
+        -:  987:
+        -:  988:    BOOST_CXX14_CONSTEXPR friend bool operator>=( basic_string_view sv1, basic_string_view sv2 ) BOOST_NOEXCEPT
+        -:  989:    {
+        -:  990:        return sv1.compare( sv2 ) >= 0;
+        -:  991:    }
+        -:  992:
+        -:  993:#if !defined(BOOST_NO_CXX17_HDR_STRING_VIEW)
+        -:  994:
+        -:  995:    // "sufficient number of additional overloads"
+        -:  996:
+        -:  997:    // against std::string_view
+        -:  998:
+        -:  999:    BOOST_CXX14_CONSTEXPR friend bool operator==( basic_string_view sv1, std::basic_string_view<Ch> sv2 ) BOOST_NOEXCEPT
+        -: 1000:    {
+        -: 1001:        return sv1.size() == sv2.size() && traits_type::compare( sv1.data(), sv2.data(), sv1.size() ) == 0;
+        -: 1002:    }
+        -: 1003:
+        -: 1004:    BOOST_CXX14_CONSTEXPR friend bool operator==( std::basic_string_view<Ch> sv1, basic_string_view sv2 ) BOOST_NOEXCEPT
+        -: 1005:    {
+        -: 1006:        return sv1.size() == sv2.size() && traits_type::compare( sv1.data(), sv2.data(), sv1.size() ) == 0;
+        -: 1007:    }
+        -: 1008:
+        -: 1009:    BOOST_CXX14_CONSTEXPR friend bool operator!=( basic_string_view sv1, std::basic_string_view<Ch> sv2 ) BOOST_NOEXCEPT
+        -: 1010:    {
+        -: 1011:        return !( sv1 == sv2 );
+        -: 1012:    }
+        -: 1013:
+        -: 1014:    BOOST_CXX14_CONSTEXPR friend bool operator!=( std::basic_string_view<Ch> sv1, basic_string_view sv2 ) BOOST_NOEXCEPT
+        -: 1015:    {
+        -: 1016:        return !( sv1 == sv2 );
+        -: 1017:    }
+        -: 1018:
+        -: 1019:    BOOST_CXX14_CONSTEXPR friend bool operator<( basic_string_view sv1, std::basic_string_view<Ch> sv2 ) BOOST_NOEXCEPT
+        -: 1020:    {
+        -: 1021:        return sv1.compare( sv2 ) < 0;
+        -: 1022:    }
+        -: 1023:
+        -: 1024:    BOOST_CXX14_CONSTEXPR friend bool operator<( std::basic_string_view<Ch> sv1, basic_string_view sv2 ) BOOST_NOEXCEPT
+        -: 1025:    {
+        -: 1026:        return sv1.compare( sv2 ) < 0;
+        -: 1027:    }
+        -: 1028:
+        -: 1029:    BOOST_CXX14_CONSTEXPR friend bool operator<=( basic_string_view sv1, std::basic_string_view<Ch> sv2 ) BOOST_NOEXCEPT
+        -: 1030:    {
+        -: 1031:        return sv1.compare( sv2 ) <= 0;
+        -: 1032:    }
+        -: 1033:
+        -: 1034:    BOOST_CXX14_CONSTEXPR friend bool operator<=( std::basic_string_view<Ch> sv1, basic_string_view sv2 ) BOOST_NOEXCEPT
+        -: 1035:    {
+        -: 1036:        return sv1.compare( sv2 ) <= 0;
+        -: 1037:    }
+        -: 1038:
+        -: 1039:    BOOST_CXX14_CONSTEXPR friend bool operator>( basic_string_view sv1, std::basic_string_view<Ch> sv2 ) BOOST_NOEXCEPT
+        -: 1040:    {
+        -: 1041:        return sv1.compare( sv2 ) > 0;
+        -: 1042:    }
+        -: 1043:
+        -: 1044:    BOOST_CXX14_CONSTEXPR friend bool operator>( std::basic_string_view<Ch> sv1, basic_string_view sv2 ) BOOST_NOEXCEPT
+        -: 1045:    {
+        -: 1046:        return sv1.compare( sv2 ) > 0;
+        -: 1047:    }
+        -: 1048:
+        -: 1049:    BOOST_CXX14_CONSTEXPR friend bool operator>=( basic_string_view sv1, std::basic_string_view<Ch> sv2 ) BOOST_NOEXCEPT
+        -: 1050:    {
+        -: 1051:        return sv1.compare( sv2 ) >= 0;
+        -: 1052:    }
+        -: 1053:
+        -: 1054:    BOOST_CXX14_CONSTEXPR friend bool operator>=( std::basic_string_view<Ch> sv1, basic_string_view sv2 ) BOOST_NOEXCEPT
+        -: 1055:    {
+        -: 1056:        return sv1.compare( sv2 ) >= 0;
+        -: 1057:    }
+        -: 1058:
+        -: 1059:    // against Ch const*
+        -: 1060:
+        -: 1061:    BOOST_CXX14_CONSTEXPR friend bool operator==( basic_string_view sv1, Ch const* sv2 ) BOOST_NOEXCEPT
+        -: 1062:    {
+        -: 1063:        return sv1 == basic_string_view( sv2 );
+        -: 1064:    }
+        -: 1065:
+        -: 1066:    BOOST_CXX14_CONSTEXPR friend bool operator==( Ch const* sv1, basic_string_view sv2 ) BOOST_NOEXCEPT
+        -: 1067:    {
+        -: 1068:        return basic_string_view( sv1 ) == sv2;
+        -: 1069:    }
+        -: 1070:
+        -: 1071:    BOOST_CXX14_CONSTEXPR friend bool operator!=( basic_string_view sv1, Ch const* sv2 ) BOOST_NOEXCEPT
+        -: 1072:    {
+        -: 1073:        return !( sv1 == sv2 );
+        -: 1074:    }
+        -: 1075:
+        -: 1076:    BOOST_CXX14_CONSTEXPR friend bool operator!=( Ch const* sv1, basic_string_view sv2 ) BOOST_NOEXCEPT
+        -: 1077:    {
+        -: 1078:        return !( sv1 == sv2 );
+        -: 1079:    }
+        -: 1080:
+        -: 1081:    BOOST_CXX14_CONSTEXPR friend bool operator<( basic_string_view sv1, Ch const* sv2 ) BOOST_NOEXCEPT
+        -: 1082:    {
+        -: 1083:        return sv1.compare( sv2 ) < 0;
+        -: 1084:    }
+        -: 1085:
+        -: 1086:    BOOST_CXX14_CONSTEXPR friend bool operator<( Ch const* sv1, basic_string_view sv2 ) BOOST_NOEXCEPT
+        -: 1087:    {
+        -: 1088:        return sv2.compare( sv1 ) > 0;
+        -: 1089:    }
+        -: 1090:
+        -: 1091:    BOOST_CXX14_CONSTEXPR friend bool operator<=( basic_string_view sv1, Ch const* sv2 ) BOOST_NOEXCEPT
+        -: 1092:    {
+        -: 1093:        return sv1.compare( sv2 ) <= 0;
+        -: 1094:    }
+        -: 1095:
+        -: 1096:    BOOST_CXX14_CONSTEXPR friend bool operator<=( Ch const* sv1, basic_string_view sv2 ) BOOST_NOEXCEPT
+        -: 1097:    {
+        -: 1098:        return sv2.compare( sv1 ) >= 0;
+        -: 1099:    }
+        -: 1100:
+        -: 1101:    BOOST_CXX14_CONSTEXPR friend bool operator>( basic_string_view sv1, Ch const* sv2 ) BOOST_NOEXCEPT
+        -: 1102:    {
+        -: 1103:        return sv1.compare( sv2 ) > 0;
+        -: 1104:    }
+        -: 1105:
+        -: 1106:    BOOST_CXX14_CONSTEXPR friend bool operator>( Ch const* sv1, basic_string_view sv2 ) BOOST_NOEXCEPT
+        -: 1107:    {
+        -: 1108:        return sv2.compare( sv1 ) < 0;
+        -: 1109:    }
+        -: 1110:
+        -: 1111:    BOOST_CXX14_CONSTEXPR friend bool operator>=( basic_string_view sv1, Ch const* sv2 ) BOOST_NOEXCEPT
+        -: 1112:    {
+        -: 1113:        return sv1.compare( sv2 ) >= 0;
+        -: 1114:    }
+        -: 1115:
+        -: 1116:    BOOST_CXX14_CONSTEXPR friend bool operator>=( Ch const* sv1, basic_string_view sv2 ) BOOST_NOEXCEPT
+        -: 1117:    {
+        -: 1118:        return sv2.compare( sv1 ) <= 0;
+        -: 1119:    }
+        -: 1120:
+        -: 1121:    // against std::string
+        -: 1122:
+        -: 1123:    template<class A> BOOST_CXX14_CONSTEXPR friend bool operator==( basic_string_view sv1, std::basic_string<Ch, std::char_traits<Ch>, A> const& sv2 ) BOOST_NOEXCEPT
+        -: 1124:    {
+        -: 1125:        return sv1.size() == sv2.size() && traits_type::compare( sv1.data(), sv2.data(), sv1.size() ) == 0;
+        -: 1126:    }
+        -: 1127:
+        -: 1128:    template<class A> BOOST_CXX14_CONSTEXPR friend bool operator==( std::basic_string<Ch, std::char_traits<Ch>, A> const& sv1, basic_string_view sv2 ) BOOST_NOEXCEPT
+        -: 1129:    {
+        -: 1130:        return sv1.size() == sv2.size() && traits_type::compare( sv1.data(), sv2.data(), sv1.size() ) == 0;
+        -: 1131:    }
+        -: 1132:
+        -: 1133:    template<class A> BOOST_CXX14_CONSTEXPR friend bool operator!=( basic_string_view sv1, std::basic_string<Ch, std::char_traits<Ch>, A> const& sv2 ) BOOST_NOEXCEPT
+        -: 1134:    {
+        -: 1135:        return !( sv1 == sv2 );
+        -: 1136:    }
+        -: 1137:
+        -: 1138:    template<class A> BOOST_CXX14_CONSTEXPR friend bool operator!=( std::basic_string<Ch, std::char_traits<Ch>, A> const& sv1, basic_string_view sv2 ) BOOST_NOEXCEPT
+        -: 1139:    {
+        -: 1140:        return !( sv1 == sv2 );
+        -: 1141:    }
+        -: 1142:
+        -: 1143:    template<class A> BOOST_CXX14_CONSTEXPR friend bool operator<( basic_string_view sv1, std::basic_string<Ch, std::char_traits<Ch>, A> const& sv2 ) BOOST_NOEXCEPT
+        -: 1144:    {
+        -: 1145:        return sv1.compare( sv2 ) < 0;
+        -: 1146:    }
+        -: 1147:
+        -: 1148:    template<class A> BOOST_CXX14_CONSTEXPR friend bool operator<( std::basic_string<Ch, std::char_traits<Ch>, A> const& sv1, basic_string_view sv2 ) BOOST_NOEXCEPT
+        -: 1149:    {
+        -: 1150:        return sv2.compare( sv1 ) > 0;
+        -: 1151:    }
+        -: 1152:
+        -: 1153:    template<class A> BOOST_CXX14_CONSTEXPR friend bool operator<=( basic_string_view sv1, std::basic_string<Ch, std::char_traits<Ch>, A> const& sv2 ) BOOST_NOEXCEPT
+        -: 1154:    {
+        -: 1155:        return sv1.compare( sv2 ) <= 0;
+        -: 1156:    }
+        -: 1157:
+        -: 1158:    template<class A> BOOST_CXX14_CONSTEXPR friend bool operator<=( std::basic_string<Ch, std::char_traits<Ch>, A> const& sv1, basic_string_view sv2 ) BOOST_NOEXCEPT
+        -: 1159:    {
+        -: 1160:        return sv2.compare( sv1 ) >= 0;
+        -: 1161:    }
+        -: 1162:
+        -: 1163:    template<class A> BOOST_CXX14_CONSTEXPR friend bool operator>( basic_string_view sv1, std::basic_string<Ch, std::char_traits<Ch>, A> const& sv2 ) BOOST_NOEXCEPT
+        -: 1164:    {
+        -: 1165:        return sv1.compare( sv2 ) > 0;
+        -: 1166:    }
+        -: 1167:
+        -: 1168:    template<class A> BOOST_CXX14_CONSTEXPR friend bool operator>( std::basic_string<Ch, std::char_traits<Ch>, A> const& sv1, basic_string_view sv2 ) BOOST_NOEXCEPT
+        -: 1169:    {
+        -: 1170:        return sv2.compare( sv1 ) < 0;
+        -: 1171:    }
+        -: 1172:
+        -: 1173:    template<class A> BOOST_CXX14_CONSTEXPR friend bool operator>=( basic_string_view sv1, std::basic_string<Ch, std::char_traits<Ch>, A> const& sv2 ) BOOST_NOEXCEPT
+        -: 1174:    {
+        -: 1175:        return sv1.compare( sv2 ) >= 0;
+        -: 1176:    }
+        -: 1177:
+        -: 1178:    template<class A> BOOST_CXX14_CONSTEXPR friend bool operator>=( std::basic_string<Ch, std::char_traits<Ch>, A> const& sv1, basic_string_view sv2 ) BOOST_NOEXCEPT
+        -: 1179:    {
+        -: 1180:        return sv2.compare( sv1 ) <= 0;
+        -: 1181:    }
+        -: 1182:
+        -: 1183:#endif
+        -: 1184:
+        -: 1185:    inline friend std::size_t hash_value( basic_string_view const& sv )
+        -: 1186:    {
+        -: 1187:        return boost::hash_range( sv.begin(), sv.end() );
+        -: 1188:    }
+        -: 1189:};
+        -: 1190:
+        -: 1191:// stream inserter
+        -: 1192:
+        -: 1193:template<class Ch> std::basic_ostream<Ch>& operator<<( std::basic_ostream<Ch>& os, basic_string_view<Ch> str )
+        -: 1194:{
+        -: 1195:    Ch const* p = str.data();
+        -: 1196:    std::streamsize n = str.size();
+        -: 1197:
+        -: 1198:    std::streamsize m = os.width();
+        -: 1199:
+        -: 1200:    if( n >= m )
+        -: 1201:    {
+        -: 1202:        os.write( p, n );
+        -: 1203:    }
+        -: 1204:    else if( ( os.flags() & std::ios_base::adjustfield ) == std::ios_base::left )
+        -: 1205:    {
+        -: 1206:        os.write( p, n );
+        -: 1207:
+        -: 1208:        os.width( m - n );
+        -: 1209:        os << "";
+        -: 1210:    }
+        -: 1211:    else
+        -: 1212:    {
+        -: 1213:        os.width( m - n );
+        -: 1214:        os << "";
+        -: 1215:
+        -: 1216:        os.write( p, n );
+        -: 1217:    }
+        -: 1218:
+        -: 1219:    os.width( 0 );
+        -: 1220:    return os;
+        -: 1221:}
+        -: 1222:
+        -: 1223:#if defined(BOOST_NO_CXX17_INLINE_VARIABLES)
+        -: 1224:template<class Ch> BOOST_CONSTEXPR_OR_CONST std::size_t basic_string_view<Ch>::npos;
+        -: 1225:#endif
+        -: 1226:
+        -: 1227:// typedef names
+        -: 1228:
+        -: 1229:typedef basic_string_view<char> string_view;
+        -: 1230:typedef basic_string_view<wchar_t> wstring_view;
+        -: 1231:
+        -: 1232:#if !defined(BOOST_NO_CXX11_CHAR16_T)
+        -: 1233:typedef basic_string_view<char16_t> u16string_view;
+        -: 1234:#endif
+        -: 1235:
+        -: 1236:#if !defined(BOOST_NO_CXX11_CHAR32_T)
+        -: 1237:typedef basic_string_view<char32_t> u32string_view;
+        -: 1238:#endif
+        -: 1239:
+        -: 1240:#if defined(__cpp_char8_t) && __cpp_char8_t >= 201811L
+        -: 1241:typedef basic_string_view<char8_t> u8string_view;
+        -: 1242:#endif
+        -: 1243:
+        -: 1244:} // namespace core
+        -: 1245:} // namespace boost
+        -: 1246:
+        -: 1247:// std::common_reference support
+        -: 1248:// needed for iterators that have reference=string_view and value_type=std::string
+        -: 1249:
+        -: 1250:#if !defined(BOOST_NO_CXX20_HDR_CONCEPTS)
+        -: 1251:
+        -: 1252:template<class Ch, class A, template<class> class Q1, template<class> class Q2>
+        -: 1253:struct std::basic_common_reference<
+        -: 1254:    boost::core::basic_string_view<Ch>,
+        -: 1255:    std::basic_string<Ch, std::char_traits<Ch>, A>,
+        -: 1256:    Q1, Q2>
+        -: 1257:{
+        -: 1258:    using type = boost::core::basic_string_view<Ch>;
+        -: 1259:};
+        -: 1260:
+        -: 1261:template<class Ch, class A, template<class> class Q1, template<class> class Q2>
+        -: 1262:struct std::basic_common_reference<
+        -: 1263:    std::basic_string<Ch, std::char_traits<Ch>, A>,
+        -: 1264:    boost::core::basic_string_view<Ch>,
+        -: 1265:    Q1, Q2>
+        -: 1266:{
+        -: 1267:    using type = boost::core::basic_string_view<Ch>;
+        -: 1268:};
+        -: 1269:
+        -: 1270:#endif
+        -: 1271:
+        -: 1272:#endif  // #ifndef BOOST_CORE_STRING_VIEW_HPP_INCLUDED

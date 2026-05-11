@@ -1,0 +1,531 @@
+        -:    0:Source:/usr/include/boost/asio/ssl/detail/openssl_init.hpp
+        -:    1://
+        -:    2:// ssl/detail/openssl_init.hpp
+        -:    3:// ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        -:    4://
+        -:    5:// Copyright (c) 2003-2023 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+        -:    6://
+        -:    7:// Distributed under the Boost Software License, Version 1.0. (See accompanying
+        -:    8:// file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+        -:    9://
+        -:   10:
+        -:   11:#ifndef BOOST_ASIO_SSL_DETAIL_OPENSSL_INIT_HPP
+        -:   12:#define BOOST_ASIO_SSL_DETAIL_OPENSSL_INIT_HPP
+        -:   13:
+        -:   14:#if defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   15:# pragma once
+        -:   16:#endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   17:
+        -:   18:#include <boost/asio/detail/config.hpp>
+        -:   19:#include <cstring>
+        -:   20:#include <boost/asio/detail/memory.hpp>
+        -:   21:#include <boost/asio/detail/noncopyable.hpp>
+        -:   22:#include <boost/asio/ssl/detail/openssl_types.hpp>
+        -:   23:
+        -:   24:#include <boost/asio/detail/push_options.hpp>
+        -:   25:
+        -:   26:namespace boost {
+        -:   27:namespace asio {
+        -:   28:namespace ssl {
+        -:   29:namespace detail {
+        -:   30:
+        -:   31:class openssl_init_base
+        -:   32:  : private noncopyable
+        -:   33:{
+        -:   34:protected:
+        -:   35:  // Class that performs the actual initialisation.
+        -:   36:  class do_init;
+        -:   37:
+        -:   38:  // Helper function to manage a do_init singleton. The static instance of the
+        -:   39:  // openssl_init object ensures that this function is always called before
+        -:   40:  // main, and therefore before any other threads can get started. The do_init
+        -:   41:  // instance must be static in this function to ensure that it gets
+        -:   42:  // initialised before any other global objects try to use it.
+        -:   43:  BOOST_ASIO_DECL static boost::asio::detail::shared_ptr<do_init> instance();
+        -:   44:
+        -:   45:#if !defined(SSL_OP_NO_COMPRESSION) \
+        -:   46:  && (OPENSSL_VERSION_NUMBER >= 0x00908000L)
+        -:   47:  // Get an empty stack of compression methods, to be used when disabling
+        -:   48:  // compression.
+        -:   49:  BOOST_ASIO_DECL static STACK_OF(SSL_COMP)* get_null_compression_methods();
+        -:   50:#endif // !defined(SSL_OP_NO_COMPRESSION)
+        -:   51:       // && (OPENSSL_VERSION_NUMBER >= 0x00908000L)
+        -:   52:};
+        -:   53:
+        -:   54:template <bool Do_Init = true>
+        -:   55:class openssl_init : private openssl_init_base
+        -:   56:{
+        -:   57:public:
+        -:   58:  // Constructor.
+      77*:   59:  openssl_init()
+      77*:   60:    : ref_(instance())
+        -:   61:  {
+        -:   62:    using namespace std; // For memmove.
+        -:   63:
+        -:   64:    // Ensure openssl_init::instance_ is linked in.
+      77*:   65:    openssl_init* tmp = &instance_;
+      77*:   66:    memmove(&tmp, &tmp, sizeof(openssl_init*));
+      77*:   67:  }
+------------------
+_ZN5boost4asio3ssl6detail12openssl_initILb1EEC2Ev:
+function _ZN5boost4asio3ssl6detail12openssl_initILb1EEC2Ev called 6 returned 100% blocks executed 80%
+        6:   59:  openssl_init()
+        6:   60:    : ref_(instance())
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:   61:  {
+        -:   62:    using namespace std; // For memmove.
+        -:   63:
+        -:   64:    // Ensure openssl_init::instance_ is linked in.
+        6:   65:    openssl_init* tmp = &instance_;
+        6:   66:    memmove(&tmp, &tmp, sizeof(openssl_init*));
+        6:   67:  }
+call    0 never executed
+------------------
+_ZN5boost4asio3ssl6detail12openssl_initILb1EEC2Ev:
+function _ZN5boost4asio3ssl6detail12openssl_initILb1EEC2Ev called 0 returned 0% blocks executed 0%
+    #####:   59:  openssl_init()
+    #####:   60:    : ref_(instance())
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+        -:   61:  {
+        -:   62:    using namespace std; // For memmove.
+        -:   63:
+        -:   64:    // Ensure openssl_init::instance_ is linked in.
+    #####:   65:    openssl_init* tmp = &instance_;
+    #####:   66:    memmove(&tmp, &tmp, sizeof(openssl_init*));
+    #####:   67:  }
+call    0 never executed
+------------------
+_ZN5boost4asio3ssl6detail12openssl_initILb1EEC2Ev:
+function _ZN5boost4asio3ssl6detail12openssl_initILb1EEC2Ev called 0 returned 0% blocks executed 0%
+    #####:   59:  openssl_init()
+    #####:   60:    : ref_(instance())
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+        -:   61:  {
+        -:   62:    using namespace std; // For memmove.
+        -:   63:
+        -:   64:    // Ensure openssl_init::instance_ is linked in.
+    #####:   65:    openssl_init* tmp = &instance_;
+    #####:   66:    memmove(&tmp, &tmp, sizeof(openssl_init*));
+    #####:   67:  }
+call    0 never executed
+------------------
+_ZN5boost4asio3ssl6detail12openssl_initILb1EEC2Ev:
+function _ZN5boost4asio3ssl6detail12openssl_initILb1EEC2Ev called 0 returned 0% blocks executed 0%
+    #####:   59:  openssl_init()
+    #####:   60:    : ref_(instance())
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+        -:   61:  {
+        -:   62:    using namespace std; // For memmove.
+        -:   63:
+        -:   64:    // Ensure openssl_init::instance_ is linked in.
+    #####:   65:    openssl_init* tmp = &instance_;
+    #####:   66:    memmove(&tmp, &tmp, sizeof(openssl_init*));
+    #####:   67:  }
+call    0 never executed
+------------------
+_ZN5boost4asio3ssl6detail12openssl_initILb1EEC2Ev:
+function _ZN5boost4asio3ssl6detail12openssl_initILb1EEC2Ev called 8 returned 100% blocks executed 80%
+        8:   59:  openssl_init()
+        8:   60:    : ref_(instance())
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:   61:  {
+        -:   62:    using namespace std; // For memmove.
+        -:   63:
+        -:   64:    // Ensure openssl_init::instance_ is linked in.
+        8:   65:    openssl_init* tmp = &instance_;
+        8:   66:    memmove(&tmp, &tmp, sizeof(openssl_init*));
+        8:   67:  }
+call    0 never executed
+------------------
+_ZN5boost4asio3ssl6detail12openssl_initILb1EEC2Ev:
+function _ZN5boost4asio3ssl6detail12openssl_initILb1EEC2Ev called 9 returned 100% blocks executed 80%
+        9:   59:  openssl_init()
+        9:   60:    : ref_(instance())
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:   61:  {
+        -:   62:    using namespace std; // For memmove.
+        -:   63:
+        -:   64:    // Ensure openssl_init::instance_ is linked in.
+        9:   65:    openssl_init* tmp = &instance_;
+        9:   66:    memmove(&tmp, &tmp, sizeof(openssl_init*));
+        9:   67:  }
+call    0 never executed
+------------------
+_ZN5boost4asio3ssl6detail12openssl_initILb1EEC2Ev:
+function _ZN5boost4asio3ssl6detail12openssl_initILb1EEC2Ev called 5 returned 100% blocks executed 80%
+        5:   59:  openssl_init()
+        5:   60:    : ref_(instance())
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:   61:  {
+        -:   62:    using namespace std; // For memmove.
+        -:   63:
+        -:   64:    // Ensure openssl_init::instance_ is linked in.
+        5:   65:    openssl_init* tmp = &instance_;
+        5:   66:    memmove(&tmp, &tmp, sizeof(openssl_init*));
+        5:   67:  }
+call    0 never executed
+------------------
+_ZN5boost4asio3ssl6detail12openssl_initILb1EEC2Ev:
+function _ZN5boost4asio3ssl6detail12openssl_initILb1EEC2Ev called 7 returned 100% blocks executed 80%
+        7:   59:  openssl_init()
+        7:   60:    : ref_(instance())
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:   61:  {
+        -:   62:    using namespace std; // For memmove.
+        -:   63:
+        -:   64:    // Ensure openssl_init::instance_ is linked in.
+        7:   65:    openssl_init* tmp = &instance_;
+        7:   66:    memmove(&tmp, &tmp, sizeof(openssl_init*));
+        7:   67:  }
+call    0 never executed
+------------------
+_ZN5boost4asio3ssl6detail12openssl_initILb1EEC2Ev:
+function _ZN5boost4asio3ssl6detail12openssl_initILb1EEC2Ev called 6 returned 100% blocks executed 80%
+        6:   59:  openssl_init()
+        6:   60:    : ref_(instance())
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:   61:  {
+        -:   62:    using namespace std; // For memmove.
+        -:   63:
+        -:   64:    // Ensure openssl_init::instance_ is linked in.
+        6:   65:    openssl_init* tmp = &instance_;
+        6:   66:    memmove(&tmp, &tmp, sizeof(openssl_init*));
+        6:   67:  }
+call    0 never executed
+------------------
+_ZN5boost4asio3ssl6detail12openssl_initILb1EEC2Ev:
+function _ZN5boost4asio3ssl6detail12openssl_initILb1EEC2Ev called 0 returned 0% blocks executed 0%
+    #####:   59:  openssl_init()
+    #####:   60:    : ref_(instance())
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+        -:   61:  {
+        -:   62:    using namespace std; // For memmove.
+        -:   63:
+        -:   64:    // Ensure openssl_init::instance_ is linked in.
+    #####:   65:    openssl_init* tmp = &instance_;
+    #####:   66:    memmove(&tmp, &tmp, sizeof(openssl_init*));
+    #####:   67:  }
+call    0 never executed
+------------------
+_ZN5boost4asio3ssl6detail12openssl_initILb1EEC2Ev:
+function _ZN5boost4asio3ssl6detail12openssl_initILb1EEC2Ev called 12 returned 100% blocks executed 80%
+       12:   59:  openssl_init()
+       12:   60:    : ref_(instance())
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:   61:  {
+        -:   62:    using namespace std; // For memmove.
+        -:   63:
+        -:   64:    // Ensure openssl_init::instance_ is linked in.
+       12:   65:    openssl_init* tmp = &instance_;
+       12:   66:    memmove(&tmp, &tmp, sizeof(openssl_init*));
+       12:   67:  }
+call    0 never executed
+------------------
+_ZN5boost4asio3ssl6detail12openssl_initILb1EEC2Ev:
+function _ZN5boost4asio3ssl6detail12openssl_initILb1EEC2Ev called 9 returned 100% blocks executed 80%
+        9:   59:  openssl_init()
+        9:   60:    : ref_(instance())
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:   61:  {
+        -:   62:    using namespace std; // For memmove.
+        -:   63:
+        -:   64:    // Ensure openssl_init::instance_ is linked in.
+        9:   65:    openssl_init* tmp = &instance_;
+        9:   66:    memmove(&tmp, &tmp, sizeof(openssl_init*));
+        9:   67:  }
+call    0 never executed
+------------------
+_ZN5boost4asio3ssl6detail12openssl_initILb1EEC2Ev:
+function _ZN5boost4asio3ssl6detail12openssl_initILb1EEC2Ev called 15 returned 100% blocks executed 80%
+       15:   59:  openssl_init()
+       15:   60:    : ref_(instance())
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:   61:  {
+        -:   62:    using namespace std; // For memmove.
+        -:   63:
+        -:   64:    // Ensure openssl_init::instance_ is linked in.
+       15:   65:    openssl_init* tmp = &instance_;
+       15:   66:    memmove(&tmp, &tmp, sizeof(openssl_init*));
+       15:   67:  }
+call    0 never executed
+------------------
+_ZN5boost4asio3ssl6detail12openssl_initILb1EEC2Ev:
+function _ZN5boost4asio3ssl6detail12openssl_initILb1EEC2Ev called 0 returned 0% blocks executed 0%
+    #####:   59:  openssl_init()
+    #####:   60:    : ref_(instance())
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+        -:   61:  {
+        -:   62:    using namespace std; // For memmove.
+        -:   63:
+        -:   64:    // Ensure openssl_init::instance_ is linked in.
+    #####:   65:    openssl_init* tmp = &instance_;
+    #####:   66:    memmove(&tmp, &tmp, sizeof(openssl_init*));
+    #####:   67:  }
+call    0 never executed
+------------------
+_ZN5boost4asio3ssl6detail12openssl_initILb1EEC2Ev:
+function _ZN5boost4asio3ssl6detail12openssl_initILb1EEC2Ev called 0 returned 0% blocks executed 0%
+    #####:   59:  openssl_init()
+    #####:   60:    : ref_(instance())
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+        -:   61:  {
+        -:   62:    using namespace std; // For memmove.
+        -:   63:
+        -:   64:    // Ensure openssl_init::instance_ is linked in.
+    #####:   65:    openssl_init* tmp = &instance_;
+    #####:   66:    memmove(&tmp, &tmp, sizeof(openssl_init*));
+    #####:   67:  }
+call    0 never executed
+------------------
+_ZN5boost4asio3ssl6detail12openssl_initILb1EEC2Ev:
+function _ZN5boost4asio3ssl6detail12openssl_initILb1EEC2Ev called 0 returned 0% blocks executed 0%
+    #####:   59:  openssl_init()
+    #####:   60:    : ref_(instance())
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+        -:   61:  {
+        -:   62:    using namespace std; // For memmove.
+        -:   63:
+        -:   64:    // Ensure openssl_init::instance_ is linked in.
+    #####:   65:    openssl_init* tmp = &instance_;
+    #####:   66:    memmove(&tmp, &tmp, sizeof(openssl_init*));
+    #####:   67:  }
+call    0 never executed
+------------------
+_ZN5boost4asio3ssl6detail12openssl_initILb1EEC2Ev:
+function _ZN5boost4asio3ssl6detail12openssl_initILb1EEC2Ev called 0 returned 0% blocks executed 0%
+    #####:   59:  openssl_init()
+    #####:   60:    : ref_(instance())
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+        -:   61:  {
+        -:   62:    using namespace std; // For memmove.
+        -:   63:
+        -:   64:    // Ensure openssl_init::instance_ is linked in.
+    #####:   65:    openssl_init* tmp = &instance_;
+    #####:   66:    memmove(&tmp, &tmp, sizeof(openssl_init*));
+    #####:   67:  }
+call    0 never executed
+------------------
+        -:   68:
+        -:   69:  // Destructor.
+      77*:   70:  ~openssl_init()
+        -:   71:  {
+      77*:   72:  }
+------------------
+_ZN5boost4asio3ssl6detail12openssl_initILb1EED2Ev:
+function _ZN5boost4asio3ssl6detail12openssl_initILb1EED2Ev called 6 returned 100% blocks executed 100%
+        6:   70:  ~openssl_init()
+        -:   71:  {
+        6:   72:  }
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN5boost4asio3ssl6detail12openssl_initILb1EED2Ev:
+function _ZN5boost4asio3ssl6detail12openssl_initILb1EED2Ev called 0 returned 0% blocks executed 0%
+    #####:   70:  ~openssl_init()
+        -:   71:  {
+    #####:   72:  }
+call    0 never executed
+call    1 never executed
+------------------
+_ZN5boost4asio3ssl6detail12openssl_initILb1EED2Ev:
+function _ZN5boost4asio3ssl6detail12openssl_initILb1EED2Ev called 0 returned 0% blocks executed 0%
+    #####:   70:  ~openssl_init()
+        -:   71:  {
+    #####:   72:  }
+call    0 never executed
+call    1 never executed
+------------------
+_ZN5boost4asio3ssl6detail12openssl_initILb1EED2Ev:
+function _ZN5boost4asio3ssl6detail12openssl_initILb1EED2Ev called 0 returned 0% blocks executed 0%
+    #####:   70:  ~openssl_init()
+        -:   71:  {
+    #####:   72:  }
+call    0 never executed
+call    1 never executed
+------------------
+_ZN5boost4asio3ssl6detail12openssl_initILb1EED2Ev:
+function _ZN5boost4asio3ssl6detail12openssl_initILb1EED2Ev called 8 returned 100% blocks executed 100%
+        8:   70:  ~openssl_init()
+        -:   71:  {
+        8:   72:  }
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN5boost4asio3ssl6detail12openssl_initILb1EED2Ev:
+function _ZN5boost4asio3ssl6detail12openssl_initILb1EED2Ev called 9 returned 100% blocks executed 100%
+        9:   70:  ~openssl_init()
+        -:   71:  {
+        9:   72:  }
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN5boost4asio3ssl6detail12openssl_initILb1EED2Ev:
+function _ZN5boost4asio3ssl6detail12openssl_initILb1EED2Ev called 5 returned 100% blocks executed 100%
+        5:   70:  ~openssl_init()
+        -:   71:  {
+        5:   72:  }
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN5boost4asio3ssl6detail12openssl_initILb1EED2Ev:
+function _ZN5boost4asio3ssl6detail12openssl_initILb1EED2Ev called 7 returned 100% blocks executed 100%
+        7:   70:  ~openssl_init()
+        -:   71:  {
+        7:   72:  }
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN5boost4asio3ssl6detail12openssl_initILb1EED2Ev:
+function _ZN5boost4asio3ssl6detail12openssl_initILb1EED2Ev called 6 returned 100% blocks executed 100%
+        6:   70:  ~openssl_init()
+        -:   71:  {
+        6:   72:  }
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN5boost4asio3ssl6detail12openssl_initILb1EED2Ev:
+function _ZN5boost4asio3ssl6detail12openssl_initILb1EED2Ev called 0 returned 0% blocks executed 0%
+    #####:   70:  ~openssl_init()
+        -:   71:  {
+    #####:   72:  }
+call    0 never executed
+call    1 never executed
+------------------
+_ZN5boost4asio3ssl6detail12openssl_initILb1EED2Ev:
+function _ZN5boost4asio3ssl6detail12openssl_initILb1EED2Ev called 12 returned 100% blocks executed 100%
+       12:   70:  ~openssl_init()
+        -:   71:  {
+       12:   72:  }
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN5boost4asio3ssl6detail12openssl_initILb1EED2Ev:
+function _ZN5boost4asio3ssl6detail12openssl_initILb1EED2Ev called 9 returned 100% blocks executed 100%
+        9:   70:  ~openssl_init()
+        -:   71:  {
+        9:   72:  }
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN5boost4asio3ssl6detail12openssl_initILb1EED2Ev:
+function _ZN5boost4asio3ssl6detail12openssl_initILb1EED2Ev called 15 returned 100% blocks executed 100%
+       15:   70:  ~openssl_init()
+        -:   71:  {
+       15:   72:  }
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN5boost4asio3ssl6detail12openssl_initILb1EED2Ev:
+function _ZN5boost4asio3ssl6detail12openssl_initILb1EED2Ev called 0 returned 0% blocks executed 0%
+    #####:   70:  ~openssl_init()
+        -:   71:  {
+    #####:   72:  }
+call    0 never executed
+call    1 never executed
+------------------
+_ZN5boost4asio3ssl6detail12openssl_initILb1EED2Ev:
+function _ZN5boost4asio3ssl6detail12openssl_initILb1EED2Ev called 0 returned 0% blocks executed 0%
+    #####:   70:  ~openssl_init()
+        -:   71:  {
+    #####:   72:  }
+call    0 never executed
+call    1 never executed
+------------------
+_ZN5boost4asio3ssl6detail12openssl_initILb1EED2Ev:
+function _ZN5boost4asio3ssl6detail12openssl_initILb1EED2Ev called 0 returned 0% blocks executed 0%
+    #####:   70:  ~openssl_init()
+        -:   71:  {
+    #####:   72:  }
+call    0 never executed
+call    1 never executed
+------------------
+_ZN5boost4asio3ssl6detail12openssl_initILb1EED2Ev:
+function _ZN5boost4asio3ssl6detail12openssl_initILb1EED2Ev called 0 returned 0% blocks executed 0%
+    #####:   70:  ~openssl_init()
+        -:   71:  {
+    #####:   72:  }
+call    0 never executed
+call    1 never executed
+------------------
+        -:   73:
+        -:   74:#if !defined(SSL_OP_NO_COMPRESSION) \
+        -:   75:  && (OPENSSL_VERSION_NUMBER >= 0x00908000L)
+        -:   76:  using openssl_init_base::get_null_compression_methods;
+        -:   77:#endif // !defined(SSL_OP_NO_COMPRESSION)
+        -:   78:       // && (OPENSSL_VERSION_NUMBER >= 0x00908000L)
+        -:   79:
+        -:   80:private:
+        -:   81:  // Instance to force initialisation of openssl at global scope.
+        -:   82:  static openssl_init instance_;
+        -:   83:
+        -:   84:  // Reference to singleton do_init object to ensure that openssl does not get
+        -:   85:  // cleaned up until the last user has finished with it.
+        -:   86:  boost::asio::detail::shared_ptr<do_init> ref_;
+        -:   87:};
+        -:   88:
+        -:   89:template <bool Do_Init>
+        -:   90:openssl_init<Do_Init> openssl_init<Do_Init>::instance_;
+        -:   91:
+        -:   92:} // namespace detail
+        -:   93:} // namespace ssl
+        -:   94:} // namespace asio
+        -:   95:} // namespace boost
+        -:   96:
+        -:   97:#include <boost/asio/detail/pop_options.hpp>
+        -:   98:
+        -:   99:#if defined(BOOST_ASIO_HEADER_ONLY)
+        -:  100:# include <boost/asio/ssl/detail/impl/openssl_init.ipp>
+        -:  101:#endif // defined(BOOST_ASIO_HEADER_ONLY)
+        -:  102:
+        -:  103:#endif // BOOST_ASIO_SSL_DETAIL_OPENSSL_INIT_HPP

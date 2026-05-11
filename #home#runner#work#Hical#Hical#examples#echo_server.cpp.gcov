@@ -1,0 +1,189 @@
+        -:    0:Source:/home/runner/work/Hical/Hical/examples/echo_server.cpp
+        -:    1:#include <boost/asio.hpp>
+        -:    2:#include <boost/asio/awaitable.hpp>
+        -:    3:#include <boost/asio/co_spawn.hpp>
+        -:    4:#include <boost/asio/detached.hpp>
+        -:    5:#include <boost/asio/use_awaitable.hpp>
+        -:    6:#include <iostream>
+        -:    7:#include <memory>
+        -:    8:
+        -:    9:using boost::asio::awaitable;
+        -:   10:using boost::asio::co_spawn;
+        -:   11:using boost::asio::detached;
+        -:   12:using boost::asio::use_awaitable;
+        -:   13:using boost::asio::ip::tcp;
+        -:   14:
+        -:   15:/**
+        -:   16: * @brief 协程式会话处理
+        -:   17: * 使用 co_await 进行异步读写，替代旧版回调式实现。
+        -:   18: */
+function _Z13handleSessionN5boost4asio19basic_stream_socketINS0_2ip3tcpENS0_15any_io_executorEEE called 0 returned 0% blocks executed 0%
+    #####:   19:awaitable<void> handleSession(tcp::socket socket)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:   20:{
+        -:   21:	try
+        -:   22:	{
+        -:   23:		char data[1024];
+        -:   24:		for (;;)
+        -:   25:		{
+        -:   26:			// 协程式异步读取
+        -:   27:			auto bytesRead = co_await socket.async_read_some(boost::asio::buffer(data), use_awaitable);
+        -:   28:
+        -:   29:			// 协程式异步写入（Echo 回写）
+        -:   30:			co_await boost::asio::async_write(socket, boost::asio::buffer(data, bytesRead), use_awaitable);
+        -:   31:		}
+        -:   32:	}
+        -:   33:	catch (const std::exception&)
+        -:   34:	{
+        -:   35:		// 连接关闭或错误，会话结束
+        -:   36:	}
+    #####:   37:}
+call    0 never executed
+call    1 never executed
+call    2 never executed
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed
+call    9 never executed
+branch 10 never executed (fallthrough)
+branch 11 never executed
+call   12 never executed
+branch 13 never executed (fallthrough)
+branch 14 never executed
+call   15 never executed
+call   16 never executed
+branch 17 never executed (fallthrough)
+branch 18 never executed (throw)
+call   19 never executed
+call   20 never executed
+        -:   38:
+        -:   39:/**
+        -:   40: * @brief 协程式连接接受器
+        -:   41: */
+function _Z8listenerN5boost4asio21basic_socket_acceptorINS0_2ip3tcpENS0_15any_io_executorEEE called 0 returned 0% blocks executed 0%
+    #####:   42:awaitable<void> listener(tcp::acceptor acceptor)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:   43:{
+        -:   44:	for (;;)
+        -:   45:	{
+        -:   46:		// 协程式异步接受连接
+        -:   47:		auto socket = co_await acceptor.async_accept(use_awaitable);
+        -:   48:
+        -:   49:		// 为每个连接启动一个独立的协程
+        -:   50:		co_spawn(acceptor.get_executor(), handleSession(std::move(socket)), detached);
+        -:   51:	}
+    #####:   52:}
+call    0 never executed
+call    1 never executed
+call    2 never executed
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed
+call    9 never executed
+branch 10 never executed (fallthrough)
+branch 11 never executed
+call   12 never executed
+branch 13 never executed (fallthrough)
+branch 14 never executed
+call   15 never executed
+call   16 never executed
+branch 17 never executed (fallthrough)
+branch 18 never executed (throw)
+call   19 never executed
+call   20 never executed
+        -:   53:
+function main called 0 returned 0% blocks executed 0%
+    #####:   54:int main(int argc, char* argv[])
+        -:   55:{
+        -:   56:	try
+        -:   57:	{
+    #####:   58:		if (argc != 2)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:   59:		{
+    #####:   60:			std::cerr << "用法: echo_server <端口>\n";
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:   61:			return 1;
+        -:   62:		}
+        -:   63:
+    #####:   64:		boost::asio::io_context ioContext;
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:   65:
+    #####:   66:		auto port = static_cast<unsigned short>(std::atoi(argv[1]));
+    #####:   67:		tcp::acceptor acceptor(ioContext, tcp::endpoint(tcp::v4(), port));
+call    0 never executed
+call    1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed (throw)
+        -:   68:
+        -:   69:		// 启动监听协程
+    #####:   70:		co_spawn(ioContext, listener(std::move(acceptor)), detached);
+call    0 never executed
+call    1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed (throw)
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed (throw)
+call    8 never executed
+call    9 never executed
+call   10 never executed
+call   11 never executed
+        -:   71:
+    #####:   72:		std::cout << "Echo Server（协程式）启动在端口 " << argv[1] << std::endl;
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed (throw)
+    #####:   73:		ioContext.run();
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:   74:	}
+call    0 never executed
+call    1 never executed
+call    2 never executed
+call    3 never executed
+    =====:   75:	catch (const std::exception& e)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+call    2 never executed
+        -:   76:	{
+    =====:   77:		std::cerr << "异常: " << e.what() << std::endl;
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+call    4 never executed
+branch  5 never executed (fallthrough)
+branch  6 never executed (throw)
+call    7 never executed
+branch  8 never executed (fallthrough)
+branch  9 never executed (throw)
+    =====:   78:	}
+call    0 never executed
+call    1 never executed
+        -:   79:
+    #####:   80:	return 0;
+        -:   81:}

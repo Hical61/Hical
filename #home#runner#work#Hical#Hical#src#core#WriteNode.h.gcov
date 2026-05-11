@@ -1,0 +1,253 @@
+        -:    0:Source:/home/runner/work/Hical/Hical/src/core/WriteNode.h
+        -:    1:#pragma once
+        -:    2:
+        -:    3:/**
+        -:    4: * @file WriteNode.h
+        -:    5: * @brief 多态写缓冲节点（支持内存数据和文件发送）
+        -:    6: * 设计灵感来自 Trantor 网络库的 BufferNode 多态设计。
+        -:    7: * 将发送数据抽象为节点，支持在发送队列中混合不同类型的数据源：
+        -:    8: * - MemoryWriteNode：内存中的字符串数据
+        -:    9: * - FileWriteNode：文件路径 + 偏移 + 长度（支持后续零拷贝优化）
+        -:   10: * writeLoop 根据节点类型选择最优发送策略：
+        -:   11: * - 连续内存节点 → scatter-gather I/O 批量发送
+        -:   12: * - 文件节点 → 分块读取并发送（后续可优化为 sendfile/TransmitFile）
+        -:   13: */
+        -:   14:
+        -:   15:#include "PmrBuffer.h"
+        -:   16:#include <boost/asio/buffer.hpp>
+        -:   17:#include <cstdint>
+        -:   18:#include <filesystem>
+        -:   19:#include <memory>
+        -:   20:#include <string>
+        -:   21:
+        -:   22:namespace hical
+        -:   23:{
+        -:   24:
+        -:   25:	/**
+        -:   26:	 * @brief 写缓冲节点基类
+        -:   27:	 */
+        -:   28:	class WriteNode
+        -:   29:	{
+        -:   30:	public:
+       2*:   31:		virtual ~WriteNode() = default;
+------------------
+_ZN5hical9WriteNodeD0Ev:
+function _ZN5hical9WriteNodeD0Ev called 0 returned 0% blocks executed 0%
+    #####:   31:		virtual ~WriteNode() = default;
+call    0 never executed
+call    1 never executed
+------------------
+_ZN5hical9WriteNodeD2Ev:
+function _ZN5hical9WriteNodeD2Ev called 2 returned 100% blocks executed 100%
+        2:   31:		virtual ~WriteNode() = default;
+------------------
+        -:   32:
+        -:   33:		/**
+        -:   34:		 * @brief 节点数据大小（字节）
+        -:   35:		 * @return 总字节数
+        -:   36:		 */
+        -:   37:		virtual size_t size() const = 0;
+        -:   38:
+        -:   39:		/**
+        -:   40:		 * @brief 是否为文件节点
+        -:   41:		 * @return true 如果是文件节点
+        -:   42:		 */
+function _ZNK5hical9WriteNode6isFileEv called 4 returned 100% blocks executed 100%
+        4:   43:		virtual bool isFile() const
+        -:   44:		{
+        4:   45:			return false;
+        -:   46:		}
+        -:   47:
+        -:   48:		/**
+        -:   49:		 * @brief 获取内存数据的 const_buffer 视图（仅内存节点有效）
+        -:   50:		 * @return const_buffer，文件节点返回空 buffer
+        -:   51:		 */
+function _ZNK5hical9WriteNode8asBufferEv called 0 returned 0% blocks executed 0%
+    #####:   52:		virtual boost::asio::const_buffer asBuffer() const
+        -:   53:		{
+    #####:   54:			return {};
+call    0 never executed
+        -:   55:		}
+        -:   56:
+function _ZN5hical9WriteNodeC2Ev called 2 returned 100% blocks executed 100%
+        2:   57:		WriteNode() = default;
+        -:   58:		WriteNode(const WriteNode&) = delete;
+        -:   59:		WriteNode& operator=(const WriteNode&) = delete;
+        -:   60:	};
+        -:   61:
+        -:   62:	/**
+        -:   63:	 * @brief 内存数据写节点
+        -:   64:	 * 持有 shared_ptr<string>，支持零拷贝共享。
+        -:   65:	 */
+        -:   66:	class MemoryWriteNode : public WriteNode
+        -:   67:	{
+        -:   68:	public:
+function _ZN5hical15MemoryWriteNodeC2ESt10shared_ptrINSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEE called 1 returned 100% blocks executed 100%
+        1:   69:		explicit MemoryWriteNode(std::shared_ptr<std::string> data) : data_(std::move(data))
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+        -:   70:		{
+        1:   71:		}
+        -:   72:
+function _ZN5hical15MemoryWriteNodeC2EONSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEE called 1 returned 100% blocks executed 83%
+        1:   73:		explicit MemoryWriteNode(std::string&& data) : data_(std::make_shared<std::string>(std::move(data)))
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+        -:   74:		{
+        1:   75:		}
+call    0 never executed
+        -:   76:
+function _ZNK5hical15MemoryWriteNode4sizeEv called 4 returned 100% blocks executed 100%
+        4:   77:		size_t size() const override
+        -:   78:		{
+        4:   79:			return data_->size();
+call    0 returned 100%
+call    1 returned 100%
+        -:   80:		}
+        -:   81:
+function _ZNK5hical15MemoryWriteNode8asBufferEv called 2 returned 100% blocks executed 100%
+        2:   82:		boost::asio::const_buffer asBuffer() const override
+        -:   83:		{
+        2:   84:			return boost::asio::buffer(*data_);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+        -:   85:		}
+        -:   86:
+        -:   87:		boost::asio::const_buffer buffer() const
+        -:   88:		{
+        -:   89:			return boost::asio::buffer(*data_);
+        -:   90:		}
+        -:   91:
+        -:   92:		const std::string& data() const
+        -:   93:		{
+        -:   94:			return *data_;
+        -:   95:		}
+        -:   96:
+        -:   97:	private:
+        -:   98:		std::shared_ptr<std::string> data_;
+        -:   99:	};
+        -:  100:
+        -:  101:	/**
+        -:  102:	 * @brief PMR 缓冲区写节点
+        -:  103:	 * 直接持有 PmrBuffer（move 语义），避免 PmrBuffer → string 的数据拷贝。
+        -:  104:	 */
+        -:  105:	class PmrBufferWriteNode : public WriteNode
+        -:  106:	{
+        -:  107:	public:
+function _ZN5hical18PmrBufferWriteNodeC2EONS_9PmrBufferE called 0 returned 0% blocks executed 0%
+    #####:  108:		explicit PmrBufferWriteNode(PmrBuffer&& buffer) : buffer_(std::move(buffer))
+call    0 never executed
+call    1 never executed
+call    2 never executed
+        -:  109:		{
+    #####:  110:		}
+        -:  111:
+function _ZNK5hical18PmrBufferWriteNode4sizeEv called 0 returned 0% blocks executed 0%
+    #####:  112:		size_t size() const override
+        -:  113:		{
+    #####:  114:			return buffer_.readableBytes();
+call    0 never executed
+        -:  115:		}
+        -:  116:
+function _ZNK5hical18PmrBufferWriteNode8asBufferEv called 0 returned 0% blocks executed 0%
+    #####:  117:		boost::asio::const_buffer asBuffer() const override
+        -:  118:		{
+    #####:  119:			return boost::asio::buffer(buffer_.peek(), buffer_.readableBytes());
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+        -:  120:		}
+        -:  121:
+        -:  122:		boost::asio::const_buffer buffer() const
+        -:  123:		{
+        -:  124:			return boost::asio::buffer(buffer_.peek(), buffer_.readableBytes());
+        -:  125:		}
+        -:  126:
+        -:  127:	private:
+        -:  128:		PmrBuffer buffer_;
+        -:  129:	};
+        -:  130:
+        -:  131:	/**
+        -:  132:	 * @brief 文件写节点
+        -:  133:	 * 持有文件路径、偏移量和长度。
+        -:  134:	 * writeLoop 中分块读取并异步发送。
+        -:  135:	 * 后续可优化为 sendfile(Linux) / TransmitFile(Windows) 零拷贝。
+        -:  136:	 */
+        -:  137:	class FileWriteNode : public WriteNode
+        -:  138:	{
+        -:  139:	public:
+        -:  140:		/**
+        -:  141:		 * @brief 构造文件写节点
+        -:  142:		 * @param path 文件路径
+        -:  143:		 * @param offset 起始偏移量
+        -:  144:		 * @param length 发送长度（-1 表示到文件末尾）
+        -:  145:		 */
+function _ZN5hical13FileWriteNodeC2ENSt10filesystem7__cxx114pathEll called 0 returned 0% blocks executed 0%
+    #####:  146:		FileWriteNode(std::filesystem::path path, int64_t offset = 0, int64_t length = -1)
+    #####:  147:			: path_(std::move(path)), offset_(offset)
+call    0 never executed
+call    1 never executed
+call    2 never executed
+        -:  148:		{
+    #####:  149:			if (length < 0)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  150:			{
+    #####:  151:				auto fileSize = std::filesystem::file_size(path_);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  152:				length_ = static_cast<int64_t>(fileSize) - offset_;
+        -:  153:			}
+        -:  154:			else
+        -:  155:			{
+    #####:  156:				length_ = length;
+        -:  157:			}
+    #####:  158:		}
+call    0 never executed
+call    1 never executed
+        -:  159:
+function _ZNK5hical13FileWriteNode4sizeEv called 0 returned 0% blocks executed 0%
+    #####:  160:		size_t size() const override
+        -:  161:		{
+    #####:  162:			return static_cast<size_t>(length_);
+        -:  163:		}
+        -:  164:
+function _ZNK5hical13FileWriteNode6isFileEv called 0 returned 0% blocks executed 0%
+    #####:  165:		bool isFile() const override
+        -:  166:		{
+    #####:  167:			return true;
+        -:  168:		}
+        -:  169:
+function _ZNK5hical13FileWriteNode4pathB5cxx11Ev called 0 returned 0% blocks executed 0%
+    #####:  170:		const std::filesystem::path& path() const
+        -:  171:		{
+    #####:  172:			return path_;
+        -:  173:		}
+        -:  174:
+function _ZNK5hical13FileWriteNode6offsetEv called 0 returned 0% blocks executed 0%
+    #####:  175:		int64_t offset() const
+        -:  176:		{
+    #####:  177:			return offset_;
+        -:  178:		}
+        -:  179:
+function _ZNK5hical13FileWriteNode6lengthEv called 0 returned 0% blocks executed 0%
+    #####:  180:		int64_t length() const
+        -:  181:		{
+    #####:  182:			return length_;
+        -:  183:		}
+        -:  184:
+        -:  185:	private:
+        -:  186:		std::filesystem::path path_;
+        -:  187:		int64_t offset_;
+        -:  188:		int64_t length_;
+        -:  189:	};
+        -:  190:
+        -:  191:} // namespace hical

@@ -1,0 +1,130 @@
+        -:    0:Source:/usr/include/boost/asio/ssl/error.hpp
+        -:    1://
+        -:    2:// ssl/error.hpp
+        -:    3:// ~~~~~~~~~~~~~
+        -:    4://
+        -:    5:// Copyright (c) 2003-2023 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+        -:    6://
+        -:    7:// Distributed under the Boost Software License, Version 1.0. (See accompanying
+        -:    8:// file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+        -:    9://
+        -:   10:
+        -:   11:#ifndef BOOST_ASIO_SSL_ERROR_HPP
+        -:   12:#define BOOST_ASIO_SSL_ERROR_HPP
+        -:   13:
+        -:   14:#if defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   15:# pragma once
+        -:   16:#endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   17:
+        -:   18:#include <boost/asio/detail/config.hpp>
+        -:   19:#include <boost/system/error_code.hpp>
+        -:   20:#include <boost/asio/ssl/detail/openssl_types.hpp>
+        -:   21:
+        -:   22:#include <boost/asio/detail/push_options.hpp>
+        -:   23:
+        -:   24:namespace boost {
+        -:   25:namespace asio {
+        -:   26:namespace error {
+        -:   27:
+        -:   28:enum ssl_errors
+        -:   29:{
+        -:   30:  // Error numbers are those produced by openssl.
+        -:   31:};
+        -:   32:
+        -:   33:extern BOOST_ASIO_DECL
+        -:   34:const boost::system::error_category& get_ssl_category();
+        -:   35:
+        -:   36:static const boost::system::error_category&
+        -:   37:  ssl_category BOOST_ASIO_UNUSED_VARIABLE
+        -:   38:  = boost::asio::error::get_ssl_category();
+        -:   39:
+        -:   40:} // namespace error
+        -:   41:namespace ssl {
+        -:   42:namespace error {
+        -:   43:
+        -:   44:enum stream_errors
+        -:   45:{
+        -:   46:#if defined(GENERATING_DOCUMENTATION)
+        -:   47:  /// The underlying stream closed before the ssl stream gracefully shut down.
+        -:   48:  stream_truncated,
+        -:   49:
+        -:   50:  /// The underlying SSL library returned a system error without providing
+        -:   51:  /// further information.
+        -:   52:  unspecified_system_error,
+        -:   53:
+        -:   54:  /// The underlying SSL library generated an unexpected result from a function
+        -:   55:  /// call.
+        -:   56:  unexpected_result
+        -:   57:#else // defined(GENERATING_DOCUMENTATION)
+        -:   58:# if (OPENSSL_VERSION_NUMBER < 0x10100000L) \
+        -:   59:    && !defined(OPENSSL_IS_BORINGSSL) \
+        -:   60:    && !defined(BOOST_ASIO_USE_WOLFSSL)
+        -:   61:  stream_truncated = ERR_PACK(ERR_LIB_SSL, 0, SSL_R_SHORT_READ),
+        -:   62:# else
+        -:   63:  stream_truncated = 1,
+        -:   64:# endif
+        -:   65:  unspecified_system_error = 2,
+        -:   66:  unexpected_result = 3
+        -:   67:#endif // defined(GENERATING_DOCUMENTATION)
+        -:   68:};
+        -:   69:
+        -:   70:extern BOOST_ASIO_DECL
+        -:   71:const boost::system::error_category& get_stream_category();
+        -:   72:
+        -:   73:static const boost::system::error_category&
+        -:   74:  stream_category BOOST_ASIO_UNUSED_VARIABLE
+        -:   75:  = boost::asio::ssl::error::get_stream_category();
+        -:   76:
+        -:   77:} // namespace error
+        -:   78:} // namespace ssl
+        -:   79:} // namespace asio
+        -:   80:} // namespace boost
+        -:   81:
+        -:   82:namespace boost {
+        -:   83:namespace system {
+        -:   84:
+        -:   85:template<> struct is_error_code_enum<boost::asio::error::ssl_errors>
+        -:   86:{
+        -:   87:  static const bool value = true;
+        -:   88:};
+        -:   89:
+        -:   90:template<> struct is_error_code_enum<boost::asio::ssl::error::stream_errors>
+        -:   91:{
+        -:   92:  static const bool value = true;
+        -:   93:};
+        -:   94:
+        -:   95:} // namespace system
+        -:   96:} // namespace boost
+        -:   97:
+        -:   98:namespace boost {
+        -:   99:namespace asio {
+        -:  100:namespace error {
+        -:  101:
+        -:  102:inline boost::system::error_code make_error_code(ssl_errors e)
+        -:  103:{
+        -:  104:  return boost::system::error_code(
+        -:  105:      static_cast<int>(e), get_ssl_category());
+        -:  106:}
+        -:  107:
+        -:  108:} // namespace error
+        -:  109:namespace ssl {
+        -:  110:namespace error {
+        -:  111:
+    #####:  112:inline boost::system::error_code make_error_code(stream_errors e)
+        -:  113:{
+        -:  114:  return boost::system::error_code(
+    #####:  115:      static_cast<int>(e), get_stream_category());
+        -:  116:}
+        -:  117:
+        -:  118:} // namespace error
+        -:  119:} // namespace ssl
+        -:  120:} // namespace asio
+        -:  121:} // namespace boost
+        -:  122:
+        -:  123:#include <boost/asio/detail/pop_options.hpp>
+        -:  124:
+        -:  125:#if defined(BOOST_ASIO_HEADER_ONLY)
+        -:  126:# include <boost/asio/ssl/impl/error.ipp>
+        -:  127:#endif // defined(BOOST_ASIO_HEADER_ONLY)
+        -:  128:
+        -:  129:#endif // BOOST_ASIO_SSL_ERROR_HPP

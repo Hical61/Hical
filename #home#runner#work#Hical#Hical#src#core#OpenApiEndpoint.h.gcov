@@ -1,0 +1,337 @@
+        -:    0:Source:/home/runner/work/Hical/Hical/src/core/OpenApiEndpoint.h
+        -:    1:#pragma once
+        -:    2:
+        -:    3:/**
+        -:    4: * @brief OpenAPI 端点暴露 + Swagger UI
+        -:    5: * 提供 serveOpenApi() 一键注册函数，
+        -:    6: * 在 Router 上注册 /openapi.json 和 /docs 两个端点。
+        -:    7: * 用法：
+        -:    8: *   auto doc = std::make_shared<OpenApiDocument>(registry, config);
+        -:    9: *   serveOpenApi(server.router(), doc);
+        -:   10: *   // GET /openapi.json → 返回 OpenAPI 3.0 JSON
+        -:   11: *   // GET /docs → 返回 Swagger UI HTML
+        -:   12: */
+        -:   13:
+        -:   14:#include "OpenApiDocument.h"
+        -:   15:#include "Router.h"
+        -:   16:#include "HttpResponse.h"
+        -:   17:#include <memory>
+        -:   18:#include <string>
+        -:   19:
+        -:   20:namespace hical::meta::openapi
+        -:   21:{
+        -:   22:
+        -:   23:	/**
+        -:   24:	 * @brief 一键注册 OpenAPI JSON 端点 + Swagger UI 页面
+        -:   25:	 * @param router 路由器实例
+        -:   26:	 * @param document OpenAPI 文档生成器（shared_ptr 保证生命周期）
+        -:   27:	 * @param jsonPath JSON 端点路径（默认 /openapi.json）
+        -:   28:	 * @param uiPath Swagger UI 页面路径（默认 /docs）
+        -:   29:	 */
+       2*:   30:	inline void serveOpenApi(Router& router,
+        -:   31:							 std::shared_ptr<OpenApiDocument> document,
+        -:   32:							 const std::string& jsonPath = "/openapi.json",
+        -:   33:							 const std::string& uiPath = "/docs")
+        -:   34:	{
+        -:   35:		// JSON 端点
+       2*:   36:		router.get(jsonPath,
+       4*:   37:				   [document](const HttpRequest&) -> HttpResponse
+        -:   38:				   {
+    #####:   39:					   HttpResponse res;
+    #####:   40:					   res.setStatus(HttpStatusCode::hOk);
+    #####:   41:					   res.setHeader("Content-Type", "application/json; charset=utf-8");
+        -:   42:					   // 不硬编码 CORS 头，遵循用户配置的 CORS 中间件策略
+    #####:   43:					   res.setBody(document->generateString());
+    #####:   44:					   return res;
+    =====:   45:				   });
+        -:   46:
+        -:   47:		// Swagger UI（通过 CDN 引用 swagger-ui-dist，零本地依赖）
+        -:   48:		// 使用 Boost.JSON serialize 安全转义 jsonPath 防止 JS 注入
+       2*:   49:		std::string safeJsonPath = boost::json::serialize(boost::json::value(jsonPath));
+        -:   50:		// NOLINTBEGIN(cppcoreguidelines-avoid-magic-numbers)
+        -:   51:		std::string html = "<!DOCTYPE html>\n"
+        -:   52:						   "<html lang=\"en\">\n"
+        -:   53:						   "<head>\n"
+        -:   54:						   "  <meta charset=\"UTF-8\">\n"
+        -:   55:						   "  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n"
+        -:   56:						   "  <title>API Documentation</title>\n"
+        -:   57:						   "  <link rel=\"stylesheet\" "
+        -:   58:						   "href=\"https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.18.2/swagger-ui.css\" "
+        -:   59:						   "integrity=\"sha384-rcbEi6xgdPk0iWkAQzT2F3FeBJXdG+ydrawGlfHAFIZG7wU6aKbQaRewysYpmrlW\" "
+        -:   60:						   "crossorigin=\"anonymous\">\n"
+        -:   61:						   "  <style>html { box-sizing: border-box; overflow-y: scroll; } "
+        -:   62:						   "*, *::before, *::after { box-sizing: inherit; } "
+        -:   63:						   "body { margin: 0; background: #fafafa; }</style>\n"
+        -:   64:						   "</head>\n"
+        -:   65:						   "<body>\n"
+        -:   66:						   "  <div id=\"swagger-ui\"></div>\n"
+        -:   67:						   "  <script src=\"https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.18.2/swagger-ui-bundle.js\" "
+        -:   68:						   "integrity=\"sha384-NXtFPpN61oWCuN4D42K6Zd5Rt2+uxeIT36R7kpXBuY9tLnZorzrJ4ykpqwJfgjpZ\" "
+        -:   69:						   "crossorigin=\"anonymous\">"
+        -:   70:						   "</script>\n"
+        -:   71:						   "  <script>\n"
+        -:   72:						   "    SwaggerUIBundle({\n"
+        -:   73:						   "      url: "
+       4*:   74:						   + safeJsonPath
+        -:   75:						   + ",\n"
+        -:   76:							 "      dom_id: \"#swagger-ui\",\n"
+        -:   77:							 "      presets: [\n"
+        -:   78:							 "        SwaggerUIBundle.presets.apis,\n"
+        -:   79:							 "        SwaggerUIBundle.SwaggerUIStandalonePreset\n"
+        -:   80:							 "      ],\n"
+        -:   81:							 "      layout: \"StandaloneLayout\"\n"
+        -:   82:							 "    });\n"
+        -:   83:							 "  </script>\n"
+        -:   84:							 "</body>\n"
+       2*:   85:							 "</html>\n";
+        -:   86:		// NOLINTEND(cppcoreguidelines-avoid-magic-numbers)
+        -:   87:
+       2*:   88:		router.get(uiPath,
+       4*:   89:				   [html = std::move(html)](const HttpRequest&) -> HttpResponse
+        -:   90:				   {
+    #####:   91:					   HttpResponse res;
+    #####:   92:					   res.setStatus(HttpStatusCode::hOk);
+    #####:   93:					   res.setHeader("Content-Type", "text/html; charset=utf-8");
+    #####:   94:					   res.setBody(html);
+    #####:   95:					   return res;
+    =====:   96:				   });
+       2*:   97:	}
+------------------
+_ZN5hical4meta7openapi12serveOpenApiERNS_6RouterESt10shared_ptrINS1_15OpenApiDocumentEERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEESE_:
+function _ZN5hical4meta7openapi12serveOpenApiERNS_6RouterESt10shared_ptrINS1_15OpenApiDocumentEERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEESE_ called 2 returned 100% blocks executed 47%
+        2:   30:	inline void serveOpenApi(Router& router,
+        -:   31:							 std::shared_ptr<OpenApiDocument> document,
+        -:   32:							 const std::string& jsonPath = "/openapi.json",
+        -:   33:							 const std::string& uiPath = "/docs")
+        -:   34:	{
+        -:   35:		// JSON 端点
+        2:   36:		router.get(jsonPath,
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+        4:   37:				   [document](const HttpRequest&) -> HttpResponse
+call    0 returned 100%
+call    1 returned 100%
+call    2 never executed
+        -:   38:				   {
+        -:   39:					   HttpResponse res;
+        -:   40:					   res.setStatus(HttpStatusCode::hOk);
+        -:   41:					   res.setHeader("Content-Type", "application/json; charset=utf-8");
+        -:   42:					   // 不硬编码 CORS 头，遵循用户配置的 CORS 中间件策略
+        -:   43:					   res.setBody(document->generateString());
+        -:   44:					   return res;
+        -:   45:				   });
+        -:   46:
+        -:   47:		// Swagger UI（通过 CDN 引用 swagger-ui-dist，零本地依赖）
+        -:   48:		// 使用 Boost.JSON serialize 安全转义 jsonPath 防止 JS 注入
+        2:   49:		std::string safeJsonPath = boost::json::serialize(boost::json::value(jsonPath));
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+call    8 returned 100%
+call    9 returned 100%
+call   10 never executed
+call   11 never executed
+        -:   50:		// NOLINTBEGIN(cppcoreguidelines-avoid-magic-numbers)
+        -:   51:		std::string html = "<!DOCTYPE html>\n"
+        -:   52:						   "<html lang=\"en\">\n"
+        -:   53:						   "<head>\n"
+        -:   54:						   "  <meta charset=\"UTF-8\">\n"
+        -:   55:						   "  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n"
+        -:   56:						   "  <title>API Documentation</title>\n"
+        -:   57:						   "  <link rel=\"stylesheet\" "
+        -:   58:						   "href=\"https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.18.2/swagger-ui.css\" "
+        -:   59:						   "integrity=\"sha384-rcbEi6xgdPk0iWkAQzT2F3FeBJXdG+ydrawGlfHAFIZG7wU6aKbQaRewysYpmrlW\" "
+        -:   60:						   "crossorigin=\"anonymous\">\n"
+        -:   61:						   "  <style>html { box-sizing: border-box; overflow-y: scroll; } "
+        -:   62:						   "*, *::before, *::after { box-sizing: inherit; } "
+        -:   63:						   "body { margin: 0; background: #fafafa; }</style>\n"
+        -:   64:						   "</head>\n"
+        -:   65:						   "<body>\n"
+        -:   66:						   "  <div id=\"swagger-ui\"></div>\n"
+        -:   67:						   "  <script src=\"https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.18.2/swagger-ui-bundle.js\" "
+        -:   68:						   "integrity=\"sha384-NXtFPpN61oWCuN4D42K6Zd5Rt2+uxeIT36R7kpXBuY9tLnZorzrJ4ykpqwJfgjpZ\" "
+        -:   69:						   "crossorigin=\"anonymous\">"
+        -:   70:						   "</script>\n"
+        -:   71:						   "  <script>\n"
+        -:   72:						   "    SwaggerUIBundle({\n"
+        -:   73:						   "      url: "
+        4:   74:						   + safeJsonPath
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 never executed
+        -:   75:						   + ",\n"
+        -:   76:							 "      dom_id: \"#swagger-ui\",\n"
+        -:   77:							 "      presets: [\n"
+        -:   78:							 "        SwaggerUIBundle.presets.apis,\n"
+        -:   79:							 "        SwaggerUIBundle.SwaggerUIStandalonePreset\n"
+        -:   80:							 "      ],\n"
+        -:   81:							 "      layout: \"StandaloneLayout\"\n"
+        -:   82:							 "    });\n"
+        -:   83:							 "  </script>\n"
+        -:   84:							 "</body>\n"
+        2:   85:							 "</html>\n";
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:   86:		// NOLINTEND(cppcoreguidelines-avoid-magic-numbers)
+        -:   87:
+        2:   88:		router.get(uiPath,
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+        4:   89:				   [html = std::move(html)](const HttpRequest&) -> HttpResponse
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 never executed
+        -:   90:				   {
+        -:   91:					   HttpResponse res;
+        -:   92:					   res.setStatus(HttpStatusCode::hOk);
+        -:   93:					   res.setHeader("Content-Type", "text/html; charset=utf-8");
+        -:   94:					   res.setBody(html);
+        -:   95:					   return res;
+        -:   96:				   });
+        2:   97:	}
+call    0 returned 100%
+call    1 returned 100%
+call    2 never executed
+call    3 never executed
+------------------
+_ZN5hical4meta7openapi12serveOpenApiERNS_6RouterESt10shared_ptrINS1_15OpenApiDocumentEERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEESE_:
+function _ZN5hical4meta7openapi12serveOpenApiERNS_6RouterESt10shared_ptrINS1_15OpenApiDocumentEERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEESE_ called 0 returned 0% blocks executed 0%
+    #####:   30:	inline void serveOpenApi(Router& router,
+        -:   31:							 std::shared_ptr<OpenApiDocument> document,
+        -:   32:							 const std::string& jsonPath = "/openapi.json",
+        -:   33:							 const std::string& uiPath = "/docs")
+        -:   34:	{
+        -:   35:		// JSON 端点
+    #####:   36:		router.get(jsonPath,
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+call    6 never executed
+call    7 never executed
+    #####:   37:				   [document](const HttpRequest&) -> HttpResponse
+call    0 never executed
+call    1 never executed
+call    2 never executed
+        -:   38:				   {
+        -:   39:					   HttpResponse res;
+        -:   40:					   res.setStatus(HttpStatusCode::hOk);
+        -:   41:					   res.setHeader("Content-Type", "application/json; charset=utf-8");
+        -:   42:					   // 不硬编码 CORS 头，遵循用户配置的 CORS 中间件策略
+        -:   43:					   res.setBody(document->generateString());
+        -:   44:					   return res;
+        -:   45:				   });
+        -:   46:
+        -:   47:		// Swagger UI（通过 CDN 引用 swagger-ui-dist，零本地依赖）
+        -:   48:		// 使用 Boost.JSON serialize 安全转义 jsonPath 防止 JS 注入
+    #####:   49:		std::string safeJsonPath = boost::json::serialize(boost::json::value(jsonPath));
+call    0 never executed
+call    1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed (throw)
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed (throw)
+call    8 never executed
+call    9 never executed
+call   10 never executed
+call   11 never executed
+        -:   50:		// NOLINTBEGIN(cppcoreguidelines-avoid-magic-numbers)
+        -:   51:		std::string html = "<!DOCTYPE html>\n"
+        -:   52:						   "<html lang=\"en\">\n"
+        -:   53:						   "<head>\n"
+        -:   54:						   "  <meta charset=\"UTF-8\">\n"
+        -:   55:						   "  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n"
+        -:   56:						   "  <title>API Documentation</title>\n"
+        -:   57:						   "  <link rel=\"stylesheet\" "
+        -:   58:						   "href=\"https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.18.2/swagger-ui.css\" "
+        -:   59:						   "integrity=\"sha384-rcbEi6xgdPk0iWkAQzT2F3FeBJXdG+ydrawGlfHAFIZG7wU6aKbQaRewysYpmrlW\" "
+        -:   60:						   "crossorigin=\"anonymous\">\n"
+        -:   61:						   "  <style>html { box-sizing: border-box; overflow-y: scroll; } "
+        -:   62:						   "*, *::before, *::after { box-sizing: inherit; } "
+        -:   63:						   "body { margin: 0; background: #fafafa; }</style>\n"
+        -:   64:						   "</head>\n"
+        -:   65:						   "<body>\n"
+        -:   66:						   "  <div id=\"swagger-ui\"></div>\n"
+        -:   67:						   "  <script src=\"https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.18.2/swagger-ui-bundle.js\" "
+        -:   68:						   "integrity=\"sha384-NXtFPpN61oWCuN4D42K6Zd5Rt2+uxeIT36R7kpXBuY9tLnZorzrJ4ykpqwJfgjpZ\" "
+        -:   69:						   "crossorigin=\"anonymous\">"
+        -:   70:						   "</script>\n"
+        -:   71:						   "  <script>\n"
+        -:   72:						   "    SwaggerUIBundle({\n"
+        -:   73:						   "      url: "
+    #####:   74:						   + safeJsonPath
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+call    4 never executed
+        -:   75:						   + ",\n"
+        -:   76:							 "      dom_id: \"#swagger-ui\",\n"
+        -:   77:							 "      presets: [\n"
+        -:   78:							 "        SwaggerUIBundle.presets.apis,\n"
+        -:   79:							 "        SwaggerUIBundle.SwaggerUIStandalonePreset\n"
+        -:   80:							 "      ],\n"
+        -:   81:							 "      layout: \"StandaloneLayout\"\n"
+        -:   82:							 "    });\n"
+        -:   83:							 "  </script>\n"
+        -:   84:							 "</body>\n"
+    #####:   85:							 "</html>\n";
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:   86:		// NOLINTEND(cppcoreguidelines-avoid-magic-numbers)
+        -:   87:
+    #####:   88:		router.get(uiPath,
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+call    6 never executed
+call    7 never executed
+    #####:   89:				   [html = std::move(html)](const HttpRequest&) -> HttpResponse
+call    0 never executed
+call    1 never executed
+call    2 never executed
+call    3 never executed
+        -:   90:				   {
+        -:   91:					   HttpResponse res;
+        -:   92:					   res.setStatus(HttpStatusCode::hOk);
+        -:   93:					   res.setHeader("Content-Type", "text/html; charset=utf-8");
+        -:   94:					   res.setBody(html);
+        -:   95:					   return res;
+        -:   96:				   });
+    #####:   97:	}
+call    0 never executed
+call    1 never executed
+call    2 never executed
+call    3 never executed
+------------------
+        -:   98:
+        -:   99:} // namespace hical::meta::openapi

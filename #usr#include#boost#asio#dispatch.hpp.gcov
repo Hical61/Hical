@@ -1,0 +1,446 @@
+        -:    0:Source:/usr/include/boost/asio/dispatch.hpp
+        -:    1://
+        -:    2:// dispatch.hpp
+        -:    3:// ~~~~~~~~~~~~
+        -:    4://
+        -:    5:// Copyright (c) 2003-2023 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+        -:    6://
+        -:    7:// Distributed under the Boost Software License, Version 1.0. (See accompanying
+        -:    8:// file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+        -:    9://
+        -:   10:
+        -:   11:#ifndef BOOST_ASIO_DISPATCH_HPP
+        -:   12:#define BOOST_ASIO_DISPATCH_HPP
+        -:   13:
+        -:   14:#if defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   15:# pragma once
+        -:   16:#endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   17:
+        -:   18:#include <boost/asio/detail/config.hpp>
+        -:   19:#include <boost/asio/async_result.hpp>
+        -:   20:#include <boost/asio/detail/initiate_dispatch.hpp>
+        -:   21:#include <boost/asio/detail/type_traits.hpp>
+        -:   22:#include <boost/asio/execution_context.hpp>
+        -:   23:#include <boost/asio/execution/executor.hpp>
+        -:   24:#include <boost/asio/is_executor.hpp>
+        -:   25:
+        -:   26:#include <boost/asio/detail/push_options.hpp>
+        -:   27:
+        -:   28:namespace boost {
+        -:   29:namespace asio {
+        -:   30:
+        -:   31:/// Submits a completion token or function object for execution.
+        -:   32:/**
+        -:   33: * This function submits an object for execution using the object's associated
+        -:   34: * executor. The function object may be called from the current thread prior to
+        -:   35: * returning from <tt>dispatch()</tt>. Otherwise, it is queued for execution.
+        -:   36: *
+        -:   37: * @param token The @ref completion_token that will be used to produce a
+        -:   38: * completion handler. The function signature of the completion handler must be:
+        -:   39: * @code void handler(); @endcode
+        -:   40: *
+        -:   41: * @returns This function returns <tt>async_initiate<NullaryToken,
+        -:   42: * void()>(Init{}, token)</tt>, where @c Init is a function object type defined
+        -:   43: * as:
+        -:   44: *
+        -:   45: * @code class Init
+        -:   46: * {
+        -:   47: * public:
+        -:   48: *   template <typename CompletionHandler>
+        -:   49: *     void operator()(CompletionHandler&& completion_handler) const;
+        -:   50: * }; @endcode
+        -:   51: *
+        -:   52: * The function call operator of @c Init:
+        -:   53: *
+        -:   54: * @li Obtains the handler's associated executor object @c ex of type @c Ex by
+        -:   55: * performing @code auto ex = get_associated_executor(handler); @endcode
+        -:   56: *
+        -:   57: * @li Obtains the handler's associated allocator object @c alloc by performing
+        -:   58: * @code auto alloc = get_associated_allocator(handler); @endcode
+        -:   59: *
+        -:   60: * @li If <tt>execution::is_executor<Ex>::value</tt> is true, performs
+        -:   61: * @code prefer(ex, execution::allocator(alloc)).execute(
+        -:   62: *     std::forward<CompletionHandler>(completion_handler)); @endcode
+        -:   63: *
+        -:   64: * @li If <tt>execution::is_executor<Ex>::value</tt> is false, performs
+        -:   65: * @code ex.dispatch(
+        -:   66: *     std::forward<CompletionHandler>(completion_handler),
+        -:   67: *     alloc); @endcode
+        -:   68: *
+        -:   69: * @par Completion Signature
+        -:   70: * @code void() @endcode
+        -:   71: */
+        -:   72:template <BOOST_ASIO_COMPLETION_TOKEN_FOR(void()) NullaryToken>
+   10025*:   73:BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(NullaryToken, void()) dispatch(
+        -:   74:    BOOST_ASIO_MOVE_ARG(NullaryToken) token)
+        -:   75:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:   76:    async_initiate<NullaryToken, void()>(
+        -:   77:        declval<detail::initiate_dispatch>(), token)))
+        -:   78:{
+   10025*:   79:  return async_initiate<NullaryToken, void()>(
+    9938*:   80:      detail::initiate_dispatch(), token);
+        -:   81:}
+------------------
+_ZN5boost4asio8dispatchINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEEDaOT_:
+function _ZN5boost4asio8dispatchINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEEDaOT_ called 9 returned 100% blocks executed 100%
+        9:   73:BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(NullaryToken, void()) dispatch(
+        -:   74:    BOOST_ASIO_MOVE_ARG(NullaryToken) token)
+        -:   75:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:   76:    async_initiate<NullaryToken, void()>(
+        -:   77:        declval<detail::initiate_dispatch>(), token)))
+        -:   78:{
+        9:   79:  return async_initiate<NullaryToken, void()>(
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        9:   80:      detail::initiate_dispatch(), token);
+        -:   81:}
+------------------
+_ZN5boost4asio8dispatchINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEEDaOT_:
+function _ZN5boost4asio8dispatchINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEEDaOT_ called 8 returned 100% blocks executed 100%
+        8:   73:BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(NullaryToken, void()) dispatch(
+        -:   74:    BOOST_ASIO_MOVE_ARG(NullaryToken) token)
+        -:   75:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:   76:    async_initiate<NullaryToken, void()>(
+        -:   77:        declval<detail::initiate_dispatch>(), token)))
+        -:   78:{
+        8:   79:  return async_initiate<NullaryToken, void()>(
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        8:   80:      detail::initiate_dispatch(), token);
+        -:   81:}
+------------------
+_ZN5boost4asio8dispatchINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEEDaOT_:
+function _ZN5boost4asio8dispatchINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEEDaOT_ called 0 returned 0% blocks executed 0%
+    #####:   73:BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(NullaryToken, void()) dispatch(
+        -:   74:    BOOST_ASIO_MOVE_ARG(NullaryToken) token)
+        -:   75:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:   76:    async_initiate<NullaryToken, void()>(
+        -:   77:        declval<detail::initiate_dispatch>(), token)))
+        -:   78:{
+    #####:   79:  return async_initiate<NullaryToken, void()>(
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:   80:      detail::initiate_dispatch(), token);
+        -:   81:}
+------------------
+_ZN5boost4asio8dispatchINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEEDaOT_:
+function _ZN5boost4asio8dispatchINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEEDaOT_ called 118 returned 100% blocks executed 100%
+      118:   73:BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(NullaryToken, void()) dispatch(
+        -:   74:    BOOST_ASIO_MOVE_ARG(NullaryToken) token)
+        -:   75:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:   76:    async_initiate<NullaryToken, void()>(
+        -:   77:        declval<detail::initiate_dispatch>(), token)))
+        -:   78:{
+      118:   79:  return async_initiate<NullaryToken, void()>(
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+      118:   80:      detail::initiate_dispatch(), token);
+        -:   81:}
+------------------
+_ZN5boost4asio8dispatchINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEEDaOT_:
+function _ZN5boost4asio8dispatchINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEEDaOT_ called 0 returned 0% blocks executed 0%
+    #####:   73:BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(NullaryToken, void()) dispatch(
+        -:   74:    BOOST_ASIO_MOVE_ARG(NullaryToken) token)
+        -:   75:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:   76:    async_initiate<NullaryToken, void()>(
+        -:   77:        declval<detail::initiate_dispatch>(), token)))
+        -:   78:{
+    #####:   79:  return async_initiate<NullaryToken, void()>(
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:   80:      detail::initiate_dispatch(), token);
+        -:   81:}
+------------------
+_ZN5boost4asio8dispatchINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEEDaOT_:
+function _ZN5boost4asio8dispatchINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEEDaOT_ called 9811 returned 99% blocks executed 100%
+     9811:   73:BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(NullaryToken, void()) dispatch(
+        -:   74:    BOOST_ASIO_MOVE_ARG(NullaryToken) token)
+        -:   75:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:   76:    async_initiate<NullaryToken, void()>(
+        -:   77:        declval<detail::initiate_dispatch>(), token)))
+        -:   78:{
+     9811:   79:  return async_initiate<NullaryToken, void()>(
+call    0 returned 99%
+branch  1 taken 99% (fallthrough)
+branch  2 taken 0% (throw)
+     9724:   80:      detail::initiate_dispatch(), token);
+        -:   81:}
+------------------
+_ZN5boost4asio8dispatchINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEEDaOT_:
+function _ZN5boost4asio8dispatchINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEEDaOT_ called 18 returned 100% blocks executed 100%
+       18:   73:BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(NullaryToken, void()) dispatch(
+        -:   74:    BOOST_ASIO_MOVE_ARG(NullaryToken) token)
+        -:   75:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:   76:    async_initiate<NullaryToken, void()>(
+        -:   77:        declval<detail::initiate_dispatch>(), token)))
+        -:   78:{
+       18:   79:  return async_initiate<NullaryToken, void()>(
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       18:   80:      detail::initiate_dispatch(), token);
+        -:   81:}
+------------------
+_ZN5boost4asio8dispatchINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEEDaOT_:
+function _ZN5boost4asio8dispatchINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEEDaOT_ called 9 returned 100% blocks executed 100%
+        9:   73:BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(NullaryToken, void()) dispatch(
+        -:   74:    BOOST_ASIO_MOVE_ARG(NullaryToken) token)
+        -:   75:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:   76:    async_initiate<NullaryToken, void()>(
+        -:   77:        declval<detail::initiate_dispatch>(), token)))
+        -:   78:{
+        9:   79:  return async_initiate<NullaryToken, void()>(
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        9:   80:      detail::initiate_dispatch(), token);
+        -:   81:}
+------------------
+_ZN5boost4asio8dispatchINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEEDaOT_:
+function _ZN5boost4asio8dispatchINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEEDaOT_ called 5 returned 100% blocks executed 100%
+        5:   73:BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(NullaryToken, void()) dispatch(
+        -:   74:    BOOST_ASIO_MOVE_ARG(NullaryToken) token)
+        -:   75:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:   76:    async_initiate<NullaryToken, void()>(
+        -:   77:        declval<detail::initiate_dispatch>(), token)))
+        -:   78:{
+        5:   79:  return async_initiate<NullaryToken, void()>(
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        5:   80:      detail::initiate_dispatch(), token);
+        -:   81:}
+------------------
+_ZN5boost4asio8dispatchINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEEDaOT_:
+function _ZN5boost4asio8dispatchINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEEDaOT_ called 14 returned 100% blocks executed 100%
+       14:   73:BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(NullaryToken, void()) dispatch(
+        -:   74:    BOOST_ASIO_MOVE_ARG(NullaryToken) token)
+        -:   75:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:   76:    async_initiate<NullaryToken, void()>(
+        -:   77:        declval<detail::initiate_dispatch>(), token)))
+        -:   78:{
+       14:   79:  return async_initiate<NullaryToken, void()>(
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       14:   80:      detail::initiate_dispatch(), token);
+        -:   81:}
+------------------
+_ZN5boost4asio8dispatchINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEEDaOT_:
+function _ZN5boost4asio8dispatchINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEEDaOT_ called 16 returned 100% blocks executed 100%
+       16:   73:BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(NullaryToken, void()) dispatch(
+        -:   74:    BOOST_ASIO_MOVE_ARG(NullaryToken) token)
+        -:   75:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:   76:    async_initiate<NullaryToken, void()>(
+        -:   77:        declval<detail::initiate_dispatch>(), token)))
+        -:   78:{
+       16:   79:  return async_initiate<NullaryToken, void()>(
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       16:   80:      detail::initiate_dispatch(), token);
+        -:   81:}
+------------------
+_ZN5boost4asio8dispatchINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEEDaOT_:
+function _ZN5boost4asio8dispatchINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEEDaOT_ called 5 returned 100% blocks executed 100%
+        5:   73:BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(NullaryToken, void()) dispatch(
+        -:   74:    BOOST_ASIO_MOVE_ARG(NullaryToken) token)
+        -:   75:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:   76:    async_initiate<NullaryToken, void()>(
+        -:   77:        declval<detail::initiate_dispatch>(), token)))
+        -:   78:{
+        5:   79:  return async_initiate<NullaryToken, void()>(
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        5:   80:      detail::initiate_dispatch(), token);
+        -:   81:}
+------------------
+_ZN5boost4asio8dispatchINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEEDaOT_:
+function _ZN5boost4asio8dispatchINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEEDaOT_ called 12 returned 100% blocks executed 100%
+       12:   73:BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(NullaryToken, void()) dispatch(
+        -:   74:    BOOST_ASIO_MOVE_ARG(NullaryToken) token)
+        -:   75:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:   76:    async_initiate<NullaryToken, void()>(
+        -:   77:        declval<detail::initiate_dispatch>(), token)))
+        -:   78:{
+       12:   79:  return async_initiate<NullaryToken, void()>(
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       12:   80:      detail::initiate_dispatch(), token);
+        -:   81:}
+------------------
+_ZN5boost4asio8dispatchINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEEDaOT_:
+function _ZN5boost4asio8dispatchINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEEDaOT_ called 0 returned 0% blocks executed 0%
+    #####:   73:BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(NullaryToken, void()) dispatch(
+        -:   74:    BOOST_ASIO_MOVE_ARG(NullaryToken) token)
+        -:   75:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:   76:    async_initiate<NullaryToken, void()>(
+        -:   77:        declval<detail::initiate_dispatch>(), token)))
+        -:   78:{
+    #####:   79:  return async_initiate<NullaryToken, void()>(
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:   80:      detail::initiate_dispatch(), token);
+        -:   81:}
+------------------
+_ZN5boost4asio8dispatchINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEEDaOT_:
+function _ZN5boost4asio8dispatchINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEEDaOT_ called 0 returned 0% blocks executed 0%
+    #####:   73:BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(NullaryToken, void()) dispatch(
+        -:   74:    BOOST_ASIO_MOVE_ARG(NullaryToken) token)
+        -:   75:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:   76:    async_initiate<NullaryToken, void()>(
+        -:   77:        declval<detail::initiate_dispatch>(), token)))
+        -:   78:{
+    #####:   79:  return async_initiate<NullaryToken, void()>(
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:   80:      detail::initiate_dispatch(), token);
+        -:   81:}
+------------------
+_ZN5boost4asio8dispatchINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEEDaOT_:
+function _ZN5boost4asio8dispatchINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEEDaOT_ called 0 returned 0% blocks executed 0%
+    #####:   73:BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(NullaryToken, void()) dispatch(
+        -:   74:    BOOST_ASIO_MOVE_ARG(NullaryToken) token)
+        -:   75:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:   76:    async_initiate<NullaryToken, void()>(
+        -:   77:        declval<detail::initiate_dispatch>(), token)))
+        -:   78:{
+    #####:   79:  return async_initiate<NullaryToken, void()>(
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:   80:      detail::initiate_dispatch(), token);
+        -:   81:}
+------------------
+        -:   82:
+        -:   83:/// Submits a completion token or function object for execution.
+        -:   84:/**
+        -:   85: * This function submits an object for execution using the specified executor.
+        -:   86: * The function object may be called from the current thread prior to returning
+        -:   87: * from <tt>dispatch()</tt>. Otherwise, it is queued for execution.
+        -:   88: *
+        -:   89: * @param ex The target executor.
+        -:   90: *
+        -:   91: * @param token The @ref completion_token that will be used to produce a
+        -:   92: * completion handler. The function signature of the completion handler must be:
+        -:   93: * @code void handler(); @endcode
+        -:   94: *
+        -:   95: * @returns This function returns <tt>async_initiate<NullaryToken,
+        -:   96: * void()>(Init{ex}, token)</tt>, where @c Init is a function object type
+        -:   97: * defined as:
+        -:   98: *
+        -:   99: * @code class Init
+        -:  100: * {
+        -:  101: * public:
+        -:  102: *   using executor_type = Executor;
+        -:  103: *   explicit Init(const Executor& ex) : ex_(ex) {}
+        -:  104: *   executor_type get_executor() const noexcept { return ex_; }
+        -:  105: *   template <typename CompletionHandler>
+        -:  106: *     void operator()(CompletionHandler&& completion_handler) const;
+        -:  107: * private:
+        -:  108: *   Executor ex_; // exposition only
+        -:  109: * }; @endcode
+        -:  110: *
+        -:  111: * The function call operator of @c Init:
+        -:  112: *
+        -:  113: * @li Obtains the handler's associated executor object @c ex1 of type @c Ex1 by
+        -:  114: * performing @code auto ex1 = get_associated_executor(handler, ex); @endcode
+        -:  115: *
+        -:  116: * @li Obtains the handler's associated allocator object @c alloc by performing
+        -:  117: * @code auto alloc = get_associated_allocator(handler); @endcode
+        -:  118: *
+        -:  119: * @li If <tt>execution::is_executor<Ex1>::value</tt> is true, constructs a
+        -:  120: * function object @c f with a member @c executor_ that is initialised with
+        -:  121: * <tt>prefer(ex1, execution::outstanding_work.tracked)</tt>, a member @c
+        -:  122: * handler_ that is a decay-copy of @c completion_handler, and a function call
+        -:  123: * operator that performs:
+        -:  124: * @code auto a = get_associated_allocator(handler_);
+        -:  125: * prefer(executor_, execution::allocator(a)).execute(std::move(handler_));
+        -:  126: * @endcode
+        -:  127: *
+        -:  128: * @li If <tt>execution::is_executor<Ex1>::value</tt> is false, constructs a
+        -:  129: * function object @c f with a member @c work_ that is initialised with
+        -:  130: * <tt>make_work_guard(ex1)</tt>, a member @c handler_ that is a decay-copy of
+        -:  131: * @c completion_handler, and a function call operator that performs:
+        -:  132: * @code auto a = get_associated_allocator(handler_);
+        -:  133: * work_.get_executor().dispatch(std::move(handler_), a);
+        -:  134: * work_.reset(); @endcode
+        -:  135: *
+        -:  136: * @li If <tt>execution::is_executor<Ex>::value</tt> is true, performs
+        -:  137: * @code prefer(ex, execution::allocator(alloc)).execute(std::move(f)); @endcode
+        -:  138: *
+        -:  139: * @li If <tt>execution::is_executor<Ex>::value</tt> is false, performs
+        -:  140: * @code ex.dispatch(std::move(f), alloc); @endcode
+        -:  141: *
+        -:  142: * @par Completion Signature
+        -:  143: * @code void() @endcode
+        -:  144: */
+        -:  145:template <typename Executor,
+        -:  146:    BOOST_ASIO_COMPLETION_TOKEN_FOR(void()) NullaryToken
+        -:  147:      BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(Executor)>
+   10165*:  148:BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(NullaryToken, void()) dispatch(
+        -:  149:    const Executor& ex,
+        -:  150:    BOOST_ASIO_MOVE_ARG(NullaryToken) token
+        -:  151:      BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(Executor),
+        -:  152:    typename constraint<
+        -:  153:      execution::is_executor<Executor>::value || is_executor<Executor>::value
+        -:  154:    >::type = 0)
+        -:  155:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:  156:    async_initiate<NullaryToken, void()>(
+        -:  157:        declval<detail::initiate_dispatch_with_executor<Executor> >(), token)))
+        -:  158:{
+   10185*:  159:  return async_initiate<NullaryToken, void()>(
+   20339*:  160:      detail::initiate_dispatch_with_executor<Executor>(ex), token);
+        -:  161:}
+        -:  162:
+        -:  163:/// Submits a completion token or function object for execution.
+        -:  164:/**
+        -:  165: * @param ctx An execution context, from which the target executor is obtained.
+        -:  166: *
+        -:  167: * @param token The @ref completion_token that will be used to produce a
+        -:  168: * completion handler. The function signature of the completion handler must be:
+        -:  169: * @code void handler(); @endcode
+        -:  170: *
+        -:  171: * @returns <tt>dispatch(ctx.get_executor(),
+        -:  172: * forward<NullaryToken>(token))</tt>.
+        -:  173: *
+        -:  174: * @par Completion Signature
+        -:  175: * @code void() @endcode
+        -:  176: */
+        -:  177:template <typename ExecutionContext,
+        -:  178:    BOOST_ASIO_COMPLETION_TOKEN_FOR(void()) NullaryToken
+        -:  179:      BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(
+        -:  180:        typename ExecutionContext::executor_type)>
+        -:  181:BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(NullaryToken, void()) dispatch(
+        -:  182:    ExecutionContext& ctx,
+        -:  183:    BOOST_ASIO_MOVE_ARG(NullaryToken) token
+        -:  184:      BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(
+        -:  185:        typename ExecutionContext::executor_type),
+        -:  186:    typename constraint<is_convertible<
+        -:  187:      ExecutionContext&, execution_context&>::value>::type = 0)
+        -:  188:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:  189:    async_initiate<NullaryToken, void()>(
+        -:  190:        declval<detail::initiate_dispatch_with_executor<
+        -:  191:          typename ExecutionContext::executor_type> >(), token)))
+        -:  192:{
+        -:  193:  return async_initiate<NullaryToken, void()>(
+        -:  194:      detail::initiate_dispatch_with_executor<
+        -:  195:        typename ExecutionContext::executor_type>(
+        -:  196:          ctx.get_executor()), token);
+        -:  197:}
+        -:  198:
+        -:  199:} // namespace asio
+        -:  200:} // namespace boost
+        -:  201:
+        -:  202:#include <boost/asio/detail/pop_options.hpp>
+        -:  203:
+        -:  204:#endif // BOOST_ASIO_DISPATCH_HPP

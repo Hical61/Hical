@@ -1,0 +1,4579 @@
+        -:    0:Source:/home/runner/work/Hical/Hical/src/core/OpenApiSchema.h
+        -:    1:#pragma once
+        -:    2:
+        -:    3:/**
+        -:    4: * @brief OpenAPI 3.0 JSON Schema 自动生成（C++20 回退实现）
+        -:    5: * 从 HICAL_JSON() 宏生成的 FieldDescriptor tuple 中提取类型信息，
+        -:    6: * 自动生成符合 OpenAPI 3.0 / JSON Schema 规范的 schema 对象。
+        -:    7: * 对外 API：
+        -:    8: *   auto schema = hical::meta::openapi::jsonSchema<MyDTO>();
+        -:    9: *   // -> {"type":"object","properties":{...},"required":[...]}
+        -:   10: * 类型名注册（用于 $ref）：
+        -:   11: *   HICAL_SCHEMA_NAME(MyDTO, "MyDTO")
+        -:   12: */
+        -:   13:
+        -:   14:#include "Reflection.h"
+        -:   15:#include "MetaJson.h"
+        -:   16:#include <boost/json.hpp>
+        -:   17:#include <string>
+        -:   18:#include <string_view>
+        -:   19:#include <type_traits>
+        -:   20:#include <unordered_map>
+        -:   21:#include <vector>
+        -:   22:
+        -:   23:namespace hical::meta::openapi
+        -:   24:{
+        -:   25:
+        -:   26:	// ============ Schema 类型名注册 ============
+        -:   27:
+        -:   28:	/**
+        -:   29:	 * @brief 类型名特化模板，决定嵌套类型使用 $ref 还是内联
+        -:   30:	 * 当 SchemaName<T>::value != nullptr 时，生成 $ref 引用
+        -:   31:	 */
+        -:   32:	template <typename T>
+        -:   33:	struct SchemaName
+        -:   34:	{
+        -:   35:		static constexpr const char* value = nullptr;
+        -:   36:	};
+        -:   37:
+        -:   38:	// ============ 前向声明 ============
+        -:   39:
+        -:   40:	template <typename T>
+        -:   41:	boost::json::object jsonSchema();
+        -:   42:
+        -:   43:	// ============ 编译期类型到 Schema 映射 ============
+        -:   44:
+        -:   45:	namespace detail
+        -:   46:	{
+        -:   47:
+        -:   48:		/**
+        -:   49:		 * @brief 基本类型 → OpenAPI Schema
+        -:   50:		 */
+        -:   51:		template <typename T>
+      39*:   52:		boost::json::object typeToSchema()
+        -:   53:		{
+      39*:   54:			boost::json::object prop;
+        -:   55:
+        -:   56:			if constexpr (std::is_same_v<T, std::string>)
+        -:   57:			{
+      21*:   58:				prop["type"] = "string";
+        -:   59:			}
+        -:   60:			else if constexpr (std::is_same_v<T, bool>)
+        -:   61:			{
+        1:   62:				prop["type"] = "boolean";
+        -:   63:			}
+        -:   64:			else if constexpr (std::is_integral_v<T>)
+        -:   65:			{
+      10*:   66:				prop["type"] = "integer";
+        -:   67:				if constexpr (sizeof(T) <= 4)
+        -:   68:				{
+       9*:   69:					prop["format"] = "int32";
+        -:   70:				}
+        -:   71:				else
+        -:   72:				{
+        1:   73:					prop["format"] = "int64";
+        -:   74:				}
+        -:   75:				if constexpr (std::is_unsigned_v<T>)
+        -:   76:				{
+        1:   77:					prop["minimum"] = 0;
+        -:   78:				}
+        -:   79:			}
+        -:   80:			else if constexpr (std::is_same_v<T, float>)
+        -:   81:			{
+        1:   82:				prop["type"] = "number";
+        1:   83:				prop["format"] = "float";
+        -:   84:			}
+        -:   85:			else if constexpr (std::is_floating_point_v<T>)
+        -:   86:			{
+        1:   87:				prop["type"] = "number";
+        1:   88:				prop["format"] = "double";
+        -:   89:			}
+        -:   90:			else if constexpr (IsVector<T>::value)
+        -:   91:			{
+        -:   92:				using ElemType = typename T::value_type;
+        2:   93:				prop["type"] = "array";
+        2:   94:				prop["items"] = typeToSchema<ElemType>();
+        -:   95:			}
+        -:   96:			else if constexpr (HasJsonFields<T>::value)
+        -:   97:			{
+        -:   98:				// 有 SchemaName → 生成 $ref；否则内联展开
+        -:   99:				if constexpr (SchemaName<T>::value != nullptr)
+        -:  100:				{
+        3:  101:					prop["$ref"] = std::string("#/components/schemas/") + SchemaName<T>::value;
+        -:  102:				}
+        -:  103:				else
+        -:  104:				{
+        -:  105:					// 内联展开完整 schema
+        -:  106:					return openapi::jsonSchema<T>();
+        -:  107:				}
+        -:  108:			}
+        -:  109:			else
+        -:  110:			{
+        -:  111:				static_assert(sizeof(T) == 0, "Unsupported type for OpenAPI schema generation");
+        -:  112:			}
+        -:  113:
+      39*:  114:			return prop;
+    =====:  115:		}
+------------------
+_ZN5hical4meta7openapi6detail12typeToSchemaISt6vectorI8NamedDTOSaIS5_EEEEN5boost4json6objectEv:
+function _ZN5hical4meta7openapi6detail12typeToSchemaISt6vectorI8NamedDTOSaIS5_EEEEN5boost4json6objectEv called 1 returned 100% blocks executed 67%
+        1:   52:		boost::json::object typeToSchema()
+        -:   53:		{
+        1:   54:			boost::json::object prop;
+call    0 returned 100%
+        -:   55:
+        -:   56:			if constexpr (std::is_same_v<T, std::string>)
+        -:   57:			{
+        -:   58:				prop["type"] = "string";
+        -:   59:			}
+        -:   60:			else if constexpr (std::is_same_v<T, bool>)
+        -:   61:			{
+        -:   62:				prop["type"] = "boolean";
+        -:   63:			}
+        -:   64:			else if constexpr (std::is_integral_v<T>)
+        -:   65:			{
+        -:   66:				prop["type"] = "integer";
+        -:   67:				if constexpr (sizeof(T) <= 4)
+        -:   68:				{
+        -:   69:					prop["format"] = "int32";
+        -:   70:				}
+        -:   71:				else
+        -:   72:				{
+        -:   73:					prop["format"] = "int64";
+        -:   74:				}
+        -:   75:				if constexpr (std::is_unsigned_v<T>)
+        -:   76:				{
+        -:   77:					prop["minimum"] = 0;
+        -:   78:				}
+        -:   79:			}
+        -:   80:			else if constexpr (std::is_same_v<T, float>)
+        -:   81:			{
+        -:   82:				prop["type"] = "number";
+        -:   83:				prop["format"] = "float";
+        -:   84:			}
+        -:   85:			else if constexpr (std::is_floating_point_v<T>)
+        -:   86:			{
+        -:   87:				prop["type"] = "number";
+        -:   88:				prop["format"] = "double";
+        -:   89:			}
+        -:   90:			else if constexpr (IsVector<T>::value)
+        -:   91:			{
+        -:   92:				using ElemType = typename T::value_type;
+        1:   93:				prop["type"] = "array";
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+        1:   94:				prop["items"] = typeToSchema<ElemType>();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+call    7 returned 100%
+branch  8 taken 100% (fallthrough)
+branch  9 taken 0% (throw)
+call   10 returned 100%
+call   11 never executed
+        -:   95:			}
+        -:   96:			else if constexpr (HasJsonFields<T>::value)
+        -:   97:			{
+        -:   98:				// 有 SchemaName → 生成 $ref；否则内联展开
+        -:   99:				if constexpr (SchemaName<T>::value != nullptr)
+        -:  100:				{
+        -:  101:					prop["$ref"] = std::string("#/components/schemas/") + SchemaName<T>::value;
+        -:  102:				}
+        -:  103:				else
+        -:  104:				{
+        -:  105:					// 内联展开完整 schema
+        -:  106:					return openapi::jsonSchema<T>();
+        -:  107:				}
+        -:  108:			}
+        -:  109:			else
+        -:  110:			{
+        -:  111:				static_assert(sizeof(T) == 0, "Unsupported type for OpenAPI schema generation");
+        -:  112:			}
+        -:  113:
+        1:  114:			return prop;
+    =====:  115:		}
+call    0 never executed
+------------------
+_ZN5hical4meta7openapi6detail12typeToSchemaI8NamedDTOEEN5boost4json6objectEv:
+function _ZN5hical4meta7openapi6detail12typeToSchemaI8NamedDTOEEN5boost4json6objectEv called 2 returned 100% blocks executed 56%
+        2:   52:		boost::json::object typeToSchema()
+        -:   53:		{
+        2:   54:			boost::json::object prop;
+call    0 returned 100%
+        -:   55:
+        -:   56:			if constexpr (std::is_same_v<T, std::string>)
+        -:   57:			{
+        -:   58:				prop["type"] = "string";
+        -:   59:			}
+        -:   60:			else if constexpr (std::is_same_v<T, bool>)
+        -:   61:			{
+        -:   62:				prop["type"] = "boolean";
+        -:   63:			}
+        -:   64:			else if constexpr (std::is_integral_v<T>)
+        -:   65:			{
+        -:   66:				prop["type"] = "integer";
+        -:   67:				if constexpr (sizeof(T) <= 4)
+        -:   68:				{
+        -:   69:					prop["format"] = "int32";
+        -:   70:				}
+        -:   71:				else
+        -:   72:				{
+        -:   73:					prop["format"] = "int64";
+        -:   74:				}
+        -:   75:				if constexpr (std::is_unsigned_v<T>)
+        -:   76:				{
+        -:   77:					prop["minimum"] = 0;
+        -:   78:				}
+        -:   79:			}
+        -:   80:			else if constexpr (std::is_same_v<T, float>)
+        -:   81:			{
+        -:   82:				prop["type"] = "number";
+        -:   83:				prop["format"] = "float";
+        -:   84:			}
+        -:   85:			else if constexpr (std::is_floating_point_v<T>)
+        -:   86:			{
+        -:   87:				prop["type"] = "number";
+        -:   88:				prop["format"] = "double";
+        -:   89:			}
+        -:   90:			else if constexpr (IsVector<T>::value)
+        -:   91:			{
+        -:   92:				using ElemType = typename T::value_type;
+        -:   93:				prop["type"] = "array";
+        -:   94:				prop["items"] = typeToSchema<ElemType>();
+        -:   95:			}
+        -:   96:			else if constexpr (HasJsonFields<T>::value)
+        -:   97:			{
+        -:   98:				// 有 SchemaName → 生成 $ref；否则内联展开
+        -:   99:				if constexpr (SchemaName<T>::value != nullptr)
+        -:  100:				{
+        2:  101:					prop["$ref"] = std::string("#/components/schemas/") + SchemaName<T>::value;
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 returned 100%
+call    8 returned 100%
+branch  9 taken 100% (fallthrough)
+branch 10 taken 0% (throw)
+call   11 returned 100%
+branch 12 taken 100% (fallthrough)
+branch 13 taken 0% (throw)
+call   14 returned 100%
+call   15 returned 100%
+call   16 never executed
+call   17 never executed
+        -:  102:				}
+        -:  103:				else
+        -:  104:				{
+        -:  105:					// 内联展开完整 schema
+        -:  106:					return openapi::jsonSchema<T>();
+        -:  107:				}
+        -:  108:			}
+        -:  109:			else
+        -:  110:			{
+        -:  111:				static_assert(sizeof(T) == 0, "Unsupported type for OpenAPI schema generation");
+        -:  112:			}
+        -:  113:
+        2:  114:			return prop;
+    =====:  115:		}
+call    0 never executed
+------------------
+_ZN5hical4meta7openapi6detail12typeToSchemaI13NestedAddressEEN5boost4json6objectEv:
+function _ZN5hical4meta7openapi6detail12typeToSchemaI13NestedAddressEEN5boost4json6objectEv called 1 returned 100% blocks executed 56%
+        1:   52:		boost::json::object typeToSchema()
+        -:   53:		{
+        1:   54:			boost::json::object prop;
+call    0 returned 100%
+        -:   55:
+        -:   56:			if constexpr (std::is_same_v<T, std::string>)
+        -:   57:			{
+        -:   58:				prop["type"] = "string";
+        -:   59:			}
+        -:   60:			else if constexpr (std::is_same_v<T, bool>)
+        -:   61:			{
+        -:   62:				prop["type"] = "boolean";
+        -:   63:			}
+        -:   64:			else if constexpr (std::is_integral_v<T>)
+        -:   65:			{
+        -:   66:				prop["type"] = "integer";
+        -:   67:				if constexpr (sizeof(T) <= 4)
+        -:   68:				{
+        -:   69:					prop["format"] = "int32";
+        -:   70:				}
+        -:   71:				else
+        -:   72:				{
+        -:   73:					prop["format"] = "int64";
+        -:   74:				}
+        -:   75:				if constexpr (std::is_unsigned_v<T>)
+        -:   76:				{
+        -:   77:					prop["minimum"] = 0;
+        -:   78:				}
+        -:   79:			}
+        -:   80:			else if constexpr (std::is_same_v<T, float>)
+        -:   81:			{
+        -:   82:				prop["type"] = "number";
+        -:   83:				prop["format"] = "float";
+        -:   84:			}
+        -:   85:			else if constexpr (std::is_floating_point_v<T>)
+        -:   86:			{
+        -:   87:				prop["type"] = "number";
+        -:   88:				prop["format"] = "double";
+        -:   89:			}
+        -:   90:			else if constexpr (IsVector<T>::value)
+        -:   91:			{
+        -:   92:				using ElemType = typename T::value_type;
+        -:   93:				prop["type"] = "array";
+        -:   94:				prop["items"] = typeToSchema<ElemType>();
+        -:   95:			}
+        -:   96:			else if constexpr (HasJsonFields<T>::value)
+        -:   97:			{
+        -:   98:				// 有 SchemaName → 生成 $ref；否则内联展开
+        -:   99:				if constexpr (SchemaName<T>::value != nullptr)
+        -:  100:				{
+        1:  101:					prop["$ref"] = std::string("#/components/schemas/") + SchemaName<T>::value;
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 returned 100%
+call    8 returned 100%
+branch  9 taken 100% (fallthrough)
+branch 10 taken 0% (throw)
+call   11 returned 100%
+branch 12 taken 100% (fallthrough)
+branch 13 taken 0% (throw)
+call   14 returned 100%
+call   15 returned 100%
+call   16 never executed
+call   17 never executed
+        -:  102:				}
+        -:  103:				else
+        -:  104:				{
+        -:  105:					// 内联展开完整 schema
+        -:  106:					return openapi::jsonSchema<T>();
+        -:  107:				}
+        -:  108:			}
+        -:  109:			else
+        -:  110:			{
+        -:  111:				static_assert(sizeof(T) == 0, "Unsupported type for OpenAPI schema generation");
+        -:  112:			}
+        -:  113:
+        1:  114:			return prop;
+    =====:  115:		}
+call    0 never executed
+------------------
+_ZN5hical4meta7openapi6detail12typeToSchemaISt6vectorIiSaIiEEEEN5boost4json6objectEv:
+function _ZN5hical4meta7openapi6detail12typeToSchemaISt6vectorIiSaIiEEEEN5boost4json6objectEv called 1 returned 100% blocks executed 67%
+        1:   52:		boost::json::object typeToSchema()
+        -:   53:		{
+        1:   54:			boost::json::object prop;
+call    0 returned 100%
+        -:   55:
+        -:   56:			if constexpr (std::is_same_v<T, std::string>)
+        -:   57:			{
+        -:   58:				prop["type"] = "string";
+        -:   59:			}
+        -:   60:			else if constexpr (std::is_same_v<T, bool>)
+        -:   61:			{
+        -:   62:				prop["type"] = "boolean";
+        -:   63:			}
+        -:   64:			else if constexpr (std::is_integral_v<T>)
+        -:   65:			{
+        -:   66:				prop["type"] = "integer";
+        -:   67:				if constexpr (sizeof(T) <= 4)
+        -:   68:				{
+        -:   69:					prop["format"] = "int32";
+        -:   70:				}
+        -:   71:				else
+        -:   72:				{
+        -:   73:					prop["format"] = "int64";
+        -:   74:				}
+        -:   75:				if constexpr (std::is_unsigned_v<T>)
+        -:   76:				{
+        -:   77:					prop["minimum"] = 0;
+        -:   78:				}
+        -:   79:			}
+        -:   80:			else if constexpr (std::is_same_v<T, float>)
+        -:   81:			{
+        -:   82:				prop["type"] = "number";
+        -:   83:				prop["format"] = "float";
+        -:   84:			}
+        -:   85:			else if constexpr (std::is_floating_point_v<T>)
+        -:   86:			{
+        -:   87:				prop["type"] = "number";
+        -:   88:				prop["format"] = "double";
+        -:   89:			}
+        -:   90:			else if constexpr (IsVector<T>::value)
+        -:   91:			{
+        -:   92:				using ElemType = typename T::value_type;
+        1:   93:				prop["type"] = "array";
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+        1:   94:				prop["items"] = typeToSchema<ElemType>();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+call    7 returned 100%
+branch  8 taken 100% (fallthrough)
+branch  9 taken 0% (throw)
+call   10 returned 100%
+call   11 never executed
+        -:   95:			}
+        -:   96:			else if constexpr (HasJsonFields<T>::value)
+        -:   97:			{
+        -:   98:				// 有 SchemaName → 生成 $ref；否则内联展开
+        -:   99:				if constexpr (SchemaName<T>::value != nullptr)
+        -:  100:				{
+        -:  101:					prop["$ref"] = std::string("#/components/schemas/") + SchemaName<T>::value;
+        -:  102:				}
+        -:  103:				else
+        -:  104:				{
+        -:  105:					// 内联展开完整 schema
+        -:  106:					return openapi::jsonSchema<T>();
+        -:  107:				}
+        -:  108:			}
+        -:  109:			else
+        -:  110:			{
+        -:  111:				static_assert(sizeof(T) == 0, "Unsupported type for OpenAPI schema generation");
+        -:  112:			}
+        -:  113:
+        1:  114:			return prop;
+    =====:  115:		}
+call    0 never executed
+------------------
+_ZN5hical4meta7openapi6detail12typeToSchemaIbEEN5boost4json6objectEv:
+function _ZN5hical4meta7openapi6detail12typeToSchemaIbEEN5boost4json6objectEv called 1 returned 100% blocks executed 78%
+        1:   52:		boost::json::object typeToSchema()
+        -:   53:		{
+        1:   54:			boost::json::object prop;
+call    0 returned 100%
+        -:   55:
+        -:   56:			if constexpr (std::is_same_v<T, std::string>)
+        -:   57:			{
+        -:   58:				prop["type"] = "string";
+        -:   59:			}
+        -:   60:			else if constexpr (std::is_same_v<T, bool>)
+        -:   61:			{
+        1:   62:				prop["type"] = "boolean";
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+        -:   63:			}
+        -:   64:			else if constexpr (std::is_integral_v<T>)
+        -:   65:			{
+        -:   66:				prop["type"] = "integer";
+        -:   67:				if constexpr (sizeof(T) <= 4)
+        -:   68:				{
+        -:   69:					prop["format"] = "int32";
+        -:   70:				}
+        -:   71:				else
+        -:   72:				{
+        -:   73:					prop["format"] = "int64";
+        -:   74:				}
+        -:   75:				if constexpr (std::is_unsigned_v<T>)
+        -:   76:				{
+        -:   77:					prop["minimum"] = 0;
+        -:   78:				}
+        -:   79:			}
+        -:   80:			else if constexpr (std::is_same_v<T, float>)
+        -:   81:			{
+        -:   82:				prop["type"] = "number";
+        -:   83:				prop["format"] = "float";
+        -:   84:			}
+        -:   85:			else if constexpr (std::is_floating_point_v<T>)
+        -:   86:			{
+        -:   87:				prop["type"] = "number";
+        -:   88:				prop["format"] = "double";
+        -:   89:			}
+        -:   90:			else if constexpr (IsVector<T>::value)
+        -:   91:			{
+        -:   92:				using ElemType = typename T::value_type;
+        -:   93:				prop["type"] = "array";
+        -:   94:				prop["items"] = typeToSchema<ElemType>();
+        -:   95:			}
+        -:   96:			else if constexpr (HasJsonFields<T>::value)
+        -:   97:			{
+        -:   98:				// 有 SchemaName → 生成 $ref；否则内联展开
+        -:   99:				if constexpr (SchemaName<T>::value != nullptr)
+        -:  100:				{
+        -:  101:					prop["$ref"] = std::string("#/components/schemas/") + SchemaName<T>::value;
+        -:  102:				}
+        -:  103:				else
+        -:  104:				{
+        -:  105:					// 内联展开完整 schema
+        -:  106:					return openapi::jsonSchema<T>();
+        -:  107:				}
+        -:  108:			}
+        -:  109:			else
+        -:  110:			{
+        -:  111:				static_assert(sizeof(T) == 0, "Unsupported type for OpenAPI schema generation");
+        -:  112:			}
+        -:  113:
+        1:  114:			return prop;
+    =====:  115:		}
+call    0 never executed
+------------------
+_ZN5hical4meta7openapi6detail12typeToSchemaIfEEN5boost4json6objectEv:
+function _ZN5hical4meta7openapi6detail12typeToSchemaIfEEN5boost4json6objectEv called 1 returned 100% blocks executed 77%
+        1:   52:		boost::json::object typeToSchema()
+        -:   53:		{
+        1:   54:			boost::json::object prop;
+call    0 returned 100%
+        -:   55:
+        -:   56:			if constexpr (std::is_same_v<T, std::string>)
+        -:   57:			{
+        -:   58:				prop["type"] = "string";
+        -:   59:			}
+        -:   60:			else if constexpr (std::is_same_v<T, bool>)
+        -:   61:			{
+        -:   62:				prop["type"] = "boolean";
+        -:   63:			}
+        -:   64:			else if constexpr (std::is_integral_v<T>)
+        -:   65:			{
+        -:   66:				prop["type"] = "integer";
+        -:   67:				if constexpr (sizeof(T) <= 4)
+        -:   68:				{
+        -:   69:					prop["format"] = "int32";
+        -:   70:				}
+        -:   71:				else
+        -:   72:				{
+        -:   73:					prop["format"] = "int64";
+        -:   74:				}
+        -:   75:				if constexpr (std::is_unsigned_v<T>)
+        -:   76:				{
+        -:   77:					prop["minimum"] = 0;
+        -:   78:				}
+        -:   79:			}
+        -:   80:			else if constexpr (std::is_same_v<T, float>)
+        -:   81:			{
+        1:   82:				prop["type"] = "number";
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+        1:   83:				prop["format"] = "float";
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+        -:   84:			}
+        -:   85:			else if constexpr (std::is_floating_point_v<T>)
+        -:   86:			{
+        -:   87:				prop["type"] = "number";
+        -:   88:				prop["format"] = "double";
+        -:   89:			}
+        -:   90:			else if constexpr (IsVector<T>::value)
+        -:   91:			{
+        -:   92:				using ElemType = typename T::value_type;
+        -:   93:				prop["type"] = "array";
+        -:   94:				prop["items"] = typeToSchema<ElemType>();
+        -:   95:			}
+        -:   96:			else if constexpr (HasJsonFields<T>::value)
+        -:   97:			{
+        -:   98:				// 有 SchemaName → 生成 $ref；否则内联展开
+        -:   99:				if constexpr (SchemaName<T>::value != nullptr)
+        -:  100:				{
+        -:  101:					prop["$ref"] = std::string("#/components/schemas/") + SchemaName<T>::value;
+        -:  102:				}
+        -:  103:				else
+        -:  104:				{
+        -:  105:					// 内联展开完整 schema
+        -:  106:					return openapi::jsonSchema<T>();
+        -:  107:				}
+        -:  108:			}
+        -:  109:			else
+        -:  110:			{
+        -:  111:				static_assert(sizeof(T) == 0, "Unsupported type for OpenAPI schema generation");
+        -:  112:			}
+        -:  113:
+        1:  114:			return prop;
+    =====:  115:		}
+call    0 never executed
+------------------
+_ZN5hical4meta7openapi6detail12typeToSchemaIdEEN5boost4json6objectEv:
+function _ZN5hical4meta7openapi6detail12typeToSchemaIdEEN5boost4json6objectEv called 1 returned 100% blocks executed 77%
+        1:   52:		boost::json::object typeToSchema()
+        -:   53:		{
+        1:   54:			boost::json::object prop;
+call    0 returned 100%
+        -:   55:
+        -:   56:			if constexpr (std::is_same_v<T, std::string>)
+        -:   57:			{
+        -:   58:				prop["type"] = "string";
+        -:   59:			}
+        -:   60:			else if constexpr (std::is_same_v<T, bool>)
+        -:   61:			{
+        -:   62:				prop["type"] = "boolean";
+        -:   63:			}
+        -:   64:			else if constexpr (std::is_integral_v<T>)
+        -:   65:			{
+        -:   66:				prop["type"] = "integer";
+        -:   67:				if constexpr (sizeof(T) <= 4)
+        -:   68:				{
+        -:   69:					prop["format"] = "int32";
+        -:   70:				}
+        -:   71:				else
+        -:   72:				{
+        -:   73:					prop["format"] = "int64";
+        -:   74:				}
+        -:   75:				if constexpr (std::is_unsigned_v<T>)
+        -:   76:				{
+        -:   77:					prop["minimum"] = 0;
+        -:   78:				}
+        -:   79:			}
+        -:   80:			else if constexpr (std::is_same_v<T, float>)
+        -:   81:			{
+        -:   82:				prop["type"] = "number";
+        -:   83:				prop["format"] = "float";
+        -:   84:			}
+        -:   85:			else if constexpr (std::is_floating_point_v<T>)
+        -:   86:			{
+        1:   87:				prop["type"] = "number";
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+        1:   88:				prop["format"] = "double";
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+        -:   89:			}
+        -:   90:			else if constexpr (IsVector<T>::value)
+        -:   91:			{
+        -:   92:				using ElemType = typename T::value_type;
+        -:   93:				prop["type"] = "array";
+        -:   94:				prop["items"] = typeToSchema<ElemType>();
+        -:   95:			}
+        -:   96:			else if constexpr (HasJsonFields<T>::value)
+        -:   97:			{
+        -:   98:				// 有 SchemaName → 生成 $ref；否则内联展开
+        -:   99:				if constexpr (SchemaName<T>::value != nullptr)
+        -:  100:				{
+        -:  101:					prop["$ref"] = std::string("#/components/schemas/") + SchemaName<T>::value;
+        -:  102:				}
+        -:  103:				else
+        -:  104:				{
+        -:  105:					// 内联展开完整 schema
+        -:  106:					return openapi::jsonSchema<T>();
+        -:  107:				}
+        -:  108:			}
+        -:  109:			else
+        -:  110:			{
+        -:  111:				static_assert(sizeof(T) == 0, "Unsupported type for OpenAPI schema generation");
+        -:  112:			}
+        -:  113:
+        1:  114:			return prop;
+    =====:  115:		}
+call    0 never executed
+------------------
+_ZN5hical4meta7openapi6detail12typeToSchemaImEEN5boost4json6objectEv:
+function _ZN5hical4meta7openapi6detail12typeToSchemaImEEN5boost4json6objectEv called 1 returned 100% blocks executed 76%
+        1:   52:		boost::json::object typeToSchema()
+        -:   53:		{
+        1:   54:			boost::json::object prop;
+call    0 returned 100%
+        -:   55:
+        -:   56:			if constexpr (std::is_same_v<T, std::string>)
+        -:   57:			{
+        -:   58:				prop["type"] = "string";
+        -:   59:			}
+        -:   60:			else if constexpr (std::is_same_v<T, bool>)
+        -:   61:			{
+        -:   62:				prop["type"] = "boolean";
+        -:   63:			}
+        -:   64:			else if constexpr (std::is_integral_v<T>)
+        -:   65:			{
+        1:   66:				prop["type"] = "integer";
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+        -:   67:				if constexpr (sizeof(T) <= 4)
+        -:   68:				{
+        -:   69:					prop["format"] = "int32";
+        -:   70:				}
+        -:   71:				else
+        -:   72:				{
+        1:   73:					prop["format"] = "int64";
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+        -:   74:				}
+        -:   75:				if constexpr (std::is_unsigned_v<T>)
+        -:   76:				{
+        1:   77:					prop["minimum"] = 0;
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+        -:   78:				}
+        -:   79:			}
+        -:   80:			else if constexpr (std::is_same_v<T, float>)
+        -:   81:			{
+        -:   82:				prop["type"] = "number";
+        -:   83:				prop["format"] = "float";
+        -:   84:			}
+        -:   85:			else if constexpr (std::is_floating_point_v<T>)
+        -:   86:			{
+        -:   87:				prop["type"] = "number";
+        -:   88:				prop["format"] = "double";
+        -:   89:			}
+        -:   90:			else if constexpr (IsVector<T>::value)
+        -:   91:			{
+        -:   92:				using ElemType = typename T::value_type;
+        -:   93:				prop["type"] = "array";
+        -:   94:				prop["items"] = typeToSchema<ElemType>();
+        -:   95:			}
+        -:   96:			else if constexpr (HasJsonFields<T>::value)
+        -:   97:			{
+        -:   98:				// 有 SchemaName → 生成 $ref；否则内联展开
+        -:   99:				if constexpr (SchemaName<T>::value != nullptr)
+        -:  100:				{
+        -:  101:					prop["$ref"] = std::string("#/components/schemas/") + SchemaName<T>::value;
+        -:  102:				}
+        -:  103:				else
+        -:  104:				{
+        -:  105:					// 内联展开完整 schema
+        -:  106:					return openapi::jsonSchema<T>();
+        -:  107:				}
+        -:  108:			}
+        -:  109:			else
+        -:  110:			{
+        -:  111:				static_assert(sizeof(T) == 0, "Unsupported type for OpenAPI schema generation");
+        -:  112:			}
+        -:  113:
+        1:  114:			return prop;
+    =====:  115:		}
+call    0 never executed
+------------------
+_ZN5hical4meta7openapi6detail12typeToSchemaIiEEN5boost4json6objectEv:
+function _ZN5hical4meta7openapi6detail12typeToSchemaIiEEN5boost4json6objectEv called 9 returned 100% blocks executed 77%
+        9:   52:		boost::json::object typeToSchema()
+        -:   53:		{
+        9:   54:			boost::json::object prop;
+call    0 returned 100%
+        -:   55:
+        -:   56:			if constexpr (std::is_same_v<T, std::string>)
+        -:   57:			{
+        -:   58:				prop["type"] = "string";
+        -:   59:			}
+        -:   60:			else if constexpr (std::is_same_v<T, bool>)
+        -:   61:			{
+        -:   62:				prop["type"] = "boolean";
+        -:   63:			}
+        -:   64:			else if constexpr (std::is_integral_v<T>)
+        -:   65:			{
+        9:   66:				prop["type"] = "integer";
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+        -:   67:				if constexpr (sizeof(T) <= 4)
+        -:   68:				{
+        9:   69:					prop["format"] = "int32";
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+        -:   70:				}
+        -:   71:				else
+        -:   72:				{
+        -:   73:					prop["format"] = "int64";
+        -:   74:				}
+        -:   75:				if constexpr (std::is_unsigned_v<T>)
+        -:   76:				{
+        -:   77:					prop["minimum"] = 0;
+        -:   78:				}
+        -:   79:			}
+        -:   80:			else if constexpr (std::is_same_v<T, float>)
+        -:   81:			{
+        -:   82:				prop["type"] = "number";
+        -:   83:				prop["format"] = "float";
+        -:   84:			}
+        -:   85:			else if constexpr (std::is_floating_point_v<T>)
+        -:   86:			{
+        -:   87:				prop["type"] = "number";
+        -:   88:				prop["format"] = "double";
+        -:   89:			}
+        -:   90:			else if constexpr (IsVector<T>::value)
+        -:   91:			{
+        -:   92:				using ElemType = typename T::value_type;
+        -:   93:				prop["type"] = "array";
+        -:   94:				prop["items"] = typeToSchema<ElemType>();
+        -:   95:			}
+        -:   96:			else if constexpr (HasJsonFields<T>::value)
+        -:   97:			{
+        -:   98:				// 有 SchemaName → 生成 $ref；否则内联展开
+        -:   99:				if constexpr (SchemaName<T>::value != nullptr)
+        -:  100:				{
+        -:  101:					prop["$ref"] = std::string("#/components/schemas/") + SchemaName<T>::value;
+        -:  102:				}
+        -:  103:				else
+        -:  104:				{
+        -:  105:					// 内联展开完整 schema
+        -:  106:					return openapi::jsonSchema<T>();
+        -:  107:				}
+        -:  108:			}
+        -:  109:			else
+        -:  110:			{
+        -:  111:				static_assert(sizeof(T) == 0, "Unsupported type for OpenAPI schema generation");
+        -:  112:			}
+        -:  113:
+        9:  114:			return prop;
+    =====:  115:		}
+call    0 never executed
+------------------
+_ZN5hical4meta7openapi6detail12typeToSchemaINSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEEEN5boost4json6objectEv:
+function _ZN5hical4meta7openapi6detail12typeToSchemaINSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEEEN5boost4json6objectEv called 21 returned 100% blocks executed 78%
+       21:   52:		boost::json::object typeToSchema()
+        -:   53:		{
+       21:   54:			boost::json::object prop;
+call    0 returned 100%
+        -:   55:
+        -:   56:			if constexpr (std::is_same_v<T, std::string>)
+        -:   57:			{
+       21:   58:				prop["type"] = "string";
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+        -:   59:			}
+        -:   60:			else if constexpr (std::is_same_v<T, bool>)
+        -:   61:			{
+        -:   62:				prop["type"] = "boolean";
+        -:   63:			}
+        -:   64:			else if constexpr (std::is_integral_v<T>)
+        -:   65:			{
+        -:   66:				prop["type"] = "integer";
+        -:   67:				if constexpr (sizeof(T) <= 4)
+        -:   68:				{
+        -:   69:					prop["format"] = "int32";
+        -:   70:				}
+        -:   71:				else
+        -:   72:				{
+        -:   73:					prop["format"] = "int64";
+        -:   74:				}
+        -:   75:				if constexpr (std::is_unsigned_v<T>)
+        -:   76:				{
+        -:   77:					prop["minimum"] = 0;
+        -:   78:				}
+        -:   79:			}
+        -:   80:			else if constexpr (std::is_same_v<T, float>)
+        -:   81:			{
+        -:   82:				prop["type"] = "number";
+        -:   83:				prop["format"] = "float";
+        -:   84:			}
+        -:   85:			else if constexpr (std::is_floating_point_v<T>)
+        -:   86:			{
+        -:   87:				prop["type"] = "number";
+        -:   88:				prop["format"] = "double";
+        -:   89:			}
+        -:   90:			else if constexpr (IsVector<T>::value)
+        -:   91:			{
+        -:   92:				using ElemType = typename T::value_type;
+        -:   93:				prop["type"] = "array";
+        -:   94:				prop["items"] = typeToSchema<ElemType>();
+        -:   95:			}
+        -:   96:			else if constexpr (HasJsonFields<T>::value)
+        -:   97:			{
+        -:   98:				// 有 SchemaName → 生成 $ref；否则内联展开
+        -:   99:				if constexpr (SchemaName<T>::value != nullptr)
+        -:  100:				{
+        -:  101:					prop["$ref"] = std::string("#/components/schemas/") + SchemaName<T>::value;
+        -:  102:				}
+        -:  103:				else
+        -:  104:				{
+        -:  105:					// 内联展开完整 schema
+        -:  106:					return openapi::jsonSchema<T>();
+        -:  107:				}
+        -:  108:			}
+        -:  109:			else
+        -:  110:			{
+        -:  111:				static_assert(sizeof(T) == 0, "Unsupported type for OpenAPI schema generation");
+        -:  112:			}
+        -:  113:
+       21:  114:			return prop;
+    =====:  115:		}
+call    0 never executed
+------------------
+_ZN5hical4meta7openapi6detail12typeToSchemaIiEEN5boost4json6objectEv:
+function _ZN5hical4meta7openapi6detail12typeToSchemaIiEEN5boost4json6objectEv called 0 returned 0% blocks executed 0%
+    #####:   52:		boost::json::object typeToSchema()
+        -:   53:		{
+    #####:   54:			boost::json::object prop;
+call    0 never executed
+        -:   55:
+        -:   56:			if constexpr (std::is_same_v<T, std::string>)
+        -:   57:			{
+        -:   58:				prop["type"] = "string";
+        -:   59:			}
+        -:   60:			else if constexpr (std::is_same_v<T, bool>)
+        -:   61:			{
+        -:   62:				prop["type"] = "boolean";
+        -:   63:			}
+        -:   64:			else if constexpr (std::is_integral_v<T>)
+        -:   65:			{
+    #####:   66:				prop["type"] = "integer";
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+branch  5 never executed (fallthrough)
+branch  6 never executed (throw)
+        -:   67:				if constexpr (sizeof(T) <= 4)
+        -:   68:				{
+    #####:   69:					prop["format"] = "int32";
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+branch  5 never executed (fallthrough)
+branch  6 never executed (throw)
+        -:   70:				}
+        -:   71:				else
+        -:   72:				{
+        -:   73:					prop["format"] = "int64";
+        -:   74:				}
+        -:   75:				if constexpr (std::is_unsigned_v<T>)
+        -:   76:				{
+        -:   77:					prop["minimum"] = 0;
+        -:   78:				}
+        -:   79:			}
+        -:   80:			else if constexpr (std::is_same_v<T, float>)
+        -:   81:			{
+        -:   82:				prop["type"] = "number";
+        -:   83:				prop["format"] = "float";
+        -:   84:			}
+        -:   85:			else if constexpr (std::is_floating_point_v<T>)
+        -:   86:			{
+        -:   87:				prop["type"] = "number";
+        -:   88:				prop["format"] = "double";
+        -:   89:			}
+        -:   90:			else if constexpr (IsVector<T>::value)
+        -:   91:			{
+        -:   92:				using ElemType = typename T::value_type;
+        -:   93:				prop["type"] = "array";
+        -:   94:				prop["items"] = typeToSchema<ElemType>();
+        -:   95:			}
+        -:   96:			else if constexpr (HasJsonFields<T>::value)
+        -:   97:			{
+        -:   98:				// 有 SchemaName → 生成 $ref；否则内联展开
+        -:   99:				if constexpr (SchemaName<T>::value != nullptr)
+        -:  100:				{
+        -:  101:					prop["$ref"] = std::string("#/components/schemas/") + SchemaName<T>::value;
+        -:  102:				}
+        -:  103:				else
+        -:  104:				{
+        -:  105:					// 内联展开完整 schema
+        -:  106:					return openapi::jsonSchema<T>();
+        -:  107:				}
+        -:  108:			}
+        -:  109:			else
+        -:  110:			{
+        -:  111:				static_assert(sizeof(T) == 0, "Unsupported type for OpenAPI schema generation");
+        -:  112:			}
+        -:  113:
+    #####:  114:			return prop;
+    =====:  115:		}
+call    0 never executed
+------------------
+_ZN5hical4meta7openapi6detail12typeToSchemaINSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEEEN5boost4json6objectEv:
+function _ZN5hical4meta7openapi6detail12typeToSchemaINSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEEEN5boost4json6objectEv called 0 returned 0% blocks executed 0%
+    #####:   52:		boost::json::object typeToSchema()
+        -:   53:		{
+    #####:   54:			boost::json::object prop;
+call    0 never executed
+        -:   55:
+        -:   56:			if constexpr (std::is_same_v<T, std::string>)
+        -:   57:			{
+    #####:   58:				prop["type"] = "string";
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+branch  5 never executed (fallthrough)
+branch  6 never executed (throw)
+        -:   59:			}
+        -:   60:			else if constexpr (std::is_same_v<T, bool>)
+        -:   61:			{
+        -:   62:				prop["type"] = "boolean";
+        -:   63:			}
+        -:   64:			else if constexpr (std::is_integral_v<T>)
+        -:   65:			{
+        -:   66:				prop["type"] = "integer";
+        -:   67:				if constexpr (sizeof(T) <= 4)
+        -:   68:				{
+        -:   69:					prop["format"] = "int32";
+        -:   70:				}
+        -:   71:				else
+        -:   72:				{
+        -:   73:					prop["format"] = "int64";
+        -:   74:				}
+        -:   75:				if constexpr (std::is_unsigned_v<T>)
+        -:   76:				{
+        -:   77:					prop["minimum"] = 0;
+        -:   78:				}
+        -:   79:			}
+        -:   80:			else if constexpr (std::is_same_v<T, float>)
+        -:   81:			{
+        -:   82:				prop["type"] = "number";
+        -:   83:				prop["format"] = "float";
+        -:   84:			}
+        -:   85:			else if constexpr (std::is_floating_point_v<T>)
+        -:   86:			{
+        -:   87:				prop["type"] = "number";
+        -:   88:				prop["format"] = "double";
+        -:   89:			}
+        -:   90:			else if constexpr (IsVector<T>::value)
+        -:   91:			{
+        -:   92:				using ElemType = typename T::value_type;
+        -:   93:				prop["type"] = "array";
+        -:   94:				prop["items"] = typeToSchema<ElemType>();
+        -:   95:			}
+        -:   96:			else if constexpr (HasJsonFields<T>::value)
+        -:   97:			{
+        -:   98:				// 有 SchemaName → 生成 $ref；否则内联展开
+        -:   99:				if constexpr (SchemaName<T>::value != nullptr)
+        -:  100:				{
+        -:  101:					prop["$ref"] = std::string("#/components/schemas/") + SchemaName<T>::value;
+        -:  102:				}
+        -:  103:				else
+        -:  104:				{
+        -:  105:					// 内联展开完整 schema
+        -:  106:					return openapi::jsonSchema<T>();
+        -:  107:				}
+        -:  108:			}
+        -:  109:			else
+        -:  110:			{
+        -:  111:				static_assert(sizeof(T) == 0, "Unsupported type for OpenAPI schema generation");
+        -:  112:			}
+        -:  113:
+    #####:  114:			return prop;
+    =====:  115:		}
+call    0 never executed
+------------------
+        -:  116:
+        -:  117:		/**
+        -:  118:		 * @brief 遍历 FieldDescriptor tuple 构建 properties 和 required 数组
+        -:  119:		 * 复用 MetaJson.h serializeFields 已验证的 fold expression 模式
+        -:  120:		 */
+        -:  121:		template <typename T, typename Tuple, size_t... I>
+      20*:  122:		void buildProperties(boost::json::object& props,
+        -:  123:							 boost::json::array& required,
+        -:  124:							 const Tuple& fields,
+        -:  125:							 std::index_sequence<I...>)
+        -:  126:		{
+      59*:  127:			auto processOne = [&](const auto& field)
+        -:  128:			{
+      39*:  129:				if (field.ignored)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+branch  2 taken 0% (fallthrough)
+branch  3 taken 100%
+branch  4 taken 0% (fallthrough)
+branch  5 taken 100%
+branch  6 taken 0% (fallthrough)
+branch  7 taken 100%
+branch  8 taken 0% (fallthrough)
+branch  9 taken 100%
+branch 10 taken 0% (fallthrough)
+branch 11 taken 100%
+branch 12 taken 0% (fallthrough)
+branch 13 taken 100%
+branch 14 taken 0% (fallthrough)
+branch 15 taken 100%
+branch 16 taken 0% (fallthrough)
+branch 17 taken 100%
+branch 18 taken 25% (fallthrough)
+branch 19 taken 75%
+branch 20 taken 0% (fallthrough)
+branch 21 taken 100%
+branch 22 taken 50% (fallthrough)
+branch 23 taken 50%
+branch 24 taken 0% (fallthrough)
+branch 25 taken 100%
+branch 26 taken 0% (fallthrough)
+branch 27 taken 100%
+branch 28 taken 0% (fallthrough)
+branch 29 taken 100%
+branch 30 taken 0% (fallthrough)
+branch 31 taken 100%
+branch 32 taken 0% (fallthrough)
+branch 33 taken 100%
+branch 34 taken 0% (fallthrough)
+branch 35 taken 100%
+branch 36 taken 0% (fallthrough)
+branch 37 taken 100%
+branch 38 taken 0% (fallthrough)
+branch 39 taken 100%
+branch 40 taken 0% (fallthrough)
+branch 41 taken 100%
+branch 42 taken 0% (fallthrough)
+branch 43 taken 100%
+branch 44 never executed (fallthrough)
+branch 45 never executed
+branch 46 never executed (fallthrough)
+branch 47 never executed
+branch 48 never executed (fallthrough)
+branch 49 never executed
+branch 50 never executed (fallthrough)
+branch 51 never executed
+branch 52 never executed (fallthrough)
+branch 53 never executed
+branch 54 never executed (fallthrough)
+branch 55 never executed
+branch 56 never executed (fallthrough)
+branch 57 never executed
+        -:  130:				{
+       2*:  131:					return;
+        -:  132:				}
+        -:  133:				// 从成员指针推导字段类型
+        -:  134:				using FieldType = std::remove_reference_t<decltype(std::declval<T>().*(field.pointer))>;
+      37*:  135:				props[field.name] = typeToSchema<FieldType>();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+call    7 returned 100%
+branch  8 taken 100% (fallthrough)
+branch  9 taken 0% (throw)
+call   10 returned 100%
+call   11 never executed
+call   12 never executed
+call   13 returned 100%
+branch 14 taken 100% (fallthrough)
+branch 15 taken 0% (throw)
+call   16 returned 100%
+call   17 returned 100%
+branch 18 taken 100% (fallthrough)
+branch 19 taken 0% (throw)
+call   20 returned 100%
+branch 21 taken 100% (fallthrough)
+branch 22 taken 0% (throw)
+call   23 returned 100%
+call   24 never executed
+call   25 never executed
+call   26 returned 100%
+branch 27 taken 100% (fallthrough)
+branch 28 taken 0% (throw)
+call   29 returned 100%
+call   30 returned 100%
+branch 31 taken 100% (fallthrough)
+branch 32 taken 0% (throw)
+call   33 returned 100%
+branch 34 taken 100% (fallthrough)
+branch 35 taken 0% (throw)
+call   36 returned 100%
+call   37 never executed
+call   38 never executed
+call   39 returned 100%
+branch 40 taken 100% (fallthrough)
+branch 41 taken 0% (throw)
+call   42 returned 100%
+call   43 returned 100%
+branch 44 taken 100% (fallthrough)
+branch 45 taken 0% (throw)
+call   46 returned 100%
+branch 47 taken 100% (fallthrough)
+branch 48 taken 0% (throw)
+call   49 returned 100%
+call   50 never executed
+call   51 never executed
+call   52 returned 100%
+branch 53 taken 100% (fallthrough)
+branch 54 taken 0% (throw)
+call   55 returned 100%
+call   56 returned 100%
+branch 57 taken 100% (fallthrough)
+branch 58 taken 0% (throw)
+call   59 returned 100%
+branch 60 taken 100% (fallthrough)
+branch 61 taken 0% (throw)
+call   62 returned 100%
+call   63 never executed
+call   64 never executed
+call   65 returned 100%
+branch 66 taken 100% (fallthrough)
+branch 67 taken 0% (throw)
+call   68 returned 100%
+call   69 returned 100%
+branch 70 taken 100% (fallthrough)
+branch 71 taken 0% (throw)
+call   72 returned 100%
+branch 73 taken 100% (fallthrough)
+branch 74 taken 0% (throw)
+call   75 returned 100%
+call   76 never executed
+call   77 never executed
+call   78 returned 100%
+branch 79 taken 100% (fallthrough)
+branch 80 taken 0% (throw)
+call   81 returned 100%
+call   82 returned 100%
+branch 83 taken 100% (fallthrough)
+branch 84 taken 0% (throw)
+call   85 returned 100%
+branch 86 taken 100% (fallthrough)
+branch 87 taken 0% (throw)
+call   88 returned 100%
+call   89 never executed
+call   90 never executed
+call   91 returned 100%
+branch 92 taken 100% (fallthrough)
+branch 93 taken 0% (throw)
+call   94 returned 100%
+call   95 returned 100%
+branch 96 taken 100% (fallthrough)
+branch 97 taken 0% (throw)
+call   98 returned 100%
+branch 99 taken 100% (fallthrough)
+branch 100 taken 0% (throw)
+call   101 returned 100%
+call   102 never executed
+call   103 never executed
+call   104 returned 100%
+branch 105 taken 100% (fallthrough)
+branch 106 taken 0% (throw)
+call   107 returned 100%
+call   108 returned 100%
+branch 109 taken 100% (fallthrough)
+branch 110 taken 0% (throw)
+call   111 returned 100%
+branch 112 taken 100% (fallthrough)
+branch 113 taken 0% (throw)
+call   114 returned 100%
+call   115 never executed
+call   116 never executed
+call   117 returned 100%
+branch 118 taken 100% (fallthrough)
+branch 119 taken 0% (throw)
+call   120 returned 100%
+call   121 returned 100%
+branch 122 taken 100% (fallthrough)
+branch 123 taken 0% (throw)
+call   124 returned 100%
+branch 125 taken 100% (fallthrough)
+branch 126 taken 0% (throw)
+call   127 returned 100%
+call   128 never executed
+call   129 never executed
+call   130 returned 100%
+branch 131 taken 100% (fallthrough)
+branch 132 taken 0% (throw)
+call   133 returned 100%
+call   134 returned 100%
+branch 135 taken 100% (fallthrough)
+branch 136 taken 0% (throw)
+call   137 returned 100%
+branch 138 taken 100% (fallthrough)
+branch 139 taken 0% (throw)
+call   140 returned 100%
+call   141 never executed
+call   142 never executed
+call   143 returned 100%
+branch 144 taken 100% (fallthrough)
+branch 145 taken 0% (throw)
+call   146 returned 100%
+call   147 returned 100%
+branch 148 taken 100% (fallthrough)
+branch 149 taken 0% (throw)
+call   150 returned 100%
+branch 151 taken 100% (fallthrough)
+branch 152 taken 0% (throw)
+call   153 returned 100%
+call   154 never executed
+call   155 never executed
+call   156 returned 100%
+branch 157 taken 100% (fallthrough)
+branch 158 taken 0% (throw)
+call   159 returned 100%
+call   160 returned 100%
+branch 161 taken 100% (fallthrough)
+branch 162 taken 0% (throw)
+call   163 returned 100%
+branch 164 taken 100% (fallthrough)
+branch 165 taken 0% (throw)
+call   166 returned 100%
+call   167 never executed
+call   168 never executed
+call   169 returned 100%
+branch 170 taken 100% (fallthrough)
+branch 171 taken 0% (throw)
+call   172 returned 100%
+call   173 returned 100%
+branch 174 taken 100% (fallthrough)
+branch 175 taken 0% (throw)
+call   176 returned 100%
+branch 177 taken 100% (fallthrough)
+branch 178 taken 0% (throw)
+call   179 returned 100%
+call   180 never executed
+call   181 never executed
+call   182 returned 100%
+branch 183 taken 100% (fallthrough)
+branch 184 taken 0% (throw)
+call   185 returned 100%
+call   186 returned 100%
+branch 187 taken 100% (fallthrough)
+branch 188 taken 0% (throw)
+call   189 returned 100%
+branch 190 taken 100% (fallthrough)
+branch 191 taken 0% (throw)
+call   192 returned 100%
+call   193 never executed
+call   194 never executed
+call   195 returned 100%
+branch 196 taken 100% (fallthrough)
+branch 197 taken 0% (throw)
+call   198 returned 100%
+call   199 returned 100%
+branch 200 taken 100% (fallthrough)
+branch 201 taken 0% (throw)
+call   202 returned 100%
+branch 203 taken 100% (fallthrough)
+branch 204 taken 0% (throw)
+call   205 returned 100%
+call   206 never executed
+call   207 never executed
+call   208 returned 100%
+branch 209 taken 100% (fallthrough)
+branch 210 taken 0% (throw)
+call   211 returned 100%
+call   212 returned 100%
+branch 213 taken 100% (fallthrough)
+branch 214 taken 0% (throw)
+call   215 returned 100%
+branch 216 taken 100% (fallthrough)
+branch 217 taken 0% (throw)
+call   218 returned 100%
+call   219 never executed
+call   220 never executed
+call   221 returned 100%
+branch 222 taken 100% (fallthrough)
+branch 223 taken 0% (throw)
+call   224 returned 100%
+call   225 returned 100%
+branch 226 taken 100% (fallthrough)
+branch 227 taken 0% (throw)
+call   228 returned 100%
+branch 229 taken 100% (fallthrough)
+branch 230 taken 0% (throw)
+call   231 returned 100%
+call   232 never executed
+call   233 never executed
+call   234 returned 100%
+branch 235 taken 100% (fallthrough)
+branch 236 taken 0% (throw)
+call   237 returned 100%
+call   238 returned 100%
+branch 239 taken 100% (fallthrough)
+branch 240 taken 0% (throw)
+call   241 returned 100%
+branch 242 taken 100% (fallthrough)
+branch 243 taken 0% (throw)
+call   244 returned 100%
+call   245 never executed
+call   246 never executed
+call   247 returned 100%
+branch 248 taken 100% (fallthrough)
+branch 249 taken 0% (throw)
+call   250 returned 100%
+call   251 returned 100%
+branch 252 taken 100% (fallthrough)
+branch 253 taken 0% (throw)
+call   254 returned 100%
+branch 255 taken 100% (fallthrough)
+branch 256 taken 0% (throw)
+call   257 returned 100%
+call   258 never executed
+call   259 never executed
+call   260 returned 100%
+branch 261 taken 100% (fallthrough)
+branch 262 taken 0% (throw)
+call   263 returned 100%
+call   264 returned 100%
+branch 265 taken 100% (fallthrough)
+branch 266 taken 0% (throw)
+call   267 returned 100%
+branch 268 taken 100% (fallthrough)
+branch 269 taken 0% (throw)
+call   270 returned 100%
+call   271 never executed
+call   272 never executed
+call   273 returned 100%
+branch 274 taken 100% (fallthrough)
+branch 275 taken 0% (throw)
+call   276 returned 100%
+call   277 returned 100%
+branch 278 taken 100% (fallthrough)
+branch 279 taken 0% (throw)
+call   280 returned 100%
+branch 281 taken 100% (fallthrough)
+branch 282 taken 0% (throw)
+call   283 returned 100%
+call   284 never executed
+call   285 never executed
+call   286 never executed
+branch 287 never executed (fallthrough)
+branch 288 never executed (throw)
+call   289 never executed
+call   290 never executed
+branch 291 never executed (fallthrough)
+branch 292 never executed (throw)
+call   293 never executed
+branch 294 never executed (fallthrough)
+branch 295 never executed (throw)
+call   296 never executed
+call   297 never executed
+call   298 never executed
+call   299 never executed
+branch 300 never executed (fallthrough)
+branch 301 never executed (throw)
+call   302 never executed
+call   303 never executed
+branch 304 never executed (fallthrough)
+branch 305 never executed (throw)
+call   306 never executed
+branch 307 never executed (fallthrough)
+branch 308 never executed (throw)
+call   309 never executed
+call   310 never executed
+call   311 never executed
+call   312 never executed
+branch 313 never executed (fallthrough)
+branch 314 never executed (throw)
+call   315 never executed
+call   316 never executed
+branch 317 never executed (fallthrough)
+branch 318 never executed (throw)
+call   319 never executed
+branch 320 never executed (fallthrough)
+branch 321 never executed (throw)
+call   322 never executed
+call   323 never executed
+call   324 never executed
+call   325 never executed
+branch 326 never executed (fallthrough)
+branch 327 never executed (throw)
+call   328 never executed
+call   329 never executed
+branch 330 never executed (fallthrough)
+branch 331 never executed (throw)
+call   332 never executed
+branch 333 never executed (fallthrough)
+branch 334 never executed (throw)
+call   335 never executed
+call   336 never executed
+call   337 never executed
+call   338 never executed
+branch 339 never executed (fallthrough)
+branch 340 never executed (throw)
+call   341 never executed
+call   342 never executed
+branch 343 never executed (fallthrough)
+branch 344 never executed (throw)
+call   345 never executed
+branch 346 never executed (fallthrough)
+branch 347 never executed (throw)
+call   348 never executed
+call   349 never executed
+call   350 never executed
+call   351 never executed
+branch 352 never executed (fallthrough)
+branch 353 never executed (throw)
+call   354 never executed
+call   355 never executed
+branch 356 never executed (fallthrough)
+branch 357 never executed (throw)
+call   358 never executed
+branch 359 never executed (fallthrough)
+branch 360 never executed (throw)
+call   361 never executed
+call   362 never executed
+call   363 never executed
+call   364 never executed
+branch 365 never executed (fallthrough)
+branch 366 never executed (throw)
+call   367 never executed
+call   368 never executed
+branch 369 never executed (fallthrough)
+branch 370 never executed (throw)
+call   371 never executed
+branch 372 never executed (fallthrough)
+branch 373 never executed (throw)
+call   374 never executed
+call   375 never executed
+call   376 never executed
+      37*:  136:				if (field.required)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+branch  2 taken 0% (fallthrough)
+branch  3 taken 100%
+branch  4 taken 0% (fallthrough)
+branch  5 taken 100%
+branch  6 taken 0% (fallthrough)
+branch  7 taken 100%
+branch  8 taken 0% (fallthrough)
+branch  9 taken 100%
+branch 10 taken 0% (fallthrough)
+branch 11 taken 100%
+branch 12 taken 0% (fallthrough)
+branch 13 taken 100%
+branch 14 taken 0% (fallthrough)
+branch 15 taken 100%
+branch 16 taken 100% (fallthrough)
+branch 17 taken 0%
+branch 18 taken 33% (fallthrough)
+branch 19 taken 67%
+branch 20 taken 0% (fallthrough)
+branch 21 taken 100%
+branch 22 taken 0% (fallthrough)
+branch 23 taken 100%
+branch 24 taken 100% (fallthrough)
+branch 25 taken 0%
+branch 26 taken 100% (fallthrough)
+branch 27 taken 0%
+branch 28 taken 0% (fallthrough)
+branch 29 taken 100%
+branch 30 taken 0% (fallthrough)
+branch 31 taken 100%
+branch 32 taken 0% (fallthrough)
+branch 33 taken 100%
+branch 34 taken 0% (fallthrough)
+branch 35 taken 100%
+branch 36 taken 0% (fallthrough)
+branch 37 taken 100%
+branch 38 taken 0% (fallthrough)
+branch 39 taken 100%
+branch 40 taken 0% (fallthrough)
+branch 41 taken 100%
+branch 42 taken 0% (fallthrough)
+branch 43 taken 100%
+branch 44 never executed (fallthrough)
+branch 45 never executed
+branch 46 never executed (fallthrough)
+branch 47 never executed
+branch 48 never executed (fallthrough)
+branch 49 never executed
+branch 50 never executed (fallthrough)
+branch 51 never executed
+branch 52 never executed (fallthrough)
+branch 53 never executed
+branch 54 never executed (fallthrough)
+branch 55 never executed
+branch 56 never executed (fallthrough)
+branch 57 never executed
+        -:  137:				{
+      12*:  138:					required.push_back(boost::json::value(std::string(field.name)));
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed (throw)
+call    8 never executed
+branch  9 never executed (fallthrough)
+branch 10 never executed (throw)
+call   11 never executed
+call   12 never executed
+call   13 never executed
+call   14 never executed
+call   15 never executed
+call   16 never executed
+call   17 never executed
+call   18 never executed
+branch 19 never executed (fallthrough)
+branch 20 never executed (throw)
+call   21 never executed
+call   22 never executed
+branch 23 never executed (fallthrough)
+branch 24 never executed (throw)
+call   25 never executed
+branch 26 never executed (fallthrough)
+branch 27 never executed (throw)
+call   28 never executed
+call   29 never executed
+call   30 never executed
+call   31 never executed
+call   32 never executed
+call   33 never executed
+call   34 never executed
+call   35 never executed
+branch 36 never executed (fallthrough)
+branch 37 never executed (throw)
+call   38 never executed
+call   39 never executed
+branch 40 never executed (fallthrough)
+branch 41 never executed (throw)
+call   42 never executed
+branch 43 never executed (fallthrough)
+branch 44 never executed (throw)
+call   45 never executed
+call   46 never executed
+call   47 never executed
+call   48 never executed
+call   49 never executed
+call   50 never executed
+call   51 never executed
+call   52 never executed
+branch 53 never executed (fallthrough)
+branch 54 never executed (throw)
+call   55 never executed
+call   56 never executed
+branch 57 never executed (fallthrough)
+branch 58 never executed (throw)
+call   59 never executed
+branch 60 never executed (fallthrough)
+branch 61 never executed (throw)
+call   62 never executed
+call   63 never executed
+call   64 never executed
+call   65 never executed
+call   66 never executed
+call   67 never executed
+call   68 never executed
+call   69 never executed
+branch 70 never executed (fallthrough)
+branch 71 never executed (throw)
+call   72 never executed
+call   73 never executed
+branch 74 never executed (fallthrough)
+branch 75 never executed (throw)
+call   76 never executed
+branch 77 never executed (fallthrough)
+branch 78 never executed (throw)
+call   79 never executed
+call   80 never executed
+call   81 never executed
+call   82 never executed
+call   83 never executed
+call   84 never executed
+call   85 never executed
+call   86 never executed
+branch 87 never executed (fallthrough)
+branch 88 never executed (throw)
+call   89 never executed
+call   90 never executed
+branch 91 never executed (fallthrough)
+branch 92 never executed (throw)
+call   93 never executed
+branch 94 never executed (fallthrough)
+branch 95 never executed (throw)
+call   96 never executed
+call   97 never executed
+call   98 never executed
+call   99 never executed
+call   100 never executed
+call   101 never executed
+call   102 never executed
+call   103 never executed
+branch 104 never executed (fallthrough)
+branch 105 never executed (throw)
+call   106 never executed
+call   107 never executed
+branch 108 never executed (fallthrough)
+branch 109 never executed (throw)
+call   110 never executed
+branch 111 never executed (fallthrough)
+branch 112 never executed (throw)
+call   113 never executed
+call   114 never executed
+call   115 never executed
+call   116 never executed
+call   117 never executed
+call   118 never executed
+call   119 never executed
+call   120 never executed
+branch 121 never executed (fallthrough)
+branch 122 never executed (throw)
+call   123 never executed
+call   124 never executed
+branch 125 never executed (fallthrough)
+branch 126 never executed (throw)
+call   127 never executed
+branch 128 never executed (fallthrough)
+branch 129 never executed (throw)
+call   130 never executed
+call   131 never executed
+call   132 never executed
+call   133 never executed
+call   134 never executed
+call   135 never executed
+call   136 returned 100%
+call   137 returned 100%
+branch 138 taken 100% (fallthrough)
+branch 139 taken 0% (throw)
+call   140 returned 100%
+call   141 returned 100%
+branch 142 taken 100% (fallthrough)
+branch 143 taken 0% (throw)
+call   144 returned 100%
+branch 145 taken 100% (fallthrough)
+branch 146 taken 0% (throw)
+call   147 returned 100%
+call   148 returned 100%
+call   149 returned 100%
+call   150 never executed
+call   151 never executed
+call   152 never executed
+call   153 returned 100%
+call   154 returned 100%
+branch 155 taken 100% (fallthrough)
+branch 156 taken 0% (throw)
+call   157 returned 100%
+call   158 returned 100%
+branch 159 taken 100% (fallthrough)
+branch 160 taken 0% (throw)
+call   161 returned 100%
+branch 162 taken 100% (fallthrough)
+branch 163 taken 0% (throw)
+call   164 returned 100%
+call   165 returned 100%
+call   166 returned 100%
+call   167 never executed
+call   168 never executed
+call   169 never executed
+call   170 never executed
+call   171 never executed
+branch 172 never executed (fallthrough)
+branch 173 never executed (throw)
+call   174 never executed
+call   175 never executed
+branch 176 never executed (fallthrough)
+branch 177 never executed (throw)
+call   178 never executed
+branch 179 never executed (fallthrough)
+branch 180 never executed (throw)
+call   181 never executed
+call   182 never executed
+call   183 never executed
+call   184 never executed
+call   185 never executed
+call   186 never executed
+call   187 never executed
+call   188 never executed
+branch 189 never executed (fallthrough)
+branch 190 never executed (throw)
+call   191 never executed
+call   192 never executed
+branch 193 never executed (fallthrough)
+branch 194 never executed (throw)
+call   195 never executed
+branch 196 never executed (fallthrough)
+branch 197 never executed (throw)
+call   198 never executed
+call   199 never executed
+call   200 never executed
+call   201 never executed
+call   202 never executed
+call   203 never executed
+call   204 returned 100%
+call   205 returned 100%
+branch 206 taken 100% (fallthrough)
+branch 207 taken 0% (throw)
+call   208 returned 100%
+call   209 returned 100%
+branch 210 taken 100% (fallthrough)
+branch 211 taken 0% (throw)
+call   212 returned 100%
+branch 213 taken 100% (fallthrough)
+branch 214 taken 0% (throw)
+call   215 returned 100%
+call   216 returned 100%
+call   217 returned 100%
+call   218 never executed
+call   219 never executed
+call   220 never executed
+call   221 returned 100%
+call   222 returned 100%
+branch 223 taken 100% (fallthrough)
+branch 224 taken 0% (throw)
+call   225 returned 100%
+call   226 returned 100%
+branch 227 taken 100% (fallthrough)
+branch 228 taken 0% (throw)
+call   229 returned 100%
+branch 230 taken 100% (fallthrough)
+branch 231 taken 0% (throw)
+call   232 returned 100%
+call   233 returned 100%
+call   234 returned 100%
+call   235 never executed
+call   236 never executed
+call   237 never executed
+call   238 never executed
+call   239 never executed
+branch 240 never executed (fallthrough)
+branch 241 never executed (throw)
+call   242 never executed
+call   243 never executed
+branch 244 never executed (fallthrough)
+branch 245 never executed (throw)
+call   246 never executed
+branch 247 never executed (fallthrough)
+branch 248 never executed (throw)
+call   249 never executed
+call   250 never executed
+call   251 never executed
+call   252 never executed
+call   253 never executed
+call   254 never executed
+call   255 never executed
+call   256 never executed
+branch 257 never executed (fallthrough)
+branch 258 never executed (throw)
+call   259 never executed
+call   260 never executed
+branch 261 never executed (fallthrough)
+branch 262 never executed (throw)
+call   263 never executed
+branch 264 never executed (fallthrough)
+branch 265 never executed (throw)
+call   266 never executed
+call   267 never executed
+call   268 never executed
+call   269 never executed
+call   270 never executed
+call   271 never executed
+call   272 never executed
+call   273 never executed
+branch 274 never executed (fallthrough)
+branch 275 never executed (throw)
+call   276 never executed
+call   277 never executed
+branch 278 never executed (fallthrough)
+branch 279 never executed (throw)
+call   280 never executed
+branch 281 never executed (fallthrough)
+branch 282 never executed (throw)
+call   283 never executed
+call   284 never executed
+call   285 never executed
+call   286 never executed
+call   287 never executed
+call   288 never executed
+call   289 never executed
+call   290 never executed
+branch 291 never executed (fallthrough)
+branch 292 never executed (throw)
+call   293 never executed
+call   294 never executed
+branch 295 never executed (fallthrough)
+branch 296 never executed (throw)
+call   297 never executed
+branch 298 never executed (fallthrough)
+branch 299 never executed (throw)
+call   300 never executed
+call   301 never executed
+call   302 never executed
+call   303 never executed
+call   304 never executed
+call   305 never executed
+call   306 never executed
+call   307 never executed
+branch 308 never executed (fallthrough)
+branch 309 never executed (throw)
+call   310 never executed
+call   311 never executed
+branch 312 never executed (fallthrough)
+branch 313 never executed (throw)
+call   314 never executed
+branch 315 never executed (fallthrough)
+branch 316 never executed (throw)
+call   317 never executed
+call   318 never executed
+call   319 never executed
+call   320 never executed
+call   321 never executed
+call   322 never executed
+call   323 never executed
+call   324 never executed
+branch 325 never executed (fallthrough)
+branch 326 never executed (throw)
+call   327 never executed
+call   328 never executed
+branch 329 never executed (fallthrough)
+branch 330 never executed (throw)
+call   331 never executed
+branch 332 never executed (fallthrough)
+branch 333 never executed (throw)
+call   334 never executed
+call   335 never executed
+call   336 never executed
+call   337 never executed
+call   338 never executed
+call   339 never executed
+call   340 never executed
+call   341 never executed
+branch 342 never executed (fallthrough)
+branch 343 never executed (throw)
+call   344 never executed
+call   345 never executed
+branch 346 never executed (fallthrough)
+branch 347 never executed (throw)
+call   348 never executed
+branch 349 never executed (fallthrough)
+branch 350 never executed (throw)
+call   351 never executed
+call   352 never executed
+call   353 never executed
+call   354 never executed
+call   355 never executed
+call   356 never executed
+call   357 never executed
+call   358 never executed
+branch 359 never executed (fallthrough)
+branch 360 never executed (throw)
+call   361 never executed
+call   362 never executed
+branch 363 never executed (fallthrough)
+branch 364 never executed (throw)
+call   365 never executed
+branch 366 never executed (fallthrough)
+branch 367 never executed (throw)
+call   368 never executed
+call   369 never executed
+call   370 never executed
+call   371 never executed
+call   372 never executed
+call   373 never executed
+call   374 never executed
+call   375 never executed
+branch 376 never executed (fallthrough)
+branch 377 never executed (throw)
+call   378 never executed
+call   379 never executed
+branch 380 never executed (fallthrough)
+branch 381 never executed (throw)
+call   382 never executed
+branch 383 never executed (fallthrough)
+branch 384 never executed (throw)
+call   385 never executed
+call   386 never executed
+call   387 never executed
+call   388 never executed
+call   389 never executed
+call   390 never executed
+call   391 never executed
+call   392 never executed
+branch 393 never executed (fallthrough)
+branch 394 never executed (throw)
+call   395 never executed
+call   396 never executed
+branch 397 never executed (fallthrough)
+branch 398 never executed (throw)
+call   399 never executed
+branch 400 never executed (fallthrough)
+branch 401 never executed (throw)
+call   402 never executed
+call   403 never executed
+call   404 never executed
+call   405 never executed
+call   406 never executed
+call   407 never executed
+call   408 never executed
+call   409 never executed
+branch 410 never executed (fallthrough)
+branch 411 never executed (throw)
+call   412 never executed
+call   413 never executed
+branch 414 never executed (fallthrough)
+branch 415 never executed (throw)
+call   416 never executed
+branch 417 never executed (fallthrough)
+branch 418 never executed (throw)
+call   419 never executed
+call   420 never executed
+call   421 never executed
+call   422 never executed
+call   423 never executed
+call   424 never executed
+call   425 never executed
+call   426 never executed
+branch 427 never executed (fallthrough)
+branch 428 never executed (throw)
+call   429 never executed
+call   430 never executed
+branch 431 never executed (fallthrough)
+branch 432 never executed (throw)
+call   433 never executed
+branch 434 never executed (fallthrough)
+branch 435 never executed (throw)
+call   436 never executed
+call   437 never executed
+call   438 never executed
+call   439 never executed
+call   440 never executed
+call   441 never executed
+call   442 never executed
+call   443 never executed
+branch 444 never executed (fallthrough)
+branch 445 never executed (throw)
+call   446 never executed
+call   447 never executed
+branch 448 never executed (fallthrough)
+branch 449 never executed (throw)
+call   450 never executed
+branch 451 never executed (fallthrough)
+branch 452 never executed (throw)
+call   453 never executed
+call   454 never executed
+call   455 never executed
+call   456 never executed
+call   457 never executed
+call   458 never executed
+call   459 never executed
+call   460 never executed
+branch 461 never executed (fallthrough)
+branch 462 never executed (throw)
+call   463 never executed
+call   464 never executed
+branch 465 never executed (fallthrough)
+branch 466 never executed (throw)
+call   467 never executed
+branch 468 never executed (fallthrough)
+branch 469 never executed (throw)
+call   470 never executed
+call   471 never executed
+call   472 never executed
+call   473 never executed
+call   474 never executed
+call   475 never executed
+call   476 never executed
+call   477 never executed
+branch 478 never executed (fallthrough)
+branch 479 never executed (throw)
+call   480 never executed
+call   481 never executed
+branch 482 never executed (fallthrough)
+branch 483 never executed (throw)
+call   484 never executed
+branch 485 never executed (fallthrough)
+branch 486 never executed (throw)
+call   487 never executed
+call   488 never executed
+call   489 never executed
+call   490 never executed
+call   491 never executed
+call   492 never executed
+        -:  139:				}
+        -:  140:			};
+      20*:  141:			(processOne(std::get<I>(fields)), ...);
+      20*:  142:		}
+------------------
+_ZN5hical4meta7openapi6detail15buildPropertiesI10WithVectorSt5tupleIJNS0_6detail15FieldDescriptorIS4_NSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEEENS7_IS4_St6vectorIiSaIiEEEEEEJLm0ELm1EEEEvRN5boost4json6objectERNSL_5arrayERKT0_St16integer_sequenceImJXspT1_EEE:
+function _ZN5hical4meta7openapi6detail15buildPropertiesI10WithVectorSt5tupleIJNS0_6detail15FieldDescriptorIS4_NSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEEENS7_IS4_St6vectorIiSaIiEEEEEEJLm0ELm1EEEEvRN5boost4json6objectERNSL_5arrayERKT0_St16integer_sequenceImJXspT1_EEE called 1 returned 100% blocks executed 100%
+        1:  122:		void buildProperties(boost::json::object& props,
+        -:  123:							 boost::json::array& required,
+        -:  124:							 const Tuple& fields,
+        -:  125:							 std::index_sequence<I...>)
+        -:  126:		{
+        1:  127:			auto processOne = [&](const auto& field)
+        -:  128:			{
+        -:  129:				if (field.ignored)
+        -:  130:				{
+        -:  131:					return;
+        -:  132:				}
+        -:  133:				// 从成员指针推导字段类型
+        -:  134:				using FieldType = std::remove_reference_t<decltype(std::declval<T>().*(field.pointer))>;
+        -:  135:				props[field.name] = typeToSchema<FieldType>();
+        -:  136:				if (field.required)
+        -:  137:				{
+        -:  138:					required.push_back(boost::json::value(std::string(field.name)));
+        -:  139:				}
+        -:  140:			};
+        1:  141:			(processOne(std::get<I>(fields)), ...);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+        1:  142:		}
+------------------
+_ZN5hical4meta7openapi6detail15buildPropertiesI7UserDTOSt5tupleIJNS0_6detail15FieldDescriptorIS4_NSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEEENS7_IS4_iEESE_EEJLm0ELm1ELm2EEEEvRN5boost4json6objectERNSI_5arrayERKT0_St16integer_sequenceImJXspT1_EEE:
+function _ZN5hical4meta7openapi6detail15buildPropertiesI7UserDTOSt5tupleIJNS0_6detail15FieldDescriptorIS4_NSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEEENS7_IS4_iEESE_EEJLm0ELm1ELm2EEEEvRN5boost4json6objectERNSI_5arrayERKT0_St16integer_sequenceImJXspT1_EEE called 0 returned 0% blocks executed 0%
+    #####:  122:		void buildProperties(boost::json::object& props,
+        -:  123:							 boost::json::array& required,
+        -:  124:							 const Tuple& fields,
+        -:  125:							 std::index_sequence<I...>)
+        -:  126:		{
+    #####:  127:			auto processOne = [&](const auto& field)
+        -:  128:			{
+        -:  129:				if (field.ignored)
+        -:  130:				{
+        -:  131:					return;
+        -:  132:				}
+        -:  133:				// 从成员指针推导字段类型
+        -:  134:				using FieldType = std::remove_reference_t<decltype(std::declval<T>().*(field.pointer))>;
+        -:  135:				props[field.name] = typeToSchema<FieldType>();
+        -:  136:				if (field.required)
+        -:  137:				{
+        -:  138:					required.push_back(boost::json::value(std::string(field.name)));
+        -:  139:				}
+        -:  140:			};
+    #####:  141:			(processOne(std::get<I>(fields)), ...);
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed (throw)
+call    8 never executed
+call    9 never executed
+branch 10 never executed (fallthrough)
+branch 11 never executed (throw)
+    #####:  142:		}
+------------------
+_ZN5hical4meta7openapi6detail15buildPropertiesI17CreateUserRequestSt5tupleIJNS0_6detail15FieldDescriptorIS4_NSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEEENS7_IS4_iEESE_EEJLm0ELm1ELm2EEEEvRN5boost4json6objectERNSI_5arrayERKT0_St16integer_sequenceImJXspT1_EEE:
+function _ZN5hical4meta7openapi6detail15buildPropertiesI17CreateUserRequestSt5tupleIJNS0_6detail15FieldDescriptorIS4_NSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEEENS7_IS4_iEESE_EEJLm0ELm1ELm2EEEEvRN5boost4json6objectERNSI_5arrayERKT0_St16integer_sequenceImJXspT1_EEE called 0 returned 0% blocks executed 0%
+    #####:  122:		void buildProperties(boost::json::object& props,
+        -:  123:							 boost::json::array& required,
+        -:  124:							 const Tuple& fields,
+        -:  125:							 std::index_sequence<I...>)
+        -:  126:		{
+    #####:  127:			auto processOne = [&](const auto& field)
+        -:  128:			{
+        -:  129:				if (field.ignored)
+        -:  130:				{
+        -:  131:					return;
+        -:  132:				}
+        -:  133:				// 从成员指针推导字段类型
+        -:  134:				using FieldType = std::remove_reference_t<decltype(std::declval<T>().*(field.pointer))>;
+        -:  135:				props[field.name] = typeToSchema<FieldType>();
+        -:  136:				if (field.required)
+        -:  137:				{
+        -:  138:					required.push_back(boost::json::value(std::string(field.name)));
+        -:  139:				}
+        -:  140:			};
+    #####:  141:			(processOne(std::get<I>(fields)), ...);
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed (throw)
+call    8 never executed
+call    9 never executed
+branch 10 never executed (fallthrough)
+branch 11 never executed (throw)
+    #####:  142:		}
+------------------
+_ZN5hical4meta7openapi6detail15buildPropertiesI13ErrorResponseSt5tupleIJNS0_6detail15FieldDescriptorIS4_iEENS7_IS4_NSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEEEEEJLm0ELm1EEEEvRN5boost4json6objectERNSI_5arrayERKT0_St16integer_sequenceImJXspT1_EEE:
+function _ZN5hical4meta7openapi6detail15buildPropertiesI13ErrorResponseSt5tupleIJNS0_6detail15FieldDescriptorIS4_iEENS7_IS4_NSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEEEEEJLm0ELm1EEEEvRN5boost4json6objectERNSI_5arrayERKT0_St16integer_sequenceImJXspT1_EEE called 0 returned 0% blocks executed 0%
+    #####:  122:		void buildProperties(boost::json::object& props,
+        -:  123:							 boost::json::array& required,
+        -:  124:							 const Tuple& fields,
+        -:  125:							 std::index_sequence<I...>)
+        -:  126:		{
+    #####:  127:			auto processOne = [&](const auto& field)
+        -:  128:			{
+        -:  129:				if (field.ignored)
+        -:  130:				{
+        -:  131:					return;
+        -:  132:				}
+        -:  133:				// 从成员指针推导字段类型
+        -:  134:				using FieldType = std::remove_reference_t<decltype(std::declval<T>().*(field.pointer))>;
+        -:  135:				props[field.name] = typeToSchema<FieldType>();
+        -:  136:				if (field.required)
+        -:  137:				{
+        -:  138:					required.push_back(boost::json::value(std::string(field.name)));
+        -:  139:				}
+        -:  140:			};
+    #####:  141:			(processOne(std::get<I>(fields)), ...);
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed (throw)
+    #####:  142:		}
+------------------
+_ZN5hical4meta7openapi6detail15buildPropertiesI9StatusDTOSt5tupleIJNS0_6detail15FieldDescriptorIS4_NSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEEESE_SE_EEJLm0ELm1ELm2EEEEvRN5boost4json6objectERNSH_5arrayERKT0_St16integer_sequenceImJXspT1_EEE:
+function _ZN5hical4meta7openapi6detail15buildPropertiesI9StatusDTOSt5tupleIJNS0_6detail15FieldDescriptorIS4_NSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEEESE_SE_EEJLm0ELm1ELm2EEEEvRN5boost4json6objectERNSH_5arrayERKT0_St16integer_sequenceImJXspT1_EEE called 0 returned 0% blocks executed 0%
+    #####:  122:		void buildProperties(boost::json::object& props,
+        -:  123:							 boost::json::array& required,
+        -:  124:							 const Tuple& fields,
+        -:  125:							 std::index_sequence<I...>)
+        -:  126:		{
+    #####:  127:			auto processOne = [&](const auto& field)
+        -:  128:			{
+        -:  129:				if (field.ignored)
+        -:  130:				{
+        -:  131:					return;
+        -:  132:				}
+        -:  133:				// 从成员指针推导字段类型
+        -:  134:				using FieldType = std::remove_reference_t<decltype(std::declval<T>().*(field.pointer))>;
+        -:  135:				props[field.name] = typeToSchema<FieldType>();
+        -:  136:				if (field.required)
+        -:  137:				{
+        -:  138:					required.push_back(boost::json::value(std::string(field.name)));
+        -:  139:				}
+        -:  140:			};
+    #####:  141:			(processOne(std::get<I>(fields)), ...);
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed (throw)
+call    8 never executed
+call    9 never executed
+branch 10 never executed (fallthrough)
+branch 11 never executed (throw)
+    #####:  142:		}
+------------------
+_ZN5hical4meta7openapi6detail15buildPropertiesI9SimpleDTOSt5tupleIJNS0_6detail15FieldDescriptorIS4_NSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEEENS7_IS4_iEEEEJLm0ELm1EEEEvRN5boost4json6objectERNSI_5arrayERKT0_St16integer_sequenceImJXspT1_EEE:
+function _ZN5hical4meta7openapi6detail15buildPropertiesI9SimpleDTOSt5tupleIJNS0_6detail15FieldDescriptorIS4_NSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEEENS7_IS4_iEEEEJLm0ELm1EEEEvRN5boost4json6objectERNSI_5arrayERKT0_St16integer_sequenceImJXspT1_EEE called 5 returned 100% blocks executed 100%
+        5:  122:		void buildProperties(boost::json::object& props,
+        -:  123:							 boost::json::array& required,
+        -:  124:							 const Tuple& fields,
+        -:  125:							 std::index_sequence<I...>)
+        -:  126:		{
+        5:  127:			auto processOne = [&](const auto& field)
+        -:  128:			{
+        -:  129:				if (field.ignored)
+        -:  130:				{
+        -:  131:					return;
+        -:  132:				}
+        -:  133:				// 从成员指针推导字段类型
+        -:  134:				using FieldType = std::remove_reference_t<decltype(std::declval<T>().*(field.pointer))>;
+        -:  135:				props[field.name] = typeToSchema<FieldType>();
+        -:  136:				if (field.required)
+        -:  137:				{
+        -:  138:					required.push_back(boost::json::value(std::string(field.name)));
+        -:  139:				}
+        -:  140:			};
+        5:  141:			(processOne(std::get<I>(fields)), ...);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+        5:  142:		}
+------------------
+_ZN5hical4meta7openapi6detail15buildPropertiesI9Uint64DTOSt5tupleIJNS0_6detail15FieldDescriptorIS4_mEEEEJLm0EEEEvRN5boost4json6objectERNSB_5arrayERKT0_St16integer_sequenceImJXspT1_EEE:
+function _ZN5hical4meta7openapi6detail15buildPropertiesI9Uint64DTOSt5tupleIJNS0_6detail15FieldDescriptorIS4_mEEEEJLm0EEEEvRN5boost4json6objectERNSB_5arrayERKT0_St16integer_sequenceImJXspT1_EEE called 1 returned 100% blocks executed 100%
+        1:  122:		void buildProperties(boost::json::object& props,
+        -:  123:							 boost::json::array& required,
+        -:  124:							 const Tuple& fields,
+        -:  125:							 std::index_sequence<I...>)
+        -:  126:		{
+        1:  127:			auto processOne = [&](const auto& field)
+        -:  128:			{
+        -:  129:				if (field.ignored)
+        -:  130:				{
+        -:  131:					return;
+        -:  132:				}
+        -:  133:				// 从成员指针推导字段类型
+        -:  134:				using FieldType = std::remove_reference_t<decltype(std::declval<T>().*(field.pointer))>;
+        -:  135:				props[field.name] = typeToSchema<FieldType>();
+        -:  136:				if (field.required)
+        -:  137:				{
+        -:  138:					required.push_back(boost::json::value(std::string(field.name)));
+        -:  139:				}
+        -:  140:			};
+        1:  141:			(processOne(std::get<I>(fields)), ...);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        1:  142:		}
+------------------
+_ZN5hical4meta7openapi6detail15buildPropertiesI10WithDoubleSt5tupleIJNS0_6detail15FieldDescriptorIS4_dEENS7_IS4_fEEEEJLm0ELm1EEEEvRN5boost4json6objectERNSC_5arrayERKT0_St16integer_sequenceImJXspT1_EEE:
+function _ZN5hical4meta7openapi6detail15buildPropertiesI10WithDoubleSt5tupleIJNS0_6detail15FieldDescriptorIS4_dEENS7_IS4_fEEEEJLm0ELm1EEEEvRN5boost4json6objectERNSC_5arrayERKT0_St16integer_sequenceImJXspT1_EEE called 1 returned 100% blocks executed 100%
+        1:  122:		void buildProperties(boost::json::object& props,
+        -:  123:							 boost::json::array& required,
+        -:  124:							 const Tuple& fields,
+        -:  125:							 std::index_sequence<I...>)
+        -:  126:		{
+        1:  127:			auto processOne = [&](const auto& field)
+        -:  128:			{
+        -:  129:				if (field.ignored)
+        -:  130:				{
+        -:  131:					return;
+        -:  132:				}
+        -:  133:				// 从成员指针推导字段类型
+        -:  134:				using FieldType = std::remove_reference_t<decltype(std::declval<T>().*(field.pointer))>;
+        -:  135:				props[field.name] = typeToSchema<FieldType>();
+        -:  136:				if (field.required)
+        -:  137:				{
+        -:  138:					required.push_back(boost::json::value(std::string(field.name)));
+        -:  139:				}
+        -:  140:			};
+        1:  141:			(processOne(std::get<I>(fields)), ...);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+        1:  142:		}
+------------------
+_ZN5hical4meta7openapi6detail15buildPropertiesIZN32OpenApiSchemaTest_BoolField_Test8TestBodyEvE7BoolDTOSt5tupleIJNS0_6detail15FieldDescriptorIS5_bEEEEJLm0EEEEvRN5boost4json6objectERNSC_5arrayERKT0_St16integer_sequenceImJXspT1_EEE:
+function _ZN5hical4meta7openapi6detail15buildPropertiesIZN32OpenApiSchemaTest_BoolField_Test8TestBodyEvE7BoolDTOSt5tupleIJNS0_6detail15FieldDescriptorIS5_bEEEEJLm0EEEEvRN5boost4json6objectERNSC_5arrayERKT0_St16integer_sequenceImJXspT1_EEE called 1 returned 100% blocks executed 100%
+        1:  122:		void buildProperties(boost::json::object& props,
+        -:  123:							 boost::json::array& required,
+        -:  124:							 const Tuple& fields,
+        -:  125:							 std::index_sequence<I...>)
+        -:  126:		{
+        1:  127:			auto processOne = [&](const auto& field)
+        -:  128:			{
+        -:  129:				if (field.ignored)
+        -:  130:				{
+        -:  131:					return;
+        -:  132:				}
+        -:  133:				// 从成员指针推导字段类型
+        -:  134:				using FieldType = std::remove_reference_t<decltype(std::declval<T>().*(field.pointer))>;
+        -:  135:				props[field.name] = typeToSchema<FieldType>();
+        -:  136:				if (field.required)
+        -:  137:				{
+        -:  138:					required.push_back(boost::json::value(std::string(field.name)));
+        -:  139:				}
+        -:  140:			};
+        1:  141:			(processOne(std::get<I>(fields)), ...);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        1:  142:		}
+------------------
+_ZN5hical4meta7openapi6detail15buildPropertiesI13NestedAddressSt5tupleIJNS0_6detail15FieldDescriptorIS4_NSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEEESE_EEJLm0ELm1EEEEvRN5boost4json6objectERNSH_5arrayERKT0_St16integer_sequenceImJXspT1_EEE:
+function _ZN5hical4meta7openapi6detail15buildPropertiesI13NestedAddressSt5tupleIJNS0_6detail15FieldDescriptorIS4_NSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEEESE_EEJLm0ELm1EEEEvRN5boost4json6objectERNSH_5arrayERKT0_St16integer_sequenceImJXspT1_EEE called 2 returned 100% blocks executed 100%
+        2:  122:		void buildProperties(boost::json::object& props,
+        -:  123:							 boost::json::array& required,
+        -:  124:							 const Tuple& fields,
+        -:  125:							 std::index_sequence<I...>)
+        -:  126:		{
+        2:  127:			auto processOne = [&](const auto& field)
+        -:  128:			{
+        -:  129:				if (field.ignored)
+        -:  130:				{
+        -:  131:					return;
+        -:  132:				}
+        -:  133:				// 从成员指针推导字段类型
+        -:  134:				using FieldType = std::remove_reference_t<decltype(std::declval<T>().*(field.pointer))>;
+        -:  135:				props[field.name] = typeToSchema<FieldType>();
+        -:  136:				if (field.required)
+        -:  137:				{
+        -:  138:					required.push_back(boost::json::value(std::string(field.name)));
+        -:  139:				}
+        -:  140:			};
+        2:  141:			(processOne(std::get<I>(fields)), ...);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+        2:  142:		}
+------------------
+_ZN5hical4meta7openapi6detail15buildPropertiesI11RequiredDTOSt5tupleIJNS0_6detail15FieldDescriptorIS4_NSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEEENS7_IS4_iEEEEJLm0ELm1EEEEvRN5boost4json6objectERNSI_5arrayERKT0_St16integer_sequenceImJXspT1_EEE:
+function _ZN5hical4meta7openapi6detail15buildPropertiesI11RequiredDTOSt5tupleIJNS0_6detail15FieldDescriptorIS4_NSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEEENS7_IS4_iEEEEJLm0ELm1EEEEvRN5boost4json6objectERNSI_5arrayERKT0_St16integer_sequenceImJXspT1_EEE called 1 returned 100% blocks executed 100%
+        1:  122:		void buildProperties(boost::json::object& props,
+        -:  123:							 boost::json::array& required,
+        -:  124:							 const Tuple& fields,
+        -:  125:							 std::index_sequence<I...>)
+        -:  126:		{
+        1:  127:			auto processOne = [&](const auto& field)
+        -:  128:			{
+        -:  129:				if (field.ignored)
+        -:  130:				{
+        -:  131:					return;
+        -:  132:				}
+        -:  133:				// 从成员指针推导字段类型
+        -:  134:				using FieldType = std::remove_reference_t<decltype(std::declval<T>().*(field.pointer))>;
+        -:  135:				props[field.name] = typeToSchema<FieldType>();
+        -:  136:				if (field.required)
+        -:  137:				{
+        -:  138:					required.push_back(boost::json::value(std::string(field.name)));
+        -:  139:				}
+        -:  140:			};
+        1:  141:			(processOne(std::get<I>(fields)), ...);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+        1:  142:		}
+------------------
+_ZN5hical4meta7openapi6detail15buildPropertiesI9IgnoreDTOSt5tupleIJNS0_6detail15FieldDescriptorIS4_NSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEEESE_EEJLm0ELm1EEEEvRN5boost4json6objectERNSH_5arrayERKT0_St16integer_sequenceImJXspT1_EEE:
+function _ZN5hical4meta7openapi6detail15buildPropertiesI9IgnoreDTOSt5tupleIJNS0_6detail15FieldDescriptorIS4_NSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEEESE_EEJLm0ELm1EEEEvRN5boost4json6objectERNSH_5arrayERKT0_St16integer_sequenceImJXspT1_EEE called 1 returned 100% blocks executed 100%
+        1:  122:		void buildProperties(boost::json::object& props,
+        -:  123:							 boost::json::array& required,
+        -:  124:							 const Tuple& fields,
+        -:  125:							 std::index_sequence<I...>)
+        -:  126:		{
+        1:  127:			auto processOne = [&](const auto& field)
+        -:  128:			{
+        -:  129:				if (field.ignored)
+        -:  130:				{
+        -:  131:					return;
+        -:  132:				}
+        -:  133:				// 从成员指针推导字段类型
+        -:  134:				using FieldType = std::remove_reference_t<decltype(std::declval<T>().*(field.pointer))>;
+        -:  135:				props[field.name] = typeToSchema<FieldType>();
+        -:  136:				if (field.required)
+        -:  137:				{
+        -:  138:					required.push_back(boost::json::value(std::string(field.name)));
+        -:  139:				}
+        -:  140:			};
+        1:  141:			(processOne(std::get<I>(fields)), ...);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+        1:  142:		}
+------------------
+_ZN5hical4meta7openapi6detail15buildPropertiesI8AliasDTOSt5tupleIJNS0_6detail15FieldDescriptorIS4_NSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEEESE_EEJLm0ELm1EEEEvRN5boost4json6objectERNSH_5arrayERKT0_St16integer_sequenceImJXspT1_EEE:
+function _ZN5hical4meta7openapi6detail15buildPropertiesI8AliasDTOSt5tupleIJNS0_6detail15FieldDescriptorIS4_NSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEEESE_EEJLm0ELm1EEEEvRN5boost4json6objectERNSH_5arrayERKT0_St16integer_sequenceImJXspT1_EEE called 1 returned 100% blocks executed 100%
+        1:  122:		void buildProperties(boost::json::object& props,
+        -:  123:							 boost::json::array& required,
+        -:  124:							 const Tuple& fields,
+        -:  125:							 std::index_sequence<I...>)
+        -:  126:		{
+        1:  127:			auto processOne = [&](const auto& field)
+        -:  128:			{
+        -:  129:				if (field.ignored)
+        -:  130:				{
+        -:  131:					return;
+        -:  132:				}
+        -:  133:				// 从成员指针推导字段类型
+        -:  134:				using FieldType = std::remove_reference_t<decltype(std::declval<T>().*(field.pointer))>;
+        -:  135:				props[field.name] = typeToSchema<FieldType>();
+        -:  136:				if (field.required)
+        -:  137:				{
+        -:  138:					required.push_back(boost::json::value(std::string(field.name)));
+        -:  139:				}
+        -:  140:			};
+        1:  141:			(processOne(std::get<I>(fields)), ...);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+        1:  142:		}
+------------------
+_ZN5hical4meta7openapi6detail15buildPropertiesI8MixedDTOSt5tupleIJNS0_6detail15FieldDescriptorIS4_NSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEEENS7_IS4_iEESE_SE_SE_EEJLm0ELm1ELm2ELm3ELm4EEEEvRN5boost4json6objectERNSI_5arrayERKT0_St16integer_sequenceImJXspT1_EEE:
+function _ZN5hical4meta7openapi6detail15buildPropertiesI8MixedDTOSt5tupleIJNS0_6detail15FieldDescriptorIS4_NSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEEENS7_IS4_iEESE_SE_SE_EEJLm0ELm1ELm2ELm3ELm4EEEEvRN5boost4json6objectERNSI_5arrayERKT0_St16integer_sequenceImJXspT1_EEE called 1 returned 100% blocks executed 100%
+        1:  122:		void buildProperties(boost::json::object& props,
+        -:  123:							 boost::json::array& required,
+        -:  124:							 const Tuple& fields,
+        -:  125:							 std::index_sequence<I...>)
+        -:  126:		{
+        1:  127:			auto processOne = [&](const auto& field)
+        -:  128:			{
+        -:  129:				if (field.ignored)
+        -:  130:				{
+        -:  131:					return;
+        -:  132:				}
+        -:  133:				// 从成员指针推导字段类型
+        -:  134:				using FieldType = std::remove_reference_t<decltype(std::declval<T>().*(field.pointer))>;
+        -:  135:				props[field.name] = typeToSchema<FieldType>();
+        -:  136:				if (field.required)
+        -:  137:				{
+        -:  138:					required.push_back(boost::json::value(std::string(field.name)));
+        -:  139:				}
+        -:  140:			};
+        1:  141:			(processOne(std::get<I>(fields)), ...);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+call    8 returned 100%
+call    9 returned 100%
+branch 10 taken 100% (fallthrough)
+branch 11 taken 0% (throw)
+call   12 returned 100%
+call   13 returned 100%
+branch 14 taken 100% (fallthrough)
+branch 15 taken 0% (throw)
+call   16 returned 100%
+call   17 returned 100%
+branch 18 taken 100% (fallthrough)
+branch 19 taken 0% (throw)
+        1:  142:		}
+------------------
+_ZN5hical4meta7openapi6detail15buildPropertiesI15UserWithAddressSt5tupleIJNS0_6detail15FieldDescriptorIS4_NSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEEENS7_IS4_iEENS7_IS4_13NestedAddressEEEEJLm0ELm1ELm2EEEEvRN5boost4json6objectERNSK_5arrayERKT0_St16integer_sequenceImJXspT1_EEE:
+function _ZN5hical4meta7openapi6detail15buildPropertiesI15UserWithAddressSt5tupleIJNS0_6detail15FieldDescriptorIS4_NSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEEENS7_IS4_iEENS7_IS4_13NestedAddressEEEEJLm0ELm1ELm2EEEEvRN5boost4json6objectERNSK_5arrayERKT0_St16integer_sequenceImJXspT1_EEE called 1 returned 100% blocks executed 100%
+        1:  122:		void buildProperties(boost::json::object& props,
+        -:  123:							 boost::json::array& required,
+        -:  124:							 const Tuple& fields,
+        -:  125:							 std::index_sequence<I...>)
+        -:  126:		{
+        1:  127:			auto processOne = [&](const auto& field)
+        -:  128:			{
+        -:  129:				if (field.ignored)
+        -:  130:				{
+        -:  131:					return;
+        -:  132:				}
+        -:  133:				// 从成员指针推导字段类型
+        -:  134:				using FieldType = std::remove_reference_t<decltype(std::declval<T>().*(field.pointer))>;
+        -:  135:				props[field.name] = typeToSchema<FieldType>();
+        -:  136:				if (field.required)
+        -:  137:				{
+        -:  138:					required.push_back(boost::json::value(std::string(field.name)));
+        -:  139:				}
+        -:  140:			};
+        1:  141:			(processOne(std::get<I>(fields)), ...);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+call    8 returned 100%
+call    9 returned 100%
+branch 10 taken 100% (fallthrough)
+branch 11 taken 0% (throw)
+        1:  142:		}
+------------------
+_ZN5hical4meta7openapi6detail15buildPropertiesI15WithNamedNestedSt5tupleIJNS0_6detail15FieldDescriptorIS4_NSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEEENS7_IS4_8NamedDTOEEEEJLm0ELm1EEEEvRN5boost4json6objectERNSJ_5arrayERKT0_St16integer_sequenceImJXspT1_EEE:
+function _ZN5hical4meta7openapi6detail15buildPropertiesI15WithNamedNestedSt5tupleIJNS0_6detail15FieldDescriptorIS4_NSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEEENS7_IS4_8NamedDTOEEEEJLm0ELm1EEEEvRN5boost4json6objectERNSJ_5arrayERKT0_St16integer_sequenceImJXspT1_EEE called 1 returned 100% blocks executed 100%
+        1:  122:		void buildProperties(boost::json::object& props,
+        -:  123:							 boost::json::array& required,
+        -:  124:							 const Tuple& fields,
+        -:  125:							 std::index_sequence<I...>)
+        -:  126:		{
+        1:  127:			auto processOne = [&](const auto& field)
+        -:  128:			{
+        -:  129:				if (field.ignored)
+        -:  130:				{
+        -:  131:					return;
+        -:  132:				}
+        -:  133:				// 从成员指针推导字段类型
+        -:  134:				using FieldType = std::remove_reference_t<decltype(std::declval<T>().*(field.pointer))>;
+        -:  135:				props[field.name] = typeToSchema<FieldType>();
+        -:  136:				if (field.required)
+        -:  137:				{
+        -:  138:					required.push_back(boost::json::value(std::string(field.name)));
+        -:  139:				}
+        -:  140:			};
+        1:  141:			(processOne(std::get<I>(fields)), ...);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+        1:  142:		}
+------------------
+_ZN5hical4meta7openapi6detail15buildPropertiesI17WithVectorOfNamedSt5tupleIJNS0_6detail15FieldDescriptorIS4_St6vectorI8NamedDTOSaIS9_EEEEEEJLm0EEEEvRN5boost4json6objectERNSF_5arrayERKT0_St16integer_sequenceImJXspT1_EEE:
+function _ZN5hical4meta7openapi6detail15buildPropertiesI17WithVectorOfNamedSt5tupleIJNS0_6detail15FieldDescriptorIS4_St6vectorI8NamedDTOSaIS9_EEEEEEJLm0EEEEvRN5boost4json6objectERNSF_5arrayERKT0_St16integer_sequenceImJXspT1_EEE called 1 returned 100% blocks executed 100%
+        1:  122:		void buildProperties(boost::json::object& props,
+        -:  123:							 boost::json::array& required,
+        -:  124:							 const Tuple& fields,
+        -:  125:							 std::index_sequence<I...>)
+        -:  126:		{
+        1:  127:			auto processOne = [&](const auto& field)
+        -:  128:			{
+        -:  129:				if (field.ignored)
+        -:  130:				{
+        -:  131:					return;
+        -:  132:				}
+        -:  133:				// 从成员指针推导字段类型
+        -:  134:				using FieldType = std::remove_reference_t<decltype(std::declval<T>().*(field.pointer))>;
+        -:  135:				props[field.name] = typeToSchema<FieldType>();
+        -:  136:				if (field.required)
+        -:  137:				{
+        -:  138:					required.push_back(boost::json::value(std::string(field.name)));
+        -:  139:				}
+        -:  140:			};
+        1:  141:			(processOne(std::get<I>(fields)), ...);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        1:  142:		}
+------------------
+_ZN5hical4meta7openapi6detail15buildPropertiesI8NamedDTOSt5tupleIJNS0_6detail15FieldDescriptorIS4_NSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEEEEEJLm0EEEEvRN5boost4json6objectERNSH_5arrayERKT0_St16integer_sequenceImJXspT1_EEE:
+function _ZN5hical4meta7openapi6detail15buildPropertiesI8NamedDTOSt5tupleIJNS0_6detail15FieldDescriptorIS4_NSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEEEEEJLm0EEEEvRN5boost4json6objectERNSH_5arrayERKT0_St16integer_sequenceImJXspT1_EEE called 2 returned 100% blocks executed 100%
+        2:  122:		void buildProperties(boost::json::object& props,
+        -:  123:							 boost::json::array& required,
+        -:  124:							 const Tuple& fields,
+        -:  125:							 std::index_sequence<I...>)
+        -:  126:		{
+        2:  127:			auto processOne = [&](const auto& field)
+        -:  128:			{
+        -:  129:				if (field.ignored)
+        -:  130:				{
+        -:  131:					return;
+        -:  132:				}
+        -:  133:				// 从成员指针推导字段类型
+        -:  134:				using FieldType = std::remove_reference_t<decltype(std::declval<T>().*(field.pointer))>;
+        -:  135:				props[field.name] = typeToSchema<FieldType>();
+        -:  136:				if (field.required)
+        -:  137:				{
+        -:  138:					required.push_back(boost::json::value(std::string(field.name)));
+        -:  139:				}
+        -:  140:			};
+        2:  141:			(processOne(std::get<I>(fields)), ...);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        2:  142:		}
+------------------
+        -:  143:
+        -:  144:	} // namespace detail
+        -:  145:
+        -:  146:	// ============ 公共 API ============
+        -:  147:
+        -:  148:	/**
+        -:  149:	 * @brief 从 HICAL_JSON 标注的结构体自动生成 JSON Schema
+        -:  150:	 * @tparam T 标注了 HICAL_JSON() 的结构体类型
+        -:  151:	 * @return boost::json::object 符合 OpenAPI 3.0 Schema Object 规范
+        -:  152:	 * 类型映射：
+        -:  153:	 *   std::string        → {"type":"string"}
+        -:  154:	 *   bool               → {"type":"boolean"}
+        -:  155:	 *   int/int32_t        → {"type":"integer","format":"int32"}
+        -:  156:	 *   int64_t            → {"type":"integer","format":"int64"}
+        -:  157:	 *   uint64_t           → {"type":"integer","format":"int64","minimum":0}
+        -:  158:	 *   float              → {"type":"number","format":"float"}
+        -:  159:	 *   double             → {"type":"number","format":"double"}
+        -:  160:	 *   std::vector<T>     → {"type":"array","items":{...}}
+        -:  161:	 *   嵌套 HasJsonFields → $ref 或内联 object
+        -:  162:	 */
+        -:  163:	template <typename T>
+      20*:  164:	boost::json::object jsonSchema()
+        -:  165:	{
+        -:  166:		static_assert(HasJsonFields<T>::value, "Type must use HICAL_JSON() macro for schema generation");
+        -:  167:
+      20*:  168:		boost::json::object schema;
+      20*:  169:		schema["type"] = "object";
+        -:  170:
+      20*:  171:		boost::json::object properties;
+      20*:  172:		boost::json::array requiredFields;
+        -:  173:
+      20*:  174:		const auto& fields = T::hicalJsonFields();
+      20*:  175:		constexpr auto count = std::tuple_size_v<std::remove_cvref_t<decltype(fields)>>;
+      20*:  176:		detail::buildProperties<T>(properties, requiredFields, fields, std::make_index_sequence<count> {});
+        -:  177:
+      20*:  178:		schema["properties"] = std::move(properties);
+      20*:  179:		if (!requiredFields.empty())
+        -:  180:		{
+       2*:  181:			schema["required"] = std::move(requiredFields);
+        -:  182:		}
+        -:  183:
+      20*:  184:		return schema;
+      20*:  185:	}
+------------------
+_ZN5hical4meta7openapi10jsonSchemaI10WithVectorEEN5boost4json6objectEv:
+function _ZN5hical4meta7openapi10jsonSchemaI10WithVectorEEN5boost4json6objectEv called 1 returned 100% blocks executed 58%
+        1:  164:	boost::json::object jsonSchema()
+        -:  165:	{
+        -:  166:		static_assert(HasJsonFields<T>::value, "Type must use HICAL_JSON() macro for schema generation");
+        -:  167:
+        1:  168:		boost::json::object schema;
+call    0 returned 100%
+        1:  169:		schema["type"] = "object";
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+        -:  170:
+        1:  171:		boost::json::object properties;
+call    0 returned 100%
+        1:  172:		boost::json::array requiredFields;
+call    0 returned 100%
+        -:  173:
+        1:  174:		const auto& fields = T::hicalJsonFields();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  175:		constexpr auto count = std::tuple_size_v<std::remove_cvref_t<decltype(fields)>>;
+        1:  176:		detail::buildProperties<T>(properties, requiredFields, fields, std::make_index_sequence<count> {});
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  177:
+        1:  178:		schema["properties"] = std::move(properties);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+        1:  179:		if (!requiredFields.empty())
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+        -:  180:		{
+    #####:  181:			schema["required"] = std::move(requiredFields);
+call    0 never executed
+call    1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed (throw)
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed (throw)
+        -:  182:		}
+        -:  183:
+        1:  184:		return schema;
+        1:  185:	}
+call    0 returned 100%
+call    1 returned 100%
+call    2 never executed
+call    3 never executed
+call    4 never executed
+------------------
+_ZN5hical4meta7openapi10jsonSchemaI7UserDTOEEN5boost4json6objectEv:
+function _ZN5hical4meta7openapi10jsonSchemaI7UserDTOEEN5boost4json6objectEv called 0 returned 0% blocks executed 0%
+    #####:  164:	boost::json::object jsonSchema()
+        -:  165:	{
+        -:  166:		static_assert(HasJsonFields<T>::value, "Type must use HICAL_JSON() macro for schema generation");
+        -:  167:
+    #####:  168:		boost::json::object schema;
+call    0 never executed
+    #####:  169:		schema["type"] = "object";
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+branch  5 never executed (fallthrough)
+branch  6 never executed (throw)
+        -:  170:
+    #####:  171:		boost::json::object properties;
+call    0 never executed
+    #####:  172:		boost::json::array requiredFields;
+call    0 never executed
+        -:  173:
+    #####:  174:		const auto& fields = T::hicalJsonFields();
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  175:		constexpr auto count = std::tuple_size_v<std::remove_cvref_t<decltype(fields)>>;
+    #####:  176:		detail::buildProperties<T>(properties, requiredFields, fields, std::make_index_sequence<count> {});
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:  177:
+    #####:  178:		schema["properties"] = std::move(properties);
+call    0 never executed
+call    1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed (throw)
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed (throw)
+    #####:  179:		if (!requiredFields.empty())
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+        -:  180:		{
+    #####:  181:			schema["required"] = std::move(requiredFields);
+call    0 never executed
+call    1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed (throw)
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed (throw)
+        -:  182:		}
+        -:  183:
+    #####:  184:		return schema;
+    #####:  185:	}
+call    0 never executed
+call    1 never executed
+call    2 never executed
+call    3 never executed
+call    4 never executed
+------------------
+_ZN5hical4meta7openapi10jsonSchemaI17CreateUserRequestEEN5boost4json6objectEv:
+function _ZN5hical4meta7openapi10jsonSchemaI17CreateUserRequestEEN5boost4json6objectEv called 0 returned 0% blocks executed 0%
+    #####:  164:	boost::json::object jsonSchema()
+        -:  165:	{
+        -:  166:		static_assert(HasJsonFields<T>::value, "Type must use HICAL_JSON() macro for schema generation");
+        -:  167:
+    #####:  168:		boost::json::object schema;
+call    0 never executed
+    #####:  169:		schema["type"] = "object";
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+branch  5 never executed (fallthrough)
+branch  6 never executed (throw)
+        -:  170:
+    #####:  171:		boost::json::object properties;
+call    0 never executed
+    #####:  172:		boost::json::array requiredFields;
+call    0 never executed
+        -:  173:
+    #####:  174:		const auto& fields = T::hicalJsonFields();
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  175:		constexpr auto count = std::tuple_size_v<std::remove_cvref_t<decltype(fields)>>;
+    #####:  176:		detail::buildProperties<T>(properties, requiredFields, fields, std::make_index_sequence<count> {});
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:  177:
+    #####:  178:		schema["properties"] = std::move(properties);
+call    0 never executed
+call    1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed (throw)
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed (throw)
+    #####:  179:		if (!requiredFields.empty())
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+        -:  180:		{
+    #####:  181:			schema["required"] = std::move(requiredFields);
+call    0 never executed
+call    1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed (throw)
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed (throw)
+        -:  182:		}
+        -:  183:
+    #####:  184:		return schema;
+    #####:  185:	}
+call    0 never executed
+call    1 never executed
+call    2 never executed
+call    3 never executed
+call    4 never executed
+------------------
+_ZN5hical4meta7openapi10jsonSchemaI13ErrorResponseEEN5boost4json6objectEv:
+function _ZN5hical4meta7openapi10jsonSchemaI13ErrorResponseEEN5boost4json6objectEv called 0 returned 0% blocks executed 0%
+    #####:  164:	boost::json::object jsonSchema()
+        -:  165:	{
+        -:  166:		static_assert(HasJsonFields<T>::value, "Type must use HICAL_JSON() macro for schema generation");
+        -:  167:
+    #####:  168:		boost::json::object schema;
+call    0 never executed
+    #####:  169:		schema["type"] = "object";
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+branch  5 never executed (fallthrough)
+branch  6 never executed (throw)
+        -:  170:
+    #####:  171:		boost::json::object properties;
+call    0 never executed
+    #####:  172:		boost::json::array requiredFields;
+call    0 never executed
+        -:  173:
+    #####:  174:		const auto& fields = T::hicalJsonFields();
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  175:		constexpr auto count = std::tuple_size_v<std::remove_cvref_t<decltype(fields)>>;
+    #####:  176:		detail::buildProperties<T>(properties, requiredFields, fields, std::make_index_sequence<count> {});
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:  177:
+    #####:  178:		schema["properties"] = std::move(properties);
+call    0 never executed
+call    1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed (throw)
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed (throw)
+    #####:  179:		if (!requiredFields.empty())
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+        -:  180:		{
+    #####:  181:			schema["required"] = std::move(requiredFields);
+call    0 never executed
+call    1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed (throw)
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed (throw)
+        -:  182:		}
+        -:  183:
+    #####:  184:		return schema;
+    #####:  185:	}
+call    0 never executed
+call    1 never executed
+call    2 never executed
+call    3 never executed
+call    4 never executed
+------------------
+_ZN5hical4meta7openapi10jsonSchemaI9StatusDTOEEN5boost4json6objectEv:
+function _ZN5hical4meta7openapi10jsonSchemaI9StatusDTOEEN5boost4json6objectEv called 0 returned 0% blocks executed 0%
+    #####:  164:	boost::json::object jsonSchema()
+        -:  165:	{
+        -:  166:		static_assert(HasJsonFields<T>::value, "Type must use HICAL_JSON() macro for schema generation");
+        -:  167:
+    #####:  168:		boost::json::object schema;
+call    0 never executed
+    #####:  169:		schema["type"] = "object";
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+branch  5 never executed (fallthrough)
+branch  6 never executed (throw)
+        -:  170:
+    #####:  171:		boost::json::object properties;
+call    0 never executed
+    #####:  172:		boost::json::array requiredFields;
+call    0 never executed
+        -:  173:
+    #####:  174:		const auto& fields = T::hicalJsonFields();
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  175:		constexpr auto count = std::tuple_size_v<std::remove_cvref_t<decltype(fields)>>;
+    #####:  176:		detail::buildProperties<T>(properties, requiredFields, fields, std::make_index_sequence<count> {});
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:  177:
+    #####:  178:		schema["properties"] = std::move(properties);
+call    0 never executed
+call    1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed (throw)
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed (throw)
+    #####:  179:		if (!requiredFields.empty())
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+        -:  180:		{
+    #####:  181:			schema["required"] = std::move(requiredFields);
+call    0 never executed
+call    1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed (throw)
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed (throw)
+        -:  182:		}
+        -:  183:
+    #####:  184:		return schema;
+    #####:  185:	}
+call    0 never executed
+call    1 never executed
+call    2 never executed
+call    3 never executed
+call    4 never executed
+------------------
+_ZN5hical4meta7openapi10jsonSchemaI9SimpleDTOEEN5boost4json6objectEv:
+function _ZN5hical4meta7openapi10jsonSchemaI9SimpleDTOEEN5boost4json6objectEv called 5 returned 100% blocks executed 58%
+        5:  164:	boost::json::object jsonSchema()
+        -:  165:	{
+        -:  166:		static_assert(HasJsonFields<T>::value, "Type must use HICAL_JSON() macro for schema generation");
+        -:  167:
+        5:  168:		boost::json::object schema;
+call    0 returned 100%
+        5:  169:		schema["type"] = "object";
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+        -:  170:
+        5:  171:		boost::json::object properties;
+call    0 returned 100%
+        5:  172:		boost::json::array requiredFields;
+call    0 returned 100%
+        -:  173:
+        5:  174:		const auto& fields = T::hicalJsonFields();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        5:  175:		constexpr auto count = std::tuple_size_v<std::remove_cvref_t<decltype(fields)>>;
+        5:  176:		detail::buildProperties<T>(properties, requiredFields, fields, std::make_index_sequence<count> {});
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  177:
+        5:  178:		schema["properties"] = std::move(properties);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+        5:  179:		if (!requiredFields.empty())
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+        -:  180:		{
+    #####:  181:			schema["required"] = std::move(requiredFields);
+call    0 never executed
+call    1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed (throw)
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed (throw)
+        -:  182:		}
+        -:  183:
+        5:  184:		return schema;
+        5:  185:	}
+call    0 returned 100%
+call    1 returned 100%
+call    2 never executed
+call    3 never executed
+call    4 never executed
+------------------
+_ZN5hical4meta7openapi10jsonSchemaI9Uint64DTOEEN5boost4json6objectEv:
+function _ZN5hical4meta7openapi10jsonSchemaI9Uint64DTOEEN5boost4json6objectEv called 1 returned 100% blocks executed 58%
+        1:  164:	boost::json::object jsonSchema()
+        -:  165:	{
+        -:  166:		static_assert(HasJsonFields<T>::value, "Type must use HICAL_JSON() macro for schema generation");
+        -:  167:
+        1:  168:		boost::json::object schema;
+call    0 returned 100%
+        1:  169:		schema["type"] = "object";
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+        -:  170:
+        1:  171:		boost::json::object properties;
+call    0 returned 100%
+        1:  172:		boost::json::array requiredFields;
+call    0 returned 100%
+        -:  173:
+        1:  174:		const auto& fields = T::hicalJsonFields();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  175:		constexpr auto count = std::tuple_size_v<std::remove_cvref_t<decltype(fields)>>;
+        1:  176:		detail::buildProperties<T>(properties, requiredFields, fields, std::make_index_sequence<count> {});
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  177:
+        1:  178:		schema["properties"] = std::move(properties);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+        1:  179:		if (!requiredFields.empty())
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+        -:  180:		{
+    #####:  181:			schema["required"] = std::move(requiredFields);
+call    0 never executed
+call    1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed (throw)
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed (throw)
+        -:  182:		}
+        -:  183:
+        1:  184:		return schema;
+        1:  185:	}
+call    0 returned 100%
+call    1 returned 100%
+call    2 never executed
+call    3 never executed
+call    4 never executed
+------------------
+_ZN5hical4meta7openapi10jsonSchemaI10WithDoubleEEN5boost4json6objectEv:
+function _ZN5hical4meta7openapi10jsonSchemaI10WithDoubleEEN5boost4json6objectEv called 1 returned 100% blocks executed 58%
+        1:  164:	boost::json::object jsonSchema()
+        -:  165:	{
+        -:  166:		static_assert(HasJsonFields<T>::value, "Type must use HICAL_JSON() macro for schema generation");
+        -:  167:
+        1:  168:		boost::json::object schema;
+call    0 returned 100%
+        1:  169:		schema["type"] = "object";
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+        -:  170:
+        1:  171:		boost::json::object properties;
+call    0 returned 100%
+        1:  172:		boost::json::array requiredFields;
+call    0 returned 100%
+        -:  173:
+        1:  174:		const auto& fields = T::hicalJsonFields();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  175:		constexpr auto count = std::tuple_size_v<std::remove_cvref_t<decltype(fields)>>;
+        1:  176:		detail::buildProperties<T>(properties, requiredFields, fields, std::make_index_sequence<count> {});
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  177:
+        1:  178:		schema["properties"] = std::move(properties);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+        1:  179:		if (!requiredFields.empty())
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+        -:  180:		{
+    #####:  181:			schema["required"] = std::move(requiredFields);
+call    0 never executed
+call    1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed (throw)
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed (throw)
+        -:  182:		}
+        -:  183:
+        1:  184:		return schema;
+        1:  185:	}
+call    0 returned 100%
+call    1 returned 100%
+call    2 never executed
+call    3 never executed
+call    4 never executed
+------------------
+_ZN5hical4meta7openapi10jsonSchemaIZN32OpenApiSchemaTest_BoolField_Test8TestBodyEvE7BoolDTOEEN5boost4json6objectEv:
+function _ZN5hical4meta7openapi10jsonSchemaIZN32OpenApiSchemaTest_BoolField_Test8TestBodyEvE7BoolDTOEEN5boost4json6objectEv called 1 returned 100% blocks executed 58%
+        1:  164:	boost::json::object jsonSchema()
+        -:  165:	{
+        -:  166:		static_assert(HasJsonFields<T>::value, "Type must use HICAL_JSON() macro for schema generation");
+        -:  167:
+        1:  168:		boost::json::object schema;
+call    0 returned 100%
+        1:  169:		schema["type"] = "object";
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+        -:  170:
+        1:  171:		boost::json::object properties;
+call    0 returned 100%
+        1:  172:		boost::json::array requiredFields;
+call    0 returned 100%
+        -:  173:
+        1:  174:		const auto& fields = T::hicalJsonFields();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  175:		constexpr auto count = std::tuple_size_v<std::remove_cvref_t<decltype(fields)>>;
+        1:  176:		detail::buildProperties<T>(properties, requiredFields, fields, std::make_index_sequence<count> {});
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  177:
+        1:  178:		schema["properties"] = std::move(properties);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+        1:  179:		if (!requiredFields.empty())
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+        -:  180:		{
+    #####:  181:			schema["required"] = std::move(requiredFields);
+call    0 never executed
+call    1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed (throw)
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed (throw)
+        -:  182:		}
+        -:  183:
+        1:  184:		return schema;
+        1:  185:	}
+call    0 returned 100%
+call    1 returned 100%
+call    2 never executed
+call    3 never executed
+call    4 never executed
+------------------
+_ZN5hical4meta7openapi10jsonSchemaI13NestedAddressEEN5boost4json6objectEv:
+function _ZN5hical4meta7openapi10jsonSchemaI13NestedAddressEEN5boost4json6objectEv called 2 returned 100% blocks executed 58%
+        2:  164:	boost::json::object jsonSchema()
+        -:  165:	{
+        -:  166:		static_assert(HasJsonFields<T>::value, "Type must use HICAL_JSON() macro for schema generation");
+        -:  167:
+        2:  168:		boost::json::object schema;
+call    0 returned 100%
+        2:  169:		schema["type"] = "object";
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+        -:  170:
+        2:  171:		boost::json::object properties;
+call    0 returned 100%
+        2:  172:		boost::json::array requiredFields;
+call    0 returned 100%
+        -:  173:
+        2:  174:		const auto& fields = T::hicalJsonFields();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        2:  175:		constexpr auto count = std::tuple_size_v<std::remove_cvref_t<decltype(fields)>>;
+        2:  176:		detail::buildProperties<T>(properties, requiredFields, fields, std::make_index_sequence<count> {});
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  177:
+        2:  178:		schema["properties"] = std::move(properties);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+        2:  179:		if (!requiredFields.empty())
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+        -:  180:		{
+    #####:  181:			schema["required"] = std::move(requiredFields);
+call    0 never executed
+call    1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed (throw)
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed (throw)
+        -:  182:		}
+        -:  183:
+        2:  184:		return schema;
+        2:  185:	}
+call    0 returned 100%
+call    1 returned 100%
+call    2 never executed
+call    3 never executed
+call    4 never executed
+------------------
+_ZN5hical4meta7openapi10jsonSchemaI11RequiredDTOEEN5boost4json6objectEv:
+function _ZN5hical4meta7openapi10jsonSchemaI11RequiredDTOEEN5boost4json6objectEv called 1 returned 100% blocks executed 73%
+        1:  164:	boost::json::object jsonSchema()
+        -:  165:	{
+        -:  166:		static_assert(HasJsonFields<T>::value, "Type must use HICAL_JSON() macro for schema generation");
+        -:  167:
+        1:  168:		boost::json::object schema;
+call    0 returned 100%
+        1:  169:		schema["type"] = "object";
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+        -:  170:
+        1:  171:		boost::json::object properties;
+call    0 returned 100%
+        1:  172:		boost::json::array requiredFields;
+call    0 returned 100%
+        -:  173:
+        1:  174:		const auto& fields = T::hicalJsonFields();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  175:		constexpr auto count = std::tuple_size_v<std::remove_cvref_t<decltype(fields)>>;
+        1:  176:		detail::buildProperties<T>(properties, requiredFields, fields, std::make_index_sequence<count> {});
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  177:
+        1:  178:		schema["properties"] = std::move(properties);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+        1:  179:		if (!requiredFields.empty())
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0%
+        -:  180:		{
+        1:  181:			schema["required"] = std::move(requiredFields);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+        -:  182:		}
+        -:  183:
+        1:  184:		return schema;
+        1:  185:	}
+call    0 returned 100%
+call    1 returned 100%
+call    2 never executed
+call    3 never executed
+call    4 never executed
+------------------
+_ZN5hical4meta7openapi10jsonSchemaI9IgnoreDTOEEN5boost4json6objectEv:
+function _ZN5hical4meta7openapi10jsonSchemaI9IgnoreDTOEEN5boost4json6objectEv called 1 returned 100% blocks executed 58%
+        1:  164:	boost::json::object jsonSchema()
+        -:  165:	{
+        -:  166:		static_assert(HasJsonFields<T>::value, "Type must use HICAL_JSON() macro for schema generation");
+        -:  167:
+        1:  168:		boost::json::object schema;
+call    0 returned 100%
+        1:  169:		schema["type"] = "object";
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+        -:  170:
+        1:  171:		boost::json::object properties;
+call    0 returned 100%
+        1:  172:		boost::json::array requiredFields;
+call    0 returned 100%
+        -:  173:
+        1:  174:		const auto& fields = T::hicalJsonFields();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  175:		constexpr auto count = std::tuple_size_v<std::remove_cvref_t<decltype(fields)>>;
+        1:  176:		detail::buildProperties<T>(properties, requiredFields, fields, std::make_index_sequence<count> {});
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  177:
+        1:  178:		schema["properties"] = std::move(properties);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+        1:  179:		if (!requiredFields.empty())
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+        -:  180:		{
+    #####:  181:			schema["required"] = std::move(requiredFields);
+call    0 never executed
+call    1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed (throw)
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed (throw)
+        -:  182:		}
+        -:  183:
+        1:  184:		return schema;
+        1:  185:	}
+call    0 returned 100%
+call    1 returned 100%
+call    2 never executed
+call    3 never executed
+call    4 never executed
+------------------
+_ZN5hical4meta7openapi10jsonSchemaI8AliasDTOEEN5boost4json6objectEv:
+function _ZN5hical4meta7openapi10jsonSchemaI8AliasDTOEEN5boost4json6objectEv called 1 returned 100% blocks executed 58%
+        1:  164:	boost::json::object jsonSchema()
+        -:  165:	{
+        -:  166:		static_assert(HasJsonFields<T>::value, "Type must use HICAL_JSON() macro for schema generation");
+        -:  167:
+        1:  168:		boost::json::object schema;
+call    0 returned 100%
+        1:  169:		schema["type"] = "object";
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+        -:  170:
+        1:  171:		boost::json::object properties;
+call    0 returned 100%
+        1:  172:		boost::json::array requiredFields;
+call    0 returned 100%
+        -:  173:
+        1:  174:		const auto& fields = T::hicalJsonFields();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  175:		constexpr auto count = std::tuple_size_v<std::remove_cvref_t<decltype(fields)>>;
+        1:  176:		detail::buildProperties<T>(properties, requiredFields, fields, std::make_index_sequence<count> {});
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  177:
+        1:  178:		schema["properties"] = std::move(properties);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+        1:  179:		if (!requiredFields.empty())
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+        -:  180:		{
+    #####:  181:			schema["required"] = std::move(requiredFields);
+call    0 never executed
+call    1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed (throw)
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed (throw)
+        -:  182:		}
+        -:  183:
+        1:  184:		return schema;
+        1:  185:	}
+call    0 returned 100%
+call    1 returned 100%
+call    2 never executed
+call    3 never executed
+call    4 never executed
+------------------
+_ZN5hical4meta7openapi10jsonSchemaI8MixedDTOEEN5boost4json6objectEv:
+function _ZN5hical4meta7openapi10jsonSchemaI8MixedDTOEEN5boost4json6objectEv called 1 returned 100% blocks executed 73%
+        1:  164:	boost::json::object jsonSchema()
+        -:  165:	{
+        -:  166:		static_assert(HasJsonFields<T>::value, "Type must use HICAL_JSON() macro for schema generation");
+        -:  167:
+        1:  168:		boost::json::object schema;
+call    0 returned 100%
+        1:  169:		schema["type"] = "object";
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+        -:  170:
+        1:  171:		boost::json::object properties;
+call    0 returned 100%
+        1:  172:		boost::json::array requiredFields;
+call    0 returned 100%
+        -:  173:
+        1:  174:		const auto& fields = T::hicalJsonFields();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  175:		constexpr auto count = std::tuple_size_v<std::remove_cvref_t<decltype(fields)>>;
+        1:  176:		detail::buildProperties<T>(properties, requiredFields, fields, std::make_index_sequence<count> {});
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  177:
+        1:  178:		schema["properties"] = std::move(properties);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+        1:  179:		if (!requiredFields.empty())
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0%
+        -:  180:		{
+        1:  181:			schema["required"] = std::move(requiredFields);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+        -:  182:		}
+        -:  183:
+        1:  184:		return schema;
+        1:  185:	}
+call    0 returned 100%
+call    1 returned 100%
+call    2 never executed
+call    3 never executed
+call    4 never executed
+------------------
+_ZN5hical4meta7openapi10jsonSchemaI15UserWithAddressEEN5boost4json6objectEv:
+function _ZN5hical4meta7openapi10jsonSchemaI15UserWithAddressEEN5boost4json6objectEv called 1 returned 100% blocks executed 58%
+        1:  164:	boost::json::object jsonSchema()
+        -:  165:	{
+        -:  166:		static_assert(HasJsonFields<T>::value, "Type must use HICAL_JSON() macro for schema generation");
+        -:  167:
+        1:  168:		boost::json::object schema;
+call    0 returned 100%
+        1:  169:		schema["type"] = "object";
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+        -:  170:
+        1:  171:		boost::json::object properties;
+call    0 returned 100%
+        1:  172:		boost::json::array requiredFields;
+call    0 returned 100%
+        -:  173:
+        1:  174:		const auto& fields = T::hicalJsonFields();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  175:		constexpr auto count = std::tuple_size_v<std::remove_cvref_t<decltype(fields)>>;
+        1:  176:		detail::buildProperties<T>(properties, requiredFields, fields, std::make_index_sequence<count> {});
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  177:
+        1:  178:		schema["properties"] = std::move(properties);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+        1:  179:		if (!requiredFields.empty())
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+        -:  180:		{
+    #####:  181:			schema["required"] = std::move(requiredFields);
+call    0 never executed
+call    1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed (throw)
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed (throw)
+        -:  182:		}
+        -:  183:
+        1:  184:		return schema;
+        1:  185:	}
+call    0 returned 100%
+call    1 returned 100%
+call    2 never executed
+call    3 never executed
+call    4 never executed
+------------------
+_ZN5hical4meta7openapi10jsonSchemaI15WithNamedNestedEEN5boost4json6objectEv:
+function _ZN5hical4meta7openapi10jsonSchemaI15WithNamedNestedEEN5boost4json6objectEv called 1 returned 100% blocks executed 58%
+        1:  164:	boost::json::object jsonSchema()
+        -:  165:	{
+        -:  166:		static_assert(HasJsonFields<T>::value, "Type must use HICAL_JSON() macro for schema generation");
+        -:  167:
+        1:  168:		boost::json::object schema;
+call    0 returned 100%
+        1:  169:		schema["type"] = "object";
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+        -:  170:
+        1:  171:		boost::json::object properties;
+call    0 returned 100%
+        1:  172:		boost::json::array requiredFields;
+call    0 returned 100%
+        -:  173:
+        1:  174:		const auto& fields = T::hicalJsonFields();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  175:		constexpr auto count = std::tuple_size_v<std::remove_cvref_t<decltype(fields)>>;
+        1:  176:		detail::buildProperties<T>(properties, requiredFields, fields, std::make_index_sequence<count> {});
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  177:
+        1:  178:		schema["properties"] = std::move(properties);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+        1:  179:		if (!requiredFields.empty())
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+        -:  180:		{
+    #####:  181:			schema["required"] = std::move(requiredFields);
+call    0 never executed
+call    1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed (throw)
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed (throw)
+        -:  182:		}
+        -:  183:
+        1:  184:		return schema;
+        1:  185:	}
+call    0 returned 100%
+call    1 returned 100%
+call    2 never executed
+call    3 never executed
+call    4 never executed
+------------------
+_ZN5hical4meta7openapi10jsonSchemaI17WithVectorOfNamedEEN5boost4json6objectEv:
+function _ZN5hical4meta7openapi10jsonSchemaI17WithVectorOfNamedEEN5boost4json6objectEv called 1 returned 100% blocks executed 58%
+        1:  164:	boost::json::object jsonSchema()
+        -:  165:	{
+        -:  166:		static_assert(HasJsonFields<T>::value, "Type must use HICAL_JSON() macro for schema generation");
+        -:  167:
+        1:  168:		boost::json::object schema;
+call    0 returned 100%
+        1:  169:		schema["type"] = "object";
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+        -:  170:
+        1:  171:		boost::json::object properties;
+call    0 returned 100%
+        1:  172:		boost::json::array requiredFields;
+call    0 returned 100%
+        -:  173:
+        1:  174:		const auto& fields = T::hicalJsonFields();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  175:		constexpr auto count = std::tuple_size_v<std::remove_cvref_t<decltype(fields)>>;
+        1:  176:		detail::buildProperties<T>(properties, requiredFields, fields, std::make_index_sequence<count> {});
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  177:
+        1:  178:		schema["properties"] = std::move(properties);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+        1:  179:		if (!requiredFields.empty())
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+        -:  180:		{
+    #####:  181:			schema["required"] = std::move(requiredFields);
+call    0 never executed
+call    1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed (throw)
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed (throw)
+        -:  182:		}
+        -:  183:
+        1:  184:		return schema;
+        1:  185:	}
+call    0 returned 100%
+call    1 returned 100%
+call    2 never executed
+call    3 never executed
+call    4 never executed
+------------------
+_ZN5hical4meta7openapi10jsonSchemaI8NamedDTOEEN5boost4json6objectEv:
+function _ZN5hical4meta7openapi10jsonSchemaI8NamedDTOEEN5boost4json6objectEv called 2 returned 100% blocks executed 58%
+        2:  164:	boost::json::object jsonSchema()
+        -:  165:	{
+        -:  166:		static_assert(HasJsonFields<T>::value, "Type must use HICAL_JSON() macro for schema generation");
+        -:  167:
+        2:  168:		boost::json::object schema;
+call    0 returned 100%
+        2:  169:		schema["type"] = "object";
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+        -:  170:
+        2:  171:		boost::json::object properties;
+call    0 returned 100%
+        2:  172:		boost::json::array requiredFields;
+call    0 returned 100%
+        -:  173:
+        2:  174:		const auto& fields = T::hicalJsonFields();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        2:  175:		constexpr auto count = std::tuple_size_v<std::remove_cvref_t<decltype(fields)>>;
+        2:  176:		detail::buildProperties<T>(properties, requiredFields, fields, std::make_index_sequence<count> {});
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  177:
+        2:  178:		schema["properties"] = std::move(properties);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+        2:  179:		if (!requiredFields.empty())
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+        -:  180:		{
+    #####:  181:			schema["required"] = std::move(requiredFields);
+call    0 never executed
+call    1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed (throw)
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed (throw)
+        -:  182:		}
+        -:  183:
+        2:  184:		return schema;
+        2:  185:	}
+call    0 returned 100%
+call    1 returned 100%
+call    2 never executed
+call    3 never executed
+call    4 never executed
+------------------
+        -:  186:
+        -:  187:	/**
+        -:  188:	 * @brief 递归收集类型及其嵌套类型的 schema（供 components/schemas 使用）
+        -:  189:	 * 仅收集有 SchemaName 的类型到 map 中
+        -:  190:	 * @param schemas 输出 map：schema名称 → schema对象
+        -:  191:	 */
+        -:  192:	template <typename T>
+       5*:  193:	void collectSchemas(std::unordered_map<std::string, boost::json::object>& schemas)
+        -:  194:	{
+        -:  195:		static_assert(HasJsonFields<T>::value, "Type must use HICAL_JSON() macro for schema collection");
+        -:  196:
+        -:  197:		// 注册自身（如果有名称）
+        -:  198:		if constexpr (SchemaName<T>::value != nullptr)
+        -:  199:		{
+       4*:  200:			std::string name = SchemaName<T>::value;
+       4*:  201:			if (schemas.find(name) == schemas.end())
+        -:  202:			{
+       4*:  203:				schemas[name] = jsonSchema<T>();
+        -:  204:			}
+       4*:  205:		}
+        -:  206:
+        -:  207:		// 递归收集嵌套类型
+       5*:  208:		const auto& fields = T::hicalJsonFields();
+       5*:  209:		constexpr auto count = std::tuple_size_v<std::remove_cvref_t<decltype(fields)>>;
+        -:  210:
+      19*:  211:		[&]<size_t... I>(std::index_sequence<I...>)
+        -:  212:		{
+      14*:  213:			auto collectNested = [&](const auto& field)
+        -:  214:			{
+       9*:  215:				if (field.ignored)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+branch  2 taken 0% (fallthrough)
+branch  3 taken 100%
+branch  4 taken 0% (fallthrough)
+branch  5 taken 100%
+branch  6 taken 0% (fallthrough)
+branch  7 taken 100%
+branch  8 taken 0% (fallthrough)
+branch  9 taken 100%
+branch 10 never executed (fallthrough)
+branch 11 never executed
+branch 12 never executed (fallthrough)
+branch 13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed
+branch 16 never executed (fallthrough)
+branch 17 never executed
+branch 18 never executed (fallthrough)
+branch 19 never executed
+branch 20 never executed (fallthrough)
+branch 21 never executed
+branch 22 never executed (fallthrough)
+branch 23 never executed
+        -:  216:				{
+    #####:  217:					return;
+        -:  218:				}
+        -:  219:				using FieldType = std::remove_reference_t<decltype(std::declval<T>().*(field.pointer))>;
+        -:  220:
+        -:  221:				if constexpr (HasJsonFields<FieldType>::value)
+        -:  222:				{
+        1:  223:					collectSchemas<FieldType>(schemas);
+call    0 returned 100%
+        -:  224:				}
+        -:  225:				else if constexpr (IsVector<FieldType>::value)
+        -:  226:				{
+        -:  227:					using ElemType = typename FieldType::value_type;
+        -:  228:					if constexpr (HasJsonFields<ElemType>::value)
+        -:  229:					{
+        -:  230:						collectSchemas<ElemType>(schemas);
+        -:  231:					}
+        -:  232:				}
+        -:  233:			};
+       5*:  234:			(collectNested(std::get<I>(fields)), ...);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+call    5 returned 100%
+call    6 returned 100%
+call    7 returned 100%
+call    8 returned 100%
+call    9 returned 100%
+call   10 returned 100%
+call   11 returned 100%
+branch 12 taken 100% (fallthrough)
+branch 13 taken 0% (throw)
+call   14 never executed
+call   15 never executed
+call   16 never executed
+call   17 never executed
+call   18 never executed
+call   19 never executed
+call   20 never executed
+call   21 never executed
+call   22 never executed
+call   23 never executed
+call   24 never executed
+call   25 never executed
+call   26 never executed
+call   27 never executed
+call   28 never executed
+call   29 never executed
+call   30 never executed
+call   31 never executed
+call   32 never executed
+call   33 never executed
+call   34 never executed
+call   35 never executed
+       5*:  235:		}(std::make_index_sequence<count> {});
+       5*:  236:	}
+------------------
+_ZN5hical4meta7openapi14collectSchemasI13NestedAddressEEvRSt13unordered_mapINSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEN5boost4json6objectESt4hashISA_ESt8equal_toISA_ESaISt4pairIKSA_SD_EEE:
+function _ZN5hical4meta7openapi14collectSchemasI13NestedAddressEEvRSt13unordered_mapINSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEN5boost4json6objectESt4hashISA_ESt8equal_toISA_ESaISt4pairIKSA_SD_EEE called 2 returned 100% blocks executed 64%
+        2:  193:	void collectSchemas(std::unordered_map<std::string, boost::json::object>& schemas)
+        -:  194:	{
+        -:  195:		static_assert(HasJsonFields<T>::value, "Type must use HICAL_JSON() macro for schema collection");
+        -:  196:
+        -:  197:		// 注册自身（如果有名称）
+        -:  198:		if constexpr (SchemaName<T>::value != nullptr)
+        -:  199:		{
+        2:  200:			std::string name = SchemaName<T>::value;
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        2:  201:			if (schemas.find(name) == schemas.end())
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0%
+        -:  202:			{
+        2:  203:				schemas[name] = jsonSchema<T>();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+call    9 returned 100%
+call   10 never executed
+        -:  204:			}
+        2:  205:		}
+call    0 returned 100%
+call    1 never executed
+        -:  206:
+        -:  207:		// 递归收集嵌套类型
+        2:  208:		const auto& fields = T::hicalJsonFields();
+call    0 returned 100%
+        2:  209:		constexpr auto count = std::tuple_size_v<std::remove_cvref_t<decltype(fields)>>;
+        -:  210:
+        4:  211:		[&]<size_t... I>(std::index_sequence<I...>)
+        -:  212:		{
+        -:  213:			auto collectNested = [&](const auto& field)
+        -:  214:			{
+        -:  215:				if (field.ignored)
+        -:  216:				{
+        -:  217:					return;
+        -:  218:				}
+        -:  219:				using FieldType = std::remove_reference_t<decltype(std::declval<T>().*(field.pointer))>;
+        -:  220:
+        -:  221:				if constexpr (HasJsonFields<FieldType>::value)
+        -:  222:				{
+        -:  223:					collectSchemas<FieldType>(schemas);
+        -:  224:				}
+        -:  225:				else if constexpr (IsVector<FieldType>::value)
+        -:  226:				{
+        -:  227:					using ElemType = typename FieldType::value_type;
+        -:  228:					if constexpr (HasJsonFields<ElemType>::value)
+        -:  229:					{
+        -:  230:						collectSchemas<ElemType>(schemas);
+        -:  231:					}
+        -:  232:				}
+        -:  233:			};
+        -:  234:			(collectNested(std::get<I>(fields)), ...);
+        2:  235:		}(std::make_index_sequence<count> {});
+call    0 returned 100%
+        2:  236:	}
+------------------
+_ZN5hical4meta7openapi14collectSchemasI8NamedDTOEEvRSt13unordered_mapINSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEN5boost4json6objectESt4hashISA_ESt8equal_toISA_ESaISt4pairIKSA_SD_EEE:
+function _ZN5hical4meta7openapi14collectSchemasI8NamedDTOEEvRSt13unordered_mapINSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEN5boost4json6objectESt4hashISA_ESt8equal_toISA_ESaISt4pairIKSA_SD_EEE called 2 returned 100% blocks executed 64%
+        2:  193:	void collectSchemas(std::unordered_map<std::string, boost::json::object>& schemas)
+        -:  194:	{
+        -:  195:		static_assert(HasJsonFields<T>::value, "Type must use HICAL_JSON() macro for schema collection");
+        -:  196:
+        -:  197:		// 注册自身（如果有名称）
+        -:  198:		if constexpr (SchemaName<T>::value != nullptr)
+        -:  199:		{
+        2:  200:			std::string name = SchemaName<T>::value;
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        2:  201:			if (schemas.find(name) == schemas.end())
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0%
+        -:  202:			{
+        2:  203:				schemas[name] = jsonSchema<T>();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+call    9 returned 100%
+call   10 never executed
+        -:  204:			}
+        2:  205:		}
+call    0 returned 100%
+call    1 never executed
+        -:  206:
+        -:  207:		// 递归收集嵌套类型
+        2:  208:		const auto& fields = T::hicalJsonFields();
+call    0 returned 100%
+        2:  209:		constexpr auto count = std::tuple_size_v<std::remove_cvref_t<decltype(fields)>>;
+        -:  210:
+        4:  211:		[&]<size_t... I>(std::index_sequence<I...>)
+        -:  212:		{
+        -:  213:			auto collectNested = [&](const auto& field)
+        -:  214:			{
+        -:  215:				if (field.ignored)
+        -:  216:				{
+        -:  217:					return;
+        -:  218:				}
+        -:  219:				using FieldType = std::remove_reference_t<decltype(std::declval<T>().*(field.pointer))>;
+        -:  220:
+        -:  221:				if constexpr (HasJsonFields<FieldType>::value)
+        -:  222:				{
+        -:  223:					collectSchemas<FieldType>(schemas);
+        -:  224:				}
+        -:  225:				else if constexpr (IsVector<FieldType>::value)
+        -:  226:				{
+        -:  227:					using ElemType = typename FieldType::value_type;
+        -:  228:					if constexpr (HasJsonFields<ElemType>::value)
+        -:  229:					{
+        -:  230:						collectSchemas<ElemType>(schemas);
+        -:  231:					}
+        -:  232:				}
+        -:  233:			};
+        -:  234:			(collectNested(std::get<I>(fields)), ...);
+        2:  235:		}(std::make_index_sequence<count> {});
+call    0 returned 100%
+        2:  236:	}
+------------------
+_ZN5hical4meta7openapi14collectSchemasI15UserWithAddressEEvRSt13unordered_mapINSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEN5boost4json6objectESt4hashISA_ESt8equal_toISA_ESaISt4pairIKSA_SD_EEE:
+function _ZN5hical4meta7openapi14collectSchemasI15UserWithAddressEEvRSt13unordered_mapINSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEN5boost4json6objectESt4hashISA_ESt8equal_toISA_ESaISt4pairIKSA_SD_EEE called 1 returned 100% blocks executed 100%
+        1:  193:	void collectSchemas(std::unordered_map<std::string, boost::json::object>& schemas)
+        -:  194:	{
+        -:  195:		static_assert(HasJsonFields<T>::value, "Type must use HICAL_JSON() macro for schema collection");
+        -:  196:
+        -:  197:		// 注册自身（如果有名称）
+        -:  198:		if constexpr (SchemaName<T>::value != nullptr)
+        -:  199:		{
+        -:  200:			std::string name = SchemaName<T>::value;
+        -:  201:			if (schemas.find(name) == schemas.end())
+        -:  202:			{
+        -:  203:				schemas[name] = jsonSchema<T>();
+        -:  204:			}
+        -:  205:		}
+        -:  206:
+        -:  207:		// 递归收集嵌套类型
+        1:  208:		const auto& fields = T::hicalJsonFields();
+call    0 returned 100%
+        1:  209:		constexpr auto count = std::tuple_size_v<std::remove_cvref_t<decltype(fields)>>;
+        -:  210:
+        2:  211:		[&]<size_t... I>(std::index_sequence<I...>)
+        -:  212:		{
+        -:  213:			auto collectNested = [&](const auto& field)
+        -:  214:			{
+        -:  215:				if (field.ignored)
+        -:  216:				{
+        -:  217:					return;
+        -:  218:				}
+        -:  219:				using FieldType = std::remove_reference_t<decltype(std::declval<T>().*(field.pointer))>;
+        -:  220:
+        -:  221:				if constexpr (HasJsonFields<FieldType>::value)
+        -:  222:				{
+        -:  223:					collectSchemas<FieldType>(schemas);
+        -:  224:				}
+        -:  225:				else if constexpr (IsVector<FieldType>::value)
+        -:  226:				{
+        -:  227:					using ElemType = typename FieldType::value_type;
+        -:  228:					if constexpr (HasJsonFields<ElemType>::value)
+        -:  229:					{
+        -:  230:						collectSchemas<ElemType>(schemas);
+        -:  231:					}
+        -:  232:				}
+        -:  233:			};
+        -:  234:			(collectNested(std::get<I>(fields)), ...);
+        1:  235:		}(std::make_index_sequence<count> {});
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  236:	}
+------------------
+_ZN5hical4meta7openapi14collectSchemasI9StatusDTOEEvRSt13unordered_mapINSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEN5boost4json6objectESt4hashISA_ESt8equal_toISA_ESaISt4pairIKSA_SD_EEE:
+function _ZN5hical4meta7openapi14collectSchemasI9StatusDTOEEvRSt13unordered_mapINSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEN5boost4json6objectESt4hashISA_ESt8equal_toISA_ESaISt4pairIKSA_SD_EEE called 0 returned 0% blocks executed 0%
+    #####:  193:	void collectSchemas(std::unordered_map<std::string, boost::json::object>& schemas)
+        -:  194:	{
+        -:  195:		static_assert(HasJsonFields<T>::value, "Type must use HICAL_JSON() macro for schema collection");
+        -:  196:
+        -:  197:		// 注册自身（如果有名称）
+        -:  198:		if constexpr (SchemaName<T>::value != nullptr)
+        -:  199:		{
+    #####:  200:			std::string name = SchemaName<T>::value;
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  201:			if (schemas.find(name) == schemas.end())
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+branch  5 never executed (fallthrough)
+branch  6 never executed
+        -:  202:			{
+    #####:  203:				schemas[name] = jsonSchema<T>();
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed (throw)
+call    9 never executed
+call   10 never executed
+        -:  204:			}
+    #####:  205:		}
+call    0 never executed
+call    1 never executed
+        -:  206:
+        -:  207:		// 递归收集嵌套类型
+    #####:  208:		const auto& fields = T::hicalJsonFields();
+call    0 never executed
+    #####:  209:		constexpr auto count = std::tuple_size_v<std::remove_cvref_t<decltype(fields)>>;
+        -:  210:
+    #####:  211:		[&]<size_t... I>(std::index_sequence<I...>)
+        -:  212:		{
+        -:  213:			auto collectNested = [&](const auto& field)
+        -:  214:			{
+        -:  215:				if (field.ignored)
+        -:  216:				{
+        -:  217:					return;
+        -:  218:				}
+        -:  219:				using FieldType = std::remove_reference_t<decltype(std::declval<T>().*(field.pointer))>;
+        -:  220:
+        -:  221:				if constexpr (HasJsonFields<FieldType>::value)
+        -:  222:				{
+        -:  223:					collectSchemas<FieldType>(schemas);
+        -:  224:				}
+        -:  225:				else if constexpr (IsVector<FieldType>::value)
+        -:  226:				{
+        -:  227:					using ElemType = typename FieldType::value_type;
+        -:  228:					if constexpr (HasJsonFields<ElemType>::value)
+        -:  229:					{
+        -:  230:						collectSchemas<ElemType>(schemas);
+        -:  231:					}
+        -:  232:				}
+        -:  233:			};
+        -:  234:			(collectNested(std::get<I>(fields)), ...);
+    #####:  235:		}(std::make_index_sequence<count> {});
+call    0 never executed
+    #####:  236:	}
+------------------
+_ZN5hical4meta7openapi14collectSchemasI13ErrorResponseEEvRSt13unordered_mapINSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEN5boost4json6objectESt4hashISA_ESt8equal_toISA_ESaISt4pairIKSA_SD_EEE:
+function _ZN5hical4meta7openapi14collectSchemasI13ErrorResponseEEvRSt13unordered_mapINSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEN5boost4json6objectESt4hashISA_ESt8equal_toISA_ESaISt4pairIKSA_SD_EEE called 0 returned 0% blocks executed 0%
+    #####:  193:	void collectSchemas(std::unordered_map<std::string, boost::json::object>& schemas)
+        -:  194:	{
+        -:  195:		static_assert(HasJsonFields<T>::value, "Type must use HICAL_JSON() macro for schema collection");
+        -:  196:
+        -:  197:		// 注册自身（如果有名称）
+        -:  198:		if constexpr (SchemaName<T>::value != nullptr)
+        -:  199:		{
+    #####:  200:			std::string name = SchemaName<T>::value;
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  201:			if (schemas.find(name) == schemas.end())
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+branch  5 never executed (fallthrough)
+branch  6 never executed
+        -:  202:			{
+    #####:  203:				schemas[name] = jsonSchema<T>();
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed (throw)
+call    9 never executed
+call   10 never executed
+        -:  204:			}
+    #####:  205:		}
+call    0 never executed
+call    1 never executed
+        -:  206:
+        -:  207:		// 递归收集嵌套类型
+    #####:  208:		const auto& fields = T::hicalJsonFields();
+call    0 never executed
+    #####:  209:		constexpr auto count = std::tuple_size_v<std::remove_cvref_t<decltype(fields)>>;
+        -:  210:
+    #####:  211:		[&]<size_t... I>(std::index_sequence<I...>)
+        -:  212:		{
+        -:  213:			auto collectNested = [&](const auto& field)
+        -:  214:			{
+        -:  215:				if (field.ignored)
+        -:  216:				{
+        -:  217:					return;
+        -:  218:				}
+        -:  219:				using FieldType = std::remove_reference_t<decltype(std::declval<T>().*(field.pointer))>;
+        -:  220:
+        -:  221:				if constexpr (HasJsonFields<FieldType>::value)
+        -:  222:				{
+        -:  223:					collectSchemas<FieldType>(schemas);
+        -:  224:				}
+        -:  225:				else if constexpr (IsVector<FieldType>::value)
+        -:  226:				{
+        -:  227:					using ElemType = typename FieldType::value_type;
+        -:  228:					if constexpr (HasJsonFields<ElemType>::value)
+        -:  229:					{
+        -:  230:						collectSchemas<ElemType>(schemas);
+        -:  231:					}
+        -:  232:				}
+        -:  233:			};
+        -:  234:			(collectNested(std::get<I>(fields)), ...);
+    #####:  235:		}(std::make_index_sequence<count> {});
+call    0 never executed
+    #####:  236:	}
+------------------
+_ZN5hical4meta7openapi14collectSchemasI17CreateUserRequestEEvRSt13unordered_mapINSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEN5boost4json6objectESt4hashISA_ESt8equal_toISA_ESaISt4pairIKSA_SD_EEE:
+function _ZN5hical4meta7openapi14collectSchemasI17CreateUserRequestEEvRSt13unordered_mapINSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEN5boost4json6objectESt4hashISA_ESt8equal_toISA_ESaISt4pairIKSA_SD_EEE called 0 returned 0% blocks executed 0%
+    #####:  193:	void collectSchemas(std::unordered_map<std::string, boost::json::object>& schemas)
+        -:  194:	{
+        -:  195:		static_assert(HasJsonFields<T>::value, "Type must use HICAL_JSON() macro for schema collection");
+        -:  196:
+        -:  197:		// 注册自身（如果有名称）
+        -:  198:		if constexpr (SchemaName<T>::value != nullptr)
+        -:  199:		{
+    #####:  200:			std::string name = SchemaName<T>::value;
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  201:			if (schemas.find(name) == schemas.end())
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+branch  5 never executed (fallthrough)
+branch  6 never executed
+        -:  202:			{
+    #####:  203:				schemas[name] = jsonSchema<T>();
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed (throw)
+call    9 never executed
+call   10 never executed
+        -:  204:			}
+    #####:  205:		}
+call    0 never executed
+call    1 never executed
+        -:  206:
+        -:  207:		// 递归收集嵌套类型
+    #####:  208:		const auto& fields = T::hicalJsonFields();
+call    0 never executed
+    #####:  209:		constexpr auto count = std::tuple_size_v<std::remove_cvref_t<decltype(fields)>>;
+        -:  210:
+    #####:  211:		[&]<size_t... I>(std::index_sequence<I...>)
+        -:  212:		{
+        -:  213:			auto collectNested = [&](const auto& field)
+        -:  214:			{
+        -:  215:				if (field.ignored)
+        -:  216:				{
+        -:  217:					return;
+        -:  218:				}
+        -:  219:				using FieldType = std::remove_reference_t<decltype(std::declval<T>().*(field.pointer))>;
+        -:  220:
+        -:  221:				if constexpr (HasJsonFields<FieldType>::value)
+        -:  222:				{
+        -:  223:					collectSchemas<FieldType>(schemas);
+        -:  224:				}
+        -:  225:				else if constexpr (IsVector<FieldType>::value)
+        -:  226:				{
+        -:  227:					using ElemType = typename FieldType::value_type;
+        -:  228:					if constexpr (HasJsonFields<ElemType>::value)
+        -:  229:					{
+        -:  230:						collectSchemas<ElemType>(schemas);
+        -:  231:					}
+        -:  232:				}
+        -:  233:			};
+        -:  234:			(collectNested(std::get<I>(fields)), ...);
+    #####:  235:		}(std::make_index_sequence<count> {});
+call    0 never executed
+    #####:  236:	}
+------------------
+_ZN5hical4meta7openapi14collectSchemasI7UserDTOEEvRSt13unordered_mapINSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEN5boost4json6objectESt4hashISA_ESt8equal_toISA_ESaISt4pairIKSA_SD_EEE:
+function _ZN5hical4meta7openapi14collectSchemasI7UserDTOEEvRSt13unordered_mapINSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEN5boost4json6objectESt4hashISA_ESt8equal_toISA_ESaISt4pairIKSA_SD_EEE called 0 returned 0% blocks executed 0%
+    #####:  193:	void collectSchemas(std::unordered_map<std::string, boost::json::object>& schemas)
+        -:  194:	{
+        -:  195:		static_assert(HasJsonFields<T>::value, "Type must use HICAL_JSON() macro for schema collection");
+        -:  196:
+        -:  197:		// 注册自身（如果有名称）
+        -:  198:		if constexpr (SchemaName<T>::value != nullptr)
+        -:  199:		{
+    #####:  200:			std::string name = SchemaName<T>::value;
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  201:			if (schemas.find(name) == schemas.end())
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+branch  5 never executed (fallthrough)
+branch  6 never executed
+        -:  202:			{
+    #####:  203:				schemas[name] = jsonSchema<T>();
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed (throw)
+call    9 never executed
+call   10 never executed
+        -:  204:			}
+    #####:  205:		}
+call    0 never executed
+call    1 never executed
+        -:  206:
+        -:  207:		// 递归收集嵌套类型
+    #####:  208:		const auto& fields = T::hicalJsonFields();
+call    0 never executed
+    #####:  209:		constexpr auto count = std::tuple_size_v<std::remove_cvref_t<decltype(fields)>>;
+        -:  210:
+    #####:  211:		[&]<size_t... I>(std::index_sequence<I...>)
+        -:  212:		{
+        -:  213:			auto collectNested = [&](const auto& field)
+        -:  214:			{
+        -:  215:				if (field.ignored)
+        -:  216:				{
+        -:  217:					return;
+        -:  218:				}
+        -:  219:				using FieldType = std::remove_reference_t<decltype(std::declval<T>().*(field.pointer))>;
+        -:  220:
+        -:  221:				if constexpr (HasJsonFields<FieldType>::value)
+        -:  222:				{
+        -:  223:					collectSchemas<FieldType>(schemas);
+        -:  224:				}
+        -:  225:				else if constexpr (IsVector<FieldType>::value)
+        -:  226:				{
+        -:  227:					using ElemType = typename FieldType::value_type;
+        -:  228:					if constexpr (HasJsonFields<ElemType>::value)
+        -:  229:					{
+        -:  230:						collectSchemas<ElemType>(schemas);
+        -:  231:					}
+        -:  232:				}
+        -:  233:			};
+        -:  234:			(collectNested(std::get<I>(fields)), ...);
+    #####:  235:		}(std::make_index_sequence<count> {});
+call    0 never executed
+    #####:  236:	}
+------------------
+        -:  237:
+        -:  238:	/**
+        -:  239:	 * @brief 批量注册多个类型的 schema
+        -:  240:	 * 用法：registerSchemas<UserDTO, OrderDTO, ProductDTO>(schemas);
+        -:  241:	 */
+        -:  242:	template <typename... Types>
+       1*:  243:	void registerSchemas(std::unordered_map<std::string, boost::json::object>& schemas)
+        -:  244:	{
+       1*:  245:		(collectSchemas<Types>(schemas), ...);
+       1*:  246:	}
+------------------
+_ZN5hical4meta7openapi15registerSchemasIJ8NamedDTO13NestedAddressEEEvRSt13unordered_mapINSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEN5boost4json6objectESt4hashISB_ESt8equal_toISB_ESaISt4pairIKSB_SE_EEE:
+function _ZN5hical4meta7openapi15registerSchemasIJ8NamedDTO13NestedAddressEEEvRSt13unordered_mapINSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEN5boost4json6objectESt4hashISB_ESt8equal_toISB_ESaISt4pairIKSB_SE_EEE called 1 returned 100% blocks executed 100%
+        1:  243:	void registerSchemas(std::unordered_map<std::string, boost::json::object>& schemas)
+        -:  244:	{
+        1:  245:		(collectSchemas<Types>(schemas), ...);
+call    0 returned 100%
+call    1 returned 100%
+        1:  246:	}
+------------------
+_ZN5hical4meta7openapi15registerSchemasIJ7UserDTO17CreateUserRequest13ErrorResponse9StatusDTOEEEvRSt13unordered_mapINSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEN5boost4json6objectESt4hashISD_ESt8equal_toISD_ESaISt4pairIKSD_SG_EEE:
+function _ZN5hical4meta7openapi15registerSchemasIJ7UserDTO17CreateUserRequest13ErrorResponse9StatusDTOEEEvRSt13unordered_mapINSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEN5boost4json6objectESt4hashISD_ESt8equal_toISD_ESaISt4pairIKSD_SG_EEE called 0 returned 0% blocks executed 0%
+    #####:  243:	void registerSchemas(std::unordered_map<std::string, boost::json::object>& schemas)
+        -:  244:	{
+    #####:  245:		(collectSchemas<Types>(schemas), ...);
+call    0 never executed
+call    1 never executed
+call    2 never executed
+call    3 never executed
+    #####:  246:	}
+------------------
+        -:  247:
+        -:  248:} // namespace hical::meta::openapi
+        -:  249:
+        -:  250:// ============ 用户宏 ============
+        -:  251:
+        -:  252:/**
+        -:  253: * @brief 为结构体注册 OpenAPI schema 名称（用于 $ref 引用）
+        -:  254: * 用法：
+        -:  255: *   struct UserDTO { ... HICAL_JSON(UserDTO, ...) };
+        -:  256: *   HICAL_SCHEMA_NAME(UserDTO, "UserDTO")
+        -:  257: * 注册后，嵌套引用此类型时将生成 {"$ref":"#/components/schemas/UserDTO"}
+        -:  258: * 而非内联展开完整 schema
+        -:  259: */
+        -:  260:// NOLINTBEGIN(cppcoreguidelines-macro-usage)
+        -:  261:#define HICAL_SCHEMA_NAME(Type, Name)              \
+        -:  262:	template <>                                    \
+        -:  263:	struct hical::meta::openapi::SchemaName<Type>  \
+        -:  264:	{                                              \
+        -:  265:		static constexpr const char* value = Name; \
+        -:  266:	};
+        -:  267:// NOLINTEND(cppcoreguidelines-macro-usage)

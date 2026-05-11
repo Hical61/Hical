@@ -1,0 +1,137 @@
+        -:    0:Source:/home/runner/work/Hical/Hical/src/core/Multipart.h
+        -:    1:#pragma once
+        -:    2:
+        -:    3:#include "HttpRequest.h"
+        -:    4:#include "HttpResponse.h"
+        -:    5:#include <optional>
+        -:    6:#include <string>
+        -:    7:#include <string_view>
+        -:    8:#include <unordered_map>
+        -:    9:#include <vector>
+        -:   10:
+        -:   11:namespace hical
+        -:   12:{
+        -:   13:
+        -:   14:	/**
+        -:   15:	 * @brief multipart/form-data 中的单个 Part
+        -:   16:	 * 对应 RFC 7578 中的一个 body part，包含头部和数据。
+        -:   17:	 */
+        -:   18:	struct MultipartPart
+        -:   19:	{
+        -:   20:		std::unordered_map<std::string, std::string> headers; ///< Part 头部（键已转小写）
+        -:   21:		std::string name;                                     ///< form 字段名（Content-Disposition 中的 name 参数）
+        -:   22:		std::string filename;    ///< 上传文件名（Content-Disposition 中的 filename，无则为空）
+        -:   23:		std::string contentType; ///< Part 的 Content-Type（无则为空）
+        -:   24:		std::string data;        ///< Part 数据（文件内容或字段值）
+        -:   25:
+        -:   26:		/**
+        -:   27:		 * @brief 是否为文件上传 Part（有 filename）
+        -:   28:		 * @return true 如果是文件上传
+        -:   29:		 */
+       7*:   30:		bool isFile() const
+        -:   31:		{
+       7*:   32:			return !filename.empty();
+        -:   33:		}
+        -:   34:	};
+        -:   35:
+        -:   36:	/**
+        -:   37:	 * @brief multipart/form-data 解析器
+        -:   38:	 * 按照 RFC 7578 解析 Content-Type: multipart/form-data 请求体。
+        -:   39:	 * 用法（通过 HttpRequest 访问）：
+        -:   40:	 * ```cpp
+        -:   41:	 * auto parts = hical::MultipartParser::parse(req);
+        -:   42:	 * if (parts) {
+        -:   43:	 *     for (const auto& part : *parts) {
+        -:   44:	 *         if (part.isFile()) {
+        -:   45:	 *             // 处理上传文件
+        -:   46:	 *         } else {
+        -:   47:	 *             // 处理表单字段
+        -:   48:	 *         }
+        -:   49:	 *     }
+        -:   50:	 * }
+        -:   51:	 * ```
+        -:   52:	 * 也可以直接用辅助方法：
+        -:   53:	 * ```cpp
+        -:   54:	 * auto file  = hical::MultipartParser::getFile(req, "avatar");
+        -:   55:	 * auto field = hical::MultipartParser::getField(req, "username");
+        -:   56:	 * ```
+        -:   57:	 */
+        -:   58:	class MultipartParser
+        -:   59:	{
+        -:   60:	public:
+        -:   61:		/**
+        -:   62:		 * @brief 解析 multipart/form-data 请求体
+        -:   63:		 * @param req HTTP 请求
+        -:   64:		 * @return 解析成功返回 Part 列表，失败返回 nullopt
+        -:   65:		 * 失败情况：Content-Type 不是 multipart/form-data、boundary 缺失、格式错误。
+        -:   66:		 */
+        -:   67:		static std::optional<std::vector<MultipartPart>> parse(const HttpRequest& req);
+        -:   68:
+        -:   69:		/**
+        -:   70:		 * @brief 获取指定名称的文件上传 Part
+        -:   71:		 * @param req HTTP 请求
+        -:   72:		 * @param fieldName 表单字段名
+        -:   73:		 * @return 找到返回 MultipartPart（isFile() == true），否则 nullopt
+        -:   74:		 * @note 多次调用 getFile/getField 建议先调用 parse() 再用下方重载，避免重复解析
+        -:   75:		 */
+        -:   76:		static std::optional<MultipartPart> getFile(const HttpRequest& req, const std::string& fieldName);
+        -:   77:
+        -:   78:		/**
+        -:   79:		 * @brief 从已解析的 parts 中查找文件 Part（避免重复解析）
+        -:   80:		 * @param parts 已通过 parse() 获取的 Part 列表
+        -:   81:		 * @param fieldName 表单字段名
+        -:   82:		 * @return 找到返回 MultipartPart，否则 nullopt
+        -:   83:		 */
+        -:   84:		static std::optional<MultipartPart> getFile(const std::vector<MultipartPart>& parts,
+        -:   85:													const std::string& fieldName);
+        -:   86:
+        -:   87:		/**
+        -:   88:		 * @brief 获取指定名称的表单文本字段值
+        -:   89:		 * @param req HTTP 请求
+        -:   90:		 * @param fieldName 表单字段名
+        -:   91:		 * @return 找到返回字段值，否则 nullopt
+        -:   92:		 * @note 多次调用 getFile/getField 建议先调用 parse() 再用下方重载，避免重复解析
+        -:   93:		 */
+        -:   94:		static std::optional<std::string> getField(const HttpRequest& req, const std::string& fieldName);
+        -:   95:
+        -:   96:		/**
+        -:   97:		 * @brief 从已解析的 parts 中查找文本字段（避免重复解析）
+        -:   98:		 * @param parts 已通过 parse() 获取的 Part 列表
+        -:   99:		 * @param fieldName 表单字段名
+        -:  100:		 * @return 找到返回字段值，否则 nullopt
+        -:  101:		 */
+        -:  102:		static std::optional<std::string> getField(const std::vector<MultipartPart>& parts,
+        -:  103:												   const std::string& fieldName);
+        -:  104:
+        -:  105:	private:
+        -:  106:		/**
+        -:  107:		 * @brief 惰性解析并缓存 multipart parts 到 HttpRequest 中
+        -:  108:		 * @param req HTTP 请求
+        -:  109:		 * @return 缓存的 parts 指针，解析失败或无 multipart 数据时返回 nullptr
+        -:  110:		 */
+        -:  111:		static const std::vector<MultipartPart>* cachedParse(const HttpRequest& req);
+        -:  112:
+        -:  113:		/**
+        -:  114:		 * @brief 从 Content-Type 头中提取 boundary
+        -:  115:		 * @param contentType Content-Type 头字符串
+        -:  116:		 * @return boundary 字符串，失败返回空字符串
+        -:  117:		 */
+        -:  118:		static std::string extractBoundary(const std::string& contentType);
+        -:  119:
+        -:  120:		/**
+        -:  121:		 * @brief 解析单个 Part 的头部
+        -:  122:		 * @param headerBlock 头部文本块（CRLF 分隔的多行）
+        -:  123:		 * @param part 输出的 Part（写入 headers/name/filename/contentType）
+        -:  124:		 */
+        -:  125:		static void parsePartHeaders(std::string_view headerBlock, MultipartPart& part);
+        -:  126:
+        -:  127:		/**
+        -:  128:		 * @brief 解析 Content-Disposition 中的参数（name/filename）
+        -:  129:		 * @param disposition Content-Disposition 字段值
+        -:  130:		 * @param name 输出 name 参数
+        -:  131:		 * @param filename 输出 filename 参数
+        -:  132:		 */
+        -:  133:		static void parseDispositionParams(std::string_view disposition, std::string& name, std::string& filename);
+        -:  134:	};
+        -:  135:
+        -:  136:} // namespace hical

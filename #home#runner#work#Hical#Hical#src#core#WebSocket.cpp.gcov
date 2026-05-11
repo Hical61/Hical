@@ -1,0 +1,469 @@
+        -:    0:Source:/home/runner/work/Hical/Hical/src/core/WebSocket.cpp
+        -:    1:#include "WebSocket.h"
+        -:    2:#include "WsHandshake.h"
+        -:    3:#include <cstring>
+        -:    4:
+        -:    5:namespace hical
+        -:    6:{
+        -:    7:
+        -:    8:	// ============ WebSocketSession ============
+        -:    9:
+function _ZN5hical16WebSocketSessionC2EN5boost4asio19basic_stream_socketINS2_2ip3tcpENS2_15any_io_executorEEEmNS_19WsCompressionConfigEPKNS_20WsDeflateNegotiationE called 4 returned 100% blocks executed 40%
+        4:   10:	WebSocketSession::WebSocketSession(boost::asio::ip::tcp::socket socket,
+        -:   11:									   size_t maxMessageSize,
+        -:   12:									   WsCompressionConfig compression,
+        4:   13:									   const WsDeflateNegotiation* deflateNeg)
+        4:   14:		: m_socket(std::move(socket)), m_compression(compression), m_maxMessageSize(maxMessageSize)
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+call    5 returned 100%
+        -:   15:	{
+        -:   16:		// 初始 8KB 读缓冲区
+        4:   17:		m_readBuf.resize(8192);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:   18:
+        -:   19:		// 构造 permessage-deflate 上下文（仅在协商成功时）
+       4*:   20:		if (compression.enabled && deflateNeg != nullptr && deflateNeg->accepted)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+branch  2 never executed (fallthrough)
+branch  3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed
+        -:   21:		{
+    #####:   22:			WsDeflateContext::Config cfg;
+    #####:   23:			cfg.serverMaxWindowBits = deflateNeg->serverMaxWindowBits;
+    #####:   24:			cfg.clientMaxWindowBits = deflateNeg->clientMaxWindowBits;
+    #####:   25:			cfg.serverNoContextTakeover = deflateNeg->serverNoContextTakeover;
+    #####:   26:			cfg.clientNoContextTakeover = deflateNeg->clientNoContextTakeover;
+    #####:   27:			cfg.compLevel = 6;
+    #####:   28:			cfg.memLevel = 4;
+    #####:   29:			m_deflateCtx = std::make_unique<WsDeflateContext>(cfg);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+call    4 never executed
+        -:   30:		}
+        4:   31:	}
+call    0 never executed
+call    1 never executed
+call    2 never executed
+call    3 never executed
+        -:   32:
+function _ZN5hical16WebSocketSession4sendERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEE called 4 returned 100% blocks executed 44%
+        4:   33:	Awaitable<void> WebSocketSession::send(const std::string& msg)
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:   34:	{
+        -:   35:		if (m_deflateCtx)
+        -:   36:		{
+        -:   37:			auto compressed = m_deflateCtx->compress(msg);
+        -:   38:			co_await sendFrame(WsOpcode::hText, compressed, true, true);
+        -:   39:		}
+        -:   40:		else
+        -:   41:		{
+        -:   42:			co_await sendFrame(WsOpcode::hText, msg);
+        -:   43:		}
+        8:   44:	}
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed
+call    8 never executed
+branch  9 never executed (fallthrough)
+branch 10 never executed
+call   11 never executed
+call   12 never executed
+branch 13 never executed (fallthrough)
+branch 14 never executed (throw)
+call   15 never executed
+call   16 never executed
+        -:   45:
+function _ZN5hical16WebSocketSession7receiveB5cxx11Ev called 7 returned 100% blocks executed 44%
+        7:   46:	Awaitable<std::optional<std::string>> WebSocketSession::receive()
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:   47:	{
+        -:   48:		try
+        -:   49:		{
+        -:   50:			for (;;)
+        -:   51:			{
+        -:   52:				// 1. 确保至少 2 字节（帧头最小长度）
+        -:   53:				co_await ensureBytes(2);
+        -:   54:
+        -:   55:				// 2. 尝试解析帧头
+        -:   56:				auto hdr = parseWsFrameHeader(m_readBuf.data(), m_readBufUsed);
+        -:   57:				if (!hdr)
+        -:   58:				{
+        -:   59:					// 帧头不完整，多读一些
+        -:   60:					co_await ensureBytes(m_readBufUsed + 1);
+        -:   61:					continue;
+        -:   62:				}
+        -:   63:
+        -:   64:				// 3. 协议校验
+        -:   65:				if (hdr->rsv2 || hdr->rsv3)
+        -:   66:				{
+        -:   67:					// RSV2/RSV3 非零且无已协商扩展 → 协议错误
+        -:   68:					co_await sendCloseFrame(WsCloseCode::hProtocolError, "Unexpected RSV2/RSV3");
+        -:   69:					m_open = false;
+        -:   70:					co_return std::nullopt;
+        -:   71:				}
+        -:   72:
+        -:   73:				// RSV1 仅在 permessage-deflate 启用时允许
+        -:   74:				if (hdr->rsv1 && !m_deflateCtx)
+        -:   75:				{
+        -:   76:					co_await sendCloseFrame(WsCloseCode::hProtocolError, "Unexpected RSV1 without deflate");
+        -:   77:					m_open = false;
+        -:   78:					co_return std::nullopt;
+        -:   79:				}
+        -:   80:
+        -:   81:				// 客户端→服务器必须有 mask
+        -:   82:				if (!hdr->masked)
+        -:   83:				{
+        -:   84:					co_await sendCloseFrame(WsCloseCode::hProtocolError, "Client frames must be masked");
+        -:   85:					m_open = false;
+        -:   86:					co_return std::nullopt;
+        -:   87:				}
+        -:   88:
+        -:   89:				// 控制帧载荷不超过 125 字节（RFC 6455 §5.5）
+        -:   90:				bool isControl = (static_cast<uint8_t>(hdr->opcode) >= 0x08);
+        -:   91:				if (isControl && hdr->payloadLength > 125)
+        -:   92:				{
+        -:   93:					co_await sendCloseFrame(WsCloseCode::hProtocolError, "Control frame payload too large");
+        -:   94:					m_open = false;
+        -:   95:					co_return std::nullopt;
+        -:   96:				}
+        -:   97:
+        -:   98:				// 载荷大小检查
+        -:   99:				if (hdr->payloadLength > m_maxMessageSize)
+        -:  100:				{
+        -:  101:					co_await sendCloseFrame(WsCloseCode::hMessageTooBig);
+        -:  102:					m_open = false;
+        -:  103:					co_return std::nullopt;
+        -:  104:				}
+        -:  105:
+        -:  106:				// 4. 确保完整帧数据可用
+        -:  107:				size_t frameSize = hdr->headerSize + static_cast<size_t>(hdr->payloadLength);
+        -:  108:				co_await ensureBytes(frameSize);
+        -:  109:
+        -:  110:				// 5. 解除 mask
+        -:  111:				uint8_t* payloadPtr = m_readBuf.data() + hdr->headerSize;
+        -:  112:				size_t payloadLen = static_cast<size_t>(hdr->payloadLength);
+        -:  113:				unmaskPayload(payloadPtr, payloadLen, hdr->maskKey);
+        -:  114:
+        -:  115:				// 6. 控制帧处理（RFC 6455 §5.5：控制帧可穿插在数据帧分片之间）
+        -:  116:				if (hdr->opcode == WsOpcode::hClose)
+        -:  117:				{
+        -:  118:					// 回复 close 帧
+        -:  119:					if (payloadLen >= 2)
+        -:  120:					{
+        -:  121:						// 回复相同的 close payload
+        -:  122:						std::string closePayload(reinterpret_cast<const char*>(payloadPtr), payloadLen);
+        -:  123:						co_await sendFrame(WsOpcode::hClose, closePayload);
+        -:  124:					}
+        -:  125:					else
+        -:  126:					{
+        -:  127:						co_await sendFrame(WsOpcode::hClose, {});
+        -:  128:					}
+        -:  129:					consumeBytes(frameSize);
+        -:  130:					m_open = false;
+        -:  131:					co_return std::nullopt;
+        -:  132:				}
+        -:  133:
+        -:  134:				if (hdr->opcode == WsOpcode::hPing)
+        -:  135:				{
+        -:  136:					// 回复 Pong，载荷与 Ping 相同
+        -:  137:					std::string_view pongPayload(reinterpret_cast<const char*>(payloadPtr), payloadLen);
+        -:  138:					co_await sendFrame(WsOpcode::hPong, pongPayload);
+        -:  139:					consumeBytes(frameSize);
+        -:  140:					continue;
+        -:  141:				}
+        -:  142:
+        -:  143:				if (hdr->opcode == WsOpcode::hPong)
+        -:  144:				{
+        -:  145:					// 忽略未主动发送的 Pong
+        -:  146:					consumeBytes(frameSize);
+        -:  147:					continue;
+        -:  148:				}
+        -:  149:
+        -:  150:				// 7. 数据帧处理（Text/Binary/Continuation）
+        -:  151:				if (hdr->opcode == WsOpcode::hText || hdr->opcode == WsOpcode::hBinary)
+        -:  152:				{
+        -:  153:					// 新消息的首帧
+        -:  154:					m_fragmentBuf.clear();
+        -:  155:					m_fragmentOpcode = hdr->opcode;
+        -:  156:					m_fragmentCompressed = hdr->rsv1;
+        -:  157:				}
+        -:  158:				else if (hdr->opcode == WsOpcode::hContinuation)
+        -:  159:				{
+        -:  160:					// 分片消息的后续帧（首帧已设置 opcode/compressed）
+        -:  161:				}
+        -:  162:				else
+        -:  163:				{
+        -:  164:					// 未知 opcode
+        -:  165:					co_await sendCloseFrame(WsCloseCode::hProtocolError, "Unknown opcode");
+        -:  166:					m_open = false;
+        -:  167:					co_return std::nullopt;
+        -:  168:				}
+        -:  169:
+        -:  170:				// 追加载荷到分片缓冲
+        -:  171:				m_fragmentBuf.append(reinterpret_cast<const char*>(payloadPtr), payloadLen);
+        -:  172:
+        -:  173:				// 总大小检查
+        -:  174:				if (m_fragmentBuf.size() > m_maxMessageSize)
+        -:  175:				{
+        -:  176:					co_await sendCloseFrame(WsCloseCode::hMessageTooBig);
+        -:  177:					m_open = false;
+        -:  178:					co_return std::nullopt;
+        -:  179:				}
+        -:  180:
+        -:  181:				consumeBytes(frameSize);
+        -:  182:
+        -:  183:				if (hdr->fin)
+        -:  184:				{
+        -:  185:					// 消息完成
+        -:  186:					if (m_fragmentCompressed && m_deflateCtx)
+        -:  187:					{
+        -:  188:						co_return m_deflateCtx->decompress(m_fragmentBuf, m_maxMessageSize);
+        -:  189:					}
+        -:  190:					co_return std::move(m_fragmentBuf);
+        -:  191:				}
+        -:  192:				// FIN=0: 继续等待后续分片
+        -:  193:			}
+        -:  194:		}
+        -:  195:		catch (const boost::system::system_error& e)
+        -:  196:		{
+        -:  197:			m_open = false;
+        -:  198:			if (e.code() == boost::asio::error::eof || e.code() == boost::asio::error::connection_reset
+        -:  199:				|| e.code() == boost::asio::error::operation_aborted)
+        -:  200:			{
+        -:  201:				co_return std::nullopt;
+        -:  202:			}
+        -:  203:			throw;
+        -:  204:		}
+       14:  205:	}
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed
+call    9 never executed
+call   10 never executed
+branch 11 never executed (fallthrough)
+branch 12 never executed (throw)
+call   13 never executed
+call   14 never executed
+        -:  206:
+function _ZN5hical16WebSocketSession10closeAsyncEv called 0 returned 0% blocks executed 0%
+    #####:  207:	Awaitable<void> WebSocketSession::closeAsync()
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:  208:	{
+        -:  209:		bool expected = true;
+        -:  210:		if (m_open.compare_exchange_strong(expected, false))
+        -:  211:		{
+        -:  212:			try
+        -:  213:			{
+        -:  214:				co_await sendCloseFrame(WsCloseCode::hNormal);
+        -:  215:			}
+        -:  216:			catch (...)
+        -:  217:			{
+        -:  218:				// 忽略发送 close 帧的错误（对端可能已关闭）
+        -:  219:			}
+        -:  220:
+        -:  221:			boost::system::error_code ec;
+        -:  222:			m_socket.shutdown(boost::asio::ip::tcp::socket::shutdown_both, ec);
+        -:  223:			m_socket.close(ec);
+        -:  224:		}
+    #####:  225:	}
+call    0 never executed
+call    1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed (throw)
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed
+call    8 never executed
+branch  9 never executed (fallthrough)
+branch 10 never executed
+call   11 never executed
+call   12 never executed
+branch 13 never executed (fallthrough)
+branch 14 never executed (throw)
+call   15 never executed
+call   16 never executed
+        -:  226:
+function _ZN5hical16WebSocketSession5closeEv called 0 returned 0% blocks executed 0%
+    #####:  227:	void WebSocketSession::close()
+        -:  228:	{
+    #####:  229:		bool expected = true;
+    #####:  230:		if (m_open.compare_exchange_strong(expected, false))
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+        -:  231:		{
+    #####:  232:			boost::system::error_code ec;
+    #####:  233:			m_socket.shutdown(boost::asio::ip::tcp::socket::shutdown_both, ec);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  234:			m_socket.close(ec);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:  235:		}
+    #####:  236:	}
+        -:  237:
+function _ZNK5hical16WebSocketSession6isOpenEv called 8 returned 100% blocks executed 88%
+        8:  238:	bool WebSocketSession::isOpen() const
+        -:  239:	{
+       8*:  240:		return m_open.load() && m_socket.is_open();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0%
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0%
+        -:  241:	}
+        -:  242:
+function _ZN5hical16WebSocketSession6socketEv called 1 returned 100% blocks executed 100%
+        1:  243:	boost::asio::ip::tcp::socket& WebSocketSession::socket()
+        -:  244:	{
+        1:  245:		return m_socket;
+        -:  246:	}
+        -:  247:
+function _ZNK5hical16WebSocketSession17compressionConfigEv called 0 returned 0% blocks executed 0%
+    #####:  248:	const WsCompressionConfig& WebSocketSession::compressionConfig() const
+        -:  249:	{
+    #####:  250:		return m_compression;
+        -:  251:	}
+        -:  252:
+function _ZN5hical16WebSocketSession11ensureBytesEm called 10 returned 100% blocks executed 44%
+       10:  253:	Awaitable<void> WebSocketSession::ensureBytes(size_t n)
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  254:	{
+        -:  255:		while (m_readBufUsed < n)
+        -:  256:		{
+        -:  257:			// 按需扩容
+        -:  258:			if (m_readBuf.size() < n)
+        -:  259:			{
+        -:  260:				m_readBuf.resize(std::max(n, m_readBuf.size() * 2));
+        -:  261:			}
+        -:  262:
+        -:  263:			auto bytesRead = co_await m_socket.async_read_some(
+        -:  264:				boost::asio::buffer(m_readBuf.data() + m_readBufUsed, m_readBuf.size() - m_readBufUsed),
+        -:  265:				boost::asio::use_awaitable);
+        -:  266:			m_readBufUsed += bytesRead;
+        -:  267:		}
+       20:  268:	}
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed
+call    8 never executed
+branch  9 never executed (fallthrough)
+branch 10 never executed
+call   11 never executed
+call   12 never executed
+branch 13 never executed (fallthrough)
+branch 14 never executed (throw)
+call   15 never executed
+call   16 never executed
+        -:  269:
+function _ZN5hical16WebSocketSession12consumeBytesEm called 3 returned 100% blocks executed 50%
+        3:  270:	void WebSocketSession::consumeBytes(size_t n)
+        -:  271:	{
+        3:  272:		if (n >= m_readBufUsed)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:  273:		{
+        3:  274:			m_readBufUsed = 0;
+        -:  275:		}
+        -:  276:		else
+        -:  277:		{
+    #####:  278:			std::memmove(m_readBuf.data(), m_readBuf.data() + n, m_readBufUsed - n);
+call    0 never executed
+call    1 never executed
+    #####:  279:			m_readBufUsed -= n;
+        -:  280:		}
+        3:  281:	}
+        -:  282:
+function _ZN5hical16WebSocketSession9sendFrameENS_8WsOpcodeESt17basic_string_viewIcSt11char_traitsIcEEbb called 4 returned 100% blocks executed 44%
+        4:  283:	Awaitable<void> WebSocketSession::sendFrame(WsOpcode opcode, std::string_view payload, bool fin, bool rsv1)
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  284:	{
+        -:  285:		auto frame = buildWsFrame(opcode, payload, fin, rsv1);
+        -:  286:		co_await boost::asio::async_write(m_socket, boost::asio::buffer(frame), boost::asio::use_awaitable);
+        8:  287:	}
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed
+call    8 never executed
+branch  9 never executed (fallthrough)
+branch 10 never executed
+call   11 never executed
+call   12 never executed
+branch 13 never executed (fallthrough)
+branch 14 never executed (throw)
+call   15 never executed
+call   16 never executed
+        -:  288:
+function _ZN5hical16WebSocketSession14sendCloseFrameENS_11WsCloseCodeESt17basic_string_viewIcSt11char_traitsIcEE called 0 returned 0% blocks executed 0%
+    #####:  289:	Awaitable<void> WebSocketSession::sendCloseFrame(WsCloseCode code, std::string_view reason)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:  290:	{
+        -:  291:		auto closePayload = buildClosePayload(code, reason);
+        -:  292:		co_await sendFrame(WsOpcode::hClose, closePayload);
+    #####:  293:	}
+call    0 never executed
+call    1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed (throw)
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed
+call    8 never executed
+branch  9 never executed (fallthrough)
+branch 10 never executed
+call   11 never executed
+call   12 never executed
+branch 13 never executed (fallthrough)
+branch 14 never executed (throw)
+call   15 never executed
+call   16 never executed
+        -:  294:
+        -:  295:} // namespace hical

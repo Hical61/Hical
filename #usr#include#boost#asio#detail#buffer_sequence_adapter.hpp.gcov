@@ -1,0 +1,1284 @@
+        -:    0:Source:/usr/include/boost/asio/detail/buffer_sequence_adapter.hpp
+        -:    1://
+        -:    2:// detail/buffer_sequence_adapter.hpp
+        -:    3:// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        -:    4://
+        -:    5:// Copyright (c) 2003-2023 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+        -:    6://
+        -:    7:// Distributed under the Boost Software License, Version 1.0. (See accompanying
+        -:    8:// file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+        -:    9://
+        -:   10:
+        -:   11:#ifndef BOOST_ASIO_DETAIL_BUFFER_SEQUENCE_ADAPTER_HPP
+        -:   12:#define BOOST_ASIO_DETAIL_BUFFER_SEQUENCE_ADAPTER_HPP
+        -:   13:
+        -:   14:#if defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   15:# pragma once
+        -:   16:#endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   17:
+        -:   18:#include <boost/asio/detail/config.hpp>
+        -:   19:#include <boost/asio/buffer.hpp>
+        -:   20:#include <boost/asio/detail/array_fwd.hpp>
+        -:   21:#include <boost/asio/detail/socket_types.hpp>
+        -:   22:#include <boost/asio/registered_buffer.hpp>
+        -:   23:
+        -:   24:#include <boost/asio/detail/push_options.hpp>
+        -:   25:
+        -:   26:namespace boost {
+        -:   27:namespace asio {
+        -:   28:namespace detail {
+        -:   29:
+        -:   30:class buffer_sequence_adapter_base
+        -:   31:{
+        -:   32:#if defined(BOOST_ASIO_WINDOWS_RUNTIME)
+        -:   33:public:
+        -:   34:  // The maximum number of buffers to support in a single operation.
+        -:   35:  enum { max_buffers = 1 };
+        -:   36:
+        -:   37:protected:
+        -:   38:  typedef Windows::Storage::Streams::IBuffer^ native_buffer_type;
+        -:   39:
+        -:   40:  BOOST_ASIO_DECL static void init_native_buffer(
+        -:   41:      native_buffer_type& buf,
+        -:   42:      const boost::asio::mutable_buffer& buffer);
+        -:   43:
+        -:   44:  BOOST_ASIO_DECL static void init_native_buffer(
+        -:   45:      native_buffer_type& buf,
+        -:   46:      const boost::asio::const_buffer& buffer);
+        -:   47:#elif defined(BOOST_ASIO_WINDOWS) || defined(__CYGWIN__)
+        -:   48:public:
+        -:   49:  // The maximum number of buffers to support in a single operation.
+        -:   50:  enum { max_buffers = 64 < max_iov_len ? 64 : max_iov_len };
+        -:   51:
+        -:   52:protected:
+        -:   53:  typedef WSABUF native_buffer_type;
+        -:   54:
+        -:   55:  static void init_native_buffer(WSABUF& buf,
+        -:   56:      const boost::asio::mutable_buffer& buffer)
+        -:   57:  {
+        -:   58:    buf.buf = static_cast<char*>(buffer.data());
+        -:   59:    buf.len = static_cast<ULONG>(buffer.size());
+        -:   60:  }
+        -:   61:
+        -:   62:  static void init_native_buffer(WSABUF& buf,
+        -:   63:      const boost::asio::const_buffer& buffer)
+        -:   64:  {
+        -:   65:    buf.buf = const_cast<char*>(static_cast<const char*>(buffer.data()));
+        -:   66:    buf.len = static_cast<ULONG>(buffer.size());
+        -:   67:  }
+        -:   68:#else // defined(BOOST_ASIO_WINDOWS) || defined(__CYGWIN__)
+        -:   69:public:
+        -:   70:  // The maximum number of buffers to support in a single operation.
+        -:   71:  enum { max_buffers = 64 < max_iov_len ? 64 : max_iov_len };
+        -:   72:
+        -:   73:protected:
+        -:   74:  typedef iovec native_buffer_type;
+        -:   75:
+      34*:   76:  static void init_iov_base(void*& base, void* addr)
+        -:   77:  {
+      34*:   78:    base = addr;
+      34*:   79:  }
+------------------
+_ZN5boost4asio6detail28buffer_sequence_adapter_base13init_iov_baseERPvS3_:
+function _ZN5boost4asio6detail28buffer_sequence_adapter_base13init_iov_baseERPvS3_ called 0 returned 0% blocks executed 0%
+    #####:   76:  static void init_iov_base(void*& base, void* addr)
+        -:   77:  {
+    #####:   78:    base = addr;
+    #####:   79:  }
+------------------
+_ZN5boost4asio6detail28buffer_sequence_adapter_base13init_iov_baseERPvS3_:
+function _ZN5boost4asio6detail28buffer_sequence_adapter_base13init_iov_baseERPvS3_ called 34 returned 100% blocks executed 100%
+       34:   76:  static void init_iov_base(void*& base, void* addr)
+        -:   77:  {
+       34:   78:    base = addr;
+       34:   79:  }
+------------------
+        -:   80:
+        -:   81:  template <typename T>
+        -:   82:  static void init_iov_base(T& base, void* addr)
+        -:   83:  {
+        -:   84:    base = static_cast<T>(addr);
+        -:   85:  }
+        -:   86:
+        -:   87:  static void init_native_buffer(iovec& iov,
+        -:   88:      const boost::asio::mutable_buffer& buffer)
+        -:   89:  {
+        -:   90:    init_iov_base(iov.iov_base, buffer.data());
+        -:   91:    iov.iov_len = buffer.size();
+        -:   92:  }
+        -:   93:
+      34*:   94:  static void init_native_buffer(iovec& iov,
+        -:   95:      const boost::asio::const_buffer& buffer)
+        -:   96:  {
+      34*:   97:    init_iov_base(iov.iov_base, const_cast<void*>(buffer.data()));
+      34*:   98:    iov.iov_len = buffer.size();
+      34*:   99:  }
+------------------
+_ZN5boost4asio6detail28buffer_sequence_adapter_base18init_native_bufferER5iovecRKNS0_12const_bufferE:
+function _ZN5boost4asio6detail28buffer_sequence_adapter_base18init_native_bufferER5iovecRKNS0_12const_bufferE called 0 returned 0% blocks executed 0%
+    #####:   94:  static void init_native_buffer(iovec& iov,
+        -:   95:      const boost::asio::const_buffer& buffer)
+        -:   96:  {
+    #####:   97:    init_iov_base(iov.iov_base, const_cast<void*>(buffer.data()));
+call    0 never executed
+call    1 never executed
+    #####:   98:    iov.iov_len = buffer.size();
+call    0 never executed
+    #####:   99:  }
+------------------
+_ZN5boost4asio6detail28buffer_sequence_adapter_base18init_native_bufferER5iovecRKNS0_12const_bufferE:
+function _ZN5boost4asio6detail28buffer_sequence_adapter_base18init_native_bufferER5iovecRKNS0_12const_bufferE called 34 returned 100% blocks executed 100%
+       34:   94:  static void init_native_buffer(iovec& iov,
+        -:   95:      const boost::asio::const_buffer& buffer)
+        -:   96:  {
+       34:   97:    init_iov_base(iov.iov_base, const_cast<void*>(buffer.data()));
+call    0 returned 100%
+call    1 returned 100%
+       34:   98:    iov.iov_len = buffer.size();
+call    0 returned 100%
+       34:   99:  }
+------------------
+        -:  100:#endif // defined(BOOST_ASIO_WINDOWS) || defined(__CYGWIN__)
+        -:  101:};
+        -:  102:
+        -:  103:// Helper class to translate buffers into the native buffer representation.
+        -:  104:template <typename Buffer, typename Buffers>
+        -:  105:class buffer_sequence_adapter
+        -:  106:  : buffer_sequence_adapter_base
+        -:  107:{
+        -:  108:public:
+        -:  109:  enum { is_single_buffer = false };
+        -:  110:  enum { is_registered_buffer = false };
+        -:  111:
+function _ZN5boost4asio6detail23buffer_sequence_adapterINS0_12const_bufferENS1_16prepared_buffersIS3_Lm64EEEEC2ERKS5_ called 0 returned 0% blocks executed 0%
+    #####:  112:  explicit buffer_sequence_adapter(const Buffers& buffer_sequence)
+    #####:  113:    : count_(0), total_buffer_size_(0)
+        -:  114:  {
+    #####:  115:    buffer_sequence_adapter::init(
+call    0 never executed
+call    1 never executed
+call    2 never executed
+        -:  116:        boost::asio::buffer_sequence_begin(buffer_sequence),
+        -:  117:        boost::asio::buffer_sequence_end(buffer_sequence));
+    #####:  118:  }
+        -:  119:
+function _ZN5boost4asio6detail23buffer_sequence_adapterINS0_12const_bufferENS1_16prepared_buffersIS3_Lm64EEEE7buffersEv called 0 returned 0% blocks executed 0%
+    #####:  120:  native_buffer_type* buffers()
+        -:  121:  {
+    #####:  122:    return buffers_;
+        -:  123:  }
+        -:  124:
+function _ZNK5boost4asio6detail23buffer_sequence_adapterINS0_12const_bufferENS1_16prepared_buffersIS3_Lm64EEEE5countEv called 0 returned 0% blocks executed 0%
+    #####:  125:  std::size_t count() const
+        -:  126:  {
+    #####:  127:    return count_;
+        -:  128:  }
+        -:  129:
+function _ZNK5boost4asio6detail23buffer_sequence_adapterINS0_12const_bufferENS1_16prepared_buffersIS3_Lm64EEEE10total_sizeEv called 0 returned 0% blocks executed 0%
+    #####:  130:  std::size_t total_size() const
+        -:  131:  {
+    #####:  132:    return total_buffer_size_;
+        -:  133:  }
+        -:  134:
+        -:  135:  registered_buffer_id registered_id() const
+        -:  136:  {
+        -:  137:    return registered_buffer_id();
+        -:  138:  }
+        -:  139:
+        -:  140:  bool all_empty() const
+        -:  141:  {
+        -:  142:    return total_buffer_size_ == 0;
+        -:  143:  }
+        -:  144:
+function _ZN5boost4asio6detail23buffer_sequence_adapterINS0_12const_bufferENS1_16prepared_buffersIS3_Lm64EEEE9all_emptyERKS5_ called 0 returned 0% blocks executed 0%
+    #####:  145:  static bool all_empty(const Buffers& buffer_sequence)
+        -:  146:  {
+    #####:  147:    return buffer_sequence_adapter::all_empty(
+call    0 never executed
+call    1 never executed
+call    2 never executed
+        -:  148:        boost::asio::buffer_sequence_begin(buffer_sequence),
+    #####:  149:        boost::asio::buffer_sequence_end(buffer_sequence));
+        -:  150:  }
+        -:  151:
+        -:  152:  static void validate(const Buffers& buffer_sequence)
+        -:  153:  {
+        -:  154:    buffer_sequence_adapter::validate(
+        -:  155:        boost::asio::buffer_sequence_begin(buffer_sequence),
+        -:  156:        boost::asio::buffer_sequence_end(buffer_sequence));
+        -:  157:  }
+        -:  158:
+        -:  159:  static Buffer first(const Buffers& buffer_sequence)
+        -:  160:  {
+        -:  161:    return buffer_sequence_adapter::first(
+        -:  162:        boost::asio::buffer_sequence_begin(buffer_sequence),
+        -:  163:        boost::asio::buffer_sequence_end(buffer_sequence));
+        -:  164:  }
+        -:  165:
+        -:  166:  enum { linearisation_storage_size = 8192 };
+        -:  167:
+function _ZN5boost4asio6detail23buffer_sequence_adapterINS0_12const_bufferENS1_16prepared_buffersIS3_Lm64EEEE9lineariseERKS5_RKNS0_14mutable_bufferE called 0 returned 0% blocks executed 0%
+    #####:  168:  static Buffer linearise(const Buffers& buffer_sequence,
+        -:  169:      const boost::asio::mutable_buffer& storage)
+        -:  170:  {
+    #####:  171:    return buffer_sequence_adapter::linearise(
+call    0 never executed
+call    1 never executed
+call    2 never executed
+        -:  172:        boost::asio::buffer_sequence_begin(buffer_sequence),
+    #####:  173:        boost::asio::buffer_sequence_end(buffer_sequence), storage);
+        -:  174:  }
+        -:  175:
+        -:  176:private:
+        -:  177:  template <typename Iterator>
+function _ZN5boost4asio6detail23buffer_sequence_adapterINS0_12const_bufferENS1_16prepared_buffersIS3_Lm64EEEE4initIPKS3_EEvT_SA_ called 0 returned 0% blocks executed 0%
+    #####:  178:  void init(Iterator begin, Iterator end)
+        -:  179:  {
+    #####:  180:    Iterator iter = begin;
+    #####:  181:    for (; iter != end && count_ < max_buffers; ++iter, ++count_)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed (fallthrough)
+        -:  182:    {
+    #####:  183:      Buffer buffer(*iter);
+    #####:  184:      init_native_buffer(buffers_[count_], buffer);
+call    0 never executed
+    #####:  185:      total_buffer_size_ += buffer.size();
+call    0 never executed
+        -:  186:    }
+    #####:  187:  }
+        -:  188:
+        -:  189:  template <typename Iterator>
+function _ZN5boost4asio6detail23buffer_sequence_adapterINS0_12const_bufferENS1_16prepared_buffersIS3_Lm64EEEE9all_emptyIPKS3_EEbT_SA_ called 0 returned 0% blocks executed 0%
+    #####:  190:  static bool all_empty(Iterator begin, Iterator end)
+        -:  191:  {
+    #####:  192:    Iterator iter = begin;
+    #####:  193:    std::size_t i = 0;
+    #####:  194:    for (; iter != end && i < max_buffers; ++iter, ++i)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed (fallthrough)
+    #####:  195:      if (Buffer(*iter).size() > 0)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+    #####:  196:        return false;
+    #####:  197:    return true;
+        -:  198:  }
+        -:  199:
+        -:  200:  template <typename Iterator>
+        -:  201:  static void validate(Iterator begin, Iterator end)
+        -:  202:  {
+        -:  203:    Iterator iter = begin;
+        -:  204:    for (; iter != end; ++iter)
+        -:  205:    {
+        -:  206:      Buffer buffer(*iter);
+        -:  207:      buffer.data();
+        -:  208:    }
+        -:  209:  }
+        -:  210:
+        -:  211:  template <typename Iterator>
+        -:  212:  static Buffer first(Iterator begin, Iterator end)
+        -:  213:  {
+        -:  214:    Iterator iter = begin;
+        -:  215:    for (; iter != end; ++iter)
+        -:  216:    {
+        -:  217:      Buffer buffer(*iter);
+        -:  218:      if (buffer.size() != 0)
+        -:  219:        return buffer;
+        -:  220:    }
+        -:  221:    return Buffer();
+        -:  222:  }
+        -:  223:
+        -:  224:  template <typename Iterator>
+function _ZN5boost4asio6detail23buffer_sequence_adapterINS0_12const_bufferENS1_16prepared_buffersIS3_Lm64EEEE9lineariseIPKS3_EES3_T_SA_RKNS0_14mutable_bufferE called 0 returned 0% blocks executed 0%
+    #####:  225:  static Buffer linearise(Iterator begin, Iterator end,
+        -:  226:      const boost::asio::mutable_buffer& storage)
+        -:  227:  {
+    #####:  228:    boost::asio::mutable_buffer unused_storage = storage;
+    #####:  229:    Iterator iter = begin;
+    #####:  230:    while (iter != end && unused_storage.size() != 0)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed
+branch  5 never executed
+branch  6 never executed (fallthrough)
+        -:  231:    {
+    #####:  232:      Buffer buffer(*iter);
+    #####:  233:      ++iter;
+    #####:  234:      if (buffer.size() == 0)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+    #####:  235:        continue;
+    #####:  236:      if (unused_storage.size() == storage.size())
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed
+        -:  237:      {
+    #####:  238:        if (iter == end)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  239:          return buffer;
+    #####:  240:        if (buffer.size() >= unused_storage.size())
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed
+    #####:  241:          return buffer;
+        -:  242:      }
+    #####:  243:      unused_storage += boost::asio::buffer_copy(unused_storage, buffer);
+call    0 never executed
+call    1 never executed
+        -:  244:    }
+    #####:  245:    return Buffer(storage.data(), storage.size() - unused_storage.size());
+call    0 never executed
+call    1 never executed
+call    2 never executed
+call    3 never executed
+        -:  246:  }
+        -:  247:
+        -:  248:  native_buffer_type buffers_[max_buffers];
+        -:  249:  std::size_t count_;
+        -:  250:  std::size_t total_buffer_size_;
+        -:  251:};
+        -:  252:
+        -:  253:template <typename Buffer>
+        -:  254:class buffer_sequence_adapter<Buffer, boost::asio::mutable_buffer>
+        -:  255:  : buffer_sequence_adapter_base
+        -:  256:{
+        -:  257:public:
+        -:  258:  enum { is_single_buffer = true };
+        -:  259:  enum { is_registered_buffer = false };
+        -:  260:
+        -:  261:  explicit buffer_sequence_adapter(
+        -:  262:      const boost::asio::mutable_buffer& buffer_sequence)
+        -:  263:  {
+        -:  264:    init_native_buffer(buffer_, Buffer(buffer_sequence));
+        -:  265:    total_buffer_size_ = buffer_sequence.size();
+        -:  266:  }
+        -:  267:
+        -:  268:  native_buffer_type* buffers()
+        -:  269:  {
+        -:  270:    return &buffer_;
+        -:  271:  }
+        -:  272:
+        -:  273:  std::size_t count() const
+        -:  274:  {
+        -:  275:    return 1;
+        -:  276:  }
+        -:  277:
+        -:  278:  std::size_t total_size() const
+        -:  279:  {
+        -:  280:    return total_buffer_size_;
+        -:  281:  }
+        -:  282:
+        -:  283:  registered_buffer_id registered_id() const
+        -:  284:  {
+        -:  285:    return registered_buffer_id();
+        -:  286:  }
+        -:  287:
+        -:  288:  bool all_empty() const
+        -:  289:  {
+        -:  290:    return total_buffer_size_ == 0;
+        -:  291:  }
+        -:  292:
+        -:  293:  static bool all_empty(const boost::asio::mutable_buffer& buffer_sequence)
+        -:  294:  {
+        -:  295:    return buffer_sequence.size() == 0;
+        -:  296:  }
+        -:  297:
+        -:  298:  static void validate(const boost::asio::mutable_buffer& buffer_sequence)
+        -:  299:  {
+        -:  300:    buffer_sequence.data();
+        -:  301:  }
+        -:  302:
+        -:  303:  static Buffer first(const boost::asio::mutable_buffer& buffer_sequence)
+        -:  304:  {
+        -:  305:    return Buffer(buffer_sequence);
+        -:  306:  }
+        -:  307:
+        -:  308:  enum { linearisation_storage_size = 1 };
+        -:  309:
+        -:  310:  static Buffer linearise(const boost::asio::mutable_buffer& buffer_sequence,
+        -:  311:      const Buffer&)
+        -:  312:  {
+        -:  313:    return Buffer(buffer_sequence);
+        -:  314:  }
+        -:  315:
+        -:  316:private:
+        -:  317:  native_buffer_type buffer_;
+        -:  318:  std::size_t total_buffer_size_;
+        -:  319:};
+        -:  320:
+        -:  321:template <typename Buffer>
+        -:  322:class buffer_sequence_adapter<Buffer, boost::asio::const_buffer>
+        -:  323:  : buffer_sequence_adapter_base
+        -:  324:{
+        -:  325:public:
+        -:  326:  enum { is_single_buffer = true };
+        -:  327:  enum { is_registered_buffer = false };
+        -:  328:
+        -:  329:  explicit buffer_sequence_adapter(
+        -:  330:      const boost::asio::const_buffer& buffer_sequence)
+        -:  331:  {
+        -:  332:    init_native_buffer(buffer_, Buffer(buffer_sequence));
+        -:  333:    total_buffer_size_ = buffer_sequence.size();
+        -:  334:  }
+        -:  335:
+        -:  336:  native_buffer_type* buffers()
+        -:  337:  {
+        -:  338:    return &buffer_;
+        -:  339:  }
+        -:  340:
+        -:  341:  std::size_t count() const
+        -:  342:  {
+        -:  343:    return 1;
+        -:  344:  }
+        -:  345:
+        -:  346:  std::size_t total_size() const
+        -:  347:  {
+        -:  348:    return total_buffer_size_;
+        -:  349:  }
+        -:  350:
+        -:  351:  registered_buffer_id registered_id() const
+        -:  352:  {
+        -:  353:    return registered_buffer_id();
+        -:  354:  }
+        -:  355:
+        -:  356:  bool all_empty() const
+        -:  357:  {
+        -:  358:    return total_buffer_size_ == 0;
+        -:  359:  }
+        -:  360:
+        -:  361:  static bool all_empty(const boost::asio::const_buffer& buffer_sequence)
+        -:  362:  {
+        -:  363:    return buffer_sequence.size() == 0;
+        -:  364:  }
+        -:  365:
+        -:  366:  static void validate(const boost::asio::const_buffer& buffer_sequence)
+        -:  367:  {
+        -:  368:    buffer_sequence.data();
+        -:  369:  }
+        -:  370:
+        -:  371:  static Buffer first(const boost::asio::const_buffer& buffer_sequence)
+        -:  372:  {
+        -:  373:    return Buffer(buffer_sequence);
+        -:  374:  }
+        -:  375:
+        -:  376:  enum { linearisation_storage_size = 1 };
+        -:  377:
+        -:  378:  static Buffer linearise(const boost::asio::const_buffer& buffer_sequence,
+        -:  379:      const Buffer&)
+        -:  380:  {
+        -:  381:    return Buffer(buffer_sequence);
+        -:  382:  }
+        -:  383:
+        -:  384:private:
+        -:  385:  native_buffer_type buffer_;
+        -:  386:  std::size_t total_buffer_size_;
+        -:  387:};
+        -:  388:
+        -:  389:#if !defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  390:
+        -:  391:template <typename Buffer>
+        -:  392:class buffer_sequence_adapter<Buffer, boost::asio::mutable_buffers_1>
+        -:  393:  : buffer_sequence_adapter_base
+        -:  394:{
+        -:  395:public:
+        -:  396:  enum { is_single_buffer = true };
+        -:  397:  enum { is_registered_buffer = false };
+        -:  398:
+        -:  399:  explicit buffer_sequence_adapter(
+        -:  400:      const boost::asio::mutable_buffers_1& buffer_sequence)
+        -:  401:  {
+        -:  402:    init_native_buffer(buffer_, Buffer(buffer_sequence));
+        -:  403:    total_buffer_size_ = buffer_sequence.size();
+        -:  404:  }
+        -:  405:
+        -:  406:  native_buffer_type* buffers()
+        -:  407:  {
+        -:  408:    return &buffer_;
+        -:  409:  }
+        -:  410:
+        -:  411:  std::size_t count() const
+        -:  412:  {
+        -:  413:    return 1;
+        -:  414:  }
+        -:  415:
+        -:  416:  std::size_t total_size() const
+        -:  417:  {
+        -:  418:    return total_buffer_size_;
+        -:  419:  }
+        -:  420:
+        -:  421:  registered_buffer_id registered_id() const
+        -:  422:  {
+        -:  423:    return registered_buffer_id();
+        -:  424:  }
+        -:  425:
+        -:  426:  bool all_empty() const
+        -:  427:  {
+        -:  428:    return total_buffer_size_ == 0;
+        -:  429:  }
+        -:  430:
+     278*:  431:  static bool all_empty(const boost::asio::mutable_buffers_1& buffer_sequence)
+        -:  432:  {
+     278*:  433:    return buffer_sequence.size() == 0;
+        -:  434:  }
+------------------
+_ZN5boost4asio6detail23buffer_sequence_adapterINS0_14mutable_bufferENS0_17mutable_buffers_1EE9all_emptyERKS4_:
+function _ZN5boost4asio6detail23buffer_sequence_adapterINS0_14mutable_bufferENS0_17mutable_buffers_1EE9all_emptyERKS4_ called 14 returned 100% blocks executed 100%
+       14:  431:  static bool all_empty(const boost::asio::mutable_buffers_1& buffer_sequence)
+        -:  432:  {
+       14:  433:    return buffer_sequence.size() == 0;
+call    0 returned 100%
+        -:  434:  }
+------------------
+_ZN5boost4asio6detail23buffer_sequence_adapterINS0_14mutable_bufferENS0_17mutable_buffers_1EE9all_emptyERKS4_:
+function _ZN5boost4asio6detail23buffer_sequence_adapterINS0_14mutable_bufferENS0_17mutable_buffers_1EE9all_emptyERKS4_ called 264 returned 100% blocks executed 100%
+      264:  431:  static bool all_empty(const boost::asio::mutable_buffers_1& buffer_sequence)
+        -:  432:  {
+      264:  433:    return buffer_sequence.size() == 0;
+call    0 returned 100%
+        -:  434:  }
+------------------
+_ZN5boost4asio6detail23buffer_sequence_adapterINS0_14mutable_bufferENS0_17mutable_buffers_1EE9all_emptyERKS4_:
+function _ZN5boost4asio6detail23buffer_sequence_adapterINS0_14mutable_bufferENS0_17mutable_buffers_1EE9all_emptyERKS4_ called 0 returned 0% blocks executed 0%
+    #####:  431:  static bool all_empty(const boost::asio::mutable_buffers_1& buffer_sequence)
+        -:  432:  {
+    #####:  433:    return buffer_sequence.size() == 0;
+call    0 never executed
+        -:  434:  }
+------------------
+_ZN5boost4asio6detail23buffer_sequence_adapterINS0_14mutable_bufferENS0_17mutable_buffers_1EE9all_emptyERKS4_:
+function _ZN5boost4asio6detail23buffer_sequence_adapterINS0_14mutable_bufferENS0_17mutable_buffers_1EE9all_emptyERKS4_ called 0 returned 0% blocks executed 0%
+    #####:  431:  static bool all_empty(const boost::asio::mutable_buffers_1& buffer_sequence)
+        -:  432:  {
+    #####:  433:    return buffer_sequence.size() == 0;
+call    0 never executed
+        -:  434:  }
+------------------
+_ZN5boost4asio6detail23buffer_sequence_adapterINS0_14mutable_bufferENS0_17mutable_buffers_1EE9all_emptyERKS4_:
+function _ZN5boost4asio6detail23buffer_sequence_adapterINS0_14mutable_bufferENS0_17mutable_buffers_1EE9all_emptyERKS4_ called 0 returned 0% blocks executed 0%
+    #####:  431:  static bool all_empty(const boost::asio::mutable_buffers_1& buffer_sequence)
+        -:  432:  {
+    #####:  433:    return buffer_sequence.size() == 0;
+call    0 never executed
+        -:  434:  }
+------------------
+_ZN5boost4asio6detail23buffer_sequence_adapterINS0_14mutable_bufferENS0_17mutable_buffers_1EE9all_emptyERKS4_:
+function _ZN5boost4asio6detail23buffer_sequence_adapterINS0_14mutable_bufferENS0_17mutable_buffers_1EE9all_emptyERKS4_ called 0 returned 0% blocks executed 0%
+    #####:  431:  static bool all_empty(const boost::asio::mutable_buffers_1& buffer_sequence)
+        -:  432:  {
+    #####:  433:    return buffer_sequence.size() == 0;
+call    0 never executed
+        -:  434:  }
+------------------
+_ZN5boost4asio6detail23buffer_sequence_adapterINS0_14mutable_bufferENS0_17mutable_buffers_1EE9all_emptyERKS4_:
+function _ZN5boost4asio6detail23buffer_sequence_adapterINS0_14mutable_bufferENS0_17mutable_buffers_1EE9all_emptyERKS4_ called 0 returned 0% blocks executed 0%
+    #####:  431:  static bool all_empty(const boost::asio::mutable_buffers_1& buffer_sequence)
+        -:  432:  {
+    #####:  433:    return buffer_sequence.size() == 0;
+call    0 never executed
+        -:  434:  }
+------------------
+        -:  435:
+        -:  436:  static void validate(const boost::asio::mutable_buffers_1& buffer_sequence)
+        -:  437:  {
+        -:  438:    buffer_sequence.data();
+        -:  439:  }
+        -:  440:
+    1620*:  441:  static Buffer first(const boost::asio::mutable_buffers_1& buffer_sequence)
+        -:  442:  {
+    1620*:  443:    return Buffer(buffer_sequence);
+        -:  444:  }
+------------------
+_ZN5boost4asio6detail23buffer_sequence_adapterINS0_14mutable_bufferENS0_17mutable_buffers_1EE5firstERKS4_:
+function _ZN5boost4asio6detail23buffer_sequence_adapterINS0_14mutable_bufferENS0_17mutable_buffers_1EE5firstERKS4_ called 16 returned 100% blocks executed 100%
+       16:  441:  static Buffer first(const boost::asio::mutable_buffers_1& buffer_sequence)
+        -:  442:  {
+       16:  443:    return Buffer(buffer_sequence);
+        -:  444:  }
+------------------
+_ZN5boost4asio6detail23buffer_sequence_adapterINS0_14mutable_bufferENS0_17mutable_buffers_1EE5firstERKS4_:
+function _ZN5boost4asio6detail23buffer_sequence_adapterINS0_14mutable_bufferENS0_17mutable_buffers_1EE5firstERKS4_ called 0 returned 0% blocks executed 0%
+    #####:  441:  static Buffer first(const boost::asio::mutable_buffers_1& buffer_sequence)
+        -:  442:  {
+    #####:  443:    return Buffer(buffer_sequence);
+        -:  444:  }
+------------------
+_ZN5boost4asio6detail23buffer_sequence_adapterINS0_14mutable_bufferENS0_17mutable_buffers_1EE5firstERKS4_:
+function _ZN5boost4asio6detail23buffer_sequence_adapterINS0_14mutable_bufferENS0_17mutable_buffers_1EE5firstERKS4_ called 0 returned 0% blocks executed 0%
+    #####:  441:  static Buffer first(const boost::asio::mutable_buffers_1& buffer_sequence)
+        -:  442:  {
+    #####:  443:    return Buffer(buffer_sequence);
+        -:  444:  }
+------------------
+_ZN5boost4asio6detail23buffer_sequence_adapterINS0_14mutable_bufferENS0_17mutable_buffers_1EE5firstERKS4_:
+function _ZN5boost4asio6detail23buffer_sequence_adapterINS0_14mutable_bufferENS0_17mutable_buffers_1EE5firstERKS4_ called 0 returned 0% blocks executed 0%
+    #####:  441:  static Buffer first(const boost::asio::mutable_buffers_1& buffer_sequence)
+        -:  442:  {
+    #####:  443:    return Buffer(buffer_sequence);
+        -:  444:  }
+------------------
+_ZN5boost4asio6detail23buffer_sequence_adapterINS0_14mutable_bufferENS0_17mutable_buffers_1EE5firstERKS4_:
+function _ZN5boost4asio6detail23buffer_sequence_adapterINS0_14mutable_bufferENS0_17mutable_buffers_1EE5firstERKS4_ called 1446 returned 100% blocks executed 100%
+     1446:  441:  static Buffer first(const boost::asio::mutable_buffers_1& buffer_sequence)
+        -:  442:  {
+     1446:  443:    return Buffer(buffer_sequence);
+        -:  444:  }
+------------------
+_ZN5boost4asio6detail23buffer_sequence_adapterINS0_14mutable_bufferENS0_17mutable_buffers_1EE5firstERKS4_:
+function _ZN5boost4asio6detail23buffer_sequence_adapterINS0_14mutable_bufferENS0_17mutable_buffers_1EE5firstERKS4_ called 54 returned 100% blocks executed 100%
+       54:  441:  static Buffer first(const boost::asio::mutable_buffers_1& buffer_sequence)
+        -:  442:  {
+       54:  443:    return Buffer(buffer_sequence);
+        -:  444:  }
+------------------
+_ZN5boost4asio6detail23buffer_sequence_adapterINS0_14mutable_bufferENS0_17mutable_buffers_1EE5firstERKS4_:
+function _ZN5boost4asio6detail23buffer_sequence_adapterINS0_14mutable_bufferENS0_17mutable_buffers_1EE5firstERKS4_ called 14 returned 100% blocks executed 100%
+       14:  441:  static Buffer first(const boost::asio::mutable_buffers_1& buffer_sequence)
+        -:  442:  {
+       14:  443:    return Buffer(buffer_sequence);
+        -:  444:  }
+------------------
+_ZN5boost4asio6detail23buffer_sequence_adapterINS0_14mutable_bufferENS0_17mutable_buffers_1EE5firstERKS4_:
+function _ZN5boost4asio6detail23buffer_sequence_adapterINS0_14mutable_bufferENS0_17mutable_buffers_1EE5firstERKS4_ called 32 returned 100% blocks executed 100%
+       32:  441:  static Buffer first(const boost::asio::mutable_buffers_1& buffer_sequence)
+        -:  442:  {
+       32:  443:    return Buffer(buffer_sequence);
+        -:  444:  }
+------------------
+_ZN5boost4asio6detail23buffer_sequence_adapterINS0_14mutable_bufferENS0_17mutable_buffers_1EE5firstERKS4_:
+function _ZN5boost4asio6detail23buffer_sequence_adapterINS0_14mutable_bufferENS0_17mutable_buffers_1EE5firstERKS4_ called 22 returned 100% blocks executed 100%
+       22:  441:  static Buffer first(const boost::asio::mutable_buffers_1& buffer_sequence)
+        -:  442:  {
+       22:  443:    return Buffer(buffer_sequence);
+        -:  444:  }
+------------------
+_ZN5boost4asio6detail23buffer_sequence_adapterINS0_14mutable_bufferENS0_17mutable_buffers_1EE5firstERKS4_:
+function _ZN5boost4asio6detail23buffer_sequence_adapterINS0_14mutable_bufferENS0_17mutable_buffers_1EE5firstERKS4_ called 36 returned 100% blocks executed 100%
+       36:  441:  static Buffer first(const boost::asio::mutable_buffers_1& buffer_sequence)
+        -:  442:  {
+       36:  443:    return Buffer(buffer_sequence);
+        -:  444:  }
+------------------
+_ZN5boost4asio6detail23buffer_sequence_adapterINS0_14mutable_bufferENS0_17mutable_buffers_1EE5firstERKS4_:
+function _ZN5boost4asio6detail23buffer_sequence_adapterINS0_14mutable_bufferENS0_17mutable_buffers_1EE5firstERKS4_ called 0 returned 0% blocks executed 0%
+    #####:  441:  static Buffer first(const boost::asio::mutable_buffers_1& buffer_sequence)
+        -:  442:  {
+    #####:  443:    return Buffer(buffer_sequence);
+        -:  444:  }
+------------------
+_ZN5boost4asio6detail23buffer_sequence_adapterINS0_14mutable_bufferENS0_17mutable_buffers_1EE5firstERKS4_:
+function _ZN5boost4asio6detail23buffer_sequence_adapterINS0_14mutable_bufferENS0_17mutable_buffers_1EE5firstERKS4_ called 0 returned 0% blocks executed 0%
+    #####:  441:  static Buffer first(const boost::asio::mutable_buffers_1& buffer_sequence)
+        -:  442:  {
+    #####:  443:    return Buffer(buffer_sequence);
+        -:  444:  }
+------------------
+_ZN5boost4asio6detail23buffer_sequence_adapterINS0_14mutable_bufferENS0_17mutable_buffers_1EE5firstERKS4_:
+function _ZN5boost4asio6detail23buffer_sequence_adapterINS0_14mutable_bufferENS0_17mutable_buffers_1EE5firstERKS4_ called 0 returned 0% blocks executed 0%
+    #####:  441:  static Buffer first(const boost::asio::mutable_buffers_1& buffer_sequence)
+        -:  442:  {
+    #####:  443:    return Buffer(buffer_sequence);
+        -:  444:  }
+------------------
+        -:  445:
+        -:  446:  enum { linearisation_storage_size = 1 };
+        -:  447:
+        -:  448:  static Buffer linearise(const boost::asio::mutable_buffers_1& buffer_sequence,
+        -:  449:      const Buffer&)
+        -:  450:  {
+        -:  451:    return Buffer(buffer_sequence);
+        -:  452:  }
+        -:  453:
+        -:  454:private:
+        -:  455:  native_buffer_type buffer_;
+        -:  456:  std::size_t total_buffer_size_;
+        -:  457:};
+        -:  458:
+        -:  459:template <typename Buffer>
+        -:  460:class buffer_sequence_adapter<Buffer, boost::asio::const_buffers_1>
+        -:  461:  : buffer_sequence_adapter_base
+        -:  462:{
+        -:  463:public:
+        -:  464:  enum { is_single_buffer = true };
+        -:  465:  enum { is_registered_buffer = false };
+        -:  466:
+        -:  467:  explicit buffer_sequence_adapter(
+        -:  468:      const boost::asio::const_buffers_1& buffer_sequence)
+        -:  469:  {
+        -:  470:    init_native_buffer(buffer_, Buffer(buffer_sequence));
+        -:  471:    total_buffer_size_ = buffer_sequence.size();
+        -:  472:  }
+        -:  473:
+        -:  474:  native_buffer_type* buffers()
+        -:  475:  {
+        -:  476:    return &buffer_;
+        -:  477:  }
+        -:  478:
+        -:  479:  std::size_t count() const
+        -:  480:  {
+        -:  481:    return 1;
+        -:  482:  }
+        -:  483:
+        -:  484:  std::size_t total_size() const
+        -:  485:  {
+        -:  486:    return total_buffer_size_;
+        -:  487:  }
+        -:  488:
+        -:  489:  registered_buffer_id registered_id() const
+        -:  490:  {
+        -:  491:    return registered_buffer_id();
+        -:  492:  }
+        -:  493:
+        -:  494:  bool all_empty() const
+        -:  495:  {
+        -:  496:    return total_buffer_size_ == 0;
+        -:  497:  }
+        -:  498:
+     230*:  499:  static bool all_empty(const boost::asio::const_buffers_1& buffer_sequence)
+        -:  500:  {
+     230*:  501:    return buffer_sequence.size() == 0;
+        -:  502:  }
+------------------
+_ZN5boost4asio6detail23buffer_sequence_adapterINS0_12const_bufferENS0_15const_buffers_1EE9all_emptyERKS4_:
+function _ZN5boost4asio6detail23buffer_sequence_adapterINS0_12const_bufferENS0_15const_buffers_1EE9all_emptyERKS4_ called 2 returned 100% blocks executed 100%
+        2:  499:  static bool all_empty(const boost::asio::const_buffers_1& buffer_sequence)
+        -:  500:  {
+        2:  501:    return buffer_sequence.size() == 0;
+call    0 returned 100%
+        -:  502:  }
+------------------
+_ZN5boost4asio6detail23buffer_sequence_adapterINS0_12const_bufferENS0_15const_buffers_1EE9all_emptyERKS4_:
+function _ZN5boost4asio6detail23buffer_sequence_adapterINS0_12const_bufferENS0_15const_buffers_1EE9all_emptyERKS4_ called 228 returned 100% blocks executed 100%
+      228:  499:  static bool all_empty(const boost::asio::const_buffers_1& buffer_sequence)
+        -:  500:  {
+      228:  501:    return buffer_sequence.size() == 0;
+call    0 returned 100%
+        -:  502:  }
+------------------
+_ZN5boost4asio6detail23buffer_sequence_adapterINS0_12const_bufferENS0_15const_buffers_1EE9all_emptyERKS4_:
+function _ZN5boost4asio6detail23buffer_sequence_adapterINS0_12const_bufferENS0_15const_buffers_1EE9all_emptyERKS4_ called 0 returned 0% blocks executed 0%
+    #####:  499:  static bool all_empty(const boost::asio::const_buffers_1& buffer_sequence)
+        -:  500:  {
+    #####:  501:    return buffer_sequence.size() == 0;
+call    0 never executed
+        -:  502:  }
+------------------
+_ZN5boost4asio6detail23buffer_sequence_adapterINS0_12const_bufferENS0_15const_buffers_1EE9all_emptyERKS4_:
+function _ZN5boost4asio6detail23buffer_sequence_adapterINS0_12const_bufferENS0_15const_buffers_1EE9all_emptyERKS4_ called 0 returned 0% blocks executed 0%
+    #####:  499:  static bool all_empty(const boost::asio::const_buffers_1& buffer_sequence)
+        -:  500:  {
+    #####:  501:    return buffer_sequence.size() == 0;
+call    0 never executed
+        -:  502:  }
+------------------
+_ZN5boost4asio6detail23buffer_sequence_adapterINS0_12const_bufferENS0_15const_buffers_1EE9all_emptyERKS4_:
+function _ZN5boost4asio6detail23buffer_sequence_adapterINS0_12const_bufferENS0_15const_buffers_1EE9all_emptyERKS4_ called 0 returned 0% blocks executed 0%
+    #####:  499:  static bool all_empty(const boost::asio::const_buffers_1& buffer_sequence)
+        -:  500:  {
+    #####:  501:    return buffer_sequence.size() == 0;
+call    0 never executed
+        -:  502:  }
+------------------
+_ZN5boost4asio6detail23buffer_sequence_adapterINS0_12const_bufferENS0_15const_buffers_1EE9all_emptyERKS4_:
+function _ZN5boost4asio6detail23buffer_sequence_adapterINS0_12const_bufferENS0_15const_buffers_1EE9all_emptyERKS4_ called 0 returned 0% blocks executed 0%
+    #####:  499:  static bool all_empty(const boost::asio::const_buffers_1& buffer_sequence)
+        -:  500:  {
+    #####:  501:    return buffer_sequence.size() == 0;
+call    0 never executed
+        -:  502:  }
+------------------
+_ZN5boost4asio6detail23buffer_sequence_adapterINS0_12const_bufferENS0_15const_buffers_1EE9all_emptyERKS4_:
+function _ZN5boost4asio6detail23buffer_sequence_adapterINS0_12const_bufferENS0_15const_buffers_1EE9all_emptyERKS4_ called 0 returned 0% blocks executed 0%
+    #####:  499:  static bool all_empty(const boost::asio::const_buffers_1& buffer_sequence)
+        -:  500:  {
+    #####:  501:    return buffer_sequence.size() == 0;
+call    0 never executed
+        -:  502:  }
+------------------
+        -:  503:
+        -:  504:  static void validate(const boost::asio::const_buffers_1& buffer_sequence)
+        -:  505:  {
+        -:  506:    buffer_sequence.data();
+        -:  507:  }
+        -:  508:
+    1188*:  509:  static Buffer first(const boost::asio::const_buffers_1& buffer_sequence)
+        -:  510:  {
+    1188*:  511:    return Buffer(buffer_sequence);
+        -:  512:  }
+------------------
+_ZN5boost4asio6detail23buffer_sequence_adapterINS0_12const_bufferENS0_15const_buffers_1EE5firstERKS4_:
+function _ZN5boost4asio6detail23buffer_sequence_adapterINS0_12const_bufferENS0_15const_buffers_1EE5firstERKS4_ called 0 returned 0% blocks executed 0%
+    #####:  509:  static Buffer first(const boost::asio::const_buffers_1& buffer_sequence)
+        -:  510:  {
+    #####:  511:    return Buffer(buffer_sequence);
+        -:  512:  }
+------------------
+_ZN5boost4asio6detail23buffer_sequence_adapterINS0_12const_bufferENS0_15const_buffers_1EE5firstERKS4_:
+function _ZN5boost4asio6detail23buffer_sequence_adapterINS0_12const_bufferENS0_15const_buffers_1EE5firstERKS4_ called 0 returned 0% blocks executed 0%
+    #####:  509:  static Buffer first(const boost::asio::const_buffers_1& buffer_sequence)
+        -:  510:  {
+    #####:  511:    return Buffer(buffer_sequence);
+        -:  512:  }
+------------------
+_ZN5boost4asio6detail23buffer_sequence_adapterINS0_12const_bufferENS0_15const_buffers_1EE5firstERKS4_:
+function _ZN5boost4asio6detail23buffer_sequence_adapterINS0_12const_bufferENS0_15const_buffers_1EE5firstERKS4_ called 0 returned 0% blocks executed 0%
+    #####:  509:  static Buffer first(const boost::asio::const_buffers_1& buffer_sequence)
+        -:  510:  {
+    #####:  511:    return Buffer(buffer_sequence);
+        -:  512:  }
+------------------
+_ZN5boost4asio6detail23buffer_sequence_adapterINS0_12const_bufferENS0_15const_buffers_1EE5firstERKS4_:
+function _ZN5boost4asio6detail23buffer_sequence_adapterINS0_12const_bufferENS0_15const_buffers_1EE5firstERKS4_ called 0 returned 0% blocks executed 0%
+    #####:  509:  static Buffer first(const boost::asio::const_buffers_1& buffer_sequence)
+        -:  510:  {
+    #####:  511:    return Buffer(buffer_sequence);
+        -:  512:  }
+------------------
+_ZN5boost4asio6detail23buffer_sequence_adapterINS0_12const_bufferENS0_15const_buffers_1EE5firstERKS4_:
+function _ZN5boost4asio6detail23buffer_sequence_adapterINS0_12const_bufferENS0_15const_buffers_1EE5firstERKS4_ called 2 returned 100% blocks executed 100%
+        2:  509:  static Buffer first(const boost::asio::const_buffers_1& buffer_sequence)
+        -:  510:  {
+        2:  511:    return Buffer(buffer_sequence);
+        -:  512:  }
+------------------
+_ZN5boost4asio6detail23buffer_sequence_adapterINS0_12const_bufferENS0_15const_buffers_1EE5firstERKS4_:
+function _ZN5boost4asio6detail23buffer_sequence_adapterINS0_12const_bufferENS0_15const_buffers_1EE5firstERKS4_ called 1064 returned 100% blocks executed 100%
+     1064:  509:  static Buffer first(const boost::asio::const_buffers_1& buffer_sequence)
+        -:  510:  {
+     1064:  511:    return Buffer(buffer_sequence);
+        -:  512:  }
+------------------
+_ZN5boost4asio6detail23buffer_sequence_adapterINS0_12const_bufferENS0_15const_buffers_1EE5firstERKS4_:
+function _ZN5boost4asio6detail23buffer_sequence_adapterINS0_12const_bufferENS0_15const_buffers_1EE5firstERKS4_ called 47 returned 100% blocks executed 100%
+       47:  509:  static Buffer first(const boost::asio::const_buffers_1& buffer_sequence)
+        -:  510:  {
+       47:  511:    return Buffer(buffer_sequence);
+        -:  512:  }
+------------------
+_ZN5boost4asio6detail23buffer_sequence_adapterINS0_12const_bufferENS0_15const_buffers_1EE5firstERKS4_:
+function _ZN5boost4asio6detail23buffer_sequence_adapterINS0_12const_bufferENS0_15const_buffers_1EE5firstERKS4_ called 10 returned 100% blocks executed 100%
+       10:  509:  static Buffer first(const boost::asio::const_buffers_1& buffer_sequence)
+        -:  510:  {
+       10:  511:    return Buffer(buffer_sequence);
+        -:  512:  }
+------------------
+_ZN5boost4asio6detail23buffer_sequence_adapterINS0_12const_bufferENS0_15const_buffers_1EE5firstERKS4_:
+function _ZN5boost4asio6detail23buffer_sequence_adapterINS0_12const_bufferENS0_15const_buffers_1EE5firstERKS4_ called 25 returned 100% blocks executed 100%
+       25:  509:  static Buffer first(const boost::asio::const_buffers_1& buffer_sequence)
+        -:  510:  {
+       25:  511:    return Buffer(buffer_sequence);
+        -:  512:  }
+------------------
+_ZN5boost4asio6detail23buffer_sequence_adapterINS0_12const_bufferENS0_15const_buffers_1EE5firstERKS4_:
+function _ZN5boost4asio6detail23buffer_sequence_adapterINS0_12const_bufferENS0_15const_buffers_1EE5firstERKS4_ called 10 returned 100% blocks executed 100%
+       10:  509:  static Buffer first(const boost::asio::const_buffers_1& buffer_sequence)
+        -:  510:  {
+       10:  511:    return Buffer(buffer_sequence);
+        -:  512:  }
+------------------
+_ZN5boost4asio6detail23buffer_sequence_adapterINS0_12const_bufferENS0_15const_buffers_1EE5firstERKS4_:
+function _ZN5boost4asio6detail23buffer_sequence_adapterINS0_12const_bufferENS0_15const_buffers_1EE5firstERKS4_ called 30 returned 100% blocks executed 100%
+       30:  509:  static Buffer first(const boost::asio::const_buffers_1& buffer_sequence)
+        -:  510:  {
+       30:  511:    return Buffer(buffer_sequence);
+        -:  512:  }
+------------------
+_ZN5boost4asio6detail23buffer_sequence_adapterINS0_12const_bufferENS0_15const_buffers_1EE5firstERKS4_:
+function _ZN5boost4asio6detail23buffer_sequence_adapterINS0_12const_bufferENS0_15const_buffers_1EE5firstERKS4_ called 0 returned 0% blocks executed 0%
+    #####:  509:  static Buffer first(const boost::asio::const_buffers_1& buffer_sequence)
+        -:  510:  {
+    #####:  511:    return Buffer(buffer_sequence);
+        -:  512:  }
+------------------
+_ZN5boost4asio6detail23buffer_sequence_adapterINS0_12const_bufferENS0_15const_buffers_1EE5firstERKS4_:
+function _ZN5boost4asio6detail23buffer_sequence_adapterINS0_12const_bufferENS0_15const_buffers_1EE5firstERKS4_ called 0 returned 0% blocks executed 0%
+    #####:  509:  static Buffer first(const boost::asio::const_buffers_1& buffer_sequence)
+        -:  510:  {
+    #####:  511:    return Buffer(buffer_sequence);
+        -:  512:  }
+------------------
+_ZN5boost4asio6detail23buffer_sequence_adapterINS0_12const_bufferENS0_15const_buffers_1EE5firstERKS4_:
+function _ZN5boost4asio6detail23buffer_sequence_adapterINS0_12const_bufferENS0_15const_buffers_1EE5firstERKS4_ called 0 returned 0% blocks executed 0%
+    #####:  509:  static Buffer first(const boost::asio::const_buffers_1& buffer_sequence)
+        -:  510:  {
+    #####:  511:    return Buffer(buffer_sequence);
+        -:  512:  }
+------------------
+        -:  513:
+        -:  514:  enum { linearisation_storage_size = 1 };
+        -:  515:
+    #####:  516:  static Buffer linearise(const boost::asio::const_buffers_1& buffer_sequence,
+        -:  517:      const Buffer&)
+        -:  518:  {
+    #####:  519:    return Buffer(buffer_sequence);
+        -:  520:  }
+------------------
+_ZN5boost4asio6detail23buffer_sequence_adapterINS0_12const_bufferENS0_15const_buffers_1EE9lineariseERKS4_RKS3_:
+function _ZN5boost4asio6detail23buffer_sequence_adapterINS0_12const_bufferENS0_15const_buffers_1EE9lineariseERKS4_RKS3_ called 0 returned 0% blocks executed 0%
+    #####:  516:  static Buffer linearise(const boost::asio::const_buffers_1& buffer_sequence,
+        -:  517:      const Buffer&)
+        -:  518:  {
+    #####:  519:    return Buffer(buffer_sequence);
+        -:  520:  }
+------------------
+_ZN5boost4asio6detail23buffer_sequence_adapterINS0_12const_bufferENS0_15const_buffers_1EE9lineariseERKS4_RKS3_:
+function _ZN5boost4asio6detail23buffer_sequence_adapterINS0_12const_bufferENS0_15const_buffers_1EE9lineariseERKS4_RKS3_ called 0 returned 0% blocks executed 0%
+    #####:  516:  static Buffer linearise(const boost::asio::const_buffers_1& buffer_sequence,
+        -:  517:      const Buffer&)
+        -:  518:  {
+    #####:  519:    return Buffer(buffer_sequence);
+        -:  520:  }
+------------------
+        -:  521:
+        -:  522:private:
+        -:  523:  native_buffer_type buffer_;
+        -:  524:  std::size_t total_buffer_size_;
+        -:  525:};
+        -:  526:
+        -:  527:#endif // !defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  528:
+        -:  529:template <typename Buffer>
+        -:  530:class buffer_sequence_adapter<Buffer, boost::asio::mutable_registered_buffer>
+        -:  531:  : buffer_sequence_adapter_base
+        -:  532:{
+        -:  533:public:
+        -:  534:  enum { is_single_buffer = true };
+        -:  535:  enum { is_registered_buffer = true };
+        -:  536:
+        -:  537:  explicit buffer_sequence_adapter(
+        -:  538:      const boost::asio::mutable_registered_buffer& buffer_sequence)
+        -:  539:  {
+        -:  540:    init_native_buffer(buffer_, buffer_sequence.buffer());
+        -:  541:    total_buffer_size_ = buffer_sequence.size();
+        -:  542:    registered_id_ = buffer_sequence.id();
+        -:  543:  }
+        -:  544:
+        -:  545:  native_buffer_type* buffers()
+        -:  546:  {
+        -:  547:    return &buffer_;
+        -:  548:  }
+        -:  549:
+        -:  550:  std::size_t count() const
+        -:  551:  {
+        -:  552:    return 1;
+        -:  553:  }
+        -:  554:
+        -:  555:  std::size_t total_size() const
+        -:  556:  {
+        -:  557:    return total_buffer_size_;
+        -:  558:  }
+        -:  559:
+        -:  560:  registered_buffer_id registered_id() const
+        -:  561:  {
+        -:  562:    return registered_id_;
+        -:  563:  }
+        -:  564:
+        -:  565:  bool all_empty() const
+        -:  566:  {
+        -:  567:    return total_buffer_size_ == 0;
+        -:  568:  }
+        -:  569:
+        -:  570:  static bool all_empty(
+        -:  571:      const boost::asio::mutable_registered_buffer& buffer_sequence)
+        -:  572:  {
+        -:  573:    return buffer_sequence.size() == 0;
+        -:  574:  }
+        -:  575:
+        -:  576:  static void validate(
+        -:  577:      const boost::asio::mutable_registered_buffer& buffer_sequence)
+        -:  578:  {
+        -:  579:    buffer_sequence.data();
+        -:  580:  }
+        -:  581:
+        -:  582:  static Buffer first(
+        -:  583:      const boost::asio::mutable_registered_buffer& buffer_sequence)
+        -:  584:  {
+        -:  585:    return Buffer(buffer_sequence.buffer());
+        -:  586:  }
+        -:  587:
+        -:  588:  enum { linearisation_storage_size = 1 };
+        -:  589:
+        -:  590:  static Buffer linearise(
+        -:  591:      const boost::asio::mutable_registered_buffer& buffer_sequence,
+        -:  592:      const Buffer&)
+        -:  593:  {
+        -:  594:    return Buffer(buffer_sequence.buffer());
+        -:  595:  }
+        -:  596:
+        -:  597:private:
+        -:  598:  native_buffer_type buffer_;
+        -:  599:  std::size_t total_buffer_size_;
+        -:  600:  registered_buffer_id registered_id_;
+        -:  601:};
+        -:  602:
+        -:  603:template <typename Buffer>
+        -:  604:class buffer_sequence_adapter<Buffer, boost::asio::const_registered_buffer>
+        -:  605:  : buffer_sequence_adapter_base
+        -:  606:{
+        -:  607:public:
+        -:  608:  enum { is_single_buffer = true };
+        -:  609:  enum { is_registered_buffer = true };
+        -:  610:
+        -:  611:  explicit buffer_sequence_adapter(
+        -:  612:      const boost::asio::const_registered_buffer& buffer_sequence)
+        -:  613:  {
+        -:  614:    init_native_buffer(buffer_, buffer_sequence.buffer());
+        -:  615:    total_buffer_size_ = buffer_sequence.size();
+        -:  616:    registered_id_ = buffer_sequence.id();
+        -:  617:  }
+        -:  618:
+        -:  619:  native_buffer_type* buffers()
+        -:  620:  {
+        -:  621:    return &buffer_;
+        -:  622:  }
+        -:  623:
+        -:  624:  std::size_t count() const
+        -:  625:  {
+        -:  626:    return 1;
+        -:  627:  }
+        -:  628:
+        -:  629:  std::size_t total_size() const
+        -:  630:  {
+        -:  631:    return total_buffer_size_;
+        -:  632:  }
+        -:  633:
+        -:  634:  registered_buffer_id registered_id() const
+        -:  635:  {
+        -:  636:    return registered_id_;
+        -:  637:  }
+        -:  638:
+        -:  639:  bool all_empty() const
+        -:  640:  {
+        -:  641:    return total_buffer_size_ == 0;
+        -:  642:  }
+        -:  643:
+        -:  644:  static bool all_empty(
+        -:  645:      const boost::asio::const_registered_buffer& buffer_sequence)
+        -:  646:  {
+        -:  647:    return buffer_sequence.size() == 0;
+        -:  648:  }
+        -:  649:
+        -:  650:  static void validate(
+        -:  651:      const boost::asio::const_registered_buffer& buffer_sequence)
+        -:  652:  {
+        -:  653:    buffer_sequence.data();
+        -:  654:  }
+        -:  655:
+        -:  656:  static Buffer first(
+        -:  657:      const boost::asio::const_registered_buffer& buffer_sequence)
+        -:  658:  {
+        -:  659:    return Buffer(buffer_sequence.buffer());
+        -:  660:  }
+        -:  661:
+        -:  662:  enum { linearisation_storage_size = 1 };
+        -:  663:
+        -:  664:  static Buffer linearise(
+        -:  665:      const boost::asio::const_registered_buffer& buffer_sequence,
+        -:  666:      const Buffer&)
+        -:  667:  {
+        -:  668:    return Buffer(buffer_sequence.buffer());
+        -:  669:  }
+        -:  670:
+        -:  671:private:
+        -:  672:  native_buffer_type buffer_;
+        -:  673:  std::size_t total_buffer_size_;
+        -:  674:  registered_buffer_id registered_id_;
+        -:  675:};
+        -:  676:
+        -:  677:template <typename Buffer, typename Elem>
+        -:  678:class buffer_sequence_adapter<Buffer, boost::array<Elem, 2> >
+        -:  679:  : buffer_sequence_adapter_base
+        -:  680:{
+        -:  681:public:
+        -:  682:  enum { is_single_buffer = false };
+        -:  683:  enum { is_registered_buffer = false };
+        -:  684:
+        -:  685:  explicit buffer_sequence_adapter(
+        -:  686:      const boost::array<Elem, 2>& buffer_sequence)
+        -:  687:  {
+        -:  688:    init_native_buffer(buffers_[0], Buffer(buffer_sequence[0]));
+        -:  689:    init_native_buffer(buffers_[1], Buffer(buffer_sequence[1]));
+        -:  690:    total_buffer_size_ = buffer_sequence[0].size() + buffer_sequence[1].size();
+        -:  691:  }
+        -:  692:
+        -:  693:  native_buffer_type* buffers()
+        -:  694:  {
+        -:  695:    return buffers_;
+        -:  696:  }
+        -:  697:
+        -:  698:  std::size_t count() const
+        -:  699:  {
+        -:  700:    return 2;
+        -:  701:  }
+        -:  702:
+        -:  703:  std::size_t total_size() const
+        -:  704:  {
+        -:  705:    return total_buffer_size_;
+        -:  706:  }
+        -:  707:
+        -:  708:  registered_buffer_id registered_id() const
+        -:  709:  {
+        -:  710:    return registered_buffer_id();
+        -:  711:  }
+        -:  712:
+        -:  713:  bool all_empty() const
+        -:  714:  {
+        -:  715:    return total_buffer_size_ == 0;
+        -:  716:  }
+        -:  717:
+        -:  718:  static bool all_empty(const boost::array<Elem, 2>& buffer_sequence)
+        -:  719:  {
+        -:  720:    return buffer_sequence[0].size() == 0 && buffer_sequence[1].size() == 0;
+        -:  721:  }
+        -:  722:
+        -:  723:  static void validate(const boost::array<Elem, 2>& buffer_sequence)
+        -:  724:  {
+        -:  725:    buffer_sequence[0].data();
+        -:  726:    buffer_sequence[1].data();
+        -:  727:  }
+        -:  728:
+        -:  729:  static Buffer first(const boost::array<Elem, 2>& buffer_sequence)
+        -:  730:  {
+        -:  731:    return Buffer(buffer_sequence[0].size() != 0
+        -:  732:        ? buffer_sequence[0] : buffer_sequence[1]);
+        -:  733:  }
+        -:  734:
+        -:  735:  enum { linearisation_storage_size = 8192 };
+        -:  736:
+        -:  737:  static Buffer linearise(const boost::array<Elem, 2>& buffer_sequence,
+        -:  738:      const boost::asio::mutable_buffer& storage)
+        -:  739:  {
+        -:  740:    if (buffer_sequence[0].size() == 0)
+        -:  741:      return Buffer(buffer_sequence[1]);
+        -:  742:    if (buffer_sequence[1].size() == 0)
+        -:  743:      return Buffer(buffer_sequence[0]);
+        -:  744:    return Buffer(storage.data(),
+        -:  745:        boost::asio::buffer_copy(storage, buffer_sequence));
+        -:  746:  }
+        -:  747:
+        -:  748:private:
+        -:  749:  native_buffer_type buffers_[2];
+        -:  750:  std::size_t total_buffer_size_;
+        -:  751:};
+        -:  752:
+        -:  753:#if defined(BOOST_ASIO_HAS_STD_ARRAY)
+        -:  754:
+        -:  755:template <typename Buffer, typename Elem>
+        -:  756:class buffer_sequence_adapter<Buffer, std::array<Elem, 2> >
+        -:  757:  : buffer_sequence_adapter_base
+        -:  758:{
+        -:  759:public:
+        -:  760:  enum { is_single_buffer = false };
+        -:  761:  enum { is_registered_buffer = false };
+        -:  762:
+function _ZN5boost4asio6detail23buffer_sequence_adapterINS0_12const_bufferESt5arrayIS3_Lm2EEEC2ERKS5_ called 17 returned 100% blocks executed 100%
+       17:  763:  explicit buffer_sequence_adapter(
+        -:  764:      const std::array<Elem, 2>& buffer_sequence)
+        -:  765:  {
+       17:  766:    init_native_buffer(buffers_[0], Buffer(buffer_sequence[0]));
+call    0 returned 100%
+call    1 returned 100%
+       17:  767:    init_native_buffer(buffers_[1], Buffer(buffer_sequence[1]));
+call    0 returned 100%
+call    1 returned 100%
+       17:  768:    total_buffer_size_ = buffer_sequence[0].size() + buffer_sequence[1].size();
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+       17:  769:  }
+        -:  770:
+function _ZN5boost4asio6detail23buffer_sequence_adapterINS0_12const_bufferESt5arrayIS3_Lm2EEE7buffersEv called 17 returned 100% blocks executed 100%
+       17:  771:  native_buffer_type* buffers()
+        -:  772:  {
+       17:  773:    return buffers_;
+        -:  774:  }
+        -:  775:
+function _ZNK5boost4asio6detail23buffer_sequence_adapterINS0_12const_bufferESt5arrayIS3_Lm2EEE5countEv called 17 returned 100% blocks executed 100%
+       17:  776:  std::size_t count() const
+        -:  777:  {
+       17:  778:    return 2;
+        -:  779:  }
+        -:  780:
+function _ZNK5boost4asio6detail23buffer_sequence_adapterINS0_12const_bufferESt5arrayIS3_Lm2EEE10total_sizeEv called 17 returned 100% blocks executed 100%
+       17:  781:  std::size_t total_size() const
+        -:  782:  {
+       17:  783:    return total_buffer_size_;
+        -:  784:  }
+        -:  785:
+        -:  786:  registered_buffer_id registered_id() const
+        -:  787:  {
+        -:  788:    return registered_buffer_id();
+        -:  789:  }
+        -:  790:
+        -:  791:  bool all_empty() const
+        -:  792:  {
+        -:  793:    return total_buffer_size_ == 0;
+        -:  794:  }
+        -:  795:
+function _ZN5boost4asio6detail23buffer_sequence_adapterINS0_12const_bufferESt5arrayIS3_Lm2EEE9all_emptyERKS5_ called 17 returned 100% blocks executed 90%
+       17:  796:  static bool all_empty(const std::array<Elem, 2>& buffer_sequence)
+        -:  797:  {
+      17*:  798:    return buffer_sequence[0].size() == 0 && buffer_sequence[1].size() == 0;
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 94% (fallthrough)
+branch  3 taken 6%
+call    4 returned 100%
+call    5 returned 100%
+branch  6 taken 0% (fallthrough)
+branch  7 taken 100%
+        -:  799:  }
+        -:  800:
+        -:  801:  static void validate(const std::array<Elem, 2>& buffer_sequence)
+        -:  802:  {
+        -:  803:    buffer_sequence[0].data();
+        -:  804:    buffer_sequence[1].data();
+        -:  805:  }
+        -:  806:
+        -:  807:  static Buffer first(const std::array<Elem, 2>& buffer_sequence)
+        -:  808:  {
+        -:  809:    return Buffer(buffer_sequence[0].size() != 0
+        -:  810:        ? buffer_sequence[0] : buffer_sequence[1]);
+        -:  811:  }
+        -:  812:
+        -:  813:  enum { linearisation_storage_size = 8192 };
+        -:  814:
+        -:  815:  static Buffer linearise(const std::array<Elem, 2>& buffer_sequence,
+        -:  816:      const boost::asio::mutable_buffer& storage)
+        -:  817:  {
+        -:  818:    if (buffer_sequence[0].size() == 0)
+        -:  819:      return Buffer(buffer_sequence[1]);
+        -:  820:    if (buffer_sequence[1].size() == 0)
+        -:  821:      return Buffer(buffer_sequence[0]);
+        -:  822:    return Buffer(storage.data(),
+        -:  823:        boost::asio::buffer_copy(storage, buffer_sequence));
+        -:  824:  }
+        -:  825:
+        -:  826:private:
+        -:  827:  native_buffer_type buffers_[2];
+        -:  828:  std::size_t total_buffer_size_;
+        -:  829:};
+        -:  830:
+        -:  831:#endif // defined(BOOST_ASIO_HAS_STD_ARRAY)
+        -:  832:
+        -:  833:} // namespace detail
+        -:  834:} // namespace asio
+        -:  835:} // namespace boost
+        -:  836:
+        -:  837:#include <boost/asio/detail/pop_options.hpp>
+        -:  838:
+        -:  839:#if defined(BOOST_ASIO_HEADER_ONLY)
+        -:  840:# include <boost/asio/detail/impl/buffer_sequence_adapter.ipp>
+        -:  841:#endif // defined(BOOST_ASIO_HEADER_ONLY)
+        -:  842:
+        -:  843:#endif // BOOST_ASIO_DETAIL_BUFFER_SEQUENCE_ADAPTER_HPP

@@ -1,0 +1,1059 @@
+        -:    0:Source:/home/runner/work/Hical/Hical/src/core/MetaRoutes.h
+        -:    1:#pragma once
+        -:    2:
+        -:    3:/**
+        -:    4: * @brief 反射驱动的自动路由注册
+        -:    5: * 双路线：
+        -:    6: * - C++26 反射：用户用 [[hical::route(...)]] 标注，框架自动发现并注册
+        -:    7: * - C++20 回退：用户用 HICAL_HANDLER / HICAL_ROUTES 宏标注，框架遍历注册
+        -:    8: * 对外 API：
+        -:    9: *   hical::meta::registerRoutes<UserHandler>(router, handler);
+        -:   10: * 用法（C++20 回退）：
+        -:   11: * ```cpp
+        -:   12: * struct UserHandler
+        -:   13: * {
+        -:   14: *     HttpResponse listUsers(const HttpRequest& req) { ... }
+        -:   15: *     HICAL_HANDLER(Get, "/api/users", listUsers)
+        -:   16: *     HttpResponse getUser(const HttpRequest& req) { ... }
+        -:   17: *     HICAL_HANDLER(Get, "/api/users/{id}", getUser)
+        -:   18: *     HICAL_ROUTES(UserHandler, listUsers, getUser)
+        -:   19: * };
+        -:   20: * UserHandler handler;
+        -:   21: * hical::meta::registerRoutes(router, handler);
+        -:   22: * ```
+        -:   23: */
+        -:   24:
+        -:   25:#include "Reflection.h"
+        -:   26:#include "Router.h"
+        -:   27:#include <functional>
+        -:   28:#include <memory>
+        -:   29:#include <tuple>
+        -:   30:#include <type_traits>
+        -:   31:
+        -:   32:namespace hical::meta
+        -:   33:{
+        -:   34:
+        -:   35:	// ============ C++20 回退实现 ============
+        -:   36:
+        -:   37:#if !HICAL_HAS_REFLECTION
+        -:   38:
+        -:   39:	namespace detail
+        -:   40:	{
+        -:   41:
+        -:   42:		/**
+        -:   43:		 * @brief 注册单个同步路由
+        -:   44:		 * 通过 shared_ptr 捕获 handler，确保生命周期安全。
+        -:   45:		 */
+        -:   46:		template <typename Handler>
+      27*:   47:		void registerOneRoute(Router& router,
+        -:   48:							  std::shared_ptr<Handler> pHandler,
+        -:   49:							  const RouteInfo& info,
+        -:   50:							  HttpResponse (Handler::*fn)(const HttpRequest&))
+        -:   51:		{
+      27*:   52:			router.route(info.method,
+      81*:   53:						 std::string(info.path),
+      57*:   54:						 [pHandler, fn](const HttpRequest& req) -> HttpResponse
+        -:   55:						 {
+       3*:   56:							 return (pHandler.get()->*fn)(req);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+call    3 never executed
+call    4 never executed
+branch  5 never executed (fallthrough)
+branch  6 never executed
+call    7 never executed
+call    8 never executed
+branch  9 never executed (fallthrough)
+branch 10 never executed
+call   11 never executed
+call   12 returned 100%
+branch 13 taken 0% (fallthrough)
+branch 14 taken 100%
+call   15 returned 100%
+call   16 never executed
+branch 17 never executed (fallthrough)
+branch 18 never executed
+call   19 never executed
+call   20 never executed
+branch 21 never executed (fallthrough)
+branch 22 never executed
+call   23 never executed
+        -:   57:						 });
+      27*:   58:		}
+------------------
+_ZN5hical4meta6detail16registerOneRouteI12MixedHandlerEEvRNS_6RouterESt10shared_ptrIT_ERKNS0_9RouteInfoEMS7_FNS_12HttpResponseERKNS_11HttpRequestEE:
+function _ZN5hical4meta6detail16registerOneRouteI12MixedHandlerEEvRNS_6RouterESt10shared_ptrIT_ERKNS0_9RouteInfoEMS7_FNS_12HttpResponseERKNS_11HttpRequestEE called 2 returned 100% blocks executed 46%
+        2:   47:		void registerOneRoute(Router& router,
+        -:   48:							  std::shared_ptr<Handler> pHandler,
+        -:   49:							  const RouteInfo& info,
+        -:   50:							  HttpResponse (Handler::*fn)(const HttpRequest&))
+        -:   51:		{
+        2:   52:			router.route(info.method,
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 never executed
+        6:   53:						 std::string(info.path),
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+call    5 never executed
+        4:   54:						 [pHandler, fn](const HttpRequest& req) -> HttpResponse
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed
+call    8 never executed
+        -:   55:						 {
+        -:   56:							 return (pHandler.get()->*fn)(req);
+        -:   57:						 });
+        2:   58:		}
+------------------
+_ZN5hical4meta6detail16registerOneRouteI16AnnotatedHandlerEEvRNS_6RouterESt10shared_ptrIT_ERKNS0_9RouteInfoEMS7_FNS_12HttpResponseERKNS_11HttpRequestEE:
+function _ZN5hical4meta6detail16registerOneRouteI16AnnotatedHandlerEEvRNS_6RouterESt10shared_ptrIT_ERKNS0_9RouteInfoEMS7_FNS_12HttpResponseERKNS_11HttpRequestEE called 6 returned 100% blocks executed 46%
+        6:   47:		void registerOneRoute(Router& router,
+        -:   48:							  std::shared_ptr<Handler> pHandler,
+        -:   49:							  const RouteInfo& info,
+        -:   50:							  HttpResponse (Handler::*fn)(const HttpRequest&))
+        -:   51:		{
+        6:   52:			router.route(info.method,
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 never executed
+       18:   53:						 std::string(info.path),
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+call    5 never executed
+       12:   54:						 [pHandler, fn](const HttpRequest& req) -> HttpResponse
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed
+call    8 never executed
+        -:   55:						 {
+        -:   56:							 return (pHandler.get()->*fn)(req);
+        -:   57:						 });
+        6:   58:		}
+------------------
+_ZN5hical4meta6detail16registerOneRouteI12BasicHandlerEEvRNS_6RouterESt10shared_ptrIT_ERKNS0_9RouteInfoEMS7_FNS_12HttpResponseERKNS_11HttpRequestEE:
+function _ZN5hical4meta6detail16registerOneRouteI12BasicHandlerEEvRNS_6RouterESt10shared_ptrIT_ERKNS0_9RouteInfoEMS7_FNS_12HttpResponseERKNS_11HttpRequestEE called 1 returned 100% blocks executed 46%
+        1:   47:		void registerOneRoute(Router& router,
+        -:   48:							  std::shared_ptr<Handler> pHandler,
+        -:   49:							  const RouteInfo& info,
+        -:   50:							  HttpResponse (Handler::*fn)(const HttpRequest&))
+        -:   51:		{
+        1:   52:			router.route(info.method,
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 never executed
+        3:   53:						 std::string(info.path),
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+call    5 never executed
+        2:   54:						 [pHandler, fn](const HttpRequest& req) -> HttpResponse
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed
+call    8 never executed
+        -:   55:						 {
+        -:   56:							 return (pHandler.get()->*fn)(req);
+        -:   57:						 });
+        1:   58:		}
+------------------
+_ZN5hical4meta6detail16registerOneRouteI11TestHandlerEEvRNS_6RouterESt10shared_ptrIT_ERKNS0_9RouteInfoEMS7_FNS_12HttpResponseERKNS_11HttpRequestEE:
+function _ZN5hical4meta6detail16registerOneRouteI11TestHandlerEEvRNS_6RouterESt10shared_ptrIT_ERKNS0_9RouteInfoEMS7_FNS_12HttpResponseERKNS_11HttpRequestEE called 18 returned 100% blocks executed 46%
+       18:   47:		void registerOneRoute(Router& router,
+        -:   48:							  std::shared_ptr<Handler> pHandler,
+        -:   49:							  const RouteInfo& info,
+        -:   50:							  HttpResponse (Handler::*fn)(const HttpRequest&))
+        -:   51:		{
+       18:   52:			router.route(info.method,
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 never executed
+       54:   53:						 std::string(info.path),
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+call    5 never executed
+       36:   54:						 [pHandler, fn](const HttpRequest& req) -> HttpResponse
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed
+call    8 never executed
+        -:   55:						 {
+        -:   56:							 return (pHandler.get()->*fn)(req);
+        -:   57:						 });
+       18:   58:		}
+------------------
+_ZN5hical4meta6detail16registerOneRouteI10ApiHandlerEEvRNS_6RouterESt10shared_ptrIT_ERKNS0_9RouteInfoEMS7_FNS_12HttpResponseERKNS_11HttpRequestEE:
+function _ZN5hical4meta6detail16registerOneRouteI10ApiHandlerEEvRNS_6RouterESt10shared_ptrIT_ERKNS0_9RouteInfoEMS7_FNS_12HttpResponseERKNS_11HttpRequestEE called 0 returned 0% blocks executed 0%
+    #####:   47:		void registerOneRoute(Router& router,
+        -:   48:							  std::shared_ptr<Handler> pHandler,
+        -:   49:							  const RouteInfo& info,
+        -:   50:							  HttpResponse (Handler::*fn)(const HttpRequest&))
+        -:   51:		{
+    #####:   52:			router.route(info.method,
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+    #####:   53:						 std::string(info.path),
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+call    4 never executed
+call    5 never executed
+    #####:   54:						 [pHandler, fn](const HttpRequest& req) -> HttpResponse
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed
+call    8 never executed
+        -:   55:						 {
+        -:   56:							 return (pHandler.get()->*fn)(req);
+        -:   57:						 });
+    #####:   58:		}
+------------------
+_ZN5hical4meta6detail16registerOneRouteI10ApiHandlerEEvRNS_6RouterESt10shared_ptrIT_ERKNS0_9RouteInfoEMS7_FNS_12HttpResponseERKNS_11HttpRequestEE:
+function _ZN5hical4meta6detail16registerOneRouteI10ApiHandlerEEvRNS_6RouterESt10shared_ptrIT_ERKNS0_9RouteInfoEMS7_FNS_12HttpResponseERKNS_11HttpRequestEE called 0 returned 0% blocks executed 0%
+    #####:   47:		void registerOneRoute(Router& router,
+        -:   48:							  std::shared_ptr<Handler> pHandler,
+        -:   49:							  const RouteInfo& info,
+        -:   50:							  HttpResponse (Handler::*fn)(const HttpRequest&))
+        -:   51:		{
+    #####:   52:			router.route(info.method,
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+    #####:   53:						 std::string(info.path),
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+call    4 never executed
+call    5 never executed
+    #####:   54:						 [pHandler, fn](const HttpRequest& req) -> HttpResponse
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed
+call    8 never executed
+        -:   55:						 {
+        -:   56:							 return (pHandler.get()->*fn)(req);
+        -:   57:						 });
+    #####:   58:		}
+------------------
+        -:   59:
+        -:   60:		/**
+        -:   61:		 * @brief 注册单个协程路由
+        -:   62:		 */
+        -:   63:		template <typename Handler>
+        -:   64:		void registerOneRoute(Router& router,
+        -:   65:							  std::shared_ptr<Handler> pHandler,
+        -:   66:							  const RouteInfo& info,
+        -:   67:							  Awaitable<HttpResponse> (Handler::*fn)(const HttpRequest&))
+        -:   68:		{
+        -:   69:			router.route(info.method,
+        -:   70:						 std::string(info.path),
+        -:   71:						 [pHandler, fn](const HttpRequest& req) -> Awaitable<HttpResponse>
+        -:   72:						 {
+        -:   73:							 co_return co_await (pHandler.get()->*fn)(req);
+        -:   74:						 });
+        -:   75:		}
+        -:   76:
+        -:   77:		/**
+        -:   78:		 * @brief 路由注册函数对象
+        -:   79:		 * 将 RouteInfo 和成员函数指针打包为可调用对象。
+        -:   80:		 */
+        -:   81:		template <typename Handler, typename MemFnPtr>
+        -:   82:		struct RouteRegistrar
+        -:   83:		{
+        -:   84:			RouteInfo info;
+        -:   85:			MemFnPtr fnPtr;
+        -:   86:
+      27*:   87:			void apply(Router& router, std::shared_ptr<Handler> pHandler) const
+        -:   88:			{
+      27*:   89:				registerOneRoute(router, pHandler, info, fnPtr);
+      27*:   90:			}
+------------------
+_ZNK5hical4meta6detail14RouteRegistrarI12MixedHandlerMS3_FNS_12HttpResponseERKNS_11HttpRequestEEE5applyERNS_6RouterESt10shared_ptrIS3_E:
+function _ZNK5hical4meta6detail14RouteRegistrarI12MixedHandlerMS3_FNS_12HttpResponseERKNS_11HttpRequestEEE5applyERNS_6RouterESt10shared_ptrIS3_E called 2 returned 100% blocks executed 71%
+        2:   87:			void apply(Router& router, std::shared_ptr<Handler> pHandler) const
+        -:   88:			{
+        2:   89:				registerOneRoute(router, pHandler, info, fnPtr);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 never executed
+        2:   90:			}
+------------------
+_ZNK5hical4meta6detail14RouteRegistrarI16AnnotatedHandlerMS3_FNS_12HttpResponseERKNS_11HttpRequestEEE5applyERNS_6RouterESt10shared_ptrIS3_E:
+function _ZNK5hical4meta6detail14RouteRegistrarI16AnnotatedHandlerMS3_FNS_12HttpResponseERKNS_11HttpRequestEEE5applyERNS_6RouterESt10shared_ptrIS3_E called 6 returned 100% blocks executed 71%
+        6:   87:			void apply(Router& router, std::shared_ptr<Handler> pHandler) const
+        -:   88:			{
+        6:   89:				registerOneRoute(router, pHandler, info, fnPtr);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 never executed
+        6:   90:			}
+------------------
+_ZNK5hical4meta6detail14RouteRegistrarI12BasicHandlerMS3_FNS_12HttpResponseERKNS_11HttpRequestEEE5applyERNS_6RouterESt10shared_ptrIS3_E:
+function _ZNK5hical4meta6detail14RouteRegistrarI12BasicHandlerMS3_FNS_12HttpResponseERKNS_11HttpRequestEEE5applyERNS_6RouterESt10shared_ptrIS3_E called 1 returned 100% blocks executed 71%
+        1:   87:			void apply(Router& router, std::shared_ptr<Handler> pHandler) const
+        -:   88:			{
+        1:   89:				registerOneRoute(router, pHandler, info, fnPtr);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 never executed
+        1:   90:			}
+------------------
+_ZNK5hical4meta6detail14RouteRegistrarI11TestHandlerMS3_FNS_12HttpResponseERKNS_11HttpRequestEEE5applyERNS_6RouterESt10shared_ptrIS3_E:
+function _ZNK5hical4meta6detail14RouteRegistrarI11TestHandlerMS3_FNS_12HttpResponseERKNS_11HttpRequestEEE5applyERNS_6RouterESt10shared_ptrIS3_E called 18 returned 100% blocks executed 71%
+       18:   87:			void apply(Router& router, std::shared_ptr<Handler> pHandler) const
+        -:   88:			{
+       18:   89:				registerOneRoute(router, pHandler, info, fnPtr);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 never executed
+       18:   90:			}
+------------------
+_ZNK5hical4meta6detail14RouteRegistrarI10ApiHandlerMS3_FNS_12HttpResponseERKNS_11HttpRequestEEE5applyERNS_6RouterESt10shared_ptrIS3_E:
+function _ZNK5hical4meta6detail14RouteRegistrarI10ApiHandlerMS3_FNS_12HttpResponseERKNS_11HttpRequestEEE5applyERNS_6RouterESt10shared_ptrIS3_E called 0 returned 0% blocks executed 0%
+    #####:   87:			void apply(Router& router, std::shared_ptr<Handler> pHandler) const
+        -:   88:			{
+    #####:   89:				registerOneRoute(router, pHandler, info, fnPtr);
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+call    5 never executed
+    #####:   90:			}
+------------------
+_ZNK5hical4meta6detail14RouteRegistrarI10ApiHandlerMS3_FNS_12HttpResponseERKNS_11HttpRequestEEE5applyERNS_6RouterESt10shared_ptrIS3_E:
+function _ZNK5hical4meta6detail14RouteRegistrarI10ApiHandlerMS3_FNS_12HttpResponseERKNS_11HttpRequestEEE5applyERNS_6RouterESt10shared_ptrIS3_E called 0 returned 0% blocks executed 0%
+    #####:   87:			void apply(Router& router, std::shared_ptr<Handler> pHandler) const
+        -:   88:			{
+    #####:   89:				registerOneRoute(router, pHandler, info, fnPtr);
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+call    5 never executed
+    #####:   90:			}
+------------------
+        -:   91:		};
+        -:   92:
+        -:   93:		template <typename Handler, typename MemFnPtr>
+      36*:   94:		constexpr RouteRegistrar<Handler, MemFnPtr> makeRegistrar(RouteInfo info, MemFnPtr fn)
+        -:   95:		{
+      36*:   96:			return {info, fn};
+        -:   97:		}
+------------------
+_ZN5hical4meta6detail13makeRegistrarI12MixedHandlerMS3_FNS_12HttpResponseERKNS_11HttpRequestEEEENS1_14RouteRegistrarIT_T0_EENS0_9RouteInfoESC_:
+function _ZN5hical4meta6detail13makeRegistrarI12MixedHandlerMS3_FNS_12HttpResponseERKNS_11HttpRequestEEEENS1_14RouteRegistrarIT_T0_EENS0_9RouteInfoESC_ called 4 returned 100% blocks executed 100%
+        4:   94:		constexpr RouteRegistrar<Handler, MemFnPtr> makeRegistrar(RouteInfo info, MemFnPtr fn)
+        -:   95:		{
+        4:   96:			return {info, fn};
+        -:   97:		}
+------------------
+_ZN5hical4meta6detail13makeRegistrarI16AnnotatedHandlerMS3_FNS_12HttpResponseERKNS_11HttpRequestEEEENS1_14RouteRegistrarIT_T0_EENS0_9RouteInfoESC_:
+function _ZN5hical4meta6detail13makeRegistrarI16AnnotatedHandlerMS3_FNS_12HttpResponseERKNS_11HttpRequestEEEENS1_14RouteRegistrarIT_T0_EENS0_9RouteInfoESC_ called 12 returned 100% blocks executed 100%
+       12:   94:		constexpr RouteRegistrar<Handler, MemFnPtr> makeRegistrar(RouteInfo info, MemFnPtr fn)
+        -:   95:		{
+       12:   96:			return {info, fn};
+        -:   97:		}
+------------------
+_ZN5hical4meta6detail13makeRegistrarI12BasicHandlerMS3_FNS_12HttpResponseERKNS_11HttpRequestEEEENS1_14RouteRegistrarIT_T0_EENS0_9RouteInfoESC_:
+function _ZN5hical4meta6detail13makeRegistrarI12BasicHandlerMS3_FNS_12HttpResponseERKNS_11HttpRequestEEEENS1_14RouteRegistrarIT_T0_EENS0_9RouteInfoESC_ called 2 returned 100% blocks executed 100%
+        2:   94:		constexpr RouteRegistrar<Handler, MemFnPtr> makeRegistrar(RouteInfo info, MemFnPtr fn)
+        -:   95:		{
+        2:   96:			return {info, fn};
+        -:   97:		}
+------------------
+_ZN5hical4meta6detail13makeRegistrarI11TestHandlerMS3_FNS_12HttpResponseERKNS_11HttpRequestEEEENS1_14RouteRegistrarIT_T0_EENS0_9RouteInfoESC_:
+function _ZN5hical4meta6detail13makeRegistrarI11TestHandlerMS3_FNS_12HttpResponseERKNS_11HttpRequestEEEENS1_14RouteRegistrarIT_T0_EENS0_9RouteInfoESC_ called 18 returned 100% blocks executed 100%
+       18:   94:		constexpr RouteRegistrar<Handler, MemFnPtr> makeRegistrar(RouteInfo info, MemFnPtr fn)
+        -:   95:		{
+       18:   96:			return {info, fn};
+        -:   97:		}
+------------------
+_ZN5hical4meta6detail13makeRegistrarI10ApiHandlerMS3_FNS_12HttpResponseERKNS_11HttpRequestEEEENS1_14RouteRegistrarIT_T0_EENS0_9RouteInfoESC_:
+function _ZN5hical4meta6detail13makeRegistrarI10ApiHandlerMS3_FNS_12HttpResponseERKNS_11HttpRequestEEEENS1_14RouteRegistrarIT_T0_EENS0_9RouteInfoESC_ called 0 returned 0% blocks executed 0%
+    #####:   94:		constexpr RouteRegistrar<Handler, MemFnPtr> makeRegistrar(RouteInfo info, MemFnPtr fn)
+        -:   95:		{
+    #####:   96:			return {info, fn};
+        -:   97:		}
+------------------
+_ZN5hical4meta6detail13makeRegistrarI10ApiHandlerMS3_FNS_12HttpResponseERKNS_11HttpRequestEEEENS1_14RouteRegistrarIT_T0_EENS0_9RouteInfoESC_:
+function _ZN5hical4meta6detail13makeRegistrarI10ApiHandlerMS3_FNS_12HttpResponseERKNS_11HttpRequestEEEENS1_14RouteRegistrarIT_T0_EENS0_9RouteInfoESC_ called 0 returned 0% blocks executed 0%
+    #####:   94:		constexpr RouteRegistrar<Handler, MemFnPtr> makeRegistrar(RouteInfo info, MemFnPtr fn)
+        -:   95:		{
+    #####:   96:			return {info, fn};
+        -:   97:		}
+------------------
+        -:   98:
+        -:   99:		/**
+        -:  100:		 * @brief 遍历 tuple 逐个注册
+        -:  101:		 */
+        -:  102:		template <typename Handler, typename Tuple, size_t... I>
+      10*:  103:		void registerAll(Router& router,
+        -:  104:						 std::shared_ptr<Handler> pHandler,
+        -:  105:						 const Tuple& table,
+        -:  106:						 std::index_sequence<I...>)
+        -:  107:		{
+      10*:  108:			(std::get<I>(table).apply(router, pHandler), ...);
+      10*:  109:		}
+------------------
+_ZN5hical4meta6detail11registerAllI12MixedHandlerSt5tupleIJNS1_14RouteRegistrarIS3_MS3_FNS_12HttpResponseERKNS_11HttpRequestEEEESC_EEJLm0ELm1EEEEvRNS_6RouterESt10shared_ptrIT_ERKT0_St16integer_sequenceImJXspT1_EEE:
+function _ZN5hical4meta6detail11registerAllI12MixedHandlerSt5tupleIJNS1_14RouteRegistrarIS3_MS3_FNS_12HttpResponseERKNS_11HttpRequestEEEESC_EEJLm0ELm1EEEEvRNS_6RouterESt10shared_ptrIT_ERKT0_St16integer_sequenceImJXspT1_EEE called 1 returned 100% blocks executed 67%
+        1:  103:		void registerAll(Router& router,
+        -:  104:						 std::shared_ptr<Handler> pHandler,
+        -:  105:						 const Tuple& table,
+        -:  106:						 std::index_sequence<I...>)
+        -:  107:		{
+        1:  108:			(std::get<I>(table).apply(router, pHandler), ...);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+call    6 returned 100%
+call    7 returned 100%
+branch  8 taken 100% (fallthrough)
+branch  9 taken 0% (throw)
+call   10 returned 100%
+call   11 returned 100%
+call   12 never executed
+call   13 never executed
+        1:  109:		}
+------------------
+_ZN5hical4meta6detail11registerAllI16AnnotatedHandlerSt5tupleIJNS1_14RouteRegistrarIS3_MS3_FNS_12HttpResponseERKNS_11HttpRequestEEEESC_SC_EEJLm0ELm1ELm2EEEEvRNS_6RouterESt10shared_ptrIT_ERKT0_St16integer_sequenceImJXspT1_EEE:
+function _ZN5hical4meta6detail11registerAllI16AnnotatedHandlerSt5tupleIJNS1_14RouteRegistrarIS3_MS3_FNS_12HttpResponseERKNS_11HttpRequestEEEESC_SC_EEJLm0ELm1ELm2EEEEvRNS_6RouterESt10shared_ptrIT_ERKT0_St16integer_sequenceImJXspT1_EEE called 2 returned 100% blocks executed 64%
+        2:  103:		void registerAll(Router& router,
+        -:  104:						 std::shared_ptr<Handler> pHandler,
+        -:  105:						 const Tuple& table,
+        -:  106:						 std::index_sequence<I...>)
+        -:  107:		{
+        2:  108:			(std::get<I>(table).apply(router, pHandler), ...);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+call    6 returned 100%
+call    7 returned 100%
+branch  8 taken 100% (fallthrough)
+branch  9 taken 0% (throw)
+call   10 returned 100%
+call   11 returned 100%
+call   12 returned 100%
+branch 13 taken 100% (fallthrough)
+branch 14 taken 0% (throw)
+call   15 returned 100%
+call   16 returned 100%
+call   17 returned 100%
+call   18 never executed
+call   19 never executed
+call   20 never executed
+        2:  109:		}
+------------------
+_ZN5hical4meta6detail11registerAllI12BasicHandlerSt5tupleIJNS1_14RouteRegistrarIS3_MS3_FNS_12HttpResponseERKNS_11HttpRequestEEEEEEJLm0EEEEvRNS_6RouterESt10shared_ptrIT_ERKT0_St16integer_sequenceImJXspT1_EEE:
+function _ZN5hical4meta6detail11registerAllI12BasicHandlerSt5tupleIJNS1_14RouteRegistrarIS3_MS3_FNS_12HttpResponseERKNS_11HttpRequestEEEEEEJLm0EEEEvRNS_6RouterESt10shared_ptrIT_ERKT0_St16integer_sequenceImJXspT1_EEE called 1 returned 100% blocks executed 75%
+        1:  103:		void registerAll(Router& router,
+        -:  104:						 std::shared_ptr<Handler> pHandler,
+        -:  105:						 const Tuple& table,
+        -:  106:						 std::index_sequence<I...>)
+        -:  107:		{
+        1:  108:			(std::get<I>(table).apply(router, pHandler), ...);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+call    6 never executed
+        1:  109:		}
+------------------
+_ZN5hical4meta6detail11registerAllI11TestHandlerSt5tupleIJNS1_14RouteRegistrarIS3_MS3_FNS_12HttpResponseERKNS_11HttpRequestEEEESC_SC_EEJLm0ELm1ELm2EEEEvRNS_6RouterESt10shared_ptrIT_ERKT0_St16integer_sequenceImJXspT1_EEE:
+function _ZN5hical4meta6detail11registerAllI11TestHandlerSt5tupleIJNS1_14RouteRegistrarIS3_MS3_FNS_12HttpResponseERKNS_11HttpRequestEEEESC_SC_EEJLm0ELm1ELm2EEEEvRNS_6RouterESt10shared_ptrIT_ERKT0_St16integer_sequenceImJXspT1_EEE called 6 returned 100% blocks executed 64%
+        6:  103:		void registerAll(Router& router,
+        -:  104:						 std::shared_ptr<Handler> pHandler,
+        -:  105:						 const Tuple& table,
+        -:  106:						 std::index_sequence<I...>)
+        -:  107:		{
+        6:  108:			(std::get<I>(table).apply(router, pHandler), ...);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+call    6 returned 100%
+call    7 returned 100%
+branch  8 taken 100% (fallthrough)
+branch  9 taken 0% (throw)
+call   10 returned 100%
+call   11 returned 100%
+call   12 returned 100%
+branch 13 taken 100% (fallthrough)
+branch 14 taken 0% (throw)
+call   15 returned 100%
+call   16 returned 100%
+call   17 returned 100%
+call   18 never executed
+call   19 never executed
+call   20 never executed
+        6:  109:		}
+------------------
+_ZN5hical4meta6detail11registerAllI10ApiHandlerSt5tupleIJNS1_14RouteRegistrarIS3_MS3_FNS_12HttpResponseERKNS_11HttpRequestEEEESC_SC_SC_SC_EEJLm0ELm1ELm2ELm3ELm4EEEEvRNS_6RouterESt10shared_ptrIT_ERKT0_St16integer_sequenceImJXspT1_EEE:
+function _ZN5hical4meta6detail11registerAllI10ApiHandlerSt5tupleIJNS1_14RouteRegistrarIS3_MS3_FNS_12HttpResponseERKNS_11HttpRequestEEEESC_SC_SC_SC_EEJLm0ELm1ELm2ELm3ELm4EEEEvRNS_6RouterESt10shared_ptrIT_ERKT0_St16integer_sequenceImJXspT1_EEE called 0 returned 0% blocks executed 0%
+    #####:  103:		void registerAll(Router& router,
+        -:  104:						 std::shared_ptr<Handler> pHandler,
+        -:  105:						 const Tuple& table,
+        -:  106:						 std::index_sequence<I...>)
+        -:  107:		{
+    #####:  108:			(std::get<I>(table).apply(router, pHandler), ...);
+call    0 never executed
+call    1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed (throw)
+call    5 never executed
+call    6 never executed
+call    7 never executed
+branch  8 never executed (fallthrough)
+branch  9 never executed (throw)
+call   10 never executed
+call   11 never executed
+call   12 never executed
+branch 13 never executed (fallthrough)
+branch 14 never executed (throw)
+call   15 never executed
+call   16 never executed
+call   17 never executed
+branch 18 never executed (fallthrough)
+branch 19 never executed (throw)
+call   20 never executed
+call   21 never executed
+call   22 never executed
+branch 23 never executed (fallthrough)
+branch 24 never executed (throw)
+call   25 never executed
+call   26 never executed
+call   27 never executed
+call   28 never executed
+call   29 never executed
+call   30 never executed
+call   31 never executed
+call   32 never executed
+call   33 never executed
+call   34 never executed
+    #####:  109:		}
+------------------
+_ZN5hical4meta6detail11registerAllI10ApiHandlerSt5tupleIJNS1_14RouteRegistrarIS3_MS3_FNS_12HttpResponseERKNS_11HttpRequestEEEESC_SC_SC_EEJLm0ELm1ELm2ELm3EEEEvRNS_6RouterESt10shared_ptrIT_ERKT0_St16integer_sequenceImJXspT1_EEE:
+function _ZN5hical4meta6detail11registerAllI10ApiHandlerSt5tupleIJNS1_14RouteRegistrarIS3_MS3_FNS_12HttpResponseERKNS_11HttpRequestEEEESC_SC_SC_EEJLm0ELm1ELm2ELm3EEEEvRNS_6RouterESt10shared_ptrIT_ERKT0_St16integer_sequenceImJXspT1_EEE called 0 returned 0% blocks executed 0%
+    #####:  103:		void registerAll(Router& router,
+        -:  104:						 std::shared_ptr<Handler> pHandler,
+        -:  105:						 const Tuple& table,
+        -:  106:						 std::index_sequence<I...>)
+        -:  107:		{
+    #####:  108:			(std::get<I>(table).apply(router, pHandler), ...);
+call    0 never executed
+call    1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed (throw)
+call    5 never executed
+call    6 never executed
+call    7 never executed
+branch  8 never executed (fallthrough)
+branch  9 never executed (throw)
+call   10 never executed
+call   11 never executed
+call   12 never executed
+branch 13 never executed (fallthrough)
+branch 14 never executed (throw)
+call   15 never executed
+call   16 never executed
+call   17 never executed
+branch 18 never executed (fallthrough)
+branch 19 never executed (throw)
+call   20 never executed
+call   21 never executed
+call   22 never executed
+call   23 never executed
+call   24 never executed
+call   25 never executed
+call   26 never executed
+call   27 never executed
+    #####:  109:		}
+------------------
+        -:  110:
+        -:  111:	} // namespace detail
+        -:  112:
+        -:  113:	/**
+        -:  114:	 * @brief 自动注册 Handler 中所有路由到 Router（shared_ptr 版本，推荐）
+        -:  115:	 * 通过 shared_ptr 管理 handler 生命周期，确保路由回调中的引用始终有效。
+        -:  116:	 * 适用于 handler 需要跨异步边界存活的场景。
+        -:  117:	 */
+        -:  118:	template <typename Handler>
+      10*:  119:	void registerRoutes(Router& router, std::shared_ptr<Handler> pHandler)
+        -:  120:	{
+        -:  121:		static_assert(HasRouteTable<Handler>::value,
+        -:  122:					  "Handler must use HICAL_ROUTES() macro or have C++26 reflection support");
+        -:  123:
+      10*:  124:		auto table = Handler::hicalRouteTable();
+      10*:  125:		constexpr auto count = std::tuple_size_v<decltype(table)>;
+      10*:  126:		detail::registerAll(router, pHandler, table, std::make_index_sequence<count> {});
+      10*:  127:	}
+------------------
+_ZN5hical4meta14registerRoutesI12MixedHandlerEEvRNS_6RouterESt10shared_ptrIT_E:
+function _ZN5hical4meta14registerRoutesI12MixedHandlerEEvRNS_6RouterESt10shared_ptrIT_E called 1 returned 100% blocks executed 67%
+        1:  119:	void registerRoutes(Router& router, std::shared_ptr<Handler> pHandler)
+        -:  120:	{
+        -:  121:		static_assert(HasRouteTable<Handler>::value,
+        -:  122:					  "Handler must use HICAL_ROUTES() macro or have C++26 reflection support");
+        -:  123:
+        1:  124:		auto table = Handler::hicalRouteTable();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  125:		constexpr auto count = std::tuple_size_v<decltype(table)>;
+        1:  126:		detail::registerAll(router, pHandler, table, std::make_index_sequence<count> {});
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 never executed
+        1:  127:	}
+------------------
+_ZN5hical4meta14registerRoutesI16AnnotatedHandlerEEvRNS_6RouterESt10shared_ptrIT_E:
+function _ZN5hical4meta14registerRoutesI16AnnotatedHandlerEEvRNS_6RouterESt10shared_ptrIT_E called 2 returned 100% blocks executed 67%
+        2:  119:	void registerRoutes(Router& router, std::shared_ptr<Handler> pHandler)
+        -:  120:	{
+        -:  121:		static_assert(HasRouteTable<Handler>::value,
+        -:  122:					  "Handler must use HICAL_ROUTES() macro or have C++26 reflection support");
+        -:  123:
+        2:  124:		auto table = Handler::hicalRouteTable();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        2:  125:		constexpr auto count = std::tuple_size_v<decltype(table)>;
+        2:  126:		detail::registerAll(router, pHandler, table, std::make_index_sequence<count> {});
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 never executed
+        2:  127:	}
+------------------
+_ZN5hical4meta14registerRoutesI12BasicHandlerEEvRNS_6RouterESt10shared_ptrIT_E:
+function _ZN5hical4meta14registerRoutesI12BasicHandlerEEvRNS_6RouterESt10shared_ptrIT_E called 1 returned 100% blocks executed 67%
+        1:  119:	void registerRoutes(Router& router, std::shared_ptr<Handler> pHandler)
+        -:  120:	{
+        -:  121:		static_assert(HasRouteTable<Handler>::value,
+        -:  122:					  "Handler must use HICAL_ROUTES() macro or have C++26 reflection support");
+        -:  123:
+        1:  124:		auto table = Handler::hicalRouteTable();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  125:		constexpr auto count = std::tuple_size_v<decltype(table)>;
+        1:  126:		detail::registerAll(router, pHandler, table, std::make_index_sequence<count> {});
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 never executed
+        1:  127:	}
+------------------
+_ZN5hical4meta14registerRoutesI11TestHandlerEEvRNS_6RouterESt10shared_ptrIT_E:
+function _ZN5hical4meta14registerRoutesI11TestHandlerEEvRNS_6RouterESt10shared_ptrIT_E called 6 returned 100% blocks executed 67%
+        6:  119:	void registerRoutes(Router& router, std::shared_ptr<Handler> pHandler)
+        -:  120:	{
+        -:  121:		static_assert(HasRouteTable<Handler>::value,
+        -:  122:					  "Handler must use HICAL_ROUTES() macro or have C++26 reflection support");
+        -:  123:
+        6:  124:		auto table = Handler::hicalRouteTable();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        6:  125:		constexpr auto count = std::tuple_size_v<decltype(table)>;
+        6:  126:		detail::registerAll(router, pHandler, table, std::make_index_sequence<count> {});
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 never executed
+        6:  127:	}
+------------------
+_ZN5hical4meta14registerRoutesI10ApiHandlerEEvRNS_6RouterESt10shared_ptrIT_E:
+function _ZN5hical4meta14registerRoutesI10ApiHandlerEEvRNS_6RouterESt10shared_ptrIT_E called 0 returned 0% blocks executed 0%
+    #####:  119:	void registerRoutes(Router& router, std::shared_ptr<Handler> pHandler)
+        -:  120:	{
+        -:  121:		static_assert(HasRouteTable<Handler>::value,
+        -:  122:					  "Handler must use HICAL_ROUTES() macro or have C++26 reflection support");
+        -:  123:
+    #####:  124:		auto table = Handler::hicalRouteTable();
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  125:		constexpr auto count = std::tuple_size_v<decltype(table)>;
+    #####:  126:		detail::registerAll(router, pHandler, table, std::make_index_sequence<count> {});
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+call    5 never executed
+    #####:  127:	}
+------------------
+_ZN5hical4meta14registerRoutesI10ApiHandlerEEvRNS_6RouterESt10shared_ptrIT_E:
+function _ZN5hical4meta14registerRoutesI10ApiHandlerEEvRNS_6RouterESt10shared_ptrIT_E called 0 returned 0% blocks executed 0%
+    #####:  119:	void registerRoutes(Router& router, std::shared_ptr<Handler> pHandler)
+        -:  120:	{
+        -:  121:		static_assert(HasRouteTable<Handler>::value,
+        -:  122:					  "Handler must use HICAL_ROUTES() macro or have C++26 reflection support");
+        -:  123:
+    #####:  124:		auto table = Handler::hicalRouteTable();
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  125:		constexpr auto count = std::tuple_size_v<decltype(table)>;
+    #####:  126:		detail::registerAll(router, pHandler, table, std::make_index_sequence<count> {});
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+call    5 never executed
+    #####:  127:	}
+------------------
+        -:  128:
+        -:  129:	/**
+        -:  130:	 * @brief 自动注册 Handler 中所有路由到 Router（引用版本，便捷）
+        -:  131:	 * 内部创建 shared_ptr（以空删除器包装），调用者需确保 handler 的生命周期
+        -:  132:	 * 覆盖所有路由回调的执行期（如 server.start() 阻塞期间）。
+        -:  133:	 * 对于非阻塞/异步场景，推荐使用 shared_ptr 重载。
+        -:  134:	 */
+        -:  135:	template <typename Handler>
+      10*:  136:	void registerRoutes(Router& router, Handler& handler)
+        -:  137:	{
+        -:  138:		static_assert(HasRouteTable<Handler>::value,
+        -:  139:					  "Handler must use HICAL_ROUTES() macro or have C++26 reflection support");
+        -:  140:
+        -:  141:		// 空删除器：不接管所有权，由调用者管理生命周期
+      10*:  142:		auto pHandler = std::shared_ptr<Handler>(&handler,
+      10*:  143:												 [](Handler*)
+        -:  144:												 {
+        -:  145:												 });
+      10*:  146:		registerRoutes(router, pHandler);
+      10*:  147:	}
+------------------
+_ZN5hical4meta14registerRoutesI12MixedHandlerEEvRNS_6RouterERT_:
+function _ZN5hical4meta14registerRoutesI12MixedHandlerEEvRNS_6RouterERT_ called 1 returned 100% blocks executed 58%
+        1:  136:	void registerRoutes(Router& router, Handler& handler)
+        -:  137:	{
+        -:  138:		static_assert(HasRouteTable<Handler>::value,
+        -:  139:					  "Handler must use HICAL_ROUTES() macro or have C++26 reflection support");
+        -:  140:
+        -:  141:		// 空删除器：不接管所有权，由调用者管理生命周期
+        1:  142:		auto pHandler = std::shared_ptr<Handler>(&handler,
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  143:												 [](Handler*)
+        -:  144:												 {
+        -:  145:												 });
+        1:  146:		registerRoutes(router, pHandler);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 never executed
+        1:  147:	}
+call    0 returned 100%
+call    1 never executed
+------------------
+_ZN5hical4meta14registerRoutesI16AnnotatedHandlerEEvRNS_6RouterERT_:
+function _ZN5hical4meta14registerRoutesI16AnnotatedHandlerEEvRNS_6RouterERT_ called 2 returned 100% blocks executed 58%
+        2:  136:	void registerRoutes(Router& router, Handler& handler)
+        -:  137:	{
+        -:  138:		static_assert(HasRouteTable<Handler>::value,
+        -:  139:					  "Handler must use HICAL_ROUTES() macro or have C++26 reflection support");
+        -:  140:
+        -:  141:		// 空删除器：不接管所有权，由调用者管理生命周期
+        2:  142:		auto pHandler = std::shared_ptr<Handler>(&handler,
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  143:												 [](Handler*)
+        -:  144:												 {
+        -:  145:												 });
+        2:  146:		registerRoutes(router, pHandler);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 never executed
+        2:  147:	}
+call    0 returned 100%
+call    1 never executed
+------------------
+_ZN5hical4meta14registerRoutesI12BasicHandlerEEvRNS_6RouterERT_:
+function _ZN5hical4meta14registerRoutesI12BasicHandlerEEvRNS_6RouterERT_ called 1 returned 100% blocks executed 58%
+        1:  136:	void registerRoutes(Router& router, Handler& handler)
+        -:  137:	{
+        -:  138:		static_assert(HasRouteTable<Handler>::value,
+        -:  139:					  "Handler must use HICAL_ROUTES() macro or have C++26 reflection support");
+        -:  140:
+        -:  141:		// 空删除器：不接管所有权，由调用者管理生命周期
+        1:  142:		auto pHandler = std::shared_ptr<Handler>(&handler,
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  143:												 [](Handler*)
+        -:  144:												 {
+        -:  145:												 });
+        1:  146:		registerRoutes(router, pHandler);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 never executed
+        1:  147:	}
+call    0 returned 100%
+call    1 never executed
+------------------
+_ZN5hical4meta14registerRoutesI11TestHandlerEEvRNS_6RouterERT_:
+function _ZN5hical4meta14registerRoutesI11TestHandlerEEvRNS_6RouterERT_ called 6 returned 100% blocks executed 58%
+        6:  136:	void registerRoutes(Router& router, Handler& handler)
+        -:  137:	{
+        -:  138:		static_assert(HasRouteTable<Handler>::value,
+        -:  139:					  "Handler must use HICAL_ROUTES() macro or have C++26 reflection support");
+        -:  140:
+        -:  141:		// 空删除器：不接管所有权，由调用者管理生命周期
+        6:  142:		auto pHandler = std::shared_ptr<Handler>(&handler,
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  143:												 [](Handler*)
+        -:  144:												 {
+        -:  145:												 });
+        6:  146:		registerRoutes(router, pHandler);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 never executed
+        6:  147:	}
+call    0 returned 100%
+call    1 never executed
+------------------
+_ZN5hical4meta14registerRoutesI10ApiHandlerEEvRNS_6RouterERT_:
+function _ZN5hical4meta14registerRoutesI10ApiHandlerEEvRNS_6RouterERT_ called 0 returned 0% blocks executed 0%
+    #####:  136:	void registerRoutes(Router& router, Handler& handler)
+        -:  137:	{
+        -:  138:		static_assert(HasRouteTable<Handler>::value,
+        -:  139:					  "Handler must use HICAL_ROUTES() macro or have C++26 reflection support");
+        -:  140:
+        -:  141:		// 空删除器：不接管所有权，由调用者管理生命周期
+    #####:  142:		auto pHandler = std::shared_ptr<Handler>(&handler,
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:  143:												 [](Handler*)
+        -:  144:												 {
+        -:  145:												 });
+    #####:  146:		registerRoutes(router, pHandler);
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+call    5 never executed
+    #####:  147:	}
+call    0 never executed
+call    1 never executed
+------------------
+_ZN5hical4meta14registerRoutesI10ApiHandlerEEvRNS_6RouterERT_:
+function _ZN5hical4meta14registerRoutesI10ApiHandlerEEvRNS_6RouterERT_ called 0 returned 0% blocks executed 0%
+    #####:  136:	void registerRoutes(Router& router, Handler& handler)
+        -:  137:	{
+        -:  138:		static_assert(HasRouteTable<Handler>::value,
+        -:  139:					  "Handler must use HICAL_ROUTES() macro or have C++26 reflection support");
+        -:  140:
+        -:  141:		// 空删除器：不接管所有权，由调用者管理生命周期
+    #####:  142:		auto pHandler = std::shared_ptr<Handler>(&handler,
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:  143:												 [](Handler*)
+        -:  144:												 {
+        -:  145:												 });
+    #####:  146:		registerRoutes(router, pHandler);
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+call    5 never executed
+    #####:  147:	}
+call    0 never executed
+call    1 never executed
+------------------
+        -:  148:
+        -:  149:#else // HICAL_HAS_REFLECTION == 1
+        -:  150:
+        -:  151:	// ============ C++26 反射实现 ============
+        -:  152:
+        -:  153:	template <typename Handler>
+        -:  154:	void registerRoutes(Router& router, Handler& handler)
+        -:  155:	{
+        -:  156:		template for (constexpr auto fn : std::meta::nonstatic_member_functions_of(^^Handler))
+        -:  157:		{
+        -:  158:			constexpr auto attrs = std::meta::attributes_of(fn);
+        -:  159:			template for (constexpr auto attr : attrs)
+        -:  160:			{
+        -:  161:				if constexpr (std::meta::identifier_of(attr) == "hical::route")
+        -:  162:				{
+        -:  163:					constexpr auto args = std::meta::attribute_arguments_of(attr);
+        -:  164:					constexpr auto path = std::meta::extract<const char*>(args[0]);
+        -:  165:					constexpr auto methodStr = std::meta::extract<const char*>(args[1]);
+        -:  166:					auto method = stringToHttpMethod(methodStr);
+        -:  167:
+        -:  168:					router.route(method,
+        -:  169:								 path,
+        -:  170:								 [&handler](const HttpRequest& req) -> Awaitable<HttpResponse>
+        -:  171:								 {
+        -:  172:									 if constexpr (std::is_same_v<decltype(handler.[:fn:](req)), HttpResponse>)
+        -:  173:									 {
+        -:  174:										 co_return handler.[:fn:](req);
+        -:  175:									 }
+        -:  176:									 else
+        -:  177:									 {
+        -:  178:										 co_return co_await handler.[:fn:](req);
+        -:  179:									 }
+        -:  180:								 });
+        -:  181:				}
+        -:  182:			}
+        -:  183:		}
+        -:  184:	}
+        -:  185:
+        -:  186:#endif // HICAL_HAS_REFLECTION
+        -:  187:
+        -:  188:} // namespace hical::meta
+        -:  189:
+        -:  190:// ============ C++20 回退宏 ============
+        -:  191:
+        -:  192:#if !HICAL_HAS_REFLECTION
+        -:  193:
+        -:  194:/**
+        -:  195: * @brief 标注单个路由处理器（C++20 回退方案）
+        -:  196: * @param method HTTP 方法（Get, Post, Put, Delete 等）
+        -:  197: * @param path   路由路径
+        -:  198: * @param func   成员函数名
+        -:  199: */
+        -:  200:	#define HICAL_HANDLER(method, path, func) \
+        -:  201:		static constexpr ::hical::meta::RouteInfo hicalRouteInfo_##func {::hical::HttpMethod::h##method, path, #func};
+        -:  202:
+        -:  203:/**
+        -:  204: * @brief 收集所有路由（C++20 回退方案）
+        -:  205: * 第一个参数为 Handler 类型名，后续参数为成员函数名。
+        -:  206: * 用法：HICAL_ROUTES(MyHandler, listUsers, getUser)
+        -:  207: */
+        -:  208:	#define HICAL_ROUTES(Type, ...)                                                                  \
+        -:  209:		static auto hicalRouteTable()                                                                \
+        -:  210:		{                                                                                            \
+        -:  211:			return std::make_tuple(HICAL_ROUTES_EXPAND_(HICAL_ROUTES_FOR_EACH_(Type, __VA_ARGS__))); \
+        -:  212:		}
+        -:  213:
+        -:  214:	// 生成单个 registrar
+        -:  215:	#define HICAL_ROUTE_REG_(T, func) ::hical::meta::detail::makeRegistrar<T>(T::hicalRouteInfo_##func, &T::func)
+        -:  216:
+        -:  217:// ---- __VA_OPT__ 递归展开 ----
+        -:  218:
+        -:  219:	#define HICAL_ROUTES_PARENS_ ()
+        -:  220:
+        -:  221:	#define HICAL_ROUTES_FOR_EACH_(T, a, ...) \
+        -:  222:		HICAL_ROUTE_REG_(T, a) __VA_OPT__(, HICAL_ROUTES_FE_AGAIN_ HICAL_ROUTES_PARENS_(T, __VA_ARGS__))
+        -:  223:
+        -:  224:	#define HICAL_ROUTES_FE_AGAIN_() HICAL_ROUTES_FOR_EACH_
+        -:  225:
+        -:  226:	// 多层 EXPAND 解锁递归深度（支持最多 243 个路由）
+        -:  227:	#define HICAL_ROUTES_EXPAND_(...) HICAL_ROUTES_EXP4_(HICAL_ROUTES_EXP4_(__VA_ARGS__))
+        -:  228:	#define HICAL_ROUTES_EXP4_(...) HICAL_ROUTES_EXP3_(HICAL_ROUTES_EXP3_(__VA_ARGS__))
+        -:  229:	#define HICAL_ROUTES_EXP3_(...) HICAL_ROUTES_EXP2_(HICAL_ROUTES_EXP2_(__VA_ARGS__))
+        -:  230:	#define HICAL_ROUTES_EXP2_(...) HICAL_ROUTES_EXP1_(HICAL_ROUTES_EXP1_(__VA_ARGS__))
+        -:  231:	#define HICAL_ROUTES_EXP1_(...) __VA_ARGS__
+        -:  232:
+        -:  233:#else
+        -:  234:	#define HICAL_HANDLER(method, path, func)
+        -:  235:	#define HICAL_ROUTES(Type, ...)
+        -:  236:#endif

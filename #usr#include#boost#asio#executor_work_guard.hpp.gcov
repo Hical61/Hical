@@ -1,0 +1,384 @@
+        -:    0:Source:/usr/include/boost/asio/executor_work_guard.hpp
+        -:    1://
+        -:    2:// executor_work_guard.hpp
+        -:    3:// ~~~~~~~~~~~~~~~~~~~~~~~
+        -:    4://
+        -:    5:// Copyright (c) 2003-2023 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+        -:    6://
+        -:    7:// Distributed under the Boost Software License, Version 1.0. (See accompanying
+        -:    8:// file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+        -:    9://
+        -:   10:
+        -:   11:#ifndef BOOST_ASIO_EXECUTOR_WORK_GUARD_HPP
+        -:   12:#define BOOST_ASIO_EXECUTOR_WORK_GUARD_HPP
+        -:   13:
+        -:   14:#if defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   15:# pragma once
+        -:   16:#endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   17:
+        -:   18:#include <boost/asio/detail/config.hpp>
+        -:   19:
+        -:   20:#include <boost/asio/associated_executor.hpp>
+        -:   21:#include <boost/asio/detail/type_traits.hpp>
+        -:   22:#include <boost/asio/execution.hpp>
+        -:   23:#include <boost/asio/is_executor.hpp>
+        -:   24:
+        -:   25:#include <boost/asio/detail/push_options.hpp>
+        -:   26:
+        -:   27:namespace boost {
+        -:   28:namespace asio {
+        -:   29:
+        -:   30:#if !defined(BOOST_ASIO_EXECUTOR_WORK_GUARD_DECL)
+        -:   31:#define BOOST_ASIO_EXECUTOR_WORK_GUARD_DECL
+        -:   32:
+        -:   33:template <typename Executor, typename = void, typename = void>
+        -:   34:class executor_work_guard;
+        -:   35:
+        -:   36:#endif // !defined(BOOST_ASIO_EXECUTOR_WORK_GUARD_DECL)
+        -:   37:
+        -:   38:#if defined(GENERATING_DOCUMENTATION)
+        -:   39:
+        -:   40:/// An object of type @c executor_work_guard controls ownership of outstanding
+        -:   41:/// executor work within a scope.
+        -:   42:template <typename Executor>
+        -:   43:class executor_work_guard
+        -:   44:{
+        -:   45:public:
+        -:   46:  /// The underlying executor type.
+        -:   47:  typedef Executor executor_type;
+        -:   48:
+        -:   49:  /// Constructs a @c executor_work_guard object for the specified executor.
+        -:   50:  /**
+        -:   51:   * Stores a copy of @c e and calls <tt>on_work_started()</tt> on it.
+        -:   52:   */
+        -:   53:  explicit executor_work_guard(const executor_type& e) BOOST_ASIO_NOEXCEPT;
+        -:   54:
+        -:   55:  /// Copy constructor.
+        -:   56:  executor_work_guard(const executor_work_guard& other) BOOST_ASIO_NOEXCEPT;
+        -:   57:
+        -:   58:  /// Move constructor.
+        -:   59:  executor_work_guard(executor_work_guard&& other) BOOST_ASIO_NOEXCEPT;
+        -:   60:
+        -:   61:  /// Destructor.
+        -:   62:  /**
+        -:   63:   * Unless the object has already been reset, or is in a moved-from state,
+        -:   64:   * calls <tt>on_work_finished()</tt> on the stored executor.
+        -:   65:   */
+        -:   66:  ~executor_work_guard();
+        -:   67:
+        -:   68:  /// Obtain the associated executor.
+        -:   69:  executor_type get_executor() const BOOST_ASIO_NOEXCEPT;
+        -:   70:
+        -:   71:  /// Whether the executor_work_guard object owns some outstanding work.
+        -:   72:  bool owns_work() const BOOST_ASIO_NOEXCEPT;
+        -:   73:
+        -:   74:  /// Indicate that the work is no longer outstanding.
+        -:   75:  /**
+        -:   76:   * Unless the object has already been reset, or is in a moved-from state,
+        -:   77:   * calls <tt>on_work_finished()</tt> on the stored executor.
+        -:   78:   */
+        -:   79:  void reset() BOOST_ASIO_NOEXCEPT;
+        -:   80:};
+        -:   81:
+        -:   82:#endif // defined(GENERATING_DOCUMENTATION)
+        -:   83:
+        -:   84:#if !defined(GENERATING_DOCUMENTATION)
+        -:   85:
+        -:   86:#if !defined(BOOST_ASIO_NO_TS_EXECUTORS)
+        -:   87:
+        -:   88:template <typename Executor>
+        -:   89:class executor_work_guard<Executor,
+        -:   90:    typename enable_if<
+        -:   91:      is_executor<Executor>::value
+        -:   92:    >::type>
+        -:   93:{
+        -:   94:public:
+        -:   95:  typedef Executor executor_type;
+        -:   96:
+function _ZN5boost4asio19executor_work_guardINS0_10io_context19basic_executor_typeISaIvELm0EEEvvEC2ERKS5_ called 120 returned 100% blocks executed 100%
+      120:   97:  explicit executor_work_guard(const executor_type& e) BOOST_ASIO_NOEXCEPT
+      120:   98:    : executor_(e),
+call    0 returned 100%
+      120:   99:      owns_(true)
+        -:  100:  {
+      120:  101:    executor_.on_work_started();
+call    0 returned 100%
+      120:  102:  }
+        -:  103:
+        -:  104:  executor_work_guard(const executor_work_guard& other) BOOST_ASIO_NOEXCEPT
+        -:  105:    : executor_(other.executor_),
+        -:  106:      owns_(other.owns_)
+        -:  107:  {
+        -:  108:    if (owns_)
+        -:  109:      executor_.on_work_started();
+        -:  110:  }
+        -:  111:
+        -:  112:#if defined(BOOST_ASIO_HAS_MOVE)
+function _ZN5boost4asio19executor_work_guardINS0_10io_context19basic_executor_typeISaIvELm0EEEvvEC2EOS6_ called 120 returned 100% blocks executed 100%
+      120:  113:  executor_work_guard(executor_work_guard&& other) BOOST_ASIO_NOEXCEPT
+      120:  114:    : executor_(BOOST_ASIO_MOVE_CAST(Executor)(other.executor_)),
+call    0 returned 100%
+      120:  115:      owns_(other.owns_)
+        -:  116:  {
+      120:  117:    other.owns_ = false;
+      120:  118:  }
+        -:  119:#endif // defined(BOOST_ASIO_HAS_MOVE)
+        -:  120:
+function _ZN5boost4asio19executor_work_guardINS0_10io_context19basic_executor_typeISaIvELm0EEEvvED2Ev called 240 returned 100% blocks executed 100%
+      240:  121:  ~executor_work_guard()
+        -:  122:  {
+      240:  123:    if (owns_)
+branch  0 taken 50% (fallthrough)
+branch  1 taken 50%
+      120:  124:      executor_.on_work_finished();
+call    0 returned 100%
+      240:  125:  }
+call    0 returned 100%
+        -:  126:
+        -:  127:  executor_type get_executor() const BOOST_ASIO_NOEXCEPT
+        -:  128:  {
+        -:  129:    return executor_;
+        -:  130:  }
+        -:  131:
+        -:  132:  bool owns_work() const BOOST_ASIO_NOEXCEPT
+        -:  133:  {
+        -:  134:    return owns_;
+        -:  135:  }
+        -:  136:
+        -:  137:  void reset() BOOST_ASIO_NOEXCEPT
+        -:  138:  {
+        -:  139:    if (owns_)
+        -:  140:    {
+        -:  141:      executor_.on_work_finished();
+        -:  142:      owns_ = false;
+        -:  143:    }
+        -:  144:  }
+        -:  145:
+        -:  146:private:
+        -:  147:  // Disallow assignment.
+        -:  148:  executor_work_guard& operator=(const executor_work_guard&);
+        -:  149:
+        -:  150:  executor_type executor_;
+        -:  151:  bool owns_;
+        -:  152:};
+        -:  153:
+        -:  154:#endif // !defined(BOOST_ASIO_NO_TS_EXECUTORS)
+        -:  155:
+        -:  156:template <typename Executor>
+        -:  157:class executor_work_guard<Executor,
+        -:  158:    typename enable_if<
+        -:  159:      !is_executor<Executor>::value
+        -:  160:    >::type,
+        -:  161:    typename enable_if<
+        -:  162:      execution::is_executor<Executor>::value
+        -:  163:    >::type>
+        -:  164:{
+        -:  165:public:
+        -:  166:  typedef Executor executor_type;
+        -:  167:
+        -:  168:  explicit executor_work_guard(const executor_type& e) BOOST_ASIO_NOEXCEPT
+        -:  169:    : executor_(e),
+        -:  170:      owns_(true)
+        -:  171:  {
+        -:  172:    new (&work_) work_type(boost::asio::prefer(executor_,
+        -:  173:          execution::outstanding_work.tracked));
+        -:  174:  }
+        -:  175:
+        -:  176:  executor_work_guard(const executor_work_guard& other) BOOST_ASIO_NOEXCEPT
+        -:  177:    : executor_(other.executor_),
+        -:  178:      owns_(other.owns_)
+        -:  179:  {
+        -:  180:    if (owns_)
+        -:  181:    {
+        -:  182:      new (&work_) work_type(boost::asio::prefer(executor_,
+        -:  183:            execution::outstanding_work.tracked));
+        -:  184:    }
+        -:  185:  }
+        -:  186:
+        -:  187:#if defined(BOOST_ASIO_HAS_MOVE)
+        -:  188:  executor_work_guard(executor_work_guard&& other) BOOST_ASIO_NOEXCEPT
+        -:  189:    : executor_(BOOST_ASIO_MOVE_CAST(Executor)(other.executor_)),
+        -:  190:      owns_(other.owns_)
+        -:  191:  {
+        -:  192:    if (owns_)
+        -:  193:    {
+        -:  194:      new (&work_) work_type(
+        -:  195:          BOOST_ASIO_MOVE_CAST(work_type)(
+        -:  196:            *static_cast<work_type*>(
+        -:  197:              static_cast<void*>(&other.work_))));
+        -:  198:      other.owns_ = false;
+        -:  199:    }
+        -:  200:  }
+        -:  201:#endif //  defined(BOOST_ASIO_HAS_MOVE)
+        -:  202:
+        -:  203:  ~executor_work_guard()
+        -:  204:  {
+        -:  205:    if (owns_)
+        -:  206:      static_cast<work_type*>(static_cast<void*>(&work_))->~work_type();
+        -:  207:  }
+        -:  208:
+        -:  209:  executor_type get_executor() const BOOST_ASIO_NOEXCEPT
+        -:  210:  {
+        -:  211:    return executor_;
+        -:  212:  }
+        -:  213:
+        -:  214:  bool owns_work() const BOOST_ASIO_NOEXCEPT
+        -:  215:  {
+        -:  216:    return owns_;
+        -:  217:  }
+        -:  218:
+        -:  219:  void reset() BOOST_ASIO_NOEXCEPT
+        -:  220:  {
+        -:  221:    if (owns_)
+        -:  222:    {
+        -:  223:      static_cast<work_type*>(static_cast<void*>(&work_))->~work_type();
+        -:  224:      owns_ = false;
+        -:  225:    }
+        -:  226:  }
+        -:  227:
+        -:  228:private:
+        -:  229:  // Disallow assignment.
+        -:  230:  executor_work_guard& operator=(const executor_work_guard&);
+        -:  231:
+        -:  232:  typedef typename decay<
+        -:  233:      typename prefer_result<
+        -:  234:        const executor_type&,
+        -:  235:        execution::outstanding_work_t::tracked_t
+        -:  236:      >::type
+        -:  237:    >::type work_type;
+        -:  238:
+        -:  239:  executor_type executor_;
+        -:  240:  typename aligned_storage<sizeof(work_type),
+        -:  241:      alignment_of<work_type>::value>::type work_;
+        -:  242:  bool owns_;
+        -:  243:};
+        -:  244:
+        -:  245:#endif // !defined(GENERATING_DOCUMENTATION)
+        -:  246:
+        -:  247:/// Create an @ref executor_work_guard object.
+        -:  248:/**
+        -:  249: * @param ex An executor.
+        -:  250: *
+        -:  251: * @returns A work guard constructed with the specified executor.
+        -:  252: */
+        -:  253:template <typename Executor>
+        -:  254:BOOST_ASIO_NODISCARD inline executor_work_guard<Executor>
+        -:  255:make_work_guard(const Executor& ex,
+        -:  256:    typename constraint<
+        -:  257:      is_executor<Executor>::value || execution::is_executor<Executor>::value
+        -:  258:    >::type = 0)
+        -:  259:{
+        -:  260:  return executor_work_guard<Executor>(ex);
+        -:  261:}
+        -:  262:
+        -:  263:/// Create an @ref executor_work_guard object.
+        -:  264:/**
+        -:  265: * @param ctx An execution context, from which an executor will be obtained.
+        -:  266: *
+        -:  267: * @returns A work guard constructed with the execution context's executor,
+        -:  268: * obtained by performing <tt>ctx.get_executor()</tt>.
+        -:  269: */
+        -:  270:template <typename ExecutionContext>
+        -:  271:BOOST_ASIO_NODISCARD inline
+        -:  272:executor_work_guard<typename ExecutionContext::executor_type>
+function _ZN5boost4asio15make_work_guardINS0_10io_contextEEENS0_19executor_work_guardINT_13executor_typeEvvEERS4_NS0_10constraintIXsrSt14is_convertibleIS7_RNS0_17execution_contextEE5valueEiE4typeE called 120 returned 100% blocks executed 100%
+      120:  273:make_work_guard(ExecutionContext& ctx,
+        -:  274:    typename constraint<
+        -:  275:      is_convertible<ExecutionContext&, execution_context&>::value
+        -:  276:    >::type = 0)
+        -:  277:{
+        -:  278:  return executor_work_guard<typename ExecutionContext::executor_type>(
+      120:  279:      ctx.get_executor());
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+        -:  280:}
+        -:  281:
+        -:  282:/// Create an @ref executor_work_guard object.
+        -:  283:/**
+        -:  284: * @param t An arbitrary object, such as a completion handler, for which the
+        -:  285: * associated executor will be obtained.
+        -:  286: *
+        -:  287: * @returns A work guard constructed with the associated executor of the object
+        -:  288: * @c t, which is obtained as if by calling <tt>get_associated_executor(t)</tt>.
+        -:  289: */
+        -:  290:template <typename T>
+        -:  291:BOOST_ASIO_NODISCARD inline
+        -:  292:executor_work_guard<
+        -:  293:    typename constraint<
+        -:  294:      !is_executor<T>::value
+        -:  295:        && !execution::is_executor<T>::value
+        -:  296:        && !is_convertible<T&, execution_context&>::value,
+        -:  297:      associated_executor<T>
+        -:  298:    >::type::type>
+        -:  299:make_work_guard(const T& t)
+        -:  300:{
+        -:  301:  return executor_work_guard<typename associated_executor<T>::type>(
+        -:  302:      associated_executor<T>::get(t));
+        -:  303:}
+        -:  304:
+        -:  305:/// Create an @ref executor_work_guard object.
+        -:  306:/**
+        -:  307: * @param t An arbitrary object, such as a completion handler, for which the
+        -:  308: * associated executor will be obtained.
+        -:  309: *
+        -:  310: * @param ex An executor to be used as the candidate object when determining the
+        -:  311: * associated executor.
+        -:  312: *
+        -:  313: * @returns A work guard constructed with the associated executor of the object
+        -:  314: * @c t, which is obtained as if by calling <tt>get_associated_executor(t,
+        -:  315: * ex)</tt>.
+        -:  316: */
+        -:  317:template <typename T, typename Executor>
+        -:  318:BOOST_ASIO_NODISCARD inline
+        -:  319:executor_work_guard<typename associated_executor<T, Executor>::type>
+        -:  320:make_work_guard(const T& t, const Executor& ex,
+        -:  321:    typename constraint<
+        -:  322:      is_executor<Executor>::value || execution::is_executor<Executor>::value
+        -:  323:    >::type = 0)
+        -:  324:{
+        -:  325:  return executor_work_guard<typename associated_executor<T, Executor>::type>(
+        -:  326:      associated_executor<T, Executor>::get(t, ex));
+        -:  327:}
+        -:  328:
+        -:  329:/// Create an @ref executor_work_guard object.
+        -:  330:/**
+        -:  331: * @param t An arbitrary object, such as a completion handler, for which the
+        -:  332: * associated executor will be obtained.
+        -:  333: *
+        -:  334: * @param ctx An execution context, from which an executor is obtained to use as
+        -:  335: * the candidate object for determining the associated executor.
+        -:  336: *
+        -:  337: * @returns A work guard constructed with the associated executor of the object
+        -:  338: * @c t, which is obtained as if by calling <tt>get_associated_executor(t,
+        -:  339: * ctx.get_executor())</tt>.
+        -:  340: */
+        -:  341:template <typename T, typename ExecutionContext>
+        -:  342:BOOST_ASIO_NODISCARD inline executor_work_guard<typename associated_executor<T,
+        -:  343:  typename ExecutionContext::executor_type>::type>
+        -:  344:make_work_guard(const T& t, ExecutionContext& ctx,
+        -:  345:    typename constraint<
+        -:  346:      !is_executor<T>::value
+        -:  347:    >::type = 0,
+        -:  348:    typename constraint<
+        -:  349:      !execution::is_executor<T>::value
+        -:  350:    >::type = 0,
+        -:  351:    typename constraint<
+        -:  352:      !is_convertible<T&, execution_context&>::value
+        -:  353:    >::type = 0,
+        -:  354:    typename constraint<
+        -:  355:      is_convertible<ExecutionContext&, execution_context&>::value
+        -:  356:    >::type = 0)
+        -:  357:{
+        -:  358:  return executor_work_guard<typename associated_executor<T,
+        -:  359:    typename ExecutionContext::executor_type>::type>(
+        -:  360:      associated_executor<T, typename ExecutionContext::executor_type>::get(
+        -:  361:        t, ctx.get_executor()));
+        -:  362:}
+        -:  363:
+        -:  364:} // namespace asio
+        -:  365:} // namespace boost
+        -:  366:
+        -:  367:#include <boost/asio/detail/pop_options.hpp>
+        -:  368:
+        -:  369:#endif // BOOST_ASIO_EXECUTOR_WORK_GUARD_HPP

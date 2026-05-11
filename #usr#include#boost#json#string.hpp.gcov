@@ -1,0 +1,3244 @@
+        -:    0:Source:/usr/include/boost/json/string.hpp
+        -:    1://
+        -:    2:// Copyright (c) 2019 Vinnie Falco (vinnie.falco@gmail.com)
+        -:    3:// Copyright (c) 2020 Krystian Stasiowski (sdkrystian@gmail.com)
+        -:    4://
+        -:    5:// Distributed under the Boost Software License, Version 1.0. (See accompanying
+        -:    6:// file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+        -:    7://
+        -:    8:// Official repository: https://github.com/boostorg/json
+        -:    9://
+        -:   10:
+        -:   11:#ifndef BOOST_JSON_STRING_HPP
+        -:   12:#define BOOST_JSON_STRING_HPP
+        -:   13:
+        -:   14:#include <boost/json/detail/config.hpp>
+        -:   15:#include <boost/json/pilfer.hpp>
+        -:   16:#include <boost/json/storage_ptr.hpp>
+        -:   17:#include <boost/json/string_view.hpp>
+        -:   18:#include <boost/json/detail/digest.hpp>
+        -:   19:#include <boost/json/detail/except.hpp>
+        -:   20:#include <boost/json/detail/string_impl.hpp>
+        -:   21:#include <boost/json/detail/value.hpp>
+        -:   22:#include <algorithm>
+        -:   23:#include <cstring>
+        -:   24:#include <initializer_list>
+        -:   25:#include <iosfwd>
+        -:   26:#include <iterator>
+        -:   27:#include <limits>
+        -:   28:#include <new>
+        -:   29:#include <type_traits>
+        -:   30:#include <utility>
+        -:   31:
+        -:   32:namespace boost {
+        -:   33:namespace json {
+        -:   34:
+        -:   35:class value;
+        -:   36:
+        -:   37:/** The native type of string values.
+        -:   38:
+        -:   39:    Instances of string store and manipulate sequences
+        -:   40:    of `char` using the UTF-8 encoding. The elements of
+        -:   41:    a string are stored contiguously. A pointer to any
+        -:   42:    character in a string may be passed to functions
+        -:   43:    that expect a pointer to the first element of a
+        -:   44:    null-terminated `char` array. The type uses small
+        -:   45:    buffer optimisation to avoid allocations for small
+        -:   46:    strings.
+        -:   47:
+        -:   48:    String iterators are regular `char` pointers.
+        -:   49:
+        -:   50:    @note `string` member functions do not validate
+        -:   51:    any UTF-8 byte sequences passed to them.
+        -:   52:
+        -:   53:    @par Thread Safety
+        -:   54:
+        -:   55:    Non-const member functions may not be called
+        -:   56:    concurrently with any other member functions.
+        -:   57:
+        -:   58:    @par Satisfies
+        -:   59:        <a href="https://en.cppreference.com/w/cpp/named_req/ContiguousContainer"><em>ContiguousContainer</em></a>,
+        -:   60:        <a href="https://en.cppreference.com/w/cpp/named_req/ReversibleContainer"><em>ReversibleContainer</em></a>, and
+        -:   61:        <a href="https://en.cppreference.com/w/cpp/named_req/SequenceContainer"><em>SequenceContainer</em></a>.
+        -:   62:*/
+        -:   63:class string
+        -:   64:{
+        -:   65:    friend class value;
+        -:   66:#ifndef BOOST_JSON_DOCS
+        -:   67:    // VFALCO doc toolchain shouldn't show this but does
+        -:   68:    friend struct detail::access;
+        -:   69:#endif
+        -:   70:
+        -:   71:    using string_impl = detail::string_impl;
+        -:   72:
+        -:   73:    inline
+        -:   74:    string(
+        -:   75:        detail::key_t const&,
+        -:   76:        string_view s,
+        -:   77:        storage_ptr sp);
+        -:   78:
+        -:   79:    inline
+        -:   80:    string(
+        -:   81:        detail::key_t const&,
+        -:   82:        string_view s1,
+        -:   83:        string_view s2,
+        -:   84:        storage_ptr sp);
+        -:   85:
+        -:   86:public:
+        -:   87:    /** The type of _Allocator_ returned by @ref get_allocator
+        -:   88:
+        -:   89:        This type is a @ref polymorphic_allocator.
+        -:   90:    */
+        -:   91:#ifdef BOOST_JSON_DOCS
+        -:   92:    // VFALCO doc toolchain renders this incorrectly
+        -:   93:    using allocator_type = __see_below__;
+        -:   94:#else
+        -:   95:    using allocator_type = polymorphic_allocator<value>;
+        -:   96:#endif
+        -:   97:
+        -:   98:    /// The type of a character
+        -:   99:    using value_type        = char;
+        -:  100:
+        -:  101:    /// The type used to represent unsigned integers
+        -:  102:    using size_type         = std::size_t;
+        -:  103:
+        -:  104:    /// The type used to represent signed integers
+        -:  105:    using difference_type   = std::ptrdiff_t;
+        -:  106:
+        -:  107:    /// A pointer to an element
+        -:  108:    using pointer           = char*;
+        -:  109:
+        -:  110:    /// A const pointer to an element
+        -:  111:    using const_pointer     = char const*;
+        -:  112:
+        -:  113:    /// A reference to an element
+        -:  114:    using reference         = char&;
+        -:  115:
+        -:  116:    /// A const reference to an element
+        -:  117:    using const_reference   = const char&;
+        -:  118:
+        -:  119:    /// A random access iterator to an element
+        -:  120:    using iterator          = char*;
+        -:  121:
+        -:  122:    /// A random access const iterator to an element
+        -:  123:    using const_iterator    = char const*;
+        -:  124:
+        -:  125:    /// A reverse random access iterator to an element
+        -:  126:    using reverse_iterator =
+        -:  127:        std::reverse_iterator<iterator>;
+        -:  128:
+        -:  129:    /// A reverse random access const iterator to an element
+        -:  130:    using const_reverse_iterator =
+        -:  131:        std::reverse_iterator<const_iterator>;
+        -:  132:
+        -:  133:    /// A special index
+        -:  134:    static constexpr std::size_t npos =
+        -:  135:        string_view::npos;
+        -:  136:
+        -:  137:private:
+        -:  138:    template<class T>
+        -:  139:    using is_inputit = typename std::enable_if<
+        -:  140:        std::is_convertible<typename
+        -:  141:            std::iterator_traits<T>::value_type,
+        -:  142:            char>::value>::type;
+        -:  143:
+        -:  144:    storage_ptr sp_; // must come first
+        -:  145:    string_impl impl_;
+        -:  146:
+        -:  147:public:
+        -:  148:    /** Destructor.
+        -:  149:
+        -:  150:        Any dynamically allocated internal storage
+        -:  151:        is freed.
+        -:  152:
+        -:  153:        @par Complexity
+        -:  154:        Constant.
+        -:  155:
+        -:  156:        @par Exception Safety
+        -:  157:        No-throw guarantee.
+        -:  158:    */
+        -:  159:    ~string() noexcept
+        -:  160:    {
+        -:  161:        impl_.destroy(sp_);
+        -:  162:    }
+        -:  163:
+        -:  164:    //------------------------------------------------------
+        -:  165:    //
+        -:  166:    // Construction
+        -:  167:    //
+        -:  168:    //------------------------------------------------------
+        -:  169:
+        -:  170:    /** Default constructor.
+        -:  171:
+        -:  172:        The string will have a zero size and a non-zero,
+        -:  173:        unspecified capacity, using the [default memory resource].
+        -:  174:
+        -:  175:        @par Complexity
+        -:  176:
+        -:  177:        Constant.
+        -:  178:
+        -:  179:        [default memory resource]: json/allocators/storage_ptr.html#json.allocators.storage_ptr.default_memory_resource
+        -:  180:    */
+        -:  181:    string() = default;
+        -:  182:
+        -:  183:    /** Pilfer constructor.
+        -:  184:
+        -:  185:        The string is constructed by acquiring ownership
+        -:  186:        of the contents of `other` using pilfer semantics.
+        -:  187:        This is more efficient than move construction, when
+        -:  188:        it is known that the moved-from object will be
+        -:  189:        immediately destroyed afterwards.
+        -:  190:
+        -:  191:        @par Complexity
+        -:  192:        Constant.
+        -:  193:
+        -:  194:        @par Exception Safety
+        -:  195:        No-throw guarantee.
+        -:  196:
+        -:  197:        @param other The value to pilfer. After pilfer
+        -:  198:        construction, `other` is not in a usable state
+        -:  199:        and may only be destroyed.
+        -:  200:
+        -:  201:        @see @ref pilfer,
+        -:  202:            <a href="http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2016/p0308r0.html">
+        -:  203:                Valueless Variants Considered Harmful</a>
+        -:  204:    */
+        -:  205:    string(pilfered<string> other) noexcept
+        -:  206:        : sp_(std::move(other.get().sp_))
+        -:  207:        , impl_(other.get().impl_)
+        -:  208:    {
+        -:  209:        ::new(&other.get().impl_) string_impl();
+        -:  210:    }
+        -:  211:
+        -:  212:    /** Constructor.
+        -:  213:
+        -:  214:        The string will have zero size and a non-zero,
+        -:  215:        unspecified capacity, obtained from the specified
+        -:  216:        memory resource.
+        -:  217:
+        -:  218:        @par Complexity
+        -:  219:
+        -:  220:        Constant.
+        -:  221:
+        -:  222:        @param sp A pointer to the @ref memory_resource
+        -:  223:        to use. The container will acquire shared
+        -:  224:        ownership of the memory resource.
+        -:  225:    */
+        -:  226:    explicit
+        -:  227:    string(storage_ptr sp)
+        -:  228:        : sp_(std::move(sp))
+        -:  229:    {
+        -:  230:    }
+        -:  231:
+        -:  232:    /** Constructor.
+        -:  233:
+        -:  234:        Construct the contents with `count` copies of
+        -:  235:        character `ch`.
+        -:  236:
+        -:  237:        @par Complexity
+        -:  238:
+        -:  239:        Linear in `count`.
+        -:  240:
+        -:  241:        @par Exception Safety
+        -:  242:
+        -:  243:        Strong guarantee.
+        -:  244:        Calls to `memory_resource::allocate` may throw.
+        -:  245:
+        -:  246:        @param count The size of the resulting string.
+        -:  247:
+        -:  248:        @param ch The value to initialize characters
+        -:  249:        of the string with.
+        -:  250:
+        -:  251:        @param sp An optional pointer to the @ref memory_resource
+        -:  252:        to use. The container will acquire shared
+        -:  253:        ownership of the memory resource.
+        -:  254:        The default argument for this parameter is `{}`.
+        -:  255:
+        -:  256:        @throw system_error `count > max_size()`.
+        -:  257:    */
+        -:  258:    BOOST_JSON_DECL
+        -:  259:    explicit
+        -:  260:    string(
+        -:  261:        std::size_t count,
+        -:  262:        char ch,
+        -:  263:        storage_ptr sp = {});
+        -:  264:
+        -:  265:    /** Constructor.
+        -:  266:
+        -:  267:        Construct the contents with those of the null
+        -:  268:        terminated string pointed to by `s`. The length
+        -:  269:        of the string is determined by the first null
+        -:  270:        character.
+        -:  271:
+        -:  272:        @par Complexity
+        -:  273:
+        -:  274:        Linear in `strlen(s)`.
+        -:  275:
+        -:  276:        @par Exception Safety
+        -:  277:
+        -:  278:        Strong guarantee.
+        -:  279:        Calls to `memory_resource::allocate` may throw.
+        -:  280:
+        -:  281:        @param s A pointer to a character string used to
+        -:  282:        copy from.
+        -:  283:
+        -:  284:        @param sp An optional pointer to the @ref memory_resource
+        -:  285:        to use. The container will acquire shared
+        -:  286:        ownership of the memory resource.
+        -:  287:        The default argument for this parameter is `{}`.
+        -:  288:
+        -:  289:        @throw system_error `strlen(s) > max_size()`.
+        -:  290:    */
+        -:  291:    BOOST_JSON_DECL
+        -:  292:    string(
+        -:  293:        char const* s,
+        -:  294:        storage_ptr sp = {});
+        -:  295:
+        -:  296:    /** Constructor.
+        -:  297:
+        -:  298:        Construct the contents with copies of the
+        -:  299:        characters in the range `{s, s+count)`.
+        -:  300:        This range can contain null characters.
+        -:  301:
+        -:  302:        @par Complexity
+        -:  303:
+        -:  304:        Linear in `count`.
+        -:  305:
+        -:  306:        @par Exception Safety
+        -:  307:
+        -:  308:        Strong guarantee.
+        -:  309:        Calls to `memory_resource::allocate` may throw.
+        -:  310:
+        -:  311:        @param count The number of characters to copy.
+        -:  312:
+        -:  313:        @param s A pointer to a character string used to
+        -:  314:        copy from.
+        -:  315:
+        -:  316:        @param sp An optional pointer to the @ref memory_resource
+        -:  317:        to use. The container will acquire shared
+        -:  318:        ownership of the memory resource.
+        -:  319:        The default argument for this parameter is `{}`.
+        -:  320:
+        -:  321:        @throw system_error `count > max_size()`.
+        -:  322:    */
+        -:  323:    BOOST_JSON_DECL
+        -:  324:    explicit
+        -:  325:    string(
+        -:  326:        char const* s,
+        -:  327:        std::size_t count,
+        -:  328:        storage_ptr sp = {});
+        -:  329:
+        -:  330:    /** Constructor.
+        -:  331:
+        -:  332:        Construct the contents with copies of characters
+        -:  333:        in the range `{first, last)`.
+        -:  334:
+        -:  335:        @par Complexity
+        -:  336:
+        -:  337:        Linear in `std::distance(first, last)`.
+        -:  338:
+        -:  339:        @par Exception Safety
+        -:  340:
+        -:  341:        Strong guarantee.
+        -:  342:        Calls to `memory_resource::allocate` may throw.
+        -:  343:
+        -:  344:        @tparam InputIt The type of the iterators.
+        -:  345:
+        -:  346:        @par Constraints
+        -:  347:
+        -:  348:        `InputIt` satisfies __InputIterator__.
+        -:  349:
+        -:  350:        @param first An input iterator pointing to the
+        -:  351:        first character to insert, or pointing to the
+        -:  352:        end of the range.
+        -:  353:
+        -:  354:        @param last An input iterator pointing to the end
+        -:  355:        of the range.
+        -:  356:
+        -:  357:        @param sp An optional pointer to the @ref memory_resource
+        -:  358:        to use. The container will acquire shared
+        -:  359:        ownership of the memory resource.
+        -:  360:        The default argument for this parameter is `{}`.
+        -:  361:
+        -:  362:        @throw system_error `std::distance(first, last) > max_size()`.
+        -:  363:    */
+        -:  364:    template<class InputIt
+        -:  365:    #ifndef BOOST_JSON_DOCS
+        -:  366:        ,class = is_inputit<InputIt>
+        -:  367:    #endif
+        -:  368:    >
+        -:  369:    explicit
+        -:  370:    string(
+        -:  371:        InputIt first,
+        -:  372:        InputIt last,
+        -:  373:        storage_ptr sp = {});
+        -:  374:
+        -:  375:    /** Copy constructor.
+        -:  376:
+        -:  377:        Construct the contents with a copy of `other`.
+        -:  378:
+        -:  379:        @par Complexity
+        -:  380:
+        -:  381:        Linear in `other.size()`.
+        -:  382:
+        -:  383:        @par Exception Safety
+        -:  384:
+        -:  385:        Strong guarantee.
+        -:  386:        Calls to `memory_resource::allocate` may throw.
+        -:  387:
+        -:  388:        @param other The string to use as a source
+        -:  389:        to copy from.
+        -:  390:    */
+        -:  391:    BOOST_JSON_DECL
+        -:  392:    string(string const& other);
+        -:  393:
+        -:  394:    /** Constructor.
+        -:  395:
+        -:  396:        Construct the contents with a copy of `other`.
+        -:  397:
+        -:  398:        @par Complexity
+        -:  399:
+        -:  400:        Linear in `other.size()`.
+        -:  401:
+        -:  402:        @par Exception Safety
+        -:  403:
+        -:  404:        Strong guarantee.
+        -:  405:        Calls to `memory_resource::allocate` may throw.
+        -:  406:
+        -:  407:        @param other The string to use as a source
+        -:  408:        to copy from.
+        -:  409:
+        -:  410:        @param sp An optional pointer to the @ref memory_resource
+        -:  411:        to use. The container will acquire shared
+        -:  412:        ownership of the memory resource.
+        -:  413:        The default argument for this parameter is `{}`.
+        -:  414:    */
+        -:  415:    BOOST_JSON_DECL
+        -:  416:    explicit
+        -:  417:    string(
+        -:  418:        string const& other,
+        -:  419:        storage_ptr sp);
+        -:  420:
+        -:  421:    /** Move constructor.
+        -:  422:
+        -:  423:        Constructs the string with the contents of `other`
+        -:  424:        using move semantics. Ownership of the underlying
+        -:  425:        memory is transferred.
+        -:  426:        The container acquires shared ownership of the
+        -:  427:        @ref memory_resource used by `other`. After construction,
+        -:  428:        the moved-from string behaves as if newly
+        -:  429:        constructed with its current memory resource.
+        -:  430:
+        -:  431:        @par Complexity
+        -:  432:
+        -:  433:        Constant.
+        -:  434:
+        -:  435:        @param other The string to move
+        -:  436:    */
+        -:  437:    string(string&& other) noexcept
+        -:  438:        : sp_(other.sp_)
+        -:  439:        , impl_(other.impl_)
+        -:  440:    {
+        -:  441:        ::new(&other.impl_) string_impl();
+        -:  442:    }
+        -:  443:
+        -:  444:    /** Constructor.
+        -:  445:
+        -:  446:        Construct the contents with those of `other`
+        -:  447:        using move semantics.
+        -:  448:
+        -:  449:        @li If `*other.storage() == *sp`,
+        -:  450:        ownership of the underlying memory is transferred
+        -:  451:        in constant time, with no possibility
+        -:  452:        of exceptions. After construction, the moved-from
+        -:  453:        string behaves as if newly constructed with
+        -:  454:        its current @ref memory_resource. Otherwise,
+        -:  455:
+        -:  456:        @li If `*other.storage() != *sp`,
+        -:  457:        a copy of the characters in `other` is made. In
+        -:  458:        this case, the moved-from string is not changed.
+        -:  459:
+        -:  460:        @par Complexity
+        -:  461:
+        -:  462:        Constant or linear in `other.size()`.
+        -:  463:
+        -:  464:        @par Exception Safety
+        -:  465:
+        -:  466:        Strong guarantee.
+        -:  467:        Calls to `memory_resource::allocate` may throw.
+        -:  468:
+        -:  469:        @param other The string to assign from.
+        -:  470:
+        -:  471:        @param sp An optional pointer to the @ref memory_resource
+        -:  472:        to use. The container will acquire shared
+        -:  473:        ownership of the memory resource.
+        -:  474:        The default argument for this parameter is `{}`.
+        -:  475:    */
+        -:  476:    BOOST_JSON_DECL
+        -:  477:    explicit
+        -:  478:    string(
+        -:  479:        string&& other,
+        -:  480:        storage_ptr sp);
+        -:  481:
+        -:  482:    /** Constructor.
+        -:  483:
+        -:  484:        Construct the contents with those of a
+        -:  485:        string view. This view can contain
+        -:  486:        null characters.
+        -:  487:
+        -:  488:        @par Complexity
+        -:  489:
+        -:  490:        Linear in `s.size()`.
+        -:  491:
+        -:  492:        @par Exception Safety
+        -:  493:
+        -:  494:        Strong guarantee.
+        -:  495:        Calls to `memory_resource::allocate` may throw.
+        -:  496:
+        -:  497:        @param s The string view to copy from.
+        -:  498:
+        -:  499:        @param sp An optional pointer to the @ref memory_resource
+        -:  500:        to use. The container will acquire shared
+        -:  501:        ownership of the memory resource.
+        -:  502:        The default argument for this parameter is `{}`.
+        -:  503:
+        -:  504:        @throw system_error `s.size() > max_size()`.
+        -:  505:    */
+        -:  506:    BOOST_JSON_DECL
+        -:  507:    string(
+        -:  508:        string_view s,
+        -:  509:        storage_ptr sp = {});
+        -:  510:
+        -:  511:    //------------------------------------------------------
+        -:  512:    //
+        -:  513:    // Assignment
+        -:  514:    //
+        -:  515:    //------------------------------------------------------
+        -:  516:
+        -:  517:    /** Copy assignment.
+        -:  518:
+        -:  519:        Replace the contents with a copy of `other`.
+        -:  520:
+        -:  521:        @par Complexity
+        -:  522:
+        -:  523:        Linear in `other.size()`.
+        -:  524:
+        -:  525:        @par Exception Safety
+        -:  526:
+        -:  527:        Strong guarantee.
+        -:  528:        Calls to `memory_resource::allocate` may throw.
+        -:  529:
+        -:  530:        @return `*this`
+        -:  531:
+        -:  532:        @param other The string to use as a source
+        -:  533:        to copy from.
+        -:  534:    */
+        -:  535:    BOOST_JSON_DECL
+        -:  536:    string&
+        -:  537:    operator=(string const& other);
+        -:  538:
+        -:  539:    /** Move assignment.
+        -:  540:
+        -:  541:        Replace the contents with those of `other`
+        -:  542:        using move semantics.
+        -:  543:
+        -:  544:        @li If `&other == this`, do nothing. Otherwise,
+        -:  545:
+        -:  546:        @li If `*other.storage() == *this->storage()`,
+        -:  547:        ownership of the underlying memory is transferred
+        -:  548:        in constant time, with no possibility
+        -:  549:        of exceptions. After construction, the moved-from
+        -:  550:        string behaves as if newly constructed with its
+        -:  551:        current @ref memory_resource. Otherwise,
+        -:  552:
+        -:  553:        @li a copy of the characters in `other` is made. In
+        -:  554:        this case, the moved-from container is not changed.
+        -:  555:
+        -:  556:        @par Complexity
+        -:  557:
+        -:  558:        Constant or linear in `other.size()`.
+        -:  559:
+        -:  560:        @par Exception Safety
+        -:  561:
+        -:  562:        Strong guarantee.
+        -:  563:        Calls to `memory_resource::allocate` may throw.
+        -:  564:
+        -:  565:        @return `*this`
+        -:  566:
+        -:  567:        @param other The string to use as a source
+        -:  568:        to move from.
+        -:  569:    */
+        -:  570:    BOOST_JSON_DECL
+        -:  571:    string&
+        -:  572:    operator=(string&& other);
+        -:  573:
+        -:  574:    /** Assign a value to the string.
+        -:  575:
+        -:  576:        Replaces the contents with those of the null
+        -:  577:        terminated string pointed to by `s`. The length
+        -:  578:        of the string is determined by the first null
+        -:  579:        character.
+        -:  580:
+        -:  581:        @par Complexity
+        -:  582:
+        -:  583:        Linear in `std::strlen(s)`.
+        -:  584:
+        -:  585:        @par Exception Safety
+        -:  586:
+        -:  587:        Strong guarantee.
+        -:  588:        Calls to `memory_resource::allocate` may throw.
+        -:  589:
+        -:  590:        @return `*this`
+        -:  591:
+        -:  592:        @param s The null-terminated character string.
+        -:  593:
+        -:  594:        @throw system_error `std::strlen(s) > max_size()`.
+        -:  595:    */
+        -:  596:    BOOST_JSON_DECL
+        -:  597:    string&
+        -:  598:    operator=(char const* s);
+        -:  599:
+        -:  600:    /** Assign a value to the string.
+        -:  601:
+        -:  602:        Replaces the contents with those of a
+        -:  603:        string view. This view can contain
+        -:  604:        null characters.
+        -:  605:
+        -:  606:        @par Complexity
+        -:  607:
+        -:  608:        Linear in `s.size()`.
+        -:  609:
+        -:  610:        @par Exception Safety
+        -:  611:
+        -:  612:        Strong guarantee.
+        -:  613:        Calls to `memory_resource::allocate` may throw.
+        -:  614:
+        -:  615:        @return `*this`
+        -:  616:
+        -:  617:        @param s The string view to copy from.
+        -:  618:
+        -:  619:        @throw system_error `s.size() > max_size()`.
+        -:  620:    */
+        -:  621:    BOOST_JSON_DECL
+        -:  622:    string&
+        -:  623:    operator=(string_view s);
+        -:  624:
+        -:  625:    //------------------------------------------------------
+        -:  626:
+        -:  627:    /** Assign characters to a string.
+        -:  628:
+        -:  629:        Replace the contents with `count` copies of
+        -:  630:        character `ch`.
+        -:  631:
+        -:  632:        @par Complexity
+        -:  633:
+        -:  634:        Linear in `count`.
+        -:  635:
+        -:  636:        @par Exception Safety
+        -:  637:
+        -:  638:        Strong guarantee.
+        -:  639:        Calls to `memory_resource::allocate` may throw.
+        -:  640:
+        -:  641:        @return `*this`
+        -:  642:
+        -:  643:        @param count The size of the resulting string.
+        -:  644:
+        -:  645:        @param ch The value to initialize characters
+        -:  646:        of the string with.
+        -:  647:
+        -:  648:        @throw system_error `count > max_size()`.
+        -:  649:    */
+        -:  650:    BOOST_JSON_DECL
+        -:  651:    string&
+        -:  652:    assign(
+        -:  653:        std::size_t count,
+        -:  654:        char ch);
+        -:  655:
+        -:  656:    /** Assign characters to a string.
+        -:  657:
+        -:  658:        Replace the contents with a copy of `other`.
+        -:  659:
+        -:  660:        @par Complexity
+        -:  661:
+        -:  662:        Linear in `other.size()`.
+        -:  663:
+        -:  664:        @par Exception Safety
+        -:  665:
+        -:  666:        Strong guarantee.
+        -:  667:        Calls to `memory_resource::allocate` may throw.
+        -:  668:
+        -:  669:        @return `*this`
+        -:  670:
+        -:  671:        @param other The string to use as a source
+        -:  672:        to copy from.
+        -:  673:    */
+        -:  674:    BOOST_JSON_DECL
+        -:  675:    string&
+        -:  676:    assign(
+        -:  677:        string const& other);
+        -:  678:
+        -:  679:    /** Assign characters to a string.
+        -:  680:
+        -:  681:        Replace the contents with those of `other`
+        -:  682:        using move semantics.
+        -:  683:
+        -:  684:        @li If `&other == this`, do nothing. Otherwise,
+        -:  685:
+        -:  686:        @li If `*other.storage() == *this->storage()`,
+        -:  687:        ownership of the underlying memory is transferred
+        -:  688:        in constant time, with no possibility of
+        -:  689:        exceptions. After construction, the moved-from
+        -:  690:        string behaves as if newly constructed with
+        -:  691:        its current  @ref memory_resource, otherwise
+        -:  692:
+        -:  693:        @li If `*other.storage() != *this->storage()`,
+        -:  694:        a copy of the characters in `other` is made.
+        -:  695:        In this case, the moved-from container
+        -:  696:        is not changed.
+        -:  697:
+        -:  698:        @par Complexity
+        -:  699:
+        -:  700:        Constant or linear in `other.size()`.
+        -:  701:
+        -:  702:        @par Exception Safety
+        -:  703:
+        -:  704:        Strong guarantee.
+        -:  705:        Calls to `memory_resource::allocate` may throw.
+        -:  706:
+        -:  707:        @return `*this`
+        -:  708:
+        -:  709:        @param other The string to assign from.
+        -:  710:    */
+        -:  711:    BOOST_JSON_DECL
+        -:  712:    string&
+        -:  713:    assign(string&& other);
+        -:  714:
+        -:  715:    /** Assign characters to a string.
+        -:  716:
+        -:  717:        Replaces the contents with copies of the
+        -:  718:        characters in the range `{s, s+count)`. This
+        -:  719:        range can contain null characters.
+        -:  720:
+        -:  721:        @par Complexity
+        -:  722:
+        -:  723:        Linear in `count`.
+        -:  724:
+        -:  725:        @par Exception Safety
+        -:  726:
+        -:  727:        Strong guarantee.
+        -:  728:        Calls to `memory_resource::allocate` may throw.
+        -:  729:
+        -:  730:        @return `*this`
+        -:  731:
+        -:  732:        @param count The number of characters to copy.
+        -:  733:
+        -:  734:        @param s A pointer to a character string used to
+        -:  735:        copy from.
+        -:  736:
+        -:  737:        @throw system_error `count > max_size()`.
+        -:  738:    */
+        -:  739:    BOOST_JSON_DECL
+        -:  740:    string&
+        -:  741:    assign(
+        -:  742:        char const* s,
+        -:  743:        std::size_t count);
+        -:  744:
+        -:  745:    /** Assign characters to a string.
+        -:  746:
+        -:  747:        Replaces the contents with those of the null
+        -:  748:        terminated string pointed to by `s`. The length
+        -:  749:        of the string is determined by the first null
+        -:  750:        character.
+        -:  751:
+        -:  752:        @par Complexity
+        -:  753:
+        -:  754:        Linear in `strlen(s)`.
+        -:  755:
+        -:  756:        @par Exception Safety
+        -:  757:
+        -:  758:        Strong guarantee.
+        -:  759:
+        -:  760:        @note
+        -:  761:
+        -:  762:        Calls to `memory_resource::allocate` may throw.
+        -:  763:
+        -:  764:        @return `*this`
+        -:  765:
+        -:  766:        @param s A pointer to a character string used to
+        -:  767:        copy from.
+        -:  768:
+        -:  769:        @throw system_error `strlen(s) > max_size()`.
+        -:  770:    */
+        -:  771:    BOOST_JSON_DECL
+        -:  772:    string&
+        -:  773:    assign(
+        -:  774:        char const* s);
+        -:  775:
+        -:  776:    /** Assign characters to a string.
+        -:  777:
+        -:  778:        Replaces the contents with copies of characters
+        -:  779:        in the range `{first, last)`.
+        -:  780:
+        -:  781:        @par Complexity
+        -:  782:
+        -:  783:        Linear in `std::distance(first, last)`.
+        -:  784:
+        -:  785:        @par Exception Safety
+        -:  786:
+        -:  787:        Strong guarantee.
+        -:  788:        Calls to `memory_resource::allocate` may throw.
+        -:  789:
+        -:  790:        @tparam InputIt The type of the iterators.
+        -:  791:
+        -:  792:        @par Constraints
+        -:  793:
+        -:  794:        `InputIt` satisfies __InputIterator__.
+        -:  795:
+        -:  796:        @return `*this`
+        -:  797:
+        -:  798:        @param first An input iterator pointing to the
+        -:  799:        first character to insert, or pointing to the
+        -:  800:        end of the range.
+        -:  801:
+        -:  802:        @param last An input iterator pointing to the end
+        -:  803:        of the range.
+        -:  804:
+        -:  805:        @throw system_error `std::distance(first, last) > max_size()`.
+        -:  806:    */
+        -:  807:    template<class InputIt
+        -:  808:    #ifndef BOOST_JSON_DOCS
+        -:  809:        ,class = is_inputit<InputIt>
+        -:  810:    #endif
+        -:  811:    >
+        -:  812:    string&
+        -:  813:    assign(
+        -:  814:        InputIt first,
+        -:  815:        InputIt last);
+        -:  816:
+        -:  817:    /** Assign characters to a string.
+        -:  818:
+        -:  819:        Replaces the contents with those of a
+        -:  820:        string view. This view can contain
+        -:  821:        null characters.
+        -:  822:
+        -:  823:        @par Complexity
+        -:  824:
+        -:  825:        Linear in `s.size()`.
+        -:  826:
+        -:  827:        @par Exception Safety
+        -:  828:
+        -:  829:        Strong guarantee.
+        -:  830:        Calls to `memory_resource::allocate` may throw.
+        -:  831:
+        -:  832:        @return `*this`
+        -:  833:
+        -:  834:        @param s The string view to copy from.
+        -:  835:
+        -:  836:        @throw system_error `s.size() > max_size()`.
+        -:  837:    */
+        -:  838:    string&
+        -:  839:    assign(string_view s)
+        -:  840:    {
+        -:  841:        return assign(s.data(), s.size());
+        -:  842:    }
+        -:  843:
+        -:  844:    //------------------------------------------------------
+        -:  845:
+        -:  846:    /** Return the associated @ref memory_resource
+        -:  847:
+        -:  848:        This returns the @ref memory_resource used by
+        -:  849:        the container.
+        -:  850:
+        -:  851:        @par Complexity
+        -:  852:
+        -:  853:        Constant.
+        -:  854:
+        -:  855:        @par Exception Safety
+        -:  856:
+        -:  857:        No-throw guarantee.
+        -:  858:    */
+        -:  859:    storage_ptr const&
+        -:  860:    storage() const noexcept
+        -:  861:    {
+        -:  862:        return sp_;
+        -:  863:    }
+        -:  864:
+        -:  865:    /** Return the associated @ref memory_resource
+        -:  866:
+        -:  867:        This function returns an instance of
+        -:  868:        @ref polymorphic_allocator constructed from the
+        -:  869:        associated @ref memory_resource.
+        -:  870:
+        -:  871:        @par Complexity
+        -:  872:
+        -:  873:        Constant.
+        -:  874:
+        -:  875:        @par Exception Safety
+        -:  876:
+        -:  877:        No-throw guarantee.
+        -:  878:    */
+        -:  879:    allocator_type
+        -:  880:    get_allocator() const noexcept
+        -:  881:    {
+        -:  882:        return sp_.get();
+        -:  883:    }
+        -:  884:
+        -:  885:    //------------------------------------------------------
+        -:  886:    //
+        -:  887:    // Element Access
+        -:  888:    //
+        -:  889:    //------------------------------------------------------
+        -:  890:
+        -:  891:    /** Return a character with bounds checking.
+        -:  892:
+        -:  893:        Returns a reference to the character specified at
+        -:  894:        location `pos`.
+        -:  895:
+        -:  896:        @par Complexity
+        -:  897:
+        -:  898:        Constant.
+        -:  899:
+        -:  900:        @par Exception Safety
+        -:  901:
+        -:  902:        Strong guarantee.
+        -:  903:
+        -:  904:        @param pos A zero-based index to access.
+        -:  905:
+        -:  906:        @throw system_error `pos >= size()`
+        -:  907:    */
+        -:  908:    /** @{ */
+        -:  909:    char&
+        -:  910:    at(std::size_t pos)
+        -:  911:    {
+        -:  912:
+        -:  913:        auto const& self = *this;
+        -:  914:        return const_cast< char& >( self.at(pos) );
+        -:  915:    }
+        -:  916:
+        -:  917:    char const&
+        -:  918:    at(std::size_t pos) const
+        -:  919:    {
+        -:  920:        if(pos >= size())
+        -:  921:        {
+        -:  922:            BOOST_STATIC_CONSTEXPR source_location loc = BOOST_CURRENT_LOCATION;
+        -:  923:            detail::throw_system_error( error::out_of_range, &loc );
+        -:  924:        }
+        -:  925:        return impl_.data()[pos];
+        -:  926:    }
+        -:  927:    /** @} */
+        -:  928:
+        -:  929:    /** Return a character without bounds checking.
+        -:  930:
+        -:  931:        Returns a reference to the character specified at
+        -:  932:        location `pos`.
+        -:  933:
+        -:  934:        @par Complexity
+        -:  935:
+        -:  936:        Constant.
+        -:  937:
+        -:  938:        @par Precondition
+        -:  939:
+        -:  940:        @code
+        -:  941:        pos >= size
+        -:  942:        @endcode
+        -:  943:
+        -:  944:        @param pos A zero-based index to access.
+        -:  945:    */
+        -:  946:    char&
+        -:  947:    operator[](std::size_t pos)
+        -:  948:    {
+        -:  949:        return impl_.data()[pos];
+        -:  950:    }
+        -:  951:
+        -:  952:   /**  Return a character without bounds checking.
+        -:  953:
+        -:  954:        Returns a reference to the character specified at
+        -:  955:        location `pos`.
+        -:  956:
+        -:  957:        @par Complexity
+        -:  958:
+        -:  959:        Constant.
+        -:  960:
+        -:  961:        @par Precondition
+        -:  962:
+        -:  963:        @code
+        -:  964:        pos >= size
+        -:  965:        @endcode
+        -:  966:
+        -:  967:        @param pos A zero-based index to access.
+        -:  968:    */
+        -:  969:    const char&
+        -:  970:    operator[](std::size_t pos) const
+        -:  971:    {
+        -:  972:        return impl_.data()[pos];
+        -:  973:    }
+        -:  974:
+        -:  975:    /** Return the first character.
+        -:  976:
+        -:  977:        Returns a reference to the first character.
+        -:  978:
+        -:  979:        @par Complexity
+        -:  980:
+        -:  981:        Constant.
+        -:  982:
+        -:  983:        @par Precondition
+        -:  984:
+        -:  985:        @code
+        -:  986:        not empty()
+        -:  987:        @endcode
+        -:  988:    */
+        -:  989:    char&
+        -:  990:    front()
+        -:  991:    {
+        -:  992:        return impl_.data()[0];
+        -:  993:    }
+        -:  994:
+        -:  995:    /** Return the first character.
+        -:  996:
+        -:  997:        Returns a reference to the first character.
+        -:  998:
+        -:  999:        @par Complexity
+        -: 1000:
+        -: 1001:        Constant.
+        -: 1002:
+        -: 1003:        @par Precondition
+        -: 1004:
+        -: 1005:        @code
+        -: 1006:        not empty()
+        -: 1007:        @endcode
+        -: 1008:    */
+        -: 1009:    char const&
+        -: 1010:    front() const
+        -: 1011:    {
+        -: 1012:        return impl_.data()[0];
+        -: 1013:    }
+        -: 1014:
+        -: 1015:    /** Return the last character.
+        -: 1016:
+        -: 1017:        Returns a reference to the last character.
+        -: 1018:
+        -: 1019:        @par Complexity
+        -: 1020:
+        -: 1021:        Constant.
+        -: 1022:
+        -: 1023:        @par Precondition
+        -: 1024:
+        -: 1025:        @code
+        -: 1026:        not empty()
+        -: 1027:        @endcode
+        -: 1028:    */
+        -: 1029:    char&
+        -: 1030:    back()
+        -: 1031:    {
+        -: 1032:        return impl_.data()[impl_.size() - 1];
+        -: 1033:    }
+        -: 1034:
+        -: 1035:    /** Return the last character.
+        -: 1036:
+        -: 1037:        Returns a reference to the last character.
+        -: 1038:
+        -: 1039:        @par Complexity
+        -: 1040:
+        -: 1041:        Constant.
+        -: 1042:
+        -: 1043:        @par Precondition
+        -: 1044:
+        -: 1045:        @code
+        -: 1046:        not empty()
+        -: 1047:        @endcode
+        -: 1048:    */
+        -: 1049:    char const&
+        -: 1050:    back() const
+        -: 1051:    {
+        -: 1052:        return impl_.data()[impl_.size() - 1];
+        -: 1053:    }
+        -: 1054:
+        -: 1055:    /** Return the underlying character array directly.
+        -: 1056:
+        -: 1057:        Returns a pointer to the underlying array
+        -: 1058:        serving as storage. The value returned is such that
+        -: 1059:        the range `{data(), data()+size())` is always a
+        -: 1060:        valid range, even if the container is empty.
+        -: 1061:
+        -: 1062:        @par Complexity
+        -: 1063:
+        -: 1064:        Constant.
+        -: 1065:
+        -: 1066:        @note The value returned from
+        -: 1067:        this function is never equal to `nullptr`.
+        -: 1068:    */
+        -: 1069:    char*
+        -: 1070:    data() noexcept
+        -: 1071:    {
+        -: 1072:        return impl_.data();
+        -: 1073:    }
+        -: 1074:
+        -: 1075:    /** Return the underlying character array directly.
+        -: 1076:
+        -: 1077:        Returns a pointer to the underlying array
+        -: 1078:        serving as storage.
+        -: 1079:
+        -: 1080:        @note The value returned is such that
+        -: 1081:        the range `{data(), data() + size())` is always a
+        -: 1082:        valid range, even if the container is empty.
+        -: 1083:        The value returned from
+        -: 1084:        this function is never equal to `nullptr`.
+        -: 1085:
+        -: 1086:        @par Complexity
+        -: 1087:
+        -: 1088:        Constant.
+        -: 1089:    */
+        -: 1090:    char const*
+      52*: 1091:    data() const noexcept
+        -: 1092:    {
+      52*: 1093:        return impl_.data();
+        -: 1094:    }
+------------------
+_ZNK5boost4json6string4dataEv:
+function _ZNK5boost4json6string4dataEv called 0 returned 0% blocks executed 0%
+    #####: 1091:    data() const noexcept
+        -: 1092:    {
+    #####: 1093:        return impl_.data();
+call    0 never executed
+        -: 1094:    }
+------------------
+_ZNK5boost4json6string4dataEv:
+function _ZNK5boost4json6string4dataEv called 4 returned 100% blocks executed 100%
+        4: 1091:    data() const noexcept
+        -: 1092:    {
+        4: 1093:        return impl_.data();
+call    0 returned 100%
+        -: 1094:    }
+------------------
+_ZNK5boost4json6string4dataEv:
+function _ZNK5boost4json6string4dataEv called 1 returned 100% blocks executed 100%
+        1: 1091:    data() const noexcept
+        -: 1092:    {
+        1: 1093:        return impl_.data();
+call    0 returned 100%
+        -: 1094:    }
+------------------
+_ZNK5boost4json6string4dataEv:
+function _ZNK5boost4json6string4dataEv called 2 returned 100% blocks executed 100%
+        2: 1091:    data() const noexcept
+        -: 1092:    {
+        2: 1093:        return impl_.data();
+call    0 returned 100%
+        -: 1094:    }
+------------------
+_ZNK5boost4json6string4dataEv:
+function _ZNK5boost4json6string4dataEv called 44 returned 100% blocks executed 100%
+       44: 1091:    data() const noexcept
+        -: 1092:    {
+       44: 1093:        return impl_.data();
+call    0 returned 100%
+        -: 1094:    }
+------------------
+_ZNK5boost4json6string4dataEv:
+function _ZNK5boost4json6string4dataEv called 1 returned 100% blocks executed 100%
+        1: 1091:    data() const noexcept
+        -: 1092:    {
+        1: 1093:        return impl_.data();
+call    0 returned 100%
+        -: 1094:    }
+------------------
+_ZNK5boost4json6string4dataEv:
+function _ZNK5boost4json6string4dataEv called 0 returned 0% blocks executed 0%
+    #####: 1091:    data() const noexcept
+        -: 1092:    {
+    #####: 1093:        return impl_.data();
+call    0 never executed
+        -: 1094:    }
+------------------
+_ZNK5boost4json6string4dataEv:
+function _ZNK5boost4json6string4dataEv called 0 returned 0% blocks executed 0%
+    #####: 1091:    data() const noexcept
+        -: 1092:    {
+    #####: 1093:        return impl_.data();
+call    0 never executed
+        -: 1094:    }
+------------------
+        -: 1095:
+        -: 1096:    /** Return the underlying character array directly.
+        -: 1097:
+        -: 1098:        Returns a pointer to the underlying array
+        -: 1099:        serving as storage. The value returned is such that
+        -: 1100:        the range `{c_str(), c_str() + size()}` is always a
+        -: 1101:        valid range, even if the container is empty.
+        -: 1102:
+        -: 1103:        @par Complexity
+        -: 1104:
+        -: 1105:        Constant.
+        -: 1106:
+        -: 1107:        @note The value returned from
+        -: 1108:        this function is never equal to `nullptr`.
+        -: 1109:    */
+        -: 1110:    char const*
+        -: 1111:    c_str() const noexcept
+        -: 1112:    {
+        -: 1113:        return impl_.data();
+        -: 1114:    }
+        -: 1115:
+        -: 1116:    /** Convert to a `string_view` referring to the string.
+        -: 1117:
+        -: 1118:        Returns a string view to the
+        -: 1119:        underlying character string. The size of the view
+        -: 1120:        does not include the null terminator.
+        -: 1121:
+        -: 1122:        @par Complexity
+        -: 1123:
+        -: 1124:        Constant.
+        -: 1125:    */
+        -: 1126:    operator string_view() const noexcept
+        -: 1127:    {
+        -: 1128:        return {data(), size()};
+        -: 1129:    }
+        -: 1130:
+        -: 1131:#if ! defined(BOOST_NO_CXX17_HDR_STRING_VIEW)
+        -: 1132:    /** Convert to a `std::string_view` referring to the string.
+        -: 1133:
+        -: 1134:        Returns a string view to the underlying character string. The size of
+        -: 1135:        the view does not include the null terminator.
+        -: 1136:
+        -: 1137:        This overload is not defined when `BOOST_NO_CXX17_HDR_STRING_VIEW`
+        -: 1138:        is defined.
+        -: 1139:
+        -: 1140:        @par Complexity
+        -: 1141:
+        -: 1142:        Constant.
+        -: 1143:    */
+      27*: 1144:    operator std::string_view() const noexcept
+        -: 1145:    {
+      27*: 1146:        return {data(), size()};
+        -: 1147:    }
+------------------
+_ZNK5boost4json6stringcvSt17basic_string_viewIcSt11char_traitsIcEEEv:
+function _ZNK5boost4json6stringcvSt17basic_string_viewIcSt11char_traitsIcEEEv called 0 returned 0% blocks executed 0%
+    #####: 1144:    operator std::string_view() const noexcept
+        -: 1145:    {
+    #####: 1146:        return {data(), size()};
+call    0 never executed
+call    1 never executed
+call    2 never executed
+        -: 1147:    }
+------------------
+_ZNK5boost4json6stringcvSt17basic_string_viewIcSt11char_traitsIcEEEv:
+function _ZNK5boost4json6stringcvSt17basic_string_viewIcSt11char_traitsIcEEEv called 27 returned 100% blocks executed 100%
+       27: 1144:    operator std::string_view() const noexcept
+        -: 1145:    {
+       27: 1146:        return {data(), size()};
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+        -: 1147:    }
+------------------
+_ZNK5boost4json6stringcvSt17basic_string_viewIcSt11char_traitsIcEEEv:
+function _ZNK5boost4json6stringcvSt17basic_string_viewIcSt11char_traitsIcEEEv called 0 returned 0% blocks executed 0%
+    #####: 1144:    operator std::string_view() const noexcept
+        -: 1145:    {
+    #####: 1146:        return {data(), size()};
+call    0 never executed
+call    1 never executed
+call    2 never executed
+        -: 1147:    }
+------------------
+_ZNK5boost4json6stringcvSt17basic_string_viewIcSt11char_traitsIcEEEv:
+function _ZNK5boost4json6stringcvSt17basic_string_viewIcSt11char_traitsIcEEEv called 0 returned 0% blocks executed 0%
+    #####: 1144:    operator std::string_view() const noexcept
+        -: 1145:    {
+    #####: 1146:        return {data(), size()};
+call    0 never executed
+call    1 never executed
+call    2 never executed
+        -: 1147:    }
+------------------
+        -: 1148:#endif
+        -: 1149:
+        -: 1150:    //------------------------------------------------------
+        -: 1151:    //
+        -: 1152:    // Iterators
+        -: 1153:    //
+        -: 1154:    //------------------------------------------------------
+        -: 1155:
+        -: 1156:    /** Return an iterator to the beginning.
+        -: 1157:
+        -: 1158:        If the container is empty, @ref end() is returned.
+        -: 1159:
+        -: 1160:        @par Complexity
+        -: 1161:        Constant.
+        -: 1162:
+        -: 1163:        @par Exception Safety
+        -: 1164:        No-throw guarantee.
+        -: 1165:    */
+        -: 1166:    iterator
+        -: 1167:    begin() noexcept
+        -: 1168:    {
+        -: 1169:        return impl_.data();
+        -: 1170:    }
+        -: 1171:
+        -: 1172:    /** Return an iterator to the beginning.
+        -: 1173:
+        -: 1174:        If the container is empty, @ref end() is returned.
+        -: 1175:
+        -: 1176:        @par Complexity
+        -: 1177:        Constant.
+        -: 1178:
+        -: 1179:        @par Exception Safety
+        -: 1180:        No-throw guarantee.
+        -: 1181:    */
+        -: 1182:    const_iterator
+    #####: 1183:    begin() const noexcept
+        -: 1184:    {
+    #####: 1185:        return impl_.data();
+        -: 1186:    }
+------------------
+_ZNK5boost4json6string5beginEv:
+function _ZNK5boost4json6string5beginEv called 0 returned 0% blocks executed 0%
+    #####: 1183:    begin() const noexcept
+        -: 1184:    {
+    #####: 1185:        return impl_.data();
+call    0 never executed
+        -: 1186:    }
+------------------
+_ZNK5boost4json6string5beginEv:
+function _ZNK5boost4json6string5beginEv called 0 returned 0% blocks executed 0%
+    #####: 1183:    begin() const noexcept
+        -: 1184:    {
+    #####: 1185:        return impl_.data();
+call    0 never executed
+        -: 1186:    }
+------------------
+_ZNK5boost4json6string5beginEv:
+function _ZNK5boost4json6string5beginEv called 0 returned 0% blocks executed 0%
+    #####: 1183:    begin() const noexcept
+        -: 1184:    {
+    #####: 1185:        return impl_.data();
+call    0 never executed
+        -: 1186:    }
+------------------
+_ZNK5boost4json6string5beginEv:
+function _ZNK5boost4json6string5beginEv called 0 returned 0% blocks executed 0%
+    #####: 1183:    begin() const noexcept
+        -: 1184:    {
+    #####: 1185:        return impl_.data();
+call    0 never executed
+        -: 1186:    }
+------------------
+        -: 1187:
+        -: 1188:    /** Return an iterator to the beginning.
+        -: 1189:
+        -: 1190:        If the container is empty, @ref cend() is returned.
+        -: 1191:
+        -: 1192:        @par Complexity
+        -: 1193:        Constant.
+        -: 1194:
+        -: 1195:        @par Exception Safety
+        -: 1196:        No-throw guarantee.
+        -: 1197:    */
+        -: 1198:    const_iterator
+        -: 1199:    cbegin() const noexcept
+        -: 1200:    {
+        -: 1201:        return impl_.data();
+        -: 1202:    }
+        -: 1203:
+        -: 1204:    /** Return an iterator to the end.
+        -: 1205:
+        -: 1206:        Returns an iterator to the character
+        -: 1207:        following the last character of the string.
+        -: 1208:        This character acts as a placeholder, attempting
+        -: 1209:        to access it results in undefined behavior.
+        -: 1210:
+        -: 1211:        @par Complexity
+        -: 1212:        Constant.
+        -: 1213:
+        -: 1214:        @par Exception Safety
+        -: 1215:        No-throw guarantee.
+        -: 1216:    */
+        -: 1217:    iterator
+        -: 1218:    end() noexcept
+        -: 1219:    {
+        -: 1220:        return impl_.end();
+        -: 1221:    }
+        -: 1222:
+        -: 1223:    /** Return an iterator to the end.
+        -: 1224:
+        -: 1225:        Returns an iterator to the character following
+        -: 1226:        the last character of the string.
+        -: 1227:        This character acts as a placeholder, attempting
+        -: 1228:        to access it results in undefined behavior.
+        -: 1229:
+        -: 1230:        @par Complexity
+        -: 1231:        Constant.
+        -: 1232:
+        -: 1233:        @par Exception Safety
+        -: 1234:        No-throw guarantee.
+        -: 1235:    */
+        -: 1236:    const_iterator
+    #####: 1237:    end() const noexcept
+        -: 1238:    {
+    #####: 1239:        return impl_.end();
+        -: 1240:    }
+------------------
+_ZNK5boost4json6string3endEv:
+function _ZNK5boost4json6string3endEv called 0 returned 0% blocks executed 0%
+    #####: 1237:    end() const noexcept
+        -: 1238:    {
+    #####: 1239:        return impl_.end();
+call    0 never executed
+        -: 1240:    }
+------------------
+_ZNK5boost4json6string3endEv:
+function _ZNK5boost4json6string3endEv called 0 returned 0% blocks executed 0%
+    #####: 1237:    end() const noexcept
+        -: 1238:    {
+    #####: 1239:        return impl_.end();
+call    0 never executed
+        -: 1240:    }
+------------------
+_ZNK5boost4json6string3endEv:
+function _ZNK5boost4json6string3endEv called 0 returned 0% blocks executed 0%
+    #####: 1237:    end() const noexcept
+        -: 1238:    {
+    #####: 1239:        return impl_.end();
+call    0 never executed
+        -: 1240:    }
+------------------
+_ZNK5boost4json6string3endEv:
+function _ZNK5boost4json6string3endEv called 0 returned 0% blocks executed 0%
+    #####: 1237:    end() const noexcept
+        -: 1238:    {
+    #####: 1239:        return impl_.end();
+call    0 never executed
+        -: 1240:    }
+------------------
+        -: 1241:
+        -: 1242:    /** Return an iterator to the end.
+        -: 1243:
+        -: 1244:        Returns an iterator to the character following
+        -: 1245:        the last character of the string.
+        -: 1246:        This character acts as a placeholder, attempting
+        -: 1247:        to access it results in undefined behavior.
+        -: 1248:
+        -: 1249:        @par Complexity
+        -: 1250:        Constant.
+        -: 1251:
+        -: 1252:        @par Exception Safety
+        -: 1253:        No-throw guarantee.
+        -: 1254:    */
+        -: 1255:    const_iterator
+        -: 1256:    cend() const noexcept
+        -: 1257:    {
+        -: 1258:        return impl_.end();
+        -: 1259:    }
+        -: 1260:
+        -: 1261:    /** Return a reverse iterator to the first character of the reversed container.
+        -: 1262:
+        -: 1263:        Returns the pointed-to character that
+        -: 1264:        corresponds to the last character of the
+        -: 1265:        non-reversed container.
+        -: 1266:        If the container is empty, @ref rend() is returned.
+        -: 1267:
+        -: 1268:        @par Complexity
+        -: 1269:        Constant.
+        -: 1270:
+        -: 1271:        @par Exception Safety
+        -: 1272:        No-throw guarantee.
+        -: 1273:    */
+        -: 1274:    reverse_iterator
+        -: 1275:    rbegin() noexcept
+        -: 1276:    {
+        -: 1277:        return reverse_iterator(impl_.end());
+        -: 1278:    }
+        -: 1279:
+        -: 1280:    /** Return a reverse iterator to the first character of the reversed container.
+        -: 1281:
+        -: 1282:        Returns the pointed-to character that
+        -: 1283:        corresponds to the last character of the
+        -: 1284:        non-reversed container.
+        -: 1285:        If the container is empty, @ref rend() is returned.
+        -: 1286:
+        -: 1287:        @par Complexity
+        -: 1288:        Constant.
+        -: 1289:
+        -: 1290:        @par Exception Safety
+        -: 1291:        No-throw guarantee.
+        -: 1292:    */
+        -: 1293:    const_reverse_iterator
+        -: 1294:    rbegin() const noexcept
+        -: 1295:    {
+        -: 1296:        return const_reverse_iterator(impl_.end());
+        -: 1297:    }
+        -: 1298:
+        -: 1299:    /** Return a reverse iterator to the first character of the reversed container.
+        -: 1300:
+        -: 1301:        Returns the pointed-to character that
+        -: 1302:        corresponds to the last character of the
+        -: 1303:        non-reversed container.
+        -: 1304:        If the container is empty, @ref crend() is returned.
+        -: 1305:
+        -: 1306:        @par Complexity
+        -: 1307:        Constant.
+        -: 1308:
+        -: 1309:        @par Exception Safety
+        -: 1310:        No-throw guarantee.
+        -: 1311:    */
+        -: 1312:    const_reverse_iterator
+        -: 1313:    crbegin() const noexcept
+        -: 1314:    {
+        -: 1315:        return const_reverse_iterator(impl_.end());
+        -: 1316:    }
+        -: 1317:
+        -: 1318:    /** Return a reverse iterator to the character following the last character of the reversed container.
+        -: 1319:
+        -: 1320:        Returns the pointed-to character that corresponds
+        -: 1321:        to the character preceding the first character of
+        -: 1322:        the non-reversed container.
+        -: 1323:        This character acts as a placeholder, attempting
+        -: 1324:        to access it results in undefined behavior.
+        -: 1325:
+        -: 1326:        @par Complexity
+        -: 1327:        Constant.
+        -: 1328:
+        -: 1329:        @par Exception Safety
+        -: 1330:        No-throw guarantee.
+        -: 1331:    */
+        -: 1332:    reverse_iterator
+        -: 1333:    rend() noexcept
+        -: 1334:    {
+        -: 1335:        return reverse_iterator(begin());
+        -: 1336:    }
+        -: 1337:
+        -: 1338:    /** Return a reverse iterator to the character following the last character of the reversed container.
+        -: 1339:
+        -: 1340:        Returns the pointed-to character that corresponds
+        -: 1341:        to the character preceding the first character of
+        -: 1342:        the non-reversed container.
+        -: 1343:        This character acts as a placeholder, attempting
+        -: 1344:        to access it results in undefined behavior.
+        -: 1345:
+        -: 1346:        @par Complexity
+        -: 1347:        Constant.
+        -: 1348:
+        -: 1349:        @par Exception Safety
+        -: 1350:        No-throw guarantee.
+        -: 1351:    */
+        -: 1352:    const_reverse_iterator
+        -: 1353:    rend() const noexcept
+        -: 1354:    {
+        -: 1355:        return const_reverse_iterator(begin());
+        -: 1356:    }
+        -: 1357:
+        -: 1358:    /** Return a reverse iterator to the character following the last character of the reversed container.
+        -: 1359:
+        -: 1360:        Returns the pointed-to character that corresponds
+        -: 1361:        to the character preceding the first character of
+        -: 1362:        the non-reversed container.
+        -: 1363:        This character acts as a placeholder, attempting
+        -: 1364:        to access it results in undefined behavior.
+        -: 1365:
+        -: 1366:        @par Complexity
+        -: 1367:        Constant.
+        -: 1368:
+        -: 1369:        @par Exception Safety
+        -: 1370:        No-throw guarantee.
+        -: 1371:    */
+        -: 1372:    const_reverse_iterator
+        -: 1373:    crend() const noexcept
+        -: 1374:    {
+        -: 1375:        return const_reverse_iterator(begin());
+        -: 1376:    }
+        -: 1377:
+        -: 1378:    //------------------------------------------------------
+        -: 1379:    //
+        -: 1380:    // Capacity
+        -: 1381:    //
+        -: 1382:    //------------------------------------------------------
+        -: 1383:
+        -: 1384:    /** Check if the string has no characters.
+        -: 1385:
+        -: 1386:        Returns `true` if there are no characters in
+        -: 1387:        the string, i.e. @ref size() returns 0.
+        -: 1388:
+        -: 1389:        @par Complexity
+        -: 1390:
+        -: 1391:        Constant.
+        -: 1392:    */
+        -: 1393:    bool
+        -: 1394:    empty() const noexcept
+        -: 1395:    {
+        -: 1396:        return impl_.size() == 0;
+        -: 1397:    }
+        -: 1398:
+        -: 1399:    /** Return the number of characters in the string.
+        -: 1400:
+        -: 1401:        The value returned does not include the
+        -: 1402:        null terminator, which is always present.
+        -: 1403:
+        -: 1404:        @par Complexity
+        -: 1405:
+        -: 1406:        Constant.
+        -: 1407:    */
+        -: 1408:    std::size_t
+      52*: 1409:    size() const noexcept
+        -: 1410:    {
+      52*: 1411:        return impl_.size();
+        -: 1412:    }
+------------------
+_ZNK5boost4json6string4sizeEv:
+function _ZNK5boost4json6string4sizeEv called 0 returned 0% blocks executed 0%
+    #####: 1409:    size() const noexcept
+        -: 1410:    {
+    #####: 1411:        return impl_.size();
+call    0 never executed
+        -: 1412:    }
+------------------
+_ZNK5boost4json6string4sizeEv:
+function _ZNK5boost4json6string4sizeEv called 4 returned 100% blocks executed 100%
+        4: 1409:    size() const noexcept
+        -: 1410:    {
+        4: 1411:        return impl_.size();
+call    0 returned 100%
+        -: 1412:    }
+------------------
+_ZNK5boost4json6string4sizeEv:
+function _ZNK5boost4json6string4sizeEv called 1 returned 100% blocks executed 100%
+        1: 1409:    size() const noexcept
+        -: 1410:    {
+        1: 1411:        return impl_.size();
+call    0 returned 100%
+        -: 1412:    }
+------------------
+_ZNK5boost4json6string4sizeEv:
+function _ZNK5boost4json6string4sizeEv called 2 returned 100% blocks executed 100%
+        2: 1409:    size() const noexcept
+        -: 1410:    {
+        2: 1411:        return impl_.size();
+call    0 returned 100%
+        -: 1412:    }
+------------------
+_ZNK5boost4json6string4sizeEv:
+function _ZNK5boost4json6string4sizeEv called 44 returned 100% blocks executed 100%
+       44: 1409:    size() const noexcept
+        -: 1410:    {
+       44: 1411:        return impl_.size();
+call    0 returned 100%
+        -: 1412:    }
+------------------
+_ZNK5boost4json6string4sizeEv:
+function _ZNK5boost4json6string4sizeEv called 1 returned 100% blocks executed 100%
+        1: 1409:    size() const noexcept
+        -: 1410:    {
+        1: 1411:        return impl_.size();
+call    0 returned 100%
+        -: 1412:    }
+------------------
+_ZNK5boost4json6string4sizeEv:
+function _ZNK5boost4json6string4sizeEv called 0 returned 0% blocks executed 0%
+    #####: 1409:    size() const noexcept
+        -: 1410:    {
+    #####: 1411:        return impl_.size();
+call    0 never executed
+        -: 1412:    }
+------------------
+_ZNK5boost4json6string4sizeEv:
+function _ZNK5boost4json6string4sizeEv called 0 returned 0% blocks executed 0%
+    #####: 1409:    size() const noexcept
+        -: 1410:    {
+    #####: 1411:        return impl_.size();
+call    0 never executed
+        -: 1412:    }
+------------------
+        -: 1413:
+        -: 1414:    /** Return the maximum number of characters any string can hold.
+        -: 1415:
+        -: 1416:        The maximum is an implementation-defined number.
+        -: 1417:        This value is a theoretical limit; at runtime,
+        -: 1418:        the actual maximum size may be less due to
+        -: 1419:        resource limits.
+        -: 1420:
+        -: 1421:        @par Complexity
+        -: 1422:
+        -: 1423:        Constant.
+        -: 1424:    */
+        -: 1425:    static
+        -: 1426:    constexpr
+        -: 1427:    std::size_t
+        -: 1428:    max_size() noexcept
+        -: 1429:    {
+        -: 1430:        return string_impl::max_size();
+        -: 1431:    }
+        -: 1432:
+        -: 1433:    /** Return the number of characters that can be held without a reallocation.
+        -: 1434:
+        -: 1435:        This number represents the largest number of
+        -: 1436:        characters the currently allocated storage can contain.
+        -: 1437:        This number may be larger than the value returned
+        -: 1438:        by @ref size().
+        -: 1439:
+        -: 1440:        @par Complexity
+        -: 1441:
+        -: 1442:        Constant.
+        -: 1443:    */
+        -: 1444:    std::size_t
+        -: 1445:    capacity() const noexcept
+        -: 1446:    {
+        -: 1447:        return impl_.capacity();
+        -: 1448:    }
+        -: 1449:
+        -: 1450:    /** Increase the capacity to at least a certain amount.
+        -: 1451:
+        -: 1452:        This increases the capacity of the array to a value
+        -: 1453:        that is greater than or equal to `new_capacity`. If
+        -: 1454:        `new_capacity > capacity()`, new memory is
+        -: 1455:        allocated. Otherwise, the call has no effect.
+        -: 1456:        The number of elements and therefore the
+        -: 1457:        @ref size() of the container is not changed.
+        -: 1458:
+        -: 1459:        @par Complexity
+        -: 1460:
+        -: 1461:        At most, linear in @ref size().
+        -: 1462:
+        -: 1463:        @par Exception Safety
+        -: 1464:
+        -: 1465:        Strong guarantee.
+        -: 1466:        Calls to `memory_resource::allocate` may throw.
+        -: 1467:
+        -: 1468:        @note
+        -: 1469:
+        -: 1470:        If new memory is allocated, all iterators including
+        -: 1471:        any past-the-end iterators, and all references to
+        -: 1472:        the elements are invalidated. Otherwise, no
+        -: 1473:        iterators or references are invalidated.
+        -: 1474:
+        -: 1475:        @param new_capacity The new capacity of the array.
+        -: 1476:
+        -: 1477:        @throw system_error `new_capacity > max_size()`
+        -: 1478:    */
+        -: 1479:    void
+        -: 1480:    reserve(std::size_t new_capacity)
+        -: 1481:    {
+        -: 1482:        if(new_capacity <= capacity())
+        -: 1483:            return;
+        -: 1484:        reserve_impl(new_capacity);
+        -: 1485:    }
+        -: 1486:
+        -: 1487:    /** Request the removal of unused capacity.
+        -: 1488:
+        -: 1489:        This performs a non-binding request to reduce
+        -: 1490:        @ref capacity() to @ref size(). The request may
+        -: 1491:        or may not be fulfilled.
+        -: 1492:
+        -: 1493:        @par Complexity
+        -: 1494:
+        -: 1495:        At most, linear in @ref size().
+        -: 1496:
+        -: 1497:        @note If reallocation occurs, all iterators
+        -: 1498:        including  any past-the-end iterators, and all
+        -: 1499:        references to characters are invalidated.
+        -: 1500:        Otherwise, no iterators or references are
+        -: 1501:        invalidated.
+        -: 1502:    */
+        -: 1503:    BOOST_JSON_DECL
+        -: 1504:    void
+        -: 1505:    shrink_to_fit();
+        -: 1506:
+        -: 1507:    //------------------------------------------------------
+        -: 1508:    //
+        -: 1509:    // Operations
+        -: 1510:    //
+        -: 1511:    //------------------------------------------------------
+        -: 1512:
+        -: 1513:    /** Clear the contents.
+        -: 1514:
+        -: 1515:        Erases all characters from the string. After this
+        -: 1516:        call, @ref size() returns zero but @ref capacity()
+        -: 1517:        is unchanged.
+        -: 1518:
+        -: 1519:        @par Complexity
+        -: 1520:
+        -: 1521:        Linear in @ref size().
+        -: 1522:
+        -: 1523:        @note All references, pointers, or iterators
+        -: 1524:        referring to contained elements are invalidated.
+        -: 1525:        Any past-the-end iterators are also invalidated.
+        -: 1526:    */
+        -: 1527:    BOOST_JSON_DECL
+        -: 1528:    void
+        -: 1529:    clear() noexcept;
+        -: 1530:
+        -: 1531:    //------------------------------------------------------
+        -: 1532:
+        -: 1533:    /** Insert a string.
+        -: 1534:
+        -: 1535:        Inserts the `string_view` `sv` at the position `pos`.
+        -: 1536:
+        -: 1537:        @par Exception Safety
+        -: 1538:
+        -: 1539:        Strong guarantee.
+        -: 1540:
+        -: 1541:        @note All references, pointers, or iterators
+        -: 1542:        referring to contained elements are invalidated.
+        -: 1543:        Any past-the-end iterators are also invalidated.
+        -: 1544:
+        -: 1545:        @return `*this`
+        -: 1546:
+        -: 1547:        @param pos The index to insert at.
+        -: 1548:
+        -: 1549:        @param sv The `string_view` to insert.
+        -: 1550:
+        -: 1551:        @throw system_error `size() + s.size() > max_size()`
+        -: 1552:
+        -: 1553:        @throw system_error `pos > size()`
+        -: 1554:    */
+        -: 1555:    BOOST_JSON_DECL
+        -: 1556:    string&
+        -: 1557:    insert(
+        -: 1558:        std::size_t pos,
+        -: 1559:        string_view sv);
+        -: 1560:
+        -: 1561:    /** Insert a character.
+        -: 1562:
+        -: 1563:        Inserts `count` copies of `ch` at the position `pos`.
+        -: 1564:
+        -: 1565:        @par Exception Safety
+        -: 1566:
+        -: 1567:        Strong guarantee.
+        -: 1568:
+        -: 1569:        @note All references, pointers, or iterators
+        -: 1570:        referring to contained elements are invalidated.
+        -: 1571:        Any past-the-end iterators are also invalidated.
+        -: 1572:
+        -: 1573:        @return `*this`
+        -: 1574:
+        -: 1575:        @param pos The index to insert at.
+        -: 1576:
+        -: 1577:        @param count The number of characters to insert.
+        -: 1578:
+        -: 1579:        @param ch The character to insert.
+        -: 1580:
+        -: 1581:        @throw system_error `size() + count > max_size()`
+        -: 1582:
+        -: 1583:        @throw system_error `pos > size()`
+        -: 1584:    */
+        -: 1585:    BOOST_JSON_DECL
+        -: 1586:    string&
+        -: 1587:    insert(
+        -: 1588:        std::size_t pos,
+        -: 1589:        std::size_t count,
+        -: 1590:        char ch);
+        -: 1591:
+        -: 1592:    /** Insert a character.
+        -: 1593:
+        -: 1594:        Inserts the character `ch` before the character
+        -: 1595:        at index `pos`.
+        -: 1596:
+        -: 1597:        @par Exception Safety
+        -: 1598:
+        -: 1599:        Strong guarantee.
+        -: 1600:
+        -: 1601:        @note All references, pointers, or iterators
+        -: 1602:        referring to contained elements are invalidated.
+        -: 1603:        Any past-the-end iterators are also invalidated.
+        -: 1604:
+        -: 1605:        @return `*this`
+        -: 1606:
+        -: 1607:        @param pos The index to insert at.
+        -: 1608:
+        -: 1609:        @param ch The character to insert.
+        -: 1610:
+        -: 1611:        @throw system_error `size() + 1 > max_size()`
+        -: 1612:
+        -: 1613:        @throw system_error `pos > size()`
+        -: 1614:    */
+        -: 1615:    string&
+        -: 1616:    insert(
+        -: 1617:        size_type pos,
+        -: 1618:        char ch)
+        -: 1619:    {
+        -: 1620:        return insert(pos, 1, ch);
+        -: 1621:    }
+        -: 1622:
+        -: 1623:    /** Insert a range of characters.
+        -: 1624:
+        -: 1625:        Inserts characters from the range `{first, last)`
+        -: 1626:        before the character at index `pos`.
+        -: 1627:
+        -: 1628:        @par Precondition
+        -: 1629:
+        -: 1630:        `{first, last)` is a valid range.
+        -: 1631:
+        -: 1632:        @par Exception Safety
+        -: 1633:
+        -: 1634:        Strong guarantee.
+        -: 1635:
+        -: 1636:        @note All references, pointers, or iterators
+        -: 1637:        referring to contained elements are invalidated.
+        -: 1638:        Any past-the-end iterators are also invalidated.
+        -: 1639:
+        -: 1640:        @tparam InputIt The type of the iterators.
+        -: 1641:
+        -: 1642:        @par Constraints
+        -: 1643:
+        -: 1644:        `InputIt` satisfies __InputIterator__.
+        -: 1645:
+        -: 1646:        @return `*this`
+        -: 1647:
+        -: 1648:        @param pos The index to insert at.
+        -: 1649:
+        -: 1650:        @param first The beginning of the character range.
+        -: 1651:
+        -: 1652:        @param last The end of the character range.
+        -: 1653:
+        -: 1654:        @throw system_error `size() + insert_count > max_size()`
+        -: 1655:
+        -: 1656:        @throw system_error `pos > size()`
+        -: 1657:    */
+        -: 1658:    template<class InputIt
+        -: 1659:    #ifndef BOOST_JSON_DOCS
+        -: 1660:        ,class = is_inputit<InputIt>
+        -: 1661:    #endif
+        -: 1662:    >
+        -: 1663:    string&
+        -: 1664:    insert(
+        -: 1665:        size_type pos,
+        -: 1666:        InputIt first,
+        -: 1667:        InputIt last);
+        -: 1668:
+        -: 1669:    //------------------------------------------------------
+        -: 1670:
+        -: 1671:    /** Erase characters from the string.
+        -: 1672:
+        -: 1673:        Erases `num` characters from the string, starting
+        -: 1674:        at `pos`.  `num` is determined as the smaller of
+        -: 1675:        `count` and `size() - pos`.
+        -: 1676:
+        -: 1677:        @par Exception Safety
+        -: 1678:
+        -: 1679:        Strong guarantee.
+        -: 1680:
+        -: 1681:        @note All references, pointers, or iterators
+        -: 1682:        referring to contained elements are invalidated.
+        -: 1683:        Any past-the-end iterators are also invalidated.
+        -: 1684:
+        -: 1685:        @return `*this`
+        -: 1686:
+        -: 1687:        @param pos The index to erase at.
+        -: 1688:        The default argument for this parameter is `0`.
+        -: 1689:
+        -: 1690:        @param count The number of characters to erase.
+        -: 1691:        The default argument for this parameter
+        -: 1692:        is @ref npos.
+        -: 1693:
+        -: 1694:        @throw system_error `pos > size()`
+        -: 1695:    */
+        -: 1696:    BOOST_JSON_DECL
+        -: 1697:    string&
+        -: 1698:    erase(
+        -: 1699:        std::size_t pos = 0,
+        -: 1700:        std::size_t count = npos);
+        -: 1701:
+        -: 1702:    /** Erase a character from the string.
+        -: 1703:
+        -: 1704:        Erases the character at `pos`.
+        -: 1705:
+        -: 1706:        @par Precondition
+        -: 1707:
+        -: 1708:        @code
+        -: 1709:        pos >= data() && pos <= data() + size()
+        -: 1710:        @endcode
+        -: 1711:
+        -: 1712:        @par Exception Safety
+        -: 1713:
+        -: 1714:        Strong guarantee.
+        -: 1715:
+        -: 1716:        @note All references, pointers, or iterators
+        -: 1717:        referring to contained elements are invalidated.
+        -: 1718:        Any past-the-end iterators are also invalidated.
+        -: 1719:
+        -: 1720:        @return An iterator referring to character
+        -: 1721:        immediately following the erased character, or
+        -: 1722:        @ref end() if one does not exist.
+        -: 1723:
+        -: 1724:        @param pos An iterator referring to the
+        -: 1725:        character to erase.
+        -: 1726:    */
+        -: 1727:    BOOST_JSON_DECL
+        -: 1728:    iterator
+        -: 1729:    erase(const_iterator pos);
+        -: 1730:
+        -: 1731:    /** Erase a range from the string.
+        -: 1732:
+        -: 1733:        Erases the characters in the range `{first, last)`.
+        -: 1734:
+        -: 1735:        @par Precondition
+        -: 1736:
+        -: 1737:        `{first, last}` shall be valid within
+        -: 1738:        @code
+        -: 1739:        {data(), data() + size()}
+        -: 1740:        @endcode
+        -: 1741:
+        -: 1742:        @par Exception Safety
+        -: 1743:
+        -: 1744:        Strong guarantee.
+        -: 1745:
+        -: 1746:        @note All references, pointers, or iterators
+        -: 1747:        referring to contained elements are invalidated.
+        -: 1748:        Any past-the-end iterators are also invalidated.
+        -: 1749:
+        -: 1750:        @return An iterator referring to the character
+        -: 1751:        `last` previously referred to, or @ref end()
+        -: 1752:        if one does not exist.
+        -: 1753:
+        -: 1754:        @param first An iterator representing the first
+        -: 1755:        character to erase.
+        -: 1756:
+        -: 1757:        @param last An iterator one past the last
+        -: 1758:        character to erase.
+        -: 1759:    */
+        -: 1760:    BOOST_JSON_DECL
+        -: 1761:    iterator
+        -: 1762:    erase(
+        -: 1763:        const_iterator first,
+        -: 1764:        const_iterator last);
+        -: 1765:
+        -: 1766:    //------------------------------------------------------
+        -: 1767:
+        -: 1768:    /** Append a character.
+        -: 1769:
+        -: 1770:        Appends a character to the end of the string.
+        -: 1771:
+        -: 1772:        @par Exception Safety
+        -: 1773:
+        -: 1774:        Strong guarantee.
+        -: 1775:
+        -: 1776:        @param ch The character to append.
+        -: 1777:
+        -: 1778:        @throw system_error `size() + 1 > max_size()`
+        -: 1779:    */
+        -: 1780:    BOOST_JSON_DECL
+        -: 1781:    void
+        -: 1782:    push_back(char ch);
+        -: 1783:
+        -: 1784:    /** Remove the last character.
+        -: 1785:
+        -: 1786:        Removes a character from the end of the string.
+        -: 1787:
+        -: 1788:        @par Precondition
+        -: 1789:
+        -: 1790:        @code
+        -: 1791:        not empty()
+        -: 1792:        @endcode
+        -: 1793:    */
+        -: 1794:    BOOST_JSON_DECL
+        -: 1795:    void
+        -: 1796:    pop_back();
+        -: 1797:
+        -: 1798:    //------------------------------------------------------
+        -: 1799:
+        -: 1800:    /** Append characters to the string.
+        -: 1801:
+        -: 1802:        Appends `count` copies of `ch` to the end of
+        -: 1803:        the string.
+        -: 1804:
+        -: 1805:        @par Exception Safety
+        -: 1806:
+        -: 1807:        Strong guarantee.
+        -: 1808:
+        -: 1809:        @return `*this`
+        -: 1810:
+        -: 1811:        @param count The number of characters to append.
+        -: 1812:
+        -: 1813:        @param ch The character to append.
+        -: 1814:
+        -: 1815:        @throw system_error `size() + count > max_size()`
+        -: 1816:    */
+        -: 1817:    BOOST_JSON_DECL
+        -: 1818:    string&
+        -: 1819:    append(
+        -: 1820:        std::size_t count,
+        -: 1821:        char ch);
+        -: 1822:
+        -: 1823:    /** Append a string to the string.
+        -: 1824:
+        -: 1825:        Appends `sv` the end of the string.
+        -: 1826:
+        -: 1827:        @par Exception Safety
+        -: 1828:
+        -: 1829:        Strong guarantee.
+        -: 1830:
+        -: 1831:        @return `*this`
+        -: 1832:
+        -: 1833:        @param sv The `string_view` to append.
+        -: 1834:
+        -: 1835:        @throw system_error `size() + s.size() > max_size()`
+        -: 1836:    */
+        -: 1837:    BOOST_JSON_DECL
+        -: 1838:    string&
+        -: 1839:    append(string_view sv);
+        -: 1840:
+        -: 1841:    /** Append a range of characters.
+        -: 1842:
+        -: 1843:        Appends characters from the range `{first, last)`
+        -: 1844:        to the end of the string.
+        -: 1845:
+        -: 1846:        @par Precondition
+        -: 1847:
+        -: 1848:        `{first, last)` shall be a valid range
+        -: 1849:
+        -: 1850:        @par Exception Safety
+        -: 1851:
+        -: 1852:        Strong guarantee.
+        -: 1853:
+        -: 1854:        @tparam InputIt The type of the iterators.
+        -: 1855:
+        -: 1856:        @par Constraints
+        -: 1857:
+        -: 1858:        `InputIt` satisfies __InputIterator__.
+        -: 1859:
+        -: 1860:        @return `*this`
+        -: 1861:
+        -: 1862:        @param first An iterator representing the
+        -: 1863:        first character to append.
+        -: 1864:
+        -: 1865:        @param last An iterator one past the
+        -: 1866:        last character to append.
+        -: 1867:
+        -: 1868:        @throw system_error `size() + insert_count > max_size()`
+        -: 1869:    */
+        -: 1870:    template<class InputIt
+        -: 1871:    #ifndef BOOST_JSON_DOCS
+        -: 1872:        ,class = is_inputit<InputIt>
+        -: 1873:    #endif
+        -: 1874:    >
+        -: 1875:    string&
+        -: 1876:    append(InputIt first, InputIt last);
+        -: 1877:
+        -: 1878:    //------------------------------------------------------
+        -: 1879:
+        -: 1880:    /** Append characters from a string.
+        -: 1881:
+        -: 1882:        Appends `{sv.begin(), sv.end())` to the end of
+        -: 1883:        the string.
+        -: 1884:
+        -: 1885:        @par Exception Safety
+        -: 1886:
+        -: 1887:        Strong guarantee.
+        -: 1888:
+        -: 1889:        @return `*this`
+        -: 1890:
+        -: 1891:        @param sv The `string_view` to append.
+        -: 1892:
+        -: 1893:        @throw system_error `size() + sv.size() > max_size()`
+        -: 1894:    */
+        -: 1895:    string&
+        -: 1896:    operator+=(string_view sv)
+        -: 1897:    {
+        -: 1898:        return append(sv);
+        -: 1899:    }
+        -: 1900:
+        -: 1901:    /** Append a character.
+        -: 1902:
+        -: 1903:        Appends a character to the end of the string.
+        -: 1904:
+        -: 1905:        @par Exception Safety
+        -: 1906:
+        -: 1907:        Strong guarantee.
+        -: 1908:
+        -: 1909:        @param ch The character to append.
+        -: 1910:
+        -: 1911:        @throw system_error `size() + 1 > max_size()`
+        -: 1912:    */
+        -: 1913:    string&
+        -: 1914:    operator+=(char ch)
+        -: 1915:    {
+        -: 1916:        push_back(ch);
+        -: 1917:        return *this;
+        -: 1918:    }
+        -: 1919:
+        -: 1920:    //------------------------------------------------------
+        -: 1921:
+        -: 1922:    /** Compare a string with the string.
+        -: 1923:
+        -: 1924:        Let `comp` be
+        -: 1925:        `std::char_traits<char>::compare(data(), sv.data(), std::min(size(), sv.size())`.
+        -: 1926:        If `comp != 0`, then the result is `comp`. Otherwise,
+        -: 1927:        the result is `0` if `size() == sv.size()`,
+        -: 1928:        `-1` if `size() < sv.size()`, and `1` otherwise.
+        -: 1929:
+        -: 1930:        @par Complexity
+        -: 1931:
+        -: 1932:        Linear.
+        -: 1933:
+        -: 1934:        @return The result of lexicographically comparing
+        -: 1935:        the characters of `sv` and the string.
+        -: 1936:
+        -: 1937:        @param sv The `string_view` to compare.
+        -: 1938:    */
+        -: 1939:    int
+        -: 1940:    compare(string_view sv) const noexcept
+        -: 1941:    {
+        -: 1942:        return subview().compare(sv);
+        -: 1943:    }
+        -: 1944:
+        -: 1945:    //------------------------------------------------------
+        -: 1946:
+        -: 1947:    /** Return whether the string begins with a string.
+        -: 1948:
+        -: 1949:        Returns `true` if the string begins with `s`,
+        -: 1950:        and `false` otherwise.
+        -: 1951:
+        -: 1952:        @par Complexity
+        -: 1953:
+        -: 1954:        Linear.
+        -: 1955:
+        -: 1956:        @param s The `string_view` to check for.
+        -: 1957:    */
+        -: 1958:    bool
+        -: 1959:    starts_with(string_view s) const noexcept
+        -: 1960:    {
+        -: 1961:        return subview(0, s.size()) == s;
+        -: 1962:    }
+        -: 1963:
+        -: 1964:    /** Return whether the string begins with a character.
+        -: 1965:
+        -: 1966:        Returns `true` if the string begins with `ch`,
+        -: 1967:        and `false` otherwise.
+        -: 1968:
+        -: 1969:        @par Complexity
+        -: 1970:
+        -: 1971:        Constant.
+        -: 1972:
+        -: 1973:        @param ch The character to check for.
+        -: 1974:    */
+        -: 1975:    bool
+        -: 1976:    starts_with(char ch) const noexcept
+        -: 1977:    {
+        -: 1978:        return ! empty() && front() == ch;
+        -: 1979:    }
+        -: 1980:
+        -: 1981:    /** Return whether the string end with a string.
+        -: 1982:
+        -: 1983:        Returns `true` if the string end with `s`,
+        -: 1984:        and `false` otherwise.
+        -: 1985:
+        -: 1986:        @par Complexity
+        -: 1987:
+        -: 1988:        Linear.
+        -: 1989:
+        -: 1990:        @param s The string to check for.
+        -: 1991:    */
+        -: 1992:    bool
+        -: 1993:    ends_with(string_view s) const noexcept
+        -: 1994:    {
+        -: 1995:        return size() >= s.size() &&
+        -: 1996:            subview(size() - s.size()) == s;
+        -: 1997:    }
+        -: 1998:
+        -: 1999:    /** Return whether the string ends with a character.
+        -: 2000:
+        -: 2001:        Returns `true` if the string ends with `ch`,
+        -: 2002:        and `false` otherwise.
+        -: 2003:
+        -: 2004:        @par Complexity
+        -: 2005:
+        -: 2006:        Constant.
+        -: 2007:
+        -: 2008:        @param ch The character to check for.
+        -: 2009:    */
+        -: 2010:    bool
+        -: 2011:    ends_with(char ch) const noexcept
+        -: 2012:    {
+        -: 2013:        return ! empty() && back() == ch;
+        -: 2014:    }
+        -: 2015:
+        -: 2016:    //------------------------------------------------------
+        -: 2017:
+        -: 2018:    /** Replace a substring with a string.
+        -: 2019:
+        -: 2020:        Replaces `rcount` characters starting at index
+        -: 2021:        `pos` with those of `sv`, where `rcount` is
+        -: 2022:        `std::min(count, size() - pos)`.
+        -: 2023:
+        -: 2024:        @par Exception Safety
+        -: 2025:
+        -: 2026:        Strong guarantee.
+        -: 2027:
+        -: 2028:        @note All references, pointers, or iterators
+        -: 2029:        referring to contained elements are invalidated.
+        -: 2030:        Any past-the-end iterators are also invalidated.
+        -: 2031:
+        -: 2032:        @return `*this`
+        -: 2033:
+        -: 2034:        @param pos The index to replace at.
+        -: 2035:
+        -: 2036:        @param count The number of characters to replace.
+        -: 2037:
+        -: 2038:        @param sv The `string_view` to replace with.
+        -: 2039:
+        -: 2040:        @throw system_error `size() + (sv.size() - rcount) > max_size()`
+        -: 2041:
+        -: 2042:        @throw system_error `pos > size()`
+        -: 2043:    */
+        -: 2044:    BOOST_JSON_DECL
+        -: 2045:    string&
+        -: 2046:    replace(
+        -: 2047:        std::size_t pos,
+        -: 2048:        std::size_t count,
+        -: 2049:        string_view sv);
+        -: 2050:
+        -: 2051:    /** Replace a range with a string.
+        -: 2052:
+        -: 2053:        Replaces the characters in the range
+        -: 2054:        `{first, last)` with those of `sv`.
+        -: 2055:
+        -: 2056:        @par Precondition
+        -: 2057:
+        -: 2058:        `{first, last)` is a valid range.
+        -: 2059:
+        -: 2060:        @par Exception Safety
+        -: 2061:
+        -: 2062:        Strong guarantee.
+        -: 2063:
+        -: 2064:        @note All references, pointers, or iterators
+        -: 2065:        referring to contained elements are invalidated.
+        -: 2066:        Any past-the-end iterators are also invalidated.
+        -: 2067:
+        -: 2068:        @return `*this`
+        -: 2069:
+        -: 2070:        @param first An iterator referring to the first
+        -: 2071:        character to replace.
+        -: 2072:
+        -: 2073:        @param last An iterator one past the end of
+        -: 2074:        the last character to replace.
+        -: 2075:
+        -: 2076:        @param sv The `string_view` to replace with.
+        -: 2077:
+        -: 2078:        @throw system_error `size() + (sv.size() - std::distance(first, last)) > max_size()`
+        -: 2079:    */
+        -: 2080:    string&
+        -: 2081:    replace(
+        -: 2082:        const_iterator first,
+        -: 2083:        const_iterator last,
+        -: 2084:        string_view sv)
+        -: 2085:    {
+        -: 2086:        return replace(first - begin(), last - first, sv);
+        -: 2087:    }
+        -: 2088:
+        -: 2089:    /** Replace a range with a range.
+        -: 2090:
+        -: 2091:        Replaces the characters in the range
+        -: 2092:        `{first, last)` with those of `{first2, last2)`.
+        -: 2093:
+        -: 2094:        @par Precondition
+        -: 2095:
+        -: 2096:        `{first, last)` is a valid range.
+        -: 2097:
+        -: 2098:        `{first2, last2)` is a valid range.
+        -: 2099:
+        -: 2100:        @par Exception Safety
+        -: 2101:
+        -: 2102:        Strong guarantee.
+        -: 2103:
+        -: 2104:        @note All references, pointers, or iterators
+        -: 2105:        referring to contained elements are invalidated.
+        -: 2106:        Any past-the-end iterators are also invalidated.
+        -: 2107:
+        -: 2108:        @tparam InputIt The type of the iterators.
+        -: 2109:
+        -: 2110:        @par Constraints
+        -: 2111:
+        -: 2112:        `InputIt` satisfies __InputIterator__.
+        -: 2113:
+        -: 2114:        @return `*this`
+        -: 2115:
+        -: 2116:        @param first An iterator referring to the first
+        -: 2117:        character to replace.
+        -: 2118:
+        -: 2119:        @param last An iterator one past the end of
+        -: 2120:        the last character to replace.
+        -: 2121:
+        -: 2122:        @param first2 An iterator referring to the first
+        -: 2123:        character to replace with.
+        -: 2124:
+        -: 2125:        @param last2 An iterator one past the end of
+        -: 2126:        the last character to replace with.
+        -: 2127:
+        -: 2128:        @throw system_error `size() + (inserted - std::distance(first, last)) > max_size()`
+        -: 2129:    */
+        -: 2130:    template<class InputIt
+        -: 2131:    #ifndef BOOST_JSON_DOCS
+        -: 2132:        ,class = is_inputit<InputIt>
+        -: 2133:    #endif
+        -: 2134:    >
+        -: 2135:    string&
+        -: 2136:    replace(
+        -: 2137:        const_iterator first,
+        -: 2138:        const_iterator last,
+        -: 2139:        InputIt first2,
+        -: 2140:        InputIt last2);
+        -: 2141:
+        -: 2142:    /** Replace a substring with copies of a character.
+        -: 2143:
+        -: 2144:        Replaces `rcount` characters starting at index
+        -: 2145:        `pos`with `count2` copies of `ch`, where
+        -: 2146:        `rcount` is `std::min(count, size() - pos)`.
+        -: 2147:
+        -: 2148:        @par Exception Safety
+        -: 2149:
+        -: 2150:        Strong guarantee.
+        -: 2151:
+        -: 2152:        @note All references, pointers, or iterators
+        -: 2153:        referring to contained elements are invalidated.
+        -: 2154:        Any past-the-end iterators are also invalidated.
+        -: 2155:
+        -: 2156:        @return `*this`
+        -: 2157:
+        -: 2158:        @param pos The index to replace at.
+        -: 2159:
+        -: 2160:        @param count The number of characters to replace.
+        -: 2161:
+        -: 2162:        @param count2 The number of characters to
+        -: 2163:        replace with.
+        -: 2164:
+        -: 2165:        @param ch The character to replace with.
+        -: 2166:
+        -: 2167:        @throw system_error `size() + (count2 - rcount) > max_size()`
+        -: 2168:
+        -: 2169:        @throw system_error `pos > size()`
+        -: 2170:    */
+        -: 2171:    BOOST_JSON_DECL
+        -: 2172:    string&
+        -: 2173:    replace(
+        -: 2174:        std::size_t pos,
+        -: 2175:        std::size_t count,
+        -: 2176:        std::size_t count2,
+        -: 2177:        char ch);
+        -: 2178:
+        -: 2179:    /** Replace a range with copies of a character.
+        -: 2180:
+        -: 2181:        Replaces the characters in the range
+        -: 2182:        `{first, last)` with `count` copies of `ch`.
+        -: 2183:
+        -: 2184:        @par Precondition
+        -: 2185:
+        -: 2186:        `{first, last)` is a valid range.
+        -: 2187:
+        -: 2188:        @par Exception Safety
+        -: 2189:
+        -: 2190:        Strong guarantee.
+        -: 2191:
+        -: 2192:        @note All references, pointers, or iterators
+        -: 2193:        referring to contained elements are invalidated.
+        -: 2194:        Any past-the-end iterators are also invalidated.
+        -: 2195:
+        -: 2196:        @return `*this`
+        -: 2197:
+        -: 2198:        @param first An iterator referring to the first
+        -: 2199:        character to replace.
+        -: 2200:
+        -: 2201:        @param last An iterator one past the end of
+        -: 2202:        the last character to replace.
+        -: 2203:
+        -: 2204:        @param count The number of characters to
+        -: 2205:        replace with.
+        -: 2206:
+        -: 2207:        @param ch The character to replace with.
+        -: 2208:
+        -: 2209:        @throw system_error `size() + (count - std::distance(first, last)) > max_size()`
+        -: 2210:    */
+        -: 2211:    string&
+        -: 2212:    replace(
+        -: 2213:        const_iterator first,
+        -: 2214:        const_iterator last,
+        -: 2215:        std::size_t count,
+        -: 2216:        char ch)
+        -: 2217:    {
+        -: 2218:        return replace(first - begin(), last - first, count, ch);
+        -: 2219:    }
+        -: 2220:
+        -: 2221:    //------------------------------------------------------
+        -: 2222:
+        -: 2223:    /** Return a view.
+        -: 2224:
+        -: 2225:        Returns a view of a substring.
+        -: 2226:
+        -: 2227:        @par Exception Safety
+        -: 2228:
+        -: 2229:        Strong guarantee.
+        -: 2230:
+        -: 2231:        @return `this->subview().substr(pos, count)`
+        -: 2232:
+        -: 2233:        @param pos The index to being the substring at.
+        -: 2234:        The default argument for this parameter is `0`.
+        -: 2235:
+        -: 2236:        @param count The length of the substring.
+        -: 2237:        The default argument for this parameter
+        -: 2238:        is @ref npos.
+        -: 2239:
+        -: 2240:        @throw system_error `pos > size()`
+        -: 2241:    */
+        -: 2242:    string_view
+        -: 2243:    subview(
+        -: 2244:        std::size_t pos
+        -: 2245:        ,std::size_t count = npos) const
+        -: 2246:    {
+        -: 2247:        return subview().substr(pos, count);
+        -: 2248:    }
+        -: 2249:
+        -: 2250:    /** Return a view.
+        -: 2251:
+        -: 2252:        Returns a view of the whole string.
+        -: 2253:
+        -: 2254:        @par Exception Safety
+        -: 2255:
+        -: 2256:        `noexcept`
+        -: 2257:
+        -: 2258:        @return `string_view(this->data(), this->size())`.
+        -: 2259:    */
+        -: 2260:    string_view
+       25: 2261:    subview() const noexcept
+        -: 2262:    {
+       25: 2263:        return string_view( data(), size() );
+        -: 2264:    }
+------------------
+_ZNK5boost4json6string7subviewEv:
+function _ZNK5boost4json6string7subviewEv called 4 returned 100% blocks executed 100%
+        4: 2261:    subview() const noexcept
+        -: 2262:    {
+        4: 2263:        return string_view( data(), size() );
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+        -: 2264:    }
+------------------
+_ZNK5boost4json6string7subviewEv:
+function _ZNK5boost4json6string7subviewEv called 1 returned 100% blocks executed 100%
+        1: 2261:    subview() const noexcept
+        -: 2262:    {
+        1: 2263:        return string_view( data(), size() );
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+        -: 2264:    }
+------------------
+_ZNK5boost4json6string7subviewEv:
+function _ZNK5boost4json6string7subviewEv called 2 returned 100% blocks executed 100%
+        2: 2261:    subview() const noexcept
+        -: 2262:    {
+        2: 2263:        return string_view( data(), size() );
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+        -: 2264:    }
+------------------
+_ZNK5boost4json6string7subviewEv:
+function _ZNK5boost4json6string7subviewEv called 17 returned 100% blocks executed 100%
+       17: 2261:    subview() const noexcept
+        -: 2262:    {
+       17: 2263:        return string_view( data(), size() );
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+        -: 2264:    }
+------------------
+_ZNK5boost4json6string7subviewEv:
+function _ZNK5boost4json6string7subviewEv called 1 returned 100% blocks executed 100%
+        1: 2261:    subview() const noexcept
+        -: 2262:    {
+        1: 2263:        return string_view( data(), size() );
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+        -: 2264:    }
+------------------
+        -: 2265:
+        -: 2266:    //------------------------------------------------------
+        -: 2267:
+        -: 2268:    /** Copy a substring to another string.
+        -: 2269:
+        -: 2270:        Copies `std::min(count, size() - pos)` characters
+        -: 2271:        starting at index `pos` to the string pointed
+        -: 2272:        to by `dest`.
+        -: 2273:
+        -: 2274:        @note The resulting string is not null terminated.
+        -: 2275:
+        -: 2276:        @return The number of characters copied.
+        -: 2277:
+        -: 2278:        @param count The number of characters to copy.
+        -: 2279:
+        -: 2280:        @param dest The string to copy to.
+        -: 2281:
+        -: 2282:        @param pos The index to begin copying from. The
+        -: 2283:        default argument for this parameter is `0`.
+        -: 2284:
+        -: 2285:        @throw system_error `pos > max_size()`
+        -: 2286:    */
+        -: 2287:    std::size_t
+        -: 2288:    copy(
+        -: 2289:        char* dest,
+        -: 2290:        std::size_t count,
+        -: 2291:        std::size_t pos = 0) const
+        -: 2292:    {
+        -: 2293:        return subview().copy(dest, count, pos);
+        -: 2294:    }
+        -: 2295:
+        -: 2296:    //------------------------------------------------------
+        -: 2297:
+        -: 2298:    /** Change the size of the string.
+        -: 2299:
+        -: 2300:        Resizes the string to contain `count` characters.
+        -: 2301:        If `count > size()`, characters with the value `0`
+        -: 2302:        are appended. Otherwise, `size()` is reduced
+        -: 2303:        to `count`.
+        -: 2304:
+        -: 2305:        @param count The size to resize the string to.
+        -: 2306:
+        -: 2307:        @throw system_error `count > max_size()`
+        -: 2308:    */
+        -: 2309:    void
+        -: 2310:    resize(std::size_t count)
+        -: 2311:    {
+        -: 2312:        resize(count, 0);
+        -: 2313:    }
+        -: 2314:
+        -: 2315:    /** Change the size of the string.
+        -: 2316:
+        -: 2317:        Resizes the string to contain `count` characters.
+        -: 2318:        If `count > size()`, copies of `ch` are
+        -: 2319:        appended. Otherwise, `size()` is reduced
+        -: 2320:        to `count`.
+        -: 2321:
+        -: 2322:        @param count The size to resize the string to.
+        -: 2323:
+        -: 2324:        @param ch The characters to append if the size
+        -: 2325:        increases.
+        -: 2326:
+        -: 2327:        @throw system_error `count > max_size()`
+        -: 2328:    */
+        -: 2329:    BOOST_JSON_DECL
+        -: 2330:    void
+        -: 2331:    resize(std::size_t count, char ch);
+        -: 2332:
+        -: 2333:    /** Increase size without changing capacity.
+        -: 2334:
+        -: 2335:        This increases the size of the string by `n`
+        -: 2336:        characters, adjusting the position of the
+        -: 2337:        terminating null for the new size. The new
+        -: 2338:        characters remain uninitialized. This function
+        -: 2339:        may be used to append characters directly into
+        -: 2340:        the storage between `end()` and
+        -: 2341:        `data() + capacity()`.
+        -: 2342:
+        -: 2343:        @par Precondition
+        -: 2344:
+        -: 2345:        @code
+        -: 2346:        count <= capacity() - size()
+        -: 2347:        @endcode
+        -: 2348:
+        -: 2349:        @param n The amount to increase the size by.
+        -: 2350:    */
+        -: 2351:    void
+        -: 2352:    grow(std::size_t n) noexcept
+        -: 2353:    {
+        -: 2354:        BOOST_ASSERT(
+        -: 2355:            n <= impl_.capacity() - impl_.size());
+        -: 2356:        impl_.term(impl_.size() + n);
+        -: 2357:    }
+        -: 2358:
+        -: 2359:    //------------------------------------------------------
+        -: 2360:
+        -: 2361:    /** Swap the contents.
+        -: 2362:
+        -: 2363:        Exchanges the contents of this string with another
+        -: 2364:        string. Ownership of the respective @ref memory_resource
+        -: 2365:        objects is not transferred.
+        -: 2366:
+        -: 2367:        @li If `&other == this`, do nothing. Otherwise,
+        -: 2368:
+        -: 2369:        @li if `*other.storage() == *this->storage()`,
+        -: 2370:        ownership of the underlying memory is swapped in
+        -: 2371:        constant time, with no possibility of exceptions.
+        -: 2372:        All iterators and references remain valid. Otherwise,
+        -: 2373:
+        -: 2374:        @li the contents are logically swapped by making copies,
+        -: 2375:        which can throw. In this case all iterators and
+        -: 2376:        references are invalidated.
+        -: 2377:
+        -: 2378:        @par Complexity
+        -: 2379:
+        -: 2380:        Constant or linear in @ref size() plus
+        -: 2381:        `other.size()`.
+        -: 2382:
+        -: 2383:        @par Exception Safety
+        -: 2384:
+        -: 2385:        Strong guarantee.
+        -: 2386:        Calls to `memory_resource::allocate` may throw.
+        -: 2387:    */
+        -: 2388:    BOOST_JSON_DECL
+        -: 2389:    void
+        -: 2390:    swap(string& other);
+        -: 2391:
+        -: 2392:    /** Exchange the given values.
+        -: 2393:
+        -: 2394:        Exchanges the contents of the string `lhs` with
+        -: 2395:        another string `rhs`. Ownership of the respective
+        -: 2396:        @ref memory_resource objects is not transferred.
+        -: 2397:
+        -: 2398:        @li If `&lhs == &rhs`, do nothing. Otherwise,
+        -: 2399:
+        -: 2400:        @li if `*lhs.storage() == *rhs.storage()`,
+        -: 2401:        ownership of the underlying memory is swapped in
+        -: 2402:        constant time, with no possibility of exceptions.
+        -: 2403:        All iterators and references remain valid. Otherwise,
+        -: 2404:
+        -: 2405:        @li the contents are logically swapped by making a copy,
+        -: 2406:        which can throw. In this case all iterators and
+        -: 2407:        references are invalidated.
+        -: 2408:
+        -: 2409:        @par Effects
+        -: 2410:        @code
+        -: 2411:        lhs.swap( rhs );
+        -: 2412:        @endcode
+        -: 2413:
+        -: 2414:        @par Complexity
+        -: 2415:        Constant or linear in `lhs.size() + rhs.size()`.
+        -: 2416:
+        -: 2417:        @par Exception Safety
+        -: 2418:        Strong guarantee.
+        -: 2419:        Calls to `memory_resource::allocate` may throw.
+        -: 2420:
+        -: 2421:        @param lhs The string to exchange.
+        -: 2422:
+        -: 2423:        @param rhs The string to exchange.
+        -: 2424:
+        -: 2425:        @see @ref string::swap
+        -: 2426:    */
+        -: 2427:    friend
+        -: 2428:    void
+        -: 2429:    swap(string& lhs, string& rhs)
+        -: 2430:    {
+        -: 2431:        lhs.swap(rhs);
+        -: 2432:    }
+        -: 2433:    //------------------------------------------------------
+        -: 2434:    //
+        -: 2435:    // Search
+        -: 2436:    //
+        -: 2437:    //------------------------------------------------------
+        -: 2438:
+        -: 2439:    /** Find the first occurrence of a string within the string.
+        -: 2440:
+        -: 2441:        Returns the lowest index `idx` greater than or equal
+        -: 2442:        to `pos` where each element of `sv`  is equal to
+        -: 2443:        that of `{begin() + idx, begin() + idx + sv.size())`
+        -: 2444:        if one exists, and @ref npos otherwise.
+        -: 2445:
+        -: 2446:        @par Complexity
+        -: 2447:
+        -: 2448:        Linear.
+        -: 2449:
+        -: 2450:        @return The first occurrence of `sv` within the
+        -: 2451:        string starting at the index `pos`, or @ref npos
+        -: 2452:        if none exists.
+        -: 2453:
+        -: 2454:        @param sv The `string_view` to search for.
+        -: 2455:
+        -: 2456:        @param pos The index to start searching at.
+        -: 2457:        The default argument for this parameter is `0`.
+        -: 2458:    */
+        -: 2459:    std::size_t
+        -: 2460:    find(
+        -: 2461:        string_view sv,
+        -: 2462:        std::size_t pos = 0) const noexcept
+        -: 2463:    {
+        -: 2464:        return subview().find(sv, pos);
+        -: 2465:    }
+        -: 2466:
+        -: 2467:    /** Find the first occurrence of a character within the string.
+        -: 2468:
+        -: 2469:        Returns the index corrosponding to the first
+        -: 2470:        occurrence of `ch` within `{begin() + pos, end())`
+        -: 2471:        if it exists, and @ref npos otherwise.
+        -: 2472:
+        -: 2473:        @par Complexity
+        -: 2474:
+        -: 2475:        Linear.
+        -: 2476:
+        -: 2477:        @return The first occurrence of `ch` within the
+        -: 2478:        string starting at the index `pos`, or @ref npos
+        -: 2479:        if none exists.
+        -: 2480:
+        -: 2481:        @param ch The character to search for.
+        -: 2482:
+        -: 2483:        @param pos The index to start searching at.
+        -: 2484:        The default argument for this parameter is `0`.
+        -: 2485:    */
+        -: 2486:    std::size_t
+        -: 2487:    find(
+        -: 2488:        char ch,
+        -: 2489:        std::size_t pos = 0) const noexcept
+        -: 2490:    {
+        -: 2491:        return subview().find(ch, pos);
+        -: 2492:    }
+        -: 2493:
+        -: 2494:    //------------------------------------------------------
+        -: 2495:
+        -: 2496:    /** Find the last occurrence of a string within the string.
+        -: 2497:
+        -: 2498:        Returns the highest index `idx` less than or equal
+        -: 2499:        to `pos` where each element of `sv` is equal to that
+        -: 2500:        of `{begin() + idx, begin() + idx + sv.size())`
+        -: 2501:        if one exists, and @ref npos otherwise.
+        -: 2502:
+        -: 2503:        @par Complexity
+        -: 2504:
+        -: 2505:        Linear.
+        -: 2506:
+        -: 2507:        @return The last occurrence of `sv` within the
+        -: 2508:        string starting before or at the index `pos`,
+        -: 2509:        or @ref npos if none exists.
+        -: 2510:
+        -: 2511:        @param sv The `string_view` to search for.
+        -: 2512:
+        -: 2513:        @param pos The index to start searching at.
+        -: 2514:        The default argument for this parameter
+        -: 2515:        is @ref npos.
+        -: 2516:    */
+        -: 2517:    std::size_t
+        -: 2518:    rfind(
+        -: 2519:        string_view sv,
+        -: 2520:        std::size_t pos = npos) const noexcept
+        -: 2521:    {
+        -: 2522:        return subview().rfind(sv, pos);
+        -: 2523:    }
+        -: 2524:
+        -: 2525:    /** Find the last occurrence of a character within the string.
+        -: 2526:
+        -: 2527:        Returns index corrosponding to the last occurrence
+        -: 2528:        of `ch` within `{begin(), begin() + pos}` if it
+        -: 2529:        exists, and @ref npos otherwise.
+        -: 2530:
+        -: 2531:        @par Complexity
+        -: 2532:
+        -: 2533:        Linear.
+        -: 2534:
+        -: 2535:        @return The last occurrence of `ch` within the
+        -: 2536:        string starting before or at the index `pos`,
+        -: 2537:        or @ref npos if none exists.
+        -: 2538:
+        -: 2539:        @param ch The character to search for.
+        -: 2540:
+        -: 2541:        @param pos The index to stop searching at.
+        -: 2542:        The default argument for this parameter
+        -: 2543:        is @ref npos.
+        -: 2544:    */
+        -: 2545:    std::size_t
+        -: 2546:    rfind(
+        -: 2547:        char ch,
+        -: 2548:        std::size_t pos = npos) const noexcept
+        -: 2549:    {
+        -: 2550:        return subview().rfind(ch, pos);
+        -: 2551:    }
+        -: 2552:
+        -: 2553:    //------------------------------------------------------
+        -: 2554:
+        -: 2555:    /** Find the first occurrence of any of the characters within the string.
+        -: 2556:
+        -: 2557:        Returns the index corrosponding to the first
+        -: 2558:        occurrence of any of the characters of `sv`
+        -: 2559:        within `{begin() + pos, end())` if it exists,
+        -: 2560:        and @ref npos otherwise.
+        -: 2561:
+        -: 2562:        @par Complexity
+        -: 2563:
+        -: 2564:        Linear.
+        -: 2565:
+        -: 2566:        @return The first occurrence of any of the
+        -: 2567:        characters within `sv` within the string
+        -: 2568:        starting at the index `pos`, or @ref npos
+        -: 2569:        if none exists.
+        -: 2570:
+        -: 2571:        @param sv The characters to search for.
+        -: 2572:
+        -: 2573:        @param pos The index to start searching at.
+        -: 2574:        The default argument for this parameter is `0`.
+        -: 2575:    */
+        -: 2576:    std::size_t
+        -: 2577:    find_first_of(
+        -: 2578:        string_view sv,
+        -: 2579:        std::size_t pos = 0) const noexcept
+        -: 2580:    {
+        -: 2581:        return subview().find_first_of(sv, pos);
+        -: 2582:    }
+        -: 2583:
+        -: 2584:    //------------------------------------------------------
+        -: 2585:
+        -: 2586:    /** Find the first occurrence of any of the characters not within the string.
+        -: 2587:
+        -: 2588:        Returns the index corrosponding to the first
+        -: 2589:        character of `{begin() + pos, end())` that is
+        -: 2590:        not within `sv` if it exists, and @ref npos
+        -: 2591:        otherwise.
+        -: 2592:
+        -: 2593:        @par Complexity
+        -: 2594:
+        -: 2595:        Linear.
+        -: 2596:
+        -: 2597:        @return The first occurrence of a character that
+        -: 2598:        is not within `sv` within the string starting at
+        -: 2599:        the index `pos`, or @ref npos if none exists.
+        -: 2600:
+        -: 2601:        @param sv The characters to ignore.
+        -: 2602:
+        -: 2603:        @param pos The index to start searching at.
+        -: 2604:        The default argument for this parameter is `0`.
+        -: 2605:    */
+        -: 2606:    std::size_t
+        -: 2607:    find_first_not_of(
+        -: 2608:        string_view sv,
+        -: 2609:        std::size_t pos = 0) const noexcept
+        -: 2610:    {
+        -: 2611:        return subview().find_first_not_of(sv, pos);
+        -: 2612:    }
+        -: 2613:
+        -: 2614:    /** Find the first occurrence of a character not equal to `ch`.
+        -: 2615:
+        -: 2616:        Returns the index corrosponding to the first
+        -: 2617:        character of `{begin() + pos, end())` that is
+        -: 2618:        not equal to `ch` if it exists, and
+        -: 2619:        @ref npos otherwise.
+        -: 2620:
+        -: 2621:        @par Complexity
+        -: 2622:
+        -: 2623:        Linear.
+        -: 2624:
+        -: 2625:        @return The first occurrence of a character that
+        -: 2626:        is not equal to `ch`, or @ref npos if none exists.
+        -: 2627:
+        -: 2628:        @param ch The character to ignore.
+        -: 2629:
+        -: 2630:        @param pos The index to start searching at.
+        -: 2631:        The default argument for this parameter is `0`.
+        -: 2632:    */
+        -: 2633:    std::size_t
+        -: 2634:    find_first_not_of(
+        -: 2635:        char ch,
+        -: 2636:        std::size_t pos = 0) const noexcept
+        -: 2637:    {
+        -: 2638:        return subview().find_first_not_of(ch, pos);
+        -: 2639:    }
+        -: 2640:
+        -: 2641:    //------------------------------------------------------
+        -: 2642:
+        -: 2643:    /** Find the last occurrence of any of the characters within the string.
+        -: 2644:
+        -: 2645:        Returns the index corrosponding to the last
+        -: 2646:        occurrence of any of the characters of `sv` within
+        -: 2647:        `{begin(), begin() + pos}` if it exists,
+        -: 2648:        and @ref npos otherwise.
+        -: 2649:
+        -: 2650:        @par Complexity
+        -: 2651:
+        -: 2652:        Linear.
+        -: 2653:
+        -: 2654:        @return The last occurrence of any of the
+        -: 2655:        characters within `sv` within the string starting
+        -: 2656:        before or at the index `pos`, or @ref npos if
+        -: 2657:        none exists.
+        -: 2658:
+        -: 2659:        @param sv The characters to search for.
+        -: 2660:
+        -: 2661:        @param pos The index to stop searching at.
+        -: 2662:        The default argument for this parameter
+        -: 2663:        is @ref npos.
+        -: 2664:    */
+        -: 2665:    std::size_t
+        -: 2666:    find_last_of(
+        -: 2667:        string_view sv,
+        -: 2668:        std::size_t pos = npos) const noexcept
+        -: 2669:    {
+        -: 2670:        return subview().find_last_of(sv, pos);
+        -: 2671:    }
+        -: 2672:
+        -: 2673:    //------------------------------------------------------
+        -: 2674:
+        -: 2675:    /** Find the last occurrence of a character not within the string.
+        -: 2676:
+        -: 2677:        Returns the index corrosponding to the last
+        -: 2678:        character of `{begin(), begin() + pos}` that is not
+        -: 2679:        within `sv` if it exists, and @ref npos otherwise.
+        -: 2680:
+        -: 2681:        @par Complexity
+        -: 2682:
+        -: 2683:        Linear.
+        -: 2684:
+        -: 2685:        @return The last occurrence of a character that is
+        -: 2686:        not within `sv` within the string before or at the
+        -: 2687:        index `pos`, or @ref npos if none exists.
+        -: 2688:
+        -: 2689:        @param sv The characters to ignore.
+        -: 2690:
+        -: 2691:        @param pos The index to stop searching at.
+        -: 2692:        The default argument for this parameter
+        -: 2693:        is @ref npos.
+        -: 2694:    */
+        -: 2695:    std::size_t
+        -: 2696:    find_last_not_of(
+        -: 2697:        string_view sv,
+        -: 2698:        std::size_t pos = npos) const noexcept
+        -: 2699:    {
+        -: 2700:        return subview().find_last_not_of(sv, pos);
+        -: 2701:    }
+        -: 2702:
+        -: 2703:    /** Find the last occurrence of a character not equal to `ch`.
+        -: 2704:
+        -: 2705:        Returns the index corrosponding to the last
+        -: 2706:        character of `{begin(), begin() + pos}` that is
+        -: 2707:        not equal to `ch` if it exists, and @ref npos
+        -: 2708:        otherwise.
+        -: 2709:
+        -: 2710:        @par Complexity
+        -: 2711:
+        -: 2712:        Linear.
+        -: 2713:
+        -: 2714:        @return The last occurrence of a character that
+        -: 2715:        is not equal to `ch` before or at the index `pos`,
+        -: 2716:        or @ref npos if none exists.
+        -: 2717:
+        -: 2718:        @param ch The character to ignore.
+        -: 2719:
+        -: 2720:        @param pos The index to start searching at.
+        -: 2721:        The default argument for this parameter
+        -: 2722:        is @ref npos.
+        -: 2723:    */
+        -: 2724:    std::size_t
+        -: 2725:    find_last_not_of(
+        -: 2726:        char ch,
+        -: 2727:        std::size_t pos = npos) const noexcept
+        -: 2728:    {
+        -: 2729:        return subview().find_last_not_of(ch, pos);
+        -: 2730:    }
+        -: 2731:
+        -: 2732:    /** Serialize @ref string to an output stream.
+        -: 2733:
+        -: 2734:        This function serializes a `string` as JSON into the output stream.
+        -: 2735:
+        -: 2736:        @return Reference to `os`.
+        -: 2737:
+        -: 2738:        @par Complexity
+        -: 2739:        Constant or linear in the size of `str`.
+        -: 2740:
+        -: 2741:        @par Exception Safety
+        -: 2742:        Strong guarantee.
+        -: 2743:        Calls to `memory_resource::allocate` may throw.
+        -: 2744:
+        -: 2745:        @param os The output stream to serialize to.
+        -: 2746:
+        -: 2747:        @param str The value to serialize.
+        -: 2748:    */
+        -: 2749:    BOOST_JSON_DECL
+        -: 2750:    friend
+        -: 2751:    std::ostream&
+        -: 2752:    operator<<(
+        -: 2753:        std::ostream& os,
+        -: 2754:        string const& str);
+        -: 2755:
+        -: 2756:private:
+        -: 2757:    class undo;
+        -: 2758:
+        -: 2759:    template<class It>
+        -: 2760:    using iter_cat = typename
+        -: 2761:        std::iterator_traits<It>::iterator_category;
+        -: 2762:
+        -: 2763:    template<class InputIt>
+        -: 2764:    void
+        -: 2765:    assign(InputIt first, InputIt last,
+        -: 2766:        std::random_access_iterator_tag);
+        -: 2767:
+        -: 2768:    template<class InputIt>
+        -: 2769:    void
+        -: 2770:    assign(InputIt first, InputIt last,
+        -: 2771:        std::input_iterator_tag);
+        -: 2772:
+        -: 2773:    template<class InputIt>
+        -: 2774:    void
+        -: 2775:    append(InputIt first, InputIt last,
+        -: 2776:        std::random_access_iterator_tag);
+        -: 2777:
+        -: 2778:    template<class InputIt>
+        -: 2779:    void
+        -: 2780:    append(InputIt first, InputIt last,
+        -: 2781:        std::input_iterator_tag);
+        -: 2782:
+        -: 2783:    BOOST_JSON_DECL
+        -: 2784:    void
+        -: 2785:    reserve_impl(std::size_t new_capacity);
+        -: 2786:};
+        -: 2787:
+        -: 2788://----------------------------------------------------------
+        -: 2789:
+        -: 2790:namespace detail
+        -: 2791:{
+        -: 2792:
+        -: 2793:template <>
+        -: 2794:inline
+        -: 2795:string_view
+       25: 2796:to_string_view<string>(string const& s) noexcept
+        -: 2797:{
+       25: 2798:    return s.subview();
+        -: 2799:}
+------------------
+_ZN5boost4json6detail14to_string_viewINS0_6stringEEENS_4core17basic_string_viewIcEERKT_:
+function _ZN5boost4json6detail14to_string_viewINS0_6stringEEENS_4core17basic_string_viewIcEERKT_ called 4 returned 100% blocks executed 100%
+        4: 2796:to_string_view<string>(string const& s) noexcept
+        -: 2797:{
+        4: 2798:    return s.subview();
+call    0 returned 100%
+        -: 2799:}
+------------------
+_ZN5boost4json6detail14to_string_viewINS0_6stringEEENS_4core17basic_string_viewIcEERKT_:
+function _ZN5boost4json6detail14to_string_viewINS0_6stringEEENS_4core17basic_string_viewIcEERKT_ called 1 returned 100% blocks executed 100%
+        1: 2796:to_string_view<string>(string const& s) noexcept
+        -: 2797:{
+        1: 2798:    return s.subview();
+call    0 returned 100%
+        -: 2799:}
+------------------
+_ZN5boost4json6detail14to_string_viewINS0_6stringEEENS_4core17basic_string_viewIcEERKT_:
+function _ZN5boost4json6detail14to_string_viewINS0_6stringEEENS_4core17basic_string_viewIcEERKT_ called 2 returned 100% blocks executed 100%
+        2: 2796:to_string_view<string>(string const& s) noexcept
+        -: 2797:{
+        2: 2798:    return s.subview();
+call    0 returned 100%
+        -: 2799:}
+------------------
+_ZN5boost4json6detail14to_string_viewINS0_6stringEEENS_4core17basic_string_viewIcEERKT_:
+function _ZN5boost4json6detail14to_string_viewINS0_6stringEEENS_4core17basic_string_viewIcEERKT_ called 17 returned 100% blocks executed 100%
+       17: 2796:to_string_view<string>(string const& s) noexcept
+        -: 2797:{
+       17: 2798:    return s.subview();
+call    0 returned 100%
+        -: 2799:}
+------------------
+_ZN5boost4json6detail14to_string_viewINS0_6stringEEENS_4core17basic_string_viewIcEERKT_:
+function _ZN5boost4json6detail14to_string_viewINS0_6stringEEENS_4core17basic_string_viewIcEERKT_ called 1 returned 100% blocks executed 100%
+        1: 2796:to_string_view<string>(string const& s) noexcept
+        -: 2797:{
+        1: 2798:    return s.subview();
+call    0 returned 100%
+        -: 2799:}
+------------------
+        -: 2800:
+        -: 2801:} // namespace detail
+        -: 2802:
+        -: 2803:
+        -: 2804:/** Return true if lhs equals rhs.
+        -: 2805:
+        -: 2806:    A lexicographical comparison is used.
+        -: 2807:*/
+        -: 2808:#ifdef BOOST_JSON_DOCS
+        -: 2809:bool
+        -: 2810:operator==(string const& lhs, string const& rhs) noexcept
+        -: 2811:#else
+        -: 2812:template<class T, class U>
+        -: 2813:detail::string_comp_op_requirement<T, U>
+       25: 2814:operator==(T const& lhs, U const& rhs) noexcept
+        -: 2815:#endif
+        -: 2816:{
+       25: 2817:    return detail::to_string_view(lhs) == detail::to_string_view(rhs);
+        -: 2818:}
+        -: 2819:
+        -: 2820:/** Return true if lhs does not equal rhs.
+        -: 2821:
+        -: 2822:    A lexicographical comparison is used.
+        -: 2823:*/
+        -: 2824:#ifdef BOOST_JSON_DOCS
+        -: 2825:bool
+        -: 2826:operator!=(string const& lhs, string const& rhs) noexcept
+        -: 2827:#else
+        -: 2828:template<class T, class U>
+        -: 2829:detail::string_comp_op_requirement<T, U>
+        -: 2830:operator!=(T const& lhs, U const& rhs) noexcept
+        -: 2831:#endif
+        -: 2832:{
+        -: 2833:    return detail::to_string_view(lhs) != detail::to_string_view(rhs);
+        -: 2834:}
+        -: 2835:
+        -: 2836:/** Return true if lhs is less than rhs.
+        -: 2837:
+        -: 2838:    A lexicographical comparison is used.
+        -: 2839:*/
+        -: 2840:#ifdef BOOST_JSON_DOCS
+        -: 2841:bool
+        -: 2842:operator<(string const& lhs, string const& rhs) noexcept
+        -: 2843:#else
+        -: 2844:template<class T, class U>
+        -: 2845:detail::string_comp_op_requirement<T, U>
+        -: 2846:operator<(T const& lhs, U const& rhs) noexcept
+        -: 2847:#endif
+        -: 2848:{
+        -: 2849:    return detail::to_string_view(lhs) < detail::to_string_view(rhs);
+        -: 2850:}
+        -: 2851:
+        -: 2852:/** Return true if lhs is less than or equal to rhs.
+        -: 2853:
+        -: 2854:    A lexicographical comparison is used.
+        -: 2855:*/
+        -: 2856:#ifdef BOOST_JSON_DOCS
+        -: 2857:bool
+        -: 2858:operator<=(string const& lhs, string const& rhs) noexcept
+        -: 2859:#else
+        -: 2860:template<class T, class U>
+        -: 2861:detail::string_comp_op_requirement<T, U>
+        -: 2862:operator<=(T const& lhs, U const& rhs) noexcept
+        -: 2863:#endif
+        -: 2864:{
+        -: 2865:    return detail::to_string_view(lhs) <= detail::to_string_view(rhs);
+        -: 2866:}
+        -: 2867:
+        -: 2868:#ifdef BOOST_JSON_DOCS
+        -: 2869:bool
+        -: 2870:operator>=(string const& lhs, string const& rhs) noexcept
+        -: 2871:#else
+        -: 2872:template<class T, class U>
+        -: 2873:detail::string_comp_op_requirement<T, U>
+        -: 2874:operator>=(T const& lhs, U const& rhs) noexcept
+        -: 2875:#endif
+        -: 2876:{
+        -: 2877:    return detail::to_string_view(lhs) >= detail::to_string_view(rhs);
+        -: 2878:}
+        -: 2879:
+        -: 2880:/** Return true if lhs is greater than rhs.
+        -: 2881:
+        -: 2882:    A lexicographical comparison is used.
+        -: 2883:*/
+        -: 2884:#ifdef BOOST_JSON_DOCS
+        -: 2885:bool
+        -: 2886:operator>(string const& lhs, string const& rhs) noexcept
+        -: 2887:#else
+        -: 2888:template<class T, class U>
+        -: 2889:detail::string_comp_op_requirement<T, U>
+        -: 2890:operator>(T const& lhs, U const& rhs) noexcept
+        -: 2891:#endif
+        -: 2892:{
+        -: 2893:    return detail::to_string_view(lhs) > detail::to_string_view(rhs);
+        -: 2894:}
+        -: 2895:
+        -: 2896:} // namespace json
+        -: 2897:} // namespace boost
+        -: 2898:
+        -: 2899:// std::hash specialization
+        -: 2900:#ifndef BOOST_JSON_DOCS
+        -: 2901:namespace std {
+        -: 2902:template<>
+        -: 2903:struct hash< ::boost::json::string >
+        -: 2904:{
+        -: 2905:    BOOST_JSON_DECL
+        -: 2906:    std::size_t
+        -: 2907:    operator()( ::boost::json::string const& js ) const noexcept;
+        -: 2908:};
+        -: 2909:} // std
+        -: 2910:#endif
+        -: 2911:
+        -: 2912:#include <boost/json/impl/string.hpp>
+        -: 2913:
+        -: 2914:#endif

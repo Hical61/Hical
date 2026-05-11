@@ -1,0 +1,576 @@
+        -:    0:Source:/home/runner/work/Hical/Hical/src/core/Log.cpp
+        -:    1:#include "Log.h"
+        -:    2:
+        -:    3:#include "LogChannel.h"
+        -:    4:#include "LogFormatter.h"
+        -:    5:#include "LogRecord.h"
+        -:    6:#include "LogSink.h"
+        -:    7:
+        -:    8:#include <cstring>
+        -:    9:#include <sstream>
+        -:   10:#include <stdexcept>
+        -:   11:#include <thread>
+        -:   12:
+        -:   13:namespace hical
+        -:   14:{
+        -:   15:
+        -:   16:	// ============ thread_local 缓存 ============
+        -:   17:
+        -:   18:	namespace
+        -:   19:	{
+        -:   20:		struct ThreadIdCache
+        -:   21:		{
+        -:   22:			bool initialized {false};
+        -:   23:			uint64_t threadId {0};
+        -:   24:		};
+        -:   25:
+        -:   26:		// NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
+        -:   27:		thread_local ThreadIdCache tidTlsCache;
+        -:   28:
+        -:   29:		// NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
+        -:   30:
+function _ZN5hical12_GLOBAL__N_114cachedThreadIdEv called 428 returned 100% blocks executed 57%
+      428:   31:		uint64_t cachedThreadId()
+        -:   32:		{
+      428:   33:			auto& cache = tidTlsCache;
+      428:   34:			if (!cache.initialized)
+branch  0 taken 7% (fallthrough)
+branch  1 taken 93%
+        -:   35:			{
+       28:   36:				std::ostringstream oss;
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       28:   37:				oss << std::this_thread::get_id();
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:   38:				try
+        -:   39:				{
+       28:   40:					cache.threadId = std::stoull(oss.str());
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+        -:   41:				}
+    =====:   42:				catch (...)
+call    0 never executed
+        -:   43:				{
+    =====:   44:					cache.threadId = std::hash<std::thread::id> {}(std::this_thread::get_id());
+call    0 never executed
+call    1 never executed
+    =====:   45:				}
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+       28:   46:				cache.initialized = true;
+       28:   47:			}
+call    0 returned 100%
+call    1 never executed
+      428:   48:			return cache.threadId;
+        -:   49:		}
+        -:   50:
+        -:   51:		// 默认 StderrSink（当无 Sink 配置时使用）
+function _ZN5hical12_GLOBAL__N_117defaultStderrSinkEv called 1 returned 100% blocks executed 100%
+        1:   52:		StderrSink& defaultStderrSink()
+        -:   53:		{
+        1:   54:			static StderrSink sSink;
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0%
+call    5 returned 100%
+call    6 returned 100%
+        1:   55:			return sSink;
+        -:   56:		}
+        -:   57:
+        -:   58:		// 默认 TextFormatter
+function _ZN5hical12_GLOBAL__N_120defaultTextFormatterEv called 433 returned 100% blocks executed 82%
+      433:   59:		const std::shared_ptr<TextFormatter>& defaultTextFormatter()
+        -:   60:		{
+      433:   61:			static auto sFormatter = std::make_shared<TextFormatter>();
+branch  0 taken 6% (fallthrough)
+branch  1 taken 94%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0%
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+call    8 returned 100%
+call    9 returned 100%
+branch 10 never executed (fallthrough)
+branch 11 never executed
+call   12 never executed
+      433:   62:			return sFormatter;
+        -:   63:		}
+        -:   64:	} // namespace
+        -:   65:
+        -:   66:	// ============ Logger 实现 ============
+        -:   67:
+function _ZN5hical6LoggerC2Ev called 42 returned 100% blocks executed 73%
+       42:   68:	Logger::Logger()
+       42:   69:		: m_sinks(std::make_shared<const std::vector<std::shared_ptr<LogSink>>>())
+call    0 returned 100%
+       84:   70:		, m_channels(std::make_unique<LogChannelRegistry>())
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+        -:   71:	{
+       42:   72:	}
+call    0 never executed
+call    1 never executed
+        -:   73:
+function _ZN5hical6Logger8instanceEv called 1181 returned 100% blocks executed 82%
+     1181:   74:	Logger& Logger::instance()
+        -:   75:	{
+     1181:   76:		static Logger sInstance;
+branch  0 taken 4% (fallthrough)
+branch  1 taken 96%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0%
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+call    8 returned 100%
+call    9 returned 100%
+branch 10 never executed (fallthrough)
+branch 11 never executed
+call   12 never executed
+     1181:   77:		return sInstance;
+        -:   78:	}
+        -:   79:
+function _ZN5hical6Logger8setLevelENS_8LogLevelE called 109 returned 100% blocks executed 100%
+      109:   80:	void Logger::setLevel(LogLevel level)
+        -:   81:	{
+      109:   82:		m_level.store(level, std::memory_order_relaxed);
+call    0 returned 100%
+      109:   83:	}
+        -:   84:
+function _ZNK5hical6Logger5levelEv called 442 returned 100% blocks executed 100%
+      442:   85:	LogLevel Logger::level() const
+        -:   86:	{
+      442:   87:		return m_level.load(std::memory_order_relaxed);
+call    0 returned 100%
+        -:   88:	}
+        -:   89:
+function _ZN5hical6Logger13setFlushLevelENS_8LogLevelE called 76 returned 100% blocks executed 100%
+       76:   90:	void Logger::setFlushLevel(LogLevel level)
+        -:   91:	{
+       76:   92:		m_flushLevel.store(level, std::memory_order_relaxed);
+call    0 returned 100%
+       76:   93:	}
+        -:   94:
+function _ZNK5hical6Logger10flushLevelEv called 5 returned 100% blocks executed 100%
+        5:   95:	LogLevel Logger::flushLevel() const
+        -:   96:	{
+        5:   97:		return m_flushLevel.load(std::memory_order_relaxed);
+call    0 returned 100%
+        -:   98:	}
+        -:   99:
+function _ZN5hical6Logger9setOutputERSo called 99 returned 100% blocks executed 64%
+       99:  100:	void Logger::setOutput(std::ostream& os)
+        -:  101:	{
+       99:  102:		auto newSinks = std::make_shared<std::vector<std::shared_ptr<LogSink>>>();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       99:  103:		newSinks->push_back(std::make_shared<OStreamSink>(os));
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+call    8 returned 100%
+call    9 returned 100%
+call   10 never executed
+call   11 never executed
+       99:  104:		std::lock_guard<std::mutex> lock(m_mutex);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       99:  105:		m_sinks = std::move(newSinks);
+call    0 returned 100%
+call    1 returned 100%
+       99:  106:	}
+call    0 returned 100%
+call    1 returned 100%
+call    2 never executed
+        -:  107:
+function _ZN5hical6Logger9setOutputERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEE called 1 returned 100% blocks executed 57%
+        1:  108:	void Logger::setOutput(const std::string& filePath)
+        -:  109:	{
+        1:  110:		auto fileSink = std::make_shared<FileSink>(LogFile::Options {.basePath = filePath});
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+branch  8 never executed (fallthrough)
+branch  9 never executed
+call   10 never executed
+        1:  111:		auto newSinks = std::make_shared<std::vector<std::shared_ptr<LogSink>>>();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  112:		newSinks->push_back(std::move(fileSink));
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+        1:  113:		std::lock_guard<std::mutex> lock(m_mutex);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  114:		m_sinks = std::move(newSinks);
+call    0 returned 100%
+call    1 returned 100%
+        1:  115:	}
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 never executed
+call    4 never executed
+        -:  116:
+function _ZN5hical6Logger3logENS_8LogLevelEPKciSt17basic_string_viewIcSt11char_traitsIcEE called 0 returned 0% blocks executed 0%
+    #####:  117:	void Logger::log(LogLevel lvl, const char* file, int line, std::string_view msg)
+        -:  118:	{
+    #####:  119:		output(lvl, file, line, msg);
+call    0 never executed
+    #####:  120:	}
+        -:  121:
+function _ZN5hical6Logger7addSinkESt10shared_ptrINS_7LogSinkEE called 5 returned 100% blocks executed 75%
+        5:  122:	void Logger::addSink(std::shared_ptr<LogSink> sink)
+        -:  123:	{
+        5:  124:		std::lock_guard<std::mutex> lock(m_mutex);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        5:  125:		auto newSinks = std::make_shared<std::vector<std::shared_ptr<LogSink>>>(*m_sinks);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        5:  126:		newSinks->push_back(std::move(sink));
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+        5:  127:		m_sinks = std::move(newSinks);
+call    0 returned 100%
+call    1 returned 100%
+        5:  128:	}
+call    0 returned 100%
+call    1 returned 100%
+call    2 never executed
+call    3 never executed
+        -:  129:
+function _ZN5hical6Logger7setSinkESt10shared_ptrINS_7LogSinkEE called 2 returned 100% blocks executed 85%
+        2:  130:	void Logger::setSink(std::shared_ptr<LogSink> sink)
+        -:  131:	{
+        2:  132:		auto newSinks = std::make_shared<std::vector<std::shared_ptr<LogSink>>>();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        2:  133:		newSinks->push_back(std::move(sink));
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+        2:  134:		std::lock_guard<std::mutex> lock(m_mutex);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        2:  135:		m_sinks = std::move(newSinks);
+call    0 returned 100%
+call    1 returned 100%
+        2:  136:	}
+call    0 returned 100%
+call    1 returned 100%
+call    2 never executed
+        -:  137:
+function _ZN5hical6Logger10clearSinksEv called 5 returned 100% blocks executed 70%
+        5:  138:	void Logger::clearSinks()
+        -:  139:	{
+        5:  140:		std::lock_guard<std::mutex> lock(m_mutex);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        5:  141:		m_sinks = std::make_shared<const std::vector<std::shared_ptr<LogSink>>>();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+        5:  142:	}
+call    0 returned 100%
+call    1 never executed
+        -:  143:
+function _ZN5hical6Logger12setFormatterESt10shared_ptrINS_12LogFormatterEE called 0 returned 0% blocks executed 0%
+    #####:  144:	void Logger::setFormatter(std::shared_ptr<LogFormatter> formatter)
+        -:  145:	{
+    #####:  146:		std::lock_guard<std::mutex> lock(m_mutex);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  147:		m_formatter = std::move(formatter);
+call    0 never executed
+call    1 never executed
+    #####:  148:	}
+call    0 never executed
+        -:  149:
+function _ZN5hical6Logger8channelsEv called 5 returned 100% blocks executed 100%
+        5:  150:	LogChannelRegistry& Logger::channels()
+        -:  151:	{
+        5:  152:		return *m_channels;
+call    0 returned 100%
+        -:  153:	}
+        -:  154:
+function _ZN5hical6Logger6outputENS_8LogLevelEPKciSt17basic_string_viewIcSt11char_traitsIcEE called 427 returned 101% blocks executed 80%
+      427:  155:	void Logger::output(LogLevel lvl, const char* file, int line, std::string_view msg)
+        -:  156:	{
+      427:  157:		LogRecord record;
+call    0 returned 101%
+branch  1 taken 101% (fallthrough)
+branch  2 taken 0% (throw)
+      430:  158:		record.level = lvl;
+      430:  159:		record.timestamp = std::chrono::system_clock::now();
+call    0 returned 100%
+      428:  160:		record.threadId = cachedThreadId();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+      430:  161:		record.file = file;
+      430:  162:		record.line = line;
+      430:  163:		record.message = msg;
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  164:
+      430:  165:		emit(record);
+call    0 returned 101%
+branch  1 taken 101% (fallthrough)
+branch  2 taken 0% (throw)
+      433:  166:	}
+call    0 returned 100%
+call    1 never executed
+        -:  167:
+function _ZN5hical6Logger16outputWithFieldsENS_8LogLevelEPKciN5boost4json6objectESt17basic_string_viewIcSt11char_traitsIcEE called 0 returned 0% blocks executed 0%
+    #####:  168:	void Logger::outputWithFields(LogLevel lvl,
+        -:  169:								  const char* file,
+        -:  170:								  int line,
+        -:  171:								  boost::json::object fields,
+        -:  172:								  std::string_view msg)
+        -:  173:	{
+    #####:  174:		LogRecord record;
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  175:		record.level = lvl;
+    #####:  176:		record.timestamp = std::chrono::system_clock::now();
+call    0 never executed
+    #####:  177:		record.threadId = cachedThreadId();
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  178:		record.file = file;
+    #####:  179:		record.line = line;
+    #####:  180:		record.message = msg;
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  181:		record.fields = std::move(fields);
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+        -:  182:
+    #####:  183:		emit(record);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  184:	}
+call    0 never executed
+call    1 never executed
+        -:  185:
+function _ZN5hical6Logger4emitERKNS_9LogRecordE called 430 returned 101% blocks executed 78%
+      430:  186:	void Logger::emit(const LogRecord& record)
+        -:  187:	{
+        -:  188:		// COW snapshot：锁内仅拷贝 shared_ptr（1 次 atomic_inc），不拷贝 vector
+      430:  189:		std::shared_ptr<LogFormatter> fmtSnap;
+      430:  190:		std::shared_ptr<const std::vector<std::shared_ptr<LogSink>>> sinksSnap;
+        -:  191:		{
+      430:  192:			std::lock_guard<std::mutex> lock(m_mutex);
+call    0 returned 101%
+branch  1 taken 101% (fallthrough)
+branch  2 taken 0% (throw)
+      433:  193:			fmtSnap = m_formatter;
+call    0 returned 100%
+      433:  194:			sinksSnap = m_sinks;
+call    0 returned 100%
+      433:  195:		}
+call    0 returned 100%
+        -:  196:
+        -:  197:		// 锁外格式化（纯函数，不访问 Logger 共享状态）
+     433*:  198:		LogFormatter* formatter = fmtSnap ? fmtSnap.get() : defaultTextFormatter().get();
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+call    3 never executed
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+call    7 returned 100%
+      433:  199:		auto formattedLine = formatter->format(record);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  200:
+        -:  201:		bool needFlush =
+      432:  202:			record.level >= m_flushLevel.load(std::memory_order_relaxed) || record.level == LogLevel::hFatal;
+call    0 returned 100%
+branch  1 taken 99% (fallthrough)
+branch  2 taken 1%
+branch  3 taken 0% (fallthrough)
+branch  4 taken 100%
+        -:  203:
+        -:  204:		// 锁外分发到各 Sink（Sink 接口要求实现线程安全）
+      433:  205:		if (sinksSnap->empty())
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 1% (fallthrough)
+branch  3 taken 100%
+        -:  206:		{
+        1:  207:			defaultStderrSink().write(formattedLine);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+        1:  208:			if (needFlush)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:  209:			{
+    #####:  210:				defaultStderrSink().flush();
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+        -:  211:			}
+        -:  212:		}
+        -:  213:		else
+        -:  214:		{
+      864:  215:			for (const auto& sink : *sinksSnap)
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+call    5 returned 100%
+branch  6 taken 50%
+branch  7 taken 50% (fallthrough)
+        -:  216:			{
+      432:  217:				if (record.level >= sink->sinkLevel())
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 1%
+        -:  218:				{
+      429:  219:					sink->write(formattedLine);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+        -:  220:				}
+        -:  221:			}
+      431:  222:			if (needFlush)
+branch  0 taken 1% (fallthrough)
+branch  1 taken 99%
+        -:  223:			{
+        8:  224:				for (const auto& sink : *sinksSnap)
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+call    5 returned 100%
+branch  6 taken 50%
+branch  7 taken 50% (fallthrough)
+        -:  225:				{
+        4:  226:					sink->flush();
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:  227:				}
+        -:  228:			}
+        -:  229:		}
+        -:  230:
+        -:  231:		// Fatal 级别：flush stderr 后 abort
+      433:  232:		if (record.level == LogLevel::hFatal)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:  233:		{
+    #####:  234:			fflush(stderr);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  235:			std::abort();
+call    0 never executed
+        -:  236:		}
+      433:  237:	}
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 never executed
+call    4 never executed
+call    5 never executed
+        -:  238:
+function _ZN5hical6Logger6emitToERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEERKNS_9LogRecordE called 0 returned 0% blocks executed 0%
+    #####:  239:	void Logger::emitTo(const std::string& channelName, const LogRecord& record)
+        -:  240:	{
+    #####:  241:		auto ch = m_channels->get(channelName);
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+    #####:  242:		if (ch)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+        -:  243:		{
+    #####:  244:			ch->emit(record);
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+        -:  245:		}
+    #####:  246:	}
+call    0 never executed
+call    1 never executed
+        -:  247:
+        -:  248:} // namespace hical

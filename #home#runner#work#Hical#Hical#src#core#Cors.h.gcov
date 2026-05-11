@@ -1,0 +1,318 @@
+        -:    0:Source:/home/runner/work/Hical/Hical/src/core/Cors.h
+        -:    1:#pragma once
+        -:    2:
+        -:    3:#include "Coroutine.h"
+        -:    4:#include "HttpRequest.h"
+        -:    5:#include "HttpResponse.h"
+        -:    6:#include "HttpTypes.h"
+        -:    7:#include "Middleware.h"
+        -:    8:#include <stdexcept>
+        -:    9:#include <string>
+        -:   10:#include <vector>
+        -:   11:
+        -:   12:namespace hical
+        -:   13:{
+        -:   14:
+        -:   15:	/**
+        -:   16:	 * @brief CORS 配置选项
+        -:   17:	 */
+        -:   18:	struct CorsOptions
+        -:   19:	{
+        -:   20:		/// 允许的 Origin 列表（{"*"} 表示全放行，具体域名精确匹配）
+        -:   21:		std::vector<std::string> allowedOrigins = {"*"};
+        -:   22:
+        -:   23:		/// 允许的 HTTP 方法
+        -:   24:		std::vector<std::string> allowedMethods = {"GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"};
+        -:   25:
+        -:   26:		/// 允许的请求头
+        -:   27:		std::vector<std::string> allowedHeaders = {"Content-Type", "Authorization"};
+        -:   28:
+        -:   29:		/// 暴露给客户端的响应头
+        -:   30:		std::vector<std::string> exposeHeaders;
+        -:   31:
+        -:   32:		/// 是否允许携带凭证（Cookie 等）
+        -:   33:		bool allowCredentials = false;
+        -:   34:
+        -:   35:		/// preflight 缓存时间（秒）
+        -:   36:		int maxAge = 86400;
+        -:   37:	};
+        -:   38:
+        -:   39:	namespace detail
+        -:   40:	{
+        -:   41:
+function _ZN5hical6detail11joinStringsERKSt6vectorINSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEESaIS7_EE called 42 returned 100% blocks executed 92%
+       42:   42:		inline std::string joinStrings(const std::vector<std::string>& vec)
+        -:   43:		{
+       42:   44:			std::string result;
+call    0 returned 100%
+      156:   45:			for (size_t i = 0; i < vec.size(); ++i)
+call    0 returned 100%
+branch  1 taken 73%
+branch  2 taken 27% (fallthrough)
+        -:   46:			{
+      114:   47:				if (i > 0)
+branch  0 taken 75% (fallthrough)
+branch  1 taken 25%
+        -:   48:				{
+       85:   49:					result += ", ";
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:   50:				}
+      114:   51:				result += vec[i];
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:   52:			}
+       42:   53:			return result;
+    =====:   54:		}
+call    0 never executed
+        -:   55:
+        -:   56:	} // namespace detail
+        -:   57:
+        -:   58:	/**
+        -:   59:	 * @brief 创建 CORS 中间件
+        -:   60:	 * 行为：
+        -:   61:	 * - 无 Origin 头 → 直接透传，不附加任何 CORS 响应头
+        -:   62:	 * - Origin 不在白名单 → 直接透传，不附加任何 CORS 响应头
+        -:   63:	 * - OPTIONS preflight → 返回 204，附加完整 CORS 预检响应头，不调用 next
+        -:   64:	 * - 其他跨域请求 → 调用 next，后置附加 CORS 简单响应头
+        -:   65:	 * - allowCredentials=true 时 Allow-Origin 必须回显具体 origin 而非 "*"
+        -:   66:	 * - 非通配符模式时附加 Vary: Origin，提示缓存按 Origin 区分
+        -:   67:	 * @param opts CORS 配置选项
+        -:   68:	 * @return MiddlewareHandler 可传入 server.use() 的中间件
+        -:   69:	 */
+function _ZN5hical18makeCorsMiddlewareENS_11CorsOptionsE called 15 returned 93% blocks executed 60%
+       15:   70:	inline MiddlewareHandler makeCorsMiddleware(CorsOptions opts = {})
+        -:   71:	{
+        -:   72:		// 安全校验：allowCredentials=true 时禁止通配符 origin
+        -:   73:		// 此组合等于对任意 origin 放行带凭证的跨域请求，是 CSRF 攻击向量
+       15:   74:		if (opts.allowCredentials)
+branch  0 taken 20% (fallthrough)
+branch  1 taken 80%
+        -:   75:		{
+        5:   76:			for (const auto& o : opts.allowedOrigins)
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 60%
+branch  6 taken 40% (fallthrough)
+        -:   77:			{
+        3:   78:				if (o == "*")
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+branch  3 taken 33% (fallthrough)
+branch  4 taken 67%
+        -:   79:				{
+        -:   80:					throw std::invalid_argument("CORS: allowCredentials=true with wildcard origin '*' is insecure. "
+        1:   81:												"Please specify explicit allowed origins.");
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 never executed
+        -:   82:				}
+        -:   83:			}
+        -:   84:		}
+        -:   85:
+        -:   86:		// 预计算不变量，避免每次 preflight 请求重复拼接
+       14:   87:		auto methodsStr = detail::joinStrings(opts.allowedMethods);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       14:   88:		auto headersStr = detail::joinStrings(opts.allowedHeaders);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       14:   89:		auto maxAgeStr = std::to_string(opts.maxAge);
+call    0 returned 100%
+       14:   90:		auto exposeHeadersStr = detail::joinStrings(opts.exposeHeaders);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:   91:
+function _ZZN5hical18makeCorsMiddlewareENS_11CorsOptionsEENKUlRNS_11HttpRequestESt8functionIFN5boost4asio9awaitableINS_12HttpResponseENS5_15any_io_executorEEES2_EEE_clES2_SB_ called 14 returned 100% blocks executed 42%
+       98:   92:		return [opts = std::move(opts),
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+call    5 returned 100%
+call    6 returned 100%
+call    7 never executed
+branch  8 never executed (fallthrough)
+branch  9 never executed
+call   10 never executed
+branch 11 never executed (fallthrough)
+branch 12 never executed
+call   13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed
+call   16 never executed
+branch 17 never executed (fallthrough)
+branch 18 never executed
+call   19 never executed
+call   20 returned 100%
+branch 21 taken 100% (fallthrough)
+branch 22 taken 0% (throw)
+       14:   93:				methodsStr = std::move(methodsStr),
+call    0 returned 100%
+       14:   94:				headersStr = std::move(headersStr),
+call    0 returned 100%
+       14:   95:				maxAgeStr = std::move(maxAgeStr),
+call    0 returned 100%
+       14:   96:				exposeHeadersStr = std::move(exposeHeadersStr)](HttpRequest& req,
+call    0 returned 100%
+        -:   97:																MiddlewareNext next) -> Awaitable<HttpResponse>
+        -:   98:		{
+        -:   99:			auto origin = std::string(req.header("Origin"));
+        -:  100:
+        -:  101:			if (origin.empty())
+        -:  102:			{
+        -:  103:				co_return co_await next(req);
+        -:  104:			}
+        -:  105:
+        -:  106:			bool isWildcard = false;
+        -:  107:			bool originAllowed = false;
+        -:  108:			for (const auto& allowed : opts.allowedOrigins)
+        -:  109:			{
+        -:  110:				if (allowed == "*")
+        -:  111:				{
+        -:  112:					isWildcard = true;
+        -:  113:					originAllowed = true;
+        -:  114:					break;
+        -:  115:				}
+        -:  116:				if (allowed == origin)
+        -:  117:				{
+        -:  118:					originAllowed = true;
+        -:  119:					break;
+        -:  120:				}
+        -:  121:			}
+        -:  122:
+        -:  123:			if (!originAllowed)
+        -:  124:			{
+        -:  125:				co_return co_await next(req);
+        -:  126:			}
+        -:  127:
+        -:  128:			// allowCredentials=true 时规范禁止用 "*"，必须回显具体 origin
+        -:  129:			std::string allowOriginValue = (opts.allowCredentials || !isWildcard) ? origin : "*";
+        -:  130:
+function _ZZZN5hical18makeCorsMiddlewareENS_11CorsOptionsEENKUlRNS_11HttpRequestESt8functionIFN5boost4asio9awaitableINS_12HttpResponseENS5_15any_io_executorEEES2_EEE_clES2_SB_ENKUlRS7_E_clESD_ called 12 returned 100% blocks executed 54%
+       12:  131:			auto applyCommonHeaders = [&](HttpResponse& res)
+        -:  132:			{
+       24:  133:				res.setHeader("Access-Control-Allow-Origin", allowOriginValue);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+call    8 never executed
+       12:  134:				if (opts.allowCredentials)
+branch  0 taken 17% (fallthrough)
+branch  1 taken 83%
+        -:  135:				{
+        8:  136:					res.setHeader("Access-Control-Allow-Credentials", "true");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+call    9 returned 100%
+call   10 returned 100%
+call   11 never executed
+call   12 never executed
+call   13 never executed
+        -:  137:				}
+       12:  138:				if (!isWildcard)
+branch  0 taken 42% (fallthrough)
+branch  1 taken 58%
+        -:  139:				{
+       20:  140:					res.setHeader("Vary", "Origin");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+call    9 returned 100%
+call   10 returned 100%
+call   11 never executed
+call   12 never executed
+        -:  141:				}
+       12:  142:			};
+        -:  143:
+        -:  144:			// CORS preflight 必须同时满足：OPTIONS 方法 + Access-Control-Request-Method 头
+        -:  145:			// 不带 ACRM 的 OPTIONS 是普通业务请求，应正常路由到 handler
+        -:  146:			bool isPreflight =
+        -:  147:				req.method() == HttpMethod::hOptions && !req.header("Access-Control-Request-Method").empty();
+        -:  148:
+        -:  149:			if (isPreflight)
+        -:  150:			{
+        -:  151:				HttpResponse res;
+        -:  152:				res.setStatus(HttpStatusCode::hNoContent);
+        -:  153:				applyCommonHeaders(res);
+        -:  154:				res.setHeader("Access-Control-Allow-Methods", methodsStr);
+        -:  155:				res.setHeader("Access-Control-Allow-Headers", headersStr);
+        -:  156:				res.setHeader("Access-Control-Max-Age", maxAgeStr);
+        -:  157:				co_return res;
+        -:  158:			}
+        -:  159:
+        -:  160:			auto res = co_await next(req);
+        -:  161:			applyCommonHeaders(res);
+        -:  162:
+        -:  163:			if (!exposeHeadersStr.empty())
+        -:  164:			{
+        -:  165:				res.setHeader("Access-Control-Expose-Headers", exposeHeadersStr);
+        -:  166:			}
+        -:  167:
+        -:  168:			co_return res;
+       56:  169:		};
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+call    5 returned 100%
+call    6 returned 100%
+call    7 never executed
+branch  8 never executed (fallthrough)
+branch  9 never executed
+call   10 never executed
+branch 11 never executed (fallthrough)
+branch 12 never executed
+call   13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed
+call   16 never executed
+call   17 never executed
+branch 18 never executed (fallthrough)
+branch 19 never executed (throw)
+call   20 never executed
+call   21 never executed
+       14:  170:	}
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 never executed
+call    5 never executed
+call    6 never executed
+call    7 never executed
+        -:  171:
+        -:  172:} // namespace hical

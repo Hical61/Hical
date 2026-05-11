@@ -1,0 +1,2456 @@
+        -:    0:Source:/usr/include/c++/14/future
+        -:    1:// <future> -*- C++ -*-
+        -:    2:
+        -:    3:// Copyright (C) 2009-2024 Free Software Foundation, Inc.
+        -:    4://
+        -:    5:// This file is part of the GNU ISO C++ Library.  This library is free
+        -:    6:// software; you can redistribute it and/or modify it under the
+        -:    7:// terms of the GNU General Public License as published by the
+        -:    8:// Free Software Foundation; either version 3, or (at your option)
+        -:    9:// any later version.
+        -:   10:
+        -:   11:// This library is distributed in the hope that it will be useful,
+        -:   12:// but WITHOUT ANY WARRANTY; without even the implied warranty of
+        -:   13:// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+        -:   14:// GNU General Public License for more details.
+        -:   15:
+        -:   16:// Under Section 7 of GPL version 3, you are granted additional
+        -:   17:// permissions described in the GCC Runtime Library Exception, version
+        -:   18:// 3.1, as published by the Free Software Foundation.
+        -:   19:
+        -:   20:// You should have received a copy of the GNU General Public License and
+        -:   21:// a copy of the GCC Runtime Library Exception along with this program;
+        -:   22:// see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
+        -:   23:// <http://www.gnu.org/licenses/>.
+        -:   24:
+        -:   25:/** @file include/future
+        -:   26: *  This is a Standard C++ Library header.
+        -:   27: */
+        -:   28:
+        -:   29:#ifndef _GLIBCXX_FUTURE
+        -:   30:#define _GLIBCXX_FUTURE 1
+        -:   31:
+        -:   32:#pragma GCC system_header
+        -:   33:
+        -:   34:#include <bits/requires_hosted.h> // concurrency
+        -:   35:
+        -:   36:#if __cplusplus < 201103L
+        -:   37:# include <bits/c++0x_warning.h>
+        -:   38:#else
+        -:   39:
+        -:   40:#include <mutex>	      // call_once
+        -:   41:#include <condition_variable> // __at_thread_exit_elt
+        -:   42:#include <system_error>
+        -:   43:#include <bits/atomic_base.h> // atomic_flag
+        -:   44:#include <bits/allocated_ptr.h>
+        -:   45:#include <bits/atomic_futex.h>
+        -:   46:#include <bits/exception_defines.h>
+        -:   47:#include <bits/invoke.h>
+        -:   48:#include <bits/unique_ptr.h>
+        -:   49:#include <bits/shared_ptr.h>
+        -:   50:#include <bits/std_function.h>
+        -:   51:#include <bits/std_thread.h>
+        -:   52:#include <bits/uses_allocator.h>
+        -:   53:#include <ext/aligned_buffer.h>
+        -:   54:
+        -:   55:namespace std _GLIBCXX_VISIBILITY(default)
+        -:   56:{
+        -:   57:_GLIBCXX_BEGIN_NAMESPACE_VERSION
+        -:   58:
+        -:   59:  /**
+        -:   60:   * @defgroup futures Futures
+        -:   61:   * @ingroup concurrency
+        -:   62:   *
+        -:   63:   * Futures and promises provide support for retrieving the result from
+        -:   64:   * an asynchronous function, e.g. one that is running in another thread.
+        -:   65:   * A `std::future` represents an asynchronous result that will become
+        -:   66:   * ready at some later time. A consumer can wait on a future until the
+        -:   67:   * result is ready to be accessed.
+        -:   68:   *
+        -:   69:   * @since C++11
+        -:   70:   * @{
+        -:   71:   */
+        -:   72:
+        -:   73:  /// Error code for futures
+        -:   74:  enum class future_errc
+        -:   75:  {
+        -:   76:    future_already_retrieved = 1,
+        -:   77:    promise_already_satisfied,
+        -:   78:    no_state,
+        -:   79:    broken_promise
+        -:   80:  };
+        -:   81:
+        -:   82:  /// Specialization that allows `future_errc` to convert to `error_code`.
+        -:   83:  template<>
+        -:   84:    struct is_error_code_enum<future_errc> : public true_type { };
+        -:   85:
+        -:   86:  /// Points to a statically-allocated object derived from error_category.
+        -:   87:  [[__nodiscard__, __gnu__::__const__]]
+        -:   88:  const error_category&
+        -:   89:  future_category() noexcept;
+        -:   90:
+        -:   91:  /// Overload of make_error_code for `future_errc`.
+        -:   92:  [[__nodiscard__]]
+        -:   93:  inline error_code
+    #####:   94:  make_error_code(future_errc __errc) noexcept
+    #####:   95:  { return error_code(static_cast<int>(__errc), future_category()); }
+------------------
+_ZSt15make_error_codeSt11future_errc:
+function _ZSt15make_error_codeSt11future_errc called 0 returned 0% blocks executed 0%
+    #####:   94:  make_error_code(future_errc __errc) noexcept
+    #####:   95:  { return error_code(static_cast<int>(__errc), future_category()); }
+call    0 never executed
+------------------
+_ZSt15make_error_codeSt11future_errc:
+function _ZSt15make_error_codeSt11future_errc called 0 returned 0% blocks executed 0%
+    #####:   94:  make_error_code(future_errc __errc) noexcept
+    #####:   95:  { return error_code(static_cast<int>(__errc), future_category()); }
+call    0 never executed
+------------------
+        -:   96:
+        -:   97:  /// Overload of make_error_condition for `future_errc`.
+        -:   98:  [[__nodiscard__]]
+        -:   99:  inline error_condition
+        -:  100:  make_error_condition(future_errc __errc) noexcept
+        -:  101:  { return error_condition(static_cast<int>(__errc), future_category()); }
+        -:  102:
+        -:  103:  /**
+        -:  104:   *  @brief Exception type thrown by futures.
+        -:  105:   *  @ingroup exceptions
+        -:  106:   *  @since C++11
+        -:  107:   */
+        -:  108:  class future_error : public logic_error
+        -:  109:  {
+        -:  110:  public:
+        -:  111:    explicit
+    #####:  112:    future_error(future_errc __errc)
+    #####:  113:    : future_error(std::make_error_code(__errc))
+    #####:  114:    { }
+------------------
+_ZNSt12future_errorC2ESt11future_errc:
+function _ZNSt12future_errorC2ESt11future_errc called 0 returned 0% blocks executed 0%
+    #####:  112:    future_error(future_errc __errc)
+    #####:  113:    : future_error(std::make_error_code(__errc))
+call    0 never executed
+call    1 never executed
+    #####:  114:    { }
+------------------
+_ZNSt12future_errorC2ESt11future_errc:
+function _ZNSt12future_errorC2ESt11future_errc called 0 returned 0% blocks executed 0%
+    #####:  112:    future_error(future_errc __errc)
+    #####:  113:    : future_error(std::make_error_code(__errc))
+call    0 never executed
+call    1 never executed
+    #####:  114:    { }
+------------------
+        -:  115:
+        -:  116:    virtual ~future_error() noexcept;
+        -:  117:
+        -:  118:    virtual const char*
+        -:  119:    what() const noexcept;
+        -:  120:
+        -:  121:    const error_code&
+        -:  122:    code() const noexcept { return _M_code; }
+        -:  123:
+        -:  124:  private:
+        -:  125:    explicit
+    #####:  126:    future_error(error_code __ec)
+    #####:  127:    : logic_error("std::future_error: " + __ec.message()), _M_code(__ec)
+    #####:  128:    { }
+------------------
+_ZNSt12future_errorC2ESt10error_code:
+function _ZNSt12future_errorC2ESt10error_code called 0 returned 0% blocks executed 0%
+    #####:  126:    future_error(error_code __ec)
+    #####:  127:    : logic_error("std::future_error: " + __ec.message()), _M_code(__ec)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed (throw)
+call    9 never executed
+call   10 never executed
+call   11 never executed
+call   12 never executed
+    #####:  128:    { }
+------------------
+_ZNSt12future_errorC2ESt10error_code:
+function _ZNSt12future_errorC2ESt10error_code called 0 returned 0% blocks executed 0%
+    #####:  126:    future_error(error_code __ec)
+    #####:  127:    : logic_error("std::future_error: " + __ec.message()), _M_code(__ec)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed (throw)
+call    9 never executed
+call   10 never executed
+call   11 never executed
+call   12 never executed
+    #####:  128:    { }
+------------------
+        -:  129:
+        -:  130:    friend void __throw_future_error(int);
+        -:  131:
+        -:  132:    error_code 			_M_code;
+        -:  133:  };
+        -:  134:
+        -:  135:  // Forward declarations.
+        -:  136:  template<typename _Res>
+        -:  137:    class future;
+        -:  138:
+        -:  139:  template<typename _Res>
+        -:  140:    class shared_future;
+        -:  141:
+        -:  142:  template<typename _Signature>
+        -:  143:    class packaged_task;
+        -:  144:
+        -:  145:  template<typename _Res>
+        -:  146:    class promise;
+        -:  147:
+        -:  148:  /// Launch code for futures
+        -:  149:  enum class launch
+        -:  150:  {
+        -:  151:    async = 1,
+        -:  152:    deferred = 2
+        -:  153:  };
+        -:  154:
+        -:  155:  [[__nodiscard__]]
+        -:  156:  constexpr launch operator&(launch __x, launch __y) noexcept
+        -:  157:  {
+        -:  158:    return static_cast<launch>(
+        -:  159:	static_cast<int>(__x) & static_cast<int>(__y));
+        -:  160:  }
+        -:  161:
+        -:  162:  [[__nodiscard__]]
+        -:  163:  constexpr launch operator|(launch __x, launch __y) noexcept
+        -:  164:  {
+        -:  165:    return static_cast<launch>(
+        -:  166:	static_cast<int>(__x) | static_cast<int>(__y));
+        -:  167:  }
+        -:  168:
+        -:  169:  [[__nodiscard__]]
+        -:  170:  constexpr launch operator^(launch __x, launch __y) noexcept
+        -:  171:  {
+        -:  172:    return static_cast<launch>(
+        -:  173:	static_cast<int>(__x) ^ static_cast<int>(__y));
+        -:  174:  }
+        -:  175:
+        -:  176:  [[__nodiscard__]]
+        -:  177:  constexpr launch operator~(launch __x) noexcept
+        -:  178:  { return static_cast<launch>(~static_cast<int>(__x)); }
+        -:  179:
+        -:  180:  _GLIBCXX14_CONSTEXPR
+        -:  181:  inline launch& operator&=(launch& __x, launch __y) noexcept
+        -:  182:  { return __x = __x & __y; }
+        -:  183:
+        -:  184:  _GLIBCXX14_CONSTEXPR
+        -:  185:  inline launch& operator|=(launch& __x, launch __y) noexcept
+        -:  186:  { return __x = __x | __y; }
+        -:  187:
+        -:  188:  _GLIBCXX14_CONSTEXPR
+        -:  189:  inline launch& operator^=(launch& __x, launch __y) noexcept
+        -:  190:  { return __x = __x ^ __y; }
+        -:  191:
+        -:  192:  /// Status code for futures
+        -:  193:  enum class future_status
+        -:  194:  {
+        -:  195:    ready,
+        -:  196:    timeout,
+        -:  197:    deferred
+        -:  198:  };
+        -:  199:
+        -:  200:  /// @cond undocumented
+        -:  201:  // _GLIBCXX_RESOLVE_LIB_DEFECTS
+        -:  202:  // 2021. Further incorrect usages of result_of
+        -:  203:  template<typename _Fn, typename... _Args>
+        -:  204:    using __async_result_of = typename __invoke_result<
+        -:  205:      typename decay<_Fn>::type, typename decay<_Args>::type...>::type;
+        -:  206:  /// @endcond
+        -:  207:
+        -:  208:  template<typename _Fn, typename... _Args>
+        -:  209:    future<__async_result_of<_Fn, _Args...>>
+        -:  210:    async(launch __policy, _Fn&& __fn, _Args&&... __args);
+        -:  211:
+        -:  212:  template<typename _Fn, typename... _Args>
+        -:  213:    future<__async_result_of<_Fn, _Args...>>
+        -:  214:    async(_Fn&& __fn, _Args&&... __args);
+        -:  215:
+        -:  216:#if defined(_GLIBCXX_HAS_GTHREADS)
+        -:  217:
+        -:  218:  /// @cond undocumented
+        -:  219:
+        -:  220:  /// Base class and enclosing scope.
+        -:  221:  struct __future_base
+        -:  222:  {
+        -:  223:    /// Base class for results.
+        -:  224:    struct _Result_base
+        -:  225:    {
+        -:  226:      exception_ptr		_M_error;
+        -:  227:
+        -:  228:      _Result_base(const _Result_base&) = delete;
+        -:  229:      _Result_base& operator=(const _Result_base&) = delete;
+        -:  230:
+        -:  231:      // _M_destroy() allows derived classes to control deallocation
+        -:  232:      virtual void _M_destroy() = 0;
+        -:  233:
+        -:  234:      struct _Deleter
+        -:  235:      {
+       17:  236:	void operator()(_Result_base* __fr) const { __fr->_M_destroy(); }
+------------------
+_ZNKSt13__future_base12_Result_base8_DeleterclEPS0_:
+function _ZNKSt13__future_base12_Result_base8_DeleterclEPS0_ called 1 returned 100% blocks executed 100%
+        1:  236:	void operator()(_Result_base* __fr) const { __fr->_M_destroy(); }
+call    0 returned 100%
+------------------
+_ZNKSt13__future_base12_Result_base8_DeleterclEPS0_:
+function _ZNKSt13__future_base12_Result_base8_DeleterclEPS0_ called 16 returned 100% blocks executed 100%
+       16:  236:	void operator()(_Result_base* __fr) const { __fr->_M_destroy(); }
+call    0 returned 100%
+------------------
+        -:  237:      };
+        -:  238:
+        -:  239:    protected:
+        -:  240:      _Result_base();
+        -:  241:      virtual ~_Result_base();
+        -:  242:    };
+        -:  243:
+        -:  244:    /// A unique_ptr for result objects.
+        -:  245:    template<typename _Res>
+        -:  246:      using _Ptr = unique_ptr<_Res, _Result_base::_Deleter>;
+        -:  247:
+        -:  248:    /// A result object that has storage for an object of type _Res.
+        -:  249:    template<typename _Res>
+        -:  250:      struct _Result : _Result_base
+        -:  251:      {
+        -:  252:      private:
+        -:  253:	__gnu_cxx::__aligned_buffer<_Res>	_M_storage;
+        -:  254:	bool 					_M_initialized;
+        -:  255:
+        -:  256:      public:
+        -:  257:	typedef _Res result_type;
+        -:  258:
+function _ZNSt13__future_base7_ResultIN5hical12HttpResponseEEC2Ev called 16 returned 100% blocks executed 100%
+       16:  259:	_Result() noexcept : _M_initialized() { }
+call    0 returned 100%
+        -:  260:
+       32:  261:	~_Result()
+        -:  262:	{
+       16:  263:	  if (_M_initialized)
+       16:  264:	    _M_value().~_Res();
+       48:  265:	}
+------------------
+_ZNSt13__future_base7_ResultIN5hical12HttpResponseEED0Ev:
+function _ZNSt13__future_base7_ResultIN5hical12HttpResponseEED0Ev called 16 returned 100% blocks executed 100%
+       16:  261:	~_Result()
+        -:  262:	{
+        -:  263:	  if (_M_initialized)
+        -:  264:	    _M_value().~_Res();
+       16:  265:	}
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZNSt13__future_base7_ResultIN5hical12HttpResponseEED2Ev:
+function _ZNSt13__future_base7_ResultIN5hical12HttpResponseEED2Ev called 16 returned 100% blocks executed 100%
+       16:  261:	~_Result()
+        -:  262:	{
+       16:  263:	  if (_M_initialized)
+       16:  264:	    _M_value().~_Res();
+call    0 returned 100%
+call    1 returned 100%
+       32:  265:	}
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+call    2 returned 100%
+------------------
+        -:  266:
+        -:  267:	// Return lvalue, future will add const or rvalue-reference
+        -:  268:	_Res&
+function _ZNSt13__future_base7_ResultIN5hical12HttpResponseEE8_M_valueEv called 32 returned 100% blocks executed 100%
+       32:  269:	_M_value() noexcept { return *_M_storage._M_ptr(); }
+call    0 returned 100%
+        -:  270:
+        -:  271:	void
+        -:  272:	_M_set(const _Res& __res)
+        -:  273:	{
+        -:  274:	  ::new (_M_storage._M_addr()) _Res(__res);
+        -:  275:	  _M_initialized = true;
+        -:  276:	}
+        -:  277:
+        -:  278:	void
+function _ZNSt13__future_base7_ResultIN5hical12HttpResponseEE6_M_setEOS2_ called 16 returned 100% blocks executed 100%
+       16:  279:	_M_set(_Res&& __res)
+        -:  280:	{
+       16:  281:	  ::new (_M_storage._M_addr()) _Res(std::move(__res));
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+       16:  282:	  _M_initialized = true;
+       16:  283:	}
+        -:  284:
+        -:  285:      private:
+function _ZNSt13__future_base7_ResultIN5hical12HttpResponseEE10_M_destroyEv called 16 returned 100% blocks executed 100%
+       16:  286:	void _M_destroy() { delete this; }
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+call    2 returned 100%
+        -:  287:    };
+        -:  288:
+        -:  289:    /// A result object that uses an allocator.
+        -:  290:    template<typename _Res, typename _Alloc>
+        -:  291:      struct _Result_alloc final : _Result<_Res>, _Alloc
+        -:  292:      {
+        -:  293:	using __allocator_type = __alloc_rebind<_Alloc, _Result_alloc>;
+        -:  294:
+        -:  295:        explicit
+        -:  296:	_Result_alloc(const _Alloc& __a) : _Result<_Res>(), _Alloc(__a)
+        -:  297:	{ }
+        -:  298:
+        -:  299:      private:
+        -:  300:	void _M_destroy()
+        -:  301:	{
+        -:  302:	  __allocator_type __a(*this);
+        -:  303:	  __allocated_ptr<__allocator_type> __guard_ptr{ __a, this };
+        -:  304:	  this->~_Result_alloc();
+        -:  305:	}
+        -:  306:      };
+        -:  307:
+        -:  308:    // Create a result object that uses an allocator.
+        -:  309:    template<typename _Res, typename _Allocator>
+        -:  310:      static _Ptr<_Result_alloc<_Res, _Allocator>>
+        -:  311:      _S_allocate_result(const _Allocator& __a)
+        -:  312:      {
+        -:  313:	using __result_type = _Result_alloc<_Res, _Allocator>;
+        -:  314:	typename __result_type::__allocator_type __a2(__a);
+        -:  315:	auto __guard = std::__allocate_guarded(__a2);
+        -:  316:	__result_type* __p = ::new((void*)__guard.get()) __result_type{__a};
+        -:  317:	__guard = nullptr;
+        -:  318:	return _Ptr<__result_type>(__p);
+        -:  319:      }
+        -:  320:
+        -:  321:    // Keep it simple for std::allocator.
+        -:  322:    template<typename _Res, typename _Tp>
+        -:  323:      static _Ptr<_Result<_Res>>
+function _ZNSt13__future_base18_S_allocate_resultIN5hical12HttpResponseEcEESt10unique_ptrINS_7_ResultIT_EENS_12_Result_base8_DeleterEERKSaIT0_E called 16 returned 100% blocks executed 100%
+       16:  324:      _S_allocate_result(const std::allocator<_Tp>&)
+        -:  325:      {
+       16:  326:	return _Ptr<_Result<_Res>>(new _Result<_Res>);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+        -:  327:      }
+        -:  328:
+        -:  329:    // Base class for various types of shared state created by an
+        -:  330:    // asynchronous provider (such as a std::promise) and shared with one
+        -:  331:    // or more associated futures.
+        -:  332:    class _State_baseV2
+        -:  333:    {
+        -:  334:      typedef _Ptr<_Result_base> _Ptr_type;
+        -:  335:
+        -:  336:      enum _Status : unsigned {
+        -:  337:	__not_ready,
+        -:  338:	__ready
+        -:  339:      };
+        -:  340:
+        -:  341:      _Ptr_type			_M_result;
+        -:  342:      __atomic_futex_unsigned<>	_M_status;
+        -:  343:      atomic_flag         	_M_retrieved = ATOMIC_FLAG_INIT;
+        -:  344:      once_flag			_M_once;
+        -:  345:
+        -:  346:    public:
+       17:  347:      _State_baseV2() noexcept : _M_result(), _M_status(_Status::__not_ready)
+       17:  348:	{ }
+------------------
+_ZNSt13__future_base13_State_baseV2C2Ev:
+function _ZNSt13__future_base13_State_baseV2C2Ev called 1 returned 100% blocks executed 100%
+        1:  347:      _State_baseV2() noexcept : _M_result(), _M_status(_Status::__not_ready)
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+        1:  348:	{ }
+------------------
+_ZNSt13__future_base13_State_baseV2C2Ev:
+function _ZNSt13__future_base13_State_baseV2C2Ev called 16 returned 100% blocks executed 100%
+       16:  347:      _State_baseV2() noexcept : _M_result(), _M_status(_Status::__not_ready)
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+       16:  348:	{ }
+------------------
+        -:  349:      _State_baseV2(const _State_baseV2&) = delete;
+        -:  350:      _State_baseV2& operator=(const _State_baseV2&) = delete;
+      17*:  351:      virtual ~_State_baseV2() = default;
+------------------
+_ZNSt13__future_base13_State_baseV2D0Ev:
+function _ZNSt13__future_base13_State_baseV2D0Ev called 0 returned 0% blocks executed 0%
+    #####:  351:      virtual ~_State_baseV2() = default;
+call    0 never executed
+call    1 never executed
+------------------
+_ZNSt13__future_base13_State_baseV2D2Ev:
+function _ZNSt13__future_base13_State_baseV2D2Ev called 1 returned 100% blocks executed 100%
+        1:  351:      virtual ~_State_baseV2() = default;
+call    0 returned 100%
+------------------
+_ZNSt13__future_base13_State_baseV2D0Ev:
+function _ZNSt13__future_base13_State_baseV2D0Ev called 0 returned 0% blocks executed 0%
+    #####:  351:      virtual ~_State_baseV2() = default;
+call    0 never executed
+call    1 never executed
+------------------
+_ZNSt13__future_base13_State_baseV2D2Ev:
+function _ZNSt13__future_base13_State_baseV2D2Ev called 16 returned 100% blocks executed 100%
+       16:  351:      virtual ~_State_baseV2() = default;
+call    0 returned 100%
+------------------
+        -:  352:
+        -:  353:      _Result_base&
+       17:  354:      wait()
+        -:  355:      {
+        -:  356:	// Run any deferred function or join any asynchronous thread:
+       17:  357:	_M_complete_async();
+        -:  358:	// Acquire MO makes sure this synchronizes with the thread that made
+        -:  359:	// the future ready.
+       17:  360:	_M_status._M_load_when_equal(_Status::__ready, memory_order_acquire);
+       17:  361:	return *_M_result;
+        -:  362:      }
+------------------
+_ZNSt13__future_base13_State_baseV24waitEv:
+function _ZNSt13__future_base13_State_baseV24waitEv called 1 returned 100% blocks executed 70%
+        1:  354:      wait()
+        -:  355:      {
+        -:  356:	// Run any deferred function or join any asynchronous thread:
+        1:  357:	_M_complete_async();
+call    0 returned 100%
+        -:  358:	// Acquire MO makes sure this synchronizes with the thread that made
+        -:  359:	// the future ready.
+        1:  360:	_M_status._M_load_when_equal(_Status::__ready, memory_order_acquire);
+call    0 returned 100%
+        1:  361:	return *_M_result;
+call    0 returned 100%
+        -:  362:      }
+------------------
+_ZNSt13__future_base13_State_baseV24waitEv:
+function _ZNSt13__future_base13_State_baseV24waitEv called 16 returned 100% blocks executed 70%
+       16:  354:      wait()
+        -:  355:      {
+        -:  356:	// Run any deferred function or join any asynchronous thread:
+       16:  357:	_M_complete_async();
+call    0 returned 100%
+        -:  358:	// Acquire MO makes sure this synchronizes with the thread that made
+        -:  359:	// the future ready.
+       16:  360:	_M_status._M_load_when_equal(_Status::__ready, memory_order_acquire);
+call    0 returned 100%
+       16:  361:	return *_M_result;
+call    0 returned 100%
+        -:  362:      }
+------------------
+        -:  363:
+        -:  364:      template<typename _Rep, typename _Period>
+        -:  365:        future_status
+        -:  366:        wait_for(const chrono::duration<_Rep, _Period>& __rel)
+        -:  367:        {
+        -:  368:	  // First, check if the future has been made ready.  Use acquire MO
+        -:  369:	  // to synchronize with the thread that made it ready.
+        -:  370:	  if (_M_status._M_load(memory_order_acquire) == _Status::__ready)
+        -:  371:	    return future_status::ready;
+        -:  372:
+        -:  373:	  if (_M_is_deferred_future())
+        -:  374:	    return future_status::deferred;
+        -:  375:
+        -:  376:	  // Don't wait unless the relative time is greater than zero.
+        -:  377:	  if (__rel > __rel.zero()
+        -:  378:	      && _M_status._M_load_when_equal_for(_Status::__ready,
+        -:  379:						  memory_order_acquire,
+        -:  380:						  __rel))
+        -:  381:	    {
+        -:  382:	      // _GLIBCXX_RESOLVE_LIB_DEFECTS
+        -:  383:	      // 2100.  timed waiting functions must also join
+        -:  384:	      // This call is a no-op by default except on an async future,
+        -:  385:	      // in which case the async thread is joined.  It's also not a
+        -:  386:	      // no-op for a deferred future, but such a future will never
+        -:  387:	      // reach this point because it returns future_status::deferred
+        -:  388:	      // instead of waiting for the future to become ready (see
+        -:  389:	      // above).  Async futures synchronize in this call, so we need
+        -:  390:	      // no further synchronization here.
+        -:  391:	      _M_complete_async();
+        -:  392:
+        -:  393:	      return future_status::ready;
+        -:  394:	    }
+        -:  395:	  return future_status::timeout;
+        -:  396:	}
+        -:  397:
+        -:  398:      template<typename _Clock, typename _Duration>
+        -:  399:        future_status
+        -:  400:        wait_until(const chrono::time_point<_Clock, _Duration>& __abs)
+        -:  401:        {
+        -:  402:#if __cplusplus > 201703L
+        -:  403:	  static_assert(chrono::is_clock_v<_Clock>);
+        -:  404:#endif
+        -:  405:	  // First, check if the future has been made ready.  Use acquire MO
+        -:  406:	  // to synchronize with the thread that made it ready.
+        -:  407:	  if (_M_status._M_load(memory_order_acquire) == _Status::__ready)
+        -:  408:	    return future_status::ready;
+        -:  409:
+        -:  410:	  if (_M_is_deferred_future())
+        -:  411:	    return future_status::deferred;
+        -:  412:
+        -:  413:	  if (_M_status._M_load_when_equal_until(_Status::__ready,
+        -:  414:						 memory_order_acquire,
+        -:  415:						 __abs))
+        -:  416:	    {
+        -:  417:	      // _GLIBCXX_RESOLVE_LIB_DEFECTS
+        -:  418:	      // 2100.  timed waiting functions must also join
+        -:  419:	      // See wait_for(...) above.
+        -:  420:	      _M_complete_async();
+        -:  421:
+        -:  422:	      return future_status::ready;
+        -:  423:	    }
+        -:  424:	  return future_status::timeout;
+        -:  425:	}
+        -:  426:
+        -:  427:      // Provide a result to the shared state and make it ready.
+        -:  428:      // Calls at most once: _M_result = __res();
+        -:  429:      void
+       17:  430:      _M_set_result(function<_Ptr_type()> __res, bool __ignore_failure = false)
+        -:  431:      {
+       17:  432:	bool __did_set = false;
+        -:  433:        // all calls to this function are serialized,
+        -:  434:        // side-effects of invoking __res only happen once
+    #####:  435:	call_once(_M_once, &_State_baseV2::_M_do_set, this,
+       17:  436:		  std::__addressof(__res), std::__addressof(__did_set));
+       17:  437:	if (__did_set)
+        -:  438:	  // Use release MO to synchronize with observers of the ready state.
+       17:  439:	  _M_status._M_store_notify_all(_Status::__ready,
+        -:  440:					memory_order_release);
+    #####:  441:	else if (!__ignore_failure)
+    #####:  442:          __throw_future_error(int(future_errc::promise_already_satisfied));
+       17:  443:      }
+------------------
+_ZNSt13__future_base13_State_baseV213_M_set_resultESt8functionIFSt10unique_ptrINS_12_Result_baseENS3_8_DeleterEEvEEb:
+function _ZNSt13__future_base13_State_baseV213_M_set_resultESt8functionIFSt10unique_ptrINS_12_Result_baseENS3_8_DeleterEEvEEb called 1 returned 100% blocks executed 67%
+        1:  430:      _M_set_result(function<_Ptr_type()> __res, bool __ignore_failure = false)
+        -:  431:      {
+        1:  432:	bool __did_set = false;
+        -:  433:        // all calls to this function are serialized,
+        -:  434:        // side-effects of invoking __res only happen once
+    #####:  435:	call_once(_M_once, &_State_baseV2::_M_do_set, this,
+        1:  436:		  std::__addressof(__res), std::__addressof(__did_set));
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+        1:  437:	if (__did_set)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:  438:	  // Use release MO to synchronize with observers of the ready state.
+        1:  439:	  _M_status._M_store_notify_all(_Status::__ready,
+        -:  440:					memory_order_release);
+    #####:  441:	else if (!__ignore_failure)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  442:          __throw_future_error(int(future_errc::promise_already_satisfied));
+call    0 never executed
+        1:  443:      }
+------------------
+_ZNSt13__future_base13_State_baseV213_M_set_resultESt8functionIFSt10unique_ptrINS_12_Result_baseENS3_8_DeleterEEvEEb:
+function _ZNSt13__future_base13_State_baseV213_M_set_resultESt8functionIFSt10unique_ptrINS_12_Result_baseENS3_8_DeleterEEvEEb called 16 returned 100% blocks executed 61%
+       16:  430:      _M_set_result(function<_Ptr_type()> __res, bool __ignore_failure = false)
+        -:  431:      {
+       16:  432:	bool __did_set = false;
+        -:  433:        // all calls to this function are serialized,
+        -:  434:        // side-effects of invoking __res only happen once
+    #####:  435:	call_once(_M_once, &_State_baseV2::_M_do_set, this,
+       16:  436:		  std::__addressof(__res), std::__addressof(__did_set));
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+       16:  437:	if (__did_set)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:  438:	  // Use release MO to synchronize with observers of the ready state.
+       16:  439:	  _M_status._M_store_notify_all(_Status::__ready,
+        -:  440:					memory_order_release);
+    #####:  441:	else if (!__ignore_failure)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  442:          __throw_future_error(int(future_errc::promise_already_satisfied));
+call    0 never executed
+       16:  443:      }
+------------------
+        -:  444:
+        -:  445:      // Provide a result to the shared state but delay making it ready
+        -:  446:      // until the calling thread exits.
+        -:  447:      // Calls at most once: _M_result = __res();
+        -:  448:      void
+        -:  449:      _M_set_delayed_result(function<_Ptr_type()> __res,
+        -:  450:			    weak_ptr<_State_baseV2> __self)
+        -:  451:      {
+        -:  452:	bool __did_set = false;
+        -:  453:	unique_ptr<_Make_ready> __mr{new _Make_ready};
+        -:  454:        // all calls to this function are serialized,
+        -:  455:        // side-effects of invoking __res only happen once
+        -:  456:	call_once(_M_once, &_State_baseV2::_M_do_set, this,
+        -:  457:		  std::__addressof(__res), std::__addressof(__did_set));
+        -:  458:	if (!__did_set)
+        -:  459:          __throw_future_error(int(future_errc::promise_already_satisfied));
+        -:  460:	__mr->_M_shared_state = std::move(__self);
+        -:  461:	__mr->_M_set();
+        -:  462:	__mr.release();
+        -:  463:      }
+        -:  464:
+        -:  465:      // Abandon this shared state.
+        -:  466:      void
+       17:  467:      _M_break_promise(_Ptr_type __res)
+        -:  468:      {
+       17:  469:	if (static_cast<bool>(__res))
+        -:  470:	  {
+    #####:  471:	    __res->_M_error =
+    #####:  472:	      make_exception_ptr(future_error(future_errc::broken_promise));
+        -:  473:	    // This function is only called when the last asynchronous result
+        -:  474:	    // provider is abandoning this shared state, so noone can be
+        -:  475:	    // trying to make the shared state ready at the same time, and
+        -:  476:	    // we can access _M_result directly instead of through call_once.
+    #####:  477:	    _M_result.swap(__res);
+        -:  478:	    // Use release MO to synchronize with observers of the ready state.
+    #####:  479:	    _M_status._M_store_notify_all(_Status::__ready,
+        -:  480:					  memory_order_release);
+        -:  481:	  }
+       17:  482:      }
+------------------
+_ZNSt13__future_base13_State_baseV216_M_break_promiseESt10unique_ptrINS_12_Result_baseENS2_8_DeleterEE:
+function _ZNSt13__future_base13_State_baseV216_M_break_promiseESt10unique_ptrINS_12_Result_baseENS2_8_DeleterEE called 1 returned 100% blocks executed 22%
+        1:  467:      _M_break_promise(_Ptr_type __res)
+        -:  468:      {
+        1:  469:	if (static_cast<bool>(__res))
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+        -:  470:	  {
+    #####:  471:	    __res->_M_error =
+call    0 never executed
+    #####:  472:	      make_exception_ptr(future_error(future_errc::broken_promise));
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+call    4 never executed
+call    5 never executed
+call    6 never executed
+        -:  473:	    // This function is only called when the last asynchronous result
+        -:  474:	    // provider is abandoning this shared state, so noone can be
+        -:  475:	    // trying to make the shared state ready at the same time, and
+        -:  476:	    // we can access _M_result directly instead of through call_once.
+    #####:  477:	    _M_result.swap(__res);
+call    0 never executed
+        -:  478:	    // Use release MO to synchronize with observers of the ready state.
+    #####:  479:	    _M_status._M_store_notify_all(_Status::__ready,
+        -:  480:					  memory_order_release);
+        -:  481:	  }
+        1:  482:      }
+------------------
+_ZNSt13__future_base13_State_baseV216_M_break_promiseESt10unique_ptrINS_12_Result_baseENS2_8_DeleterEE:
+function _ZNSt13__future_base13_State_baseV216_M_break_promiseESt10unique_ptrINS_12_Result_baseENS2_8_DeleterEE called 16 returned 100% blocks executed 22%
+       16:  467:      _M_break_promise(_Ptr_type __res)
+        -:  468:      {
+       16:  469:	if (static_cast<bool>(__res))
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+        -:  470:	  {
+    #####:  471:	    __res->_M_error =
+call    0 never executed
+    #####:  472:	      make_exception_ptr(future_error(future_errc::broken_promise));
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+call    4 never executed
+call    5 never executed
+call    6 never executed
+        -:  473:	    // This function is only called when the last asynchronous result
+        -:  474:	    // provider is abandoning this shared state, so noone can be
+        -:  475:	    // trying to make the shared state ready at the same time, and
+        -:  476:	    // we can access _M_result directly instead of through call_once.
+    #####:  477:	    _M_result.swap(__res);
+call    0 never executed
+        -:  478:	    // Use release MO to synchronize with observers of the ready state.
+    #####:  479:	    _M_status._M_store_notify_all(_Status::__ready,
+        -:  480:					  memory_order_release);
+        -:  481:	  }
+       16:  482:      }
+------------------
+        -:  483:
+        -:  484:      // Called when this object is first passed to a future.
+        -:  485:      void
+       17:  486:      _M_set_retrieved_flag()
+        -:  487:      {
+       34:  488:	if (_M_retrieved.test_and_set())
+    #####:  489:	  __throw_future_error(int(future_errc::future_already_retrieved));
+       17:  490:      }
+------------------
+_ZNSt13__future_base13_State_baseV221_M_set_retrieved_flagEv:
+function _ZNSt13__future_base13_State_baseV221_M_set_retrieved_flagEv called 1 returned 100% blocks executed 80%
+        1:  486:      _M_set_retrieved_flag()
+        -:  487:      {
+        2:  488:	if (_M_retrieved.test_and_set())
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  489:	  __throw_future_error(int(future_errc::future_already_retrieved));
+call    0 never executed
+        1:  490:      }
+------------------
+_ZNSt13__future_base13_State_baseV221_M_set_retrieved_flagEv:
+function _ZNSt13__future_base13_State_baseV221_M_set_retrieved_flagEv called 16 returned 100% blocks executed 80%
+       16:  486:      _M_set_retrieved_flag()
+        -:  487:      {
+       32:  488:	if (_M_retrieved.test_and_set())
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  489:	  __throw_future_error(int(future_errc::future_already_retrieved));
+call    0 never executed
+       16:  490:      }
+------------------
+        -:  491:
+        -:  492:      template<typename _Res, typename _Arg>
+        -:  493:        struct _Setter;
+        -:  494:
+        -:  495:      // set lvalues
+        -:  496:      template<typename _Res, typename _Arg>
+        -:  497:        struct _Setter<_Res, _Arg&>
+        -:  498:        {
+        -:  499:          // check this is only used by promise<R>::set_value(const R&)
+        -:  500:          // or promise<R&>::set_value(R&)
+        -:  501:          static_assert(is_same<_Res, _Arg&>::value  // promise<R&>
+        -:  502:              || is_same<const _Res, _Arg>::value,   // promise<R>
+        -:  503:              "Invalid specialisation");
+        -:  504:
+        -:  505:	  // Used by std::promise to copy construct the result.
+        -:  506:          typename promise<_Res>::_Ptr_type operator()() const
+        -:  507:          {
+        -:  508:            _M_promise->_M_storage->_M_set(*_M_arg);
+        -:  509:            return std::move(_M_promise->_M_storage);
+        -:  510:          }
+        -:  511:          promise<_Res>*    _M_promise;
+        -:  512:          _Arg*             _M_arg;
+        -:  513:        };
+        -:  514:
+        -:  515:      // set rvalues
+        -:  516:      template<typename _Res>
+        -:  517:        struct _Setter<_Res, _Res&&>
+        -:  518:        {
+        -:  519:	  // Used by std::promise to move construct the result.
+function _ZNKSt13__future_base13_State_baseV27_SetterIN5hical12HttpResponseEOS3_EclEv called 16 returned 100% blocks executed 100%
+       16:  520:          typename promise<_Res>::_Ptr_type operator()() const
+        -:  521:          {
+       16:  522:            _M_promise->_M_storage->_M_set(std::move(*_M_arg));
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+       16:  523:            return std::move(_M_promise->_M_storage);
+call    0 returned 100%
+call    1 returned 100%
+        -:  524:          }
+        -:  525:          promise<_Res>*    _M_promise;
+        -:  526:          _Res*             _M_arg;
+        -:  527:        };
+        -:  528:
+        -:  529:      // set void
+        -:  530:      template<typename _Res>
+        -:  531:	struct _Setter<_Res, void>
+        -:  532:	{
+        -:  533:	  static_assert(is_void<_Res>::value, "Only used for promise<void>");
+        -:  534:
+function _ZNKSt13__future_base13_State_baseV27_SetterIvvEclEv called 1 returned 100% blocks executed 100%
+        1:  535:	  typename promise<_Res>::_Ptr_type operator()() const
+        1:  536:	  { return std::move(_M_promise->_M_storage); }
+call    0 returned 100%
+call    1 returned 100%
+        -:  537:
+        -:  538:	  promise<_Res>*    _M_promise;
+        -:  539:	};
+        -:  540:
+        -:  541:      struct __exception_ptr_tag { };
+        -:  542:
+        -:  543:      // set exceptions
+        -:  544:      template<typename _Res>
+        -:  545:        struct _Setter<_Res, __exception_ptr_tag>
+        -:  546:        {
+        -:  547:	  // Used by std::promise to store an exception as the result.
+function _ZNKSt13__future_base13_State_baseV27_SetterIN5hical12HttpResponseENS0_19__exception_ptr_tagEEclEv called 0 returned 0% blocks executed 0%
+    #####:  548:          typename promise<_Res>::_Ptr_type operator()() const
+        -:  549:          {
+    #####:  550:            _M_promise->_M_storage->_M_error = *_M_ex;
+call    0 never executed
+call    1 never executed
+    #####:  551:            return std::move(_M_promise->_M_storage);
+call    0 never executed
+call    1 never executed
+        -:  552:          }
+        -:  553:
+        -:  554:          promise<_Res>*   _M_promise;
+        -:  555:          exception_ptr*    _M_ex;
+        -:  556:        };
+        -:  557:
+        -:  558:      template<typename _Res, typename _Arg>
+        -:  559:	__attribute__((__always_inline__))
+        -:  560:        static _Setter<_Res, _Arg&&>
+        -:  561:        __setter(promise<_Res>* __prom, _Arg&& __arg) noexcept
+        -:  562:        {
+       16:  563:          return _Setter<_Res, _Arg&&>{ __prom, std::__addressof(__arg) };
+call    0 returned 100%
+        -:  564:        }
+        -:  565:
+        -:  566:      template<typename _Res>
+        -:  567:	__attribute__((__always_inline__))
+        -:  568:        static _Setter<_Res, __exception_ptr_tag>
+        -:  569:        __setter(exception_ptr& __ex, promise<_Res>* __prom) noexcept
+        -:  570:        {
+    #####:  571:          __glibcxx_assert(__ex != nullptr); // LWG 2276
+branch  0 never executed (fallthrough)
+branch  1 never executed
+call    2 never executed
+call    3 never executed
+call    4 never executed
+branch  5 never executed (fallthrough)
+branch  6 never executed
+    #####:  572:          return _Setter<_Res, __exception_ptr_tag>{ __prom, &__ex };
+        -:  573:        }
+        -:  574:
+        -:  575:      template<typename _Res>
+        -:  576:	__attribute__((__always_inline__))
+        -:  577:	static _Setter<_Res, void>
+        -:  578:	__setter(promise<_Res>* __prom) noexcept
+        -:  579:	{
+        1:  580:	  return _Setter<_Res, void>{ __prom };
+        -:  581:	}
+        -:  582:
+        -:  583:      template<typename _Tp>
+        -:  584:        static void
+       51:  585:        _S_check(const shared_ptr<_Tp>& __p)
+        -:  586:        {
+       51:  587:          if (!static_cast<bool>(__p))
+    #####:  588:            __throw_future_error((int)future_errc::no_state);
+       51:  589:        }
+------------------
+_ZNSt13__future_base13_State_baseV28_S_checkIS0_EEvRKSt10shared_ptrIT_E:
+function _ZNSt13__future_base13_State_baseV28_S_checkIS0_EEvRKSt10shared_ptrIT_E called 3 returned 100% blocks executed 75%
+        3:  585:        _S_check(const shared_ptr<_Tp>& __p)
+        -:  586:        {
+        3:  587:          if (!static_cast<bool>(__p))
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+    #####:  588:            __throw_future_error((int)future_errc::no_state);
+call    0 never executed
+        3:  589:        }
+------------------
+_ZNSt13__future_base13_State_baseV28_S_checkIS0_EEvRKSt10shared_ptrIT_E:
+function _ZNSt13__future_base13_State_baseV28_S_checkIS0_EEvRKSt10shared_ptrIT_E called 48 returned 100% blocks executed 75%
+       48:  585:        _S_check(const shared_ptr<_Tp>& __p)
+        -:  586:        {
+       48:  587:          if (!static_cast<bool>(__p))
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+    #####:  588:            __throw_future_error((int)future_errc::no_state);
+call    0 never executed
+       48:  589:        }
+------------------
+        -:  590:
+        -:  591:    private:
+        -:  592:      // The function invoked with std::call_once(_M_once, ...).
+        -:  593:      void
+       17:  594:      _M_do_set(function<_Ptr_type()>* __f, bool* __did_set)
+        -:  595:      {
+       17:  596:        _Ptr_type __res = (*__f)();
+        -:  597:        // Notify the caller that we did try to set; if we do not throw an
+        -:  598:        // exception, the caller will be aware that it did set (e.g., see
+        -:  599:        // _M_set_result).
+       17:  600:	*__did_set = true;
+       17:  601:        _M_result.swap(__res); // nothrow
+       17:  602:      }
+------------------
+_ZNSt13__future_base13_State_baseV29_M_do_setEPSt8functionIFSt10unique_ptrINS_12_Result_baseENS3_8_DeleterEEvEEPb:
+function _ZNSt13__future_base13_State_baseV29_M_do_setEPSt8functionIFSt10unique_ptrINS_12_Result_baseENS3_8_DeleterEEvEEPb called 1 returned 100% blocks executed 100%
+        1:  594:      _M_do_set(function<_Ptr_type()>* __f, bool* __did_set)
+        -:  595:      {
+        1:  596:        _Ptr_type __res = (*__f)();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  597:        // Notify the caller that we did try to set; if we do not throw an
+        -:  598:        // exception, the caller will be aware that it did set (e.g., see
+        -:  599:        // _M_set_result).
+        1:  600:	*__did_set = true;
+        1:  601:        _M_result.swap(__res); // nothrow
+call    0 returned 100%
+        1:  602:      }
+call    0 returned 100%
+------------------
+_ZNSt13__future_base13_State_baseV29_M_do_setEPSt8functionIFSt10unique_ptrINS_12_Result_baseENS3_8_DeleterEEvEEPb:
+function _ZNSt13__future_base13_State_baseV29_M_do_setEPSt8functionIFSt10unique_ptrINS_12_Result_baseENS3_8_DeleterEEvEEPb called 16 returned 100% blocks executed 100%
+       16:  594:      _M_do_set(function<_Ptr_type()>* __f, bool* __did_set)
+        -:  595:      {
+       16:  596:        _Ptr_type __res = (*__f)();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  597:        // Notify the caller that we did try to set; if we do not throw an
+        -:  598:        // exception, the caller will be aware that it did set (e.g., see
+        -:  599:        // _M_set_result).
+       16:  600:	*__did_set = true;
+       16:  601:        _M_result.swap(__res); // nothrow
+call    0 returned 100%
+       16:  602:      }
+call    0 returned 100%
+------------------
+        -:  603:
+        -:  604:      // Wait for completion of async function.
+       17:  605:      virtual void _M_complete_async() { }
+------------------
+_ZNSt13__future_base13_State_baseV217_M_complete_asyncEv:
+function _ZNSt13__future_base13_State_baseV217_M_complete_asyncEv called 1 returned 100% blocks executed 100%
+        1:  605:      virtual void _M_complete_async() { }
+------------------
+_ZNSt13__future_base13_State_baseV217_M_complete_asyncEv:
+function _ZNSt13__future_base13_State_baseV217_M_complete_asyncEv called 16 returned 100% blocks executed 100%
+       16:  605:      virtual void _M_complete_async() { }
+------------------
+        -:  606:
+        -:  607:      // Return true if state corresponds to a deferred function.
+    #####:  608:      virtual bool _M_is_deferred_future() const { return false; }
+------------------
+_ZNKSt13__future_base13_State_baseV221_M_is_deferred_futureEv:
+function _ZNKSt13__future_base13_State_baseV221_M_is_deferred_futureEv called 0 returned 0% blocks executed 0%
+    #####:  608:      virtual bool _M_is_deferred_future() const { return false; }
+------------------
+_ZNKSt13__future_base13_State_baseV221_M_is_deferred_futureEv:
+function _ZNKSt13__future_base13_State_baseV221_M_is_deferred_futureEv called 0 returned 0% blocks executed 0%
+    #####:  608:      virtual bool _M_is_deferred_future() const { return false; }
+------------------
+        -:  609:
+        -:  610:      struct _Make_ready final : __at_thread_exit_elt
+        -:  611:      {
+        -:  612:	weak_ptr<_State_baseV2> _M_shared_state;
+        -:  613:	static void _S_run(void*);
+        -:  614:	void _M_set();
+        -:  615:      };
+        -:  616:    };
+        -:  617:
+        -:  618:#ifdef _GLIBCXX_ASYNC_ABI_COMPAT
+        -:  619:    class _State_base;
+        -:  620:    class _Async_state_common;
+        -:  621:#else
+        -:  622:    using _State_base = _State_baseV2;
+        -:  623:    class _Async_state_commonV2;
+        -:  624:#endif
+        -:  625:
+        -:  626:    template<typename _BoundFn,
+        -:  627:	     typename _Res = decltype(std::declval<_BoundFn&>()())>
+        -:  628:      class _Deferred_state;
+        -:  629:
+        -:  630:    template<typename _BoundFn,
+        -:  631:	     typename _Res = decltype(std::declval<_BoundFn&>()())>
+        -:  632:      class _Async_state_impl;
+        -:  633:
+        -:  634:    template<typename _Signature>
+        -:  635:      struct _Task_state_base;
+        -:  636:
+        -:  637:    template<typename _Fn, typename _Alloc, typename _Signature>
+        -:  638:      struct _Task_state;
+        -:  639:
+        -:  640:    template<typename _Res_ptr, typename _Fn,
+        -:  641:	     typename _Res = typename _Res_ptr::element_type::result_type>
+        -:  642:      struct _Task_setter;
+        -:  643:
+        -:  644:    template<typename _Res_ptr, typename _BoundFn>
+        -:  645:      static _Task_setter<_Res_ptr, _BoundFn>
+        -:  646:      _S_task_setter(_Res_ptr& __ptr, _BoundFn& __call)
+        -:  647:      {
+        -:  648:	return { std::__addressof(__ptr), std::__addressof(__call) };
+        -:  649:      }
+        -:  650:  };
+        -:  651:
+        -:  652:  /// Partial specialization for reference types.
+        -:  653:  template<typename _Res>
+        -:  654:    struct __future_base::_Result<_Res&> : __future_base::_Result_base
+        -:  655:    {
+        -:  656:      typedef _Res& result_type;
+        -:  657:
+        -:  658:      _Result() noexcept : _M_value_ptr() { }
+        -:  659:
+        -:  660:      void
+        -:  661:      _M_set(_Res& __res) noexcept
+        -:  662:      { _M_value_ptr = std::addressof(__res); }
+        -:  663:
+        -:  664:      _Res& _M_get() noexcept { return *_M_value_ptr; }
+        -:  665:
+        -:  666:    private:
+        -:  667:      _Res* 			_M_value_ptr;
+        -:  668:
+        -:  669:      void _M_destroy() { delete this; }
+        -:  670:    };
+        -:  671:
+        -:  672:  /// Explicit specialization for void.
+        -:  673:  template<>
+        -:  674:    struct __future_base::_Result<void> : __future_base::_Result_base
+        -:  675:    {
+        -:  676:      typedef void result_type;
+        -:  677:
+        -:  678:    private:
+function _ZNSt13__future_base7_ResultIvE10_M_destroyEv called 1 returned 100% blocks executed 100%
+        1:  679:      void _M_destroy() { delete this; }
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+call    2 returned 100%
+        -:  680:    };
+        -:  681:
+        -:  682:  /// @endcond
+        -:  683:
+        -:  684:#ifndef _GLIBCXX_ASYNC_ABI_COMPAT
+        -:  685:
+        -:  686:  /// @cond undocumented
+        -:  687:  // Allow _Setter objects to be stored locally in std::function
+        -:  688:  template<typename _Res, typename _Arg>
+        -:  689:    struct __is_location_invariant
+        -:  690:    <__future_base::_State_base::_Setter<_Res, _Arg>>
+        -:  691:    : true_type { };
+        -:  692:
+        -:  693:  // Allow _Task_setter objects to be stored locally in std::function
+        -:  694:  template<typename _Res_ptr, typename _Fn, typename _Res>
+        -:  695:    struct __is_location_invariant
+        -:  696:    <__future_base::_Task_setter<_Res_ptr, _Fn, _Res>>
+        -:  697:    : true_type { };
+        -:  698:  /// @endcond
+        -:  699:
+        -:  700:  /// Common implementation for future and shared_future.
+        -:  701:  template<typename _Res>
+        -:  702:    class __basic_future : public __future_base
+        -:  703:    {
+        -:  704:    protected:
+        -:  705:      typedef shared_ptr<_State_base>		__state_type;
+        -:  706:      typedef __future_base::_Result<_Res>&	__result_type;
+        -:  707:
+        -:  708:    private:
+        -:  709:      __state_type 		_M_state;
+        -:  710:
+        -:  711:    public:
+        -:  712:      // Disable copying.
+        -:  713:      __basic_future(const __basic_future&) = delete;
+        -:  714:      __basic_future& operator=(const __basic_future&) = delete;
+        -:  715:
+        -:  716:      bool
+        -:  717:      valid() const noexcept { return static_cast<bool>(_M_state); }
+        -:  718:
+        -:  719:      void
+function _ZNKSt14__basic_futureIvE4waitEv called 1 returned 100% blocks executed 100%
+        1:  720:      wait() const
+        -:  721:      {
+        1:  722:        _State_base::_S_check(_M_state);
+call    0 returned 100%
+        1:  723:        _M_state->wait();
+call    0 returned 100%
+call    1 returned 100%
+        1:  724:      }
+        -:  725:
+        -:  726:      template<typename _Rep, typename _Period>
+        -:  727:        future_status
+        -:  728:        wait_for(const chrono::duration<_Rep, _Period>& __rel) const
+        -:  729:        {
+        -:  730:          _State_base::_S_check(_M_state);
+        -:  731:          return _M_state->wait_for(__rel);
+        -:  732:        }
+        -:  733:
+        -:  734:      template<typename _Clock, typename _Duration>
+        -:  735:        future_status
+        -:  736:        wait_until(const chrono::time_point<_Clock, _Duration>& __abs) const
+        -:  737:        {
+        -:  738:          _State_base::_S_check(_M_state);
+        -:  739:          return _M_state->wait_until(__abs);
+        -:  740:        }
+        -:  741:
+        -:  742:    protected:
+        -:  743:      /// Wait for the state to be ready and rethrow any stored exception
+        -:  744:      __result_type
+function _ZNKSt14__basic_futureIN5hical12HttpResponseEE13_M_get_resultEv called 16 returned 100% blocks executed 71%
+       16:  745:      _M_get_result() const
+        -:  746:      {
+       16:  747:        _State_base::_S_check(_M_state);
+call    0 returned 100%
+       16:  748:        _Result_base& __res = _M_state->wait();
+call    0 returned 100%
+call    1 returned 100%
+       16:  749:        if (!(__res._M_error == nullptr))
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 0% (fallthrough)
+branch  4 taken 100%
+    #####:  750:          rethrow_exception(__res._M_error);
+call    0 never executed
+call    1 never executed
+call    2 never executed
+       16:  751:        return static_cast<__result_type>(__res);
+        -:  752:      }
+        -:  753:
+        -:  754:      void _M_swap(__basic_future& __that) noexcept
+        -:  755:      {
+        -:  756:        _M_state.swap(__that._M_state);
+        -:  757:      }
+        -:  758:
+        -:  759:      // Construction of a future by promise::get_future()
+        -:  760:      explicit
+       17:  761:      __basic_future(const __state_type& __state) : _M_state(__state)
+        -:  762:      {
+       17:  763:        _State_base::_S_check(_M_state);
+       17:  764:        _M_state->_M_set_retrieved_flag();
+       17:  765:      }
+------------------
+_ZNSt14__basic_futureIvEC2ERKSt10shared_ptrINSt13__future_base13_State_baseV2EE:
+function _ZNSt14__basic_futureIvEC2ERKSt10shared_ptrINSt13__future_base13_State_baseV2EE called 1 returned 100% blocks executed 86%
+        1:  761:      __basic_future(const __state_type& __state) : _M_state(__state)
+call    0 returned 100%
+        -:  762:      {
+        1:  763:        _State_base::_S_check(_M_state);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  764:        _M_state->_M_set_retrieved_flag();
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        1:  765:      }
+call    0 never executed
+------------------
+_ZNSt14__basic_futureIN5hical12HttpResponseEEC2ERKSt10shared_ptrINSt13__future_base13_State_baseV2EE:
+function _ZNSt14__basic_futureIN5hical12HttpResponseEEC2ERKSt10shared_ptrINSt13__future_base13_State_baseV2EE called 16 returned 100% blocks executed 86%
+       16:  761:      __basic_future(const __state_type& __state) : _M_state(__state)
+call    0 returned 100%
+        -:  762:      {
+       16:  763:        _State_base::_S_check(_M_state);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       16:  764:        _M_state->_M_set_retrieved_flag();
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+       16:  765:      }
+call    0 never executed
+------------------
+        -:  766:
+        -:  767:      // Copy construction from a shared_future
+        -:  768:      explicit
+        -:  769:      __basic_future(const shared_future<_Res>&) noexcept;
+        -:  770:
+        -:  771:      // Move construction from a shared_future
+        -:  772:      explicit
+        -:  773:      __basic_future(shared_future<_Res>&&) noexcept;
+        -:  774:
+        -:  775:      // Move construction from a future
+        -:  776:      explicit
+        -:  777:      __basic_future(future<_Res>&&) noexcept;
+        -:  778:
+        -:  779:      constexpr __basic_future() noexcept : _M_state() { }
+        -:  780:
+        -:  781:      struct _Reset
+        -:  782:      {
+function _ZNSt14__basic_futureIN5hical12HttpResponseEE6_ResetC2ERS2_ called 16 returned 100% blocks executed 100%
+       16:  783:        explicit _Reset(__basic_future& __fut) noexcept : _M_fut(__fut) { }
+function _ZNSt14__basic_futureIN5hical12HttpResponseEE6_ResetD2Ev called 16 returned 100% blocks executed 100%
+       16:  784:        ~_Reset() { _M_fut._M_state.reset(); }
+call    0 returned 100%
+        -:  785:        __basic_future& _M_fut;
+        -:  786:      };
+        -:  787:    };
+        -:  788:
+        -:  789:
+        -:  790:  /// Primary template for future.
+        -:  791:  template<typename _Res>
+        -:  792:    class future : public __basic_future<_Res>
+        -:  793:    {
+        -:  794:      // _GLIBCXX_RESOLVE_LIB_DEFECTS
+        -:  795:      // 3458. Is shared_future intended to work with arrays or function types?
+        -:  796:      static_assert(!is_array<_Res>{}, "result type must not be an array");
+        -:  797:      static_assert(!is_function<_Res>{}, "result type must not be a function");
+        -:  798:      static_assert(is_destructible<_Res>{},
+        -:  799:		    "result type must be destructible");
+        -:  800:
+        -:  801:      friend class promise<_Res>;
+        -:  802:      template<typename> friend class packaged_task;
+        -:  803:      template<typename _Fn, typename... _Args>
+        -:  804:        friend future<__async_result_of<_Fn, _Args...>>
+        -:  805:        async(launch, _Fn&&, _Args&&...);
+        -:  806:
+        -:  807:      typedef __basic_future<_Res> _Base_type;
+        -:  808:      typedef typename _Base_type::__state_type __state_type;
+        -:  809:
+        -:  810:      explicit
+function _ZNSt6futureIN5hical12HttpResponseEEC2ERKSt10shared_ptrINSt13__future_base13_State_baseV2EE called 16 returned 100% blocks executed 100%
+       16:  811:      future(const __state_type& __state) : _Base_type(__state) { }
+call    0 returned 100%
+        -:  812:
+        -:  813:    public:
+        -:  814:      constexpr future() noexcept : _Base_type() { }
+        -:  815:
+        -:  816:      /// Move constructor
+function _ZNSt6futureIN5hical12HttpResponseEEC2EOS2_ called 16 returned 100% blocks executed 100%
+       16:  817:      future(future&& __uf) noexcept : _Base_type(std::move(__uf)) { }
+call    0 returned 100%
+call    1 returned 100%
+        -:  818:
+        -:  819:      // Disable copying
+        -:  820:      future(const future&) = delete;
+        -:  821:      future& operator=(const future&) = delete;
+        -:  822:
+        -:  823:      future& operator=(future&& __fut) noexcept
+        -:  824:      {
+        -:  825:        future(std::move(__fut))._M_swap(*this);
+        -:  826:        return *this;
+        -:  827:      }
+        -:  828:
+        -:  829:      /// Retrieving the value
+        -:  830:      _Res
+function _ZNSt6futureIN5hical12HttpResponseEE3getEv called 16 returned 100% blocks executed 82%
+       16:  831:      get()
+        -:  832:      {
+       16:  833:        typename _Base_type::_Reset __reset(*this);
+call    0 returned 100%
+       32:  834:        return std::move(this->_M_get_result()._M_value());
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+call    5 returned 100%
+       16:  835:      }
+call    0 returned 100%
+call    1 never executed
+        -:  836:
+        -:  837:      shared_future<_Res> share() noexcept;
+        -:  838:    };
+        -:  839:
+        -:  840:  /// Partial specialization for future<R&>
+        -:  841:  template<typename _Res>
+        -:  842:    class future<_Res&> : public __basic_future<_Res&>
+        -:  843:    {
+        -:  844:      friend class promise<_Res&>;
+        -:  845:      template<typename> friend class packaged_task;
+        -:  846:      template<typename _Fn, typename... _Args>
+        -:  847:        friend future<__async_result_of<_Fn, _Args...>>
+        -:  848:        async(launch, _Fn&&, _Args&&...);
+        -:  849:
+        -:  850:      typedef __basic_future<_Res&> _Base_type;
+        -:  851:      typedef typename _Base_type::__state_type __state_type;
+        -:  852:
+        -:  853:      explicit
+        -:  854:      future(const __state_type& __state) : _Base_type(__state) { }
+        -:  855:
+        -:  856:    public:
+        -:  857:      constexpr future() noexcept : _Base_type() { }
+        -:  858:
+        -:  859:      /// Move constructor
+        -:  860:      future(future&& __uf) noexcept : _Base_type(std::move(__uf)) { }
+        -:  861:
+        -:  862:      // Disable copying
+        -:  863:      future(const future&) = delete;
+        -:  864:      future& operator=(const future&) = delete;
+        -:  865:
+        -:  866:      future& operator=(future&& __fut) noexcept
+        -:  867:      {
+        -:  868:        future(std::move(__fut))._M_swap(*this);
+        -:  869:        return *this;
+        -:  870:      }
+        -:  871:
+        -:  872:      /// Retrieving the value
+        -:  873:      _Res&
+        -:  874:      get()
+        -:  875:      {
+        -:  876:        typename _Base_type::_Reset __reset(*this);
+        -:  877:        return this->_M_get_result()._M_get();
+        -:  878:      }
+        -:  879:
+        -:  880:      shared_future<_Res&> share() noexcept;
+        -:  881:    };
+        -:  882:
+        -:  883:  /// Explicit specialization for future<void>
+        -:  884:  template<>
+        -:  885:    class future<void> : public __basic_future<void>
+        -:  886:    {
+        -:  887:      friend class promise<void>;
+        -:  888:      template<typename> friend class packaged_task;
+        -:  889:      template<typename _Fn, typename... _Args>
+        -:  890:        friend future<__async_result_of<_Fn, _Args...>>
+        -:  891:        async(launch, _Fn&&, _Args&&...);
+        -:  892:
+        -:  893:      typedef __basic_future<void> _Base_type;
+        -:  894:      typedef typename _Base_type::__state_type __state_type;
+        -:  895:
+        -:  896:      explicit
+function _ZNSt6futureIvEC2ERKSt10shared_ptrINSt13__future_base13_State_baseV2EE called 1 returned 100% blocks executed 100%
+        1:  897:      future(const __state_type& __state) : _Base_type(__state) { }
+call    0 returned 100%
+        -:  898:
+        -:  899:    public:
+        -:  900:      constexpr future() noexcept : _Base_type() { }
+        -:  901:
+        -:  902:      /// Move constructor
+        -:  903:      future(future&& __uf) noexcept : _Base_type(std::move(__uf)) { }
+        -:  904:
+        -:  905:      // Disable copying
+        -:  906:      future(const future&) = delete;
+        -:  907:      future& operator=(const future&) = delete;
+        -:  908:
+        -:  909:      future& operator=(future&& __fut) noexcept
+        -:  910:      {
+        -:  911:        future(std::move(__fut))._M_swap(*this);
+        -:  912:        return *this;
+        -:  913:      }
+        -:  914:
+        -:  915:      /// Retrieving the value
+        -:  916:      void
+        -:  917:      get()
+        -:  918:      {
+        -:  919:        typename _Base_type::_Reset __reset(*this);
+        -:  920:        this->_M_get_result();
+        -:  921:      }
+        -:  922:
+        -:  923:      shared_future<void> share() noexcept;
+        -:  924:    };
+        -:  925:
+        -:  926:
+        -:  927:  /// Primary template for shared_future.
+        -:  928:  template<typename _Res>
+        -:  929:    class shared_future : public __basic_future<_Res>
+        -:  930:    {
+        -:  931:      // _GLIBCXX_RESOLVE_LIB_DEFECTS
+        -:  932:      // 3458. Is shared_future intended to work with arrays or function types?
+        -:  933:      static_assert(!is_array<_Res>{}, "result type must not be an array");
+        -:  934:      static_assert(!is_function<_Res>{}, "result type must not be a function");
+        -:  935:      static_assert(is_destructible<_Res>{},
+        -:  936:		    "result type must be destructible");
+        -:  937:
+        -:  938:      typedef __basic_future<_Res> _Base_type;
+        -:  939:
+        -:  940:    public:
+        -:  941:      constexpr shared_future() noexcept : _Base_type() { }
+        -:  942:
+        -:  943:      /// Copy constructor
+        -:  944:      shared_future(const shared_future& __sf) noexcept : _Base_type(__sf) { }
+        -:  945:
+        -:  946:      /// Construct from a future rvalue
+        -:  947:      shared_future(future<_Res>&& __uf) noexcept
+        -:  948:      : _Base_type(std::move(__uf))
+        -:  949:      { }
+        -:  950:
+        -:  951:      /// Construct from a shared_future rvalue
+        -:  952:      shared_future(shared_future&& __sf) noexcept
+        -:  953:      : _Base_type(std::move(__sf))
+        -:  954:      { }
+        -:  955:
+        -:  956:      shared_future& operator=(const shared_future& __sf) noexcept
+        -:  957:      {
+        -:  958:        shared_future(__sf)._M_swap(*this);
+        -:  959:        return *this;
+        -:  960:      }
+        -:  961:
+        -:  962:      shared_future& operator=(shared_future&& __sf) noexcept
+        -:  963:      {
+        -:  964:        shared_future(std::move(__sf))._M_swap(*this);
+        -:  965:        return *this;
+        -:  966:      }
+        -:  967:
+        -:  968:      /// Retrieving the value
+        -:  969:      const _Res&
+        -:  970:      get() const { return this->_M_get_result()._M_value(); }
+        -:  971:    };
+        -:  972:
+        -:  973:  /// Partial specialization for shared_future<R&>
+        -:  974:  template<typename _Res>
+        -:  975:    class shared_future<_Res&> : public __basic_future<_Res&>
+        -:  976:    {
+        -:  977:      typedef __basic_future<_Res&>           _Base_type;
+        -:  978:
+        -:  979:    public:
+        -:  980:      constexpr shared_future() noexcept : _Base_type() { }
+        -:  981:
+        -:  982:      /// Copy constructor
+        -:  983:      shared_future(const shared_future& __sf) : _Base_type(__sf) { }
+        -:  984:
+        -:  985:      /// Construct from a future rvalue
+        -:  986:      shared_future(future<_Res&>&& __uf) noexcept
+        -:  987:      : _Base_type(std::move(__uf))
+        -:  988:      { }
+        -:  989:
+        -:  990:      /// Construct from a shared_future rvalue
+        -:  991:      shared_future(shared_future&& __sf) noexcept
+        -:  992:      : _Base_type(std::move(__sf))
+        -:  993:      { }
+        -:  994:
+        -:  995:      shared_future& operator=(const shared_future& __sf)
+        -:  996:      {
+        -:  997:        shared_future(__sf)._M_swap(*this);
+        -:  998:        return *this;
+        -:  999:      }
+        -: 1000:
+        -: 1001:      shared_future& operator=(shared_future&& __sf) noexcept
+        -: 1002:      {
+        -: 1003:        shared_future(std::move(__sf))._M_swap(*this);
+        -: 1004:        return *this;
+        -: 1005:      }
+        -: 1006:
+        -: 1007:      /// Retrieving the value
+        -: 1008:      _Res&
+        -: 1009:      get() const { return this->_M_get_result()._M_get(); }
+        -: 1010:    };
+        -: 1011:
+        -: 1012:  /// Explicit specialization for shared_future<void>
+        -: 1013:  template<>
+        -: 1014:    class shared_future<void> : public __basic_future<void>
+        -: 1015:    {
+        -: 1016:      typedef __basic_future<void> _Base_type;
+        -: 1017:
+        -: 1018:    public:
+        -: 1019:      constexpr shared_future() noexcept : _Base_type() { }
+        -: 1020:
+        -: 1021:      /// Copy constructor
+        -: 1022:      shared_future(const shared_future& __sf) : _Base_type(__sf) { }
+        -: 1023:
+        -: 1024:      /// Construct from a future rvalue
+        -: 1025:      shared_future(future<void>&& __uf) noexcept
+        -: 1026:      : _Base_type(std::move(__uf))
+        -: 1027:      { }
+        -: 1028:
+        -: 1029:      /// Construct from a shared_future rvalue
+        -: 1030:      shared_future(shared_future&& __sf) noexcept
+        -: 1031:      : _Base_type(std::move(__sf))
+        -: 1032:      { }
+        -: 1033:
+        -: 1034:      shared_future& operator=(const shared_future& __sf)
+        -: 1035:      {
+        -: 1036:        shared_future(__sf)._M_swap(*this);
+        -: 1037:        return *this;
+        -: 1038:      }
+        -: 1039:
+        -: 1040:      shared_future& operator=(shared_future&& __sf) noexcept
+        -: 1041:      {
+        -: 1042:        shared_future(std::move(__sf))._M_swap(*this);
+        -: 1043:        return *this;
+        -: 1044:      }
+        -: 1045:
+        -: 1046:      // Retrieving the value
+        -: 1047:      void
+        -: 1048:      get() const { this->_M_get_result(); }
+        -: 1049:    };
+        -: 1050:
+        -: 1051:  // Now we can define the protected __basic_future constructors.
+        -: 1052:  template<typename _Res>
+        -: 1053:    inline __basic_future<_Res>::
+        -: 1054:    __basic_future(const shared_future<_Res>& __sf) noexcept
+        -: 1055:    : _M_state(__sf._M_state)
+        -: 1056:    { }
+        -: 1057:
+        -: 1058:  template<typename _Res>
+        -: 1059:    inline __basic_future<_Res>::
+        -: 1060:    __basic_future(shared_future<_Res>&& __sf) noexcept
+        -: 1061:    : _M_state(std::move(__sf._M_state))
+        -: 1062:    { }
+        -: 1063:
+        -: 1064:  template<typename _Res>
+function _ZNSt14__basic_futureIN5hical12HttpResponseEEC2EOSt6futureIS1_E called 16 returned 100% blocks executed 100%
+       16: 1065:    inline __basic_future<_Res>::
+        -: 1066:    __basic_future(future<_Res>&& __uf) noexcept
+       16: 1067:    : _M_state(std::move(__uf._M_state))
+call    0 returned 100%
+call    1 returned 100%
+       16: 1068:    { }
+        -: 1069:
+        -: 1070:  // _GLIBCXX_RESOLVE_LIB_DEFECTS
+        -: 1071:  // 2556. Wide contract for future::share()
+        -: 1072:  template<typename _Res>
+        -: 1073:    inline shared_future<_Res>
+        -: 1074:    future<_Res>::share() noexcept
+        -: 1075:    { return shared_future<_Res>(std::move(*this)); }
+        -: 1076:
+        -: 1077:  template<typename _Res>
+        -: 1078:    inline shared_future<_Res&>
+        -: 1079:    future<_Res&>::share() noexcept
+        -: 1080:    { return shared_future<_Res&>(std::move(*this)); }
+        -: 1081:
+        -: 1082:  inline shared_future<void>
+        -: 1083:  future<void>::share() noexcept
+        -: 1084:  { return shared_future<void>(std::move(*this)); }
+        -: 1085:
+        -: 1086:  /// Primary template for promise
+        -: 1087:  template<typename _Res>
+        -: 1088:    class promise
+        -: 1089:    {
+        -: 1090:      // _GLIBCXX_RESOLVE_LIB_DEFECTS
+        -: 1091:      // 3466: Specify the requirements for promise/future/[...] consistently
+        -: 1092:      static_assert(!is_array<_Res>{}, "result type must not be an array");
+        -: 1093:      static_assert(!is_function<_Res>{}, "result type must not be a function");
+        -: 1094:      static_assert(is_destructible<_Res>{},
+        -: 1095:		    "result type must be destructible");
+        -: 1096:
+        -: 1097:      typedef __future_base::_State_base 	_State;
+        -: 1098:      typedef __future_base::_Result<_Res>	_Res_type;
+        -: 1099:      typedef __future_base::_Ptr<_Res_type>	_Ptr_type;
+        -: 1100:      template<typename, typename> friend struct _State::_Setter;
+        -: 1101:      friend _State;
+        -: 1102:
+        -: 1103:      shared_ptr<_State>                        _M_future;
+        -: 1104:      _Ptr_type                                 _M_storage;
+        -: 1105:
+        -: 1106:    public:
+        -: 1107:      promise()
+        -: 1108:      : _M_future(std::make_shared<_State>()),
+        -: 1109:	_M_storage(new _Res_type())
+        -: 1110:      { }
+        -: 1111:
+        -: 1112:      promise(promise&& __rhs) noexcept
+        -: 1113:      : _M_future(std::move(__rhs._M_future)),
+        -: 1114:	_M_storage(std::move(__rhs._M_storage))
+        -: 1115:      { }
+        -: 1116:
+        -: 1117:      template<typename _Allocator>
+function _ZNSt7promiseIN5hical12HttpResponseEEC2ISaIcEEESt15allocator_arg_tRKT_ called 16 returned 100% blocks executed 80%
+       16: 1118:        promise(allocator_arg_t, const _Allocator& __a)
+       16: 1119:        : _M_future(std::allocate_shared<_State>(__a)),
+call    0 returned 100%
+       16: 1120:	  _M_storage(__future_base::_S_allocate_result<_Res>(__a))
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       16: 1121:        { }
+call    0 never executed
+        -: 1122:
+        -: 1123:      template<typename _Allocator>
+        -: 1124:        promise(allocator_arg_t, const _Allocator&, promise&& __rhs)
+        -: 1125:        : _M_future(std::move(__rhs._M_future)),
+        -: 1126:	  _M_storage(std::move(__rhs._M_storage))
+        -: 1127:        { }
+        -: 1128:
+        -: 1129:      promise(const promise&) = delete;
+        -: 1130:
+function _ZNSt7promiseIN5hical12HttpResponseEED2Ev called 16 returned 100% blocks executed 94%
+       16: 1131:      ~promise()
+        -: 1132:      {
+      16*: 1133:        if (static_cast<bool>(_M_future) && !_M_future.unique())
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0%
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0%
+       16: 1134:          _M_future->_M_break_promise(std::move(_M_storage));
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+       16: 1135:      }
+call    0 returned 100%
+call    1 returned 100%
+        -: 1136:
+        -: 1137:      // Assignment
+        -: 1138:      promise&
+        -: 1139:      operator=(promise&& __rhs) noexcept
+        -: 1140:      {
+        -: 1141:        promise(std::move(__rhs)).swap(*this);
+        -: 1142:        return *this;
+        -: 1143:      }
+        -: 1144:
+        -: 1145:      promise& operator=(const promise&) = delete;
+        -: 1146:
+        -: 1147:      void
+        -: 1148:      swap(promise& __rhs) noexcept
+        -: 1149:      {
+        -: 1150:        _M_future.swap(__rhs._M_future);
+        -: 1151:        _M_storage.swap(__rhs._M_storage);
+        -: 1152:      }
+        -: 1153:
+        -: 1154:      // Retrieving the result
+        -: 1155:      future<_Res>
+function _ZNSt7promiseIN5hical12HttpResponseEE10get_futureEv called 16 returned 100% blocks executed 100%
+       16: 1156:      get_future()
+       16: 1157:      { return future<_Res>(_M_future); }
+call    0 returned 100%
+        -: 1158:
+        -: 1159:      // Setting the result
+        -: 1160:      void
+        -: 1161:      set_value(const _Res& __r)
+        -: 1162:      { _M_state()._M_set_result(_State::__setter(this, __r)); }
+        -: 1163:
+        -: 1164:      void
+function _ZNSt7promiseIN5hical12HttpResponseEE9set_valueEOS1_ called 16 returned 100% blocks executed 77%
+       16: 1165:      set_value(_Res&& __r)
+       32: 1166:      { _M_state()._M_set_result(_State::__setter(this, std::move(__r))); }
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+        -: 1167:
+        -: 1168:      void
+function _ZNSt7promiseIN5hical12HttpResponseEE13set_exceptionENSt15__exception_ptr13exception_ptrE called 0 returned 0% blocks executed 0%
+    #####: 1169:      set_exception(exception_ptr __p)
+    #####: 1170:      { _M_state()._M_set_result(_State::__setter(__p, this)); }
+call    0 never executed
+call    1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed (throw)
+call    5 never executed
+call    6 never executed
+        -: 1171:
+        -: 1172:      void
+        -: 1173:      set_value_at_thread_exit(const _Res& __r)
+        -: 1174:      {
+        -: 1175:	_M_state()._M_set_delayed_result(_State::__setter(this, __r),
+        -: 1176:					 _M_future);
+        -: 1177:      }
+        -: 1178:
+        -: 1179:      void
+        -: 1180:      set_value_at_thread_exit(_Res&& __r)
+        -: 1181:      {
+        -: 1182:	_M_state()._M_set_delayed_result(
+        -: 1183:	    _State::__setter(this, std::move(__r)), _M_future);
+        -: 1184:      }
+        -: 1185:
+        -: 1186:      void
+        -: 1187:      set_exception_at_thread_exit(exception_ptr __p)
+        -: 1188:      {
+        -: 1189:	_M_state()._M_set_delayed_result(_State::__setter(__p, this),
+        -: 1190:					 _M_future);
+        -: 1191:      }
+        -: 1192:
+        -: 1193:    private:
+        -: 1194:      _State&
+function _ZNSt7promiseIN5hical12HttpResponseEE8_M_stateEv called 16 returned 100% blocks executed 100%
+       16: 1195:      _M_state()
+        -: 1196:      {
+       16: 1197:	__future_base::_State_base::_S_check(_M_future);
+call    0 returned 100%
+       16: 1198:	return *_M_future;
+call    0 returned 100%
+        -: 1199:      }
+        -: 1200:    };
+        -: 1201:
+        -: 1202:  template<typename _Res>
+        -: 1203:    inline void
+        -: 1204:    swap(promise<_Res>& __x, promise<_Res>& __y) noexcept
+        -: 1205:    { __x.swap(__y); }
+        -: 1206:
+        -: 1207:  template<typename _Res, typename _Alloc>
+        -: 1208:    struct uses_allocator<promise<_Res>, _Alloc>
+        -: 1209:    : public true_type { };
+        -: 1210:
+        -: 1211:
+        -: 1212:  /// Partial specialization for promise<R&>
+        -: 1213:  template<typename _Res>
+        -: 1214:    class promise<_Res&>
+        -: 1215:    {
+        -: 1216:      typedef __future_base::_State_base	_State;
+        -: 1217:      typedef __future_base::_Result<_Res&>	_Res_type;
+        -: 1218:      typedef __future_base::_Ptr<_Res_type> 	_Ptr_type;
+        -: 1219:      template<typename, typename> friend struct _State::_Setter;
+        -: 1220:      friend _State;
+        -: 1221:
+        -: 1222:      shared_ptr<_State>                        _M_future;
+        -: 1223:      _Ptr_type                                 _M_storage;
+        -: 1224:
+        -: 1225:    public:
+        -: 1226:      promise()
+        -: 1227:      : _M_future(std::make_shared<_State>()),
+        -: 1228:	_M_storage(new _Res_type())
+        -: 1229:      { }
+        -: 1230:
+        -: 1231:      promise(promise&& __rhs) noexcept
+        -: 1232:      : _M_future(std::move(__rhs._M_future)),
+        -: 1233:	_M_storage(std::move(__rhs._M_storage))
+        -: 1234:      { }
+        -: 1235:
+        -: 1236:      template<typename _Allocator>
+        -: 1237:        promise(allocator_arg_t, const _Allocator& __a)
+        -: 1238:        : _M_future(std::allocate_shared<_State>(__a)),
+        -: 1239:	  _M_storage(__future_base::_S_allocate_result<_Res&>(__a))
+        -: 1240:        { }
+        -: 1241:
+        -: 1242:      template<typename _Allocator>
+        -: 1243:        promise(allocator_arg_t, const _Allocator&, promise&& __rhs)
+        -: 1244:        : _M_future(std::move(__rhs._M_future)),
+        -: 1245:	  _M_storage(std::move(__rhs._M_storage))
+        -: 1246:        { }
+        -: 1247:
+        -: 1248:      promise(const promise&) = delete;
+        -: 1249:
+        -: 1250:      ~promise()
+        -: 1251:      {
+        -: 1252:        if (static_cast<bool>(_M_future) && !_M_future.unique())
+        -: 1253:          _M_future->_M_break_promise(std::move(_M_storage));
+        -: 1254:      }
+        -: 1255:
+        -: 1256:      // Assignment
+        -: 1257:      promise&
+        -: 1258:      operator=(promise&& __rhs) noexcept
+        -: 1259:      {
+        -: 1260:        promise(std::move(__rhs)).swap(*this);
+        -: 1261:        return *this;
+        -: 1262:      }
+        -: 1263:
+        -: 1264:      promise& operator=(const promise&) = delete;
+        -: 1265:
+        -: 1266:      void
+        -: 1267:      swap(promise& __rhs) noexcept
+        -: 1268:      {
+        -: 1269:        _M_future.swap(__rhs._M_future);
+        -: 1270:        _M_storage.swap(__rhs._M_storage);
+        -: 1271:      }
+        -: 1272:
+        -: 1273:      // Retrieving the result
+        -: 1274:      future<_Res&>
+        -: 1275:      get_future()
+        -: 1276:      { return future<_Res&>(_M_future); }
+        -: 1277:
+        -: 1278:      // Setting the result
+        -: 1279:      void
+        -: 1280:      set_value(_Res& __r)
+        -: 1281:      { _M_state()._M_set_result(_State::__setter(this, __r)); }
+        -: 1282:
+        -: 1283:      void
+        -: 1284:      set_exception(exception_ptr __p)
+        -: 1285:      { _M_state()._M_set_result(_State::__setter(__p, this)); }
+        -: 1286:
+        -: 1287:      void
+        -: 1288:      set_value_at_thread_exit(_Res& __r)
+        -: 1289:      {
+        -: 1290:	_M_state()._M_set_delayed_result(_State::__setter(this, __r),
+        -: 1291:					 _M_future);
+        -: 1292:      }
+        -: 1293:
+        -: 1294:      void
+        -: 1295:      set_exception_at_thread_exit(exception_ptr __p)
+        -: 1296:      {
+        -: 1297:	_M_state()._M_set_delayed_result(_State::__setter(__p, this),
+        -: 1298:					 _M_future);
+        -: 1299:      }
+        -: 1300:
+        -: 1301:    private:
+        -: 1302:      _State&
+        -: 1303:      _M_state()
+        -: 1304:      {
+        -: 1305:	__future_base::_State_base::_S_check(_M_future);
+        -: 1306:	return *_M_future;
+        -: 1307:      }
+        -: 1308:    };
+        -: 1309:
+        -: 1310:  /// Explicit specialization for promise<void>
+        -: 1311:  template<>
+        -: 1312:    class promise<void>
+        -: 1313:    {
+        -: 1314:      typedef __future_base::_State_base	_State;
+        -: 1315:      typedef __future_base::_Result<void>	_Res_type;
+        -: 1316:      typedef __future_base::_Ptr<_Res_type> 	_Ptr_type;
+        -: 1317:      template<typename, typename> friend struct _State::_Setter;
+        -: 1318:      friend _State;
+        -: 1319:
+        -: 1320:      shared_ptr<_State>                        _M_future;
+        -: 1321:      _Ptr_type                                 _M_storage;
+        -: 1322:
+        -: 1323:    public:
+function _ZNSt7promiseIvEC2Ev called 1 returned 100% blocks executed 60%
+        1: 1324:      promise()
+        1: 1325:      : _M_future(std::make_shared<_State>()),
+call    0 returned 100%
+        1: 1326:	_M_storage(new _Res_type())
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 never executed (fallthrough)
+branch  8 never executed
+call    9 never executed
+        1: 1327:      { }
+call    0 never executed
+        -: 1328:
+function _ZNSt7promiseIvEC2EOS0_ called 1 returned 100% blocks executed 100%
+        1: 1329:      promise(promise&& __rhs) noexcept
+        1: 1330:      : _M_future(std::move(__rhs._M_future)),
+call    0 returned 100%
+call    1 returned 100%
+        1: 1331:	_M_storage(std::move(__rhs._M_storage))
+call    0 returned 100%
+call    1 returned 100%
+        1: 1332:      { }
+        -: 1333:
+        -: 1334:      template<typename _Allocator>
+        -: 1335:        promise(allocator_arg_t, const _Allocator& __a)
+        -: 1336:        : _M_future(std::allocate_shared<_State>(__a)),
+        -: 1337:	  _M_storage(__future_base::_S_allocate_result<void>(__a))
+        -: 1338:        { }
+        -: 1339:
+        -: 1340:      // _GLIBCXX_RESOLVE_LIB_DEFECTS
+        -: 1341:      // 2095.  missing constructors needed for uses-allocator construction
+        -: 1342:      template<typename _Allocator>
+        -: 1343:        promise(allocator_arg_t, const _Allocator&, promise&& __rhs)
+        -: 1344:        : _M_future(std::move(__rhs._M_future)),
+        -: 1345:	  _M_storage(std::move(__rhs._M_storage))
+        -: 1346:        { }
+        -: 1347:
+        -: 1348:      promise(const promise&) = delete;
+        -: 1349:
+function _ZNSt7promiseIvED2Ev called 2 returned 100% blocks executed 100%
+        2: 1350:      ~promise()
+        -: 1351:      {
+        2: 1352:        if (static_cast<bool>(_M_future) && !_M_future.unique())
+call    0 returned 100%
+branch  1 taken 50% (fallthrough)
+branch  2 taken 50%
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0%
+branch  6 taken 50% (fallthrough)
+branch  7 taken 50%
+        1: 1353:          _M_future->_M_break_promise(std::move(_M_storage));
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+        2: 1354:      }
+call    0 returned 100%
+call    1 returned 100%
+        -: 1355:
+        -: 1356:      // Assignment
+        -: 1357:      promise&
+        -: 1358:      operator=(promise&& __rhs) noexcept
+        -: 1359:      {
+        -: 1360:        promise(std::move(__rhs)).swap(*this);
+        -: 1361:        return *this;
+        -: 1362:      }
+        -: 1363:
+        -: 1364:      promise& operator=(const promise&) = delete;
+        -: 1365:
+        -: 1366:      void
+        -: 1367:      swap(promise& __rhs) noexcept
+        -: 1368:      {
+        -: 1369:        _M_future.swap(__rhs._M_future);
+        -: 1370:        _M_storage.swap(__rhs._M_storage);
+        -: 1371:      }
+        -: 1372:
+        -: 1373:      // Retrieving the result
+        -: 1374:      future<void>
+function _ZNSt7promiseIvE10get_futureEv called 1 returned 100% blocks executed 100%
+        1: 1375:      get_future()
+        1: 1376:      { return future<void>(_M_future); }
+call    0 returned 100%
+        -: 1377:
+        -: 1378:      // Setting the result
+        -: 1379:      void
+function _ZNSt7promiseIvE9set_valueEv called 1 returned 100% blocks executed 73%
+        1: 1380:      set_value()
+        2: 1381:      { _M_state()._M_set_result(_State::__setter(this)); }
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+call    6 never executed
+        -: 1382:
+        -: 1383:      void
+        -: 1384:      set_exception(exception_ptr __p)
+        -: 1385:      { _M_state()._M_set_result(_State::__setter(__p, this)); }
+        -: 1386:
+        -: 1387:      void
+        -: 1388:      set_value_at_thread_exit()
+        -: 1389:      { _M_state()._M_set_delayed_result(_State::__setter(this), _M_future); }
+        -: 1390:
+        -: 1391:      void
+        -: 1392:      set_exception_at_thread_exit(exception_ptr __p)
+        -: 1393:      {
+        -: 1394:	_M_state()._M_set_delayed_result(_State::__setter(__p, this),
+        -: 1395:					 _M_future);
+        -: 1396:      }
+        -: 1397:
+        -: 1398:    private:
+        -: 1399:      _State&
+function _ZNSt7promiseIvE8_M_stateEv called 1 returned 100% blocks executed 100%
+        1: 1400:      _M_state()
+        -: 1401:      {
+        1: 1402:	__future_base::_State_base::_S_check(_M_future);
+call    0 returned 100%
+        1: 1403:	return *_M_future;
+call    0 returned 100%
+        -: 1404:      }
+        -: 1405:    };
+        -: 1406:
+        -: 1407:  /// @cond undocumented
+        -: 1408:  template<typename _Ptr_type, typename _Fn, typename _Res>
+        -: 1409:    struct __future_base::_Task_setter
+        -: 1410:    {
+        -: 1411:      // Invoke the function and provide the result to the caller.
+        -: 1412:      _Ptr_type operator()() const
+        -: 1413:      {
+        -: 1414:	__try
+        -: 1415:	  {
+        -: 1416:	    (*_M_result)->_M_set((*_M_fn)());
+        -: 1417:	  }
+        -: 1418:	__catch(const __cxxabiv1::__forced_unwind&)
+        -: 1419:	  {
+        -: 1420:	    __throw_exception_again; // will cause broken_promise
+        -: 1421:	  }
+        -: 1422:	__catch(...)
+        -: 1423:	  {
+        -: 1424:	    (*_M_result)->_M_error = current_exception();
+        -: 1425:	  }
+        -: 1426:	return std::move(*_M_result);
+        -: 1427:      }
+        -: 1428:      _Ptr_type*	_M_result;
+        -: 1429:      _Fn*		_M_fn;
+        -: 1430:    };
+        -: 1431:
+        -: 1432:  template<typename _Ptr_type, typename _Fn>
+        -: 1433:    struct __future_base::_Task_setter<_Ptr_type, _Fn, void>
+        -: 1434:    {
+        -: 1435:      _Ptr_type operator()() const
+        -: 1436:      {
+        -: 1437:	__try
+        -: 1438:	  {
+        -: 1439:	    (*_M_fn)();
+        -: 1440:	  }
+        -: 1441:	__catch(const __cxxabiv1::__forced_unwind&)
+        -: 1442:	  {
+        -: 1443:	    __throw_exception_again; // will cause broken_promise
+        -: 1444:	  }
+        -: 1445:	__catch(...)
+        -: 1446:	  {
+        -: 1447:	    (*_M_result)->_M_error = current_exception();
+        -: 1448:	  }
+        -: 1449:	return std::move(*_M_result);
+        -: 1450:      }
+        -: 1451:      _Ptr_type*	_M_result;
+        -: 1452:      _Fn*		_M_fn;
+        -: 1453:    };
+        -: 1454:
+        -: 1455:  // Holds storage for a packaged_task's result.
+        -: 1456:  template<typename _Res, typename... _Args>
+        -: 1457:    struct __future_base::_Task_state_base<_Res(_Args...)>
+        -: 1458:    : __future_base::_State_base
+        -: 1459:    {
+        -: 1460:      typedef _Res _Res_type;
+        -: 1461:
+        -: 1462:      template<typename _Alloc>
+        -: 1463:	_Task_state_base(const _Alloc& __a)
+        -: 1464:	: _M_result(_S_allocate_result<_Res>(__a))
+        -: 1465:	{ }
+        -: 1466:
+        -: 1467:      // Invoke the stored task and make the state ready.
+        -: 1468:      virtual void
+        -: 1469:      _M_run(_Args&&... __args) = 0;
+        -: 1470:
+        -: 1471:      // Invoke the stored task and make the state ready at thread exit.
+        -: 1472:      virtual void
+        -: 1473:      _M_run_delayed(_Args&&... __args, weak_ptr<_State_base>) = 0;
+        -: 1474:
+        -: 1475:      virtual shared_ptr<_Task_state_base>
+        -: 1476:      _M_reset() = 0;
+        -: 1477:
+        -: 1478:      typedef __future_base::_Ptr<_Result<_Res>> _Ptr_type;
+        -: 1479:      _Ptr_type _M_result;
+        -: 1480:    };
+        -: 1481:
+        -: 1482:  // Holds a packaged_task's stored task.
+        -: 1483:  template<typename _Fn, typename _Alloc, typename _Res, typename... _Args>
+        -: 1484:    struct __future_base::_Task_state<_Fn, _Alloc, _Res(_Args...)> final
+        -: 1485:    : __future_base::_Task_state_base<_Res(_Args...)>
+        -: 1486:    {
+        -: 1487:      template<typename _Fn2>
+        -: 1488:	_Task_state(_Fn2&& __fn, const _Alloc& __a)
+        -: 1489:	: _Task_state_base<_Res(_Args...)>(__a),
+        -: 1490:	  _M_impl(std::forward<_Fn2>(__fn), __a)
+        -: 1491:	{ }
+        -: 1492:
+        -: 1493:    private:
+        -: 1494:      virtual void
+        -: 1495:      _M_run(_Args&&... __args)
+        -: 1496:      {
+        -: 1497:	auto __boundfn = [&] () -> _Res {
+        -: 1498:	    return std::__invoke_r<_Res>(_M_impl._M_fn,
+        -: 1499:					 std::forward<_Args>(__args)...);
+        -: 1500:	};
+        -: 1501:	this->_M_set_result(_S_task_setter(this->_M_result, __boundfn));
+        -: 1502:      }
+        -: 1503:
+        -: 1504:      virtual void
+        -: 1505:      _M_run_delayed(_Args&&... __args, weak_ptr<_State_base> __self)
+        -: 1506:      {
+        -: 1507:	auto __boundfn = [&] () -> _Res {
+        -: 1508:	    return std::__invoke_r<_Res>(_M_impl._M_fn,
+        -: 1509:					 std::forward<_Args>(__args)...);
+        -: 1510:	};
+        -: 1511:	this->_M_set_delayed_result(_S_task_setter(this->_M_result, __boundfn),
+        -: 1512:				    std::move(__self));
+        -: 1513:      }
+        -: 1514:
+        -: 1515:      virtual shared_ptr<_Task_state_base<_Res(_Args...)>>
+        -: 1516:      _M_reset();
+        -: 1517:
+        -: 1518:      struct _Impl : _Alloc
+        -: 1519:      {
+        -: 1520:	template<typename _Fn2>
+        -: 1521:	  _Impl(_Fn2&& __fn, const _Alloc& __a)
+        -: 1522:	  : _Alloc(__a), _M_fn(std::forward<_Fn2>(__fn)) { }
+        -: 1523:	_Fn _M_fn;
+        -: 1524:      } _M_impl;
+        -: 1525:    };
+        -: 1526:
+        -: 1527:  template<typename _Signature, typename _Fn,
+        -: 1528:	   typename _Alloc = std::allocator<int>>
+        -: 1529:    static shared_ptr<__future_base::_Task_state_base<_Signature>>
+        -: 1530:    __create_task_state(_Fn&& __fn, const _Alloc& __a = _Alloc())
+        -: 1531:    {
+        -: 1532:      typedef typename decay<_Fn>::type _Fn2;
+        -: 1533:      typedef __future_base::_Task_state<_Fn2, _Alloc, _Signature> _State;
+        -: 1534:      return std::allocate_shared<_State>(__a, std::forward<_Fn>(__fn), __a);
+        -: 1535:    }
+        -: 1536:
+        -: 1537:  template<typename _Fn, typename _Alloc, typename _Res, typename... _Args>
+        -: 1538:    shared_ptr<__future_base::_Task_state_base<_Res(_Args...)>>
+        -: 1539:    __future_base::_Task_state<_Fn, _Alloc, _Res(_Args...)>::_M_reset()
+        -: 1540:    {
+        -: 1541:      return __create_task_state<_Res(_Args...)>(std::move(_M_impl._M_fn),
+        -: 1542:						 static_cast<_Alloc&>(_M_impl));
+        -: 1543:    }
+        -: 1544:  /// @endcond
+        -: 1545:
+        -: 1546:  /// packaged_task
+        -: 1547:  template<typename _Res, typename... _ArgTypes>
+        -: 1548:    class packaged_task<_Res(_ArgTypes...)>
+        -: 1549:    {
+        -: 1550:      typedef __future_base::_Task_state_base<_Res(_ArgTypes...)> _State_type;
+        -: 1551:      shared_ptr<_State_type>                   _M_state;
+        -: 1552:
+        -: 1553:      // _GLIBCXX_RESOLVE_LIB_DEFECTS
+        -: 1554:      // 3039. Unnecessary decay in thread and packaged_task
+        -: 1555:      template<typename _Fn, typename _Fn2 = __remove_cvref_t<_Fn>>
+        -: 1556:	using __not_same
+        -: 1557:	  = typename enable_if<!is_same<packaged_task, _Fn2>::value>::type;
+        -: 1558:
+        -: 1559:    public:
+        -: 1560:      // Construction and destruction
+        -: 1561:      packaged_task() noexcept { }
+        -: 1562:
+        -: 1563:      template<typename _Fn, typename = __not_same<_Fn>>
+        -: 1564:	explicit
+        -: 1565:	packaged_task(_Fn&& __fn)
+        -: 1566:	: _M_state(
+        -: 1567:	    __create_task_state<_Res(_ArgTypes...)>(std::forward<_Fn>(__fn)))
+        -: 1568:	{ }
+        -: 1569:
+        -: 1570:#if __cplusplus < 201703L
+        -: 1571:      // _GLIBCXX_RESOLVE_LIB_DEFECTS
+        -: 1572:      // 2097. packaged_task constructors should be constrained
+        -: 1573:      // 2407. [this constructor should not be] explicit
+        -: 1574:      // 2921. packaged_task and type-erased allocators
+        -: 1575:      template<typename _Fn, typename _Alloc, typename = __not_same<_Fn>>
+        -: 1576:	packaged_task(allocator_arg_t, const _Alloc& __a, _Fn&& __fn)
+        -: 1577:	: _M_state(__create_task_state<_Res(_ArgTypes...)>(
+        -: 1578:		   std::forward<_Fn>(__fn), __a))
+        -: 1579:	{ }
+        -: 1580:
+        -: 1581:      // _GLIBCXX_RESOLVE_LIB_DEFECTS
+        -: 1582:      // 2095.  missing constructors needed for uses-allocator construction
+        -: 1583:      template<typename _Allocator>
+        -: 1584:	packaged_task(allocator_arg_t, const _Allocator&) noexcept
+        -: 1585:	{ }
+        -: 1586:
+        -: 1587:      template<typename _Allocator>
+        -: 1588:	packaged_task(allocator_arg_t, const _Allocator&,
+        -: 1589:		      const packaged_task&) = delete;
+        -: 1590:
+        -: 1591:      template<typename _Allocator>
+        -: 1592:	packaged_task(allocator_arg_t, const _Allocator&,
+        -: 1593:		      packaged_task&& __other) noexcept
+        -: 1594:	{ this->swap(__other); }
+        -: 1595:#endif
+        -: 1596:
+        -: 1597:      ~packaged_task()
+        -: 1598:      {
+        -: 1599:        if (static_cast<bool>(_M_state) && !_M_state.unique())
+        -: 1600:	  _M_state->_M_break_promise(std::move(_M_state->_M_result));
+        -: 1601:      }
+        -: 1602:
+        -: 1603:      // No copy
+        -: 1604:      packaged_task(const packaged_task&) = delete;
+        -: 1605:      packaged_task& operator=(const packaged_task&) = delete;
+        -: 1606:
+        -: 1607:      // Move support
+        -: 1608:      packaged_task(packaged_task&& __other) noexcept
+        -: 1609:      { this->swap(__other); }
+        -: 1610:
+        -: 1611:      packaged_task& operator=(packaged_task&& __other) noexcept
+        -: 1612:      {
+        -: 1613:	packaged_task(std::move(__other)).swap(*this);
+        -: 1614:	return *this;
+        -: 1615:      }
+        -: 1616:
+        -: 1617:      void
+        -: 1618:      swap(packaged_task& __other) noexcept
+        -: 1619:      { _M_state.swap(__other._M_state); }
+        -: 1620:
+        -: 1621:      bool
+        -: 1622:      valid() const noexcept
+        -: 1623:      { return static_cast<bool>(_M_state); }
+        -: 1624:
+        -: 1625:      // Result retrieval
+        -: 1626:      future<_Res>
+        -: 1627:      get_future()
+        -: 1628:      { return future<_Res>(_M_state); }
+        -: 1629:
+        -: 1630:      // Execution
+        -: 1631:      void
+        -: 1632:      operator()(_ArgTypes... __args)
+        -: 1633:      {
+        -: 1634:	__future_base::_State_base::_S_check(_M_state);
+        -: 1635:	_M_state->_M_run(std::forward<_ArgTypes>(__args)...);
+        -: 1636:      }
+        -: 1637:
+        -: 1638:      void
+        -: 1639:      make_ready_at_thread_exit(_ArgTypes... __args)
+        -: 1640:      {
+        -: 1641:	__future_base::_State_base::_S_check(_M_state);
+        -: 1642:	_M_state->_M_run_delayed(std::forward<_ArgTypes>(__args)..., _M_state);
+        -: 1643:      }
+        -: 1644:
+        -: 1645:      void
+        -: 1646:      reset()
+        -: 1647:      {
+        -: 1648:	__future_base::_State_base::_S_check(_M_state);
+        -: 1649:	packaged_task __tmp;
+        -: 1650:	__tmp._M_state = _M_state;
+        -: 1651:	_M_state = _M_state->_M_reset();
+        -: 1652:      }
+        -: 1653:    };
+        -: 1654:
+        -: 1655:  // _GLIBCXX_RESOLVE_LIB_DEFECTS
+        -: 1656:  // 3117. Missing packaged_task deduction guides
+        -: 1657:#if __cpp_deduction_guides >= 201606
+        -: 1658:  template<typename _Res, typename... _ArgTypes>
+        -: 1659:    packaged_task(_Res(*)(_ArgTypes...)) -> packaged_task<_Res(_ArgTypes...)>;
+        -: 1660:
+        -: 1661:  template<typename _Fun, typename _Signature
+        -: 1662:	     = __function_guide_t<_Fun, decltype(&_Fun::operator())>>
+        -: 1663:    packaged_task(_Fun) -> packaged_task<_Signature>;
+        -: 1664:#endif
+        -: 1665:
+        -: 1666:  /// swap
+        -: 1667:  template<typename _Res, typename... _ArgTypes>
+        -: 1668:    inline void
+        -: 1669:    swap(packaged_task<_Res(_ArgTypes...)>& __x,
+        -: 1670:	 packaged_task<_Res(_ArgTypes...)>& __y) noexcept
+        -: 1671:    { __x.swap(__y); }
+        -: 1672:
+        -: 1673:#if __cplusplus < 201703L
+        -: 1674:  // _GLIBCXX_RESOLVE_LIB_DEFECTS
+        -: 1675:  // 2976. Dangling uses_allocator specialization for packaged_task
+        -: 1676:  template<typename _Res, typename _Alloc>
+        -: 1677:    struct uses_allocator<packaged_task<_Res>, _Alloc>
+        -: 1678:    : public true_type { };
+        -: 1679:#endif
+        -: 1680:
+        -: 1681:  /// @cond undocumented
+        -: 1682:
+        -: 1683:  // Shared state created by std::async().
+        -: 1684:  // Holds a deferred function and storage for its result.
+        -: 1685:  template<typename _BoundFn, typename _Res>
+        -: 1686:    class __future_base::_Deferred_state final
+        -: 1687:    : public __future_base::_State_base
+        -: 1688:    {
+        -: 1689:    public:
+        -: 1690:      template<typename... _Args>
+        -: 1691:	explicit
+        -: 1692:	_Deferred_state(_Args&&... __args)
+        -: 1693:	: _M_result(new _Result<_Res>()),
+        -: 1694:	  _M_fn(std::forward<_Args>(__args)...)
+        -: 1695:	{ }
+        -: 1696:
+        -: 1697:    private:
+        -: 1698:      typedef __future_base::_Ptr<_Result<_Res>> _Ptr_type;
+        -: 1699:      _Ptr_type _M_result;
+        -: 1700:      _BoundFn _M_fn;
+        -: 1701:
+        -: 1702:      // Run the deferred function.
+        -: 1703:      virtual void
+        -: 1704:      _M_complete_async()
+        -: 1705:      {
+        -: 1706:	// Multiple threads can call a waiting function on the future and
+        -: 1707:	// reach this point at the same time. The call_once in _M_set_result
+        -: 1708:	// ensures only the first one run the deferred function, stores the
+        -: 1709:	// result in _M_result, swaps that with the base _M_result and makes
+        -: 1710:	// the state ready. Tell _M_set_result to ignore failure so all later
+        -: 1711:	// calls do nothing.
+        -: 1712:        _M_set_result(_S_task_setter(_M_result, _M_fn), true);
+        -: 1713:      }
+        -: 1714:
+        -: 1715:      // Caller should check whether the state is ready first, because this
+        -: 1716:      // function will return true even after the deferred function has run.
+        -: 1717:      virtual bool _M_is_deferred_future() const { return true; }
+        -: 1718:    };
+        -: 1719:
+        -: 1720:  // Common functionality hoisted out of the _Async_state_impl template.
+        -: 1721:  class __future_base::_Async_state_commonV2
+        -: 1722:    : public __future_base::_State_base
+        -: 1723:  {
+        -: 1724:  protected:
+        -: 1725:    ~_Async_state_commonV2() = default;
+        -: 1726:
+        -: 1727:    // Make waiting functions block until the thread completes, as if joined.
+        -: 1728:    //
+        -: 1729:    // This function is used by wait() to satisfy the first requirement below
+        -: 1730:    // and by wait_for() / wait_until() to satisfy the second.
+        -: 1731:    //
+        -: 1732:    // [futures.async]:
+        -: 1733:    //
+        -: 1734:    // - a call to a waiting function on an asynchronous return object that
+        -: 1735:    // shares the shared state created by this async call shall block until
+        -: 1736:    // the associated thread has completed, as if joined, or else time out.
+        -: 1737:    //
+        -: 1738:    // - the associated thread completion synchronizes with the return from
+        -: 1739:    // the first function that successfully detects the ready status of the
+        -: 1740:    // shared state or with the return from the last function that releases
+        -: 1741:    // the shared state, whichever happens first.
+        -: 1742:    virtual void _M_complete_async() { _M_join(); }
+        -: 1743:
+        -: 1744:    void _M_join() { std::call_once(_M_once, &thread::join, &_M_thread); }
+        -: 1745:
+        -: 1746:    thread _M_thread;
+        -: 1747:    once_flag _M_once;
+        -: 1748:  };
+        -: 1749:
+        -: 1750:  // Shared state created by std::async().
+        -: 1751:  // Starts a new thread that runs a function and makes the shared state ready.
+        -: 1752:  template<typename _BoundFn, typename _Res>
+        -: 1753:    class __future_base::_Async_state_impl final
+        -: 1754:    : public __future_base::_Async_state_commonV2
+        -: 1755:    {
+        -: 1756:    public:
+        -: 1757:      template<typename... _Args>
+        -: 1758:	explicit
+        -: 1759:	_Async_state_impl(_Args&&... __args)
+        -: 1760:	: _M_result(new _Result<_Res>()),
+        -: 1761:	  _M_fn(std::forward<_Args>(__args)...)
+        -: 1762:	{
+        -: 1763:	  _M_thread = std::thread{&_Async_state_impl::_M_run, this};
+        -: 1764:	}
+        -: 1765:
+        -: 1766:      // Must not destroy _M_result and _M_fn until the thread finishes.
+        -: 1767:      // Call join() directly rather than through _M_join() because no other
+        -: 1768:      // thread can be referring to this state if it is being destroyed.
+        -: 1769:      ~_Async_state_impl()
+        -: 1770:      {
+        -: 1771:	if (_M_thread.joinable())
+        -: 1772:	  _M_thread.join();
+        -: 1773:      }
+        -: 1774:
+        -: 1775:    private:
+        -: 1776:      void
+        -: 1777:      _M_run()
+        -: 1778:      {
+        -: 1779:	__try
+        -: 1780:	  {
+        -: 1781:	    _M_set_result(_S_task_setter(_M_result, _M_fn));
+        -: 1782:	  }
+        -: 1783:	__catch (const __cxxabiv1::__forced_unwind&)
+        -: 1784:	  {
+        -: 1785:	    // make the shared state ready on thread cancellation
+        -: 1786:	    if (static_cast<bool>(_M_result))
+        -: 1787:	      this->_M_break_promise(std::move(_M_result));
+        -: 1788:	    __throw_exception_again;
+        -: 1789:	  }
+        -: 1790:      }
+        -: 1791:
+        -: 1792:      typedef __future_base::_Ptr<_Result<_Res>> _Ptr_type;
+        -: 1793:      _Ptr_type _M_result;
+        -: 1794:      _BoundFn _M_fn;
+        -: 1795:    };
+        -: 1796:  /// @endcond
+        -: 1797:
+        -: 1798:  /// async
+        -: 1799:  template<typename _Fn, typename... _Args>
+        -: 1800:    _GLIBCXX_NODISCARD future<__async_result_of<_Fn, _Args...>>
+        -: 1801:    async(launch __policy, _Fn&& __fn, _Args&&... __args)
+        -: 1802:    {
+        -: 1803:      using _Wr = std::thread::_Call_wrapper<_Fn, _Args...>;
+        -: 1804:      using _As = __future_base::_Async_state_impl<_Wr>;
+        -: 1805:      using _Ds = __future_base::_Deferred_state<_Wr>;
+        -: 1806:
+        -: 1807:      std::shared_ptr<__future_base::_State_base> __state;
+        -: 1808:      if ((__policy & launch::async) == launch::async)
+        -: 1809:	{
+        -: 1810:	  __try
+        -: 1811:	    {
+        -: 1812:	      __state = std::make_shared<_As>(std::forward<_Fn>(__fn),
+        -: 1813:					      std::forward<_Args>(__args)...);
+        -: 1814:	    }
+        -: 1815:#if __cpp_exceptions
+        -: 1816:	  catch(const system_error& __e)
+        -: 1817:	    {
+        -: 1818:	      if (__e.code() != errc::resource_unavailable_try_again
+        -: 1819:		  || (__policy & launch::deferred) != launch::deferred)
+        -: 1820:		throw;
+        -: 1821:	    }
+        -: 1822:#endif
+        -: 1823:	}
+        -: 1824:      if (!__state)
+        -: 1825:	{
+        -: 1826:	  __state = std::make_shared<_Ds>(std::forward<_Fn>(__fn),
+        -: 1827:					  std::forward<_Args>(__args)...);
+        -: 1828:	}
+        -: 1829:      return future<__async_result_of<_Fn, _Args...>>(std::move(__state));
+        -: 1830:    }
+        -: 1831:
+        -: 1832:  /// async, potential overload
+        -: 1833:  template<typename _Fn, typename... _Args>
+        -: 1834:    _GLIBCXX_NODISCARD inline future<__async_result_of<_Fn, _Args...>>
+        -: 1835:    async(_Fn&& __fn, _Args&&... __args)
+        -: 1836:    {
+        -: 1837:      return std::async(launch::async|launch::deferred,
+        -: 1838:			std::forward<_Fn>(__fn),
+        -: 1839:			std::forward<_Args>(__args)...);
+        -: 1840:    }
+        -: 1841:
+        -: 1842:#endif // _GLIBCXX_ASYNC_ABI_COMPAT
+        -: 1843:#endif // _GLIBCXX_HAS_GTHREADS
+        -: 1844:
+        -: 1845:  /// @} group futures
+        -: 1846:_GLIBCXX_END_NAMESPACE_VERSION
+        -: 1847:} // namespace
+        -: 1848:
+        -: 1849:#endif // C++11
+        -: 1850:
+        -: 1851:#endif // _GLIBCXX_FUTURE

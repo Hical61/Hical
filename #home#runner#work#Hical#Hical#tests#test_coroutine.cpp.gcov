@@ -1,0 +1,797 @@
+        -:    0:Source:/home/runner/work/Hical/Hical/tests/test_coroutine.cpp
+        -:    1:#include "core/Coroutine.h"
+        -:    2:#include "asio/AsioEventLoop.h"
+        -:    3:#include <gtest/gtest.h>
+        -:    4:#include <atomic>
+        -:    5:#include <chrono>
+        -:    6:#include <thread>
+        -:    7:
+        -:    8:using namespace hical;
+        -:    9:
+        -:   10:// 测试协程 sleep（使用 executor 版本）
+        4:   11:TEST(CoroutineTest, Sleep)
+        -:   12:{
+        1:   13:	AsioEventLoop loop;
+        1:   14:	std::atomic<bool> executed {false};
+        1:   15:	auto start = std::chrono::steady_clock::now();
+        -:   16:
+        1:   17:	coSpawn(loop.getIoContext(),
+        2:   18:			[&]() -> Awaitable<void>
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:   19:			{
+        -:   20:				co_await sleep(0.1);
+        -:   21:				executed = true;
+        2:   22:			});
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed
+call    8 never executed
+branch  9 never executed (fallthrough)
+branch 10 never executed
+call   11 never executed
+call   12 never executed
+branch 13 never executed (fallthrough)
+branch 14 never executed (throw)
+call   15 never executed
+call   16 never executed
+        -:   23:
+        -:   24:	std::thread loopThread(
+        1:   25:		[&loop]()
+        -:   26:		{
+        1:   27:			loop.run();
+call    0 returned 100%
+        2:   28:		});
+        -:   29:
+        1:   30:	std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        -:   31:
+       1*:   32:	EXPECT_TRUE(executed.load());
+        -:   33:
+        -:   34:	auto elapsed =
+        1:   35:		std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count();
+       1*:   36:	EXPECT_GE(elapsed, 90);
+        -:   37:
+        1:   38:	loop.stop();
+        1:   39:	loopThread.join();
+        1:   40:}
+------------------
+_ZN24CoroutineTest_Sleep_TestC2Ev:
+function _ZN24CoroutineTest_Sleep_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:   11:TEST(CoroutineTest, Sleep)
+call    0 returned 100%
+------------------
+_ZN24CoroutineTest_Sleep_TestD0Ev:
+function _ZN24CoroutineTest_Sleep_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:   11:TEST(CoroutineTest, Sleep)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN24CoroutineTest_Sleep_TestD2Ev:
+function _ZN24CoroutineTest_Sleep_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:   11:TEST(CoroutineTest, Sleep)
+call    0 returned 100%
+------------------
+_ZN24CoroutineTest_Sleep_Test8TestBodyEv:
+function _ZN24CoroutineTest_Sleep_Test8TestBodyEv called 1 returned 100% blocks executed 35%
+        1:   11:TEST(CoroutineTest, Sleep)
+        -:   12:{
+        1:   13:	AsioEventLoop loop;
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:   14:	std::atomic<bool> executed {false};
+        1:   15:	auto start = std::chrono::steady_clock::now();
+call    0 returned 100%
+        -:   16:
+        1:   17:	coSpawn(loop.getIoContext(),
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:   18:			[&]() -> Awaitable<void>
+call    0 returned 100%
+        -:   19:			{
+        -:   20:				co_await sleep(0.1);
+        -:   21:				executed = true;
+        -:   22:			});
+        -:   23:
+        -:   24:	std::thread loopThread(
+    #####:   25:		[&loop]()
+        -:   26:		{
+        -:   27:			loop.run();
+        1:   28:		});
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:   29:
+        1:   30:	std::this_thread::sleep_for(std::chrono::milliseconds(200));
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:   31:
+       1*:   32:	EXPECT_TRUE(executed.load());
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 0% (fallthrough)
+branch  4 taken 100%
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed (throw)
+call    8 never executed
+branch  9 never executed (fallthrough)
+branch 10 never executed (throw)
+call   11 never executed
+call   12 never executed
+branch 13 never executed (fallthrough)
+branch 14 never executed (throw)
+call   15 never executed
+branch 16 never executed (fallthrough)
+branch 17 never executed (throw)
+call   18 never executed
+call   19 never executed
+call   20 never executed
+call   21 returned 100%
+call   22 never executed
+call   23 never executed
+call   24 never executed
+call   25 never executed
+        -:   33:
+        -:   34:	auto elapsed =
+        1:   35:		std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count();
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+call    7 returned 100%
+       1*:   36:	EXPECT_GE(elapsed, 90);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 0% (fallthrough)
+branch  5 taken 100%
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed (throw)
+call    9 never executed
+call   10 never executed
+branch 11 never executed (fallthrough)
+branch 12 never executed (throw)
+call   13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed (throw)
+call   16 never executed
+call   17 never executed
+call   18 returned 100%
+call   19 never executed
+call   20 never executed
+call   21 never executed
+        -:   37:
+        1:   38:	loop.stop();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:   39:	loopThread.join();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:   40:}
+call    0 returned 100%
+call    1 returned 100%
+call    2 never executed
+call    3 never executed
+------------------
+        -:   41:
+        -:   42:// 测试 sleepFor（io_context 版本）
+        4:   43:TEST(CoroutineTest, SleepForWithIoContext)
+        -:   44:{
+        1:   45:	AsioEventLoop loop;
+        1:   46:	std::atomic<bool> executed {false};
+        -:   47:
+        1:   48:	coSpawn(loop.getIoContext(),
+        2:   49:			[&]() -> Awaitable<void>
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:   50:			{
+        -:   51:				co_await sleepFor(loop.getIoContext(), 0.05);
+        -:   52:				executed = true;
+        2:   53:			});
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed
+call    8 never executed
+branch  9 never executed (fallthrough)
+branch 10 never executed
+call   11 never executed
+call   12 never executed
+branch 13 never executed (fallthrough)
+branch 14 never executed (throw)
+call   15 never executed
+call   16 never executed
+        -:   54:
+        -:   55:	std::thread loopThread(
+        1:   56:		[&loop]()
+        -:   57:		{
+        1:   58:			loop.run();
+call    0 returned 100%
+        2:   59:		});
+        -:   60:
+        1:   61:	std::this_thread::sleep_for(std::chrono::milliseconds(150));
+        -:   62:
+       1*:   63:	EXPECT_TRUE(executed.load());
+        -:   64:
+        1:   65:	loop.stop();
+        1:   66:	loopThread.join();
+        1:   67:}
+------------------
+_ZN40CoroutineTest_SleepForWithIoContext_TestC2Ev:
+function _ZN40CoroutineTest_SleepForWithIoContext_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:   43:TEST(CoroutineTest, SleepForWithIoContext)
+call    0 returned 100%
+------------------
+_ZN40CoroutineTest_SleepForWithIoContext_TestD0Ev:
+function _ZN40CoroutineTest_SleepForWithIoContext_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:   43:TEST(CoroutineTest, SleepForWithIoContext)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN40CoroutineTest_SleepForWithIoContext_TestD2Ev:
+function _ZN40CoroutineTest_SleepForWithIoContext_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:   43:TEST(CoroutineTest, SleepForWithIoContext)
+call    0 returned 100%
+------------------
+_ZN40CoroutineTest_SleepForWithIoContext_Test8TestBodyEv:
+function _ZN40CoroutineTest_SleepForWithIoContext_Test8TestBodyEv called 1 returned 100% blocks executed 37%
+        1:   43:TEST(CoroutineTest, SleepForWithIoContext)
+        -:   44:{
+        1:   45:	AsioEventLoop loop;
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:   46:	std::atomic<bool> executed {false};
+        -:   47:
+        1:   48:	coSpawn(loop.getIoContext(),
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:   49:			[&]() -> Awaitable<void>
+call    0 returned 100%
+        -:   50:			{
+        -:   51:				co_await sleepFor(loop.getIoContext(), 0.05);
+        -:   52:				executed = true;
+        -:   53:			});
+        -:   54:
+        -:   55:	std::thread loopThread(
+    #####:   56:		[&loop]()
+        -:   57:		{
+        -:   58:			loop.run();
+        1:   59:		});
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:   60:
+        1:   61:	std::this_thread::sleep_for(std::chrono::milliseconds(150));
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:   62:
+       1*:   63:	EXPECT_TRUE(executed.load());
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 0% (fallthrough)
+branch  4 taken 100%
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed (throw)
+call    8 never executed
+branch  9 never executed (fallthrough)
+branch 10 never executed (throw)
+call   11 never executed
+call   12 never executed
+branch 13 never executed (fallthrough)
+branch 14 never executed (throw)
+call   15 never executed
+branch 16 never executed (fallthrough)
+branch 17 never executed (throw)
+call   18 never executed
+call   19 never executed
+call   20 never executed
+call   21 returned 100%
+call   22 never executed
+call   23 never executed
+call   24 never executed
+call   25 never executed
+        -:   64:
+        1:   65:	loop.stop();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:   66:	loopThread.join();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:   67:}
+call    0 returned 100%
+call    1 returned 100%
+call    2 never executed
+call    3 never executed
+------------------
+        -:   68:
+        -:   69:// 测试 sleepFor（chrono duration 版本）
+        4:   70:TEST(CoroutineTest, SleepForChrono)
+        -:   71:{
+        1:   72:	AsioEventLoop loop;
+        1:   73:	std::atomic<bool> executed {false};
+        -:   74:
+        1:   75:	coSpawn(loop.getIoContext(),
+        2:   76:			[&]() -> Awaitable<void>
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:   77:			{
+        -:   78:				co_await sleepFor(loop.getIoContext(), std::chrono::milliseconds(50));
+        -:   79:				executed = true;
+        2:   80:			});
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed
+call    8 never executed
+branch  9 never executed (fallthrough)
+branch 10 never executed
+call   11 never executed
+call   12 never executed
+branch 13 never executed (fallthrough)
+branch 14 never executed (throw)
+call   15 never executed
+call   16 never executed
+        -:   81:
+        -:   82:	std::thread loopThread(
+        1:   83:		[&loop]()
+        -:   84:		{
+        1:   85:			loop.run();
+call    0 returned 100%
+        2:   86:		});
+        -:   87:
+        1:   88:	std::this_thread::sleep_for(std::chrono::milliseconds(150));
+        -:   89:
+       1*:   90:	EXPECT_TRUE(executed.load());
+        -:   91:
+        1:   92:	loop.stop();
+        1:   93:	loopThread.join();
+        1:   94:}
+------------------
+_ZN33CoroutineTest_SleepForChrono_TestC2Ev:
+function _ZN33CoroutineTest_SleepForChrono_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:   70:TEST(CoroutineTest, SleepForChrono)
+call    0 returned 100%
+------------------
+_ZN33CoroutineTest_SleepForChrono_TestD0Ev:
+function _ZN33CoroutineTest_SleepForChrono_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:   70:TEST(CoroutineTest, SleepForChrono)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN33CoroutineTest_SleepForChrono_TestD2Ev:
+function _ZN33CoroutineTest_SleepForChrono_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:   70:TEST(CoroutineTest, SleepForChrono)
+call    0 returned 100%
+------------------
+_ZN33CoroutineTest_SleepForChrono_Test8TestBodyEv:
+function _ZN33CoroutineTest_SleepForChrono_Test8TestBodyEv called 1 returned 100% blocks executed 37%
+        1:   70:TEST(CoroutineTest, SleepForChrono)
+        -:   71:{
+        1:   72:	AsioEventLoop loop;
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:   73:	std::atomic<bool> executed {false};
+        -:   74:
+        1:   75:	coSpawn(loop.getIoContext(),
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:   76:			[&]() -> Awaitable<void>
+call    0 returned 100%
+        -:   77:			{
+        -:   78:				co_await sleepFor(loop.getIoContext(), std::chrono::milliseconds(50));
+        -:   79:				executed = true;
+        -:   80:			});
+        -:   81:
+        -:   82:	std::thread loopThread(
+    #####:   83:		[&loop]()
+        -:   84:		{
+        -:   85:			loop.run();
+        1:   86:		});
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:   87:
+        1:   88:	std::this_thread::sleep_for(std::chrono::milliseconds(150));
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:   89:
+       1*:   90:	EXPECT_TRUE(executed.load());
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 0% (fallthrough)
+branch  4 taken 100%
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed (throw)
+call    8 never executed
+branch  9 never executed (fallthrough)
+branch 10 never executed (throw)
+call   11 never executed
+call   12 never executed
+branch 13 never executed (fallthrough)
+branch 14 never executed (throw)
+call   15 never executed
+branch 16 never executed (fallthrough)
+branch 17 never executed (throw)
+call   18 never executed
+call   19 never executed
+call   20 never executed
+call   21 returned 100%
+call   22 never executed
+call   23 never executed
+call   24 never executed
+call   25 never executed
+        -:   91:
+        1:   92:	loop.stop();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:   93:	loopThread.join();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:   94:}
+call    0 returned 100%
+call    1 returned 100%
+call    2 never executed
+call    3 never executed
+------------------
+        -:   95:
+        -:   96:// 测试 coSpawn 启动多个协程
+        4:   97:TEST(CoroutineTest, MultipleCoroutines)
+        -:   98:{
+        1:   99:	AsioEventLoop loop;
+        1:  100:	std::atomic<int> counter {0};
+        -:  101:
+        6:  102:	for (int i = 0; i < 5; ++i)
+        -:  103:	{
+        5:  104:		coSpawn(loop.getIoContext(),
+       15:  105:				[&counter]() -> Awaitable<void>
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  106:				{
+        -:  107:					co_await sleep(0.01);
+        -:  108:					counter++;
+       10:  109:				});
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed
+call    8 never executed
+branch  9 never executed (fallthrough)
+branch 10 never executed
+call   11 never executed
+call   12 never executed
+branch 13 never executed (fallthrough)
+branch 14 never executed (throw)
+call   15 never executed
+call   16 never executed
+        -:  110:	}
+        -:  111:
+        -:  112:	std::thread loopThread(
+        1:  113:		[&loop]()
+        -:  114:		{
+        1:  115:			loop.run();
+call    0 returned 100%
+        2:  116:		});
+        -:  117:
+        1:  118:	std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        -:  119:
+       2*:  120:	EXPECT_EQ(counter.load(), 5);
+        -:  121:
+        1:  122:	loop.stop();
+        1:  123:	loopThread.join();
+        1:  124:}
+------------------
+_ZN37CoroutineTest_MultipleCoroutines_TestC2Ev:
+function _ZN37CoroutineTest_MultipleCoroutines_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:   97:TEST(CoroutineTest, MultipleCoroutines)
+call    0 returned 100%
+------------------
+_ZN37CoroutineTest_MultipleCoroutines_TestD0Ev:
+function _ZN37CoroutineTest_MultipleCoroutines_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:   97:TEST(CoroutineTest, MultipleCoroutines)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN37CoroutineTest_MultipleCoroutines_TestD2Ev:
+function _ZN37CoroutineTest_MultipleCoroutines_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:   97:TEST(CoroutineTest, MultipleCoroutines)
+call    0 returned 100%
+------------------
+_ZN37CoroutineTest_MultipleCoroutines_Test8TestBodyEv:
+function _ZN37CoroutineTest_MultipleCoroutines_Test8TestBodyEv called 1 returned 100% blocks executed 47%
+        1:   97:TEST(CoroutineTest, MultipleCoroutines)
+        -:   98:{
+        1:   99:	AsioEventLoop loop;
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  100:	std::atomic<int> counter {0};
+        -:  101:
+        6:  102:	for (int i = 0; i < 5; ++i)
+branch  0 taken 83%
+branch  1 taken 17% (fallthrough)
+        -:  103:	{
+        5:  104:		coSpawn(loop.getIoContext(),
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       10:  105:				[&counter]() -> Awaitable<void>
+call    0 returned 100%
+        -:  106:				{
+        -:  107:					co_await sleep(0.01);
+        -:  108:					counter++;
+        -:  109:				});
+        -:  110:	}
+        -:  111:
+        -:  112:	std::thread loopThread(
+    #####:  113:		[&loop]()
+        -:  114:		{
+        -:  115:			loop.run();
+        1:  116:		});
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  117:
+        1:  118:	std::this_thread::sleep_for(std::chrono::milliseconds(200));
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:  119:
+       2*:  120:	EXPECT_EQ(counter.load(), 5);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 0% (fallthrough)
+branch  6 taken 100%
+call    7 never executed
+branch  8 never executed (fallthrough)
+branch  9 never executed (throw)
+call   10 never executed
+call   11 never executed
+branch 12 never executed (fallthrough)
+branch 13 never executed (throw)
+call   14 never executed
+branch 15 never executed (fallthrough)
+branch 16 never executed (throw)
+call   17 never executed
+call   18 never executed
+call   19 returned 100%
+call   20 never executed
+call   21 never executed
+call   22 never executed
+        -:  121:
+        1:  122:	loop.stop();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  123:	loopThread.join();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  124:}
+call    0 returned 100%
+call    1 returned 100%
+call    2 never executed
+call    3 never executed
+------------------
+        -:  125:
+        -:  126:// 测试协程返回值
+        4:  127:TEST(CoroutineTest, AwaitableWithReturnValue)
+        -:  128:{
+        1:  129:	AsioEventLoop loop;
+        1:  130:	std::atomic<int> result {0};
+        -:  131:
+        1:  132:	auto compute = []() -> Awaitable<int>
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  133:	{
+        -:  134:		co_await sleep(0.01);
+        -:  135:		co_return 42;
+        2:  136:	};
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed
+call    9 never executed
+call   10 never executed
+branch 11 never executed (fallthrough)
+branch 12 never executed (throw)
+call   13 never executed
+call   14 never executed
+        -:  137:
+        1:  138:	coSpawn(loop.getIoContext(),
+        2:  139:			[&result, &compute]() -> Awaitable<void>
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  140:			{
+        -:  141:				int val = co_await compute();
+        -:  142:				result = val;
+        2:  143:			});
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed
+call    8 never executed
+branch  9 never executed (fallthrough)
+branch 10 never executed
+call   11 never executed
+call   12 never executed
+branch 13 never executed (fallthrough)
+branch 14 never executed (throw)
+call   15 never executed
+call   16 never executed
+        -:  144:
+        -:  145:	std::thread loopThread(
+        1:  146:		[&loop]()
+        -:  147:		{
+        1:  148:			loop.run();
+call    0 returned 100%
+        2:  149:		});
+        -:  150:
+        1:  151:	std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        -:  152:
+       2*:  153:	EXPECT_EQ(result.load(), 42);
+        -:  154:
+        1:  155:	loop.stop();
+        1:  156:	loopThread.join();
+        1:  157:}
+------------------
+_ZN43CoroutineTest_AwaitableWithReturnValue_TestC2Ev:
+function _ZN43CoroutineTest_AwaitableWithReturnValue_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:  127:TEST(CoroutineTest, AwaitableWithReturnValue)
+call    0 returned 100%
+------------------
+_ZN43CoroutineTest_AwaitableWithReturnValue_TestD0Ev:
+function _ZN43CoroutineTest_AwaitableWithReturnValue_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:  127:TEST(CoroutineTest, AwaitableWithReturnValue)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN43CoroutineTest_AwaitableWithReturnValue_TestD2Ev:
+function _ZN43CoroutineTest_AwaitableWithReturnValue_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:  127:TEST(CoroutineTest, AwaitableWithReturnValue)
+call    0 returned 100%
+------------------
+_ZN43CoroutineTest_AwaitableWithReturnValue_Test8TestBodyEv:
+function _ZN43CoroutineTest_AwaitableWithReturnValue_Test8TestBodyEv called 1 returned 100% blocks executed 44%
+        1:  127:TEST(CoroutineTest, AwaitableWithReturnValue)
+        -:  128:{
+        1:  129:	AsioEventLoop loop;
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  130:	std::atomic<int> result {0};
+        -:  131:
+        -:  132:	auto compute = []() -> Awaitable<int>
+        -:  133:	{
+        -:  134:		co_await sleep(0.01);
+        -:  135:		co_return 42;
+        -:  136:	};
+        -:  137:
+        1:  138:	coSpawn(loop.getIoContext(),
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  139:			[&result, &compute]() -> Awaitable<void>
+call    0 returned 100%
+        -:  140:			{
+        -:  141:				int val = co_await compute();
+        -:  142:				result = val;
+        -:  143:			});
+        -:  144:
+        -:  145:	std::thread loopThread(
+    #####:  146:		[&loop]()
+        -:  147:		{
+        -:  148:			loop.run();
+        1:  149:		});
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  150:
+        1:  151:	std::this_thread::sleep_for(std::chrono::milliseconds(200));
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:  152:
+       2*:  153:	EXPECT_EQ(result.load(), 42);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 0% (fallthrough)
+branch  6 taken 100%
+call    7 never executed
+branch  8 never executed (fallthrough)
+branch  9 never executed (throw)
+call   10 never executed
+call   11 never executed
+branch 12 never executed (fallthrough)
+branch 13 never executed (throw)
+call   14 never executed
+branch 15 never executed (fallthrough)
+branch 16 never executed (throw)
+call   17 never executed
+call   18 never executed
+call   19 returned 100%
+call   20 never executed
+call   21 never executed
+call   22 never executed
+        -:  154:
+        1:  155:	loop.stop();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  156:	loopThread.join();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  157:}
+call    0 returned 100%
+call    1 returned 100%
+call    2 never executed
+call    3 never executed
+------------------

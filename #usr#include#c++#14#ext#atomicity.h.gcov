@@ -1,0 +1,370 @@
+        -:    0:Source:/usr/include/c++/14/ext/atomicity.h
+        -:    1:// Support for atomic operations -*- C++ -*-
+        -:    2:
+        -:    3:// Copyright (C) 2004-2024 Free Software Foundation, Inc.
+        -:    4://
+        -:    5:// This file is part of the GNU ISO C++ Library.  This library is free
+        -:    6:// software; you can redistribute it and/or modify it under the
+        -:    7:// terms of the GNU General Public License as published by the
+        -:    8:// Free Software Foundation; either version 3, or (at your option)
+        -:    9:// any later version.
+        -:   10:
+        -:   11:// This library is distributed in the hope that it will be useful,
+        -:   12:// but WITHOUT ANY WARRANTY; without even the implied warranty of
+        -:   13:// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+        -:   14:// GNU General Public License for more details.
+        -:   15:
+        -:   16:// Under Section 7 of GPL version 3, you are granted additional
+        -:   17:// permissions described in the GCC Runtime Library Exception, version
+        -:   18:// 3.1, as published by the Free Software Foundation.
+        -:   19:
+        -:   20:// You should have received a copy of the GNU General Public License and
+        -:   21:// a copy of the GCC Runtime Library Exception along with this program;
+        -:   22:// see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
+        -:   23:// <http://www.gnu.org/licenses/>.
+        -:   24:
+        -:   25:/** @file ext/atomicity.h
+        -:   26: *  This file is a GNU extension to the Standard C++ Library.
+        -:   27: */
+        -:   28:
+        -:   29:#ifndef _GLIBCXX_ATOMICITY_H
+        -:   30:#define _GLIBCXX_ATOMICITY_H	1
+        -:   31:
+        -:   32:#pragma GCC system_header
+        -:   33:
+        -:   34:#include <bits/c++config.h>
+        -:   35:#include <bits/gthr.h>
+        -:   36:#include <bits/atomic_word.h>
+        -:   37:#if __has_include(<sys/single_threaded.h>)
+        -:   38:# include <sys/single_threaded.h>
+        -:   39:#endif
+        -:   40:
+        -:   41:namespace __gnu_cxx _GLIBCXX_VISIBILITY(default)
+        -:   42:{
+        -:   43:_GLIBCXX_BEGIN_NAMESPACE_VERSION
+        -:   44:
+        -:   45:  __attribute__((__always_inline__))
+        -:   46:  inline bool
+        -:   47:  __is_single_threaded() _GLIBCXX_NOTHROW
+        -:   48:  {
+        -:   49:#ifndef __GTHREADS
+        -:   50:    return true;
+        -:   51:#elif __has_include(<sys/single_threaded.h>)
+    4134*:   52:    return ::__libc_single_threaded;
+        -:   53:#else
+        -:   54:    return !__gthread_active_p();
+        -:   55:#endif
+        -:   56:  }
+        -:   57:
+        -:   58:  // Functions for portable atomic access.
+        -:   59:  // To abstract locking primitives across all thread policies, use:
+        -:   60:  // __exchange_and_add_dispatch
+        -:   61:  // __atomic_add_dispatch
+        -:   62:#ifdef _GLIBCXX_ATOMIC_BUILTINS
+        -:   63:  inline _Atomic_word
+        -:   64:  __attribute__((__always_inline__))
+        -:   65:  __exchange_and_add(volatile _Atomic_word* __mem, int __val)
+    1505*:   66:  { return __atomic_fetch_add(__mem, __val, __ATOMIC_ACQ_REL); }
+        -:   67:
+        -:   68:  inline void
+        -:   69:  __attribute__((__always_inline__))
+        -:   70:  __atomic_add(volatile _Atomic_word* __mem, int __val)
+    1343*:   71:  { __atomic_fetch_add(__mem, __val, __ATOMIC_ACQ_REL); }
+        -:   72:#else
+        -:   73:  _Atomic_word
+        -:   74:  __exchange_and_add(volatile _Atomic_word*, int) _GLIBCXX_NOTHROW;
+        -:   75:
+        -:   76:  void
+        -:   77:  __atomic_add(volatile _Atomic_word*, int) _GLIBCXX_NOTHROW;
+        -:   78:#endif
+        -:   79:
+        -:   80:  inline _Atomic_word
+        -:   81:  __attribute__((__always_inline__))
+        -:   82:  __exchange_and_add_single(_Atomic_word* __mem, int __val)
+        -:   83:  {
+     597*:   84:    _Atomic_word __result = *__mem;
+     597*:   85:    *__mem += __val;
+     597*:   86:    return __result;
+        -:   87:  }
+        -:   88:
+        -:   89:  inline void
+        -:   90:  __attribute__((__always_inline__))
+        -:   91:  __atomic_add_single(_Atomic_word* __mem, int __val)
+     685*:   92:  { *__mem += __val; }
+        -:   93:
+        -:   94:  inline _Atomic_word
+        -:   95:  __attribute__ ((__always_inline__))
+        -:   96:  __exchange_and_add_dispatch(_Atomic_word* __mem, int __val)
+        -:   97:  {
+    2102*:   98:    if (__is_single_threaded())
+branch  0 never executed (fallthrough)
+branch  1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed
+branch  8 never executed (fallthrough)
+branch  9 never executed
+branch 10 never executed (fallthrough)
+branch 11 never executed
+branch 12 taken 0% (fallthrough)
+branch 13 taken 100%
+branch 14 taken 0% (fallthrough)
+branch 15 taken 100%
+branch 16 taken 0% (fallthrough)
+branch 17 taken 100%
+branch 18 never executed (fallthrough)
+branch 19 never executed
+branch 20 never executed (fallthrough)
+branch 21 never executed
+branch 22 never executed (fallthrough)
+branch 23 never executed
+branch 24 never executed (fallthrough)
+branch 25 never executed
+branch 26 never executed (fallthrough)
+branch 27 never executed
+branch 28 never executed (fallthrough)
+branch 29 never executed
+branch 30 never executed (fallthrough)
+branch 31 never executed
+branch 32 never executed (fallthrough)
+branch 33 never executed
+branch 34 never executed (fallthrough)
+branch 35 never executed
+branch 36 never executed (fallthrough)
+branch 37 never executed
+branch 38 never executed (fallthrough)
+branch 39 never executed
+branch 40 never executed (fallthrough)
+branch 41 never executed
+branch 42 never executed (fallthrough)
+branch 43 never executed
+branch 44 never executed (fallthrough)
+branch 45 never executed
+branch 46 taken 100% (fallthrough)
+branch 47 taken 0%
+branch 48 never executed (fallthrough)
+branch 49 never executed
+branch 50 never executed (fallthrough)
+branch 51 never executed
+branch 52 never executed (fallthrough)
+branch 53 never executed
+branch 54 never executed (fallthrough)
+branch 55 never executed
+branch 56 never executed (fallthrough)
+branch 57 never executed
+branch 58 never executed (fallthrough)
+branch 59 never executed
+branch 60 never executed (fallthrough)
+branch 61 never executed
+branch 62 never executed (fallthrough)
+branch 63 never executed
+branch 64 never executed (fallthrough)
+branch 65 never executed
+branch 66 taken 100% (fallthrough)
+branch 67 taken 0%
+branch 68 never executed (fallthrough)
+branch 69 never executed
+branch 70 taken 100% (fallthrough)
+branch 71 taken 0%
+branch 72 never executed (fallthrough)
+branch 73 never executed
+branch 74 taken 0% (fallthrough)
+branch 75 taken 100%
+branch 76 taken 0% (fallthrough)
+branch 77 taken 100%
+branch 78 taken 3% (fallthrough)
+branch 79 taken 97%
+branch 80 never executed (fallthrough)
+branch 81 never executed
+branch 82 taken 100% (fallthrough)
+branch 83 taken 0%
+branch 84 never executed (fallthrough)
+branch 85 never executed
+branch 86 taken 3% (fallthrough)
+branch 87 taken 97%
+branch 88 never executed (fallthrough)
+branch 89 never executed
+branch 90 taken 100% (fallthrough)
+branch 91 taken 0%
+branch 92 never executed (fallthrough)
+branch 93 never executed
+branch 94 taken 10% (fallthrough)
+branch 95 taken 90%
+branch 96 never executed (fallthrough)
+branch 97 never executed
+branch 98 taken 2% (fallthrough)
+branch 99 taken 98%
+branch 100 never executed (fallthrough)
+branch 101 never executed
+branch 102 taken 11% (fallthrough)
+branch 103 taken 89%
+branch 104 never executed (fallthrough)
+branch 105 never executed
+branch 106 taken 2% (fallthrough)
+branch 107 taken 98%
+branch 108 taken 12% (fallthrough)
+branch 109 taken 88%
+branch 110 taken 12% (fallthrough)
+branch 111 taken 88%
+branch 112 taken 5% (fallthrough)
+branch 113 taken 95%
+branch 114 never executed (fallthrough)
+branch 115 never executed
+branch 116 taken 100% (fallthrough)
+branch 117 taken 0%
+branch 118 never executed (fallthrough)
+branch 119 never executed
+branch 120 taken 100% (fallthrough)
+branch 121 taken 0%
+branch 122 never executed (fallthrough)
+branch 123 never executed
+branch 124 taken 26% (fallthrough)
+branch 125 taken 74%
+branch 126 never executed (fallthrough)
+branch 127 never executed
+branch 128 taken 100% (fallthrough)
+branch 129 taken 0%
+branch 130 never executed (fallthrough)
+branch 131 never executed
+branch 132 taken 85% (fallthrough)
+branch 133 taken 15%
+branch 134 taken 25% (fallthrough)
+branch 135 taken 75%
+branch 136 taken 25% (fallthrough)
+branch 137 taken 75%
+branch 138 taken 18% (fallthrough)
+branch 139 taken 82%
+branch 140 never executed (fallthrough)
+branch 141 never executed
+branch 142 taken 2% (fallthrough)
+branch 143 taken 98%
+branch 144 never executed (fallthrough)
+branch 145 never executed
+branch 146 never executed (fallthrough)
+branch 147 never executed
+branch 148 never executed (fallthrough)
+branch 149 never executed
+branch 150 never executed (fallthrough)
+branch 151 never executed
+branch 152 never executed (fallthrough)
+branch 153 never executed
+branch 154 never executed (fallthrough)
+branch 155 never executed
+branch 156 never executed (fallthrough)
+branch 157 never executed
+branch 158 never executed (fallthrough)
+branch 159 never executed
+branch 160 never executed (fallthrough)
+branch 161 never executed
+branch 162 never executed (fallthrough)
+branch 163 never executed
+branch 164 never executed (fallthrough)
+branch 165 never executed
+     597*:   99:      return __exchange_and_add_single(__mem, __val);
+        -:  100:    else
+    1505*:  101:      return __exchange_and_add(__mem, __val);
+        -:  102:  }
+        -:  103:
+        -:  104:  inline void
+        -:  105:  __attribute__ ((__always_inline__))
+        -:  106:  __atomic_add_dispatch(_Atomic_word* __mem, int __val)
+        -:  107:  {
+    2028*:  108:    if (__is_single_threaded())
+branch  0 never executed (fallthrough)
+branch  1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed
+branch  6 taken 0% (fallthrough)
+branch  7 taken 100%
+branch  8 taken 0% (fallthrough)
+branch  9 taken 100%
+branch 10 never executed (fallthrough)
+branch 11 never executed
+branch 12 never executed (fallthrough)
+branch 13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed
+branch 16 taken 100% (fallthrough)
+branch 17 taken 0%
+branch 18 never executed (fallthrough)
+branch 19 never executed
+branch 20 never executed (fallthrough)
+branch 21 never executed
+branch 22 never executed (fallthrough)
+branch 23 never executed
+branch 24 never executed (fallthrough)
+branch 25 never executed
+branch 26 taken 100% (fallthrough)
+branch 27 taken 0%
+branch 28 taken 100% (fallthrough)
+branch 29 taken 0%
+branch 30 taken 0% (fallthrough)
+branch 31 taken 100%
+branch 32 taken 16% (fallthrough)
+branch 33 taken 84%
+branch 34 taken 100% (fallthrough)
+branch 35 taken 0%
+branch 36 taken 11% (fallthrough)
+branch 37 taken 89%
+branch 38 taken 10% (fallthrough)
+branch 39 taken 90%
+branch 40 taken 12% (fallthrough)
+branch 41 taken 88%
+branch 42 taken 33% (fallthrough)
+branch 43 taken 67%
+branch 44 taken 18% (fallthrough)
+branch 45 taken 82%
+branch 46 taken 12% (fallthrough)
+branch 47 taken 88%
+branch 48 taken 100% (fallthrough)
+branch 49 taken 0%
+branch 50 taken 100% (fallthrough)
+branch 51 taken 0%
+branch 52 taken 26% (fallthrough)
+branch 53 taken 74%
+branch 54 taken 100% (fallthrough)
+branch 55 taken 0%
+branch 56 taken 100% (fallthrough)
+branch 57 taken 0%
+branch 58 taken 100% (fallthrough)
+branch 59 taken 0%
+branch 60 taken 37% (fallthrough)
+branch 61 taken 63%
+branch 62 taken 18% (fallthrough)
+branch 63 taken 82%
+branch 64 never executed (fallthrough)
+branch 65 never executed
+branch 66 never executed (fallthrough)
+branch 67 never executed
+branch 68 never executed (fallthrough)
+branch 69 never executed
+branch 70 never executed (fallthrough)
+branch 71 never executed
+branch 72 never executed (fallthrough)
+branch 73 never executed
+branch 74 never executed (fallthrough)
+branch 75 never executed
+        -:  109:      __atomic_add_single(__mem, __val);
+        -:  110:    else
+        -:  111:      __atomic_add(__mem, __val);
+    2028*:  112:  }
+        -:  113:
+        -:  114:_GLIBCXX_END_NAMESPACE_VERSION
+        -:  115:} // namespace
+        -:  116:
+        -:  117:// Even if the CPU doesn't need a memory barrier, we need to ensure
+        -:  118:// that the compiler doesn't reorder memory accesses across the
+        -:  119:// barriers.
+        -:  120:#ifndef _GLIBCXX_READ_MEM_BARRIER
+        -:  121:#define _GLIBCXX_READ_MEM_BARRIER __atomic_thread_fence (__ATOMIC_ACQUIRE)
+        -:  122:#endif
+        -:  123:#ifndef _GLIBCXX_WRITE_MEM_BARRIER
+        -:  124:#define _GLIBCXX_WRITE_MEM_BARRIER __atomic_thread_fence (__ATOMIC_RELEASE)
+        -:  125:#endif
+        -:  126:
+        -:  127:#endif 

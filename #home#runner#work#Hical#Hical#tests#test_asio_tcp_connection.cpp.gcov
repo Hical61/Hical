@@ -1,0 +1,2023 @@
+        -:    0:Source:/home/runner/work/Hical/Hical/tests/test_asio_tcp_connection.cpp
+        -:    1:#include "asio/GenericConnection.h"
+        -:    2:#include "asio/AsioEventLoop.h"
+        -:    3:#include "core/PmrBuffer.h"
+        -:    4:#include <gtest/gtest.h>
+        -:    5:#include <atomic>
+        -:    6:#include <chrono>
+        -:    7:#include <thread>
+        -:    8:
+        -:    9:using namespace hical;
+        -:   10:
+        -:   11:// 测试辅助：创建一对已连接的 socket
+function _Z22createConnectedSocketsRN5boost4asio10io_contextES2_ called 8 returned 100% blocks executed 66%
+        8:   12:std::pair<boost::asio::ip::tcp::socket, boost::asio::ip::tcp::socket> createConnectedSockets(
+        -:   13:	boost::asio::io_context& io1,
+        -:   14:	boost::asio::io_context& io2)
+        -:   15:{
+        -:   16:	using boost::asio::ip::tcp;
+        -:   17:
+        -:   18:	// 创建 acceptor，绑定到 localhost
+        8:   19:	tcp::acceptor acceptor(io1, tcp::endpoint(boost::asio::ip::make_address("127.0.0.1"), 0));
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+        8:   20:	auto port = acceptor.local_endpoint().port();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+        -:   21:
+        -:   22:	// 客户端连接
+        8:   23:	tcp::socket clientSocket(io2);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        8:   24:	tcp::socket serverSocket(io1);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:   25:
+        8:   26:	std::atomic<bool> connected {false};
+        -:   27:
+        -:   28:	// 异步接受连接
+        8:   29:	acceptor.async_accept(serverSocket,
+function _ZZ22createConnectedSocketsRN5boost4asio10io_contextES2_ENKUlNS_6system10error_codeEE_clES4_ called 8 returned 100% blocks executed 29%
+        8:   30:						  [&](boost::system::error_code ec)
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:   31:						  {
+       8*:   32:							  EXPECT_FALSE(ec);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 0% (fallthrough)
+branch  4 taken 100%
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed (throw)
+call    8 never executed
+branch  9 never executed (fallthrough)
+branch 10 never executed (throw)
+call   11 never executed
+call   12 never executed
+branch 13 never executed (fallthrough)
+branch 14 never executed (throw)
+call   15 never executed
+branch 16 never executed (fallthrough)
+branch 17 never executed (throw)
+call   18 never executed
+call   19 never executed
+call   20 never executed
+call   21 returned 100%
+call   22 never executed
+call   23 never executed
+call   24 never executed
+call   25 never executed
+        8:   33:							  connected = true;
+call    0 returned 100%
+        8:   34:						  });
+        -:   35:
+        -:   36:	// 客户端连接到 localhost
+        8:   37:	clientSocket.connect(tcp::endpoint(boost::asio::ip::make_address("127.0.0.1"), port));
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+        -:   38:
+        -:   39:	// 等待连接建立
+       16:   40:	while (!connected)
+call    0 returned 100%
+branch  1 taken 50%
+branch  2 taken 50% (fallthrough)
+        -:   41:	{
+        8:   42:		io1.poll();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        8:   43:		std::this_thread::sleep_for(std::chrono::milliseconds(1));
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:   44:	}
+        -:   45:
+       16:   46:	return {std::move(serverSocket), std::move(clientSocket)};
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+        8:   47:}
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 never executed
+call    4 never executed
+call    5 never executed
+        -:   48:
+        -:   49:// 测试基本的连接建立
+        4:   50:TEST(PlainConnectionTest, BasicConnection)
+        -:   51:{
+        1:   52:	AsioEventLoop loop;
+        1:   53:	auto [socket1, socket2] = createConnectedSockets(loop.getIoContext(), loop.getIoContext());
+        -:   54:
+        2:   55:	InetAddress localAddr("127.0.0.1", 12345);
+        1:   56:	InetAddress peerAddr("127.0.0.1", 54321);
+        -:   57:
+        1:   58:	auto conn = std::make_shared<PlainConnection>(&loop, std::move(socket1), localAddr, peerAddr);
+        -:   59:
+       1*:   60:	EXPECT_FALSE(conn->connected());
+        -:   61:
+        1:   62:	std::atomic<bool> established {false};
+        2:   63:	conn->onConnection(
+        3:   64:		[&](const TcpConnection::Ptr& c)
+        -:   65:		{
+        2:   66:			if (c->connected())
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 50% (fallthrough)
+branch  3 taken 50%
+        -:   67:			{
+        1:   68:				established = true;
+call    0 returned 100%
+        -:   69:			}
+        2:   70:		});
+        -:   71:
+        1:   72:	conn->connectEstablished();
+        -:   73:
+        -:   74:	std::thread loopThread(
+        1:   75:		[&loop]()
+        -:   76:		{
+        1:   77:			loop.run();
+call    0 returned 100%
+        3:   78:		});
+        -:   79:
+        1:   80:	std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        -:   81:
+       1*:   82:	EXPECT_TRUE(established.load());
+       1*:   83:	EXPECT_TRUE(conn->connected());
+        -:   84:
+        1:   85:	conn->close();
+        1:   86:	std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        -:   87:
+        1:   88:	loop.stop();
+        1:   89:	loopThread.join();
+        1:   90:}
+------------------
+_ZN40PlainConnectionTest_BasicConnection_TestC2Ev:
+function _ZN40PlainConnectionTest_BasicConnection_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:   50:TEST(PlainConnectionTest, BasicConnection)
+call    0 returned 100%
+------------------
+_ZN40PlainConnectionTest_BasicConnection_TestD0Ev:
+function _ZN40PlainConnectionTest_BasicConnection_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:   50:TEST(PlainConnectionTest, BasicConnection)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN40PlainConnectionTest_BasicConnection_TestD2Ev:
+function _ZN40PlainConnectionTest_BasicConnection_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:   50:TEST(PlainConnectionTest, BasicConnection)
+call    0 returned 100%
+------------------
+_ZN40PlainConnectionTest_BasicConnection_Test8TestBodyEv:
+function _ZN40PlainConnectionTest_BasicConnection_Test8TestBodyEv called 1 returned 100% blocks executed 38%
+        1:   50:TEST(PlainConnectionTest, BasicConnection)
+        -:   51:{
+        1:   52:	AsioEventLoop loop;
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:   53:	auto [socket1, socket2] = createConnectedSockets(loop.getIoContext(), loop.getIoContext());
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+call    6 returned 100%
+        -:   54:
+        2:   55:	InetAddress localAddr("127.0.0.1", 12345);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+        1:   56:	InetAddress peerAddr("127.0.0.1", 54321);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+        -:   57:
+        1:   58:	auto conn = std::make_shared<PlainConnection>(&loop, std::move(socket1), localAddr, peerAddr);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:   59:
+       1*:   60:	EXPECT_FALSE(conn->connected());
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 returned 100%
+branch  6 taken 0% (fallthrough)
+branch  7 taken 100%
+call    8 never executed
+branch  9 never executed (fallthrough)
+branch 10 never executed (throw)
+call   11 never executed
+branch 12 never executed (fallthrough)
+branch 13 never executed (throw)
+call   14 never executed
+call   15 never executed
+branch 16 never executed (fallthrough)
+branch 17 never executed (throw)
+call   18 never executed
+branch 19 never executed (fallthrough)
+branch 20 never executed (throw)
+call   21 never executed
+call   22 never executed
+call   23 never executed
+call   24 returned 100%
+call   25 never executed
+call   26 never executed
+call   27 never executed
+call   28 never executed
+        -:   61:
+        1:   62:	std::atomic<bool> established {false};
+        2:   63:	conn->onConnection(
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 never executed
+        1:   64:		[&](const TcpConnection::Ptr& c)
+call    0 returned 100%
+        -:   65:		{
+        -:   66:			if (c->connected())
+        -:   67:			{
+        -:   68:				established = true;
+        -:   69:			}
+        -:   70:		});
+        -:   71:
+        1:   72:	conn->connectEstablished();
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:   73:
+        -:   74:	std::thread loopThread(
+    #####:   75:		[&loop]()
+        -:   76:		{
+        -:   77:			loop.run();
+        2:   78:		});
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 never executed
+        -:   79:
+        1:   80:	std::this_thread::sleep_for(std::chrono::milliseconds(100));
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:   81:
+       1*:   82:	EXPECT_TRUE(established.load());
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 0% (fallthrough)
+branch  4 taken 100%
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed (throw)
+call    8 never executed
+branch  9 never executed (fallthrough)
+branch 10 never executed (throw)
+call   11 never executed
+call   12 never executed
+branch 13 never executed (fallthrough)
+branch 14 never executed (throw)
+call   15 never executed
+branch 16 never executed (fallthrough)
+branch 17 never executed (throw)
+call   18 never executed
+call   19 never executed
+call   20 never executed
+call   21 returned 100%
+call   22 never executed
+call   23 never executed
+call   24 never executed
+call   25 never executed
+       1*:   83:	EXPECT_TRUE(conn->connected());
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 returned 100%
+branch  6 taken 0% (fallthrough)
+branch  7 taken 100%
+call    8 never executed
+branch  9 never executed (fallthrough)
+branch 10 never executed (throw)
+call   11 never executed
+branch 12 never executed (fallthrough)
+branch 13 never executed (throw)
+call   14 never executed
+call   15 never executed
+branch 16 never executed (fallthrough)
+branch 17 never executed (throw)
+call   18 never executed
+branch 19 never executed (fallthrough)
+branch 20 never executed (throw)
+call   21 never executed
+call   22 never executed
+call   23 never executed
+call   24 returned 100%
+call   25 never executed
+call   26 never executed
+call   27 never executed
+call   28 never executed
+        -:   84:
+        1:   85:	conn->close();
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        1:   86:	std::this_thread::sleep_for(std::chrono::milliseconds(50));
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:   87:
+        1:   88:	loop.stop();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:   89:	loopThread.join();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:   90:}
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 never executed
+call    4 never executed
+call    5 never executed
+------------------
+        -:   91:
+        -:   92:// 测试数据发送和接收
+        4:   93:TEST(PlainConnectionTest, SendAndReceive)
+        -:   94:{
+        1:   95:	AsioEventLoop loop;
+        1:   96:	auto [socket1, socket2] = createConnectedSockets(loop.getIoContext(), loop.getIoContext());
+        -:   97:
+        2:   98:	InetAddress localAddr("127.0.0.1", 12345);
+        1:   99:	InetAddress peerAddr("127.0.0.1", 54321);
+        -:  100:
+        1:  101:	auto conn = std::make_shared<PlainConnection>(&loop, std::move(socket1), localAddr, peerAddr);
+        -:  102:
+        1:  103:	std::atomic<bool> received {false};
+        1:  104:	std::string receivedData;
+        -:  105:
+        2:  106:	conn->onMessage(
+        2:  107:		[&](const TcpConnection::Ptr& /*c*/, PmrBuffer* buf)
+        -:  108:		{
+        1:  109:			receivedData = buf->read(buf->readableBytes());
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 returned 100%
+        1:  110:			received = true;
+call    0 returned 100%
+        1:  111:		});
+        -:  112:
+        1:  113:	conn->connectEstablished();
+        -:  114:
+        -:  115:	std::thread loopThread(
+        1:  116:		[&loop]()
+        -:  117:		{
+        1:  118:			loop.run();
+call    0 returned 100%
+        2:  119:		});
+        -:  120:
+        1:  121:	std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        -:  122:
+        -:  123:	// 从 socket2 发送数据
+        1:  124:	std::string testData = "Hello PlainConnection!";
+        1:  125:	boost::asio::write(socket2, boost::asio::buffer(testData));
+        -:  126:
+        -:  127:	// 等待接收
+        1:  128:	std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        -:  129:
+       1*:  130:	EXPECT_TRUE(received.load());
+       1*:  131:	EXPECT_EQ(receivedData, testData);
+       1*:  132:	EXPECT_EQ(conn->bytesReceived(), testData.size());
+        -:  133:
+        1:  134:	conn->close();
+        1:  135:	loop.stop();
+        1:  136:	loopThread.join();
+        1:  137:}
+------------------
+_ZN39PlainConnectionTest_SendAndReceive_TestC2Ev:
+function _ZN39PlainConnectionTest_SendAndReceive_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:   93:TEST(PlainConnectionTest, SendAndReceive)
+call    0 returned 100%
+------------------
+_ZN39PlainConnectionTest_SendAndReceive_TestD0Ev:
+function _ZN39PlainConnectionTest_SendAndReceive_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:   93:TEST(PlainConnectionTest, SendAndReceive)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN39PlainConnectionTest_SendAndReceive_TestD2Ev:
+function _ZN39PlainConnectionTest_SendAndReceive_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:   93:TEST(PlainConnectionTest, SendAndReceive)
+call    0 returned 100%
+------------------
+_ZN39PlainConnectionTest_SendAndReceive_Test8TestBodyEv:
+function _ZN39PlainConnectionTest_SendAndReceive_Test8TestBodyEv called 1 returned 100% blocks executed 42%
+        1:   93:TEST(PlainConnectionTest, SendAndReceive)
+        -:   94:{
+        1:   95:	AsioEventLoop loop;
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:   96:	auto [socket1, socket2] = createConnectedSockets(loop.getIoContext(), loop.getIoContext());
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+call    6 returned 100%
+        -:   97:
+        2:   98:	InetAddress localAddr("127.0.0.1", 12345);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+        1:   99:	InetAddress peerAddr("127.0.0.1", 54321);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+        -:  100:
+        1:  101:	auto conn = std::make_shared<PlainConnection>(&loop, std::move(socket1), localAddr, peerAddr);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:  102:
+        1:  103:	std::atomic<bool> received {false};
+        1:  104:	std::string receivedData;
+call    0 returned 100%
+        -:  105:
+        2:  106:	conn->onMessage(
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 never executed
+        1:  107:		[&](const TcpConnection::Ptr& /*c*/, PmrBuffer* buf)
+call    0 returned 100%
+        -:  108:		{
+        -:  109:			receivedData = buf->read(buf->readableBytes());
+        -:  110:			received = true;
+        -:  111:		});
+        -:  112:
+        1:  113:	conn->connectEstablished();
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:  114:
+        -:  115:	std::thread loopThread(
+    #####:  116:		[&loop]()
+        -:  117:		{
+        -:  118:			loop.run();
+        1:  119:		});
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  120:
+        1:  121:	std::this_thread::sleep_for(std::chrono::milliseconds(50));
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:  122:
+        -:  123:	// 从 socket2 发送数据
+        1:  124:	std::string testData = "Hello PlainConnection!";
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  125:	boost::asio::write(socket2, boost::asio::buffer(testData));
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:  126:
+        -:  127:	// 等待接收
+        1:  128:	std::this_thread::sleep_for(std::chrono::milliseconds(100));
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:  129:
+       1*:  130:	EXPECT_TRUE(received.load());
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 0% (fallthrough)
+branch  4 taken 100%
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed (throw)
+call    8 never executed
+branch  9 never executed (fallthrough)
+branch 10 never executed (throw)
+call   11 never executed
+call   12 never executed
+branch 13 never executed (fallthrough)
+branch 14 never executed (throw)
+call   15 never executed
+branch 16 never executed (fallthrough)
+branch 17 never executed (throw)
+call   18 never executed
+call   19 never executed
+call   20 never executed
+call   21 returned 100%
+call   22 never executed
+call   23 never executed
+call   24 never executed
+call   25 never executed
+       1*:  131:	EXPECT_EQ(receivedData, testData);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 0% (fallthrough)
+branch  5 taken 100%
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed (throw)
+call    9 never executed
+call   10 never executed
+branch 11 never executed (fallthrough)
+branch 12 never executed (throw)
+call   13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed (throw)
+call   16 never executed
+call   17 never executed
+call   18 returned 100%
+call   19 never executed
+call   20 never executed
+call   21 never executed
+       1*:  132:	EXPECT_EQ(conn->bytesReceived(), testData.size());
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+call    8 returned 100%
+branch  9 taken 0% (fallthrough)
+branch 10 taken 100%
+call   11 never executed
+branch 12 never executed (fallthrough)
+branch 13 never executed (throw)
+call   14 never executed
+call   15 never executed
+branch 16 never executed (fallthrough)
+branch 17 never executed (throw)
+call   18 never executed
+branch 19 never executed (fallthrough)
+branch 20 never executed (throw)
+call   21 never executed
+call   22 never executed
+call   23 returned 100%
+call   24 never executed
+call   25 never executed
+call   26 never executed
+        -:  133:
+        1:  134:	conn->close();
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        1:  135:	loop.stop();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  136:	loopThread.join();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  137:}
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+call    5 returned 100%
+call    6 never executed
+call    7 never executed
+call    8 never executed
+call    9 never executed
+call   10 never executed
+call   11 never executed
+------------------
+        -:  138:
+        -:  139:// 测试从 PlainConnection 发送数据
+        4:  140:TEST(PlainConnectionTest, SendFromConnection)
+        -:  141:{
+        1:  142:	AsioEventLoop loop;
+        1:  143:	auto [socket1, socket2] = createConnectedSockets(loop.getIoContext(), loop.getIoContext());
+        -:  144:
+        2:  145:	InetAddress localAddr("127.0.0.1", 12345);
+        1:  146:	InetAddress peerAddr("127.0.0.1", 54321);
+        -:  147:
+        1:  148:	auto conn = std::make_shared<PlainConnection>(&loop, std::move(socket1), localAddr, peerAddr);
+        -:  149:
+        1:  150:	conn->connectEstablished();
+        -:  151:
+        -:  152:	std::thread loopThread(
+        1:  153:		[&loop]()
+        -:  154:		{
+        1:  155:			loop.run();
+call    0 returned 100%
+        2:  156:		});
+        -:  157:
+        1:  158:	std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        -:  159:
+        -:  160:	// 从连接发送数据
+        1:  161:	std::string testData = "Hello from PlainConnection!";
+        1:  162:	conn->send(testData);
+        -:  163:
+        -:  164:	// 等待异步写操作完成
+        1:  165:	std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        -:  166:
+        -:  167:	// 从 socket2 接收数据
+        -:  168:	char buffer[1024];
+        1:  169:	boost::system::error_code ec;
+        1:  170:	size_t len = socket2.read_some(boost::asio::buffer(buffer), ec);
+        -:  171:
+       1*:  172:	EXPECT_FALSE(ec);
+       2*:  173:	EXPECT_EQ(std::string(buffer, len), testData);
+        -:  174:
+        -:  175:	// 等待 bytesSent 统计更新
+        1:  176:	std::this_thread::sleep_for(std::chrono::milliseconds(50));
+       1*:  177:	EXPECT_EQ(conn->bytesSent(), testData.size());
+        -:  178:
+        1:  179:	conn->close();
+        1:  180:	loop.stop();
+        1:  181:	loopThread.join();
+        1:  182:}
+------------------
+_ZN43PlainConnectionTest_SendFromConnection_TestC2Ev:
+function _ZN43PlainConnectionTest_SendFromConnection_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:  140:TEST(PlainConnectionTest, SendFromConnection)
+call    0 returned 100%
+------------------
+_ZN43PlainConnectionTest_SendFromConnection_TestD0Ev:
+function _ZN43PlainConnectionTest_SendFromConnection_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:  140:TEST(PlainConnectionTest, SendFromConnection)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN43PlainConnectionTest_SendFromConnection_TestD2Ev:
+function _ZN43PlainConnectionTest_SendFromConnection_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:  140:TEST(PlainConnectionTest, SendFromConnection)
+call    0 returned 100%
+------------------
+_ZN43PlainConnectionTest_SendFromConnection_Test8TestBodyEv:
+function _ZN43PlainConnectionTest_SendFromConnection_Test8TestBodyEv called 1 returned 100% blocks executed 42%
+        1:  140:TEST(PlainConnectionTest, SendFromConnection)
+        -:  141:{
+        1:  142:	AsioEventLoop loop;
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  143:	auto [socket1, socket2] = createConnectedSockets(loop.getIoContext(), loop.getIoContext());
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+call    6 returned 100%
+        -:  144:
+        2:  145:	InetAddress localAddr("127.0.0.1", 12345);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+        1:  146:	InetAddress peerAddr("127.0.0.1", 54321);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+        -:  147:
+        1:  148:	auto conn = std::make_shared<PlainConnection>(&loop, std::move(socket1), localAddr, peerAddr);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:  149:
+        1:  150:	conn->connectEstablished();
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:  151:
+        -:  152:	std::thread loopThread(
+    #####:  153:		[&loop]()
+        -:  154:		{
+        -:  155:			loop.run();
+        1:  156:		});
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  157:
+        1:  158:	std::this_thread::sleep_for(std::chrono::milliseconds(50));
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:  159:
+        -:  160:	// 从连接发送数据
+        1:  161:	std::string testData = "Hello from PlainConnection!";
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  162:	conn->send(testData);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:  163:
+        -:  164:	// 等待异步写操作完成
+        1:  165:	std::this_thread::sleep_for(std::chrono::milliseconds(100));
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:  166:
+        -:  167:	// 从 socket2 接收数据
+        -:  168:	char buffer[1024];
+        1:  169:	boost::system::error_code ec;
+        1:  170:	size_t len = socket2.read_some(boost::asio::buffer(buffer), ec);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:  171:
+       1*:  172:	EXPECT_FALSE(ec);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 0% (fallthrough)
+branch  4 taken 100%
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed (throw)
+call    8 never executed
+branch  9 never executed (fallthrough)
+branch 10 never executed (throw)
+call   11 never executed
+call   12 never executed
+branch 13 never executed (fallthrough)
+branch 14 never executed (throw)
+call   15 never executed
+branch 16 never executed (fallthrough)
+branch 17 never executed (throw)
+call   18 never executed
+call   19 never executed
+call   20 never executed
+call   21 returned 100%
+call   22 never executed
+call   23 never executed
+call   24 never executed
+call   25 never executed
+       2*:  173:	EXPECT_EQ(std::string(buffer, len), testData);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 returned 100%
+branch  8 taken 0% (fallthrough)
+branch  9 taken 100%
+call   10 never executed
+branch 11 never executed (fallthrough)
+branch 12 never executed (throw)
+call   13 never executed
+call   14 never executed
+branch 15 never executed (fallthrough)
+branch 16 never executed (throw)
+call   17 never executed
+branch 18 never executed (fallthrough)
+branch 19 never executed (throw)
+call   20 never executed
+call   21 never executed
+call   22 returned 100%
+call   23 never executed
+call   24 never executed
+call   25 never executed
+call   26 never executed
+        -:  174:
+        -:  175:	// 等待 bytesSent 统计更新
+        1:  176:	std::this_thread::sleep_for(std::chrono::milliseconds(50));
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+       1*:  177:	EXPECT_EQ(conn->bytesSent(), testData.size());
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+call    8 returned 100%
+branch  9 taken 0% (fallthrough)
+branch 10 taken 100%
+call   11 never executed
+branch 12 never executed (fallthrough)
+branch 13 never executed (throw)
+call   14 never executed
+call   15 never executed
+branch 16 never executed (fallthrough)
+branch 17 never executed (throw)
+call   18 never executed
+branch 19 never executed (fallthrough)
+branch 20 never executed (throw)
+call   21 never executed
+call   22 never executed
+call   23 returned 100%
+call   24 never executed
+call   25 never executed
+call   26 never executed
+        -:  178:
+        1:  179:	conn->close();
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        1:  180:	loop.stop();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  181:	loopThread.join();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  182:}
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+call    5 never executed
+call    6 never executed
+call    7 never executed
+call    8 never executed
+call    9 never executed
+------------------
+        -:  183:
+        -:  184:// 测试写完成回调
+        4:  185:TEST(PlainConnectionTest, WriteCompleteCallback)
+        -:  186:{
+        1:  187:	AsioEventLoop loop;
+        1:  188:	auto [socket1, socket2] = createConnectedSockets(loop.getIoContext(), loop.getIoContext());
+        -:  189:
+        2:  190:	InetAddress localAddr("127.0.0.1", 12345);
+        1:  191:	InetAddress peerAddr("127.0.0.1", 54321);
+        -:  192:
+        1:  193:	auto conn = std::make_shared<PlainConnection>(&loop, std::move(socket1), localAddr, peerAddr);
+        -:  194:
+        1:  195:	std::atomic<int> writeCompleteCount {0};
+        2:  196:	conn->onWriteComplete(
+        2:  197:		[&](const TcpConnection::Ptr&)
+        -:  198:		{
+        1:  199:			writeCompleteCount++;
+call    0 returned 100%
+        1:  200:		});
+        -:  201:
+        1:  202:	conn->connectEstablished();
+        -:  203:
+        -:  204:	std::thread loopThread(
+        1:  205:		[&loop]()
+        -:  206:		{
+        1:  207:			loop.run();
+call    0 returned 100%
+        2:  208:		});
+        -:  209:
+        1:  210:	std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        -:  211:
+        -:  212:	// 发送数据
+        2:  213:	conn->send("Test message");
+        -:  214:
+        -:  215:	// 等待写完成
+        1:  216:	std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        -:  217:
+       2*:  218:	EXPECT_GE(writeCompleteCount.load(), 1);
+        -:  219:
+        1:  220:	conn->close();
+        1:  221:	loop.stop();
+        1:  222:	loopThread.join();
+        1:  223:}
+------------------
+_ZN46PlainConnectionTest_WriteCompleteCallback_TestC2Ev:
+function _ZN46PlainConnectionTest_WriteCompleteCallback_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:  185:TEST(PlainConnectionTest, WriteCompleteCallback)
+call    0 returned 100%
+------------------
+_ZN46PlainConnectionTest_WriteCompleteCallback_TestD0Ev:
+function _ZN46PlainConnectionTest_WriteCompleteCallback_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:  185:TEST(PlainConnectionTest, WriteCompleteCallback)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN46PlainConnectionTest_WriteCompleteCallback_TestD2Ev:
+function _ZN46PlainConnectionTest_WriteCompleteCallback_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:  185:TEST(PlainConnectionTest, WriteCompleteCallback)
+call    0 returned 100%
+------------------
+_ZN46PlainConnectionTest_WriteCompleteCallback_Test8TestBodyEv:
+function _ZN46PlainConnectionTest_WriteCompleteCallback_Test8TestBodyEv called 1 returned 100% blocks executed 50%
+        1:  185:TEST(PlainConnectionTest, WriteCompleteCallback)
+        -:  186:{
+        1:  187:	AsioEventLoop loop;
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  188:	auto [socket1, socket2] = createConnectedSockets(loop.getIoContext(), loop.getIoContext());
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+call    6 returned 100%
+        -:  189:
+        2:  190:	InetAddress localAddr("127.0.0.1", 12345);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+        1:  191:	InetAddress peerAddr("127.0.0.1", 54321);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+        -:  192:
+        1:  193:	auto conn = std::make_shared<PlainConnection>(&loop, std::move(socket1), localAddr, peerAddr);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:  194:
+        1:  195:	std::atomic<int> writeCompleteCount {0};
+        2:  196:	conn->onWriteComplete(
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 never executed
+        1:  197:		[&](const TcpConnection::Ptr&)
+call    0 returned 100%
+        -:  198:		{
+        -:  199:			writeCompleteCount++;
+        -:  200:		});
+        -:  201:
+        1:  202:	conn->connectEstablished();
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:  203:
+        -:  204:	std::thread loopThread(
+    #####:  205:		[&loop]()
+        -:  206:		{
+        -:  207:			loop.run();
+        1:  208:		});
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  209:
+        1:  210:	std::this_thread::sleep_for(std::chrono::milliseconds(50));
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:  211:
+        -:  212:	// 发送数据
+        2:  213:	conn->send("Test message");
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+call    7 returned 100%
+call    8 never executed
+        -:  214:
+        -:  215:	// 等待写完成
+        1:  216:	std::this_thread::sleep_for(std::chrono::milliseconds(100));
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:  217:
+       2*:  218:	EXPECT_GE(writeCompleteCount.load(), 1);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 0% (fallthrough)
+branch  6 taken 100%
+call    7 never executed
+branch  8 never executed (fallthrough)
+branch  9 never executed (throw)
+call   10 never executed
+call   11 never executed
+branch 12 never executed (fallthrough)
+branch 13 never executed (throw)
+call   14 never executed
+branch 15 never executed (fallthrough)
+branch 16 never executed (throw)
+call   17 never executed
+call   18 never executed
+call   19 returned 100%
+call   20 never executed
+call   21 never executed
+call   22 never executed
+        -:  219:
+        1:  220:	conn->close();
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        1:  221:	loop.stop();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  222:	loopThread.join();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  223:}
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 never executed
+call    5 never executed
+call    6 never executed
+call    7 never executed
+------------------
+        -:  224:
+        -:  225:// 测试连接关闭回调
+        4:  226:TEST(PlainConnectionTest, CloseCallback)
+        -:  227:{
+        1:  228:	AsioEventLoop loop;
+        1:  229:	auto [socket1, socket2] = createConnectedSockets(loop.getIoContext(), loop.getIoContext());
+        -:  230:
+        2:  231:	InetAddress localAddr("127.0.0.1", 12345);
+        1:  232:	InetAddress peerAddr("127.0.0.1", 54321);
+        -:  233:
+        1:  234:	auto conn = std::make_shared<PlainConnection>(&loop, std::move(socket1), localAddr, peerAddr);
+        -:  235:
+        1:  236:	std::atomic<bool> closed {false};
+        2:  237:	conn->onClose(
+        2:  238:		[&](const TcpConnection::Ptr&)
+        -:  239:		{
+        1:  240:			closed = true;
+call    0 returned 100%
+        1:  241:		});
+        -:  242:
+        1:  243:	conn->connectEstablished();
+        -:  244:
+        -:  245:	std::thread loopThread(
+        1:  246:		[&loop]()
+        -:  247:		{
+        1:  248:			loop.run();
+call    0 returned 100%
+        2:  249:		});
+        -:  250:
+        1:  251:	std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        -:  252:
+        -:  253:	// 关闭连接
+        1:  254:	conn->close();
+        -:  255:
+        1:  256:	std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        -:  257:
+       1*:  258:	EXPECT_TRUE(closed.load());
+       1*:  259:	EXPECT_TRUE(conn->disconnected());
+        -:  260:
+        1:  261:	loop.stop();
+        1:  262:	loopThread.join();
+        1:  263:}
+------------------
+_ZN38PlainConnectionTest_CloseCallback_TestC2Ev:
+function _ZN38PlainConnectionTest_CloseCallback_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:  226:TEST(PlainConnectionTest, CloseCallback)
+call    0 returned 100%
+------------------
+_ZN38PlainConnectionTest_CloseCallback_TestD0Ev:
+function _ZN38PlainConnectionTest_CloseCallback_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:  226:TEST(PlainConnectionTest, CloseCallback)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN38PlainConnectionTest_CloseCallback_TestD2Ev:
+function _ZN38PlainConnectionTest_CloseCallback_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:  226:TEST(PlainConnectionTest, CloseCallback)
+call    0 returned 100%
+------------------
+_ZN38PlainConnectionTest_CloseCallback_Test8TestBodyEv:
+function _ZN38PlainConnectionTest_CloseCallback_Test8TestBodyEv called 1 returned 100% blocks executed 42%
+        1:  226:TEST(PlainConnectionTest, CloseCallback)
+        -:  227:{
+        1:  228:	AsioEventLoop loop;
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  229:	auto [socket1, socket2] = createConnectedSockets(loop.getIoContext(), loop.getIoContext());
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+call    6 returned 100%
+        -:  230:
+        2:  231:	InetAddress localAddr("127.0.0.1", 12345);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+        1:  232:	InetAddress peerAddr("127.0.0.1", 54321);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+        -:  233:
+        1:  234:	auto conn = std::make_shared<PlainConnection>(&loop, std::move(socket1), localAddr, peerAddr);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:  235:
+        1:  236:	std::atomic<bool> closed {false};
+        2:  237:	conn->onClose(
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 never executed
+        1:  238:		[&](const TcpConnection::Ptr&)
+call    0 returned 100%
+        -:  239:		{
+        -:  240:			closed = true;
+        -:  241:		});
+        -:  242:
+        1:  243:	conn->connectEstablished();
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:  244:
+        -:  245:	std::thread loopThread(
+    #####:  246:		[&loop]()
+        -:  247:		{
+        -:  248:			loop.run();
+        1:  249:		});
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  250:
+        1:  251:	std::this_thread::sleep_for(std::chrono::milliseconds(50));
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:  252:
+        -:  253:	// 关闭连接
+        1:  254:	conn->close();
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:  255:
+        1:  256:	std::this_thread::sleep_for(std::chrono::milliseconds(100));
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:  257:
+       1*:  258:	EXPECT_TRUE(closed.load());
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 0% (fallthrough)
+branch  4 taken 100%
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed (throw)
+call    8 never executed
+branch  9 never executed (fallthrough)
+branch 10 never executed (throw)
+call   11 never executed
+call   12 never executed
+branch 13 never executed (fallthrough)
+branch 14 never executed (throw)
+call   15 never executed
+branch 16 never executed (fallthrough)
+branch 17 never executed (throw)
+call   18 never executed
+call   19 never executed
+call   20 never executed
+call   21 returned 100%
+call   22 never executed
+call   23 never executed
+call   24 never executed
+call   25 never executed
+       1*:  259:	EXPECT_TRUE(conn->disconnected());
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 returned 100%
+branch  6 taken 0% (fallthrough)
+branch  7 taken 100%
+call    8 never executed
+branch  9 never executed (fallthrough)
+branch 10 never executed (throw)
+call   11 never executed
+branch 12 never executed (fallthrough)
+branch 13 never executed (throw)
+call   14 never executed
+call   15 never executed
+branch 16 never executed (fallthrough)
+branch 17 never executed (throw)
+call   18 never executed
+branch 19 never executed (fallthrough)
+branch 20 never executed (throw)
+call   21 never executed
+call   22 never executed
+call   23 never executed
+call   24 returned 100%
+call   25 never executed
+call   26 never executed
+call   27 never executed
+call   28 never executed
+        -:  260:
+        1:  261:	loop.stop();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  262:	loopThread.join();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  263:}
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 never executed
+call    5 never executed
+call    6 never executed
+call    7 never executed
+------------------
+        -:  264:
+        -:  265:// 测试 TCP_NODELAY
+        4:  266:TEST(PlainConnectionTest, TcpNoDelay)
+        -:  267:{
+        1:  268:	AsioEventLoop loop;
+        1:  269:	auto [socket1, socket2] = createConnectedSockets(loop.getIoContext(), loop.getIoContext());
+        -:  270:
+        2:  271:	InetAddress localAddr("127.0.0.1", 12345);
+        1:  272:	InetAddress peerAddr("127.0.0.1", 54321);
+        -:  273:
+        1:  274:	auto conn = std::make_shared<PlainConnection>(&loop, std::move(socket1), localAddr, peerAddr);
+        -:  275:
+        1:  276:	conn->connectEstablished();
+        -:  277:
+        -:  278:	// 设置 TCP_NODELAY
+        1:  279:	conn->setTcpNoDelay(true);
+        -:  280:
+        -:  281:	// 无异常即为成功
+       1*:  282:	EXPECT_TRUE(true);
+        -:  283:
+        1:  284:	conn->close();
+        1:  285:}
+------------------
+_ZN35PlainConnectionTest_TcpNoDelay_TestC2Ev:
+function _ZN35PlainConnectionTest_TcpNoDelay_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:  266:TEST(PlainConnectionTest, TcpNoDelay)
+call    0 returned 100%
+------------------
+_ZN35PlainConnectionTest_TcpNoDelay_TestD0Ev:
+function _ZN35PlainConnectionTest_TcpNoDelay_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:  266:TEST(PlainConnectionTest, TcpNoDelay)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN35PlainConnectionTest_TcpNoDelay_TestD2Ev:
+function _ZN35PlainConnectionTest_TcpNoDelay_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:  266:TEST(PlainConnectionTest, TcpNoDelay)
+call    0 returned 100%
+------------------
+_ZN35PlainConnectionTest_TcpNoDelay_Test8TestBodyEv:
+function _ZN35PlainConnectionTest_TcpNoDelay_Test8TestBodyEv called 1 returned 100% blocks executed 47%
+        1:  266:TEST(PlainConnectionTest, TcpNoDelay)
+        -:  267:{
+        1:  268:	AsioEventLoop loop;
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  269:	auto [socket1, socket2] = createConnectedSockets(loop.getIoContext(), loop.getIoContext());
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+call    6 returned 100%
+        -:  270:
+        2:  271:	InetAddress localAddr("127.0.0.1", 12345);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+        1:  272:	InetAddress peerAddr("127.0.0.1", 54321);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+        -:  273:
+        1:  274:	auto conn = std::make_shared<PlainConnection>(&loop, std::move(socket1), localAddr, peerAddr);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:  275:
+        1:  276:	conn->connectEstablished();
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:  277:
+        -:  278:	// 设置 TCP_NODELAY
+        1:  279:	conn->setTcpNoDelay(true);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:  280:
+        -:  281:	// 无异常即为成功
+       1*:  282:	EXPECT_TRUE(true);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 0% (fallthrough)
+branch  3 taken 100%
+call    4 never executed
+branch  5 never executed (fallthrough)
+branch  6 never executed (throw)
+call    7 never executed
+branch  8 never executed (fallthrough)
+branch  9 never executed (throw)
+call   10 never executed
+call   11 never executed
+branch 12 never executed (fallthrough)
+branch 13 never executed (throw)
+call   14 never executed
+branch 15 never executed (fallthrough)
+branch 16 never executed (throw)
+call   17 never executed
+call   18 never executed
+call   19 never executed
+call   20 returned 100%
+call   21 never executed
+call   22 never executed
+call   23 never executed
+call   24 never executed
+        -:  283:
+        1:  284:	conn->close();
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        1:  285:}
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 never executed
+call    4 never executed
+call    5 never executed
+------------------
+        -:  286:
+        -:  287:// 测试用户上下文
+        4:  288:TEST(PlainConnectionTest, UserContext)
+        -:  289:{
+        1:  290:	AsioEventLoop loop;
+        1:  291:	auto [socket1, socket2] = createConnectedSockets(loop.getIoContext(), loop.getIoContext());
+        -:  292:
+        2:  293:	InetAddress localAddr("127.0.0.1", 12345);
+        1:  294:	InetAddress peerAddr("127.0.0.1", 54321);
+        -:  295:
+        1:  296:	auto conn = std::make_shared<PlainConnection>(&loop, std::move(socket1), localAddr, peerAddr);
+        -:  297:
+       1*:  298:	EXPECT_FALSE(conn->hasContext());
+        -:  299:
+        1:  300:	auto context = std::make_shared<int>(42);
+        1:  301:	conn->setContext(context);
+        -:  302:
+       1*:  303:	EXPECT_TRUE(conn->hasContext());
+       1*:  304:	EXPECT_EQ(*conn->getContext<int>(), 42);
+        -:  305:
+        1:  306:	conn->clearContext();
+       1*:  307:	EXPECT_FALSE(conn->hasContext());
+        -:  308:
+        1:  309:	conn->close();
+        1:  310:}
+------------------
+_ZN36PlainConnectionTest_UserContext_TestC2Ev:
+function _ZN36PlainConnectionTest_UserContext_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:  288:TEST(PlainConnectionTest, UserContext)
+call    0 returned 100%
+------------------
+_ZN36PlainConnectionTest_UserContext_TestD0Ev:
+function _ZN36PlainConnectionTest_UserContext_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:  288:TEST(PlainConnectionTest, UserContext)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN36PlainConnectionTest_UserContext_TestD2Ev:
+function _ZN36PlainConnectionTest_UserContext_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:  288:TEST(PlainConnectionTest, UserContext)
+call    0 returned 100%
+------------------
+_ZN36PlainConnectionTest_UserContext_Test8TestBodyEv:
+function _ZN36PlainConnectionTest_UserContext_Test8TestBodyEv called 1 returned 100% blocks executed 35%
+        1:  288:TEST(PlainConnectionTest, UserContext)
+        -:  289:{
+        1:  290:	AsioEventLoop loop;
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  291:	auto [socket1, socket2] = createConnectedSockets(loop.getIoContext(), loop.getIoContext());
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+call    6 returned 100%
+        -:  292:
+        2:  293:	InetAddress localAddr("127.0.0.1", 12345);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+        1:  294:	InetAddress peerAddr("127.0.0.1", 54321);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+        -:  295:
+        1:  296:	auto conn = std::make_shared<PlainConnection>(&loop, std::move(socket1), localAddr, peerAddr);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:  297:
+       1*:  298:	EXPECT_FALSE(conn->hasContext());
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 returned 100%
+branch  6 taken 0% (fallthrough)
+branch  7 taken 100%
+call    8 never executed
+branch  9 never executed (fallthrough)
+branch 10 never executed (throw)
+call   11 never executed
+branch 12 never executed (fallthrough)
+branch 13 never executed (throw)
+call   14 never executed
+call   15 never executed
+branch 16 never executed (fallthrough)
+branch 17 never executed (throw)
+call   18 never executed
+branch 19 never executed (fallthrough)
+branch 20 never executed (throw)
+call   21 never executed
+call   22 never executed
+call   23 never executed
+call   24 returned 100%
+call   25 never executed
+call   26 never executed
+call   27 never executed
+call   28 never executed
+        -:  299:
+        1:  300:	auto context = std::make_shared<int>(42);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  301:	conn->setContext(context);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+call    6 never executed
+        -:  302:
+       1*:  303:	EXPECT_TRUE(conn->hasContext());
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 returned 100%
+branch  6 taken 0% (fallthrough)
+branch  7 taken 100%
+call    8 never executed
+branch  9 never executed (fallthrough)
+branch 10 never executed (throw)
+call   11 never executed
+branch 12 never executed (fallthrough)
+branch 13 never executed (throw)
+call   14 never executed
+call   15 never executed
+branch 16 never executed (fallthrough)
+branch 17 never executed (throw)
+call   18 never executed
+branch 19 never executed (fallthrough)
+branch 20 never executed (throw)
+call   21 never executed
+call   22 never executed
+call   23 never executed
+call   24 returned 100%
+call   25 never executed
+call   26 never executed
+call   27 never executed
+call   28 never executed
+       1*:  304:	EXPECT_EQ(*conn->getContext<int>(), 42);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+call    8 returned 100%
+call    9 returned 100%
+branch 10 taken 0% (fallthrough)
+branch 11 taken 100%
+call   12 never executed
+branch 13 never executed (fallthrough)
+branch 14 never executed (throw)
+call   15 never executed
+call   16 never executed
+branch 17 never executed (fallthrough)
+branch 18 never executed (throw)
+call   19 never executed
+branch 20 never executed (fallthrough)
+branch 21 never executed (throw)
+call   22 never executed
+call   23 never executed
+call   24 returned 100%
+call   25 never executed
+call   26 never executed
+call   27 never executed
+call   28 never executed
+        -:  305:
+        1:  306:	conn->clearContext();
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+       1*:  307:	EXPECT_FALSE(conn->hasContext());
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 returned 100%
+branch  6 taken 0% (fallthrough)
+branch  7 taken 100%
+call    8 never executed
+branch  9 never executed (fallthrough)
+branch 10 never executed (throw)
+call   11 never executed
+branch 12 never executed (fallthrough)
+branch 13 never executed (throw)
+call   14 never executed
+call   15 never executed
+branch 16 never executed (fallthrough)
+branch 17 never executed (throw)
+call   18 never executed
+branch 19 never executed (fallthrough)
+branch 20 never executed (throw)
+call   21 never executed
+call   22 never executed
+call   23 never executed
+call   24 returned 100%
+call   25 never executed
+call   26 never executed
+call   27 never executed
+call   28 never executed
+        -:  308:
+        1:  309:	conn->close();
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        1:  310:}
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 never executed
+call    5 never executed
+call    6 never executed
+call    7 never executed
+------------------
+        -:  311:
+        -:  312:// 测试 PmrBuffer 使用
+        4:  313:TEST(PlainConnectionTest, PmrBufferUsage)
+        -:  314:{
+        1:  315:	AsioEventLoop loop;
+        1:  316:	auto [socket1, socket2] = createConnectedSockets(loop.getIoContext(), loop.getIoContext());
+        -:  317:
+        2:  318:	InetAddress localAddr("127.0.0.1", 12345);
+        1:  319:	InetAddress peerAddr("127.0.0.1", 54321);
+        -:  320:
+        1:  321:	auto conn = std::make_shared<PlainConnection>(&loop, std::move(socket1), localAddr, peerAddr);
+        -:  322:
+        1:  323:	std::atomic<bool> received {false};
+        1:  324:	PmrBuffer receivedBuffer(loop.allocator());
+        -:  325:
+        2:  326:	conn->onMessage(
+        2:  327:		[&](const TcpConnection::Ptr& /*c*/, PmrBuffer* buf)
+        -:  328:		{
+        1:  329:			receivedBuffer.append(*buf);
+call    0 returned 100%
+        1:  330:			buf->retrieveAll();
+call    0 returned 100%
+        1:  331:			received = true;
+call    0 returned 100%
+        1:  332:		});
+        -:  333:
+        1:  334:	conn->connectEstablished();
+        -:  335:
+        -:  336:	std::thread loopThread(
+        1:  337:		[&loop]()
+        -:  338:		{
+        1:  339:			loop.run();
+call    0 returned 100%
+        2:  340:		});
+        -:  341:
+        1:  342:	std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        -:  343:
+        -:  344:	// 发送数据
+        1:  345:	std::string testData = "PmrBuffer test data";
+        1:  346:	boost::asio::write(socket2, boost::asio::buffer(testData));
+        -:  347:
+        -:  348:	// 等待接收
+        1:  349:	std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        -:  350:
+       1*:  351:	EXPECT_TRUE(received.load());
+       1*:  352:	EXPECT_EQ(receivedBuffer.readableBytes(), testData.size());
+       2*:  353:	EXPECT_EQ(std::string(receivedBuffer.peek(), receivedBuffer.readableBytes()), testData);
+        -:  354:
+        1:  355:	conn->close();
+        1:  356:	loop.stop();
+        1:  357:	loopThread.join();
+        1:  358:}
+------------------
+_ZN39PlainConnectionTest_PmrBufferUsage_TestC2Ev:
+function _ZN39PlainConnectionTest_PmrBufferUsage_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:  313:TEST(PlainConnectionTest, PmrBufferUsage)
+call    0 returned 100%
+------------------
+_ZN39PlainConnectionTest_PmrBufferUsage_TestD0Ev:
+function _ZN39PlainConnectionTest_PmrBufferUsage_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:  313:TEST(PlainConnectionTest, PmrBufferUsage)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN39PlainConnectionTest_PmrBufferUsage_TestD2Ev:
+function _ZN39PlainConnectionTest_PmrBufferUsage_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:  313:TEST(PlainConnectionTest, PmrBufferUsage)
+call    0 returned 100%
+------------------
+_ZN39PlainConnectionTest_PmrBufferUsage_Test8TestBodyEv:
+function _ZN39PlainConnectionTest_PmrBufferUsage_Test8TestBodyEv called 1 returned 100% blocks executed 42%
+        1:  313:TEST(PlainConnectionTest, PmrBufferUsage)
+        -:  314:{
+        1:  315:	AsioEventLoop loop;
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  316:	auto [socket1, socket2] = createConnectedSockets(loop.getIoContext(), loop.getIoContext());
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+call    6 returned 100%
+        -:  317:
+        2:  318:	InetAddress localAddr("127.0.0.1", 12345);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+        1:  319:	InetAddress peerAddr("127.0.0.1", 54321);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+        -:  320:
+        1:  321:	auto conn = std::make_shared<PlainConnection>(&loop, std::move(socket1), localAddr, peerAddr);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:  322:
+        1:  323:	std::atomic<bool> received {false};
+        1:  324:	PmrBuffer receivedBuffer(loop.allocator());
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+        -:  325:
+        2:  326:	conn->onMessage(
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 never executed
+        1:  327:		[&](const TcpConnection::Ptr& /*c*/, PmrBuffer* buf)
+call    0 returned 100%
+        -:  328:		{
+        -:  329:			receivedBuffer.append(*buf);
+        -:  330:			buf->retrieveAll();
+        -:  331:			received = true;
+        -:  332:		});
+        -:  333:
+        1:  334:	conn->connectEstablished();
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:  335:
+        -:  336:	std::thread loopThread(
+    #####:  337:		[&loop]()
+        -:  338:		{
+        -:  339:			loop.run();
+        1:  340:		});
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  341:
+        1:  342:	std::this_thread::sleep_for(std::chrono::milliseconds(50));
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:  343:
+        -:  344:	// 发送数据
+        1:  345:	std::string testData = "PmrBuffer test data";
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  346:	boost::asio::write(socket2, boost::asio::buffer(testData));
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:  347:
+        -:  348:	// 等待接收
+        1:  349:	std::this_thread::sleep_for(std::chrono::milliseconds(100));
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:  350:
+       1*:  351:	EXPECT_TRUE(received.load());
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 0% (fallthrough)
+branch  4 taken 100%
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed (throw)
+call    8 never executed
+branch  9 never executed (fallthrough)
+branch 10 never executed (throw)
+call   11 never executed
+call   12 never executed
+branch 13 never executed (fallthrough)
+branch 14 never executed (throw)
+call   15 never executed
+branch 16 never executed (fallthrough)
+branch 17 never executed (throw)
+call   18 never executed
+call   19 never executed
+call   20 never executed
+call   21 returned 100%
+call   22 never executed
+call   23 never executed
+call   24 never executed
+call   25 never executed
+       1*:  352:	EXPECT_EQ(receivedBuffer.readableBytes(), testData.size());
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+branch  6 taken 0% (fallthrough)
+branch  7 taken 100%
+call    8 never executed
+branch  9 never executed (fallthrough)
+branch 10 never executed (throw)
+call   11 never executed
+call   12 never executed
+branch 13 never executed (fallthrough)
+branch 14 never executed (throw)
+call   15 never executed
+branch 16 never executed (fallthrough)
+branch 17 never executed (throw)
+call   18 never executed
+call   19 never executed
+call   20 returned 100%
+call   21 never executed
+call   22 never executed
+call   23 never executed
+       2*:  353:	EXPECT_EQ(std::string(receivedBuffer.peek(), receivedBuffer.readableBytes()), testData);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+call    7 returned 100%
+branch  8 taken 100% (fallthrough)
+branch  9 taken 0% (throw)
+call   10 returned 100%
+call   11 returned 100%
+branch 12 taken 0% (fallthrough)
+branch 13 taken 100%
+call   14 never executed
+branch 15 never executed (fallthrough)
+branch 16 never executed (throw)
+call   17 never executed
+call   18 never executed
+branch 19 never executed (fallthrough)
+branch 20 never executed (throw)
+call   21 never executed
+branch 22 never executed (fallthrough)
+branch 23 never executed (throw)
+call   24 never executed
+call   25 never executed
+call   26 returned 100%
+call   27 never executed
+call   28 never executed
+call   29 never executed
+call   30 never executed
+        -:  354:
+        1:  355:	conn->close();
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        1:  356:	loop.stop();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  357:	loopThread.join();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  358:}
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+call    5 returned 100%
+call    6 never executed
+call    7 never executed
+call    8 never executed
+call    9 never executed
+call   10 never executed
+call   11 never executed
+------------------

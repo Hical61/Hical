@@ -1,0 +1,1255 @@
+        -:    0:Source:/usr/include/boost/asio/basic_deadline_timer.hpp
+        -:    1://
+        -:    2:// basic_deadline_timer.hpp
+        -:    3:// ~~~~~~~~~~~~~~~~~~~~~~~~
+        -:    4://
+        -:    5:// Copyright (c) 2003-2023 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+        -:    6://
+        -:    7:// Distributed under the Boost Software License, Version 1.0. (See accompanying
+        -:    8:// file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+        -:    9://
+        -:   10:
+        -:   11:#ifndef BOOST_ASIO_BASIC_DEADLINE_TIMER_HPP
+        -:   12:#define BOOST_ASIO_BASIC_DEADLINE_TIMER_HPP
+        -:   13:
+        -:   14:#if defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   15:# pragma once
+        -:   16:#endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   17:
+        -:   18:#include <boost/asio/detail/config.hpp>
+        -:   19:
+        -:   20:#if defined(BOOST_ASIO_HAS_BOOST_DATE_TIME) \
+        -:   21:  || defined(GENERATING_DOCUMENTATION)
+        -:   22:
+        -:   23:#include <cstddef>
+        -:   24:#include <boost/asio/any_io_executor.hpp>
+        -:   25:#include <boost/asio/detail/deadline_timer_service.hpp>
+        -:   26:#include <boost/asio/detail/handler_type_requirements.hpp>
+        -:   27:#include <boost/asio/detail/io_object_impl.hpp>
+        -:   28:#include <boost/asio/detail/non_const_lvalue.hpp>
+        -:   29:#include <boost/asio/detail/throw_error.hpp>
+        -:   30:#include <boost/asio/error.hpp>
+        -:   31:#include <boost/asio/execution_context.hpp>
+        -:   32:#include <boost/asio/time_traits.hpp>
+        -:   33:
+        -:   34:#include <boost/asio/detail/push_options.hpp>
+        -:   35:
+        -:   36:namespace boost {
+        -:   37:namespace asio {
+        -:   38:
+        -:   39:/// Provides waitable timer functionality.
+        -:   40:/**
+        -:   41: * The basic_deadline_timer class template provides the ability to perform a
+        -:   42: * blocking or asynchronous wait for a timer to expire.
+        -:   43: *
+        -:   44: * A deadline timer is always in one of two states: "expired" or "not expired".
+        -:   45: * If the wait() or async_wait() function is called on an expired timer, the
+        -:   46: * wait operation will complete immediately.
+        -:   47: *
+        -:   48: * Most applications will use the boost::asio::deadline_timer typedef.
+        -:   49: *
+        -:   50: * @par Thread Safety
+        -:   51: * @e Distinct @e objects: Safe.@n
+        -:   52: * @e Shared @e objects: Unsafe.
+        -:   53: *
+        -:   54: * @par Examples
+        -:   55: * Performing a blocking wait:
+        -:   56: * @code
+        -:   57: * // Construct a timer without setting an expiry time.
+        -:   58: * boost::asio::deadline_timer timer(my_context);
+        -:   59: *
+        -:   60: * // Set an expiry time relative to now.
+        -:   61: * timer.expires_from_now(boost::posix_time::seconds(5));
+        -:   62: *
+        -:   63: * // Wait for the timer to expire.
+        -:   64: * timer.wait();
+        -:   65: * @endcode
+        -:   66: *
+        -:   67: * @par 
+        -:   68: * Performing an asynchronous wait:
+        -:   69: * @code
+        -:   70: * void handler(const boost::system::error_code& error)
+        -:   71: * {
+        -:   72: *   if (!error)
+        -:   73: *   {
+        -:   74: *     // Timer expired.
+        -:   75: *   }
+        -:   76: * }
+        -:   77: *
+        -:   78: * ...
+        -:   79: *
+        -:   80: * // Construct a timer with an absolute expiry time.
+        -:   81: * boost::asio::deadline_timer timer(my_context,
+        -:   82: *     boost::posix_time::time_from_string("2005-12-07 23:59:59.000"));
+        -:   83: *
+        -:   84: * // Start an asynchronous wait.
+        -:   85: * timer.async_wait(handler);
+        -:   86: * @endcode
+        -:   87: *
+        -:   88: * @par Changing an active deadline_timer's expiry time
+        -:   89: *
+        -:   90: * Changing the expiry time of a timer while there are pending asynchronous
+        -:   91: * waits causes those wait operations to be cancelled. To ensure that the action
+        -:   92: * associated with the timer is performed only once, use something like this:
+        -:   93: * used:
+        -:   94: *
+        -:   95: * @code
+        -:   96: * void on_some_event()
+        -:   97: * {
+        -:   98: *   if (my_timer.expires_from_now(seconds(5)) > 0)
+        -:   99: *   {
+        -:  100: *     // We managed to cancel the timer. Start new asynchronous wait.
+        -:  101: *     my_timer.async_wait(on_timeout);
+        -:  102: *   }
+        -:  103: *   else
+        -:  104: *   {
+        -:  105: *     // Too late, timer has already expired!
+        -:  106: *   }
+        -:  107: * }
+        -:  108: *
+        -:  109: * void on_timeout(const boost::system::error_code& e)
+        -:  110: * {
+        -:  111: *   if (e != boost::asio::error::operation_aborted)
+        -:  112: *   {
+        -:  113: *     // Timer was not cancelled, take necessary action.
+        -:  114: *   }
+        -:  115: * }
+        -:  116: * @endcode
+        -:  117: *
+        -:  118: * @li The boost::asio::basic_deadline_timer::expires_from_now() function
+        -:  119: * cancels any pending asynchronous waits, and returns the number of
+        -:  120: * asynchronous waits that were cancelled. If it returns 0 then you were too
+        -:  121: * late and the wait handler has already been executed, or will soon be
+        -:  122: * executed. If it returns 1 then the wait handler was successfully cancelled.
+        -:  123: *
+        -:  124: * @li If a wait handler is cancelled, the boost::system::error_code passed to
+        -:  125: * it contains the value boost::asio::error::operation_aborted.
+        -:  126: */
+        -:  127:template <typename Time,
+        -:  128:    typename TimeTraits = boost::asio::time_traits<Time>,
+        -:  129:    typename Executor = any_io_executor>
+        -:  130:class basic_deadline_timer
+        -:  131:{
+        -:  132:private:
+        -:  133:  class initiate_async_wait;
+        -:  134:
+        -:  135:public:
+        -:  136:  /// The type of the executor associated with the object.
+        -:  137:  typedef Executor executor_type;
+        -:  138:
+        -:  139:  /// Rebinds the timer type to another executor.
+        -:  140:  template <typename Executor1>
+        -:  141:  struct rebind_executor
+        -:  142:  {
+        -:  143:    /// The timer type when rebound to the specified executor.
+        -:  144:    typedef basic_deadline_timer<Time, TimeTraits, Executor1> other;
+        -:  145:  };
+        -:  146:
+        -:  147:  /// The time traits type.
+        -:  148:  typedef TimeTraits traits_type;
+        -:  149:
+        -:  150:  /// The time type.
+        -:  151:  typedef typename traits_type::time_type time_type;
+        -:  152:
+        -:  153:  /// The duration type.
+        -:  154:  typedef typename traits_type::duration_type duration_type;
+        -:  155:
+        -:  156:  /// Constructor.
+        -:  157:  /**
+        -:  158:   * This constructor creates a timer without setting an expiry time. The
+        -:  159:   * expires_at() or expires_from_now() functions must be called to set an
+        -:  160:   * expiry time before the timer can be waited on.
+        -:  161:   *
+        -:  162:   * @param ex The I/O executor that the timer will use, by default, to
+        -:  163:   * dispatch handlers for any asynchronous operations performed on the timer.
+        -:  164:   */
+    #####:  165:  explicit basic_deadline_timer(const executor_type& ex)
+    #####:  166:    : impl_(0, ex)
+        -:  167:  {
+    #####:  168:  }
+------------------
+_ZN5boost4asio20basic_deadline_timerINS_10posix_time5ptimeENS0_11time_traitsIS3_EENS0_15any_io_executorEEC2ERKS6_:
+function _ZN5boost4asio20basic_deadline_timerINS_10posix_time5ptimeENS0_11time_traitsIS3_EENS0_15any_io_executorEEC2ERKS6_ called 0 returned 0% blocks executed 0%
+    #####:  165:  explicit basic_deadline_timer(const executor_type& ex)
+    #####:  166:    : impl_(0, ex)
+call    0 never executed
+        -:  167:  {
+    #####:  168:  }
+------------------
+_ZN5boost4asio20basic_deadline_timerINS_10posix_time5ptimeENS0_11time_traitsIS3_EENS0_15any_io_executorEEC2ERKS6_:
+function _ZN5boost4asio20basic_deadline_timerINS_10posix_time5ptimeENS0_11time_traitsIS3_EENS0_15any_io_executorEEC2ERKS6_ called 0 returned 0% blocks executed 0%
+    #####:  165:  explicit basic_deadline_timer(const executor_type& ex)
+    #####:  166:    : impl_(0, ex)
+call    0 never executed
+        -:  167:  {
+    #####:  168:  }
+------------------
+        -:  169:
+        -:  170:  /// Constructor.
+        -:  171:  /**
+        -:  172:   * This constructor creates a timer without setting an expiry time. The
+        -:  173:   * expires_at() or expires_from_now() functions must be called to set an
+        -:  174:   * expiry time before the timer can be waited on.
+        -:  175:   *
+        -:  176:   * @param context An execution context which provides the I/O executor that
+        -:  177:   * the timer will use, by default, to dispatch handlers for any asynchronous
+        -:  178:   * operations performed on the timer.
+        -:  179:   */
+        -:  180:  template <typename ExecutionContext>
+        -:  181:  explicit basic_deadline_timer(ExecutionContext& context,
+        -:  182:      typename constraint<
+        -:  183:        is_convertible<ExecutionContext&, execution_context&>::value
+        -:  184:      >::type = 0)
+        -:  185:    : impl_(0, 0, context)
+        -:  186:  {
+        -:  187:  }
+        -:  188:
+        -:  189:  /// Constructor to set a particular expiry time as an absolute time.
+        -:  190:  /**
+        -:  191:   * This constructor creates a timer and sets the expiry time.
+        -:  192:   *
+        -:  193:   * @param ex The I/O executor that the timer will use, by default, to
+        -:  194:   * dispatch handlers for any asynchronous operations performed on the timer.
+        -:  195:   *
+        -:  196:   * @param expiry_time The expiry time to be used for the timer, expressed
+        -:  197:   * as an absolute time.
+        -:  198:   */
+        -:  199:  basic_deadline_timer(const executor_type& ex, const time_type& expiry_time)
+        -:  200:    : impl_(0, ex)
+        -:  201:  {
+        -:  202:    boost::system::error_code ec;
+        -:  203:    impl_.get_service().expires_at(impl_.get_implementation(), expiry_time, ec);
+        -:  204:    boost::asio::detail::throw_error(ec, "expires_at");
+        -:  205:  }
+        -:  206:
+        -:  207:  /// Constructor to set a particular expiry time as an absolute time.
+        -:  208:  /**
+        -:  209:   * This constructor creates a timer and sets the expiry time.
+        -:  210:   *
+        -:  211:   * @param context An execution context which provides the I/O executor that
+        -:  212:   * the timer will use, by default, to dispatch handlers for any asynchronous
+        -:  213:   * operations performed on the timer.
+        -:  214:   *
+        -:  215:   * @param expiry_time The expiry time to be used for the timer, expressed
+        -:  216:   * as an absolute time.
+        -:  217:   */
+        -:  218:  template <typename ExecutionContext>
+        -:  219:  basic_deadline_timer(ExecutionContext& context, const time_type& expiry_time,
+        -:  220:      typename constraint<
+        -:  221:        is_convertible<ExecutionContext&, execution_context&>::value
+        -:  222:      >::type = 0)
+        -:  223:    : impl_(0, 0, context)
+        -:  224:  {
+        -:  225:    boost::system::error_code ec;
+        -:  226:    impl_.get_service().expires_at(impl_.get_implementation(), expiry_time, ec);
+        -:  227:    boost::asio::detail::throw_error(ec, "expires_at");
+        -:  228:  }
+        -:  229:
+        -:  230:  /// Constructor to set a particular expiry time relative to now.
+        -:  231:  /**
+        -:  232:   * This constructor creates a timer and sets the expiry time.
+        -:  233:   *
+        -:  234:   * @param ex The I/O executor that the timer will use, by default, to
+        -:  235:   * dispatch handlers for any asynchronous operations performed on the timer.
+        -:  236:   *
+        -:  237:   * @param expiry_time The expiry time to be used for the timer, relative to
+        -:  238:   * now.
+        -:  239:   */
+        -:  240:  basic_deadline_timer(const executor_type& ex,
+        -:  241:      const duration_type& expiry_time)
+        -:  242:    : impl_(0, ex)
+        -:  243:  {
+        -:  244:    boost::system::error_code ec;
+        -:  245:    impl_.get_service().expires_from_now(
+        -:  246:        impl_.get_implementation(), expiry_time, ec);
+        -:  247:    boost::asio::detail::throw_error(ec, "expires_from_now");
+        -:  248:  }
+        -:  249:
+        -:  250:  /// Constructor to set a particular expiry time relative to now.
+        -:  251:  /**
+        -:  252:   * This constructor creates a timer and sets the expiry time.
+        -:  253:   *
+        -:  254:   * @param context An execution context which provides the I/O executor that
+        -:  255:   * the timer will use, by default, to dispatch handlers for any asynchronous
+        -:  256:   * operations performed on the timer.
+        -:  257:   *
+        -:  258:   * @param expiry_time The expiry time to be used for the timer, relative to
+        -:  259:   * now.
+        -:  260:   */
+        -:  261:  template <typename ExecutionContext>
+        -:  262:  basic_deadline_timer(ExecutionContext& context,
+        -:  263:      const duration_type& expiry_time,
+        -:  264:      typename constraint<
+        -:  265:        is_convertible<ExecutionContext&, execution_context&>::value
+        -:  266:      >::type = 0)
+        -:  267:    : impl_(0, 0, context)
+        -:  268:  {
+        -:  269:    boost::system::error_code ec;
+        -:  270:    impl_.get_service().expires_from_now(
+        -:  271:        impl_.get_implementation(), expiry_time, ec);
+        -:  272:    boost::asio::detail::throw_error(ec, "expires_from_now");
+        -:  273:  }
+        -:  274:
+        -:  275:#if defined(BOOST_ASIO_HAS_MOVE) || defined(GENERATING_DOCUMENTATION)
+        -:  276:  /// Move-construct a basic_deadline_timer from another.
+        -:  277:  /**
+        -:  278:   * This constructor moves a timer from one object to another.
+        -:  279:   *
+        -:  280:   * @param other The other basic_deadline_timer object from which the move will
+        -:  281:   * occur.
+        -:  282:   *
+        -:  283:   * @note Following the move, the moved-from object is in the same state as if
+        -:  284:   * constructed using the @c basic_deadline_timer(const executor_type&)
+        -:  285:   * constructor.
+        -:  286:   */
+    #####:  287:  basic_deadline_timer(basic_deadline_timer&& other)
+    #####:  288:    : impl_(std::move(other.impl_))
+        -:  289:  {
+    #####:  290:  }
+------------------
+_ZN5boost4asio20basic_deadline_timerINS_10posix_time5ptimeENS0_11time_traitsIS3_EENS0_15any_io_executorEEC2EOS7_:
+function _ZN5boost4asio20basic_deadline_timerINS_10posix_time5ptimeENS0_11time_traitsIS3_EENS0_15any_io_executorEEC2EOS7_ called 0 returned 0% blocks executed 0%
+    #####:  287:  basic_deadline_timer(basic_deadline_timer&& other)
+    #####:  288:    : impl_(std::move(other.impl_))
+call    0 never executed
+call    1 never executed
+        -:  289:  {
+    #####:  290:  }
+------------------
+_ZN5boost4asio20basic_deadline_timerINS_10posix_time5ptimeENS0_11time_traitsIS3_EENS0_15any_io_executorEEC2EOS7_:
+function _ZN5boost4asio20basic_deadline_timerINS_10posix_time5ptimeENS0_11time_traitsIS3_EENS0_15any_io_executorEEC2EOS7_ called 0 returned 0% blocks executed 0%
+    #####:  287:  basic_deadline_timer(basic_deadline_timer&& other)
+    #####:  288:    : impl_(std::move(other.impl_))
+call    0 never executed
+call    1 never executed
+        -:  289:  {
+    #####:  290:  }
+------------------
+        -:  291:
+        -:  292:  /// Move-assign a basic_deadline_timer from another.
+        -:  293:  /**
+        -:  294:   * This assignment operator moves a timer from one object to another. Cancels
+        -:  295:   * any outstanding asynchronous operations associated with the target object.
+        -:  296:   *
+        -:  297:   * @param other The other basic_deadline_timer object from which the move will
+        -:  298:   * occur.
+        -:  299:   *
+        -:  300:   * @note Following the move, the moved-from object is in the same state as if
+        -:  301:   * constructed using the @c basic_deadline_timer(const executor_type&)
+        -:  302:   * constructor.
+        -:  303:   */
+        -:  304:  basic_deadline_timer& operator=(basic_deadline_timer&& other)
+        -:  305:  {
+        -:  306:    impl_ = std::move(other.impl_);
+        -:  307:    return *this;
+        -:  308:  }
+        -:  309:#endif // defined(BOOST_ASIO_HAS_MOVE) || defined(GENERATING_DOCUMENTATION)
+        -:  310:
+        -:  311:  /// Destroys the timer.
+        -:  312:  /**
+        -:  313:   * This function destroys the timer, cancelling any outstanding asynchronous
+        -:  314:   * wait operations associated with the timer as if by calling @c cancel.
+        -:  315:   */
+    #####:  316:  ~basic_deadline_timer()
+        -:  317:  {
+    #####:  318:  }
+------------------
+_ZN5boost4asio20basic_deadline_timerINS_10posix_time5ptimeENS0_11time_traitsIS3_EENS0_15any_io_executorEED2Ev:
+function _ZN5boost4asio20basic_deadline_timerINS_10posix_time5ptimeENS0_11time_traitsIS3_EENS0_15any_io_executorEED2Ev called 0 returned 0% blocks executed 0%
+    #####:  316:  ~basic_deadline_timer()
+        -:  317:  {
+    #####:  318:  }
+call    0 never executed
+------------------
+_ZN5boost4asio20basic_deadline_timerINS_10posix_time5ptimeENS0_11time_traitsIS3_EENS0_15any_io_executorEED2Ev:
+function _ZN5boost4asio20basic_deadline_timerINS_10posix_time5ptimeENS0_11time_traitsIS3_EENS0_15any_io_executorEED2Ev called 0 returned 0% blocks executed 0%
+    #####:  316:  ~basic_deadline_timer()
+        -:  317:  {
+    #####:  318:  }
+call    0 never executed
+------------------
+_ZN5boost4asio20basic_deadline_timerINS_10posix_time5ptimeENS0_11time_traitsIS3_EENS0_15any_io_executorEED2Ev:
+function _ZN5boost4asio20basic_deadline_timerINS_10posix_time5ptimeENS0_11time_traitsIS3_EENS0_15any_io_executorEED2Ev called 0 returned 0% blocks executed 0%
+    #####:  316:  ~basic_deadline_timer()
+        -:  317:  {
+    #####:  318:  }
+call    0 never executed
+------------------
+        -:  319:
+        -:  320:  /// Get the executor associated with the object.
+        -:  321:  const executor_type& get_executor() BOOST_ASIO_NOEXCEPT
+        -:  322:  {
+        -:  323:    return impl_.get_executor();
+        -:  324:  }
+        -:  325:
+        -:  326:  /// Cancel any asynchronous operations that are waiting on the timer.
+        -:  327:  /**
+        -:  328:   * This function forces the completion of any pending asynchronous wait
+        -:  329:   * operations against the timer. The handler for each cancelled operation will
+        -:  330:   * be invoked with the boost::asio::error::operation_aborted error code.
+        -:  331:   *
+        -:  332:   * Cancelling the timer does not change the expiry time.
+        -:  333:   *
+        -:  334:   * @return The number of asynchronous operations that were cancelled.
+        -:  335:   *
+        -:  336:   * @throws boost::system::system_error Thrown on failure.
+        -:  337:   *
+        -:  338:   * @note If the timer has already expired when cancel() is called, then the
+        -:  339:   * handlers for asynchronous wait operations will:
+        -:  340:   *
+        -:  341:   * @li have already been invoked; or
+        -:  342:   *
+        -:  343:   * @li have been queued for invocation in the near future.
+        -:  344:   *
+        -:  345:   * These handlers can no longer be cancelled, and therefore are passed an
+        -:  346:   * error code that indicates the successful completion of the wait operation.
+        -:  347:   */
+        -:  348:  std::size_t cancel()
+        -:  349:  {
+        -:  350:    boost::system::error_code ec;
+        -:  351:    std::size_t s = impl_.get_service().cancel(impl_.get_implementation(), ec);
+        -:  352:    boost::asio::detail::throw_error(ec, "cancel");
+        -:  353:    return s;
+        -:  354:  }
+        -:  355:
+        -:  356:  /// Cancel any asynchronous operations that are waiting on the timer.
+        -:  357:  /**
+        -:  358:   * This function forces the completion of any pending asynchronous wait
+        -:  359:   * operations against the timer. The handler for each cancelled operation will
+        -:  360:   * be invoked with the boost::asio::error::operation_aborted error code.
+        -:  361:   *
+        -:  362:   * Cancelling the timer does not change the expiry time.
+        -:  363:   *
+        -:  364:   * @param ec Set to indicate what error occurred, if any.
+        -:  365:   *
+        -:  366:   * @return The number of asynchronous operations that were cancelled.
+        -:  367:   *
+        -:  368:   * @note If the timer has already expired when cancel() is called, then the
+        -:  369:   * handlers for asynchronous wait operations will:
+        -:  370:   *
+        -:  371:   * @li have already been invoked; or
+        -:  372:   *
+        -:  373:   * @li have been queued for invocation in the near future.
+        -:  374:   *
+        -:  375:   * These handlers can no longer be cancelled, and therefore are passed an
+        -:  376:   * error code that indicates the successful completion of the wait operation.
+        -:  377:   */
+        -:  378:  std::size_t cancel(boost::system::error_code& ec)
+        -:  379:  {
+        -:  380:    return impl_.get_service().cancel(impl_.get_implementation(), ec);
+        -:  381:  }
+        -:  382:
+        -:  383:  /// Cancels one asynchronous operation that is waiting on the timer.
+        -:  384:  /**
+        -:  385:   * This function forces the completion of one pending asynchronous wait
+        -:  386:   * operation against the timer. Handlers are cancelled in FIFO order. The
+        -:  387:   * handler for the cancelled operation will be invoked with the
+        -:  388:   * boost::asio::error::operation_aborted error code.
+        -:  389:   *
+        -:  390:   * Cancelling the timer does not change the expiry time.
+        -:  391:   *
+        -:  392:   * @return The number of asynchronous operations that were cancelled. That is,
+        -:  393:   * either 0 or 1.
+        -:  394:   *
+        -:  395:   * @throws boost::system::system_error Thrown on failure.
+        -:  396:   *
+        -:  397:   * @note If the timer has already expired when cancel_one() is called, then
+        -:  398:   * the handlers for asynchronous wait operations will:
+        -:  399:   *
+        -:  400:   * @li have already been invoked; or
+        -:  401:   *
+        -:  402:   * @li have been queued for invocation in the near future.
+        -:  403:   *
+        -:  404:   * These handlers can no longer be cancelled, and therefore are passed an
+        -:  405:   * error code that indicates the successful completion of the wait operation.
+        -:  406:   */
+        -:  407:  std::size_t cancel_one()
+        -:  408:  {
+        -:  409:    boost::system::error_code ec;
+        -:  410:    std::size_t s = impl_.get_service().cancel_one(
+        -:  411:        impl_.get_implementation(), ec);
+        -:  412:    boost::asio::detail::throw_error(ec, "cancel_one");
+        -:  413:    return s;
+        -:  414:  }
+        -:  415:
+        -:  416:  /// Cancels one asynchronous operation that is waiting on the timer.
+        -:  417:  /**
+        -:  418:   * This function forces the completion of one pending asynchronous wait
+        -:  419:   * operation against the timer. Handlers are cancelled in FIFO order. The
+        -:  420:   * handler for the cancelled operation will be invoked with the
+        -:  421:   * boost::asio::error::operation_aborted error code.
+        -:  422:   *
+        -:  423:   * Cancelling the timer does not change the expiry time.
+        -:  424:   *
+        -:  425:   * @param ec Set to indicate what error occurred, if any.
+        -:  426:   *
+        -:  427:   * @return The number of asynchronous operations that were cancelled. That is,
+        -:  428:   * either 0 or 1.
+        -:  429:   *
+        -:  430:   * @note If the timer has already expired when cancel_one() is called, then
+        -:  431:   * the handlers for asynchronous wait operations will:
+        -:  432:   *
+        -:  433:   * @li have already been invoked; or
+        -:  434:   *
+        -:  435:   * @li have been queued for invocation in the near future.
+        -:  436:   *
+        -:  437:   * These handlers can no longer be cancelled, and therefore are passed an
+        -:  438:   * error code that indicates the successful completion of the wait operation.
+        -:  439:   */
+        -:  440:  std::size_t cancel_one(boost::system::error_code& ec)
+        -:  441:  {
+        -:  442:    return impl_.get_service().cancel_one(impl_.get_implementation(), ec);
+        -:  443:  }
+        -:  444:
+        -:  445:  /// Get the timer's expiry time as an absolute time.
+        -:  446:  /**
+        -:  447:   * This function may be used to obtain the timer's current expiry time.
+        -:  448:   * Whether the timer has expired or not does not affect this value.
+        -:  449:   */
+    #####:  450:  time_type expires_at() const
+        -:  451:  {
+    #####:  452:    return impl_.get_service().expires_at(impl_.get_implementation());
+        -:  453:  }
+------------------
+_ZNK5boost4asio20basic_deadline_timerINS_10posix_time5ptimeENS0_11time_traitsIS3_EENS0_15any_io_executorEE10expires_atEv:
+function _ZNK5boost4asio20basic_deadline_timerINS_10posix_time5ptimeENS0_11time_traitsIS3_EENS0_15any_io_executorEE10expires_atEv called 0 returned 0% blocks executed 0%
+    #####:  450:  time_type expires_at() const
+        -:  451:  {
+    #####:  452:    return impl_.get_service().expires_at(impl_.get_implementation());
+call    0 never executed
+call    1 never executed
+call    2 never executed
+        -:  453:  }
+------------------
+_ZNK5boost4asio20basic_deadline_timerINS_10posix_time5ptimeENS0_11time_traitsIS3_EENS0_15any_io_executorEE10expires_atEv:
+function _ZNK5boost4asio20basic_deadline_timerINS_10posix_time5ptimeENS0_11time_traitsIS3_EENS0_15any_io_executorEE10expires_atEv called 0 returned 0% blocks executed 0%
+    #####:  450:  time_type expires_at() const
+        -:  451:  {
+    #####:  452:    return impl_.get_service().expires_at(impl_.get_implementation());
+call    0 never executed
+call    1 never executed
+call    2 never executed
+        -:  453:  }
+------------------
+        -:  454:
+        -:  455:  /// Set the timer's expiry time as an absolute time.
+        -:  456:  /**
+        -:  457:   * This function sets the expiry time. Any pending asynchronous wait
+        -:  458:   * operations will be cancelled. The handler for each cancelled operation will
+        -:  459:   * be invoked with the boost::asio::error::operation_aborted error code.
+        -:  460:   *
+        -:  461:   * @param expiry_time The expiry time to be used for the timer.
+        -:  462:   *
+        -:  463:   * @return The number of asynchronous operations that were cancelled.
+        -:  464:   *
+        -:  465:   * @throws boost::system::system_error Thrown on failure.
+        -:  466:   *
+        -:  467:   * @note If the timer has already expired when expires_at() is called, then
+        -:  468:   * the handlers for asynchronous wait operations will:
+        -:  469:   *
+        -:  470:   * @li have already been invoked; or
+        -:  471:   *
+        -:  472:   * @li have been queued for invocation in the near future.
+        -:  473:   *
+        -:  474:   * These handlers can no longer be cancelled, and therefore are passed an
+        -:  475:   * error code that indicates the successful completion of the wait operation.
+        -:  476:   */
+    #####:  477:  std::size_t expires_at(const time_type& expiry_time)
+        -:  478:  {
+    #####:  479:    boost::system::error_code ec;
+    #####:  480:    std::size_t s = impl_.get_service().expires_at(
+    #####:  481:        impl_.get_implementation(), expiry_time, ec);
+    #####:  482:    boost::asio::detail::throw_error(ec, "expires_at");
+    #####:  483:    return s;
+        -:  484:  }
+------------------
+_ZN5boost4asio20basic_deadline_timerINS_10posix_time5ptimeENS0_11time_traitsIS3_EENS0_15any_io_executorEE10expires_atERKS3_:
+function _ZN5boost4asio20basic_deadline_timerINS_10posix_time5ptimeENS0_11time_traitsIS3_EENS0_15any_io_executorEE10expires_atERKS3_ called 0 returned 0% blocks executed 0%
+    #####:  477:  std::size_t expires_at(const time_type& expiry_time)
+        -:  478:  {
+    #####:  479:    boost::system::error_code ec;
+    #####:  480:    std::size_t s = impl_.get_service().expires_at(
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+    #####:  481:        impl_.get_implementation(), expiry_time, ec);
+call    0 never executed
+    #####:  482:    boost::asio::detail::throw_error(ec, "expires_at");
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+    #####:  483:    return s;
+        -:  484:  }
+------------------
+_ZN5boost4asio20basic_deadline_timerINS_10posix_time5ptimeENS0_11time_traitsIS3_EENS0_15any_io_executorEE10expires_atERKS3_:
+function _ZN5boost4asio20basic_deadline_timerINS_10posix_time5ptimeENS0_11time_traitsIS3_EENS0_15any_io_executorEE10expires_atERKS3_ called 0 returned 0% blocks executed 0%
+    #####:  477:  std::size_t expires_at(const time_type& expiry_time)
+        -:  478:  {
+    #####:  479:    boost::system::error_code ec;
+    #####:  480:    std::size_t s = impl_.get_service().expires_at(
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+    #####:  481:        impl_.get_implementation(), expiry_time, ec);
+call    0 never executed
+    #####:  482:    boost::asio::detail::throw_error(ec, "expires_at");
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+    #####:  483:    return s;
+        -:  484:  }
+------------------
+_ZN5boost4asio20basic_deadline_timerINS_10posix_time5ptimeENS0_11time_traitsIS3_EENS0_15any_io_executorEE10expires_atERKS3_:
+function _ZN5boost4asio20basic_deadline_timerINS_10posix_time5ptimeENS0_11time_traitsIS3_EENS0_15any_io_executorEE10expires_atERKS3_ called 0 returned 0% blocks executed 0%
+    #####:  477:  std::size_t expires_at(const time_type& expiry_time)
+        -:  478:  {
+    #####:  479:    boost::system::error_code ec;
+    #####:  480:    std::size_t s = impl_.get_service().expires_at(
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+    #####:  481:        impl_.get_implementation(), expiry_time, ec);
+call    0 never executed
+    #####:  482:    boost::asio::detail::throw_error(ec, "expires_at");
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+    #####:  483:    return s;
+        -:  484:  }
+------------------
+        -:  485:
+        -:  486:  /// Set the timer's expiry time as an absolute time.
+        -:  487:  /**
+        -:  488:   * This function sets the expiry time. Any pending asynchronous wait
+        -:  489:   * operations will be cancelled. The handler for each cancelled operation will
+        -:  490:   * be invoked with the boost::asio::error::operation_aborted error code.
+        -:  491:   *
+        -:  492:   * @param expiry_time The expiry time to be used for the timer.
+        -:  493:   *
+        -:  494:   * @param ec Set to indicate what error occurred, if any.
+        -:  495:   *
+        -:  496:   * @return The number of asynchronous operations that were cancelled.
+        -:  497:   *
+        -:  498:   * @note If the timer has already expired when expires_at() is called, then
+        -:  499:   * the handlers for asynchronous wait operations will:
+        -:  500:   *
+        -:  501:   * @li have already been invoked; or
+        -:  502:   *
+        -:  503:   * @li have been queued for invocation in the near future.
+        -:  504:   *
+        -:  505:   * These handlers can no longer be cancelled, and therefore are passed an
+        -:  506:   * error code that indicates the successful completion of the wait operation.
+        -:  507:   */
+        -:  508:  std::size_t expires_at(const time_type& expiry_time,
+        -:  509:      boost::system::error_code& ec)
+        -:  510:  {
+        -:  511:    return impl_.get_service().expires_at(
+        -:  512:        impl_.get_implementation(), expiry_time, ec);
+        -:  513:  }
+        -:  514:
+        -:  515:  /// Get the timer's expiry time relative to now.
+        -:  516:  /**
+        -:  517:   * This function may be used to obtain the timer's current expiry time.
+        -:  518:   * Whether the timer has expired or not does not affect this value.
+        -:  519:   */
+        -:  520:  duration_type expires_from_now() const
+        -:  521:  {
+        -:  522:    return impl_.get_service().expires_from_now(impl_.get_implementation());
+        -:  523:  }
+        -:  524:
+        -:  525:  /// Set the timer's expiry time relative to now.
+        -:  526:  /**
+        -:  527:   * This function sets the expiry time. Any pending asynchronous wait
+        -:  528:   * operations will be cancelled. The handler for each cancelled operation will
+        -:  529:   * be invoked with the boost::asio::error::operation_aborted error code.
+        -:  530:   *
+        -:  531:   * @param expiry_time The expiry time to be used for the timer.
+        -:  532:   *
+        -:  533:   * @return The number of asynchronous operations that were cancelled.
+        -:  534:   *
+        -:  535:   * @throws boost::system::system_error Thrown on failure.
+        -:  536:   *
+        -:  537:   * @note If the timer has already expired when expires_from_now() is called,
+        -:  538:   * then the handlers for asynchronous wait operations will:
+        -:  539:   *
+        -:  540:   * @li have already been invoked; or
+        -:  541:   *
+        -:  542:   * @li have been queued for invocation in the near future.
+        -:  543:   *
+        -:  544:   * These handlers can no longer be cancelled, and therefore are passed an
+        -:  545:   * error code that indicates the successful completion of the wait operation.
+        -:  546:   */
+        -:  547:  std::size_t expires_from_now(const duration_type& expiry_time)
+        -:  548:  {
+        -:  549:    boost::system::error_code ec;
+        -:  550:    std::size_t s = impl_.get_service().expires_from_now(
+        -:  551:        impl_.get_implementation(), expiry_time, ec);
+        -:  552:    boost::asio::detail::throw_error(ec, "expires_from_now");
+        -:  553:    return s;
+        -:  554:  }
+        -:  555:
+        -:  556:  /// Set the timer's expiry time relative to now.
+        -:  557:  /**
+        -:  558:   * This function sets the expiry time. Any pending asynchronous wait
+        -:  559:   * operations will be cancelled. The handler for each cancelled operation will
+        -:  560:   * be invoked with the boost::asio::error::operation_aborted error code.
+        -:  561:   *
+        -:  562:   * @param expiry_time The expiry time to be used for the timer.
+        -:  563:   *
+        -:  564:   * @param ec Set to indicate what error occurred, if any.
+        -:  565:   *
+        -:  566:   * @return The number of asynchronous operations that were cancelled.
+        -:  567:   *
+        -:  568:   * @note If the timer has already expired when expires_from_now() is called,
+        -:  569:   * then the handlers for asynchronous wait operations will:
+        -:  570:   *
+        -:  571:   * @li have already been invoked; or
+        -:  572:   *
+        -:  573:   * @li have been queued for invocation in the near future.
+        -:  574:   *
+        -:  575:   * These handlers can no longer be cancelled, and therefore are passed an
+        -:  576:   * error code that indicates the successful completion of the wait operation.
+        -:  577:   */
+        -:  578:  std::size_t expires_from_now(const duration_type& expiry_time,
+        -:  579:      boost::system::error_code& ec)
+        -:  580:  {
+        -:  581:    return impl_.get_service().expires_from_now(
+        -:  582:        impl_.get_implementation(), expiry_time, ec);
+        -:  583:  }
+        -:  584:
+        -:  585:  /// Perform a blocking wait on the timer.
+        -:  586:  /**
+        -:  587:   * This function is used to wait for the timer to expire. This function
+        -:  588:   * blocks and does not return until the timer has expired.
+        -:  589:   *
+        -:  590:   * @throws boost::system::system_error Thrown on failure.
+        -:  591:   */
+        -:  592:  void wait()
+        -:  593:  {
+        -:  594:    boost::system::error_code ec;
+        -:  595:    impl_.get_service().wait(impl_.get_implementation(), ec);
+        -:  596:    boost::asio::detail::throw_error(ec, "wait");
+        -:  597:  }
+        -:  598:
+        -:  599:  /// Perform a blocking wait on the timer.
+        -:  600:  /**
+        -:  601:   * This function is used to wait for the timer to expire. This function
+        -:  602:   * blocks and does not return until the timer has expired.
+        -:  603:   *
+        -:  604:   * @param ec Set to indicate what error occurred, if any.
+        -:  605:   */
+        -:  606:  void wait(boost::system::error_code& ec)
+        -:  607:  {
+        -:  608:    impl_.get_service().wait(impl_.get_implementation(), ec);
+        -:  609:  }
+        -:  610:
+        -:  611:  /// Start an asynchronous wait on the timer.
+        -:  612:  /**
+        -:  613:   * This function may be used to initiate an asynchronous wait against the
+        -:  614:   * timer. It is an initiating function for an @ref asynchronous_operation,
+        -:  615:   * and always returns immediately.
+        -:  616:   *
+        -:  617:   * For each call to async_wait(), the completion handler will be called
+        -:  618:   * exactly once. The completion handler will be called when:
+        -:  619:   *
+        -:  620:   * @li The timer has expired.
+        -:  621:   *
+        -:  622:   * @li The timer was cancelled, in which case the handler is passed the error
+        -:  623:   * code boost::asio::error::operation_aborted.
+        -:  624:   *
+        -:  625:   * @param token The @ref completion_token that will be used to produce a
+        -:  626:   * completion handler, which will be called when the timer expires. Potential
+        -:  627:   * completion tokens include @ref use_future, @ref use_awaitable, @ref
+        -:  628:   * yield_context, or a function object with the correct completion signature.
+        -:  629:   * The function signature of the completion handler must be:
+        -:  630:   * @code void handler(
+        -:  631:   *   const boost::system::error_code& error // Result of operation.
+        -:  632:   * ); @endcode
+        -:  633:   * Regardless of whether the asynchronous operation completes immediately or
+        -:  634:   * not, the completion handler will not be invoked from within this function.
+        -:  635:   * On immediate completion, invocation of the handler will be performed in a
+        -:  636:   * manner equivalent to using boost::asio::post().
+        -:  637:   *
+        -:  638:   * @par Completion Signature
+        -:  639:   * @code void(boost::system::error_code) @endcode
+        -:  640:   *
+        -:  641:   * @par Per-Operation Cancellation
+        -:  642:   * This asynchronous operation supports cancellation for the following
+        -:  643:   * boost::asio::cancellation_type values:
+        -:  644:   *
+        -:  645:   * @li @c cancellation_type::terminal
+        -:  646:   *
+        -:  647:   * @li @c cancellation_type::partial
+        -:  648:   *
+        -:  649:   * @li @c cancellation_type::total
+        -:  650:   */
+        -:  651:  template <
+        -:  652:      BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code))
+        -:  653:        WaitToken BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(executor_type)>
+        -:  654:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(WaitToken,
+        -:  655:      void (boost::system::error_code))
+    #####:  656:  async_wait(
+        -:  657:      BOOST_ASIO_MOVE_ARG(WaitToken) token
+        -:  658:        BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type))
+        -:  659:    BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:  660:      async_initiate<WaitToken, void (boost::system::error_code)>(
+        -:  661:          declval<initiate_async_wait>(), token)))
+        -:  662:  {
+    #####:  663:    return async_initiate<WaitToken, void (boost::system::error_code)>(
+    #####:  664:        initiate_async_wait(this), token);
+        -:  665:  }
+------------------
+_ZN5boost4asio20basic_deadline_timerINS_10posix_time5ptimeENS0_11time_traitsIS3_EENS0_15any_io_executorEE10async_waitINS0_3ssl6detail5io_opINS0_19basic_stream_socketINS0_2ip3tcpES6_EENSA_8write_opINS0_15const_buffers_1EEENS0_6detail8write_opINS9_6streamISF_EENS0_17mutable_buffers_1EPKNS0_14mutable_bufferENSJ_14transfer_all_tENSJ_17awaitable_handlerIS6_JNS_6system10error_codeEmEEEEEEEEEDaOT_:
+function _ZN5boost4asio20basic_deadline_timerINS_10posix_time5ptimeENS0_11time_traitsIS3_EENS0_15any_io_executorEE10async_waitINS0_3ssl6detail5io_opINS0_19basic_stream_socketINS0_2ip3tcpES6_EENSA_8write_opINS0_15const_buffers_1EEENS0_6detail8write_opINS9_6streamISF_EENS0_17mutable_buffers_1EPKNS0_14mutable_bufferENSJ_14transfer_all_tENSJ_17awaitable_handlerIS6_JNS_6system10error_codeEmEEEEEEEEEDaOT_ called 0 returned 0% blocks executed 0%
+    #####:  656:  async_wait(
+        -:  657:      BOOST_ASIO_MOVE_ARG(WaitToken) token
+        -:  658:        BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type))
+        -:  659:    BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:  660:      async_initiate<WaitToken, void (boost::system::error_code)>(
+        -:  661:          declval<initiate_async_wait>(), token)))
+        -:  662:  {
+    #####:  663:    return async_initiate<WaitToken, void (boost::system::error_code)>(
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  664:        initiate_async_wait(this), token);
+call    0 never executed
+        -:  665:  }
+------------------
+_ZN5boost4asio20basic_deadline_timerINS_10posix_time5ptimeENS0_11time_traitsIS3_EENS0_15any_io_executorEE10async_waitINS0_3ssl6detail5io_opINS0_19basic_stream_socketINS0_2ip3tcpES6_EENSA_8write_opINS0_6detail16prepared_buffersINS0_12const_bufferELm64EEEEENSH_8write_opINS9_6streamISF_EESt6vectorISJ_SaISJ_EEN9__gnu_cxx17__normal_iteratorIPKSJ_SR_EENSH_14transfer_all_tENSH_17awaitable_handlerIS6_JNS_6system10error_codeEmEEEEEEEEEDaOT_:
+function _ZN5boost4asio20basic_deadline_timerINS_10posix_time5ptimeENS0_11time_traitsIS3_EENS0_15any_io_executorEE10async_waitINS0_3ssl6detail5io_opINS0_19basic_stream_socketINS0_2ip3tcpES6_EENSA_8write_opINS0_6detail16prepared_buffersINS0_12const_bufferELm64EEEEENSH_8write_opINS9_6streamISF_EESt6vectorISJ_SaISJ_EEN9__gnu_cxx17__normal_iteratorIPKSJ_SR_EENSH_14transfer_all_tENSH_17awaitable_handlerIS6_JNS_6system10error_codeEmEEEEEEEEEDaOT_ called 0 returned 0% blocks executed 0%
+    #####:  656:  async_wait(
+        -:  657:      BOOST_ASIO_MOVE_ARG(WaitToken) token
+        -:  658:        BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type))
+        -:  659:    BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:  660:      async_initiate<WaitToken, void (boost::system::error_code)>(
+        -:  661:          declval<initiate_async_wait>(), token)))
+        -:  662:  {
+    #####:  663:    return async_initiate<WaitToken, void (boost::system::error_code)>(
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  664:        initiate_async_wait(this), token);
+call    0 never executed
+        -:  665:  }
+------------------
+_ZN5boost4asio20basic_deadline_timerINS_10posix_time5ptimeENS0_11time_traitsIS3_EENS0_15any_io_executorEE10async_waitINS0_3ssl6detail5io_opINS0_19basic_stream_socketINS0_2ip3tcpES6_EENSA_8write_opINS0_6detail16prepared_buffersINS0_12const_bufferELm64EEEEENSH_8write_opINS9_6streamISF_EESt4spanIKSJ_Lm18446744073709551615EEN9__gnu_cxx17__normal_iteratorIPSQ_SR_EENSH_14transfer_all_tENSH_17awaitable_handlerIS6_JNS_6system10error_codeEmEEEEEEEEEDaOT_:
+function _ZN5boost4asio20basic_deadline_timerINS_10posix_time5ptimeENS0_11time_traitsIS3_EENS0_15any_io_executorEE10async_waitINS0_3ssl6detail5io_opINS0_19basic_stream_socketINS0_2ip3tcpES6_EENSA_8write_opINS0_6detail16prepared_buffersINS0_12const_bufferELm64EEEEENSH_8write_opINS9_6streamISF_EESt4spanIKSJ_Lm18446744073709551615EEN9__gnu_cxx17__normal_iteratorIPSQ_SR_EENSH_14transfer_all_tENSH_17awaitable_handlerIS6_JNS_6system10error_codeEmEEEEEEEEEDaOT_ called 0 returned 0% blocks executed 0%
+    #####:  656:  async_wait(
+        -:  657:      BOOST_ASIO_MOVE_ARG(WaitToken) token
+        -:  658:        BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type))
+        -:  659:    BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:  660:      async_initiate<WaitToken, void (boost::system::error_code)>(
+        -:  661:          declval<initiate_async_wait>(), token)))
+        -:  662:  {
+    #####:  663:    return async_initiate<WaitToken, void (boost::system::error_code)>(
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  664:        initiate_async_wait(this), token);
+call    0 never executed
+        -:  665:  }
+------------------
+_ZN5boost4asio20basic_deadline_timerINS_10posix_time5ptimeENS0_11time_traitsIS3_EENS0_15any_io_executorEE10async_waitINS0_3ssl6detail5io_opINS0_19basic_stream_socketINS0_2ip3tcpES6_EENSA_8write_opINS0_15const_buffers_1EEENS0_6detail8write_opINS9_6streamISF_EENS0_12const_bufferEPKSN_NSJ_14transfer_all_tENSJ_17awaitable_handlerIS6_JNS_6system10error_codeEmEEEEEEEEEDaOT_:
+function _ZN5boost4asio20basic_deadline_timerINS_10posix_time5ptimeENS0_11time_traitsIS3_EENS0_15any_io_executorEE10async_waitINS0_3ssl6detail5io_opINS0_19basic_stream_socketINS0_2ip3tcpES6_EENSA_8write_opINS0_15const_buffers_1EEENS0_6detail8write_opINS9_6streamISF_EENS0_12const_bufferEPKSN_NSJ_14transfer_all_tENSJ_17awaitable_handlerIS6_JNS_6system10error_codeEmEEEEEEEEEDaOT_ called 0 returned 0% blocks executed 0%
+    #####:  656:  async_wait(
+        -:  657:      BOOST_ASIO_MOVE_ARG(WaitToken) token
+        -:  658:        BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type))
+        -:  659:    BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:  660:      async_initiate<WaitToken, void (boost::system::error_code)>(
+        -:  661:          declval<initiate_async_wait>(), token)))
+        -:  662:  {
+    #####:  663:    return async_initiate<WaitToken, void (boost::system::error_code)>(
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  664:        initiate_async_wait(this), token);
+call    0 never executed
+        -:  665:  }
+------------------
+_ZN5boost4asio20basic_deadline_timerINS_10posix_time5ptimeENS0_11time_traitsIS3_EENS0_15any_io_executorEE10async_waitINS0_3ssl6detail5io_opINS0_19basic_stream_socketINS0_2ip3tcpES6_EENSA_11shutdown_opENS0_6detail17awaitable_handlerIS6_JNS_6system10error_codeEEEEEEEEDaOT_:
+function _ZN5boost4asio20basic_deadline_timerINS_10posix_time5ptimeENS0_11time_traitsIS3_EENS0_15any_io_executorEE10async_waitINS0_3ssl6detail5io_opINS0_19basic_stream_socketINS0_2ip3tcpES6_EENSA_11shutdown_opENS0_6detail17awaitable_handlerIS6_JNS_6system10error_codeEEEEEEEEDaOT_ called 0 returned 0% blocks executed 0%
+    #####:  656:  async_wait(
+        -:  657:      BOOST_ASIO_MOVE_ARG(WaitToken) token
+        -:  658:        BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type))
+        -:  659:    BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:  660:      async_initiate<WaitToken, void (boost::system::error_code)>(
+        -:  661:          declval<initiate_async_wait>(), token)))
+        -:  662:  {
+    #####:  663:    return async_initiate<WaitToken, void (boost::system::error_code)>(
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  664:        initiate_async_wait(this), token);
+call    0 never executed
+        -:  665:  }
+------------------
+_ZN5boost4asio20basic_deadline_timerINS_10posix_time5ptimeENS0_11time_traitsIS3_EENS0_15any_io_executorEE10async_waitINS0_3ssl6detail5io_opINS0_19basic_stream_socketINS0_2ip3tcpES6_EENSA_7read_opINS0_17mutable_buffers_1EEENS0_6detail17awaitable_handlerIS6_JNS_6system10error_codeEmEEEEEEEDaOT_:
+function _ZN5boost4asio20basic_deadline_timerINS_10posix_time5ptimeENS0_11time_traitsIS3_EENS0_15any_io_executorEE10async_waitINS0_3ssl6detail5io_opINS0_19basic_stream_socketINS0_2ip3tcpES6_EENSA_7read_opINS0_17mutable_buffers_1EEENS0_6detail17awaitable_handlerIS6_JNS_6system10error_codeEmEEEEEEEDaOT_ called 0 returned 0% blocks executed 0%
+    #####:  656:  async_wait(
+        -:  657:      BOOST_ASIO_MOVE_ARG(WaitToken) token
+        -:  658:        BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type))
+        -:  659:    BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:  660:      async_initiate<WaitToken, void (boost::system::error_code)>(
+        -:  661:          declval<initiate_async_wait>(), token)))
+        -:  662:  {
+    #####:  663:    return async_initiate<WaitToken, void (boost::system::error_code)>(
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  664:        initiate_async_wait(this), token);
+call    0 never executed
+        -:  665:  }
+------------------
+_ZN5boost4asio20basic_deadline_timerINS_10posix_time5ptimeENS0_11time_traitsIS3_EENS0_15any_io_executorEE10async_waitINS0_3ssl6detail5io_opINS0_19basic_stream_socketINS0_2ip3tcpES6_EENSA_12handshake_opENS0_6detail17awaitable_handlerIS6_JNS_6system10error_codeEEEEEEEEDaOT_:
+function _ZN5boost4asio20basic_deadline_timerINS_10posix_time5ptimeENS0_11time_traitsIS3_EENS0_15any_io_executorEE10async_waitINS0_3ssl6detail5io_opINS0_19basic_stream_socketINS0_2ip3tcpES6_EENSA_12handshake_opENS0_6detail17awaitable_handlerIS6_JNS_6system10error_codeEEEEEEEEDaOT_ called 0 returned 0% blocks executed 0%
+    #####:  656:  async_wait(
+        -:  657:      BOOST_ASIO_MOVE_ARG(WaitToken) token
+        -:  658:        BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type))
+        -:  659:    BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:  660:      async_initiate<WaitToken, void (boost::system::error_code)>(
+        -:  661:          declval<initiate_async_wait>(), token)))
+        -:  662:  {
+    #####:  663:    return async_initiate<WaitToken, void (boost::system::error_code)>(
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  664:        initiate_async_wait(this), token);
+call    0 never executed
+        -:  665:  }
+------------------
+_ZN5boost4asio20basic_deadline_timerINS_10posix_time5ptimeENS0_11time_traitsIS3_EENS0_15any_io_executorEE10async_waitINS0_3ssl6detail5io_opINS0_19basic_stream_socketINS0_2ip3tcpES6_EENSA_8write_opINS0_15const_buffers_1EEENS0_6detail8write_opINS9_6streamISF_EENS0_17mutable_buffers_1EPKNS0_14mutable_bufferENSJ_14transfer_all_tENSJ_17awaitable_handlerIS6_JNS_6system10error_codeEmEEEEEEEEEDaOT_:
+function _ZN5boost4asio20basic_deadline_timerINS_10posix_time5ptimeENS0_11time_traitsIS3_EENS0_15any_io_executorEE10async_waitINS0_3ssl6detail5io_opINS0_19basic_stream_socketINS0_2ip3tcpES6_EENSA_8write_opINS0_15const_buffers_1EEENS0_6detail8write_opINS9_6streamISF_EENS0_17mutable_buffers_1EPKNS0_14mutable_bufferENSJ_14transfer_all_tENSJ_17awaitable_handlerIS6_JNS_6system10error_codeEmEEEEEEEEEDaOT_ called 0 returned 0% blocks executed 0%
+    #####:  656:  async_wait(
+        -:  657:      BOOST_ASIO_MOVE_ARG(WaitToken) token
+        -:  658:        BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type))
+        -:  659:    BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:  660:      async_initiate<WaitToken, void (boost::system::error_code)>(
+        -:  661:          declval<initiate_async_wait>(), token)))
+        -:  662:  {
+    #####:  663:    return async_initiate<WaitToken, void (boost::system::error_code)>(
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  664:        initiate_async_wait(this), token);
+call    0 never executed
+        -:  665:  }
+------------------
+_ZN5boost4asio20basic_deadline_timerINS_10posix_time5ptimeENS0_11time_traitsIS3_EENS0_15any_io_executorEE10async_waitINS0_3ssl6detail5io_opINS0_19basic_stream_socketINS0_2ip3tcpES6_EENSA_7read_opINS0_17mutable_buffers_1EEENS0_6detail17awaitable_handlerIS6_JNS_6system10error_codeEmEEEEEEEDaOT_:
+function _ZN5boost4asio20basic_deadline_timerINS_10posix_time5ptimeENS0_11time_traitsIS3_EENS0_15any_io_executorEE10async_waitINS0_3ssl6detail5io_opINS0_19basic_stream_socketINS0_2ip3tcpES6_EENSA_7read_opINS0_17mutable_buffers_1EEENS0_6detail17awaitable_handlerIS6_JNS_6system10error_codeEmEEEEEEEDaOT_ called 0 returned 0% blocks executed 0%
+    #####:  656:  async_wait(
+        -:  657:      BOOST_ASIO_MOVE_ARG(WaitToken) token
+        -:  658:        BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type))
+        -:  659:    BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:  660:      async_initiate<WaitToken, void (boost::system::error_code)>(
+        -:  661:          declval<initiate_async_wait>(), token)))
+        -:  662:  {
+    #####:  663:    return async_initiate<WaitToken, void (boost::system::error_code)>(
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  664:        initiate_async_wait(this), token);
+call    0 never executed
+        -:  665:  }
+------------------
+_ZN5boost4asio20basic_deadline_timerINS_10posix_time5ptimeENS0_11time_traitsIS3_EENS0_15any_io_executorEE10async_waitINS0_3ssl6detail5io_opINS0_19basic_stream_socketINS0_2ip3tcpES6_EENSA_12handshake_opENS0_6detail17awaitable_handlerIS6_JNS_6system10error_codeEEEEEEEEDaOT_:
+function _ZN5boost4asio20basic_deadline_timerINS_10posix_time5ptimeENS0_11time_traitsIS3_EENS0_15any_io_executorEE10async_waitINS0_3ssl6detail5io_opINS0_19basic_stream_socketINS0_2ip3tcpES6_EENSA_12handshake_opENS0_6detail17awaitable_handlerIS6_JNS_6system10error_codeEEEEEEEEDaOT_ called 0 returned 0% blocks executed 0%
+    #####:  656:  async_wait(
+        -:  657:      BOOST_ASIO_MOVE_ARG(WaitToken) token
+        -:  658:        BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type))
+        -:  659:    BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:  660:      async_initiate<WaitToken, void (boost::system::error_code)>(
+        -:  661:          declval<initiate_async_wait>(), token)))
+        -:  662:  {
+    #####:  663:    return async_initiate<WaitToken, void (boost::system::error_code)>(
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  664:        initiate_async_wait(this), token);
+call    0 never executed
+        -:  665:  }
+------------------
+        -:  666:
+        -:  667:private:
+        -:  668:  // Disallow copying and assignment.
+        -:  669:  basic_deadline_timer(const basic_deadline_timer&) BOOST_ASIO_DELETED;
+        -:  670:  basic_deadline_timer& operator=(
+        -:  671:      const basic_deadline_timer&) BOOST_ASIO_DELETED;
+        -:  672:
+        -:  673:  class initiate_async_wait
+        -:  674:  {
+        -:  675:  public:
+        -:  676:    typedef Executor executor_type;
+        -:  677:
+    #####:  678:    explicit initiate_async_wait(basic_deadline_timer* self)
+    #####:  679:      : self_(self)
+        -:  680:    {
+    #####:  681:    }
+------------------
+_ZN5boost4asio20basic_deadline_timerINS_10posix_time5ptimeENS0_11time_traitsIS3_EENS0_15any_io_executorEE19initiate_async_waitC2EPS7_:
+function _ZN5boost4asio20basic_deadline_timerINS_10posix_time5ptimeENS0_11time_traitsIS3_EENS0_15any_io_executorEE19initiate_async_waitC2EPS7_ called 0 returned 0% blocks executed 0%
+    #####:  678:    explicit initiate_async_wait(basic_deadline_timer* self)
+    #####:  679:      : self_(self)
+        -:  680:    {
+    #####:  681:    }
+------------------
+_ZN5boost4asio20basic_deadline_timerINS_10posix_time5ptimeENS0_11time_traitsIS3_EENS0_15any_io_executorEE19initiate_async_waitC2EPS7_:
+function _ZN5boost4asio20basic_deadline_timerINS_10posix_time5ptimeENS0_11time_traitsIS3_EENS0_15any_io_executorEE19initiate_async_waitC2EPS7_ called 0 returned 0% blocks executed 0%
+    #####:  678:    explicit initiate_async_wait(basic_deadline_timer* self)
+    #####:  679:      : self_(self)
+        -:  680:    {
+    #####:  681:    }
+------------------
+        -:  682:
+        -:  683:    const executor_type& get_executor() const BOOST_ASIO_NOEXCEPT
+        -:  684:    {
+        -:  685:      return self_->get_executor();
+        -:  686:    }
+        -:  687:
+        -:  688:    template <typename WaitHandler>
+    #####:  689:    void operator()(BOOST_ASIO_MOVE_ARG(WaitHandler) handler) const
+        -:  690:    {
+        -:  691:      // If you get an error on the following line it means that your handler
+        -:  692:      // does not meet the documented type requirements for a WaitHandler.
+        -:  693:      BOOST_ASIO_WAIT_HANDLER_CHECK(WaitHandler, handler) type_check;
+        -:  694:
+    #####:  695:      detail::non_const_lvalue<WaitHandler> handler2(handler);
+    #####:  696:      self_->impl_.get_service().async_wait(
+    #####:  697:          self_->impl_.get_implementation(),
+    #####:  698:          handler2.value, self_->impl_.get_executor());
+    #####:  699:    }
+------------------
+_ZNK5boost4asio20basic_deadline_timerINS_10posix_time5ptimeENS0_11time_traitsIS3_EENS0_15any_io_executorEE19initiate_async_waitclINS0_3ssl6detail5io_opINS0_19basic_stream_socketINS0_2ip3tcpES6_EENSB_8write_opINS0_15const_buffers_1EEENS0_6detail8write_opINSA_6streamISG_EENS0_17mutable_buffers_1EPKNS0_14mutable_bufferENSK_14transfer_all_tENSK_17awaitable_handlerIS6_JNS_6system10error_codeEmEEEEEEEEEvOT_:
+function _ZNK5boost4asio20basic_deadline_timerINS_10posix_time5ptimeENS0_11time_traitsIS3_EENS0_15any_io_executorEE19initiate_async_waitclINS0_3ssl6detail5io_opINS0_19basic_stream_socketINS0_2ip3tcpES6_EENSB_8write_opINS0_15const_buffers_1EEENS0_6detail8write_opINSA_6streamISG_EENS0_17mutable_buffers_1EPKNS0_14mutable_bufferENSK_14transfer_all_tENSK_17awaitable_handlerIS6_JNS_6system10error_codeEmEEEEEEEEEvOT_ called 0 returned 0% blocks executed 0%
+    #####:  689:    void operator()(BOOST_ASIO_MOVE_ARG(WaitHandler) handler) const
+        -:  690:    {
+        -:  691:      // If you get an error on the following line it means that your handler
+        -:  692:      // does not meet the documented type requirements for a WaitHandler.
+        -:  693:      BOOST_ASIO_WAIT_HANDLER_CHECK(WaitHandler, handler) type_check;
+        -:  694:
+    #####:  695:      detail::non_const_lvalue<WaitHandler> handler2(handler);
+call    0 never executed
+    #####:  696:      self_->impl_.get_service().async_wait(
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+    #####:  697:          self_->impl_.get_implementation(),
+    #####:  698:          handler2.value, self_->impl_.get_executor());
+call    0 never executed
+call    1 never executed
+    #####:  699:    }
+------------------
+_ZNK5boost4asio20basic_deadline_timerINS_10posix_time5ptimeENS0_11time_traitsIS3_EENS0_15any_io_executorEE19initiate_async_waitclINS0_3ssl6detail5io_opINS0_19basic_stream_socketINS0_2ip3tcpES6_EENSB_8write_opINS0_6detail16prepared_buffersINS0_12const_bufferELm64EEEEENSI_8write_opINSA_6streamISG_EESt6vectorISK_SaISK_EEN9__gnu_cxx17__normal_iteratorIPKSK_SS_EENSI_14transfer_all_tENSI_17awaitable_handlerIS6_JNS_6system10error_codeEmEEEEEEEEEvOT_:
+function _ZNK5boost4asio20basic_deadline_timerINS_10posix_time5ptimeENS0_11time_traitsIS3_EENS0_15any_io_executorEE19initiate_async_waitclINS0_3ssl6detail5io_opINS0_19basic_stream_socketINS0_2ip3tcpES6_EENSB_8write_opINS0_6detail16prepared_buffersINS0_12const_bufferELm64EEEEENSI_8write_opINSA_6streamISG_EESt6vectorISK_SaISK_EEN9__gnu_cxx17__normal_iteratorIPKSK_SS_EENSI_14transfer_all_tENSI_17awaitable_handlerIS6_JNS_6system10error_codeEmEEEEEEEEEvOT_ called 0 returned 0% blocks executed 0%
+    #####:  689:    void operator()(BOOST_ASIO_MOVE_ARG(WaitHandler) handler) const
+        -:  690:    {
+        -:  691:      // If you get an error on the following line it means that your handler
+        -:  692:      // does not meet the documented type requirements for a WaitHandler.
+        -:  693:      BOOST_ASIO_WAIT_HANDLER_CHECK(WaitHandler, handler) type_check;
+        -:  694:
+    #####:  695:      detail::non_const_lvalue<WaitHandler> handler2(handler);
+call    0 never executed
+    #####:  696:      self_->impl_.get_service().async_wait(
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+    #####:  697:          self_->impl_.get_implementation(),
+    #####:  698:          handler2.value, self_->impl_.get_executor());
+call    0 never executed
+call    1 never executed
+    #####:  699:    }
+------------------
+_ZNK5boost4asio20basic_deadline_timerINS_10posix_time5ptimeENS0_11time_traitsIS3_EENS0_15any_io_executorEE19initiate_async_waitclINS0_3ssl6detail5io_opINS0_19basic_stream_socketINS0_2ip3tcpES6_EENSB_8write_opINS0_6detail16prepared_buffersINS0_12const_bufferELm64EEEEENSI_8write_opINSA_6streamISG_EESt4spanIKSK_Lm18446744073709551615EEN9__gnu_cxx17__normal_iteratorIPSR_SS_EENSI_14transfer_all_tENSI_17awaitable_handlerIS6_JNS_6system10error_codeEmEEEEEEEEEvOT_:
+function _ZNK5boost4asio20basic_deadline_timerINS_10posix_time5ptimeENS0_11time_traitsIS3_EENS0_15any_io_executorEE19initiate_async_waitclINS0_3ssl6detail5io_opINS0_19basic_stream_socketINS0_2ip3tcpES6_EENSB_8write_opINS0_6detail16prepared_buffersINS0_12const_bufferELm64EEEEENSI_8write_opINSA_6streamISG_EESt4spanIKSK_Lm18446744073709551615EEN9__gnu_cxx17__normal_iteratorIPSR_SS_EENSI_14transfer_all_tENSI_17awaitable_handlerIS6_JNS_6system10error_codeEmEEEEEEEEEvOT_ called 0 returned 0% blocks executed 0%
+    #####:  689:    void operator()(BOOST_ASIO_MOVE_ARG(WaitHandler) handler) const
+        -:  690:    {
+        -:  691:      // If you get an error on the following line it means that your handler
+        -:  692:      // does not meet the documented type requirements for a WaitHandler.
+        -:  693:      BOOST_ASIO_WAIT_HANDLER_CHECK(WaitHandler, handler) type_check;
+        -:  694:
+    #####:  695:      detail::non_const_lvalue<WaitHandler> handler2(handler);
+call    0 never executed
+    #####:  696:      self_->impl_.get_service().async_wait(
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+    #####:  697:          self_->impl_.get_implementation(),
+    #####:  698:          handler2.value, self_->impl_.get_executor());
+call    0 never executed
+call    1 never executed
+    #####:  699:    }
+------------------
+_ZNK5boost4asio20basic_deadline_timerINS_10posix_time5ptimeENS0_11time_traitsIS3_EENS0_15any_io_executorEE19initiate_async_waitclINS0_3ssl6detail5io_opINS0_19basic_stream_socketINS0_2ip3tcpES6_EENSB_8write_opINS0_15const_buffers_1EEENS0_6detail8write_opINSA_6streamISG_EENS0_12const_bufferEPKSO_NSK_14transfer_all_tENSK_17awaitable_handlerIS6_JNS_6system10error_codeEmEEEEEEEEEvOT_:
+function _ZNK5boost4asio20basic_deadline_timerINS_10posix_time5ptimeENS0_11time_traitsIS3_EENS0_15any_io_executorEE19initiate_async_waitclINS0_3ssl6detail5io_opINS0_19basic_stream_socketINS0_2ip3tcpES6_EENSB_8write_opINS0_15const_buffers_1EEENS0_6detail8write_opINSA_6streamISG_EENS0_12const_bufferEPKSO_NSK_14transfer_all_tENSK_17awaitable_handlerIS6_JNS_6system10error_codeEmEEEEEEEEEvOT_ called 0 returned 0% blocks executed 0%
+    #####:  689:    void operator()(BOOST_ASIO_MOVE_ARG(WaitHandler) handler) const
+        -:  690:    {
+        -:  691:      // If you get an error on the following line it means that your handler
+        -:  692:      // does not meet the documented type requirements for a WaitHandler.
+        -:  693:      BOOST_ASIO_WAIT_HANDLER_CHECK(WaitHandler, handler) type_check;
+        -:  694:
+    #####:  695:      detail::non_const_lvalue<WaitHandler> handler2(handler);
+call    0 never executed
+    #####:  696:      self_->impl_.get_service().async_wait(
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+    #####:  697:          self_->impl_.get_implementation(),
+    #####:  698:          handler2.value, self_->impl_.get_executor());
+call    0 never executed
+call    1 never executed
+    #####:  699:    }
+------------------
+_ZNK5boost4asio20basic_deadline_timerINS_10posix_time5ptimeENS0_11time_traitsIS3_EENS0_15any_io_executorEE19initiate_async_waitclINS0_3ssl6detail5io_opINS0_19basic_stream_socketINS0_2ip3tcpES6_EENSB_11shutdown_opENS0_6detail17awaitable_handlerIS6_JNS_6system10error_codeEEEEEEEEvOT_:
+function _ZNK5boost4asio20basic_deadline_timerINS_10posix_time5ptimeENS0_11time_traitsIS3_EENS0_15any_io_executorEE19initiate_async_waitclINS0_3ssl6detail5io_opINS0_19basic_stream_socketINS0_2ip3tcpES6_EENSB_11shutdown_opENS0_6detail17awaitable_handlerIS6_JNS_6system10error_codeEEEEEEEEvOT_ called 0 returned 0% blocks executed 0%
+    #####:  689:    void operator()(BOOST_ASIO_MOVE_ARG(WaitHandler) handler) const
+        -:  690:    {
+        -:  691:      // If you get an error on the following line it means that your handler
+        -:  692:      // does not meet the documented type requirements for a WaitHandler.
+        -:  693:      BOOST_ASIO_WAIT_HANDLER_CHECK(WaitHandler, handler) type_check;
+        -:  694:
+    #####:  695:      detail::non_const_lvalue<WaitHandler> handler2(handler);
+call    0 never executed
+    #####:  696:      self_->impl_.get_service().async_wait(
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+    #####:  697:          self_->impl_.get_implementation(),
+    #####:  698:          handler2.value, self_->impl_.get_executor());
+call    0 never executed
+call    1 never executed
+    #####:  699:    }
+------------------
+_ZNK5boost4asio20basic_deadline_timerINS_10posix_time5ptimeENS0_11time_traitsIS3_EENS0_15any_io_executorEE19initiate_async_waitclINS0_3ssl6detail5io_opINS0_19basic_stream_socketINS0_2ip3tcpES6_EENSB_7read_opINS0_17mutable_buffers_1EEENS0_6detail17awaitable_handlerIS6_JNS_6system10error_codeEmEEEEEEEvOT_:
+function _ZNK5boost4asio20basic_deadline_timerINS_10posix_time5ptimeENS0_11time_traitsIS3_EENS0_15any_io_executorEE19initiate_async_waitclINS0_3ssl6detail5io_opINS0_19basic_stream_socketINS0_2ip3tcpES6_EENSB_7read_opINS0_17mutable_buffers_1EEENS0_6detail17awaitable_handlerIS6_JNS_6system10error_codeEmEEEEEEEvOT_ called 0 returned 0% blocks executed 0%
+    #####:  689:    void operator()(BOOST_ASIO_MOVE_ARG(WaitHandler) handler) const
+        -:  690:    {
+        -:  691:      // If you get an error on the following line it means that your handler
+        -:  692:      // does not meet the documented type requirements for a WaitHandler.
+        -:  693:      BOOST_ASIO_WAIT_HANDLER_CHECK(WaitHandler, handler) type_check;
+        -:  694:
+    #####:  695:      detail::non_const_lvalue<WaitHandler> handler2(handler);
+call    0 never executed
+    #####:  696:      self_->impl_.get_service().async_wait(
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+    #####:  697:          self_->impl_.get_implementation(),
+    #####:  698:          handler2.value, self_->impl_.get_executor());
+call    0 never executed
+call    1 never executed
+    #####:  699:    }
+------------------
+_ZNK5boost4asio20basic_deadline_timerINS_10posix_time5ptimeENS0_11time_traitsIS3_EENS0_15any_io_executorEE19initiate_async_waitclINS0_3ssl6detail5io_opINS0_19basic_stream_socketINS0_2ip3tcpES6_EENSB_12handshake_opENS0_6detail17awaitable_handlerIS6_JNS_6system10error_codeEEEEEEEEvOT_:
+function _ZNK5boost4asio20basic_deadline_timerINS_10posix_time5ptimeENS0_11time_traitsIS3_EENS0_15any_io_executorEE19initiate_async_waitclINS0_3ssl6detail5io_opINS0_19basic_stream_socketINS0_2ip3tcpES6_EENSB_12handshake_opENS0_6detail17awaitable_handlerIS6_JNS_6system10error_codeEEEEEEEEvOT_ called 0 returned 0% blocks executed 0%
+    #####:  689:    void operator()(BOOST_ASIO_MOVE_ARG(WaitHandler) handler) const
+        -:  690:    {
+        -:  691:      // If you get an error on the following line it means that your handler
+        -:  692:      // does not meet the documented type requirements for a WaitHandler.
+        -:  693:      BOOST_ASIO_WAIT_HANDLER_CHECK(WaitHandler, handler) type_check;
+        -:  694:
+    #####:  695:      detail::non_const_lvalue<WaitHandler> handler2(handler);
+call    0 never executed
+    #####:  696:      self_->impl_.get_service().async_wait(
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+    #####:  697:          self_->impl_.get_implementation(),
+    #####:  698:          handler2.value, self_->impl_.get_executor());
+call    0 never executed
+call    1 never executed
+    #####:  699:    }
+------------------
+_ZNK5boost4asio20basic_deadline_timerINS_10posix_time5ptimeENS0_11time_traitsIS3_EENS0_15any_io_executorEE19initiate_async_waitclINS0_3ssl6detail5io_opINS0_19basic_stream_socketINS0_2ip3tcpES6_EENSB_8write_opINS0_15const_buffers_1EEENS0_6detail8write_opINSA_6streamISG_EENS0_17mutable_buffers_1EPKNS0_14mutable_bufferENSK_14transfer_all_tENSK_17awaitable_handlerIS6_JNS_6system10error_codeEmEEEEEEEEEvOT_:
+function _ZNK5boost4asio20basic_deadline_timerINS_10posix_time5ptimeENS0_11time_traitsIS3_EENS0_15any_io_executorEE19initiate_async_waitclINS0_3ssl6detail5io_opINS0_19basic_stream_socketINS0_2ip3tcpES6_EENSB_8write_opINS0_15const_buffers_1EEENS0_6detail8write_opINSA_6streamISG_EENS0_17mutable_buffers_1EPKNS0_14mutable_bufferENSK_14transfer_all_tENSK_17awaitable_handlerIS6_JNS_6system10error_codeEmEEEEEEEEEvOT_ called 0 returned 0% blocks executed 0%
+    #####:  689:    void operator()(BOOST_ASIO_MOVE_ARG(WaitHandler) handler) const
+        -:  690:    {
+        -:  691:      // If you get an error on the following line it means that your handler
+        -:  692:      // does not meet the documented type requirements for a WaitHandler.
+        -:  693:      BOOST_ASIO_WAIT_HANDLER_CHECK(WaitHandler, handler) type_check;
+        -:  694:
+    #####:  695:      detail::non_const_lvalue<WaitHandler> handler2(handler);
+call    0 never executed
+    #####:  696:      self_->impl_.get_service().async_wait(
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+    #####:  697:          self_->impl_.get_implementation(),
+    #####:  698:          handler2.value, self_->impl_.get_executor());
+call    0 never executed
+call    1 never executed
+    #####:  699:    }
+------------------
+_ZNK5boost4asio20basic_deadline_timerINS_10posix_time5ptimeENS0_11time_traitsIS3_EENS0_15any_io_executorEE19initiate_async_waitclINS0_3ssl6detail5io_opINS0_19basic_stream_socketINS0_2ip3tcpES6_EENSB_7read_opINS0_17mutable_buffers_1EEENS0_6detail17awaitable_handlerIS6_JNS_6system10error_codeEmEEEEEEEvOT_:
+function _ZNK5boost4asio20basic_deadline_timerINS_10posix_time5ptimeENS0_11time_traitsIS3_EENS0_15any_io_executorEE19initiate_async_waitclINS0_3ssl6detail5io_opINS0_19basic_stream_socketINS0_2ip3tcpES6_EENSB_7read_opINS0_17mutable_buffers_1EEENS0_6detail17awaitable_handlerIS6_JNS_6system10error_codeEmEEEEEEEvOT_ called 0 returned 0% blocks executed 0%
+    #####:  689:    void operator()(BOOST_ASIO_MOVE_ARG(WaitHandler) handler) const
+        -:  690:    {
+        -:  691:      // If you get an error on the following line it means that your handler
+        -:  692:      // does not meet the documented type requirements for a WaitHandler.
+        -:  693:      BOOST_ASIO_WAIT_HANDLER_CHECK(WaitHandler, handler) type_check;
+        -:  694:
+    #####:  695:      detail::non_const_lvalue<WaitHandler> handler2(handler);
+call    0 never executed
+    #####:  696:      self_->impl_.get_service().async_wait(
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+    #####:  697:          self_->impl_.get_implementation(),
+    #####:  698:          handler2.value, self_->impl_.get_executor());
+call    0 never executed
+call    1 never executed
+    #####:  699:    }
+------------------
+_ZNK5boost4asio20basic_deadline_timerINS_10posix_time5ptimeENS0_11time_traitsIS3_EENS0_15any_io_executorEE19initiate_async_waitclINS0_3ssl6detail5io_opINS0_19basic_stream_socketINS0_2ip3tcpES6_EENSB_12handshake_opENS0_6detail17awaitable_handlerIS6_JNS_6system10error_codeEEEEEEEEvOT_:
+function _ZNK5boost4asio20basic_deadline_timerINS_10posix_time5ptimeENS0_11time_traitsIS3_EENS0_15any_io_executorEE19initiate_async_waitclINS0_3ssl6detail5io_opINS0_19basic_stream_socketINS0_2ip3tcpES6_EENSB_12handshake_opENS0_6detail17awaitable_handlerIS6_JNS_6system10error_codeEEEEEEEEvOT_ called 0 returned 0% blocks executed 0%
+    #####:  689:    void operator()(BOOST_ASIO_MOVE_ARG(WaitHandler) handler) const
+        -:  690:    {
+        -:  691:      // If you get an error on the following line it means that your handler
+        -:  692:      // does not meet the documented type requirements for a WaitHandler.
+        -:  693:      BOOST_ASIO_WAIT_HANDLER_CHECK(WaitHandler, handler) type_check;
+        -:  694:
+    #####:  695:      detail::non_const_lvalue<WaitHandler> handler2(handler);
+call    0 never executed
+    #####:  696:      self_->impl_.get_service().async_wait(
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+    #####:  697:          self_->impl_.get_implementation(),
+    #####:  698:          handler2.value, self_->impl_.get_executor());
+call    0 never executed
+call    1 never executed
+    #####:  699:    }
+------------------
+        -:  700:
+        -:  701:  private:
+        -:  702:    basic_deadline_timer* self_;
+        -:  703:  };
+        -:  704:
+        -:  705:  detail::io_object_impl<
+        -:  706:    detail::deadline_timer_service<TimeTraits>, Executor> impl_;
+        -:  707:};
+        -:  708:
+        -:  709:} // namespace asio
+        -:  710:} // namespace boost
+        -:  711:
+        -:  712:#include <boost/asio/detail/pop_options.hpp>
+        -:  713:
+        -:  714:#endif // defined(BOOST_ASIO_HAS_BOOST_DATE_TIME)
+        -:  715:       // || defined(GENERATING_DOCUMENTATION)
+        -:  716:
+        -:  717:#endif // BOOST_ASIO_BASIC_DEADLINE_TIMER_HPP

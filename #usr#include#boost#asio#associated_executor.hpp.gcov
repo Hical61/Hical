@@ -1,0 +1,1077 @@
+        -:    0:Source:/usr/include/boost/asio/associated_executor.hpp
+        -:    1://
+        -:    2:// associated_executor.hpp
+        -:    3:// ~~~~~~~~~~~~~~~~~~~~~~~
+        -:    4://
+        -:    5:// Copyright (c) 2003-2023 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+        -:    6://
+        -:    7:// Distributed under the Boost Software License, Version 1.0. (See accompanying
+        -:    8:// file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+        -:    9://
+        -:   10:
+        -:   11:#ifndef BOOST_ASIO_ASSOCIATED_EXECUTOR_HPP
+        -:   12:#define BOOST_ASIO_ASSOCIATED_EXECUTOR_HPP
+        -:   13:
+        -:   14:#if defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   15:# pragma once
+        -:   16:#endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   17:
+        -:   18:#include <boost/asio/detail/config.hpp>
+        -:   19:#include <boost/asio/associator.hpp>
+        -:   20:#include <boost/asio/detail/functional.hpp>
+        -:   21:#include <boost/asio/detail/type_traits.hpp>
+        -:   22:#include <boost/asio/execution/executor.hpp>
+        -:   23:#include <boost/asio/is_executor.hpp>
+        -:   24:#include <boost/asio/system_executor.hpp>
+        -:   25:
+        -:   26:#include <boost/asio/detail/push_options.hpp>
+        -:   27:
+        -:   28:namespace boost {
+        -:   29:namespace asio {
+        -:   30:
+        -:   31:template <typename T, typename Executor>
+        -:   32:struct associated_executor;
+        -:   33:
+        -:   34:namespace detail {
+        -:   35:
+        -:   36:template <typename T, typename = void>
+        -:   37:struct has_executor_type : false_type
+        -:   38:{
+        -:   39:};
+        -:   40:
+        -:   41:template <typename T>
+        -:   42:struct has_executor_type<T,
+        -:   43:  typename void_type<typename T::executor_type>::type>
+        -:   44:    : true_type
+        -:   45:{
+        -:   46:};
+        -:   47:
+        -:   48:template <typename T, typename E, typename = void, typename = void>
+        -:   49:struct associated_executor_impl
+        -:   50:{
+        -:   51:  typedef void asio_associated_executor_is_unspecialised;
+        -:   52:
+        -:   53:  typedef E type;
+        -:   54:
+        -:   55:  static type get(const T&) BOOST_ASIO_NOEXCEPT
+        -:   56:  {
+        -:   57:    return type();
+        -:   58:  }
+        -:   59:
+        -:   60:  static const type& get(const T&, const E& e) BOOST_ASIO_NOEXCEPT
+        -:   61:  {
+        -:   62:    return e;
+        -:   63:  }
+        -:   64:};
+        -:   65:
+        -:   66:template <typename T, typename E>
+        -:   67:struct associated_executor_impl<T, E,
+        -:   68:  typename void_type<typename T::executor_type>::type>
+        -:   69:{
+        -:   70:  typedef typename T::executor_type type;
+        -:   71:
+   19454*:   72:  static BOOST_ASIO_AUTO_RETURN_TYPE_PREFIX(type) get(
+        -:   73:      const T& t) BOOST_ASIO_NOEXCEPT
+        -:   74:    BOOST_ASIO_AUTO_RETURN_TYPE_SUFFIX((t.get_executor()))
+        -:   75:  {
+   19454*:   76:    return t.get_executor();
+        -:   77:  }
+------------------
+_ZN5boost4asio6detail24associated_executor_implINS1_26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEENS0_21basic_system_executorINS0_9execution6detail8blocking10possibly_tILi0EEENS9_12relationship6fork_tILi0EEESaIvEEEvvE3getERKS6_:
+function _ZN5boost4asio6detail24associated_executor_implINS1_26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEENS0_21basic_system_executorINS0_9execution6detail8blocking10possibly_tILi0EEENS9_12relationship6fork_tILi0EEESaIvEEEvvE3getERKS6_ called 9 returned 100% blocks executed 100%
+        9:   72:  static BOOST_ASIO_AUTO_RETURN_TYPE_PREFIX(type) get(
+        -:   73:      const T& t) BOOST_ASIO_NOEXCEPT
+        -:   74:    BOOST_ASIO_AUTO_RETURN_TYPE_SUFFIX((t.get_executor()))
+        -:   75:  {
+        9:   76:    return t.get_executor();
+call    0 returned 100%
+        -:   77:  }
+------------------
+_ZN5boost4asio6detail24associated_executor_implINS1_26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEENS0_21basic_system_executorINS0_9execution6detail8blocking10possibly_tILi0EEENS9_12relationship6fork_tILi0EEESaIvEEEvvE3getERKS6_:
+function _ZN5boost4asio6detail24associated_executor_implINS1_26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEENS0_21basic_system_executorINS0_9execution6detail8blocking10possibly_tILi0EEENS9_12relationship6fork_tILi0EEESaIvEEEvvE3getERKS6_ called 8 returned 100% blocks executed 100%
+        8:   72:  static BOOST_ASIO_AUTO_RETURN_TYPE_PREFIX(type) get(
+        -:   73:      const T& t) BOOST_ASIO_NOEXCEPT
+        -:   74:    BOOST_ASIO_AUTO_RETURN_TYPE_SUFFIX((t.get_executor()))
+        -:   75:  {
+        8:   76:    return t.get_executor();
+call    0 returned 100%
+        -:   77:  }
+------------------
+_ZN5boost4asio6detail24associated_executor_implINS1_26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEENS0_21basic_system_executorINS0_9execution6detail8blocking10possibly_tILi0EEENS9_12relationship6fork_tILi0EEESaIvEEEvvE3getERKS6_:
+function _ZN5boost4asio6detail24associated_executor_implINS1_26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEENS0_21basic_system_executorINS0_9execution6detail8blocking10possibly_tILi0EEENS9_12relationship6fork_tILi0EEESaIvEEEvvE3getERKS6_ called 0 returned 0% blocks executed 0%
+    #####:   72:  static BOOST_ASIO_AUTO_RETURN_TYPE_PREFIX(type) get(
+        -:   73:      const T& t) BOOST_ASIO_NOEXCEPT
+        -:   74:    BOOST_ASIO_AUTO_RETURN_TYPE_SUFFIX((t.get_executor()))
+        -:   75:  {
+    #####:   76:    return t.get_executor();
+call    0 never executed
+        -:   77:  }
+------------------
+_ZN5boost4asio6detail24associated_executor_implINS1_26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEENS0_21basic_system_executorINS0_9execution6detail8blocking10possibly_tILi0EEENS9_12relationship6fork_tILi0EEESaIvEEEvvE3getERKS6_:
+function _ZN5boost4asio6detail24associated_executor_implINS1_26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEENS0_21basic_system_executorINS0_9execution6detail8blocking10possibly_tILi0EEENS9_12relationship6fork_tILi0EEESaIvEEEvvE3getERKS6_ called 118 returned 100% blocks executed 100%
+      118:   72:  static BOOST_ASIO_AUTO_RETURN_TYPE_PREFIX(type) get(
+        -:   73:      const T& t) BOOST_ASIO_NOEXCEPT
+        -:   74:    BOOST_ASIO_AUTO_RETURN_TYPE_SUFFIX((t.get_executor()))
+        -:   75:  {
+      118:   76:    return t.get_executor();
+call    0 returned 100%
+        -:   77:  }
+------------------
+_ZN5boost4asio6detail24associated_executor_implINS1_26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEENS0_21basic_system_executorINS0_9execution6detail8blocking10possibly_tILi0EEENS9_12relationship6fork_tILi0EEESaIvEEEvvE3getERKS6_:
+function _ZN5boost4asio6detail24associated_executor_implINS1_26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEENS0_21basic_system_executorINS0_9execution6detail8blocking10possibly_tILi0EEENS9_12relationship6fork_tILi0EEESaIvEEEvvE3getERKS6_ called 0 returned 0% blocks executed 0%
+    #####:   72:  static BOOST_ASIO_AUTO_RETURN_TYPE_PREFIX(type) get(
+        -:   73:      const T& t) BOOST_ASIO_NOEXCEPT
+        -:   74:    BOOST_ASIO_AUTO_RETURN_TYPE_SUFFIX((t.get_executor()))
+        -:   75:  {
+    #####:   76:    return t.get_executor();
+call    0 never executed
+        -:   77:  }
+------------------
+_ZN5boost4asio6detail24associated_executor_implINS1_26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEENS0_21basic_system_executorINS0_9execution6detail8blocking10possibly_tILi0EEENS9_12relationship6fork_tILi0EEESaIvEEEvvE3getERKS6_:
+function _ZN5boost4asio6detail24associated_executor_implINS1_26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEENS0_21basic_system_executorINS0_9execution6detail8blocking10possibly_tILi0EEENS9_12relationship6fork_tILi0EEESaIvEEEvvE3getERKS6_ called 19171 returned 100% blocks executed 100%
+    19171:   72:  static BOOST_ASIO_AUTO_RETURN_TYPE_PREFIX(type) get(
+        -:   73:      const T& t) BOOST_ASIO_NOEXCEPT
+        -:   74:    BOOST_ASIO_AUTO_RETURN_TYPE_SUFFIX((t.get_executor()))
+        -:   75:  {
+    19171:   76:    return t.get_executor();
+call    0 returned 100%
+        -:   77:  }
+------------------
+_ZN5boost4asio6detail24associated_executor_implINS1_26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEENS0_21basic_system_executorINS0_9execution6detail8blocking10possibly_tILi0EEENS9_12relationship6fork_tILi0EEESaIvEEEvvE3getERKS6_:
+function _ZN5boost4asio6detail24associated_executor_implINS1_26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEENS0_21basic_system_executorINS0_9execution6detail8blocking10possibly_tILi0EEENS9_12relationship6fork_tILi0EEESaIvEEEvvE3getERKS6_ called 35 returned 100% blocks executed 100%
+       35:   72:  static BOOST_ASIO_AUTO_RETURN_TYPE_PREFIX(type) get(
+        -:   73:      const T& t) BOOST_ASIO_NOEXCEPT
+        -:   74:    BOOST_ASIO_AUTO_RETURN_TYPE_SUFFIX((t.get_executor()))
+        -:   75:  {
+       35:   76:    return t.get_executor();
+call    0 returned 100%
+        -:   77:  }
+------------------
+_ZN5boost4asio6detail24associated_executor_implINS1_26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEENS0_21basic_system_executorINS0_9execution6detail8blocking10possibly_tILi0EEENS9_12relationship6fork_tILi0EEESaIvEEEvvE3getERKS6_:
+function _ZN5boost4asio6detail24associated_executor_implINS1_26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEENS0_21basic_system_executorINS0_9execution6detail8blocking10possibly_tILi0EEENS9_12relationship6fork_tILi0EEESaIvEEEvvE3getERKS6_ called 9 returned 100% blocks executed 100%
+        9:   72:  static BOOST_ASIO_AUTO_RETURN_TYPE_PREFIX(type) get(
+        -:   73:      const T& t) BOOST_ASIO_NOEXCEPT
+        -:   74:    BOOST_ASIO_AUTO_RETURN_TYPE_SUFFIX((t.get_executor()))
+        -:   75:  {
+        9:   76:    return t.get_executor();
+call    0 returned 100%
+        -:   77:  }
+------------------
+_ZN5boost4asio6detail24associated_executor_implINS1_26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEENS0_21basic_system_executorINS0_9execution6detail8blocking10possibly_tILi0EEENS9_12relationship6fork_tILi0EEESaIvEEEvvE3getERKS6_:
+function _ZN5boost4asio6detail24associated_executor_implINS1_26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEENS0_21basic_system_executorINS0_9execution6detail8blocking10possibly_tILi0EEENS9_12relationship6fork_tILi0EEESaIvEEEvvE3getERKS6_ called 10 returned 100% blocks executed 100%
+       10:   72:  static BOOST_ASIO_AUTO_RETURN_TYPE_PREFIX(type) get(
+        -:   73:      const T& t) BOOST_ASIO_NOEXCEPT
+        -:   74:    BOOST_ASIO_AUTO_RETURN_TYPE_SUFFIX((t.get_executor()))
+        -:   75:  {
+       10:   76:    return t.get_executor();
+call    0 returned 100%
+        -:   77:  }
+------------------
+_ZN5boost4asio6detail24associated_executor_implINS1_26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEENS0_21basic_system_executorINS0_9execution6detail8blocking10possibly_tILi0EEENS9_12relationship6fork_tILi0EEESaIvEEEvvE3getERKS6_:
+function _ZN5boost4asio6detail24associated_executor_implINS1_26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEENS0_21basic_system_executorINS0_9execution6detail8blocking10possibly_tILi0EEENS9_12relationship6fork_tILi0EEESaIvEEEvvE3getERKS6_ called 28 returned 100% blocks executed 100%
+       28:   72:  static BOOST_ASIO_AUTO_RETURN_TYPE_PREFIX(type) get(
+        -:   73:      const T& t) BOOST_ASIO_NOEXCEPT
+        -:   74:    BOOST_ASIO_AUTO_RETURN_TYPE_SUFFIX((t.get_executor()))
+        -:   75:  {
+       28:   76:    return t.get_executor();
+call    0 returned 100%
+        -:   77:  }
+------------------
+_ZN5boost4asio6detail24associated_executor_implINS1_26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEENS0_21basic_system_executorINS0_9execution6detail8blocking10possibly_tILi0EEENS9_12relationship6fork_tILi0EEESaIvEEEvvE3getERKS6_:
+function _ZN5boost4asio6detail24associated_executor_implINS1_26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEENS0_21basic_system_executorINS0_9execution6detail8blocking10possibly_tILi0EEENS9_12relationship6fork_tILi0EEESaIvEEEvvE3getERKS6_ called 32 returned 100% blocks executed 100%
+       32:   72:  static BOOST_ASIO_AUTO_RETURN_TYPE_PREFIX(type) get(
+        -:   73:      const T& t) BOOST_ASIO_NOEXCEPT
+        -:   74:    BOOST_ASIO_AUTO_RETURN_TYPE_SUFFIX((t.get_executor()))
+        -:   75:  {
+       32:   76:    return t.get_executor();
+call    0 returned 100%
+        -:   77:  }
+------------------
+_ZN5boost4asio6detail24associated_executor_implINS1_26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEENS0_21basic_system_executorINS0_9execution6detail8blocking10possibly_tILi0EEENS9_12relationship6fork_tILi0EEESaIvEEEvvE3getERKS6_:
+function _ZN5boost4asio6detail24associated_executor_implINS1_26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEENS0_21basic_system_executorINS0_9execution6detail8blocking10possibly_tILi0EEENS9_12relationship6fork_tILi0EEESaIvEEEvvE3getERKS6_ called 10 returned 100% blocks executed 100%
+       10:   72:  static BOOST_ASIO_AUTO_RETURN_TYPE_PREFIX(type) get(
+        -:   73:      const T& t) BOOST_ASIO_NOEXCEPT
+        -:   74:    BOOST_ASIO_AUTO_RETURN_TYPE_SUFFIX((t.get_executor()))
+        -:   75:  {
+       10:   76:    return t.get_executor();
+call    0 returned 100%
+        -:   77:  }
+------------------
+_ZN5boost4asio6detail24associated_executor_implINS1_26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEENS0_21basic_system_executorINS0_9execution6detail8blocking10possibly_tILi0EEENS9_12relationship6fork_tILi0EEESaIvEEEvvE3getERKS6_:
+function _ZN5boost4asio6detail24associated_executor_implINS1_26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEENS0_21basic_system_executorINS0_9execution6detail8blocking10possibly_tILi0EEENS9_12relationship6fork_tILi0EEESaIvEEEvvE3getERKS6_ called 24 returned 100% blocks executed 100%
+       24:   72:  static BOOST_ASIO_AUTO_RETURN_TYPE_PREFIX(type) get(
+        -:   73:      const T& t) BOOST_ASIO_NOEXCEPT
+        -:   74:    BOOST_ASIO_AUTO_RETURN_TYPE_SUFFIX((t.get_executor()))
+        -:   75:  {
+       24:   76:    return t.get_executor();
+call    0 returned 100%
+        -:   77:  }
+------------------
+_ZN5boost4asio6detail24associated_executor_implINS1_26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEENS0_21basic_system_executorINS0_9execution6detail8blocking10possibly_tILi0EEENS9_12relationship6fork_tILi0EEESaIvEEEvvE3getERKS6_:
+function _ZN5boost4asio6detail24associated_executor_implINS1_26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEENS0_21basic_system_executorINS0_9execution6detail8blocking10possibly_tILi0EEENS9_12relationship6fork_tILi0EEESaIvEEEvvE3getERKS6_ called 0 returned 0% blocks executed 0%
+    #####:   72:  static BOOST_ASIO_AUTO_RETURN_TYPE_PREFIX(type) get(
+        -:   73:      const T& t) BOOST_ASIO_NOEXCEPT
+        -:   74:    BOOST_ASIO_AUTO_RETURN_TYPE_SUFFIX((t.get_executor()))
+        -:   75:  {
+    #####:   76:    return t.get_executor();
+call    0 never executed
+        -:   77:  }
+------------------
+_ZN5boost4asio6detail24associated_executor_implINS1_26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEENS0_21basic_system_executorINS0_9execution6detail8blocking10possibly_tILi0EEENS9_12relationship6fork_tILi0EEESaIvEEEvvE3getERKS6_:
+function _ZN5boost4asio6detail24associated_executor_implINS1_26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEENS0_21basic_system_executorINS0_9execution6detail8blocking10possibly_tILi0EEENS9_12relationship6fork_tILi0EEESaIvEEEvvE3getERKS6_ called 0 returned 0% blocks executed 0%
+    #####:   72:  static BOOST_ASIO_AUTO_RETURN_TYPE_PREFIX(type) get(
+        -:   73:      const T& t) BOOST_ASIO_NOEXCEPT
+        -:   74:    BOOST_ASIO_AUTO_RETURN_TYPE_SUFFIX((t.get_executor()))
+        -:   75:  {
+    #####:   76:    return t.get_executor();
+call    0 never executed
+        -:   77:  }
+------------------
+_ZN5boost4asio6detail24associated_executor_implINS1_26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEENS0_21basic_system_executorINS0_9execution6detail8blocking10possibly_tILi0EEENS9_12relationship6fork_tILi0EEESaIvEEEvvE3getERKS6_:
+function _ZN5boost4asio6detail24associated_executor_implINS1_26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEENS0_21basic_system_executorINS0_9execution6detail8blocking10possibly_tILi0EEENS9_12relationship6fork_tILi0EEESaIvEEEvvE3getERKS6_ called 0 returned 0% blocks executed 0%
+    #####:   72:  static BOOST_ASIO_AUTO_RETURN_TYPE_PREFIX(type) get(
+        -:   73:      const T& t) BOOST_ASIO_NOEXCEPT
+        -:   74:    BOOST_ASIO_AUTO_RETURN_TYPE_SUFFIX((t.get_executor()))
+        -:   75:  {
+    #####:   76:    return t.get_executor();
+call    0 never executed
+        -:   77:  }
+------------------
+        -:   78:
+     751*:   79:  static BOOST_ASIO_AUTO_RETURN_TYPE_PREFIX(type) get(
+        -:   80:      const T& t, const E&) BOOST_ASIO_NOEXCEPT
+        -:   81:    BOOST_ASIO_AUTO_RETURN_TYPE_SUFFIX((t.get_executor()))
+        -:   82:  {
+     751*:   83:    return t.get_executor();
+        -:   84:  }
+------------------
+_ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEEEES4_vvE3getERKS7_RKS4_:
+function _ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEEEES4_vvE3getERKS7_RKS4_ called 0 returned 0% blocks executed 0%
+    #####:   79:  static BOOST_ASIO_AUTO_RETURN_TYPE_PREFIX(type) get(
+        -:   80:      const T& t, const E&) BOOST_ASIO_NOEXCEPT
+        -:   81:    BOOST_ASIO_AUTO_RETURN_TYPE_SUFFIX((t.get_executor()))
+        -:   82:  {
+    #####:   83:    return t.get_executor();
+call    0 never executed
+        -:   84:  }
+------------------
+_ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEEEES4_vvE3getERKS7_RKS4_:
+function _ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEEEES4_vvE3getERKS7_RKS4_ called 1 returned 100% blocks executed 100%
+        1:   79:  static BOOST_ASIO_AUTO_RETURN_TYPE_PREFIX(type) get(
+        -:   80:      const T& t, const E&) BOOST_ASIO_NOEXCEPT
+        -:   81:    BOOST_ASIO_AUTO_RETURN_TYPE_SUFFIX((t.get_executor()))
+        -:   82:  {
+        1:   83:    return t.get_executor();
+call    0 returned 100%
+        -:   84:  }
+------------------
+_ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEEEES4_vvE3getERKS7_RKS4_:
+function _ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEEEES4_vvE3getERKS7_RKS4_ called 9 returned 100% blocks executed 100%
+        9:   79:  static BOOST_ASIO_AUTO_RETURN_TYPE_PREFIX(type) get(
+        -:   80:      const T& t, const E&) BOOST_ASIO_NOEXCEPT
+        -:   81:    BOOST_ASIO_AUTO_RETURN_TYPE_SUFFIX((t.get_executor()))
+        -:   82:  {
+        9:   83:    return t.get_executor();
+call    0 returned 100%
+        -:   84:  }
+------------------
+_ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEEEES4_vvE3getERKS7_RKS4_:
+function _ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEEEES4_vvE3getERKS7_RKS4_ called 0 returned 0% blocks executed 0%
+    #####:   79:  static BOOST_ASIO_AUTO_RETURN_TYPE_PREFIX(type) get(
+        -:   80:      const T& t, const E&) BOOST_ASIO_NOEXCEPT
+        -:   81:    BOOST_ASIO_AUTO_RETURN_TYPE_SUFFIX((t.get_executor()))
+        -:   82:  {
+    #####:   83:    return t.get_executor();
+call    0 never executed
+        -:   84:  }
+------------------
+_ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEEEES4_vvE3getERKS7_RKS4_:
+function _ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEEEES4_vvE3getERKS7_RKS4_ called 5 returned 100% blocks executed 100%
+        5:   79:  static BOOST_ASIO_AUTO_RETURN_TYPE_PREFIX(type) get(
+        -:   80:      const T& t, const E&) BOOST_ASIO_NOEXCEPT
+        -:   81:    BOOST_ASIO_AUTO_RETURN_TYPE_SUFFIX((t.get_executor()))
+        -:   82:  {
+        5:   83:    return t.get_executor();
+call    0 returned 100%
+        -:   84:  }
+------------------
+_ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEEEES4_vvE3getERKS7_RKS4_:
+function _ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEEEES4_vvE3getERKS7_RKS4_ called 0 returned 0% blocks executed 0%
+    #####:   79:  static BOOST_ASIO_AUTO_RETURN_TYPE_PREFIX(type) get(
+        -:   80:      const T& t, const E&) BOOST_ASIO_NOEXCEPT
+        -:   81:    BOOST_ASIO_AUTO_RETURN_TYPE_SUFFIX((t.get_executor()))
+        -:   82:  {
+    #####:   83:    return t.get_executor();
+call    0 never executed
+        -:   84:  }
+------------------
+_ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEEEES4_vvE3getERKS7_RKS4_:
+function _ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEEEES4_vvE3getERKS7_RKS4_ called 4 returned 100% blocks executed 100%
+        4:   79:  static BOOST_ASIO_AUTO_RETURN_TYPE_PREFIX(type) get(
+        -:   80:      const T& t, const E&) BOOST_ASIO_NOEXCEPT
+        -:   81:    BOOST_ASIO_AUTO_RETURN_TYPE_SUFFIX((t.get_executor()))
+        -:   82:  {
+        4:   83:    return t.get_executor();
+call    0 returned 100%
+        -:   84:  }
+------------------
+_ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEEEES4_vvE3getERKS7_RKS4_:
+function _ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEEEES4_vvE3getERKS7_RKS4_ called 6 returned 100% blocks executed 100%
+        6:   79:  static BOOST_ASIO_AUTO_RETURN_TYPE_PREFIX(type) get(
+        -:   80:      const T& t, const E&) BOOST_ASIO_NOEXCEPT
+        -:   81:    BOOST_ASIO_AUTO_RETURN_TYPE_SUFFIX((t.get_executor()))
+        -:   82:  {
+        6:   83:    return t.get_executor();
+call    0 returned 100%
+        -:   84:  }
+------------------
+_ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEEEES4_vvE3getERKS7_RKS4_:
+function _ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEEEES4_vvE3getERKS7_RKS4_ called 0 returned 0% blocks executed 0%
+    #####:   79:  static BOOST_ASIO_AUTO_RETURN_TYPE_PREFIX(type) get(
+        -:   80:      const T& t, const E&) BOOST_ASIO_NOEXCEPT
+        -:   81:    BOOST_ASIO_AUTO_RETURN_TYPE_SUFFIX((t.get_executor()))
+        -:   82:  {
+    #####:   83:    return t.get_executor();
+call    0 never executed
+        -:   84:  }
+------------------
+_ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEEEES4_vvE3getERKS7_RKS4_:
+function _ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEEEES4_vvE3getERKS7_RKS4_ called 0 returned 0% blocks executed 0%
+    #####:   79:  static BOOST_ASIO_AUTO_RETURN_TYPE_PREFIX(type) get(
+        -:   80:      const T& t, const E&) BOOST_ASIO_NOEXCEPT
+        -:   81:    BOOST_ASIO_AUTO_RETURN_TYPE_SUFFIX((t.get_executor()))
+        -:   82:  {
+    #####:   83:    return t.get_executor();
+call    0 never executed
+        -:   84:  }
+------------------
+_ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEEEES4_vvE3getERKS7_RKS4_:
+function _ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEEEES4_vvE3getERKS7_RKS4_ called 0 returned 0% blocks executed 0%
+    #####:   79:  static BOOST_ASIO_AUTO_RETURN_TYPE_PREFIX(type) get(
+        -:   80:      const T& t, const E&) BOOST_ASIO_NOEXCEPT
+        -:   81:    BOOST_ASIO_AUTO_RETURN_TYPE_SUFFIX((t.get_executor()))
+        -:   82:  {
+    #####:   83:    return t.get_executor();
+call    0 never executed
+        -:   84:  }
+------------------
+_ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEEEES4_vvE3getERKS7_RKS4_:
+function _ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEEEES4_vvE3getERKS7_RKS4_ called 0 returned 0% blocks executed 0%
+    #####:   79:  static BOOST_ASIO_AUTO_RETURN_TYPE_PREFIX(type) get(
+        -:   80:      const T& t, const E&) BOOST_ASIO_NOEXCEPT
+        -:   81:    BOOST_ASIO_AUTO_RETURN_TYPE_SUFFIX((t.get_executor()))
+        -:   82:  {
+    #####:   83:    return t.get_executor();
+call    0 never executed
+        -:   84:  }
+------------------
+_ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEEEES4_vvE3getERKS7_RKS4_:
+function _ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEEEES4_vvE3getERKS7_RKS4_ called 0 returned 0% blocks executed 0%
+    #####:   79:  static BOOST_ASIO_AUTO_RETURN_TYPE_PREFIX(type) get(
+        -:   80:      const T& t, const E&) BOOST_ASIO_NOEXCEPT
+        -:   81:    BOOST_ASIO_AUTO_RETURN_TYPE_SUFFIX((t.get_executor()))
+        -:   82:  {
+    #####:   83:    return t.get_executor();
+call    0 never executed
+        -:   84:  }
+------------------
+_ZN5boost4asio6detail24associated_executor_implINS1_15promise_handlerIFvNSt15__exception_ptr13exception_ptrEN5hical12HttpResponseEESaIvEEENS0_15any_io_executorEvvE3getERKSA_RKSB_:
+function _ZN5boost4asio6detail24associated_executor_implINS1_15promise_handlerIFvNSt15__exception_ptr13exception_ptrEN5hical12HttpResponseEESaIvEEENS0_15any_io_executorEvvE3getERKSA_RKSB_ called 16 returned 100% blocks executed 100%
+       16:   79:  static BOOST_ASIO_AUTO_RETURN_TYPE_PREFIX(type) get(
+        -:   80:      const T& t, const E&) BOOST_ASIO_NOEXCEPT
+        -:   81:    BOOST_ASIO_AUTO_RETURN_TYPE_SUFFIX((t.get_executor()))
+        -:   82:  {
+       16:   83:    return t.get_executor();
+call    0 returned 100%
+        -:   84:  }
+------------------
+_ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEEEES4_vvE3getERKS7_RKS4_:
+function _ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEEEES4_vvE3getERKS7_RKS4_ called 6 returned 100% blocks executed 100%
+        6:   79:  static BOOST_ASIO_AUTO_RETURN_TYPE_PREFIX(type) get(
+        -:   80:      const T& t, const E&) BOOST_ASIO_NOEXCEPT
+        -:   81:    BOOST_ASIO_AUTO_RETURN_TYPE_SUFFIX((t.get_executor()))
+        -:   82:  {
+        6:   83:    return t.get_executor();
+call    0 returned 100%
+        -:   84:  }
+------------------
+_ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEEEES4_vvE3getERKS7_RKS4_:
+function _ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEEEES4_vvE3getERKS7_RKS4_ called 0 returned 0% blocks executed 0%
+    #####:   79:  static BOOST_ASIO_AUTO_RETURN_TYPE_PREFIX(type) get(
+        -:   80:      const T& t, const E&) BOOST_ASIO_NOEXCEPT
+        -:   81:    BOOST_ASIO_AUTO_RETURN_TYPE_SUFFIX((t.get_executor()))
+        -:   82:  {
+    #####:   83:    return t.get_executor();
+call    0 never executed
+        -:   84:  }
+------------------
+_ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEEEES4_vvE3getERKS7_RKS4_:
+function _ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEEEES4_vvE3getERKS7_RKS4_ called 0 returned 0% blocks executed 0%
+    #####:   79:  static BOOST_ASIO_AUTO_RETURN_TYPE_PREFIX(type) get(
+        -:   80:      const T& t, const E&) BOOST_ASIO_NOEXCEPT
+        -:   81:    BOOST_ASIO_AUTO_RETURN_TYPE_SUFFIX((t.get_executor()))
+        -:   82:  {
+    #####:   83:    return t.get_executor();
+call    0 never executed
+        -:   84:  }
+------------------
+_ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEEEES4_vvE3getERKS7_RKS4_:
+function _ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEEEES4_vvE3getERKS7_RKS4_ called 7 returned 100% blocks executed 100%
+        7:   79:  static BOOST_ASIO_AUTO_RETURN_TYPE_PREFIX(type) get(
+        -:   80:      const T& t, const E&) BOOST_ASIO_NOEXCEPT
+        -:   81:    BOOST_ASIO_AUTO_RETURN_TYPE_SUFFIX((t.get_executor()))
+        -:   82:  {
+        7:   83:    return t.get_executor();
+call    0 returned 100%
+        -:   84:  }
+------------------
+_ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEEEES4_vvE3getERKS7_RKS4_:
+function _ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEEEES4_vvE3getERKS7_RKS4_ called 0 returned 0% blocks executed 0%
+    #####:   79:  static BOOST_ASIO_AUTO_RETURN_TYPE_PREFIX(type) get(
+        -:   80:      const T& t, const E&) BOOST_ASIO_NOEXCEPT
+        -:   81:    BOOST_ASIO_AUTO_RETURN_TYPE_SUFFIX((t.get_executor()))
+        -:   82:  {
+    #####:   83:    return t.get_executor();
+call    0 never executed
+        -:   84:  }
+------------------
+_ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeENS0_2ip14basic_endpointINS7_3tcpEEEEEES4_vvE3getERKSB_RKS4_:
+function _ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeENS0_2ip14basic_endpointINS7_3tcpEEEEEES4_vvE3getERKSB_RKS4_ called 0 returned 0% blocks executed 0%
+    #####:   79:  static BOOST_ASIO_AUTO_RETURN_TYPE_PREFIX(type) get(
+        -:   80:      const T& t, const E&) BOOST_ASIO_NOEXCEPT
+        -:   81:    BOOST_ASIO_AUTO_RETURN_TYPE_SUFFIX((t.get_executor()))
+        -:   82:  {
+    #####:   83:    return t.get_executor();
+call    0 never executed
+        -:   84:  }
+------------------
+_ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEmEEES4_vvE3getERKS7_RKS4_:
+function _ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEmEEES4_vvE3getERKS7_RKS4_ called 0 returned 0% blocks executed 0%
+    #####:   79:  static BOOST_ASIO_AUTO_RETURN_TYPE_PREFIX(type) get(
+        -:   80:      const T& t, const E&) BOOST_ASIO_NOEXCEPT
+        -:   81:    BOOST_ASIO_AUTO_RETURN_TYPE_SUFFIX((t.get_executor()))
+        -:   82:  {
+    #####:   83:    return t.get_executor();
+call    0 never executed
+        -:   84:  }
+------------------
+_ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeENS0_2ip22basic_resolver_resultsINS7_3tcpEEEEEES4_vvE3getERKSB_RKS4_:
+function _ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeENS0_2ip22basic_resolver_resultsINS7_3tcpEEEEEES4_vvE3getERKSB_RKS4_ called 0 returned 0% blocks executed 0%
+    #####:   79:  static BOOST_ASIO_AUTO_RETURN_TYPE_PREFIX(type) get(
+        -:   80:      const T& t, const E&) BOOST_ASIO_NOEXCEPT
+        -:   81:    BOOST_ASIO_AUTO_RETURN_TYPE_SUFFIX((t.get_executor()))
+        -:   82:  {
+    #####:   83:    return t.get_executor();
+call    0 never executed
+        -:   84:  }
+------------------
+_ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEEEES4_vvE3getERKS7_RKS4_:
+function _ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEEEES4_vvE3getERKS7_RKS4_ called 0 returned 0% blocks executed 0%
+    #####:   79:  static BOOST_ASIO_AUTO_RETURN_TYPE_PREFIX(type) get(
+        -:   80:      const T& t, const E&) BOOST_ASIO_NOEXCEPT
+        -:   81:    BOOST_ASIO_AUTO_RETURN_TYPE_SUFFIX((t.get_executor()))
+        -:   82:  {
+    #####:   83:    return t.get_executor();
+call    0 never executed
+        -:   84:  }
+------------------
+_ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEEEES4_vvE3getERKS7_RKS4_:
+function _ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEEEES4_vvE3getERKS7_RKS4_ called 0 returned 0% blocks executed 0%
+    #####:   79:  static BOOST_ASIO_AUTO_RETURN_TYPE_PREFIX(type) get(
+        -:   80:      const T& t, const E&) BOOST_ASIO_NOEXCEPT
+        -:   81:    BOOST_ASIO_AUTO_RETURN_TYPE_SUFFIX((t.get_executor()))
+        -:   82:  {
+    #####:   83:    return t.get_executor();
+call    0 never executed
+        -:   84:  }
+------------------
+_ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeENS0_19basic_stream_socketINS0_2ip3tcpES4_EEEEES4_vvE3getERKSB_RKS4_:
+function _ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeENS0_19basic_stream_socketINS0_2ip3tcpES4_EEEEES4_vvE3getERKSB_RKS4_ called 0 returned 0% blocks executed 0%
+    #####:   79:  static BOOST_ASIO_AUTO_RETURN_TYPE_PREFIX(type) get(
+        -:   80:      const T& t, const E&) BOOST_ASIO_NOEXCEPT
+        -:   81:    BOOST_ASIO_AUTO_RETURN_TYPE_SUFFIX((t.get_executor()))
+        -:   82:  {
+    #####:   83:    return t.get_executor();
+call    0 never executed
+        -:   84:  }
+------------------
+_ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEmEEES4_vvE3getERKS7_RKS4_:
+function _ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEmEEES4_vvE3getERKS7_RKS4_ called 0 returned 0% blocks executed 0%
+    #####:   79:  static BOOST_ASIO_AUTO_RETURN_TYPE_PREFIX(type) get(
+        -:   80:      const T& t, const E&) BOOST_ASIO_NOEXCEPT
+        -:   81:    BOOST_ASIO_AUTO_RETURN_TYPE_SUFFIX((t.get_executor()))
+        -:   82:  {
+    #####:   83:    return t.get_executor();
+call    0 never executed
+        -:   84:  }
+------------------
+_ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEEEES4_vvE3getERKS7_RKS4_:
+function _ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEEEES4_vvE3getERKS7_RKS4_ called 0 returned 0% blocks executed 0%
+    #####:   79:  static BOOST_ASIO_AUTO_RETURN_TYPE_PREFIX(type) get(
+        -:   80:      const T& t, const E&) BOOST_ASIO_NOEXCEPT
+        -:   81:    BOOST_ASIO_AUTO_RETURN_TYPE_SUFFIX((t.get_executor()))
+        -:   82:  {
+    #####:   83:    return t.get_executor();
+call    0 never executed
+        -:   84:  }
+------------------
+_ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEEEES4_vvE3getERKS7_RKS4_:
+function _ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEEEES4_vvE3getERKS7_RKS4_ called 0 returned 0% blocks executed 0%
+    #####:   79:  static BOOST_ASIO_AUTO_RETURN_TYPE_PREFIX(type) get(
+        -:   80:      const T& t, const E&) BOOST_ASIO_NOEXCEPT
+        -:   81:    BOOST_ASIO_AUTO_RETURN_TYPE_SUFFIX((t.get_executor()))
+        -:   82:  {
+    #####:   83:    return t.get_executor();
+call    0 never executed
+        -:   84:  }
+------------------
+_ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEEEES4_vvE3getERKS7_RKS4_:
+function _ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEEEES4_vvE3getERKS7_RKS4_ called 0 returned 0% blocks executed 0%
+    #####:   79:  static BOOST_ASIO_AUTO_RETURN_TYPE_PREFIX(type) get(
+        -:   80:      const T& t, const E&) BOOST_ASIO_NOEXCEPT
+        -:   81:    BOOST_ASIO_AUTO_RETURN_TYPE_SUFFIX((t.get_executor()))
+        -:   82:  {
+    #####:   83:    return t.get_executor();
+call    0 never executed
+        -:   84:  }
+------------------
+_ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEmEEES4_vvE3getERKS7_RKS4_:
+function _ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEmEEES4_vvE3getERKS7_RKS4_ called 16 returned 100% blocks executed 100%
+       16:   79:  static BOOST_ASIO_AUTO_RETURN_TYPE_PREFIX(type) get(
+        -:   80:      const T& t, const E&) BOOST_ASIO_NOEXCEPT
+        -:   81:    BOOST_ASIO_AUTO_RETURN_TYPE_SUFFIX((t.get_executor()))
+        -:   82:  {
+       16:   83:    return t.get_executor();
+call    0 returned 100%
+        -:   84:  }
+------------------
+_ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEEEES4_vvE3getERKS7_RKS4_:
+function _ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEEEES4_vvE3getERKS7_RKS4_ called 0 returned 0% blocks executed 0%
+    #####:   79:  static BOOST_ASIO_AUTO_RETURN_TYPE_PREFIX(type) get(
+        -:   80:      const T& t, const E&) BOOST_ASIO_NOEXCEPT
+        -:   81:    BOOST_ASIO_AUTO_RETURN_TYPE_SUFFIX((t.get_executor()))
+        -:   82:  {
+    #####:   83:    return t.get_executor();
+call    0 never executed
+        -:   84:  }
+------------------
+_ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEEEES4_vvE3getERKS7_RKS4_:
+function _ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEEEES4_vvE3getERKS7_RKS4_ called 0 returned 0% blocks executed 0%
+    #####:   79:  static BOOST_ASIO_AUTO_RETURN_TYPE_PREFIX(type) get(
+        -:   80:      const T& t, const E&) BOOST_ASIO_NOEXCEPT
+        -:   81:    BOOST_ASIO_AUTO_RETURN_TYPE_SUFFIX((t.get_executor()))
+        -:   82:  {
+    #####:   83:    return t.get_executor();
+call    0 never executed
+        -:   84:  }
+------------------
+_ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEEEES4_vvE3getERKS7_RKS4_:
+function _ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEEEES4_vvE3getERKS7_RKS4_ called 0 returned 0% blocks executed 0%
+    #####:   79:  static BOOST_ASIO_AUTO_RETURN_TYPE_PREFIX(type) get(
+        -:   80:      const T& t, const E&) BOOST_ASIO_NOEXCEPT
+        -:   81:    BOOST_ASIO_AUTO_RETURN_TYPE_SUFFIX((t.get_executor()))
+        -:   82:  {
+    #####:   83:    return t.get_executor();
+call    0 never executed
+        -:   84:  }
+------------------
+_ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEEEES4_vvE3getERKS7_RKS4_:
+function _ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEEEES4_vvE3getERKS7_RKS4_ called 0 returned 0% blocks executed 0%
+    #####:   79:  static BOOST_ASIO_AUTO_RETURN_TYPE_PREFIX(type) get(
+        -:   80:      const T& t, const E&) BOOST_ASIO_NOEXCEPT
+        -:   81:    BOOST_ASIO_AUTO_RETURN_TYPE_SUFFIX((t.get_executor()))
+        -:   82:  {
+    #####:   83:    return t.get_executor();
+call    0 never executed
+        -:   84:  }
+------------------
+_ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEEEES4_vvE3getERKS7_RKS4_:
+function _ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEEEES4_vvE3getERKS7_RKS4_ called 0 returned 0% blocks executed 0%
+    #####:   79:  static BOOST_ASIO_AUTO_RETURN_TYPE_PREFIX(type) get(
+        -:   80:      const T& t, const E&) BOOST_ASIO_NOEXCEPT
+        -:   81:    BOOST_ASIO_AUTO_RETURN_TYPE_SUFFIX((t.get_executor()))
+        -:   82:  {
+    #####:   83:    return t.get_executor();
+call    0 never executed
+        -:   84:  }
+------------------
+_ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEEEES4_vvE3getERKS7_RKS4_:
+function _ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEEEES4_vvE3getERKS7_RKS4_ called 0 returned 0% blocks executed 0%
+    #####:   79:  static BOOST_ASIO_AUTO_RETURN_TYPE_PREFIX(type) get(
+        -:   80:      const T& t, const E&) BOOST_ASIO_NOEXCEPT
+        -:   81:    BOOST_ASIO_AUTO_RETURN_TYPE_SUFFIX((t.get_executor()))
+        -:   82:  {
+    #####:   83:    return t.get_executor();
+call    0 never executed
+        -:   84:  }
+------------------
+_ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEEEES4_vvE3getERKS7_RKS4_:
+function _ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEEEES4_vvE3getERKS7_RKS4_ called 0 returned 0% blocks executed 0%
+    #####:   79:  static BOOST_ASIO_AUTO_RETURN_TYPE_PREFIX(type) get(
+        -:   80:      const T& t, const E&) BOOST_ASIO_NOEXCEPT
+        -:   81:    BOOST_ASIO_AUTO_RETURN_TYPE_SUFFIX((t.get_executor()))
+        -:   82:  {
+    #####:   83:    return t.get_executor();
+call    0 never executed
+        -:   84:  }
+------------------
+_ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJmEEES4_vvE3getERKS5_RKS4_:
+function _ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJmEEES4_vvE3getERKS5_RKS4_ called 0 returned 0% blocks executed 0%
+    #####:   79:  static BOOST_ASIO_AUTO_RETURN_TYPE_PREFIX(type) get(
+        -:   80:      const T& t, const E&) BOOST_ASIO_NOEXCEPT
+        -:   81:    BOOST_ASIO_AUTO_RETURN_TYPE_SUFFIX((t.get_executor()))
+        -:   82:  {
+    #####:   83:    return t.get_executor();
+call    0 never executed
+        -:   84:  }
+------------------
+_ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJEEES4_vvE3getERKS5_RKS4_:
+function _ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJEEES4_vvE3getERKS5_RKS4_ called 68 returned 100% blocks executed 100%
+       68:   79:  static BOOST_ASIO_AUTO_RETURN_TYPE_PREFIX(type) get(
+        -:   80:      const T& t, const E&) BOOST_ASIO_NOEXCEPT
+        -:   81:    BOOST_ASIO_AUTO_RETURN_TYPE_SUFFIX((t.get_executor()))
+        -:   82:  {
+       68:   83:    return t.get_executor();
+call    0 returned 100%
+        -:   84:  }
+------------------
+_ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEmEEES4_vvE3getERKS7_RKS4_:
+function _ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEmEEES4_vvE3getERKS7_RKS4_ called 509 returned 100% blocks executed 100%
+      509:   79:  static BOOST_ASIO_AUTO_RETURN_TYPE_PREFIX(type) get(
+        -:   80:      const T& t, const E&) BOOST_ASIO_NOEXCEPT
+        -:   81:    BOOST_ASIO_AUTO_RETURN_TYPE_SUFFIX((t.get_executor()))
+        -:   82:  {
+      509:   83:    return t.get_executor();
+call    0 returned 100%
+        -:   84:  }
+------------------
+_ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeENS0_19basic_stream_socketINS0_2ip3tcpES4_EEEEES4_vvE3getERKSB_RKS4_:
+function _ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeENS0_19basic_stream_socketINS0_2ip3tcpES4_EEEEES4_vvE3getERKSB_RKS4_ called 9 returned 100% blocks executed 100%
+        9:   79:  static BOOST_ASIO_AUTO_RETURN_TYPE_PREFIX(type) get(
+        -:   80:      const T& t, const E&) BOOST_ASIO_NOEXCEPT
+        -:   81:    BOOST_ASIO_AUTO_RETURN_TYPE_SUFFIX((t.get_executor()))
+        -:   82:  {
+        9:   83:    return t.get_executor();
+call    0 returned 100%
+        -:   84:  }
+------------------
+_ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEEEES4_vvE3getERKS7_RKS4_:
+function _ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEEEES4_vvE3getERKS7_RKS4_ called 0 returned 0% blocks executed 0%
+    #####:   79:  static BOOST_ASIO_AUTO_RETURN_TYPE_PREFIX(type) get(
+        -:   80:      const T& t, const E&) BOOST_ASIO_NOEXCEPT
+        -:   81:    BOOST_ASIO_AUTO_RETURN_TYPE_SUFFIX((t.get_executor()))
+        -:   82:  {
+    #####:   83:    return t.get_executor();
+call    0 never executed
+        -:   84:  }
+------------------
+_ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEEEES4_vvE3getERKS7_RKS4_:
+function _ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEEEES4_vvE3getERKS7_RKS4_ called 0 returned 0% blocks executed 0%
+    #####:   79:  static BOOST_ASIO_AUTO_RETURN_TYPE_PREFIX(type) get(
+        -:   80:      const T& t, const E&) BOOST_ASIO_NOEXCEPT
+        -:   81:    BOOST_ASIO_AUTO_RETURN_TYPE_SUFFIX((t.get_executor()))
+        -:   82:  {
+    #####:   83:    return t.get_executor();
+call    0 never executed
+        -:   84:  }
+------------------
+_ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEmEEES4_vvE3getERKS7_RKS4_:
+function _ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEmEEES4_vvE3getERKS7_RKS4_ called 0 returned 0% blocks executed 0%
+    #####:   79:  static BOOST_ASIO_AUTO_RETURN_TYPE_PREFIX(type) get(
+        -:   80:      const T& t, const E&) BOOST_ASIO_NOEXCEPT
+        -:   81:    BOOST_ASIO_AUTO_RETURN_TYPE_SUFFIX((t.get_executor()))
+        -:   82:  {
+    #####:   83:    return t.get_executor();
+call    0 never executed
+        -:   84:  }
+------------------
+_ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEEEES4_vvE3getERKS7_RKS4_:
+function _ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEEEES4_vvE3getERKS7_RKS4_ called 0 returned 0% blocks executed 0%
+    #####:   79:  static BOOST_ASIO_AUTO_RETURN_TYPE_PREFIX(type) get(
+        -:   80:      const T& t, const E&) BOOST_ASIO_NOEXCEPT
+        -:   81:    BOOST_ASIO_AUTO_RETURN_TYPE_SUFFIX((t.get_executor()))
+        -:   82:  {
+    #####:   83:    return t.get_executor();
+call    0 never executed
+        -:   84:  }
+------------------
+_ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEEEES4_vvE3getERKS7_RKS4_:
+function _ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEEEES4_vvE3getERKS7_RKS4_ called 0 returned 0% blocks executed 0%
+    #####:   79:  static BOOST_ASIO_AUTO_RETURN_TYPE_PREFIX(type) get(
+        -:   80:      const T& t, const E&) BOOST_ASIO_NOEXCEPT
+        -:   81:    BOOST_ASIO_AUTO_RETURN_TYPE_SUFFIX((t.get_executor()))
+        -:   82:  {
+    #####:   83:    return t.get_executor();
+call    0 never executed
+        -:   84:  }
+------------------
+_ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeENS0_19basic_stream_socketINS0_2ip3tcpES4_EEEEES4_vvE3getERKSB_RKS4_:
+function _ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeENS0_19basic_stream_socketINS0_2ip3tcpES4_EEEEES4_vvE3getERKSB_RKS4_ called 95 returned 100% blocks executed 100%
+       95:   79:  static BOOST_ASIO_AUTO_RETURN_TYPE_PREFIX(type) get(
+        -:   80:      const T& t, const E&) BOOST_ASIO_NOEXCEPT
+        -:   81:    BOOST_ASIO_AUTO_RETURN_TYPE_SUFFIX((t.get_executor()))
+        -:   82:  {
+       95:   83:    return t.get_executor();
+call    0 returned 100%
+        -:   84:  }
+------------------
+_ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEEEES4_vvE3getERKS7_RKS4_:
+function _ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEEEES4_vvE3getERKS7_RKS4_ called 0 returned 0% blocks executed 0%
+    #####:   79:  static BOOST_ASIO_AUTO_RETURN_TYPE_PREFIX(type) get(
+        -:   80:      const T& t, const E&) BOOST_ASIO_NOEXCEPT
+        -:   81:    BOOST_ASIO_AUTO_RETURN_TYPE_SUFFIX((t.get_executor()))
+        -:   82:  {
+    #####:   83:    return t.get_executor();
+call    0 never executed
+        -:   84:  }
+------------------
+_ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEmEEES4_vvE3getERKS7_RKS4_:
+function _ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEmEEES4_vvE3getERKS7_RKS4_ called 0 returned 0% blocks executed 0%
+    #####:   79:  static BOOST_ASIO_AUTO_RETURN_TYPE_PREFIX(type) get(
+        -:   80:      const T& t, const E&) BOOST_ASIO_NOEXCEPT
+        -:   81:    BOOST_ASIO_AUTO_RETURN_TYPE_SUFFIX((t.get_executor()))
+        -:   82:  {
+    #####:   83:    return t.get_executor();
+call    0 never executed
+        -:   84:  }
+------------------
+_ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeENS0_19basic_stream_socketINS0_2ip3tcpES4_EEEEES4_vvE3getERKSB_RKS4_:
+function _ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeENS0_19basic_stream_socketINS0_2ip3tcpES4_EEEEES4_vvE3getERKSB_RKS4_ called 0 returned 0% blocks executed 0%
+    #####:   79:  static BOOST_ASIO_AUTO_RETURN_TYPE_PREFIX(type) get(
+        -:   80:      const T& t, const E&) BOOST_ASIO_NOEXCEPT
+        -:   81:    BOOST_ASIO_AUTO_RETURN_TYPE_SUFFIX((t.get_executor()))
+        -:   82:  {
+    #####:   83:    return t.get_executor();
+call    0 never executed
+        -:   84:  }
+------------------
+_ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEEEES4_vvE3getERKS7_RKS4_:
+function _ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEEEES4_vvE3getERKS7_RKS4_ called 0 returned 0% blocks executed 0%
+    #####:   79:  static BOOST_ASIO_AUTO_RETURN_TYPE_PREFIX(type) get(
+        -:   80:      const T& t, const E&) BOOST_ASIO_NOEXCEPT
+        -:   81:    BOOST_ASIO_AUTO_RETURN_TYPE_SUFFIX((t.get_executor()))
+        -:   82:  {
+    #####:   83:    return t.get_executor();
+call    0 never executed
+        -:   84:  }
+------------------
+_ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEEEES4_vvE3getERKS7_RKS4_:
+function _ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEEEES4_vvE3getERKS7_RKS4_ called 0 returned 0% blocks executed 0%
+    #####:   79:  static BOOST_ASIO_AUTO_RETURN_TYPE_PREFIX(type) get(
+        -:   80:      const T& t, const E&) BOOST_ASIO_NOEXCEPT
+        -:   81:    BOOST_ASIO_AUTO_RETURN_TYPE_SUFFIX((t.get_executor()))
+        -:   82:  {
+    #####:   83:    return t.get_executor();
+call    0 never executed
+        -:   84:  }
+------------------
+_ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEEEES4_vvE3getERKS7_RKS4_:
+function _ZN5boost4asio6detail24associated_executor_implINS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEEEES4_vvE3getERKS7_RKS4_ called 0 returned 0% blocks executed 0%
+    #####:   79:  static BOOST_ASIO_AUTO_RETURN_TYPE_PREFIX(type) get(
+        -:   80:      const T& t, const E&) BOOST_ASIO_NOEXCEPT
+        -:   81:    BOOST_ASIO_AUTO_RETURN_TYPE_SUFFIX((t.get_executor()))
+        -:   82:  {
+    #####:   83:    return t.get_executor();
+call    0 never executed
+        -:   84:  }
+------------------
+        -:   85:};
+        -:   86:
+        -:   87:template <typename T, typename E>
+        -:   88:struct associated_executor_impl<T, E,
+        -:   89:  typename enable_if<
+        -:   90:    !has_executor_type<T>::value
+        -:   91:  >::type,
+        -:   92:  typename void_type<
+        -:   93:    typename associator<associated_executor, T, E>::type
+        -:   94:  >::type> : associator<associated_executor, T, E>
+        -:   95:{
+        -:   96:};
+        -:   97:
+        -:   98:} // namespace detail
+        -:   99:
+        -:  100:/// Traits type used to obtain the executor associated with an object.
+        -:  101:/**
+        -:  102: * A program may specialise this traits type if the @c T template parameter in
+        -:  103: * the specialisation is a user-defined type. The template parameter @c
+        -:  104: * Executor shall be a type meeting the Executor requirements.
+        -:  105: *
+        -:  106: * Specialisations shall meet the following requirements, where @c t is a const
+        -:  107: * reference to an object of type @c T, and @c e is an object of type @c
+        -:  108: * Executor.
+        -:  109: *
+        -:  110: * @li Provide a nested typedef @c type that identifies a type meeting the
+        -:  111: * Executor requirements.
+        -:  112: *
+        -:  113: * @li Provide a noexcept static member function named @c get, callable as @c
+        -:  114: * get(t) and with return type @c type or a (possibly const) reference to @c
+        -:  115: * type.
+        -:  116: *
+        -:  117: * @li Provide a noexcept static member function named @c get, callable as @c
+        -:  118: * get(t,e) and with return type @c type or a (possibly const) reference to @c
+        -:  119: * type.
+        -:  120: */
+        -:  121:template <typename T, typename Executor = system_executor>
+        -:  122:struct associated_executor
+        -:  123:#if !defined(GENERATING_DOCUMENTATION)
+        -:  124:  : detail::associated_executor_impl<T, Executor>
+        -:  125:#endif // !defined(GENERATING_DOCUMENTATION)
+        -:  126:{
+        -:  127:#if defined(GENERATING_DOCUMENTATION)
+        -:  128:  /// If @c T has a nested type @c executor_type, <tt>T::executor_type</tt>.
+        -:  129:  /// Otherwise @c Executor.
+        -:  130:  typedef see_below type;
+        -:  131:
+        -:  132:  /// If @c T has a nested type @c executor_type, returns
+        -:  133:  /// <tt>t.get_executor()</tt>. Otherwise returns @c type().
+        -:  134:  static decltype(auto) get(const T& t) BOOST_ASIO_NOEXCEPT;
+        -:  135:
+        -:  136:  /// If @c T has a nested type @c executor_type, returns
+        -:  137:  /// <tt>t.get_executor()</tt>. Otherwise returns @c ex.
+        -:  138:  static decltype(auto) get(const T& t, const Executor& ex) BOOST_ASIO_NOEXCEPT;
+        -:  139:#endif // defined(GENERATING_DOCUMENTATION)
+        -:  140:};
+        -:  141:
+        -:  142:/// Helper function to obtain an object's associated executor.
+        -:  143:/**
+        -:  144: * @returns <tt>associated_executor<T>::get(t)</tt>
+        -:  145: */
+        -:  146:template <typename T>
+        -:  147:BOOST_ASIO_NODISCARD inline typename associated_executor<T>::type
+   19461*:  148:get_associated_executor(const T& t) BOOST_ASIO_NOEXCEPT
+        -:  149:{
+   19461*:  150:  return associated_executor<T>::get(t);
+        -:  151:}
+------------------
+_ZN5boost4asio23get_associated_executorINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEENS0_19associated_executorIT_NS0_21basic_system_executorINS0_9execution6detail8blocking10possibly_tILi0EEENSB_12relationship6fork_tILi0EEESaIvEEEE4typeERKS8_:
+function _ZN5boost4asio23get_associated_executorINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEENS0_19associated_executorIT_NS0_21basic_system_executorINS0_9execution6detail8blocking10possibly_tILi0EEENSB_12relationship6fork_tILi0EEESaIvEEEE4typeERKS8_ called 9 returned 100% blocks executed 100%
+        9:  148:get_associated_executor(const T& t) BOOST_ASIO_NOEXCEPT
+        -:  149:{
+        9:  150:  return associated_executor<T>::get(t);
+call    0 returned 100%
+        -:  151:}
+------------------
+_ZN5boost4asio23get_associated_executorINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEENS0_19associated_executorIT_NS0_21basic_system_executorINS0_9execution6detail8blocking10possibly_tILi0EEENSB_12relationship6fork_tILi0EEESaIvEEEE4typeERKS8_:
+function _ZN5boost4asio23get_associated_executorINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEENS0_19associated_executorIT_NS0_21basic_system_executorINS0_9execution6detail8blocking10possibly_tILi0EEENSB_12relationship6fork_tILi0EEESaIvEEEE4typeERKS8_ called 8 returned 100% blocks executed 100%
+        8:  148:get_associated_executor(const T& t) BOOST_ASIO_NOEXCEPT
+        -:  149:{
+        8:  150:  return associated_executor<T>::get(t);
+call    0 returned 100%
+        -:  151:}
+------------------
+_ZN5boost4asio23get_associated_executorINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEENS0_19associated_executorIT_NS0_21basic_system_executorINS0_9execution6detail8blocking10possibly_tILi0EEENSB_12relationship6fork_tILi0EEESaIvEEEE4typeERKS8_:
+function _ZN5boost4asio23get_associated_executorINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEENS0_19associated_executorIT_NS0_21basic_system_executorINS0_9execution6detail8blocking10possibly_tILi0EEENSB_12relationship6fork_tILi0EEESaIvEEEE4typeERKS8_ called 0 returned 0% blocks executed 0%
+    #####:  148:get_associated_executor(const T& t) BOOST_ASIO_NOEXCEPT
+        -:  149:{
+    #####:  150:  return associated_executor<T>::get(t);
+call    0 never executed
+        -:  151:}
+------------------
+_ZN5boost4asio23get_associated_executorINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEENS0_19associated_executorIT_NS0_21basic_system_executorINS0_9execution6detail8blocking10possibly_tILi0EEENSB_12relationship6fork_tILi0EEESaIvEEEE4typeERKS8_:
+function _ZN5boost4asio23get_associated_executorINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEENS0_19associated_executorIT_NS0_21basic_system_executorINS0_9execution6detail8blocking10possibly_tILi0EEENSB_12relationship6fork_tILi0EEESaIvEEEE4typeERKS8_ called 118 returned 100% blocks executed 100%
+      118:  148:get_associated_executor(const T& t) BOOST_ASIO_NOEXCEPT
+        -:  149:{
+      118:  150:  return associated_executor<T>::get(t);
+call    0 returned 100%
+        -:  151:}
+------------------
+_ZN5boost4asio23get_associated_executorINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEENS0_19associated_executorIT_NS0_21basic_system_executorINS0_9execution6detail8blocking10possibly_tILi0EEENSB_12relationship6fork_tILi0EEESaIvEEEE4typeERKS8_:
+function _ZN5boost4asio23get_associated_executorINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEENS0_19associated_executorIT_NS0_21basic_system_executorINS0_9execution6detail8blocking10possibly_tILi0EEENSB_12relationship6fork_tILi0EEESaIvEEEE4typeERKS8_ called 0 returned 0% blocks executed 0%
+    #####:  148:get_associated_executor(const T& t) BOOST_ASIO_NOEXCEPT
+        -:  149:{
+    #####:  150:  return associated_executor<T>::get(t);
+call    0 never executed
+        -:  151:}
+------------------
+_ZN5boost4asio23get_associated_executorINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEENS0_19associated_executorIT_NS0_21basic_system_executorINS0_9execution6detail8blocking10possibly_tILi0EEENSB_12relationship6fork_tILi0EEESaIvEEEE4typeERKS8_:
+function _ZN5boost4asio23get_associated_executorINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEENS0_19associated_executorIT_NS0_21basic_system_executorINS0_9execution6detail8blocking10possibly_tILi0EEENSB_12relationship6fork_tILi0EEESaIvEEEE4typeERKS8_ called 19178 returned 99% blocks executed 100%
+    19178:  148:get_associated_executor(const T& t) BOOST_ASIO_NOEXCEPT
+        -:  149:{
+    19178:  150:  return associated_executor<T>::get(t);
+call    0 returned 99%
+        -:  151:}
+------------------
+_ZN5boost4asio23get_associated_executorINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEENS0_19associated_executorIT_NS0_21basic_system_executorINS0_9execution6detail8blocking10possibly_tILi0EEENSB_12relationship6fork_tILi0EEESaIvEEEE4typeERKS8_:
+function _ZN5boost4asio23get_associated_executorINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEENS0_19associated_executorIT_NS0_21basic_system_executorINS0_9execution6detail8blocking10possibly_tILi0EEENSB_12relationship6fork_tILi0EEESaIvEEEE4typeERKS8_ called 35 returned 100% blocks executed 100%
+       35:  148:get_associated_executor(const T& t) BOOST_ASIO_NOEXCEPT
+        -:  149:{
+       35:  150:  return associated_executor<T>::get(t);
+call    0 returned 100%
+        -:  151:}
+------------------
+_ZN5boost4asio23get_associated_executorINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEENS0_19associated_executorIT_NS0_21basic_system_executorINS0_9execution6detail8blocking10possibly_tILi0EEENSB_12relationship6fork_tILi0EEESaIvEEEE4typeERKS8_:
+function _ZN5boost4asio23get_associated_executorINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEENS0_19associated_executorIT_NS0_21basic_system_executorINS0_9execution6detail8blocking10possibly_tILi0EEENSB_12relationship6fork_tILi0EEESaIvEEEE4typeERKS8_ called 9 returned 100% blocks executed 100%
+        9:  148:get_associated_executor(const T& t) BOOST_ASIO_NOEXCEPT
+        -:  149:{
+        9:  150:  return associated_executor<T>::get(t);
+call    0 returned 100%
+        -:  151:}
+------------------
+_ZN5boost4asio23get_associated_executorINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEENS0_19associated_executorIT_NS0_21basic_system_executorINS0_9execution6detail8blocking10possibly_tILi0EEENSB_12relationship6fork_tILi0EEESaIvEEEE4typeERKS8_:
+function _ZN5boost4asio23get_associated_executorINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEENS0_19associated_executorIT_NS0_21basic_system_executorINS0_9execution6detail8blocking10possibly_tILi0EEENSB_12relationship6fork_tILi0EEESaIvEEEE4typeERKS8_ called 10 returned 100% blocks executed 100%
+       10:  148:get_associated_executor(const T& t) BOOST_ASIO_NOEXCEPT
+        -:  149:{
+       10:  150:  return associated_executor<T>::get(t);
+call    0 returned 100%
+        -:  151:}
+------------------
+_ZN5boost4asio23get_associated_executorINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEENS0_19associated_executorIT_NS0_21basic_system_executorINS0_9execution6detail8blocking10possibly_tILi0EEENSB_12relationship6fork_tILi0EEESaIvEEEE4typeERKS8_:
+function _ZN5boost4asio23get_associated_executorINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEENS0_19associated_executorIT_NS0_21basic_system_executorINS0_9execution6detail8blocking10possibly_tILi0EEENSB_12relationship6fork_tILi0EEESaIvEEEE4typeERKS8_ called 28 returned 100% blocks executed 100%
+       28:  148:get_associated_executor(const T& t) BOOST_ASIO_NOEXCEPT
+        -:  149:{
+       28:  150:  return associated_executor<T>::get(t);
+call    0 returned 100%
+        -:  151:}
+------------------
+_ZN5boost4asio23get_associated_executorINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEENS0_19associated_executorIT_NS0_21basic_system_executorINS0_9execution6detail8blocking10possibly_tILi0EEENSB_12relationship6fork_tILi0EEESaIvEEEE4typeERKS8_:
+function _ZN5boost4asio23get_associated_executorINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEENS0_19associated_executorIT_NS0_21basic_system_executorINS0_9execution6detail8blocking10possibly_tILi0EEENSB_12relationship6fork_tILi0EEESaIvEEEE4typeERKS8_ called 32 returned 100% blocks executed 100%
+       32:  148:get_associated_executor(const T& t) BOOST_ASIO_NOEXCEPT
+        -:  149:{
+       32:  150:  return associated_executor<T>::get(t);
+call    0 returned 100%
+        -:  151:}
+------------------
+_ZN5boost4asio23get_associated_executorINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEENS0_19associated_executorIT_NS0_21basic_system_executorINS0_9execution6detail8blocking10possibly_tILi0EEENSB_12relationship6fork_tILi0EEESaIvEEEE4typeERKS8_:
+function _ZN5boost4asio23get_associated_executorINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEENS0_19associated_executorIT_NS0_21basic_system_executorINS0_9execution6detail8blocking10possibly_tILi0EEENSB_12relationship6fork_tILi0EEESaIvEEEE4typeERKS8_ called 10 returned 100% blocks executed 100%
+       10:  148:get_associated_executor(const T& t) BOOST_ASIO_NOEXCEPT
+        -:  149:{
+       10:  150:  return associated_executor<T>::get(t);
+call    0 returned 100%
+        -:  151:}
+------------------
+_ZN5boost4asio23get_associated_executorINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEENS0_19associated_executorIT_NS0_21basic_system_executorINS0_9execution6detail8blocking10possibly_tILi0EEENSB_12relationship6fork_tILi0EEESaIvEEEE4typeERKS8_:
+function _ZN5boost4asio23get_associated_executorINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEENS0_19associated_executorIT_NS0_21basic_system_executorINS0_9execution6detail8blocking10possibly_tILi0EEENSB_12relationship6fork_tILi0EEESaIvEEEE4typeERKS8_ called 24 returned 100% blocks executed 100%
+       24:  148:get_associated_executor(const T& t) BOOST_ASIO_NOEXCEPT
+        -:  149:{
+       24:  150:  return associated_executor<T>::get(t);
+call    0 returned 100%
+        -:  151:}
+------------------
+_ZN5boost4asio23get_associated_executorINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEENS0_19associated_executorIT_NS0_21basic_system_executorINS0_9execution6detail8blocking10possibly_tILi0EEENSB_12relationship6fork_tILi0EEESaIvEEEE4typeERKS8_:
+function _ZN5boost4asio23get_associated_executorINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEENS0_19associated_executorIT_NS0_21basic_system_executorINS0_9execution6detail8blocking10possibly_tILi0EEENSB_12relationship6fork_tILi0EEESaIvEEEE4typeERKS8_ called 0 returned 0% blocks executed 0%
+    #####:  148:get_associated_executor(const T& t) BOOST_ASIO_NOEXCEPT
+        -:  149:{
+    #####:  150:  return associated_executor<T>::get(t);
+call    0 never executed
+        -:  151:}
+------------------
+_ZN5boost4asio23get_associated_executorINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEENS0_19associated_executorIT_NS0_21basic_system_executorINS0_9execution6detail8blocking10possibly_tILi0EEENSB_12relationship6fork_tILi0EEESaIvEEEE4typeERKS8_:
+function _ZN5boost4asio23get_associated_executorINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEENS0_19associated_executorIT_NS0_21basic_system_executorINS0_9execution6detail8blocking10possibly_tILi0EEENSB_12relationship6fork_tILi0EEESaIvEEEE4typeERKS8_ called 0 returned 0% blocks executed 0%
+    #####:  148:get_associated_executor(const T& t) BOOST_ASIO_NOEXCEPT
+        -:  149:{
+    #####:  150:  return associated_executor<T>::get(t);
+call    0 never executed
+        -:  151:}
+------------------
+_ZN5boost4asio23get_associated_executorINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEENS0_19associated_executorIT_NS0_21basic_system_executorINS0_9execution6detail8blocking10possibly_tILi0EEENSB_12relationship6fork_tILi0EEESaIvEEEE4typeERKS8_:
+function _ZN5boost4asio23get_associated_executorINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEENS0_19associated_executorIT_NS0_21basic_system_executorINS0_9execution6detail8blocking10possibly_tILi0EEENSB_12relationship6fork_tILi0EEESaIvEEEE4typeERKS8_ called 0 returned 0% blocks executed 0%
+    #####:  148:get_associated_executor(const T& t) BOOST_ASIO_NOEXCEPT
+        -:  149:{
+    #####:  150:  return associated_executor<T>::get(t);
+call    0 never executed
+        -:  151:}
+------------------
+        -:  152:
+        -:  153:/// Helper function to obtain an object's associated executor.
+        -:  154:/**
+        -:  155: * @returns <tt>associated_executor<T, Executor>::get(t, ex)</tt>
+        -:  156: */
+        -:  157:template <typename T, typename Executor>
+        -:  158:BOOST_ASIO_NODISCARD inline BOOST_ASIO_AUTO_RETURN_TYPE_PREFIX2(
+        -:  159:    typename associated_executor<T, Executor>::type)
+     751*:  160:get_associated_executor(const T& t, const Executor& ex,
+        -:  161:    typename constraint<
+        -:  162:      is_executor<Executor>::value || execution::is_executor<Executor>::value
+        -:  163:    >::type = 0) BOOST_ASIO_NOEXCEPT
+        -:  164:  BOOST_ASIO_AUTO_RETURN_TYPE_SUFFIX((
+        -:  165:    associated_executor<T, Executor>::get(t, ex)))
+        -:  166:{
+     751*:  167:  return associated_executor<T, Executor>::get(t, ex);
+        -:  168:}
+        -:  169:
+        -:  170:/// Helper function to obtain an object's associated executor.
+        -:  171:/**
+        -:  172: * @returns <tt>associated_executor<T, typename
+        -:  173: * ExecutionContext::executor_type>::get(t, ctx.get_executor())</tt>
+        -:  174: */
+        -:  175:template <typename T, typename ExecutionContext>
+        -:  176:BOOST_ASIO_NODISCARD inline typename associated_executor<T,
+        -:  177:    typename ExecutionContext::executor_type>::type
+        -:  178:get_associated_executor(const T& t, ExecutionContext& ctx,
+        -:  179:    typename constraint<is_convertible<ExecutionContext&,
+        -:  180:      execution_context&>::value>::type = 0) BOOST_ASIO_NOEXCEPT
+        -:  181:{
+        -:  182:  return associated_executor<T,
+        -:  183:    typename ExecutionContext::executor_type>::get(t, ctx.get_executor());
+        -:  184:}
+        -:  185:
+        -:  186:#if defined(BOOST_ASIO_HAS_ALIAS_TEMPLATES)
+        -:  187:
+        -:  188:template <typename T, typename Executor = system_executor>
+        -:  189:using associated_executor_t = typename associated_executor<T, Executor>::type;
+        -:  190:
+        -:  191:#endif // defined(BOOST_ASIO_HAS_ALIAS_TEMPLATES)
+        -:  192:
+        -:  193:namespace detail {
+        -:  194:
+        -:  195:template <typename T, typename E, typename = void>
+        -:  196:struct associated_executor_forwarding_base
+        -:  197:{
+        -:  198:};
+        -:  199:
+        -:  200:template <typename T, typename E>
+        -:  201:struct associated_executor_forwarding_base<T, E,
+        -:  202:    typename enable_if<
+        -:  203:      is_same<
+        -:  204:        typename associated_executor<T,
+        -:  205:          E>::asio_associated_executor_is_unspecialised,
+        -:  206:        void
+        -:  207:      >::value
+        -:  208:    >::type>
+        -:  209:{
+        -:  210:  typedef void asio_associated_executor_is_unspecialised;
+        -:  211:};
+        -:  212:
+        -:  213:} // namespace detail
+        -:  214:
+        -:  215:#if defined(BOOST_ASIO_HAS_STD_REFERENCE_WRAPPER) \
+        -:  216:  || defined(GENERATING_DOCUMENTATION)
+        -:  217:
+        -:  218:/// Specialisation of associated_executor for @c std::reference_wrapper.
+        -:  219:template <typename T, typename Executor>
+        -:  220:struct associated_executor<reference_wrapper<T>, Executor>
+        -:  221:#if !defined(GENERATING_DOCUMENTATION)
+        -:  222:  : detail::associated_executor_forwarding_base<T, Executor>
+        -:  223:#endif // !defined(GENERATING_DOCUMENTATION)
+        -:  224:{
+        -:  225:  /// Forwards @c type to the associator specialisation for the unwrapped type
+        -:  226:  /// @c T.
+        -:  227:  typedef typename associated_executor<T, Executor>::type type;
+        -:  228:
+        -:  229:  /// Forwards the request to get the executor to the associator specialisation
+        -:  230:  /// for the unwrapped type @c T.
+        -:  231:  static type get(reference_wrapper<T> t) BOOST_ASIO_NOEXCEPT
+        -:  232:  {
+        -:  233:    return associated_executor<T, Executor>::get(t.get());
+        -:  234:  }
+        -:  235:
+        -:  236:  /// Forwards the request to get the executor to the associator specialisation
+        -:  237:  /// for the unwrapped type @c T.
+        -:  238:  static BOOST_ASIO_AUTO_RETURN_TYPE_PREFIX(type) get(
+        -:  239:      reference_wrapper<T> t, const Executor& ex) BOOST_ASIO_NOEXCEPT
+        -:  240:    BOOST_ASIO_AUTO_RETURN_TYPE_SUFFIX((
+        -:  241:      associated_executor<T, Executor>::get(t.get(), ex)))
+        -:  242:  {
+        -:  243:    return associated_executor<T, Executor>::get(t.get(), ex);
+        -:  244:  }
+        -:  245:};
+        -:  246:
+        -:  247:#endif // defined(BOOST_ASIO_HAS_STD_REFERENCE_WRAPPER)
+        -:  248:       //   || defined(GENERATING_DOCUMENTATION)
+        -:  249:
+        -:  250:} // namespace asio
+        -:  251:} // namespace boost
+        -:  252:
+        -:  253:#include <boost/asio/detail/pop_options.hpp>
+        -:  254:
+        -:  255:#endif // BOOST_ASIO_ASSOCIATED_EXECUTOR_HPP

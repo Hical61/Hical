@@ -1,0 +1,717 @@
+        -:    0:Source:/home/runner/work/Hical/Hical/src/core/WsFrame.h
+        -:    1:#pragma once
+        -:    2:
+        -:    3:#include <cstdint>
+        -:    4:#include <cstring>
+        -:    5:#include <optional>
+        -:    6:#include <string>
+        -:    7:#include <string_view>
+        -:    8:
+        -:    9:namespace hical
+        -:   10:{
+        -:   11:
+        -:   12:	// WebSocket 操作码 (RFC 6455 §5.2)
+        -:   13:	enum class WsOpcode : uint8_t
+        -:   14:	{
+        -:   15:		hContinuation = 0x0,
+        -:   16:		hText = 0x1,
+        -:   17:		hBinary = 0x2,
+        -:   18:		// 0x3-0x7: 保留给未来的非控制帧
+        -:   19:		hClose = 0x8,
+        -:   20:		hPing = 0x9,
+        -:   21:		hPong = 0xA
+        -:   22:		// 0xB-0xF: 保留给未来的控制帧
+        -:   23:	};
+        -:   24:
+        -:   25:	// WebSocket 关闭状态码 (RFC 6455 §7.4.1)
+        -:   26:	enum class WsCloseCode : uint16_t
+        -:   27:	{
+        -:   28:		hNormal = 1000,
+        -:   29:		hGoingAway = 1001,
+        -:   30:		hProtocolError = 1002,
+        -:   31:		hUnsupportedData = 1003,
+        -:   32:		// 1004: 保留
+        -:   33:		hNoStatusReceived = 1005, // 不能在 close 帧中发送
+        -:   34:		hAbnormalClosure = 1006,  // 不能在 close 帧中发送
+        -:   35:		hInvalidPayload = 1007,
+        -:   36:		hPolicyViolation = 1008,
+        -:   37:		hMessageTooBig = 1009,
+        -:   38:		hMandatoryExtension = 1010,
+        -:   39:		hInternalError = 1011
+        -:   40:	};
+        -:   41:
+        -:   42:	// 解析后的帧头
+        -:   43:	struct WsFrameHeader
+        -:   44:	{
+        -:   45:		bool fin = false;
+        -:   46:		bool rsv1 = false;
+        -:   47:		bool rsv2 = false;
+        -:   48:		bool rsv3 = false;
+        -:   49:		WsOpcode opcode = WsOpcode::hText;
+        -:   50:		bool masked = false;
+        -:   51:		uint64_t payloadLength = 0;
+        -:   52:		uint8_t maskKey[4] = {};
+        -:   53:		size_t headerSize = 0; // 帧头总字节数 (2~14)
+        -:   54:	};
+        -:   55:
+        -:   56:	/**
+        -:   57:	 * @brief 解析 WebSocket 帧头（RFC 6455 §5.2）
+        -:   58:	 * 增量解析友好：数据不足时返回 nullopt，调用方可继续等待更多数据再重试。
+        -:   59:	 * 帧头布局：
+        -:   60:	 *   Byte 0: FIN(1) + RSV1(1) + RSV2(1) + RSV3(1) + opcode(4)
+        -:   61:	 *   Byte 1: MASK(1) + payload_len(7)
+        -:   62:	 *   Extended payload length: 若 payload_len==126 则后跟 2 字节 uint16 (big-endian)
+        -:   63:	 *                             若 payload_len==127 则后跟 8 字节 uint64 (big-endian)
+        -:   64:	 *   Masking key: 若 MASK==1 则后跟 4 字节
+        -:   65:	 * @param data  输入缓冲区指针
+        -:   66:	 * @param size  缓冲区可用字节数
+        -:   67:	 * @return 解析成功时返回填充好的 WsFrameHeader；数据不足时返回 nullopt
+        -:   68:	 */
+       7*:   69:	inline std::optional<WsFrameHeader> parseWsFrameHeader(const uint8_t* data, size_t size)
+        -:   70:	{
+        -:   71:		// 至少需要 2 字节才能确定帧头的最小结构
+       7*:   72:		if (size < 2)
+        -:   73:		{
+    #####:   74:			return std::nullopt;
+        -:   75:		}
+        -:   76:
+       7*:   77:		WsFrameHeader hdr;
+        -:   78:
+       7*:   79:		const uint8_t byte0 = data[0];
+       7*:   80:		const uint8_t byte1 = data[1];
+        -:   81:
+       7*:   82:		hdr.fin = (byte0 & 0x80) != 0;
+       7*:   83:		hdr.rsv1 = (byte0 & 0x40) != 0;
+       7*:   84:		hdr.rsv2 = (byte0 & 0x20) != 0;
+       7*:   85:		hdr.rsv3 = (byte0 & 0x10) != 0;
+       7*:   86:		hdr.opcode = static_cast<WsOpcode>(byte0 & 0x0F);
+       7*:   87:		hdr.masked = (byte1 & 0x80) != 0;
+        -:   88:
+       7*:   89:		const uint8_t rawLen = byte1 & 0x7F;
+        -:   90:
+       7*:   91:		size_t extLenBytes = 0;
+       7*:   92:		if (rawLen == 126)
+        -:   93:		{
+    #####:   94:			extLenBytes = 2;
+        -:   95:		}
+       7*:   96:		else if (rawLen == 127)
+        -:   97:		{
+    #####:   98:			extLenBytes = 8;
+        -:   99:		}
+        -:  100:
+       7*:  101:		const size_t maskBytes = hdr.masked ? 4 : 0;
+       7*:  102:		hdr.headerSize = 2 + extLenBytes + maskBytes;
+        -:  103:
+       7*:  104:		if (size < hdr.headerSize)
+        -:  105:		{
+    #####:  106:			return std::nullopt;
+        -:  107:		}
+        -:  108:
+        -:  109:		// 解析 extended payload length (big-endian via memcpy，不依赖平台字节序)
+       7*:  110:		if (extLenBytes == 0)
+        -:  111:		{
+       7*:  112:			hdr.payloadLength = rawLen;
+        -:  113:		}
+    #####:  114:		else if (extLenBytes == 2)
+        -:  115:		{
+    #####:  116:			hdr.payloadLength = (static_cast<uint64_t>(data[2]) << 8) | static_cast<uint64_t>(data[3]);
+        -:  117:		}
+        -:  118:		else // extLenBytes == 8
+        -:  119:		{
+        -:  120:			uint8_t tmp[8];
+    #####:  121:			std::memcpy(tmp, data + 2, 8);
+    #####:  122:			hdr.payloadLength = (static_cast<uint64_t>(tmp[0]) << 56) | (static_cast<uint64_t>(tmp[1]) << 48)
+    #####:  123:								| (static_cast<uint64_t>(tmp[2]) << 40) | (static_cast<uint64_t>(tmp[3]) << 32)
+    #####:  124:								| (static_cast<uint64_t>(tmp[4]) << 24) | (static_cast<uint64_t>(tmp[5]) << 16)
+    #####:  125:								| (static_cast<uint64_t>(tmp[6]) << 8) | static_cast<uint64_t>(tmp[7]);
+        -:  126:		}
+        -:  127:
+       7*:  128:		if (hdr.masked)
+        -:  129:		{
+       3*:  130:			std::memcpy(hdr.maskKey, data + 2 + extLenBytes, 4);
+        -:  131:		}
+        -:  132:
+       7*:  133:		return hdr;
+        -:  134:	}
+------------------
+_ZN5hical18parseWsFrameHeaderEPKhm:
+function _ZN5hical18parseWsFrameHeaderEPKhm called 0 returned 0% blocks executed 0%
+    #####:   69:	inline std::optional<WsFrameHeader> parseWsFrameHeader(const uint8_t* data, size_t size)
+        -:   70:	{
+        -:   71:		// 至少需要 2 字节才能确定帧头的最小结构
+    #####:   72:		if (size < 2)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:   73:		{
+    #####:   74:			return std::nullopt;
+call    0 never executed
+        -:   75:		}
+        -:   76:
+    #####:   77:		WsFrameHeader hdr;
+        -:   78:
+    #####:   79:		const uint8_t byte0 = data[0];
+    #####:   80:		const uint8_t byte1 = data[1];
+        -:   81:
+    #####:   82:		hdr.fin = (byte0 & 0x80) != 0;
+    #####:   83:		hdr.rsv1 = (byte0 & 0x40) != 0;
+    #####:   84:		hdr.rsv2 = (byte0 & 0x20) != 0;
+    #####:   85:		hdr.rsv3 = (byte0 & 0x10) != 0;
+    #####:   86:		hdr.opcode = static_cast<WsOpcode>(byte0 & 0x0F);
+    #####:   87:		hdr.masked = (byte1 & 0x80) != 0;
+        -:   88:
+    #####:   89:		const uint8_t rawLen = byte1 & 0x7F;
+        -:   90:
+    #####:   91:		size_t extLenBytes = 0;
+    #####:   92:		if (rawLen == 126)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:   93:		{
+    #####:   94:			extLenBytes = 2;
+        -:   95:		}
+    #####:   96:		else if (rawLen == 127)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:   97:		{
+    #####:   98:			extLenBytes = 8;
+        -:   99:		}
+        -:  100:
+    #####:  101:		const size_t maskBytes = hdr.masked ? 4 : 0;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  102:		hdr.headerSize = 2 + extLenBytes + maskBytes;
+        -:  103:
+    #####:  104:		if (size < hdr.headerSize)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  105:		{
+    #####:  106:			return std::nullopt;
+call    0 never executed
+        -:  107:		}
+        -:  108:
+        -:  109:		// 解析 extended payload length (big-endian via memcpy，不依赖平台字节序)
+    #####:  110:		if (extLenBytes == 0)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  111:		{
+    #####:  112:			hdr.payloadLength = rawLen;
+        -:  113:		}
+    #####:  114:		else if (extLenBytes == 2)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  115:		{
+    #####:  116:			hdr.payloadLength = (static_cast<uint64_t>(data[2]) << 8) | static_cast<uint64_t>(data[3]);
+        -:  117:		}
+        -:  118:		else // extLenBytes == 8
+        -:  119:		{
+        -:  120:			uint8_t tmp[8];
+    #####:  121:			std::memcpy(tmp, data + 2, 8);
+    #####:  122:			hdr.payloadLength = (static_cast<uint64_t>(tmp[0]) << 56) | (static_cast<uint64_t>(tmp[1]) << 48)
+    #####:  123:								| (static_cast<uint64_t>(tmp[2]) << 40) | (static_cast<uint64_t>(tmp[3]) << 32)
+    #####:  124:								| (static_cast<uint64_t>(tmp[4]) << 24) | (static_cast<uint64_t>(tmp[5]) << 16)
+    #####:  125:								| (static_cast<uint64_t>(tmp[6]) << 8) | static_cast<uint64_t>(tmp[7]);
+        -:  126:		}
+        -:  127:
+    #####:  128:		if (hdr.masked)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  129:		{
+    #####:  130:			std::memcpy(hdr.maskKey, data + 2 + extLenBytes, 4);
+        -:  131:		}
+        -:  132:
+    #####:  133:		return hdr;
+call    0 never executed
+        -:  134:	}
+------------------
+_ZN5hical18parseWsFrameHeaderEPKhm:
+function _ZN5hical18parseWsFrameHeaderEPKhm called 7 returned 100% blocks executed 67%
+        7:   69:	inline std::optional<WsFrameHeader> parseWsFrameHeader(const uint8_t* data, size_t size)
+        -:   70:	{
+        -:   71:		// 至少需要 2 字节才能确定帧头的最小结构
+        7:   72:		if (size < 2)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:   73:		{
+    #####:   74:			return std::nullopt;
+call    0 never executed
+        -:   75:		}
+        -:   76:
+        7:   77:		WsFrameHeader hdr;
+        -:   78:
+        7:   79:		const uint8_t byte0 = data[0];
+        7:   80:		const uint8_t byte1 = data[1];
+        -:   81:
+        7:   82:		hdr.fin = (byte0 & 0x80) != 0;
+        7:   83:		hdr.rsv1 = (byte0 & 0x40) != 0;
+        7:   84:		hdr.rsv2 = (byte0 & 0x20) != 0;
+        7:   85:		hdr.rsv3 = (byte0 & 0x10) != 0;
+        7:   86:		hdr.opcode = static_cast<WsOpcode>(byte0 & 0x0F);
+        7:   87:		hdr.masked = (byte1 & 0x80) != 0;
+        -:   88:
+        7:   89:		const uint8_t rawLen = byte1 & 0x7F;
+        -:   90:
+        7:   91:		size_t extLenBytes = 0;
+        7:   92:		if (rawLen == 126)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:   93:		{
+    #####:   94:			extLenBytes = 2;
+        -:   95:		}
+        7:   96:		else if (rawLen == 127)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:   97:		{
+    #####:   98:			extLenBytes = 8;
+        -:   99:		}
+        -:  100:
+        7:  101:		const size_t maskBytes = hdr.masked ? 4 : 0;
+branch  0 taken 43% (fallthrough)
+branch  1 taken 57%
+        7:  102:		hdr.headerSize = 2 + extLenBytes + maskBytes;
+        -:  103:
+        7:  104:		if (size < hdr.headerSize)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:  105:		{
+    #####:  106:			return std::nullopt;
+call    0 never executed
+        -:  107:		}
+        -:  108:
+        -:  109:		// 解析 extended payload length (big-endian via memcpy，不依赖平台字节序)
+        7:  110:		if (extLenBytes == 0)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:  111:		{
+        7:  112:			hdr.payloadLength = rawLen;
+        -:  113:		}
+    #####:  114:		else if (extLenBytes == 2)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  115:		{
+    #####:  116:			hdr.payloadLength = (static_cast<uint64_t>(data[2]) << 8) | static_cast<uint64_t>(data[3]);
+        -:  117:		}
+        -:  118:		else // extLenBytes == 8
+        -:  119:		{
+        -:  120:			uint8_t tmp[8];
+    #####:  121:			std::memcpy(tmp, data + 2, 8);
+    #####:  122:			hdr.payloadLength = (static_cast<uint64_t>(tmp[0]) << 56) | (static_cast<uint64_t>(tmp[1]) << 48)
+    #####:  123:								| (static_cast<uint64_t>(tmp[2]) << 40) | (static_cast<uint64_t>(tmp[3]) << 32)
+    #####:  124:								| (static_cast<uint64_t>(tmp[4]) << 24) | (static_cast<uint64_t>(tmp[5]) << 16)
+    #####:  125:								| (static_cast<uint64_t>(tmp[6]) << 8) | static_cast<uint64_t>(tmp[7]);
+        -:  126:		}
+        -:  127:
+        7:  128:		if (hdr.masked)
+branch  0 taken 43% (fallthrough)
+branch  1 taken 57%
+        -:  129:		{
+        3:  130:			std::memcpy(hdr.maskKey, data + 2 + extLenBytes, 4);
+        -:  131:		}
+        -:  132:
+        7:  133:		return hdr;
+call    0 returned 100%
+        -:  134:	}
+------------------
+        -:  135:
+        -:  136:	/**
+        -:  137:	 * @brief 原地解除 WebSocket payload 的 XOR masking（RFC 6455 §5.3）
+        -:  138:	 * 快速路径：按 4 字节对齐批量 XOR uint32_t，尾部逐字节处理。
+        -:  139:	 * 同一函数既用于 mask 也用于 unmask（XOR 互逆）。
+        -:  140:	 * @param data    payload 数据指针（原地修改）
+        -:  141:	 * @param size    payload 字节数
+        -:  142:	 * @param maskKey 4 字节 mask key
+        -:  143:	 */
+       8*:  144:	inline void unmaskPayload(uint8_t* data, size_t size, const uint8_t maskKey[4])
+        -:  145:	{
+        -:  146:		// 将 4 字节 mask key 拼成 uint32_t，用于批量 XOR
+       8*:  147:		uint32_t mask32 = 0;
+       8*:  148:		std::memcpy(&mask32, maskKey, 4);
+        -:  149:
+       8*:  150:		size_t i = 0;
+        -:  151:
+        -:  152:		// 4 字节对齐快速路径
+      16*:  153:		for (; i + 4 <= size; i += 4)
+        -:  154:		{
+       8*:  155:			uint32_t chunk = 0;
+       8*:  156:			std::memcpy(&chunk, data + i, 4);
+       8*:  157:			chunk ^= mask32;
+       8*:  158:			std::memcpy(data + i, &chunk, 4);
+        -:  159:		}
+        -:  160:
+        -:  161:		// 处理尾部不足 4 字节的剩余部分
+      14*:  162:		for (; i < size; ++i)
+        -:  163:		{
+       6*:  164:			data[i] ^= maskKey[i % 4];
+        -:  165:		}
+       8*:  166:	}
+------------------
+_ZN5hical13unmaskPayloadEPhmPKh:
+function _ZN5hical13unmaskPayloadEPhmPKh called 0 returned 0% blocks executed 0%
+    #####:  144:	inline void unmaskPayload(uint8_t* data, size_t size, const uint8_t maskKey[4])
+        -:  145:	{
+        -:  146:		// 将 4 字节 mask key 拼成 uint32_t，用于批量 XOR
+    #####:  147:		uint32_t mask32 = 0;
+    #####:  148:		std::memcpy(&mask32, maskKey, 4);
+        -:  149:
+    #####:  150:		size_t i = 0;
+        -:  151:
+        -:  152:		// 4 字节对齐快速路径
+    #####:  153:		for (; i + 4 <= size; i += 4)
+branch  0 never executed
+branch  1 never executed (fallthrough)
+        -:  154:		{
+    #####:  155:			uint32_t chunk = 0;
+    #####:  156:			std::memcpy(&chunk, data + i, 4);
+    #####:  157:			chunk ^= mask32;
+    #####:  158:			std::memcpy(data + i, &chunk, 4);
+        -:  159:		}
+        -:  160:
+        -:  161:		// 处理尾部不足 4 字节的剩余部分
+    #####:  162:		for (; i < size; ++i)
+branch  0 never executed
+branch  1 never executed (fallthrough)
+        -:  163:		{
+    #####:  164:			data[i] ^= maskKey[i % 4];
+        -:  165:		}
+    #####:  166:	}
+------------------
+_ZN5hical13unmaskPayloadEPhmPKh:
+function _ZN5hical13unmaskPayloadEPhmPKh called 8 returned 100% blocks executed 100%
+        8:  144:	inline void unmaskPayload(uint8_t* data, size_t size, const uint8_t maskKey[4])
+        -:  145:	{
+        -:  146:		// 将 4 字节 mask key 拼成 uint32_t，用于批量 XOR
+        8:  147:		uint32_t mask32 = 0;
+        8:  148:		std::memcpy(&mask32, maskKey, 4);
+        -:  149:
+        8:  150:		size_t i = 0;
+        -:  151:
+        -:  152:		// 4 字节对齐快速路径
+       16:  153:		for (; i + 4 <= size; i += 4)
+branch  0 taken 50%
+branch  1 taken 50% (fallthrough)
+        -:  154:		{
+        8:  155:			uint32_t chunk = 0;
+        8:  156:			std::memcpy(&chunk, data + i, 4);
+        8:  157:			chunk ^= mask32;
+        8:  158:			std::memcpy(data + i, &chunk, 4);
+        -:  159:		}
+        -:  160:
+        -:  161:		// 处理尾部不足 4 字节的剩余部分
+       14:  162:		for (; i < size; ++i)
+branch  0 taken 43%
+branch  1 taken 57% (fallthrough)
+        -:  163:		{
+        6:  164:			data[i] ^= maskKey[i % 4];
+        -:  165:		}
+        8:  166:	}
+------------------
+        -:  167:
+        -:  168:	/**
+        -:  169:	 * @brief 构造服务端发送的 WebSocket 帧（不带 mask）
+        -:  170:	 * 服务端向客户端发送时不得 mask（RFC 6455 §5.1）。
+        -:  171:	 * rsv1=true 表示 permessage-deflate 压缩帧。
+        -:  172:	 * @param opcode   帧操作码
+        -:  173:	 * @param payload  帧载荷数据
+        -:  174:	 * @param fin      是否为消息的最后一帧，默认 true
+        -:  175:	 * @param rsv1     RSV1 位，压缩帧时置 true，默认 false
+        -:  176:	 * @return 完整帧字节串（帧头 + 载荷）
+        -:  177:	 */
+function _ZN5hical12buildWsFrameB5cxx11ENS_8WsOpcodeESt17basic_string_viewIcSt11char_traitsIcEEbb called 4 returned 100% blocks executed 69%
+        4:  178:	inline std::string buildWsFrame(WsOpcode opcode, std::string_view payload, bool fin = true, bool rsv1 = false)
+        -:  179:	{
+        4:  180:		const uint64_t payloadLen = payload.size();
+call    0 returned 100%
+        -:  181:
+        -:  182:		// 预计算帧头大小
+        4:  183:		size_t headerSize = 2;
+        4:  184:		if (payloadLen > 65535)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:  185:		{
+    #####:  186:			headerSize += 8;
+        -:  187:		}
+        4:  188:		else if (payloadLen > 125)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:  189:		{
+    #####:  190:			headerSize += 2;
+        -:  191:		}
+        -:  192:
+        4:  193:		std::string frame;
+call    0 returned 100%
+        4:  194:		frame.resize(headerSize + payloadLen);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        4:  195:		auto* out = reinterpret_cast<uint8_t*>(frame.data());
+call    0 returned 100%
+        -:  196:
+        -:  197:		// Byte 0: FIN + RSV1 + opcode
+       4*:  198:		out[0] = static_cast<uint8_t>((fin ? 0x80U : 0x00U) | (rsv1 ? 0x40U : 0x00U)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+branch  2 taken 0% (fallthrough)
+branch  3 taken 100%
+        4:  199:									  | (static_cast<uint8_t>(opcode) & 0x0FU));
+        -:  200:
+        -:  201:		// Byte 1 + extended payload length (big-endian, MASK=0)
+        4:  202:		if (payloadLen <= 125)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:  203:		{
+        4:  204:			out[1] = static_cast<uint8_t>(payloadLen);
+        -:  205:		}
+    #####:  206:		else if (payloadLen <= 65535)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  207:		{
+    #####:  208:			out[1] = 126;
+    #####:  209:			const auto len16 = static_cast<uint16_t>(payloadLen);
+    #####:  210:			out[2] = static_cast<uint8_t>(len16 >> 8);
+    #####:  211:			out[3] = static_cast<uint8_t>(len16 & 0xFF);
+        -:  212:		}
+        -:  213:		else
+        -:  214:		{
+    #####:  215:			out[1] = 127;
+    #####:  216:			out[2] = static_cast<uint8_t>(payloadLen >> 56);
+    #####:  217:			out[3] = static_cast<uint8_t>((payloadLen >> 48) & 0xFF);
+    #####:  218:			out[4] = static_cast<uint8_t>((payloadLen >> 40) & 0xFF);
+    #####:  219:			out[5] = static_cast<uint8_t>((payloadLen >> 32) & 0xFF);
+    #####:  220:			out[6] = static_cast<uint8_t>((payloadLen >> 24) & 0xFF);
+    #####:  221:			out[7] = static_cast<uint8_t>((payloadLen >> 16) & 0xFF);
+    #####:  222:			out[8] = static_cast<uint8_t>((payloadLen >> 8) & 0xFF);
+    #####:  223:			out[9] = static_cast<uint8_t>(payloadLen & 0xFF);
+        -:  224:		}
+        -:  225:
+        4:  226:		if (payloadLen > 0)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:  227:		{
+        4:  228:			std::memcpy(out + headerSize, payload.data(), payloadLen);
+call    0 returned 100%
+        -:  229:		}
+        -:  230:
+        4:  231:		return frame;
+    =====:  232:	}
+call    0 never executed
+        -:  233:
+        -:  234:	/**
+        -:  235:	 * @brief 构造 WebSocket close 帧的载荷（RFC 6455 §5.5.1）
+        -:  236:	 * 格式：2 字节状态码（big-endian）+ 可选 UTF-8 reason 字符串。
+        -:  237:	 * reason 最长 123 字节（close 帧 payload 上限 125 字节，减去状态码 2 字节）。
+        -:  238:	 * @param code    关闭状态码
+        -:  239:	 * @param reason  可选关闭原因（超长部分截断）
+        -:  240:	 * @return close 帧的载荷字节串
+        -:  241:	 */
+       2*:  242:	inline std::string buildClosePayload(WsCloseCode code, std::string_view reason = {})
+        -:  243:	{
+       2*:  244:		constexpr size_t kMaxReasonLen = 123;
+       2*:  245:		if (reason.size() > kMaxReasonLen)
+        -:  246:		{
+    #####:  247:			reason = reason.substr(0, kMaxReasonLen);
+        -:  248:		}
+        -:  249:
+       2*:  250:		std::string payload;
+       2*:  251:		payload.resize(2 + reason.size());
+        -:  252:
+       2*:  253:		const auto codeVal = static_cast<uint16_t>(code);
+       2*:  254:		payload[0] = static_cast<char>(codeVal >> 8);
+       2*:  255:		payload[1] = static_cast<char>(codeVal & 0xFF);
+        -:  256:
+       2*:  257:		if (!reason.empty())
+        -:  258:		{
+    #####:  259:			std::memcpy(payload.data() + 2, reason.data(), reason.size());
+        -:  260:		}
+        -:  261:
+       2*:  262:		return payload;
+    =====:  263:	}
+------------------
+_ZN5hical17buildClosePayloadB5cxx11ENS_11WsCloseCodeESt17basic_string_viewIcSt11char_traitsIcEE:
+function _ZN5hical17buildClosePayloadB5cxx11ENS_11WsCloseCodeESt17basic_string_viewIcSt11char_traitsIcEE called 0 returned 0% blocks executed 0%
+    #####:  242:	inline std::string buildClosePayload(WsCloseCode code, std::string_view reason = {})
+        -:  243:	{
+    #####:  244:		constexpr size_t kMaxReasonLen = 123;
+    #####:  245:		if (reason.size() > kMaxReasonLen)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+        -:  246:		{
+    #####:  247:			reason = reason.substr(0, kMaxReasonLen);
+call    0 never executed
+        -:  248:		}
+        -:  249:
+    #####:  250:		std::string payload;
+call    0 never executed
+    #####:  251:		payload.resize(2 + reason.size());
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+        -:  252:
+    #####:  253:		const auto codeVal = static_cast<uint16_t>(code);
+    #####:  254:		payload[0] = static_cast<char>(codeVal >> 8);
+call    0 never executed
+    #####:  255:		payload[1] = static_cast<char>(codeVal & 0xFF);
+call    0 never executed
+        -:  256:
+    #####:  257:		if (!reason.empty())
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+        -:  258:		{
+    #####:  259:			std::memcpy(payload.data() + 2, reason.data(), reason.size());
+call    0 never executed
+call    1 never executed
+call    2 never executed
+        -:  260:		}
+        -:  261:
+    #####:  262:		return payload;
+    =====:  263:	}
+call    0 never executed
+------------------
+_ZN5hical17buildClosePayloadB5cxx11ENS_11WsCloseCodeESt17basic_string_viewIcSt11char_traitsIcEE:
+function _ZN5hical17buildClosePayloadB5cxx11ENS_11WsCloseCodeESt17basic_string_viewIcSt11char_traitsIcEE called 2 returned 100% blocks executed 67%
+        2:  242:	inline std::string buildClosePayload(WsCloseCode code, std::string_view reason = {})
+        -:  243:	{
+        2:  244:		constexpr size_t kMaxReasonLen = 123;
+        2:  245:		if (reason.size() > kMaxReasonLen)
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+        -:  246:		{
+    #####:  247:			reason = reason.substr(0, kMaxReasonLen);
+call    0 never executed
+        -:  248:		}
+        -:  249:
+        2:  250:		std::string payload;
+call    0 returned 100%
+        2:  251:		payload.resize(2 + reason.size());
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:  252:
+        2:  253:		const auto codeVal = static_cast<uint16_t>(code);
+        2:  254:		payload[0] = static_cast<char>(codeVal >> 8);
+call    0 returned 100%
+        2:  255:		payload[1] = static_cast<char>(codeVal & 0xFF);
+call    0 returned 100%
+        -:  256:
+        2:  257:		if (!reason.empty())
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+        -:  258:		{
+    #####:  259:			std::memcpy(payload.data() + 2, reason.data(), reason.size());
+call    0 never executed
+call    1 never executed
+call    2 never executed
+        -:  260:		}
+        -:  261:
+        2:  262:		return payload;
+    =====:  263:	}
+call    0 never executed
+------------------
+        -:  264:
+        -:  265:	/**
+        -:  266:	 * @brief 构造带 mask 的 WebSocket 帧（客户端用，RFC 6455 §5.1）
+        -:  267:	 * 仅供测试客户端使用。客户端发送帧必须 mask（RFC 6455 §5.3）。
+        -:  268:	 * maskKey 由调用方提供（通常来自安全随机源）。
+        -:  269:	 * @param opcode   帧操作码
+        -:  270:	 * @param payload  帧载荷（将被 XOR mask 后写入帧）
+        -:  271:	 * @param maskKey  4 字节 mask key
+        -:  272:	 * @param fin      是否为消息的最后一帧，默认 true
+        -:  273:	 * @param rsv1     RSV1 位，压缩帧时置 true，默认 false
+        -:  274:	 * @return 完整帧字节串（帧头 + maskKey + 已 mask 的载荷）
+        -:  275:	 */
+function _ZN5hical18buildMaskedWsFrameB5cxx11ENS_8WsOpcodeESt17basic_string_viewIcSt11char_traitsIcEEPKhbb called 5 returned 100% blocks executed 69%
+        5:  276:	inline std::string buildMaskedWsFrame(WsOpcode opcode,
+        -:  277:										  std::string_view payload,
+        -:  278:										  const uint8_t maskKey[4],
+        -:  279:										  bool fin = true,
+        -:  280:										  bool rsv1 = false)
+        -:  281:	{
+        5:  282:		const uint64_t payloadLen = payload.size();
+call    0 returned 100%
+        -:  283:
+        5:  284:		size_t headerSize = 2 + 4; // 2 基础 + 4 maskKey
+        5:  285:		if (payloadLen > 65535)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:  286:		{
+    #####:  287:			headerSize += 8;
+        -:  288:		}
+        5:  289:		else if (payloadLen > 125)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:  290:		{
+    #####:  291:			headerSize += 2;
+        -:  292:		}
+        -:  293:
+        5:  294:		std::string frame;
+call    0 returned 100%
+        5:  295:		frame.resize(headerSize + payloadLen);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        5:  296:		auto* out = reinterpret_cast<uint8_t*>(frame.data());
+call    0 returned 100%
+        -:  297:
+        -:  298:		// Byte 0: FIN + RSV1 + opcode
+       5*:  299:		out[0] = static_cast<uint8_t>((fin ? 0x80U : 0x00U) | (rsv1 ? 0x40U : 0x00U)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+branch  2 taken 0% (fallthrough)
+branch  3 taken 100%
+        5:  300:									  | (static_cast<uint8_t>(opcode) & 0x0FU));
+        -:  301:
+        -:  302:		// Byte 1 + extended payload length (MASK=1)
+        5:  303:		size_t maskKeyOffset = 2;
+        5:  304:		if (payloadLen <= 125)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:  305:		{
+        5:  306:			out[1] = static_cast<uint8_t>(0x80U | payloadLen);
+        -:  307:		}
+    #####:  308:		else if (payloadLen <= 65535)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  309:		{
+    #####:  310:			out[1] = static_cast<uint8_t>(0x80U | 126U);
+    #####:  311:			const auto len16 = static_cast<uint16_t>(payloadLen);
+    #####:  312:			out[2] = static_cast<uint8_t>(len16 >> 8);
+    #####:  313:			out[3] = static_cast<uint8_t>(len16 & 0xFF);
+    #####:  314:			maskKeyOffset = 4;
+        -:  315:		}
+        -:  316:		else
+        -:  317:		{
+    #####:  318:			out[1] = static_cast<uint8_t>(0x80U | 127U);
+    #####:  319:			out[2] = static_cast<uint8_t>(payloadLen >> 56);
+    #####:  320:			out[3] = static_cast<uint8_t>((payloadLen >> 48) & 0xFF);
+    #####:  321:			out[4] = static_cast<uint8_t>((payloadLen >> 40) & 0xFF);
+    #####:  322:			out[5] = static_cast<uint8_t>((payloadLen >> 32) & 0xFF);
+    #####:  323:			out[6] = static_cast<uint8_t>((payloadLen >> 24) & 0xFF);
+    #####:  324:			out[7] = static_cast<uint8_t>((payloadLen >> 16) & 0xFF);
+    #####:  325:			out[8] = static_cast<uint8_t>((payloadLen >> 8) & 0xFF);
+    #####:  326:			out[9] = static_cast<uint8_t>(payloadLen & 0xFF);
+    #####:  327:			maskKeyOffset = 10;
+        -:  328:		}
+        -:  329:
+        -:  330:		// 写入 mask key
+        5:  331:		std::memcpy(out + maskKeyOffset, maskKey, 4);
+        -:  332:
+        -:  333:		// 复制 payload 并原地 XOR mask
+        5:  334:		if (payloadLen > 0)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:  335:		{
+        5:  336:			uint8_t* payloadOut = out + headerSize;
+        5:  337:			std::memcpy(payloadOut, payload.data(), payloadLen);
+call    0 returned 100%
+        5:  338:			unmaskPayload(payloadOut, payloadLen, maskKey);
+call    0 returned 100%
+        -:  339:		}
+        -:  340:
+        5:  341:		return frame;
+    =====:  342:	}
+call    0 never executed
+        -:  343:
+        -:  344:} // namespace hical

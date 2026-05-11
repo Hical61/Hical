@@ -1,0 +1,1994 @@
+        -:    0:Source:/usr/include/c++/14/system_error
+        -:    1:// <system_error> -*- C++ -*-
+        -:    2:
+        -:    3:// Copyright (C) 2007-2024 Free Software Foundation, Inc.
+        -:    4://
+        -:    5:// This file is part of the GNU ISO C++ Library.  This library is free
+        -:    6:// software; you can redistribute it and/or modify it under the
+        -:    7:// terms of the GNU General Public License as published by the
+        -:    8:// Free Software Foundation; either version 3, or (at your option)
+        -:    9:// any later version.
+        -:   10:
+        -:   11:// This library is distributed in the hope that it will be useful,
+        -:   12:// but WITHOUT ANY WARRANTY; without even the implied warranty of
+        -:   13:// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+        -:   14:// GNU General Public License for more details.
+        -:   15:
+        -:   16:// Under Section 7 of GPL version 3, you are granted additional
+        -:   17:// permissions described in the GCC Runtime Library Exception, version
+        -:   18:// 3.1, as published by the Free Software Foundation.
+        -:   19:
+        -:   20:// You should have received a copy of the GNU General Public License and
+        -:   21:// a copy of the GCC Runtime Library Exception along with this program;
+        -:   22:// see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
+        -:   23:// <http://www.gnu.org/licenses/>.
+        -:   24:
+        -:   25:/** @file include/system_error
+        -:   26: *  This is a Standard C++ Library header.
+        -:   27: */
+        -:   28:
+        -:   29:#ifndef _GLIBCXX_SYSTEM_ERROR
+        -:   30:#define _GLIBCXX_SYSTEM_ERROR 1
+        -:   31:
+        -:   32:#pragma GCC system_header
+        -:   33:
+        -:   34:#include <bits/requires_hosted.h> // OS-dependent
+        -:   35:
+        -:   36:#if __cplusplus < 201103L
+        -:   37:# include <bits/c++0x_warning.h>
+        -:   38:#else
+        -:   39:
+        -:   40:#include <bits/c++config.h>
+        -:   41:#include <bits/error_constants.h>
+        -:   42:#include <iosfwd>
+        -:   43:#include <stdexcept>
+        -:   44:#if __cplusplus > 201703L
+        -:   45:# include <compare>
+        -:   46:#endif
+        -:   47:
+        -:   48:namespace std _GLIBCXX_VISIBILITY(default)
+        -:   49:{
+        -:   50:_GLIBCXX_BEGIN_NAMESPACE_VERSION
+        -:   51:
+        -:   52:  /** @addtogroup diagnostics
+        -:   53:   * @{
+        -:   54:   */
+        -:   55:
+        -:   56:  class error_code;
+        -:   57:  class error_condition;
+        -:   58:  class system_error;
+        -:   59:
+        -:   60:  /// is_error_code_enum
+        -:   61:  template<typename _Tp>
+        -:   62:    struct is_error_code_enum : public false_type { };
+        -:   63:
+        -:   64:  /// is_error_condition_enum
+        -:   65:  template<typename _Tp>
+        -:   66:    struct is_error_condition_enum : public false_type { };
+        -:   67:
+        -:   68:  template<>
+        -:   69:    struct is_error_condition_enum<errc>
+        -:   70:    : public true_type { };
+        -:   71:
+        -:   72:#if __cplusplus > 201402L
+        -:   73:  template <typename _Tp>
+        -:   74:    inline constexpr bool is_error_code_enum_v =
+        -:   75:      is_error_code_enum<_Tp>::value;
+        -:   76:  template <typename _Tp>
+        -:   77:    inline constexpr bool is_error_condition_enum_v =
+        -:   78:      is_error_condition_enum<_Tp>::value;
+        -:   79:#endif // C++17
+        -:   80:  /// @}
+        -:   81:
+        -:   82:_GLIBCXX_BEGIN_INLINE_ABI_NAMESPACE(_V2)
+        -:   83:
+        -:   84:  /** @addtogroup diagnostics
+        -:   85:   * @{
+        -:   86:   */
+        -:   87:
+        -:   88:  /** Abstract base class for types defining a category of error codes.
+        -:   89:   *
+        -:   90:   * An error category defines a context that gives meaning to the integer
+        -:   91:   * stored in an `error_code` or `error_condition` object. For example,
+        -:   92:   * the standard `errno` constants such a `EINVAL` and `ENOMEM` are
+        -:   93:   * associated with the "generic" category and other OS-specific error
+        -:   94:   * numbers are associated with the "system" category, but a user-defined
+        -:   95:   * category might give different meanings to the same numerical values.
+        -:   96:   *
+        -:   97:   * A user-defined category can override the `equivalent` member functions
+        -:   98:   * to define correspondence between errors in different categories.
+        -:   99:   * For example, a category for errors from disk I/O could consider some
+        -:  100:   * of its error numbers equivalent to ENOSPC and ENOENT in the generic
+        -:  101:   * category.
+        -:  102:   *
+        -:  103:   * @headerfile system_error
+        -:  104:   * @since C++11
+        -:  105:   */
+        -:  106:  class error_category
+        -:  107:  {
+        -:  108:  public:
+        -:  109:    constexpr error_category() noexcept = default;
+        -:  110:
+        -:  111:    virtual ~error_category();
+        -:  112:
+        -:  113:    error_category(const error_category&) = delete;
+        -:  114:    error_category& operator=(const error_category&) = delete;
+        -:  115:
+        -:  116:    /// A string that identifies the error category.
+        -:  117:    virtual const char*
+        -:  118:    name() const noexcept = 0;
+        -:  119:
+        -:  120:    // We need two different virtual functions here, one returning a
+        -:  121:    // COW string and one returning an SSO string. Their positions in the
+        -:  122:    // vtable must be consistent for dynamic dispatch to work, but which one
+        -:  123:    // the name "message()" finds depends on which ABI the caller is using.
+        -:  124:#if _GLIBCXX_USE_CXX11_ABI
+        -:  125:  private:
+        -:  126:    _GLIBCXX_DEFAULT_ABI_TAG
+        -:  127:    virtual __cow_string
+        -:  128:    _M_message(int) const;
+        -:  129:
+        -:  130:  public:
+        -:  131:    /// A description of the error condition corresponding to the number.
+        -:  132:    _GLIBCXX_DEFAULT_ABI_TAG
+        -:  133:    virtual string
+        -:  134:    message(int) const = 0;
+        -:  135:#else
+        -:  136:    virtual string
+        -:  137:    message(int) const = 0;
+        -:  138:
+        -:  139:  private:
+        -:  140:    virtual __sso_string
+        -:  141:    _M_message(int) const;
+        -:  142:#endif
+        -:  143:
+        -:  144:  public:
+        -:  145:    /// Return an error_condition corresponding to `i` in this category.
+        -:  146:    virtual error_condition
+        -:  147:    default_error_condition(int __i) const noexcept;
+        -:  148:
+        -:  149:    /// Test whether `cond` corresponds to `i` for this category.
+        -:  150:    virtual bool
+        -:  151:    equivalent(int __i, const error_condition& __cond) const noexcept;
+        -:  152:
+        -:  153:    /// Test whether `code` corresponds to `i` for this category.
+        -:  154:    virtual bool
+        -:  155:    equivalent(const error_code& __code, int __i) const noexcept;
+        -:  156:
+        -:  157:    /// An error_category only compares equal to itself.
+        -:  158:    [[__nodiscard__]]
+        -:  159:    bool
+    #####:  160:    operator==(const error_category& __other) const noexcept
+    #####:  161:    { return this == &__other; }
+------------------
+_ZNKSt3_V214error_categoryeqERKS0_:
+function _ZNKSt3_V214error_categoryeqERKS0_ called 0 returned 0% blocks executed 0%
+    #####:  160:    operator==(const error_category& __other) const noexcept
+    #####:  161:    { return this == &__other; }
+------------------
+_ZNKSt3_V214error_categoryeqERKS0_:
+function _ZNKSt3_V214error_categoryeqERKS0_ called 0 returned 0% blocks executed 0%
+    #####:  160:    operator==(const error_category& __other) const noexcept
+    #####:  161:    { return this == &__other; }
+------------------
+_ZNKSt3_V214error_categoryeqERKS0_:
+function _ZNKSt3_V214error_categoryeqERKS0_ called 0 returned 0% blocks executed 0%
+    #####:  160:    operator==(const error_category& __other) const noexcept
+    #####:  161:    { return this == &__other; }
+------------------
+_ZNKSt3_V214error_categoryeqERKS0_:
+function _ZNKSt3_V214error_categoryeqERKS0_ called 0 returned 0% blocks executed 0%
+    #####:  160:    operator==(const error_category& __other) const noexcept
+    #####:  161:    { return this == &__other; }
+------------------
+_ZNKSt3_V214error_categoryeqERKS0_:
+function _ZNKSt3_V214error_categoryeqERKS0_ called 0 returned 0% blocks executed 0%
+    #####:  160:    operator==(const error_category& __other) const noexcept
+    #####:  161:    { return this == &__other; }
+------------------
+_ZNKSt3_V214error_categoryeqERKS0_:
+function _ZNKSt3_V214error_categoryeqERKS0_ called 0 returned 0% blocks executed 0%
+    #####:  160:    operator==(const error_category& __other) const noexcept
+    #####:  161:    { return this == &__other; }
+------------------
+_ZNKSt3_V214error_categoryeqERKS0_:
+function _ZNKSt3_V214error_categoryeqERKS0_ called 0 returned 0% blocks executed 0%
+    #####:  160:    operator==(const error_category& __other) const noexcept
+    #####:  161:    { return this == &__other; }
+------------------
+_ZNKSt3_V214error_categoryeqERKS0_:
+function _ZNKSt3_V214error_categoryeqERKS0_ called 0 returned 0% blocks executed 0%
+    #####:  160:    operator==(const error_category& __other) const noexcept
+    #####:  161:    { return this == &__other; }
+------------------
+_ZNKSt3_V214error_categoryeqERKS0_:
+function _ZNKSt3_V214error_categoryeqERKS0_ called 0 returned 0% blocks executed 0%
+    #####:  160:    operator==(const error_category& __other) const noexcept
+    #####:  161:    { return this == &__other; }
+------------------
+_ZNKSt3_V214error_categoryeqERKS0_:
+function _ZNKSt3_V214error_categoryeqERKS0_ called 0 returned 0% blocks executed 0%
+    #####:  160:    operator==(const error_category& __other) const noexcept
+    #####:  161:    { return this == &__other; }
+------------------
+_ZNKSt3_V214error_categoryeqERKS0_:
+function _ZNKSt3_V214error_categoryeqERKS0_ called 0 returned 0% blocks executed 0%
+    #####:  160:    operator==(const error_category& __other) const noexcept
+    #####:  161:    { return this == &__other; }
+------------------
+_ZNKSt3_V214error_categoryeqERKS0_:
+function _ZNKSt3_V214error_categoryeqERKS0_ called 0 returned 0% blocks executed 0%
+    #####:  160:    operator==(const error_category& __other) const noexcept
+    #####:  161:    { return this == &__other; }
+------------------
+_ZNKSt3_V214error_categoryeqERKS0_:
+function _ZNKSt3_V214error_categoryeqERKS0_ called 0 returned 0% blocks executed 0%
+    #####:  160:    operator==(const error_category& __other) const noexcept
+    #####:  161:    { return this == &__other; }
+------------------
+_ZNKSt3_V214error_categoryeqERKS0_:
+function _ZNKSt3_V214error_categoryeqERKS0_ called 0 returned 0% blocks executed 0%
+    #####:  160:    operator==(const error_category& __other) const noexcept
+    #####:  161:    { return this == &__other; }
+------------------
+_ZNKSt3_V214error_categoryeqERKS0_:
+function _ZNKSt3_V214error_categoryeqERKS0_ called 0 returned 0% blocks executed 0%
+    #####:  160:    operator==(const error_category& __other) const noexcept
+    #####:  161:    { return this == &__other; }
+------------------
+_ZNKSt3_V214error_categoryeqERKS0_:
+function _ZNKSt3_V214error_categoryeqERKS0_ called 0 returned 0% blocks executed 0%
+    #####:  160:    operator==(const error_category& __other) const noexcept
+    #####:  161:    { return this == &__other; }
+------------------
+_ZNKSt3_V214error_categoryeqERKS0_:
+function _ZNKSt3_V214error_categoryeqERKS0_ called 0 returned 0% blocks executed 0%
+    #####:  160:    operator==(const error_category& __other) const noexcept
+    #####:  161:    { return this == &__other; }
+------------------
+        -:  162:
+        -:  163:    /// Ordered comparison that defines a total order for error categories.
+        -:  164:#if __cpp_lib_three_way_comparison
+        -:  165:    [[nodiscard]]
+        -:  166:    strong_ordering
+        -:  167:    operator<=>(const error_category& __rhs) const noexcept
+        -:  168:    { return std::compare_three_way()(this, &__rhs); }
+        -:  169:#else
+        -:  170:    bool
+        -:  171:    operator<(const error_category& __other) const noexcept
+        -:  172:    { return less<const error_category*>()(this, &__other); }
+        -:  173:
+        -:  174:    bool
+        -:  175:    operator!=(const error_category& __other) const noexcept
+        -:  176:    { return this != &__other; }
+        -:  177:#endif
+        -:  178:  };
+        -:  179:
+        -:  180:  // DR 890.
+        -:  181:
+        -:  182:  /// Error category for `errno` error codes.
+        -:  183:  [[__nodiscard__, __gnu__::__const__]]
+        -:  184:  const error_category&
+        -:  185:  generic_category() noexcept;
+        -:  186:
+        -:  187:  /// Error category for other error codes defined by the OS.
+        -:  188:  [[__nodiscard__, __gnu__::__const__]]
+        -:  189:  const error_category&
+        -:  190:  system_category() noexcept;
+        -:  191:
+        -:  192:  /// @}
+        -:  193:
+        -:  194:_GLIBCXX_END_INLINE_ABI_NAMESPACE(_V2)
+        -:  195:
+        -:  196:  /** @addtogroup diagnostics
+        -:  197:   * @{
+        -:  198:   */
+        -:  199:
+        -:  200:namespace __adl_only
+        -:  201:{
+        -:  202:  void make_error_code() = delete;
+        -:  203:  void make_error_condition() = delete;
+        -:  204:}
+        -:  205:
+        -:  206:  /** Class error_code
+        -:  207:   *
+        -:  208:   * This class is a value type storing an integer error number and a
+        -:  209:   * category that gives meaning to the error number. Typically this is done
+        -:  210:   * close the the point where the error happens, to capture the original
+        -:  211:   * error value.
+        -:  212:   *
+        -:  213:   * An `error_code` object can be used to store the original error value
+        -:  214:   * emitted by some subsystem, with a category relevant to the subsystem.
+        -:  215:   * For example, errors from POSIX library functions can be represented by
+        -:  216:   * an `errno` value and the "generic" category, but errors from an HTTP
+        -:  217:   * library might be represented by an HTTP response status code (e.g. 404)
+        -:  218:   * and a custom category defined by the library.
+        -:  219:   *
+        -:  220:   * @headerfile system_error
+        -:  221:   * @since C++11
+        -:  222:   */
+        -:  223:  class error_code
+        -:  224:  {
+        -:  225:    template<typename _ErrorCodeEnum>
+        -:  226:      using _Check
+        -:  227:	= __enable_if_t<is_error_code_enum<_ErrorCodeEnum>::value>;
+        -:  228:
+        -:  229:  public:
+      135:  230:    error_code() noexcept
+      135:  231:    : _M_value(0), _M_cat(&system_category()) { }
+------------------
+_ZNSt10error_codeC2Ev:
+function _ZNSt10error_codeC2Ev called 1 returned 100% blocks executed 100%
+        1:  230:    error_code() noexcept
+        1:  231:    : _M_value(0), _M_cat(&system_category()) { }
+------------------
+_ZNSt10error_codeC2Ev:
+function _ZNSt10error_codeC2Ev called 16 returned 100% blocks executed 100%
+       16:  230:    error_code() noexcept
+       16:  231:    : _M_value(0), _M_cat(&system_category()) { }
+------------------
+_ZNSt10error_codeC2Ev:
+function _ZNSt10error_codeC2Ev called 78 returned 100% blocks executed 100%
+       78:  230:    error_code() noexcept
+       78:  231:    : _M_value(0), _M_cat(&system_category()) { }
+------------------
+_ZNSt10error_codeC2Ev:
+function _ZNSt10error_codeC2Ev called 40 returned 100% blocks executed 100%
+       40:  230:    error_code() noexcept
+       40:  231:    : _M_value(0), _M_cat(&system_category()) { }
+------------------
+        -:  232:
+    #####:  233:    error_code(int __v, const error_category& __cat) noexcept
+    #####:  234:    : _M_value(__v), _M_cat(&__cat) { }
+------------------
+_ZNSt10error_codeC2EiRKNSt3_V214error_categoryE:
+function _ZNSt10error_codeC2EiRKNSt3_V214error_categoryE called 0 returned 0% blocks executed 0%
+    #####:  233:    error_code(int __v, const error_category& __cat) noexcept
+    #####:  234:    : _M_value(__v), _M_cat(&__cat) { }
+------------------
+_ZNSt10error_codeC2EiRKNSt3_V214error_categoryE:
+function _ZNSt10error_codeC2EiRKNSt3_V214error_categoryE called 0 returned 0% blocks executed 0%
+    #####:  233:    error_code(int __v, const error_category& __cat) noexcept
+    #####:  234:    : _M_value(__v), _M_cat(&__cat) { }
+------------------
+        -:  235:
+        -:  236:    /// Initialize with a user-defined type, by calling make_error_code.
+        -:  237:    template<typename _ErrorCodeEnum,
+        -:  238:	     typename = _Check<_ErrorCodeEnum>>
+        -:  239:      error_code(_ErrorCodeEnum __e) noexcept
+        -:  240:      {
+        -:  241:	using __adl_only::make_error_code;
+        -:  242:	*this = make_error_code(__e);
+        -:  243:      }
+        -:  244:
+        -:  245:    error_code(const error_code&) = default;
+        -:  246:    error_code& operator=(const error_code&) = default;
+        -:  247:
+        -:  248:    void
+        -:  249:    assign(int __v, const error_category& __cat) noexcept
+        -:  250:    {
+        -:  251:      _M_value = __v;
+        -:  252:      _M_cat = &__cat;
+        -:  253:    }
+        -:  254:
+        -:  255:    void
+        -:  256:    clear() noexcept
+        -:  257:    { assign(0, system_category()); }
+        -:  258:
+        -:  259:    /// The error value.
+        -:  260:    [[__nodiscard__]]
+        -:  261:    int
+    #####:  262:    value() const noexcept { return _M_value; }
+------------------
+_ZNKSt10error_code5valueEv:
+function _ZNKSt10error_code5valueEv called 0 returned 0% blocks executed 0%
+    #####:  262:    value() const noexcept { return _M_value; }
+------------------
+_ZNKSt10error_code5valueEv:
+function _ZNKSt10error_code5valueEv called 0 returned 0% blocks executed 0%
+    #####:  262:    value() const noexcept { return _M_value; }
+------------------
+_ZNKSt10error_code5valueEv:
+function _ZNKSt10error_code5valueEv called 0 returned 0% blocks executed 0%
+    #####:  262:    value() const noexcept { return _M_value; }
+------------------
+_ZNKSt10error_code5valueEv:
+function _ZNKSt10error_code5valueEv called 0 returned 0% blocks executed 0%
+    #####:  262:    value() const noexcept { return _M_value; }
+------------------
+_ZNKSt10error_code5valueEv:
+function _ZNKSt10error_code5valueEv called 0 returned 0% blocks executed 0%
+    #####:  262:    value() const noexcept { return _M_value; }
+------------------
+_ZNKSt10error_code5valueEv:
+function _ZNKSt10error_code5valueEv called 0 returned 0% blocks executed 0%
+    #####:  262:    value() const noexcept { return _M_value; }
+------------------
+_ZNKSt10error_code5valueEv:
+function _ZNKSt10error_code5valueEv called 0 returned 0% blocks executed 0%
+    #####:  262:    value() const noexcept { return _M_value; }
+------------------
+_ZNKSt10error_code5valueEv:
+function _ZNKSt10error_code5valueEv called 0 returned 0% blocks executed 0%
+    #####:  262:    value() const noexcept { return _M_value; }
+------------------
+_ZNKSt10error_code5valueEv:
+function _ZNKSt10error_code5valueEv called 0 returned 0% blocks executed 0%
+    #####:  262:    value() const noexcept { return _M_value; }
+------------------
+_ZNKSt10error_code5valueEv:
+function _ZNKSt10error_code5valueEv called 0 returned 0% blocks executed 0%
+    #####:  262:    value() const noexcept { return _M_value; }
+------------------
+_ZNKSt10error_code5valueEv:
+function _ZNKSt10error_code5valueEv called 0 returned 0% blocks executed 0%
+    #####:  262:    value() const noexcept { return _M_value; }
+------------------
+_ZNKSt10error_code5valueEv:
+function _ZNKSt10error_code5valueEv called 0 returned 0% blocks executed 0%
+    #####:  262:    value() const noexcept { return _M_value; }
+------------------
+_ZNKSt10error_code5valueEv:
+function _ZNKSt10error_code5valueEv called 0 returned 0% blocks executed 0%
+    #####:  262:    value() const noexcept { return _M_value; }
+------------------
+_ZNKSt10error_code5valueEv:
+function _ZNKSt10error_code5valueEv called 0 returned 0% blocks executed 0%
+    #####:  262:    value() const noexcept { return _M_value; }
+------------------
+_ZNKSt10error_code5valueEv:
+function _ZNKSt10error_code5valueEv called 0 returned 0% blocks executed 0%
+    #####:  262:    value() const noexcept { return _M_value; }
+------------------
+_ZNKSt10error_code5valueEv:
+function _ZNKSt10error_code5valueEv called 0 returned 0% blocks executed 0%
+    #####:  262:    value() const noexcept { return _M_value; }
+------------------
+_ZNKSt10error_code5valueEv:
+function _ZNKSt10error_code5valueEv called 0 returned 0% blocks executed 0%
+    #####:  262:    value() const noexcept { return _M_value; }
+------------------
+_ZNKSt10error_code5valueEv:
+function _ZNKSt10error_code5valueEv called 0 returned 0% blocks executed 0%
+    #####:  262:    value() const noexcept { return _M_value; }
+------------------
+_ZNKSt10error_code5valueEv:
+function _ZNKSt10error_code5valueEv called 0 returned 0% blocks executed 0%
+    #####:  262:    value() const noexcept { return _M_value; }
+------------------
+_ZNKSt10error_code5valueEv:
+function _ZNKSt10error_code5valueEv called 0 returned 0% blocks executed 0%
+    #####:  262:    value() const noexcept { return _M_value; }
+------------------
+_ZNKSt10error_code5valueEv:
+function _ZNKSt10error_code5valueEv called 0 returned 0% blocks executed 0%
+    #####:  262:    value() const noexcept { return _M_value; }
+------------------
+_ZNKSt10error_code5valueEv:
+function _ZNKSt10error_code5valueEv called 0 returned 0% blocks executed 0%
+    #####:  262:    value() const noexcept { return _M_value; }
+------------------
+_ZNKSt10error_code5valueEv:
+function _ZNKSt10error_code5valueEv called 0 returned 0% blocks executed 0%
+    #####:  262:    value() const noexcept { return _M_value; }
+------------------
+_ZNKSt10error_code5valueEv:
+function _ZNKSt10error_code5valueEv called 0 returned 0% blocks executed 0%
+    #####:  262:    value() const noexcept { return _M_value; }
+------------------
+_ZNKSt10error_code5valueEv:
+function _ZNKSt10error_code5valueEv called 0 returned 0% blocks executed 0%
+    #####:  262:    value() const noexcept { return _M_value; }
+------------------
+_ZNKSt10error_code5valueEv:
+function _ZNKSt10error_code5valueEv called 0 returned 0% blocks executed 0%
+    #####:  262:    value() const noexcept { return _M_value; }
+------------------
+_ZNKSt10error_code5valueEv:
+function _ZNKSt10error_code5valueEv called 0 returned 0% blocks executed 0%
+    #####:  262:    value() const noexcept { return _M_value; }
+------------------
+_ZNKSt10error_code5valueEv:
+function _ZNKSt10error_code5valueEv called 0 returned 0% blocks executed 0%
+    #####:  262:    value() const noexcept { return _M_value; }
+------------------
+_ZNKSt10error_code5valueEv:
+function _ZNKSt10error_code5valueEv called 0 returned 0% blocks executed 0%
+    #####:  262:    value() const noexcept { return _M_value; }
+------------------
+_ZNKSt10error_code5valueEv:
+function _ZNKSt10error_code5valueEv called 0 returned 0% blocks executed 0%
+    #####:  262:    value() const noexcept { return _M_value; }
+------------------
+_ZNKSt10error_code5valueEv:
+function _ZNKSt10error_code5valueEv called 0 returned 0% blocks executed 0%
+    #####:  262:    value() const noexcept { return _M_value; }
+------------------
+_ZNKSt10error_code5valueEv:
+function _ZNKSt10error_code5valueEv called 0 returned 0% blocks executed 0%
+    #####:  262:    value() const noexcept { return _M_value; }
+------------------
+_ZNKSt10error_code5valueEv:
+function _ZNKSt10error_code5valueEv called 0 returned 0% blocks executed 0%
+    #####:  262:    value() const noexcept { return _M_value; }
+------------------
+_ZNKSt10error_code5valueEv:
+function _ZNKSt10error_code5valueEv called 0 returned 0% blocks executed 0%
+    #####:  262:    value() const noexcept { return _M_value; }
+------------------
+_ZNKSt10error_code5valueEv:
+function _ZNKSt10error_code5valueEv called 0 returned 0% blocks executed 0%
+    #####:  262:    value() const noexcept { return _M_value; }
+------------------
+_ZNKSt10error_code5valueEv:
+function _ZNKSt10error_code5valueEv called 0 returned 0% blocks executed 0%
+    #####:  262:    value() const noexcept { return _M_value; }
+------------------
+_ZNKSt10error_code5valueEv:
+function _ZNKSt10error_code5valueEv called 0 returned 0% blocks executed 0%
+    #####:  262:    value() const noexcept { return _M_value; }
+------------------
+_ZNKSt10error_code5valueEv:
+function _ZNKSt10error_code5valueEv called 0 returned 0% blocks executed 0%
+    #####:  262:    value() const noexcept { return _M_value; }
+------------------
+_ZNKSt10error_code5valueEv:
+function _ZNKSt10error_code5valueEv called 0 returned 0% blocks executed 0%
+    #####:  262:    value() const noexcept { return _M_value; }
+------------------
+_ZNKSt10error_code5valueEv:
+function _ZNKSt10error_code5valueEv called 0 returned 0% blocks executed 0%
+    #####:  262:    value() const noexcept { return _M_value; }
+------------------
+_ZNKSt10error_code5valueEv:
+function _ZNKSt10error_code5valueEv called 0 returned 0% blocks executed 0%
+    #####:  262:    value() const noexcept { return _M_value; }
+------------------
+_ZNKSt10error_code5valueEv:
+function _ZNKSt10error_code5valueEv called 0 returned 0% blocks executed 0%
+    #####:  262:    value() const noexcept { return _M_value; }
+------------------
+_ZNKSt10error_code5valueEv:
+function _ZNKSt10error_code5valueEv called 0 returned 0% blocks executed 0%
+    #####:  262:    value() const noexcept { return _M_value; }
+------------------
+_ZNKSt10error_code5valueEv:
+function _ZNKSt10error_code5valueEv called 0 returned 0% blocks executed 0%
+    #####:  262:    value() const noexcept { return _M_value; }
+------------------
+_ZNKSt10error_code5valueEv:
+function _ZNKSt10error_code5valueEv called 0 returned 0% blocks executed 0%
+    #####:  262:    value() const noexcept { return _M_value; }
+------------------
+_ZNKSt10error_code5valueEv:
+function _ZNKSt10error_code5valueEv called 0 returned 0% blocks executed 0%
+    #####:  262:    value() const noexcept { return _M_value; }
+------------------
+_ZNKSt10error_code5valueEv:
+function _ZNKSt10error_code5valueEv called 0 returned 0% blocks executed 0%
+    #####:  262:    value() const noexcept { return _M_value; }
+------------------
+_ZNKSt10error_code5valueEv:
+function _ZNKSt10error_code5valueEv called 0 returned 0% blocks executed 0%
+    #####:  262:    value() const noexcept { return _M_value; }
+------------------
+_ZNKSt10error_code5valueEv:
+function _ZNKSt10error_code5valueEv called 0 returned 0% blocks executed 0%
+    #####:  262:    value() const noexcept { return _M_value; }
+------------------
+_ZNKSt10error_code5valueEv:
+function _ZNKSt10error_code5valueEv called 0 returned 0% blocks executed 0%
+    #####:  262:    value() const noexcept { return _M_value; }
+------------------
+_ZNKSt10error_code5valueEv:
+function _ZNKSt10error_code5valueEv called 0 returned 0% blocks executed 0%
+    #####:  262:    value() const noexcept { return _M_value; }
+------------------
+_ZNKSt10error_code5valueEv:
+function _ZNKSt10error_code5valueEv called 0 returned 0% blocks executed 0%
+    #####:  262:    value() const noexcept { return _M_value; }
+------------------
+_ZNKSt10error_code5valueEv:
+function _ZNKSt10error_code5valueEv called 0 returned 0% blocks executed 0%
+    #####:  262:    value() const noexcept { return _M_value; }
+------------------
+_ZNKSt10error_code5valueEv:
+function _ZNKSt10error_code5valueEv called 0 returned 0% blocks executed 0%
+    #####:  262:    value() const noexcept { return _M_value; }
+------------------
+_ZNKSt10error_code5valueEv:
+function _ZNKSt10error_code5valueEv called 0 returned 0% blocks executed 0%
+    #####:  262:    value() const noexcept { return _M_value; }
+------------------
+_ZNKSt10error_code5valueEv:
+function _ZNKSt10error_code5valueEv called 0 returned 0% blocks executed 0%
+    #####:  262:    value() const noexcept { return _M_value; }
+------------------
+_ZNKSt10error_code5valueEv:
+function _ZNKSt10error_code5valueEv called 0 returned 0% blocks executed 0%
+    #####:  262:    value() const noexcept { return _M_value; }
+------------------
+_ZNKSt10error_code5valueEv:
+function _ZNKSt10error_code5valueEv called 0 returned 0% blocks executed 0%
+    #####:  262:    value() const noexcept { return _M_value; }
+------------------
+_ZNKSt10error_code5valueEv:
+function _ZNKSt10error_code5valueEv called 0 returned 0% blocks executed 0%
+    #####:  262:    value() const noexcept { return _M_value; }
+------------------
+_ZNKSt10error_code5valueEv:
+function _ZNKSt10error_code5valueEv called 0 returned 0% blocks executed 0%
+    #####:  262:    value() const noexcept { return _M_value; }
+------------------
+_ZNKSt10error_code5valueEv:
+function _ZNKSt10error_code5valueEv called 0 returned 0% blocks executed 0%
+    #####:  262:    value() const noexcept { return _M_value; }
+------------------
+_ZNKSt10error_code5valueEv:
+function _ZNKSt10error_code5valueEv called 0 returned 0% blocks executed 0%
+    #####:  262:    value() const noexcept { return _M_value; }
+------------------
+_ZNKSt10error_code5valueEv:
+function _ZNKSt10error_code5valueEv called 0 returned 0% blocks executed 0%
+    #####:  262:    value() const noexcept { return _M_value; }
+------------------
+_ZNKSt10error_code5valueEv:
+function _ZNKSt10error_code5valueEv called 0 returned 0% blocks executed 0%
+    #####:  262:    value() const noexcept { return _M_value; }
+------------------
+_ZNKSt10error_code5valueEv:
+function _ZNKSt10error_code5valueEv called 0 returned 0% blocks executed 0%
+    #####:  262:    value() const noexcept { return _M_value; }
+------------------
+_ZNKSt10error_code5valueEv:
+function _ZNKSt10error_code5valueEv called 0 returned 0% blocks executed 0%
+    #####:  262:    value() const noexcept { return _M_value; }
+------------------
+_ZNKSt10error_code5valueEv:
+function _ZNKSt10error_code5valueEv called 0 returned 0% blocks executed 0%
+    #####:  262:    value() const noexcept { return _M_value; }
+------------------
+        -:  263:
+        -:  264:    /// The error category that this error belongs to.
+        -:  265:    [[__nodiscard__]]
+        -:  266:    const error_category&
+    #####:  267:    category() const noexcept { return *_M_cat; }
+------------------
+_ZNKSt10error_code8categoryEv:
+function _ZNKSt10error_code8categoryEv called 0 returned 0% blocks executed 0%
+    #####:  267:    category() const noexcept { return *_M_cat; }
+------------------
+_ZNKSt10error_code8categoryEv:
+function _ZNKSt10error_code8categoryEv called 0 returned 0% blocks executed 0%
+    #####:  267:    category() const noexcept { return *_M_cat; }
+------------------
+_ZNKSt10error_code8categoryEv:
+function _ZNKSt10error_code8categoryEv called 0 returned 0% blocks executed 0%
+    #####:  267:    category() const noexcept { return *_M_cat; }
+------------------
+_ZNKSt10error_code8categoryEv:
+function _ZNKSt10error_code8categoryEv called 0 returned 0% blocks executed 0%
+    #####:  267:    category() const noexcept { return *_M_cat; }
+------------------
+_ZNKSt10error_code8categoryEv:
+function _ZNKSt10error_code8categoryEv called 0 returned 0% blocks executed 0%
+    #####:  267:    category() const noexcept { return *_M_cat; }
+------------------
+_ZNKSt10error_code8categoryEv:
+function _ZNKSt10error_code8categoryEv called 0 returned 0% blocks executed 0%
+    #####:  267:    category() const noexcept { return *_M_cat; }
+------------------
+_ZNKSt10error_code8categoryEv:
+function _ZNKSt10error_code8categoryEv called 0 returned 0% blocks executed 0%
+    #####:  267:    category() const noexcept { return *_M_cat; }
+------------------
+_ZNKSt10error_code8categoryEv:
+function _ZNKSt10error_code8categoryEv called 0 returned 0% blocks executed 0%
+    #####:  267:    category() const noexcept { return *_M_cat; }
+------------------
+_ZNKSt10error_code8categoryEv:
+function _ZNKSt10error_code8categoryEv called 0 returned 0% blocks executed 0%
+    #####:  267:    category() const noexcept { return *_M_cat; }
+------------------
+_ZNKSt10error_code8categoryEv:
+function _ZNKSt10error_code8categoryEv called 0 returned 0% blocks executed 0%
+    #####:  267:    category() const noexcept { return *_M_cat; }
+------------------
+_ZNKSt10error_code8categoryEv:
+function _ZNKSt10error_code8categoryEv called 0 returned 0% blocks executed 0%
+    #####:  267:    category() const noexcept { return *_M_cat; }
+------------------
+_ZNKSt10error_code8categoryEv:
+function _ZNKSt10error_code8categoryEv called 0 returned 0% blocks executed 0%
+    #####:  267:    category() const noexcept { return *_M_cat; }
+------------------
+_ZNKSt10error_code8categoryEv:
+function _ZNKSt10error_code8categoryEv called 0 returned 0% blocks executed 0%
+    #####:  267:    category() const noexcept { return *_M_cat; }
+------------------
+_ZNKSt10error_code8categoryEv:
+function _ZNKSt10error_code8categoryEv called 0 returned 0% blocks executed 0%
+    #####:  267:    category() const noexcept { return *_M_cat; }
+------------------
+_ZNKSt10error_code8categoryEv:
+function _ZNKSt10error_code8categoryEv called 0 returned 0% blocks executed 0%
+    #####:  267:    category() const noexcept { return *_M_cat; }
+------------------
+_ZNKSt10error_code8categoryEv:
+function _ZNKSt10error_code8categoryEv called 0 returned 0% blocks executed 0%
+    #####:  267:    category() const noexcept { return *_M_cat; }
+------------------
+_ZNKSt10error_code8categoryEv:
+function _ZNKSt10error_code8categoryEv called 0 returned 0% blocks executed 0%
+    #####:  267:    category() const noexcept { return *_M_cat; }
+------------------
+_ZNKSt10error_code8categoryEv:
+function _ZNKSt10error_code8categoryEv called 0 returned 0% blocks executed 0%
+    #####:  267:    category() const noexcept { return *_M_cat; }
+------------------
+_ZNKSt10error_code8categoryEv:
+function _ZNKSt10error_code8categoryEv called 0 returned 0% blocks executed 0%
+    #####:  267:    category() const noexcept { return *_M_cat; }
+------------------
+_ZNKSt10error_code8categoryEv:
+function _ZNKSt10error_code8categoryEv called 0 returned 0% blocks executed 0%
+    #####:  267:    category() const noexcept { return *_M_cat; }
+------------------
+_ZNKSt10error_code8categoryEv:
+function _ZNKSt10error_code8categoryEv called 0 returned 0% blocks executed 0%
+    #####:  267:    category() const noexcept { return *_M_cat; }
+------------------
+_ZNKSt10error_code8categoryEv:
+function _ZNKSt10error_code8categoryEv called 0 returned 0% blocks executed 0%
+    #####:  267:    category() const noexcept { return *_M_cat; }
+------------------
+_ZNKSt10error_code8categoryEv:
+function _ZNKSt10error_code8categoryEv called 0 returned 0% blocks executed 0%
+    #####:  267:    category() const noexcept { return *_M_cat; }
+------------------
+_ZNKSt10error_code8categoryEv:
+function _ZNKSt10error_code8categoryEv called 0 returned 0% blocks executed 0%
+    #####:  267:    category() const noexcept { return *_M_cat; }
+------------------
+_ZNKSt10error_code8categoryEv:
+function _ZNKSt10error_code8categoryEv called 0 returned 0% blocks executed 0%
+    #####:  267:    category() const noexcept { return *_M_cat; }
+------------------
+_ZNKSt10error_code8categoryEv:
+function _ZNKSt10error_code8categoryEv called 0 returned 0% blocks executed 0%
+    #####:  267:    category() const noexcept { return *_M_cat; }
+------------------
+_ZNKSt10error_code8categoryEv:
+function _ZNKSt10error_code8categoryEv called 0 returned 0% blocks executed 0%
+    #####:  267:    category() const noexcept { return *_M_cat; }
+------------------
+_ZNKSt10error_code8categoryEv:
+function _ZNKSt10error_code8categoryEv called 0 returned 0% blocks executed 0%
+    #####:  267:    category() const noexcept { return *_M_cat; }
+------------------
+_ZNKSt10error_code8categoryEv:
+function _ZNKSt10error_code8categoryEv called 0 returned 0% blocks executed 0%
+    #####:  267:    category() const noexcept { return *_M_cat; }
+------------------
+_ZNKSt10error_code8categoryEv:
+function _ZNKSt10error_code8categoryEv called 0 returned 0% blocks executed 0%
+    #####:  267:    category() const noexcept { return *_M_cat; }
+------------------
+_ZNKSt10error_code8categoryEv:
+function _ZNKSt10error_code8categoryEv called 0 returned 0% blocks executed 0%
+    #####:  267:    category() const noexcept { return *_M_cat; }
+------------------
+_ZNKSt10error_code8categoryEv:
+function _ZNKSt10error_code8categoryEv called 0 returned 0% blocks executed 0%
+    #####:  267:    category() const noexcept { return *_M_cat; }
+------------------
+_ZNKSt10error_code8categoryEv:
+function _ZNKSt10error_code8categoryEv called 0 returned 0% blocks executed 0%
+    #####:  267:    category() const noexcept { return *_M_cat; }
+------------------
+_ZNKSt10error_code8categoryEv:
+function _ZNKSt10error_code8categoryEv called 0 returned 0% blocks executed 0%
+    #####:  267:    category() const noexcept { return *_M_cat; }
+------------------
+_ZNKSt10error_code8categoryEv:
+function _ZNKSt10error_code8categoryEv called 0 returned 0% blocks executed 0%
+    #####:  267:    category() const noexcept { return *_M_cat; }
+------------------
+_ZNKSt10error_code8categoryEv:
+function _ZNKSt10error_code8categoryEv called 0 returned 0% blocks executed 0%
+    #####:  267:    category() const noexcept { return *_M_cat; }
+------------------
+_ZNKSt10error_code8categoryEv:
+function _ZNKSt10error_code8categoryEv called 0 returned 0% blocks executed 0%
+    #####:  267:    category() const noexcept { return *_M_cat; }
+------------------
+_ZNKSt10error_code8categoryEv:
+function _ZNKSt10error_code8categoryEv called 0 returned 0% blocks executed 0%
+    #####:  267:    category() const noexcept { return *_M_cat; }
+------------------
+_ZNKSt10error_code8categoryEv:
+function _ZNKSt10error_code8categoryEv called 0 returned 0% blocks executed 0%
+    #####:  267:    category() const noexcept { return *_M_cat; }
+------------------
+_ZNKSt10error_code8categoryEv:
+function _ZNKSt10error_code8categoryEv called 0 returned 0% blocks executed 0%
+    #####:  267:    category() const noexcept { return *_M_cat; }
+------------------
+_ZNKSt10error_code8categoryEv:
+function _ZNKSt10error_code8categoryEv called 0 returned 0% blocks executed 0%
+    #####:  267:    category() const noexcept { return *_M_cat; }
+------------------
+_ZNKSt10error_code8categoryEv:
+function _ZNKSt10error_code8categoryEv called 0 returned 0% blocks executed 0%
+    #####:  267:    category() const noexcept { return *_M_cat; }
+------------------
+_ZNKSt10error_code8categoryEv:
+function _ZNKSt10error_code8categoryEv called 0 returned 0% blocks executed 0%
+    #####:  267:    category() const noexcept { return *_M_cat; }
+------------------
+_ZNKSt10error_code8categoryEv:
+function _ZNKSt10error_code8categoryEv called 0 returned 0% blocks executed 0%
+    #####:  267:    category() const noexcept { return *_M_cat; }
+------------------
+_ZNKSt10error_code8categoryEv:
+function _ZNKSt10error_code8categoryEv called 0 returned 0% blocks executed 0%
+    #####:  267:    category() const noexcept { return *_M_cat; }
+------------------
+_ZNKSt10error_code8categoryEv:
+function _ZNKSt10error_code8categoryEv called 0 returned 0% blocks executed 0%
+    #####:  267:    category() const noexcept { return *_M_cat; }
+------------------
+_ZNKSt10error_code8categoryEv:
+function _ZNKSt10error_code8categoryEv called 0 returned 0% blocks executed 0%
+    #####:  267:    category() const noexcept { return *_M_cat; }
+------------------
+_ZNKSt10error_code8categoryEv:
+function _ZNKSt10error_code8categoryEv called 0 returned 0% blocks executed 0%
+    #####:  267:    category() const noexcept { return *_M_cat; }
+------------------
+_ZNKSt10error_code8categoryEv:
+function _ZNKSt10error_code8categoryEv called 0 returned 0% blocks executed 0%
+    #####:  267:    category() const noexcept { return *_M_cat; }
+------------------
+_ZNKSt10error_code8categoryEv:
+function _ZNKSt10error_code8categoryEv called 0 returned 0% blocks executed 0%
+    #####:  267:    category() const noexcept { return *_M_cat; }
+------------------
+_ZNKSt10error_code8categoryEv:
+function _ZNKSt10error_code8categoryEv called 0 returned 0% blocks executed 0%
+    #####:  267:    category() const noexcept { return *_M_cat; }
+------------------
+_ZNKSt10error_code8categoryEv:
+function _ZNKSt10error_code8categoryEv called 0 returned 0% blocks executed 0%
+    #####:  267:    category() const noexcept { return *_M_cat; }
+------------------
+_ZNKSt10error_code8categoryEv:
+function _ZNKSt10error_code8categoryEv called 0 returned 0% blocks executed 0%
+    #####:  267:    category() const noexcept { return *_M_cat; }
+------------------
+_ZNKSt10error_code8categoryEv:
+function _ZNKSt10error_code8categoryEv called 0 returned 0% blocks executed 0%
+    #####:  267:    category() const noexcept { return *_M_cat; }
+------------------
+_ZNKSt10error_code8categoryEv:
+function _ZNKSt10error_code8categoryEv called 0 returned 0% blocks executed 0%
+    #####:  267:    category() const noexcept { return *_M_cat; }
+------------------
+_ZNKSt10error_code8categoryEv:
+function _ZNKSt10error_code8categoryEv called 0 returned 0% blocks executed 0%
+    #####:  267:    category() const noexcept { return *_M_cat; }
+------------------
+_ZNKSt10error_code8categoryEv:
+function _ZNKSt10error_code8categoryEv called 0 returned 0% blocks executed 0%
+    #####:  267:    category() const noexcept { return *_M_cat; }
+------------------
+_ZNKSt10error_code8categoryEv:
+function _ZNKSt10error_code8categoryEv called 0 returned 0% blocks executed 0%
+    #####:  267:    category() const noexcept { return *_M_cat; }
+------------------
+_ZNKSt10error_code8categoryEv:
+function _ZNKSt10error_code8categoryEv called 0 returned 0% blocks executed 0%
+    #####:  267:    category() const noexcept { return *_M_cat; }
+------------------
+_ZNKSt10error_code8categoryEv:
+function _ZNKSt10error_code8categoryEv called 0 returned 0% blocks executed 0%
+    #####:  267:    category() const noexcept { return *_M_cat; }
+------------------
+_ZNKSt10error_code8categoryEv:
+function _ZNKSt10error_code8categoryEv called 0 returned 0% blocks executed 0%
+    #####:  267:    category() const noexcept { return *_M_cat; }
+------------------
+_ZNKSt10error_code8categoryEv:
+function _ZNKSt10error_code8categoryEv called 0 returned 0% blocks executed 0%
+    #####:  267:    category() const noexcept { return *_M_cat; }
+------------------
+_ZNKSt10error_code8categoryEv:
+function _ZNKSt10error_code8categoryEv called 0 returned 0% blocks executed 0%
+    #####:  267:    category() const noexcept { return *_M_cat; }
+------------------
+_ZNKSt10error_code8categoryEv:
+function _ZNKSt10error_code8categoryEv called 0 returned 0% blocks executed 0%
+    #####:  267:    category() const noexcept { return *_M_cat; }
+------------------
+_ZNKSt10error_code8categoryEv:
+function _ZNKSt10error_code8categoryEv called 0 returned 0% blocks executed 0%
+    #####:  267:    category() const noexcept { return *_M_cat; }
+------------------
+_ZNKSt10error_code8categoryEv:
+function _ZNKSt10error_code8categoryEv called 0 returned 0% blocks executed 0%
+    #####:  267:    category() const noexcept { return *_M_cat; }
+------------------
+_ZNKSt10error_code8categoryEv:
+function _ZNKSt10error_code8categoryEv called 0 returned 0% blocks executed 0%
+    #####:  267:    category() const noexcept { return *_M_cat; }
+------------------
+        -:  268:
+        -:  269:    /// An `error_condition` for this error's category and value.
+        -:  270:    error_condition
+        -:  271:    default_error_condition() const noexcept;
+        -:  272:
+        -:  273:    /// The category's description of the value.
+        -:  274:    _GLIBCXX_DEFAULT_ABI_TAG
+        -:  275:    string
+    #####:  276:    message() const
+    #####:  277:    { return category().message(value()); }
+------------------
+_ZNKSt10error_code7messageB5cxx11Ev:
+function _ZNKSt10error_code7messageB5cxx11Ev called 0 returned 0% blocks executed 0%
+    #####:  276:    message() const
+    #####:  277:    { return category().message(value()); }
+call    0 never executed
+call    1 never executed
+call    2 never executed
+------------------
+_ZNKSt10error_code7messageB5cxx11Ev:
+function _ZNKSt10error_code7messageB5cxx11Ev called 0 returned 0% blocks executed 0%
+    #####:  276:    message() const
+    #####:  277:    { return category().message(value()); }
+call    0 never executed
+call    1 never executed
+call    2 never executed
+------------------
+_ZNKSt10error_code7messageB5cxx11Ev:
+function _ZNKSt10error_code7messageB5cxx11Ev called 0 returned 0% blocks executed 0%
+    #####:  276:    message() const
+    #####:  277:    { return category().message(value()); }
+call    0 never executed
+call    1 never executed
+call    2 never executed
+------------------
+_ZNKSt10error_code7messageB5cxx11Ev:
+function _ZNKSt10error_code7messageB5cxx11Ev called 0 returned 0% blocks executed 0%
+    #####:  276:    message() const
+    #####:  277:    { return category().message(value()); }
+call    0 never executed
+call    1 never executed
+call    2 never executed
+------------------
+_ZNKSt10error_code7messageB5cxx11Ev:
+function _ZNKSt10error_code7messageB5cxx11Ev called 0 returned 0% blocks executed 0%
+    #####:  276:    message() const
+    #####:  277:    { return category().message(value()); }
+call    0 never executed
+call    1 never executed
+call    2 never executed
+------------------
+_ZNKSt10error_code7messageB5cxx11Ev:
+function _ZNKSt10error_code7messageB5cxx11Ev called 0 returned 0% blocks executed 0%
+    #####:  276:    message() const
+    #####:  277:    { return category().message(value()); }
+call    0 never executed
+call    1 never executed
+call    2 never executed
+------------------
+_ZNKSt10error_code7messageB5cxx11Ev:
+function _ZNKSt10error_code7messageB5cxx11Ev called 0 returned 0% blocks executed 0%
+    #####:  276:    message() const
+    #####:  277:    { return category().message(value()); }
+call    0 never executed
+call    1 never executed
+call    2 never executed
+------------------
+_ZNKSt10error_code7messageB5cxx11Ev:
+function _ZNKSt10error_code7messageB5cxx11Ev called 0 returned 0% blocks executed 0%
+    #####:  276:    message() const
+    #####:  277:    { return category().message(value()); }
+call    0 never executed
+call    1 never executed
+call    2 never executed
+------------------
+_ZNKSt10error_code7messageB5cxx11Ev:
+function _ZNKSt10error_code7messageB5cxx11Ev called 0 returned 0% blocks executed 0%
+    #####:  276:    message() const
+    #####:  277:    { return category().message(value()); }
+call    0 never executed
+call    1 never executed
+call    2 never executed
+------------------
+_ZNKSt10error_code7messageB5cxx11Ev:
+function _ZNKSt10error_code7messageB5cxx11Ev called 0 returned 0% blocks executed 0%
+    #####:  276:    message() const
+    #####:  277:    { return category().message(value()); }
+call    0 never executed
+call    1 never executed
+call    2 never executed
+------------------
+_ZNKSt10error_code7messageB5cxx11Ev:
+function _ZNKSt10error_code7messageB5cxx11Ev called 0 returned 0% blocks executed 0%
+    #####:  276:    message() const
+    #####:  277:    { return category().message(value()); }
+call    0 never executed
+call    1 never executed
+call    2 never executed
+------------------
+_ZNKSt10error_code7messageB5cxx11Ev:
+function _ZNKSt10error_code7messageB5cxx11Ev called 0 returned 0% blocks executed 0%
+    #####:  276:    message() const
+    #####:  277:    { return category().message(value()); }
+call    0 never executed
+call    1 never executed
+call    2 never executed
+------------------
+_ZNKSt10error_code7messageB5cxx11Ev:
+function _ZNKSt10error_code7messageB5cxx11Ev called 0 returned 0% blocks executed 0%
+    #####:  276:    message() const
+    #####:  277:    { return category().message(value()); }
+call    0 never executed
+call    1 never executed
+call    2 never executed
+------------------
+_ZNKSt10error_code7messageB5cxx11Ev:
+function _ZNKSt10error_code7messageB5cxx11Ev called 0 returned 0% blocks executed 0%
+    #####:  276:    message() const
+    #####:  277:    { return category().message(value()); }
+call    0 never executed
+call    1 never executed
+call    2 never executed
+------------------
+_ZNKSt10error_code7messageB5cxx11Ev:
+function _ZNKSt10error_code7messageB5cxx11Ev called 0 returned 0% blocks executed 0%
+    #####:  276:    message() const
+    #####:  277:    { return category().message(value()); }
+call    0 never executed
+call    1 never executed
+call    2 never executed
+------------------
+_ZNKSt10error_code7messageB5cxx11Ev:
+function _ZNKSt10error_code7messageB5cxx11Ev called 0 returned 0% blocks executed 0%
+    #####:  276:    message() const
+    #####:  277:    { return category().message(value()); }
+call    0 never executed
+call    1 never executed
+call    2 never executed
+------------------
+_ZNKSt10error_code7messageB5cxx11Ev:
+function _ZNKSt10error_code7messageB5cxx11Ev called 0 returned 0% blocks executed 0%
+    #####:  276:    message() const
+    #####:  277:    { return category().message(value()); }
+call    0 never executed
+call    1 never executed
+call    2 never executed
+------------------
+_ZNKSt10error_code7messageB5cxx11Ev:
+function _ZNKSt10error_code7messageB5cxx11Ev called 0 returned 0% blocks executed 0%
+    #####:  276:    message() const
+    #####:  277:    { return category().message(value()); }
+call    0 never executed
+call    1 never executed
+call    2 never executed
+------------------
+_ZNKSt10error_code7messageB5cxx11Ev:
+function _ZNKSt10error_code7messageB5cxx11Ev called 0 returned 0% blocks executed 0%
+    #####:  276:    message() const
+    #####:  277:    { return category().message(value()); }
+call    0 never executed
+call    1 never executed
+call    2 never executed
+------------------
+_ZNKSt10error_code7messageB5cxx11Ev:
+function _ZNKSt10error_code7messageB5cxx11Ev called 0 returned 0% blocks executed 0%
+    #####:  276:    message() const
+    #####:  277:    { return category().message(value()); }
+call    0 never executed
+call    1 never executed
+call    2 never executed
+------------------
+_ZNKSt10error_code7messageB5cxx11Ev:
+function _ZNKSt10error_code7messageB5cxx11Ev called 0 returned 0% blocks executed 0%
+    #####:  276:    message() const
+    #####:  277:    { return category().message(value()); }
+call    0 never executed
+call    1 never executed
+call    2 never executed
+------------------
+_ZNKSt10error_code7messageB5cxx11Ev:
+function _ZNKSt10error_code7messageB5cxx11Ev called 0 returned 0% blocks executed 0%
+    #####:  276:    message() const
+    #####:  277:    { return category().message(value()); }
+call    0 never executed
+call    1 never executed
+call    2 never executed
+------------------
+_ZNKSt10error_code7messageB5cxx11Ev:
+function _ZNKSt10error_code7messageB5cxx11Ev called 0 returned 0% blocks executed 0%
+    #####:  276:    message() const
+    #####:  277:    { return category().message(value()); }
+call    0 never executed
+call    1 never executed
+call    2 never executed
+------------------
+_ZNKSt10error_code7messageB5cxx11Ev:
+function _ZNKSt10error_code7messageB5cxx11Ev called 0 returned 0% blocks executed 0%
+    #####:  276:    message() const
+    #####:  277:    { return category().message(value()); }
+call    0 never executed
+call    1 never executed
+call    2 never executed
+------------------
+_ZNKSt10error_code7messageB5cxx11Ev:
+function _ZNKSt10error_code7messageB5cxx11Ev called 0 returned 0% blocks executed 0%
+    #####:  276:    message() const
+    #####:  277:    { return category().message(value()); }
+call    0 never executed
+call    1 never executed
+call    2 never executed
+------------------
+_ZNKSt10error_code7messageB5cxx11Ev:
+function _ZNKSt10error_code7messageB5cxx11Ev called 0 returned 0% blocks executed 0%
+    #####:  276:    message() const
+    #####:  277:    { return category().message(value()); }
+call    0 never executed
+call    1 never executed
+call    2 never executed
+------------------
+_ZNKSt10error_code7messageB5cxx11Ev:
+function _ZNKSt10error_code7messageB5cxx11Ev called 0 returned 0% blocks executed 0%
+    #####:  276:    message() const
+    #####:  277:    { return category().message(value()); }
+call    0 never executed
+call    1 never executed
+call    2 never executed
+------------------
+_ZNKSt10error_code7messageB5cxx11Ev:
+function _ZNKSt10error_code7messageB5cxx11Ev called 0 returned 0% blocks executed 0%
+    #####:  276:    message() const
+    #####:  277:    { return category().message(value()); }
+call    0 never executed
+call    1 never executed
+call    2 never executed
+------------------
+_ZNKSt10error_code7messageB5cxx11Ev:
+function _ZNKSt10error_code7messageB5cxx11Ev called 0 returned 0% blocks executed 0%
+    #####:  276:    message() const
+    #####:  277:    { return category().message(value()); }
+call    0 never executed
+call    1 never executed
+call    2 never executed
+------------------
+_ZNKSt10error_code7messageB5cxx11Ev:
+function _ZNKSt10error_code7messageB5cxx11Ev called 0 returned 0% blocks executed 0%
+    #####:  276:    message() const
+    #####:  277:    { return category().message(value()); }
+call    0 never executed
+call    1 never executed
+call    2 never executed
+------------------
+_ZNKSt10error_code7messageB5cxx11Ev:
+function _ZNKSt10error_code7messageB5cxx11Ev called 0 returned 0% blocks executed 0%
+    #####:  276:    message() const
+    #####:  277:    { return category().message(value()); }
+call    0 never executed
+call    1 never executed
+call    2 never executed
+------------------
+_ZNKSt10error_code7messageB5cxx11Ev:
+function _ZNKSt10error_code7messageB5cxx11Ev called 0 returned 0% blocks executed 0%
+    #####:  276:    message() const
+    #####:  277:    { return category().message(value()); }
+call    0 never executed
+call    1 never executed
+call    2 never executed
+------------------
+_ZNKSt10error_code7messageB5cxx11Ev:
+function _ZNKSt10error_code7messageB5cxx11Ev called 0 returned 0% blocks executed 0%
+    #####:  276:    message() const
+    #####:  277:    { return category().message(value()); }
+call    0 never executed
+call    1 never executed
+call    2 never executed
+------------------
+_ZNKSt10error_code7messageB5cxx11Ev:
+function _ZNKSt10error_code7messageB5cxx11Ev called 0 returned 0% blocks executed 0%
+    #####:  276:    message() const
+    #####:  277:    { return category().message(value()); }
+call    0 never executed
+call    1 never executed
+call    2 never executed
+------------------
+_ZNKSt10error_code7messageB5cxx11Ev:
+function _ZNKSt10error_code7messageB5cxx11Ev called 0 returned 0% blocks executed 0%
+    #####:  276:    message() const
+    #####:  277:    { return category().message(value()); }
+call    0 never executed
+call    1 never executed
+call    2 never executed
+------------------
+_ZNKSt10error_code7messageB5cxx11Ev:
+function _ZNKSt10error_code7messageB5cxx11Ev called 0 returned 0% blocks executed 0%
+    #####:  276:    message() const
+    #####:  277:    { return category().message(value()); }
+call    0 never executed
+call    1 never executed
+call    2 never executed
+------------------
+_ZNKSt10error_code7messageB5cxx11Ev:
+function _ZNKSt10error_code7messageB5cxx11Ev called 0 returned 0% blocks executed 0%
+    #####:  276:    message() const
+    #####:  277:    { return category().message(value()); }
+call    0 never executed
+call    1 never executed
+call    2 never executed
+------------------
+_ZNKSt10error_code7messageB5cxx11Ev:
+function _ZNKSt10error_code7messageB5cxx11Ev called 0 returned 0% blocks executed 0%
+    #####:  276:    message() const
+    #####:  277:    { return category().message(value()); }
+call    0 never executed
+call    1 never executed
+call    2 never executed
+------------------
+_ZNKSt10error_code7messageB5cxx11Ev:
+function _ZNKSt10error_code7messageB5cxx11Ev called 0 returned 0% blocks executed 0%
+    #####:  276:    message() const
+    #####:  277:    { return category().message(value()); }
+call    0 never executed
+call    1 never executed
+call    2 never executed
+------------------
+_ZNKSt10error_code7messageB5cxx11Ev:
+function _ZNKSt10error_code7messageB5cxx11Ev called 0 returned 0% blocks executed 0%
+    #####:  276:    message() const
+    #####:  277:    { return category().message(value()); }
+call    0 never executed
+call    1 never executed
+call    2 never executed
+------------------
+_ZNKSt10error_code7messageB5cxx11Ev:
+function _ZNKSt10error_code7messageB5cxx11Ev called 0 returned 0% blocks executed 0%
+    #####:  276:    message() const
+    #####:  277:    { return category().message(value()); }
+call    0 never executed
+call    1 never executed
+call    2 never executed
+------------------
+_ZNKSt10error_code7messageB5cxx11Ev:
+function _ZNKSt10error_code7messageB5cxx11Ev called 0 returned 0% blocks executed 0%
+    #####:  276:    message() const
+    #####:  277:    { return category().message(value()); }
+call    0 never executed
+call    1 never executed
+call    2 never executed
+------------------
+_ZNKSt10error_code7messageB5cxx11Ev:
+function _ZNKSt10error_code7messageB5cxx11Ev called 0 returned 0% blocks executed 0%
+    #####:  276:    message() const
+    #####:  277:    { return category().message(value()); }
+call    0 never executed
+call    1 never executed
+call    2 never executed
+------------------
+_ZNKSt10error_code7messageB5cxx11Ev:
+function _ZNKSt10error_code7messageB5cxx11Ev called 0 returned 0% blocks executed 0%
+    #####:  276:    message() const
+    #####:  277:    { return category().message(value()); }
+call    0 never executed
+call    1 never executed
+call    2 never executed
+------------------
+_ZNKSt10error_code7messageB5cxx11Ev:
+function _ZNKSt10error_code7messageB5cxx11Ev called 0 returned 0% blocks executed 0%
+    #####:  276:    message() const
+    #####:  277:    { return category().message(value()); }
+call    0 never executed
+call    1 never executed
+call    2 never executed
+------------------
+_ZNKSt10error_code7messageB5cxx11Ev:
+function _ZNKSt10error_code7messageB5cxx11Ev called 0 returned 0% blocks executed 0%
+    #####:  276:    message() const
+    #####:  277:    { return category().message(value()); }
+call    0 never executed
+call    1 never executed
+call    2 never executed
+------------------
+_ZNKSt10error_code7messageB5cxx11Ev:
+function _ZNKSt10error_code7messageB5cxx11Ev called 0 returned 0% blocks executed 0%
+    #####:  276:    message() const
+    #####:  277:    { return category().message(value()); }
+call    0 never executed
+call    1 never executed
+call    2 never executed
+------------------
+        -:  278:
+        -:  279:    /// Test whether `value()` is non-zero.
+        -:  280:    [[__nodiscard__]]
+      53*:  281:    explicit operator bool() const noexcept
+      53*:  282:    { return _M_value != 0; }
+------------------
+_ZNKSt10error_codecvbEv:
+function _ZNKSt10error_codecvbEv called 0 returned 0% blocks executed 0%
+    #####:  281:    explicit operator bool() const noexcept
+    #####:  282:    { return _M_value != 0; }
+------------------
+_ZNKSt10error_codecvbEv:
+function _ZNKSt10error_codecvbEv called 53 returned 100% blocks executed 100%
+       53:  281:    explicit operator bool() const noexcept
+       53:  282:    { return _M_value != 0; }
+------------------
+        -:  283:
+        -:  284:    // DR 804.
+        -:  285:  private:
+        -:  286:    int            		_M_value;
+        -:  287:    const error_category* 	_M_cat;
+        -:  288:  };
+        -:  289:
+        -:  290:  // C++11 19.5.2.5 non-member functions
+        -:  291:
+        -:  292:  /** Create an `error_code` representing a standard `errc` condition.
+        -:  293:   *
+        -:  294:   * The `std::errc` constants correspond to `errno` macros and so use the
+        -:  295:   * generic category.
+        -:  296:   *
+        -:  297:   * @relates error_code
+        -:  298:   * @since C++11
+        -:  299:   */
+        -:  300:  [[__nodiscard__]]
+        -:  301:  inline error_code
+        -:  302:  make_error_code(errc __e) noexcept
+        -:  303:  { return error_code(static_cast<int>(__e), generic_category()); }
+        -:  304:
+        -:  305:  /** Ordered comparison for std::error_code.
+        -:  306:   *
+        -:  307:   * This defines a total order by comparing the categories, and then
+        -:  308:   * if they are equal comparing the values.
+        -:  309:   *
+        -:  310:   * @relates error_code
+        -:  311:   * @since C++11
+        -:  312:   */
+        -:  313:#if __cpp_lib_three_way_comparison
+        -:  314:  [[nodiscard]]
+        -:  315:  inline strong_ordering
+        -:  316:  operator<=>(const error_code& __lhs, const error_code& __rhs) noexcept
+        -:  317:  {
+        -:  318:    if (auto __c = __lhs.category() <=> __rhs.category(); __c != 0)
+        -:  319:      return __c;
+        -:  320:    return __lhs.value() <=> __rhs.value();
+        -:  321:  }
+        -:  322:#else
+        -:  323:  inline bool
+        -:  324:  operator<(const error_code& __lhs, const error_code& __rhs) noexcept
+        -:  325:  {
+        -:  326:    return (__lhs.category() < __rhs.category()
+        -:  327:	    || (__lhs.category() == __rhs.category()
+        -:  328:		&& __lhs.value() < __rhs.value()));
+        -:  329:  }
+        -:  330:#endif
+        -:  331:
+        -:  332:  /** Write a std::error_code to an ostream.
+        -:  333:   *
+        -:  334:   * @relates error_code
+        -:  335:   * @since C++11
+        -:  336:   */
+        -:  337:  template<typename _CharT, typename _Traits>
+        -:  338:    basic_ostream<_CharT, _Traits>&
+        -:  339:    operator<<(basic_ostream<_CharT, _Traits>& __os, const error_code& __e)
+        -:  340:    { return (__os << __e.category().name() << ':' << __e.value()); }
+        -:  341:
+        -:  342:  /** Class error_condition
+        -:  343:   *
+        -:  344:   * This class represents error conditions that may be visible at an API
+        -:  345:   * boundary. Different `error_code` values that can occur within a library
+        -:  346:   * or module might map to the same `error_condition`.
+        -:  347:   *
+        -:  348:   * An `error_condition` represents something that the program can test for,
+        -:  349:   * and subsequently take appropriate action.
+        -:  350:   *
+        -:  351:   * @headerfile system_error
+        -:  352:   * @since C++11
+        -:  353:   */
+        -:  354:  class error_condition
+        -:  355:  {
+        -:  356:    template<typename _ErrorConditionEnum>
+        -:  357:      using _Check
+        -:  358:	= __enable_if_t<is_error_condition_enum<_ErrorConditionEnum>::value>;
+        -:  359:
+        -:  360:  public:
+        -:  361:    /// Initialize with a zero (no error) value and the generic category.
+        -:  362:    error_condition() noexcept
+        -:  363:    : _M_value(0), _M_cat(&generic_category()) { }
+        -:  364:
+        -:  365:    /// Initialize with the specified value and category.
+function _ZNSt15error_conditionC2EiRKNSt3_V214error_categoryE called 0 returned 0% blocks executed 0%
+    #####:  366:    error_condition(int __v, const error_category& __cat) noexcept
+    #####:  367:    : _M_value(__v), _M_cat(&__cat) { }
+        -:  368:
+        -:  369:    /// Initialize with a user-defined type, by calling make_error_condition.
+        -:  370:    template<typename _ErrorConditionEnum,
+        -:  371:	     typename = _Check<_ErrorConditionEnum>>
+function _ZNSt15error_conditionC2ISt4errcvEET_ called 0 returned 0% blocks executed 0%
+    #####:  372:      error_condition(_ErrorConditionEnum __e) noexcept
+        -:  373:      {
+        -:  374:	using __adl_only::make_error_condition;
+    #####:  375:	*this = make_error_condition(__e);
+call    0 never executed
+    #####:  376:      }
+        -:  377:
+        -:  378:    error_condition(const error_condition&) = default;
+        -:  379:    error_condition& operator=(const error_condition&) = default;
+        -:  380:
+        -:  381:    /// Set the value and category.
+        -:  382:    void
+        -:  383:    assign(int __v, const error_category& __cat) noexcept
+        -:  384:    {
+        -:  385:      _M_value = __v;
+        -:  386:      _M_cat = &__cat;
+        -:  387:    }
+        -:  388:
+        -:  389:    /// Reset the value and category to the default-constructed state.
+        -:  390:    void
+        -:  391:    clear() noexcept
+        -:  392:    { assign(0, generic_category()); }
+        -:  393:
+        -:  394:    // C++11 19.5.3.4 observers
+        -:  395:
+        -:  396:    /// The error value.
+        -:  397:    [[__nodiscard__]]
+        -:  398:    int
+function _ZNKSt15error_condition5valueEv called 0 returned 0% blocks executed 0%
+    #####:  399:    value() const noexcept { return _M_value; }
+        -:  400:
+        -:  401:    /// The error category that this error belongs to.
+        -:  402:    [[__nodiscard__]]
+        -:  403:    const error_category&
+function _ZNKSt15error_condition8categoryEv called 0 returned 0% blocks executed 0%
+    #####:  404:    category() const noexcept { return *_M_cat; }
+        -:  405:
+        -:  406:    /// The category's description of the value.
+        -:  407:    _GLIBCXX_DEFAULT_ABI_TAG
+        -:  408:    string
+        -:  409:    message() const
+        -:  410:    { return category().message(value()); }
+        -:  411:
+        -:  412:    /// Test whether `value()` is non-zero.
+        -:  413:    [[__nodiscard__]]
+        -:  414:    explicit operator bool() const noexcept
+        -:  415:    { return _M_value != 0; }
+        -:  416:
+        -:  417:    // DR 804.
+        -:  418:  private:
+        -:  419:    int 			_M_value;
+        -:  420:    const error_category* 	_M_cat;
+        -:  421:  };
+        -:  422:
+        -:  423:  // C++11 19.5.3.5 non-member functions
+        -:  424:
+        -:  425:  /** Create an `error_condition` representing a standard `errc` condition.
+        -:  426:   *
+        -:  427:   * The `std::errc` constants correspond to `errno` macros and so use the
+        -:  428:   * generic category.
+        -:  429:   *
+        -:  430:   * @relates error_condition
+        -:  431:   * @since C++11
+        -:  432:   */
+        -:  433:  [[__nodiscard__]]
+        -:  434:  inline error_condition
+function _ZSt20make_error_conditionSt4errc called 0 returned 0% blocks executed 0%
+    #####:  435:  make_error_condition(errc __e) noexcept
+    #####:  436:  { return error_condition(static_cast<int>(__e), generic_category()); }
+call    0 never executed
+        -:  437:
+        -:  438:  // C++11 19.5.4 Comparison operators
+        -:  439:
+        -:  440:  /** Equality comparison for std::error_code.
+        -:  441:   *
+        -:  442:   * Returns true only if they have the same category and the same value.
+        -:  443:   *
+        -:  444:   * @relates error_condition
+        -:  445:   * @since C++11
+        -:  446:   */
+        -:  447:  [[__nodiscard__]]
+        -:  448:  inline bool
+    #####:  449:  operator==(const error_code& __lhs, const error_code& __rhs) noexcept
+        -:  450:  {
+    #####:  451:    return __lhs.category() == __rhs.category()
+    #####:  452:	     && __lhs.value() == __rhs.value();
+        -:  453:  }
+------------------
+_ZSteqRKSt10error_codeS1_:
+function _ZSteqRKSt10error_codeS1_ called 0 returned 0% blocks executed 0%
+    #####:  449:  operator==(const error_code& __lhs, const error_code& __rhs) noexcept
+        -:  450:  {
+    #####:  451:    return __lhs.category() == __rhs.category()
+call    0 never executed
+call    1 never executed
+call    2 never executed
+    #####:  452:	     && __lhs.value() == __rhs.value();
+branch  0 never executed (fallthrough)
+branch  1 never executed
+call    2 never executed
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed
+        -:  453:  }
+------------------
+_ZSteqRKSt10error_codeS1_:
+function _ZSteqRKSt10error_codeS1_ called 0 returned 0% blocks executed 0%
+    #####:  449:  operator==(const error_code& __lhs, const error_code& __rhs) noexcept
+        -:  450:  {
+    #####:  451:    return __lhs.category() == __rhs.category()
+call    0 never executed
+call    1 never executed
+call    2 never executed
+    #####:  452:	     && __lhs.value() == __rhs.value();
+branch  0 never executed (fallthrough)
+branch  1 never executed
+call    2 never executed
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed
+        -:  453:  }
+------------------
+_ZSteqRKSt10error_codeS1_:
+function _ZSteqRKSt10error_codeS1_ called 0 returned 0% blocks executed 0%
+    #####:  449:  operator==(const error_code& __lhs, const error_code& __rhs) noexcept
+        -:  450:  {
+    #####:  451:    return __lhs.category() == __rhs.category()
+call    0 never executed
+call    1 never executed
+call    2 never executed
+    #####:  452:	     && __lhs.value() == __rhs.value();
+branch  0 never executed (fallthrough)
+branch  1 never executed
+call    2 never executed
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed
+        -:  453:  }
+------------------
+_ZSteqRKSt10error_codeS1_:
+function _ZSteqRKSt10error_codeS1_ called 0 returned 0% blocks executed 0%
+    #####:  449:  operator==(const error_code& __lhs, const error_code& __rhs) noexcept
+        -:  450:  {
+    #####:  451:    return __lhs.category() == __rhs.category()
+call    0 never executed
+call    1 never executed
+call    2 never executed
+    #####:  452:	     && __lhs.value() == __rhs.value();
+branch  0 never executed (fallthrough)
+branch  1 never executed
+call    2 never executed
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed
+        -:  453:  }
+------------------
+_ZSteqRKSt10error_codeS1_:
+function _ZSteqRKSt10error_codeS1_ called 0 returned 0% blocks executed 0%
+    #####:  449:  operator==(const error_code& __lhs, const error_code& __rhs) noexcept
+        -:  450:  {
+    #####:  451:    return __lhs.category() == __rhs.category()
+call    0 never executed
+call    1 never executed
+call    2 never executed
+    #####:  452:	     && __lhs.value() == __rhs.value();
+branch  0 never executed (fallthrough)
+branch  1 never executed
+call    2 never executed
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed
+        -:  453:  }
+------------------
+_ZSteqRKSt10error_codeS1_:
+function _ZSteqRKSt10error_codeS1_ called 0 returned 0% blocks executed 0%
+    #####:  449:  operator==(const error_code& __lhs, const error_code& __rhs) noexcept
+        -:  450:  {
+    #####:  451:    return __lhs.category() == __rhs.category()
+call    0 never executed
+call    1 never executed
+call    2 never executed
+    #####:  452:	     && __lhs.value() == __rhs.value();
+branch  0 never executed (fallthrough)
+branch  1 never executed
+call    2 never executed
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed
+        -:  453:  }
+------------------
+_ZSteqRKSt10error_codeS1_:
+function _ZSteqRKSt10error_codeS1_ called 0 returned 0% blocks executed 0%
+    #####:  449:  operator==(const error_code& __lhs, const error_code& __rhs) noexcept
+        -:  450:  {
+    #####:  451:    return __lhs.category() == __rhs.category()
+call    0 never executed
+call    1 never executed
+call    2 never executed
+    #####:  452:	     && __lhs.value() == __rhs.value();
+branch  0 never executed (fallthrough)
+branch  1 never executed
+call    2 never executed
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed
+        -:  453:  }
+------------------
+_ZSteqRKSt10error_codeS1_:
+function _ZSteqRKSt10error_codeS1_ called 0 returned 0% blocks executed 0%
+    #####:  449:  operator==(const error_code& __lhs, const error_code& __rhs) noexcept
+        -:  450:  {
+    #####:  451:    return __lhs.category() == __rhs.category()
+call    0 never executed
+call    1 never executed
+call    2 never executed
+    #####:  452:	     && __lhs.value() == __rhs.value();
+branch  0 never executed (fallthrough)
+branch  1 never executed
+call    2 never executed
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed
+        -:  453:  }
+------------------
+_ZSteqRKSt10error_codeS1_:
+function _ZSteqRKSt10error_codeS1_ called 0 returned 0% blocks executed 0%
+    #####:  449:  operator==(const error_code& __lhs, const error_code& __rhs) noexcept
+        -:  450:  {
+    #####:  451:    return __lhs.category() == __rhs.category()
+call    0 never executed
+call    1 never executed
+call    2 never executed
+    #####:  452:	     && __lhs.value() == __rhs.value();
+branch  0 never executed (fallthrough)
+branch  1 never executed
+call    2 never executed
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed
+        -:  453:  }
+------------------
+_ZSteqRKSt10error_codeS1_:
+function _ZSteqRKSt10error_codeS1_ called 0 returned 0% blocks executed 0%
+    #####:  449:  operator==(const error_code& __lhs, const error_code& __rhs) noexcept
+        -:  450:  {
+    #####:  451:    return __lhs.category() == __rhs.category()
+call    0 never executed
+call    1 never executed
+call    2 never executed
+    #####:  452:	     && __lhs.value() == __rhs.value();
+branch  0 never executed (fallthrough)
+branch  1 never executed
+call    2 never executed
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed
+        -:  453:  }
+------------------
+_ZSteqRKSt10error_codeS1_:
+function _ZSteqRKSt10error_codeS1_ called 0 returned 0% blocks executed 0%
+    #####:  449:  operator==(const error_code& __lhs, const error_code& __rhs) noexcept
+        -:  450:  {
+    #####:  451:    return __lhs.category() == __rhs.category()
+call    0 never executed
+call    1 never executed
+call    2 never executed
+    #####:  452:	     && __lhs.value() == __rhs.value();
+branch  0 never executed (fallthrough)
+branch  1 never executed
+call    2 never executed
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed
+        -:  453:  }
+------------------
+_ZSteqRKSt10error_codeS1_:
+function _ZSteqRKSt10error_codeS1_ called 0 returned 0% blocks executed 0%
+    #####:  449:  operator==(const error_code& __lhs, const error_code& __rhs) noexcept
+        -:  450:  {
+    #####:  451:    return __lhs.category() == __rhs.category()
+call    0 never executed
+call    1 never executed
+call    2 never executed
+    #####:  452:	     && __lhs.value() == __rhs.value();
+branch  0 never executed (fallthrough)
+branch  1 never executed
+call    2 never executed
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed
+        -:  453:  }
+------------------
+_ZSteqRKSt10error_codeS1_:
+function _ZSteqRKSt10error_codeS1_ called 0 returned 0% blocks executed 0%
+    #####:  449:  operator==(const error_code& __lhs, const error_code& __rhs) noexcept
+        -:  450:  {
+    #####:  451:    return __lhs.category() == __rhs.category()
+call    0 never executed
+call    1 never executed
+call    2 never executed
+    #####:  452:	     && __lhs.value() == __rhs.value();
+branch  0 never executed (fallthrough)
+branch  1 never executed
+call    2 never executed
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed
+        -:  453:  }
+------------------
+_ZSteqRKSt10error_codeS1_:
+function _ZSteqRKSt10error_codeS1_ called 0 returned 0% blocks executed 0%
+    #####:  449:  operator==(const error_code& __lhs, const error_code& __rhs) noexcept
+        -:  450:  {
+    #####:  451:    return __lhs.category() == __rhs.category()
+call    0 never executed
+call    1 never executed
+call    2 never executed
+    #####:  452:	     && __lhs.value() == __rhs.value();
+branch  0 never executed (fallthrough)
+branch  1 never executed
+call    2 never executed
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed
+        -:  453:  }
+------------------
+_ZSteqRKSt10error_codeS1_:
+function _ZSteqRKSt10error_codeS1_ called 0 returned 0% blocks executed 0%
+    #####:  449:  operator==(const error_code& __lhs, const error_code& __rhs) noexcept
+        -:  450:  {
+    #####:  451:    return __lhs.category() == __rhs.category()
+call    0 never executed
+call    1 never executed
+call    2 never executed
+    #####:  452:	     && __lhs.value() == __rhs.value();
+branch  0 never executed (fallthrough)
+branch  1 never executed
+call    2 never executed
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed
+        -:  453:  }
+------------------
+_ZSteqRKSt10error_codeS1_:
+function _ZSteqRKSt10error_codeS1_ called 0 returned 0% blocks executed 0%
+    #####:  449:  operator==(const error_code& __lhs, const error_code& __rhs) noexcept
+        -:  450:  {
+    #####:  451:    return __lhs.category() == __rhs.category()
+call    0 never executed
+call    1 never executed
+call    2 never executed
+    #####:  452:	     && __lhs.value() == __rhs.value();
+branch  0 never executed (fallthrough)
+branch  1 never executed
+call    2 never executed
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed
+        -:  453:  }
+------------------
+_ZSteqRKSt10error_codeS1_:
+function _ZSteqRKSt10error_codeS1_ called 0 returned 0% blocks executed 0%
+    #####:  449:  operator==(const error_code& __lhs, const error_code& __rhs) noexcept
+        -:  450:  {
+    #####:  451:    return __lhs.category() == __rhs.category()
+call    0 never executed
+call    1 never executed
+call    2 never executed
+    #####:  452:	     && __lhs.value() == __rhs.value();
+branch  0 never executed (fallthrough)
+branch  1 never executed
+call    2 never executed
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed
+        -:  453:  }
+------------------
+        -:  454:
+        -:  455:  /** Equality comparison for std::error_code and std::error_condition.
+        -:  456:   *
+        -:  457:   * Uses each category's `equivalent` member function to check whether
+        -:  458:   * the values correspond to an equivalent error in that category.
+        -:  459:   *
+        -:  460:   * @relates error_condition
+        -:  461:   * @since C++11
+        -:  462:   */
+        -:  463:  [[__nodiscard__]]
+        -:  464:  inline bool
+function _ZSteqRKSt10error_codeRKSt15error_condition called 0 returned 0% blocks executed 0%
+    #####:  465:  operator==(const error_code& __lhs, const error_condition& __rhs) noexcept
+        -:  466:  {
+    #####:  467:    return __lhs.category().equivalent(__lhs.value(), __rhs)
+call    0 never executed
+call    1 never executed
+call    2 never executed
+    #####:  468:	     || __rhs.category().equivalent(__lhs, __rhs.value());
+branch  0 never executed (fallthrough)
+branch  1 never executed
+call    2 never executed
+call    3 never executed
+call    4 never executed
+branch  5 never executed (fallthrough)
+branch  6 never executed
+        -:  469:  }
+        -:  470:
+        -:  471:  /** Equality comparison for std::error_condition.
+        -:  472:   *
+        -:  473:   * Returns true only if they have the same category and the same value.
+        -:  474:   *
+        -:  475:   * @relates error_condition
+        -:  476:   * @since C++11
+        -:  477:   */
+        -:  478:  [[__nodiscard__]]
+        -:  479:  inline bool
+        -:  480:  operator==(const error_condition& __lhs,
+        -:  481:	     const error_condition& __rhs) noexcept
+        -:  482:  {
+        -:  483:    return __lhs.category() == __rhs.category()
+        -:  484:	     && __lhs.value() == __rhs.value();
+        -:  485:  }
+        -:  486:
+        -:  487:  /** Ordered comparison for std::error_condition.
+        -:  488:   *
+        -:  489:   * This defines a total order by comparing the categories, and then
+        -:  490:   * if they are equal comparing the values.
+        -:  491:   *
+        -:  492:   * @relates error_condition
+        -:  493:   * @since C++11
+        -:  494:   */
+        -:  495:#if __cpp_lib_three_way_comparison
+        -:  496:  [[nodiscard]]
+        -:  497:  inline strong_ordering
+        -:  498:  operator<=>(const error_condition& __lhs,
+        -:  499:	      const error_condition& __rhs) noexcept
+        -:  500:  {
+        -:  501:    if (auto __c = __lhs.category() <=> __rhs.category(); __c != 0)
+        -:  502:      return __c;
+        -:  503:    return __lhs.value() <=> __rhs.value();
+        -:  504:  }
+        -:  505:#else
+        -:  506:  inline bool
+        -:  507:  operator<(const error_condition& __lhs,
+        -:  508:	    const error_condition& __rhs) noexcept
+        -:  509:  {
+        -:  510:    return (__lhs.category() < __rhs.category()
+        -:  511:	    || (__lhs.category() == __rhs.category()
+        -:  512:		&& __lhs.value() < __rhs.value()));
+        -:  513:  }
+        -:  514:
+        -:  515:  /// @relates error_condition
+        -:  516:  inline bool
+        -:  517:  operator==(const error_condition& __lhs, const error_code& __rhs) noexcept
+        -:  518:  {
+        -:  519:    return (__rhs.category().equivalent(__rhs.value(), __lhs)
+        -:  520:	    || __lhs.category().equivalent(__rhs, __lhs.value()));
+        -:  521:  }
+        -:  522:
+        -:  523:  /// @relates error_code
+        -:  524:  inline bool
+        -:  525:  operator!=(const error_code& __lhs, const error_code& __rhs) noexcept
+        -:  526:  { return !(__lhs == __rhs); }
+        -:  527:
+        -:  528:  /// @relates error_code
+        -:  529:  inline bool
+        -:  530:  operator!=(const error_code& __lhs, const error_condition& __rhs) noexcept
+        -:  531:  { return !(__lhs == __rhs); }
+        -:  532:
+        -:  533:  /// @relates error_condition
+        -:  534:  inline bool
+        -:  535:  operator!=(const error_condition& __lhs, const error_code& __rhs) noexcept
+        -:  536:  { return !(__lhs == __rhs); }
+        -:  537:
+        -:  538:  /// @relates error_condition
+        -:  539:  inline bool
+        -:  540:  operator!=(const error_condition& __lhs,
+        -:  541:	     const error_condition& __rhs) noexcept
+        -:  542:  { return !(__lhs == __rhs); }
+        -:  543:#endif // three_way_comparison
+        -:  544:  /// @}
+        -:  545:
+        -:  546:  /**
+        -:  547:   * @brief An exception type that includes an `error_code` value.
+        -:  548:   *
+        -:  549:   * Typically used to report errors from the operating system and other
+        -:  550:   * low-level APIs.
+        -:  551:   *
+        -:  552:   * @headerfile system_error
+        -:  553:   * @since C++11
+        -:  554:   * @ingroup exceptions
+        -:  555:   */
+        -:  556:  class system_error : public std::runtime_error
+        -:  557:  {
+        -:  558:  private:
+        -:  559:    error_code 	_M_code;
+        -:  560:
+        -:  561:  public:
+        -:  562:    system_error(error_code __ec = error_code())
+        -:  563:    : runtime_error(__ec.message()), _M_code(__ec) { }
+        -:  564:
+        -:  565:    system_error(error_code __ec, const string& __what)
+        -:  566:    : runtime_error(__what + (": " + __ec.message())), _M_code(__ec) { }
+        -:  567:
+        -:  568:    system_error(error_code __ec, const char* __what)
+        -:  569:    : runtime_error(__what + (": " + __ec.message())), _M_code(__ec) { }
+        -:  570:
+        -:  571:    system_error(int __v, const error_category& __ecat, const char* __what)
+        -:  572:    : system_error(error_code(__v, __ecat), __what) { }
+        -:  573:
+        -:  574:    system_error(int __v, const error_category& __ecat)
+        -:  575:    : runtime_error(error_code(__v, __ecat).message()),
+        -:  576:      _M_code(__v, __ecat) { }
+        -:  577:
+        -:  578:    system_error(int __v, const error_category& __ecat, const string& __what)
+        -:  579:    : runtime_error(__what + (": " + error_code(__v, __ecat).message())),
+        -:  580:      _M_code(__v, __ecat) { }
+        -:  581:
+        -:  582:#if __cplusplus >= 201103L
+        -:  583:    system_error (const system_error &) = default;
+        -:  584:    system_error &operator= (const system_error &) = default;
+        -:  585:#endif
+        -:  586:
+        -:  587:    virtual ~system_error() noexcept;
+        -:  588:
+        -:  589:    const error_code&
+        -:  590:    code() const noexcept { return _M_code; }
+        -:  591:  };
+        -:  592:
+        -:  593:_GLIBCXX_END_NAMESPACE_VERSION
+        -:  594:} // namespace
+        -:  595:
+        -:  596:#include <bits/functional_hash.h>
+        -:  597:
+        -:  598:namespace std _GLIBCXX_VISIBILITY(default)
+        -:  599:{
+        -:  600:_GLIBCXX_BEGIN_NAMESPACE_VERSION
+        -:  601:
+        -:  602:#ifndef _GLIBCXX_COMPATIBILITY_CXX0X
+        -:  603:  // DR 1182.
+        -:  604:  /// std::hash specialization for error_code.
+        -:  605:  /// @relates error_code
+        -:  606:  template<>
+        -:  607:    struct hash<error_code>
+        -:  608:    : public __hash_base<size_t, error_code>
+        -:  609:    {
+        -:  610:      size_t
+        -:  611:      operator()(const error_code& __e) const noexcept
+        -:  612:      {
+        -:  613:	const size_t __tmp = std::_Hash_impl::hash(__e.value());
+        -:  614:	return std::_Hash_impl::__hash_combine(&__e.category(), __tmp);
+        -:  615:      }
+        -:  616:    };
+        -:  617:#endif // _GLIBCXX_COMPATIBILITY_CXX0X
+        -:  618:
+        -:  619:#if __cplusplus >= 201703L
+        -:  620:  // DR 2686.
+        -:  621:  /// std::hash specialization for error_condition.
+        -:  622:  /// @relates error_condition
+        -:  623:  template<>
+        -:  624:    struct hash<error_condition>
+        -:  625:    : public __hash_base<size_t, error_condition>
+        -:  626:    {
+        -:  627:      size_t
+        -:  628:      operator()(const error_condition& __e) const noexcept
+        -:  629:      {
+        -:  630:	const size_t __tmp = std::_Hash_impl::hash(__e.value());
+        -:  631:	return std::_Hash_impl::__hash_combine(&__e.category(), __tmp);
+        -:  632:      }
+        -:  633:    };
+        -:  634:#endif
+        -:  635:
+        -:  636:_GLIBCXX_END_NAMESPACE_VERSION
+        -:  637:} // namespace
+        -:  638:
+        -:  639:#endif // C++11
+        -:  640:
+        -:  641:#endif // _GLIBCXX_SYSTEM_ERROR

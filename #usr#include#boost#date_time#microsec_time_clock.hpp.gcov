@@ -1,0 +1,176 @@
+        -:    0:Source:/usr/include/boost/date_time/microsec_time_clock.hpp
+        -:    1:#ifndef DATE_TIME_HIGHRES_TIME_CLOCK_HPP___
+        -:    2:#define DATE_TIME_HIGHRES_TIME_CLOCK_HPP___
+        -:    3:
+        -:    4:/* Copyright (c) 2002,2003,2005 CrystalClear Software, Inc.
+        -:    5: * Use, modification and distribution is subject to the
+        -:    6: * Boost Software License, Version 1.0. (See accompanying
+        -:    7: * file LICENSE_1_0.txt or http://www.boost.org/LICENSE_1_0.txt)
+        -:    8: * Author: Jeff Garland, Bart Garst
+        -:    9: * $Date$
+        -:   10: */
+        -:   11:
+        -:   12:
+        -:   13:/*! @file microsec_time_clock.hpp
+        -:   14:  This file contains a high resolution time clock implementation.
+        -:   15:*/
+        -:   16:
+        -:   17:#include <boost/cstdint.hpp>
+        -:   18:#include <boost/shared_ptr.hpp>
+        -:   19:#include <boost/detail/workaround.hpp>
+        -:   20:#include <boost/date_time/compiler_config.hpp>
+        -:   21:#include <boost/date_time/c_time.hpp>
+        -:   22:#include <boost/date_time/time_clock.hpp>
+        -:   23:#if defined(BOOST_HAS_FTIME)
+        -:   24:#include <boost/winapi/time.hpp>
+        -:   25:#endif
+        -:   26:
+        -:   27:#ifdef BOOST_DATE_TIME_HAS_HIGH_PRECISION_CLOCK
+        -:   28:
+        -:   29:namespace boost {
+        -:   30:namespace date_time {
+        -:   31:
+        -:   32:  //! A clock providing microsecond level resolution
+        -:   33:  /*! A high precision clock that measures the local time
+        -:   34:   *  at a resolution up to microseconds and adjusts to the
+        -:   35:   *  resolution of the time system.  For example, for the
+        -:   36:   *  a library configuration with nano second resolution,
+        -:   37:   *  the last 3 places of the fractional seconds will always
+        -:   38:   *  be 000 since there are 1000 nano-seconds in a micro second.
+        -:   39:   */
+        -:   40:  template<class time_type>
+        -:   41:  class microsec_clock
+        -:   42:  {
+        -:   43:  private:
+        -:   44:    //! Type for the function used to convert time_t to tm
+        -:   45:    typedef std::tm* (*time_converter)(const std::time_t*, std::tm*);
+        -:   46:
+        -:   47:  public:
+        -:   48:    typedef typename time_type::date_type date_type;
+        -:   49:    typedef typename time_type::time_duration_type time_duration_type;
+        -:   50:    typedef typename time_duration_type::rep_type resolution_traits_type;
+        -:   51:
+        -:   52:    //! return a local time object for the given zone, based on computer clock
+        -:   53:    //JKG -- looks like we could rewrite this against universal_time
+        -:   54:    template<class time_zone_type>
+        -:   55:    static time_type local_time(shared_ptr<time_zone_type> tz_ptr)
+        -:   56:    {
+        -:   57:      typedef typename time_type::utc_time_type utc_time_type;
+        -:   58:      typedef second_clock<utc_time_type> second_clock;
+        -:   59:      // we'll need to know the utc_offset this machine has
+        -:   60:      // in order to get a utc_time_type set to utc
+        -:   61:      utc_time_type utc_time = second_clock::universal_time();
+        -:   62:      time_duration_type utc_offset = second_clock::local_time() - utc_time;
+        -:   63:      // use micro clock to get a local time with sub seconds
+        -:   64:      // and adjust it to get a true utc time reading with sub seconds
+        -:   65:      utc_time = microsec_clock<utc_time_type>::local_time() - utc_offset;
+        -:   66:      return time_type(utc_time, tz_ptr);
+        -:   67:    }
+        -:   68:
+        -:   69:    //! Returns the local time based on computer clock settings
+        -:   70:    static time_type local_time()
+        -:   71:    {
+        -:   72:      return create_time(&c_time::localtime);
+        -:   73:    }
+        -:   74:
+        -:   75:    //! Returns the UTC time based on computer settings
+    #####:   76:    static time_type universal_time()
+        -:   77:    {
+    #####:   78:      return create_time(&c_time::gmtime);
+        -:   79:    }
+------------------
+_ZN5boost9date_time14microsec_clockINS_10posix_time5ptimeEE14universal_timeEv:
+function _ZN5boost9date_time14microsec_clockINS_10posix_time5ptimeEE14universal_timeEv called 0 returned 0% blocks executed 0%
+    #####:   76:    static time_type universal_time()
+        -:   77:    {
+    #####:   78:      return create_time(&c_time::gmtime);
+call    0 never executed
+        -:   79:    }
+------------------
+_ZN5boost9date_time14microsec_clockINS_10posix_time5ptimeEE14universal_timeEv:
+function _ZN5boost9date_time14microsec_clockINS_10posix_time5ptimeEE14universal_timeEv called 0 returned 0% blocks executed 0%
+    #####:   76:    static time_type universal_time()
+        -:   77:    {
+    #####:   78:      return create_time(&c_time::gmtime);
+call    0 never executed
+        -:   79:    }
+------------------
+        -:   80:
+        -:   81:  private:
+    #####:   82:    static time_type create_time(time_converter converter)
+        -:   83:    {
+        -:   84:#ifdef BOOST_HAS_GETTIMEOFDAY
+        -:   85:      timeval tv;
+    #####:   86:      gettimeofday(&tv, 0); //gettimeofday does not support TZ adjust on Linux.
+    #####:   87:      std::time_t t = tv.tv_sec;
+    #####:   88:      boost::uint32_t sub_sec = tv.tv_usec;
+        -:   89:#elif defined(BOOST_HAS_FTIME)
+        -:   90:      boost::winapi::FILETIME_ ft;
+        -:   91:      boost::winapi::GetSystemTimeAsFileTime(&ft);
+        -:   92:#if BOOST_WORKAROUND(__MWERKS__, BOOST_TESTED_AT(0x3205))
+        -:   93:      // Some runtime library implementations expect local times as the norm for ctime functions.
+        -:   94:      {
+        -:   95:        boost::winapi::FILETIME_ local_ft;
+        -:   96:        boost::winapi::FileTimeToLocalFileTime(&ft, &local_ft);
+        -:   97:        ft = local_ft;
+        -:   98:      }
+        -:   99:#endif
+        -:  100:
+        -:  101:      boost::uint64_t micros = file_time_to_microseconds(ft); // it will not wrap, since ft is the current time
+        -:  102:                                                              // and cannot be before 1970-Jan-01
+        -:  103:      std::time_t t = static_cast<std::time_t>(micros / 1000000UL); // seconds since epoch
+        -:  104:      // microseconds -- static casts suppress warnings
+        -:  105:      boost::uint32_t sub_sec = static_cast<boost::uint32_t>(micros % 1000000UL);
+        -:  106:#else
+        -:  107:#error Internal Boost.DateTime error: BOOST_DATE_TIME_HAS_HIGH_PRECISION_CLOCK is defined, however neither gettimeofday nor FILETIME support is detected.
+        -:  108:#endif
+        -:  109:
+        -:  110:      std::tm curr;
+    #####:  111:      std::tm* curr_ptr = converter(&t, &curr);
+    #####:  112:      date_type d(static_cast< typename date_type::year_type::value_type >(curr_ptr->tm_year + 1900),
+    #####:  113:                  static_cast< typename date_type::month_type::value_type >(curr_ptr->tm_mon + 1),
+    #####:  114:                  static_cast< typename date_type::day_type::value_type >(curr_ptr->tm_mday));
+        -:  115:
+        -:  116:      //The following line will adjust the fractional second tick in terms
+        -:  117:      //of the current time system.  For example, if the time system
+        -:  118:      //doesn't support fractional seconds then res_adjust returns 0
+        -:  119:      //and all the fractional seconds return 0.
+    #####:  120:      int adjust = static_cast< int >(resolution_traits_type::res_adjust() / 1000000);
+        -:  121:
+    #####:  122:      time_duration_type td(static_cast< typename time_duration_type::hour_type >(curr_ptr->tm_hour),
+    #####:  123:                            static_cast< typename time_duration_type::min_type >(curr_ptr->tm_min),
+    #####:  124:                            static_cast< typename time_duration_type::sec_type >(curr_ptr->tm_sec),
+    #####:  125:                            sub_sec * adjust);
+        -:  126:
+    #####:  127:      return time_type(d,td);
+        -:  128:    }
+        -:  129:
+        -:  130:#if defined(BOOST_HAS_FTIME)
+        -:  131:    /*!
+        -:  132:     * The function converts file_time into number of microseconds elapsed since 1970-Jan-01
+        -:  133:     *
+        -:  134:     * \note Only dates after 1970-Jan-01 are supported. Dates before will be wrapped.
+        -:  135:     */
+        -:  136:    static boost::uint64_t file_time_to_microseconds(boost::winapi::FILETIME_ const& ft)
+        -:  137:    {
+        -:  138:      // shift is difference between 1970-Jan-01 & 1601-Jan-01
+        -:  139:      // in 100-nanosecond units
+        -:  140:      const boost::uint64_t shift = 116444736000000000ULL; // (27111902 << 32) + 3577643008
+        -:  141:
+        -:  142:      // 100-nanos since 1601-Jan-01
+        -:  143:      boost::uint64_t ft_as_integer = (static_cast< boost::uint64_t >(ft.dwHighDateTime) << 32) | static_cast< boost::uint64_t >(ft.dwLowDateTime);
+        -:  144:
+        -:  145:      ft_as_integer -= shift; // filetime is now 100-nanos since 1970-Jan-01
+        -:  146:      return (ft_as_integer / 10U); // truncate to microseconds
+        -:  147:    }
+        -:  148:#endif
+        -:  149:  };
+        -:  150:
+        -:  151:
+        -:  152:} } //namespace date_time
+        -:  153:
+        -:  154:#endif //BOOST_DATE_TIME_HAS_HIGH_PRECISION_CLOCK
+        -:  155:
+        -:  156:
+        -:  157:#endif
+        -:  158:

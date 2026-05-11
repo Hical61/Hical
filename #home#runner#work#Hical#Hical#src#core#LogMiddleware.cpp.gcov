@@ -1,0 +1,232 @@
+        -:    0:Source:/home/runner/work/Hical/Hical/src/core/LogMiddleware.cpp
+        -:    1:#include "LogMiddleware.h"
+        -:    2:
+        -:    3:#include "HttpRequest.h"
+        -:    4:#include "HttpTypes.h"
+        -:    5:#include "Log.h"
+        -:    6:#include "LogChannel.h"
+        -:    7:#include "LogRecord.h"
+        -:    8:
+        -:    9:#include <chrono>
+        -:   10:#include <random>
+        -:   11:#include <stdexcept>
+        -:   12:
+        -:   13:namespace hical
+        -:   14:{
+        -:   15:
+        -:   16:	namespace
+        -:   17:	{
+        -:   18:		/// trace-id 格式校验：仅接受 1-128 个 hex/alphanum/'-' 字符
+function _ZN5hical12_GLOBAL__N_114isValidTraceIdESt17basic_string_viewIcSt11char_traitsIcEE called 0 returned 0% blocks executed 0%
+    #####:   19:		bool isValidTraceId(std::string_view id)
+        -:   20:		{
+    #####:   21:			if (id.empty() || id.size() > 128)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed
+        -:   22:			{
+    #####:   23:				return false;
+        -:   24:			}
+    #####:   25:			for (unsigned char c : id)
+call    0 never executed
+call    1 never executed
+branch  2 never executed
+branch  3 never executed (fallthrough)
+        -:   26:			{
+    #####:   27:				bool ok = (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F') || c == '-';
+branch  0 never executed (fallthrough)
+branch  1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed
+branch  8 never executed (fallthrough)
+branch  9 never executed
+branch 10 never executed (fallthrough)
+branch 11 never executed
+branch 12 never executed (fallthrough)
+branch 13 never executed
+    #####:   28:				if (!ok)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:   29:				{
+    #####:   30:					return false;
+        -:   31:				}
+        -:   32:			}
+    #####:   33:			return true;
+        -:   34:		}
+        -:   35:	} // namespace
+        -:   36:
+function _ZN5hical15generateTraceIdB5cxx11Ev called 4 returned 100% blocks executed 82%
+        4:   37:	std::string generateTraceId()
+        -:   38:	{
+        -:   39:		// thread_local PRNG：trace-id 只需全局唯一，不需要密码学安全
+        -:   40:		// 避免 OpenSSL RAND_bytes 的跨平台全局锁竞争
+        4:   41:		thread_local std::mt19937_64 sRng(std::random_device {}());
+branch  0 taken 75% (fallthrough)
+branch  1 taken 25%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+call    8 returned 100%
+branch  9 taken 100% (fallthrough)
+branch 10 taken 0% (throw)
+call   11 returned 100%
+call   12 never executed
+call   13 never executed
+        -:   42:
+        4:   43:		uint64_t hi = sRng();
+call    0 returned 100%
+        4:   44:		uint64_t lo = sRng();
+call    0 returned 100%
+        -:   45:
+        -:   46:		static constexpr char kHex[] = "0123456789abcdef";
+        4:   47:		std::string result(32, '\0');
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:   48:
+        -:   49:		// 高 64 位 → result[0..15]
+       68:   50:		for (int i = 15; i >= 0; --i)
+branch  0 taken 94%
+branch  1 taken 6% (fallthrough)
+        -:   51:		{
+       64:   52:			result[15 - i] = kHex[(hi >> (i * 4)) & 0xf];
+call    0 returned 100%
+        -:   53:		}
+        -:   54:		// 低 64 位 → result[16..31]
+       68:   55:		for (int i = 15; i >= 0; --i)
+branch  0 taken 94%
+branch  1 taken 6% (fallthrough)
+        -:   56:		{
+       64:   57:			result[31 - i] = kHex[(lo >> (i * 4)) & 0xf];
+call    0 returned 100%
+        -:   58:		}
+        4:   59:		return result;
+        -:   60:	}
+        -:   61:
+function _ZN5hical10getTraceIdB5cxx11ERKNS_11HttpRequestE called 0 returned 0% blocks executed 0%
+    #####:   62:	std::string getTraceId(const HttpRequest& req)
+        -:   63:	{
+    #####:   64:		auto val = req.getAttribute<std::string>(hTraceIdKey);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+call    6 never executed
+call    7 never executed
+    #####:   65:		return val.value_or("");
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:   66:	}
+call    0 never executed
+call    1 never executed
+        -:   67:
+function _ZN5hical17makeLogMiddlewareENS_20LogMiddlewareOptionsE called 0 returned 0% blocks executed 0%
+    #####:   68:	MiddlewareHandler makeLogMiddleware(LogMiddlewareOptions opts)
+        -:   69:	{
+function _ZZN5hical17makeLogMiddlewareENS_20LogMiddlewareOptionsEENKUlRNS_11HttpRequestESt8functionIFN5boost4asio9awaitableINS_12HttpResponseENS5_15any_io_executorEEES2_EEE_clES2_SB_ called 0 returned 0% blocks executed 0%
+    #####:   70:		return [opts = std::move(opts)](HttpRequest& req, MiddlewareNext next) -> Awaitable<HttpResponse>
+call    0 never executed
+call    1 never executed
+call    2 never executed
+call    3 never executed
+call    4 never executed
+branch  5 never executed (fallthrough)
+branch  6 never executed (throw)
+        -:   71:		{
+        -:   72:			// ---- before next() ----
+        -:   73:			std::string traceId;
+        -:   74:			if (opts.autoTraceId)
+        -:   75:			{
+        -:   76:				// 尝试从请求头提取，校验格式后采纳
+        -:   77:				auto clientTraceId = req.header(opts.traceIdHeader);
+        -:   78:				if (!clientTraceId.empty() && isValidTraceId(clientTraceId))
+        -:   79:				{
+        -:   80:					traceId = std::string(clientTraceId);
+        -:   81:				}
+        -:   82:				else
+        -:   83:				{
+        -:   84:					traceId = generateTraceId();
+        -:   85:				}
+        -:   86:				req.setAttribute(hTraceIdKey, traceId);
+        -:   87:			}
+        -:   88:
+        -:   89:			auto startTime = std::chrono::steady_clock::now();
+        -:   90:
+        -:   91:			// ---- 调用后续中间件/路由 ----
+        -:   92:			auto response = co_await next(req);
+        -:   93:
+        -:   94:			// ---- after next() ----
+        -:   95:			auto endTime = std::chrono::steady_clock::now();
+        -:   96:			auto latencyMs = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
+        -:   97:
+        -:   98:			// 发射结构化访问日志到 access 通道
+        -:   99:			auto ch = Logger::instance().channels().get(opts.accessLogChannel);
+        -:  100:			if (ch)
+        -:  101:			{
+        -:  102:				LogRecord record;
+        -:  103:				record.level = LogLevel::hInfo;
+        -:  104:				record.timestamp = std::chrono::system_clock::now();
+        -:  105:				record.file = nullptr;
+        -:  106:				record.line = 0;
+        -:  107:				record.traceId = traceId;
+        -:  108:
+        -:  109:				auto method = std::string(httpMethodToString(req.method()));
+        -:  110:				auto path = std::string(req.path());
+        -:  111:				auto status = static_cast<int>(response.statusCode());
+        -:  112:
+        -:  113:				record.message = method + " " + path;
+        -:  114:				record.fields["method"] = method;
+        -:  115:				record.fields["path"] = path;
+        -:  116:				record.fields["status"] = status;
+        -:  117:				record.fields["latency_ms"] = latencyMs;
+        -:  118:
+        -:  119:				if (!traceId.empty())
+        -:  120:				{
+        -:  121:					record.fields["trace_id"] = traceId;
+        -:  122:				}
+        -:  123:
+        -:  124:				ch->emit(record);
+        -:  125:			}
+        -:  126:
+        -:  127:			co_return response;
+    #####:  128:		};
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+call    4 never executed
+call    5 never executed
+call    6 never executed
+call    7 never executed
+branch  8 never executed (fallthrough)
+branch  9 never executed
+call   10 never executed
+branch 11 never executed (fallthrough)
+branch 12 never executed
+call   13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed
+call   16 never executed
+call   17 never executed
+branch 18 never executed (fallthrough)
+branch 19 never executed (throw)
+call   20 never executed
+call   21 never executed
+        -:  129:	}
+        -:  130:
+        -:  131:} // namespace hical

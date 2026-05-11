@@ -1,0 +1,881 @@
+        -:    0:Source:/home/runner/work/Hical/Hical/tests/test_graceful_shutdown.cpp
+        -:    1:#include "TestHttpClient.h"
+        -:    2:#include "core/HttpServer.h"
+        -:    3:#include <boost/asio.hpp>
+        -:    4:#include <gtest/gtest.h>
+        -:    5:#include <chrono>
+        -:    6:#include <string>
+        -:    7:#include <thread>
+        -:    8:
+        -:    9:using namespace hical;
+        -:   10:using boost::asio::ip::tcp;
+        -:   11:using hical::test::httpGet;
+        -:   12:
+        -:   13:// 辅助：启动服务器并等待就绪，返回实际端口
+function _ZL18startServerAndWaitRN5hical10HttpServerERSt6thread called 4 returned 100% blocks executed 53%
+        4:   14:static uint16_t startServerAndWait(HttpServer& server, std::thread& serverThread)
+        -:   15:{
+        4:   16:	serverThread = std::thread(
+call    0 returned 100%
+call    1 never executed
+function _ZZL18startServerAndWaitRN5hical10HttpServerERSt6threadENKUlvE_clEv called 4 returned 100% blocks executed 100%
+    #####:   17:		[&server]()
+        -:   18:		{
+        4:   19:			server.start();
+call    0 returned 100%
+        4:   20:		});
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+        -:   21:
+        4:   22:	uint16_t port = 0;
+        8:   23:	for (int i = 0; i < 50; ++i)
+branch  0 taken 100%
+branch  1 taken 0% (fallthrough)
+        -:   24:	{
+        8:   25:		port = server.port();
+call    0 returned 100%
+        8:   26:		if (port != 0)
+branch  0 taken 50% (fallthrough)
+branch  1 taken 50%
+        -:   27:		{
+        4:   28:			break;
+        -:   29:		}
+        4:   30:		std::this_thread::sleep_for(std::chrono::milliseconds(20));
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 never executed
+        -:   31:	}
+        -:   32:
+        4:   33:	for (int i = 0; i < 50; ++i)
+branch  0 taken 100%
+branch  1 taken 0% (fallthrough)
+        -:   34:	{
+        -:   35:		try
+        -:   36:		{
+        4:   37:			boost::asio::io_context io;
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        4:   38:			tcp::socket sock(io);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        4:   39:			sock.connect(tcp::endpoint(boost::asio::ip::make_address("127.0.0.1"), port));
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+        4:   40:			sock.close();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        4:   41:			return port;
+        4:   42:		}
+call    0 returned 100%
+call    1 returned 100%
+call    2 never executed
+call    3 never executed
+    =====:   43:		catch (...)
+call    0 never executed
+        -:   44:		{
+    =====:   45:			std::this_thread::sleep_for(std::chrono::milliseconds(20));
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+    =====:   46:		}
+call    0 never executed
+call    1 never executed
+        -:   47:	}
+    #####:   48:	return port;
+        -:   49:}
+        -:   50:
+        -:   51:// stop() 能正常关闭服务器，不挂起
+        4:   52:TEST(GracefulShutdownTest, StopDoesNotHang)
+        -:   53:{
+        1:   54:	HttpServer server(0);
+        1:   55:	server.setShutdownTimeout(5.0);
+        -:   56:
+        3:   57:	server.router().get("/hello",
+        1:   58:						[](const HttpRequest&) -> HttpResponse
+        -:   59:						{
+        2:   60:							return HttpResponse::ok("hello");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+        -:   61:						});
+        -:   62:
+        1:   63:	std::thread serverThread;
+        1:   64:	auto port = startServerAndWait(server, serverThread);
+        -:   65:
+        4:   66:	auto [status, body] = httpGet("127.0.0.1", port, "/hello");
+       1*:   67:	EXPECT_EQ(status, 200u);
+       1*:   68:	EXPECT_EQ(body, "hello");
+        -:   69:
+        1:   70:	server.stop();
+        1:   71:	if (serverThread.joinable())
+        -:   72:	{
+        1:   73:		serverThread.join();
+        -:   74:	}
+        1:   75:}
+------------------
+_ZN41GracefulShutdownTest_StopDoesNotHang_TestC2Ev:
+function _ZN41GracefulShutdownTest_StopDoesNotHang_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:   52:TEST(GracefulShutdownTest, StopDoesNotHang)
+call    0 returned 100%
+------------------
+_ZN41GracefulShutdownTest_StopDoesNotHang_TestD0Ev:
+function _ZN41GracefulShutdownTest_StopDoesNotHang_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:   52:TEST(GracefulShutdownTest, StopDoesNotHang)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN41GracefulShutdownTest_StopDoesNotHang_TestD2Ev:
+function _ZN41GracefulShutdownTest_StopDoesNotHang_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:   52:TEST(GracefulShutdownTest, StopDoesNotHang)
+call    0 returned 100%
+------------------
+_ZN41GracefulShutdownTest_StopDoesNotHang_Test8TestBodyEv:
+function _ZN41GracefulShutdownTest_StopDoesNotHang_Test8TestBodyEv called 1 returned 100% blocks executed 41%
+        1:   52:TEST(GracefulShutdownTest, StopDoesNotHang)
+        -:   53:{
+        1:   54:	HttpServer server(0);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:   55:	server.setShutdownTimeout(5.0);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:   56:
+        3:   57:	server.router().get("/hello",
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+call    7 returned 100%
+branch  8 taken 100% (fallthrough)
+branch  9 taken 0% (throw)
+call   10 returned 100%
+call   11 returned 100%
+call   12 never executed
+call   13 never executed
+    #####:   58:						[](const HttpRequest&) -> HttpResponse
+        -:   59:						{
+        -:   60:							return HttpResponse::ok("hello");
+        -:   61:						});
+        -:   62:
+        1:   63:	std::thread serverThread;
+call    0 returned 100%
+        1:   64:	auto port = startServerAndWait(server, serverThread);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:   65:
+        4:   66:	auto [status, body] = httpGet("127.0.0.1", port, "/hello");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+call    9 returned 100%
+call   10 returned 100%
+call   11 returned 100%
+call   12 returned 100%
+call   13 never executed
+call   14 never executed
+       1*:   67:	EXPECT_EQ(status, 200u);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 0% (fallthrough)
+branch  5 taken 100%
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed (throw)
+call    9 never executed
+call   10 never executed
+branch 11 never executed (fallthrough)
+branch 12 never executed (throw)
+call   13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed (throw)
+call   16 never executed
+call   17 never executed
+call   18 returned 100%
+call   19 never executed
+call   20 never executed
+call   21 never executed
+       1*:   68:	EXPECT_EQ(body, "hello");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 0% (fallthrough)
+branch  5 taken 100%
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed (throw)
+call    9 never executed
+call   10 never executed
+branch 11 never executed (fallthrough)
+branch 12 never executed (throw)
+call   13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed (throw)
+call   16 never executed
+call   17 never executed
+call   18 returned 100%
+call   19 never executed
+call   20 never executed
+call   21 never executed
+        -:   69:
+        1:   70:	server.stop();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:   71:	if (serverThread.joinable())
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0%
+        -:   72:	{
+        1:   73:		serverThread.join();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:   74:	}
+        1:   75:}
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 never executed
+call    4 never executed
+call    5 never executed
+------------------
+        -:   76:
+        -:   77:// drain 模式下响应携带 Connection: close，活跃连接处理完当前请求后退出
+        4:   78:TEST(GracefulShutdownTest, DrainingResponseConnectionClose)
+        -:   79:{
+        1:   80:	HttpServer server(0);
+        1:   81:	server.setShutdownTimeout(5.0);
+        -:   82:
+        3:   83:	server.router().get("/ping",
+        1:   84:						[](const HttpRequest&) -> Awaitable<HttpResponse>
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:   85:						{
+        -:   86:							co_return HttpResponse::ok("pong");
+        2:   87:						});
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed
+call    9 never executed
+call   10 never executed
+branch 11 never executed (fallthrough)
+branch 12 never executed (throw)
+call   13 never executed
+call   14 never executed
+        -:   88:
+        1:   89:	std::thread serverThread;
+        1:   90:	auto port = startServerAndWait(server, serverThread);
+        -:   91:
+        -:   92:	// 发送一个 keep-alive 请求，建立连接后触发 stop
+        1:   93:	boost::asio::io_context ioCtx;
+        1:   94:	tcp::socket sock(ioCtx);
+        1:   95:	sock.connect(tcp::endpoint(boost::asio::ip::make_address("127.0.0.1"), port));
+        -:   96:
+        -:   97:	std::string req = "GET /ping HTTP/1.1\r\n"
+        -:   98:					  "Host: 127.0.0.1\r\n"
+        -:   99:					  "Connection: keep-alive\r\n"
+        1:  100:					  "\r\n";
+        1:  101:	boost::asio::write(sock, boost::asio::buffer(req));
+        -:  102:
+        -:  103:	// 读取响应
+        1:  104:	std::string residual;
+        1:  105:	auto result = hical::test::detail::readHttpResponse(sock, residual);
+       1*:  106:	EXPECT_EQ(result.status, 200u);
+        -:  107:
+        -:  108:	// stop 触发 drain，连接应在下一次请求时收到 Connection: close
+        1:  109:	server.stop();
+        1:  110:	boost::system::error_code ec;
+        1:  111:	sock.close(ec);
+        -:  112:
+        1:  113:	if (serverThread.joinable())
+        -:  114:	{
+        1:  115:		serverThread.join();
+        -:  116:	}
+        1:  117:}
+------------------
+_ZN57GracefulShutdownTest_DrainingResponseConnectionClose_TestC2Ev:
+function _ZN57GracefulShutdownTest_DrainingResponseConnectionClose_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:   78:TEST(GracefulShutdownTest, DrainingResponseConnectionClose)
+call    0 returned 100%
+------------------
+_ZN57GracefulShutdownTest_DrainingResponseConnectionClose_TestD0Ev:
+function _ZN57GracefulShutdownTest_DrainingResponseConnectionClose_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:   78:TEST(GracefulShutdownTest, DrainingResponseConnectionClose)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN57GracefulShutdownTest_DrainingResponseConnectionClose_TestD2Ev:
+function _ZN57GracefulShutdownTest_DrainingResponseConnectionClose_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:   78:TEST(GracefulShutdownTest, DrainingResponseConnectionClose)
+call    0 returned 100%
+------------------
+_ZN57GracefulShutdownTest_DrainingResponseConnectionClose_Test8TestBodyEv:
+function _ZN57GracefulShutdownTest_DrainingResponseConnectionClose_Test8TestBodyEv called 1 returned 100% blocks executed 48%
+        1:   78:TEST(GracefulShutdownTest, DrainingResponseConnectionClose)
+        -:   79:{
+        1:   80:	HttpServer server(0);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:   81:	server.setShutdownTimeout(5.0);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:   82:
+        3:   83:	server.router().get("/ping",
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+call    7 returned 100%
+branch  8 taken 100% (fallthrough)
+branch  9 taken 0% (throw)
+call   10 returned 100%
+call   11 returned 100%
+call   12 never executed
+call   13 never executed
+    #####:   84:						[](const HttpRequest&) -> Awaitable<HttpResponse>
+        -:   85:						{
+        -:   86:							co_return HttpResponse::ok("pong");
+        -:   87:						});
+        -:   88:
+        1:   89:	std::thread serverThread;
+call    0 returned 100%
+        1:   90:	auto port = startServerAndWait(server, serverThread);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:   91:
+        -:   92:	// 发送一个 keep-alive 请求，建立连接后触发 stop
+        1:   93:	boost::asio::io_context ioCtx;
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:   94:	tcp::socket sock(ioCtx);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:   95:	sock.connect(tcp::endpoint(boost::asio::ip::make_address("127.0.0.1"), port));
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+        -:   96:
+        -:   97:	std::string req = "GET /ping HTTP/1.1\r\n"
+        -:   98:					  "Host: 127.0.0.1\r\n"
+        -:   99:					  "Connection: keep-alive\r\n"
+        1:  100:					  "\r\n";
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  101:	boost::asio::write(sock, boost::asio::buffer(req));
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:  102:
+        -:  103:	// 读取响应
+        1:  104:	std::string residual;
+call    0 returned 100%
+        1:  105:	auto result = hical::test::detail::readHttpResponse(sock, residual);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       1*:  106:	EXPECT_EQ(result.status, 200u);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 0% (fallthrough)
+branch  5 taken 100%
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed (throw)
+call    9 never executed
+call   10 never executed
+branch 11 never executed (fallthrough)
+branch 12 never executed (throw)
+call   13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed (throw)
+call   16 never executed
+call   17 never executed
+call   18 returned 100%
+call   19 never executed
+call   20 never executed
+call   21 never executed
+        -:  107:
+        -:  108:	// stop 触发 drain，连接应在下一次请求时收到 Connection: close
+        1:  109:	server.stop();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  110:	boost::system::error_code ec;
+        1:  111:	sock.close(ec);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  112:
+        1:  113:	if (serverThread.joinable())
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0%
+        -:  114:	{
+        1:  115:		serverThread.join();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  116:	}
+        1:  117:}
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+call    5 returned 100%
+call    6 returned 100%
+call    7 never executed
+call    8 never executed
+call    9 never executed
+call   10 never executed
+call   11 never executed
+call   12 never executed
+call   13 never executed
+------------------
+        -:  118:
+        -:  119:// setShutdownTimeout 不抛异常
+        4:  120:TEST(GracefulShutdownTest, SetShutdownTimeoutNoThrow)
+        -:  121:{
+        1:  122:	HttpServer server(0);
+       1*:  123:	EXPECT_NO_THROW(server.setShutdownTimeout(2.0));
+       1*:  124:	EXPECT_NO_THROW(server.setShutdownTimeout(0.5));
+        1:  125:}
+------------------
+_ZN51GracefulShutdownTest_SetShutdownTimeoutNoThrow_TestC2Ev:
+function _ZN51GracefulShutdownTest_SetShutdownTimeoutNoThrow_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:  120:TEST(GracefulShutdownTest, SetShutdownTimeoutNoThrow)
+call    0 returned 100%
+------------------
+_ZN51GracefulShutdownTest_SetShutdownTimeoutNoThrow_TestD0Ev:
+function _ZN51GracefulShutdownTest_SetShutdownTimeoutNoThrow_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:  120:TEST(GracefulShutdownTest, SetShutdownTimeoutNoThrow)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN51GracefulShutdownTest_SetShutdownTimeoutNoThrow_TestD2Ev:
+function _ZN51GracefulShutdownTest_SetShutdownTimeoutNoThrow_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:  120:TEST(GracefulShutdownTest, SetShutdownTimeoutNoThrow)
+call    0 returned 100%
+------------------
+_ZN51GracefulShutdownTest_SetShutdownTimeoutNoThrow_Test8TestBodyEv:
+function _ZN51GracefulShutdownTest_SetShutdownTimeoutNoThrow_Test8TestBodyEv called 1 returned 100% blocks executed 17%
+        1:  120:TEST(GracefulShutdownTest, SetShutdownTimeoutNoThrow)
+        -:  121:{
+        1:  122:	HttpServer server(0);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       1*:  123:	EXPECT_NO_THROW(server.setShutdownTimeout(2.0));
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0%
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0%
+call    9 returned 100%
+branch 10 taken 100% (fallthrough)
+branch 11 taken 0% (throw)
+call   12 never executed
+branch 13 never executed (fallthrough)
+branch 14 never executed (throw)
+call   15 never executed
+branch 16 never executed (fallthrough)
+branch 17 never executed (throw)
+call   18 never executed
+call   19 never executed
+branch 20 never executed (fallthrough)
+branch 21 never executed (throw)
+call   22 never executed
+branch 23 never executed (fallthrough)
+branch 24 never executed (throw)
+call   25 never executed
+call   26 never executed
+call   27 never executed
+call   28 returned 100%
+branch 29 never executed
+branch 30 never executed
+call   31 never executed
+call   32 never executed
+branch 33 never executed (fallthrough)
+branch 34 never executed (throw)
+call   35 never executed
+branch 36 never executed (fallthrough)
+branch 37 never executed (throw)
+call   38 never executed
+branch 39 never executed (fallthrough)
+branch 40 never executed (throw)
+call   41 never executed
+call   42 never executed
+branch 43 never executed (fallthrough)
+branch 44 never executed (throw)
+call   45 never executed
+call   46 never executed
+branch 47 never executed (fallthrough)
+branch 48 never executed (throw)
+call   49 never executed
+branch 50 never executed (fallthrough)
+branch 51 never executed (throw)
+call   52 never executed
+call   53 never executed
+call   54 never executed
+branch 55 never executed (fallthrough)
+branch 56 never executed (throw)
+call   57 never executed
+branch 58 never executed (fallthrough)
+branch 59 never executed (throw)
+call   60 never executed
+call   61 never executed
+call   62 never executed
+call   63 never executed
+call   64 never executed
+call   65 never executed
+call   66 never executed
+       1*:  124:	EXPECT_NO_THROW(server.setShutdownTimeout(0.5));
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0%
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0%
+call    9 returned 100%
+branch 10 taken 100% (fallthrough)
+branch 11 taken 0% (throw)
+call   12 never executed
+branch 13 never executed (fallthrough)
+branch 14 never executed (throw)
+call   15 never executed
+branch 16 never executed (fallthrough)
+branch 17 never executed (throw)
+call   18 never executed
+call   19 never executed
+branch 20 never executed (fallthrough)
+branch 21 never executed (throw)
+call   22 never executed
+branch 23 never executed (fallthrough)
+branch 24 never executed (throw)
+call   25 never executed
+call   26 never executed
+call   27 never executed
+call   28 returned 100%
+branch 29 never executed
+branch 30 never executed
+call   31 never executed
+call   32 never executed
+branch 33 never executed (fallthrough)
+branch 34 never executed (throw)
+call   35 never executed
+branch 36 never executed (fallthrough)
+branch 37 never executed (throw)
+call   38 never executed
+branch 39 never executed (fallthrough)
+branch 40 never executed (throw)
+call   41 never executed
+call   42 never executed
+branch 43 never executed (fallthrough)
+branch 44 never executed (throw)
+call   45 never executed
+call   46 never executed
+branch 47 never executed (fallthrough)
+branch 48 never executed (throw)
+call   49 never executed
+branch 50 never executed (fallthrough)
+branch 51 never executed (throw)
+call   52 never executed
+call   53 never executed
+call   54 never executed
+branch 55 never executed (fallthrough)
+branch 56 never executed (throw)
+call   57 never executed
+branch 58 never executed (fallthrough)
+branch 59 never executed (throw)
+call   60 never executed
+call   61 never executed
+call   62 never executed
+call   63 never executed
+call   64 never executed
+call   65 never executed
+call   66 never executed
+        1:  125:}
+call    0 returned 100%
+call    1 never executed
+------------------
+        -:  126:
+        -:  127:// 多次 stop() 幂等，不 crash
+        4:  128:TEST(GracefulShutdownTest, StopIsIdempotent)
+        -:  129:{
+        1:  130:	HttpServer server(0);
+        3:  131:	server.router().get("/",
+    #####:  132:						[](const HttpRequest&) -> HttpResponse
+        -:  133:						{
+    #####:  134:							return HttpResponse::ok("ok");
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+call    6 never executed
+call    7 never executed
+        -:  135:						});
+        -:  136:
+        1:  137:	std::thread serverThread;
+        1:  138:	startServerAndWait(server, serverThread);
+        -:  139:
+        1:  140:	server.stop();
+        1:  141:	server.stop(); // 第二次 stop 应安全忽略
+        -:  142:
+        1:  143:	if (serverThread.joinable())
+        -:  144:	{
+        1:  145:		serverThread.join();
+        -:  146:	}
+        1:  147:}
+------------------
+_ZN42GracefulShutdownTest_StopIsIdempotent_TestC2Ev:
+function _ZN42GracefulShutdownTest_StopIsIdempotent_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:  128:TEST(GracefulShutdownTest, StopIsIdempotent)
+call    0 returned 100%
+------------------
+_ZN42GracefulShutdownTest_StopIsIdempotent_TestD0Ev:
+function _ZN42GracefulShutdownTest_StopIsIdempotent_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:  128:TEST(GracefulShutdownTest, StopIsIdempotent)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN42GracefulShutdownTest_StopIsIdempotent_TestD2Ev:
+function _ZN42GracefulShutdownTest_StopIsIdempotent_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:  128:TEST(GracefulShutdownTest, StopIsIdempotent)
+call    0 returned 100%
+------------------
+_ZN42GracefulShutdownTest_StopIsIdempotent_Test8TestBodyEv:
+function _ZN42GracefulShutdownTest_StopIsIdempotent_Test8TestBodyEv called 1 returned 100% blocks executed 60%
+        1:  128:TEST(GracefulShutdownTest, StopIsIdempotent)
+        -:  129:{
+        1:  130:	HttpServer server(0);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        3:  131:	server.router().get("/",
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+call    7 returned 100%
+branch  8 taken 100% (fallthrough)
+branch  9 taken 0% (throw)
+call   10 returned 100%
+call   11 returned 100%
+call   12 never executed
+call   13 never executed
+    #####:  132:						[](const HttpRequest&) -> HttpResponse
+        -:  133:						{
+        -:  134:							return HttpResponse::ok("ok");
+        -:  135:						});
+        -:  136:
+        1:  137:	std::thread serverThread;
+call    0 returned 100%
+        1:  138:	startServerAndWait(server, serverThread);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  139:
+        1:  140:	server.stop();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  141:	server.stop(); // 第二次 stop 应安全忽略
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  142:
+        1:  143:	if (serverThread.joinable())
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0%
+        -:  144:	{
+        1:  145:		serverThread.join();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  146:	}
+        1:  147:}
+call    0 returned 100%
+call    1 returned 100%
+call    2 never executed
+call    3 never executed
+------------------
+        -:  148:
+        -:  149:// gracefulStop 通过超时保底强制退出（无活跃连接时应立即退出）
+        4:  150:TEST(GracefulShutdownTest, GracefulStopWithShortTimeout)
+        -:  151:{
+        1:  152:	HttpServer server(0);
+        1:  153:	server.setShutdownTimeout(1.0);
+        -:  154:
+        3:  155:	server.router().get("/",
+    #####:  156:						[](const HttpRequest&) -> HttpResponse
+        -:  157:						{
+    #####:  158:							return HttpResponse::ok("ok");
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+call    6 never executed
+call    7 never executed
+        -:  159:						});
+        -:  160:
+        1:  161:	std::thread serverThread;
+        1:  162:	startServerAndWait(server, serverThread);
+        -:  163:
+        -:  164:	// 无活跃连接，gracefulStop 关闭 acceptor 后 ioContext 应在超时内自然退出
+        1:  165:	server.stop();
+        -:  166:
+        1:  167:	if (serverThread.joinable())
+        -:  168:	{
+        1:  169:		serverThread.join();
+        -:  170:	}
+        1:  171:}
+------------------
+_ZN54GracefulShutdownTest_GracefulStopWithShortTimeout_TestC2Ev:
+function _ZN54GracefulShutdownTest_GracefulStopWithShortTimeout_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:  150:TEST(GracefulShutdownTest, GracefulStopWithShortTimeout)
+call    0 returned 100%
+------------------
+_ZN54GracefulShutdownTest_GracefulStopWithShortTimeout_TestD0Ev:
+function _ZN54GracefulShutdownTest_GracefulStopWithShortTimeout_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:  150:TEST(GracefulShutdownTest, GracefulStopWithShortTimeout)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN54GracefulShutdownTest_GracefulStopWithShortTimeout_TestD2Ev:
+function _ZN54GracefulShutdownTest_GracefulStopWithShortTimeout_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:  150:TEST(GracefulShutdownTest, GracefulStopWithShortTimeout)
+call    0 returned 100%
+------------------
+_ZN54GracefulShutdownTest_GracefulStopWithShortTimeout_Test8TestBodyEv:
+function _ZN54GracefulShutdownTest_GracefulStopWithShortTimeout_Test8TestBodyEv called 1 returned 100% blocks executed 60%
+        1:  150:TEST(GracefulShutdownTest, GracefulStopWithShortTimeout)
+        -:  151:{
+        1:  152:	HttpServer server(0);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  153:	server.setShutdownTimeout(1.0);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  154:
+        3:  155:	server.router().get("/",
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+call    7 returned 100%
+branch  8 taken 100% (fallthrough)
+branch  9 taken 0% (throw)
+call   10 returned 100%
+call   11 returned 100%
+call   12 never executed
+call   13 never executed
+    #####:  156:						[](const HttpRequest&) -> HttpResponse
+        -:  157:						{
+        -:  158:							return HttpResponse::ok("ok");
+        -:  159:						});
+        -:  160:
+        1:  161:	std::thread serverThread;
+call    0 returned 100%
+        1:  162:	startServerAndWait(server, serverThread);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  163:
+        -:  164:	// 无活跃连接，gracefulStop 关闭 acceptor 后 ioContext 应在超时内自然退出
+        1:  165:	server.stop();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  166:
+        1:  167:	if (serverThread.joinable())
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0%
+        -:  168:	{
+        1:  169:		serverThread.join();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  170:	}
+        1:  171:}
+call    0 returned 100%
+call    1 returned 100%
+call    2 never executed
+call    3 never executed
+------------------

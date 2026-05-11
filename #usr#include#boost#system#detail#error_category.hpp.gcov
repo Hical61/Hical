@@ -1,0 +1,1302 @@
+        -:    0:Source:/usr/include/boost/system/detail/error_category.hpp
+        -:    1:#ifndef BOOST_SYSTEM_DETAIL_ERROR_CATEGORY_HPP_INCLUDED
+        -:    2:#define BOOST_SYSTEM_DETAIL_ERROR_CATEGORY_HPP_INCLUDED
+        -:    3:
+        -:    4://  Copyright Beman Dawes 2006, 2007
+        -:    5://  Copyright Christoper Kohlhoff 2007
+        -:    6://  Copyright Peter Dimov 2017, 2018
+        -:    7://
+        -:    8://  Distributed under the Boost Software License, Version 1.0. (See accompanying
+        -:    9://  file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+        -:   10://
+        -:   11://  See library home page at http://www.boost.org/libs/system
+        -:   12:
+        -:   13:#include <boost/system/detail/config.hpp>
+        -:   14:#include <boost/cstdint.hpp>
+        -:   15:#include <boost/config.hpp>
+        -:   16:#include <boost/config/workaround.hpp>
+        -:   17:#include <string>
+        -:   18:#include <functional>
+        -:   19:#include <cstddef>
+        -:   20:
+        -:   21:#if defined(BOOST_SYSTEM_HAS_SYSTEM_ERROR)
+        -:   22:# include <system_error>
+        -:   23:# include <atomic>
+        -:   24:#endif
+        -:   25:
+        -:   26:namespace boost
+        -:   27:{
+        -:   28:
+        -:   29:namespace system
+        -:   30:{
+        -:   31:
+        -:   32:class error_category;
+        -:   33:class error_code;
+        -:   34:class error_condition;
+        -:   35:
+        -:   36:std::size_t hash_value( error_code const & ec );
+        -:   37:
+        -:   38:namespace detail
+        -:   39:{
+        -:   40:
+        -:   41:BOOST_SYSTEM_CONSTEXPR bool failed_impl( int ev, error_category const & cat );
+        -:   42:
+        -:   43:class std_category;
+        -:   44:
+        -:   45:} // namespace detail
+        -:   46:
+        -:   47:#if ( defined( BOOST_GCC ) && BOOST_GCC >= 40600 ) || defined( BOOST_CLANG )
+        -:   48:#pragma GCC diagnostic push
+        -:   49:#pragma GCC diagnostic ignored "-Wnon-virtual-dtor"
+        -:   50:#endif
+        -:   51:
+        -:   52:#if defined(BOOST_MSVC) && BOOST_MSVC < 1900
+        -:   53:#pragma warning(push)
+        -:   54:#pragma warning(disable: 4351) //  new behavior: elements of array will be default initialized
+        -:   55:#endif
+        -:   56:
+        -:   57:class BOOST_SYMBOL_VISIBLE error_category
+        -:   58:{
+        -:   59:private:
+        -:   60:
+        -:   61:    friend std::size_t hash_value( error_code const & ec );
+        -:   62:    friend BOOST_SYSTEM_CONSTEXPR bool detail::failed_impl( int ev, error_category const & cat );
+        -:   63:
+        -:   64:    friend class error_code;
+        -:   65:    friend class error_condition;
+        -:   66:
+        -:   67:#if !defined(BOOST_NO_CXX11_DELETED_FUNCTIONS)
+        -:   68:public:
+        -:   69:
+        -:   70:    error_category( error_category const & ) = delete;
+        -:   71:    error_category& operator=( error_category const & ) = delete;
+        -:   72:
+        -:   73:#else
+        -:   74:private:
+        -:   75:
+        -:   76:    error_category( error_category const & );
+        -:   77:    error_category& operator=( error_category const & );
+        -:   78:
+        -:   79:#endif
+        -:   80:
+        -:   81:private:
+        -:   82:
+        -:   83:    boost::ulong_long_type id_;
+        -:   84:
+        -:   85:    static std::size_t const stdcat_size_ = 4 * sizeof( void const* );
+        -:   86:
+        -:   87:    union
+        -:   88:    {
+        -:   89:        mutable unsigned char stdcat_[ stdcat_size_ ];
+        -:   90:        void const* stdcat_align_;
+        -:   91:    };
+        -:   92:
+        -:   93:#if defined(BOOST_SYSTEM_HAS_SYSTEM_ERROR)
+        -:   94:
+        -:   95:    mutable std::atomic< unsigned > sc_init_;
+        -:   96:
+        -:   97:#else
+        -:   98:
+        -:   99:    unsigned sc_init_;
+        -:  100:
+        -:  101:#endif
+        -:  102:
+        -:  103:protected:
+        -:  104:
+        -:  105:#if !defined(BOOST_NO_CXX11_DEFAULTED_FUNCTIONS) && !defined(BOOST_NO_CXX11_NON_PUBLIC_DEFAULTED_FUNCTIONS)
+        -:  106:
+        -:  107:    ~error_category() = default;
+        -:  108:
+        -:  109:#else
+        -:  110:
+        -:  111:    // We'd like to make the destructor protected, to make code that deletes
+        -:  112:    // an error_category* not compile; unfortunately, doing the below makes
+        -:  113:    // the destructor user-provided and hence breaks use after main, as the
+        -:  114:    // categories may get destroyed before code that uses them
+        -:  115:
+        -:  116:    // ~error_category() {}
+        -:  117:
+        -:  118:#endif
+        -:  119:
+        -:  120:#if !BOOST_WORKAROUND(BOOST_GCC, < 40800)
+        -:  121:    BOOST_CONSTEXPR
+        -:  122:#endif
+        -:  123:    error_category() BOOST_NOEXCEPT: id_( 0 ), stdcat_(), sc_init_()
+        -:  124:    {
+        -:  125:    }
+        -:  126:
+        -:  127:    explicit
+        -:  128:#if !BOOST_WORKAROUND(BOOST_GCC, < 40800)
+        -:  129:    BOOST_CONSTEXPR
+        -:  130:#endif
+        -:  131:    error_category( boost::ulong_long_type id ) BOOST_NOEXCEPT: id_( id ), stdcat_(), sc_init_()
+        -:  132:    {
+        -:  133:    }
+        -:  134:
+        -:  135:public:
+        -:  136:
+        -:  137:    virtual const char * name() const BOOST_NOEXCEPT = 0;
+        -:  138:
+        -:  139:    virtual error_condition default_error_condition( int ev ) const BOOST_NOEXCEPT;
+        -:  140:    virtual bool equivalent( int code, const error_condition & condition ) const BOOST_NOEXCEPT;
+        -:  141:    virtual bool equivalent( const error_code & code, int condition ) const BOOST_NOEXCEPT;
+        -:  142:
+        -:  143:    virtual std::string message( int ev ) const = 0;
+        -:  144:    virtual char const * message( int ev, char * buffer, std::size_t len ) const BOOST_NOEXCEPT;
+        -:  145:
+      72*:  146:    virtual bool failed( int ev ) const BOOST_NOEXCEPT
+        -:  147:    {
+      72*:  148:        return ev != 0;
+        -:  149:    }
+------------------
+_ZNK5boost6system14error_category6failedEi:
+function _ZNK5boost6system14error_category6failedEi called 12 returned 100% blocks executed 100%
+       12:  146:    virtual bool failed( int ev ) const BOOST_NOEXCEPT
+        -:  147:    {
+       12:  148:        return ev != 0;
+        -:  149:    }
+------------------
+_ZNK5boost6system14error_category6failedEi:
+function _ZNK5boost6system14error_category6failedEi called 0 returned 0% blocks executed 0%
+    #####:  146:    virtual bool failed( int ev ) const BOOST_NOEXCEPT
+        -:  147:    {
+    #####:  148:        return ev != 0;
+        -:  149:    }
+------------------
+_ZNK5boost6system14error_category6failedEi:
+function _ZNK5boost6system14error_category6failedEi called 0 returned 0% blocks executed 0%
+    #####:  146:    virtual bool failed( int ev ) const BOOST_NOEXCEPT
+        -:  147:    {
+    #####:  148:        return ev != 0;
+        -:  149:    }
+------------------
+_ZNK5boost6system14error_category6failedEi:
+function _ZNK5boost6system14error_category6failedEi called 0 returned 0% blocks executed 0%
+    #####:  146:    virtual bool failed( int ev ) const BOOST_NOEXCEPT
+        -:  147:    {
+    #####:  148:        return ev != 0;
+        -:  149:    }
+------------------
+_ZNK5boost6system14error_category6failedEi:
+function _ZNK5boost6system14error_category6failedEi called 0 returned 0% blocks executed 0%
+    #####:  146:    virtual bool failed( int ev ) const BOOST_NOEXCEPT
+        -:  147:    {
+    #####:  148:        return ev != 0;
+        -:  149:    }
+------------------
+_ZNK5boost6system14error_category6failedEi:
+function _ZNK5boost6system14error_category6failedEi called 11 returned 100% blocks executed 100%
+       11:  146:    virtual bool failed( int ev ) const BOOST_NOEXCEPT
+        -:  147:    {
+       11:  148:        return ev != 0;
+        -:  149:    }
+------------------
+_ZNK5boost6system14error_category6failedEi:
+function _ZNK5boost6system14error_category6failedEi called 4 returned 100% blocks executed 100%
+        4:  146:    virtual bool failed( int ev ) const BOOST_NOEXCEPT
+        -:  147:    {
+        4:  148:        return ev != 0;
+        -:  149:    }
+------------------
+_ZNK5boost6system14error_category6failedEi:
+function _ZNK5boost6system14error_category6failedEi called 0 returned 0% blocks executed 0%
+    #####:  146:    virtual bool failed( int ev ) const BOOST_NOEXCEPT
+        -:  147:    {
+    #####:  148:        return ev != 0;
+        -:  149:    }
+------------------
+_ZNK5boost6system14error_category6failedEi:
+function _ZNK5boost6system14error_category6failedEi called 0 returned 0% blocks executed 0%
+    #####:  146:    virtual bool failed( int ev ) const BOOST_NOEXCEPT
+        -:  147:    {
+    #####:  148:        return ev != 0;
+        -:  149:    }
+------------------
+_ZNK5boost6system14error_category6failedEi:
+function _ZNK5boost6system14error_category6failedEi called 0 returned 0% blocks executed 0%
+    #####:  146:    virtual bool failed( int ev ) const BOOST_NOEXCEPT
+        -:  147:    {
+    #####:  148:        return ev != 0;
+        -:  149:    }
+------------------
+_ZNK5boost6system14error_category6failedEi:
+function _ZNK5boost6system14error_category6failedEi called 0 returned 0% blocks executed 0%
+    #####:  146:    virtual bool failed( int ev ) const BOOST_NOEXCEPT
+        -:  147:    {
+    #####:  148:        return ev != 0;
+        -:  149:    }
+------------------
+_ZNK5boost6system14error_category6failedEi:
+function _ZNK5boost6system14error_category6failedEi called 0 returned 0% blocks executed 0%
+    #####:  146:    virtual bool failed( int ev ) const BOOST_NOEXCEPT
+        -:  147:    {
+    #####:  148:        return ev != 0;
+        -:  149:    }
+------------------
+_ZNK5boost6system14error_category6failedEi:
+function _ZNK5boost6system14error_category6failedEi called 0 returned 0% blocks executed 0%
+    #####:  146:    virtual bool failed( int ev ) const BOOST_NOEXCEPT
+        -:  147:    {
+    #####:  148:        return ev != 0;
+        -:  149:    }
+------------------
+_ZNK5boost6system14error_category6failedEi:
+function _ZNK5boost6system14error_category6failedEi called 0 returned 0% blocks executed 0%
+    #####:  146:    virtual bool failed( int ev ) const BOOST_NOEXCEPT
+        -:  147:    {
+    #####:  148:        return ev != 0;
+        -:  149:    }
+------------------
+_ZNK5boost6system14error_category6failedEi:
+function _ZNK5boost6system14error_category6failedEi called 0 returned 0% blocks executed 0%
+    #####:  146:    virtual bool failed( int ev ) const BOOST_NOEXCEPT
+        -:  147:    {
+    #####:  148:        return ev != 0;
+        -:  149:    }
+------------------
+_ZNK5boost6system14error_category6failedEi:
+function _ZNK5boost6system14error_category6failedEi called 13 returned 100% blocks executed 100%
+       13:  146:    virtual bool failed( int ev ) const BOOST_NOEXCEPT
+        -:  147:    {
+       13:  148:        return ev != 0;
+        -:  149:    }
+------------------
+_ZNK5boost6system14error_category6failedEi:
+function _ZNK5boost6system14error_category6failedEi called 0 returned 0% blocks executed 0%
+    #####:  146:    virtual bool failed( int ev ) const BOOST_NOEXCEPT
+        -:  147:    {
+    #####:  148:        return ev != 0;
+        -:  149:    }
+------------------
+_ZNK5boost6system14error_category6failedEi:
+function _ZNK5boost6system14error_category6failedEi called 0 returned 0% blocks executed 0%
+    #####:  146:    virtual bool failed( int ev ) const BOOST_NOEXCEPT
+        -:  147:    {
+    #####:  148:        return ev != 0;
+        -:  149:    }
+------------------
+_ZNK5boost6system14error_category6failedEi:
+function _ZNK5boost6system14error_category6failedEi called 0 returned 0% blocks executed 0%
+    #####:  146:    virtual bool failed( int ev ) const BOOST_NOEXCEPT
+        -:  147:    {
+    #####:  148:        return ev != 0;
+        -:  149:    }
+------------------
+_ZNK5boost6system14error_category6failedEi:
+function _ZNK5boost6system14error_category6failedEi called 0 returned 0% blocks executed 0%
+    #####:  146:    virtual bool failed( int ev ) const BOOST_NOEXCEPT
+        -:  147:    {
+    #####:  148:        return ev != 0;
+        -:  149:    }
+------------------
+_ZNK5boost6system14error_category6failedEi:
+function _ZNK5boost6system14error_category6failedEi called 0 returned 0% blocks executed 0%
+    #####:  146:    virtual bool failed( int ev ) const BOOST_NOEXCEPT
+        -:  147:    {
+    #####:  148:        return ev != 0;
+        -:  149:    }
+------------------
+_ZNK5boost6system14error_category6failedEi:
+function _ZNK5boost6system14error_category6failedEi called 0 returned 0% blocks executed 0%
+    #####:  146:    virtual bool failed( int ev ) const BOOST_NOEXCEPT
+        -:  147:    {
+    #####:  148:        return ev != 0;
+        -:  149:    }
+------------------
+_ZNK5boost6system14error_category6failedEi:
+function _ZNK5boost6system14error_category6failedEi called 0 returned 0% blocks executed 0%
+    #####:  146:    virtual bool failed( int ev ) const BOOST_NOEXCEPT
+        -:  147:    {
+    #####:  148:        return ev != 0;
+        -:  149:    }
+------------------
+_ZNK5boost6system14error_category6failedEi:
+function _ZNK5boost6system14error_category6failedEi called 0 returned 0% blocks executed 0%
+    #####:  146:    virtual bool failed( int ev ) const BOOST_NOEXCEPT
+        -:  147:    {
+    #####:  148:        return ev != 0;
+        -:  149:    }
+------------------
+_ZNK5boost6system14error_category6failedEi:
+function _ZNK5boost6system14error_category6failedEi called 0 returned 0% blocks executed 0%
+    #####:  146:    virtual bool failed( int ev ) const BOOST_NOEXCEPT
+        -:  147:    {
+    #####:  148:        return ev != 0;
+        -:  149:    }
+------------------
+_ZNK5boost6system14error_category6failedEi:
+function _ZNK5boost6system14error_category6failedEi called 12 returned 100% blocks executed 100%
+       12:  146:    virtual bool failed( int ev ) const BOOST_NOEXCEPT
+        -:  147:    {
+       12:  148:        return ev != 0;
+        -:  149:    }
+------------------
+_ZNK5boost6system14error_category6failedEi:
+function _ZNK5boost6system14error_category6failedEi called 0 returned 0% blocks executed 0%
+    #####:  146:    virtual bool failed( int ev ) const BOOST_NOEXCEPT
+        -:  147:    {
+    #####:  148:        return ev != 0;
+        -:  149:    }
+------------------
+_ZNK5boost6system14error_category6failedEi:
+function _ZNK5boost6system14error_category6failedEi called 0 returned 0% blocks executed 0%
+    #####:  146:    virtual bool failed( int ev ) const BOOST_NOEXCEPT
+        -:  147:    {
+    #####:  148:        return ev != 0;
+        -:  149:    }
+------------------
+_ZNK5boost6system14error_category6failedEi:
+function _ZNK5boost6system14error_category6failedEi called 0 returned 0% blocks executed 0%
+    #####:  146:    virtual bool failed( int ev ) const BOOST_NOEXCEPT
+        -:  147:    {
+    #####:  148:        return ev != 0;
+        -:  149:    }
+------------------
+_ZNK5boost6system14error_category6failedEi:
+function _ZNK5boost6system14error_category6failedEi called 19 returned 100% blocks executed 100%
+       19:  146:    virtual bool failed( int ev ) const BOOST_NOEXCEPT
+        -:  147:    {
+       19:  148:        return ev != 0;
+        -:  149:    }
+------------------
+_ZNK5boost6system14error_category6failedEi:
+function _ZNK5boost6system14error_category6failedEi called 0 returned 0% blocks executed 0%
+    #####:  146:    virtual bool failed( int ev ) const BOOST_NOEXCEPT
+        -:  147:    {
+    #####:  148:        return ev != 0;
+        -:  149:    }
+------------------
+_ZNK5boost6system14error_category6failedEi:
+function _ZNK5boost6system14error_category6failedEi called 0 returned 0% blocks executed 0%
+    #####:  146:    virtual bool failed( int ev ) const BOOST_NOEXCEPT
+        -:  147:    {
+    #####:  148:        return ev != 0;
+        -:  149:    }
+------------------
+_ZNK5boost6system14error_category6failedEi:
+function _ZNK5boost6system14error_category6failedEi called 0 returned 0% blocks executed 0%
+    #####:  146:    virtual bool failed( int ev ) const BOOST_NOEXCEPT
+        -:  147:    {
+    #####:  148:        return ev != 0;
+        -:  149:    }
+------------------
+_ZNK5boost6system14error_category6failedEi:
+function _ZNK5boost6system14error_category6failedEi called 0 returned 0% blocks executed 0%
+    #####:  146:    virtual bool failed( int ev ) const BOOST_NOEXCEPT
+        -:  147:    {
+    #####:  148:        return ev != 0;
+        -:  149:    }
+------------------
+_ZNK5boost6system14error_category6failedEi:
+function _ZNK5boost6system14error_category6failedEi called 0 returned 0% blocks executed 0%
+    #####:  146:    virtual bool failed( int ev ) const BOOST_NOEXCEPT
+        -:  147:    {
+    #####:  148:        return ev != 0;
+        -:  149:    }
+------------------
+_ZNK5boost6system14error_category6failedEi:
+function _ZNK5boost6system14error_category6failedEi called 0 returned 0% blocks executed 0%
+    #####:  146:    virtual bool failed( int ev ) const BOOST_NOEXCEPT
+        -:  147:    {
+    #####:  148:        return ev != 0;
+        -:  149:    }
+------------------
+_ZNK5boost6system14error_category6failedEi:
+function _ZNK5boost6system14error_category6failedEi called 0 returned 0% blocks executed 0%
+    #####:  146:    virtual bool failed( int ev ) const BOOST_NOEXCEPT
+        -:  147:    {
+    #####:  148:        return ev != 0;
+        -:  149:    }
+------------------
+_ZNK5boost6system14error_category6failedEi:
+function _ZNK5boost6system14error_category6failedEi called 0 returned 0% blocks executed 0%
+    #####:  146:    virtual bool failed( int ev ) const BOOST_NOEXCEPT
+        -:  147:    {
+    #####:  148:        return ev != 0;
+        -:  149:    }
+------------------
+_ZNK5boost6system14error_category6failedEi:
+function _ZNK5boost6system14error_category6failedEi called 0 returned 0% blocks executed 0%
+    #####:  146:    virtual bool failed( int ev ) const BOOST_NOEXCEPT
+        -:  147:    {
+    #####:  148:        return ev != 0;
+        -:  149:    }
+------------------
+_ZNK5boost6system14error_category6failedEi:
+function _ZNK5boost6system14error_category6failedEi called 0 returned 0% blocks executed 0%
+    #####:  146:    virtual bool failed( int ev ) const BOOST_NOEXCEPT
+        -:  147:    {
+    #####:  148:        return ev != 0;
+        -:  149:    }
+------------------
+_ZNK5boost6system14error_category6failedEi:
+function _ZNK5boost6system14error_category6failedEi called 0 returned 0% blocks executed 0%
+    #####:  146:    virtual bool failed( int ev ) const BOOST_NOEXCEPT
+        -:  147:    {
+    #####:  148:        return ev != 0;
+        -:  149:    }
+------------------
+_ZNK5boost6system14error_category6failedEi:
+function _ZNK5boost6system14error_category6failedEi called 0 returned 0% blocks executed 0%
+    #####:  146:    virtual bool failed( int ev ) const BOOST_NOEXCEPT
+        -:  147:    {
+    #####:  148:        return ev != 0;
+        -:  149:    }
+------------------
+_ZNK5boost6system14error_category6failedEi:
+function _ZNK5boost6system14error_category6failedEi called 0 returned 0% blocks executed 0%
+    #####:  146:    virtual bool failed( int ev ) const BOOST_NOEXCEPT
+        -:  147:    {
+    #####:  148:        return ev != 0;
+        -:  149:    }
+------------------
+_ZNK5boost6system14error_category6failedEi:
+function _ZNK5boost6system14error_category6failedEi called 0 returned 0% blocks executed 0%
+    #####:  146:    virtual bool failed( int ev ) const BOOST_NOEXCEPT
+        -:  147:    {
+    #####:  148:        return ev != 0;
+        -:  149:    }
+------------------
+_ZNK5boost6system14error_category6failedEi:
+function _ZNK5boost6system14error_category6failedEi called 0 returned 0% blocks executed 0%
+    #####:  146:    virtual bool failed( int ev ) const BOOST_NOEXCEPT
+        -:  147:    {
+    #####:  148:        return ev != 0;
+        -:  149:    }
+------------------
+_ZNK5boost6system14error_category6failedEi:
+function _ZNK5boost6system14error_category6failedEi called 0 returned 0% blocks executed 0%
+    #####:  146:    virtual bool failed( int ev ) const BOOST_NOEXCEPT
+        -:  147:    {
+    #####:  148:        return ev != 0;
+        -:  149:    }
+------------------
+_ZNK5boost6system14error_category6failedEi:
+function _ZNK5boost6system14error_category6failedEi called 0 returned 0% blocks executed 0%
+    #####:  146:    virtual bool failed( int ev ) const BOOST_NOEXCEPT
+        -:  147:    {
+    #####:  148:        return ev != 0;
+        -:  149:    }
+------------------
+_ZNK5boost6system14error_category6failedEi:
+function _ZNK5boost6system14error_category6failedEi called 0 returned 0% blocks executed 0%
+    #####:  146:    virtual bool failed( int ev ) const BOOST_NOEXCEPT
+        -:  147:    {
+    #####:  148:        return ev != 0;
+        -:  149:    }
+------------------
+_ZNK5boost6system14error_category6failedEi:
+function _ZNK5boost6system14error_category6failedEi called 0 returned 0% blocks executed 0%
+    #####:  146:    virtual bool failed( int ev ) const BOOST_NOEXCEPT
+        -:  147:    {
+    #####:  148:        return ev != 0;
+        -:  149:    }
+------------------
+_ZNK5boost6system14error_category6failedEi:
+function _ZNK5boost6system14error_category6failedEi called 0 returned 0% blocks executed 0%
+    #####:  146:    virtual bool failed( int ev ) const BOOST_NOEXCEPT
+        -:  147:    {
+    #####:  148:        return ev != 0;
+        -:  149:    }
+------------------
+_ZNK5boost6system14error_category6failedEi:
+function _ZNK5boost6system14error_category6failedEi called 0 returned 0% blocks executed 0%
+    #####:  146:    virtual bool failed( int ev ) const BOOST_NOEXCEPT
+        -:  147:    {
+    #####:  148:        return ev != 0;
+        -:  149:    }
+------------------
+_ZNK5boost6system14error_category6failedEi:
+function _ZNK5boost6system14error_category6failedEi called 0 returned 0% blocks executed 0%
+    #####:  146:    virtual bool failed( int ev ) const BOOST_NOEXCEPT
+        -:  147:    {
+    #####:  148:        return ev != 0;
+        -:  149:    }
+------------------
+_ZNK5boost6system14error_category6failedEi:
+function _ZNK5boost6system14error_category6failedEi called 0 returned 0% blocks executed 0%
+    #####:  146:    virtual bool failed( int ev ) const BOOST_NOEXCEPT
+        -:  147:    {
+    #####:  148:        return ev != 0;
+        -:  149:    }
+------------------
+_ZNK5boost6system14error_category6failedEi:
+function _ZNK5boost6system14error_category6failedEi called 0 returned 0% blocks executed 0%
+    #####:  146:    virtual bool failed( int ev ) const BOOST_NOEXCEPT
+        -:  147:    {
+    #####:  148:        return ev != 0;
+        -:  149:    }
+------------------
+_ZNK5boost6system14error_category6failedEi:
+function _ZNK5boost6system14error_category6failedEi called 0 returned 0% blocks executed 0%
+    #####:  146:    virtual bool failed( int ev ) const BOOST_NOEXCEPT
+        -:  147:    {
+    #####:  148:        return ev != 0;
+        -:  149:    }
+------------------
+_ZNK5boost6system14error_category6failedEi:
+function _ZNK5boost6system14error_category6failedEi called 0 returned 0% blocks executed 0%
+    #####:  146:    virtual bool failed( int ev ) const BOOST_NOEXCEPT
+        -:  147:    {
+    #####:  148:        return ev != 0;
+        -:  149:    }
+------------------
+_ZNK5boost6system14error_category6failedEi:
+function _ZNK5boost6system14error_category6failedEi called 0 returned 0% blocks executed 0%
+    #####:  146:    virtual bool failed( int ev ) const BOOST_NOEXCEPT
+        -:  147:    {
+    #####:  148:        return ev != 0;
+        -:  149:    }
+------------------
+_ZNK5boost6system14error_category6failedEi:
+function _ZNK5boost6system14error_category6failedEi called 0 returned 0% blocks executed 0%
+    #####:  146:    virtual bool failed( int ev ) const BOOST_NOEXCEPT
+        -:  147:    {
+    #####:  148:        return ev != 0;
+        -:  149:    }
+------------------
+_ZNK5boost6system14error_category6failedEi:
+function _ZNK5boost6system14error_category6failedEi called 0 returned 0% blocks executed 0%
+    #####:  146:    virtual bool failed( int ev ) const BOOST_NOEXCEPT
+        -:  147:    {
+    #####:  148:        return ev != 0;
+        -:  149:    }
+------------------
+_ZNK5boost6system14error_category6failedEi:
+function _ZNK5boost6system14error_category6failedEi called 0 returned 0% blocks executed 0%
+    #####:  146:    virtual bool failed( int ev ) const BOOST_NOEXCEPT
+        -:  147:    {
+    #####:  148:        return ev != 0;
+        -:  149:    }
+------------------
+_ZNK5boost6system14error_category6failedEi:
+function _ZNK5boost6system14error_category6failedEi called 0 returned 0% blocks executed 0%
+    #####:  146:    virtual bool failed( int ev ) const BOOST_NOEXCEPT
+        -:  147:    {
+    #####:  148:        return ev != 0;
+        -:  149:    }
+------------------
+_ZNK5boost6system14error_category6failedEi:
+function _ZNK5boost6system14error_category6failedEi called 0 returned 0% blocks executed 0%
+    #####:  146:    virtual bool failed( int ev ) const BOOST_NOEXCEPT
+        -:  147:    {
+    #####:  148:        return ev != 0;
+        -:  149:    }
+------------------
+_ZNK5boost6system14error_category6failedEi:
+function _ZNK5boost6system14error_category6failedEi called 0 returned 0% blocks executed 0%
+    #####:  146:    virtual bool failed( int ev ) const BOOST_NOEXCEPT
+        -:  147:    {
+    #####:  148:        return ev != 0;
+        -:  149:    }
+------------------
+_ZNK5boost6system14error_category6failedEi:
+function _ZNK5boost6system14error_category6failedEi called 1 returned 100% blocks executed 100%
+        1:  146:    virtual bool failed( int ev ) const BOOST_NOEXCEPT
+        -:  147:    {
+        1:  148:        return ev != 0;
+        -:  149:    }
+------------------
+_ZNK5boost6system14error_category6failedEi:
+function _ZNK5boost6system14error_category6failedEi called 0 returned 0% blocks executed 0%
+    #####:  146:    virtual bool failed( int ev ) const BOOST_NOEXCEPT
+        -:  147:    {
+    #####:  148:        return ev != 0;
+        -:  149:    }
+------------------
+_ZNK5boost6system14error_category6failedEi:
+function _ZNK5boost6system14error_category6failedEi called 0 returned 0% blocks executed 0%
+    #####:  146:    virtual bool failed( int ev ) const BOOST_NOEXCEPT
+        -:  147:    {
+    #####:  148:        return ev != 0;
+        -:  149:    }
+------------------
+_ZNK5boost6system14error_category6failedEi:
+function _ZNK5boost6system14error_category6failedEi called 0 returned 0% blocks executed 0%
+    #####:  146:    virtual bool failed( int ev ) const BOOST_NOEXCEPT
+        -:  147:    {
+    #####:  148:        return ev != 0;
+        -:  149:    }
+------------------
+        -:  150:
+     171*:  151:    friend BOOST_SYSTEM_CONSTEXPR bool operator==( error_category const & lhs, error_category const & rhs ) BOOST_NOEXCEPT
+        -:  152:    {
+     171*:  153:        return rhs.id_ == 0? &lhs == &rhs: lhs.id_ == rhs.id_;
+        -:  154:    }
+------------------
+_ZN5boost6systemeqERKNS0_14error_categoryES3_:
+function _ZN5boost6systemeqERKNS0_14error_categoryES3_ called 20 returned 100% blocks executed 100%
+       20:  151:    friend BOOST_SYSTEM_CONSTEXPR bool operator==( error_category const & lhs, error_category const & rhs ) BOOST_NOEXCEPT
+        -:  152:    {
+       20:  153:        return rhs.id_ == 0? &lhs == &rhs: lhs.id_ == rhs.id_;
+branch  0 taken 25% (fallthrough)
+branch  1 taken 75%
+        -:  154:    }
+------------------
+_ZN5boost6systemeqERKNS0_14error_categoryES3_:
+function _ZN5boost6systemeqERKNS0_14error_categoryES3_ called 0 returned 0% blocks executed 0%
+    #####:  151:    friend BOOST_SYSTEM_CONSTEXPR bool operator==( error_category const & lhs, error_category const & rhs ) BOOST_NOEXCEPT
+        -:  152:    {
+    #####:  153:        return rhs.id_ == 0? &lhs == &rhs: lhs.id_ == rhs.id_;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  154:    }
+------------------
+_ZN5boost6systemeqERKNS0_14error_categoryES3_:
+function _ZN5boost6systemeqERKNS0_14error_categoryES3_ called 0 returned 0% blocks executed 0%
+    #####:  151:    friend BOOST_SYSTEM_CONSTEXPR bool operator==( error_category const & lhs, error_category const & rhs ) BOOST_NOEXCEPT
+        -:  152:    {
+    #####:  153:        return rhs.id_ == 0? &lhs == &rhs: lhs.id_ == rhs.id_;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  154:    }
+------------------
+_ZN5boost6systemeqERKNS0_14error_categoryES3_:
+function _ZN5boost6systemeqERKNS0_14error_categoryES3_ called 0 returned 0% blocks executed 0%
+    #####:  151:    friend BOOST_SYSTEM_CONSTEXPR bool operator==( error_category const & lhs, error_category const & rhs ) BOOST_NOEXCEPT
+        -:  152:    {
+    #####:  153:        return rhs.id_ == 0? &lhs == &rhs: lhs.id_ == rhs.id_;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  154:    }
+------------------
+_ZN5boost6systemeqERKNS0_14error_categoryES3_:
+function _ZN5boost6systemeqERKNS0_14error_categoryES3_ called 0 returned 0% blocks executed 0%
+    #####:  151:    friend BOOST_SYSTEM_CONSTEXPR bool operator==( error_category const & lhs, error_category const & rhs ) BOOST_NOEXCEPT
+        -:  152:    {
+    #####:  153:        return rhs.id_ == 0? &lhs == &rhs: lhs.id_ == rhs.id_;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  154:    }
+------------------
+_ZN5boost6systemeqERKNS0_14error_categoryES3_:
+function _ZN5boost6systemeqERKNS0_14error_categoryES3_ called 16 returned 100% blocks executed 100%
+       16:  151:    friend BOOST_SYSTEM_CONSTEXPR bool operator==( error_category const & lhs, error_category const & rhs ) BOOST_NOEXCEPT
+        -:  152:    {
+       16:  153:        return rhs.id_ == 0? &lhs == &rhs: lhs.id_ == rhs.id_;
+branch  0 taken 31% (fallthrough)
+branch  1 taken 69%
+        -:  154:    }
+------------------
+_ZN5boost6systemeqERKNS0_14error_categoryES3_:
+function _ZN5boost6systemeqERKNS0_14error_categoryES3_ called 9 returned 100% blocks executed 100%
+        9:  151:    friend BOOST_SYSTEM_CONSTEXPR bool operator==( error_category const & lhs, error_category const & rhs ) BOOST_NOEXCEPT
+        -:  152:    {
+        9:  153:        return rhs.id_ == 0? &lhs == &rhs: lhs.id_ == rhs.id_;
+branch  0 taken 22% (fallthrough)
+branch  1 taken 78%
+        -:  154:    }
+------------------
+_ZN5boost6systemeqERKNS0_14error_categoryES3_:
+function _ZN5boost6systemeqERKNS0_14error_categoryES3_ called 0 returned 0% blocks executed 0%
+    #####:  151:    friend BOOST_SYSTEM_CONSTEXPR bool operator==( error_category const & lhs, error_category const & rhs ) BOOST_NOEXCEPT
+        -:  152:    {
+    #####:  153:        return rhs.id_ == 0? &lhs == &rhs: lhs.id_ == rhs.id_;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  154:    }
+------------------
+_ZN5boost6systemeqERKNS0_14error_categoryES3_:
+function _ZN5boost6systemeqERKNS0_14error_categoryES3_ called 0 returned 0% blocks executed 0%
+    #####:  151:    friend BOOST_SYSTEM_CONSTEXPR bool operator==( error_category const & lhs, error_category const & rhs ) BOOST_NOEXCEPT
+        -:  152:    {
+    #####:  153:        return rhs.id_ == 0? &lhs == &rhs: lhs.id_ == rhs.id_;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  154:    }
+------------------
+_ZN5boost6systemeqERKNS0_14error_categoryES3_:
+function _ZN5boost6systemeqERKNS0_14error_categoryES3_ called 0 returned 0% blocks executed 0%
+    #####:  151:    friend BOOST_SYSTEM_CONSTEXPR bool operator==( error_category const & lhs, error_category const & rhs ) BOOST_NOEXCEPT
+        -:  152:    {
+    #####:  153:        return rhs.id_ == 0? &lhs == &rhs: lhs.id_ == rhs.id_;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  154:    }
+------------------
+_ZN5boost6systemeqERKNS0_14error_categoryES3_:
+function _ZN5boost6systemeqERKNS0_14error_categoryES3_ called 0 returned 0% blocks executed 0%
+    #####:  151:    friend BOOST_SYSTEM_CONSTEXPR bool operator==( error_category const & lhs, error_category const & rhs ) BOOST_NOEXCEPT
+        -:  152:    {
+    #####:  153:        return rhs.id_ == 0? &lhs == &rhs: lhs.id_ == rhs.id_;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  154:    }
+------------------
+_ZN5boost6systemeqERKNS0_14error_categoryES3_:
+function _ZN5boost6systemeqERKNS0_14error_categoryES3_ called 0 returned 0% blocks executed 0%
+    #####:  151:    friend BOOST_SYSTEM_CONSTEXPR bool operator==( error_category const & lhs, error_category const & rhs ) BOOST_NOEXCEPT
+        -:  152:    {
+    #####:  153:        return rhs.id_ == 0? &lhs == &rhs: lhs.id_ == rhs.id_;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  154:    }
+------------------
+_ZN5boost6systemeqERKNS0_14error_categoryES3_:
+function _ZN5boost6systemeqERKNS0_14error_categoryES3_ called 0 returned 0% blocks executed 0%
+    #####:  151:    friend BOOST_SYSTEM_CONSTEXPR bool operator==( error_category const & lhs, error_category const & rhs ) BOOST_NOEXCEPT
+        -:  152:    {
+    #####:  153:        return rhs.id_ == 0? &lhs == &rhs: lhs.id_ == rhs.id_;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  154:    }
+------------------
+_ZN5boost6systemeqERKNS0_14error_categoryES3_:
+function _ZN5boost6systemeqERKNS0_14error_categoryES3_ called 0 returned 0% blocks executed 0%
+    #####:  151:    friend BOOST_SYSTEM_CONSTEXPR bool operator==( error_category const & lhs, error_category const & rhs ) BOOST_NOEXCEPT
+        -:  152:    {
+    #####:  153:        return rhs.id_ == 0? &lhs == &rhs: lhs.id_ == rhs.id_;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  154:    }
+------------------
+_ZN5boost6systemeqERKNS0_14error_categoryES3_:
+function _ZN5boost6systemeqERKNS0_14error_categoryES3_ called 0 returned 0% blocks executed 0%
+    #####:  151:    friend BOOST_SYSTEM_CONSTEXPR bool operator==( error_category const & lhs, error_category const & rhs ) BOOST_NOEXCEPT
+        -:  152:    {
+    #####:  153:        return rhs.id_ == 0? &lhs == &rhs: lhs.id_ == rhs.id_;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  154:    }
+------------------
+_ZN5boost6systemeqERKNS0_14error_categoryES3_:
+function _ZN5boost6systemeqERKNS0_14error_categoryES3_ called 54 returned 100% blocks executed 100%
+       54:  151:    friend BOOST_SYSTEM_CONSTEXPR bool operator==( error_category const & lhs, error_category const & rhs ) BOOST_NOEXCEPT
+        -:  152:    {
+       54:  153:        return rhs.id_ == 0? &lhs == &rhs: lhs.id_ == rhs.id_;
+branch  0 taken 11% (fallthrough)
+branch  1 taken 89%
+        -:  154:    }
+------------------
+_ZN5boost6systemeqERKNS0_14error_categoryES3_:
+function _ZN5boost6systemeqERKNS0_14error_categoryES3_ called 0 returned 0% blocks executed 0%
+    #####:  151:    friend BOOST_SYSTEM_CONSTEXPR bool operator==( error_category const & lhs, error_category const & rhs ) BOOST_NOEXCEPT
+        -:  152:    {
+    #####:  153:        return rhs.id_ == 0? &lhs == &rhs: lhs.id_ == rhs.id_;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  154:    }
+------------------
+_ZN5boost6systemeqERKNS0_14error_categoryES3_:
+function _ZN5boost6systemeqERKNS0_14error_categoryES3_ called 0 returned 0% blocks executed 0%
+    #####:  151:    friend BOOST_SYSTEM_CONSTEXPR bool operator==( error_category const & lhs, error_category const & rhs ) BOOST_NOEXCEPT
+        -:  152:    {
+    #####:  153:        return rhs.id_ == 0? &lhs == &rhs: lhs.id_ == rhs.id_;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  154:    }
+------------------
+_ZN5boost6systemeqERKNS0_14error_categoryES3_:
+function _ZN5boost6systemeqERKNS0_14error_categoryES3_ called 0 returned 0% blocks executed 0%
+    #####:  151:    friend BOOST_SYSTEM_CONSTEXPR bool operator==( error_category const & lhs, error_category const & rhs ) BOOST_NOEXCEPT
+        -:  152:    {
+    #####:  153:        return rhs.id_ == 0? &lhs == &rhs: lhs.id_ == rhs.id_;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  154:    }
+------------------
+_ZN5boost6systemeqERKNS0_14error_categoryES3_:
+function _ZN5boost6systemeqERKNS0_14error_categoryES3_ called 0 returned 0% blocks executed 0%
+    #####:  151:    friend BOOST_SYSTEM_CONSTEXPR bool operator==( error_category const & lhs, error_category const & rhs ) BOOST_NOEXCEPT
+        -:  152:    {
+    #####:  153:        return rhs.id_ == 0? &lhs == &rhs: lhs.id_ == rhs.id_;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  154:    }
+------------------
+_ZN5boost6systemeqERKNS0_14error_categoryES3_:
+function _ZN5boost6systemeqERKNS0_14error_categoryES3_ called 0 returned 0% blocks executed 0%
+    #####:  151:    friend BOOST_SYSTEM_CONSTEXPR bool operator==( error_category const & lhs, error_category const & rhs ) BOOST_NOEXCEPT
+        -:  152:    {
+    #####:  153:        return rhs.id_ == 0? &lhs == &rhs: lhs.id_ == rhs.id_;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  154:    }
+------------------
+_ZN5boost6systemeqERKNS0_14error_categoryES3_:
+function _ZN5boost6systemeqERKNS0_14error_categoryES3_ called 0 returned 0% blocks executed 0%
+    #####:  151:    friend BOOST_SYSTEM_CONSTEXPR bool operator==( error_category const & lhs, error_category const & rhs ) BOOST_NOEXCEPT
+        -:  152:    {
+    #####:  153:        return rhs.id_ == 0? &lhs == &rhs: lhs.id_ == rhs.id_;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  154:    }
+------------------
+_ZN5boost6systemeqERKNS0_14error_categoryES3_:
+function _ZN5boost6systemeqERKNS0_14error_categoryES3_ called 0 returned 0% blocks executed 0%
+    #####:  151:    friend BOOST_SYSTEM_CONSTEXPR bool operator==( error_category const & lhs, error_category const & rhs ) BOOST_NOEXCEPT
+        -:  152:    {
+    #####:  153:        return rhs.id_ == 0? &lhs == &rhs: lhs.id_ == rhs.id_;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  154:    }
+------------------
+_ZN5boost6systemeqERKNS0_14error_categoryES3_:
+function _ZN5boost6systemeqERKNS0_14error_categoryES3_ called 0 returned 0% blocks executed 0%
+    #####:  151:    friend BOOST_SYSTEM_CONSTEXPR bool operator==( error_category const & lhs, error_category const & rhs ) BOOST_NOEXCEPT
+        -:  152:    {
+    #####:  153:        return rhs.id_ == 0? &lhs == &rhs: lhs.id_ == rhs.id_;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  154:    }
+------------------
+_ZN5boost6systemeqERKNS0_14error_categoryES3_:
+function _ZN5boost6systemeqERKNS0_14error_categoryES3_ called 0 returned 0% blocks executed 0%
+    #####:  151:    friend BOOST_SYSTEM_CONSTEXPR bool operator==( error_category const & lhs, error_category const & rhs ) BOOST_NOEXCEPT
+        -:  152:    {
+    #####:  153:        return rhs.id_ == 0? &lhs == &rhs: lhs.id_ == rhs.id_;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  154:    }
+------------------
+_ZN5boost6systemeqERKNS0_14error_categoryES3_:
+function _ZN5boost6systemeqERKNS0_14error_categoryES3_ called 19 returned 100% blocks executed 100%
+       19:  151:    friend BOOST_SYSTEM_CONSTEXPR bool operator==( error_category const & lhs, error_category const & rhs ) BOOST_NOEXCEPT
+        -:  152:    {
+       19:  153:        return rhs.id_ == 0? &lhs == &rhs: lhs.id_ == rhs.id_;
+branch  0 taken 32% (fallthrough)
+branch  1 taken 68%
+        -:  154:    }
+------------------
+_ZN5boost6systemeqERKNS0_14error_categoryES3_:
+function _ZN5boost6systemeqERKNS0_14error_categoryES3_ called 0 returned 0% blocks executed 0%
+    #####:  151:    friend BOOST_SYSTEM_CONSTEXPR bool operator==( error_category const & lhs, error_category const & rhs ) BOOST_NOEXCEPT
+        -:  152:    {
+    #####:  153:        return rhs.id_ == 0? &lhs == &rhs: lhs.id_ == rhs.id_;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  154:    }
+------------------
+_ZN5boost6systemeqERKNS0_14error_categoryES3_:
+function _ZN5boost6systemeqERKNS0_14error_categoryES3_ called 18 returned 100% blocks executed 80%
+       18:  151:    friend BOOST_SYSTEM_CONSTEXPR bool operator==( error_category const & lhs, error_category const & rhs ) BOOST_NOEXCEPT
+        -:  152:    {
+      18*:  153:        return rhs.id_ == 0? &lhs == &rhs: lhs.id_ == rhs.id_;
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:  154:    }
+------------------
+_ZN5boost6systemeqERKNS0_14error_categoryES3_:
+function _ZN5boost6systemeqERKNS0_14error_categoryES3_ called 0 returned 0% blocks executed 0%
+    #####:  151:    friend BOOST_SYSTEM_CONSTEXPR bool operator==( error_category const & lhs, error_category const & rhs ) BOOST_NOEXCEPT
+        -:  152:    {
+    #####:  153:        return rhs.id_ == 0? &lhs == &rhs: lhs.id_ == rhs.id_;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  154:    }
+------------------
+_ZN5boost6systemeqERKNS0_14error_categoryES3_:
+function _ZN5boost6systemeqERKNS0_14error_categoryES3_ called 19 returned 100% blocks executed 100%
+       19:  151:    friend BOOST_SYSTEM_CONSTEXPR bool operator==( error_category const & lhs, error_category const & rhs ) BOOST_NOEXCEPT
+        -:  152:    {
+       19:  153:        return rhs.id_ == 0? &lhs == &rhs: lhs.id_ == rhs.id_;
+branch  0 taken 11% (fallthrough)
+branch  1 taken 89%
+        -:  154:    }
+------------------
+_ZN5boost6systemeqERKNS0_14error_categoryES3_:
+function _ZN5boost6systemeqERKNS0_14error_categoryES3_ called 0 returned 0% blocks executed 0%
+    #####:  151:    friend BOOST_SYSTEM_CONSTEXPR bool operator==( error_category const & lhs, error_category const & rhs ) BOOST_NOEXCEPT
+        -:  152:    {
+    #####:  153:        return rhs.id_ == 0? &lhs == &rhs: lhs.id_ == rhs.id_;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  154:    }
+------------------
+_ZN5boost6systemeqERKNS0_14error_categoryES3_:
+function _ZN5boost6systemeqERKNS0_14error_categoryES3_ called 0 returned 0% blocks executed 0%
+    #####:  151:    friend BOOST_SYSTEM_CONSTEXPR bool operator==( error_category const & lhs, error_category const & rhs ) BOOST_NOEXCEPT
+        -:  152:    {
+    #####:  153:        return rhs.id_ == 0? &lhs == &rhs: lhs.id_ == rhs.id_;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  154:    }
+------------------
+_ZN5boost6systemeqERKNS0_14error_categoryES3_:
+function _ZN5boost6systemeqERKNS0_14error_categoryES3_ called 0 returned 0% blocks executed 0%
+    #####:  151:    friend BOOST_SYSTEM_CONSTEXPR bool operator==( error_category const & lhs, error_category const & rhs ) BOOST_NOEXCEPT
+        -:  152:    {
+    #####:  153:        return rhs.id_ == 0? &lhs == &rhs: lhs.id_ == rhs.id_;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  154:    }
+------------------
+_ZN5boost6systemeqERKNS0_14error_categoryES3_:
+function _ZN5boost6systemeqERKNS0_14error_categoryES3_ called 0 returned 0% blocks executed 0%
+    #####:  151:    friend BOOST_SYSTEM_CONSTEXPR bool operator==( error_category const & lhs, error_category const & rhs ) BOOST_NOEXCEPT
+        -:  152:    {
+    #####:  153:        return rhs.id_ == 0? &lhs == &rhs: lhs.id_ == rhs.id_;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  154:    }
+------------------
+_ZN5boost6systemeqERKNS0_14error_categoryES3_:
+function _ZN5boost6systemeqERKNS0_14error_categoryES3_ called 0 returned 0% blocks executed 0%
+    #####:  151:    friend BOOST_SYSTEM_CONSTEXPR bool operator==( error_category const & lhs, error_category const & rhs ) BOOST_NOEXCEPT
+        -:  152:    {
+    #####:  153:        return rhs.id_ == 0? &lhs == &rhs: lhs.id_ == rhs.id_;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  154:    }
+------------------
+_ZN5boost6systemeqERKNS0_14error_categoryES3_:
+function _ZN5boost6systemeqERKNS0_14error_categoryES3_ called 0 returned 0% blocks executed 0%
+    #####:  151:    friend BOOST_SYSTEM_CONSTEXPR bool operator==( error_category const & lhs, error_category const & rhs ) BOOST_NOEXCEPT
+        -:  152:    {
+    #####:  153:        return rhs.id_ == 0? &lhs == &rhs: lhs.id_ == rhs.id_;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  154:    }
+------------------
+_ZN5boost6systemeqERKNS0_14error_categoryES3_:
+function _ZN5boost6systemeqERKNS0_14error_categoryES3_ called 0 returned 0% blocks executed 0%
+    #####:  151:    friend BOOST_SYSTEM_CONSTEXPR bool operator==( error_category const & lhs, error_category const & rhs ) BOOST_NOEXCEPT
+        -:  152:    {
+    #####:  153:        return rhs.id_ == 0? &lhs == &rhs: lhs.id_ == rhs.id_;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  154:    }
+------------------
+_ZN5boost6systemeqERKNS0_14error_categoryES3_:
+function _ZN5boost6systemeqERKNS0_14error_categoryES3_ called 0 returned 0% blocks executed 0%
+    #####:  151:    friend BOOST_SYSTEM_CONSTEXPR bool operator==( error_category const & lhs, error_category const & rhs ) BOOST_NOEXCEPT
+        -:  152:    {
+    #####:  153:        return rhs.id_ == 0? &lhs == &rhs: lhs.id_ == rhs.id_;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  154:    }
+------------------
+_ZN5boost6systemeqERKNS0_14error_categoryES3_:
+function _ZN5boost6systemeqERKNS0_14error_categoryES3_ called 0 returned 0% blocks executed 0%
+    #####:  151:    friend BOOST_SYSTEM_CONSTEXPR bool operator==( error_category const & lhs, error_category const & rhs ) BOOST_NOEXCEPT
+        -:  152:    {
+    #####:  153:        return rhs.id_ == 0? &lhs == &rhs: lhs.id_ == rhs.id_;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  154:    }
+------------------
+_ZN5boost6systemeqERKNS0_14error_categoryES3_:
+function _ZN5boost6systemeqERKNS0_14error_categoryES3_ called 0 returned 0% blocks executed 0%
+    #####:  151:    friend BOOST_SYSTEM_CONSTEXPR bool operator==( error_category const & lhs, error_category const & rhs ) BOOST_NOEXCEPT
+        -:  152:    {
+    #####:  153:        return rhs.id_ == 0? &lhs == &rhs: lhs.id_ == rhs.id_;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  154:    }
+------------------
+_ZN5boost6systemeqERKNS0_14error_categoryES3_:
+function _ZN5boost6systemeqERKNS0_14error_categoryES3_ called 0 returned 0% blocks executed 0%
+    #####:  151:    friend BOOST_SYSTEM_CONSTEXPR bool operator==( error_category const & lhs, error_category const & rhs ) BOOST_NOEXCEPT
+        -:  152:    {
+    #####:  153:        return rhs.id_ == 0? &lhs == &rhs: lhs.id_ == rhs.id_;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  154:    }
+------------------
+_ZN5boost6systemeqERKNS0_14error_categoryES3_:
+function _ZN5boost6systemeqERKNS0_14error_categoryES3_ called 0 returned 0% blocks executed 0%
+    #####:  151:    friend BOOST_SYSTEM_CONSTEXPR bool operator==( error_category const & lhs, error_category const & rhs ) BOOST_NOEXCEPT
+        -:  152:    {
+    #####:  153:        return rhs.id_ == 0? &lhs == &rhs: lhs.id_ == rhs.id_;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  154:    }
+------------------
+_ZN5boost6systemeqERKNS0_14error_categoryES3_:
+function _ZN5boost6systemeqERKNS0_14error_categoryES3_ called 0 returned 0% blocks executed 0%
+    #####:  151:    friend BOOST_SYSTEM_CONSTEXPR bool operator==( error_category const & lhs, error_category const & rhs ) BOOST_NOEXCEPT
+        -:  152:    {
+    #####:  153:        return rhs.id_ == 0? &lhs == &rhs: lhs.id_ == rhs.id_;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  154:    }
+------------------
+_ZN5boost6systemeqERKNS0_14error_categoryES3_:
+function _ZN5boost6systemeqERKNS0_14error_categoryES3_ called 0 returned 0% blocks executed 0%
+    #####:  151:    friend BOOST_SYSTEM_CONSTEXPR bool operator==( error_category const & lhs, error_category const & rhs ) BOOST_NOEXCEPT
+        -:  152:    {
+    #####:  153:        return rhs.id_ == 0? &lhs == &rhs: lhs.id_ == rhs.id_;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  154:    }
+------------------
+_ZN5boost6systemeqERKNS0_14error_categoryES3_:
+function _ZN5boost6systemeqERKNS0_14error_categoryES3_ called 0 returned 0% blocks executed 0%
+    #####:  151:    friend BOOST_SYSTEM_CONSTEXPR bool operator==( error_category const & lhs, error_category const & rhs ) BOOST_NOEXCEPT
+        -:  152:    {
+    #####:  153:        return rhs.id_ == 0? &lhs == &rhs: lhs.id_ == rhs.id_;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  154:    }
+------------------
+_ZN5boost6systemeqERKNS0_14error_categoryES3_:
+function _ZN5boost6systemeqERKNS0_14error_categoryES3_ called 0 returned 0% blocks executed 0%
+    #####:  151:    friend BOOST_SYSTEM_CONSTEXPR bool operator==( error_category const & lhs, error_category const & rhs ) BOOST_NOEXCEPT
+        -:  152:    {
+    #####:  153:        return rhs.id_ == 0? &lhs == &rhs: lhs.id_ == rhs.id_;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  154:    }
+------------------
+_ZN5boost6systemeqERKNS0_14error_categoryES3_:
+function _ZN5boost6systemeqERKNS0_14error_categoryES3_ called 0 returned 0% blocks executed 0%
+    #####:  151:    friend BOOST_SYSTEM_CONSTEXPR bool operator==( error_category const & lhs, error_category const & rhs ) BOOST_NOEXCEPT
+        -:  152:    {
+    #####:  153:        return rhs.id_ == 0? &lhs == &rhs: lhs.id_ == rhs.id_;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  154:    }
+------------------
+_ZN5boost6systemeqERKNS0_14error_categoryES3_:
+function _ZN5boost6systemeqERKNS0_14error_categoryES3_ called 0 returned 0% blocks executed 0%
+    #####:  151:    friend BOOST_SYSTEM_CONSTEXPR bool operator==( error_category const & lhs, error_category const & rhs ) BOOST_NOEXCEPT
+        -:  152:    {
+    #####:  153:        return rhs.id_ == 0? &lhs == &rhs: lhs.id_ == rhs.id_;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  154:    }
+------------------
+_ZN5boost6systemeqERKNS0_14error_categoryES3_:
+function _ZN5boost6systemeqERKNS0_14error_categoryES3_ called 0 returned 0% blocks executed 0%
+    #####:  151:    friend BOOST_SYSTEM_CONSTEXPR bool operator==( error_category const & lhs, error_category const & rhs ) BOOST_NOEXCEPT
+        -:  152:    {
+    #####:  153:        return rhs.id_ == 0? &lhs == &rhs: lhs.id_ == rhs.id_;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  154:    }
+------------------
+_ZN5boost6systemeqERKNS0_14error_categoryES3_:
+function _ZN5boost6systemeqERKNS0_14error_categoryES3_ called 0 returned 0% blocks executed 0%
+    #####:  151:    friend BOOST_SYSTEM_CONSTEXPR bool operator==( error_category const & lhs, error_category const & rhs ) BOOST_NOEXCEPT
+        -:  152:    {
+    #####:  153:        return rhs.id_ == 0? &lhs == &rhs: lhs.id_ == rhs.id_;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  154:    }
+------------------
+_ZN5boost6systemeqERKNS0_14error_categoryES3_:
+function _ZN5boost6systemeqERKNS0_14error_categoryES3_ called 0 returned 0% blocks executed 0%
+    #####:  151:    friend BOOST_SYSTEM_CONSTEXPR bool operator==( error_category const & lhs, error_category const & rhs ) BOOST_NOEXCEPT
+        -:  152:    {
+    #####:  153:        return rhs.id_ == 0? &lhs == &rhs: lhs.id_ == rhs.id_;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  154:    }
+------------------
+_ZN5boost6systemeqERKNS0_14error_categoryES3_:
+function _ZN5boost6systemeqERKNS0_14error_categoryES3_ called 0 returned 0% blocks executed 0%
+    #####:  151:    friend BOOST_SYSTEM_CONSTEXPR bool operator==( error_category const & lhs, error_category const & rhs ) BOOST_NOEXCEPT
+        -:  152:    {
+    #####:  153:        return rhs.id_ == 0? &lhs == &rhs: lhs.id_ == rhs.id_;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  154:    }
+------------------
+_ZN5boost6systemeqERKNS0_14error_categoryES3_:
+function _ZN5boost6systemeqERKNS0_14error_categoryES3_ called 0 returned 0% blocks executed 0%
+    #####:  151:    friend BOOST_SYSTEM_CONSTEXPR bool operator==( error_category const & lhs, error_category const & rhs ) BOOST_NOEXCEPT
+        -:  152:    {
+    #####:  153:        return rhs.id_ == 0? &lhs == &rhs: lhs.id_ == rhs.id_;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  154:    }
+------------------
+_ZN5boost6systemeqERKNS0_14error_categoryES3_:
+function _ZN5boost6systemeqERKNS0_14error_categoryES3_ called 0 returned 0% blocks executed 0%
+    #####:  151:    friend BOOST_SYSTEM_CONSTEXPR bool operator==( error_category const & lhs, error_category const & rhs ) BOOST_NOEXCEPT
+        -:  152:    {
+    #####:  153:        return rhs.id_ == 0? &lhs == &rhs: lhs.id_ == rhs.id_;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  154:    }
+------------------
+_ZN5boost6systemeqERKNS0_14error_categoryES3_:
+function _ZN5boost6systemeqERKNS0_14error_categoryES3_ called 0 returned 0% blocks executed 0%
+    #####:  151:    friend BOOST_SYSTEM_CONSTEXPR bool operator==( error_category const & lhs, error_category const & rhs ) BOOST_NOEXCEPT
+        -:  152:    {
+    #####:  153:        return rhs.id_ == 0? &lhs == &rhs: lhs.id_ == rhs.id_;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  154:    }
+------------------
+_ZN5boost6systemeqERKNS0_14error_categoryES3_:
+function _ZN5boost6systemeqERKNS0_14error_categoryES3_ called 0 returned 0% blocks executed 0%
+    #####:  151:    friend BOOST_SYSTEM_CONSTEXPR bool operator==( error_category const & lhs, error_category const & rhs ) BOOST_NOEXCEPT
+        -:  152:    {
+    #####:  153:        return rhs.id_ == 0? &lhs == &rhs: lhs.id_ == rhs.id_;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  154:    }
+------------------
+_ZN5boost6systemeqERKNS0_14error_categoryES3_:
+function _ZN5boost6systemeqERKNS0_14error_categoryES3_ called 0 returned 0% blocks executed 0%
+    #####:  151:    friend BOOST_SYSTEM_CONSTEXPR bool operator==( error_category const & lhs, error_category const & rhs ) BOOST_NOEXCEPT
+        -:  152:    {
+    #####:  153:        return rhs.id_ == 0? &lhs == &rhs: lhs.id_ == rhs.id_;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  154:    }
+------------------
+_ZN5boost6systemeqERKNS0_14error_categoryES3_:
+function _ZN5boost6systemeqERKNS0_14error_categoryES3_ called 0 returned 0% blocks executed 0%
+    #####:  151:    friend BOOST_SYSTEM_CONSTEXPR bool operator==( error_category const & lhs, error_category const & rhs ) BOOST_NOEXCEPT
+        -:  152:    {
+    #####:  153:        return rhs.id_ == 0? &lhs == &rhs: lhs.id_ == rhs.id_;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  154:    }
+------------------
+_ZN5boost6systemeqERKNS0_14error_categoryES3_:
+function _ZN5boost6systemeqERKNS0_14error_categoryES3_ called 0 returned 0% blocks executed 0%
+    #####:  151:    friend BOOST_SYSTEM_CONSTEXPR bool operator==( error_category const & lhs, error_category const & rhs ) BOOST_NOEXCEPT
+        -:  152:    {
+    #####:  153:        return rhs.id_ == 0? &lhs == &rhs: lhs.id_ == rhs.id_;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  154:    }
+------------------
+_ZN5boost6systemeqERKNS0_14error_categoryES3_:
+function _ZN5boost6systemeqERKNS0_14error_categoryES3_ called 0 returned 0% blocks executed 0%
+    #####:  151:    friend BOOST_SYSTEM_CONSTEXPR bool operator==( error_category const & lhs, error_category const & rhs ) BOOST_NOEXCEPT
+        -:  152:    {
+    #####:  153:        return rhs.id_ == 0? &lhs == &rhs: lhs.id_ == rhs.id_;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  154:    }
+------------------
+_ZN5boost6systemeqERKNS0_14error_categoryES3_:
+function _ZN5boost6systemeqERKNS0_14error_categoryES3_ called 0 returned 0% blocks executed 0%
+    #####:  151:    friend BOOST_SYSTEM_CONSTEXPR bool operator==( error_category const & lhs, error_category const & rhs ) BOOST_NOEXCEPT
+        -:  152:    {
+    #####:  153:        return rhs.id_ == 0? &lhs == &rhs: lhs.id_ == rhs.id_;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  154:    }
+------------------
+_ZN5boost6systemeqERKNS0_14error_categoryES3_:
+function _ZN5boost6systemeqERKNS0_14error_categoryES3_ called 0 returned 0% blocks executed 0%
+    #####:  151:    friend BOOST_SYSTEM_CONSTEXPR bool operator==( error_category const & lhs, error_category const & rhs ) BOOST_NOEXCEPT
+        -:  152:    {
+    #####:  153:        return rhs.id_ == 0? &lhs == &rhs: lhs.id_ == rhs.id_;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  154:    }
+------------------
+_ZN5boost6systemeqERKNS0_14error_categoryES3_:
+function _ZN5boost6systemeqERKNS0_14error_categoryES3_ called 0 returned 0% blocks executed 0%
+    #####:  151:    friend BOOST_SYSTEM_CONSTEXPR bool operator==( error_category const & lhs, error_category const & rhs ) BOOST_NOEXCEPT
+        -:  152:    {
+    #####:  153:        return rhs.id_ == 0? &lhs == &rhs: lhs.id_ == rhs.id_;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  154:    }
+------------------
+_ZN5boost6systemeqERKNS0_14error_categoryES3_:
+function _ZN5boost6systemeqERKNS0_14error_categoryES3_ called 16 returned 100% blocks executed 80%
+       16:  151:    friend BOOST_SYSTEM_CONSTEXPR bool operator==( error_category const & lhs, error_category const & rhs ) BOOST_NOEXCEPT
+        -:  152:    {
+      16*:  153:        return rhs.id_ == 0? &lhs == &rhs: lhs.id_ == rhs.id_;
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:  154:    }
+------------------
+_ZN5boost6systemeqERKNS0_14error_categoryES3_:
+function _ZN5boost6systemeqERKNS0_14error_categoryES3_ called 0 returned 0% blocks executed 0%
+    #####:  151:    friend BOOST_SYSTEM_CONSTEXPR bool operator==( error_category const & lhs, error_category const & rhs ) BOOST_NOEXCEPT
+        -:  152:    {
+    #####:  153:        return rhs.id_ == 0? &lhs == &rhs: lhs.id_ == rhs.id_;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  154:    }
+------------------
+_ZN5boost6systemeqERKNS0_14error_categoryES3_:
+function _ZN5boost6systemeqERKNS0_14error_categoryES3_ called 0 returned 0% blocks executed 0%
+    #####:  151:    friend BOOST_SYSTEM_CONSTEXPR bool operator==( error_category const & lhs, error_category const & rhs ) BOOST_NOEXCEPT
+        -:  152:    {
+    #####:  153:        return rhs.id_ == 0? &lhs == &rhs: lhs.id_ == rhs.id_;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  154:    }
+------------------
+_ZN5boost6systemeqERKNS0_14error_categoryES3_:
+function _ZN5boost6systemeqERKNS0_14error_categoryES3_ called 0 returned 0% blocks executed 0%
+    #####:  151:    friend BOOST_SYSTEM_CONSTEXPR bool operator==( error_category const & lhs, error_category const & rhs ) BOOST_NOEXCEPT
+        -:  152:    {
+    #####:  153:        return rhs.id_ == 0? &lhs == &rhs: lhs.id_ == rhs.id_;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  154:    }
+------------------
+        -:  155:
+        -:  156:    friend BOOST_SYSTEM_CONSTEXPR bool operator!=( error_category const & lhs, error_category const & rhs ) BOOST_NOEXCEPT
+        -:  157:    {
+        -:  158:        return !( lhs == rhs );
+        -:  159:    }
+        -:  160:
+        -:  161:    friend BOOST_SYSTEM_CONSTEXPR bool operator<( error_category const & lhs, error_category const & rhs ) BOOST_NOEXCEPT
+        -:  162:    {
+        -:  163:        if( lhs.id_ < rhs.id_ )
+        -:  164:        {
+        -:  165:            return true;
+        -:  166:        }
+        -:  167:
+        -:  168:        if( lhs.id_ > rhs.id_ )
+        -:  169:        {
+        -:  170:            return false;
+        -:  171:        }
+        -:  172:
+        -:  173:        if( rhs.id_ != 0 )
+        -:  174:        {
+        -:  175:            return false; // equal
+        -:  176:        }
+        -:  177:
+        -:  178:        return std::less<error_category const *>()( &lhs, &rhs );
+        -:  179:    }
+        -:  180:
+        -:  181:#if defined(BOOST_SYSTEM_HAS_SYSTEM_ERROR)
+        -:  182:
+        -:  183:    void init_stdcat() const;
+        -:  184:
+        -:  185:# if defined(__SUNPRO_CC) // trailing __global is not supported
+        -:  186:    operator std::error_category const & () const;
+        -:  187:# else
+        -:  188:    operator std::error_category const & () const BOOST_SYMBOL_VISIBLE;
+        -:  189:# endif
+        -:  190:
+        -:  191:#endif
+        -:  192:};
+        -:  193:
+        -:  194:#if defined(BOOST_MSVC) && BOOST_MSVC < 1900
+        -:  195:#pragma warning(pop)
+        -:  196:#endif
+        -:  197:
+        -:  198:#if ( defined( BOOST_GCC ) && BOOST_GCC >= 40600 ) || defined( BOOST_CLANG )
+        -:  199:#pragma GCC diagnostic pop
+        -:  200:#endif
+        -:  201:
+        -:  202:namespace detail
+        -:  203:{
+        -:  204:
+        -:  205:static const boost::ulong_long_type generic_category_id = ( boost::ulong_long_type( 0xB2AB117A ) << 32 ) + 0x257EDFD0;
+        -:  206:static const boost::ulong_long_type system_category_id = generic_category_id + 1;
+        -:  207:static const boost::ulong_long_type interop_category_id = generic_category_id + 2;
+        -:  208:
+    2347*:  209:BOOST_SYSTEM_CONSTEXPR inline bool failed_impl( int ev, error_category const & cat )
+        -:  210:{
+    2347*:  211:    if( cat.id_ == system_category_id || cat.id_ == generic_category_id )
+        -:  212:    {
+    2275*:  213:        return ev != 0;
+        -:  214:    }
+        -:  215:    else
+        -:  216:    {
+      72*:  217:        return cat.failed( ev );
+        -:  218:    }
+        -:  219:}
+        -:  220:
+        -:  221:} // namespace detail
+        -:  222:
+        -:  223:} // namespace system
+        -:  224:
+        -:  225:} // namespace boost
+        -:  226:
+        -:  227:#endif // #ifndef BOOST_SYSTEM_DETAIL_ERROR_CATEGORY_HPP_INCLUDED

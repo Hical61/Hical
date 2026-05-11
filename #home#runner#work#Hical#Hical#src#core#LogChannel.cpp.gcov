@@ -1,0 +1,310 @@
+        -:    0:Source:/home/runner/work/Hical/Hical/src/core/LogChannel.cpp
+        -:    1:#include "LogChannel.h"
+        -:    2:
+        -:    3:#include <utility>
+        -:    4:
+        -:    5:namespace hical
+        -:    6:{
+        -:    7:
+        -:    8:	// ============ LogChannel ============
+        -:    9:
+function _ZN5hical10LogChannelC2ENSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEE called 12 returned 100% blocks executed 71%
+       12:   10:	LogChannel::LogChannel(std::string name)
+       12:   11:		: m_name(std::move(name))
+call    0 returned 100%
+call    1 returned 100%
+       12:   12:		, m_formatter(std::make_shared<TextFormatter>())
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+       24:   13:		, m_sinks(std::make_shared<const std::vector<std::shared_ptr<LogSink>>>())
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+        -:   14:	{
+       12:   15:	}
+call    0 never executed
+call    1 never executed
+        -:   16:
+function _ZNK5hical10LogChannel4nameB5cxx11Ev called 2 returned 100% blocks executed 100%
+        2:   17:	const std::string& LogChannel::name() const
+        -:   18:	{
+        2:   19:		return m_name;
+        -:   20:	}
+        -:   21:
+function _ZN5hical10LogChannel8setLevelENS_8LogLevelE called 8 returned 100% blocks executed 100%
+        8:   22:	void LogChannel::setLevel(LogLevel lvl)
+        -:   23:	{
+        8:   24:		m_level.store(lvl, std::memory_order_relaxed);
+call    0 returned 100%
+        8:   25:	}
+        -:   26:
+function _ZNK5hical10LogChannel5levelEv called 7 returned 100% blocks executed 100%
+        7:   27:	LogLevel LogChannel::level() const
+        -:   28:	{
+        7:   29:		return m_level.load(std::memory_order_relaxed);
+call    0 returned 100%
+        -:   30:	}
+        -:   31:
+function _ZN5hical10LogChannel12setFormatterESt10shared_ptrINS_12LogFormatterEE called 2 returned 100% blocks executed 90%
+        2:   32:	void LogChannel::setFormatter(std::shared_ptr<LogFormatter> formatter)
+        -:   33:	{
+        2:   34:		if (!formatter)
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+        -:   35:		{
+    #####:   36:			return; // 拒绝 nullptr，保持当前 formatter
+        -:   37:		}
+        2:   38:		std::lock_guard<std::mutex> lock(m_mutex);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        2:   39:		m_formatter = std::move(formatter);
+call    0 returned 100%
+call    1 returned 100%
+        2:   40:	}
+call    0 returned 100%
+        -:   41:
+function _ZN5hical10LogChannel7addSinkESt10shared_ptrINS_7LogSinkEE called 8 returned 100% blocks executed 75%
+        8:   42:	void LogChannel::addSink(std::shared_ptr<LogSink> sink)
+        -:   43:	{
+        8:   44:		std::lock_guard<std::mutex> lock(m_mutex);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        8:   45:		auto newSinks = std::make_shared<std::vector<std::shared_ptr<LogSink>>>(*m_sinks);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        8:   46:		newSinks->push_back(std::move(sink));
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+        8:   47:		m_sinks = std::move(newSinks);
+call    0 returned 100%
+call    1 returned 100%
+        8:   48:	}
+call    0 returned 100%
+call    1 returned 100%
+call    2 never executed
+call    3 never executed
+        -:   49:
+function _ZN5hical10LogChannel10clearSinksEv called 3 returned 100% blocks executed 70%
+        3:   50:	void LogChannel::clearSinks()
+        -:   51:	{
+        3:   52:		std::lock_guard<std::mutex> lock(m_mutex);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        3:   53:		m_sinks = std::make_shared<const std::vector<std::shared_ptr<LogSink>>>();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+        3:   54:	}
+call    0 returned 100%
+call    1 never executed
+        -:   55:
+function _ZN5hical10LogChannel4emitERKNS_9LogRecordE called 9 returned 100% blocks executed 78%
+        9:   56:	void LogChannel::emit(const LogRecord& record)
+        -:   57:	{
+        9:   58:		if (record.level < m_level.load(std::memory_order_relaxed))
+call    0 returned 100%
+branch  1 taken 11% (fallthrough)
+branch  2 taken 89%
+        -:   59:		{
+        1:   60:			return;
+        -:   61:		}
+        -:   62:
+        -:   63:		// COW snapshot：锁内仅拷贝 shared_ptr，不拷贝 vector
+        8:   64:		std::shared_ptr<LogFormatter> fmtSnap;
+        8:   65:		std::shared_ptr<const std::vector<std::shared_ptr<LogSink>>> sinksSnap;
+        -:   66:		{
+        8:   67:			std::lock_guard<std::mutex> lock(m_mutex);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        8:   68:			fmtSnap = m_formatter;
+call    0 returned 100%
+        8:   69:			sinksSnap = m_sinks;
+call    0 returned 100%
+        8:   70:		}
+call    0 returned 100%
+        -:   71:
+        -:   72:		// 锁外格式化 + 分发（Sink 接口要求实现线程安全）
+        8:   73:		auto formatted = fmtSnap->format(record);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+       16:   74:		for (const auto& sink : *sinksSnap)
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+call    5 returned 100%
+branch  6 taken 50%
+branch  7 taken 50% (fallthrough)
+        -:   75:		{
+        8:   76:			if (record.level >= sink->sinkLevel())
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0%
+        -:   77:			{
+        8:   78:				sink->write(formatted);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+        -:   79:			}
+        -:   80:		}
+        8:   81:	}
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 never executed
+call    4 never executed
+call    5 never executed
+        -:   82:
+        -:   83:	// ============ LogChannelRegistry ============
+        -:   84:
+function _ZN5hical18LogChannelRegistry11getOrCreateERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEE called 7 returned 100% blocks executed 75%
+        7:   85:	std::shared_ptr<LogChannel> LogChannelRegistry::getOrCreate(const std::string& name)
+        -:   86:	{
+        -:   87:		{
+        7:   88:			std::shared_lock<std::shared_mutex> rlock(m_mutex);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        7:   89:			auto it = m_channels.find(name);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        7:   90:			if (it != m_channels.end())
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 14% (fallthrough)
+branch  3 taken 86%
+        -:   91:			{
+        1:   92:				return it->second;
+call    0 returned 100%
+call    1 returned 100%
+        -:   93:			}
+        7:   94:		}
+call    0 returned 100%
+branch  1 taken 86% (fallthrough)
+branch  2 taken 14%
+call    3 never executed
+        6:   95:		std::unique_lock<std::shared_mutex> wlock(m_mutex);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:   96:		// 双重检查
+        6:   97:		auto it = m_channels.find(name);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        6:   98:		if (it != m_channels.end())
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 0% (fallthrough)
+branch  3 taken 100%
+        -:   99:		{
+    #####:  100:			return it->second;
+call    0 never executed
+call    1 never executed
+        -:  101:		}
+        6:  102:		auto ch = std::make_shared<LogChannel>(name);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        6:  103:		m_channels[name] = ch;
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+        6:  104:		return ch;
+call    0 returned 100%
+        6:  105:	}
+call    0 returned 100%
+call    1 returned 100%
+call    2 never executed
+call    3 never executed
+        -:  106:
+function _ZNK5hical18LogChannelRegistry3getERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEE called 3 returned 100% blocks executed 86%
+        3:  107:	std::shared_ptr<LogChannel> LogChannelRegistry::get(const std::string& name) const
+        -:  108:	{
+        3:  109:		std::shared_lock<std::shared_mutex> rlock(m_mutex);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        3:  110:		auto it = m_channels.find(name);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        3:  111:		if (it != m_channels.end())
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 67% (fallthrough)
+branch  3 taken 33%
+        -:  112:		{
+        2:  113:			return it->second;
+call    0 returned 100%
+call    1 returned 100%
+        -:  114:		}
+        1:  115:		return nullptr;
+call    0 returned 100%
+        3:  116:	}
+call    0 returned 100%
+call    1 never executed
+        -:  117:
+function _ZNK5hical18LogChannelRegistry12listChannelsB5cxx11Ev called 1 returned 100% blocks executed 75%
+        1:  118:	std::vector<std::pair<std::string, LogLevel>> LogChannelRegistry::listChannels() const
+        -:  119:	{
+        1:  120:		std::shared_lock<std::shared_mutex> rlock(m_mutex);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  121:		std::vector<std::pair<std::string, LogLevel>> result;
+        1:  122:		result.reserve(m_channels.size());
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        3:  123:		for (const auto& [name, ch] : m_channels)
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+call    5 returned 100%
+branch  6 taken 67%
+branch  7 taken 33% (fallthrough)
+        -:  124:		{
+        2:  125:			result.emplace_back(name, ch->level());
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+        -:  126:		}
+        1:  127:		return result;
+        1:  128:	}
+call    0 returned 100%
+call    1 never executed
+call    2 never executed
+        -:  129:
+        -:  130:} // namespace hical

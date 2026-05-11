@@ -1,0 +1,275 @@
+        -:    0:Source:/home/runner/work/Hical/Hical/src/core/TcpConnection.h
+        -:    1:#pragma once
+        -:    2:
+        -:    3:#include "PmrBuffer.h"
+        -:    4:#include <chrono>
+        -:    5:#include <cstddef>
+        -:    6:#include <filesystem>
+        -:    7:#include <functional>
+        -:    8:#include <memory>
+        -:    9:#include <string>
+        -:   10:
+        -:   11:namespace hical
+        -:   12:{
+        -:   13:
+        -:   14:	class EventLoop;
+        -:   15:	class InetAddress;
+        -:   16:
+        -:   17:	/**
+        -:   18:	 * @brief TCP 连接抽象接口（hical 风格）
+        -:   19:	 * 与旧版 ITcpConnection 的区别：
+        -:   20:	 * - 回调命名：recvMsgCallback_ -> onMessage
+        -:   21:	 * - 回调命名：closeCallback_ -> onClose
+        -:   22:	 * - 回调命名：writeCompleteCallback_ -> onWriteComplete
+        -:   23:	 * - 使用 PmrBuffer 替代 MsgBuffer
+        -:   24:	 * - 新增协程支持接口
+        -:   25:	 */
+        -:   26:	class TcpConnection : public std::enable_shared_from_this<TcpConnection>
+        -:   27:	{
+        -:   28:	public:
+        -:   29:		using Ptr = std::shared_ptr<TcpConnection>;
+        -:   30:
+        -:   31:		// 回调类型定义（hical 风格命名）
+        -:   32:		using MessageCallback = std::function<void(const Ptr&, PmrBuffer*)>;
+        -:   33:		using ConnectionCallback = std::function<void(const Ptr&)>;
+        -:   34:		using CloseCallback = std::function<void(const Ptr&)>;
+        -:   35:		using WriteCompleteCallback = std::function<void(const Ptr&)>;
+        -:   36:		using HighWaterMarkCallback = std::function<void(const Ptr&, size_t)>;
+        -:   37:
+      13*:   38:		virtual ~TcpConnection() = default;
+------------------
+_ZN5hical13TcpConnectionD0Ev:
+function _ZN5hical13TcpConnectionD0Ev called 0 returned 0% blocks executed 0%
+    #####:   38:		virtual ~TcpConnection() = default;
+call    0 never executed
+call    1 never executed
+------------------
+_ZN5hical13TcpConnectionD2Ev:
+function _ZN5hical13TcpConnectionD2Ev called 13 returned 100% blocks executed 100%
+       13:   38:		virtual ~TcpConnection() = default;
+call    0 returned 100%
+------------------
+        -:   39:
+        -:   40:		// ============ 数据发送 ============
+        -:   41:
+        -:   42:		/**
+        -:   43:		 * @brief 发送数据
+        -:   44:		 * @param data 数据指针
+        -:   45:		 * @param len 数据长度
+        -:   46:		 */
+        -:   47:		virtual void send(const char* data, size_t len) = 0;
+        -:   48:
+        -:   49:		/**
+        -:   50:		 * @brief 发送字符串
+        -:   51:		 * @param msg 字符串
+        -:   52:		 */
+        -:   53:		virtual void send(const std::string& msg) = 0;
+        -:   54:
+        -:   55:		/**
+        -:   56:		 * @brief 发送字符串（移动语义）
+        -:   57:		 * @param msg 字符串
+        -:   58:		 */
+        -:   59:		virtual void send(std::string&& msg) = 0;
+        -:   60:
+        -:   61:		/**
+        -:   62:		 * @brief 发送缓冲区数据
+        -:   63:		 * @param buffer 消息缓冲区
+        -:   64:		 */
+        -:   65:		virtual void send(const PmrBuffer& buffer) = 0;
+        -:   66:
+        -:   67:		/**
+        -:   68:		 * @brief 发送缓冲区数据（移动语义）
+        -:   69:		 * @param buffer 消息缓冲区
+        -:   70:		 */
+        -:   71:		virtual void send(PmrBuffer&& buffer) = 0;
+        -:   72:
+        -:   73:		/**
+        -:   74:		 * @brief 发送共享字符串
+        -:   75:		 * @param msgPtr 字符串智能指针
+        -:   76:		 */
+        -:   77:		virtual void send(const std::shared_ptr<std::string>& msgPtr) = 0;
+        -:   78:
+        -:   79:		/**
+        -:   80:		 * @brief 发送共享缓冲区
+        -:   81:		 * @param msgPtr 缓冲区智能指针
+        -:   82:		 */
+        -:   83:		virtual void send(const std::shared_ptr<PmrBuffer>& msgPtr) = 0;
+        -:   84:
+        -:   85:		// ============ 连接控制 ============
+        -:   86:
+        -:   87:		/**
+        -:   88:		 * @brief 关闭连接（半关闭，只关闭写端）
+        -:   89:		 */
+        -:   90:		virtual void shutdown() = 0;
+        -:   91:
+        -:   92:		/**
+        -:   93:		 * @brief 强制关闭连接
+        -:   94:		 */
+        -:   95:		virtual void close() = 0;
+        -:   96:
+        -:   97:		/**
+        -:   98:		 * @brief 设置 TCP_NODELAY 选项
+        -:   99:		 * @param on 是否启用
+        -:  100:		 */
+        -:  101:		virtual void setTcpNoDelay(bool on) = 0;
+        -:  102:
+        -:  103:		/**
+        -:  104:		 * @brief 启动读取（开始接收数据）
+        -:  105:		 */
+        -:  106:		virtual void startRead() = 0;
+        -:  107:
+        -:  108:		/**
+        -:  109:		 * @brief 停止读取
+        -:  110:		 */
+        -:  111:		virtual void stopRead() = 0;
+        -:  112:
+        -:  113:		// ============ 连接生命周期（由 TcpServer 调用） ============
+        -:  114:
+        -:  115:		/**
+        -:  116:		 * @brief 连接建立后调用（SSL 连接会自动执行握手）
+        -:  117:		 */
+        -:  118:		virtual void connectEstablished() = 0;
+        -:  119:
+        -:  120:		/**
+        -:  121:		 * @brief 连接销毁前调用
+        -:  122:		 */
+        -:  123:		virtual void connectDestroyed() = 0;
+        -:  124:
+        -:  125:		// ============ 状态查询 ============
+        -:  126:
+        -:  127:		/**
+        -:  128:		 * @brief 连接是否已建立
+        -:  129:		 * @return true 如果已连接
+        -:  130:		 */
+        -:  131:		virtual bool connected() const = 0;
+        -:  132:
+        -:  133:		/**
+        -:  134:		 * @brief 连接是否已断开
+        -:  135:		 * @return true 如果已断开
+        -:  136:		 */
+        -:  137:		virtual bool disconnected() const = 0;
+        -:  138:
+        -:  139:		/**
+        -:  140:		 * @brief 获取本地地址
+        -:  141:		 * @return 本地地址
+        -:  142:		 */
+        -:  143:		virtual const InetAddress& localAddr() const = 0;
+        -:  144:
+        -:  145:		/**
+        -:  146:		 * @brief 获取远端地址
+        -:  147:		 * @return 远端地址
+        -:  148:		 */
+        -:  149:		virtual const InetAddress& peerAddr() const = 0;
+        -:  150:
+        -:  151:		/**
+        -:  152:		 * @brief 获取所属事件循环
+        -:  153:		 * @return 事件循环指针
+        -:  154:		 */
+        -:  155:		virtual EventLoop* getLoop() = 0;
+        -:  156:
+        -:  157:		/**
+        -:  158:		 * @brief 获取已发送字节数
+        -:  159:		 * @return 字节数
+        -:  160:		 */
+        -:  161:		virtual size_t bytesSent() const = 0;
+        -:  162:
+        -:  163:		/**
+        -:  164:		 * @brief 获取已接收字节数
+        -:  165:		 * @return 字节数
+        -:  166:		 */
+        -:  167:		virtual size_t bytesReceived() const = 0;
+        -:  168:
+        -:  169:		/**
+        -:  170:		 * @brief 获取最后活跃时间
+        -:  171:		 * @return 最后一次读写数据的时间点
+        -:  172:		 */
+        -:  173:		virtual std::chrono::steady_clock::time_point lastActiveTime() const = 0;
+        -:  174:
+        -:  175:		// ============ 文件发送 ============
+        -:  176:
+        -:  177:		/**
+        -:  178:		 * @brief 发送文件（支持零拷贝优化）
+        -:  179:		 * @param path 文件路径
+        -:  180:		 * @param offset 起始偏移量（默认 0）
+        -:  181:		 * @param length 发送长度（-1 表示到文件末尾）
+        -:  182:		 */
+        -:  183:		virtual void sendFile(const std::filesystem::path& path, int64_t offset = 0, int64_t length = -1) = 0;
+        -:  184:
+        -:  185:		// ============ 回调设置（hical 风格命名）============
+        -:  186:
+        -:  187:		/**
+        -:  188:		 * @brief 设置消息接收回调
+        -:  189:		 * @param cb 回调函数
+        -:  190:		 */
+        -:  191:		virtual void onMessage(MessageCallback cb) = 0;
+        -:  192:
+        -:  193:		/**
+        -:  194:		 * @brief 设置连接建立/断开回调
+        -:  195:		 * @param cb 回调函数
+        -:  196:		 */
+        -:  197:		virtual void onConnection(ConnectionCallback cb) = 0;
+        -:  198:
+        -:  199:		/**
+        -:  200:		 * @brief 设置连接关闭回调
+        -:  201:		 * @param cb 回调函数
+        -:  202:		 */
+        -:  203:		virtual void onClose(CloseCallback cb) = 0;
+        -:  204:
+        -:  205:		/**
+        -:  206:		 * @brief 设置写完成回调
+        -:  207:		 * @param cb 回调函数
+        -:  208:		 */
+        -:  209:		virtual void onWriteComplete(WriteCompleteCallback cb) = 0;
+        -:  210:
+        -:  211:		/**
+        -:  212:		 * @brief 设置高水位回调
+        -:  213:		 * @param cb 回调函数
+        -:  214:		 * @param markLen 高水位字节数
+        -:  215:		 */
+        -:  216:		virtual void onHighWaterMark(HighWaterMarkCallback cb, size_t markLen) = 0;
+        -:  217:
+        -:  218:		// ============ 用户上下文 ============
+        -:  219:
+        -:  220:		/**
+        -:  221:		 * @brief 设置用户上下文
+        -:  222:		 * @param context 上下文对象
+        -:  223:		 */
+        -:  224:		virtual void setContext(const std::shared_ptr<void>& context) = 0;
+        -:  225:
+        -:  226:		/**
+        -:  227:		 * @brief 获取用户上下文
+        -:  228:		 * @tparam T 上下文类型
+        -:  229:		 * @return 上下文对象
+        -:  230:		 */
+        -:  231:		template <typename T>
+function _ZNK5hical13TcpConnection10getContextIiEESt10shared_ptrIT_Ev called 1 returned 100% blocks executed 100%
+        1:  232:		std::shared_ptr<T> getContext() const
+        -:  233:		{
+        1:  234:			return std::static_pointer_cast<T>(getContextInternal());
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+        -:  235:		}
+        -:  236:
+        -:  237:		/**
+        -:  238:		 * @brief 是否设置了用户上下文
+        -:  239:		 * @return true 如果已设置
+        -:  240:		 */
+        -:  241:		virtual bool hasContext() const = 0;
+        -:  242:
+        -:  243:		/**
+        -:  244:		 * @brief 清除用户上下文
+        -:  245:		 */
+        -:  246:		virtual void clearContext() = 0;
+        -:  247:
+        -:  248:	protected:
+        -:  249:		/**
+        -:  250:		 * @brief 获取用户上下文（内部实现）
+        -:  251:		 * @return 上下文对象
+        -:  252:		 */
+        -:  253:		virtual std::shared_ptr<void> getContextInternal() const = 0;
+        -:  254:	};
+        -:  255:
+        -:  256:} // namespace hical

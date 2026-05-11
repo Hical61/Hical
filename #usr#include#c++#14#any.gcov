@@ -1,0 +1,2210 @@
+        -:    0:Source:/usr/include/c++/14/any
+        -:    1:// <any> -*- C++ -*-
+        -:    2:
+        -:    3:// Copyright (C) 2014-2024 Free Software Foundation, Inc.
+        -:    4://
+        -:    5:// This file is part of the GNU ISO C++ Library.  This library is free
+        -:    6:// software; you can redistribute it and/or modify it under the
+        -:    7:// terms of the GNU General Public License as published by the
+        -:    8:// Free Software Foundation; either version 3, or (at your option)
+        -:    9:// any later version.
+        -:   10:
+        -:   11:// This library is distributed in the hope that it will be useful,
+        -:   12:// but WITHOUT ANY WARRANTY; without even the implied warranty of
+        -:   13:// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+        -:   14:// GNU General Public License for more details.
+        -:   15:
+        -:   16:// Under Section 7 of GPL version 3, you are granted additional
+        -:   17:// permissions described in the GCC Runtime Library Exception, version
+        -:   18:// 3.1, as published by the Free Software Foundation.
+        -:   19:
+        -:   20:// You should have received a copy of the GNU General Public License and
+        -:   21:// a copy of the GCC Runtime Library Exception along with this program;
+        -:   22:// see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
+        -:   23:// <http://www.gnu.org/licenses/>.
+        -:   24:
+        -:   25:/** @file include/any
+        -:   26: *  This is a Standard C++ Library header.
+        -:   27: */
+        -:   28:
+        -:   29:#ifndef _GLIBCXX_ANY
+        -:   30:#define _GLIBCXX_ANY 1
+        -:   31:
+        -:   32:#pragma GCC system_header
+        -:   33:
+        -:   34:#define __glibcxx_want_any
+        -:   35:#include <bits/version.h>
+        -:   36:
+        -:   37:#ifdef __cpp_lib_any // C++ >= 17
+        -:   38:
+        -:   39:#include <initializer_list>
+        -:   40:#include <typeinfo>
+        -:   41:#include <new>
+        -:   42:#include <type_traits>
+        -:   43:#include <bits/utility.h> // in_place_type_t
+        -:   44:
+        -:   45:namespace std _GLIBCXX_VISIBILITY(default)
+        -:   46:{
+        -:   47:_GLIBCXX_BEGIN_NAMESPACE_VERSION
+        -:   48:
+        -:   49:  /**
+        -:   50:   *  @addtogroup utilities
+        -:   51:   *  @{
+        -:   52:   */
+        -:   53:
+        -:   54:  /**
+        -:   55:   *  @brief Exception class thrown by a failed @c any_cast
+        -:   56:   *  @ingroup exceptions
+        -:   57:   */
+        -:   58:  class bad_any_cast : public bad_cast
+        -:   59:  {
+        -:   60:  public:
+    #####:   61:    virtual const char* what() const noexcept { return "bad any_cast"; }
+------------------
+_ZNKSt12bad_any_cast4whatEv:
+function _ZNKSt12bad_any_cast4whatEv called 0 returned 0% blocks executed 0%
+    #####:   61:    virtual const char* what() const noexcept { return "bad any_cast"; }
+------------------
+_ZNKSt12bad_any_cast4whatEv:
+function _ZNKSt12bad_any_cast4whatEv called 0 returned 0% blocks executed 0%
+    #####:   61:    virtual const char* what() const noexcept { return "bad any_cast"; }
+------------------
+_ZNKSt12bad_any_cast4whatEv:
+function _ZNKSt12bad_any_cast4whatEv called 0 returned 0% blocks executed 0%
+    #####:   61:    virtual const char* what() const noexcept { return "bad any_cast"; }
+------------------
+        -:   62:  };
+        -:   63:
+    #####:   64:  [[gnu::noreturn]] inline void __throw_bad_any_cast()
+        -:   65:  {
+        -:   66:#if __cpp_exceptions
+    #####:   67:    throw bad_any_cast{};
+        -:   68:#else
+        -:   69:    __builtin_abort();
+        -:   70:#endif
+        -:   71:  }
+------------------
+_ZSt20__throw_bad_any_castv:
+function _ZSt20__throw_bad_any_castv called 0 returned 0% blocks executed 0%
+    #####:   64:  [[gnu::noreturn]] inline void __throw_bad_any_cast()
+        -:   65:  {
+        -:   66:#if __cpp_exceptions
+    #####:   67:    throw bad_any_cast{};
+call    0 never executed
+call    1 never executed
+        -:   68:#else
+        -:   69:    __builtin_abort();
+        -:   70:#endif
+        -:   71:  }
+------------------
+_ZSt20__throw_bad_any_castv:
+function _ZSt20__throw_bad_any_castv called 0 returned 0% blocks executed 0%
+    #####:   64:  [[gnu::noreturn]] inline void __throw_bad_any_cast()
+        -:   65:  {
+        -:   66:#if __cpp_exceptions
+    #####:   67:    throw bad_any_cast{};
+call    0 never executed
+call    1 never executed
+        -:   68:#else
+        -:   69:    __builtin_abort();
+        -:   70:#endif
+        -:   71:  }
+------------------
+_ZSt20__throw_bad_any_castv:
+function _ZSt20__throw_bad_any_castv called 0 returned 0% blocks executed 0%
+    #####:   64:  [[gnu::noreturn]] inline void __throw_bad_any_cast()
+        -:   65:  {
+        -:   66:#if __cpp_exceptions
+    #####:   67:    throw bad_any_cast{};
+call    0 never executed
+call    1 never executed
+        -:   68:#else
+        -:   69:    __builtin_abort();
+        -:   70:#endif
+        -:   71:  }
+------------------
+        -:   72:
+        -:   73:  /**
+        -:   74:   *  @brief A type-safe container of any type.
+        -:   75:   *
+        -:   76:   *  An `any` object's state is either empty or it stores a contained object
+        -:   77:   *  of CopyConstructible type.
+        -:   78:   *
+        -:   79:   *  @since C++17
+        -:   80:   */
+        -:   81:  class any
+        -:   82:  {
+        -:   83:    // Holds either pointer to a heap object or the contained object itself.
+        -:   84:    union _Storage
+        -:   85:    {
+   10773*:   86:      constexpr _Storage() : _M_ptr{nullptr} {}
+------------------
+_ZNSt3any8_StorageC2Ev:
+function _ZNSt3any8_StorageC2Ev called 0 returned 0% blocks executed 0%
+    #####:   86:      constexpr _Storage() : _M_ptr{nullptr} {}
+------------------
+_ZNSt3any8_StorageC2Ev:
+function _ZNSt3any8_StorageC2Ev called 0 returned 0% blocks executed 0%
+    #####:   86:      constexpr _Storage() : _M_ptr{nullptr} {}
+------------------
+_ZNSt3any8_StorageC2Ev:
+function _ZNSt3any8_StorageC2Ev called 9733 returned 100% blocks executed 100%
+     9733:   86:      constexpr _Storage() : _M_ptr{nullptr} {}
+------------------
+_ZNSt3any8_StorageC2Ev:
+function _ZNSt3any8_StorageC2Ev called 0 returned 0% blocks executed 0%
+    #####:   86:      constexpr _Storage() : _M_ptr{nullptr} {}
+------------------
+_ZNSt3any8_StorageC2Ev:
+function _ZNSt3any8_StorageC2Ev called 1024 returned 100% blocks executed 100%
+     1024:   86:      constexpr _Storage() : _M_ptr{nullptr} {}
+------------------
+_ZNSt3any8_StorageC2Ev:
+function _ZNSt3any8_StorageC2Ev called 16 returned 100% blocks executed 100%
+       16:   86:      constexpr _Storage() : _M_ptr{nullptr} {}
+------------------
+        -:   87:
+        -:   88:      // Prevent trivial copies of this type, buffer might hold a non-POD.
+        -:   89:      _Storage(const _Storage&) = delete;
+        -:   90:      _Storage& operator=(const _Storage&) = delete;
+        -:   91:
+        -:   92:      void* _M_ptr;
+        -:   93:      aligned_storage<sizeof(_M_ptr), alignof(void*)>::type _M_buffer;
+        -:   94:    };
+        -:   95:
+        -:   96:    template<typename _Tp, typename _Safe = is_nothrow_move_constructible<_Tp>,
+        -:   97:	     bool _Fits = (sizeof(_Tp) <= sizeof(_Storage))
+        -:   98:			  && (alignof(_Tp) <= alignof(_Storage))>
+        -:   99:      using _Internal = std::integral_constant<bool, _Safe::value && _Fits>;
+        -:  100:
+        -:  101:    template<typename _Tp>
+        -:  102:      struct _Manager_internal; // uses small-object optimization
+        -:  103:
+        -:  104:    template<typename _Tp>
+        -:  105:      struct _Manager_external; // creates contained object on the heap
+        -:  106:
+        -:  107:    template<typename _Tp>
+        -:  108:      using _Manager = __conditional_t<_Internal<_Tp>::value,
+        -:  109:				       _Manager_internal<_Tp>,
+        -:  110:				       _Manager_external<_Tp>>;
+        -:  111:
+        -:  112:    template<typename _Tp, typename _VTp = decay_t<_Tp>>
+        -:  113:      using _Decay_if_not_any = enable_if_t<!is_same_v<_VTp, any>, _VTp>;
+        -:  114:
+        -:  115:    /// Emplace with an object created from @p __args as the contained object.
+        -:  116:    template <typename _Tp, typename... _Args,
+        -:  117:	      typename _Mgr = _Manager<_Tp>>
+        -:  118:      void __do_emplace(_Args&&... __args)
+        -:  119:      {
+        -:  120:	reset();
+        -:  121:        _Mgr::_S_create(_M_storage, std::forward<_Args>(__args)...);
+        -:  122:	_M_manager = &_Mgr::_S_manage;
+        -:  123:      }
+        -:  124:
+        -:  125:    /// Emplace with an object created from @p __il and @p __args as
+        -:  126:    /// the contained object.
+        -:  127:    template <typename _Tp, typename _Up, typename... _Args,
+        -:  128:	      typename _Mgr = _Manager<_Tp>>
+        -:  129:      void __do_emplace(initializer_list<_Up> __il, _Args&&... __args)
+        -:  130:      {
+        -:  131:	reset();
+        -:  132:	_Mgr::_S_create(_M_storage, __il, std::forward<_Args>(__args)...);
+        -:  133:	_M_manager = &_Mgr::_S_manage;
+        -:  134:      }
+        -:  135:
+        -:  136:    template <typename _Res, typename _Tp, typename... _Args>
+        -:  137:      using __any_constructible
+        -:  138:	= enable_if<__and_<is_copy_constructible<_Tp>,
+        -:  139:			   is_constructible<_Tp, _Args...>>::value,
+        -:  140:		    _Res>;
+        -:  141:
+        -:  142:    template <typename _Tp, typename... _Args>
+        -:  143:      using __any_constructible_t
+        -:  144:	= typename __any_constructible<bool, _Tp, _Args...>::type;
+        -:  145:
+        -:  146:    template<typename _VTp, typename... _Args>
+        -:  147:      using __emplace_t
+        -:  148:	= typename __any_constructible<_VTp&, _VTp, _Args...>::type;
+        -:  149:
+        -:  150:  public:
+        -:  151:    // construct/destruct
+        -:  152:
+        -:  153:    /// Default constructor, creates an empty object.
+    10245:  154:    constexpr any() noexcept : _M_manager(nullptr) { }
+------------------
+_ZNSt3anyC2Ev:
+function _ZNSt3anyC2Ev called 9733 returned 101% blocks executed 100%
+     9733:  154:    constexpr any() noexcept : _M_manager(nullptr) { }
+call    0 returned 101%
+------------------
+_ZNSt3anyC2Ev:
+function _ZNSt3anyC2Ev called 512 returned 100% blocks executed 100%
+      512:  154:    constexpr any() noexcept : _M_manager(nullptr) { }
+call    0 returned 100%
+------------------
+        -:  155:
+        -:  156:    /// Copy constructor, copies the state of @p __other
+function _ZNSt3anyC2ERKS_ called 0 returned 0% blocks executed 0%
+    #####:  157:    any(const any& __other)
+    #####:  158:    {
+call    0 never executed
+    #####:  159:      if (!__other.has_value())
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+    #####:  160:	_M_manager = nullptr;
+        -:  161:      else
+        -:  162:	{
+        -:  163:	  _Arg __arg;
+    #####:  164:	  __arg._M_any = this;
+    #####:  165:	  __other._M_manager(_Op_clone, &__other, &__arg);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:  166:	}
+    #####:  167:    }
+        -:  168:
+        -:  169:    /**
+        -:  170:     * @brief Move constructor, transfer the state from @p __other
+        -:  171:     *
+        -:  172:     * @post @c !__other.has_value() (this postcondition is a GNU extension)
+        -:  173:     */
+        -:  174:    any(any&& __other) noexcept
+        -:  175:    {
+        -:  176:      if (!__other.has_value())
+        -:  177:	_M_manager = nullptr;
+        -:  178:      else
+        -:  179:	{
+        -:  180:	  _Arg __arg;
+        -:  181:	  __arg._M_any = this;
+        -:  182:	  __other._M_manager(_Op_xfer, &__other, &__arg);
+        -:  183:	}
+        -:  184:    }
+        -:  185:
+        -:  186:    /// Construct with a copy of @p __value as the contained object.
+        -:  187:    template <typename _Tp, typename _VTp = _Decay_if_not_any<_Tp>,
+        -:  188:	      typename _Mgr = _Manager<_VTp>,
+        -:  189:	      enable_if_t<is_copy_constructible_v<_VTp>
+        -:  190:			  && !__is_in_place_type_v<_VTp>, bool> = true>
+     516*:  191:      any(_Tp&& __value)
+     516*:  192:      : _M_manager(&_Mgr::_S_manage)
+        -:  193:      {
+     516*:  194:	_Mgr::_S_create(_M_storage, std::forward<_Tp>(__value));
+     516*:  195:      }
+------------------
+_ZNSt3anyC2ISt6vectorIN5hical13MultipartPartESaIS3_EES5_NS_17_Manager_externalIS5_EELb1EEEOT_:
+function _ZNSt3anyC2ISt6vectorIN5hical13MultipartPartESaIS3_EES5_NS_17_Manager_externalIS5_EELb1EEEOT_ called 2 returned 100% blocks executed 100%
+        2:  191:      any(_Tp&& __value)
+        2:  192:      : _M_manager(&_Mgr::_S_manage)
+call    0 returned 100%
+        -:  193:      {
+        2:  194:	_Mgr::_S_create(_M_storage, std::forward<_Tp>(__value));
+call    0 returned 100%
+call    1 returned 100%
+        2:  195:      }
+------------------
+_ZNSt3anyC2IRNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEES6_NS_17_Manager_externalIS6_EELb1EEEOT_:
+function _ZNSt3anyC2IRNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEES6_NS_17_Manager_externalIS6_EELb1EEEOT_ called 0 returned 0% blocks executed 0%
+    #####:  191:      any(_Tp&& __value)
+    #####:  192:      : _M_manager(&_Mgr::_S_manage)
+call    0 never executed
+        -:  193:      {
+    #####:  194:	_Mgr::_S_create(_M_storage, std::forward<_Tp>(__value));
+call    0 never executed
+call    1 never executed
+    #####:  195:      }
+------------------
+_ZNSt3anyC2IRSt10shared_ptrIN5hical7SessionEES4_NS_17_Manager_externalIS4_EELb1EEEOT_:
+function _ZNSt3anyC2IRSt10shared_ptrIN5hical7SessionEES4_NS_17_Manager_externalIS4_EELb1EEEOT_ called 0 returned 0% blocks executed 0%
+    #####:  191:      any(_Tp&& __value)
+    #####:  192:      : _M_manager(&_Mgr::_S_manage)
+call    0 never executed
+        -:  193:      {
+    #####:  194:	_Mgr::_S_create(_M_storage, std::forward<_Tp>(__value));
+call    0 never executed
+call    1 never executed
+    #####:  195:      }
+------------------
+_ZNSt3anyC2IRiiNS_17_Manager_internalIiEELb1EEEOT_:
+function _ZNSt3anyC2IRiiNS_17_Manager_internalIiEELb1EEEOT_ called 500 returned 100% blocks executed 100%
+      500:  191:      any(_Tp&& __value)
+      500:  192:      : _M_manager(&_Mgr::_S_manage)
+call    0 returned 100%
+        -:  193:      {
+      500:  194:	_Mgr::_S_create(_M_storage, std::forward<_Tp>(__value));
+call    0 returned 100%
+call    1 returned 100%
+      500:  195:      }
+------------------
+_ZNSt3anyC2IiiNS_17_Manager_internalIiEELb1EEEOT_:
+function _ZNSt3anyC2IiiNS_17_Manager_internalIiEELb1EEEOT_ called 5 returned 100% blocks executed 100%
+        5:  191:      any(_Tp&& __value)
+        5:  192:      : _M_manager(&_Mgr::_S_manage)
+call    0 returned 100%
+        -:  193:      {
+        5:  194:	_Mgr::_S_create(_M_storage, std::forward<_Tp>(__value));
+call    0 returned 100%
+call    1 returned 100%
+        5:  195:      }
+------------------
+_ZNSt3anyC2INSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEES6_NS_17_Manager_externalIS6_EELb1EEEOT_:
+function _ZNSt3anyC2INSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEES6_NS_17_Manager_externalIS6_EELb1EEEOT_ called 7 returned 100% blocks executed 100%
+        7:  191:      any(_Tp&& __value)
+        7:  192:      : _M_manager(&_Mgr::_S_manage)
+call    0 returned 100%
+        -:  193:      {
+        7:  194:	_Mgr::_S_create(_M_storage, std::forward<_Tp>(__value));
+call    0 returned 100%
+call    1 returned 100%
+        7:  195:      }
+------------------
+_ZNSt3anyC2IRSt10shared_ptrIN5hical7SessionEES4_NS_17_Manager_externalIS4_EELb1EEEOT_:
+function _ZNSt3anyC2IRSt10shared_ptrIN5hical7SessionEES4_NS_17_Manager_externalIS4_EELb1EEEOT_ called 0 returned 0% blocks executed 0%
+    #####:  191:      any(_Tp&& __value)
+    #####:  192:      : _M_manager(&_Mgr::_S_manage)
+call    0 never executed
+        -:  193:      {
+    #####:  194:	_Mgr::_S_create(_M_storage, std::forward<_Tp>(__value));
+call    0 never executed
+call    1 never executed
+    #####:  195:      }
+------------------
+_ZNSt3anyC2INSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEES6_NS_17_Manager_externalIS6_EELb1EEEOT_:
+function _ZNSt3anyC2INSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEES6_NS_17_Manager_externalIS6_EELb1EEEOT_ called 2 returned 100% blocks executed 100%
+        2:  191:      any(_Tp&& __value)
+        2:  192:      : _M_manager(&_Mgr::_S_manage)
+call    0 returned 100%
+        -:  193:      {
+        2:  194:	_Mgr::_S_create(_M_storage, std::forward<_Tp>(__value));
+call    0 returned 100%
+call    1 returned 100%
+        2:  195:      }
+------------------
+        -:  196:
+        -:  197:    /// Construct with an object created from @p __args as the contained object.
+        -:  198:    template <typename _Tp, typename... _Args, typename _VTp = decay_t<_Tp>,
+        -:  199:	      typename _Mgr = _Manager<_VTp>,
+        -:  200:	      __any_constructible_t<_VTp, _Args&&...> = false>
+        -:  201:      explicit
+        -:  202:      any(in_place_type_t<_Tp>, _Args&&... __args)
+        -:  203:      : _M_manager(&_Mgr::_S_manage)
+        -:  204:      {
+        -:  205:	_Mgr::_S_create(_M_storage, std::forward<_Args>(__args)...);
+        -:  206:      }
+        -:  207:
+        -:  208:    /// Construct with an object created from @p __il and @p __args as
+        -:  209:    /// the contained object.
+        -:  210:    template <typename _Tp, typename _Up, typename... _Args,
+        -:  211:	      typename _VTp = decay_t<_Tp>, typename _Mgr = _Manager<_VTp>,
+        -:  212:	      __any_constructible_t<_VTp, initializer_list<_Up>&,
+        -:  213:				    _Args&&...> = false>
+        -:  214:      explicit
+        -:  215:      any(in_place_type_t<_Tp>, initializer_list<_Up> __il, _Args&&... __args)
+        -:  216:      : _M_manager(&_Mgr::_S_manage)
+        -:  217:      {
+        -:  218:	_Mgr::_S_create(_M_storage, __il, std::forward<_Args>(__args)...);
+        -:  219:      }
+        -:  220:
+        -:  221:    /// Destructor, calls @c reset()
+   10901*:  222:    ~any() { reset(); }
+------------------
+_ZNSt3anyD2Ev:
+function _ZNSt3anyD2Ev called 13 returned 100% blocks executed 100%
+       13:  222:    ~any() { reset(); }
+call    0 returned 100%
+------------------
+_ZNSt3anyD2Ev:
+function _ZNSt3anyD2Ev called 0 returned 0% blocks executed 0%
+    #####:  222:    ~any() { reset(); }
+call    0 never executed
+------------------
+_ZNSt3anyD2Ev:
+function _ZNSt3anyD2Ev called 16 returned 100% blocks executed 100%
+       16:  222:    ~any() { reset(); }
+call    0 returned 100%
+------------------
+_ZNSt3anyD2Ev:
+function _ZNSt3anyD2Ev called 6 returned 100% blocks executed 100%
+        6:  222:    ~any() { reset(); }
+call    0 returned 100%
+------------------
+_ZNSt3anyD2Ev:
+function _ZNSt3anyD2Ev called 16 returned 100% blocks executed 100%
+       16:  222:    ~any() { reset(); }
+call    0 returned 100%
+------------------
+_ZNSt3anyD2Ev:
+function _ZNSt3anyD2Ev called 7 returned 100% blocks executed 100%
+        7:  222:    ~any() { reset(); }
+call    0 returned 100%
+------------------
+_ZNSt3anyD2Ev:
+function _ZNSt3anyD2Ev called 14 returned 100% blocks executed 100%
+       14:  222:    ~any() { reset(); }
+call    0 returned 100%
+------------------
+_ZNSt3anyD2Ev:
+function _ZNSt3anyD2Ev called 1024 returned 100% blocks executed 100%
+     1024:  222:    ~any() { reset(); }
+call    0 returned 100%
+------------------
+_ZNSt3anyD2Ev:
+function _ZNSt3anyD2Ev called 5 returned 100% blocks executed 100%
+        5:  222:    ~any() { reset(); }
+call    0 returned 100%
+------------------
+_ZNSt3anyD2Ev:
+function _ZNSt3anyD2Ev called 9 returned 100% blocks executed 100%
+        9:  222:    ~any() { reset(); }
+call    0 returned 100%
+------------------
+_ZNSt3anyD2Ev:
+function _ZNSt3anyD2Ev called 0 returned 0% blocks executed 0%
+    #####:  222:    ~any() { reset(); }
+call    0 never executed
+------------------
+_ZNSt3anyD2Ev:
+function _ZNSt3anyD2Ev called 18 returned 100% blocks executed 100%
+       18:  222:    ~any() { reset(); }
+call    0 returned 100%
+------------------
+_ZNSt3anyD2Ev:
+function _ZNSt3anyD2Ev called 9741 returned 101% blocks executed 100%
+     9741:  222:    ~any() { reset(); }
+call    0 returned 101%
+------------------
+_ZNSt3anyD2Ev:
+function _ZNSt3anyD2Ev called 7 returned 100% blocks executed 100%
+        7:  222:    ~any() { reset(); }
+call    0 returned 100%
+------------------
+_ZNSt3anyD2Ev:
+function _ZNSt3anyD2Ev called 7 returned 100% blocks executed 100%
+        7:  222:    ~any() { reset(); }
+call    0 returned 100%
+------------------
+_ZNSt3anyD2Ev:
+function _ZNSt3anyD2Ev called 0 returned 0% blocks executed 0%
+    #####:  222:    ~any() { reset(); }
+call    0 never executed
+------------------
+_ZNSt3anyD2Ev:
+function _ZNSt3anyD2Ev called 6 returned 100% blocks executed 100%
+        6:  222:    ~any() { reset(); }
+call    0 returned 100%
+------------------
+_ZNSt3anyD2Ev:
+function _ZNSt3anyD2Ev called 12 returned 100% blocks executed 100%
+       12:  222:    ~any() { reset(); }
+call    0 returned 100%
+------------------
+_ZNSt3anyD2Ev:
+function _ZNSt3anyD2Ev called 0 returned 0% blocks executed 0%
+    #####:  222:    ~any() { reset(); }
+call    0 never executed
+------------------
+        -:  223:
+        -:  224:    // assignments
+        -:  225:
+        -:  226:    /// Copy the state of another object.
+        -:  227:    any&
+        -:  228:    operator=(const any& __rhs)
+        -:  229:    {
+        -:  230:      *this = any(__rhs);
+        -:  231:      return *this;
+        -:  232:    }
+        -:  233:
+        -:  234:    /**
+        -:  235:     * @brief Move assignment operator
+        -:  236:     *
+        -:  237:     * @post @c !__rhs.has_value() (not guaranteed for other implementations)
+        -:  238:     */
+        -:  239:    any&
+     516*:  240:    operator=(any&& __rhs) noexcept
+        -:  241:    {
+     516*:  242:      if (!__rhs.has_value())
+    #####:  243:	reset();
+     516*:  244:      else if (this != &__rhs)
+        -:  245:	{
+     516*:  246:	  reset();
+        -:  247:	  _Arg __arg;
+     516*:  248:	  __arg._M_any = this;
+     516*:  249:	  __rhs._M_manager(_Op_xfer, &__rhs, &__arg);
+        -:  250:	}
+     516*:  251:      return *this;
+        -:  252:    }
+------------------
+_ZNSt3anyaSEOS_:
+function _ZNSt3anyaSEOS_ called 0 returned 0% blocks executed 0%
+    #####:  240:    operator=(any&& __rhs) noexcept
+        -:  241:    {
+    #####:  242:      if (!__rhs.has_value())
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+    #####:  243:	reset();
+call    0 never executed
+    #####:  244:      else if (this != &__rhs)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  245:	{
+    #####:  246:	  reset();
+call    0 never executed
+        -:  247:	  _Arg __arg;
+    #####:  248:	  __arg._M_any = this;
+    #####:  249:	  __rhs._M_manager(_Op_xfer, &__rhs, &__arg);
+call    0 never executed
+        -:  250:	}
+    #####:  251:      return *this;
+        -:  252:    }
+------------------
+_ZNSt3anyaSEOS_:
+function _ZNSt3anyaSEOS_ called 4 returned 100% blocks executed 89%
+        4:  240:    operator=(any&& __rhs) noexcept
+        -:  241:    {
+        4:  242:      if (!__rhs.has_value())
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+    #####:  243:	reset();
+call    0 never executed
+        4:  244:      else if (this != &__rhs)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:  245:	{
+        4:  246:	  reset();
+call    0 returned 100%
+        -:  247:	  _Arg __arg;
+        4:  248:	  __arg._M_any = this;
+        4:  249:	  __rhs._M_manager(_Op_xfer, &__rhs, &__arg);
+call    0 returned 100%
+        -:  250:	}
+        4:  251:      return *this;
+        -:  252:    }
+------------------
+_ZNSt3anyaSEOS_:
+function _ZNSt3anyaSEOS_ called 512 returned 100% blocks executed 89%
+      512:  240:    operator=(any&& __rhs) noexcept
+        -:  241:    {
+      512:  242:      if (!__rhs.has_value())
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+    #####:  243:	reset();
+call    0 never executed
+      512:  244:      else if (this != &__rhs)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:  245:	{
+      512:  246:	  reset();
+call    0 returned 100%
+        -:  247:	  _Arg __arg;
+      512:  248:	  __arg._M_any = this;
+      512:  249:	  __rhs._M_manager(_Op_xfer, &__rhs, &__arg);
+call    0 returned 100%
+        -:  250:	}
+      512:  251:      return *this;
+        -:  252:    }
+------------------
+        -:  253:
+        -:  254:    /// Store a copy of @p __rhs as the contained object.
+        -:  255:    template<typename _Tp>
+        -:  256:      enable_if_t<is_copy_constructible<_Decay_if_not_any<_Tp>>::value, any&>
+function _ZNSt3anyaSISt6vectorIN5hical13MultipartPartESaIS3_EEEENSt9enable_ifIXsrSt21is_copy_constructibleINS6_IXnt9is_same_vINSt5decayIT_E4typeES_EESB_E4typeEE5valueERS_E4typeEOS9_ called 2 returned 100% blocks executed 100%
+        2:  257:      operator=(_Tp&& __rhs)
+        -:  258:      {
+        2:  259:	*this = any(std::forward<_Tp>(__rhs));
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 returned 100%
+        2:  260:	return *this;
+        -:  261:      }
+        -:  262:
+        -:  263:    /// Emplace with an object created from @p __args as the contained object.
+        -:  264:    template <typename _Tp, typename... _Args>
+        -:  265:      __emplace_t<decay_t<_Tp>, _Args...>
+        -:  266:      emplace(_Args&&... __args)
+        -:  267:      {
+        -:  268:	using _VTp = decay_t<_Tp>;
+        -:  269:	__do_emplace<_VTp>(std::forward<_Args>(__args)...);
+        -:  270:	return *any::_Manager<_VTp>::_S_access(_M_storage);
+        -:  271:      }
+        -:  272:
+        -:  273:    /// Emplace with an object created from @p __il and @p __args as
+        -:  274:    /// the contained object.
+        -:  275:    template <typename _Tp, typename _Up, typename... _Args>
+        -:  276:      __emplace_t<decay_t<_Tp>, initializer_list<_Up>&, _Args&&...>
+        -:  277:      emplace(initializer_list<_Up> __il, _Args&&... __args)
+        -:  278:      {
+        -:  279:	using _VTp = decay_t<_Tp>;
+        -:  280:	__do_emplace<_VTp, _Up>(__il, std::forward<_Args>(__args)...);
+        -:  281:	return *any::_Manager<_VTp>::_S_access(_M_storage);
+        -:  282:      }
+        -:  283:
+        -:  284:    // modifiers
+        -:  285:
+        -:  286:    /// If not empty, destroy the contained object.
+   11384*:  287:    void reset() noexcept
+        -:  288:    {
+   11384*:  289:      if (has_value())
+        -:  290:      {
+     516*:  291:	_M_manager(_Op_destroy, this, nullptr);
+     516*:  292:	_M_manager = nullptr;
+        -:  293:      }
+   11561*:  294:    }
+------------------
+_ZNSt3any5resetEv:
+function _ZNSt3any5resetEv called 15 returned 100% blocks executed 100%
+       15:  287:    void reset() noexcept
+        -:  288:    {
+       15:  289:      if (has_value())
+call    0 returned 100%
+branch  1 taken 13% (fallthrough)
+branch  2 taken 87%
+        -:  290:      {
+        2:  291:	_M_manager(_Op_destroy, this, nullptr);
+call    0 returned 100%
+        2:  292:	_M_manager = nullptr;
+        -:  293:      }
+       15:  294:    }
+------------------
+_ZNSt3any5resetEv:
+function _ZNSt3any5resetEv called 0 returned 0% blocks executed 0%
+    #####:  287:    void reset() noexcept
+        -:  288:    {
+    #####:  289:      if (has_value())
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+        -:  290:      {
+    #####:  291:	_M_manager(_Op_destroy, this, nullptr);
+call    0 never executed
+    #####:  292:	_M_manager = nullptr;
+        -:  293:      }
+    #####:  294:    }
+------------------
+_ZNSt3any5resetEv:
+function _ZNSt3any5resetEv called 18 returned 100% blocks executed 100%
+       18:  287:    void reset() noexcept
+        -:  288:    {
+       18:  289:      if (has_value())
+call    0 returned 100%
+branch  1 taken 11% (fallthrough)
+branch  2 taken 89%
+        -:  290:      {
+        2:  291:	_M_manager(_Op_destroy, this, nullptr);
+call    0 returned 100%
+        2:  292:	_M_manager = nullptr;
+        -:  293:      }
+       18:  294:    }
+------------------
+_ZNSt3any5resetEv:
+function _ZNSt3any5resetEv called 6 returned 100% blocks executed 60%
+        6:  287:    void reset() noexcept
+        -:  288:    {
+        6:  289:      if (has_value())
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+        -:  290:      {
+    #####:  291:	_M_manager(_Op_destroy, this, nullptr);
+call    0 never executed
+    #####:  292:	_M_manager = nullptr;
+        -:  293:      }
+        6:  294:    }
+------------------
+_ZNSt3any5resetEv:
+function _ZNSt3any5resetEv called 16 returned 100% blocks executed 60%
+       16:  287:    void reset() noexcept
+        -:  288:    {
+       16:  289:      if (has_value())
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+        -:  290:      {
+    #####:  291:	_M_manager(_Op_destroy, this, nullptr);
+call    0 never executed
+    #####:  292:	_M_manager = nullptr;
+        -:  293:      }
+       16:  294:    }
+------------------
+_ZNSt3any5resetEv:
+function _ZNSt3any5resetEv called 7 returned 100% blocks executed 60%
+        7:  287:    void reset() noexcept
+        -:  288:    {
+        7:  289:      if (has_value())
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+        -:  290:      {
+    #####:  291:	_M_manager(_Op_destroy, this, nullptr);
+call    0 never executed
+    #####:  292:	_M_manager = nullptr;
+        -:  293:      }
+        7:  294:    }
+------------------
+_ZNSt3any5resetEv:
+function _ZNSt3any5resetEv called 14 returned 100% blocks executed 60%
+       14:  287:    void reset() noexcept
+        -:  288:    {
+       14:  289:      if (has_value())
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+        -:  290:      {
+    #####:  291:	_M_manager(_Op_destroy, this, nullptr);
+call    0 never executed
+    #####:  292:	_M_manager = nullptr;
+        -:  293:      }
+       14:  294:    }
+------------------
+_ZNSt3any5resetEv:
+function _ZNSt3any5resetEv called 1536 returned 100% blocks executed 100%
+     1536:  287:    void reset() noexcept
+        -:  288:    {
+     1536:  289:      if (has_value())
+call    0 returned 100%
+branch  1 taken 33% (fallthrough)
+branch  2 taken 67%
+        -:  290:      {
+      512:  291:	_M_manager(_Op_destroy, this, nullptr);
+call    0 returned 100%
+      512:  292:	_M_manager = nullptr;
+        -:  293:      }
+     1536:  294:    }
+------------------
+_ZNSt3any5resetEv:
+function _ZNSt3any5resetEv called 5 returned 100% blocks executed 60%
+        5:  287:    void reset() noexcept
+        -:  288:    {
+        5:  289:      if (has_value())
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+        -:  290:      {
+    #####:  291:	_M_manager(_Op_destroy, this, nullptr);
+call    0 never executed
+    #####:  292:	_M_manager = nullptr;
+        -:  293:      }
+        5:  294:    }
+------------------
+_ZNSt3any5resetEv:
+function _ZNSt3any5resetEv called 9 returned 100% blocks executed 60%
+        9:  287:    void reset() noexcept
+        -:  288:    {
+        9:  289:      if (has_value())
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+        -:  290:      {
+    #####:  291:	_M_manager(_Op_destroy, this, nullptr);
+call    0 never executed
+    #####:  292:	_M_manager = nullptr;
+        -:  293:      }
+        9:  294:    }
+------------------
+_ZNSt3any5resetEv:
+function _ZNSt3any5resetEv called 0 returned 0% blocks executed 0%
+    #####:  287:    void reset() noexcept
+        -:  288:    {
+    #####:  289:      if (has_value())
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+        -:  290:      {
+    #####:  291:	_M_manager(_Op_destroy, this, nullptr);
+call    0 never executed
+    #####:  292:	_M_manager = nullptr;
+        -:  293:      }
+    #####:  294:    }
+------------------
+_ZNSt3any5resetEv:
+function _ZNSt3any5resetEv called 18 returned 100% blocks executed 60%
+       18:  287:    void reset() noexcept
+        -:  288:    {
+       18:  289:      if (has_value())
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+        -:  290:      {
+    #####:  291:	_M_manager(_Op_destroy, this, nullptr);
+call    0 never executed
+    #####:  292:	_M_manager = nullptr;
+        -:  293:      }
+       18:  294:    }
+------------------
+_ZNSt3any5resetEv:
+function _ZNSt3any5resetEv called 9708 returned 102% blocks executed 60%
+     9708:  287:    void reset() noexcept
+        -:  288:    {
+     9708:  289:      if (has_value())
+call    0 returned 102%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+        -:  290:      {
+    #####:  291:	_M_manager(_Op_destroy, this, nullptr);
+call    0 never executed
+    #####:  292:	_M_manager = nullptr;
+        -:  293:      }
+     9885:  294:    }
+------------------
+_ZNSt3any5resetEv:
+function _ZNSt3any5resetEv called 7 returned 100% blocks executed 60%
+        7:  287:    void reset() noexcept
+        -:  288:    {
+        7:  289:      if (has_value())
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+        -:  290:      {
+    #####:  291:	_M_manager(_Op_destroy, this, nullptr);
+call    0 never executed
+    #####:  292:	_M_manager = nullptr;
+        -:  293:      }
+        7:  294:    }
+------------------
+_ZNSt3any5resetEv:
+function _ZNSt3any5resetEv called 7 returned 100% blocks executed 60%
+        7:  287:    void reset() noexcept
+        -:  288:    {
+        7:  289:      if (has_value())
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+        -:  290:      {
+    #####:  291:	_M_manager(_Op_destroy, this, nullptr);
+call    0 never executed
+    #####:  292:	_M_manager = nullptr;
+        -:  293:      }
+        7:  294:    }
+------------------
+_ZNSt3any5resetEv:
+function _ZNSt3any5resetEv called 0 returned 0% blocks executed 0%
+    #####:  287:    void reset() noexcept
+        -:  288:    {
+    #####:  289:      if (has_value())
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+        -:  290:      {
+    #####:  291:	_M_manager(_Op_destroy, this, nullptr);
+call    0 never executed
+    #####:  292:	_M_manager = nullptr;
+        -:  293:      }
+    #####:  294:    }
+------------------
+_ZNSt3any5resetEv:
+function _ZNSt3any5resetEv called 6 returned 100% blocks executed 60%
+        6:  287:    void reset() noexcept
+        -:  288:    {
+        6:  289:      if (has_value())
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+        -:  290:      {
+    #####:  291:	_M_manager(_Op_destroy, this, nullptr);
+call    0 never executed
+    #####:  292:	_M_manager = nullptr;
+        -:  293:      }
+        6:  294:    }
+------------------
+_ZNSt3any5resetEv:
+function _ZNSt3any5resetEv called 12 returned 100% blocks executed 60%
+       12:  287:    void reset() noexcept
+        -:  288:    {
+       12:  289:      if (has_value())
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+        -:  290:      {
+    #####:  291:	_M_manager(_Op_destroy, this, nullptr);
+call    0 never executed
+    #####:  292:	_M_manager = nullptr;
+        -:  293:      }
+       12:  294:    }
+------------------
+_ZNSt3any5resetEv:
+function _ZNSt3any5resetEv called 0 returned 0% blocks executed 0%
+    #####:  287:    void reset() noexcept
+        -:  288:    {
+    #####:  289:      if (has_value())
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+        -:  290:      {
+    #####:  291:	_M_manager(_Op_destroy, this, nullptr);
+call    0 never executed
+    #####:  292:	_M_manager = nullptr;
+        -:  293:      }
+    #####:  294:    }
+------------------
+        -:  295:
+        -:  296:    /// Exchange state with another object.
+        -:  297:    void swap(any& __rhs) noexcept
+        -:  298:    {
+        -:  299:      if (!has_value() && !__rhs.has_value())
+        -:  300:	return;
+        -:  301:
+        -:  302:      if (has_value() && __rhs.has_value())
+        -:  303:	{
+        -:  304:	  if (this == &__rhs)
+        -:  305:	    return;
+        -:  306:
+        -:  307:	  any __tmp;
+        -:  308:	  _Arg __arg;
+        -:  309:	  __arg._M_any = &__tmp;
+        -:  310:	  __rhs._M_manager(_Op_xfer, &__rhs, &__arg);
+        -:  311:	  __arg._M_any = &__rhs;
+        -:  312:	  _M_manager(_Op_xfer, this, &__arg);
+        -:  313:	  __arg._M_any = this;
+        -:  314:	  __tmp._M_manager(_Op_xfer, &__tmp, &__arg);
+        -:  315:	}
+        -:  316:      else
+        -:  317:	{
+        -:  318:	  any* __empty = !has_value() ? this : &__rhs;
+        -:  319:	  any* __full = !has_value() ? &__rhs : this;
+        -:  320:	  _Arg __arg;
+        -:  321:	  __arg._M_any = __empty;
+        -:  322:	  __full->_M_manager(_Op_xfer, __full, &__arg);
+        -:  323:	}
+        -:  324:    }
+        -:  325:
+        -:  326:    // observers
+        -:  327:
+        -:  328:    /// Reports whether there is a contained object or not.
+   12069*:  329:    bool has_value() const noexcept { return _M_manager != nullptr; }
+------------------
+_ZNKSt3any9has_valueEv:
+function _ZNKSt3any9has_valueEv called 21 returned 100% blocks executed 100%
+       21:  329:    bool has_value() const noexcept { return _M_manager != nullptr; }
+------------------
+_ZNKSt3any9has_valueEv:
+function _ZNKSt3any9has_valueEv called 0 returned 0% blocks executed 0%
+    #####:  329:    bool has_value() const noexcept { return _M_manager != nullptr; }
+------------------
+_ZNKSt3any9has_valueEv:
+function _ZNKSt3any9has_valueEv called 22 returned 100% blocks executed 100%
+       22:  329:    bool has_value() const noexcept { return _M_manager != nullptr; }
+------------------
+_ZNKSt3any9has_valueEv:
+function _ZNKSt3any9has_valueEv called 6 returned 100% blocks executed 100%
+        6:  329:    bool has_value() const noexcept { return _M_manager != nullptr; }
+------------------
+_ZNKSt3any9has_valueEv:
+function _ZNKSt3any9has_valueEv called 16 returned 100% blocks executed 100%
+       16:  329:    bool has_value() const noexcept { return _M_manager != nullptr; }
+------------------
+_ZNKSt3any9has_valueEv:
+function _ZNKSt3any9has_valueEv called 7 returned 100% blocks executed 100%
+        7:  329:    bool has_value() const noexcept { return _M_manager != nullptr; }
+------------------
+_ZNKSt3any9has_valueEv:
+function _ZNKSt3any9has_valueEv called 14 returned 100% blocks executed 100%
+       14:  329:    bool has_value() const noexcept { return _M_manager != nullptr; }
+------------------
+_ZNKSt3any9has_valueEv:
+function _ZNKSt3any9has_valueEv called 2156 returned 100% blocks executed 100%
+     2156:  329:    bool has_value() const noexcept { return _M_manager != nullptr; }
+------------------
+_ZNKSt3any9has_valueEv:
+function _ZNKSt3any9has_valueEv called 5 returned 100% blocks executed 100%
+        5:  329:    bool has_value() const noexcept { return _M_manager != nullptr; }
+------------------
+_ZNKSt3any9has_valueEv:
+function _ZNKSt3any9has_valueEv called 9 returned 100% blocks executed 100%
+        9:  329:    bool has_value() const noexcept { return _M_manager != nullptr; }
+------------------
+_ZNKSt3any9has_valueEv:
+function _ZNKSt3any9has_valueEv called 0 returned 0% blocks executed 0%
+    #####:  329:    bool has_value() const noexcept { return _M_manager != nullptr; }
+------------------
+_ZNKSt3any9has_valueEv:
+function _ZNKSt3any9has_valueEv called 18 returned 100% blocks executed 100%
+       18:  329:    bool has_value() const noexcept { return _M_manager != nullptr; }
+------------------
+_ZNKSt3any9has_valueEv:
+function _ZNKSt3any9has_valueEv called 9763 returned 100% blocks executed 100%
+     9763:  329:    bool has_value() const noexcept { return _M_manager != nullptr; }
+------------------
+_ZNKSt3any9has_valueEv:
+function _ZNKSt3any9has_valueEv called 7 returned 100% blocks executed 100%
+        7:  329:    bool has_value() const noexcept { return _M_manager != nullptr; }
+------------------
+_ZNKSt3any9has_valueEv:
+function _ZNKSt3any9has_valueEv called 7 returned 100% blocks executed 100%
+        7:  329:    bool has_value() const noexcept { return _M_manager != nullptr; }
+------------------
+_ZNKSt3any9has_valueEv:
+function _ZNKSt3any9has_valueEv called 0 returned 0% blocks executed 0%
+    #####:  329:    bool has_value() const noexcept { return _M_manager != nullptr; }
+------------------
+_ZNKSt3any9has_valueEv:
+function _ZNKSt3any9has_valueEv called 6 returned 100% blocks executed 100%
+        6:  329:    bool has_value() const noexcept { return _M_manager != nullptr; }
+------------------
+_ZNKSt3any9has_valueEv:
+function _ZNKSt3any9has_valueEv called 12 returned 100% blocks executed 100%
+       12:  329:    bool has_value() const noexcept { return _M_manager != nullptr; }
+------------------
+_ZNKSt3any9has_valueEv:
+function _ZNKSt3any9has_valueEv called 0 returned 0% blocks executed 0%
+    #####:  329:    bool has_value() const noexcept { return _M_manager != nullptr; }
+------------------
+        -:  330:
+        -:  331:#if __cpp_rtti
+        -:  332:    /// The @c typeid of the contained object, or @c typeid(void) if empty.
+     110*:  333:    const type_info& type() const noexcept
+        -:  334:    {
+     110*:  335:      if (!has_value())
+    #####:  336:	return typeid(void);
+        -:  337:      _Arg __arg;
+     110*:  338:      _M_manager(_Op_get_type_info, this, &__arg);
+     110*:  339:      return *__arg._M_typeinfo;
+        -:  340:    }
+------------------
+_ZNKSt3any4typeEv:
+function _ZNKSt3any4typeEv called 0 returned 0% blocks executed 0%
+    #####:  333:    const type_info& type() const noexcept
+        -:  334:    {
+    #####:  335:      if (!has_value())
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+    #####:  336:	return typeid(void);
+        -:  337:      _Arg __arg;
+    #####:  338:      _M_manager(_Op_get_type_info, this, &__arg);
+call    0 never executed
+    #####:  339:      return *__arg._M_typeinfo;
+        -:  340:    }
+------------------
+_ZNKSt3any4typeEv:
+function _ZNKSt3any4typeEv called 0 returned 0% blocks executed 0%
+    #####:  333:    const type_info& type() const noexcept
+        -:  334:    {
+    #####:  335:      if (!has_value())
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+    #####:  336:	return typeid(void);
+        -:  337:      _Arg __arg;
+    #####:  338:      _M_manager(_Op_get_type_info, this, &__arg);
+call    0 never executed
+    #####:  339:      return *__arg._M_typeinfo;
+        -:  340:    }
+------------------
+_ZNKSt3any4typeEv:
+function _ZNKSt3any4typeEv called 108 returned 100% blocks executed 86%
+      108:  333:    const type_info& type() const noexcept
+        -:  334:    {
+      108:  335:      if (!has_value())
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+    #####:  336:	return typeid(void);
+        -:  337:      _Arg __arg;
+      108:  338:      _M_manager(_Op_get_type_info, this, &__arg);
+call    0 returned 100%
+      108:  339:      return *__arg._M_typeinfo;
+        -:  340:    }
+------------------
+_ZNKSt3any4typeEv:
+function _ZNKSt3any4typeEv called 2 returned 100% blocks executed 86%
+        2:  333:    const type_info& type() const noexcept
+        -:  334:    {
+        2:  335:      if (!has_value())
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+    #####:  336:	return typeid(void);
+        -:  337:      _Arg __arg;
+        2:  338:      _M_manager(_Op_get_type_info, this, &__arg);
+call    0 returned 100%
+        2:  339:      return *__arg._M_typeinfo;
+        -:  340:    }
+------------------
+        -:  341:#endif
+        -:  342:
+        -:  343:    /// @cond undocumented
+        -:  344:    template<typename _Tp>
+        -:  345:      static constexpr bool __is_valid_cast()
+        -:  346:      { return __or_<is_reference<_Tp>, is_copy_constructible<_Tp>>::value; }
+        -:  347:    /// @endcond
+        -:  348:
+        -:  349:  private:
+        -:  350:    enum _Op {
+        -:  351:	_Op_access, _Op_get_type_info, _Op_clone, _Op_destroy, _Op_xfer
+        -:  352:    };
+        -:  353:
+        -:  354:    union _Arg
+        -:  355:    {
+        -:  356:	void* _M_obj;
+        -:  357:	const std::type_info* _M_typeinfo;
+        -:  358:	any* _M_any;
+        -:  359:    };
+        -:  360:
+        -:  361:    void (*_M_manager)(_Op, const any*, _Arg*);
+        -:  362:    _Storage _M_storage;
+        -:  363:
+        -:  364:    /// @cond undocumented
+        -:  365:    template<typename _Tp>
+        -:  366:      friend void* __any_caster(const any* __any);
+        -:  367:    /// @endcond
+        -:  368:
+        -:  369:    // Manage in-place contained object.
+        -:  370:    template<typename _Tp>
+        -:  371:      struct _Manager_internal
+        -:  372:      {
+        -:  373:	static void
+        -:  374:	_S_manage(_Op __which, const any* __anyp, _Arg* __arg);
+        -:  375:
+        -:  376:	template<typename _Up>
+        -:  377:	  static void
+      505:  378:	  _S_create(_Storage& __storage, _Up&& __value)
+        -:  379:	  {
+      505:  380:	    void* __addr = &__storage._M_buffer;
+      505:  381:	    ::new (__addr) _Tp(std::forward<_Up>(__value));
+      505:  382:	  }
+------------------
+_ZNSt3any17_Manager_internalIiE9_S_createIRiEEvRNS_8_StorageEOT_:
+function _ZNSt3any17_Manager_internalIiE9_S_createIRiEEvRNS_8_StorageEOT_ called 500 returned 100% blocks executed 100%
+      500:  378:	  _S_create(_Storage& __storage, _Up&& __value)
+        -:  379:	  {
+      500:  380:	    void* __addr = &__storage._M_buffer;
+      500:  381:	    ::new (__addr) _Tp(std::forward<_Up>(__value));
+call    0 returned 100%
+call    1 returned 100%
+      500:  382:	  }
+------------------
+_ZNSt3any17_Manager_internalIiE9_S_createIiEEvRNS_8_StorageEOT_:
+function _ZNSt3any17_Manager_internalIiE9_S_createIiEEvRNS_8_StorageEOT_ called 5 returned 100% blocks executed 100%
+        5:  378:	  _S_create(_Storage& __storage, _Up&& __value)
+        -:  379:	  {
+        5:  380:	    void* __addr = &__storage._M_buffer;
+        5:  381:	    ::new (__addr) _Tp(std::forward<_Up>(__value));
+call    0 returned 100%
+call    1 returned 100%
+        5:  382:	  }
+------------------
+        -:  383:
+        -:  384:	template<typename... _Args>
+        -:  385:	  static void
+        -:  386:	  _S_create(_Storage& __storage, _Args&&... __args)
+        -:  387:	  {
+        -:  388:	    void* __addr = &__storage._M_buffer;
+        -:  389:	    ::new (__addr) _Tp(std::forward<_Args>(__args)...);
+        -:  390:	  }
+        -:  391:
+        -:  392:	static _Tp*
+function _ZNSt3any17_Manager_internalIiE9_S_accessERKNS_8_StorageE called 103 returned 100% blocks executed 100%
+      103:  393:	_S_access(const _Storage& __storage)
+        -:  394:	{
+        -:  395:	  // The contained object is in __storage._M_buffer
+      103:  396:	  const void* __addr = &__storage._M_buffer;
+      103:  397:	  return static_cast<_Tp*>(const_cast<void*>(__addr));
+        -:  398:	}
+        -:  399:      };
+        -:  400:
+        -:  401:    // Manage external contained object.
+        -:  402:    template<typename _Tp>
+        -:  403:      struct _Manager_external
+        -:  404:      {
+        -:  405:	static void
+        -:  406:	_S_manage(_Op __which, const any* __anyp, _Arg* __arg);
+        -:  407:
+        -:  408:	template<typename _Up>
+        -:  409:	  static void
+      11*:  410:	  _S_create(_Storage& __storage, _Up&& __value)
+        -:  411:	  {
+      11*:  412:	    __storage._M_ptr = new _Tp(std::forward<_Up>(__value));
+      11*:  413:	  }
+------------------
+_ZNSt3any17_Manager_externalISt6vectorIN5hical13MultipartPartESaIS3_EEE9_S_createIS5_EEvRNS_8_StorageEOT_:
+function _ZNSt3any17_Manager_externalISt6vectorIN5hical13MultipartPartESaIS3_EEE9_S_createIS5_EEvRNS_8_StorageEOT_ called 2 returned 100% blocks executed 100%
+        2:  410:	  _S_create(_Storage& __storage, _Up&& __value)
+        -:  411:	  {
+        2:  412:	    __storage._M_ptr = new _Tp(std::forward<_Up>(__value));
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+        2:  413:	  }
+------------------
+_ZNSt3any17_Manager_externalINSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEE9_S_createIRS6_EEvRNS_8_StorageEOT_:
+function _ZNSt3any17_Manager_externalINSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEE9_S_createIRS6_EEvRNS_8_StorageEOT_ called 0 returned 0% blocks executed 0%
+    #####:  410:	  _S_create(_Storage& __storage, _Up&& __value)
+        -:  411:	  {
+    #####:  412:	    __storage._M_ptr = new _Tp(std::forward<_Up>(__value));
+call    0 never executed
+call    1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed (throw)
+branch  5 never executed (fallthrough)
+branch  6 never executed
+call    7 never executed
+    #####:  413:	  }
+------------------
+_ZNSt3any17_Manager_externalISt10shared_ptrIN5hical7SessionEEE9_S_createIRS4_EEvRNS_8_StorageEOT_:
+function _ZNSt3any17_Manager_externalISt10shared_ptrIN5hical7SessionEEE9_S_createIRS4_EEvRNS_8_StorageEOT_ called 0 returned 0% blocks executed 0%
+    #####:  410:	  _S_create(_Storage& __storage, _Up&& __value)
+        -:  411:	  {
+    #####:  412:	    __storage._M_ptr = new _Tp(std::forward<_Up>(__value));
+call    0 never executed
+call    1 never executed
+call    2 never executed
+    #####:  413:	  }
+------------------
+_ZNSt3any17_Manager_externalINSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEE9_S_createIS6_EEvRNS_8_StorageEOT_:
+function _ZNSt3any17_Manager_externalINSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEE9_S_createIS6_EEvRNS_8_StorageEOT_ called 7 returned 100% blocks executed 100%
+        7:  410:	  _S_create(_Storage& __storage, _Up&& __value)
+        -:  411:	  {
+        7:  412:	    __storage._M_ptr = new _Tp(std::forward<_Up>(__value));
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+        7:  413:	  }
+------------------
+_ZNSt3any17_Manager_externalISt10shared_ptrIN5hical7SessionEEE9_S_createIRS4_EEvRNS_8_StorageEOT_:
+function _ZNSt3any17_Manager_externalISt10shared_ptrIN5hical7SessionEEE9_S_createIRS4_EEvRNS_8_StorageEOT_ called 0 returned 0% blocks executed 0%
+    #####:  410:	  _S_create(_Storage& __storage, _Up&& __value)
+        -:  411:	  {
+    #####:  412:	    __storage._M_ptr = new _Tp(std::forward<_Up>(__value));
+call    0 never executed
+call    1 never executed
+call    2 never executed
+    #####:  413:	  }
+------------------
+_ZNSt3any17_Manager_externalINSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEE9_S_createIS6_EEvRNS_8_StorageEOT_:
+function _ZNSt3any17_Manager_externalINSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEE9_S_createIS6_EEvRNS_8_StorageEOT_ called 2 returned 100% blocks executed 100%
+        2:  410:	  _S_create(_Storage& __storage, _Up&& __value)
+        -:  411:	  {
+        2:  412:	    __storage._M_ptr = new _Tp(std::forward<_Up>(__value));
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+        2:  413:	  }
+------------------
+        -:  414:	template<typename... _Args>
+        -:  415:	  static void
+        -:  416:	  _S_create(_Storage& __storage, _Args&&... __args)
+        -:  417:	  {
+        -:  418:	    __storage._M_ptr = new _Tp(std::forward<_Args>(__args)...);
+        -:  419:	  }
+        -:  420:	static _Tp*
+      10*:  421:	_S_access(const _Storage& __storage)
+        -:  422:	{
+        -:  423:	  // The contained object is in *__storage._M_ptr
+      10*:  424:	  return static_cast<_Tp*>(__storage._M_ptr);
+        -:  425:	}
+------------------
+_ZNSt3any17_Manager_externalISt6vectorIN5hical13MultipartPartESaIS3_EEE9_S_accessERKNS_8_StorageE:
+function _ZNSt3any17_Manager_externalISt6vectorIN5hical13MultipartPartESaIS3_EEE9_S_accessERKNS_8_StorageE called 4 returned 100% blocks executed 100%
+        4:  421:	_S_access(const _Storage& __storage)
+        -:  422:	{
+        -:  423:	  // The contained object is in *__storage._M_ptr
+        4:  424:	  return static_cast<_Tp*>(__storage._M_ptr);
+        -:  425:	}
+------------------
+_ZNSt3any17_Manager_externalINSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEE9_S_accessERKNS_8_StorageE:
+function _ZNSt3any17_Manager_externalINSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEE9_S_accessERKNS_8_StorageE called 0 returned 0% blocks executed 0%
+    #####:  421:	_S_access(const _Storage& __storage)
+        -:  422:	{
+        -:  423:	  // The contained object is in *__storage._M_ptr
+    #####:  424:	  return static_cast<_Tp*>(__storage._M_ptr);
+        -:  425:	}
+------------------
+_ZNSt3any17_Manager_externalINSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEE9_S_accessERKNS_8_StorageE:
+function _ZNSt3any17_Manager_externalINSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEE9_S_accessERKNS_8_StorageE called 4 returned 100% blocks executed 100%
+        4:  421:	_S_access(const _Storage& __storage)
+        -:  422:	{
+        -:  423:	  // The contained object is in *__storage._M_ptr
+        4:  424:	  return static_cast<_Tp*>(__storage._M_ptr);
+        -:  425:	}
+------------------
+_ZNSt3any17_Manager_externalINSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEE9_S_accessERKNS_8_StorageE:
+function _ZNSt3any17_Manager_externalINSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEE9_S_accessERKNS_8_StorageE called 2 returned 100% blocks executed 100%
+        2:  421:	_S_access(const _Storage& __storage)
+        -:  422:	{
+        -:  423:	  // The contained object is in *__storage._M_ptr
+        2:  424:	  return static_cast<_Tp*>(__storage._M_ptr);
+        -:  425:	}
+------------------
+        -:  426:      };
+        -:  427:  };
+        -:  428:
+        -:  429:  /// Exchange the states of two @c any objects.
+        -:  430:  inline void swap(any& __x, any& __y) noexcept { __x.swap(__y); }
+        -:  431:
+        -:  432:  /// Create an `any` holding a `_Tp` constructed from `__args...`.
+        -:  433:  template <typename _Tp, typename... _Args>
+        -:  434:    inline
+        -:  435:    enable_if_t<is_constructible_v<any, in_place_type_t<_Tp>, _Args...>, any>
+        -:  436:    make_any(_Args&&... __args)
+        -:  437:    {
+        -:  438:      return any(in_place_type<_Tp>, std::forward<_Args>(__args)...);
+        -:  439:    }
+        -:  440:
+        -:  441:  /// Create an `any` holding a `_Tp` constructed from `__il` and `__args...`.
+        -:  442:  template <typename _Tp, typename _Up, typename... _Args>
+        -:  443:    inline
+        -:  444:    enable_if_t<is_constructible_v<any, in_place_type_t<_Tp>,
+        -:  445:				   initializer_list<_Up>&, _Args...>, any>
+        -:  446:    make_any(initializer_list<_Up> __il, _Args&&... __args)
+        -:  447:    {
+        -:  448:      return any(in_place_type<_Tp>, __il, std::forward<_Args>(__args)...);
+        -:  449:    }
+        -:  450:
+        -:  451:  /**
+        -:  452:   * @brief Access the contained object.
+        -:  453:   *
+        -:  454:   * @tparam  _ValueType  A const-reference or CopyConstructible type.
+        -:  455:   * @param   __any       The object to access.
+        -:  456:   * @return  The contained object.
+        -:  457:   * @throw   bad_any_cast If <code>
+        -:  458:   *          __any.type() != typeid(remove_reference_t<_ValueType>)
+        -:  459:   *          </code>
+        -:  460:   */
+        -:  461:  template<typename _ValueType>
+      107:  462:    inline _ValueType any_cast(const any& __any)
+        -:  463:    {
+        -:  464:      using _Up = __remove_cvref_t<_ValueType>;
+        -:  465:      static_assert(any::__is_valid_cast<_ValueType>(),
+        -:  466:	  "Template argument must be a reference or CopyConstructible type");
+        -:  467:      static_assert(is_constructible_v<_ValueType, const _Up&>,
+        -:  468:	  "Template argument must be constructible from a const value.");
+      107:  469:      auto __p = any_cast<_Up>(&__any);
+      107:  470:      if (__p)
+      107:  471:	return static_cast<_ValueType>(*__p);
+    #####:  472:      __throw_bad_any_cast();
+        -:  473:    }
+------------------
+_ZSt8any_castIiET_RKSt3any:
+function _ZSt8any_castIiET_RKSt3any called 103 returned 100% blocks executed 80%
+      103:  462:    inline _ValueType any_cast(const any& __any)
+        -:  463:    {
+        -:  464:      using _Up = __remove_cvref_t<_ValueType>;
+        -:  465:      static_assert(any::__is_valid_cast<_ValueType>(),
+        -:  466:	  "Template argument must be a reference or CopyConstructible type");
+        -:  467:      static_assert(is_constructible_v<_ValueType, const _Up&>,
+        -:  468:	  "Template argument must be constructible from a const value.");
+      103:  469:      auto __p = any_cast<_Up>(&__any);
+call    0 returned 100%
+      103:  470:      if (__p)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+      103:  471:	return static_cast<_ValueType>(*__p);
+    #####:  472:      __throw_bad_any_cast();
+call    0 never executed
+        -:  473:    }
+------------------
+_ZSt8any_castINSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEET_RKSt3any:
+function _ZSt8any_castINSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEET_RKSt3any called 4 returned 100% blocks executed 80%
+        4:  462:    inline _ValueType any_cast(const any& __any)
+        -:  463:    {
+        -:  464:      using _Up = __remove_cvref_t<_ValueType>;
+        -:  465:      static_assert(any::__is_valid_cast<_ValueType>(),
+        -:  466:	  "Template argument must be a reference or CopyConstructible type");
+        -:  467:      static_assert(is_constructible_v<_ValueType, const _Up&>,
+        -:  468:	  "Template argument must be constructible from a const value.");
+        4:  469:      auto __p = any_cast<_Up>(&__any);
+call    0 returned 100%
+        4:  470:      if (__p)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        4:  471:	return static_cast<_ValueType>(*__p);
+call    0 returned 100%
+    #####:  472:      __throw_bad_any_cast();
+call    0 never executed
+        -:  473:    }
+------------------
+        -:  474:
+        -:  475:  /**
+        -:  476:   * @brief Access the contained object.
+        -:  477:   *
+        -:  478:   * @tparam  _ValueType  A reference or CopyConstructible type.
+        -:  479:   * @param   __any       The object to access.
+        -:  480:   * @return  The contained object.
+        -:  481:   * @throw   bad_any_cast If <code>
+        -:  482:   *          __any.type() != typeid(remove_reference_t<_ValueType>)
+        -:  483:   *          </code>
+        -:  484:   *
+        -:  485:   * @{
+        -:  486:   */
+        -:  487:  template<typename _ValueType>
+       2*:  488:    inline _ValueType any_cast(any& __any)
+        -:  489:    {
+        -:  490:      using _Up = __remove_cvref_t<_ValueType>;
+        -:  491:      static_assert(any::__is_valid_cast<_ValueType>(),
+        -:  492:	  "Template argument must be a reference or CopyConstructible type");
+        -:  493:      static_assert(is_constructible_v<_ValueType, _Up&>,
+        -:  494:	  "Template argument must be constructible from an lvalue.");
+       2*:  495:      auto __p = any_cast<_Up>(&__any);
+       2*:  496:      if (__p)
+       2*:  497:	return static_cast<_ValueType>(*__p);
+    #####:  498:      __throw_bad_any_cast();
+        -:  499:    }
+------------------
+_ZSt8any_castINSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEET_RSt3any:
+function _ZSt8any_castINSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEET_RSt3any called 0 returned 0% blocks executed 0%
+    #####:  488:    inline _ValueType any_cast(any& __any)
+        -:  489:    {
+        -:  490:      using _Up = __remove_cvref_t<_ValueType>;
+        -:  491:      static_assert(any::__is_valid_cast<_ValueType>(),
+        -:  492:	  "Template argument must be a reference or CopyConstructible type");
+        -:  493:      static_assert(is_constructible_v<_ValueType, _Up&>,
+        -:  494:	  "Template argument must be constructible from an lvalue.");
+    #####:  495:      auto __p = any_cast<_Up>(&__any);
+call    0 never executed
+    #####:  496:      if (__p)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  497:	return static_cast<_ValueType>(*__p);
+call    0 never executed
+    #####:  498:      __throw_bad_any_cast();
+call    0 never executed
+        -:  499:    }
+------------------
+_ZSt8any_castINSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEET_RSt3any:
+function _ZSt8any_castINSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEET_RSt3any called 2 returned 100% blocks executed 80%
+        2:  488:    inline _ValueType any_cast(any& __any)
+        -:  489:    {
+        -:  490:      using _Up = __remove_cvref_t<_ValueType>;
+        -:  491:      static_assert(any::__is_valid_cast<_ValueType>(),
+        -:  492:	  "Template argument must be a reference or CopyConstructible type");
+        -:  493:      static_assert(is_constructible_v<_ValueType, _Up&>,
+        -:  494:	  "Template argument must be constructible from an lvalue.");
+        2:  495:      auto __p = any_cast<_Up>(&__any);
+call    0 returned 100%
+        2:  496:      if (__p)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        2:  497:	return static_cast<_ValueType>(*__p);
+call    0 returned 100%
+    #####:  498:      __throw_bad_any_cast();
+call    0 never executed
+        -:  499:    }
+------------------
+        -:  500:
+        -:  501:  template<typename _ValueType>
+        -:  502:    inline _ValueType any_cast(any&& __any)
+        -:  503:    {
+        -:  504:      using _Up = __remove_cvref_t<_ValueType>;
+        -:  505:      static_assert(any::__is_valid_cast<_ValueType>(),
+        -:  506:	  "Template argument must be a reference or CopyConstructible type");
+        -:  507:      static_assert(is_constructible_v<_ValueType, _Up>,
+        -:  508:	  "Template argument must be constructible from an rvalue.");
+        -:  509:      auto __p = any_cast<_Up>(&__any);
+        -:  510:      if (__p)
+        -:  511:	return static_cast<_ValueType>(std::move(*__p));
+        -:  512:      __throw_bad_any_cast();
+        -:  513:    }
+        -:  514:  /// @}
+        -:  515:
+        -:  516:  /// @cond undocumented
+        -:  517:  template<typename _Tp>
+     113*:  518:    void* __any_caster(const any* __any)
+        -:  519:    {
+        -:  520:      // any_cast<T> returns non-null if __any->type() == typeid(T) and
+        -:  521:      // typeid(T) ignores cv-qualifiers so remove them:
+        -:  522:      using _Up = remove_cv_t<_Tp>;
+        -:  523:      // The contained value has a decayed type, so if decay_t<U> is not U,
+        -:  524:      // then it's not possible to have a contained value of type U:
+        -:  525:      if constexpr (!is_same_v<decay_t<_Up>, _Up>)
+        -:  526:	return nullptr;
+        -:  527:      // Only copy constructible types can be used for contained values:
+        -:  528:      else if constexpr (!is_copy_constructible_v<_Up>)
+        -:  529:	return nullptr;
+        -:  530:      // First try comparing function addresses, which works without RTTI
+     226*:  531:      else if (__any->_M_manager == &any::_Manager<_Up>::_S_manage
+        -:  532:#if __cpp_rtti
+     113*:  533:	  || __any->type() == typeid(_Tp)
+        -:  534:#endif
+        -:  535:	  )
+        -:  536:	{
+     113*:  537:	  return any::_Manager<_Up>::_S_access(__any->_M_storage);
+        -:  538:	}
+    #####:  539:      return nullptr;
+        -:  540:    }
+------------------
+_ZSt12__any_casterISt6vectorIN5hical13MultipartPartESaIS2_EEEPvPKSt3any:
+function _ZSt12__any_casterISt6vectorIN5hical13MultipartPartESaIS2_EEEPvPKSt3any called 4 returned 100% blocks executed 50%
+        4:  518:    void* __any_caster(const any* __any)
+        -:  519:    {
+        -:  520:      // any_cast<T> returns non-null if __any->type() == typeid(T) and
+        -:  521:      // typeid(T) ignores cv-qualifiers so remove them:
+        -:  522:      using _Up = remove_cv_t<_Tp>;
+        -:  523:      // The contained value has a decayed type, so if decay_t<U> is not U,
+        -:  524:      // then it's not possible to have a contained value of type U:
+        -:  525:      if constexpr (!is_same_v<decay_t<_Up>, _Up>)
+        -:  526:	return nullptr;
+        -:  527:      // Only copy constructible types can be used for contained values:
+        -:  528:      else if constexpr (!is_copy_constructible_v<_Up>)
+        -:  529:	return nullptr;
+        -:  530:      // First try comparing function addresses, which works without RTTI
+        8:  531:      else if (__any->_M_manager == &any::_Manager<_Up>::_S_manage
+        -:  532:#if __cpp_rtti
+       4*:  533:	  || __any->type() == typeid(_Tp)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+call    2 never executed
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0%
+        -:  534:#endif
+        -:  535:	  )
+        -:  536:	{
+        4:  537:	  return any::_Manager<_Up>::_S_access(__any->_M_storage);
+call    0 returned 100%
+        -:  538:	}
+    #####:  539:      return nullptr;
+        -:  540:    }
+------------------
+_ZSt12__any_casterINSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEEPvPKSt3any:
+function _ZSt12__any_casterINSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEEPvPKSt3any called 0 returned 0% blocks executed 0%
+    #####:  518:    void* __any_caster(const any* __any)
+        -:  519:    {
+        -:  520:      // any_cast<T> returns non-null if __any->type() == typeid(T) and
+        -:  521:      // typeid(T) ignores cv-qualifiers so remove them:
+        -:  522:      using _Up = remove_cv_t<_Tp>;
+        -:  523:      // The contained value has a decayed type, so if decay_t<U> is not U,
+        -:  524:      // then it's not possible to have a contained value of type U:
+        -:  525:      if constexpr (!is_same_v<decay_t<_Up>, _Up>)
+        -:  526:	return nullptr;
+        -:  527:      // Only copy constructible types can be used for contained values:
+        -:  528:      else if constexpr (!is_copy_constructible_v<_Up>)
+        -:  529:	return nullptr;
+        -:  530:      // First try comparing function addresses, which works without RTTI
+    #####:  531:      else if (__any->_M_manager == &any::_Manager<_Up>::_S_manage
+        -:  532:#if __cpp_rtti
+    #####:  533:	  || __any->type() == typeid(_Tp)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+call    2 never executed
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed
+        -:  534:#endif
+        -:  535:	  )
+        -:  536:	{
+    #####:  537:	  return any::_Manager<_Up>::_S_access(__any->_M_storage);
+call    0 never executed
+        -:  538:	}
+    #####:  539:      return nullptr;
+        -:  540:    }
+------------------
+_ZSt12__any_casterIiEPvPKSt3any:
+function _ZSt12__any_casterIiEPvPKSt3any called 103 returned 100% blocks executed 50%
+      103:  518:    void* __any_caster(const any* __any)
+        -:  519:    {
+        -:  520:      // any_cast<T> returns non-null if __any->type() == typeid(T) and
+        -:  521:      // typeid(T) ignores cv-qualifiers so remove them:
+        -:  522:      using _Up = remove_cv_t<_Tp>;
+        -:  523:      // The contained value has a decayed type, so if decay_t<U> is not U,
+        -:  524:      // then it's not possible to have a contained value of type U:
+        -:  525:      if constexpr (!is_same_v<decay_t<_Up>, _Up>)
+        -:  526:	return nullptr;
+        -:  527:      // Only copy constructible types can be used for contained values:
+        -:  528:      else if constexpr (!is_copy_constructible_v<_Up>)
+        -:  529:	return nullptr;
+        -:  530:      // First try comparing function addresses, which works without RTTI
+      206:  531:      else if (__any->_M_manager == &any::_Manager<_Up>::_S_manage
+        -:  532:#if __cpp_rtti
+     103*:  533:	  || __any->type() == typeid(_Tp)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+call    2 never executed
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0%
+        -:  534:#endif
+        -:  535:	  )
+        -:  536:	{
+      103:  537:	  return any::_Manager<_Up>::_S_access(__any->_M_storage);
+call    0 returned 100%
+        -:  538:	}
+    #####:  539:      return nullptr;
+        -:  540:    }
+------------------
+_ZSt12__any_casterINSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEEPvPKSt3any:
+function _ZSt12__any_casterINSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEEPvPKSt3any called 4 returned 100% blocks executed 50%
+        4:  518:    void* __any_caster(const any* __any)
+        -:  519:    {
+        -:  520:      // any_cast<T> returns non-null if __any->type() == typeid(T) and
+        -:  521:      // typeid(T) ignores cv-qualifiers so remove them:
+        -:  522:      using _Up = remove_cv_t<_Tp>;
+        -:  523:      // The contained value has a decayed type, so if decay_t<U> is not U,
+        -:  524:      // then it's not possible to have a contained value of type U:
+        -:  525:      if constexpr (!is_same_v<decay_t<_Up>, _Up>)
+        -:  526:	return nullptr;
+        -:  527:      // Only copy constructible types can be used for contained values:
+        -:  528:      else if constexpr (!is_copy_constructible_v<_Up>)
+        -:  529:	return nullptr;
+        -:  530:      // First try comparing function addresses, which works without RTTI
+        8:  531:      else if (__any->_M_manager == &any::_Manager<_Up>::_S_manage
+        -:  532:#if __cpp_rtti
+       4*:  533:	  || __any->type() == typeid(_Tp)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+call    2 never executed
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0%
+        -:  534:#endif
+        -:  535:	  )
+        -:  536:	{
+        4:  537:	  return any::_Manager<_Up>::_S_access(__any->_M_storage);
+call    0 returned 100%
+        -:  538:	}
+    #####:  539:      return nullptr;
+        -:  540:    }
+------------------
+_ZSt12__any_casterINSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEEPvPKSt3any:
+function _ZSt12__any_casterINSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEEPvPKSt3any called 2 returned 100% blocks executed 50%
+        2:  518:    void* __any_caster(const any* __any)
+        -:  519:    {
+        -:  520:      // any_cast<T> returns non-null if __any->type() == typeid(T) and
+        -:  521:      // typeid(T) ignores cv-qualifiers so remove them:
+        -:  522:      using _Up = remove_cv_t<_Tp>;
+        -:  523:      // The contained value has a decayed type, so if decay_t<U> is not U,
+        -:  524:      // then it's not possible to have a contained value of type U:
+        -:  525:      if constexpr (!is_same_v<decay_t<_Up>, _Up>)
+        -:  526:	return nullptr;
+        -:  527:      // Only copy constructible types can be used for contained values:
+        -:  528:      else if constexpr (!is_copy_constructible_v<_Up>)
+        -:  529:	return nullptr;
+        -:  530:      // First try comparing function addresses, which works without RTTI
+        4:  531:      else if (__any->_M_manager == &any::_Manager<_Up>::_S_manage
+        -:  532:#if __cpp_rtti
+       2*:  533:	  || __any->type() == typeid(_Tp)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+call    2 never executed
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0%
+        -:  534:#endif
+        -:  535:	  )
+        -:  536:	{
+        2:  537:	  return any::_Manager<_Up>::_S_access(__any->_M_storage);
+call    0 returned 100%
+        -:  538:	}
+    #####:  539:      return nullptr;
+        -:  540:    }
+------------------
+        -:  541:  /// @endcond
+        -:  542:
+        -:  543:  /**
+        -:  544:   * @brief Access the contained object.
+        -:  545:   *
+        -:  546:   * @tparam  _ValueType  The type of the contained object.
+        -:  547:   * @param   __any       A pointer to the object to access.
+        -:  548:   * @return  The address of the contained object if <code>
+        -:  549:   *          __any != nullptr && __any.type() == typeid(_ValueType)
+        -:  550:   *          </code>, otherwise a null pointer.
+        -:  551:   *
+        -:  552:   * @{
+        -:  553:   */
+        -:  554:  template<typename _ValueType>
+      107:  555:    inline const _ValueType* any_cast(const any* __any) noexcept
+        -:  556:    {
+        -:  557:      // _GLIBCXX_RESOLVE_LIB_DEFECTS
+        -:  558:      // 3305. any_cast<void>
+        -:  559:      static_assert(!is_void_v<_ValueType>);
+        -:  560:
+        -:  561:      // As an optimization, don't bother instantiating __any_caster for
+        -:  562:      // function types, since std::any can only hold objects.
+        -:  563:      if constexpr (is_object_v<_ValueType>)
+      107:  564:	if (__any)
+      107:  565:	  return static_cast<_ValueType*>(__any_caster<_ValueType>(__any));
+    #####:  566:      return nullptr;
+        -:  567:    }
+------------------
+_ZSt8any_castIiEPKT_PKSt3any:
+function _ZSt8any_castIiEPKT_PKSt3any called 103 returned 100% blocks executed 80%
+      103:  555:    inline const _ValueType* any_cast(const any* __any) noexcept
+        -:  556:    {
+        -:  557:      // _GLIBCXX_RESOLVE_LIB_DEFECTS
+        -:  558:      // 3305. any_cast<void>
+        -:  559:      static_assert(!is_void_v<_ValueType>);
+        -:  560:
+        -:  561:      // As an optimization, don't bother instantiating __any_caster for
+        -:  562:      // function types, since std::any can only hold objects.
+        -:  563:      if constexpr (is_object_v<_ValueType>)
+      103:  564:	if (__any)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+      103:  565:	  return static_cast<_ValueType*>(__any_caster<_ValueType>(__any));
+call    0 returned 100%
+    #####:  566:      return nullptr;
+        -:  567:    }
+------------------
+_ZSt8any_castINSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEEPKT_PKSt3any:
+function _ZSt8any_castINSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEEPKT_PKSt3any called 4 returned 100% blocks executed 80%
+        4:  555:    inline const _ValueType* any_cast(const any* __any) noexcept
+        -:  556:    {
+        -:  557:      // _GLIBCXX_RESOLVE_LIB_DEFECTS
+        -:  558:      // 3305. any_cast<void>
+        -:  559:      static_assert(!is_void_v<_ValueType>);
+        -:  560:
+        -:  561:      // As an optimization, don't bother instantiating __any_caster for
+        -:  562:      // function types, since std::any can only hold objects.
+        -:  563:      if constexpr (is_object_v<_ValueType>)
+        4:  564:	if (__any)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        4:  565:	  return static_cast<_ValueType*>(__any_caster<_ValueType>(__any));
+call    0 returned 100%
+    #####:  566:      return nullptr;
+        -:  567:    }
+------------------
+        -:  568:
+        -:  569:  template<typename _ValueType>
+       6*:  570:    inline _ValueType* any_cast(any* __any) noexcept
+        -:  571:    {
+        -:  572:      static_assert(!is_void_v<_ValueType>);
+        -:  573:
+        -:  574:      if constexpr (is_object_v<_ValueType>)
+       6*:  575:	if (__any)
+       6*:  576:	  return static_cast<_ValueType*>(__any_caster<_ValueType>(__any));
+    #####:  577:      return nullptr;
+        -:  578:    }
+------------------
+_ZSt8any_castISt6vectorIN5hical13MultipartPartESaIS2_EEEPT_PSt3any:
+function _ZSt8any_castISt6vectorIN5hical13MultipartPartESaIS2_EEEPT_PSt3any called 4 returned 100% blocks executed 80%
+        4:  570:    inline _ValueType* any_cast(any* __any) noexcept
+        -:  571:    {
+        -:  572:      static_assert(!is_void_v<_ValueType>);
+        -:  573:
+        -:  574:      if constexpr (is_object_v<_ValueType>)
+        4:  575:	if (__any)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        4:  576:	  return static_cast<_ValueType*>(__any_caster<_ValueType>(__any));
+call    0 returned 100%
+    #####:  577:      return nullptr;
+        -:  578:    }
+------------------
+_ZSt8any_castINSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEEPT_PSt3any:
+function _ZSt8any_castINSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEEPT_PSt3any called 0 returned 0% blocks executed 0%
+    #####:  570:    inline _ValueType* any_cast(any* __any) noexcept
+        -:  571:    {
+        -:  572:      static_assert(!is_void_v<_ValueType>);
+        -:  573:
+        -:  574:      if constexpr (is_object_v<_ValueType>)
+    #####:  575:	if (__any)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  576:	  return static_cast<_ValueType*>(__any_caster<_ValueType>(__any));
+call    0 never executed
+    #####:  577:      return nullptr;
+        -:  578:    }
+------------------
+_ZSt8any_castINSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEEPT_PSt3any:
+function _ZSt8any_castINSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEEPT_PSt3any called 2 returned 100% blocks executed 80%
+        2:  570:    inline _ValueType* any_cast(any* __any) noexcept
+        -:  571:    {
+        -:  572:      static_assert(!is_void_v<_ValueType>);
+        -:  573:
+        -:  574:      if constexpr (is_object_v<_ValueType>)
+        2:  575:	if (__any)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        2:  576:	  return static_cast<_ValueType*>(__any_caster<_ValueType>(__any));
+call    0 returned 100%
+    #####:  577:      return nullptr;
+        -:  578:    }
+------------------
+        -:  579:  /// @}
+        -:  580:
+        -:  581:  template<typename _Tp>
+        -:  582:    void
+function _ZNSt3any17_Manager_internalIiE9_S_manageENS_3_OpEPKS_PNS_4_ArgE called 1114 returned 100% blocks executed 70%
+     1114:  583:    any::_Manager_internal<_Tp>::
+        -:  584:    _S_manage(_Op __which, const any* __any, _Arg* __arg)
+        -:  585:    {
+        -:  586:      // The contained object is in _M_storage._M_buffer
+     1114:  587:      auto __ptr = reinterpret_cast<const _Tp*>(&__any->_M_storage._M_buffer);
+     1114:  588:      switch (__which)
+branch  0 taken 0%
+branch  1 taken 9%
+branch  2 taken 0%
+branch  3 taken 45%
+branch  4 taken 45%
+branch  5 taken 0%
+        -:  589:      {
+    #####:  590:      case _Op_access:
+    #####:  591:	__arg->_M_obj = const_cast<_Tp*>(__ptr);
+    #####:  592:	break;
+      104:  593:      case _Op_get_type_info:
+        -:  594:#if __cpp_rtti
+      104:  595:	__arg->_M_typeinfo = &typeid(_Tp);
+        -:  596:#endif
+      104:  597:	break;
+    #####:  598:      case _Op_clone:
+    #####:  599:	::new(&__arg->_M_any->_M_storage._M_buffer) _Tp(*__ptr);
+call    0 never executed
+    #####:  600:	__arg->_M_any->_M_manager = __any->_M_manager;
+    #####:  601:	break;
+      505:  602:      case _Op_destroy:
+      505:  603:	__ptr->~_Tp();
+      505:  604:	break;
+      505:  605:      case _Op_xfer:
+      505:  606:	::new(&__arg->_M_any->_M_storage._M_buffer) _Tp
+call    0 returned 100%
+      505:  607:	  (std::move(*const_cast<_Tp*>(__ptr)));
+call    0 returned 100%
+      505:  608:	__ptr->~_Tp();
+      505:  609:	__arg->_M_any->_M_manager = __any->_M_manager;
+      505:  610:	const_cast<any*>(__any)->_M_manager = nullptr;
+      505:  611:	break;
+        -:  612:      }
+     1114:  613:    }
+        -:  614:
+        -:  615:  template<typename _Tp>
+        -:  616:    void
+      28*:  617:    any::_Manager_external<_Tp>::
+        -:  618:    _S_manage(_Op __which, const any* __any, _Arg* __arg)
+        -:  619:    {
+        -:  620:      // The contained object is *_M_storage._M_ptr
+      28*:  621:      auto __ptr = static_cast<const _Tp*>(__any->_M_storage._M_ptr);
+      28*:  622:      switch (__which)
+        -:  623:      {
+    #####:  624:      case _Op_access:
+    #####:  625:	__arg->_M_obj = const_cast<_Tp*>(__ptr);
+    #####:  626:	break;
+       6*:  627:      case _Op_get_type_info:
+        -:  628:#if __cpp_rtti
+       6*:  629:	__arg->_M_typeinfo = &typeid(_Tp);
+        -:  630:#endif
+       6*:  631:	break;
+    #####:  632:      case _Op_clone:
+    #####:  633:	__arg->_M_any->_M_storage._M_ptr = new _Tp(*__ptr);
+    #####:  634:	__arg->_M_any->_M_manager = __any->_M_manager;
+    #####:  635:	break;
+      11*:  636:      case _Op_destroy:
+      11*:  637:	delete __ptr;
+      11*:  638:	break;
+      11*:  639:      case _Op_xfer:
+      11*:  640:	__arg->_M_any->_M_storage._M_ptr = __any->_M_storage._M_ptr;
+      11*:  641:	__arg->_M_any->_M_manager = __any->_M_manager;
+      11*:  642:	const_cast<any*>(__any)->_M_manager = nullptr;
+      11*:  643:	break;
+        -:  644:      }
+      28*:  645:    }
+------------------
+_ZNSt3any17_Manager_externalISt6vectorIN5hical13MultipartPartESaIS3_EEE9_S_manageENS_3_OpEPKS_PNS_4_ArgE:
+function _ZNSt3any17_Manager_externalISt6vectorIN5hical13MultipartPartESaIS3_EEE9_S_manageENS_3_OpEPKS_PNS_4_ArgE called 4 returned 100% blocks executed 53%
+        4:  617:    any::_Manager_external<_Tp>::
+        -:  618:    _S_manage(_Op __which, const any* __any, _Arg* __arg)
+        -:  619:    {
+        -:  620:      // The contained object is *_M_storage._M_ptr
+        4:  621:      auto __ptr = static_cast<const _Tp*>(__any->_M_storage._M_ptr);
+        4:  622:      switch (__which)
+branch  0 taken 0%
+branch  1 taken 0%
+branch  2 taken 0%
+branch  3 taken 50%
+branch  4 taken 50%
+branch  5 taken 0%
+        -:  623:      {
+    #####:  624:      case _Op_access:
+    #####:  625:	__arg->_M_obj = const_cast<_Tp*>(__ptr);
+    #####:  626:	break;
+    #####:  627:      case _Op_get_type_info:
+        -:  628:#if __cpp_rtti
+    #####:  629:	__arg->_M_typeinfo = &typeid(_Tp);
+        -:  630:#endif
+    #####:  631:	break;
+    #####:  632:      case _Op_clone:
+    #####:  633:	__arg->_M_any->_M_storage._M_ptr = new _Tp(*__ptr);
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+branch  4 never executed (fallthrough)
+branch  5 never executed
+call    6 never executed
+    #####:  634:	__arg->_M_any->_M_manager = __any->_M_manager;
+    #####:  635:	break;
+        2:  636:      case _Op_destroy:
+        2:  637:	delete __ptr;
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+call    2 returned 100%
+call    3 returned 100%
+        2:  638:	break;
+        2:  639:      case _Op_xfer:
+        2:  640:	__arg->_M_any->_M_storage._M_ptr = __any->_M_storage._M_ptr;
+        2:  641:	__arg->_M_any->_M_manager = __any->_M_manager;
+        2:  642:	const_cast<any*>(__any)->_M_manager = nullptr;
+        2:  643:	break;
+        -:  644:      }
+        4:  645:    }
+------------------
+_ZNSt3any17_Manager_externalINSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEE9_S_manageENS_3_OpEPKS_PNS_4_ArgE:
+function _ZNSt3any17_Manager_externalINSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEE9_S_manageENS_3_OpEPKS_PNS_4_ArgE called 0 returned 0% blocks executed 0%
+    #####:  617:    any::_Manager_external<_Tp>::
+        -:  618:    _S_manage(_Op __which, const any* __any, _Arg* __arg)
+        -:  619:    {
+        -:  620:      // The contained object is *_M_storage._M_ptr
+    #####:  621:      auto __ptr = static_cast<const _Tp*>(__any->_M_storage._M_ptr);
+    #####:  622:      switch (__which)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+branch  5 never executed
+        -:  623:      {
+    #####:  624:      case _Op_access:
+    #####:  625:	__arg->_M_obj = const_cast<_Tp*>(__ptr);
+    #####:  626:	break;
+    #####:  627:      case _Op_get_type_info:
+        -:  628:#if __cpp_rtti
+    #####:  629:	__arg->_M_typeinfo = &typeid(_Tp);
+        -:  630:#endif
+    #####:  631:	break;
+    #####:  632:      case _Op_clone:
+    #####:  633:	__arg->_M_any->_M_storage._M_ptr = new _Tp(*__ptr);
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+branch  4 never executed (fallthrough)
+branch  5 never executed
+call    6 never executed
+    #####:  634:	__arg->_M_any->_M_manager = __any->_M_manager;
+    #####:  635:	break;
+    #####:  636:      case _Op_destroy:
+    #####:  637:	delete __ptr;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+call    2 never executed
+call    3 never executed
+    #####:  638:	break;
+    #####:  639:      case _Op_xfer:
+    #####:  640:	__arg->_M_any->_M_storage._M_ptr = __any->_M_storage._M_ptr;
+    #####:  641:	__arg->_M_any->_M_manager = __any->_M_manager;
+    #####:  642:	const_cast<any*>(__any)->_M_manager = nullptr;
+    #####:  643:	break;
+        -:  644:      }
+    #####:  645:    }
+------------------
+_ZNSt3any17_Manager_externalISt10shared_ptrIN5hical7SessionEEE9_S_manageENS_3_OpEPKS_PNS_4_ArgE:
+function _ZNSt3any17_Manager_externalISt10shared_ptrIN5hical7SessionEEE9_S_manageENS_3_OpEPKS_PNS_4_ArgE called 0 returned 0% blocks executed 0%
+    #####:  617:    any::_Manager_external<_Tp>::
+        -:  618:    _S_manage(_Op __which, const any* __any, _Arg* __arg)
+        -:  619:    {
+        -:  620:      // The contained object is *_M_storage._M_ptr
+    #####:  621:      auto __ptr = static_cast<const _Tp*>(__any->_M_storage._M_ptr);
+    #####:  622:      switch (__which)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+branch  5 never executed
+        -:  623:      {
+    #####:  624:      case _Op_access:
+    #####:  625:	__arg->_M_obj = const_cast<_Tp*>(__ptr);
+    #####:  626:	break;
+    #####:  627:      case _Op_get_type_info:
+        -:  628:#if __cpp_rtti
+    #####:  629:	__arg->_M_typeinfo = &typeid(_Tp);
+        -:  630:#endif
+    #####:  631:	break;
+    #####:  632:      case _Op_clone:
+    #####:  633:	__arg->_M_any->_M_storage._M_ptr = new _Tp(*__ptr);
+call    0 never executed
+call    1 never executed
+    #####:  634:	__arg->_M_any->_M_manager = __any->_M_manager;
+    #####:  635:	break;
+    #####:  636:      case _Op_destroy:
+    #####:  637:	delete __ptr;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+call    2 never executed
+call    3 never executed
+    #####:  638:	break;
+    #####:  639:      case _Op_xfer:
+    #####:  640:	__arg->_M_any->_M_storage._M_ptr = __any->_M_storage._M_ptr;
+    #####:  641:	__arg->_M_any->_M_manager = __any->_M_manager;
+    #####:  642:	const_cast<any*>(__any)->_M_manager = nullptr;
+    #####:  643:	break;
+        -:  644:      }
+    #####:  645:    }
+------------------
+_ZNSt3any17_Manager_externalINSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEE9_S_manageENS_3_OpEPKS_PNS_4_ArgE:
+function _ZNSt3any17_Manager_externalINSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEE9_S_manageENS_3_OpEPKS_PNS_4_ArgE called 18 returned 100% blocks executed 60%
+       18:  617:    any::_Manager_external<_Tp>::
+        -:  618:    _S_manage(_Op __which, const any* __any, _Arg* __arg)
+        -:  619:    {
+        -:  620:      // The contained object is *_M_storage._M_ptr
+       18:  621:      auto __ptr = static_cast<const _Tp*>(__any->_M_storage._M_ptr);
+       18:  622:      switch (__which)
+branch  0 taken 0%
+branch  1 taken 22%
+branch  2 taken 0%
+branch  3 taken 39%
+branch  4 taken 39%
+branch  5 taken 0%
+        -:  623:      {
+    #####:  624:      case _Op_access:
+    #####:  625:	__arg->_M_obj = const_cast<_Tp*>(__ptr);
+    #####:  626:	break;
+        4:  627:      case _Op_get_type_info:
+        -:  628:#if __cpp_rtti
+        4:  629:	__arg->_M_typeinfo = &typeid(_Tp);
+        -:  630:#endif
+        4:  631:	break;
+    #####:  632:      case _Op_clone:
+    #####:  633:	__arg->_M_any->_M_storage._M_ptr = new _Tp(*__ptr);
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+branch  4 never executed (fallthrough)
+branch  5 never executed
+call    6 never executed
+    #####:  634:	__arg->_M_any->_M_manager = __any->_M_manager;
+    #####:  635:	break;
+        7:  636:      case _Op_destroy:
+        7:  637:	delete __ptr;
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+call    2 returned 100%
+call    3 returned 100%
+        7:  638:	break;
+        7:  639:      case _Op_xfer:
+        7:  640:	__arg->_M_any->_M_storage._M_ptr = __any->_M_storage._M_ptr;
+        7:  641:	__arg->_M_any->_M_manager = __any->_M_manager;
+        7:  642:	const_cast<any*>(__any)->_M_manager = nullptr;
+        7:  643:	break;
+        -:  644:      }
+       18:  645:    }
+------------------
+_ZNSt3any17_Manager_externalISt10shared_ptrIN5hical7SessionEEE9_S_manageENS_3_OpEPKS_PNS_4_ArgE:
+function _ZNSt3any17_Manager_externalISt10shared_ptrIN5hical7SessionEEE9_S_manageENS_3_OpEPKS_PNS_4_ArgE called 0 returned 0% blocks executed 0%
+    #####:  617:    any::_Manager_external<_Tp>::
+        -:  618:    _S_manage(_Op __which, const any* __any, _Arg* __arg)
+        -:  619:    {
+        -:  620:      // The contained object is *_M_storage._M_ptr
+    #####:  621:      auto __ptr = static_cast<const _Tp*>(__any->_M_storage._M_ptr);
+    #####:  622:      switch (__which)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+branch  5 never executed
+        -:  623:      {
+    #####:  624:      case _Op_access:
+    #####:  625:	__arg->_M_obj = const_cast<_Tp*>(__ptr);
+    #####:  626:	break;
+    #####:  627:      case _Op_get_type_info:
+        -:  628:#if __cpp_rtti
+    #####:  629:	__arg->_M_typeinfo = &typeid(_Tp);
+        -:  630:#endif
+    #####:  631:	break;
+    #####:  632:      case _Op_clone:
+    #####:  633:	__arg->_M_any->_M_storage._M_ptr = new _Tp(*__ptr);
+call    0 never executed
+call    1 never executed
+    #####:  634:	__arg->_M_any->_M_manager = __any->_M_manager;
+    #####:  635:	break;
+    #####:  636:      case _Op_destroy:
+    #####:  637:	delete __ptr;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+call    2 never executed
+call    3 never executed
+    #####:  638:	break;
+    #####:  639:      case _Op_xfer:
+    #####:  640:	__arg->_M_any->_M_storage._M_ptr = __any->_M_storage._M_ptr;
+    #####:  641:	__arg->_M_any->_M_manager = __any->_M_manager;
+    #####:  642:	const_cast<any*>(__any)->_M_manager = nullptr;
+    #####:  643:	break;
+        -:  644:      }
+    #####:  645:    }
+------------------
+_ZNSt3any17_Manager_externalINSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEE9_S_manageENS_3_OpEPKS_PNS_4_ArgE:
+function _ZNSt3any17_Manager_externalINSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEE9_S_manageENS_3_OpEPKS_PNS_4_ArgE called 6 returned 100% blocks executed 60%
+        6:  617:    any::_Manager_external<_Tp>::
+        -:  618:    _S_manage(_Op __which, const any* __any, _Arg* __arg)
+        -:  619:    {
+        -:  620:      // The contained object is *_M_storage._M_ptr
+        6:  621:      auto __ptr = static_cast<const _Tp*>(__any->_M_storage._M_ptr);
+        6:  622:      switch (__which)
+branch  0 taken 0%
+branch  1 taken 33%
+branch  2 taken 0%
+branch  3 taken 33%
+branch  4 taken 33%
+branch  5 taken 0%
+        -:  623:      {
+    #####:  624:      case _Op_access:
+    #####:  625:	__arg->_M_obj = const_cast<_Tp*>(__ptr);
+    #####:  626:	break;
+        2:  627:      case _Op_get_type_info:
+        -:  628:#if __cpp_rtti
+        2:  629:	__arg->_M_typeinfo = &typeid(_Tp);
+        -:  630:#endif
+        2:  631:	break;
+    #####:  632:      case _Op_clone:
+    #####:  633:	__arg->_M_any->_M_storage._M_ptr = new _Tp(*__ptr);
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+branch  4 never executed (fallthrough)
+branch  5 never executed
+call    6 never executed
+    #####:  634:	__arg->_M_any->_M_manager = __any->_M_manager;
+    #####:  635:	break;
+        2:  636:      case _Op_destroy:
+        2:  637:	delete __ptr;
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+call    2 returned 100%
+call    3 returned 100%
+        2:  638:	break;
+        2:  639:      case _Op_xfer:
+        2:  640:	__arg->_M_any->_M_storage._M_ptr = __any->_M_storage._M_ptr;
+        2:  641:	__arg->_M_any->_M_manager = __any->_M_manager;
+        2:  642:	const_cast<any*>(__any)->_M_manager = nullptr;
+        2:  643:	break;
+        -:  644:      }
+        6:  645:    }
+------------------
+        -:  646:
+        -:  647:  /// @}
+        -:  648:
+        -:  649:  namespace __detail::__variant
+        -:  650:  {
+        -:  651:    template<typename> struct _Never_valueless_alt; // see <variant>
+        -:  652:
+        -:  653:    // Provide the strong exception-safety guarantee when emplacing an
+        -:  654:    // any into a variant.
+        -:  655:    template<>
+        -:  656:      struct _Never_valueless_alt<std::any>
+        -:  657:      : std::true_type
+        -:  658:      { };
+        -:  659:  }  // namespace __detail::__variant
+        -:  660:
+        -:  661:_GLIBCXX_END_NAMESPACE_VERSION
+        -:  662:} // namespace std
+        -:  663:
+        -:  664:#endif // __cpp_lib_any
+        -:  665:#endif // _GLIBCXX_ANY

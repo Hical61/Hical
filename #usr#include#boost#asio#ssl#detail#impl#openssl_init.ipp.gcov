@@ -1,0 +1,1364 @@
+        -:    0:Source:/usr/include/boost/asio/ssl/detail/impl/openssl_init.ipp
+        -:    1://
+        -:    2:// ssl/detail/impl/openssl_init.ipp
+        -:    3:// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        -:    4://
+        -:    5:// Copyright (c) 2005 Voipster / Indrek dot Juhani at voipster dot com
+        -:    6:// Copyright (c) 2005-2023 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+        -:    7://
+        -:    8:// Distributed under the Boost Software License, Version 1.0. (See accompanying
+        -:    9:// file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+        -:   10://
+        -:   11:
+        -:   12:#ifndef BOOST_ASIO_SSL_DETAIL_IMPL_OPENSSL_INIT_IPP
+        -:   13:#define BOOST_ASIO_SSL_DETAIL_IMPL_OPENSSL_INIT_IPP
+        -:   14:
+        -:   15:#if defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   16:# pragma once
+        -:   17:#endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   18:
+        -:   19:#include <boost/asio/detail/config.hpp>
+        -:   20:#include <vector>
+        -:   21:#include <boost/asio/detail/assert.hpp>
+        -:   22:#include <boost/asio/detail/mutex.hpp>
+        -:   23:#include <boost/asio/detail/tss_ptr.hpp>
+        -:   24:#include <boost/asio/ssl/detail/openssl_init.hpp>
+        -:   25:#include <boost/asio/ssl/detail/openssl_types.hpp>
+        -:   26:
+        -:   27:#include <boost/asio/detail/push_options.hpp>
+        -:   28:
+        -:   29:namespace boost {
+        -:   30:namespace asio {
+        -:   31:namespace ssl {
+        -:   32:namespace detail {
+        -:   33:
+        -:   34:class openssl_init_base::do_init
+        -:   35:{
+        -:   36:public:
+      71*:   37:  do_init()
+        -:   38:  {
+        -:   39:#if (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   40:    ::SSL_library_init();
+        -:   41:    ::SSL_load_error_strings();        
+        -:   42:    ::OpenSSL_add_all_algorithms();
+        -:   43:
+        -:   44:    mutexes_.resize(::CRYPTO_num_locks());
+        -:   45:    for (size_t i = 0; i < mutexes_.size(); ++i)
+        -:   46:      mutexes_[i].reset(new boost::asio::detail::mutex);
+        -:   47:    ::CRYPTO_set_locking_callback(&do_init::openssl_locking_func);
+        -:   48:#endif // (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   49:#if (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   50:    ::CRYPTO_set_id_callback(&do_init::openssl_id_func);
+        -:   51:#endif // (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   52:
+        -:   53:#if !defined(SSL_OP_NO_COMPRESSION) \
+        -:   54:  && (OPENSSL_VERSION_NUMBER >= 0x00908000L)
+        -:   55:    null_compression_methods_ = sk_SSL_COMP_new_null();
+        -:   56:#endif // !defined(SSL_OP_NO_COMPRESSION)
+        -:   57:       // && (OPENSSL_VERSION_NUMBER >= 0x00908000L)
+      71*:   58:  }
+------------------
+_ZN5boost4asio3ssl6detail17openssl_init_base7do_initC2Ev:
+function _ZN5boost4asio3ssl6detail17openssl_init_base7do_initC2Ev called 6 returned 100% blocks executed 100%
+        6:   37:  do_init()
+        -:   38:  {
+        -:   39:#if (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   40:    ::SSL_library_init();
+        -:   41:    ::SSL_load_error_strings();        
+        -:   42:    ::OpenSSL_add_all_algorithms();
+        -:   43:
+        -:   44:    mutexes_.resize(::CRYPTO_num_locks());
+        -:   45:    for (size_t i = 0; i < mutexes_.size(); ++i)
+        -:   46:      mutexes_[i].reset(new boost::asio::detail::mutex);
+        -:   47:    ::CRYPTO_set_locking_callback(&do_init::openssl_locking_func);
+        -:   48:#endif // (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   49:#if (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   50:    ::CRYPTO_set_id_callback(&do_init::openssl_id_func);
+        -:   51:#endif // (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   52:
+        -:   53:#if !defined(SSL_OP_NO_COMPRESSION) \
+        -:   54:  && (OPENSSL_VERSION_NUMBER >= 0x00908000L)
+        -:   55:    null_compression_methods_ = sk_SSL_COMP_new_null();
+        -:   56:#endif // !defined(SSL_OP_NO_COMPRESSION)
+        -:   57:       // && (OPENSSL_VERSION_NUMBER >= 0x00908000L)
+        6:   58:  }
+------------------
+_ZN5boost4asio3ssl6detail17openssl_init_base7do_initC2Ev:
+function _ZN5boost4asio3ssl6detail17openssl_init_base7do_initC2Ev called 0 returned 0% blocks executed 0%
+    #####:   37:  do_init()
+        -:   38:  {
+        -:   39:#if (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   40:    ::SSL_library_init();
+        -:   41:    ::SSL_load_error_strings();        
+        -:   42:    ::OpenSSL_add_all_algorithms();
+        -:   43:
+        -:   44:    mutexes_.resize(::CRYPTO_num_locks());
+        -:   45:    for (size_t i = 0; i < mutexes_.size(); ++i)
+        -:   46:      mutexes_[i].reset(new boost::asio::detail::mutex);
+        -:   47:    ::CRYPTO_set_locking_callback(&do_init::openssl_locking_func);
+        -:   48:#endif // (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   49:#if (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   50:    ::CRYPTO_set_id_callback(&do_init::openssl_id_func);
+        -:   51:#endif // (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   52:
+        -:   53:#if !defined(SSL_OP_NO_COMPRESSION) \
+        -:   54:  && (OPENSSL_VERSION_NUMBER >= 0x00908000L)
+        -:   55:    null_compression_methods_ = sk_SSL_COMP_new_null();
+        -:   56:#endif // !defined(SSL_OP_NO_COMPRESSION)
+        -:   57:       // && (OPENSSL_VERSION_NUMBER >= 0x00908000L)
+    #####:   58:  }
+------------------
+_ZN5boost4asio3ssl6detail17openssl_init_base7do_initC2Ev:
+function _ZN5boost4asio3ssl6detail17openssl_init_base7do_initC2Ev called 0 returned 0% blocks executed 0%
+    #####:   37:  do_init()
+        -:   38:  {
+        -:   39:#if (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   40:    ::SSL_library_init();
+        -:   41:    ::SSL_load_error_strings();        
+        -:   42:    ::OpenSSL_add_all_algorithms();
+        -:   43:
+        -:   44:    mutexes_.resize(::CRYPTO_num_locks());
+        -:   45:    for (size_t i = 0; i < mutexes_.size(); ++i)
+        -:   46:      mutexes_[i].reset(new boost::asio::detail::mutex);
+        -:   47:    ::CRYPTO_set_locking_callback(&do_init::openssl_locking_func);
+        -:   48:#endif // (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   49:#if (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   50:    ::CRYPTO_set_id_callback(&do_init::openssl_id_func);
+        -:   51:#endif // (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   52:
+        -:   53:#if !defined(SSL_OP_NO_COMPRESSION) \
+        -:   54:  && (OPENSSL_VERSION_NUMBER >= 0x00908000L)
+        -:   55:    null_compression_methods_ = sk_SSL_COMP_new_null();
+        -:   56:#endif // !defined(SSL_OP_NO_COMPRESSION)
+        -:   57:       // && (OPENSSL_VERSION_NUMBER >= 0x00908000L)
+    #####:   58:  }
+------------------
+_ZN5boost4asio3ssl6detail17openssl_init_base7do_initC2Ev:
+function _ZN5boost4asio3ssl6detail17openssl_init_base7do_initC2Ev called 0 returned 0% blocks executed 0%
+    #####:   37:  do_init()
+        -:   38:  {
+        -:   39:#if (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   40:    ::SSL_library_init();
+        -:   41:    ::SSL_load_error_strings();        
+        -:   42:    ::OpenSSL_add_all_algorithms();
+        -:   43:
+        -:   44:    mutexes_.resize(::CRYPTO_num_locks());
+        -:   45:    for (size_t i = 0; i < mutexes_.size(); ++i)
+        -:   46:      mutexes_[i].reset(new boost::asio::detail::mutex);
+        -:   47:    ::CRYPTO_set_locking_callback(&do_init::openssl_locking_func);
+        -:   48:#endif // (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   49:#if (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   50:    ::CRYPTO_set_id_callback(&do_init::openssl_id_func);
+        -:   51:#endif // (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   52:
+        -:   53:#if !defined(SSL_OP_NO_COMPRESSION) \
+        -:   54:  && (OPENSSL_VERSION_NUMBER >= 0x00908000L)
+        -:   55:    null_compression_methods_ = sk_SSL_COMP_new_null();
+        -:   56:#endif // !defined(SSL_OP_NO_COMPRESSION)
+        -:   57:       // && (OPENSSL_VERSION_NUMBER >= 0x00908000L)
+    #####:   58:  }
+------------------
+_ZN5boost4asio3ssl6detail17openssl_init_base7do_initC2Ev:
+function _ZN5boost4asio3ssl6detail17openssl_init_base7do_initC2Ev called 8 returned 100% blocks executed 100%
+        8:   37:  do_init()
+        -:   38:  {
+        -:   39:#if (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   40:    ::SSL_library_init();
+        -:   41:    ::SSL_load_error_strings();        
+        -:   42:    ::OpenSSL_add_all_algorithms();
+        -:   43:
+        -:   44:    mutexes_.resize(::CRYPTO_num_locks());
+        -:   45:    for (size_t i = 0; i < mutexes_.size(); ++i)
+        -:   46:      mutexes_[i].reset(new boost::asio::detail::mutex);
+        -:   47:    ::CRYPTO_set_locking_callback(&do_init::openssl_locking_func);
+        -:   48:#endif // (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   49:#if (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   50:    ::CRYPTO_set_id_callback(&do_init::openssl_id_func);
+        -:   51:#endif // (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   52:
+        -:   53:#if !defined(SSL_OP_NO_COMPRESSION) \
+        -:   54:  && (OPENSSL_VERSION_NUMBER >= 0x00908000L)
+        -:   55:    null_compression_methods_ = sk_SSL_COMP_new_null();
+        -:   56:#endif // !defined(SSL_OP_NO_COMPRESSION)
+        -:   57:       // && (OPENSSL_VERSION_NUMBER >= 0x00908000L)
+        8:   58:  }
+------------------
+_ZN5boost4asio3ssl6detail17openssl_init_base7do_initC2Ev:
+function _ZN5boost4asio3ssl6detail17openssl_init_base7do_initC2Ev called 9 returned 100% blocks executed 100%
+        9:   37:  do_init()
+        -:   38:  {
+        -:   39:#if (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   40:    ::SSL_library_init();
+        -:   41:    ::SSL_load_error_strings();        
+        -:   42:    ::OpenSSL_add_all_algorithms();
+        -:   43:
+        -:   44:    mutexes_.resize(::CRYPTO_num_locks());
+        -:   45:    for (size_t i = 0; i < mutexes_.size(); ++i)
+        -:   46:      mutexes_[i].reset(new boost::asio::detail::mutex);
+        -:   47:    ::CRYPTO_set_locking_callback(&do_init::openssl_locking_func);
+        -:   48:#endif // (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   49:#if (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   50:    ::CRYPTO_set_id_callback(&do_init::openssl_id_func);
+        -:   51:#endif // (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   52:
+        -:   53:#if !defined(SSL_OP_NO_COMPRESSION) \
+        -:   54:  && (OPENSSL_VERSION_NUMBER >= 0x00908000L)
+        -:   55:    null_compression_methods_ = sk_SSL_COMP_new_null();
+        -:   56:#endif // !defined(SSL_OP_NO_COMPRESSION)
+        -:   57:       // && (OPENSSL_VERSION_NUMBER >= 0x00908000L)
+        9:   58:  }
+------------------
+_ZN5boost4asio3ssl6detail17openssl_init_base7do_initC2Ev:
+function _ZN5boost4asio3ssl6detail17openssl_init_base7do_initC2Ev called 5 returned 100% blocks executed 100%
+        5:   37:  do_init()
+        -:   38:  {
+        -:   39:#if (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   40:    ::SSL_library_init();
+        -:   41:    ::SSL_load_error_strings();        
+        -:   42:    ::OpenSSL_add_all_algorithms();
+        -:   43:
+        -:   44:    mutexes_.resize(::CRYPTO_num_locks());
+        -:   45:    for (size_t i = 0; i < mutexes_.size(); ++i)
+        -:   46:      mutexes_[i].reset(new boost::asio::detail::mutex);
+        -:   47:    ::CRYPTO_set_locking_callback(&do_init::openssl_locking_func);
+        -:   48:#endif // (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   49:#if (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   50:    ::CRYPTO_set_id_callback(&do_init::openssl_id_func);
+        -:   51:#endif // (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   52:
+        -:   53:#if !defined(SSL_OP_NO_COMPRESSION) \
+        -:   54:  && (OPENSSL_VERSION_NUMBER >= 0x00908000L)
+        -:   55:    null_compression_methods_ = sk_SSL_COMP_new_null();
+        -:   56:#endif // !defined(SSL_OP_NO_COMPRESSION)
+        -:   57:       // && (OPENSSL_VERSION_NUMBER >= 0x00908000L)
+        5:   58:  }
+------------------
+_ZN5boost4asio3ssl6detail17openssl_init_base7do_initC2Ev:
+function _ZN5boost4asio3ssl6detail17openssl_init_base7do_initC2Ev called 7 returned 100% blocks executed 100%
+        7:   37:  do_init()
+        -:   38:  {
+        -:   39:#if (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   40:    ::SSL_library_init();
+        -:   41:    ::SSL_load_error_strings();        
+        -:   42:    ::OpenSSL_add_all_algorithms();
+        -:   43:
+        -:   44:    mutexes_.resize(::CRYPTO_num_locks());
+        -:   45:    for (size_t i = 0; i < mutexes_.size(); ++i)
+        -:   46:      mutexes_[i].reset(new boost::asio::detail::mutex);
+        -:   47:    ::CRYPTO_set_locking_callback(&do_init::openssl_locking_func);
+        -:   48:#endif // (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   49:#if (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   50:    ::CRYPTO_set_id_callback(&do_init::openssl_id_func);
+        -:   51:#endif // (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   52:
+        -:   53:#if !defined(SSL_OP_NO_COMPRESSION) \
+        -:   54:  && (OPENSSL_VERSION_NUMBER >= 0x00908000L)
+        -:   55:    null_compression_methods_ = sk_SSL_COMP_new_null();
+        -:   56:#endif // !defined(SSL_OP_NO_COMPRESSION)
+        -:   57:       // && (OPENSSL_VERSION_NUMBER >= 0x00908000L)
+        7:   58:  }
+------------------
+_ZN5boost4asio3ssl6detail17openssl_init_base7do_initC2Ev:
+function _ZN5boost4asio3ssl6detail17openssl_init_base7do_initC2Ev called 6 returned 100% blocks executed 100%
+        6:   37:  do_init()
+        -:   38:  {
+        -:   39:#if (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   40:    ::SSL_library_init();
+        -:   41:    ::SSL_load_error_strings();        
+        -:   42:    ::OpenSSL_add_all_algorithms();
+        -:   43:
+        -:   44:    mutexes_.resize(::CRYPTO_num_locks());
+        -:   45:    for (size_t i = 0; i < mutexes_.size(); ++i)
+        -:   46:      mutexes_[i].reset(new boost::asio::detail::mutex);
+        -:   47:    ::CRYPTO_set_locking_callback(&do_init::openssl_locking_func);
+        -:   48:#endif // (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   49:#if (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   50:    ::CRYPTO_set_id_callback(&do_init::openssl_id_func);
+        -:   51:#endif // (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   52:
+        -:   53:#if !defined(SSL_OP_NO_COMPRESSION) \
+        -:   54:  && (OPENSSL_VERSION_NUMBER >= 0x00908000L)
+        -:   55:    null_compression_methods_ = sk_SSL_COMP_new_null();
+        -:   56:#endif // !defined(SSL_OP_NO_COMPRESSION)
+        -:   57:       // && (OPENSSL_VERSION_NUMBER >= 0x00908000L)
+        6:   58:  }
+------------------
+_ZN5boost4asio3ssl6detail17openssl_init_base7do_initC2Ev:
+function _ZN5boost4asio3ssl6detail17openssl_init_base7do_initC2Ev called 0 returned 0% blocks executed 0%
+    #####:   37:  do_init()
+        -:   38:  {
+        -:   39:#if (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   40:    ::SSL_library_init();
+        -:   41:    ::SSL_load_error_strings();        
+        -:   42:    ::OpenSSL_add_all_algorithms();
+        -:   43:
+        -:   44:    mutexes_.resize(::CRYPTO_num_locks());
+        -:   45:    for (size_t i = 0; i < mutexes_.size(); ++i)
+        -:   46:      mutexes_[i].reset(new boost::asio::detail::mutex);
+        -:   47:    ::CRYPTO_set_locking_callback(&do_init::openssl_locking_func);
+        -:   48:#endif // (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   49:#if (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   50:    ::CRYPTO_set_id_callback(&do_init::openssl_id_func);
+        -:   51:#endif // (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   52:
+        -:   53:#if !defined(SSL_OP_NO_COMPRESSION) \
+        -:   54:  && (OPENSSL_VERSION_NUMBER >= 0x00908000L)
+        -:   55:    null_compression_methods_ = sk_SSL_COMP_new_null();
+        -:   56:#endif // !defined(SSL_OP_NO_COMPRESSION)
+        -:   57:       // && (OPENSSL_VERSION_NUMBER >= 0x00908000L)
+    #####:   58:  }
+------------------
+_ZN5boost4asio3ssl6detail17openssl_init_base7do_initC2Ev:
+function _ZN5boost4asio3ssl6detail17openssl_init_base7do_initC2Ev called 12 returned 100% blocks executed 100%
+       12:   37:  do_init()
+        -:   38:  {
+        -:   39:#if (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   40:    ::SSL_library_init();
+        -:   41:    ::SSL_load_error_strings();        
+        -:   42:    ::OpenSSL_add_all_algorithms();
+        -:   43:
+        -:   44:    mutexes_.resize(::CRYPTO_num_locks());
+        -:   45:    for (size_t i = 0; i < mutexes_.size(); ++i)
+        -:   46:      mutexes_[i].reset(new boost::asio::detail::mutex);
+        -:   47:    ::CRYPTO_set_locking_callback(&do_init::openssl_locking_func);
+        -:   48:#endif // (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   49:#if (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   50:    ::CRYPTO_set_id_callback(&do_init::openssl_id_func);
+        -:   51:#endif // (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   52:
+        -:   53:#if !defined(SSL_OP_NO_COMPRESSION) \
+        -:   54:  && (OPENSSL_VERSION_NUMBER >= 0x00908000L)
+        -:   55:    null_compression_methods_ = sk_SSL_COMP_new_null();
+        -:   56:#endif // !defined(SSL_OP_NO_COMPRESSION)
+        -:   57:       // && (OPENSSL_VERSION_NUMBER >= 0x00908000L)
+       12:   58:  }
+------------------
+_ZN5boost4asio3ssl6detail17openssl_init_base7do_initC2Ev:
+function _ZN5boost4asio3ssl6detail17openssl_init_base7do_initC2Ev called 9 returned 100% blocks executed 100%
+        9:   37:  do_init()
+        -:   38:  {
+        -:   39:#if (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   40:    ::SSL_library_init();
+        -:   41:    ::SSL_load_error_strings();        
+        -:   42:    ::OpenSSL_add_all_algorithms();
+        -:   43:
+        -:   44:    mutexes_.resize(::CRYPTO_num_locks());
+        -:   45:    for (size_t i = 0; i < mutexes_.size(); ++i)
+        -:   46:      mutexes_[i].reset(new boost::asio::detail::mutex);
+        -:   47:    ::CRYPTO_set_locking_callback(&do_init::openssl_locking_func);
+        -:   48:#endif // (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   49:#if (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   50:    ::CRYPTO_set_id_callback(&do_init::openssl_id_func);
+        -:   51:#endif // (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   52:
+        -:   53:#if !defined(SSL_OP_NO_COMPRESSION) \
+        -:   54:  && (OPENSSL_VERSION_NUMBER >= 0x00908000L)
+        -:   55:    null_compression_methods_ = sk_SSL_COMP_new_null();
+        -:   56:#endif // !defined(SSL_OP_NO_COMPRESSION)
+        -:   57:       // && (OPENSSL_VERSION_NUMBER >= 0x00908000L)
+        9:   58:  }
+------------------
+_ZN5boost4asio3ssl6detail17openssl_init_base7do_initC2Ev:
+function _ZN5boost4asio3ssl6detail17openssl_init_base7do_initC2Ev called 9 returned 100% blocks executed 100%
+        9:   37:  do_init()
+        -:   38:  {
+        -:   39:#if (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   40:    ::SSL_library_init();
+        -:   41:    ::SSL_load_error_strings();        
+        -:   42:    ::OpenSSL_add_all_algorithms();
+        -:   43:
+        -:   44:    mutexes_.resize(::CRYPTO_num_locks());
+        -:   45:    for (size_t i = 0; i < mutexes_.size(); ++i)
+        -:   46:      mutexes_[i].reset(new boost::asio::detail::mutex);
+        -:   47:    ::CRYPTO_set_locking_callback(&do_init::openssl_locking_func);
+        -:   48:#endif // (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   49:#if (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   50:    ::CRYPTO_set_id_callback(&do_init::openssl_id_func);
+        -:   51:#endif // (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   52:
+        -:   53:#if !defined(SSL_OP_NO_COMPRESSION) \
+        -:   54:  && (OPENSSL_VERSION_NUMBER >= 0x00908000L)
+        -:   55:    null_compression_methods_ = sk_SSL_COMP_new_null();
+        -:   56:#endif // !defined(SSL_OP_NO_COMPRESSION)
+        -:   57:       // && (OPENSSL_VERSION_NUMBER >= 0x00908000L)
+        9:   58:  }
+------------------
+_ZN5boost4asio3ssl6detail17openssl_init_base7do_initC2Ev:
+function _ZN5boost4asio3ssl6detail17openssl_init_base7do_initC2Ev called 0 returned 0% blocks executed 0%
+    #####:   37:  do_init()
+        -:   38:  {
+        -:   39:#if (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   40:    ::SSL_library_init();
+        -:   41:    ::SSL_load_error_strings();        
+        -:   42:    ::OpenSSL_add_all_algorithms();
+        -:   43:
+        -:   44:    mutexes_.resize(::CRYPTO_num_locks());
+        -:   45:    for (size_t i = 0; i < mutexes_.size(); ++i)
+        -:   46:      mutexes_[i].reset(new boost::asio::detail::mutex);
+        -:   47:    ::CRYPTO_set_locking_callback(&do_init::openssl_locking_func);
+        -:   48:#endif // (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   49:#if (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   50:    ::CRYPTO_set_id_callback(&do_init::openssl_id_func);
+        -:   51:#endif // (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   52:
+        -:   53:#if !defined(SSL_OP_NO_COMPRESSION) \
+        -:   54:  && (OPENSSL_VERSION_NUMBER >= 0x00908000L)
+        -:   55:    null_compression_methods_ = sk_SSL_COMP_new_null();
+        -:   56:#endif // !defined(SSL_OP_NO_COMPRESSION)
+        -:   57:       // && (OPENSSL_VERSION_NUMBER >= 0x00908000L)
+    #####:   58:  }
+------------------
+_ZN5boost4asio3ssl6detail17openssl_init_base7do_initC2Ev:
+function _ZN5boost4asio3ssl6detail17openssl_init_base7do_initC2Ev called 0 returned 0% blocks executed 0%
+    #####:   37:  do_init()
+        -:   38:  {
+        -:   39:#if (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   40:    ::SSL_library_init();
+        -:   41:    ::SSL_load_error_strings();        
+        -:   42:    ::OpenSSL_add_all_algorithms();
+        -:   43:
+        -:   44:    mutexes_.resize(::CRYPTO_num_locks());
+        -:   45:    for (size_t i = 0; i < mutexes_.size(); ++i)
+        -:   46:      mutexes_[i].reset(new boost::asio::detail::mutex);
+        -:   47:    ::CRYPTO_set_locking_callback(&do_init::openssl_locking_func);
+        -:   48:#endif // (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   49:#if (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   50:    ::CRYPTO_set_id_callback(&do_init::openssl_id_func);
+        -:   51:#endif // (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   52:
+        -:   53:#if !defined(SSL_OP_NO_COMPRESSION) \
+        -:   54:  && (OPENSSL_VERSION_NUMBER >= 0x00908000L)
+        -:   55:    null_compression_methods_ = sk_SSL_COMP_new_null();
+        -:   56:#endif // !defined(SSL_OP_NO_COMPRESSION)
+        -:   57:       // && (OPENSSL_VERSION_NUMBER >= 0x00908000L)
+    #####:   58:  }
+------------------
+_ZN5boost4asio3ssl6detail17openssl_init_base7do_initC2Ev:
+function _ZN5boost4asio3ssl6detail17openssl_init_base7do_initC2Ev called 0 returned 0% blocks executed 0%
+    #####:   37:  do_init()
+        -:   38:  {
+        -:   39:#if (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   40:    ::SSL_library_init();
+        -:   41:    ::SSL_load_error_strings();        
+        -:   42:    ::OpenSSL_add_all_algorithms();
+        -:   43:
+        -:   44:    mutexes_.resize(::CRYPTO_num_locks());
+        -:   45:    for (size_t i = 0; i < mutexes_.size(); ++i)
+        -:   46:      mutexes_[i].reset(new boost::asio::detail::mutex);
+        -:   47:    ::CRYPTO_set_locking_callback(&do_init::openssl_locking_func);
+        -:   48:#endif // (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   49:#if (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   50:    ::CRYPTO_set_id_callback(&do_init::openssl_id_func);
+        -:   51:#endif // (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   52:
+        -:   53:#if !defined(SSL_OP_NO_COMPRESSION) \
+        -:   54:  && (OPENSSL_VERSION_NUMBER >= 0x00908000L)
+        -:   55:    null_compression_methods_ = sk_SSL_COMP_new_null();
+        -:   56:#endif // !defined(SSL_OP_NO_COMPRESSION)
+        -:   57:       // && (OPENSSL_VERSION_NUMBER >= 0x00908000L)
+    #####:   58:  }
+------------------
+_ZN5boost4asio3ssl6detail17openssl_init_base7do_initC2Ev:
+function _ZN5boost4asio3ssl6detail17openssl_init_base7do_initC2Ev called 0 returned 0% blocks executed 0%
+    #####:   37:  do_init()
+        -:   38:  {
+        -:   39:#if (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   40:    ::SSL_library_init();
+        -:   41:    ::SSL_load_error_strings();        
+        -:   42:    ::OpenSSL_add_all_algorithms();
+        -:   43:
+        -:   44:    mutexes_.resize(::CRYPTO_num_locks());
+        -:   45:    for (size_t i = 0; i < mutexes_.size(); ++i)
+        -:   46:      mutexes_[i].reset(new boost::asio::detail::mutex);
+        -:   47:    ::CRYPTO_set_locking_callback(&do_init::openssl_locking_func);
+        -:   48:#endif // (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   49:#if (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   50:    ::CRYPTO_set_id_callback(&do_init::openssl_id_func);
+        -:   51:#endif // (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   52:
+        -:   53:#if !defined(SSL_OP_NO_COMPRESSION) \
+        -:   54:  && (OPENSSL_VERSION_NUMBER >= 0x00908000L)
+        -:   55:    null_compression_methods_ = sk_SSL_COMP_new_null();
+        -:   56:#endif // !defined(SSL_OP_NO_COMPRESSION)
+        -:   57:       // && (OPENSSL_VERSION_NUMBER >= 0x00908000L)
+    #####:   58:  }
+------------------
+        -:   59:
+      71*:   60:  ~do_init()
+        -:   61:  {
+        -:   62:#if !defined(SSL_OP_NO_COMPRESSION) \
+        -:   63:  && (OPENSSL_VERSION_NUMBER >= 0x00908000L)
+        -:   64:    sk_SSL_COMP_free(null_compression_methods_);
+        -:   65:#endif // !defined(SSL_OP_NO_COMPRESSION)
+        -:   66:       // && (OPENSSL_VERSION_NUMBER >= 0x00908000L)
+        -:   67:
+        -:   68:#if (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   69:    ::CRYPTO_set_id_callback(0);
+        -:   70:#endif // (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   71:#if (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   72:    ::CRYPTO_set_locking_callback(0);
+        -:   73:    ::ERR_free_strings();
+        -:   74:    ::EVP_cleanup();
+        -:   75:    ::CRYPTO_cleanup_all_ex_data();
+        -:   76:#endif // (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   77:#if (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   78:    ::ERR_remove_state(0);
+        -:   79:#elif (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   80:    ::ERR_remove_thread_state(NULL);
+        -:   81:#endif // (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   82:#if (OPENSSL_VERSION_NUMBER >= 0x10002000L) \
+        -:   83:    && (OPENSSL_VERSION_NUMBER < 0x10100000L) \
+        -:   84:    && !defined(SSL_OP_NO_COMPRESSION)
+        -:   85:    ::SSL_COMP_free_compression_methods();
+        -:   86:#endif // (OPENSSL_VERSION_NUMBER >= 0x10002000L)
+        -:   87:       // && (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   88:       // && !defined(SSL_OP_NO_COMPRESSION)
+        -:   89:#if !defined(OPENSSL_IS_BORINGSSL) \
+        -:   90:    && !defined(BOOST_ASIO_USE_WOLFSSL) \
+        -:   91:    && (OPENSSL_VERSION_NUMBER < 0x30000000L)
+        -:   92:    ::CONF_modules_unload(1);
+        -:   93:#endif // !defined(OPENSSL_IS_BORINGSSL)
+        -:   94:       //   && !defined(BOOST_ASIO_USE_WOLFSSL)
+        -:   95:       //   && (OPENSSL_VERSION_NUMBER < 0x30000000L)
+        -:   96:#if !defined(OPENSSL_NO_ENGINE) \
+        -:   97:  && (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   98:    ::ENGINE_cleanup();
+        -:   99:#endif // !defined(OPENSSL_NO_ENGINE)
+        -:  100:       // && (OPENSSL_VERSION_NUMBER < 0x10100000L)
+      71*:  101:  }
+------------------
+_ZN5boost4asio3ssl6detail17openssl_init_base7do_initD2Ev:
+function _ZN5boost4asio3ssl6detail17openssl_init_base7do_initD2Ev called 6 returned 100% blocks executed 100%
+        6:   60:  ~do_init()
+        -:   61:  {
+        -:   62:#if !defined(SSL_OP_NO_COMPRESSION) \
+        -:   63:  && (OPENSSL_VERSION_NUMBER >= 0x00908000L)
+        -:   64:    sk_SSL_COMP_free(null_compression_methods_);
+        -:   65:#endif // !defined(SSL_OP_NO_COMPRESSION)
+        -:   66:       // && (OPENSSL_VERSION_NUMBER >= 0x00908000L)
+        -:   67:
+        -:   68:#if (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   69:    ::CRYPTO_set_id_callback(0);
+        -:   70:#endif // (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   71:#if (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   72:    ::CRYPTO_set_locking_callback(0);
+        -:   73:    ::ERR_free_strings();
+        -:   74:    ::EVP_cleanup();
+        -:   75:    ::CRYPTO_cleanup_all_ex_data();
+        -:   76:#endif // (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   77:#if (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   78:    ::ERR_remove_state(0);
+        -:   79:#elif (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   80:    ::ERR_remove_thread_state(NULL);
+        -:   81:#endif // (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   82:#if (OPENSSL_VERSION_NUMBER >= 0x10002000L) \
+        -:   83:    && (OPENSSL_VERSION_NUMBER < 0x10100000L) \
+        -:   84:    && !defined(SSL_OP_NO_COMPRESSION)
+        -:   85:    ::SSL_COMP_free_compression_methods();
+        -:   86:#endif // (OPENSSL_VERSION_NUMBER >= 0x10002000L)
+        -:   87:       // && (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   88:       // && !defined(SSL_OP_NO_COMPRESSION)
+        -:   89:#if !defined(OPENSSL_IS_BORINGSSL) \
+        -:   90:    && !defined(BOOST_ASIO_USE_WOLFSSL) \
+        -:   91:    && (OPENSSL_VERSION_NUMBER < 0x30000000L)
+        -:   92:    ::CONF_modules_unload(1);
+        -:   93:#endif // !defined(OPENSSL_IS_BORINGSSL)
+        -:   94:       //   && !defined(BOOST_ASIO_USE_WOLFSSL)
+        -:   95:       //   && (OPENSSL_VERSION_NUMBER < 0x30000000L)
+        -:   96:#if !defined(OPENSSL_NO_ENGINE) \
+        -:   97:  && (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   98:    ::ENGINE_cleanup();
+        -:   99:#endif // !defined(OPENSSL_NO_ENGINE)
+        -:  100:       // && (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        6:  101:  }
+------------------
+_ZN5boost4asio3ssl6detail17openssl_init_base7do_initD2Ev:
+function _ZN5boost4asio3ssl6detail17openssl_init_base7do_initD2Ev called 0 returned 0% blocks executed 0%
+    #####:   60:  ~do_init()
+        -:   61:  {
+        -:   62:#if !defined(SSL_OP_NO_COMPRESSION) \
+        -:   63:  && (OPENSSL_VERSION_NUMBER >= 0x00908000L)
+        -:   64:    sk_SSL_COMP_free(null_compression_methods_);
+        -:   65:#endif // !defined(SSL_OP_NO_COMPRESSION)
+        -:   66:       // && (OPENSSL_VERSION_NUMBER >= 0x00908000L)
+        -:   67:
+        -:   68:#if (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   69:    ::CRYPTO_set_id_callback(0);
+        -:   70:#endif // (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   71:#if (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   72:    ::CRYPTO_set_locking_callback(0);
+        -:   73:    ::ERR_free_strings();
+        -:   74:    ::EVP_cleanup();
+        -:   75:    ::CRYPTO_cleanup_all_ex_data();
+        -:   76:#endif // (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   77:#if (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   78:    ::ERR_remove_state(0);
+        -:   79:#elif (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   80:    ::ERR_remove_thread_state(NULL);
+        -:   81:#endif // (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   82:#if (OPENSSL_VERSION_NUMBER >= 0x10002000L) \
+        -:   83:    && (OPENSSL_VERSION_NUMBER < 0x10100000L) \
+        -:   84:    && !defined(SSL_OP_NO_COMPRESSION)
+        -:   85:    ::SSL_COMP_free_compression_methods();
+        -:   86:#endif // (OPENSSL_VERSION_NUMBER >= 0x10002000L)
+        -:   87:       // && (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   88:       // && !defined(SSL_OP_NO_COMPRESSION)
+        -:   89:#if !defined(OPENSSL_IS_BORINGSSL) \
+        -:   90:    && !defined(BOOST_ASIO_USE_WOLFSSL) \
+        -:   91:    && (OPENSSL_VERSION_NUMBER < 0x30000000L)
+        -:   92:    ::CONF_modules_unload(1);
+        -:   93:#endif // !defined(OPENSSL_IS_BORINGSSL)
+        -:   94:       //   && !defined(BOOST_ASIO_USE_WOLFSSL)
+        -:   95:       //   && (OPENSSL_VERSION_NUMBER < 0x30000000L)
+        -:   96:#if !defined(OPENSSL_NO_ENGINE) \
+        -:   97:  && (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   98:    ::ENGINE_cleanup();
+        -:   99:#endif // !defined(OPENSSL_NO_ENGINE)
+        -:  100:       // && (OPENSSL_VERSION_NUMBER < 0x10100000L)
+    #####:  101:  }
+------------------
+_ZN5boost4asio3ssl6detail17openssl_init_base7do_initD2Ev:
+function _ZN5boost4asio3ssl6detail17openssl_init_base7do_initD2Ev called 0 returned 0% blocks executed 0%
+    #####:   60:  ~do_init()
+        -:   61:  {
+        -:   62:#if !defined(SSL_OP_NO_COMPRESSION) \
+        -:   63:  && (OPENSSL_VERSION_NUMBER >= 0x00908000L)
+        -:   64:    sk_SSL_COMP_free(null_compression_methods_);
+        -:   65:#endif // !defined(SSL_OP_NO_COMPRESSION)
+        -:   66:       // && (OPENSSL_VERSION_NUMBER >= 0x00908000L)
+        -:   67:
+        -:   68:#if (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   69:    ::CRYPTO_set_id_callback(0);
+        -:   70:#endif // (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   71:#if (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   72:    ::CRYPTO_set_locking_callback(0);
+        -:   73:    ::ERR_free_strings();
+        -:   74:    ::EVP_cleanup();
+        -:   75:    ::CRYPTO_cleanup_all_ex_data();
+        -:   76:#endif // (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   77:#if (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   78:    ::ERR_remove_state(0);
+        -:   79:#elif (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   80:    ::ERR_remove_thread_state(NULL);
+        -:   81:#endif // (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   82:#if (OPENSSL_VERSION_NUMBER >= 0x10002000L) \
+        -:   83:    && (OPENSSL_VERSION_NUMBER < 0x10100000L) \
+        -:   84:    && !defined(SSL_OP_NO_COMPRESSION)
+        -:   85:    ::SSL_COMP_free_compression_methods();
+        -:   86:#endif // (OPENSSL_VERSION_NUMBER >= 0x10002000L)
+        -:   87:       // && (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   88:       // && !defined(SSL_OP_NO_COMPRESSION)
+        -:   89:#if !defined(OPENSSL_IS_BORINGSSL) \
+        -:   90:    && !defined(BOOST_ASIO_USE_WOLFSSL) \
+        -:   91:    && (OPENSSL_VERSION_NUMBER < 0x30000000L)
+        -:   92:    ::CONF_modules_unload(1);
+        -:   93:#endif // !defined(OPENSSL_IS_BORINGSSL)
+        -:   94:       //   && !defined(BOOST_ASIO_USE_WOLFSSL)
+        -:   95:       //   && (OPENSSL_VERSION_NUMBER < 0x30000000L)
+        -:   96:#if !defined(OPENSSL_NO_ENGINE) \
+        -:   97:  && (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   98:    ::ENGINE_cleanup();
+        -:   99:#endif // !defined(OPENSSL_NO_ENGINE)
+        -:  100:       // && (OPENSSL_VERSION_NUMBER < 0x10100000L)
+    #####:  101:  }
+------------------
+_ZN5boost4asio3ssl6detail17openssl_init_base7do_initD2Ev:
+function _ZN5boost4asio3ssl6detail17openssl_init_base7do_initD2Ev called 0 returned 0% blocks executed 0%
+    #####:   60:  ~do_init()
+        -:   61:  {
+        -:   62:#if !defined(SSL_OP_NO_COMPRESSION) \
+        -:   63:  && (OPENSSL_VERSION_NUMBER >= 0x00908000L)
+        -:   64:    sk_SSL_COMP_free(null_compression_methods_);
+        -:   65:#endif // !defined(SSL_OP_NO_COMPRESSION)
+        -:   66:       // && (OPENSSL_VERSION_NUMBER >= 0x00908000L)
+        -:   67:
+        -:   68:#if (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   69:    ::CRYPTO_set_id_callback(0);
+        -:   70:#endif // (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   71:#if (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   72:    ::CRYPTO_set_locking_callback(0);
+        -:   73:    ::ERR_free_strings();
+        -:   74:    ::EVP_cleanup();
+        -:   75:    ::CRYPTO_cleanup_all_ex_data();
+        -:   76:#endif // (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   77:#if (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   78:    ::ERR_remove_state(0);
+        -:   79:#elif (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   80:    ::ERR_remove_thread_state(NULL);
+        -:   81:#endif // (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   82:#if (OPENSSL_VERSION_NUMBER >= 0x10002000L) \
+        -:   83:    && (OPENSSL_VERSION_NUMBER < 0x10100000L) \
+        -:   84:    && !defined(SSL_OP_NO_COMPRESSION)
+        -:   85:    ::SSL_COMP_free_compression_methods();
+        -:   86:#endif // (OPENSSL_VERSION_NUMBER >= 0x10002000L)
+        -:   87:       // && (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   88:       // && !defined(SSL_OP_NO_COMPRESSION)
+        -:   89:#if !defined(OPENSSL_IS_BORINGSSL) \
+        -:   90:    && !defined(BOOST_ASIO_USE_WOLFSSL) \
+        -:   91:    && (OPENSSL_VERSION_NUMBER < 0x30000000L)
+        -:   92:    ::CONF_modules_unload(1);
+        -:   93:#endif // !defined(OPENSSL_IS_BORINGSSL)
+        -:   94:       //   && !defined(BOOST_ASIO_USE_WOLFSSL)
+        -:   95:       //   && (OPENSSL_VERSION_NUMBER < 0x30000000L)
+        -:   96:#if !defined(OPENSSL_NO_ENGINE) \
+        -:   97:  && (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   98:    ::ENGINE_cleanup();
+        -:   99:#endif // !defined(OPENSSL_NO_ENGINE)
+        -:  100:       // && (OPENSSL_VERSION_NUMBER < 0x10100000L)
+    #####:  101:  }
+------------------
+_ZN5boost4asio3ssl6detail17openssl_init_base7do_initD2Ev:
+function _ZN5boost4asio3ssl6detail17openssl_init_base7do_initD2Ev called 8 returned 100% blocks executed 100%
+        8:   60:  ~do_init()
+        -:   61:  {
+        -:   62:#if !defined(SSL_OP_NO_COMPRESSION) \
+        -:   63:  && (OPENSSL_VERSION_NUMBER >= 0x00908000L)
+        -:   64:    sk_SSL_COMP_free(null_compression_methods_);
+        -:   65:#endif // !defined(SSL_OP_NO_COMPRESSION)
+        -:   66:       // && (OPENSSL_VERSION_NUMBER >= 0x00908000L)
+        -:   67:
+        -:   68:#if (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   69:    ::CRYPTO_set_id_callback(0);
+        -:   70:#endif // (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   71:#if (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   72:    ::CRYPTO_set_locking_callback(0);
+        -:   73:    ::ERR_free_strings();
+        -:   74:    ::EVP_cleanup();
+        -:   75:    ::CRYPTO_cleanup_all_ex_data();
+        -:   76:#endif // (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   77:#if (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   78:    ::ERR_remove_state(0);
+        -:   79:#elif (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   80:    ::ERR_remove_thread_state(NULL);
+        -:   81:#endif // (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   82:#if (OPENSSL_VERSION_NUMBER >= 0x10002000L) \
+        -:   83:    && (OPENSSL_VERSION_NUMBER < 0x10100000L) \
+        -:   84:    && !defined(SSL_OP_NO_COMPRESSION)
+        -:   85:    ::SSL_COMP_free_compression_methods();
+        -:   86:#endif // (OPENSSL_VERSION_NUMBER >= 0x10002000L)
+        -:   87:       // && (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   88:       // && !defined(SSL_OP_NO_COMPRESSION)
+        -:   89:#if !defined(OPENSSL_IS_BORINGSSL) \
+        -:   90:    && !defined(BOOST_ASIO_USE_WOLFSSL) \
+        -:   91:    && (OPENSSL_VERSION_NUMBER < 0x30000000L)
+        -:   92:    ::CONF_modules_unload(1);
+        -:   93:#endif // !defined(OPENSSL_IS_BORINGSSL)
+        -:   94:       //   && !defined(BOOST_ASIO_USE_WOLFSSL)
+        -:   95:       //   && (OPENSSL_VERSION_NUMBER < 0x30000000L)
+        -:   96:#if !defined(OPENSSL_NO_ENGINE) \
+        -:   97:  && (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   98:    ::ENGINE_cleanup();
+        -:   99:#endif // !defined(OPENSSL_NO_ENGINE)
+        -:  100:       // && (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        8:  101:  }
+------------------
+_ZN5boost4asio3ssl6detail17openssl_init_base7do_initD2Ev:
+function _ZN5boost4asio3ssl6detail17openssl_init_base7do_initD2Ev called 9 returned 100% blocks executed 100%
+        9:   60:  ~do_init()
+        -:   61:  {
+        -:   62:#if !defined(SSL_OP_NO_COMPRESSION) \
+        -:   63:  && (OPENSSL_VERSION_NUMBER >= 0x00908000L)
+        -:   64:    sk_SSL_COMP_free(null_compression_methods_);
+        -:   65:#endif // !defined(SSL_OP_NO_COMPRESSION)
+        -:   66:       // && (OPENSSL_VERSION_NUMBER >= 0x00908000L)
+        -:   67:
+        -:   68:#if (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   69:    ::CRYPTO_set_id_callback(0);
+        -:   70:#endif // (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   71:#if (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   72:    ::CRYPTO_set_locking_callback(0);
+        -:   73:    ::ERR_free_strings();
+        -:   74:    ::EVP_cleanup();
+        -:   75:    ::CRYPTO_cleanup_all_ex_data();
+        -:   76:#endif // (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   77:#if (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   78:    ::ERR_remove_state(0);
+        -:   79:#elif (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   80:    ::ERR_remove_thread_state(NULL);
+        -:   81:#endif // (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   82:#if (OPENSSL_VERSION_NUMBER >= 0x10002000L) \
+        -:   83:    && (OPENSSL_VERSION_NUMBER < 0x10100000L) \
+        -:   84:    && !defined(SSL_OP_NO_COMPRESSION)
+        -:   85:    ::SSL_COMP_free_compression_methods();
+        -:   86:#endif // (OPENSSL_VERSION_NUMBER >= 0x10002000L)
+        -:   87:       // && (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   88:       // && !defined(SSL_OP_NO_COMPRESSION)
+        -:   89:#if !defined(OPENSSL_IS_BORINGSSL) \
+        -:   90:    && !defined(BOOST_ASIO_USE_WOLFSSL) \
+        -:   91:    && (OPENSSL_VERSION_NUMBER < 0x30000000L)
+        -:   92:    ::CONF_modules_unload(1);
+        -:   93:#endif // !defined(OPENSSL_IS_BORINGSSL)
+        -:   94:       //   && !defined(BOOST_ASIO_USE_WOLFSSL)
+        -:   95:       //   && (OPENSSL_VERSION_NUMBER < 0x30000000L)
+        -:   96:#if !defined(OPENSSL_NO_ENGINE) \
+        -:   97:  && (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   98:    ::ENGINE_cleanup();
+        -:   99:#endif // !defined(OPENSSL_NO_ENGINE)
+        -:  100:       // && (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        9:  101:  }
+------------------
+_ZN5boost4asio3ssl6detail17openssl_init_base7do_initD2Ev:
+function _ZN5boost4asio3ssl6detail17openssl_init_base7do_initD2Ev called 5 returned 100% blocks executed 100%
+        5:   60:  ~do_init()
+        -:   61:  {
+        -:   62:#if !defined(SSL_OP_NO_COMPRESSION) \
+        -:   63:  && (OPENSSL_VERSION_NUMBER >= 0x00908000L)
+        -:   64:    sk_SSL_COMP_free(null_compression_methods_);
+        -:   65:#endif // !defined(SSL_OP_NO_COMPRESSION)
+        -:   66:       // && (OPENSSL_VERSION_NUMBER >= 0x00908000L)
+        -:   67:
+        -:   68:#if (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   69:    ::CRYPTO_set_id_callback(0);
+        -:   70:#endif // (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   71:#if (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   72:    ::CRYPTO_set_locking_callback(0);
+        -:   73:    ::ERR_free_strings();
+        -:   74:    ::EVP_cleanup();
+        -:   75:    ::CRYPTO_cleanup_all_ex_data();
+        -:   76:#endif // (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   77:#if (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   78:    ::ERR_remove_state(0);
+        -:   79:#elif (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   80:    ::ERR_remove_thread_state(NULL);
+        -:   81:#endif // (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   82:#if (OPENSSL_VERSION_NUMBER >= 0x10002000L) \
+        -:   83:    && (OPENSSL_VERSION_NUMBER < 0x10100000L) \
+        -:   84:    && !defined(SSL_OP_NO_COMPRESSION)
+        -:   85:    ::SSL_COMP_free_compression_methods();
+        -:   86:#endif // (OPENSSL_VERSION_NUMBER >= 0x10002000L)
+        -:   87:       // && (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   88:       // && !defined(SSL_OP_NO_COMPRESSION)
+        -:   89:#if !defined(OPENSSL_IS_BORINGSSL) \
+        -:   90:    && !defined(BOOST_ASIO_USE_WOLFSSL) \
+        -:   91:    && (OPENSSL_VERSION_NUMBER < 0x30000000L)
+        -:   92:    ::CONF_modules_unload(1);
+        -:   93:#endif // !defined(OPENSSL_IS_BORINGSSL)
+        -:   94:       //   && !defined(BOOST_ASIO_USE_WOLFSSL)
+        -:   95:       //   && (OPENSSL_VERSION_NUMBER < 0x30000000L)
+        -:   96:#if !defined(OPENSSL_NO_ENGINE) \
+        -:   97:  && (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   98:    ::ENGINE_cleanup();
+        -:   99:#endif // !defined(OPENSSL_NO_ENGINE)
+        -:  100:       // && (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        5:  101:  }
+------------------
+_ZN5boost4asio3ssl6detail17openssl_init_base7do_initD2Ev:
+function _ZN5boost4asio3ssl6detail17openssl_init_base7do_initD2Ev called 7 returned 100% blocks executed 100%
+        7:   60:  ~do_init()
+        -:   61:  {
+        -:   62:#if !defined(SSL_OP_NO_COMPRESSION) \
+        -:   63:  && (OPENSSL_VERSION_NUMBER >= 0x00908000L)
+        -:   64:    sk_SSL_COMP_free(null_compression_methods_);
+        -:   65:#endif // !defined(SSL_OP_NO_COMPRESSION)
+        -:   66:       // && (OPENSSL_VERSION_NUMBER >= 0x00908000L)
+        -:   67:
+        -:   68:#if (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   69:    ::CRYPTO_set_id_callback(0);
+        -:   70:#endif // (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   71:#if (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   72:    ::CRYPTO_set_locking_callback(0);
+        -:   73:    ::ERR_free_strings();
+        -:   74:    ::EVP_cleanup();
+        -:   75:    ::CRYPTO_cleanup_all_ex_data();
+        -:   76:#endif // (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   77:#if (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   78:    ::ERR_remove_state(0);
+        -:   79:#elif (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   80:    ::ERR_remove_thread_state(NULL);
+        -:   81:#endif // (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   82:#if (OPENSSL_VERSION_NUMBER >= 0x10002000L) \
+        -:   83:    && (OPENSSL_VERSION_NUMBER < 0x10100000L) \
+        -:   84:    && !defined(SSL_OP_NO_COMPRESSION)
+        -:   85:    ::SSL_COMP_free_compression_methods();
+        -:   86:#endif // (OPENSSL_VERSION_NUMBER >= 0x10002000L)
+        -:   87:       // && (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   88:       // && !defined(SSL_OP_NO_COMPRESSION)
+        -:   89:#if !defined(OPENSSL_IS_BORINGSSL) \
+        -:   90:    && !defined(BOOST_ASIO_USE_WOLFSSL) \
+        -:   91:    && (OPENSSL_VERSION_NUMBER < 0x30000000L)
+        -:   92:    ::CONF_modules_unload(1);
+        -:   93:#endif // !defined(OPENSSL_IS_BORINGSSL)
+        -:   94:       //   && !defined(BOOST_ASIO_USE_WOLFSSL)
+        -:   95:       //   && (OPENSSL_VERSION_NUMBER < 0x30000000L)
+        -:   96:#if !defined(OPENSSL_NO_ENGINE) \
+        -:   97:  && (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   98:    ::ENGINE_cleanup();
+        -:   99:#endif // !defined(OPENSSL_NO_ENGINE)
+        -:  100:       // && (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        7:  101:  }
+------------------
+_ZN5boost4asio3ssl6detail17openssl_init_base7do_initD2Ev:
+function _ZN5boost4asio3ssl6detail17openssl_init_base7do_initD2Ev called 6 returned 100% blocks executed 100%
+        6:   60:  ~do_init()
+        -:   61:  {
+        -:   62:#if !defined(SSL_OP_NO_COMPRESSION) \
+        -:   63:  && (OPENSSL_VERSION_NUMBER >= 0x00908000L)
+        -:   64:    sk_SSL_COMP_free(null_compression_methods_);
+        -:   65:#endif // !defined(SSL_OP_NO_COMPRESSION)
+        -:   66:       // && (OPENSSL_VERSION_NUMBER >= 0x00908000L)
+        -:   67:
+        -:   68:#if (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   69:    ::CRYPTO_set_id_callback(0);
+        -:   70:#endif // (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   71:#if (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   72:    ::CRYPTO_set_locking_callback(0);
+        -:   73:    ::ERR_free_strings();
+        -:   74:    ::EVP_cleanup();
+        -:   75:    ::CRYPTO_cleanup_all_ex_data();
+        -:   76:#endif // (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   77:#if (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   78:    ::ERR_remove_state(0);
+        -:   79:#elif (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   80:    ::ERR_remove_thread_state(NULL);
+        -:   81:#endif // (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   82:#if (OPENSSL_VERSION_NUMBER >= 0x10002000L) \
+        -:   83:    && (OPENSSL_VERSION_NUMBER < 0x10100000L) \
+        -:   84:    && !defined(SSL_OP_NO_COMPRESSION)
+        -:   85:    ::SSL_COMP_free_compression_methods();
+        -:   86:#endif // (OPENSSL_VERSION_NUMBER >= 0x10002000L)
+        -:   87:       // && (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   88:       // && !defined(SSL_OP_NO_COMPRESSION)
+        -:   89:#if !defined(OPENSSL_IS_BORINGSSL) \
+        -:   90:    && !defined(BOOST_ASIO_USE_WOLFSSL) \
+        -:   91:    && (OPENSSL_VERSION_NUMBER < 0x30000000L)
+        -:   92:    ::CONF_modules_unload(1);
+        -:   93:#endif // !defined(OPENSSL_IS_BORINGSSL)
+        -:   94:       //   && !defined(BOOST_ASIO_USE_WOLFSSL)
+        -:   95:       //   && (OPENSSL_VERSION_NUMBER < 0x30000000L)
+        -:   96:#if !defined(OPENSSL_NO_ENGINE) \
+        -:   97:  && (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   98:    ::ENGINE_cleanup();
+        -:   99:#endif // !defined(OPENSSL_NO_ENGINE)
+        -:  100:       // && (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        6:  101:  }
+------------------
+_ZN5boost4asio3ssl6detail17openssl_init_base7do_initD2Ev:
+function _ZN5boost4asio3ssl6detail17openssl_init_base7do_initD2Ev called 0 returned 0% blocks executed 0%
+    #####:   60:  ~do_init()
+        -:   61:  {
+        -:   62:#if !defined(SSL_OP_NO_COMPRESSION) \
+        -:   63:  && (OPENSSL_VERSION_NUMBER >= 0x00908000L)
+        -:   64:    sk_SSL_COMP_free(null_compression_methods_);
+        -:   65:#endif // !defined(SSL_OP_NO_COMPRESSION)
+        -:   66:       // && (OPENSSL_VERSION_NUMBER >= 0x00908000L)
+        -:   67:
+        -:   68:#if (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   69:    ::CRYPTO_set_id_callback(0);
+        -:   70:#endif // (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   71:#if (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   72:    ::CRYPTO_set_locking_callback(0);
+        -:   73:    ::ERR_free_strings();
+        -:   74:    ::EVP_cleanup();
+        -:   75:    ::CRYPTO_cleanup_all_ex_data();
+        -:   76:#endif // (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   77:#if (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   78:    ::ERR_remove_state(0);
+        -:   79:#elif (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   80:    ::ERR_remove_thread_state(NULL);
+        -:   81:#endif // (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   82:#if (OPENSSL_VERSION_NUMBER >= 0x10002000L) \
+        -:   83:    && (OPENSSL_VERSION_NUMBER < 0x10100000L) \
+        -:   84:    && !defined(SSL_OP_NO_COMPRESSION)
+        -:   85:    ::SSL_COMP_free_compression_methods();
+        -:   86:#endif // (OPENSSL_VERSION_NUMBER >= 0x10002000L)
+        -:   87:       // && (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   88:       // && !defined(SSL_OP_NO_COMPRESSION)
+        -:   89:#if !defined(OPENSSL_IS_BORINGSSL) \
+        -:   90:    && !defined(BOOST_ASIO_USE_WOLFSSL) \
+        -:   91:    && (OPENSSL_VERSION_NUMBER < 0x30000000L)
+        -:   92:    ::CONF_modules_unload(1);
+        -:   93:#endif // !defined(OPENSSL_IS_BORINGSSL)
+        -:   94:       //   && !defined(BOOST_ASIO_USE_WOLFSSL)
+        -:   95:       //   && (OPENSSL_VERSION_NUMBER < 0x30000000L)
+        -:   96:#if !defined(OPENSSL_NO_ENGINE) \
+        -:   97:  && (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   98:    ::ENGINE_cleanup();
+        -:   99:#endif // !defined(OPENSSL_NO_ENGINE)
+        -:  100:       // && (OPENSSL_VERSION_NUMBER < 0x10100000L)
+    #####:  101:  }
+------------------
+_ZN5boost4asio3ssl6detail17openssl_init_base7do_initD2Ev:
+function _ZN5boost4asio3ssl6detail17openssl_init_base7do_initD2Ev called 12 returned 100% blocks executed 100%
+       12:   60:  ~do_init()
+        -:   61:  {
+        -:   62:#if !defined(SSL_OP_NO_COMPRESSION) \
+        -:   63:  && (OPENSSL_VERSION_NUMBER >= 0x00908000L)
+        -:   64:    sk_SSL_COMP_free(null_compression_methods_);
+        -:   65:#endif // !defined(SSL_OP_NO_COMPRESSION)
+        -:   66:       // && (OPENSSL_VERSION_NUMBER >= 0x00908000L)
+        -:   67:
+        -:   68:#if (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   69:    ::CRYPTO_set_id_callback(0);
+        -:   70:#endif // (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   71:#if (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   72:    ::CRYPTO_set_locking_callback(0);
+        -:   73:    ::ERR_free_strings();
+        -:   74:    ::EVP_cleanup();
+        -:   75:    ::CRYPTO_cleanup_all_ex_data();
+        -:   76:#endif // (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   77:#if (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   78:    ::ERR_remove_state(0);
+        -:   79:#elif (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   80:    ::ERR_remove_thread_state(NULL);
+        -:   81:#endif // (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   82:#if (OPENSSL_VERSION_NUMBER >= 0x10002000L) \
+        -:   83:    && (OPENSSL_VERSION_NUMBER < 0x10100000L) \
+        -:   84:    && !defined(SSL_OP_NO_COMPRESSION)
+        -:   85:    ::SSL_COMP_free_compression_methods();
+        -:   86:#endif // (OPENSSL_VERSION_NUMBER >= 0x10002000L)
+        -:   87:       // && (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   88:       // && !defined(SSL_OP_NO_COMPRESSION)
+        -:   89:#if !defined(OPENSSL_IS_BORINGSSL) \
+        -:   90:    && !defined(BOOST_ASIO_USE_WOLFSSL) \
+        -:   91:    && (OPENSSL_VERSION_NUMBER < 0x30000000L)
+        -:   92:    ::CONF_modules_unload(1);
+        -:   93:#endif // !defined(OPENSSL_IS_BORINGSSL)
+        -:   94:       //   && !defined(BOOST_ASIO_USE_WOLFSSL)
+        -:   95:       //   && (OPENSSL_VERSION_NUMBER < 0x30000000L)
+        -:   96:#if !defined(OPENSSL_NO_ENGINE) \
+        -:   97:  && (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   98:    ::ENGINE_cleanup();
+        -:   99:#endif // !defined(OPENSSL_NO_ENGINE)
+        -:  100:       // && (OPENSSL_VERSION_NUMBER < 0x10100000L)
+       12:  101:  }
+------------------
+_ZN5boost4asio3ssl6detail17openssl_init_base7do_initD2Ev:
+function _ZN5boost4asio3ssl6detail17openssl_init_base7do_initD2Ev called 9 returned 100% blocks executed 100%
+        9:   60:  ~do_init()
+        -:   61:  {
+        -:   62:#if !defined(SSL_OP_NO_COMPRESSION) \
+        -:   63:  && (OPENSSL_VERSION_NUMBER >= 0x00908000L)
+        -:   64:    sk_SSL_COMP_free(null_compression_methods_);
+        -:   65:#endif // !defined(SSL_OP_NO_COMPRESSION)
+        -:   66:       // && (OPENSSL_VERSION_NUMBER >= 0x00908000L)
+        -:   67:
+        -:   68:#if (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   69:    ::CRYPTO_set_id_callback(0);
+        -:   70:#endif // (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   71:#if (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   72:    ::CRYPTO_set_locking_callback(0);
+        -:   73:    ::ERR_free_strings();
+        -:   74:    ::EVP_cleanup();
+        -:   75:    ::CRYPTO_cleanup_all_ex_data();
+        -:   76:#endif // (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   77:#if (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   78:    ::ERR_remove_state(0);
+        -:   79:#elif (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   80:    ::ERR_remove_thread_state(NULL);
+        -:   81:#endif // (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   82:#if (OPENSSL_VERSION_NUMBER >= 0x10002000L) \
+        -:   83:    && (OPENSSL_VERSION_NUMBER < 0x10100000L) \
+        -:   84:    && !defined(SSL_OP_NO_COMPRESSION)
+        -:   85:    ::SSL_COMP_free_compression_methods();
+        -:   86:#endif // (OPENSSL_VERSION_NUMBER >= 0x10002000L)
+        -:   87:       // && (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   88:       // && !defined(SSL_OP_NO_COMPRESSION)
+        -:   89:#if !defined(OPENSSL_IS_BORINGSSL) \
+        -:   90:    && !defined(BOOST_ASIO_USE_WOLFSSL) \
+        -:   91:    && (OPENSSL_VERSION_NUMBER < 0x30000000L)
+        -:   92:    ::CONF_modules_unload(1);
+        -:   93:#endif // !defined(OPENSSL_IS_BORINGSSL)
+        -:   94:       //   && !defined(BOOST_ASIO_USE_WOLFSSL)
+        -:   95:       //   && (OPENSSL_VERSION_NUMBER < 0x30000000L)
+        -:   96:#if !defined(OPENSSL_NO_ENGINE) \
+        -:   97:  && (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   98:    ::ENGINE_cleanup();
+        -:   99:#endif // !defined(OPENSSL_NO_ENGINE)
+        -:  100:       // && (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        9:  101:  }
+------------------
+_ZN5boost4asio3ssl6detail17openssl_init_base7do_initD2Ev:
+function _ZN5boost4asio3ssl6detail17openssl_init_base7do_initD2Ev called 9 returned 100% blocks executed 100%
+        9:   60:  ~do_init()
+        -:   61:  {
+        -:   62:#if !defined(SSL_OP_NO_COMPRESSION) \
+        -:   63:  && (OPENSSL_VERSION_NUMBER >= 0x00908000L)
+        -:   64:    sk_SSL_COMP_free(null_compression_methods_);
+        -:   65:#endif // !defined(SSL_OP_NO_COMPRESSION)
+        -:   66:       // && (OPENSSL_VERSION_NUMBER >= 0x00908000L)
+        -:   67:
+        -:   68:#if (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   69:    ::CRYPTO_set_id_callback(0);
+        -:   70:#endif // (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   71:#if (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   72:    ::CRYPTO_set_locking_callback(0);
+        -:   73:    ::ERR_free_strings();
+        -:   74:    ::EVP_cleanup();
+        -:   75:    ::CRYPTO_cleanup_all_ex_data();
+        -:   76:#endif // (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   77:#if (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   78:    ::ERR_remove_state(0);
+        -:   79:#elif (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   80:    ::ERR_remove_thread_state(NULL);
+        -:   81:#endif // (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   82:#if (OPENSSL_VERSION_NUMBER >= 0x10002000L) \
+        -:   83:    && (OPENSSL_VERSION_NUMBER < 0x10100000L) \
+        -:   84:    && !defined(SSL_OP_NO_COMPRESSION)
+        -:   85:    ::SSL_COMP_free_compression_methods();
+        -:   86:#endif // (OPENSSL_VERSION_NUMBER >= 0x10002000L)
+        -:   87:       // && (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   88:       // && !defined(SSL_OP_NO_COMPRESSION)
+        -:   89:#if !defined(OPENSSL_IS_BORINGSSL) \
+        -:   90:    && !defined(BOOST_ASIO_USE_WOLFSSL) \
+        -:   91:    && (OPENSSL_VERSION_NUMBER < 0x30000000L)
+        -:   92:    ::CONF_modules_unload(1);
+        -:   93:#endif // !defined(OPENSSL_IS_BORINGSSL)
+        -:   94:       //   && !defined(BOOST_ASIO_USE_WOLFSSL)
+        -:   95:       //   && (OPENSSL_VERSION_NUMBER < 0x30000000L)
+        -:   96:#if !defined(OPENSSL_NO_ENGINE) \
+        -:   97:  && (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   98:    ::ENGINE_cleanup();
+        -:   99:#endif // !defined(OPENSSL_NO_ENGINE)
+        -:  100:       // && (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        9:  101:  }
+------------------
+_ZN5boost4asio3ssl6detail17openssl_init_base7do_initD2Ev:
+function _ZN5boost4asio3ssl6detail17openssl_init_base7do_initD2Ev called 0 returned 0% blocks executed 0%
+    #####:   60:  ~do_init()
+        -:   61:  {
+        -:   62:#if !defined(SSL_OP_NO_COMPRESSION) \
+        -:   63:  && (OPENSSL_VERSION_NUMBER >= 0x00908000L)
+        -:   64:    sk_SSL_COMP_free(null_compression_methods_);
+        -:   65:#endif // !defined(SSL_OP_NO_COMPRESSION)
+        -:   66:       // && (OPENSSL_VERSION_NUMBER >= 0x00908000L)
+        -:   67:
+        -:   68:#if (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   69:    ::CRYPTO_set_id_callback(0);
+        -:   70:#endif // (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   71:#if (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   72:    ::CRYPTO_set_locking_callback(0);
+        -:   73:    ::ERR_free_strings();
+        -:   74:    ::EVP_cleanup();
+        -:   75:    ::CRYPTO_cleanup_all_ex_data();
+        -:   76:#endif // (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   77:#if (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   78:    ::ERR_remove_state(0);
+        -:   79:#elif (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   80:    ::ERR_remove_thread_state(NULL);
+        -:   81:#endif // (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   82:#if (OPENSSL_VERSION_NUMBER >= 0x10002000L) \
+        -:   83:    && (OPENSSL_VERSION_NUMBER < 0x10100000L) \
+        -:   84:    && !defined(SSL_OP_NO_COMPRESSION)
+        -:   85:    ::SSL_COMP_free_compression_methods();
+        -:   86:#endif // (OPENSSL_VERSION_NUMBER >= 0x10002000L)
+        -:   87:       // && (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   88:       // && !defined(SSL_OP_NO_COMPRESSION)
+        -:   89:#if !defined(OPENSSL_IS_BORINGSSL) \
+        -:   90:    && !defined(BOOST_ASIO_USE_WOLFSSL) \
+        -:   91:    && (OPENSSL_VERSION_NUMBER < 0x30000000L)
+        -:   92:    ::CONF_modules_unload(1);
+        -:   93:#endif // !defined(OPENSSL_IS_BORINGSSL)
+        -:   94:       //   && !defined(BOOST_ASIO_USE_WOLFSSL)
+        -:   95:       //   && (OPENSSL_VERSION_NUMBER < 0x30000000L)
+        -:   96:#if !defined(OPENSSL_NO_ENGINE) \
+        -:   97:  && (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   98:    ::ENGINE_cleanup();
+        -:   99:#endif // !defined(OPENSSL_NO_ENGINE)
+        -:  100:       // && (OPENSSL_VERSION_NUMBER < 0x10100000L)
+    #####:  101:  }
+------------------
+_ZN5boost4asio3ssl6detail17openssl_init_base7do_initD2Ev:
+function _ZN5boost4asio3ssl6detail17openssl_init_base7do_initD2Ev called 0 returned 0% blocks executed 0%
+    #####:   60:  ~do_init()
+        -:   61:  {
+        -:   62:#if !defined(SSL_OP_NO_COMPRESSION) \
+        -:   63:  && (OPENSSL_VERSION_NUMBER >= 0x00908000L)
+        -:   64:    sk_SSL_COMP_free(null_compression_methods_);
+        -:   65:#endif // !defined(SSL_OP_NO_COMPRESSION)
+        -:   66:       // && (OPENSSL_VERSION_NUMBER >= 0x00908000L)
+        -:   67:
+        -:   68:#if (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   69:    ::CRYPTO_set_id_callback(0);
+        -:   70:#endif // (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   71:#if (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   72:    ::CRYPTO_set_locking_callback(0);
+        -:   73:    ::ERR_free_strings();
+        -:   74:    ::EVP_cleanup();
+        -:   75:    ::CRYPTO_cleanup_all_ex_data();
+        -:   76:#endif // (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   77:#if (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   78:    ::ERR_remove_state(0);
+        -:   79:#elif (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   80:    ::ERR_remove_thread_state(NULL);
+        -:   81:#endif // (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   82:#if (OPENSSL_VERSION_NUMBER >= 0x10002000L) \
+        -:   83:    && (OPENSSL_VERSION_NUMBER < 0x10100000L) \
+        -:   84:    && !defined(SSL_OP_NO_COMPRESSION)
+        -:   85:    ::SSL_COMP_free_compression_methods();
+        -:   86:#endif // (OPENSSL_VERSION_NUMBER >= 0x10002000L)
+        -:   87:       // && (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   88:       // && !defined(SSL_OP_NO_COMPRESSION)
+        -:   89:#if !defined(OPENSSL_IS_BORINGSSL) \
+        -:   90:    && !defined(BOOST_ASIO_USE_WOLFSSL) \
+        -:   91:    && (OPENSSL_VERSION_NUMBER < 0x30000000L)
+        -:   92:    ::CONF_modules_unload(1);
+        -:   93:#endif // !defined(OPENSSL_IS_BORINGSSL)
+        -:   94:       //   && !defined(BOOST_ASIO_USE_WOLFSSL)
+        -:   95:       //   && (OPENSSL_VERSION_NUMBER < 0x30000000L)
+        -:   96:#if !defined(OPENSSL_NO_ENGINE) \
+        -:   97:  && (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   98:    ::ENGINE_cleanup();
+        -:   99:#endif // !defined(OPENSSL_NO_ENGINE)
+        -:  100:       // && (OPENSSL_VERSION_NUMBER < 0x10100000L)
+    #####:  101:  }
+------------------
+_ZN5boost4asio3ssl6detail17openssl_init_base7do_initD2Ev:
+function _ZN5boost4asio3ssl6detail17openssl_init_base7do_initD2Ev called 0 returned 0% blocks executed 0%
+    #####:   60:  ~do_init()
+        -:   61:  {
+        -:   62:#if !defined(SSL_OP_NO_COMPRESSION) \
+        -:   63:  && (OPENSSL_VERSION_NUMBER >= 0x00908000L)
+        -:   64:    sk_SSL_COMP_free(null_compression_methods_);
+        -:   65:#endif // !defined(SSL_OP_NO_COMPRESSION)
+        -:   66:       // && (OPENSSL_VERSION_NUMBER >= 0x00908000L)
+        -:   67:
+        -:   68:#if (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   69:    ::CRYPTO_set_id_callback(0);
+        -:   70:#endif // (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   71:#if (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   72:    ::CRYPTO_set_locking_callback(0);
+        -:   73:    ::ERR_free_strings();
+        -:   74:    ::EVP_cleanup();
+        -:   75:    ::CRYPTO_cleanup_all_ex_data();
+        -:   76:#endif // (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   77:#if (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   78:    ::ERR_remove_state(0);
+        -:   79:#elif (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   80:    ::ERR_remove_thread_state(NULL);
+        -:   81:#endif // (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   82:#if (OPENSSL_VERSION_NUMBER >= 0x10002000L) \
+        -:   83:    && (OPENSSL_VERSION_NUMBER < 0x10100000L) \
+        -:   84:    && !defined(SSL_OP_NO_COMPRESSION)
+        -:   85:    ::SSL_COMP_free_compression_methods();
+        -:   86:#endif // (OPENSSL_VERSION_NUMBER >= 0x10002000L)
+        -:   87:       // && (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   88:       // && !defined(SSL_OP_NO_COMPRESSION)
+        -:   89:#if !defined(OPENSSL_IS_BORINGSSL) \
+        -:   90:    && !defined(BOOST_ASIO_USE_WOLFSSL) \
+        -:   91:    && (OPENSSL_VERSION_NUMBER < 0x30000000L)
+        -:   92:    ::CONF_modules_unload(1);
+        -:   93:#endif // !defined(OPENSSL_IS_BORINGSSL)
+        -:   94:       //   && !defined(BOOST_ASIO_USE_WOLFSSL)
+        -:   95:       //   && (OPENSSL_VERSION_NUMBER < 0x30000000L)
+        -:   96:#if !defined(OPENSSL_NO_ENGINE) \
+        -:   97:  && (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   98:    ::ENGINE_cleanup();
+        -:   99:#endif // !defined(OPENSSL_NO_ENGINE)
+        -:  100:       // && (OPENSSL_VERSION_NUMBER < 0x10100000L)
+    #####:  101:  }
+------------------
+_ZN5boost4asio3ssl6detail17openssl_init_base7do_initD2Ev:
+function _ZN5boost4asio3ssl6detail17openssl_init_base7do_initD2Ev called 0 returned 0% blocks executed 0%
+    #####:   60:  ~do_init()
+        -:   61:  {
+        -:   62:#if !defined(SSL_OP_NO_COMPRESSION) \
+        -:   63:  && (OPENSSL_VERSION_NUMBER >= 0x00908000L)
+        -:   64:    sk_SSL_COMP_free(null_compression_methods_);
+        -:   65:#endif // !defined(SSL_OP_NO_COMPRESSION)
+        -:   66:       // && (OPENSSL_VERSION_NUMBER >= 0x00908000L)
+        -:   67:
+        -:   68:#if (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   69:    ::CRYPTO_set_id_callback(0);
+        -:   70:#endif // (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   71:#if (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   72:    ::CRYPTO_set_locking_callback(0);
+        -:   73:    ::ERR_free_strings();
+        -:   74:    ::EVP_cleanup();
+        -:   75:    ::CRYPTO_cleanup_all_ex_data();
+        -:   76:#endif // (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   77:#if (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   78:    ::ERR_remove_state(0);
+        -:   79:#elif (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   80:    ::ERR_remove_thread_state(NULL);
+        -:   81:#endif // (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:   82:#if (OPENSSL_VERSION_NUMBER >= 0x10002000L) \
+        -:   83:    && (OPENSSL_VERSION_NUMBER < 0x10100000L) \
+        -:   84:    && !defined(SSL_OP_NO_COMPRESSION)
+        -:   85:    ::SSL_COMP_free_compression_methods();
+        -:   86:#endif // (OPENSSL_VERSION_NUMBER >= 0x10002000L)
+        -:   87:       // && (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   88:       // && !defined(SSL_OP_NO_COMPRESSION)
+        -:   89:#if !defined(OPENSSL_IS_BORINGSSL) \
+        -:   90:    && !defined(BOOST_ASIO_USE_WOLFSSL) \
+        -:   91:    && (OPENSSL_VERSION_NUMBER < 0x30000000L)
+        -:   92:    ::CONF_modules_unload(1);
+        -:   93:#endif // !defined(OPENSSL_IS_BORINGSSL)
+        -:   94:       //   && !defined(BOOST_ASIO_USE_WOLFSSL)
+        -:   95:       //   && (OPENSSL_VERSION_NUMBER < 0x30000000L)
+        -:   96:#if !defined(OPENSSL_NO_ENGINE) \
+        -:   97:  && (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:   98:    ::ENGINE_cleanup();
+        -:   99:#endif // !defined(OPENSSL_NO_ENGINE)
+        -:  100:       // && (OPENSSL_VERSION_NUMBER < 0x10100000L)
+    #####:  101:  }
+------------------
+        -:  102:
+        -:  103:#if !defined(SSL_OP_NO_COMPRESSION) \
+        -:  104:  && (OPENSSL_VERSION_NUMBER >= 0x00908000L)
+        -:  105:  STACK_OF(SSL_COMP)* get_null_compression_methods() const
+        -:  106:  {
+        -:  107:    return null_compression_methods_;
+        -:  108:  }
+        -:  109:#endif // !defined(SSL_OP_NO_COMPRESSION)
+        -:  110:       // && (OPENSSL_VERSION_NUMBER >= 0x00908000L)
+        -:  111:
+        -:  112:private:
+        -:  113:#if (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:  114:  static unsigned long openssl_id_func()
+        -:  115:  {
+        -:  116:#if defined(BOOST_ASIO_WINDOWS) || defined(__CYGWIN__)
+        -:  117:    return ::GetCurrentThreadId();
+        -:  118:#else // defined(BOOST_ASIO_WINDOWS) || defined(__CYGWIN__)
+        -:  119:    void* id = &errno;
+        -:  120:    BOOST_ASIO_ASSERT(sizeof(unsigned long) >= sizeof(void*));
+        -:  121:    return reinterpret_cast<unsigned long>(id);
+        -:  122:#endif // defined(BOOST_ASIO_WINDOWS) || defined(__CYGWIN__)
+        -:  123:  }
+        -:  124:#endif // (OPENSSL_VERSION_NUMBER < 0x10000000L)
+        -:  125:
+        -:  126:#if (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:  127:  static void openssl_locking_func(int mode, int n, 
+        -:  128:    const char* /*file*/, int /*line*/)
+        -:  129:  {
+        -:  130:    if (mode & CRYPTO_LOCK)
+        -:  131:      instance()->mutexes_[n]->lock();
+        -:  132:    else
+        -:  133:      instance()->mutexes_[n]->unlock();
+        -:  134:  }
+        -:  135:
+        -:  136:  // Mutexes to be used in locking callbacks.
+        -:  137:  std::vector<boost::asio::detail::shared_ptr<
+        -:  138:        boost::asio::detail::mutex> > mutexes_;
+        -:  139:#endif // (OPENSSL_VERSION_NUMBER < 0x10100000L)
+        -:  140:
+        -:  141:#if !defined(SSL_OP_NO_COMPRESSION) \
+        -:  142:  && (OPENSSL_VERSION_NUMBER >= 0x00908000L)
+        -:  143:  STACK_OF(SSL_COMP)* null_compression_methods_;
+        -:  144:#endif // !defined(SSL_OP_NO_COMPRESSION)
+        -:  145:       // && (OPENSSL_VERSION_NUMBER >= 0x00908000L)
+        -:  146:};
+        -:  147:
+        -:  148:boost::asio::detail::shared_ptr<openssl_init_base::do_init>
+      77*:  149:openssl_init_base::instance()
+        -:  150:{
+      77*:  151:  static boost::asio::detail::shared_ptr<do_init> init(new do_init);
+      77*:  152:  return init;
+        -:  153:}
+        -:  154:
+        -:  155:#if !defined(SSL_OP_NO_COMPRESSION) \
+        -:  156:  && (OPENSSL_VERSION_NUMBER >= 0x00908000L)
+        -:  157:STACK_OF(SSL_COMP)* openssl_init_base::get_null_compression_methods()
+        -:  158:{
+        -:  159:  return instance()->get_null_compression_methods();
+        -:  160:}
+        -:  161:#endif // !defined(SSL_OP_NO_COMPRESSION)
+        -:  162:       // && (OPENSSL_VERSION_NUMBER >= 0x00908000L)
+        -:  163:
+        -:  164:} // namespace detail
+        -:  165:} // namespace ssl
+        -:  166:} // namespace asio
+        -:  167:} // namespace boost
+        -:  168:
+        -:  169:#include <boost/asio/detail/pop_options.hpp>
+        -:  170:
+        -:  171:#endif // BOOST_ASIO_SSL_DETAIL_IMPL_OPENSSL_INIT_IPP

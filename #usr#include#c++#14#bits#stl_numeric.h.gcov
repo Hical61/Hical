@@ -1,0 +1,419 @@
+        -:    0:Source:/usr/include/c++/14/bits/stl_numeric.h
+        -:    1:// Numeric functions implementation -*- C++ -*-
+        -:    2:
+        -:    3:// Copyright (C) 2001-2024 Free Software Foundation, Inc.
+        -:    4://
+        -:    5:// This file is part of the GNU ISO C++ Library.  This library is free
+        -:    6:// software; you can redistribute it and/or modify it under the
+        -:    7:// terms of the GNU General Public License as published by the
+        -:    8:// Free Software Foundation; either version 3, or (at your option)
+        -:    9:// any later version.
+        -:   10:
+        -:   11:// This library is distributed in the hope that it will be useful,
+        -:   12:// but WITHOUT ANY WARRANTY; without even the implied warranty of
+        -:   13:// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+        -:   14:// GNU General Public License for more details.
+        -:   15:
+        -:   16:// Under Section 7 of GPL version 3, you are granted additional
+        -:   17:// permissions described in the GCC Runtime Library Exception, version
+        -:   18:// 3.1, as published by the Free Software Foundation.
+        -:   19:
+        -:   20:// You should have received a copy of the GNU General Public License and
+        -:   21:// a copy of the GCC Runtime Library Exception along with this program;
+        -:   22:// see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
+        -:   23:// <http://www.gnu.org/licenses/>.
+        -:   24:
+        -:   25:/*
+        -:   26: *
+        -:   27: * Copyright (c) 1994
+        -:   28: * Hewlett-Packard Company
+        -:   29: *
+        -:   30: * Permission to use, copy, modify, distribute and sell this software
+        -:   31: * and its documentation for any purpose is hereby granted without fee,
+        -:   32: * provided that the above copyright notice appear in all copies and
+        -:   33: * that both that copyright notice and this permission notice appear
+        -:   34: * in supporting documentation.  Hewlett-Packard Company makes no
+        -:   35: * representations about the suitability of this software for any
+        -:   36: * purpose.  It is provided "as is" without express or implied warranty.
+        -:   37: *
+        -:   38: *
+        -:   39: * Copyright (c) 1996,1997
+        -:   40: * Silicon Graphics Computer Systems, Inc.
+        -:   41: *
+        -:   42: * Permission to use, copy, modify, distribute and sell this software
+        -:   43: * and its documentation for any purpose is hereby granted without fee,
+        -:   44: * provided that the above copyright notice appear in all copies and
+        -:   45: * that both that copyright notice and this permission notice appear
+        -:   46: * in supporting documentation.  Silicon Graphics makes no
+        -:   47: * representations about the suitability of this software for any
+        -:   48: * purpose.  It is provided "as is" without express or implied warranty.
+        -:   49: */
+        -:   50:
+        -:   51:/** @file bits/stl_numeric.h
+        -:   52: *  This is an internal header file, included by other library headers.
+        -:   53: *  Do not attempt to use it directly. @headername{numeric}
+        -:   54: */
+        -:   55:
+        -:   56:#ifndef _STL_NUMERIC_H
+        -:   57:#define _STL_NUMERIC_H 1
+        -:   58:
+        -:   59:#include <bits/concept_check.h>
+        -:   60:#include <debug/debug.h>
+        -:   61:#include <bits/move.h> // For _GLIBCXX_MOVE
+        -:   62:
+        -:   63:
+        -:   64:namespace std _GLIBCXX_VISIBILITY(default)
+        -:   65:{
+        -:   66:_GLIBCXX_BEGIN_NAMESPACE_VERSION
+        -:   67:
+        -:   68:  /** @defgroup numeric_ops Generalized Numeric operations
+        -:   69:   *  @ingroup algorithms
+        -:   70:   */
+        -:   71:
+        -:   72:#if __cplusplus >= 201103L
+        -:   73:  /**
+        -:   74:   *  @brief  Create a range of sequentially increasing values.
+        -:   75:   *
+        -:   76:   *  For each element in the range @p [first,last) assigns @p value and
+        -:   77:   *  increments @p value as if by @p ++value.
+        -:   78:   *
+        -:   79:   *  @param  __first  Start of range.
+        -:   80:   *  @param  __last  End of range.
+        -:   81:   *  @param  __value  Starting value.
+        -:   82:   *  @return  Nothing.
+        -:   83:   *  @ingroup numeric_ops
+        -:   84:   */
+        -:   85:  template<typename _ForwardIterator, typename _Tp>
+        -:   86:    _GLIBCXX20_CONSTEXPR
+        -:   87:    void
+        -:   88:    iota(_ForwardIterator __first, _ForwardIterator __last, _Tp __value)
+        -:   89:    {
+        -:   90:      // concept requirements
+        -:   91:      __glibcxx_function_requires(_Mutable_ForwardIteratorConcept<
+        -:   92:				  _ForwardIterator>)
+        -:   93:      __glibcxx_function_requires(_ConvertibleConcept<_Tp,
+        -:   94:	    typename iterator_traits<_ForwardIterator>::value_type>)
+        -:   95:      __glibcxx_requires_valid_range(__first, __last);
+        -:   96:
+        -:   97:      for (; __first != __last; ++__first)
+        -:   98:	{
+        -:   99:	  *__first = __value;
+        -:  100:	  ++__value;
+        -:  101:	}
+        -:  102:    }
+        -:  103:#endif
+        -:  104:
+        -:  105:_GLIBCXX_END_NAMESPACE_VERSION
+        -:  106:
+        -:  107:_GLIBCXX_BEGIN_NAMESPACE_ALGO
+        -:  108:
+        -:  109:#if __cplusplus > 201703L
+        -:  110:// _GLIBCXX_RESOLVE_LIB_DEFECTS
+        -:  111:// DR 2055. std::move in std::accumulate and other algorithms
+        -:  112:# define _GLIBCXX_MOVE_IF_20(_E) std::move(_E)
+        -:  113:#else
+        -:  114:# define _GLIBCXX_MOVE_IF_20(_E) _E
+        -:  115:#endif
+        -:  116:
+        -:  117:  /// @addtogroup numeric_ops
+        -:  118:  /// @{
+        -:  119:
+        -:  120:  /**
+        -:  121:   *  @brief  Accumulate values in a range.
+        -:  122:   *
+        -:  123:   *  Accumulates the values in the range [first,last) using operator+().  The
+        -:  124:   *  initial value is @a init.  The values are processed in order.
+        -:  125:   *
+        -:  126:   *  @param  __first  Start of range.
+        -:  127:   *  @param  __last  End of range.
+        -:  128:   *  @param  __init  Starting value to add other values to.
+        -:  129:   *  @return  The final sum.
+        -:  130:   */
+        -:  131:  template<typename _InputIterator, typename _Tp>
+        -:  132:    _GLIBCXX20_CONSTEXPR
+        -:  133:    inline _Tp
+function _ZSt10accumulateIN9__gnu_cxx17__normal_iteratorIPdSt6vectorIdSaIdEEEEdET0_T_S8_S7_ called 0 returned 0% blocks executed 0%
+    #####:  134:    accumulate(_InputIterator __first, _InputIterator __last, _Tp __init)
+        -:  135:    {
+        -:  136:      // concept requirements
+        -:  137:      __glibcxx_function_requires(_InputIteratorConcept<_InputIterator>)
+        -:  138:      __glibcxx_requires_valid_range(__first, __last);
+        -:  139:
+    #####:  140:      for (; __first != __last; ++__first)
+call    0 never executed
+branch  1 never executed
+branch  2 never executed (fallthrough)
+    #####:  141:	__init = _GLIBCXX_MOVE_IF_20(__init) + *__first;
+call    0 never executed
+call    1 never executed
+call    2 never executed
+    #####:  142:      return __init;
+        -:  143:    }
+        -:  144:
+        -:  145:  /**
+        -:  146:   *  @brief  Accumulate values in a range with operation.
+        -:  147:   *
+        -:  148:   *  Accumulates the values in the range `[first,last)` using the function
+        -:  149:   *  object `__binary_op`.  The initial value is `__init`.  The values are
+        -:  150:   *  processed in order.
+        -:  151:   *
+        -:  152:   *  @param  __first  Start of range.
+        -:  153:   *  @param  __last  End of range.
+        -:  154:   *  @param  __init  Starting value to add other values to.
+        -:  155:   *  @param  __binary_op  Function object to accumulate with.
+        -:  156:   *  @return  The final sum.
+        -:  157:   */
+        -:  158:  template<typename _InputIterator, typename _Tp, typename _BinaryOperation>
+        -:  159:    _GLIBCXX20_CONSTEXPR
+        -:  160:    inline _Tp
+        -:  161:    accumulate(_InputIterator __first, _InputIterator __last, _Tp __init,
+        -:  162:	       _BinaryOperation __binary_op)
+        -:  163:    {
+        -:  164:      // concept requirements
+        -:  165:      __glibcxx_function_requires(_InputIteratorConcept<_InputIterator>)
+        -:  166:      __glibcxx_requires_valid_range(__first, __last);
+        -:  167:
+        -:  168:      for (; __first != __last; ++__first)
+        -:  169:	__init = __binary_op(_GLIBCXX_MOVE_IF_20(__init), *__first);
+        -:  170:      return __init;
+        -:  171:    }
+        -:  172:
+        -:  173:  /**
+        -:  174:   *  @brief  Compute inner product of two ranges.
+        -:  175:   *
+        -:  176:   *  Starting with an initial value of @p __init, multiplies successive
+        -:  177:   *  elements from the two ranges and adds each product into the accumulated
+        -:  178:   *  value using operator+().  The values in the ranges are processed in
+        -:  179:   *  order.
+        -:  180:   *
+        -:  181:   *  @param  __first1  Start of range 1.
+        -:  182:   *  @param  __last1  End of range 1.
+        -:  183:   *  @param  __first2  Start of range 2.
+        -:  184:   *  @param  __init  Starting value to add other values to.
+        -:  185:   *  @return  The final inner product.
+        -:  186:   */
+        -:  187:  template<typename _InputIterator1, typename _InputIterator2, typename _Tp>
+        -:  188:    _GLIBCXX20_CONSTEXPR
+        -:  189:    inline _Tp
+        -:  190:    inner_product(_InputIterator1 __first1, _InputIterator1 __last1,
+        -:  191:		  _InputIterator2 __first2, _Tp __init)
+        -:  192:    {
+        -:  193:      // concept requirements
+        -:  194:      __glibcxx_function_requires(_InputIteratorConcept<_InputIterator1>)
+        -:  195:      __glibcxx_function_requires(_InputIteratorConcept<_InputIterator2>)
+        -:  196:      __glibcxx_requires_valid_range(__first1, __last1);
+        -:  197:
+        -:  198:      for (; __first1 != __last1; ++__first1, (void)++__first2)
+        -:  199:	__init = _GLIBCXX_MOVE_IF_20(__init) + (*__first1 * *__first2);
+        -:  200:      return __init;
+        -:  201:    }
+        -:  202:
+        -:  203:  /**
+        -:  204:   *  @brief  Compute inner product of two ranges.
+        -:  205:   *
+        -:  206:   *  Starting with an initial value of @p __init, applies @p __binary_op2 to
+        -:  207:   *  successive elements from the two ranges and accumulates each result into
+        -:  208:   *  the accumulated value using @p __binary_op1.  The values in the ranges are
+        -:  209:   *  processed in order.
+        -:  210:   *
+        -:  211:   *  @param  __first1  Start of range 1.
+        -:  212:   *  @param  __last1  End of range 1.
+        -:  213:   *  @param  __first2  Start of range 2.
+        -:  214:   *  @param  __init  Starting value to add other values to.
+        -:  215:   *  @param  __binary_op1  Function object to accumulate with.
+        -:  216:   *  @param  __binary_op2  Function object to apply to pairs of input values.
+        -:  217:   *  @return  The final inner product.
+        -:  218:   */
+        -:  219:  template<typename _InputIterator1, typename _InputIterator2, typename _Tp,
+        -:  220:	   typename _BinaryOperation1, typename _BinaryOperation2>
+        -:  221:    _GLIBCXX20_CONSTEXPR
+        -:  222:    inline _Tp
+        -:  223:    inner_product(_InputIterator1 __first1, _InputIterator1 __last1,
+        -:  224:		  _InputIterator2 __first2, _Tp __init,
+        -:  225:		  _BinaryOperation1 __binary_op1,
+        -:  226:		  _BinaryOperation2 __binary_op2)
+        -:  227:    {
+        -:  228:      // concept requirements
+        -:  229:      __glibcxx_function_requires(_InputIteratorConcept<_InputIterator1>)
+        -:  230:      __glibcxx_function_requires(_InputIteratorConcept<_InputIterator2>)
+        -:  231:      __glibcxx_requires_valid_range(__first1, __last1);
+        -:  232:
+        -:  233:      for (; __first1 != __last1; ++__first1, (void)++__first2)
+        -:  234:	__init = __binary_op1(_GLIBCXX_MOVE_IF_20(__init),
+        -:  235:			      __binary_op2(*__first1, *__first2));
+        -:  236:      return __init;
+        -:  237:    }
+        -:  238:
+        -:  239:  /**
+        -:  240:   *  @brief  Return list of partial sums
+        -:  241:   *
+        -:  242:   *  Accumulates the values in the range [first,last) using the @c + operator.
+        -:  243:   *  As each successive input value is added into the total, that partial sum
+        -:  244:   *  is written to @p __result.  Therefore, the first value in @p __result is
+        -:  245:   *  the first value of the input, the second value in @p __result is the sum
+        -:  246:   *  of the first and second input values, and so on.
+        -:  247:   *
+        -:  248:   *  @param  __first  Start of input range.
+        -:  249:   *  @param  __last  End of input range.
+        -:  250:   *  @param  __result  Output sum.
+        -:  251:   *  @return  Iterator pointing just beyond the values written to __result.
+        -:  252:   */
+        -:  253:  template<typename _InputIterator, typename _OutputIterator>
+        -:  254:    _GLIBCXX20_CONSTEXPR
+        -:  255:    _OutputIterator
+        -:  256:    partial_sum(_InputIterator __first, _InputIterator __last,
+        -:  257:		_OutputIterator __result)
+        -:  258:    {
+        -:  259:      typedef typename iterator_traits<_InputIterator>::value_type _ValueType;
+        -:  260:
+        -:  261:      // concept requirements
+        -:  262:      __glibcxx_function_requires(_InputIteratorConcept<_InputIterator>)
+        -:  263:      __glibcxx_function_requires(_OutputIteratorConcept<_OutputIterator,
+        -:  264:				                         _ValueType>)
+        -:  265:      __glibcxx_requires_valid_range(__first, __last);
+        -:  266:
+        -:  267:      if (__first == __last)
+        -:  268:	return __result;
+        -:  269:      _ValueType __value = *__first;
+        -:  270:      *__result = __value;
+        -:  271:      while (++__first != __last)
+        -:  272:	{
+        -:  273:	  __value = _GLIBCXX_MOVE_IF_20(__value) + *__first;
+        -:  274:	  *++__result = __value;
+        -:  275:	}
+        -:  276:      return ++__result;
+        -:  277:    }
+        -:  278:
+        -:  279:  /**
+        -:  280:   *  @brief  Return list of partial sums
+        -:  281:   *
+        -:  282:   *  Accumulates the values in the range [first,last) using @p __binary_op.
+        -:  283:   *  As each successive input value is added into the total, that partial sum
+        -:  284:   *  is written to @p __result.  Therefore, the first value in @p __result is
+        -:  285:   *  the first value of the input, the second value in @p __result is the sum
+        -:  286:   *  of the first and second input values, and so on.
+        -:  287:   *
+        -:  288:   *  @param  __first  Start of input range.
+        -:  289:   *  @param  __last  End of input range.
+        -:  290:   *  @param  __result  Output sum.
+        -:  291:   *  @param  __binary_op  Function object.
+        -:  292:   *  @return  Iterator pointing just beyond the values written to __result.
+        -:  293:   */
+        -:  294:  template<typename _InputIterator, typename _OutputIterator,
+        -:  295:	   typename _BinaryOperation>
+        -:  296:    _GLIBCXX20_CONSTEXPR
+        -:  297:    _OutputIterator
+        -:  298:    partial_sum(_InputIterator __first, _InputIterator __last,
+        -:  299:		_OutputIterator __result, _BinaryOperation __binary_op)
+        -:  300:    {
+        -:  301:      typedef typename iterator_traits<_InputIterator>::value_type _ValueType;
+        -:  302:
+        -:  303:      // concept requirements
+        -:  304:      __glibcxx_function_requires(_InputIteratorConcept<_InputIterator>)
+        -:  305:      __glibcxx_function_requires(_OutputIteratorConcept<_OutputIterator,
+        -:  306:				                         _ValueType>)
+        -:  307:      __glibcxx_requires_valid_range(__first, __last);
+        -:  308:
+        -:  309:      if (__first == __last)
+        -:  310:	return __result;
+        -:  311:      _ValueType __value = *__first;
+        -:  312:      *__result = __value;
+        -:  313:      while (++__first != __last)
+        -:  314:	{
+        -:  315:	  __value = __binary_op(_GLIBCXX_MOVE_IF_20(__value), *__first);
+        -:  316:	  *++__result = __value;
+        -:  317:	}
+        -:  318:      return ++__result;
+        -:  319:    }
+        -:  320:
+        -:  321:  /**
+        -:  322:   *  @brief  Return differences between adjacent values.
+        -:  323:   *
+        -:  324:   *  Computes the difference between adjacent values in the range
+        -:  325:   *  [first,last) using operator-() and writes the result to @p __result.
+        -:  326:   *
+        -:  327:   *  @param  __first  Start of input range.
+        -:  328:   *  @param  __last  End of input range.
+        -:  329:   *  @param  __result  Output sums.
+        -:  330:   *  @return  Iterator pointing just beyond the values written to result.
+        -:  331:   */
+        -:  332:  // _GLIBCXX_RESOLVE_LIB_DEFECTS
+        -:  333:  // DR 539. partial_sum and adjacent_difference should mention requirements
+        -:  334:  template<typename _InputIterator, typename _OutputIterator>
+        -:  335:    _GLIBCXX20_CONSTEXPR
+        -:  336:    _OutputIterator
+        -:  337:    adjacent_difference(_InputIterator __first,
+        -:  338:			_InputIterator __last, _OutputIterator __result)
+        -:  339:    {
+        -:  340:      typedef typename iterator_traits<_InputIterator>::value_type _ValueType;
+        -:  341:
+        -:  342:      // concept requirements
+        -:  343:      __glibcxx_function_requires(_InputIteratorConcept<_InputIterator>)
+        -:  344:      __glibcxx_function_requires(_OutputIteratorConcept<_OutputIterator,
+        -:  345:				                         _ValueType>)
+        -:  346:      __glibcxx_requires_valid_range(__first, __last);
+        -:  347:
+        -:  348:      if (__first == __last)
+        -:  349:	return __result;
+        -:  350:      _ValueType __value = *__first;
+        -:  351:      *__result = __value;
+        -:  352:      while (++__first != __last)
+        -:  353:	{
+        -:  354:	  _ValueType __tmp = *__first;
+        -:  355:	  *++__result = __tmp - _GLIBCXX_MOVE_IF_20(__value);
+        -:  356:	  __value = _GLIBCXX_MOVE(__tmp);
+        -:  357:	}
+        -:  358:      return ++__result;
+        -:  359:    }
+        -:  360:
+        -:  361:  /**
+        -:  362:   *  @brief  Return differences between adjacent values.
+        -:  363:   *
+        -:  364:   *  Computes the difference between adjacent values in the range
+        -:  365:   *  [__first,__last) using the function object @p __binary_op and writes the
+        -:  366:   *  result to @p __result.
+        -:  367:   *
+        -:  368:   *  @param  __first  Start of input range.
+        -:  369:   *  @param  __last  End of input range.
+        -:  370:   *  @param  __result  Output sum.
+        -:  371:   *  @param  __binary_op Function object.
+        -:  372:   *  @return  Iterator pointing just beyond the values written to result.
+        -:  373:   */
+        -:  374:  // _GLIBCXX_RESOLVE_LIB_DEFECTS
+        -:  375:  // DR 539. partial_sum and adjacent_difference should mention requirements
+        -:  376:  template<typename _InputIterator, typename _OutputIterator,
+        -:  377:	   typename _BinaryOperation>
+        -:  378:    _GLIBCXX20_CONSTEXPR
+        -:  379:    _OutputIterator
+        -:  380:    adjacent_difference(_InputIterator __first, _InputIterator __last,
+        -:  381:			_OutputIterator __result, _BinaryOperation __binary_op)
+        -:  382:    {
+        -:  383:      typedef typename iterator_traits<_InputIterator>::value_type _ValueType;
+        -:  384:
+        -:  385:      // concept requirements
+        -:  386:      __glibcxx_function_requires(_InputIteratorConcept<_InputIterator>)
+        -:  387:      __glibcxx_function_requires(_OutputIteratorConcept<_OutputIterator,
+        -:  388:				                         _ValueType>)
+        -:  389:      __glibcxx_requires_valid_range(__first, __last);
+        -:  390:
+        -:  391:      if (__first == __last)
+        -:  392:	return __result;
+        -:  393:      _ValueType __value = *__first;
+        -:  394:      *__result = __value;
+        -:  395:      while (++__first != __last)
+        -:  396:	{
+        -:  397:	  _ValueType __tmp = *__first;
+        -:  398:	  *++__result = __binary_op(__tmp, _GLIBCXX_MOVE_IF_20(__value));
+        -:  399:	  __value = _GLIBCXX_MOVE(__tmp);
+        -:  400:	}
+        -:  401:      return ++__result;
+        -:  402:    }
+        -:  403:
+        -:  404:  /// @} group numeric_ops
+        -:  405:
+        -:  406:#undef _GLIBCXX_MOVE_IF_20
+        -:  407:
+        -:  408:_GLIBCXX_END_NAMESPACE_ALGO
+        -:  409:} // namespace std
+        -:  410:
+        -:  411:#endif /* _STL_NUMERIC_H */

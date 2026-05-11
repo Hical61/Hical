@@ -1,0 +1,894 @@
+        -:    0:Source:/usr/include/boost/asio/impl/redirect_error.hpp
+        -:    1:
+        -:    2:// impl/redirect_error.hpp
+        -:    3:// ~~~~~~~~~~~~~~~~~~~~~~~
+        -:    4://
+        -:    5:// Copyright (c) 2003-2023 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+        -:    6://
+        -:    7:// Distributed under the Boost Software License, Version 1.0. (See accompanying
+        -:    8:// file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+        -:    9://
+        -:   10:
+        -:   11:#ifndef BOOST_ASIO_IMPL_REDIRECT_ERROR_HPP
+        -:   12:#define BOOST_ASIO_IMPL_REDIRECT_ERROR_HPP
+        -:   13:
+        -:   14:#if defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   15:# pragma once
+        -:   16:#endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   17:
+        -:   18:#include <boost/asio/detail/config.hpp>
+        -:   19:#include <boost/asio/associator.hpp>
+        -:   20:#include <boost/asio/async_result.hpp>
+        -:   21:#include <boost/asio/detail/handler_alloc_helpers.hpp>
+        -:   22:#include <boost/asio/detail/handler_cont_helpers.hpp>
+        -:   23:#include <boost/asio/detail/handler_invoke_helpers.hpp>
+        -:   24:#include <boost/asio/detail/type_traits.hpp>
+        -:   25:#include <boost/asio/detail/variadic_templates.hpp>
+        -:   26:#include <boost/system/system_error.hpp>
+        -:   27:
+        -:   28:#include <boost/asio/detail/push_options.hpp>
+        -:   29:
+        -:   30:namespace boost {
+        -:   31:namespace asio {
+        -:   32:namespace detail {
+        -:   33:
+        -:   34:// Class to adapt a redirect_error_t as a completion handler.
+        -:   35:template <typename Handler>
+        -:   36:class redirect_error_handler
+        -:   37:{
+        -:   38:public:
+        -:   39:  typedef void result_type;
+        -:   40:
+        -:   41:  template <typename CompletionToken>
+        -:   42:  redirect_error_handler(redirect_error_t<CompletionToken> e)
+        -:   43:    : ec_(e.ec_),
+        -:   44:      handler_(BOOST_ASIO_MOVE_CAST(CompletionToken)(e.token_))
+        -:   45:  {
+        -:   46:  }
+        -:   47:
+        -:   48:  template <typename RedirectedHandler>
+      68*:   49:  redirect_error_handler(boost::system::error_code& ec,
+        -:   50:      BOOST_ASIO_MOVE_ARG(RedirectedHandler) h)
+      68*:   51:    : ec_(ec),
+      68*:   52:      handler_(BOOST_ASIO_MOVE_CAST(RedirectedHandler)(h))
+        -:   53:  {
+      68*:   54:  }
+------------------
+_ZN5boost4asio6detail22redirect_error_handlerINS1_17awaitable_handlerINS0_15any_io_executorEJEEEEC2IS5_EERNS_6system10error_codeEOT_:
+function _ZN5boost4asio6detail22redirect_error_handlerINS1_17awaitable_handlerINS0_15any_io_executorEJEEEEC2IS5_EERNS_6system10error_codeEOT_ called 68 returned 100% blocks executed 100%
+       68:   49:  redirect_error_handler(boost::system::error_code& ec,
+        -:   50:      BOOST_ASIO_MOVE_ARG(RedirectedHandler) h)
+       68:   51:    : ec_(ec),
+       68:   52:      handler_(BOOST_ASIO_MOVE_CAST(RedirectedHandler)(h))
+call    0 returned 100%
+        -:   53:  {
+       68:   54:  }
+------------------
+_ZN5boost4asio6detail22redirect_error_handlerINS1_17awaitable_handlerINS0_15any_io_executorEJmEEEEC2IS5_EERNS_6system10error_codeEOT_:
+function _ZN5boost4asio6detail22redirect_error_handlerINS1_17awaitable_handlerINS0_15any_io_executorEJmEEEEC2IS5_EERNS_6system10error_codeEOT_ called 0 returned 0% blocks executed 0%
+    #####:   49:  redirect_error_handler(boost::system::error_code& ec,
+        -:   50:      BOOST_ASIO_MOVE_ARG(RedirectedHandler) h)
+    #####:   51:    : ec_(ec),
+    #####:   52:      handler_(BOOST_ASIO_MOVE_CAST(RedirectedHandler)(h))
+call    0 never executed
+        -:   53:  {
+    #####:   54:  }
+------------------
+        -:   55:
+        -:   56:  void operator()()
+        -:   57:  {
+        -:   58:    BOOST_ASIO_MOVE_OR_LVALUE(Handler)(handler_)();
+        -:   59:  }
+        -:   60:
+        -:   61:#if defined(BOOST_ASIO_HAS_VARIADIC_TEMPLATES)
+        -:   62:
+        -:   63:  template <typename Arg, typename... Args>
+        -:   64:  typename enable_if<
+        -:   65:    !is_same<typename decay<Arg>::type, boost::system::error_code>::value
+        -:   66:  >::type
+        -:   67:  operator()(BOOST_ASIO_MOVE_ARG(Arg) arg, BOOST_ASIO_MOVE_ARG(Args)... args)
+        -:   68:  {
+        -:   69:    BOOST_ASIO_MOVE_OR_LVALUE(Handler)(handler_)(
+        -:   70:        BOOST_ASIO_MOVE_CAST(Arg)(arg),
+        -:   71:        BOOST_ASIO_MOVE_CAST(Args)(args)...);
+        -:   72:  }
+        -:   73:
+        -:   74:  template <typename... Args>
+      63*:   75:  void operator()(const boost::system::error_code& ec,
+        -:   76:      BOOST_ASIO_MOVE_ARG(Args)... args)
+        -:   77:  {
+      63*:   78:    ec_ = ec;
+      63*:   79:    BOOST_ASIO_MOVE_OR_LVALUE(Handler)(handler_)(
+        -:   80:        BOOST_ASIO_MOVE_CAST(Args)(args)...);
+      63*:   81:  }
+------------------
+_ZN5boost4asio6detail22redirect_error_handlerINS1_17awaitable_handlerINS0_15any_io_executorEJEEEEclIJEEEvRKNS_6system10error_codeEDpOT_:
+function _ZN5boost4asio6detail22redirect_error_handlerINS1_17awaitable_handlerINS0_15any_io_executorEJEEEEclIJEEEvRKNS_6system10error_codeEDpOT_ called 63 returned 100% blocks executed 100%
+       63:   75:  void operator()(const boost::system::error_code& ec,
+        -:   76:      BOOST_ASIO_MOVE_ARG(Args)... args)
+        -:   77:  {
+       63:   78:    ec_ = ec;
+       63:   79:    BOOST_ASIO_MOVE_OR_LVALUE(Handler)(handler_)(
+call    0 returned 100%
+        -:   80:        BOOST_ASIO_MOVE_CAST(Args)(args)...);
+       63:   81:  }
+------------------
+_ZN5boost4asio6detail22redirect_error_handlerINS1_17awaitable_handlerINS0_15any_io_executorEJmEEEEclIJRKmEEEvRKNS_6system10error_codeEDpOT_:
+function _ZN5boost4asio6detail22redirect_error_handlerINS1_17awaitable_handlerINS0_15any_io_executorEJmEEEEclIJRKmEEEvRKNS_6system10error_codeEDpOT_ called 0 returned 0% blocks executed 0%
+    #####:   75:  void operator()(const boost::system::error_code& ec,
+        -:   76:      BOOST_ASIO_MOVE_ARG(Args)... args)
+        -:   77:  {
+    #####:   78:    ec_ = ec;
+    #####:   79:    BOOST_ASIO_MOVE_OR_LVALUE(Handler)(handler_)(
+call    0 never executed
+        -:   80:        BOOST_ASIO_MOVE_CAST(Args)(args)...);
+    #####:   81:  }
+------------------
+        -:   82:
+        -:   83:#else // defined(BOOST_ASIO_HAS_VARIADIC_TEMPLATES)
+        -:   84:
+        -:   85:  template <typename Arg>
+        -:   86:  typename enable_if<
+        -:   87:    !is_same<typename decay<Arg>::type, boost::system::error_code>::value
+        -:   88:  >::type
+        -:   89:  operator()(BOOST_ASIO_MOVE_ARG(Arg) arg)
+        -:   90:  {
+        -:   91:    BOOST_ASIO_MOVE_OR_LVALUE(Handler)(handler_)(
+        -:   92:        BOOST_ASIO_MOVE_CAST(Arg)(arg));
+        -:   93:  }
+        -:   94:
+        -:   95:  void operator()(const boost::system::error_code& ec)
+        -:   96:  {
+        -:   97:    ec_ = ec;
+        -:   98:    BOOST_ASIO_MOVE_OR_LVALUE(Handler)(handler_)();
+        -:   99:  }
+        -:  100:
+        -:  101:#define BOOST_ASIO_PRIVATE_REDIRECT_ERROR_DEF(n) \
+        -:  102:  template <typename Arg, BOOST_ASIO_VARIADIC_TPARAMS(n)> \
+        -:  103:  typename enable_if< \
+        -:  104:    !is_same<typename decay<Arg>::type, boost::system::error_code>::value \
+        -:  105:  >::type \
+        -:  106:  operator()(BOOST_ASIO_MOVE_ARG(Arg) arg, BOOST_ASIO_VARIADIC_MOVE_PARAMS(n)) \
+        -:  107:  { \
+        -:  108:    BOOST_ASIO_MOVE_OR_LVALUE(Handler)(handler_)( \
+        -:  109:        BOOST_ASIO_MOVE_CAST(Arg)(arg), \
+        -:  110:        BOOST_ASIO_VARIADIC_MOVE_ARGS(n)); \
+        -:  111:  } \
+        -:  112:  \
+        -:  113:  template <BOOST_ASIO_VARIADIC_TPARAMS(n)> \
+        -:  114:  void operator()(const boost::system::error_code& ec, \
+        -:  115:      BOOST_ASIO_VARIADIC_MOVE_PARAMS(n)) \
+        -:  116:  { \
+        -:  117:    ec_ = ec; \
+        -:  118:    BOOST_ASIO_MOVE_OR_LVALUE(Handler)(handler_)( \
+        -:  119:        BOOST_ASIO_VARIADIC_MOVE_ARGS(n)); \
+        -:  120:  } \
+        -:  121:  /**/
+        -:  122:  BOOST_ASIO_VARIADIC_GENERATE(BOOST_ASIO_PRIVATE_REDIRECT_ERROR_DEF)
+        -:  123:#undef BOOST_ASIO_PRIVATE_REDIRECT_ERROR_DEF
+        -:  124:
+        -:  125:#endif // defined(BOOST_ASIO_HAS_VARIADIC_TEMPLATES)
+        -:  126:
+        -:  127://private:
+        -:  128:  boost::system::error_code& ec_;
+        -:  129:  Handler handler_;
+        -:  130:};
+        -:  131:
+        -:  132:template <typename Handler>
+        -:  133:inline asio_handler_allocate_is_deprecated
+      68*:  134:asio_handler_allocate(std::size_t size,
+        -:  135:    redirect_error_handler<Handler>* this_handler)
+        -:  136:{
+        -:  137:#if defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  138:  boost_asio_handler_alloc_helpers::allocate(size, this_handler->handler_);
+        -:  139:  return asio_handler_allocate_is_no_longer_used();
+        -:  140:#else // defined(BOOST_ASIO_NO_DEPRECATED)
+     136*:  141:  return boost_asio_handler_alloc_helpers::allocate(
+      68*:  142:      size, this_handler->handler_);
+        -:  143:#endif // defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  144:}
+------------------
+_ZN5boost4asio6detail21asio_handler_allocateINS1_17awaitable_handlerINS0_15any_io_executorEJmEEEEEPvmPNS1_22redirect_error_handlerIT_EE:
+function _ZN5boost4asio6detail21asio_handler_allocateINS1_17awaitable_handlerINS0_15any_io_executorEJmEEEEEPvmPNS1_22redirect_error_handlerIT_EE called 0 returned 0% blocks executed 0%
+    #####:  134:asio_handler_allocate(std::size_t size,
+        -:  135:    redirect_error_handler<Handler>* this_handler)
+        -:  136:{
+        -:  137:#if defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  138:  boost_asio_handler_alloc_helpers::allocate(size, this_handler->handler_);
+        -:  139:  return asio_handler_allocate_is_no_longer_used();
+        -:  140:#else // defined(BOOST_ASIO_NO_DEPRECATED)
+    #####:  141:  return boost_asio_handler_alloc_helpers::allocate(
+    #####:  142:      size, this_handler->handler_);
+call    0 never executed
+        -:  143:#endif // defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  144:}
+------------------
+_ZN5boost4asio6detail21asio_handler_allocateINS1_17awaitable_handlerINS0_15any_io_executorEJEEEEEPvmPNS1_22redirect_error_handlerIT_EE:
+function _ZN5boost4asio6detail21asio_handler_allocateINS1_17awaitable_handlerINS0_15any_io_executorEJEEEEEPvmPNS1_22redirect_error_handlerIT_EE called 68 returned 100% blocks executed 100%
+       68:  134:asio_handler_allocate(std::size_t size,
+        -:  135:    redirect_error_handler<Handler>* this_handler)
+        -:  136:{
+        -:  137:#if defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  138:  boost_asio_handler_alloc_helpers::allocate(size, this_handler->handler_);
+        -:  139:  return asio_handler_allocate_is_no_longer_used();
+        -:  140:#else // defined(BOOST_ASIO_NO_DEPRECATED)
+      136:  141:  return boost_asio_handler_alloc_helpers::allocate(
+       68:  142:      size, this_handler->handler_);
+call    0 returned 100%
+        -:  143:#endif // defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  144:}
+------------------
+        -:  145:
+        -:  146:template <typename Handler>
+        -:  147:inline asio_handler_deallocate_is_deprecated
+      68*:  148:asio_handler_deallocate(void* pointer, std::size_t size,
+        -:  149:    redirect_error_handler<Handler>* this_handler)
+        -:  150:{
+      68*:  151:  boost_asio_handler_alloc_helpers::deallocate(
+      68*:  152:      pointer, size, this_handler->handler_);
+        -:  153:#if defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  154:  return asio_handler_deallocate_is_no_longer_used();
+        -:  155:#endif // defined(BOOST_ASIO_NO_DEPRECATED)
+      68*:  156:}
+------------------
+_ZN5boost4asio6detail23asio_handler_deallocateINS1_17awaitable_handlerINS0_15any_io_executorEJmEEEEEvPvmPNS1_22redirect_error_handlerIT_EE:
+function _ZN5boost4asio6detail23asio_handler_deallocateINS1_17awaitable_handlerINS0_15any_io_executorEJmEEEEEvPvmPNS1_22redirect_error_handlerIT_EE called 0 returned 0% blocks executed 0%
+    #####:  148:asio_handler_deallocate(void* pointer, std::size_t size,
+        -:  149:    redirect_error_handler<Handler>* this_handler)
+        -:  150:{
+    #####:  151:  boost_asio_handler_alloc_helpers::deallocate(
+    #####:  152:      pointer, size, this_handler->handler_);
+call    0 never executed
+        -:  153:#if defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  154:  return asio_handler_deallocate_is_no_longer_used();
+        -:  155:#endif // defined(BOOST_ASIO_NO_DEPRECATED)
+    #####:  156:}
+------------------
+_ZN5boost4asio6detail23asio_handler_deallocateINS1_17awaitable_handlerINS0_15any_io_executorEJEEEEEvPvmPNS1_22redirect_error_handlerIT_EE:
+function _ZN5boost4asio6detail23asio_handler_deallocateINS1_17awaitable_handlerINS0_15any_io_executorEJEEEEEvPvmPNS1_22redirect_error_handlerIT_EE called 68 returned 100% blocks executed 100%
+       68:  148:asio_handler_deallocate(void* pointer, std::size_t size,
+        -:  149:    redirect_error_handler<Handler>* this_handler)
+        -:  150:{
+       68:  151:  boost_asio_handler_alloc_helpers::deallocate(
+       68:  152:      pointer, size, this_handler->handler_);
+call    0 returned 100%
+        -:  153:#if defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  154:  return asio_handler_deallocate_is_no_longer_used();
+        -:  155:#endif // defined(BOOST_ASIO_NO_DEPRECATED)
+       68:  156:}
+------------------
+        -:  157:
+        -:  158:template <typename Handler>
+function _ZN5boost4asio6detail28asio_handler_is_continuationINS1_17awaitable_handlerINS0_15any_io_executorEJmEEEEEbPNS1_22redirect_error_handlerIT_EE called 0 returned 0% blocks executed 0%
+    #####:  159:inline bool asio_handler_is_continuation(
+        -:  160:    redirect_error_handler<Handler>* this_handler)
+        -:  161:{
+    #####:  162:  return boost_asio_handler_cont_helpers::is_continuation(
+    #####:  163:        this_handler->handler_);
+call    0 never executed
+        -:  164:}
+        -:  165:
+        -:  166:template <typename Function, typename Handler>
+        -:  167:inline asio_handler_invoke_is_deprecated
+      63*:  168:asio_handler_invoke(Function& function,
+        -:  169:    redirect_error_handler<Handler>* this_handler)
+        -:  170:{
+      63*:  171:  boost_asio_handler_invoke_helpers::invoke(
+      63*:  172:      function, this_handler->handler_);
+        -:  173:#if defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  174:  return asio_handler_invoke_is_no_longer_used();
+        -:  175:#endif // defined(BOOST_ASIO_NO_DEPRECATED)
+      63*:  176:}
+------------------
+_ZN5boost4asio6detail19asio_handler_invokeINS1_7binder2INS1_8write_opINS0_19basic_stream_socketINS0_2ip3tcpENS0_15any_io_executorEEENS0_15const_buffers_1EPKNS0_12const_bufferENS1_14transfer_all_tENS1_22redirect_error_handlerINS1_17awaitable_handlerIS8_JmEEEEEEENS_6system10error_codeEmEESH_EEvRT_PNSF_IT0_EE:
+function _ZN5boost4asio6detail19asio_handler_invokeINS1_7binder2INS1_8write_opINS0_19basic_stream_socketINS0_2ip3tcpENS0_15any_io_executorEEENS0_15const_buffers_1EPKNS0_12const_bufferENS1_14transfer_all_tENS1_22redirect_error_handlerINS1_17awaitable_handlerIS8_JmEEEEEEENS_6system10error_codeEmEESH_EEvRT_PNSF_IT0_EE called 0 returned 0% blocks executed 0%
+    #####:  168:asio_handler_invoke(Function& function,
+        -:  169:    redirect_error_handler<Handler>* this_handler)
+        -:  170:{
+    #####:  171:  boost_asio_handler_invoke_helpers::invoke(
+    #####:  172:      function, this_handler->handler_);
+call    0 never executed
+        -:  173:#if defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  174:  return asio_handler_invoke_is_no_longer_used();
+        -:  175:#endif // defined(BOOST_ASIO_NO_DEPRECATED)
+    #####:  176:}
+------------------
+_ZN5boost4asio6detail19asio_handler_invokeINS1_7binder1INS1_22redirect_error_handlerINS1_17awaitable_handlerINS0_15any_io_executorEJEEEEENS_6system10error_codeEEES7_EEvRT_PNS4_IT0_EE:
+function _ZN5boost4asio6detail19asio_handler_invokeINS1_7binder1INS1_22redirect_error_handlerINS1_17awaitable_handlerINS0_15any_io_executorEJEEEEENS_6system10error_codeEEES7_EEvRT_PNS4_IT0_EE called 63 returned 100% blocks executed 100%
+       63:  168:asio_handler_invoke(Function& function,
+        -:  169:    redirect_error_handler<Handler>* this_handler)
+        -:  170:{
+       63:  171:  boost_asio_handler_invoke_helpers::invoke(
+       63:  172:      function, this_handler->handler_);
+call    0 returned 100%
+        -:  173:#if defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  174:  return asio_handler_invoke_is_no_longer_used();
+        -:  175:#endif // defined(BOOST_ASIO_NO_DEPRECATED)
+       63:  176:}
+------------------
+        -:  177:
+        -:  178:template <typename Function, typename Handler>
+        -:  179:inline asio_handler_invoke_is_deprecated
+        -:  180:asio_handler_invoke(const Function& function,
+        -:  181:    redirect_error_handler<Handler>* this_handler)
+        -:  182:{
+        -:  183:  boost_asio_handler_invoke_helpers::invoke(
+        -:  184:      function, this_handler->handler_);
+        -:  185:#if defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  186:  return asio_handler_invoke_is_no_longer_used();
+        -:  187:#endif // defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  188:}
+        -:  189:
+        -:  190:template <typename Signature>
+        -:  191:struct redirect_error_signature
+        -:  192:{
+        -:  193:  typedef Signature type;
+        -:  194:};
+        -:  195:
+        -:  196:#if defined(BOOST_ASIO_HAS_VARIADIC_TEMPLATES)
+        -:  197:
+        -:  198:template <typename R, typename... Args>
+        -:  199:struct redirect_error_signature<R(boost::system::error_code, Args...)>
+        -:  200:{
+        -:  201:  typedef R type(Args...);
+        -:  202:};
+        -:  203:
+        -:  204:template <typename R, typename... Args>
+        -:  205:struct redirect_error_signature<R(const boost::system::error_code&, Args...)>
+        -:  206:{
+        -:  207:  typedef R type(Args...);
+        -:  208:};
+        -:  209:
+        -:  210:# if defined(BOOST_ASIO_HAS_REF_QUALIFIED_FUNCTIONS)
+        -:  211:
+        -:  212:template <typename R, typename... Args>
+        -:  213:struct redirect_error_signature<R(boost::system::error_code, Args...) &>
+        -:  214:{
+        -:  215:  typedef R type(Args...) &;
+        -:  216:};
+        -:  217:
+        -:  218:template <typename R, typename... Args>
+        -:  219:struct redirect_error_signature<R(const boost::system::error_code&, Args...) &>
+        -:  220:{
+        -:  221:  typedef R type(Args...) &;
+        -:  222:};
+        -:  223:
+        -:  224:template <typename R, typename... Args>
+        -:  225:struct redirect_error_signature<R(boost::system::error_code, Args...) &&>
+        -:  226:{
+        -:  227:  typedef R type(Args...) &&;
+        -:  228:};
+        -:  229:
+        -:  230:template <typename R, typename... Args>
+        -:  231:struct redirect_error_signature<R(const boost::system::error_code&, Args...) &&>
+        -:  232:{
+        -:  233:  typedef R type(Args...) &&;
+        -:  234:};
+        -:  235:
+        -:  236:#  if defined(BOOST_ASIO_HAS_NOEXCEPT_FUNCTION_TYPE)
+        -:  237:
+        -:  238:template <typename R, typename... Args>
+        -:  239:struct redirect_error_signature<
+        -:  240:  R(boost::system::error_code, Args...) noexcept>
+        -:  241:{
+        -:  242:  typedef R type(Args...) & noexcept;
+        -:  243:};
+        -:  244:
+        -:  245:template <typename R, typename... Args>
+        -:  246:struct redirect_error_signature<
+        -:  247:  R(const boost::system::error_code&, Args...) noexcept>
+        -:  248:{
+        -:  249:  typedef R type(Args...) & noexcept;
+        -:  250:};
+        -:  251:
+        -:  252:template <typename R, typename... Args>
+        -:  253:struct redirect_error_signature<
+        -:  254:  R(boost::system::error_code, Args...) & noexcept>
+        -:  255:{
+        -:  256:  typedef R type(Args...) & noexcept;
+        -:  257:};
+        -:  258:
+        -:  259:template <typename R, typename... Args>
+        -:  260:struct redirect_error_signature<
+        -:  261:  R(const boost::system::error_code&, Args...) & noexcept>
+        -:  262:{
+        -:  263:  typedef R type(Args...) & noexcept;
+        -:  264:};
+        -:  265:
+        -:  266:template <typename R, typename... Args>
+        -:  267:struct redirect_error_signature<
+        -:  268:  R(boost::system::error_code, Args...) && noexcept>
+        -:  269:{
+        -:  270:  typedef R type(Args...) && noexcept;
+        -:  271:};
+        -:  272:
+        -:  273:template <typename R, typename... Args>
+        -:  274:struct redirect_error_signature<
+        -:  275:  R(const boost::system::error_code&, Args...) && noexcept>
+        -:  276:{
+        -:  277:  typedef R type(Args...) && noexcept;
+        -:  278:};
+        -:  279:
+        -:  280:#  endif // defined(BOOST_ASIO_HAS_NOEXCEPT_FUNCTION_TYPE)
+        -:  281:# endif // defined(BOOST_ASIO_HAS_REF_QUALIFIED_FUNCTIONS)
+        -:  282:#else // defined(BOOST_ASIO_HAS_VARIADIC_TEMPLATES)
+        -:  283:
+        -:  284:template <typename R>
+        -:  285:struct redirect_error_signature<R(boost::system::error_code)>
+        -:  286:{
+        -:  287:  typedef R type();
+        -:  288:};
+        -:  289:
+        -:  290:template <typename R>
+        -:  291:struct redirect_error_signature<R(const boost::system::error_code&)>
+        -:  292:{
+        -:  293:  typedef R type();
+        -:  294:};
+        -:  295:
+        -:  296:#define BOOST_ASIO_PRIVATE_REDIRECT_ERROR_DEF(n) \
+        -:  297:  template <typename R, BOOST_ASIO_VARIADIC_TPARAMS(n)> \
+        -:  298:  struct redirect_error_signature< \
+        -:  299:      R(boost::system::error_code, BOOST_ASIO_VARIADIC_TARGS(n))> \
+        -:  300:  { \
+        -:  301:    typedef R type(BOOST_ASIO_VARIADIC_TARGS(n)); \
+        -:  302:  }; \
+        -:  303:  \
+        -:  304:  template <typename R, BOOST_ASIO_VARIADIC_TPARAMS(n)> \
+        -:  305:  struct redirect_error_signature< \
+        -:  306:      R(const boost::system::error_code&, BOOST_ASIO_VARIADIC_TARGS(n))> \
+        -:  307:  { \
+        -:  308:    typedef R type(BOOST_ASIO_VARIADIC_TARGS(n)); \
+        -:  309:  }; \
+        -:  310:  /**/
+        -:  311:  BOOST_ASIO_VARIADIC_GENERATE(BOOST_ASIO_PRIVATE_REDIRECT_ERROR_DEF)
+        -:  312:#undef BOOST_ASIO_PRIVATE_REDIRECT_ERROR_DEF
+        -:  313:
+        -:  314:# if defined(BOOST_ASIO_HAS_REF_QUALIFIED_FUNCTIONS)
+        -:  315:
+        -:  316:template <typename R>
+        -:  317:struct redirect_error_signature<R(boost::system::error_code) &>
+        -:  318:{
+        -:  319:  typedef R type() &;
+        -:  320:};
+        -:  321:
+        -:  322:template <typename R>
+        -:  323:struct redirect_error_signature<R(const boost::system::error_code&) &>
+        -:  324:{
+        -:  325:  typedef R type() &;
+        -:  326:};
+        -:  327:
+        -:  328:template <typename R>
+        -:  329:struct redirect_error_signature<R(boost::system::error_code) &&>
+        -:  330:{
+        -:  331:  typedef R type() &&;
+        -:  332:};
+        -:  333:
+        -:  334:template <typename R>
+        -:  335:struct redirect_error_signature<R(const boost::system::error_code&) &&>
+        -:  336:{
+        -:  337:  typedef R type() &&;
+        -:  338:};
+        -:  339:
+        -:  340:#define BOOST_ASIO_PRIVATE_REDIRECT_ERROR_DEF(n) \
+        -:  341:  template <typename R, BOOST_ASIO_VARIADIC_TPARAMS(n)> \
+        -:  342:  struct redirect_error_signature< \
+        -:  343:      R(boost::system::error_code, BOOST_ASIO_VARIADIC_TARGS(n)) &> \
+        -:  344:  { \
+        -:  345:    typedef R type(BOOST_ASIO_VARIADIC_TARGS(n)) &; \
+        -:  346:  }; \
+        -:  347:  \
+        -:  348:  template <typename R, BOOST_ASIO_VARIADIC_TPARAMS(n)> \
+        -:  349:  struct redirect_error_signature< \
+        -:  350:      R(const boost::system::error_code&, BOOST_ASIO_VARIADIC_TARGS(n)) &> \
+        -:  351:  { \
+        -:  352:    typedef R type(BOOST_ASIO_VARIADIC_TARGS(n)) &; \
+        -:  353:  }; \
+        -:  354:  \
+        -:  355:  template <typename R, BOOST_ASIO_VARIADIC_TPARAMS(n)> \
+        -:  356:  struct redirect_error_signature< \
+        -:  357:      R(boost::system::error_code, BOOST_ASIO_VARIADIC_TARGS(n)) &&> \
+        -:  358:  { \
+        -:  359:    typedef R type(BOOST_ASIO_VARIADIC_TARGS(n)) &&; \
+        -:  360:  }; \
+        -:  361:  \
+        -:  362:  template <typename R, BOOST_ASIO_VARIADIC_TPARAMS(n)> \
+        -:  363:  struct redirect_error_signature< \
+        -:  364:      R(const boost::system::error_code&, BOOST_ASIO_VARIADIC_TARGS(n)) &&> \
+        -:  365:  { \
+        -:  366:    typedef R type(BOOST_ASIO_VARIADIC_TARGS(n)) &&; \
+        -:  367:  }; \
+        -:  368:  /**/
+        -:  369:  BOOST_ASIO_VARIADIC_GENERATE(BOOST_ASIO_PRIVATE_REDIRECT_ERROR_DEF)
+        -:  370:#undef BOOST_ASIO_PRIVATE_REDIRECT_ERROR_DEF
+        -:  371:
+        -:  372:#  if defined(BOOST_ASIO_HAS_NOEXCEPT_FUNCTION_TYPE)
+        -:  373:
+        -:  374:template <typename R>
+        -:  375:struct redirect_error_signature<
+        -:  376:  R(boost::system::error_code) noexcept>
+        -:  377:{
+        -:  378:  typedef R type() noexcept;
+        -:  379:};
+        -:  380:
+        -:  381:template <typename R>
+        -:  382:struct redirect_error_signature<
+        -:  383:  R(const boost::system::error_code&) noexcept>
+        -:  384:{
+        -:  385:  typedef R type() noexcept;
+        -:  386:};
+        -:  387:
+        -:  388:template <typename R>
+        -:  389:struct redirect_error_signature<
+        -:  390:  R(boost::system::error_code) & noexcept>
+        -:  391:{
+        -:  392:  typedef R type() & noexcept;
+        -:  393:};
+        -:  394:
+        -:  395:template <typename R>
+        -:  396:struct redirect_error_signature<
+        -:  397:  R(const boost::system::error_code&) & noexcept>
+        -:  398:{
+        -:  399:  typedef R type() & noexcept;
+        -:  400:};
+        -:  401:
+        -:  402:template <typename R>
+        -:  403:struct redirect_error_signature<
+        -:  404:  R(boost::system::error_code) && noexcept>
+        -:  405:{
+        -:  406:  typedef R type() && noexcept;
+        -:  407:};
+        -:  408:
+        -:  409:template <typename R>
+        -:  410:struct redirect_error_signature<
+        -:  411:  R(const boost::system::error_code&) && noexcept>
+        -:  412:{
+        -:  413:  typedef R type() && noexcept;
+        -:  414:};
+        -:  415:
+        -:  416:#define BOOST_ASIO_PRIVATE_REDIRECT_ERROR_DEF(n) \
+        -:  417:  template <typename R, BOOST_ASIO_VARIADIC_TPARAMS(n)> \
+        -:  418:  struct redirect_error_signature< \
+        -:  419:      R(boost::system::error_code, BOOST_ASIO_VARIADIC_TARGS(n)) noexcept> \
+        -:  420:  { \
+        -:  421:    typedef R type(BOOST_ASIO_VARIADIC_TARGS(n)) noexcept; \
+        -:  422:  }; \
+        -:  423:  \
+        -:  424:  template <typename R, BOOST_ASIO_VARIADIC_TPARAMS(n)> \
+        -:  425:  struct redirect_error_signature< \
+        -:  426:      R(const boost::system::error_code&, \
+        -:  427:        BOOST_ASIO_VARIADIC_TARGS(n)) noexcept> \
+        -:  428:  { \
+        -:  429:    typedef R type(BOOST_ASIO_VARIADIC_TARGS(n)) noexcept; \
+        -:  430:  }; \
+        -:  431:  \
+        -:  432:  template <typename R, BOOST_ASIO_VARIADIC_TPARAMS(n)> \
+        -:  433:  struct redirect_error_signature< \
+        -:  434:      R(boost::system::error_code, \
+        -:  435:        BOOST_ASIO_VARIADIC_TARGS(n)) & noexcept> \
+        -:  436:  { \
+        -:  437:    typedef R type(BOOST_ASIO_VARIADIC_TARGS(n)) & noexcept; \
+        -:  438:  }; \
+        -:  439:  \
+        -:  440:  template <typename R, BOOST_ASIO_VARIADIC_TPARAMS(n)> \
+        -:  441:  struct redirect_error_signature< \
+        -:  442:      R(const boost::system::error_code&, \
+        -:  443:        BOOST_ASIO_VARIADIC_TARGS(n)) & noexcept> \
+        -:  444:  { \
+        -:  445:    typedef R type(BOOST_ASIO_VARIADIC_TARGS(n)) & noexcept; \
+        -:  446:  }; \
+        -:  447:  \
+        -:  448:  template <typename R, BOOST_ASIO_VARIADIC_TPARAMS(n)> \
+        -:  449:  struct redirect_error_signature< \
+        -:  450:      R(boost::system::error_code, \
+        -:  451:        BOOST_ASIO_VARIADIC_TARGS(n)) && noexcept> \
+        -:  452:  { \
+        -:  453:    typedef R type(BOOST_ASIO_VARIADIC_TARGS(n)) && noexcept; \
+        -:  454:  }; \
+        -:  455:  \
+        -:  456:  template <typename R, BOOST_ASIO_VARIADIC_TPARAMS(n)> \
+        -:  457:  struct redirect_error_signature< \
+        -:  458:      R(const boost::system::error_code&, \
+        -:  459:        BOOST_ASIO_VARIADIC_TARGS(n)) && noexcept> \
+        -:  460:  { \
+        -:  461:    typedef R type(BOOST_ASIO_VARIADIC_TARGS(n)) && noexcept; \
+        -:  462:  }; \
+        -:  463:  /**/
+        -:  464:  BOOST_ASIO_VARIADIC_GENERATE(BOOST_ASIO_PRIVATE_REDIRECT_ERROR_DEF)
+        -:  465:#undef BOOST_ASIO_PRIVATE_REDIRECT_ERROR_DEF
+        -:  466:
+        -:  467:#  endif // defined(BOOST_ASIO_HAS_NOEXCEPT_FUNCTION_TYPE)
+        -:  468:# endif // defined(BOOST_ASIO_HAS_REF_QUALIFIED_FUNCTIONS)
+        -:  469:#endif // defined(BOOST_ASIO_HAS_VARIADIC_TEMPLATES)
+        -:  470:
+        -:  471:} // namespace detail
+        -:  472:
+        -:  473:#if !defined(GENERATING_DOCUMENTATION)
+        -:  474:
+        -:  475:template <typename CompletionToken, typename Signature>
+        -:  476:struct async_result<redirect_error_t<CompletionToken>, Signature>
+        -:  477:  : async_result<CompletionToken,
+        -:  478:      typename detail::redirect_error_signature<Signature>::type>
+        -:  479:{
+        -:  480:
+        -:  481:  struct init_wrapper
+        -:  482:  {
+      68*:  483:    explicit init_wrapper(boost::system::error_code& ec)
+      68*:  484:      : ec_(ec)
+        -:  485:    {
+      68*:  486:    }
+------------------
+_ZN5boost4asio12async_resultINS0_16redirect_error_tINS0_15use_awaitable_tINS0_15any_io_executorEEEEEJFvNS_6system10error_codeEEEE12init_wrapperC2ERS8_:
+function _ZN5boost4asio12async_resultINS0_16redirect_error_tINS0_15use_awaitable_tINS0_15any_io_executorEEEEEJFvNS_6system10error_codeEEEE12init_wrapperC2ERS8_ called 68 returned 100% blocks executed 100%
+       68:  483:    explicit init_wrapper(boost::system::error_code& ec)
+       68:  484:      : ec_(ec)
+        -:  485:    {
+       68:  486:    }
+------------------
+_ZN5boost4asio12async_resultINS0_16redirect_error_tINS0_15use_awaitable_tINS0_15any_io_executorEEEEEJFvNS_6system10error_codeEmEEE12init_wrapperC2ERS8_:
+function _ZN5boost4asio12async_resultINS0_16redirect_error_tINS0_15use_awaitable_tINS0_15any_io_executorEEEEEJFvNS_6system10error_codeEmEEE12init_wrapperC2ERS8_ called 0 returned 0% blocks executed 0%
+    #####:  483:    explicit init_wrapper(boost::system::error_code& ec)
+    #####:  484:      : ec_(ec)
+        -:  485:    {
+    #####:  486:    }
+------------------
+        -:  487:
+        -:  488:#if defined(BOOST_ASIO_HAS_VARIADIC_TEMPLATES)
+        -:  489:
+        -:  490:    template <typename Handler, typename Initiation, typename... Args>
+      68*:  491:    void operator()(
+        -:  492:        BOOST_ASIO_MOVE_ARG(Handler) handler,
+        -:  493:        BOOST_ASIO_MOVE_ARG(Initiation) initiation,
+        -:  494:        BOOST_ASIO_MOVE_ARG(Args)... args) const
+        -:  495:    {
+      68*:  496:      BOOST_ASIO_MOVE_CAST(Initiation)(initiation)(
+     136*:  497:          detail::redirect_error_handler<
+        -:  498:            typename decay<Handler>::type>(
+        -:  499:              ec_, BOOST_ASIO_MOVE_CAST(Handler)(handler)),
+        -:  500:          BOOST_ASIO_MOVE_CAST(Args)(args)...);
+      68*:  501:    }
+------------------
+_ZNK5boost4asio12async_resultINS0_16redirect_error_tINS0_15use_awaitable_tINS0_15any_io_executorEEEEEJFvNS_6system10error_codeEEEE12init_wrapperclINS0_6detail17awaitable_handlerIS4_JEEENS0_20basic_waitable_timerINSt6chrono3_V212steady_clockENS0_11wait_traitsISJ_EES4_E19initiate_async_waitEJEEEvOT_OT0_DpOT1_:
+function _ZNK5boost4asio12async_resultINS0_16redirect_error_tINS0_15use_awaitable_tINS0_15any_io_executorEEEEEJFvNS_6system10error_codeEEEE12init_wrapperclINS0_6detail17awaitable_handlerIS4_JEEENS0_20basic_waitable_timerINSt6chrono3_V212steady_clockENS0_11wait_traitsISJ_EES4_E19initiate_async_waitEJEEEvOT_OT0_DpOT1_ called 68 returned 100% blocks executed 71%
+       68:  491:    void operator()(
+        -:  492:        BOOST_ASIO_MOVE_ARG(Handler) handler,
+        -:  493:        BOOST_ASIO_MOVE_ARG(Initiation) initiation,
+        -:  494:        BOOST_ASIO_MOVE_ARG(Args)... args) const
+        -:  495:    {
+       68:  496:      BOOST_ASIO_MOVE_CAST(Initiation)(initiation)(
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+      136:  497:          detail::redirect_error_handler<
+call    0 returned 100%
+call    1 returned 100%
+call    2 never executed
+        -:  498:            typename decay<Handler>::type>(
+        -:  499:              ec_, BOOST_ASIO_MOVE_CAST(Handler)(handler)),
+        -:  500:          BOOST_ASIO_MOVE_CAST(Args)(args)...);
+       68:  501:    }
+------------------
+_ZNK5boost4asio12async_resultINS0_16redirect_error_tINS0_15use_awaitable_tINS0_15any_io_executorEEEEEJFvNS_6system10error_codeEmEEE12init_wrapperclINS0_6detail17awaitable_handlerIS4_JmEEENSD_20initiate_async_writeINS0_19basic_stream_socketINS0_2ip3tcpES4_EEEEJNS0_15const_buffers_1ENSD_14transfer_all_tEEEEvOT_OT0_DpOT1_:
+function _ZNK5boost4asio12async_resultINS0_16redirect_error_tINS0_15use_awaitable_tINS0_15any_io_executorEEEEEJFvNS_6system10error_codeEmEEE12init_wrapperclINS0_6detail17awaitable_handlerIS4_JmEEENSD_20initiate_async_writeINS0_19basic_stream_socketINS0_2ip3tcpES4_EEEEJNS0_15const_buffers_1ENSD_14transfer_all_tEEEEvOT_OT0_DpOT1_ called 0 returned 0% blocks executed 0%
+    #####:  491:    void operator()(
+        -:  492:        BOOST_ASIO_MOVE_ARG(Handler) handler,
+        -:  493:        BOOST_ASIO_MOVE_ARG(Initiation) initiation,
+        -:  494:        BOOST_ASIO_MOVE_ARG(Args)... args) const
+        -:  495:    {
+    #####:  496:      BOOST_ASIO_MOVE_CAST(Initiation)(initiation)(
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  497:          detail::redirect_error_handler<
+call    0 never executed
+call    1 never executed
+call    2 never executed
+        -:  498:            typename decay<Handler>::type>(
+        -:  499:              ec_, BOOST_ASIO_MOVE_CAST(Handler)(handler)),
+        -:  500:          BOOST_ASIO_MOVE_CAST(Args)(args)...);
+    #####:  501:    }
+------------------
+        -:  502:
+        -:  503:#else // defined(BOOST_ASIO_HAS_VARIADIC_TEMPLATES)
+        -:  504:
+        -:  505:    template <typename Handler, typename Initiation>
+        -:  506:    void operator()(
+        -:  507:        BOOST_ASIO_MOVE_ARG(Handler) handler,
+        -:  508:        BOOST_ASIO_MOVE_ARG(Initiation) initiation) const
+        -:  509:    {
+        -:  510:      BOOST_ASIO_MOVE_CAST(Initiation)(initiation)(
+        -:  511:          detail::redirect_error_handler<
+        -:  512:            typename decay<Handler>::type>(
+        -:  513:              ec_, BOOST_ASIO_MOVE_CAST(Handler)(handler)));
+        -:  514:    }
+        -:  515:
+        -:  516:#define BOOST_ASIO_PRIVATE_INIT_WRAPPER_DEF(n) \
+        -:  517:    template <typename Handler, typename Initiation, \
+        -:  518:        BOOST_ASIO_VARIADIC_TPARAMS(n)> \
+        -:  519:    void operator()( \
+        -:  520:        BOOST_ASIO_MOVE_ARG(Handler) handler, \
+        -:  521:        BOOST_ASIO_MOVE_ARG(Initiation) initiation, \
+        -:  522:        BOOST_ASIO_VARIADIC_MOVE_PARAMS(n)) const \
+        -:  523:    { \
+        -:  524:      BOOST_ASIO_MOVE_CAST(Initiation)(initiation)( \
+        -:  525:          detail::redirect_error_handler< \
+        -:  526:            typename decay<Handler>::type>( \
+        -:  527:              ec_, BOOST_ASIO_MOVE_CAST(Handler)(handler)), \
+        -:  528:          BOOST_ASIO_VARIADIC_MOVE_ARGS(n)); \
+        -:  529:    } \
+        -:  530:    /**/
+        -:  531:    BOOST_ASIO_VARIADIC_GENERATE(BOOST_ASIO_PRIVATE_INIT_WRAPPER_DEF)
+        -:  532:#undef BOOST_ASIO_PRIVATE_INIT_WRAPPER_DEF
+        -:  533:
+        -:  534:#endif // defined(BOOST_ASIO_HAS_VARIADIC_TEMPLATES)
+        -:  535:
+        -:  536:    boost::system::error_code& ec_;
+        -:  537:  };
+        -:  538:
+        -:  539:#if defined(BOOST_ASIO_HAS_VARIADIC_TEMPLATES)
+        -:  540:
+        -:  541:  template <typename Initiation, typename RawCompletionToken, typename... Args>
+        -:  542:  static BOOST_ASIO_INITFN_DEDUCED_RESULT_TYPE(CompletionToken,
+        -:  543:      typename detail::redirect_error_signature<Signature>::type,
+        -:  544:      (async_initiate<CompletionToken,
+        -:  545:        typename detail::redirect_error_signature<Signature>::type>(
+        -:  546:          declval<init_wrapper>(), declval<CompletionToken&>(),
+        -:  547:          declval<Initiation>(), declval<BOOST_ASIO_MOVE_ARG(Args)>()...)))
+      68*:  548:  initiate(
+        -:  549:      BOOST_ASIO_MOVE_ARG(Initiation) initiation,
+        -:  550:      BOOST_ASIO_MOVE_ARG(RawCompletionToken) token,
+        -:  551:      BOOST_ASIO_MOVE_ARG(Args)... args)
+        -:  552:  {
+        -:  553:    return async_initiate<CompletionToken,
+        -:  554:      typename detail::redirect_error_signature<Signature>::type>(
+     136*:  555:        init_wrapper(token.ec_), token.token_,
+        -:  556:        BOOST_ASIO_MOVE_CAST(Initiation)(initiation),
+     136*:  557:        BOOST_ASIO_MOVE_CAST(Args)(args)...);
+        -:  558:  }
+------------------
+_ZN5boost4asio12async_resultINS0_16redirect_error_tINS0_15use_awaitable_tINS0_15any_io_executorEEEEEJFvNS_6system10error_codeEEEE8initiateINS0_20basic_waitable_timerINSt6chrono3_V212steady_clockENS0_11wait_traitsISF_EES4_E19initiate_async_waitES6_JEEEDTcl14async_initiateIS5_FvvEEclL_ZSt7declvalINSA_12init_wrapperEEDTcl9__declvalIT_ELi0EEEvEEclL_ZSL_IRS5_ESO_vEEcl7declvalISN_EEspcl7declvalIOT1_EEEEOSN_OT0_DpSR_:
+function _ZN5boost4asio12async_resultINS0_16redirect_error_tINS0_15use_awaitable_tINS0_15any_io_executorEEEEEJFvNS_6system10error_codeEEEE8initiateINS0_20basic_waitable_timerINSt6chrono3_V212steady_clockENS0_11wait_traitsISF_EES4_E19initiate_async_waitES6_JEEEDTcl14async_initiateIS5_FvvEEclL_ZSt7declvalINSA_12init_wrapperEEDTcl9__declvalIT_ELi0EEEvEEclL_ZSL_IRS5_ESO_vEEcl7declvalISN_EEspcl7declvalIOT1_EEEEOSN_OT0_DpSR_ called 68 returned 100% blocks executed 100%
+       68:  548:  initiate(
+        -:  549:      BOOST_ASIO_MOVE_ARG(Initiation) initiation,
+        -:  550:      BOOST_ASIO_MOVE_ARG(RawCompletionToken) token,
+        -:  551:      BOOST_ASIO_MOVE_ARG(Args)... args)
+        -:  552:  {
+        -:  553:    return async_initiate<CompletionToken,
+        -:  554:      typename detail::redirect_error_signature<Signature>::type>(
+      136:  555:        init_wrapper(token.ec_), token.token_,
+call    0 returned 100%
+        -:  556:        BOOST_ASIO_MOVE_CAST(Initiation)(initiation),
+      136:  557:        BOOST_ASIO_MOVE_CAST(Args)(args)...);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  558:  }
+------------------
+_ZN5boost4asio12async_resultINS0_16redirect_error_tINS0_15use_awaitable_tINS0_15any_io_executorEEEEEJFvNS_6system10error_codeEmEEE8initiateINS0_6detail20initiate_async_writeINS0_19basic_stream_socketINS0_2ip3tcpES4_EEEES6_JRKNS0_15const_buffers_1ENSC_14transfer_all_tEEEEDTcl14async_initiateIS5_FvmEEclL_ZSt7declvalINSA_12init_wrapperEEDTcl9__declvalIT_ELi0EEEvEEclL_ZSO_IRS5_ESR_vEEcl7declvalISQ_EEspcl7declvalIOT1_EEEEOSQ_OT0_DpSU_:
+function _ZN5boost4asio12async_resultINS0_16redirect_error_tINS0_15use_awaitable_tINS0_15any_io_executorEEEEEJFvNS_6system10error_codeEmEEE8initiateINS0_6detail20initiate_async_writeINS0_19basic_stream_socketINS0_2ip3tcpES4_EEEES6_JRKNS0_15const_buffers_1ENSC_14transfer_all_tEEEEDTcl14async_initiateIS5_FvmEEclL_ZSt7declvalINSA_12init_wrapperEEDTcl9__declvalIT_ELi0EEEvEEclL_ZSO_IRS5_ESR_vEEcl7declvalISQ_EEspcl7declvalIOT1_EEEEOSQ_OT0_DpSU_ called 0 returned 0% blocks executed 0%
+    #####:  548:  initiate(
+        -:  549:      BOOST_ASIO_MOVE_ARG(Initiation) initiation,
+        -:  550:      BOOST_ASIO_MOVE_ARG(RawCompletionToken) token,
+        -:  551:      BOOST_ASIO_MOVE_ARG(Args)... args)
+        -:  552:  {
+        -:  553:    return async_initiate<CompletionToken,
+        -:  554:      typename detail::redirect_error_signature<Signature>::type>(
+    #####:  555:        init_wrapper(token.ec_), token.token_,
+call    0 never executed
+        -:  556:        BOOST_ASIO_MOVE_CAST(Initiation)(initiation),
+    #####:  557:        BOOST_ASIO_MOVE_CAST(Args)(args)...);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:  558:  }
+------------------
+        -:  559:
+        -:  560:#else // defined(BOOST_ASIO_HAS_VARIADIC_TEMPLATES)
+        -:  561:
+        -:  562:  template <typename Initiation, typename RawCompletionToken>
+        -:  563:  static BOOST_ASIO_INITFN_DEDUCED_RESULT_TYPE(CompletionToken,
+        -:  564:      typename detail::redirect_error_signature<Signature>::type,
+        -:  565:      (async_initiate<CompletionToken,
+        -:  566:        typename detail::redirect_error_signature<Signature>::type>(
+        -:  567:          declval<init_wrapper>(), declval<CompletionToken&>(),
+        -:  568:          declval<Initiation>())))
+        -:  569:  initiate(
+        -:  570:      BOOST_ASIO_MOVE_ARG(Initiation) initiation,
+        -:  571:      BOOST_ASIO_MOVE_ARG(RawCompletionToken) token)
+        -:  572:  {
+        -:  573:    return async_initiate<CompletionToken,
+        -:  574:      typename detail::redirect_error_signature<Signature>::type>(
+        -:  575:        init_wrapper(token.ec_), token.token_,
+        -:  576:        BOOST_ASIO_MOVE_CAST(Initiation)(initiation));
+        -:  577:  }
+        -:  578:
+        -:  579:#define BOOST_ASIO_PRIVATE_INITIATE_DEF(n) \
+        -:  580:  template <typename Initiation, typename RawCompletionToken, \
+        -:  581:      BOOST_ASIO_VARIADIC_TPARAMS(n)> \
+        -:  582:  static BOOST_ASIO_INITFN_DEDUCED_RESULT_TYPE(CompletionToken, \
+        -:  583:      typename detail::redirect_error_signature<Signature>::type, \
+        -:  584:      (async_initiate<CompletionToken, \
+        -:  585:        typename detail::redirect_error_signature<Signature>::type>( \
+        -:  586:          declval<init_wrapper>(), declval<CompletionToken&>(), \
+        -:  587:          declval<Initiation>(), BOOST_ASIO_VARIADIC_DECLVAL(n)))) \
+        -:  588:  initiate( \
+        -:  589:      BOOST_ASIO_MOVE_ARG(Initiation) initiation, \
+        -:  590:      BOOST_ASIO_MOVE_ARG(RawCompletionToken) token, \
+        -:  591:      BOOST_ASIO_VARIADIC_MOVE_PARAMS(n)) \
+        -:  592:  { \
+        -:  593:    return async_initiate<CompletionToken, \
+        -:  594:      typename detail::redirect_error_signature<Signature>::type>( \
+        -:  595:        init_wrapper(token.ec_), token.token_, \
+        -:  596:        BOOST_ASIO_MOVE_CAST(Initiation)(initiation), \
+        -:  597:        BOOST_ASIO_VARIADIC_MOVE_ARGS(n)); \
+        -:  598:  } \
+        -:  599:  /**/
+        -:  600:  BOOST_ASIO_VARIADIC_GENERATE(BOOST_ASIO_PRIVATE_INITIATE_DEF)
+        -:  601:#undef BOOST_ASIO_PRIVATE_INITIATE_DEF
+        -:  602:
+        -:  603:#endif // defined(BOOST_ASIO_HAS_VARIADIC_TEMPLATES)
+        -:  604:};
+        -:  605:
+        -:  606:template <template <typename, typename> class Associator,
+        -:  607:    typename Handler, typename DefaultCandidate>
+        -:  608:struct associator<Associator,
+        -:  609:    detail::redirect_error_handler<Handler>, DefaultCandidate>
+        -:  610:  : Associator<Handler, DefaultCandidate>
+        -:  611:{
+        -:  612:  static typename Associator<Handler, DefaultCandidate>::type
+     204*:  613:  get(const detail::redirect_error_handler<Handler>& h) BOOST_ASIO_NOEXCEPT
+        -:  614:  {
+     204*:  615:    return Associator<Handler, DefaultCandidate>::get(h.handler_);
+        -:  616:  }
+------------------
+_ZN5boost4asio10associatorINS0_20associated_allocatorENS0_6detail22redirect_error_handlerINS3_17awaitable_handlerINS0_15any_io_executorEJmEEEEESaIvEE3getERKS8_:
+function _ZN5boost4asio10associatorINS0_20associated_allocatorENS0_6detail22redirect_error_handlerINS3_17awaitable_handlerINS0_15any_io_executorEJmEEEEESaIvEE3getERKS8_ called 0 returned 0% blocks executed 0%
+    #####:  613:  get(const detail::redirect_error_handler<Handler>& h) BOOST_ASIO_NOEXCEPT
+        -:  614:  {
+    #####:  615:    return Associator<Handler, DefaultCandidate>::get(h.handler_);
+call    0 never executed
+        -:  616:  }
+------------------
+_ZN5boost4asio10associatorINS0_28associated_cancellation_slotENS0_6detail22redirect_error_handlerINS3_17awaitable_handlerINS0_15any_io_executorEJmEEEEENS0_17cancellation_slotEE3getERKS8_:
+function _ZN5boost4asio10associatorINS0_28associated_cancellation_slotENS0_6detail22redirect_error_handlerINS3_17awaitable_handlerINS0_15any_io_executorEJmEEEEENS0_17cancellation_slotEE3getERKS8_ called 0 returned 0% blocks executed 0%
+    #####:  613:  get(const detail::redirect_error_handler<Handler>& h) BOOST_ASIO_NOEXCEPT
+        -:  614:  {
+    #####:  615:    return Associator<Handler, DefaultCandidate>::get(h.handler_);
+call    0 never executed
+        -:  616:  }
+------------------
+_ZN5boost4asio10associatorINS0_20associated_allocatorENS0_6detail22redirect_error_handlerINS3_17awaitable_handlerINS0_15any_io_executorEJEEEEESaIvEE3getERKS8_:
+function _ZN5boost4asio10associatorINS0_20associated_allocatorENS0_6detail22redirect_error_handlerINS3_17awaitable_handlerINS0_15any_io_executorEJEEEEESaIvEE3getERKS8_ called 136 returned 100% blocks executed 100%
+      136:  613:  get(const detail::redirect_error_handler<Handler>& h) BOOST_ASIO_NOEXCEPT
+        -:  614:  {
+      136:  615:    return Associator<Handler, DefaultCandidate>::get(h.handler_);
+call    0 returned 100%
+        -:  616:  }
+------------------
+_ZN5boost4asio10associatorINS0_28associated_cancellation_slotENS0_6detail22redirect_error_handlerINS3_17awaitable_handlerINS0_15any_io_executorEJEEEEENS0_17cancellation_slotEE3getERKS8_:
+function _ZN5boost4asio10associatorINS0_28associated_cancellation_slotENS0_6detail22redirect_error_handlerINS3_17awaitable_handlerINS0_15any_io_executorEJEEEEENS0_17cancellation_slotEE3getERKS8_ called 68 returned 100% blocks executed 100%
+       68:  613:  get(const detail::redirect_error_handler<Handler>& h) BOOST_ASIO_NOEXCEPT
+        -:  614:  {
+       68:  615:    return Associator<Handler, DefaultCandidate>::get(h.handler_);
+call    0 returned 100%
+        -:  616:  }
+------------------
+        -:  617:
+        -:  618:  static BOOST_ASIO_AUTO_RETURN_TYPE_PREFIX2(
+        -:  619:      typename Associator<Handler, DefaultCandidate>::type)
+      68*:  620:  get(const detail::redirect_error_handler<Handler>& h,
+        -:  621:      const DefaultCandidate& c) BOOST_ASIO_NOEXCEPT
+        -:  622:    BOOST_ASIO_AUTO_RETURN_TYPE_SUFFIX((
+        -:  623:      Associator<Handler, DefaultCandidate>::get(h.handler_, c)))
+        -:  624:  {
+      68*:  625:    return Associator<Handler, DefaultCandidate>::get(h.handler_, c);
+        -:  626:  }
+        -:  627:};
+        -:  628:
+        -:  629:#endif // !defined(GENERATING_DOCUMENTATION)
+        -:  630:
+        -:  631:} // namespace asio
+        -:  632:} // namespace boost
+        -:  633:
+        -:  634:#include <boost/asio/detail/pop_options.hpp>
+        -:  635:
+        -:  636:#endif // BOOST_ASIO_IMPL_REDIRECT_ERROR_HPP

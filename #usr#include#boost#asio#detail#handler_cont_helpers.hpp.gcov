@@ -1,0 +1,46 @@
+        -:    0:Source:/usr/include/boost/asio/detail/handler_cont_helpers.hpp
+        -:    1://
+        -:    2:// detail/handler_cont_helpers.hpp
+        -:    3:// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        -:    4://
+        -:    5:// Copyright (c) 2003-2023 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+        -:    6://
+        -:    7:// Distributed under the Boost Software License, Version 1.0. (See accompanying
+        -:    8:// file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+        -:    9://
+        -:   10:
+        -:   11:#ifndef BOOST_ASIO_DETAIL_HANDLER_CONT_HELPERS_HPP
+        -:   12:#define BOOST_ASIO_DETAIL_HANDLER_CONT_HELPERS_HPP
+        -:   13:
+        -:   14:#if defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   15:# pragma once
+        -:   16:#endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   17:
+        -:   18:#include <boost/asio/detail/config.hpp>
+        -:   19:#include <boost/asio/detail/memory.hpp>
+        -:   20:#include <boost/asio/handler_continuation_hook.hpp>
+        -:   21:
+        -:   22:#include <boost/asio/detail/push_options.hpp>
+        -:   23:
+        -:   24:// Calls to asio_handler_is_continuation must be made from a namespace that
+        -:   25:// does not contain overloads of this function. This namespace is defined here
+        -:   26:// for that purpose.
+        -:   27:namespace boost_asio_handler_cont_helpers {
+        -:   28:
+        -:   29:template <typename Context>
+     868*:   30:inline bool is_continuation(Context& context)
+        -:   31:{
+        -:   32:#if !defined(BOOST_ASIO_HAS_HANDLER_HOOKS)
+        -:   33:  return false;
+        -:   34:#else
+        -:   35:  using boost::asio::asio_handler_is_continuation;
+     868*:   36:  return asio_handler_is_continuation(
+     868*:   37:      boost::asio::detail::addressof(context));
+        -:   38:#endif
+        -:   39:}
+        -:   40:
+        -:   41:} // namespace boost_asio_handler_cont_helpers
+        -:   42:
+        -:   43:#include <boost/asio/detail/pop_options.hpp>
+        -:   44:
+        -:   45:#endif // BOOST_ASIO_DETAIL_HANDLER_CONT_HELPERS_HPP

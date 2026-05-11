@@ -1,0 +1,628 @@
+        -:    0:Source:/home/runner/work/Hical/Hical/examples/openapi_server.cpp
+        -:    1:/**
+        -:    2: * @brief OpenAPI 自动生成完整示例
+        -:    3: * 演示 Hical 反射层与 OpenAPI 3.0 的集成：
+        -:    4: *   - DTO 定义 + HICAL_JSON + HICAL_SCHEMA_NAME
+        -:    5: *   - Handler 定义 + HICAL_HANDLER + HICAL_API + HICAL_ROUTES_WITH_API
+        -:    6: *   - 自动注册路由 + 收集 OpenAPI 元数据
+        -:    7: *   - 暴露 /openapi.json 和 /docs 端点
+        -:    8: * 运行后访问：
+        -:    9: *   http://localhost:8080/openapi.json  → OpenAPI 3.0 JSON spec
+        -:   10: *   http://localhost:8080/docs          → Swagger UI 页面
+        -:   11: */
+        -:   12:
+        -:   13:#include "core/HttpServer.h"
+        -:   14:#include "core/MetaJson.h"
+        -:   15:#include "core/MetaRoutes.h"
+        -:   16:#include "core/OpenApiSchema.h"
+        -:   17:#include "core/OpenApiRegistry.h"
+        -:   18:#include "core/OpenApiDocument.h"
+        -:   19:#include "core/OpenApiEndpoint.h"
+        -:   20:
+        -:   21:#include <iostream>
+        -:   22:#include <vector>
+        -:   23:
+        -:   24:using namespace hical;
+        -:   25:using namespace hical::meta;
+        -:   26:using namespace hical::meta::openapi;
+        -:   27:
+        -:   28:// ============ DTO 定义 ============
+        -:   29:
+        -:   30:struct UserDTO
+        -:   31:{
+        -:   32:	std::string name;
+        -:   33:	int age;
+        -:   34:	std::string email;
+function _ZN7UserDTO15hicalJsonFieldsB5cxx11Ev called 0 returned 0% blocks executed 0%
+    #####:   35:	HICAL_JSON(UserDTO, REQUIRED(name), age, email)
+        -:   36:};
+        -:   37:HICAL_SCHEMA_NAME(UserDTO, "UserDTO")
+        -:   38:
+        -:   39:struct CreateUserRequest
+        -:   40:{
+        -:   41:	std::string name;
+        -:   42:	int age;
+        -:   43:	std::string email;
+function _ZN17CreateUserRequest15hicalJsonFieldsB5cxx11Ev called 0 returned 0% blocks executed 0%
+    #####:   44:	HICAL_JSON(CreateUserRequest, REQUIRED(name), REQUIRED(age), email)
+        -:   45:};
+        -:   46:HICAL_SCHEMA_NAME(CreateUserRequest, "CreateUserRequest")
+        -:   47:
+        -:   48:struct ErrorResponse
+        -:   49:{
+        -:   50:	int code;
+        -:   51:	std::string message;
+function _ZN13ErrorResponse15hicalJsonFieldsB5cxx11Ev called 0 returned 0% blocks executed 0%
+    #####:   52:	HICAL_JSON(ErrorResponse, code, message)
+        -:   53:};
+        -:   54:HICAL_SCHEMA_NAME(ErrorResponse, "ErrorResponse")
+        -:   55:
+        -:   56:struct StatusDTO
+        -:   57:{
+        -:   58:	std::string status;
+        -:   59:	std::string version;
+        -:   60:	std::string framework;
+function _ZN9StatusDTO15hicalJsonFieldsB5cxx11Ev called 0 returned 0% blocks executed 0%
+    #####:   61:	HICAL_JSON(StatusDTO, status, version, framework)
+        -:   62:};
+        -:   63:HICAL_SCHEMA_NAME(StatusDTO, "StatusDTO")
+        -:   64:
+        -:   65:// ============ Handler 定义 ============
+        -:   66:
+        -:   67:struct ApiHandler
+        -:   68:{
+        -:   69:	// GET /api/status — 获取服务状态
+function _ZN10ApiHandler9getStatusERKN5hical11HttpRequestE called 0 returned 0% blocks executed 0%
+    #####:   70:	HttpResponse getStatus(const HttpRequest& /*req*/)
+        -:   71:	{
+    #####:   72:		StatusDTO status {"running", "1.0.0", "hical"};
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed (throw)
+branch  9 never executed (fallthrough)
+branch 10 never executed
+call   11 never executed
+branch 12 never executed (fallthrough)
+branch 13 never executed
+call   14 never executed
+    #####:   73:		return HttpResponse::json(toJson(status));
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+call    4 never executed
+branch  5 never executed (fallthrough)
+branch  6 never executed (throw)
+call    7 never executed
+call    8 never executed
+call    9 never executed
+call   10 never executed
+    #####:   74:	}
+call    0 never executed
+call    1 never executed
+        -:   75:	HICAL_HANDLER(Get, "/api/status", getStatus)
+function _ZNK10ApiHandlerUlvE_clEv called 0 returned 0% blocks executed 0%
+    #####:   76:	HICAL_API(getStatus, builder::summary(info, "Get service status"); builder::tags(info, {"system"});
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed (throw)
+call    8 never executed
+branch  9 never executed
+branch 10 never executed (fallthrough)
+call   11 never executed
+branch 12 never executed (fallthrough)
+branch 13 never executed (throw)
+call   14 never executed
+call   15 never executed
+branch 16 never executed (fallthrough)
+branch 17 never executed (throw)
+call   18 never executed
+        -:   77:			  builder::response<StatusDTO>(info, 200, "Service status"))
+        -:   78:
+        -:   79:	// GET /api/users — 列出所有用户
+function _ZN10ApiHandler9listUsersERKN5hical11HttpRequestE called 0 returned 0% blocks executed 0%
+    #####:   80:	HttpResponse listUsers(const HttpRequest& /*req*/)
+        -:   81:	{
+    #####:   82:		boost::json::array users;
+call    0 never executed
+    #####:   83:		users.push_back(toJson(UserDTO {"Alice", 30, "alice@example.com"}));
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed (throw)
+call    9 never executed
+call   10 never executed
+branch 11 never executed (fallthrough)
+branch 12 never executed (throw)
+call   13 never executed
+call   14 never executed
+call   15 never executed
+call   16 never executed
+call   17 never executed
+call   18 never executed
+branch 19 never executed (fallthrough)
+branch 20 never executed
+call   21 never executed
+    #####:   84:		users.push_back(toJson(UserDTO {"Bob", 25, "bob@example.com"}));
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed (throw)
+call    9 never executed
+call   10 never executed
+branch 11 never executed (fallthrough)
+branch 12 never executed (throw)
+call   13 never executed
+call   14 never executed
+call   15 never executed
+call   16 never executed
+call   17 never executed
+call   18 never executed
+branch 19 never executed (fallthrough)
+branch 20 never executed
+call   21 never executed
+    #####:   85:		return HttpResponse::json({{"users", users}, {"total", 2}});
+call    0 never executed
+call    1 never executed
+call    2 never executed
+call    3 never executed
+call    4 never executed
+call    5 never executed
+call    6 never executed
+call    7 never executed
+branch  8 never executed (fallthrough)
+branch  9 never executed (throw)
+call   10 never executed
+branch 11 never executed (fallthrough)
+branch 12 never executed (throw)
+call   13 never executed
+call   14 never executed
+call   15 never executed
+call   16 never executed
+    #####:   86:	}
+call    0 never executed
+call    1 never executed
+        -:   87:	HICAL_HANDLER(Get, "/api/users", listUsers)
+function _ZNK10ApiHandlerUlvE0_clEv called 0 returned 0% blocks executed 0%
+    #####:   88:	HICAL_API(listUsers, builder::summary(info, "List all users"); builder::tags(info, {"users"});
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed (throw)
+call    8 never executed
+branch  9 never executed
+branch 10 never executed (fallthrough)
+call   11 never executed
+branch 12 never executed (fallthrough)
+branch 13 never executed (throw)
+call   14 never executed
+call   15 never executed
+branch 16 never executed (fallthrough)
+branch 17 never executed (throw)
+call   18 never executed
+        -:   89:			  builder::response<UserDTO>(info, 200, "User list"))
+        -:   90:
+        -:   91:	// POST /api/users — 创建用户
+function _ZN10ApiHandler10createUserERKN5hical11HttpRequestE called 0 returned 0% blocks executed 0%
+    #####:   92:	HttpResponse createUser(const HttpRequest& req)
+        -:   93:	{
+    #####:   94:		auto input = req.readJson<CreateUserRequest>();
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:   95:		UserDTO user {input.name, input.age, input.email};
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+branch  6 never executed (fallthrough)
+branch  7 never executed
+call    8 never executed
+    #####:   96:		auto res = HttpResponse::json(toJson(user));
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+call    4 never executed
+branch  5 never executed (fallthrough)
+branch  6 never executed (throw)
+call    7 never executed
+call    8 never executed
+call    9 never executed
+call   10 never executed
+    #####:   97:		res.setStatus(HttpStatusCode::hCreated);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:   98:		return res;
+    #####:   99:	}
+call    0 never executed
+call    1 never executed
+call    2 never executed
+call    3 never executed
+call    4 never executed
+        -:  100:	HICAL_HANDLER(Post, "/api/users", createUser)
+function _ZNK10ApiHandlerUlvE1_clEv called 0 returned 0% blocks executed 0%
+    #####:  101:	HICAL_API(createUser, builder::summary(info, "Create a new user"); builder::tags(info, {"users"});
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed (throw)
+call    8 never executed
+branch  9 never executed
+branch 10 never executed (fallthrough)
+call   11 never executed
+branch 12 never executed (fallthrough)
+branch 13 never executed (throw)
+call   14 never executed
+call   15 never executed
+branch 16 never executed (fallthrough)
+branch 17 never executed (throw)
+call   18 never executed
+call   19 never executed
+branch 20 never executed (fallthrough)
+branch 21 never executed (throw)
+call   22 never executed
+call   23 never executed
+branch 24 never executed (fallthrough)
+branch 25 never executed (throw)
+call   26 never executed
+        -:  102:			  builder::request<CreateUserRequest>(info, "User data", true);
+        -:  103:			  builder::response<UserDTO>(info, 201, "Created");
+        -:  104:			  builder::responseDesc(info, 400, "Invalid request body"))
+        -:  105:
+        -:  106:	// GET /api/users/{id} — 获取用户详情
+function _ZN10ApiHandler7getUserERKN5hical11HttpRequestE called 0 returned 0% blocks executed 0%
+    #####:  107:	HttpResponse getUser(const HttpRequest& req)
+        -:  108:	{
+    #####:  109:		auto id = req.param("id");
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+branch  5 never executed (fallthrough)
+branch  6 never executed (throw)
+    #####:  110:		UserDTO user {"User " + id, 20, id + "@example.com"};
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+branch  6 never executed (fallthrough)
+branch  7 never executed
+call    8 never executed
+    #####:  111:		return HttpResponse::json(toJson(user));
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+call    4 never executed
+branch  5 never executed (fallthrough)
+branch  6 never executed (throw)
+call    7 never executed
+call    8 never executed
+call    9 never executed
+call   10 never executed
+    #####:  112:	}
+call    0 never executed
+call    1 never executed
+call    2 never executed
+call    3 never executed
+        -:  113:	HICAL_HANDLER(Get, "/api/users/{id}", getUser)
+function _ZNK10ApiHandlerUlvE2_clEv called 0 returned 0% blocks executed 0%
+    #####:  114:	HICAL_API(getUser, builder::summary(info, "Get user by ID"); builder::tags(info, {"users"});
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed (throw)
+call    8 never executed
+branch  9 never executed
+branch 10 never executed (fallthrough)
+call   11 never executed
+branch 12 never executed (fallthrough)
+branch 13 never executed (throw)
+call   14 never executed
+call   15 never executed
+call   16 never executed
+call   17 never executed
+branch 18 never executed (fallthrough)
+branch 19 never executed (throw)
+call   20 never executed
+call   21 never executed
+branch 22 never executed (fallthrough)
+branch 23 never executed (throw)
+call   24 never executed
+call   25 never executed
+branch 26 never executed (fallthrough)
+branch 27 never executed (throw)
+call   28 never executed
+        -:  115:			  builder::pathParam(info, "id", "integer", "User ID");
+        -:  116:			  builder::response<UserDTO>(info, 200, "User details");
+        -:  117:			  builder::responseDesc(info, 404, "User not found"))
+        -:  118:
+        -:  119:	// DELETE /api/users/{id} — 删除用户
+function _ZN10ApiHandler10deleteUserERKN5hical11HttpRequestE called 0 returned 0% blocks executed 0%
+    #####:  120:	HttpResponse deleteUser(const HttpRequest& req)
+        -:  121:	{
+    #####:  122:		auto id = req.param("id");
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+branch  5 never executed (fallthrough)
+branch  6 never executed (throw)
+    #####:  123:		return HttpResponse::json({{"deleted", id}});
+call    0 never executed
+call    1 never executed
+call    2 never executed
+call    3 never executed
+call    4 never executed
+branch  5 never executed (fallthrough)
+branch  6 never executed (throw)
+call    7 never executed
+branch  8 never executed (fallthrough)
+branch  9 never executed (throw)
+call   10 never executed
+call   11 never executed
+call   12 never executed
+call   13 never executed
+    #####:  124:	}
+call    0 never executed
+call    1 never executed
+        -:  125:	HICAL_HANDLER(Delete, "/api/users/{id}", deleteUser)
+function _ZNK10ApiHandlerUlvE3_clEv called 0 returned 0% blocks executed 0%
+    #####:  126:	HICAL_API(deleteUser, builder::summary(info, "Delete a user"); builder::tags(info, {"users"});
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed (throw)
+call    8 never executed
+branch  9 never executed
+branch 10 never executed (fallthrough)
+call   11 never executed
+branch 12 never executed (fallthrough)
+branch 13 never executed (throw)
+call   14 never executed
+call   15 never executed
+call   16 never executed
+call   17 never executed
+branch 18 never executed (fallthrough)
+branch 19 never executed (throw)
+call   20 never executed
+call   21 never executed
+branch 22 never executed (fallthrough)
+branch 23 never executed (throw)
+call   24 never executed
+call   25 never executed
+branch 26 never executed (fallthrough)
+branch 27 never executed (throw)
+call   28 never executed
+        -:  127:			  builder::pathParam(info, "id", "integer", "User ID");
+        -:  128:			  builder::responseDesc(info, 204, "Deleted");
+        -:  129:			  builder::responseDesc(info, 404, "User not found"))
+        -:  130:
+    #####:  131:	HICAL_ROUTES_WITH_API(ApiHandler, getStatus, listUsers, createUser, getUser, deleteUser)
+------------------
+_ZN10ApiHandler17hicalApiInfoTableEv:
+function _ZN10ApiHandler17hicalApiInfoTableEv called 0 returned 0% blocks executed 0%
+    #####:  131:	HICAL_ROUTES_WITH_API(ApiHandler, getStatus, listUsers, createUser, getUser, deleteUser)
+call    0 never executed
+------------------
+_ZN10ApiHandler15hicalRouteTableEv:
+function _ZN10ApiHandler15hicalRouteTableEv called 0 returned 0% blocks executed 0%
+    #####:  131:	HICAL_ROUTES_WITH_API(ApiHandler, getStatus, listUsers, createUser, getUser, deleteUser)
+call    0 never executed
+call    1 never executed
+call    2 never executed
+call    3 never executed
+call    4 never executed
+call    5 never executed
+------------------
+        -:  132:};
+        -:  133:
+        -:  134:// ============ main ============
+        -:  135:
+function main called 0 returned 0% blocks executed 0%
+    #####:  136:int main()
+        -:  137:{
+    #####:  138:	HttpServer server(8080);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  139:	auto registry = std::make_shared<OpenApiRegistry>();
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:  140:
+        -:  141:	// 注册所有 Schema
+    #####:  142:	std::unordered_map<std::string, boost::json::object> schemas;
+call    0 never executed
+    #####:  143:	registerSchemas<UserDTO, CreateUserRequest, ErrorResponse, StatusDTO>(schemas);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  144:	for (auto& [name, schema] : schemas)
+call    0 never executed
+call    1 never executed
+call    2 never executed
+call    3 never executed
+call    4 never executed
+call    5 never executed
+branch  6 never executed
+branch  7 never executed (fallthrough)
+        -:  145:	{
+    #####:  146:		registry->addSchema(name, std::move(schema));
+call    0 never executed
+call    1 never executed
+call    2 never executed
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+call    6 never executed
+call    7 never executed
+call    8 never executed
+        -:  147:	}
+        -:  148:
+        -:  149:	// 注册路由 + 收集 OpenAPI 元数据
+        -:  150:	ApiHandler handler;
+    #####:  151:	registerRoutesWithOpenApi(server.router(), handler, *registry);
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+branch  5 never executed (fallthrough)
+branch  6 never executed (throw)
+        -:  152:
+        -:  153:	// 暴露 OpenAPI 端点
+        -:  154:	auto doc = std::make_shared<OpenApiDocument>(
+        -:  155:		registry,
+    #####:  156:		OpenApiConfig {.title = "Hical OpenAPI Demo",
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed (throw)
+call    9 never executed
+branch 10 never executed (fallthrough)
+branch 11 never executed (throw)
+call   12 never executed
+branch 13 never executed (fallthrough)
+branch 14 never executed
+call   15 never executed
+branch 16 never executed (fallthrough)
+branch 17 never executed
+branch 18 never executed (fallthrough)
+branch 19 never executed
+call   20 never executed
+branch 21 never executed (fallthrough)
+branch 22 never executed
+call   23 never executed
+branch 24 never executed (fallthrough)
+branch 25 never executed
+call   26 never executed
+    #####:  157:					   .version = "1.0.0",
+    #####:  158:					   .description = "Demonstration of Hical's automatic OpenAPI generation",
+    #####:  159:					   .servers = {{"http://localhost:8080", "Local development server"}}});
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+call    4 never executed
+    #####:  160:	serveOpenApi(server.router(), doc);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+call    6 never executed
+call    7 never executed
+branch  8 never executed (fallthrough)
+branch  9 never executed (throw)
+call   10 never executed
+branch 11 never executed (fallthrough)
+branch 12 never executed (throw)
+call   13 never executed
+call   14 never executed
+call   15 never executed
+call   16 never executed
+call   17 never executed
+call   18 never executed
+        -:  161:
+    #####:  162:	std::cout << "OpenAPI server running on http://localhost:8080" << std::endl;
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+    #####:  163:	std::cout << "  API spec: http://localhost:8080/openapi.json" << std::endl;
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+    #####:  164:	std::cout << "  Swagger UI: http://localhost:8080/docs" << std::endl;
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+        -:  165:
+    #####:  166:	server.start();
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  167:	return 0;
+    #####:  168:}
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+call    6 never executed
+call    7 never executed
+call    8 never executed
+call    9 never executed
+branch 10 never executed (fallthrough)
+branch 11 never executed
+call   12 never executed
+branch 13 never executed (fallthrough)
+branch 14 never executed
+branch 15 never executed (fallthrough)
+branch 16 never executed
+call   17 never executed
+call   18 never executed
+call   19 never executed
+call   20 never executed
+call   21 never executed

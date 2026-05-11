@@ -1,0 +1,293 @@
+        -:    0:Source:/usr/include/boost/asio/ip/address.hpp
+        -:    1://
+        -:    2:// ip/address.hpp
+        -:    3:// ~~~~~~~~~~~~~~
+        -:    4://
+        -:    5:// Copyright (c) 2003-2023 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+        -:    6://
+        -:    7:// Distributed under the Boost Software License, Version 1.0. (See accompanying
+        -:    8:// file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+        -:    9://
+        -:   10:
+        -:   11:#ifndef BOOST_ASIO_IP_ADDRESS_HPP
+        -:   12:#define BOOST_ASIO_IP_ADDRESS_HPP
+        -:   13:
+        -:   14:#if defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   15:# pragma once
+        -:   16:#endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   17:
+        -:   18:#include <boost/asio/detail/config.hpp>
+        -:   19:#include <string>
+        -:   20:#include <boost/asio/detail/throw_exception.hpp>
+        -:   21:#include <boost/asio/detail/string_view.hpp>
+        -:   22:#include <boost/asio/detail/type_traits.hpp>
+        -:   23:#include <boost/system/error_code.hpp>
+        -:   24:#include <boost/asio/ip/address_v4.hpp>
+        -:   25:#include <boost/asio/ip/address_v6.hpp>
+        -:   26:#include <boost/asio/ip/bad_address_cast.hpp>
+        -:   27:
+        -:   28:#if defined(BOOST_ASIO_HAS_STD_HASH)
+        -:   29:# include <functional>
+        -:   30:#endif // defined(BOOST_ASIO_HAS_STD_HASH)
+        -:   31:
+        -:   32:#if !defined(BOOST_ASIO_NO_IOSTREAM)
+        -:   33:# include <iosfwd>
+        -:   34:#endif // !defined(BOOST_ASIO_NO_IOSTREAM)
+        -:   35:
+        -:   36:#include <boost/asio/detail/push_options.hpp>
+        -:   37:
+        -:   38:namespace boost {
+        -:   39:namespace asio {
+        -:   40:namespace ip {
+        -:   41:
+        -:   42:/// Implements version-independent IP addresses.
+        -:   43:/**
+        -:   44: * The boost::asio::ip::address class provides the ability to use either IP
+        -:   45: * version 4 or version 6 addresses.
+        -:   46: *
+        -:   47: * @par Thread Safety
+        -:   48: * @e Distinct @e objects: Safe.@n
+        -:   49: * @e Shared @e objects: Unsafe.
+        -:   50: */
+        -:   51:class address
+        -:   52:{
+        -:   53:public:
+        -:   54:  /// Default constructor.
+        -:   55:  BOOST_ASIO_DECL address() BOOST_ASIO_NOEXCEPT;
+        -:   56:
+        -:   57:  /// Construct an address from an IPv4 address.
+        -:   58:  BOOST_ASIO_DECL address(
+        -:   59:      const boost::asio::ip::address_v4& ipv4_address) BOOST_ASIO_NOEXCEPT;
+        -:   60:
+        -:   61:  /// Construct an address from an IPv6 address.
+        -:   62:  BOOST_ASIO_DECL address(
+        -:   63:      const boost::asio::ip::address_v6& ipv6_address) BOOST_ASIO_NOEXCEPT;
+        -:   64:
+        -:   65:  /// Copy constructor.
+        -:   66:  BOOST_ASIO_DECL address(const address& other) BOOST_ASIO_NOEXCEPT;
+        -:   67:
+        -:   68:#if defined(BOOST_ASIO_HAS_MOVE)
+        -:   69:  /// Move constructor.
+        -:   70:  BOOST_ASIO_DECL address(address&& other) BOOST_ASIO_NOEXCEPT;
+        -:   71:#endif // defined(BOOST_ASIO_HAS_MOVE)
+        -:   72:
+        -:   73:  /// Assign from another address.
+        -:   74:  BOOST_ASIO_DECL address& operator=(const address& other) BOOST_ASIO_NOEXCEPT;
+        -:   75:
+        -:   76:#if defined(BOOST_ASIO_HAS_MOVE)
+        -:   77:  /// Move-assign from another address.
+        -:   78:  BOOST_ASIO_DECL address& operator=(address&& other) BOOST_ASIO_NOEXCEPT;
+        -:   79:#endif // defined(BOOST_ASIO_HAS_MOVE)
+        -:   80:
+        -:   81:  /// Assign from an IPv4 address.
+        -:   82:  BOOST_ASIO_DECL address& operator=(
+        -:   83:      const boost::asio::ip::address_v4& ipv4_address) BOOST_ASIO_NOEXCEPT;
+        -:   84:
+        -:   85:  /// Assign from an IPv6 address.
+        -:   86:  BOOST_ASIO_DECL address& operator=(
+        -:   87:      const boost::asio::ip::address_v6& ipv6_address) BOOST_ASIO_NOEXCEPT;
+        -:   88:
+        -:   89:  /// Get whether the address is an IP version 4 address.
+      92*:   90:  bool is_v4() const BOOST_ASIO_NOEXCEPT
+        -:   91:  {
+      92*:   92:    return type_ == ipv4;
+        -:   93:  }
+        -:   94:
+        -:   95:  /// Get whether the address is an IP version 6 address.
+        -:   96:  bool is_v6() const BOOST_ASIO_NOEXCEPT
+        -:   97:  {
+        -:   98:    return type_ == ipv6;
+        -:   99:  }
+        -:  100:
+        -:  101:  /// Get the address as an IP version 4 address.
+        -:  102:  BOOST_ASIO_DECL boost::asio::ip::address_v4 to_v4() const;
+        -:  103:
+        -:  104:  /// Get the address as an IP version 6 address.
+        -:  105:  BOOST_ASIO_DECL boost::asio::ip::address_v6 to_v6() const;
+        -:  106:
+        -:  107:  /// Get the address as a string.
+        -:  108:  BOOST_ASIO_DECL std::string to_string() const;
+        -:  109:
+        -:  110:#if !defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  111:  /// (Deprecated: Use other overload.) Get the address as a string.
+        -:  112:  BOOST_ASIO_DECL std::string to_string(boost::system::error_code& ec) const;
+        -:  113:
+        -:  114:  /// (Deprecated: Use make_address().) Create an address from an IPv4 address
+        -:  115:  /// string in dotted decimal form, or from an IPv6 address in hexadecimal
+        -:  116:  /// notation.
+        -:  117:  static address from_string(const char* str);
+        -:  118:
+        -:  119:  /// (Deprecated: Use make_address().) Create an address from an IPv4 address
+        -:  120:  /// string in dotted decimal form, or from an IPv6 address in hexadecimal
+        -:  121:  /// notation.
+        -:  122:  static address from_string(const char* str, boost::system::error_code& ec);
+        -:  123:
+        -:  124:  /// (Deprecated: Use make_address().) Create an address from an IPv4 address
+        -:  125:  /// string in dotted decimal form, or from an IPv6 address in hexadecimal
+        -:  126:  /// notation.
+        -:  127:  static address from_string(const std::string& str);
+        -:  128:
+        -:  129:  /// (Deprecated: Use make_address().) Create an address from an IPv4 address
+        -:  130:  /// string in dotted decimal form, or from an IPv6 address in hexadecimal
+        -:  131:  /// notation.
+        -:  132:  static address from_string(
+        -:  133:      const std::string& str, boost::system::error_code& ec);
+        -:  134:#endif // !defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  135:
+        -:  136:  /// Determine whether the address is a loopback address.
+        -:  137:  BOOST_ASIO_DECL bool is_loopback() const BOOST_ASIO_NOEXCEPT;
+        -:  138:
+        -:  139:  /// Determine whether the address is unspecified.
+        -:  140:  BOOST_ASIO_DECL bool is_unspecified() const BOOST_ASIO_NOEXCEPT;
+        -:  141:
+        -:  142:  /// Determine whether the address is a multicast address.
+        -:  143:  BOOST_ASIO_DECL bool is_multicast() const BOOST_ASIO_NOEXCEPT;
+        -:  144:
+        -:  145:  /// Compare two addresses for equality.
+        -:  146:  BOOST_ASIO_DECL friend bool operator==(const address& a1,
+        -:  147:      const address& a2) BOOST_ASIO_NOEXCEPT;
+        -:  148:
+        -:  149:  /// Compare two addresses for inequality.
+        -:  150:  friend bool operator!=(const address& a1,
+        -:  151:      const address& a2) BOOST_ASIO_NOEXCEPT
+        -:  152:  {
+        -:  153:    return !(a1 == a2);
+        -:  154:  }
+        -:  155:
+        -:  156:  /// Compare addresses for ordering.
+        -:  157:  BOOST_ASIO_DECL friend bool operator<(const address& a1,
+        -:  158:      const address& a2) BOOST_ASIO_NOEXCEPT;
+        -:  159:
+        -:  160:  /// Compare addresses for ordering.
+        -:  161:  friend bool operator>(const address& a1,
+        -:  162:      const address& a2) BOOST_ASIO_NOEXCEPT
+        -:  163:  {
+        -:  164:    return a2 < a1;
+        -:  165:  }
+        -:  166:
+        -:  167:  /// Compare addresses for ordering.
+        -:  168:  friend bool operator<=(const address& a1,
+        -:  169:      const address& a2) BOOST_ASIO_NOEXCEPT
+        -:  170:  {
+        -:  171:    return !(a2 < a1);
+        -:  172:  }
+        -:  173:
+        -:  174:  /// Compare addresses for ordering.
+        -:  175:  friend bool operator>=(const address& a1,
+        -:  176:      const address& a2) BOOST_ASIO_NOEXCEPT
+        -:  177:  {
+        -:  178:    return !(a1 < a2);
+        -:  179:  }
+        -:  180:
+        -:  181:private:
+        -:  182:  // The type of the address.
+        -:  183:  enum { ipv4, ipv6 } type_;
+        -:  184:
+        -:  185:  // The underlying IPv4 address.
+        -:  186:  boost::asio::ip::address_v4 ipv4_address_;
+        -:  187:
+        -:  188:  // The underlying IPv6 address.
+        -:  189:  boost::asio::ip::address_v6 ipv6_address_;
+        -:  190:};
+        -:  191:
+        -:  192:/// Create an address from an IPv4 address string in dotted decimal form,
+        -:  193:/// or from an IPv6 address in hexadecimal notation.
+        -:  194:/**
+        -:  195: * @relates address
+        -:  196: */
+        -:  197:BOOST_ASIO_DECL address make_address(const char* str);
+        -:  198:
+        -:  199:/// Create an address from an IPv4 address string in dotted decimal form,
+        -:  200:/// or from an IPv6 address in hexadecimal notation.
+        -:  201:/**
+        -:  202: * @relates address
+        -:  203: */
+        -:  204:BOOST_ASIO_DECL address make_address(const char* str,
+        -:  205:    boost::system::error_code& ec) BOOST_ASIO_NOEXCEPT;
+        -:  206:
+        -:  207:/// Create an address from an IPv4 address string in dotted decimal form,
+        -:  208:/// or from an IPv6 address in hexadecimal notation.
+        -:  209:/**
+        -:  210: * @relates address
+        -:  211: */
+        -:  212:BOOST_ASIO_DECL address make_address(const std::string& str);
+        -:  213:
+        -:  214:/// Create an address from an IPv4 address string in dotted decimal form,
+        -:  215:/// or from an IPv6 address in hexadecimal notation.
+        -:  216:/**
+        -:  217: * @relates address
+        -:  218: */
+        -:  219:BOOST_ASIO_DECL address make_address(const std::string& str,
+        -:  220:    boost::system::error_code& ec) BOOST_ASIO_NOEXCEPT;
+        -:  221:
+        -:  222:#if defined(BOOST_ASIO_HAS_STRING_VIEW) \
+        -:  223:  || defined(GENERATING_DOCUMENTATION)
+        -:  224:
+        -:  225:/// Create an address from an IPv4 address string in dotted decimal form,
+        -:  226:/// or from an IPv6 address in hexadecimal notation.
+        -:  227:/**
+        -:  228: * @relates address
+        -:  229: */
+        -:  230:BOOST_ASIO_DECL address make_address(string_view str);
+        -:  231:
+        -:  232:/// Create an address from an IPv4 address string in dotted decimal form,
+        -:  233:/// or from an IPv6 address in hexadecimal notation.
+        -:  234:/**
+        -:  235: * @relates address
+        -:  236: */
+        -:  237:BOOST_ASIO_DECL address make_address(string_view str,
+        -:  238:    boost::system::error_code& ec) BOOST_ASIO_NOEXCEPT;
+        -:  239:
+        -:  240:#endif // defined(BOOST_ASIO_HAS_STRING_VIEW)
+        -:  241:       //  || defined(GENERATING_DOCUMENTATION)
+        -:  242:
+        -:  243:#if !defined(BOOST_ASIO_NO_IOSTREAM)
+        -:  244:
+        -:  245:/// Output an address as a string.
+        -:  246:/**
+        -:  247: * Used to output a human-readable string for a specified address.
+        -:  248: *
+        -:  249: * @param os The output stream to which the string will be written.
+        -:  250: *
+        -:  251: * @param addr The address to be written.
+        -:  252: *
+        -:  253: * @return The output stream.
+        -:  254: *
+        -:  255: * @relates boost::asio::ip::address
+        -:  256: */
+        -:  257:template <typename Elem, typename Traits>
+        -:  258:std::basic_ostream<Elem, Traits>& operator<<(
+        -:  259:    std::basic_ostream<Elem, Traits>& os, const address& addr);
+        -:  260:
+        -:  261:#endif // !defined(BOOST_ASIO_NO_IOSTREAM)
+        -:  262:
+        -:  263:} // namespace ip
+        -:  264:} // namespace asio
+        -:  265:} // namespace boost
+        -:  266:
+        -:  267:#if defined(BOOST_ASIO_HAS_STD_HASH)
+        -:  268:namespace std {
+        -:  269:
+        -:  270:template <>
+        -:  271:struct hash<boost::asio::ip::address>
+        -:  272:{
+        -:  273:  std::size_t operator()(const boost::asio::ip::address& addr)
+        -:  274:    const BOOST_ASIO_NOEXCEPT
+        -:  275:  {
+        -:  276:    return addr.is_v4()
+        -:  277:      ? std::hash<boost::asio::ip::address_v4>()(addr.to_v4())
+        -:  278:      : std::hash<boost::asio::ip::address_v6>()(addr.to_v6());
+        -:  279:  }
+        -:  280:};
+        -:  281:
+        -:  282:} // namespace std
+        -:  283:#endif // defined(BOOST_ASIO_HAS_STD_HASH)
+        -:  284:
+        -:  285:#include <boost/asio/detail/pop_options.hpp>
+        -:  286:
+        -:  287:#include <boost/asio/ip/impl/address.hpp>
+        -:  288:#if defined(BOOST_ASIO_HEADER_ONLY)
+        -:  289:# include <boost/asio/ip/impl/address.ipp>
+        -:  290:#endif // defined(BOOST_ASIO_HEADER_ONLY)
+        -:  291:
+        -:  292:#endif // BOOST_ASIO_IP_ADDRESS_HPP

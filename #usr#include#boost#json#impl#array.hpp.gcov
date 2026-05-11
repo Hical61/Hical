@@ -1,0 +1,660 @@
+        -:    0:Source:/usr/include/boost/json/impl/array.hpp
+        -:    1://
+        -:    2:// Copyright (c) 2019 Vinnie Falco (vinnie.falco@gmail.com)
+        -:    3://
+        -:    4:// Distributed under the Boost Software License, Version 1.0. (See accompanying
+        -:    5:// file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+        -:    6://
+        -:    7:// Official repository: https://github.com/boostorg/json
+        -:    8://
+        -:    9:
+        -:   10:#ifndef BOOST_JSON_IMPL_ARRAY_HPP
+        -:   11:#define BOOST_JSON_IMPL_ARRAY_HPP
+        -:   12:
+        -:   13:#include <boost/json/value.hpp>
+        -:   14:#include <boost/json/detail/except.hpp>
+        -:   15:#include <algorithm>
+        -:   16:#include <stdexcept>
+        -:   17:#include <type_traits>
+        -:   18:
+        -:   19:namespace boost {
+        -:   20:namespace json {
+        -:   21:
+        -:   22://----------------------------------------------------------
+        -:   23:
+        -:   24:struct alignas(value)
+        -:   25:    array::table
+        -:   26:{
+        -:   27:    std::uint32_t size = 0;
+        -:   28:    std::uint32_t capacity = 0;
+        -:   29:
+        -:   30:    constexpr table();
+        -:   31:
+        -:   32:    value&
+       12:   33:    operator[](std::size_t pos) noexcept
+        -:   34:    {
+        -:   35:        return (reinterpret_cast<
+       12:   36:            value*>(this + 1))[pos];
+        -:   37:    }
+------------------
+_ZN5boost4json5array5tableixEm:
+function _ZN5boost4json5array5tableixEm called 7 returned 100% blocks executed 100%
+        7:   33:    operator[](std::size_t pos) noexcept
+        -:   34:    {
+        -:   35:        return (reinterpret_cast<
+        7:   36:            value*>(this + 1))[pos];
+        -:   37:    }
+------------------
+_ZN5boost4json5array5tableixEm:
+function _ZN5boost4json5array5tableixEm called 5 returned 100% blocks executed 100%
+        5:   33:    operator[](std::size_t pos) noexcept
+        -:   34:    {
+        -:   35:        return (reinterpret_cast<
+        5:   36:            value*>(this + 1))[pos];
+        -:   37:    }
+------------------
+        -:   38:
+        -:   39:    BOOST_JSON_DECL
+        -:   40:    static
+        -:   41:    table*
+        -:   42:    allocate(
+        -:   43:        std::size_t capacity,
+        -:   44:        storage_ptr const& sp);
+        -:   45:
+        -:   46:    BOOST_JSON_DECL
+        -:   47:    static
+        -:   48:    void
+        -:   49:    deallocate(
+        -:   50:        table* p,
+        -:   51:        storage_ptr const& sp);
+        -:   52:};
+        -:   53:
+        -:   54://----------------------------------------------------------
+        -:   55:
+        -:   56:class array::revert_construct
+        -:   57:{
+        -:   58:    array* arr_;
+        -:   59:
+        -:   60:public:
+        -:   61:    explicit
+        -:   62:    revert_construct(
+        -:   63:        array& arr) noexcept
+        -:   64:        : arr_(&arr)
+        -:   65:    {
+        -:   66:    }
+        -:   67:
+        -:   68:    ~revert_construct()
+        -:   69:    {
+        -:   70:        if(! arr_)
+        -:   71:            return;
+        -:   72:        arr_->destroy();
+        -:   73:    }
+        -:   74:
+        -:   75:    void
+        -:   76:    commit() noexcept
+        -:   77:    {
+        -:   78:        arr_ = nullptr;
+        -:   79:    }
+        -:   80:};
+        -:   81:
+        -:   82://----------------------------------------------------------
+        -:   83:
+        -:   84:class array::revert_insert
+        -:   85:{
+        -:   86:    array* arr_;
+        -:   87:    std::size_t const i_;
+        -:   88:    std::size_t const n_;
+        -:   89:
+        -:   90:public:
+        -:   91:    value* p;
+        -:   92:
+        -:   93:    BOOST_JSON_DECL
+        -:   94:    revert_insert(
+        -:   95:        const_iterator pos,
+        -:   96:        std::size_t n,
+        -:   97:        array& arr);
+        -:   98:
+        -:   99:    BOOST_JSON_DECL
+        -:  100:    ~revert_insert();
+        -:  101:
+        -:  102:    value*
+        -:  103:    commit() noexcept
+        -:  104:    {
+        -:  105:        auto it =
+        -:  106:            arr_->data() + i_;
+        -:  107:        arr_ = nullptr;
+        -:  108:        return it;
+        -:  109:    }
+        -:  110:};
+        -:  111:
+        -:  112://----------------------------------------------------------
+        -:  113:
+        -:  114:void
+        -:  115:array::
+        -:  116:relocate(
+        -:  117:    value* dest,
+        -:  118:    value* src,
+        -:  119:    std::size_t n) noexcept
+        -:  120:{
+        -:  121:    if(n == 0)
+        -:  122:        return;
+        -:  123:    std::memmove(
+        -:  124:        static_cast<void*>(dest),
+        -:  125:        static_cast<void const*>(src),
+        -:  126:        n * sizeof(value));
+        -:  127:}
+        -:  128:
+        -:  129://----------------------------------------------------------
+        -:  130://
+        -:  131:// Construction
+        -:  132://
+        -:  133://----------------------------------------------------------
+        -:  134:
+        -:  135:template<class InputIt, class>
+        -:  136:array::
+        -:  137:array(
+        -:  138:    InputIt first, InputIt last,
+        -:  139:    storage_ptr sp)
+        -:  140:    : array(
+        -:  141:        first, last,
+        -:  142:        std::move(sp),
+        -:  143:        iter_cat<InputIt>{})
+        -:  144:{
+        -:  145:    BOOST_STATIC_ASSERT(
+        -:  146:        std::is_constructible<value,
+        -:  147:            decltype(*first)>::value);
+        -:  148:}
+        -:  149:
+        -:  150://----------------------------------------------------------
+        -:  151://
+        -:  152:// Modifiers
+        -:  153://
+        -:  154://----------------------------------------------------------
+        -:  155:
+        -:  156:template<class InputIt, class>
+        -:  157:auto
+        -:  158:array::
+        -:  159:insert(
+        -:  160:    const_iterator pos,
+        -:  161:    InputIt first, InputIt last) ->
+        -:  162:        iterator
+        -:  163:{
+        -:  164:    BOOST_STATIC_ASSERT(
+        -:  165:        std::is_constructible<value,
+        -:  166:            decltype(*first)>::value);
+        -:  167:    return insert(pos, first, last,
+        -:  168:        iter_cat<InputIt>{});
+        -:  169:}
+        -:  170:
+        -:  171:template<class Arg>
+        -:  172:auto
+        -:  173:array::
+        -:  174:emplace(
+        -:  175:    const_iterator pos,
+        -:  176:    Arg&& arg) ->
+        -:  177:        iterator
+        -:  178:{
+        -:  179:    BOOST_ASSERT(
+        -:  180:        pos >= begin() &&
+        -:  181:        pos <= end());
+        -:  182:    value jv(
+        -:  183:        std::forward<Arg>(arg),
+        -:  184:        storage());
+        -:  185:    return insert(pos, pilfer(jv));
+        -:  186:}
+        -:  187:
+        -:  188:template<class Arg>
+        -:  189:value&
+        -:  190:array::
+        -:  191:emplace_back(Arg&& arg)
+        -:  192:{
+        -:  193:    value jv(
+        -:  194:        std::forward<Arg>(arg),
+        -:  195:        storage());
+        -:  196:    return push_back(pilfer(jv));
+        -:  197:}
+        -:  198:
+        -:  199://----------------------------------------------------------
+        -:  200://
+        -:  201:// Element access
+        -:  202://
+        -:  203://----------------------------------------------------------
+        -:  204:
+        -:  205:value&
+        -:  206:array::
+        -:  207:at(std::size_t pos) &
+        -:  208:{
+        -:  209:    auto const& self = *this;
+        -:  210:    return const_cast< value& >( self.at(pos) );
+        -:  211:}
+        -:  212:
+        -:  213:value&&
+        -:  214:array::
+        -:  215:at(std::size_t pos) &&
+        -:  216:{
+        -:  217:    return std::move( at(pos) );
+        -:  218:}
+        -:  219:
+        -:  220:value const&
+        -:  221:array::
+        -:  222:at(std::size_t pos) const&
+        -:  223:{
+        -:  224:    if(pos >= t_->size)
+        -:  225:    {
+        -:  226:        BOOST_STATIC_CONSTEXPR source_location loc = BOOST_CURRENT_LOCATION;
+        -:  227:        detail::throw_system_error( error::out_of_range, &loc );
+        -:  228:    }
+        -:  229:    return (*t_)[pos];
+        -:  230:}
+        -:  231:
+        -:  232:value&
+        8:  233:array::
+        -:  234:operator[](std::size_t pos) & noexcept
+        -:  235:{
+       8*:  236:    BOOST_ASSERT(pos < t_->size);
+        8:  237:    return (*t_)[pos];
+        -:  238:}
+------------------
+_ZNR5boost4json5arrayixEm:
+function _ZNR5boost4json5arrayixEm called 5 returned 100% blocks executed 75%
+        5:  233:array::
+        -:  234:operator[](std::size_t pos) & noexcept
+        -:  235:{
+       5*:  236:    BOOST_ASSERT(pos < t_->size);
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+call    2 never executed
+        5:  237:    return (*t_)[pos];
+call    0 returned 100%
+        -:  238:}
+------------------
+_ZNR5boost4json5arrayixEm:
+function _ZNR5boost4json5arrayixEm called 3 returned 100% blocks executed 75%
+        3:  233:array::
+        -:  234:operator[](std::size_t pos) & noexcept
+        -:  235:{
+       3*:  236:    BOOST_ASSERT(pos < t_->size);
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+call    2 never executed
+        3:  237:    return (*t_)[pos];
+call    0 returned 100%
+        -:  238:}
+------------------
+        -:  239:
+        -:  240:value&&
+        -:  241:array::
+        -:  242:operator[](std::size_t pos) && noexcept
+        -:  243:{
+        -:  244:    return std::move( (*this)[pos] );
+        -:  245:}
+        -:  246:
+        -:  247:value const&
+        -:  248:array::
+        -:  249:operator[](std::size_t pos) const& noexcept
+        -:  250:{
+        -:  251:    BOOST_ASSERT(pos < t_->size);
+        -:  252:    return (*t_)[pos];
+        -:  253:}
+        -:  254:
+        -:  255:value&
+        -:  256:array::
+        -:  257:front() & noexcept
+        -:  258:{
+        -:  259:    BOOST_ASSERT(t_->size > 0);
+        -:  260:    return (*t_)[0];
+        -:  261:}
+        -:  262:
+        -:  263:value&&
+        -:  264:array::
+        -:  265:front() && noexcept
+        -:  266:{
+        -:  267:    return std::move( front() );
+        -:  268:}
+        -:  269:
+        -:  270:value const&
+        -:  271:array::
+        -:  272:front() const& noexcept
+        -:  273:{
+        -:  274:    BOOST_ASSERT(t_->size > 0);
+        -:  275:    return (*t_)[0];
+        -:  276:}
+        -:  277:
+        -:  278:value&
+        -:  279:array::
+        -:  280:back() & noexcept
+        -:  281:{
+        -:  282:    BOOST_ASSERT(
+        -:  283:        t_->size > 0);
+        -:  284:    return (*t_)[t_->size - 1];
+        -:  285:}
+        -:  286:
+        -:  287:value&&
+        -:  288:array::
+        -:  289:back() && noexcept
+        -:  290:{
+        -:  291:    return std::move( back() );
+        -:  292:}
+        -:  293:
+        -:  294:value const&
+        -:  295:array::
+        -:  296:back() const& noexcept
+        -:  297:{
+        -:  298:    BOOST_ASSERT(
+        -:  299:        t_->size > 0);
+        -:  300:    return (*t_)[t_->size - 1];
+        -:  301:}
+        -:  302:
+        -:  303:value*
+        -:  304:array::
+        -:  305:data() noexcept
+        -:  306:{
+        -:  307:    return &(*t_)[0];
+        -:  308:}
+        -:  309:
+        -:  310:value const*
+        -:  311:array::
+        -:  312:data() const noexcept
+        -:  313:{
+        -:  314:    return &(*t_)[0];
+        -:  315:}
+        -:  316:
+        -:  317:value const*
+        -:  318:array::
+        -:  319:if_contains(
+        -:  320:    std::size_t pos) const noexcept
+        -:  321:{
+        -:  322:    if( pos < t_->size )
+        -:  323:        return &(*t_)[pos];
+        -:  324:    return nullptr;
+        -:  325:}
+        -:  326:
+        -:  327:value*
+        -:  328:array::
+        -:  329:if_contains(
+        -:  330:    std::size_t pos) noexcept
+        -:  331:{
+        -:  332:    if( pos < t_->size )
+        -:  333:        return &(*t_)[pos];
+        -:  334:    return nullptr;
+        -:  335:}
+        -:  336:
+        -:  337://----------------------------------------------------------
+        -:  338://
+        -:  339:// Iterators
+        -:  340://
+        -:  341://----------------------------------------------------------
+        -:  342:
+        -:  343:auto
+function _ZN5boost4json5array5beginEv called 1 returned 100% blocks executed 100%
+        1:  344:array::
+        -:  345:begin() noexcept ->
+        -:  346:    iterator
+        -:  347:{
+        1:  348:    return &(*t_)[0];
+call    0 returned 100%
+        -:  349:}
+        -:  350:
+        -:  351:auto
+function _ZNK5boost4json5array5beginEv called 1 returned 100% blocks executed 100%
+        1:  352:array::
+        -:  353:begin() const noexcept ->
+        -:  354:    const_iterator
+        -:  355:{
+        1:  356:    return &(*t_)[0];
+call    0 returned 100%
+        -:  357:}
+        -:  358:
+        -:  359:auto
+        -:  360:array::
+        -:  361:cbegin() const noexcept ->
+        -:  362:    const_iterator
+        -:  363:{
+        -:  364:    return &(*t_)[0];
+        -:  365:}
+        -:  366:
+        -:  367:auto
+function _ZN5boost4json5array3endEv called 1 returned 100% blocks executed 100%
+        1:  368:array::
+        -:  369:end() noexcept ->
+        -:  370:    iterator
+        -:  371:{
+        1:  372:    return &(*t_)[t_->size];
+call    0 returned 100%
+        -:  373:}
+        -:  374:
+        -:  375:auto
+function _ZNK5boost4json5array3endEv called 1 returned 100% blocks executed 100%
+        1:  376:array::
+        -:  377:end() const noexcept ->
+        -:  378:    const_iterator
+        -:  379:{
+        1:  380:    return &(*t_)[t_->size];
+call    0 returned 100%
+        -:  381:}
+        -:  382:
+        -:  383:auto
+        -:  384:array::
+        -:  385:cend() const noexcept ->
+        -:  386:    const_iterator
+        -:  387:{
+        -:  388:    return &(*t_)[t_->size];
+        -:  389:}
+        -:  390:
+        -:  391:auto
+        -:  392:array::
+        -:  393:rbegin() noexcept ->
+        -:  394:    reverse_iterator
+        -:  395:{
+        -:  396:    return reverse_iterator(end());
+        -:  397:}
+        -:  398:
+        -:  399:auto
+        -:  400:array::
+        -:  401:rbegin() const noexcept ->
+        -:  402:    const_reverse_iterator
+        -:  403:{
+        -:  404:    return const_reverse_iterator(end());
+        -:  405:}
+        -:  406:
+        -:  407:auto
+        -:  408:array::
+        -:  409:crbegin() const noexcept ->
+        -:  410:    const_reverse_iterator
+        -:  411:{
+        -:  412:    return const_reverse_iterator(end());
+        -:  413:}
+        -:  414:
+        -:  415:auto
+        -:  416:array::
+        -:  417:rend() noexcept ->
+        -:  418:    reverse_iterator
+        -:  419:{
+        -:  420:    return reverse_iterator(begin());
+        -:  421:}
+        -:  422:
+        -:  423:auto
+        -:  424:array::
+        -:  425:rend() const noexcept ->
+        -:  426:    const_reverse_iterator
+        -:  427:{
+        -:  428:    return const_reverse_iterator(begin());
+        -:  429:}
+        -:  430:
+        -:  431:auto
+        -:  432:array::
+        -:  433:crend() const noexcept ->
+        -:  434:    const_reverse_iterator
+        -:  435:{
+        -:  436:    return const_reverse_iterator(begin());
+        -:  437:}
+        -:  438:
+        -:  439://----------------------------------------------------------
+        -:  440://
+        -:  441:// Capacity
+        -:  442://
+        -:  443://----------------------------------------------------------
+        -:  444:
+        -:  445:std::size_t
+        6:  446:array::
+        -:  447:size() const noexcept
+        -:  448:{
+        6:  449:    return t_->size;
+        -:  450:}
+------------------
+_ZNK5boost4json5array4sizeEv:
+function _ZNK5boost4json5array4sizeEv called 4 returned 100% blocks executed 100%
+        4:  446:array::
+        -:  447:size() const noexcept
+        -:  448:{
+        4:  449:    return t_->size;
+        -:  450:}
+------------------
+_ZNK5boost4json5array4sizeEv:
+function _ZNK5boost4json5array4sizeEv called 2 returned 100% blocks executed 100%
+        2:  446:array::
+        -:  447:size() const noexcept
+        -:  448:{
+        2:  449:    return t_->size;
+        -:  450:}
+------------------
+        -:  451:
+        -:  452:constexpr
+        -:  453:std::size_t
+        -:  454:array::
+        -:  455:max_size() noexcept
+        -:  456:{
+        -:  457:    // max_size depends on the address model
+        -:  458:    using min = std::integral_constant<std::size_t,
+        -:  459:        (std::size_t(-1) - sizeof(table)) / sizeof(value)>;
+        -:  460:    return min::value < BOOST_JSON_MAX_STRUCTURED_SIZE ?
+        -:  461:        min::value : BOOST_JSON_MAX_STRUCTURED_SIZE;
+        -:  462:}
+        -:  463:
+        -:  464:std::size_t
+        -:  465:array::
+        -:  466:capacity() const noexcept
+        -:  467:{
+        -:  468:    return t_->capacity;
+        -:  469:}
+        -:  470:
+        -:  471:bool
+      33*:  472:array::
+        -:  473:empty() const noexcept
+        -:  474:{
+      33*:  475:    return t_->size == 0;
+        -:  476:}
+        -:  477:
+        -:  478:void
+        -:  479:array::
+        -:  480:reserve(
+        -:  481:    std::size_t new_capacity)
+        -:  482:{
+        -:  483:    // never shrink
+        -:  484:    if(new_capacity <= t_->capacity)
+        -:  485:        return;
+        -:  486:    reserve_impl(new_capacity);
+        -:  487:}
+        -:  488:
+        -:  489://----------------------------------------------------------
+        -:  490://
+        -:  491:// private
+        -:  492://
+        -:  493://----------------------------------------------------------
+        -:  494:
+        -:  495:template<class InputIt>
+        -:  496:array::
+        -:  497:array(
+        -:  498:    InputIt first, InputIt last,
+        -:  499:    storage_ptr sp,
+        -:  500:    std::input_iterator_tag)
+        -:  501:    : sp_(std::move(sp))
+        -:  502:    , t_(&empty_)
+        -:  503:{
+        -:  504:    revert_construct r(*this);
+        -:  505:    while(first != last)
+        -:  506:    {
+        -:  507:        reserve(size() + 1);
+        -:  508:        ::new(end()) value(
+        -:  509:            *first++, sp_);
+        -:  510:        ++t_->size;
+        -:  511:    }
+        -:  512:    r.commit();
+        -:  513:}
+        -:  514:
+        -:  515:template<class InputIt>
+        -:  516:array::
+        -:  517:array(
+        -:  518:    InputIt first, InputIt last,
+        -:  519:    storage_ptr sp,
+        -:  520:    std::forward_iterator_tag)
+        -:  521:    : sp_(std::move(sp))
+        -:  522:{
+        -:  523:    std::size_t n =
+        -:  524:        std::distance(first, last);
+        -:  525:    if( n == 0 )
+        -:  526:    {
+        -:  527:        t_ = &empty_;
+        -:  528:        return;
+        -:  529:    }
+        -:  530:
+        -:  531:    t_ = table::allocate(n, sp_);
+        -:  532:    t_->size = 0;
+        -:  533:    revert_construct r(*this);
+        -:  534:    while(n--)
+        -:  535:    {
+        -:  536:        ::new(end()) value(
+        -:  537:            *first++, sp_);
+        -:  538:        ++t_->size;
+        -:  539:    }
+        -:  540:    r.commit();
+        -:  541:}
+        -:  542:
+        -:  543:template<class InputIt>
+        -:  544:auto
+        -:  545:array::
+        -:  546:insert(
+        -:  547:    const_iterator pos,
+        -:  548:    InputIt first, InputIt last,
+        -:  549:    std::input_iterator_tag) ->
+        -:  550:        iterator
+        -:  551:{
+        -:  552:    BOOST_ASSERT(
+        -:  553:        pos >= begin() && pos <= end());
+        -:  554:    if(first == last)
+        -:  555:        return data() + (pos - data());
+        -:  556:    array temp(first, last, sp_);
+        -:  557:    revert_insert r(
+        -:  558:        pos, temp.size(), *this);
+        -:  559:    relocate(
+        -:  560:        r.p,
+        -:  561:        temp.data(),
+        -:  562:        temp.size());
+        -:  563:    temp.t_->size = 0;
+        -:  564:    return r.commit();
+        -:  565:}
+        -:  566:
+        -:  567:template<class InputIt>
+        -:  568:auto
+        -:  569:array::
+        -:  570:insert(
+        -:  571:    const_iterator pos,
+        -:  572:    InputIt first, InputIt last,
+        -:  573:    std::forward_iterator_tag) ->
+        -:  574:        iterator
+        -:  575:{
+        -:  576:    std::size_t n =
+        -:  577:        std::distance(first, last);
+        -:  578:    revert_insert r(pos, n, *this);
+        -:  579:    while(n--)
+        -:  580:    {
+        -:  581:        ::new(r.p) value(*first++);
+        -:  582:        ++r.p;
+        -:  583:    }
+        -:  584:    return r.commit();
+        -:  585:}
+        -:  586:
+        -:  587:} // namespace json
+        -:  588:} // namespace boost
+        -:  589:
+        -:  590:#endif

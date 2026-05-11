@@ -1,0 +1,1573 @@
+        -:    0:Source:/usr/include/boost/asio/post.hpp
+        -:    1://
+        -:    2:// post.hpp
+        -:    3:// ~~~~~~~~
+        -:    4://
+        -:    5:// Copyright (c) 2003-2023 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+        -:    6://
+        -:    7:// Distributed under the Boost Software License, Version 1.0. (See accompanying
+        -:    8:// file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+        -:    9://
+        -:   10:
+        -:   11:#ifndef BOOST_ASIO_POST_HPP
+        -:   12:#define BOOST_ASIO_POST_HPP
+        -:   13:
+        -:   14:#if defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   15:# pragma once
+        -:   16:#endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   17:
+        -:   18:#include <boost/asio/detail/config.hpp>
+        -:   19:#include <boost/asio/async_result.hpp>
+        -:   20:#include <boost/asio/detail/initiate_post.hpp>
+        -:   21:#include <boost/asio/detail/type_traits.hpp>
+        -:   22:#include <boost/asio/execution_context.hpp>
+        -:   23:#include <boost/asio/execution/blocking.hpp>
+        -:   24:#include <boost/asio/execution/executor.hpp>
+        -:   25:#include <boost/asio/is_executor.hpp>
+        -:   26:#include <boost/asio/require.hpp>
+        -:   27:
+        -:   28:#include <boost/asio/detail/push_options.hpp>
+        -:   29:
+        -:   30:namespace boost {
+        -:   31:namespace asio {
+        -:   32:
+        -:   33:/// Submits a completion token or function object for execution.
+        -:   34:/**
+        -:   35: * This function submits an object for execution using the object's associated
+        -:   36: * executor. The function object is queued for execution, and is never called
+        -:   37: * from the current thread prior to returning from <tt>post()</tt>.
+        -:   38: *
+        -:   39: * The use of @c post(), rather than @ref defer(), indicates the caller's
+        -:   40: * preference that the function object be eagerly queued for execution.
+        -:   41: *
+        -:   42: * @param token The @ref completion_token that will be used to produce a
+        -:   43: * completion handler. The function signature of the completion handler must be:
+        -:   44: * @code void handler(); @endcode
+        -:   45: *
+        -:   46: * @returns This function returns <tt>async_initiate<NullaryToken,
+        -:   47: * void()>(Init{}, token)</tt>, where @c Init is a function object type defined
+        -:   48: * as:
+        -:   49: *
+        -:   50: * @code class Init
+        -:   51: * {
+        -:   52: * public:
+        -:   53: *   template <typename CompletionHandler>
+        -:   54: *     void operator()(CompletionHandler&& completion_handler) const;
+        -:   55: * }; @endcode
+        -:   56: *
+        -:   57: * The function call operator of @c Init:
+        -:   58: *
+        -:   59: * @li Obtains the handler's associated executor object @c ex of type @c Ex by
+        -:   60: * performing @code auto ex = get_associated_executor(handler); @endcode
+        -:   61: *
+        -:   62: * @li Obtains the handler's associated allocator object @c alloc by performing
+        -:   63: * @code auto alloc = get_associated_allocator(handler); @endcode
+        -:   64: *
+        -:   65: * @li If <tt>execution::is_executor<Ex>::value</tt> is true, performs
+        -:   66: * @code prefer(
+        -:   67: *     require(ex, execution::blocking.never),
+        -:   68: *     execution::relationship.fork,
+        -:   69: *     execution::allocator(alloc)
+        -:   70: *   ).execute(std::forward<CompletionHandler>(completion_handler)); @endcode
+        -:   71: *
+        -:   72: * @li If <tt>execution::is_executor<Ex>::value</tt> is false, performs
+        -:   73: * @code ex.post(
+        -:   74: *     std::forward<CompletionHandler>(completion_handler),
+        -:   75: *     alloc); @endcode
+        -:   76: *
+        -:   77: * @par Completion Signature
+        -:   78: * @code void() @endcode
+        -:   79: */
+        -:   80:template <BOOST_ASIO_COMPLETION_TOKEN_FOR(void()) NullaryToken>
+    9506*:   81:BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(NullaryToken, void()) post(
+        -:   82:    BOOST_ASIO_MOVE_ARG(NullaryToken) token)
+        -:   83:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:   84:    async_initiate<NullaryToken, void()>(
+        -:   85:        declval<detail::initiate_post>(), token)))
+        -:   86:{
+    9506*:   87:  return async_initiate<NullaryToken, void()>(
+    9707*:   88:      detail::initiate_post(), token);
+        -:   89:}
+------------------
+_ZN5boost4asio4postINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEEDaOT_:
+function _ZN5boost4asio4postINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEEDaOT_ called 0 returned 0% blocks executed 0%
+    #####:   81:BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(NullaryToken, void()) post(
+        -:   82:    BOOST_ASIO_MOVE_ARG(NullaryToken) token)
+        -:   83:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:   84:    async_initiate<NullaryToken, void()>(
+        -:   85:        declval<detail::initiate_post>(), token)))
+        -:   86:{
+    #####:   87:  return async_initiate<NullaryToken, void()>(
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:   88:      detail::initiate_post(), token);
+        -:   89:}
+------------------
+_ZN5boost4asio4postINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEEDaOT_:
+function _ZN5boost4asio4postINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEEDaOT_ called 0 returned 0% blocks executed 0%
+    #####:   81:BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(NullaryToken, void()) post(
+        -:   82:    BOOST_ASIO_MOVE_ARG(NullaryToken) token)
+        -:   83:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:   84:    async_initiate<NullaryToken, void()>(
+        -:   85:        declval<detail::initiate_post>(), token)))
+        -:   86:{
+    #####:   87:  return async_initiate<NullaryToken, void()>(
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:   88:      detail::initiate_post(), token);
+        -:   89:}
+------------------
+_ZN5boost4asio4postINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEEDaOT_:
+function _ZN5boost4asio4postINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEEDaOT_ called 0 returned 0% blocks executed 0%
+    #####:   81:BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(NullaryToken, void()) post(
+        -:   82:    BOOST_ASIO_MOVE_ARG(NullaryToken) token)
+        -:   83:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:   84:    async_initiate<NullaryToken, void()>(
+        -:   85:        declval<detail::initiate_post>(), token)))
+        -:   86:{
+    #####:   87:  return async_initiate<NullaryToken, void()>(
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:   88:      detail::initiate_post(), token);
+        -:   89:}
+------------------
+_ZN5boost4asio4postINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEEDaOT_:
+function _ZN5boost4asio4postINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEEDaOT_ called 0 returned 0% blocks executed 0%
+    #####:   81:BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(NullaryToken, void()) post(
+        -:   82:    BOOST_ASIO_MOVE_ARG(NullaryToken) token)
+        -:   83:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:   84:    async_initiate<NullaryToken, void()>(
+        -:   85:        declval<detail::initiate_post>(), token)))
+        -:   86:{
+    #####:   87:  return async_initiate<NullaryToken, void()>(
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:   88:      detail::initiate_post(), token);
+        -:   89:}
+------------------
+_ZN5boost4asio4postINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEEDaOT_:
+function _ZN5boost4asio4postINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEEDaOT_ called 0 returned 0% blocks executed 0%
+    #####:   81:BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(NullaryToken, void()) post(
+        -:   82:    BOOST_ASIO_MOVE_ARG(NullaryToken) token)
+        -:   83:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:   84:    async_initiate<NullaryToken, void()>(
+        -:   85:        declval<detail::initiate_post>(), token)))
+        -:   86:{
+    #####:   87:  return async_initiate<NullaryToken, void()>(
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:   88:      detail::initiate_post(), token);
+        -:   89:}
+------------------
+_ZN5boost4asio4postINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEEDaOT_:
+function _ZN5boost4asio4postINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEEDaOT_ called 9437 returned 102% blocks executed 100%
+     9437:   81:BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(NullaryToken, void()) post(
+        -:   82:    BOOST_ASIO_MOVE_ARG(NullaryToken) token)
+        -:   83:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:   84:    async_initiate<NullaryToken, void()>(
+        -:   85:        declval<detail::initiate_post>(), token)))
+        -:   86:{
+     9437:   87:  return async_initiate<NullaryToken, void()>(
+call    0 returned 102%
+branch  1 taken 102% (fallthrough)
+branch  2 taken 0% (throw)
+     9638:   88:      detail::initiate_post(), token);
+        -:   89:}
+------------------
+_ZN5boost4asio4postINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEEDaOT_:
+function _ZN5boost4asio4postINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEEDaOT_ called 17 returned 100% blocks executed 100%
+       17:   81:BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(NullaryToken, void()) post(
+        -:   82:    BOOST_ASIO_MOVE_ARG(NullaryToken) token)
+        -:   83:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:   84:    async_initiate<NullaryToken, void()>(
+        -:   85:        declval<detail::initiate_post>(), token)))
+        -:   86:{
+       17:   87:  return async_initiate<NullaryToken, void()>(
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       17:   88:      detail::initiate_post(), token);
+        -:   89:}
+------------------
+_ZN5boost4asio4postINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEEDaOT_:
+function _ZN5boost4asio4postINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEEDaOT_ called 0 returned 0% blocks executed 0%
+    #####:   81:BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(NullaryToken, void()) post(
+        -:   82:    BOOST_ASIO_MOVE_ARG(NullaryToken) token)
+        -:   83:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:   84:    async_initiate<NullaryToken, void()>(
+        -:   85:        declval<detail::initiate_post>(), token)))
+        -:   86:{
+    #####:   87:  return async_initiate<NullaryToken, void()>(
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:   88:      detail::initiate_post(), token);
+        -:   89:}
+------------------
+_ZN5boost4asio4postINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEEDaOT_:
+function _ZN5boost4asio4postINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEEDaOT_ called 5 returned 100% blocks executed 100%
+        5:   81:BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(NullaryToken, void()) post(
+        -:   82:    BOOST_ASIO_MOVE_ARG(NullaryToken) token)
+        -:   83:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:   84:    async_initiate<NullaryToken, void()>(
+        -:   85:        declval<detail::initiate_post>(), token)))
+        -:   86:{
+        5:   87:  return async_initiate<NullaryToken, void()>(
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        5:   88:      detail::initiate_post(), token);
+        -:   89:}
+------------------
+_ZN5boost4asio4postINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEEDaOT_:
+function _ZN5boost4asio4postINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEEDaOT_ called 14 returned 100% blocks executed 100%
+       14:   81:BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(NullaryToken, void()) post(
+        -:   82:    BOOST_ASIO_MOVE_ARG(NullaryToken) token)
+        -:   83:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:   84:    async_initiate<NullaryToken, void()>(
+        -:   85:        declval<detail::initiate_post>(), token)))
+        -:   86:{
+       14:   87:  return async_initiate<NullaryToken, void()>(
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       14:   88:      detail::initiate_post(), token);
+        -:   89:}
+------------------
+_ZN5boost4asio4postINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEEDaOT_:
+function _ZN5boost4asio4postINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEEDaOT_ called 16 returned 100% blocks executed 100%
+       16:   81:BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(NullaryToken, void()) post(
+        -:   82:    BOOST_ASIO_MOVE_ARG(NullaryToken) token)
+        -:   83:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:   84:    async_initiate<NullaryToken, void()>(
+        -:   85:        declval<detail::initiate_post>(), token)))
+        -:   86:{
+       16:   87:  return async_initiate<NullaryToken, void()>(
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       16:   88:      detail::initiate_post(), token);
+        -:   89:}
+------------------
+_ZN5boost4asio4postINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEEDaOT_:
+function _ZN5boost4asio4postINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEEDaOT_ called 5 returned 100% blocks executed 100%
+        5:   81:BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(NullaryToken, void()) post(
+        -:   82:    BOOST_ASIO_MOVE_ARG(NullaryToken) token)
+        -:   83:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:   84:    async_initiate<NullaryToken, void()>(
+        -:   85:        declval<detail::initiate_post>(), token)))
+        -:   86:{
+        5:   87:  return async_initiate<NullaryToken, void()>(
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        5:   88:      detail::initiate_post(), token);
+        -:   89:}
+------------------
+_ZN5boost4asio4postINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEEDaOT_:
+function _ZN5boost4asio4postINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEEDaOT_ called 12 returned 100% blocks executed 100%
+       12:   81:BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(NullaryToken, void()) post(
+        -:   82:    BOOST_ASIO_MOVE_ARG(NullaryToken) token)
+        -:   83:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:   84:    async_initiate<NullaryToken, void()>(
+        -:   85:        declval<detail::initiate_post>(), token)))
+        -:   86:{
+       12:   87:  return async_initiate<NullaryToken, void()>(
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       12:   88:      detail::initiate_post(), token);
+        -:   89:}
+------------------
+_ZN5boost4asio4postINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEEDaOT_:
+function _ZN5boost4asio4postINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEEDaOT_ called 0 returned 0% blocks executed 0%
+    #####:   81:BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(NullaryToken, void()) post(
+        -:   82:    BOOST_ASIO_MOVE_ARG(NullaryToken) token)
+        -:   83:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:   84:    async_initiate<NullaryToken, void()>(
+        -:   85:        declval<detail::initiate_post>(), token)))
+        -:   86:{
+    #####:   87:  return async_initiate<NullaryToken, void()>(
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:   88:      detail::initiate_post(), token);
+        -:   89:}
+------------------
+_ZN5boost4asio4postINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEEDaOT_:
+function _ZN5boost4asio4postINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEEDaOT_ called 0 returned 0% blocks executed 0%
+    #####:   81:BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(NullaryToken, void()) post(
+        -:   82:    BOOST_ASIO_MOVE_ARG(NullaryToken) token)
+        -:   83:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:   84:    async_initiate<NullaryToken, void()>(
+        -:   85:        declval<detail::initiate_post>(), token)))
+        -:   86:{
+    #####:   87:  return async_initiate<NullaryToken, void()>(
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:   88:      detail::initiate_post(), token);
+        -:   89:}
+------------------
+_ZN5boost4asio4postINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEEDaOT_:
+function _ZN5boost4asio4postINS0_6detail26awaitable_async_op_handlerIFvvENS0_15any_io_executorEEEEEDaOT_ called 0 returned 0% blocks executed 0%
+    #####:   81:BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(NullaryToken, void()) post(
+        -:   82:    BOOST_ASIO_MOVE_ARG(NullaryToken) token)
+        -:   83:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:   84:    async_initiate<NullaryToken, void()>(
+        -:   85:        declval<detail::initiate_post>(), token)))
+        -:   86:{
+    #####:   87:  return async_initiate<NullaryToken, void()>(
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:   88:      detail::initiate_post(), token);
+        -:   89:}
+------------------
+        -:   90:
+        -:   91:/// Submits a completion token or function object for execution.
+        -:   92:/**
+        -:   93: * This function submits an object for execution using the specified executor.
+        -:   94: * The function object is queued for execution, and is never called from the
+        -:   95: * current thread prior to returning from <tt>post()</tt>.
+        -:   96: *
+        -:   97: * The use of @c post(), rather than @ref defer(), indicates the caller's
+        -:   98: * preference that the function object be eagerly queued for execution.
+        -:   99: *
+        -:  100: * @param ex The target executor.
+        -:  101: *
+        -:  102: * @param token The @ref completion_token that will be used to produce a
+        -:  103: * completion handler. The function signature of the completion handler must be:
+        -:  104: * @code void handler(); @endcode
+        -:  105: *
+        -:  106: * @returns This function returns <tt>async_initiate<NullaryToken,
+        -:  107: * void()>(Init{ex}, token)</tt>, where @c Init is a function object type
+        -:  108: * defined as:
+        -:  109: *
+        -:  110: * @code class Init
+        -:  111: * {
+        -:  112: * public:
+        -:  113: *   using executor_type = Executor;
+        -:  114: *   explicit Init(const Executor& ex) : ex_(ex) {}
+        -:  115: *   executor_type get_executor() const noexcept { return ex_; }
+        -:  116: *   template <typename CompletionHandler>
+        -:  117: *     void operator()(CompletionHandler&& completion_handler) const;
+        -:  118: * private:
+        -:  119: *   Executor ex_; // exposition only
+        -:  120: * }; @endcode
+        -:  121: *
+        -:  122: * The function call operator of @c Init:
+        -:  123: *
+        -:  124: * @li Obtains the handler's associated executor object @c ex1 of type @c Ex1 by
+        -:  125: * performing @code auto ex1 = get_associated_executor(handler, ex); @endcode
+        -:  126: *
+        -:  127: * @li Obtains the handler's associated allocator object @c alloc by performing
+        -:  128: * @code auto alloc = get_associated_allocator(handler); @endcode
+        -:  129: *
+        -:  130: * @li If <tt>execution::is_executor<Ex1>::value</tt> is true, constructs a
+        -:  131: * function object @c f with a member @c executor_ that is initialised with
+        -:  132: * <tt>prefer(ex1, execution::outstanding_work.tracked)</tt>, a member @c
+        -:  133: * handler_ that is a decay-copy of @c completion_handler, and a function call
+        -:  134: * operator that performs:
+        -:  135: * @code auto a = get_associated_allocator(handler_);
+        -:  136: * prefer(executor_, execution::allocator(a)).execute(std::move(handler_));
+        -:  137: * @endcode
+        -:  138: *
+        -:  139: * @li If <tt>execution::is_executor<Ex1>::value</tt> is false, constructs a
+        -:  140: * function object @c f with a member @c work_ that is initialised with
+        -:  141: * <tt>make_work_guard(ex1)</tt>, a member @c handler_ that is a decay-copy of
+        -:  142: * @c completion_handler, and a function call operator that performs:
+        -:  143: * @code auto a = get_associated_allocator(handler_);
+        -:  144: * work_.get_executor().dispatch(std::move(handler_), a);
+        -:  145: * work_.reset(); @endcode
+        -:  146: *
+        -:  147: * @li If <tt>execution::is_executor<Ex>::value</tt> is true, performs
+        -:  148: * @code prefer(
+        -:  149: *     require(ex, execution::blocking.never),
+        -:  150: *     execution::relationship.fork,
+        -:  151: *     execution::allocator(alloc)
+        -:  152: *   ).execute(std::move(f)); @endcode
+        -:  153: *
+        -:  154: * @li If <tt>execution::is_executor<Ex>::value</tt> is false, performs
+        -:  155: * @code ex.post(std::move(f), alloc); @endcode
+        -:  156: *
+        -:  157: * @par Completion Signature
+        -:  158: * @code void() @endcode
+        -:  159: */
+        -:  160:template <typename Executor,
+        -:  161:    BOOST_ASIO_COMPLETION_TOKEN_FOR(void()) NullaryToken
+        -:  162:      BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(Executor)>
+      99*:  163:BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(NullaryToken, void()) post(
+        -:  164:    const Executor& ex,
+        -:  165:    BOOST_ASIO_MOVE_ARG(NullaryToken) token
+        -:  166:      BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(Executor),
+        -:  167:    typename constraint<
+        -:  168:      (execution::is_executor<Executor>::value
+        -:  169:          && can_require<Executor, execution::blocking_t::never_t>::value)
+        -:  170:        || is_executor<Executor>::value
+        -:  171:    >::type = 0)
+        -:  172:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:  173:    async_initiate<NullaryToken, void()>(
+        -:  174:        declval<detail::initiate_post_with_executor<Executor> >(), token)))
+        -:  175:{
+      99*:  176:  return async_initiate<NullaryToken, void()>(
+     198*:  177:      detail::initiate_post_with_executor<Executor>(ex), token);
+        -:  178:}
+------------------
+_ZN5boost4asio4postINS0_15any_io_executorEZNS0_6detail16awaitable_threadIS2_ED4EvEUlvE_EEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorIS7_EE5valuesrNS0_11can_requireIS7_JNSD_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorIS7_EE5valueEiE4typeE:
+function _ZN5boost4asio4postINS0_15any_io_executorEZNS0_6detail16awaitable_threadIS2_ED4EvEUlvE_EEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorIS7_EE5valuesrNS0_11can_requireIS7_JNSD_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorIS7_EE5valueEiE4typeE called 4 returned 100% blocks executed 75%
+        4:  163:BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(NullaryToken, void()) post(
+        -:  164:    const Executor& ex,
+        -:  165:    BOOST_ASIO_MOVE_ARG(NullaryToken) token
+        -:  166:      BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(Executor),
+        -:  167:    typename constraint<
+        -:  168:      (execution::is_executor<Executor>::value
+        -:  169:          && can_require<Executor, execution::blocking_t::never_t>::value)
+        -:  170:        || is_executor<Executor>::value
+        -:  171:    >::type = 0)
+        -:  172:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:  173:    async_initiate<NullaryToken, void()>(
+        -:  174:        declval<detail::initiate_post_with_executor<Executor> >(), token)))
+        -:  175:{
+        4:  176:  return async_initiate<NullaryToken, void()>(
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        8:  177:      detail::initiate_post_with_executor<Executor>(ex), token);
+call    0 returned 100%
+call    1 returned 100%
+call    2 never executed
+        -:  178:}
+------------------
+_ZN5boost4asio4postINS0_15any_io_executorEZNS0_6detail16awaitable_threadIS2_ED4EvEUlvE_EEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorIS7_EE5valuesrNS0_11can_requireIS7_JNSD_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorIS7_EE5valueEiE4typeE:
+function _ZN5boost4asio4postINS0_15any_io_executorEZNS0_6detail16awaitable_threadIS2_ED4EvEUlvE_EEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorIS7_EE5valuesrNS0_11can_requireIS7_JNSD_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorIS7_EE5valueEiE4typeE called 16 returned 100% blocks executed 75%
+       16:  163:BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(NullaryToken, void()) post(
+        -:  164:    const Executor& ex,
+        -:  165:    BOOST_ASIO_MOVE_ARG(NullaryToken) token
+        -:  166:      BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(Executor),
+        -:  167:    typename constraint<
+        -:  168:      (execution::is_executor<Executor>::value
+        -:  169:          && can_require<Executor, execution::blocking_t::never_t>::value)
+        -:  170:        || is_executor<Executor>::value
+        -:  171:    >::type = 0)
+        -:  172:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:  173:    async_initiate<NullaryToken, void()>(
+        -:  174:        declval<detail::initiate_post_with_executor<Executor> >(), token)))
+        -:  175:{
+       16:  176:  return async_initiate<NullaryToken, void()>(
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       32:  177:      detail::initiate_post_with_executor<Executor>(ex), token);
+call    0 returned 100%
+call    1 returned 100%
+call    2 never executed
+        -:  178:}
+------------------
+_ZN5boost4asio4postINS0_15any_io_executorEZNS0_6detail16awaitable_threadIS2_ED4EvEUlvE_EEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorIS7_EE5valuesrNS0_11can_requireIS7_JNSD_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorIS7_EE5valueEiE4typeE:
+function _ZN5boost4asio4postINS0_15any_io_executorEZNS0_6detail16awaitable_threadIS2_ED4EvEUlvE_EEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorIS7_EE5valuesrNS0_11can_requireIS7_JNSD_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorIS7_EE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  163:BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(NullaryToken, void()) post(
+        -:  164:    const Executor& ex,
+        -:  165:    BOOST_ASIO_MOVE_ARG(NullaryToken) token
+        -:  166:      BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(Executor),
+        -:  167:    typename constraint<
+        -:  168:      (execution::is_executor<Executor>::value
+        -:  169:          && can_require<Executor, execution::blocking_t::never_t>::value)
+        -:  170:        || is_executor<Executor>::value
+        -:  171:    >::type = 0)
+        -:  172:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:  173:    async_initiate<NullaryToken, void()>(
+        -:  174:        declval<detail::initiate_post_with_executor<Executor> >(), token)))
+        -:  175:{
+    #####:  176:  return async_initiate<NullaryToken, void()>(
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  177:      detail::initiate_post_with_executor<Executor>(ex), token);
+call    0 never executed
+call    1 never executed
+call    2 never executed
+        -:  178:}
+------------------
+_ZN5boost4asio4postINS0_15any_io_executorEZNS0_6detail16awaitable_threadIS2_ED4EvEUlvE_EEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorIS7_EE5valuesrNS0_11can_requireIS7_JNSD_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorIS7_EE5valueEiE4typeE:
+function _ZN5boost4asio4postINS0_15any_io_executorEZNS0_6detail16awaitable_threadIS2_ED4EvEUlvE_EEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorIS7_EE5valuesrNS0_11can_requireIS7_JNSD_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorIS7_EE5valueEiE4typeE called 8 returned 100% blocks executed 75%
+        8:  163:BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(NullaryToken, void()) post(
+        -:  164:    const Executor& ex,
+        -:  165:    BOOST_ASIO_MOVE_ARG(NullaryToken) token
+        -:  166:      BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(Executor),
+        -:  167:    typename constraint<
+        -:  168:      (execution::is_executor<Executor>::value
+        -:  169:          && can_require<Executor, execution::blocking_t::never_t>::value)
+        -:  170:        || is_executor<Executor>::value
+        -:  171:    >::type = 0)
+        -:  172:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:  173:    async_initiate<NullaryToken, void()>(
+        -:  174:        declval<detail::initiate_post_with_executor<Executor> >(), token)))
+        -:  175:{
+        8:  176:  return async_initiate<NullaryToken, void()>(
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       16:  177:      detail::initiate_post_with_executor<Executor>(ex), token);
+call    0 returned 100%
+call    1 returned 100%
+call    2 never executed
+        -:  178:}
+------------------
+_ZN5boost4asio4postINS0_15any_io_executorEZNS0_6detail16awaitable_threadIS2_ED4EvEUlvE_EEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorIS7_EE5valuesrNS0_11can_requireIS7_JNSD_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorIS7_EE5valueEiE4typeE:
+function _ZN5boost4asio4postINS0_15any_io_executorEZNS0_6detail16awaitable_threadIS2_ED4EvEUlvE_EEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorIS7_EE5valuesrNS0_11can_requireIS7_JNSD_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorIS7_EE5valueEiE4typeE called 13 returned 100% blocks executed 75%
+       13:  163:BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(NullaryToken, void()) post(
+        -:  164:    const Executor& ex,
+        -:  165:    BOOST_ASIO_MOVE_ARG(NullaryToken) token
+        -:  166:      BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(Executor),
+        -:  167:    typename constraint<
+        -:  168:      (execution::is_executor<Executor>::value
+        -:  169:          && can_require<Executor, execution::blocking_t::never_t>::value)
+        -:  170:        || is_executor<Executor>::value
+        -:  171:    >::type = 0)
+        -:  172:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:  173:    async_initiate<NullaryToken, void()>(
+        -:  174:        declval<detail::initiate_post_with_executor<Executor> >(), token)))
+        -:  175:{
+       13:  176:  return async_initiate<NullaryToken, void()>(
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       26:  177:      detail::initiate_post_with_executor<Executor>(ex), token);
+call    0 returned 100%
+call    1 returned 100%
+call    2 never executed
+        -:  178:}
+------------------
+_ZN5boost4asio4postINS0_15any_io_executorEZNS0_6detail16awaitable_threadIS2_ED4EvEUlvE_EEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorIS7_EE5valuesrNS0_11can_requireIS7_JNSD_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorIS7_EE5valueEiE4typeE:
+function _ZN5boost4asio4postINS0_15any_io_executorEZNS0_6detail16awaitable_threadIS2_ED4EvEUlvE_EEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorIS7_EE5valuesrNS0_11can_requireIS7_JNSD_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorIS7_EE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  163:BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(NullaryToken, void()) post(
+        -:  164:    const Executor& ex,
+        -:  165:    BOOST_ASIO_MOVE_ARG(NullaryToken) token
+        -:  166:      BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(Executor),
+        -:  167:    typename constraint<
+        -:  168:      (execution::is_executor<Executor>::value
+        -:  169:          && can_require<Executor, execution::blocking_t::never_t>::value)
+        -:  170:        || is_executor<Executor>::value
+        -:  171:    >::type = 0)
+        -:  172:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:  173:    async_initiate<NullaryToken, void()>(
+        -:  174:        declval<detail::initiate_post_with_executor<Executor> >(), token)))
+        -:  175:{
+    #####:  176:  return async_initiate<NullaryToken, void()>(
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  177:      detail::initiate_post_with_executor<Executor>(ex), token);
+call    0 never executed
+call    1 never executed
+call    2 never executed
+        -:  178:}
+------------------
+_ZN5boost4asio4postINS0_15any_io_executorEZNS0_6detail16awaitable_threadIS2_ED4EvEUlvE_EEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorIS7_EE5valuesrNS0_11can_requireIS7_JNSD_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorIS7_EE5valueEiE4typeE:
+function _ZN5boost4asio4postINS0_15any_io_executorEZNS0_6detail16awaitable_threadIS2_ED4EvEUlvE_EEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorIS7_EE5valuesrNS0_11can_requireIS7_JNSD_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorIS7_EE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  163:BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(NullaryToken, void()) post(
+        -:  164:    const Executor& ex,
+        -:  165:    BOOST_ASIO_MOVE_ARG(NullaryToken) token
+        -:  166:      BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(Executor),
+        -:  167:    typename constraint<
+        -:  168:      (execution::is_executor<Executor>::value
+        -:  169:          && can_require<Executor, execution::blocking_t::never_t>::value)
+        -:  170:        || is_executor<Executor>::value
+        -:  171:    >::type = 0)
+        -:  172:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:  173:    async_initiate<NullaryToken, void()>(
+        -:  174:        declval<detail::initiate_post_with_executor<Executor> >(), token)))
+        -:  175:{
+    #####:  176:  return async_initiate<NullaryToken, void()>(
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  177:      detail::initiate_post_with_executor<Executor>(ex), token);
+call    0 never executed
+call    1 never executed
+call    2 never executed
+        -:  178:}
+------------------
+_ZN5boost4asio4postINS0_15any_io_executorEZNS0_6detail16awaitable_threadIS2_ED4EvEUlvE_EEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorIS7_EE5valuesrNS0_11can_requireIS7_JNSD_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorIS7_EE5valueEiE4typeE:
+function _ZN5boost4asio4postINS0_15any_io_executorEZNS0_6detail16awaitable_threadIS2_ED4EvEUlvE_EEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorIS7_EE5valuesrNS0_11can_requireIS7_JNSD_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorIS7_EE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  163:BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(NullaryToken, void()) post(
+        -:  164:    const Executor& ex,
+        -:  165:    BOOST_ASIO_MOVE_ARG(NullaryToken) token
+        -:  166:      BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(Executor),
+        -:  167:    typename constraint<
+        -:  168:      (execution::is_executor<Executor>::value
+        -:  169:          && can_require<Executor, execution::blocking_t::never_t>::value)
+        -:  170:        || is_executor<Executor>::value
+        -:  171:    >::type = 0)
+        -:  172:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:  173:    async_initiate<NullaryToken, void()>(
+        -:  174:        declval<detail::initiate_post_with_executor<Executor> >(), token)))
+        -:  175:{
+    #####:  176:  return async_initiate<NullaryToken, void()>(
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  177:      detail::initiate_post_with_executor<Executor>(ex), token);
+call    0 never executed
+call    1 never executed
+call    2 never executed
+        -:  178:}
+------------------
+_ZN5boost4asio4postINS0_15any_io_executorEZNS0_6detail16awaitable_threadIS2_ED4EvEUlvE_EEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorIS7_EE5valuesrNS0_11can_requireIS7_JNSD_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorIS7_EE5valueEiE4typeE:
+function _ZN5boost4asio4postINS0_15any_io_executorEZNS0_6detail16awaitable_threadIS2_ED4EvEUlvE_EEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorIS7_EE5valuesrNS0_11can_requireIS7_JNSD_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorIS7_EE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  163:BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(NullaryToken, void()) post(
+        -:  164:    const Executor& ex,
+        -:  165:    BOOST_ASIO_MOVE_ARG(NullaryToken) token
+        -:  166:      BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(Executor),
+        -:  167:    typename constraint<
+        -:  168:      (execution::is_executor<Executor>::value
+        -:  169:          && can_require<Executor, execution::blocking_t::never_t>::value)
+        -:  170:        || is_executor<Executor>::value
+        -:  171:    >::type = 0)
+        -:  172:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:  173:    async_initiate<NullaryToken, void()>(
+        -:  174:        declval<detail::initiate_post_with_executor<Executor> >(), token)))
+        -:  175:{
+    #####:  176:  return async_initiate<NullaryToken, void()>(
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  177:      detail::initiate_post_with_executor<Executor>(ex), token);
+call    0 never executed
+call    1 never executed
+call    2 never executed
+        -:  178:}
+------------------
+_ZN5boost4asio4postINS0_15any_io_executorEZNS0_6detail16awaitable_threadIS2_ED4EvEUlvE_EEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorIS7_EE5valuesrNS0_11can_requireIS7_JNSD_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorIS7_EE5valueEiE4typeE:
+function _ZN5boost4asio4postINS0_15any_io_executorEZNS0_6detail16awaitable_threadIS2_ED4EvEUlvE_EEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorIS7_EE5valuesrNS0_11can_requireIS7_JNSD_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorIS7_EE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  163:BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(NullaryToken, void()) post(
+        -:  164:    const Executor& ex,
+        -:  165:    BOOST_ASIO_MOVE_ARG(NullaryToken) token
+        -:  166:      BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(Executor),
+        -:  167:    typename constraint<
+        -:  168:      (execution::is_executor<Executor>::value
+        -:  169:          && can_require<Executor, execution::blocking_t::never_t>::value)
+        -:  170:        || is_executor<Executor>::value
+        -:  171:    >::type = 0)
+        -:  172:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:  173:    async_initiate<NullaryToken, void()>(
+        -:  174:        declval<detail::initiate_post_with_executor<Executor> >(), token)))
+        -:  175:{
+    #####:  176:  return async_initiate<NullaryToken, void()>(
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  177:      detail::initiate_post_with_executor<Executor>(ex), token);
+call    0 never executed
+call    1 never executed
+call    2 never executed
+        -:  178:}
+------------------
+_ZN5boost4asio4postINS0_15any_io_executorEZNS0_6detail16awaitable_threadIS2_ED4EvEUlvE_EEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorIS7_EE5valuesrNS0_11can_requireIS7_JNSD_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorIS7_EE5valueEiE4typeE:
+function _ZN5boost4asio4postINS0_15any_io_executorEZNS0_6detail16awaitable_threadIS2_ED4EvEUlvE_EEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorIS7_EE5valuesrNS0_11can_requireIS7_JNSD_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorIS7_EE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  163:BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(NullaryToken, void()) post(
+        -:  164:    const Executor& ex,
+        -:  165:    BOOST_ASIO_MOVE_ARG(NullaryToken) token
+        -:  166:      BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(Executor),
+        -:  167:    typename constraint<
+        -:  168:      (execution::is_executor<Executor>::value
+        -:  169:          && can_require<Executor, execution::blocking_t::never_t>::value)
+        -:  170:        || is_executor<Executor>::value
+        -:  171:    >::type = 0)
+        -:  172:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:  173:    async_initiate<NullaryToken, void()>(
+        -:  174:        declval<detail::initiate_post_with_executor<Executor> >(), token)))
+        -:  175:{
+    #####:  176:  return async_initiate<NullaryToken, void()>(
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  177:      detail::initiate_post_with_executor<Executor>(ex), token);
+call    0 never executed
+call    1 never executed
+call    2 never executed
+        -:  178:}
+------------------
+_ZN5boost4asio4postINS0_15any_io_executorEZNS0_6detail16awaitable_threadIS2_ED4EvEUlvE_EEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorIS7_EE5valuesrNS0_11can_requireIS7_JNSD_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorIS7_EE5valueEiE4typeE:
+function _ZN5boost4asio4postINS0_15any_io_executorEZNS0_6detail16awaitable_threadIS2_ED4EvEUlvE_EEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorIS7_EE5valuesrNS0_11can_requireIS7_JNSD_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorIS7_EE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  163:BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(NullaryToken, void()) post(
+        -:  164:    const Executor& ex,
+        -:  165:    BOOST_ASIO_MOVE_ARG(NullaryToken) token
+        -:  166:      BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(Executor),
+        -:  167:    typename constraint<
+        -:  168:      (execution::is_executor<Executor>::value
+        -:  169:          && can_require<Executor, execution::blocking_t::never_t>::value)
+        -:  170:        || is_executor<Executor>::value
+        -:  171:    >::type = 0)
+        -:  172:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:  173:    async_initiate<NullaryToken, void()>(
+        -:  174:        declval<detail::initiate_post_with_executor<Executor> >(), token)))
+        -:  175:{
+    #####:  176:  return async_initiate<NullaryToken, void()>(
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  177:      detail::initiate_post_with_executor<Executor>(ex), token);
+call    0 never executed
+call    1 never executed
+call    2 never executed
+        -:  178:}
+------------------
+_ZN5boost4asio4postINS0_15any_io_executorEZNS0_6detail16awaitable_threadIS2_ED4EvEUlvE_EEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorIS7_EE5valuesrNS0_11can_requireIS7_JNSD_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorIS7_EE5valueEiE4typeE:
+function _ZN5boost4asio4postINS0_15any_io_executorEZNS0_6detail16awaitable_threadIS2_ED4EvEUlvE_EEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorIS7_EE5valuesrNS0_11can_requireIS7_JNSD_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorIS7_EE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  163:BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(NullaryToken, void()) post(
+        -:  164:    const Executor& ex,
+        -:  165:    BOOST_ASIO_MOVE_ARG(NullaryToken) token
+        -:  166:      BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(Executor),
+        -:  167:    typename constraint<
+        -:  168:      (execution::is_executor<Executor>::value
+        -:  169:          && can_require<Executor, execution::blocking_t::never_t>::value)
+        -:  170:        || is_executor<Executor>::value
+        -:  171:    >::type = 0)
+        -:  172:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:  173:    async_initiate<NullaryToken, void()>(
+        -:  174:        declval<detail::initiate_post_with_executor<Executor> >(), token)))
+        -:  175:{
+    #####:  176:  return async_initiate<NullaryToken, void()>(
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  177:      detail::initiate_post_with_executor<Executor>(ex), token);
+call    0 never executed
+call    1 never executed
+call    2 never executed
+        -:  178:}
+------------------
+_ZN5boost4asio4postINS0_15any_io_executorEZNS0_6detail16awaitable_threadIS2_ED4EvEUlvE_EEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorIS7_EE5valuesrNS0_11can_requireIS7_JNSD_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorIS7_EE5valueEiE4typeE:
+function _ZN5boost4asio4postINS0_15any_io_executorEZNS0_6detail16awaitable_threadIS2_ED4EvEUlvE_EEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorIS7_EE5valuesrNS0_11can_requireIS7_JNSD_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorIS7_EE5valueEiE4typeE called 13 returned 100% blocks executed 75%
+       13:  163:BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(NullaryToken, void()) post(
+        -:  164:    const Executor& ex,
+        -:  165:    BOOST_ASIO_MOVE_ARG(NullaryToken) token
+        -:  166:      BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(Executor),
+        -:  167:    typename constraint<
+        -:  168:      (execution::is_executor<Executor>::value
+        -:  169:          && can_require<Executor, execution::blocking_t::never_t>::value)
+        -:  170:        || is_executor<Executor>::value
+        -:  171:    >::type = 0)
+        -:  172:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:  173:    async_initiate<NullaryToken, void()>(
+        -:  174:        declval<detail::initiate_post_with_executor<Executor> >(), token)))
+        -:  175:{
+       13:  176:  return async_initiate<NullaryToken, void()>(
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       26:  177:      detail::initiate_post_with_executor<Executor>(ex), token);
+call    0 returned 100%
+call    1 returned 100%
+call    2 never executed
+        -:  178:}
+------------------
+_ZN5boost4asio4postINS0_15any_io_executorEZNS0_6detail16awaitable_threadIS2_ED4EvEUlvE_EEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorIS7_EE5valuesrNS0_11can_requireIS7_JNSD_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorIS7_EE5valueEiE4typeE:
+function _ZN5boost4asio4postINS0_15any_io_executorEZNS0_6detail16awaitable_threadIS2_ED4EvEUlvE_EEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorIS7_EE5valuesrNS0_11can_requireIS7_JNSD_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorIS7_EE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  163:BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(NullaryToken, void()) post(
+        -:  164:    const Executor& ex,
+        -:  165:    BOOST_ASIO_MOVE_ARG(NullaryToken) token
+        -:  166:      BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(Executor),
+        -:  167:    typename constraint<
+        -:  168:      (execution::is_executor<Executor>::value
+        -:  169:          && can_require<Executor, execution::blocking_t::never_t>::value)
+        -:  170:        || is_executor<Executor>::value
+        -:  171:    >::type = 0)
+        -:  172:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:  173:    async_initiate<NullaryToken, void()>(
+        -:  174:        declval<detail::initiate_post_with_executor<Executor> >(), token)))
+        -:  175:{
+    #####:  176:  return async_initiate<NullaryToken, void()>(
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  177:      detail::initiate_post_with_executor<Executor>(ex), token);
+call    0 never executed
+call    1 never executed
+call    2 never executed
+        -:  178:}
+------------------
+_ZN5boost4asio4postINS0_15any_io_executorENS0_6detail7binder1INS3_16range_connect_opINS0_2ip3tcpES2_NS6_22basic_resolver_resultsIS7_EENS3_25default_connect_conditionENS3_17awaitable_handlerIS2_JNS_6system10error_codeENS6_14basic_endpointIS7_EEEEEEESD_EEEEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorISJ_EE5valuesrNS0_11can_requireISJ_JNSP_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorISJ_EE5valueEiE4typeE:
+function _ZN5boost4asio4postINS0_15any_io_executorENS0_6detail7binder1INS3_16range_connect_opINS0_2ip3tcpES2_NS6_22basic_resolver_resultsIS7_EENS3_25default_connect_conditionENS3_17awaitable_handlerIS2_JNS_6system10error_codeENS6_14basic_endpointIS7_EEEEEEESD_EEEEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorISJ_EE5valuesrNS0_11can_requireISJ_JNSP_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorISJ_EE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  163:BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(NullaryToken, void()) post(
+        -:  164:    const Executor& ex,
+        -:  165:    BOOST_ASIO_MOVE_ARG(NullaryToken) token
+        -:  166:      BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(Executor),
+        -:  167:    typename constraint<
+        -:  168:      (execution::is_executor<Executor>::value
+        -:  169:          && can_require<Executor, execution::blocking_t::never_t>::value)
+        -:  170:        || is_executor<Executor>::value
+        -:  171:    >::type = 0)
+        -:  172:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:  173:    async_initiate<NullaryToken, void()>(
+        -:  174:        declval<detail::initiate_post_with_executor<Executor> >(), token)))
+        -:  175:{
+    #####:  176:  return async_initiate<NullaryToken, void()>(
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  177:      detail::initiate_post_with_executor<Executor>(ex), token);
+call    0 never executed
+call    1 never executed
+call    2 never executed
+        -:  178:}
+------------------
+_ZN5boost4asio4postINS0_15any_io_executorEZNS0_6detail16awaitable_threadIS2_ED4EvEUlvE_EEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorIS7_EE5valuesrNS0_11can_requireIS7_JNSD_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorIS7_EE5valueEiE4typeE:
+function _ZN5boost4asio4postINS0_15any_io_executorEZNS0_6detail16awaitable_threadIS2_ED4EvEUlvE_EEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorIS7_EE5valuesrNS0_11can_requireIS7_JNSD_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorIS7_EE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  163:BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(NullaryToken, void()) post(
+        -:  164:    const Executor& ex,
+        -:  165:    BOOST_ASIO_MOVE_ARG(NullaryToken) token
+        -:  166:      BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(Executor),
+        -:  167:    typename constraint<
+        -:  168:      (execution::is_executor<Executor>::value
+        -:  169:          && can_require<Executor, execution::blocking_t::never_t>::value)
+        -:  170:        || is_executor<Executor>::value
+        -:  171:    >::type = 0)
+        -:  172:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:  173:    async_initiate<NullaryToken, void()>(
+        -:  174:        declval<detail::initiate_post_with_executor<Executor> >(), token)))
+        -:  175:{
+    #####:  176:  return async_initiate<NullaryToken, void()>(
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  177:      detail::initiate_post_with_executor<Executor>(ex), token);
+call    0 never executed
+call    1 never executed
+call    2 never executed
+        -:  178:}
+------------------
+_ZN5boost4asio4postINS0_15any_io_executorEZNS0_6detail16awaitable_threadIS2_ED4EvEUlvE_EEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorIS7_EE5valuesrNS0_11can_requireIS7_JNSD_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorIS7_EE5valueEiE4typeE:
+function _ZN5boost4asio4postINS0_15any_io_executorEZNS0_6detail16awaitable_threadIS2_ED4EvEUlvE_EEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorIS7_EE5valuesrNS0_11can_requireIS7_JNSD_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorIS7_EE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  163:BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(NullaryToken, void()) post(
+        -:  164:    const Executor& ex,
+        -:  165:    BOOST_ASIO_MOVE_ARG(NullaryToken) token
+        -:  166:      BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(Executor),
+        -:  167:    typename constraint<
+        -:  168:      (execution::is_executor<Executor>::value
+        -:  169:          && can_require<Executor, execution::blocking_t::never_t>::value)
+        -:  170:        || is_executor<Executor>::value
+        -:  171:    >::type = 0)
+        -:  172:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:  173:    async_initiate<NullaryToken, void()>(
+        -:  174:        declval<detail::initiate_post_with_executor<Executor> >(), token)))
+        -:  175:{
+    #####:  176:  return async_initiate<NullaryToken, void()>(
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  177:      detail::initiate_post_with_executor<Executor>(ex), token);
+call    0 never executed
+call    1 never executed
+call    2 never executed
+        -:  178:}
+------------------
+_ZN5boost4asio4postINS0_15any_io_executorEZNS0_6detail16awaitable_threadIS2_ED4EvEUlvE_EEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorIS7_EE5valuesrNS0_11can_requireIS7_JNSD_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorIS7_EE5valueEiE4typeE:
+function _ZN5boost4asio4postINS0_15any_io_executorEZNS0_6detail16awaitable_threadIS2_ED4EvEUlvE_EEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorIS7_EE5valuesrNS0_11can_requireIS7_JNSD_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorIS7_EE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  163:BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(NullaryToken, void()) post(
+        -:  164:    const Executor& ex,
+        -:  165:    BOOST_ASIO_MOVE_ARG(NullaryToken) token
+        -:  166:      BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(Executor),
+        -:  167:    typename constraint<
+        -:  168:      (execution::is_executor<Executor>::value
+        -:  169:          && can_require<Executor, execution::blocking_t::never_t>::value)
+        -:  170:        || is_executor<Executor>::value
+        -:  171:    >::type = 0)
+        -:  172:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:  173:    async_initiate<NullaryToken, void()>(
+        -:  174:        declval<detail::initiate_post_with_executor<Executor> >(), token)))
+        -:  175:{
+    #####:  176:  return async_initiate<NullaryToken, void()>(
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  177:      detail::initiate_post_with_executor<Executor>(ex), token);
+call    0 never executed
+call    1 never executed
+call    2 never executed
+        -:  178:}
+------------------
+_ZN5boost4asio4postINS0_15any_io_executorEZNS0_6detail16awaitable_threadIS2_ED4EvEUlvE_EEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorIS7_EE5valuesrNS0_11can_requireIS7_JNSD_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorIS7_EE5valueEiE4typeE:
+function _ZN5boost4asio4postINS0_15any_io_executorEZNS0_6detail16awaitable_threadIS2_ED4EvEUlvE_EEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorIS7_EE5valuesrNS0_11can_requireIS7_JNSD_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorIS7_EE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  163:BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(NullaryToken, void()) post(
+        -:  164:    const Executor& ex,
+        -:  165:    BOOST_ASIO_MOVE_ARG(NullaryToken) token
+        -:  166:      BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(Executor),
+        -:  167:    typename constraint<
+        -:  168:      (execution::is_executor<Executor>::value
+        -:  169:          && can_require<Executor, execution::blocking_t::never_t>::value)
+        -:  170:        || is_executor<Executor>::value
+        -:  171:    >::type = 0)
+        -:  172:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:  173:    async_initiate<NullaryToken, void()>(
+        -:  174:        declval<detail::initiate_post_with_executor<Executor> >(), token)))
+        -:  175:{
+    #####:  176:  return async_initiate<NullaryToken, void()>(
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  177:      detail::initiate_post_with_executor<Executor>(ex), token);
+call    0 never executed
+call    1 never executed
+call    2 never executed
+        -:  178:}
+------------------
+_ZN5boost4asio4postINS0_15any_io_executorEZNS0_6detail16awaitable_threadIS2_ED4EvEUlvE_EEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorIS7_EE5valuesrNS0_11can_requireIS7_JNSD_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorIS7_EE5valueEiE4typeE:
+function _ZN5boost4asio4postINS0_15any_io_executorEZNS0_6detail16awaitable_threadIS2_ED4EvEUlvE_EEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorIS7_EE5valuesrNS0_11can_requireIS7_JNSD_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorIS7_EE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  163:BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(NullaryToken, void()) post(
+        -:  164:    const Executor& ex,
+        -:  165:    BOOST_ASIO_MOVE_ARG(NullaryToken) token
+        -:  166:      BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(Executor),
+        -:  167:    typename constraint<
+        -:  168:      (execution::is_executor<Executor>::value
+        -:  169:          && can_require<Executor, execution::blocking_t::never_t>::value)
+        -:  170:        || is_executor<Executor>::value
+        -:  171:    >::type = 0)
+        -:  172:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:  173:    async_initiate<NullaryToken, void()>(
+        -:  174:        declval<detail::initiate_post_with_executor<Executor> >(), token)))
+        -:  175:{
+    #####:  176:  return async_initiate<NullaryToken, void()>(
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  177:      detail::initiate_post_with_executor<Executor>(ex), token);
+call    0 never executed
+call    1 never executed
+call    2 never executed
+        -:  178:}
+------------------
+_ZN5boost4asio4postINS0_15any_io_executorENS0_6detail7binder1INS3_16range_connect_opINS0_2ip3tcpES2_NS6_22basic_resolver_resultsIS7_EENS3_25default_connect_conditionEZN15BenchmarkClientC4ERNS0_10io_contextERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEESL_iRSt6atomicIiESO_EUlNS_6system10error_codeENS6_14basic_endpointIS7_EEE_EESQ_EEEEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorISW_EE5valuesrNS0_11can_requireISW_JNS12_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorISW_EE5valueEiE4typeE:
+function _ZN5boost4asio4postINS0_15any_io_executorENS0_6detail7binder1INS3_16range_connect_opINS0_2ip3tcpES2_NS6_22basic_resolver_resultsIS7_EENS3_25default_connect_conditionEZN15BenchmarkClientC4ERNS0_10io_contextERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEESL_iRSt6atomicIiESO_EUlNS_6system10error_codeENS6_14basic_endpointIS7_EEE_EESQ_EEEEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorISW_EE5valuesrNS0_11can_requireISW_JNS12_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorISW_EE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  163:BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(NullaryToken, void()) post(
+        -:  164:    const Executor& ex,
+        -:  165:    BOOST_ASIO_MOVE_ARG(NullaryToken) token
+        -:  166:      BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(Executor),
+        -:  167:    typename constraint<
+        -:  168:      (execution::is_executor<Executor>::value
+        -:  169:          && can_require<Executor, execution::blocking_t::never_t>::value)
+        -:  170:        || is_executor<Executor>::value
+        -:  171:    >::type = 0)
+        -:  172:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:  173:    async_initiate<NullaryToken, void()>(
+        -:  174:        declval<detail::initiate_post_with_executor<Executor> >(), token)))
+        -:  175:{
+    #####:  176:  return async_initiate<NullaryToken, void()>(
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  177:      detail::initiate_post_with_executor<Executor>(ex), token);
+call    0 never executed
+call    1 never executed
+call    2 never executed
+        -:  178:}
+------------------
+_ZN5boost4asio4postINS0_15any_io_executorEZNS0_6detail16awaitable_threadIS2_ED4EvEUlvE_EEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorIS7_EE5valuesrNS0_11can_requireIS7_JNSD_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorIS7_EE5valueEiE4typeE:
+function _ZN5boost4asio4postINS0_15any_io_executorEZNS0_6detail16awaitable_threadIS2_ED4EvEUlvE_EEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorIS7_EE5valuesrNS0_11can_requireIS7_JNSD_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorIS7_EE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  163:BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(NullaryToken, void()) post(
+        -:  164:    const Executor& ex,
+        -:  165:    BOOST_ASIO_MOVE_ARG(NullaryToken) token
+        -:  166:      BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(Executor),
+        -:  167:    typename constraint<
+        -:  168:      (execution::is_executor<Executor>::value
+        -:  169:          && can_require<Executor, execution::blocking_t::never_t>::value)
+        -:  170:        || is_executor<Executor>::value
+        -:  171:    >::type = 0)
+        -:  172:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:  173:    async_initiate<NullaryToken, void()>(
+        -:  174:        declval<detail::initiate_post_with_executor<Executor> >(), token)))
+        -:  175:{
+    #####:  176:  return async_initiate<NullaryToken, void()>(
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  177:      detail::initiate_post_with_executor<Executor>(ex), token);
+call    0 never executed
+call    1 never executed
+call    2 never executed
+        -:  178:}
+------------------
+_ZN5boost4asio4postINS0_15any_io_executorEZNS0_6detail16awaitable_threadIS2_ED4EvEUlvE_EEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorIS7_EE5valuesrNS0_11can_requireIS7_JNSD_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorIS7_EE5valueEiE4typeE:
+function _ZN5boost4asio4postINS0_15any_io_executorEZNS0_6detail16awaitable_threadIS2_ED4EvEUlvE_EEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorIS7_EE5valuesrNS0_11can_requireIS7_JNSD_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorIS7_EE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  163:BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(NullaryToken, void()) post(
+        -:  164:    const Executor& ex,
+        -:  165:    BOOST_ASIO_MOVE_ARG(NullaryToken) token
+        -:  166:      BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(Executor),
+        -:  167:    typename constraint<
+        -:  168:      (execution::is_executor<Executor>::value
+        -:  169:          && can_require<Executor, execution::blocking_t::never_t>::value)
+        -:  170:        || is_executor<Executor>::value
+        -:  171:    >::type = 0)
+        -:  172:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:  173:    async_initiate<NullaryToken, void()>(
+        -:  174:        declval<detail::initiate_post_with_executor<Executor> >(), token)))
+        -:  175:{
+    #####:  176:  return async_initiate<NullaryToken, void()>(
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  177:      detail::initiate_post_with_executor<Executor>(ex), token);
+call    0 never executed
+call    1 never executed
+call    2 never executed
+        -:  178:}
+------------------
+_ZN5boost4asio4postINS0_15any_io_executorEZNS0_6detail16awaitable_threadIS2_ED4EvEUlvE_EEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorIS7_EE5valuesrNS0_11can_requireIS7_JNSD_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorIS7_EE5valueEiE4typeE:
+function _ZN5boost4asio4postINS0_15any_io_executorEZNS0_6detail16awaitable_threadIS2_ED4EvEUlvE_EEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorIS7_EE5valuesrNS0_11can_requireIS7_JNSD_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorIS7_EE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  163:BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(NullaryToken, void()) post(
+        -:  164:    const Executor& ex,
+        -:  165:    BOOST_ASIO_MOVE_ARG(NullaryToken) token
+        -:  166:      BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(Executor),
+        -:  167:    typename constraint<
+        -:  168:      (execution::is_executor<Executor>::value
+        -:  169:          && can_require<Executor, execution::blocking_t::never_t>::value)
+        -:  170:        || is_executor<Executor>::value
+        -:  171:    >::type = 0)
+        -:  172:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:  173:    async_initiate<NullaryToken, void()>(
+        -:  174:        declval<detail::initiate_post_with_executor<Executor> >(), token)))
+        -:  175:{
+    #####:  176:  return async_initiate<NullaryToken, void()>(
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  177:      detail::initiate_post_with_executor<Executor>(ex), token);
+call    0 never executed
+call    1 never executed
+call    2 never executed
+        -:  178:}
+------------------
+_ZN5boost4asio4postINS0_15any_io_executorEZNS0_6detail16awaitable_threadIS2_ED4EvEUlvE_EEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorIS7_EE5valuesrNS0_11can_requireIS7_JNSD_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorIS7_EE5valueEiE4typeE:
+function _ZN5boost4asio4postINS0_15any_io_executorEZNS0_6detail16awaitable_threadIS2_ED4EvEUlvE_EEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorIS7_EE5valuesrNS0_11can_requireIS7_JNSD_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorIS7_EE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  163:BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(NullaryToken, void()) post(
+        -:  164:    const Executor& ex,
+        -:  165:    BOOST_ASIO_MOVE_ARG(NullaryToken) token
+        -:  166:      BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(Executor),
+        -:  167:    typename constraint<
+        -:  168:      (execution::is_executor<Executor>::value
+        -:  169:          && can_require<Executor, execution::blocking_t::never_t>::value)
+        -:  170:        || is_executor<Executor>::value
+        -:  171:    >::type = 0)
+        -:  172:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:  173:    async_initiate<NullaryToken, void()>(
+        -:  174:        declval<detail::initiate_post_with_executor<Executor> >(), token)))
+        -:  175:{
+    #####:  176:  return async_initiate<NullaryToken, void()>(
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  177:      detail::initiate_post_with_executor<Executor>(ex), token);
+call    0 never executed
+call    1 never executed
+call    2 never executed
+        -:  178:}
+------------------
+_ZN5boost4asio4postINS0_15any_io_executorEZNS0_6detail16awaitable_threadIS2_ED4EvEUlvE_EEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorIS7_EE5valuesrNS0_11can_requireIS7_JNSD_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorIS7_EE5valueEiE4typeE:
+function _ZN5boost4asio4postINS0_15any_io_executorEZNS0_6detail16awaitable_threadIS2_ED4EvEUlvE_EEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorIS7_EE5valuesrNS0_11can_requireIS7_JNSD_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorIS7_EE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  163:BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(NullaryToken, void()) post(
+        -:  164:    const Executor& ex,
+        -:  165:    BOOST_ASIO_MOVE_ARG(NullaryToken) token
+        -:  166:      BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(Executor),
+        -:  167:    typename constraint<
+        -:  168:      (execution::is_executor<Executor>::value
+        -:  169:          && can_require<Executor, execution::blocking_t::never_t>::value)
+        -:  170:        || is_executor<Executor>::value
+        -:  171:    >::type = 0)
+        -:  172:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:  173:    async_initiate<NullaryToken, void()>(
+        -:  174:        declval<detail::initiate_post_with_executor<Executor> >(), token)))
+        -:  175:{
+    #####:  176:  return async_initiate<NullaryToken, void()>(
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  177:      detail::initiate_post_with_executor<Executor>(ex), token);
+call    0 never executed
+call    1 never executed
+call    2 never executed
+        -:  178:}
+------------------
+_ZN5boost4asio4postINS0_15any_io_executorEZNS0_6detail16awaitable_threadIS2_ED4EvEUlvE_EEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorIS7_EE5valuesrNS0_11can_requireIS7_JNSD_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorIS7_EE5valueEiE4typeE:
+function _ZN5boost4asio4postINS0_15any_io_executorEZNS0_6detail16awaitable_threadIS2_ED4EvEUlvE_EEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorIS7_EE5valuesrNS0_11can_requireIS7_JNSD_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorIS7_EE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  163:BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(NullaryToken, void()) post(
+        -:  164:    const Executor& ex,
+        -:  165:    BOOST_ASIO_MOVE_ARG(NullaryToken) token
+        -:  166:      BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(Executor),
+        -:  167:    typename constraint<
+        -:  168:      (execution::is_executor<Executor>::value
+        -:  169:          && can_require<Executor, execution::blocking_t::never_t>::value)
+        -:  170:        || is_executor<Executor>::value
+        -:  171:    >::type = 0)
+        -:  172:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:  173:    async_initiate<NullaryToken, void()>(
+        -:  174:        declval<detail::initiate_post_with_executor<Executor> >(), token)))
+        -:  175:{
+    #####:  176:  return async_initiate<NullaryToken, void()>(
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  177:      detail::initiate_post_with_executor<Executor>(ex), token);
+call    0 never executed
+call    1 never executed
+call    2 never executed
+        -:  178:}
+------------------
+_ZN5boost4asio4postINS0_15any_io_executorEZNS0_6detail16awaitable_threadIS2_ED4EvEUlvE_EEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorIS7_EE5valuesrNS0_11can_requireIS7_JNSD_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorIS7_EE5valueEiE4typeE:
+function _ZN5boost4asio4postINS0_15any_io_executorEZNS0_6detail16awaitable_threadIS2_ED4EvEUlvE_EEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorIS7_EE5valuesrNS0_11can_requireIS7_JNSD_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorIS7_EE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  163:BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(NullaryToken, void()) post(
+        -:  164:    const Executor& ex,
+        -:  165:    BOOST_ASIO_MOVE_ARG(NullaryToken) token
+        -:  166:      BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(Executor),
+        -:  167:    typename constraint<
+        -:  168:      (execution::is_executor<Executor>::value
+        -:  169:          && can_require<Executor, execution::blocking_t::never_t>::value)
+        -:  170:        || is_executor<Executor>::value
+        -:  171:    >::type = 0)
+        -:  172:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:  173:    async_initiate<NullaryToken, void()>(
+        -:  174:        declval<detail::initiate_post_with_executor<Executor> >(), token)))
+        -:  175:{
+    #####:  176:  return async_initiate<NullaryToken, void()>(
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  177:      detail::initiate_post_with_executor<Executor>(ex), token);
+call    0 never executed
+call    1 never executed
+call    2 never executed
+        -:  178:}
+------------------
+_ZN5boost4asio4postINS0_15any_io_executorEZNS0_6detail16awaitable_threadIS2_ED4EvEUlvE_EEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorIS7_EE5valuesrNS0_11can_requireIS7_JNSD_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorIS7_EE5valueEiE4typeE:
+function _ZN5boost4asio4postINS0_15any_io_executorEZNS0_6detail16awaitable_threadIS2_ED4EvEUlvE_EEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorIS7_EE5valuesrNS0_11can_requireIS7_JNSD_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorIS7_EE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  163:BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(NullaryToken, void()) post(
+        -:  164:    const Executor& ex,
+        -:  165:    BOOST_ASIO_MOVE_ARG(NullaryToken) token
+        -:  166:      BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(Executor),
+        -:  167:    typename constraint<
+        -:  168:      (execution::is_executor<Executor>::value
+        -:  169:          && can_require<Executor, execution::blocking_t::never_t>::value)
+        -:  170:        || is_executor<Executor>::value
+        -:  171:    >::type = 0)
+        -:  172:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:  173:    async_initiate<NullaryToken, void()>(
+        -:  174:        declval<detail::initiate_post_with_executor<Executor> >(), token)))
+        -:  175:{
+    #####:  176:  return async_initiate<NullaryToken, void()>(
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  177:      detail::initiate_post_with_executor<Executor>(ex), token);
+call    0 never executed
+call    1 never executed
+call    2 never executed
+        -:  178:}
+------------------
+_ZN5boost4asio4postINS0_15any_io_executorEZNS0_6detail16awaitable_threadIS2_ED4EvEUlvE_EEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorIS7_EE5valuesrNS0_11can_requireIS7_JNSD_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorIS7_EE5valueEiE4typeE:
+function _ZN5boost4asio4postINS0_15any_io_executorEZNS0_6detail16awaitable_threadIS2_ED4EvEUlvE_EEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorIS7_EE5valuesrNS0_11can_requireIS7_JNSD_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorIS7_EE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  163:BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(NullaryToken, void()) post(
+        -:  164:    const Executor& ex,
+        -:  165:    BOOST_ASIO_MOVE_ARG(NullaryToken) token
+        -:  166:      BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(Executor),
+        -:  167:    typename constraint<
+        -:  168:      (execution::is_executor<Executor>::value
+        -:  169:          && can_require<Executor, execution::blocking_t::never_t>::value)
+        -:  170:        || is_executor<Executor>::value
+        -:  171:    >::type = 0)
+        -:  172:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:  173:    async_initiate<NullaryToken, void()>(
+        -:  174:        declval<detail::initiate_post_with_executor<Executor> >(), token)))
+        -:  175:{
+    #####:  176:  return async_initiate<NullaryToken, void()>(
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  177:      detail::initiate_post_with_executor<Executor>(ex), token);
+call    0 never executed
+call    1 never executed
+call    2 never executed
+        -:  178:}
+------------------
+_ZN5boost4asio4postINS0_15any_io_executorEZNS0_6detail16awaitable_threadIS2_ED4EvEUlvE_EEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorIS7_EE5valuesrNS0_11can_requireIS7_JNSD_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorIS7_EE5valueEiE4typeE:
+function _ZN5boost4asio4postINS0_15any_io_executorEZNS0_6detail16awaitable_threadIS2_ED4EvEUlvE_EEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorIS7_EE5valuesrNS0_11can_requireIS7_JNSD_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorIS7_EE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  163:BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(NullaryToken, void()) post(
+        -:  164:    const Executor& ex,
+        -:  165:    BOOST_ASIO_MOVE_ARG(NullaryToken) token
+        -:  166:      BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(Executor),
+        -:  167:    typename constraint<
+        -:  168:      (execution::is_executor<Executor>::value
+        -:  169:          && can_require<Executor, execution::blocking_t::never_t>::value)
+        -:  170:        || is_executor<Executor>::value
+        -:  171:    >::type = 0)
+        -:  172:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:  173:    async_initiate<NullaryToken, void()>(
+        -:  174:        declval<detail::initiate_post_with_executor<Executor> >(), token)))
+        -:  175:{
+    #####:  176:  return async_initiate<NullaryToken, void()>(
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  177:      detail::initiate_post_with_executor<Executor>(ex), token);
+call    0 never executed
+call    1 never executed
+call    2 never executed
+        -:  178:}
+------------------
+_ZN5boost4asio4postINS0_15any_io_executorEZNS0_6detail16awaitable_threadIS2_ED4EvEUlvE_EEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorIS7_EE5valuesrNS0_11can_requireIS7_JNSD_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorIS7_EE5valueEiE4typeE:
+function _ZN5boost4asio4postINS0_15any_io_executorEZNS0_6detail16awaitable_threadIS2_ED4EvEUlvE_EEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorIS7_EE5valuesrNS0_11can_requireIS7_JNSD_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorIS7_EE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  163:BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(NullaryToken, void()) post(
+        -:  164:    const Executor& ex,
+        -:  165:    BOOST_ASIO_MOVE_ARG(NullaryToken) token
+        -:  166:      BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(Executor),
+        -:  167:    typename constraint<
+        -:  168:      (execution::is_executor<Executor>::value
+        -:  169:          && can_require<Executor, execution::blocking_t::never_t>::value)
+        -:  170:        || is_executor<Executor>::value
+        -:  171:    >::type = 0)
+        -:  172:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:  173:    async_initiate<NullaryToken, void()>(
+        -:  174:        declval<detail::initiate_post_with_executor<Executor> >(), token)))
+        -:  175:{
+    #####:  176:  return async_initiate<NullaryToken, void()>(
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  177:      detail::initiate_post_with_executor<Executor>(ex), token);
+call    0 never executed
+call    1 never executed
+call    2 never executed
+        -:  178:}
+------------------
+_ZN5boost4asio4postINS0_15any_io_executorEZNS0_6detail16awaitable_threadIS2_ED4EvEUlvE_EEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorIS7_EE5valuesrNS0_11can_requireIS7_JNSD_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorIS7_EE5valueEiE4typeE:
+function _ZN5boost4asio4postINS0_15any_io_executorEZNS0_6detail16awaitable_threadIS2_ED4EvEUlvE_EEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorIS7_EE5valuesrNS0_11can_requireIS7_JNSD_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorIS7_EE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  163:BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(NullaryToken, void()) post(
+        -:  164:    const Executor& ex,
+        -:  165:    BOOST_ASIO_MOVE_ARG(NullaryToken) token
+        -:  166:      BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(Executor),
+        -:  167:    typename constraint<
+        -:  168:      (execution::is_executor<Executor>::value
+        -:  169:          && can_require<Executor, execution::blocking_t::never_t>::value)
+        -:  170:        || is_executor<Executor>::value
+        -:  171:    >::type = 0)
+        -:  172:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:  173:    async_initiate<NullaryToken, void()>(
+        -:  174:        declval<detail::initiate_post_with_executor<Executor> >(), token)))
+        -:  175:{
+    #####:  176:  return async_initiate<NullaryToken, void()>(
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  177:      detail::initiate_post_with_executor<Executor>(ex), token);
+call    0 never executed
+call    1 never executed
+call    2 never executed
+        -:  178:}
+------------------
+_ZN5boost4asio4postINS0_15any_io_executorEZNS0_6detail16awaitable_threadIS2_ED4EvEUlvE_EEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorIS7_EE5valuesrNS0_11can_requireIS7_JNSD_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorIS7_EE5valueEiE4typeE:
+function _ZN5boost4asio4postINS0_15any_io_executorEZNS0_6detail16awaitable_threadIS2_ED4EvEUlvE_EEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorIS7_EE5valuesrNS0_11can_requireIS7_JNSD_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorIS7_EE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  163:BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(NullaryToken, void()) post(
+        -:  164:    const Executor& ex,
+        -:  165:    BOOST_ASIO_MOVE_ARG(NullaryToken) token
+        -:  166:      BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(Executor),
+        -:  167:    typename constraint<
+        -:  168:      (execution::is_executor<Executor>::value
+        -:  169:          && can_require<Executor, execution::blocking_t::never_t>::value)
+        -:  170:        || is_executor<Executor>::value
+        -:  171:    >::type = 0)
+        -:  172:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:  173:    async_initiate<NullaryToken, void()>(
+        -:  174:        declval<detail::initiate_post_with_executor<Executor> >(), token)))
+        -:  175:{
+    #####:  176:  return async_initiate<NullaryToken, void()>(
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  177:      detail::initiate_post_with_executor<Executor>(ex), token);
+call    0 never executed
+call    1 never executed
+call    2 never executed
+        -:  178:}
+------------------
+_ZN5boost4asio4postINS0_15any_io_executorEZNS0_6detail16awaitable_threadIS2_ED4EvEUlvE_EEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorIS7_EE5valuesrNS0_11can_requireIS7_JNSD_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorIS7_EE5valueEiE4typeE:
+function _ZN5boost4asio4postINS0_15any_io_executorEZNS0_6detail16awaitable_threadIS2_ED4EvEUlvE_EEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorIS7_EE5valuesrNS0_11can_requireIS7_JNSD_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorIS7_EE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  163:BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(NullaryToken, void()) post(
+        -:  164:    const Executor& ex,
+        -:  165:    BOOST_ASIO_MOVE_ARG(NullaryToken) token
+        -:  166:      BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(Executor),
+        -:  167:    typename constraint<
+        -:  168:      (execution::is_executor<Executor>::value
+        -:  169:          && can_require<Executor, execution::blocking_t::never_t>::value)
+        -:  170:        || is_executor<Executor>::value
+        -:  171:    >::type = 0)
+        -:  172:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:  173:    async_initiate<NullaryToken, void()>(
+        -:  174:        declval<detail::initiate_post_with_executor<Executor> >(), token)))
+        -:  175:{
+    #####:  176:  return async_initiate<NullaryToken, void()>(
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  177:      detail::initiate_post_with_executor<Executor>(ex), token);
+call    0 never executed
+call    1 never executed
+call    2 never executed
+        -:  178:}
+------------------
+_ZN5boost4asio4postINS0_15any_io_executorEZN5hical10HttpServer17closeAllAcceptorsEvEUlvE_EEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorIS6_EE5valuesrNS0_11can_requireIS6_JNSC_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorIS6_EE5valueEiE4typeE:
+function _ZN5boost4asio4postINS0_15any_io_executorEZN5hical10HttpServer17closeAllAcceptorsEvEUlvE_EEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorIS6_EE5valuesrNS0_11can_requireIS6_JNSC_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorIS6_EE5valueEiE4typeE called 28 returned 100% blocks executed 75%
+       28:  163:BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(NullaryToken, void()) post(
+        -:  164:    const Executor& ex,
+        -:  165:    BOOST_ASIO_MOVE_ARG(NullaryToken) token
+        -:  166:      BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(Executor),
+        -:  167:    typename constraint<
+        -:  168:      (execution::is_executor<Executor>::value
+        -:  169:          && can_require<Executor, execution::blocking_t::never_t>::value)
+        -:  170:        || is_executor<Executor>::value
+        -:  171:    >::type = 0)
+        -:  172:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:  173:    async_initiate<NullaryToken, void()>(
+        -:  174:        declval<detail::initiate_post_with_executor<Executor> >(), token)))
+        -:  175:{
+       28:  176:  return async_initiate<NullaryToken, void()>(
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       56:  177:      detail::initiate_post_with_executor<Executor>(ex), token);
+call    0 returned 100%
+call    1 returned 100%
+call    2 never executed
+        -:  178:}
+------------------
+_ZN5boost4asio4postINS0_15any_io_executorENS0_6detail7binder1INS3_17awaitable_handlerIS2_JNS_6system10error_codeEEEES7_EEEEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorISA_EE5valuesrNS0_11can_requireISA_JNSG_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorISA_EE5valueEiE4typeE:
+function _ZN5boost4asio4postINS0_15any_io_executorENS0_6detail7binder1INS3_17awaitable_handlerIS2_JNS_6system10error_codeEEEES7_EEEEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorISA_EE5valuesrNS0_11can_requireISA_JNSG_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorISA_EE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  163:BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(NullaryToken, void()) post(
+        -:  164:    const Executor& ex,
+        -:  165:    BOOST_ASIO_MOVE_ARG(NullaryToken) token
+        -:  166:      BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(Executor),
+        -:  167:    typename constraint<
+        -:  168:      (execution::is_executor<Executor>::value
+        -:  169:          && can_require<Executor, execution::blocking_t::never_t>::value)
+        -:  170:        || is_executor<Executor>::value
+        -:  171:    >::type = 0)
+        -:  172:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:  173:    async_initiate<NullaryToken, void()>(
+        -:  174:        declval<detail::initiate_post_with_executor<Executor> >(), token)))
+        -:  175:{
+    #####:  176:  return async_initiate<NullaryToken, void()>(
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  177:      detail::initiate_post_with_executor<Executor>(ex), token);
+call    0 never executed
+call    1 never executed
+call    2 never executed
+        -:  178:}
+------------------
+_ZN5boost4asio4postINS0_15any_io_executorEZNS0_6detail16awaitable_threadIS2_ED4EvEUlvE_EEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorIS7_EE5valuesrNS0_11can_requireIS7_JNSD_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorIS7_EE5valueEiE4typeE:
+function _ZN5boost4asio4postINS0_15any_io_executorEZNS0_6detail16awaitable_threadIS2_ED4EvEUlvE_EEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorIS7_EE5valuesrNS0_11can_requireIS7_JNSD_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorIS7_EE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  163:BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(NullaryToken, void()) post(
+        -:  164:    const Executor& ex,
+        -:  165:    BOOST_ASIO_MOVE_ARG(NullaryToken) token
+        -:  166:      BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(Executor),
+        -:  167:    typename constraint<
+        -:  168:      (execution::is_executor<Executor>::value
+        -:  169:          && can_require<Executor, execution::blocking_t::never_t>::value)
+        -:  170:        || is_executor<Executor>::value
+        -:  171:    >::type = 0)
+        -:  172:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:  173:    async_initiate<NullaryToken, void()>(
+        -:  174:        declval<detail::initiate_post_with_executor<Executor> >(), token)))
+        -:  175:{
+    #####:  176:  return async_initiate<NullaryToken, void()>(
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  177:      detail::initiate_post_with_executor<Executor>(ex), token);
+call    0 never executed
+call    1 never executed
+call    2 never executed
+        -:  178:}
+------------------
+_ZN5boost4asio4postINS0_15any_io_executorEZNS0_6detail16awaitable_threadIS2_ED4EvEUlvE_EEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorIS7_EE5valuesrNS0_11can_requireIS7_JNSD_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorIS7_EE5valueEiE4typeE:
+function _ZN5boost4asio4postINS0_15any_io_executorEZNS0_6detail16awaitable_threadIS2_ED4EvEUlvE_EEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorIS7_EE5valuesrNS0_11can_requireIS7_JNSD_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorIS7_EE5valueEiE4typeE called 5 returned 100% blocks executed 75%
+        5:  163:BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(NullaryToken, void()) post(
+        -:  164:    const Executor& ex,
+        -:  165:    BOOST_ASIO_MOVE_ARG(NullaryToken) token
+        -:  166:      BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(Executor),
+        -:  167:    typename constraint<
+        -:  168:      (execution::is_executor<Executor>::value
+        -:  169:          && can_require<Executor, execution::blocking_t::never_t>::value)
+        -:  170:        || is_executor<Executor>::value
+        -:  171:    >::type = 0)
+        -:  172:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:  173:    async_initiate<NullaryToken, void()>(
+        -:  174:        declval<detail::initiate_post_with_executor<Executor> >(), token)))
+        -:  175:{
+        5:  176:  return async_initiate<NullaryToken, void()>(
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       10:  177:      detail::initiate_post_with_executor<Executor>(ex), token);
+call    0 returned 100%
+call    1 returned 100%
+call    2 never executed
+        -:  178:}
+------------------
+_ZN5boost4asio4postINS0_15any_io_executorEZNS0_6detail16awaitable_threadIS2_ED4EvEUlvE_EEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorIS7_EE5valuesrNS0_11can_requireIS7_JNSD_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorIS7_EE5valueEiE4typeE:
+function _ZN5boost4asio4postINS0_15any_io_executorEZNS0_6detail16awaitable_threadIS2_ED4EvEUlvE_EEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorIS7_EE5valuesrNS0_11can_requireIS7_JNSD_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorIS7_EE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  163:BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(NullaryToken, void()) post(
+        -:  164:    const Executor& ex,
+        -:  165:    BOOST_ASIO_MOVE_ARG(NullaryToken) token
+        -:  166:      BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(Executor),
+        -:  167:    typename constraint<
+        -:  168:      (execution::is_executor<Executor>::value
+        -:  169:          && can_require<Executor, execution::blocking_t::never_t>::value)
+        -:  170:        || is_executor<Executor>::value
+        -:  171:    >::type = 0)
+        -:  172:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:  173:    async_initiate<NullaryToken, void()>(
+        -:  174:        declval<detail::initiate_post_with_executor<Executor> >(), token)))
+        -:  175:{
+    #####:  176:  return async_initiate<NullaryToken, void()>(
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  177:      detail::initiate_post_with_executor<Executor>(ex), token);
+call    0 never executed
+call    1 never executed
+call    2 never executed
+        -:  178:}
+------------------
+_ZN5boost4asio4postINS0_15any_io_executorEZNS0_6detail16awaitable_threadIS2_ED4EvEUlvE_EEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorIS7_EE5valuesrNS0_11can_requireIS7_JNSD_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorIS7_EE5valueEiE4typeE:
+function _ZN5boost4asio4postINS0_15any_io_executorEZNS0_6detail16awaitable_threadIS2_ED4EvEUlvE_EEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorIS7_EE5valuesrNS0_11can_requireIS7_JNSD_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorIS7_EE5valueEiE4typeE called 12 returned 100% blocks executed 75%
+       12:  163:BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(NullaryToken, void()) post(
+        -:  164:    const Executor& ex,
+        -:  165:    BOOST_ASIO_MOVE_ARG(NullaryToken) token
+        -:  166:      BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(Executor),
+        -:  167:    typename constraint<
+        -:  168:      (execution::is_executor<Executor>::value
+        -:  169:          && can_require<Executor, execution::blocking_t::never_t>::value)
+        -:  170:        || is_executor<Executor>::value
+        -:  171:    >::type = 0)
+        -:  172:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:  173:    async_initiate<NullaryToken, void()>(
+        -:  174:        declval<detail::initiate_post_with_executor<Executor> >(), token)))
+        -:  175:{
+       12:  176:  return async_initiate<NullaryToken, void()>(
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       24:  177:      detail::initiate_post_with_executor<Executor>(ex), token);
+call    0 returned 100%
+call    1 returned 100%
+call    2 never executed
+        -:  178:}
+------------------
+_ZN5boost4asio4postINS0_15any_io_executorEZNS0_6detail16awaitable_threadIS2_ED4EvEUlvE_EEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorIS7_EE5valuesrNS0_11can_requireIS7_JNSD_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorIS7_EE5valueEiE4typeE:
+function _ZN5boost4asio4postINS0_15any_io_executorEZNS0_6detail16awaitable_threadIS2_ED4EvEUlvE_EEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorIS7_EE5valuesrNS0_11can_requireIS7_JNSD_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorIS7_EE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  163:BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(NullaryToken, void()) post(
+        -:  164:    const Executor& ex,
+        -:  165:    BOOST_ASIO_MOVE_ARG(NullaryToken) token
+        -:  166:      BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(Executor),
+        -:  167:    typename constraint<
+        -:  168:      (execution::is_executor<Executor>::value
+        -:  169:          && can_require<Executor, execution::blocking_t::never_t>::value)
+        -:  170:        || is_executor<Executor>::value
+        -:  171:    >::type = 0)
+        -:  172:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:  173:    async_initiate<NullaryToken, void()>(
+        -:  174:        declval<detail::initiate_post_with_executor<Executor> >(), token)))
+        -:  175:{
+    #####:  176:  return async_initiate<NullaryToken, void()>(
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  177:      detail::initiate_post_with_executor<Executor>(ex), token);
+call    0 never executed
+call    1 never executed
+call    2 never executed
+        -:  178:}
+------------------
+_ZN5boost4asio4postINS0_15any_io_executorEZNS0_6detail16awaitable_threadIS2_ED4EvEUlvE_EEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorIS7_EE5valuesrNS0_11can_requireIS7_JNSD_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorIS7_EE5valueEiE4typeE:
+function _ZN5boost4asio4postINS0_15any_io_executorEZNS0_6detail16awaitable_threadIS2_ED4EvEUlvE_EEDaRKT_OT0_NS0_10constraintIXooaasrNS0_9execution11is_executorIS7_EE5valuesrNS0_11can_requireIS7_JNSD_6detail8blocking7never_tILi0EEEEEE5valuesrNS0_11is_executorIS7_EE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  163:BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(NullaryToken, void()) post(
+        -:  164:    const Executor& ex,
+        -:  165:    BOOST_ASIO_MOVE_ARG(NullaryToken) token
+        -:  166:      BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(Executor),
+        -:  167:    typename constraint<
+        -:  168:      (execution::is_executor<Executor>::value
+        -:  169:          && can_require<Executor, execution::blocking_t::never_t>::value)
+        -:  170:        || is_executor<Executor>::value
+        -:  171:    >::type = 0)
+        -:  172:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:  173:    async_initiate<NullaryToken, void()>(
+        -:  174:        declval<detail::initiate_post_with_executor<Executor> >(), token)))
+        -:  175:{
+    #####:  176:  return async_initiate<NullaryToken, void()>(
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  177:      detail::initiate_post_with_executor<Executor>(ex), token);
+call    0 never executed
+call    1 never executed
+call    2 never executed
+        -:  178:}
+------------------
+        -:  179:
+        -:  180:/// Submits a completion token or function object for execution.
+        -:  181:/**
+        -:  182: * @param ctx An execution context, from which the target executor is obtained.
+        -:  183: *
+        -:  184: * @param token The @ref completion_token that will be used to produce a
+        -:  185: * completion handler. The function signature of the completion handler must be:
+        -:  186: * @code void handler(); @endcode
+        -:  187: *
+        -:  188: * @returns <tt>post(ctx.get_executor(), forward<NullaryToken>(token))</tt>.
+        -:  189: *
+        -:  190: * @par Completion Signature
+        -:  191: * @code void() @endcode
+        -:  192: */
+        -:  193:template <typename ExecutionContext,
+        -:  194:    BOOST_ASIO_COMPLETION_TOKEN_FOR(void()) NullaryToken
+        -:  195:      BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(
+        -:  196:        typename ExecutionContext::executor_type)>
+function _ZN5boost4asio4postINS0_10io_contextESt8functionIFvvEEEEDaRT_OT0_NS0_10constraintIXsrSt14is_convertibleIS7_RNS0_17execution_contextEE5valueEiE4typeE called 1018 returned 101% blocks executed 62%
+     1018:  197:BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(NullaryToken, void()) post(
+        -:  198:    ExecutionContext& ctx,
+        -:  199:    BOOST_ASIO_MOVE_ARG(NullaryToken) token
+        -:  200:      BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(
+        -:  201:        typename ExecutionContext::executor_type),
+        -:  202:    typename constraint<is_convertible<
+        -:  203:      ExecutionContext&, execution_context&>::value>::type = 0)
+        -:  204:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:  205:    async_initiate<NullaryToken, void()>(
+        -:  206:        declval<detail::initiate_post_with_executor<
+        -:  207:          typename ExecutionContext::executor_type> >(), token)))
+        -:  208:{
+     1021:  209:  return async_initiate<NullaryToken, void()>(
+call    0 returned 101%
+branch  1 taken 101% (fallthrough)
+branch  2 taken 0% (throw)
+     2047:  210:      detail::initiate_post_with_executor<
+call    0 returned 100%
+call    1 returned 100%
+call    2 never executed
+        -:  211:        typename ExecutionContext::executor_type>(
+     2047:  212:          ctx.get_executor()), token);
+call    0 returned 100%
+call    1 returned 100%
+call    2 never executed
+        -:  213:}
+        -:  214:
+        -:  215:} // namespace asio
+        -:  216:} // namespace boost
+        -:  217:
+        -:  218:#include <boost/asio/detail/pop_options.hpp>
+        -:  219:
+        -:  220:#endif // BOOST_ASIO_POST_HPP

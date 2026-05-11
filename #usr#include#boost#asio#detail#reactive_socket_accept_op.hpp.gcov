@@ -1,0 +1,1641 @@
+        -:    0:Source:/usr/include/boost/asio/detail/reactive_socket_accept_op.hpp
+        -:    1://
+        -:    2:// detail/reactive_socket_accept_op.hpp
+        -:    3:// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        -:    4://
+        -:    5:// Copyright (c) 2003-2023 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+        -:    6://
+        -:    7:// Distributed under the Boost Software License, Version 1.0. (See accompanying
+        -:    8:// file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+        -:    9://
+        -:   10:
+        -:   11:#ifndef BOOST_ASIO_DETAIL_REACTIVE_SOCKET_ACCEPT_OP_HPP
+        -:   12:#define BOOST_ASIO_DETAIL_REACTIVE_SOCKET_ACCEPT_OP_HPP
+        -:   13:
+        -:   14:#if defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   15:# pragma once
+        -:   16:#endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   17:
+        -:   18:#include <boost/asio/detail/config.hpp>
+        -:   19:#include <boost/asio/detail/bind_handler.hpp>
+        -:   20:#include <boost/asio/detail/fenced_block.hpp>
+        -:   21:#include <boost/asio/detail/handler_alloc_helpers.hpp>
+        -:   22:#include <boost/asio/detail/handler_invoke_helpers.hpp>
+        -:   23:#include <boost/asio/detail/handler_work.hpp>
+        -:   24:#include <boost/asio/detail/memory.hpp>
+        -:   25:#include <boost/asio/detail/reactor_op.hpp>
+        -:   26:#include <boost/asio/detail/socket_holder.hpp>
+        -:   27:#include <boost/asio/detail/socket_ops.hpp>
+        -:   28:
+        -:   29:#include <boost/asio/detail/push_options.hpp>
+        -:   30:
+        -:   31:namespace boost {
+        -:   32:namespace asio {
+        -:   33:namespace detail {
+        -:   34:
+        -:   35:template <typename Socket, typename Protocol>
+        -:   36:class reactive_socket_accept_op_base : public reactor_op
+        -:   37:{
+        -:   38:public:
+     112*:   39:  reactive_socket_accept_op_base(const boost::system::error_code& success_ec,
+        -:   40:      socket_type socket, socket_ops::state_type state, Socket& peer,
+        -:   41:      const Protocol& protocol, typename Protocol::endpoint* peer_endpoint,
+        -:   42:      func_type complete_func)
+        -:   43:    : reactor_op(success_ec,
+        -:   44:        &reactive_socket_accept_op_base::do_perform, complete_func),
+     112*:   45:      socket_(socket),
+     112*:   46:      state_(state),
+     112*:   47:      peer_(peer),
+     112*:   48:      protocol_(protocol),
+     112*:   49:      peer_endpoint_(peer_endpoint),
+     112*:   50:      addrlen_(peer_endpoint ? peer_endpoint->capacity() : 0)
+        -:   51:  {
+     112*:   52:  }
+------------------
+_ZN5boost4asio6detail30reactive_socket_accept_op_baseINS0_19basic_stream_socketINS0_2ip3tcpENS0_15any_io_executorEEES5_EC2ERKNS_6system10error_codeEihRS7_RKS5_PNS4_14basic_endpointIS5_EEPFvPvPNS1_19scheduler_operationESC_mE:
+function _ZN5boost4asio6detail30reactive_socket_accept_op_baseINS0_19basic_stream_socketINS0_2ip3tcpENS0_15any_io_executorEEES5_EC2ERKNS_6system10error_codeEihRS7_RKS5_PNS4_14basic_endpointIS5_EEPFvPvPNS1_19scheduler_operationESC_mE called 9 returned 100% blocks executed 83%
+        9:   39:  reactive_socket_accept_op_base(const boost::system::error_code& success_ec,
+        -:   40:      socket_type socket, socket_ops::state_type state, Socket& peer,
+        -:   41:      const Protocol& protocol, typename Protocol::endpoint* peer_endpoint,
+        -:   42:      func_type complete_func)
+        -:   43:    : reactor_op(success_ec,
+        -:   44:        &reactive_socket_accept_op_base::do_perform, complete_func),
+        9:   45:      socket_(socket),
+        9:   46:      state_(state),
+        9:   47:      peer_(peer),
+        9:   48:      protocol_(protocol),
+        9:   49:      peer_endpoint_(peer_endpoint),
+       9*:   50:      addrlen_(peer_endpoint ? peer_endpoint->capacity() : 0)
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 0% (fallthrough)
+branch  3 taken 100%
+call    4 never executed
+        -:   51:  {
+        9:   52:  }
+------------------
+_ZN5boost4asio6detail30reactive_socket_accept_op_baseINS0_12basic_socketINS0_2ip3tcpENS0_15any_io_executorEEES5_EC2ERKNS_6system10error_codeEihRS7_RKS5_PNS4_14basic_endpointIS5_EEPFvPvPNS1_19scheduler_operationESC_mE:
+function _ZN5boost4asio6detail30reactive_socket_accept_op_baseINS0_12basic_socketINS0_2ip3tcpENS0_15any_io_executorEEES5_EC2ERKNS_6system10error_codeEihRS7_RKS5_PNS4_14basic_endpointIS5_EEPFvPvPNS1_19scheduler_operationESC_mE called 0 returned 0% blocks executed 0%
+    #####:   39:  reactive_socket_accept_op_base(const boost::system::error_code& success_ec,
+        -:   40:      socket_type socket, socket_ops::state_type state, Socket& peer,
+        -:   41:      const Protocol& protocol, typename Protocol::endpoint* peer_endpoint,
+        -:   42:      func_type complete_func)
+        -:   43:    : reactor_op(success_ec,
+        -:   44:        &reactive_socket_accept_op_base::do_perform, complete_func),
+    #####:   45:      socket_(socket),
+    #####:   46:      state_(state),
+    #####:   47:      peer_(peer),
+    #####:   48:      protocol_(protocol),
+    #####:   49:      peer_endpoint_(peer_endpoint),
+    #####:   50:      addrlen_(peer_endpoint ? peer_endpoint->capacity() : 0)
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed
+call    4 never executed
+        -:   51:  {
+    #####:   52:  }
+------------------
+_ZN5boost4asio6detail30reactive_socket_accept_op_baseINS0_19basic_stream_socketINS0_2ip3tcpENS0_15any_io_executorEEES5_EC2ERKNS_6system10error_codeEihRS7_RKS5_PNS4_14basic_endpointIS5_EEPFvPvPNS1_19scheduler_operationESC_mE:
+function _ZN5boost4asio6detail30reactive_socket_accept_op_baseINS0_19basic_stream_socketINS0_2ip3tcpENS0_15any_io_executorEEES5_EC2ERKNS_6system10error_codeEihRS7_RKS5_PNS4_14basic_endpointIS5_EEPFvPvPNS1_19scheduler_operationESC_mE called 95 returned 100% blocks executed 83%
+       95:   39:  reactive_socket_accept_op_base(const boost::system::error_code& success_ec,
+        -:   40:      socket_type socket, socket_ops::state_type state, Socket& peer,
+        -:   41:      const Protocol& protocol, typename Protocol::endpoint* peer_endpoint,
+        -:   42:      func_type complete_func)
+        -:   43:    : reactor_op(success_ec,
+        -:   44:        &reactive_socket_accept_op_base::do_perform, complete_func),
+       95:   45:      socket_(socket),
+       95:   46:      state_(state),
+       95:   47:      peer_(peer),
+       95:   48:      protocol_(protocol),
+       95:   49:      peer_endpoint_(peer_endpoint),
+      95*:   50:      addrlen_(peer_endpoint ? peer_endpoint->capacity() : 0)
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 0% (fallthrough)
+branch  3 taken 100%
+call    4 never executed
+        -:   51:  {
+       95:   52:  }
+------------------
+_ZN5boost4asio6detail30reactive_socket_accept_op_baseINS0_19basic_stream_socketINS0_2ip3tcpENS0_15any_io_executorEEES5_EC2ERKNS_6system10error_codeEihRS7_RKS5_PNS4_14basic_endpointIS5_EEPFvPvPNS1_19scheduler_operationESC_mE:
+function _ZN5boost4asio6detail30reactive_socket_accept_op_baseINS0_19basic_stream_socketINS0_2ip3tcpENS0_15any_io_executorEEES5_EC2ERKNS_6system10error_codeEihRS7_RKS5_PNS4_14basic_endpointIS5_EEPFvPvPNS1_19scheduler_operationESC_mE called 0 returned 0% blocks executed 0%
+    #####:   39:  reactive_socket_accept_op_base(const boost::system::error_code& success_ec,
+        -:   40:      socket_type socket, socket_ops::state_type state, Socket& peer,
+        -:   41:      const Protocol& protocol, typename Protocol::endpoint* peer_endpoint,
+        -:   42:      func_type complete_func)
+        -:   43:    : reactor_op(success_ec,
+        -:   44:        &reactive_socket_accept_op_base::do_perform, complete_func),
+    #####:   45:      socket_(socket),
+    #####:   46:      state_(state),
+    #####:   47:      peer_(peer),
+    #####:   48:      protocol_(protocol),
+    #####:   49:      peer_endpoint_(peer_endpoint),
+    #####:   50:      addrlen_(peer_endpoint ? peer_endpoint->capacity() : 0)
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed
+call    4 never executed
+        -:   51:  {
+    #####:   52:  }
+------------------
+_ZN5boost4asio6detail30reactive_socket_accept_op_baseINS0_12basic_socketINS0_2ip3tcpENS0_15any_io_executorEEES5_EC2ERKNS_6system10error_codeEihRS7_RKS5_PNS4_14basic_endpointIS5_EEPFvPvPNS1_19scheduler_operationESC_mE:
+function _ZN5boost4asio6detail30reactive_socket_accept_op_baseINS0_12basic_socketINS0_2ip3tcpENS0_15any_io_executorEEES5_EC2ERKNS_6system10error_codeEihRS7_RKS5_PNS4_14basic_endpointIS5_EEPFvPvPNS1_19scheduler_operationESC_mE called 8 returned 100% blocks executed 83%
+        8:   39:  reactive_socket_accept_op_base(const boost::system::error_code& success_ec,
+        -:   40:      socket_type socket, socket_ops::state_type state, Socket& peer,
+        -:   41:      const Protocol& protocol, typename Protocol::endpoint* peer_endpoint,
+        -:   42:      func_type complete_func)
+        -:   43:    : reactor_op(success_ec,
+        -:   44:        &reactive_socket_accept_op_base::do_perform, complete_func),
+        8:   45:      socket_(socket),
+        8:   46:      state_(state),
+        8:   47:      peer_(peer),
+        8:   48:      protocol_(protocol),
+        8:   49:      peer_endpoint_(peer_endpoint),
+       8*:   50:      addrlen_(peer_endpoint ? peer_endpoint->capacity() : 0)
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 0% (fallthrough)
+branch  3 taken 100%
+call    4 never executed
+        -:   51:  {
+        8:   52:  }
+------------------
+_ZN5boost4asio6detail30reactive_socket_accept_op_baseINS0_19basic_stream_socketINS0_2ip3tcpENS0_15any_io_executorEEES5_EC2ERKNS_6system10error_codeEihRS7_RKS5_PNS4_14basic_endpointIS5_EEPFvPvPNS1_19scheduler_operationESC_mE:
+function _ZN5boost4asio6detail30reactive_socket_accept_op_baseINS0_19basic_stream_socketINS0_2ip3tcpENS0_15any_io_executorEEES5_EC2ERKNS_6system10error_codeEihRS7_RKS5_PNS4_14basic_endpointIS5_EEPFvPvPNS1_19scheduler_operationESC_mE called 0 returned 0% blocks executed 0%
+    #####:   39:  reactive_socket_accept_op_base(const boost::system::error_code& success_ec,
+        -:   40:      socket_type socket, socket_ops::state_type state, Socket& peer,
+        -:   41:      const Protocol& protocol, typename Protocol::endpoint* peer_endpoint,
+        -:   42:      func_type complete_func)
+        -:   43:    : reactor_op(success_ec,
+        -:   44:        &reactive_socket_accept_op_base::do_perform, complete_func),
+    #####:   45:      socket_(socket),
+    #####:   46:      state_(state),
+    #####:   47:      peer_(peer),
+    #####:   48:      protocol_(protocol),
+    #####:   49:      peer_endpoint_(peer_endpoint),
+    #####:   50:      addrlen_(peer_endpoint ? peer_endpoint->capacity() : 0)
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed
+call    4 never executed
+        -:   51:  {
+    #####:   52:  }
+------------------
+        -:   53:
+     152*:   54:  static status do_perform(reactor_op* base)
+        -:   55:  {
+     152*:   56:    BOOST_ASIO_ASSUME(base != 0);
+     152*:   57:    reactive_socket_accept_op_base* o(
+        -:   58:        static_cast<reactive_socket_accept_op_base*>(base));
+        -:   59:
+     152*:   60:    socket_type new_socket = invalid_socket;
+     304*:   61:    status result = socket_ops::non_blocking_accept(o->socket_,
+     304*:   62:        o->state_, o->peer_endpoint_ ? o->peer_endpoint_->data() : 0,
+     152*:   63:        o->peer_endpoint_ ? &o->addrlen_ : 0, o->ec_, new_socket)
+     152*:   64:    ? done : not_done;
+     152*:   65:    o->new_socket_.reset(new_socket);
+        -:   66:
+        -:   67:    BOOST_ASIO_HANDLER_REACTOR_OPERATION((*o, "non_blocking_accept", o->ec_));
+        -:   68:
+     152*:   69:    return result;
+        -:   70:  }
+------------------
+_ZN5boost4asio6detail30reactive_socket_accept_op_baseINS0_19basic_stream_socketINS0_2ip3tcpENS0_15any_io_executorEEES5_E10do_performEPNS1_10reactor_opE:
+function _ZN5boost4asio6detail30reactive_socket_accept_op_baseINS0_19basic_stream_socketINS0_2ip3tcpENS0_15any_io_executorEEES5_E10do_performEPNS1_10reactor_opE called 12 returned 100% blocks executed 81%
+       12:   54:  static status do_perform(reactor_op* base)
+        -:   55:  {
+      12*:   56:    BOOST_ASIO_ASSUME(base != 0);
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+call    2 never executed
+       12:   57:    reactive_socket_accept_op_base* o(
+        -:   58:        static_cast<reactive_socket_accept_op_base*>(base));
+        -:   59:
+       12:   60:    socket_type new_socket = invalid_socket;
+      24*:   61:    status result = socket_ops::non_blocking_accept(o->socket_,
+      24*:   62:        o->state_, o->peer_endpoint_ ? o->peer_endpoint_->data() : 0,
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+call    2 never executed
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+       12:   63:        o->peer_endpoint_ ? &o->addrlen_ : 0, o->ec_, new_socket)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+       12:   64:    ? done : not_done;
+branch  0 taken 42% (fallthrough)
+branch  1 taken 58%
+       12:   65:    o->new_socket_.reset(new_socket);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:   66:
+        -:   67:    BOOST_ASIO_HANDLER_REACTOR_OPERATION((*o, "non_blocking_accept", o->ec_));
+        -:   68:
+       12:   69:    return result;
+        -:   70:  }
+------------------
+_ZN5boost4asio6detail30reactive_socket_accept_op_baseINS0_12basic_socketINS0_2ip3tcpENS0_15any_io_executorEEES5_E10do_performEPNS1_10reactor_opE:
+function _ZN5boost4asio6detail30reactive_socket_accept_op_baseINS0_12basic_socketINS0_2ip3tcpENS0_15any_io_executorEEES5_E10do_performEPNS1_10reactor_opE called 0 returned 0% blocks executed 0%
+    #####:   54:  static status do_perform(reactor_op* base)
+        -:   55:  {
+    #####:   56:    BOOST_ASIO_ASSUME(base != 0);
+branch  0 never executed (fallthrough)
+branch  1 never executed
+call    2 never executed
+    #####:   57:    reactive_socket_accept_op_base* o(
+        -:   58:        static_cast<reactive_socket_accept_op_base*>(base));
+        -:   59:
+    #####:   60:    socket_type new_socket = invalid_socket;
+    #####:   61:    status result = socket_ops::non_blocking_accept(o->socket_,
+    #####:   62:        o->state_, o->peer_endpoint_ ? o->peer_endpoint_->data() : 0,
+branch  0 never executed (fallthrough)
+branch  1 never executed
+call    2 never executed
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+    #####:   63:        o->peer_endpoint_ ? &o->addrlen_ : 0, o->ec_, new_socket)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   64:    ? done : not_done;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   65:    o->new_socket_.reset(new_socket);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:   66:
+        -:   67:    BOOST_ASIO_HANDLER_REACTOR_OPERATION((*o, "non_blocking_accept", o->ec_));
+        -:   68:
+    #####:   69:    return result;
+        -:   70:  }
+------------------
+_ZN5boost4asio6detail30reactive_socket_accept_op_baseINS0_19basic_stream_socketINS0_2ip3tcpENS0_15any_io_executorEEES5_E10do_performEPNS1_10reactor_opE:
+function _ZN5boost4asio6detail30reactive_socket_accept_op_baseINS0_19basic_stream_socketINS0_2ip3tcpENS0_15any_io_executorEEES5_E10do_performEPNS1_10reactor_opE called 124 returned 100% blocks executed 81%
+      124:   54:  static status do_perform(reactor_op* base)
+        -:   55:  {
+     124*:   56:    BOOST_ASIO_ASSUME(base != 0);
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+call    2 never executed
+      124:   57:    reactive_socket_accept_op_base* o(
+        -:   58:        static_cast<reactive_socket_accept_op_base*>(base));
+        -:   59:
+      124:   60:    socket_type new_socket = invalid_socket;
+     248*:   61:    status result = socket_ops::non_blocking_accept(o->socket_,
+     248*:   62:        o->state_, o->peer_endpoint_ ? o->peer_endpoint_->data() : 0,
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+call    2 never executed
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+      124:   63:        o->peer_endpoint_ ? &o->addrlen_ : 0, o->ec_, new_socket)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+      124:   64:    ? done : not_done;
+branch  0 taken 57% (fallthrough)
+branch  1 taken 43%
+      124:   65:    o->new_socket_.reset(new_socket);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:   66:
+        -:   67:    BOOST_ASIO_HANDLER_REACTOR_OPERATION((*o, "non_blocking_accept", o->ec_));
+        -:   68:
+      124:   69:    return result;
+        -:   70:  }
+------------------
+_ZN5boost4asio6detail30reactive_socket_accept_op_baseINS0_19basic_stream_socketINS0_2ip3tcpENS0_15any_io_executorEEES5_E10do_performEPNS1_10reactor_opE:
+function _ZN5boost4asio6detail30reactive_socket_accept_op_baseINS0_19basic_stream_socketINS0_2ip3tcpENS0_15any_io_executorEEES5_E10do_performEPNS1_10reactor_opE called 0 returned 0% blocks executed 0%
+    #####:   54:  static status do_perform(reactor_op* base)
+        -:   55:  {
+    #####:   56:    BOOST_ASIO_ASSUME(base != 0);
+branch  0 never executed (fallthrough)
+branch  1 never executed
+call    2 never executed
+    #####:   57:    reactive_socket_accept_op_base* o(
+        -:   58:        static_cast<reactive_socket_accept_op_base*>(base));
+        -:   59:
+    #####:   60:    socket_type new_socket = invalid_socket;
+    #####:   61:    status result = socket_ops::non_blocking_accept(o->socket_,
+    #####:   62:        o->state_, o->peer_endpoint_ ? o->peer_endpoint_->data() : 0,
+branch  0 never executed (fallthrough)
+branch  1 never executed
+call    2 never executed
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+    #####:   63:        o->peer_endpoint_ ? &o->addrlen_ : 0, o->ec_, new_socket)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   64:    ? done : not_done;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   65:    o->new_socket_.reset(new_socket);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:   66:
+        -:   67:    BOOST_ASIO_HANDLER_REACTOR_OPERATION((*o, "non_blocking_accept", o->ec_));
+        -:   68:
+    #####:   69:    return result;
+        -:   70:  }
+------------------
+_ZN5boost4asio6detail30reactive_socket_accept_op_baseINS0_12basic_socketINS0_2ip3tcpENS0_15any_io_executorEEES5_E10do_performEPNS1_10reactor_opE:
+function _ZN5boost4asio6detail30reactive_socket_accept_op_baseINS0_12basic_socketINS0_2ip3tcpENS0_15any_io_executorEEES5_E10do_performEPNS1_10reactor_opE called 16 returned 100% blocks executed 81%
+       16:   54:  static status do_perform(reactor_op* base)
+        -:   55:  {
+      16*:   56:    BOOST_ASIO_ASSUME(base != 0);
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+call    2 never executed
+       16:   57:    reactive_socket_accept_op_base* o(
+        -:   58:        static_cast<reactive_socket_accept_op_base*>(base));
+        -:   59:
+       16:   60:    socket_type new_socket = invalid_socket;
+      32*:   61:    status result = socket_ops::non_blocking_accept(o->socket_,
+      32*:   62:        o->state_, o->peer_endpoint_ ? o->peer_endpoint_->data() : 0,
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+call    2 never executed
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+       16:   63:        o->peer_endpoint_ ? &o->addrlen_ : 0, o->ec_, new_socket)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+       16:   64:    ? done : not_done;
+branch  0 taken 50% (fallthrough)
+branch  1 taken 50%
+       16:   65:    o->new_socket_.reset(new_socket);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:   66:
+        -:   67:    BOOST_ASIO_HANDLER_REACTOR_OPERATION((*o, "non_blocking_accept", o->ec_));
+        -:   68:
+       16:   69:    return result;
+        -:   70:  }
+------------------
+_ZN5boost4asio6detail30reactive_socket_accept_op_baseINS0_19basic_stream_socketINS0_2ip3tcpENS0_15any_io_executorEEES5_E10do_performEPNS1_10reactor_opE:
+function _ZN5boost4asio6detail30reactive_socket_accept_op_baseINS0_19basic_stream_socketINS0_2ip3tcpENS0_15any_io_executorEEES5_E10do_performEPNS1_10reactor_opE called 0 returned 0% blocks executed 0%
+    #####:   54:  static status do_perform(reactor_op* base)
+        -:   55:  {
+    #####:   56:    BOOST_ASIO_ASSUME(base != 0);
+branch  0 never executed (fallthrough)
+branch  1 never executed
+call    2 never executed
+    #####:   57:    reactive_socket_accept_op_base* o(
+        -:   58:        static_cast<reactive_socket_accept_op_base*>(base));
+        -:   59:
+    #####:   60:    socket_type new_socket = invalid_socket;
+    #####:   61:    status result = socket_ops::non_blocking_accept(o->socket_,
+    #####:   62:        o->state_, o->peer_endpoint_ ? o->peer_endpoint_->data() : 0,
+branch  0 never executed (fallthrough)
+branch  1 never executed
+call    2 never executed
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+    #####:   63:        o->peer_endpoint_ ? &o->addrlen_ : 0, o->ec_, new_socket)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   64:    ? done : not_done;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   65:    o->new_socket_.reset(new_socket);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:   66:
+        -:   67:    BOOST_ASIO_HANDLER_REACTOR_OPERATION((*o, "non_blocking_accept", o->ec_));
+        -:   68:
+    #####:   69:    return result;
+        -:   70:  }
+------------------
+        -:   71:
+      87*:   72:  void do_assign()
+        -:   73:  {
+      87*:   74:    if (new_socket_.get() != invalid_socket)
+        -:   75:    {
+      84*:   76:      if (peer_endpoint_)
+    #####:   77:        peer_endpoint_->resize(addrlen_);
+      84*:   78:      peer_.assign(protocol_, new_socket_.get(), ec_);
+      84*:   79:      if (!ec_)
+      84*:   80:        new_socket_.release();
+        -:   81:    }
+      87*:   82:  }
+------------------
+_ZN5boost4asio6detail30reactive_socket_accept_op_baseINS0_19basic_stream_socketINS0_2ip3tcpENS0_15any_io_executorEEES5_E9do_assignEv:
+function _ZN5boost4asio6detail30reactive_socket_accept_op_baseINS0_19basic_stream_socketINS0_2ip3tcpENS0_15any_io_executorEEES5_E9do_assignEv called 8 returned 100% blocks executed 83%
+        8:   72:  void do_assign()
+        -:   73:  {
+        8:   74:    if (new_socket_.get() != invalid_socket)
+call    0 returned 100%
+branch  1 taken 62% (fallthrough)
+branch  2 taken 38%
+        -:   75:    {
+        5:   76:      if (peer_endpoint_)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:   77:        peer_endpoint_->resize(addrlen_);
+call    0 never executed
+        5:   78:      peer_.assign(protocol_, new_socket_.get(), ec_);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        5:   79:      if (!ec_)
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0%
+        5:   80:        new_socket_.release();
+call    0 returned 100%
+        -:   81:    }
+        8:   82:  }
+------------------
+_ZN5boost4asio6detail30reactive_socket_accept_op_baseINS0_12basic_socketINS0_2ip3tcpENS0_15any_io_executorEEES5_E9do_assignEv:
+function _ZN5boost4asio6detail30reactive_socket_accept_op_baseINS0_12basic_socketINS0_2ip3tcpENS0_15any_io_executorEEES5_E9do_assignEv called 0 returned 0% blocks executed 0%
+    #####:   72:  void do_assign()
+        -:   73:  {
+    #####:   74:    if (new_socket_.get() != invalid_socket)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+        -:   75:    {
+    #####:   76:      if (peer_endpoint_)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   77:        peer_endpoint_->resize(addrlen_);
+call    0 never executed
+    #####:   78:      peer_.assign(protocol_, new_socket_.get(), ec_);
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+    #####:   79:      if (!ec_)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+    #####:   80:        new_socket_.release();
+call    0 never executed
+        -:   81:    }
+    #####:   82:  }
+------------------
+_ZN5boost4asio6detail30reactive_socket_accept_op_baseINS0_19basic_stream_socketINS0_2ip3tcpENS0_15any_io_executorEEES5_E9do_assignEv:
+function _ZN5boost4asio6detail30reactive_socket_accept_op_baseINS0_19basic_stream_socketINS0_2ip3tcpENS0_15any_io_executorEEES5_E9do_assignEv called 71 returned 100% blocks executed 83%
+       71:   72:  void do_assign()
+        -:   73:  {
+       71:   74:    if (new_socket_.get() != invalid_socket)
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0%
+        -:   75:    {
+       71:   76:      if (peer_endpoint_)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:   77:        peer_endpoint_->resize(addrlen_);
+call    0 never executed
+       71:   78:      peer_.assign(protocol_, new_socket_.get(), ec_);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+       71:   79:      if (!ec_)
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0%
+       71:   80:        new_socket_.release();
+call    0 returned 100%
+        -:   81:    }
+       71:   82:  }
+------------------
+_ZN5boost4asio6detail30reactive_socket_accept_op_baseINS0_19basic_stream_socketINS0_2ip3tcpENS0_15any_io_executorEEES5_E9do_assignEv:
+function _ZN5boost4asio6detail30reactive_socket_accept_op_baseINS0_19basic_stream_socketINS0_2ip3tcpENS0_15any_io_executorEEES5_E9do_assignEv called 0 returned 0% blocks executed 0%
+    #####:   72:  void do_assign()
+        -:   73:  {
+    #####:   74:    if (new_socket_.get() != invalid_socket)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+        -:   75:    {
+    #####:   76:      if (peer_endpoint_)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   77:        peer_endpoint_->resize(addrlen_);
+call    0 never executed
+    #####:   78:      peer_.assign(protocol_, new_socket_.get(), ec_);
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+    #####:   79:      if (!ec_)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+    #####:   80:        new_socket_.release();
+call    0 never executed
+        -:   81:    }
+    #####:   82:  }
+------------------
+_ZN5boost4asio6detail30reactive_socket_accept_op_baseINS0_12basic_socketINS0_2ip3tcpENS0_15any_io_executorEEES5_E9do_assignEv:
+function _ZN5boost4asio6detail30reactive_socket_accept_op_baseINS0_12basic_socketINS0_2ip3tcpENS0_15any_io_executorEEES5_E9do_assignEv called 8 returned 100% blocks executed 83%
+        8:   72:  void do_assign()
+        -:   73:  {
+        8:   74:    if (new_socket_.get() != invalid_socket)
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0%
+        -:   75:    {
+        8:   76:      if (peer_endpoint_)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:   77:        peer_endpoint_->resize(addrlen_);
+call    0 never executed
+        8:   78:      peer_.assign(protocol_, new_socket_.get(), ec_);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        8:   79:      if (!ec_)
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0%
+        8:   80:        new_socket_.release();
+call    0 returned 100%
+        -:   81:    }
+        8:   82:  }
+------------------
+_ZN5boost4asio6detail30reactive_socket_accept_op_baseINS0_19basic_stream_socketINS0_2ip3tcpENS0_15any_io_executorEEES5_E9do_assignEv:
+function _ZN5boost4asio6detail30reactive_socket_accept_op_baseINS0_19basic_stream_socketINS0_2ip3tcpENS0_15any_io_executorEEES5_E9do_assignEv called 0 returned 0% blocks executed 0%
+    #####:   72:  void do_assign()
+        -:   73:  {
+    #####:   74:    if (new_socket_.get() != invalid_socket)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+        -:   75:    {
+    #####:   76:      if (peer_endpoint_)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   77:        peer_endpoint_->resize(addrlen_);
+call    0 never executed
+    #####:   78:      peer_.assign(protocol_, new_socket_.get(), ec_);
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+    #####:   79:      if (!ec_)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+    #####:   80:        new_socket_.release();
+call    0 never executed
+        -:   81:    }
+    #####:   82:  }
+------------------
+        -:   83:
+        -:   84:private:
+        -:   85:  socket_type socket_;
+        -:   86:  socket_ops::state_type state_;
+        -:   87:  socket_holder new_socket_;
+        -:   88:  Socket& peer_;
+        -:   89:  Protocol protocol_;
+        -:   90:  typename Protocol::endpoint* peer_endpoint_;
+        -:   91:  std::size_t addrlen_;
+        -:   92:};
+        -:   93:
+        -:   94:template <typename Socket, typename Protocol,
+        -:   95:    typename Handler, typename IoExecutor>
+        -:   96:class reactive_socket_accept_op :
+        -:   97:  public reactive_socket_accept_op_base<Socket, Protocol>
+        -:   98:{
+        -:   99:public:
+        -:  100:  typedef Handler handler_type;
+        -:  101:  typedef IoExecutor io_executor_type;
+        -:  102:
+      56*:  103:  BOOST_ASIO_DEFINE_HANDLER_PTR(reactive_socket_accept_op);
+------------------
+_ZN5boost4asio6detail25reactive_socket_accept_opINS0_12basic_socketINS0_2ip3tcpENS0_15any_io_executorEEES5_NS1_17awaitable_handlerIS6_JNS_6system10error_codeEEEES6_E3ptr5resetEv:
+function _ZN5boost4asio6detail25reactive_socket_accept_opINS0_12basic_socketINS0_2ip3tcpENS0_15any_io_executorEEES5_NS1_17awaitable_handlerIS6_JNS_6system10error_codeEEEES6_E3ptr5resetEv called 0 returned 0% blocks executed 0%
+    #####:  103:  BOOST_ASIO_DEFINE_HANDLER_PTR(reactive_socket_accept_op);
+branch  0 never executed (fallthrough)
+branch  1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed
+call    5 never executed
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed (throw)
+call    9 never executed
+call   10 never executed
+branch 11 never executed (fallthrough)
+branch 12 never executed (throw)
+------------------
+_ZN5boost4asio6detail25reactive_socket_accept_opINS0_12basic_socketINS0_2ip3tcpENS0_15any_io_executorEEES5_NS1_17awaitable_handlerIS6_JNS_6system10error_codeEEEES6_E3ptrD2Ev:
+function _ZN5boost4asio6detail25reactive_socket_accept_opINS0_12basic_socketINS0_2ip3tcpENS0_15any_io_executorEEES5_NS1_17awaitable_handlerIS6_JNS_6system10error_codeEEEES6_E3ptrD2Ev called 0 returned 0% blocks executed 0%
+    #####:  103:  BOOST_ASIO_DEFINE_HANDLER_PTR(reactive_socket_accept_op);
+call    0 never executed
+------------------
+_ZN5boost4asio6detail25reactive_socket_accept_opINS0_12basic_socketINS0_2ip3tcpENS0_15any_io_executorEEES5_NS1_17awaitable_handlerIS6_JNS_6system10error_codeEEEES6_E3ptr8allocateERSB_:
+function _ZN5boost4asio6detail25reactive_socket_accept_opINS0_12basic_socketINS0_2ip3tcpENS0_15any_io_executorEEES5_NS1_17awaitable_handlerIS6_JNS_6system10error_codeEEEES6_E3ptr8allocateERSB_ called 0 returned 0% blocks executed 0%
+    #####:  103:  BOOST_ASIO_DEFINE_HANDLER_PTR(reactive_socket_accept_op);
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed (throw)
+------------------
+_ZN5boost4asio6detail25reactive_socket_accept_opINS0_12basic_socketINS0_2ip3tcpENS0_15any_io_executorEEES5_Z22createConnectedSocketsRNS0_10io_contextES9_EUlNS_6system10error_codeEE_S6_E3ptr5resetEv:
+function _ZN5boost4asio6detail25reactive_socket_accept_opINS0_12basic_socketINS0_2ip3tcpENS0_15any_io_executorEEES5_Z22createConnectedSocketsRNS0_10io_contextES9_EUlNS_6system10error_codeEE_S6_E3ptr5resetEv called 24 returned 100% blocks executed 85%
+       24:  103:  BOOST_ASIO_DEFINE_HANDLER_PTR(reactive_socket_accept_op);
+branch  0 taken 33% (fallthrough)
+branch  1 taken 67%
+call    2 returned 100%
+branch  3 taken 33% (fallthrough)
+branch  4 taken 67%
+call    5 returned 100%
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+call    9 returned 100%
+call   10 returned 100%
+branch 11 taken 100% (fallthrough)
+branch 12 taken 0% (throw)
+------------------
+_ZN5boost4asio6detail25reactive_socket_accept_opINS0_12basic_socketINS0_2ip3tcpENS0_15any_io_executorEEES5_Z22createConnectedSocketsRNS0_10io_contextES9_EUlNS_6system10error_codeEE_S6_E3ptrD2Ev:
+function _ZN5boost4asio6detail25reactive_socket_accept_opINS0_12basic_socketINS0_2ip3tcpENS0_15any_io_executorEEES5_Z22createConnectedSocketsRNS0_10io_contextES9_EUlNS_6system10error_codeEE_S6_E3ptrD2Ev called 16 returned 100% blocks executed 100%
+       16:  103:  BOOST_ASIO_DEFINE_HANDLER_PTR(reactive_socket_accept_op);
+call    0 returned 100%
+------------------
+_ZN5boost4asio6detail25reactive_socket_accept_opINS0_12basic_socketINS0_2ip3tcpENS0_15any_io_executorEEES5_Z22createConnectedSocketsRNS0_10io_contextES9_EUlNS_6system10error_codeEE_S6_E3ptr8allocateERSC_:
+function _ZN5boost4asio6detail25reactive_socket_accept_opINS0_12basic_socketINS0_2ip3tcpENS0_15any_io_executorEEES5_Z22createConnectedSocketsRNS0_10io_contextES9_EUlNS_6system10error_codeEE_S6_E3ptr8allocateERSC_ called 8 returned 100% blocks executed 80%
+       16:  103:  BOOST_ASIO_DEFINE_HANDLER_PTR(reactive_socket_accept_op);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+------------------
+        -:  104:
+       8*:  105:  reactive_socket_accept_op(const boost::system::error_code& success_ec,
+        -:  106:      socket_type socket, socket_ops::state_type state, Socket& peer,
+        -:  107:      const Protocol& protocol, typename Protocol::endpoint* peer_endpoint,
+        -:  108:      Handler& handler, const IoExecutor& io_ex)
+        -:  109:    : reactive_socket_accept_op_base<Socket, Protocol>(
+        -:  110:        success_ec, socket, state, peer, protocol, peer_endpoint,
+        -:  111:        &reactive_socket_accept_op::do_complete),
+       8*:  112:      handler_(BOOST_ASIO_MOVE_CAST(Handler)(handler)),
+       8*:  113:      work_(handler_, io_ex)
+        -:  114:  {
+       8*:  115:  }
+------------------
+_ZN5boost4asio6detail25reactive_socket_accept_opINS0_12basic_socketINS0_2ip3tcpENS0_15any_io_executorEEES5_NS1_17awaitable_handlerIS6_JNS_6system10error_codeEEEES6_EC2ERKSA_ihRS7_RKS5_PNS4_14basic_endpointIS5_EERSB_RKS6_:
+function _ZN5boost4asio6detail25reactive_socket_accept_opINS0_12basic_socketINS0_2ip3tcpENS0_15any_io_executorEEES5_NS1_17awaitable_handlerIS6_JNS_6system10error_codeEEEES6_EC2ERKSA_ihRS7_RKS5_PNS4_14basic_endpointIS5_EERSB_RKS6_ called 0 returned 0% blocks executed 0%
+    #####:  105:  reactive_socket_accept_op(const boost::system::error_code& success_ec,
+        -:  106:      socket_type socket, socket_ops::state_type state, Socket& peer,
+        -:  107:      const Protocol& protocol, typename Protocol::endpoint* peer_endpoint,
+        -:  108:      Handler& handler, const IoExecutor& io_ex)
+        -:  109:    : reactive_socket_accept_op_base<Socket, Protocol>(
+        -:  110:        success_ec, socket, state, peer, protocol, peer_endpoint,
+        -:  111:        &reactive_socket_accept_op::do_complete),
+    #####:  112:      handler_(BOOST_ASIO_MOVE_CAST(Handler)(handler)),
+call    0 never executed
+    #####:  113:      work_(handler_, io_ex)
+call    0 never executed
+call    1 never executed
+        -:  114:  {
+    #####:  115:  }
+------------------
+_ZN5boost4asio6detail25reactive_socket_accept_opINS0_12basic_socketINS0_2ip3tcpENS0_15any_io_executorEEES5_Z22createConnectedSocketsRNS0_10io_contextES9_EUlNS_6system10error_codeEE_S6_EC2ERKSB_ihRS7_RKS5_PNS4_14basic_endpointIS5_EERSC_RKS6_:
+function _ZN5boost4asio6detail25reactive_socket_accept_opINS0_12basic_socketINS0_2ip3tcpENS0_15any_io_executorEEES5_Z22createConnectedSocketsRNS0_10io_contextES9_EUlNS_6system10error_codeEE_S6_EC2ERKSB_ihRS7_RKS5_PNS4_14basic_endpointIS5_EERSC_RKS6_ called 8 returned 100% blocks executed 100%
+        8:  105:  reactive_socket_accept_op(const boost::system::error_code& success_ec,
+        -:  106:      socket_type socket, socket_ops::state_type state, Socket& peer,
+        -:  107:      const Protocol& protocol, typename Protocol::endpoint* peer_endpoint,
+        -:  108:      Handler& handler, const IoExecutor& io_ex)
+        -:  109:    : reactive_socket_accept_op_base<Socket, Protocol>(
+        -:  110:        success_ec, socket, state, peer, protocol, peer_endpoint,
+        -:  111:        &reactive_socket_accept_op::do_complete),
+        8:  112:      handler_(BOOST_ASIO_MOVE_CAST(Handler)(handler)),
+        8:  113:      work_(handler_, io_ex)
+call    0 returned 100%
+call    1 returned 100%
+        -:  114:  {
+        8:  115:  }
+------------------
+        -:  116:
+       8*:  117:  static void do_complete(void* owner, operation* base,
+        -:  118:      const boost::system::error_code& /*ec*/,
+        -:  119:      std::size_t /*bytes_transferred*/)
+        -:  120:  {
+        -:  121:    // Take ownership of the handler object.
+       8*:  122:    BOOST_ASIO_ASSUME(base != 0);
+       8*:  123:    reactive_socket_accept_op* o(static_cast<reactive_socket_accept_op*>(base));
+       8*:  124:    ptr p = { boost::asio::detail::addressof(o->handler_), o, o };
+        -:  125:
+        -:  126:    // On success, assign new connection to peer socket object.
+       8*:  127:    if (owner)
+       8*:  128:      o->do_assign();
+        -:  129:
+        -:  130:    BOOST_ASIO_HANDLER_COMPLETION((*o));
+        -:  131:
+        -:  132:    // Take ownership of the operation's outstanding work.
+       8*:  133:    handler_work<Handler, IoExecutor> w(
+        -:  134:        BOOST_ASIO_MOVE_CAST2(handler_work<Handler, IoExecutor>)(
+       8*:  135:          o->work_));
+        -:  136:
+       8*:  137:    BOOST_ASIO_ERROR_LOCATION(o->ec_);
+        -:  138:
+        -:  139:    // Make a copy of the handler so that the memory can be deallocated before
+        -:  140:    // the upcall is made. Even if we're not about to make an upcall, a
+        -:  141:    // sub-object of the handler may be the true owner of the memory associated
+        -:  142:    // with the handler. Consequently, a local copy of the handler is required
+        -:  143:    // to ensure that any owning sub-object remains valid until after we have
+        -:  144:    // deallocated the memory here.
+        -:  145:    detail::binder1<Handler, boost::system::error_code>
+       8*:  146:      handler(o->handler_, o->ec_);
+       8*:  147:    p.h = boost::asio::detail::addressof(handler.handler_);
+       8*:  148:    p.reset();
+        -:  149:
+        -:  150:    // Make the upcall if required.
+       8*:  151:    if (owner)
+        -:  152:    {
+       8*:  153:      fenced_block b(fenced_block::half);
+        -:  154:      BOOST_ASIO_HANDLER_INVOCATION_BEGIN((handler.arg1_));
+       8*:  155:      w.complete(handler, handler.handler_);
+        -:  156:      BOOST_ASIO_HANDLER_INVOCATION_END;
+       8*:  157:    }
+       8*:  158:  }
+------------------
+_ZN5boost4asio6detail25reactive_socket_accept_opINS0_12basic_socketINS0_2ip3tcpENS0_15any_io_executorEEES5_NS1_17awaitable_handlerIS6_JNS_6system10error_codeEEEES6_E11do_completeEPvPNS1_19scheduler_operationERKSA_m:
+function _ZN5boost4asio6detail25reactive_socket_accept_opINS0_12basic_socketINS0_2ip3tcpENS0_15any_io_executorEEES5_NS1_17awaitable_handlerIS6_JNS_6system10error_codeEEEES6_E11do_completeEPvPNS1_19scheduler_operationERKSA_m called 0 returned 0% blocks executed 0%
+    #####:  117:  static void do_complete(void* owner, operation* base,
+        -:  118:      const boost::system::error_code& /*ec*/,
+        -:  119:      std::size_t /*bytes_transferred*/)
+        -:  120:  {
+        -:  121:    // Take ownership of the handler object.
+    #####:  122:    BOOST_ASIO_ASSUME(base != 0);
+branch  0 never executed (fallthrough)
+branch  1 never executed
+call    2 never executed
+    #####:  123:    reactive_socket_accept_op* o(static_cast<reactive_socket_accept_op*>(base));
+    #####:  124:    ptr p = { boost::asio::detail::addressof(o->handler_), o, o };
+call    0 never executed
+        -:  125:
+        -:  126:    // On success, assign new connection to peer socket object.
+    #####:  127:    if (owner)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  128:      o->do_assign();
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:  129:
+        -:  130:    BOOST_ASIO_HANDLER_COMPLETION((*o));
+        -:  131:
+        -:  132:    // Take ownership of the operation's outstanding work.
+    #####:  133:    handler_work<Handler, IoExecutor> w(
+        -:  134:        BOOST_ASIO_MOVE_CAST2(handler_work<Handler, IoExecutor>)(
+    #####:  135:          o->work_));
+call    0 never executed
+        -:  136:
+    #####:  137:    BOOST_ASIO_ERROR_LOCATION(o->ec_);
+call    0 never executed
+        -:  138:
+        -:  139:    // Make a copy of the handler so that the memory can be deallocated before
+        -:  140:    // the upcall is made. Even if we're not about to make an upcall, a
+        -:  141:    // sub-object of the handler may be the true owner of the memory associated
+        -:  142:    // with the handler. Consequently, a local copy of the handler is required
+        -:  143:    // to ensure that any owning sub-object remains valid until after we have
+        -:  144:    // deallocated the memory here.
+        -:  145:    detail::binder1<Handler, boost::system::error_code>
+    #####:  146:      handler(o->handler_, o->ec_);
+call    0 never executed
+    #####:  147:    p.h = boost::asio::detail::addressof(handler.handler_);
+call    0 never executed
+    #####:  148:    p.reset();
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:  149:
+        -:  150:    // Make the upcall if required.
+    #####:  151:    if (owner)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  152:    {
+    #####:  153:      fenced_block b(fenced_block::half);
+call    0 never executed
+        -:  154:      BOOST_ASIO_HANDLER_INVOCATION_BEGIN((handler.arg1_));
+    #####:  155:      w.complete(handler, handler.handler_);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:  156:      BOOST_ASIO_HANDLER_INVOCATION_END;
+    #####:  157:    }
+call    0 never executed
+call    1 never executed
+    #####:  158:  }
+call    0 never executed
+call    1 never executed
+call    2 never executed
+call    3 never executed
+call    4 never executed
+call    5 never executed
+------------------
+_ZN5boost4asio6detail25reactive_socket_accept_opINS0_12basic_socketINS0_2ip3tcpENS0_15any_io_executorEEES5_Z22createConnectedSocketsRNS0_10io_contextES9_EUlNS_6system10error_codeEE_S6_E11do_completeEPvPNS1_19scheduler_operationERKSB_m:
+function _ZN5boost4asio6detail25reactive_socket_accept_opINS0_12basic_socketINS0_2ip3tcpENS0_15any_io_executorEEES5_Z22createConnectedSocketsRNS0_10io_contextES9_EUlNS_6system10error_codeEE_S6_E11do_completeEPvPNS1_19scheduler_operationERKSB_m called 8 returned 100% blocks executed 69%
+        8:  117:  static void do_complete(void* owner, operation* base,
+        -:  118:      const boost::system::error_code& /*ec*/,
+        -:  119:      std::size_t /*bytes_transferred*/)
+        -:  120:  {
+        -:  121:    // Take ownership of the handler object.
+       8*:  122:    BOOST_ASIO_ASSUME(base != 0);
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+call    2 never executed
+        8:  123:    reactive_socket_accept_op* o(static_cast<reactive_socket_accept_op*>(base));
+        8:  124:    ptr p = { boost::asio::detail::addressof(o->handler_), o, o };
+call    0 returned 100%
+        -:  125:
+        -:  126:    // On success, assign new connection to peer socket object.
+        8:  127:    if (owner)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        8:  128:      o->do_assign();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  129:
+        -:  130:    BOOST_ASIO_HANDLER_COMPLETION((*o));
+        -:  131:
+        -:  132:    // Take ownership of the operation's outstanding work.
+        8:  133:    handler_work<Handler, IoExecutor> w(
+        -:  134:        BOOST_ASIO_MOVE_CAST2(handler_work<Handler, IoExecutor>)(
+        8:  135:          o->work_));
+call    0 returned 100%
+        -:  136:
+        8:  137:    BOOST_ASIO_ERROR_LOCATION(o->ec_);
+call    0 returned 100%
+        -:  138:
+        -:  139:    // Make a copy of the handler so that the memory can be deallocated before
+        -:  140:    // the upcall is made. Even if we're not about to make an upcall, a
+        -:  141:    // sub-object of the handler may be the true owner of the memory associated
+        -:  142:    // with the handler. Consequently, a local copy of the handler is required
+        -:  143:    // to ensure that any owning sub-object remains valid until after we have
+        -:  144:    // deallocated the memory here.
+        -:  145:    detail::binder1<Handler, boost::system::error_code>
+        8:  146:      handler(o->handler_, o->ec_);
+call    0 returned 100%
+        8:  147:    p.h = boost::asio::detail::addressof(handler.handler_);
+call    0 returned 100%
+        8:  148:    p.reset();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  149:
+        -:  150:    // Make the upcall if required.
+        8:  151:    if (owner)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:  152:    {
+        8:  153:      fenced_block b(fenced_block::half);
+call    0 returned 100%
+        -:  154:      BOOST_ASIO_HANDLER_INVOCATION_BEGIN((handler.arg1_));
+        8:  155:      w.complete(handler, handler.handler_);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  156:      BOOST_ASIO_HANDLER_INVOCATION_END;
+        8:  157:    }
+call    0 returned 100%
+call    1 never executed
+        8:  158:  }
+call    0 returned 100%
+call    1 returned 100%
+call    2 never executed
+call    3 never executed
+------------------
+        -:  159:
+        -:  160:  static void do_immediate(operation* base, bool, const void* io_ex)
+        -:  161:  {
+        -:  162:    // Take ownership of the handler object.
+        -:  163:    BOOST_ASIO_ASSUME(base != 0);
+        -:  164:    reactive_socket_accept_op* o(static_cast<reactive_socket_accept_op*>(base));
+        -:  165:    ptr p = { boost::asio::detail::addressof(o->handler_), o, o };
+        -:  166:
+        -:  167:    // On success, assign new connection to peer socket object.
+        -:  168:    o->do_assign();
+        -:  169:
+        -:  170:    BOOST_ASIO_HANDLER_COMPLETION((*o));
+        -:  171:
+        -:  172:    // Take ownership of the operation's outstanding work.
+        -:  173:    immediate_handler_work<Handler, IoExecutor> w(
+        -:  174:        BOOST_ASIO_MOVE_CAST2(handler_work<Handler, IoExecutor>)(
+        -:  175:          o->work_));
+        -:  176:
+        -:  177:    BOOST_ASIO_ERROR_LOCATION(o->ec_);
+        -:  178:
+        -:  179:    // Make a copy of the handler so that the memory can be deallocated before
+        -:  180:    // the upcall is made. Even if we're not about to make an upcall, a
+        -:  181:    // sub-object of the handler may be the true owner of the memory associated
+        -:  182:    // with the handler. Consequently, a local copy of the handler is required
+        -:  183:    // to ensure that any owning sub-object remains valid until after we have
+        -:  184:    // deallocated the memory here.
+        -:  185:    detail::binder1<Handler, boost::system::error_code>
+        -:  186:      handler(o->handler_, o->ec_);
+        -:  187:    p.h = boost::asio::detail::addressof(handler.handler_);
+        -:  188:    p.reset();
+        -:  189:
+        -:  190:    BOOST_ASIO_HANDLER_INVOCATION_BEGIN((handler.arg1_));
+        -:  191:    w.complete(handler, handler.handler_, io_ex);
+        -:  192:    BOOST_ASIO_HANDLER_INVOCATION_END;
+        -:  193:  }
+        -:  194:
+        -:  195:private:
+        -:  196:  Handler handler_;
+        -:  197:  handler_work<Handler, IoExecutor> work_;
+        -:  198:};
+        -:  199:
+        -:  200:#if defined(BOOST_ASIO_HAS_MOVE)
+        -:  201:
+        -:  202:template <typename Protocol, typename PeerIoExecutor,
+        -:  203:    typename Handler, typename IoExecutor>
+        -:  204:class reactive_socket_move_accept_op :
+        -:  205:  private Protocol::socket::template rebind_executor<PeerIoExecutor>::other,
+        -:  206:  public reactive_socket_accept_op_base<
+        -:  207:    typename Protocol::socket::template rebind_executor<PeerIoExecutor>::other,
+        -:  208:    Protocol>
+        -:  209:{
+        -:  210:public:
+        -:  211:  typedef Handler handler_type;
+        -:  212:  typedef IoExecutor io_executor_type;
+        -:  213:
+     728*:  214:  BOOST_ASIO_DEFINE_HANDLER_PTR(reactive_socket_move_accept_op);
+------------------
+_ZN5boost4asio6detail30reactive_socket_move_accept_opINS0_2ip3tcpENS0_15any_io_executorENS1_17awaitable_handlerIS5_JNS_6system10error_codeENS0_19basic_stream_socketIS4_S5_EEEEES5_E3ptr5resetEv:
+function _ZN5boost4asio6detail30reactive_socket_move_accept_opINS0_2ip3tcpENS0_15any_io_executorENS1_17awaitable_handlerIS5_JNS_6system10error_codeENS0_19basic_stream_socketIS4_S5_EEEEES5_E3ptr5resetEv called 27 returned 100% blocks executed 85%
+       27:  214:  BOOST_ASIO_DEFINE_HANDLER_PTR(reactive_socket_move_accept_op);
+branch  0 taken 33% (fallthrough)
+branch  1 taken 67%
+call    2 returned 100%
+branch  3 taken 33% (fallthrough)
+branch  4 taken 67%
+call    5 returned 100%
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+call    9 returned 100%
+call   10 returned 100%
+branch 11 taken 100% (fallthrough)
+branch 12 taken 0% (throw)
+------------------
+_ZN5boost4asio6detail30reactive_socket_move_accept_opINS0_2ip3tcpENS0_15any_io_executorENS1_17awaitable_handlerIS5_JNS_6system10error_codeENS0_19basic_stream_socketIS4_S5_EEEEES5_E3ptrD2Ev:
+function _ZN5boost4asio6detail30reactive_socket_move_accept_opINS0_2ip3tcpENS0_15any_io_executorENS1_17awaitable_handlerIS5_JNS_6system10error_codeENS0_19basic_stream_socketIS4_S5_EEEEES5_E3ptrD2Ev called 18 returned 100% blocks executed 100%
+       18:  214:  BOOST_ASIO_DEFINE_HANDLER_PTR(reactive_socket_move_accept_op);
+call    0 returned 100%
+------------------
+_ZN5boost4asio6detail30reactive_socket_move_accept_opINS0_2ip3tcpENS0_15any_io_executorENS1_17awaitable_handlerIS5_JNS_6system10error_codeENS0_19basic_stream_socketIS4_S5_EEEEES5_E3ptr8allocateERSB_:
+function _ZN5boost4asio6detail30reactive_socket_move_accept_opINS0_2ip3tcpENS0_15any_io_executorENS1_17awaitable_handlerIS5_JNS_6system10error_codeENS0_19basic_stream_socketIS4_S5_EEEEES5_E3ptr8allocateERSB_ called 9 returned 100% blocks executed 80%
+       18:  214:  BOOST_ASIO_DEFINE_HANDLER_PTR(reactive_socket_move_accept_op);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+------------------
+_ZN5boost4asio6detail30reactive_socket_move_accept_opINS0_2ip3tcpENS0_15any_io_executorENS1_17awaitable_handlerIS5_JNS_6system10error_codeENS0_19basic_stream_socketIS4_S5_EEEEES5_E3ptr5resetEv:
+function _ZN5boost4asio6detail30reactive_socket_move_accept_opINS0_2ip3tcpENS0_15any_io_executorENS1_17awaitable_handlerIS5_JNS_6system10error_codeENS0_19basic_stream_socketIS4_S5_EEEEES5_E3ptr5resetEv called 285 returned 100% blocks executed 85%
+      285:  214:  BOOST_ASIO_DEFINE_HANDLER_PTR(reactive_socket_move_accept_op);
+branch  0 taken 33% (fallthrough)
+branch  1 taken 67%
+call    2 returned 100%
+branch  3 taken 33% (fallthrough)
+branch  4 taken 67%
+call    5 returned 100%
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+call    9 returned 100%
+call   10 returned 100%
+branch 11 taken 100% (fallthrough)
+branch 12 taken 0% (throw)
+------------------
+_ZN5boost4asio6detail30reactive_socket_move_accept_opINS0_2ip3tcpENS0_15any_io_executorENS1_17awaitable_handlerIS5_JNS_6system10error_codeENS0_19basic_stream_socketIS4_S5_EEEEES5_E3ptrD2Ev:
+function _ZN5boost4asio6detail30reactive_socket_move_accept_opINS0_2ip3tcpENS0_15any_io_executorENS1_17awaitable_handlerIS5_JNS_6system10error_codeENS0_19basic_stream_socketIS4_S5_EEEEES5_E3ptrD2Ev called 190 returned 100% blocks executed 100%
+      190:  214:  BOOST_ASIO_DEFINE_HANDLER_PTR(reactive_socket_move_accept_op);
+call    0 returned 100%
+------------------
+_ZN5boost4asio6detail30reactive_socket_move_accept_opINS0_2ip3tcpENS0_15any_io_executorENS1_17awaitable_handlerIS5_JNS_6system10error_codeENS0_19basic_stream_socketIS4_S5_EEEEES5_E3ptr8allocateERSB_:
+function _ZN5boost4asio6detail30reactive_socket_move_accept_opINS0_2ip3tcpENS0_15any_io_executorENS1_17awaitable_handlerIS5_JNS_6system10error_codeENS0_19basic_stream_socketIS4_S5_EEEEES5_E3ptr8allocateERSB_ called 95 returned 100% blocks executed 80%
+      190:  214:  BOOST_ASIO_DEFINE_HANDLER_PTR(reactive_socket_move_accept_op);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+------------------
+_ZN5boost4asio6detail30reactive_socket_move_accept_opINS0_2ip3tcpENS0_15any_io_executorENS1_17awaitable_handlerIS5_JNS_6system10error_codeENS0_19basic_stream_socketIS4_S5_EEEEES5_E3ptr5resetEv:
+function _ZN5boost4asio6detail30reactive_socket_move_accept_opINS0_2ip3tcpENS0_15any_io_executorENS1_17awaitable_handlerIS5_JNS_6system10error_codeENS0_19basic_stream_socketIS4_S5_EEEEES5_E3ptr5resetEv called 0 returned 0% blocks executed 0%
+    #####:  214:  BOOST_ASIO_DEFINE_HANDLER_PTR(reactive_socket_move_accept_op);
+branch  0 never executed (fallthrough)
+branch  1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed
+call    5 never executed
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed (throw)
+call    9 never executed
+call   10 never executed
+branch 11 never executed (fallthrough)
+branch 12 never executed (throw)
+------------------
+_ZN5boost4asio6detail30reactive_socket_move_accept_opINS0_2ip3tcpENS0_15any_io_executorENS1_17awaitable_handlerIS5_JNS_6system10error_codeENS0_19basic_stream_socketIS4_S5_EEEEES5_E3ptrD2Ev:
+function _ZN5boost4asio6detail30reactive_socket_move_accept_opINS0_2ip3tcpENS0_15any_io_executorENS1_17awaitable_handlerIS5_JNS_6system10error_codeENS0_19basic_stream_socketIS4_S5_EEEEES5_E3ptrD2Ev called 0 returned 0% blocks executed 0%
+    #####:  214:  BOOST_ASIO_DEFINE_HANDLER_PTR(reactive_socket_move_accept_op);
+call    0 never executed
+------------------
+_ZN5boost4asio6detail30reactive_socket_move_accept_opINS0_2ip3tcpENS0_15any_io_executorENS1_17awaitable_handlerIS5_JNS_6system10error_codeENS0_19basic_stream_socketIS4_S5_EEEEES5_E3ptr8allocateERSB_:
+function _ZN5boost4asio6detail30reactive_socket_move_accept_opINS0_2ip3tcpENS0_15any_io_executorENS1_17awaitable_handlerIS5_JNS_6system10error_codeENS0_19basic_stream_socketIS4_S5_EEEEES5_E3ptr8allocateERSB_ called 0 returned 0% blocks executed 0%
+    #####:  214:  BOOST_ASIO_DEFINE_HANDLER_PTR(reactive_socket_move_accept_op);
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed (throw)
+------------------
+_ZN5boost4asio6detail30reactive_socket_move_accept_opINS0_2ip3tcpENS0_15any_io_executorENS1_17awaitable_handlerIS5_JNS_6system10error_codeENS0_19basic_stream_socketIS4_S5_EEEEES5_E3ptr5resetEv:
+function _ZN5boost4asio6detail30reactive_socket_move_accept_opINS0_2ip3tcpENS0_15any_io_executorENS1_17awaitable_handlerIS5_JNS_6system10error_codeENS0_19basic_stream_socketIS4_S5_EEEEES5_E3ptr5resetEv called 0 returned 0% blocks executed 0%
+    #####:  214:  BOOST_ASIO_DEFINE_HANDLER_PTR(reactive_socket_move_accept_op);
+branch  0 never executed (fallthrough)
+branch  1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed
+call    5 never executed
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed (throw)
+call    9 never executed
+call   10 never executed
+branch 11 never executed (fallthrough)
+branch 12 never executed (throw)
+------------------
+_ZN5boost4asio6detail30reactive_socket_move_accept_opINS0_2ip3tcpENS0_15any_io_executorENS1_17awaitable_handlerIS5_JNS_6system10error_codeENS0_19basic_stream_socketIS4_S5_EEEEES5_E3ptrD2Ev:
+function _ZN5boost4asio6detail30reactive_socket_move_accept_opINS0_2ip3tcpENS0_15any_io_executorENS1_17awaitable_handlerIS5_JNS_6system10error_codeENS0_19basic_stream_socketIS4_S5_EEEEES5_E3ptrD2Ev called 0 returned 0% blocks executed 0%
+    #####:  214:  BOOST_ASIO_DEFINE_HANDLER_PTR(reactive_socket_move_accept_op);
+call    0 never executed
+------------------
+_ZN5boost4asio6detail30reactive_socket_move_accept_opINS0_2ip3tcpENS0_15any_io_executorENS1_17awaitable_handlerIS5_JNS_6system10error_codeENS0_19basic_stream_socketIS4_S5_EEEEES5_E3ptr8allocateERSB_:
+function _ZN5boost4asio6detail30reactive_socket_move_accept_opINS0_2ip3tcpENS0_15any_io_executorENS1_17awaitable_handlerIS5_JNS_6system10error_codeENS0_19basic_stream_socketIS4_S5_EEEEES5_E3ptr8allocateERSB_ called 0 returned 0% blocks executed 0%
+    #####:  214:  BOOST_ASIO_DEFINE_HANDLER_PTR(reactive_socket_move_accept_op);
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed (throw)
+------------------
+        -:  215:
+     104*:  216:  reactive_socket_move_accept_op(const boost::system::error_code& success_ec,
+        -:  217:      const PeerIoExecutor& peer_io_ex, socket_type socket,
+        -:  218:      socket_ops::state_type state, const Protocol& protocol,
+        -:  219:      typename Protocol::endpoint* peer_endpoint, Handler& handler,
+        -:  220:      const IoExecutor& io_ex)
+        -:  221:    : peer_socket_type(peer_io_ex),
+        -:  222:      reactive_socket_accept_op_base<peer_socket_type, Protocol>(
+        -:  223:        success_ec, socket, state, *this, protocol, peer_endpoint,
+        -:  224:        &reactive_socket_move_accept_op::do_complete),
+     104*:  225:      handler_(BOOST_ASIO_MOVE_CAST(Handler)(handler)),
+     208*:  226:      work_(handler_, io_ex)
+        -:  227:  {
+     104*:  228:  }
+------------------
+_ZN5boost4asio6detail30reactive_socket_move_accept_opINS0_2ip3tcpENS0_15any_io_executorENS1_17awaitable_handlerIS5_JNS_6system10error_codeENS0_19basic_stream_socketIS4_S5_EEEEES5_EC2ERKS8_RKS5_ihRKS4_PNS3_14basic_endpointIS4_EERSB_SG_:
+function _ZN5boost4asio6detail30reactive_socket_move_accept_opINS0_2ip3tcpENS0_15any_io_executorENS1_17awaitable_handlerIS5_JNS_6system10error_codeENS0_19basic_stream_socketIS4_S5_EEEEES5_EC2ERKS8_RKS5_ihRKS4_PNS3_14basic_endpointIS4_EERSB_SG_ called 9 returned 100% blocks executed 100%
+        9:  216:  reactive_socket_move_accept_op(const boost::system::error_code& success_ec,
+        -:  217:      const PeerIoExecutor& peer_io_ex, socket_type socket,
+        -:  218:      socket_ops::state_type state, const Protocol& protocol,
+        -:  219:      typename Protocol::endpoint* peer_endpoint, Handler& handler,
+        -:  220:      const IoExecutor& io_ex)
+        -:  221:    : peer_socket_type(peer_io_ex),
+        -:  222:      reactive_socket_accept_op_base<peer_socket_type, Protocol>(
+        -:  223:        success_ec, socket, state, *this, protocol, peer_endpoint,
+        -:  224:        &reactive_socket_move_accept_op::do_complete),
+        9:  225:      handler_(BOOST_ASIO_MOVE_CAST(Handler)(handler)),
+call    0 returned 100%
+       18:  226:      work_(handler_, io_ex)
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+        -:  227:  {
+        9:  228:  }
+------------------
+_ZN5boost4asio6detail30reactive_socket_move_accept_opINS0_2ip3tcpENS0_15any_io_executorENS1_17awaitable_handlerIS5_JNS_6system10error_codeENS0_19basic_stream_socketIS4_S5_EEEEES5_EC2ERKS8_RKS5_ihRKS4_PNS3_14basic_endpointIS4_EERSB_SG_:
+function _ZN5boost4asio6detail30reactive_socket_move_accept_opINS0_2ip3tcpENS0_15any_io_executorENS1_17awaitable_handlerIS5_JNS_6system10error_codeENS0_19basic_stream_socketIS4_S5_EEEEES5_EC2ERKS8_RKS5_ihRKS4_PNS3_14basic_endpointIS4_EERSB_SG_ called 95 returned 100% blocks executed 100%
+       95:  216:  reactive_socket_move_accept_op(const boost::system::error_code& success_ec,
+        -:  217:      const PeerIoExecutor& peer_io_ex, socket_type socket,
+        -:  218:      socket_ops::state_type state, const Protocol& protocol,
+        -:  219:      typename Protocol::endpoint* peer_endpoint, Handler& handler,
+        -:  220:      const IoExecutor& io_ex)
+        -:  221:    : peer_socket_type(peer_io_ex),
+        -:  222:      reactive_socket_accept_op_base<peer_socket_type, Protocol>(
+        -:  223:        success_ec, socket, state, *this, protocol, peer_endpoint,
+        -:  224:        &reactive_socket_move_accept_op::do_complete),
+       95:  225:      handler_(BOOST_ASIO_MOVE_CAST(Handler)(handler)),
+call    0 returned 100%
+      190:  226:      work_(handler_, io_ex)
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+        -:  227:  {
+       95:  228:  }
+------------------
+_ZN5boost4asio6detail30reactive_socket_move_accept_opINS0_2ip3tcpENS0_15any_io_executorENS1_17awaitable_handlerIS5_JNS_6system10error_codeENS0_19basic_stream_socketIS4_S5_EEEEES5_EC2ERKS8_RKS5_ihRKS4_PNS3_14basic_endpointIS4_EERSB_SG_:
+function _ZN5boost4asio6detail30reactive_socket_move_accept_opINS0_2ip3tcpENS0_15any_io_executorENS1_17awaitable_handlerIS5_JNS_6system10error_codeENS0_19basic_stream_socketIS4_S5_EEEEES5_EC2ERKS8_RKS5_ihRKS4_PNS3_14basic_endpointIS4_EERSB_SG_ called 0 returned 0% blocks executed 0%
+    #####:  216:  reactive_socket_move_accept_op(const boost::system::error_code& success_ec,
+        -:  217:      const PeerIoExecutor& peer_io_ex, socket_type socket,
+        -:  218:      socket_ops::state_type state, const Protocol& protocol,
+        -:  219:      typename Protocol::endpoint* peer_endpoint, Handler& handler,
+        -:  220:      const IoExecutor& io_ex)
+        -:  221:    : peer_socket_type(peer_io_ex),
+        -:  222:      reactive_socket_accept_op_base<peer_socket_type, Protocol>(
+        -:  223:        success_ec, socket, state, *this, protocol, peer_endpoint,
+        -:  224:        &reactive_socket_move_accept_op::do_complete),
+    #####:  225:      handler_(BOOST_ASIO_MOVE_CAST(Handler)(handler)),
+call    0 never executed
+    #####:  226:      work_(handler_, io_ex)
+call    0 never executed
+call    1 never executed
+call    2 never executed
+        -:  227:  {
+    #####:  228:  }
+------------------
+_ZN5boost4asio6detail30reactive_socket_move_accept_opINS0_2ip3tcpENS0_15any_io_executorENS1_17awaitable_handlerIS5_JNS_6system10error_codeENS0_19basic_stream_socketIS4_S5_EEEEES5_EC2ERKS8_RKS5_ihRKS4_PNS3_14basic_endpointIS4_EERSB_SG_:
+function _ZN5boost4asio6detail30reactive_socket_move_accept_opINS0_2ip3tcpENS0_15any_io_executorENS1_17awaitable_handlerIS5_JNS_6system10error_codeENS0_19basic_stream_socketIS4_S5_EEEEES5_EC2ERKS8_RKS5_ihRKS4_PNS3_14basic_endpointIS4_EERSB_SG_ called 0 returned 0% blocks executed 0%
+    #####:  216:  reactive_socket_move_accept_op(const boost::system::error_code& success_ec,
+        -:  217:      const PeerIoExecutor& peer_io_ex, socket_type socket,
+        -:  218:      socket_ops::state_type state, const Protocol& protocol,
+        -:  219:      typename Protocol::endpoint* peer_endpoint, Handler& handler,
+        -:  220:      const IoExecutor& io_ex)
+        -:  221:    : peer_socket_type(peer_io_ex),
+        -:  222:      reactive_socket_accept_op_base<peer_socket_type, Protocol>(
+        -:  223:        success_ec, socket, state, *this, protocol, peer_endpoint,
+        -:  224:        &reactive_socket_move_accept_op::do_complete),
+    #####:  225:      handler_(BOOST_ASIO_MOVE_CAST(Handler)(handler)),
+call    0 never executed
+    #####:  226:      work_(handler_, io_ex)
+call    0 never executed
+call    1 never executed
+call    2 never executed
+        -:  227:  {
+    #####:  228:  }
+------------------
+        -:  229:
+     104*:  230:  static void do_complete(void* owner, operation* base,
+        -:  231:      const boost::system::error_code& /*ec*/,
+        -:  232:      std::size_t /*bytes_transferred*/)
+        -:  233:  {
+        -:  234:    // Take ownership of the handler object.
+     104*:  235:    BOOST_ASIO_ASSUME(base != 0);
+     104*:  236:    reactive_socket_move_accept_op* o(
+     104*:  237:        static_cast<reactive_socket_move_accept_op*>(base));
+     104*:  238:    ptr p = { boost::asio::detail::addressof(o->handler_), o, o };
+        -:  239:
+        -:  240:    // On success, assign new connection to peer socket object.
+     104*:  241:    if (owner)
+      79*:  242:      o->do_assign();
+        -:  243:
+        -:  244:    BOOST_ASIO_HANDLER_COMPLETION((*o));
+        -:  245:
+        -:  246:    // Take ownership of the operation's outstanding work.
+     104*:  247:    handler_work<Handler, IoExecutor> w(
+        -:  248:        BOOST_ASIO_MOVE_CAST2(handler_work<Handler, IoExecutor>)(
+     104*:  249:          o->work_));
+        -:  250:
+     104*:  251:    BOOST_ASIO_ERROR_LOCATION(o->ec_);
+        -:  252:
+        -:  253:    // Make a copy of the handler so that the memory can be deallocated before
+        -:  254:    // the upcall is made. Even if we're not about to make an upcall, a
+        -:  255:    // sub-object of the handler may be the true owner of the memory associated
+        -:  256:    // with the handler. Consequently, a local copy of the handler is required
+        -:  257:    // to ensure that any owning sub-object remains valid until after we have
+        -:  258:    // deallocated the memory here.
+        -:  259:    detail::move_binder2<Handler,
+        -:  260:      boost::system::error_code, peer_socket_type>
+     104*:  261:        handler(0, BOOST_ASIO_MOVE_CAST(Handler)(o->handler_), o->ec_,
+        -:  262:          BOOST_ASIO_MOVE_CAST(peer_socket_type)(*o));
+     104*:  263:    p.h = boost::asio::detail::addressof(handler.handler_);
+     104*:  264:    p.reset();
+        -:  265:
+        -:  266:    // Make the upcall if required.
+     104*:  267:    if (owner)
+        -:  268:    {
+      79*:  269:      fenced_block b(fenced_block::half);
+        -:  270:      BOOST_ASIO_HANDLER_INVOCATION_BEGIN((handler.arg1_, "..."));
+      79*:  271:      w.complete(handler, handler.handler_);
+        -:  272:      BOOST_ASIO_HANDLER_INVOCATION_END;
+      79*:  273:    }
+     104*:  274:  }
+------------------
+_ZN5boost4asio6detail30reactive_socket_move_accept_opINS0_2ip3tcpENS0_15any_io_executorENS1_17awaitable_handlerIS5_JNS_6system10error_codeENS0_19basic_stream_socketIS4_S5_EEEEES5_E11do_completeEPvPNS1_19scheduler_operationERKS8_m:
+function _ZN5boost4asio6detail30reactive_socket_move_accept_opINS0_2ip3tcpENS0_15any_io_executorENS1_17awaitable_handlerIS5_JNS_6system10error_codeENS0_19basic_stream_socketIS4_S5_EEEEES5_E11do_completeEPvPNS1_19scheduler_operationERKS8_m called 9 returned 100% blocks executed 66%
+        9:  230:  static void do_complete(void* owner, operation* base,
+        -:  231:      const boost::system::error_code& /*ec*/,
+        -:  232:      std::size_t /*bytes_transferred*/)
+        -:  233:  {
+        -:  234:    // Take ownership of the handler object.
+       9*:  235:    BOOST_ASIO_ASSUME(base != 0);
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+call    2 never executed
+        9:  236:    reactive_socket_move_accept_op* o(
+       9*:  237:        static_cast<reactive_socket_move_accept_op*>(base));
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        9:  238:    ptr p = { boost::asio::detail::addressof(o->handler_), o, o };
+call    0 returned 100%
+        -:  239:
+        -:  240:    // On success, assign new connection to peer socket object.
+        9:  241:    if (owner)
+branch  0 taken 89% (fallthrough)
+branch  1 taken 11%
+        8:  242:      o->do_assign();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  243:
+        -:  244:    BOOST_ASIO_HANDLER_COMPLETION((*o));
+        -:  245:
+        -:  246:    // Take ownership of the operation's outstanding work.
+        9:  247:    handler_work<Handler, IoExecutor> w(
+        -:  248:        BOOST_ASIO_MOVE_CAST2(handler_work<Handler, IoExecutor>)(
+        9:  249:          o->work_));
+call    0 returned 100%
+        -:  250:
+        9:  251:    BOOST_ASIO_ERROR_LOCATION(o->ec_);
+call    0 returned 100%
+        -:  252:
+        -:  253:    // Make a copy of the handler so that the memory can be deallocated before
+        -:  254:    // the upcall is made. Even if we're not about to make an upcall, a
+        -:  255:    // sub-object of the handler may be the true owner of the memory associated
+        -:  256:    // with the handler. Consequently, a local copy of the handler is required
+        -:  257:    // to ensure that any owning sub-object remains valid until after we have
+        -:  258:    // deallocated the memory here.
+        -:  259:    detail::move_binder2<Handler,
+        -:  260:      boost::system::error_code, peer_socket_type>
+        9:  261:        handler(0, BOOST_ASIO_MOVE_CAST(Handler)(o->handler_), o->ec_,
+call    0 returned 100%
+        -:  262:          BOOST_ASIO_MOVE_CAST(peer_socket_type)(*o));
+        9:  263:    p.h = boost::asio::detail::addressof(handler.handler_);
+call    0 returned 100%
+        9:  264:    p.reset();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  265:
+        -:  266:    // Make the upcall if required.
+        9:  267:    if (owner)
+branch  0 taken 89% (fallthrough)
+branch  1 taken 11%
+        -:  268:    {
+        8:  269:      fenced_block b(fenced_block::half);
+call    0 returned 100%
+        -:  270:      BOOST_ASIO_HANDLER_INVOCATION_BEGIN((handler.arg1_, "..."));
+        8:  271:      w.complete(handler, handler.handler_);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  272:      BOOST_ASIO_HANDLER_INVOCATION_END;
+        8:  273:    }
+call    0 returned 100%
+call    1 never executed
+        9:  274:  }
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 never executed
+call    4 never executed
+call    5 never executed
+------------------
+_ZN5boost4asio6detail30reactive_socket_move_accept_opINS0_2ip3tcpENS0_15any_io_executorENS1_17awaitable_handlerIS5_JNS_6system10error_codeENS0_19basic_stream_socketIS4_S5_EEEEES5_E11do_completeEPvPNS1_19scheduler_operationERKS8_m:
+function _ZN5boost4asio6detail30reactive_socket_move_accept_opINS0_2ip3tcpENS0_15any_io_executorENS1_17awaitable_handlerIS5_JNS_6system10error_codeENS0_19basic_stream_socketIS4_S5_EEEEES5_E11do_completeEPvPNS1_19scheduler_operationERKS8_m called 95 returned 100% blocks executed 66%
+       95:  230:  static void do_complete(void* owner, operation* base,
+        -:  231:      const boost::system::error_code& /*ec*/,
+        -:  232:      std::size_t /*bytes_transferred*/)
+        -:  233:  {
+        -:  234:    // Take ownership of the handler object.
+      95*:  235:    BOOST_ASIO_ASSUME(base != 0);
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+call    2 never executed
+       95:  236:    reactive_socket_move_accept_op* o(
+      95*:  237:        static_cast<reactive_socket_move_accept_op*>(base));
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+       95:  238:    ptr p = { boost::asio::detail::addressof(o->handler_), o, o };
+call    0 returned 100%
+        -:  239:
+        -:  240:    // On success, assign new connection to peer socket object.
+       95:  241:    if (owner)
+branch  0 taken 75% (fallthrough)
+branch  1 taken 25%
+       71:  242:      o->do_assign();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  243:
+        -:  244:    BOOST_ASIO_HANDLER_COMPLETION((*o));
+        -:  245:
+        -:  246:    // Take ownership of the operation's outstanding work.
+       95:  247:    handler_work<Handler, IoExecutor> w(
+        -:  248:        BOOST_ASIO_MOVE_CAST2(handler_work<Handler, IoExecutor>)(
+       95:  249:          o->work_));
+call    0 returned 100%
+        -:  250:
+       95:  251:    BOOST_ASIO_ERROR_LOCATION(o->ec_);
+call    0 returned 100%
+        -:  252:
+        -:  253:    // Make a copy of the handler so that the memory can be deallocated before
+        -:  254:    // the upcall is made. Even if we're not about to make an upcall, a
+        -:  255:    // sub-object of the handler may be the true owner of the memory associated
+        -:  256:    // with the handler. Consequently, a local copy of the handler is required
+        -:  257:    // to ensure that any owning sub-object remains valid until after we have
+        -:  258:    // deallocated the memory here.
+        -:  259:    detail::move_binder2<Handler,
+        -:  260:      boost::system::error_code, peer_socket_type>
+       95:  261:        handler(0, BOOST_ASIO_MOVE_CAST(Handler)(o->handler_), o->ec_,
+call    0 returned 100%
+        -:  262:          BOOST_ASIO_MOVE_CAST(peer_socket_type)(*o));
+       95:  263:    p.h = boost::asio::detail::addressof(handler.handler_);
+call    0 returned 100%
+       95:  264:    p.reset();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  265:
+        -:  266:    // Make the upcall if required.
+       95:  267:    if (owner)
+branch  0 taken 75% (fallthrough)
+branch  1 taken 25%
+        -:  268:    {
+       71:  269:      fenced_block b(fenced_block::half);
+call    0 returned 100%
+        -:  270:      BOOST_ASIO_HANDLER_INVOCATION_BEGIN((handler.arg1_, "..."));
+       71:  271:      w.complete(handler, handler.handler_);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  272:      BOOST_ASIO_HANDLER_INVOCATION_END;
+       71:  273:    }
+call    0 returned 100%
+call    1 never executed
+       95:  274:  }
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 never executed
+call    4 never executed
+call    5 never executed
+------------------
+_ZN5boost4asio6detail30reactive_socket_move_accept_opINS0_2ip3tcpENS0_15any_io_executorENS1_17awaitable_handlerIS5_JNS_6system10error_codeENS0_19basic_stream_socketIS4_S5_EEEEES5_E11do_completeEPvPNS1_19scheduler_operationERKS8_m:
+function _ZN5boost4asio6detail30reactive_socket_move_accept_opINS0_2ip3tcpENS0_15any_io_executorENS1_17awaitable_handlerIS5_JNS_6system10error_codeENS0_19basic_stream_socketIS4_S5_EEEEES5_E11do_completeEPvPNS1_19scheduler_operationERKS8_m called 0 returned 0% blocks executed 0%
+    #####:  230:  static void do_complete(void* owner, operation* base,
+        -:  231:      const boost::system::error_code& /*ec*/,
+        -:  232:      std::size_t /*bytes_transferred*/)
+        -:  233:  {
+        -:  234:    // Take ownership of the handler object.
+    #####:  235:    BOOST_ASIO_ASSUME(base != 0);
+branch  0 never executed (fallthrough)
+branch  1 never executed
+call    2 never executed
+    #####:  236:    reactive_socket_move_accept_op* o(
+    #####:  237:        static_cast<reactive_socket_move_accept_op*>(base));
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  238:    ptr p = { boost::asio::detail::addressof(o->handler_), o, o };
+call    0 never executed
+        -:  239:
+        -:  240:    // On success, assign new connection to peer socket object.
+    #####:  241:    if (owner)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  242:      o->do_assign();
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:  243:
+        -:  244:    BOOST_ASIO_HANDLER_COMPLETION((*o));
+        -:  245:
+        -:  246:    // Take ownership of the operation's outstanding work.
+    #####:  247:    handler_work<Handler, IoExecutor> w(
+        -:  248:        BOOST_ASIO_MOVE_CAST2(handler_work<Handler, IoExecutor>)(
+    #####:  249:          o->work_));
+call    0 never executed
+        -:  250:
+    #####:  251:    BOOST_ASIO_ERROR_LOCATION(o->ec_);
+call    0 never executed
+        -:  252:
+        -:  253:    // Make a copy of the handler so that the memory can be deallocated before
+        -:  254:    // the upcall is made. Even if we're not about to make an upcall, a
+        -:  255:    // sub-object of the handler may be the true owner of the memory associated
+        -:  256:    // with the handler. Consequently, a local copy of the handler is required
+        -:  257:    // to ensure that any owning sub-object remains valid until after we have
+        -:  258:    // deallocated the memory here.
+        -:  259:    detail::move_binder2<Handler,
+        -:  260:      boost::system::error_code, peer_socket_type>
+    #####:  261:        handler(0, BOOST_ASIO_MOVE_CAST(Handler)(o->handler_), o->ec_,
+call    0 never executed
+        -:  262:          BOOST_ASIO_MOVE_CAST(peer_socket_type)(*o));
+    #####:  263:    p.h = boost::asio::detail::addressof(handler.handler_);
+call    0 never executed
+    #####:  264:    p.reset();
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:  265:
+        -:  266:    // Make the upcall if required.
+    #####:  267:    if (owner)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  268:    {
+    #####:  269:      fenced_block b(fenced_block::half);
+call    0 never executed
+        -:  270:      BOOST_ASIO_HANDLER_INVOCATION_BEGIN((handler.arg1_, "..."));
+    #####:  271:      w.complete(handler, handler.handler_);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:  272:      BOOST_ASIO_HANDLER_INVOCATION_END;
+    #####:  273:    }
+call    0 never executed
+call    1 never executed
+    #####:  274:  }
+call    0 never executed
+call    1 never executed
+call    2 never executed
+call    3 never executed
+call    4 never executed
+call    5 never executed
+------------------
+_ZN5boost4asio6detail30reactive_socket_move_accept_opINS0_2ip3tcpENS0_15any_io_executorENS1_17awaitable_handlerIS5_JNS_6system10error_codeENS0_19basic_stream_socketIS4_S5_EEEEES5_E11do_completeEPvPNS1_19scheduler_operationERKS8_m:
+function _ZN5boost4asio6detail30reactive_socket_move_accept_opINS0_2ip3tcpENS0_15any_io_executorENS1_17awaitable_handlerIS5_JNS_6system10error_codeENS0_19basic_stream_socketIS4_S5_EEEEES5_E11do_completeEPvPNS1_19scheduler_operationERKS8_m called 0 returned 0% blocks executed 0%
+    #####:  230:  static void do_complete(void* owner, operation* base,
+        -:  231:      const boost::system::error_code& /*ec*/,
+        -:  232:      std::size_t /*bytes_transferred*/)
+        -:  233:  {
+        -:  234:    // Take ownership of the handler object.
+    #####:  235:    BOOST_ASIO_ASSUME(base != 0);
+branch  0 never executed (fallthrough)
+branch  1 never executed
+call    2 never executed
+    #####:  236:    reactive_socket_move_accept_op* o(
+    #####:  237:        static_cast<reactive_socket_move_accept_op*>(base));
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  238:    ptr p = { boost::asio::detail::addressof(o->handler_), o, o };
+call    0 never executed
+        -:  239:
+        -:  240:    // On success, assign new connection to peer socket object.
+    #####:  241:    if (owner)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  242:      o->do_assign();
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:  243:
+        -:  244:    BOOST_ASIO_HANDLER_COMPLETION((*o));
+        -:  245:
+        -:  246:    // Take ownership of the operation's outstanding work.
+    #####:  247:    handler_work<Handler, IoExecutor> w(
+        -:  248:        BOOST_ASIO_MOVE_CAST2(handler_work<Handler, IoExecutor>)(
+    #####:  249:          o->work_));
+call    0 never executed
+        -:  250:
+    #####:  251:    BOOST_ASIO_ERROR_LOCATION(o->ec_);
+call    0 never executed
+        -:  252:
+        -:  253:    // Make a copy of the handler so that the memory can be deallocated before
+        -:  254:    // the upcall is made. Even if we're not about to make an upcall, a
+        -:  255:    // sub-object of the handler may be the true owner of the memory associated
+        -:  256:    // with the handler. Consequently, a local copy of the handler is required
+        -:  257:    // to ensure that any owning sub-object remains valid until after we have
+        -:  258:    // deallocated the memory here.
+        -:  259:    detail::move_binder2<Handler,
+        -:  260:      boost::system::error_code, peer_socket_type>
+    #####:  261:        handler(0, BOOST_ASIO_MOVE_CAST(Handler)(o->handler_), o->ec_,
+call    0 never executed
+        -:  262:          BOOST_ASIO_MOVE_CAST(peer_socket_type)(*o));
+    #####:  263:    p.h = boost::asio::detail::addressof(handler.handler_);
+call    0 never executed
+    #####:  264:    p.reset();
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:  265:
+        -:  266:    // Make the upcall if required.
+    #####:  267:    if (owner)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  268:    {
+    #####:  269:      fenced_block b(fenced_block::half);
+call    0 never executed
+        -:  270:      BOOST_ASIO_HANDLER_INVOCATION_BEGIN((handler.arg1_, "..."));
+    #####:  271:      w.complete(handler, handler.handler_);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:  272:      BOOST_ASIO_HANDLER_INVOCATION_END;
+    #####:  273:    }
+call    0 never executed
+call    1 never executed
+    #####:  274:  }
+call    0 never executed
+call    1 never executed
+call    2 never executed
+call    3 never executed
+call    4 never executed
+call    5 never executed
+------------------
+        -:  275:
+        -:  276:  static void do_immediate(operation* base, bool, const void* io_ex)
+        -:  277:  {
+        -:  278:    // Take ownership of the handler object.
+        -:  279:    BOOST_ASIO_ASSUME(base != 0);
+        -:  280:    reactive_socket_move_accept_op* o(
+        -:  281:        static_cast<reactive_socket_move_accept_op*>(base));
+        -:  282:    ptr p = { boost::asio::detail::addressof(o->handler_), o, o };
+        -:  283:
+        -:  284:    // On success, assign new connection to peer socket object.
+        -:  285:    o->do_assign();
+        -:  286:
+        -:  287:    BOOST_ASIO_HANDLER_COMPLETION((*o));
+        -:  288:
+        -:  289:    // Take ownership of the operation's outstanding work.
+        -:  290:    immediate_handler_work<Handler, IoExecutor> w(
+        -:  291:        BOOST_ASIO_MOVE_CAST2(handler_work<Handler, IoExecutor>)(
+        -:  292:          o->work_));
+        -:  293:
+        -:  294:    BOOST_ASIO_ERROR_LOCATION(o->ec_);
+        -:  295:
+        -:  296:    // Make a copy of the handler so that the memory can be deallocated before
+        -:  297:    // the upcall is made. Even if we're not about to make an upcall, a
+        -:  298:    // sub-object of the handler may be the true owner of the memory associated
+        -:  299:    // with the handler. Consequently, a local copy of the handler is required
+        -:  300:    // to ensure that any owning sub-object remains valid until after we have
+        -:  301:    // deallocated the memory here.
+        -:  302:    detail::move_binder2<Handler,
+        -:  303:      boost::system::error_code, peer_socket_type>
+        -:  304:        handler(0, BOOST_ASIO_MOVE_CAST(Handler)(o->handler_), o->ec_,
+        -:  305:          BOOST_ASIO_MOVE_CAST(peer_socket_type)(*o));
+        -:  306:    p.h = boost::asio::detail::addressof(handler.handler_);
+        -:  307:    p.reset();
+        -:  308:
+        -:  309:    BOOST_ASIO_HANDLER_INVOCATION_BEGIN((handler.arg1_, "..."));
+        -:  310:    w.complete(handler, handler.handler_, io_ex);
+        -:  311:    BOOST_ASIO_HANDLER_INVOCATION_END;
+        -:  312:  }
+        -:  313:
+        -:  314:private:
+        -:  315:  typedef typename Protocol::socket::template
+        -:  316:    rebind_executor<PeerIoExecutor>::other peer_socket_type;
+        -:  317:
+        -:  318:  Handler handler_;
+        -:  319:  handler_work<Handler, IoExecutor> work_;
+        -:  320:};
+        -:  321:
+        -:  322:#endif // defined(BOOST_ASIO_HAS_MOVE)
+        -:  323:
+        -:  324:} // namespace detail
+        -:  325:} // namespace asio
+        -:  326:} // namespace boost
+        -:  327:
+        -:  328:#include <boost/asio/detail/pop_options.hpp>
+        -:  329:
+        -:  330:#endif // BOOST_ASIO_DETAIL_REACTIVE_SOCKET_ACCEPT_OP_HPP

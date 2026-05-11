@@ -1,0 +1,315 @@
+        -:    0:Source:/home/runner/work/Hical/Hical/src/core/Middleware.h
+        -:    1:#pragma once
+        -:    2:
+        -:    3:#include "HttpRequest.h"
+        -:    4:#include "HttpResponse.h"
+        -:    5:#include "Coroutine.h"
+        -:    6:#include <chrono>
+        -:    7:#include <cstdint>
+        -:    8:#include <functional>
+        -:    9:#include <limits>
+        -:   10:#include <memory>
+        -:   11:#include <optional>
+        -:   12:#include <string>
+        -:   13:#include <vector>
+        -:   14:
+        -:   15:namespace hical
+        -:   16:{
+        -:   17:
+        -:   18:	/**
+        -:   19:	 * @brief 中间件 next 回调类型
+        -:   20:	 * 调用 next 会继续执行下一个中间件或最终的路由处理器。
+        -:   21:	 */
+        -:   22:	using MiddlewareNext = std::function<Awaitable<HttpResponse>(HttpRequest&)>;
+        -:   23:
+        -:   24:	/**
+        -:   25:	 * @brief 中间件处理器类型
+        -:   26:	 * 接收请求和 next 回调，返回协程化的响应。
+        -:   27:	 * 中间件可以在调用 next 前后执行逻辑（洋葱模型）。
+        -:   28:	 * 示例：
+        -:   29:	 * ```cpp
+        -:   30:	 * auto logger = [](HttpRequest& req, MiddlewareNext next)
+        -:   31:	 *     -> Awaitable<HttpResponse> {
+        -:   32:	 *     std::cout << req.path() << std::endl;    // 前置逻辑
+        -:   33:	 *     auto res = co_await next(req);            // 调用下一层
+        -:   34:	 *     std::cout << res.statusCode() << std::endl; // 后置逻辑
+        -:   35:	 *     co_return res;
+        -:   36:	 * };
+        -:   37:	 * ```
+        -:   38:	 */
+        -:   39:	using MiddlewareHandler = std::function<Awaitable<HttpResponse>(HttpRequest&, MiddlewareNext)>;
+        -:   40:
+        -:   41:	/**
+        -:   42:	 * @brief 同步中间件结果
+        -:   43:	 * nullopt = 继续执行 next，有值 = 拦截返回（短路）
+        -:   44:	 */
+        -:   45:	using SyncMiddlewareResult = std::optional<HttpResponse>;
+        -:   46:
+        -:   47:	/**
+        -:   48:	 * @brief 同步前置中间件处理器
+        -:   49:	 * 在 next() 之前执行。返回 nullopt 表示继续，返回 HttpResponse 表示拦截。
+        -:   50:	 * 不需要协程，无协程帧开销。
+        -:   51:	 */
+        -:   52:	using SyncBeforeHandler = std::function<SyncMiddlewareResult(HttpRequest&)>;
+        -:   53:
+        -:   54:	/**
+        -:   55:	 * @brief 同步后置中间件处理器
+        -:   56:	 * 在 next() 返回后执行，可修改响应头（setHeader/setCookie 等）。不需要协程。
+        -:   57:	 * @warning 禁止修改响应体（body）。因为 Content-Length 已由 setBody/setJsonBody 中的
+        -:   58:	 * prepare_payload() 固定，修改 body 会导致 Content-Length 与实际不匹配，
+        -:   59:	 * 在反向代理后可能引发 HTTP 响应走私或客户端截断。
+        -:   60:	 * 若需修改响应体，请使用异步 MiddlewareHandler 并在返回前调用 setBody()。
+        -:   61:	 */
+        -:   62:	using SyncAfterHandler = std::function<void(HttpRequest&, HttpResponse&)>;
+        -:   63:
+        -:   64:	/**
+        -:   65:	 * @brief 中间件条目（统一存储）
+        -:   66:	 * 支持异步（完整洋葱模型）和同步（前/后分离，极低开销）两种形式。
+        -:   67:	 * 连续的 Sync 条目会被合并为单个协程帧执行，大幅降低中间件链开销。
+        -:   68:	 */
+        -:   69:	struct MiddlewareEntry
+        -:   70:	{
+        -:   71:		enum class Type
+        -:   72:		{
+        -:   73:			Async,
+        -:   74:			Sync
+        -:   75:		};
+        -:   76:
+        -:   77:		Type type;
+        -:   78:		std::string name;
+        -:   79:
+        -:   80:		// Async：完整洋葱模型（每层一个协程帧）
+        -:   81:		MiddlewareHandler asyncHandler;
+        -:   82:
+        -:   83:		// Sync：前/后分离（连续 Sync 共享一个协程帧）
+        -:   84:		SyncBeforeHandler before;
+        -:   85:		SyncAfterHandler after; // 可为空
+        -:   86:	};
+        -:   87:
+        -:   88:#ifdef HICAL_ENABLE_MIDDLEWARE_PROFILING
+        -:   89:	/**
+        -:   90:	 * @brief 单个中间件的计时统计（线程安全）
+        -:   91:	 * 使用 int64_t 微秒存储，保证所有平台上 atomic<int64_t> 都是 lock-free。
+        -:   92:	 * 仅在 HICAL_ENABLE_MIDDLEWARE_PROFILING 编译选项开启时可用。
+        -:   93:	 */
+        -:   94:	struct MiddlewareTimingStats
+        -:   95:	{
+        -:   96:		std::string name;
+        -:   97:		std::atomic<size_t> callCount {0};
+        -:   98:		std::atomic<int64_t> totalTimeUs {0};                                 // 微秒
+        -:   99:		std::atomic<int64_t> maxTimeUs {0};                                   // 微秒
+        -:  100:		std::atomic<int64_t> minTimeUs {std::numeric_limits<int64_t>::max()}; // 微秒
+        -:  101:
+        -:  102:		double avgTimeMs() const
+        -:  103:		{
+        -:  104:			auto count = callCount.load(std::memory_order_relaxed);
+        -:  105:			return count > 0 ? static_cast<double>(totalTimeUs.load(std::memory_order_relaxed)) / (1000.0 * count)
+        -:  106:							 : 0.0;
+        -:  107:		}
+        -:  108:
+        -:  109:		void record(std::chrono::steady_clock::duration elapsed)
+        -:  110:		{
+        -:  111:			auto us = std::chrono::duration_cast<std::chrono::microseconds>(elapsed).count();
+        -:  112:			callCount.fetch_add(1, std::memory_order_relaxed);
+        -:  113:			totalTimeUs.fetch_add(us, std::memory_order_relaxed);
+        -:  114:
+        -:  115:			// 更新最大值（CAS）
+        -:  116:			auto curMax = maxTimeUs.load(std::memory_order_relaxed);
+        -:  117:			while (us > curMax && !maxTimeUs.compare_exchange_weak(curMax, us, std::memory_order_relaxed))
+        -:  118:			{
+        -:  119:			}
+        -:  120:
+        -:  121:			// 更新最小值（CAS）
+        -:  122:			auto curMin = minTimeUs.load(std::memory_order_relaxed);
+        -:  123:			while (us < curMin && !minTimeUs.compare_exchange_weak(curMin, us, std::memory_order_relaxed))
+        -:  124:			{
+        -:  125:			}
+        -:  126:		}
+        -:  127:	};
+        -:  128:#endif
+        -:  129:
+        -:  130:	/**
+        -:  131:	 * @brief 中间件管道（洋葱模型）
+        -:  132:	 * 按注册顺序依次执行中间件，最后执行最终处理器。
+        -:  133:	 * 每个中间件可以决定是否调用 next 继续执行，或直接返回响应（拦截）。
+        -:  134:	 */
+        -:  135:	class MiddlewarePipeline
+        -:  136:	{
+        -:  137:	public:
+       58:  138:		MiddlewarePipeline() = default;
+------------------
+_ZN5hical18MiddlewarePipelineC2Ev:
+function _ZN5hical18MiddlewarePipelineC2Ev called 23 returned 100% blocks executed 100%
+       23:  138:		MiddlewarePipeline() = default;
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN5hical18MiddlewarePipelineC2Ev:
+function _ZN5hical18MiddlewarePipelineC2Ev called 12 returned 100% blocks executed 100%
+       12:  138:		MiddlewarePipeline() = default;
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN5hical18MiddlewarePipelineC2Ev:
+function _ZN5hical18MiddlewarePipelineC2Ev called 9 returned 100% blocks executed 100%
+        9:  138:		MiddlewarePipeline() = default;
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN5hical18MiddlewarePipelineC2Ev:
+function _ZN5hical18MiddlewarePipelineC2Ev called 14 returned 100% blocks executed 100%
+       14:  138:		MiddlewarePipeline() = default;
+call    0 returned 100%
+call    1 returned 100%
+------------------
+        -:  139:
+        -:  140:		/**
+        -:  141:		 * @brief 添加中间件
+        -:  142:		 * @param middleware 中间件处理器
+        -:  143:		 * @throw std::logic_error 当 build() 已调用后再 use() 时抛出
+        -:  144:		 * @note 必须在 build() 之前调用
+        -:  145:		 */
+        -:  146:		void use(MiddlewareHandler middleware);
+        -:  147:
+        -:  148:		/**
+        -:  149:		 * @brief 添加命名中间件（启用 profiling 时记录名称用于统计）
+        -:  150:		 * @param name 中间件名称
+        -:  151:		 * @param middleware 中间件处理器
+        -:  152:		 * @throw std::logic_error 当 build() 已调用后再 use() 时抛出
+        -:  153:		 */
+        -:  154:		void use(const std::string& name, MiddlewareHandler middleware);
+        -:  155:
+        -:  156:		/**
+        -:  157:		 * @brief 添加同步前置中间件（无协程帧开销）
+        -:  158:		 * @param before 前置处理器（返回 nullopt 继续，返回 HttpResponse 拦截）
+        -:  159:		 */
+        -:  160:		void use(SyncBeforeHandler before);
+        -:  161:
+        -:  162:		/**
+        -:  163:		 * @brief 添加同步前/后中间件（无协程帧开销）
+        -:  164:		 * @param before 前置处理器
+        -:  165:		 * @param after 后置处理器（可为空）
+        -:  166:		 */
+        -:  167:		void use(SyncBeforeHandler before, SyncAfterHandler after);
+        -:  168:
+        -:  169:		/**
+        -:  170:		 * @brief 添加命名同步中间件
+        -:  171:		 * @param name 中间件名称
+        -:  172:		 * @param before 前置处理器
+        -:  173:		 * @param after 后置处理器（可为空）
+        -:  174:		 */
+        -:  175:		void use(const std::string& name, SyncBeforeHandler before, SyncAfterHandler after = nullptr);
+        -:  176:
+        -:  177:		/**
+        -:  178:		 * @brief 预构建中间件调用链
+        -:  179:		 * @param finalHandler 最终处理器（通常是路由分发）
+        -:  180:		 * @throw std::logic_error 当重复调用 build() 时抛出
+        -:  181:		 * 调用后，execute() 直接使用缓存的调用链，避免每次请求重建。
+        -:  182:		 * 调用后不应再 use() 添加中间件。
+        -:  183:		 */
+        -:  184:		void build(MiddlewareNext finalHandler);
+        -:  185:
+        -:  186:		/**
+        -:  187:		 * @brief 执行中间件管道（预构建路径，无需传入 finalHandler）
+        -:  188:		 * @param req HTTP 请求
+        -:  189:		 * @return 协程化的 HTTP 响应
+        -:  190:		 * @throw std::logic_error 当未调用 build() 时抛出
+        -:  191:		 */
+        -:  192:		Awaitable<HttpResponse> execute(HttpRequest& req);
+        -:  193:
+        -:  194:		/**
+        -:  195:		 * @brief 执行中间件管道（始终按传入的 finalHandler 动态构建调用链）
+        -:  196:		 * @param req HTTP 请求
+        -:  197:		 * @param finalHandler 最终处理器
+        -:  198:		 * @return 协程化的 HTTP 响应
+        -:  199:		 * @note 此重载始终动态构建链，profiling 开启时不记录统计数据。
+        -:  200:		 */
+        -:  201:		Awaitable<HttpResponse> execute(HttpRequest& req, MiddlewareNext finalHandler);
+        -:  202:
+        -:  203:		/**
+        -:  204:		 * @brief 预构建自定义终端处理器的调用链
+        -:  205:		 * @param finalHandler 自定义终端处理器
+        -:  206:		 * @return 预构建好的调用链（可缓存后多次调用）
+        -:  207:		 * @note profiling 开启时，返回的链共享 build() 时创建的统计对象。
+        -:  208:		 */
+        -:  209:		MiddlewareNext buildFor(MiddlewareNext finalHandler) const;
+        -:  210:
+        -:  211:		/**
+        -:  212:		 * @brief 获取中间件数量
+        -:  213:		 * @return 数量
+        -:  214:		 */
+        -:  215:		size_t size() const;
+        -:  216:
+        -:  217:		/**
+        -:  218:		 * @brief 从指定中间件列表构建洋葱调用链（供 RouteGroup 等外部使用）
+        -:  219:		 * @param middlewares 中间件列表
+        -:  220:		 * @param finalHandler 最终处理器
+        -:  221:		 * @return 构建好的调用链
+        -:  222:		 */
+        -:  223:		static MiddlewareNext buildChainFrom(const std::vector<MiddlewareHandler>& middlewares,
+        -:  224:											 MiddlewareNext finalHandler);
+        -:  225:
+        -:  226:		/**
+        -:  227:		 * @brief 从 MiddlewareEntry 列表构建优化链
+        -:  228:		 * 连续的 Sync 条目合并为单个协程帧执行，大幅减少协程帧堆分配。
+        -:  229:		 * @param entries 中间件条目列表
+        -:  230:		 * @param finalHandler 最终处理器
+        -:  231:		 * @return 构建好的调用链
+        -:  232:		 */
+        -:  233:		static MiddlewareNext buildOptimizedChain(const std::vector<MiddlewareEntry>& entries,
+        -:  234:												  MiddlewareNext finalHandler);
+        -:  235:
+        -:  236:#ifdef HICAL_ENABLE_MIDDLEWARE_PROFILING
+        -:  237:		/**
+        -:  238:		 * @brief 获取各中间件的计时统计快照
+        -:  239:		 * @return 各层中间件的统计数据（按注册顺序）
+        -:  240:		 */
+        -:  241:		struct TimingSnapshot
+        -:  242:		{
+        -:  243:			std::string name;
+        -:  244:			size_t callCount;
+        -:  245:			double totalTimeMs;
+        -:  246:			double avgTimeMs;
+        -:  247:			double maxTimeMs;
+        -:  248:			double minTimeMs;
+        -:  249:		};
+        -:  250:
+        -:  251:		std::vector<TimingSnapshot> getTimingStats() const;
+        -:  252:
+        -:  253:		/**
+        -:  254:		 * @brief 重置所有计时统计
+        -:  255:		 */
+        -:  256:		void resetTimingStats();
+        -:  257:#endif
+        -:  258:
+        -:  259:	private:
+        -:  260:		/**
+        -:  261:		 * @brief 从中间件列表构建洋葱调用链
+        -:  262:		 * @param finalHandler 最终处理器
+        -:  263:		 * @return 构建好的调用链
+        -:  264:		 */
+        -:  265:		MiddlewareNext buildChain(MiddlewareNext finalHandler) const;
+        -:  266:
+        -:  267:#ifdef HICAL_ENABLE_MIDDLEWARE_PROFILING
+        -:  268:		/**
+        -:  269:		 * @brief 构建带计时统计的洋葱调用链
+        -:  270:		 */
+        -:  271:		static MiddlewareNext buildChainWithProfiling(const std::vector<MiddlewareHandler>& middlewares,
+        -:  272:													  MiddlewareNext finalHandler,
+        -:  273:													  const std::vector<std::shared_ptr<MiddlewareTimingStats>>& stats);
+        -:  274:
+        -:  275:		/**
+        -:  276:		 * @brief 从 entries_ 中的 Async 条目重建 timingStats_
+        -:  277:		 */
+        -:  278:		void rebuildTimingStats();
+        -:  279:#endif
+        -:  280:
+        -:  281:		std::vector<MiddlewareEntry> entries_;
+        -:  282:		MiddlewareNext cachedChain_;
+        -:  283:
+        -:  284:#ifdef HICAL_ENABLE_MIDDLEWARE_PROFILING
+        -:  285:		std::vector<std::shared_ptr<MiddlewareTimingStats>> timingStats_;
+        -:  286:#endif
+        -:  287:	};
+        -:  288:
+        -:  289:} // namespace hical

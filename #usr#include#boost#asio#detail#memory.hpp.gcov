@@ -1,0 +1,2840 @@
+        -:    0:Source:/usr/include/boost/asio/detail/memory.hpp
+        -:    1://
+        -:    2:// detail/memory.hpp
+        -:    3:// ~~~~~~~~~~~~~~~~~
+        -:    4://
+        -:    5:// Copyright (c) 2003-2023 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+        -:    6://
+        -:    7:// Distributed under the Boost Software License, Version 1.0. (See accompanying
+        -:    8:// file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+        -:    9://
+        -:   10:
+        -:   11:#ifndef BOOST_ASIO_DETAIL_MEMORY_HPP
+        -:   12:#define BOOST_ASIO_DETAIL_MEMORY_HPP
+        -:   13:
+        -:   14:#if defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   15:# pragma once
+        -:   16:#endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   17:
+        -:   18:#include <boost/asio/detail/config.hpp>
+        -:   19:#include <cstddef>
+        -:   20:#include <cstdlib>
+        -:   21:#include <memory>
+        -:   22:#include <new>
+        -:   23:#include <boost/asio/detail/cstdint.hpp>
+        -:   24:#include <boost/asio/detail/throw_exception.hpp>
+        -:   25:
+        -:   26:#if !defined(BOOST_ASIO_HAS_STD_SHARED_PTR)
+        -:   27:# include <boost/make_shared.hpp>
+        -:   28:# include <boost/shared_ptr.hpp>
+        -:   29:# include <boost/weak_ptr.hpp>
+        -:   30:#endif // !defined(BOOST_ASIO_HAS_STD_SHARED_PTR)
+        -:   31:
+        -:   32:#if !defined(BOOST_ASIO_HAS_STD_ADDRESSOF)
+        -:   33:# include <boost/utility/addressof.hpp>
+        -:   34:#endif // !defined(BOOST_ASIO_HAS_STD_ADDRESSOF)
+        -:   35:
+        -:   36:#if !defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) \
+        -:   37:  && defined(BOOST_ASIO_HAS_BOOST_ALIGN) \
+        -:   38:  && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:   39:# include <boost/align/aligned_alloc.hpp>
+        -:   40:#endif // !defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC)
+        -:   41:       //   && defined(BOOST_ASIO_HAS_BOOST_ALIGN)
+        -:   42:       //   && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:   43:
+        -:   44:namespace boost {
+        -:   45:namespace asio {
+        -:   46:namespace detail {
+        -:   47:
+        -:   48:#if defined(BOOST_ASIO_HAS_STD_SHARED_PTR)
+        -:   49:using std::allocate_shared;
+        -:   50:using std::make_shared;
+        -:   51:using std::shared_ptr;
+        -:   52:using std::weak_ptr;
+        -:   53:#else // defined(BOOST_ASIO_HAS_STD_SHARED_PTR)
+        -:   54:using boost::allocate_shared;
+        -:   55:using boost::make_shared;
+        -:   56:using boost::shared_ptr;
+        -:   57:using boost::weak_ptr;
+        -:   58:#endif // defined(BOOST_ASIO_HAS_STD_SHARED_PTR)
+        -:   59:
+        -:   60:#if defined(BOOST_ASIO_HAS_STD_ADDRESSOF)
+        -:   61:using std::addressof;
+        -:   62:#else // defined(BOOST_ASIO_HAS_STD_ADDRESSOF)
+        -:   63:using boost::addressof;
+        -:   64:#endif // defined(BOOST_ASIO_HAS_STD_ADDRESSOF)
+        -:   65:
+        -:   66:#if defined(BOOST_ASIO_HAS_STD_TO_ADDRESS)
+        -:   67:using std::to_address;
+        -:   68:#else // defined(BOOST_ASIO_HAS_STD_TO_ADDRESS)
+        -:   69:template <typename T>
+        -:   70:inline T* to_address(T* p) { return p; }
+        -:   71:template <typename T>
+        -:   72:inline const T* to_address(const T* p) { return p; }
+        -:   73:template <typename T>
+        -:   74:inline volatile T* to_address(volatile T* p) { return p; }
+        -:   75:template <typename T>
+        -:   76:inline const volatile T* to_address(const volatile T* p) { return p; }
+        -:   77:#endif // defined(BOOST_ASIO_HAS_STD_TO_ADDRESS)
+        -:   78:
+        -:   79:inline void* align(std::size_t alignment,
+        -:   80:    std::size_t size, void*& ptr, std::size_t& space)
+        -:   81:{
+        -:   82:#if defined(BOOST_ASIO_HAS_STD_ALIGN)
+        -:   83:  return std::align(alignment, size, ptr, space);
+        -:   84:#else // defined(BOOST_ASIO_HAS_STD_ALIGN)
+        -:   85:	const uintptr_t intptr = reinterpret_cast<uintptr_t>(ptr);
+        -:   86:	const uintptr_t aligned = (intptr - 1u + alignment) & -alignment;
+        -:   87:	const std::size_t padding = aligned - intptr;
+        -:   88:	if (size + padding > space)
+        -:   89:    return 0;
+        -:   90:	space -= padding;
+        -:   91:	ptr = reinterpret_cast<void*>(aligned);
+        -:   92:  return ptr;
+        -:   93:#endif // defined(BOOST_ASIO_HAS_STD_ALIGN)
+        -:   94:}
+        -:   95:
+        -:   96:} // namespace detail
+        -:   97:
+        -:   98:#if defined(BOOST_ASIO_HAS_CXX11_ALLOCATORS)
+        -:   99:using std::allocator_arg_t;
+        -:  100:# define BOOST_ASIO_USES_ALLOCATOR(t) \
+        -:  101:  namespace std { \
+        -:  102:    template <typename Allocator> \
+        -:  103:    struct uses_allocator<t, Allocator> : true_type {}; \
+        -:  104:  } \
+        -:  105:  /**/
+        -:  106:# define BOOST_ASIO_REBIND_ALLOC(alloc, t) \
+        -:  107:  typename std::allocator_traits<alloc>::template rebind_alloc<t>
+        -:  108:  /**/
+        -:  109:#else // defined(BOOST_ASIO_HAS_CXX11_ALLOCATORS)
+        -:  110:struct allocator_arg_t {};
+        -:  111:# define BOOST_ASIO_USES_ALLOCATOR(t)
+        -:  112:# define BOOST_ASIO_REBIND_ALLOC(alloc, t) \
+        -:  113:  typename alloc::template rebind<t>::other
+        -:  114:  /**/
+        -:  115:#endif // defined(BOOST_ASIO_HAS_CXX11_ALLOCATORS)
+        -:  116:
+   55237*:  117:inline void* aligned_new(std::size_t align, std::size_t size)
+        -:  118:{
+        -:  119:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+   55237*:  120:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+   55237*:  121:  size = (size % align == 0) ? size : size + (align - size % align);
+   55237*:  122:  void* ptr = std::aligned_alloc(align, size);
+   55237*:  123:  if (!ptr)
+        -:  124:  {
+    #####:  125:    std::bad_alloc ex;
+    #####:  126:    boost::asio::detail::throw_exception(ex);
+    =====:  127:  }
+   55237*:  128:  return ptr;
+        -:  129:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  130:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  131:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  132:  void* ptr = boost::alignment::aligned_alloc(align, size);
+        -:  133:  if (!ptr)
+        -:  134:  {
+        -:  135:    std::bad_alloc ex;
+        -:  136:    boost::asio::detail::throw_exception(ex);
+        -:  137:  }
+        -:  138:  return ptr;
+        -:  139:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  140:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  141:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  142:  void* ptr = _aligned_malloc(size, align);
+        -:  143:  if (!ptr)
+        -:  144:  {
+        -:  145:    std::bad_alloc ex;
+        -:  146:    boost::asio::detail::throw_exception(ex);
+        -:  147:  }
+        -:  148:  return ptr;
+        -:  149:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  150:  (void)align;
+        -:  151:  return ::operator new(size);
+        -:  152:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  153:}
+------------------
+_ZN5boost4asio11aligned_newEmm:
+function _ZN5boost4asio11aligned_newEmm called 30 returned 100% blocks executed 55%
+       30:  117:inline void* aligned_new(std::size_t align, std::size_t size)
+        -:  118:{
+        -:  119:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+       30:  120:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+      30*:  121:  size = (size % align == 0) ? size : size + (align - size % align);
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+       30:  122:  void* ptr = std::aligned_alloc(align, size);
+       30:  123:  if (!ptr)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:  124:  {
+    #####:  125:    std::bad_alloc ex;
+call    0 never executed
+    #####:  126:    boost::asio::detail::throw_exception(ex);
+call    0 never executed
+    =====:  127:  }
+call    0 never executed
+       30:  128:  return ptr;
+        -:  129:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  130:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  131:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  132:  void* ptr = boost::alignment::aligned_alloc(align, size);
+        -:  133:  if (!ptr)
+        -:  134:  {
+        -:  135:    std::bad_alloc ex;
+        -:  136:    boost::asio::detail::throw_exception(ex);
+        -:  137:  }
+        -:  138:  return ptr;
+        -:  139:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  140:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  141:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  142:  void* ptr = _aligned_malloc(size, align);
+        -:  143:  if (!ptr)
+        -:  144:  {
+        -:  145:    std::bad_alloc ex;
+        -:  146:    boost::asio::detail::throw_exception(ex);
+        -:  147:  }
+        -:  148:  return ptr;
+        -:  149:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  150:  (void)align;
+        -:  151:  return ::operator new(size);
+        -:  152:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  153:}
+------------------
+_ZN5boost4asio11aligned_newEmm:
+function _ZN5boost4asio11aligned_newEmm called 0 returned 0% blocks executed 0%
+    #####:  117:inline void* aligned_new(std::size_t align, std::size_t size)
+        -:  118:{
+        -:  119:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+    #####:  120:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+    #####:  121:  size = (size % align == 0) ? size : size + (align - size % align);
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  122:  void* ptr = std::aligned_alloc(align, size);
+    #####:  123:  if (!ptr)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  124:  {
+    #####:  125:    std::bad_alloc ex;
+call    0 never executed
+    #####:  126:    boost::asio::detail::throw_exception(ex);
+call    0 never executed
+    =====:  127:  }
+call    0 never executed
+    #####:  128:  return ptr;
+        -:  129:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  130:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  131:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  132:  void* ptr = boost::alignment::aligned_alloc(align, size);
+        -:  133:  if (!ptr)
+        -:  134:  {
+        -:  135:    std::bad_alloc ex;
+        -:  136:    boost::asio::detail::throw_exception(ex);
+        -:  137:  }
+        -:  138:  return ptr;
+        -:  139:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  140:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  141:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  142:  void* ptr = _aligned_malloc(size, align);
+        -:  143:  if (!ptr)
+        -:  144:  {
+        -:  145:    std::bad_alloc ex;
+        -:  146:    boost::asio::detail::throw_exception(ex);
+        -:  147:  }
+        -:  148:  return ptr;
+        -:  149:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  150:  (void)align;
+        -:  151:  return ::operator new(size);
+        -:  152:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  153:}
+------------------
+_ZN5boost4asio11aligned_newEmm:
+function _ZN5boost4asio11aligned_newEmm called 233 returned 100% blocks executed 55%
+      233:  117:inline void* aligned_new(std::size_t align, std::size_t size)
+        -:  118:{
+        -:  119:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+      233:  120:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+     233*:  121:  size = (size % align == 0) ? size : size + (align - size % align);
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+      233:  122:  void* ptr = std::aligned_alloc(align, size);
+      233:  123:  if (!ptr)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:  124:  {
+    #####:  125:    std::bad_alloc ex;
+call    0 never executed
+    #####:  126:    boost::asio::detail::throw_exception(ex);
+call    0 never executed
+    =====:  127:  }
+call    0 never executed
+      233:  128:  return ptr;
+        -:  129:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  130:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  131:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  132:  void* ptr = boost::alignment::aligned_alloc(align, size);
+        -:  133:  if (!ptr)
+        -:  134:  {
+        -:  135:    std::bad_alloc ex;
+        -:  136:    boost::asio::detail::throw_exception(ex);
+        -:  137:  }
+        -:  138:  return ptr;
+        -:  139:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  140:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  141:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  142:  void* ptr = _aligned_malloc(size, align);
+        -:  143:  if (!ptr)
+        -:  144:  {
+        -:  145:    std::bad_alloc ex;
+        -:  146:    boost::asio::detail::throw_exception(ex);
+        -:  147:  }
+        -:  148:  return ptr;
+        -:  149:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  150:  (void)align;
+        -:  151:  return ::operator new(size);
+        -:  152:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  153:}
+------------------
+_ZN5boost4asio11aligned_newEmm:
+function _ZN5boost4asio11aligned_newEmm called 0 returned 0% blocks executed 0%
+    #####:  117:inline void* aligned_new(std::size_t align, std::size_t size)
+        -:  118:{
+        -:  119:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+    #####:  120:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+    #####:  121:  size = (size % align == 0) ? size : size + (align - size % align);
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  122:  void* ptr = std::aligned_alloc(align, size);
+    #####:  123:  if (!ptr)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  124:  {
+    #####:  125:    std::bad_alloc ex;
+call    0 never executed
+    #####:  126:    boost::asio::detail::throw_exception(ex);
+call    0 never executed
+    =====:  127:  }
+call    0 never executed
+    #####:  128:  return ptr;
+        -:  129:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  130:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  131:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  132:  void* ptr = boost::alignment::aligned_alloc(align, size);
+        -:  133:  if (!ptr)
+        -:  134:  {
+        -:  135:    std::bad_alloc ex;
+        -:  136:    boost::asio::detail::throw_exception(ex);
+        -:  137:  }
+        -:  138:  return ptr;
+        -:  139:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  140:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  141:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  142:  void* ptr = _aligned_malloc(size, align);
+        -:  143:  if (!ptr)
+        -:  144:  {
+        -:  145:    std::bad_alloc ex;
+        -:  146:    boost::asio::detail::throw_exception(ex);
+        -:  147:  }
+        -:  148:  return ptr;
+        -:  149:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  150:  (void)align;
+        -:  151:  return ::operator new(size);
+        -:  152:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  153:}
+------------------
+_ZN5boost4asio11aligned_newEmm:
+function _ZN5boost4asio11aligned_newEmm called 119 returned 100% blocks executed 55%
+      119:  117:inline void* aligned_new(std::size_t align, std::size_t size)
+        -:  118:{
+        -:  119:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+      119:  120:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+     119*:  121:  size = (size % align == 0) ? size : size + (align - size % align);
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+      119:  122:  void* ptr = std::aligned_alloc(align, size);
+      119:  123:  if (!ptr)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:  124:  {
+    #####:  125:    std::bad_alloc ex;
+call    0 never executed
+    #####:  126:    boost::asio::detail::throw_exception(ex);
+call    0 never executed
+    =====:  127:  }
+call    0 never executed
+      119:  128:  return ptr;
+        -:  129:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  130:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  131:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  132:  void* ptr = boost::alignment::aligned_alloc(align, size);
+        -:  133:  if (!ptr)
+        -:  134:  {
+        -:  135:    std::bad_alloc ex;
+        -:  136:    boost::asio::detail::throw_exception(ex);
+        -:  137:  }
+        -:  138:  return ptr;
+        -:  139:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  140:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  141:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  142:  void* ptr = _aligned_malloc(size, align);
+        -:  143:  if (!ptr)
+        -:  144:  {
+        -:  145:    std::bad_alloc ex;
+        -:  146:    boost::asio::detail::throw_exception(ex);
+        -:  147:  }
+        -:  148:  return ptr;
+        -:  149:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  150:  (void)align;
+        -:  151:  return ::operator new(size);
+        -:  152:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  153:}
+------------------
+_ZN5boost4asio11aligned_newEmm:
+function _ZN5boost4asio11aligned_newEmm called 230 returned 100% blocks executed 55%
+      230:  117:inline void* aligned_new(std::size_t align, std::size_t size)
+        -:  118:{
+        -:  119:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+      230:  120:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+     230*:  121:  size = (size % align == 0) ? size : size + (align - size % align);
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+      230:  122:  void* ptr = std::aligned_alloc(align, size);
+      230:  123:  if (!ptr)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:  124:  {
+    #####:  125:    std::bad_alloc ex;
+call    0 never executed
+    #####:  126:    boost::asio::detail::throw_exception(ex);
+call    0 never executed
+    =====:  127:  }
+call    0 never executed
+      230:  128:  return ptr;
+        -:  129:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  130:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  131:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  132:  void* ptr = boost::alignment::aligned_alloc(align, size);
+        -:  133:  if (!ptr)
+        -:  134:  {
+        -:  135:    std::bad_alloc ex;
+        -:  136:    boost::asio::detail::throw_exception(ex);
+        -:  137:  }
+        -:  138:  return ptr;
+        -:  139:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  140:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  141:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  142:  void* ptr = _aligned_malloc(size, align);
+        -:  143:  if (!ptr)
+        -:  144:  {
+        -:  145:    std::bad_alloc ex;
+        -:  146:    boost::asio::detail::throw_exception(ex);
+        -:  147:  }
+        -:  148:  return ptr;
+        -:  149:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  150:  (void)align;
+        -:  151:  return ::operator new(size);
+        -:  152:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  153:}
+------------------
+_ZN5boost4asio11aligned_newEmm:
+function _ZN5boost4asio11aligned_newEmm called 44 returned 100% blocks executed 55%
+       44:  117:inline void* aligned_new(std::size_t align, std::size_t size)
+        -:  118:{
+        -:  119:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+       44:  120:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+      44*:  121:  size = (size % align == 0) ? size : size + (align - size % align);
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+       44:  122:  void* ptr = std::aligned_alloc(align, size);
+       44:  123:  if (!ptr)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:  124:  {
+    #####:  125:    std::bad_alloc ex;
+call    0 never executed
+    #####:  126:    boost::asio::detail::throw_exception(ex);
+call    0 never executed
+    =====:  127:  }
+call    0 never executed
+       44:  128:  return ptr;
+        -:  129:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  130:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  131:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  132:  void* ptr = boost::alignment::aligned_alloc(align, size);
+        -:  133:  if (!ptr)
+        -:  134:  {
+        -:  135:    std::bad_alloc ex;
+        -:  136:    boost::asio::detail::throw_exception(ex);
+        -:  137:  }
+        -:  138:  return ptr;
+        -:  139:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  140:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  141:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  142:  void* ptr = _aligned_malloc(size, align);
+        -:  143:  if (!ptr)
+        -:  144:  {
+        -:  145:    std::bad_alloc ex;
+        -:  146:    boost::asio::detail::throw_exception(ex);
+        -:  147:  }
+        -:  148:  return ptr;
+        -:  149:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  150:  (void)align;
+        -:  151:  return ::operator new(size);
+        -:  152:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  153:}
+------------------
+_ZN5boost4asio11aligned_newEmm:
+function _ZN5boost4asio11aligned_newEmm called 0 returned 0% blocks executed 0%
+    #####:  117:inline void* aligned_new(std::size_t align, std::size_t size)
+        -:  118:{
+        -:  119:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+    #####:  120:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+    #####:  121:  size = (size % align == 0) ? size : size + (align - size % align);
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  122:  void* ptr = std::aligned_alloc(align, size);
+    #####:  123:  if (!ptr)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  124:  {
+    #####:  125:    std::bad_alloc ex;
+call    0 never executed
+    #####:  126:    boost::asio::detail::throw_exception(ex);
+call    0 never executed
+    =====:  127:  }
+call    0 never executed
+    #####:  128:  return ptr;
+        -:  129:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  130:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  131:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  132:  void* ptr = boost::alignment::aligned_alloc(align, size);
+        -:  133:  if (!ptr)
+        -:  134:  {
+        -:  135:    std::bad_alloc ex;
+        -:  136:    boost::asio::detail::throw_exception(ex);
+        -:  137:  }
+        -:  138:  return ptr;
+        -:  139:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  140:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  141:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  142:  void* ptr = _aligned_malloc(size, align);
+        -:  143:  if (!ptr)
+        -:  144:  {
+        -:  145:    std::bad_alloc ex;
+        -:  146:    boost::asio::detail::throw_exception(ex);
+        -:  147:  }
+        -:  148:  return ptr;
+        -:  149:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  150:  (void)align;
+        -:  151:  return ::operator new(size);
+        -:  152:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  153:}
+------------------
+_ZN5boost4asio11aligned_newEmm:
+function _ZN5boost4asio11aligned_newEmm called 0 returned 0% blocks executed 0%
+    #####:  117:inline void* aligned_new(std::size_t align, std::size_t size)
+        -:  118:{
+        -:  119:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+    #####:  120:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+    #####:  121:  size = (size % align == 0) ? size : size + (align - size % align);
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  122:  void* ptr = std::aligned_alloc(align, size);
+    #####:  123:  if (!ptr)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  124:  {
+    #####:  125:    std::bad_alloc ex;
+call    0 never executed
+    #####:  126:    boost::asio::detail::throw_exception(ex);
+call    0 never executed
+    =====:  127:  }
+call    0 never executed
+    #####:  128:  return ptr;
+        -:  129:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  130:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  131:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  132:  void* ptr = boost::alignment::aligned_alloc(align, size);
+        -:  133:  if (!ptr)
+        -:  134:  {
+        -:  135:    std::bad_alloc ex;
+        -:  136:    boost::asio::detail::throw_exception(ex);
+        -:  137:  }
+        -:  138:  return ptr;
+        -:  139:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  140:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  141:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  142:  void* ptr = _aligned_malloc(size, align);
+        -:  143:  if (!ptr)
+        -:  144:  {
+        -:  145:    std::bad_alloc ex;
+        -:  146:    boost::asio::detail::throw_exception(ex);
+        -:  147:  }
+        -:  148:  return ptr;
+        -:  149:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  150:  (void)align;
+        -:  151:  return ::operator new(size);
+        -:  152:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  153:}
+------------------
+_ZN5boost4asio11aligned_newEmm:
+function _ZN5boost4asio11aligned_newEmm called 121 returned 100% blocks executed 55%
+      121:  117:inline void* aligned_new(std::size_t align, std::size_t size)
+        -:  118:{
+        -:  119:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+      121:  120:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+     121*:  121:  size = (size % align == 0) ? size : size + (align - size % align);
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+      121:  122:  void* ptr = std::aligned_alloc(align, size);
+      121:  123:  if (!ptr)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:  124:  {
+    #####:  125:    std::bad_alloc ex;
+call    0 never executed
+    #####:  126:    boost::asio::detail::throw_exception(ex);
+call    0 never executed
+    =====:  127:  }
+call    0 never executed
+      121:  128:  return ptr;
+        -:  129:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  130:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  131:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  132:  void* ptr = boost::alignment::aligned_alloc(align, size);
+        -:  133:  if (!ptr)
+        -:  134:  {
+        -:  135:    std::bad_alloc ex;
+        -:  136:    boost::asio::detail::throw_exception(ex);
+        -:  137:  }
+        -:  138:  return ptr;
+        -:  139:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  140:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  141:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  142:  void* ptr = _aligned_malloc(size, align);
+        -:  143:  if (!ptr)
+        -:  144:  {
+        -:  145:    std::bad_alloc ex;
+        -:  146:    boost::asio::detail::throw_exception(ex);
+        -:  147:  }
+        -:  148:  return ptr;
+        -:  149:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  150:  (void)align;
+        -:  151:  return ::operator new(size);
+        -:  152:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  153:}
+------------------
+_ZN5boost4asio11aligned_newEmm:
+function _ZN5boost4asio11aligned_newEmm called 64 returned 100% blocks executed 55%
+       64:  117:inline void* aligned_new(std::size_t align, std::size_t size)
+        -:  118:{
+        -:  119:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+       64:  120:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+      64*:  121:  size = (size % align == 0) ? size : size + (align - size % align);
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+       64:  122:  void* ptr = std::aligned_alloc(align, size);
+       64:  123:  if (!ptr)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:  124:  {
+    #####:  125:    std::bad_alloc ex;
+call    0 never executed
+    #####:  126:    boost::asio::detail::throw_exception(ex);
+call    0 never executed
+    =====:  127:  }
+call    0 never executed
+       64:  128:  return ptr;
+        -:  129:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  130:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  131:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  132:  void* ptr = boost::alignment::aligned_alloc(align, size);
+        -:  133:  if (!ptr)
+        -:  134:  {
+        -:  135:    std::bad_alloc ex;
+        -:  136:    boost::asio::detail::throw_exception(ex);
+        -:  137:  }
+        -:  138:  return ptr;
+        -:  139:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  140:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  141:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  142:  void* ptr = _aligned_malloc(size, align);
+        -:  143:  if (!ptr)
+        -:  144:  {
+        -:  145:    std::bad_alloc ex;
+        -:  146:    boost::asio::detail::throw_exception(ex);
+        -:  147:  }
+        -:  148:  return ptr;
+        -:  149:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  150:  (void)align;
+        -:  151:  return ::operator new(size);
+        -:  152:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  153:}
+------------------
+_ZN5boost4asio11aligned_newEmm:
+function _ZN5boost4asio11aligned_newEmm called 69 returned 100% blocks executed 55%
+       69:  117:inline void* aligned_new(std::size_t align, std::size_t size)
+        -:  118:{
+        -:  119:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+       69:  120:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+      69*:  121:  size = (size % align == 0) ? size : size + (align - size % align);
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+       69:  122:  void* ptr = std::aligned_alloc(align, size);
+       69:  123:  if (!ptr)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:  124:  {
+    #####:  125:    std::bad_alloc ex;
+call    0 never executed
+    #####:  126:    boost::asio::detail::throw_exception(ex);
+call    0 never executed
+    =====:  127:  }
+call    0 never executed
+       69:  128:  return ptr;
+        -:  129:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  130:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  131:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  132:  void* ptr = boost::alignment::aligned_alloc(align, size);
+        -:  133:  if (!ptr)
+        -:  134:  {
+        -:  135:    std::bad_alloc ex;
+        -:  136:    boost::asio::detail::throw_exception(ex);
+        -:  137:  }
+        -:  138:  return ptr;
+        -:  139:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  140:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  141:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  142:  void* ptr = _aligned_malloc(size, align);
+        -:  143:  if (!ptr)
+        -:  144:  {
+        -:  145:    std::bad_alloc ex;
+        -:  146:    boost::asio::detail::throw_exception(ex);
+        -:  147:  }
+        -:  148:  return ptr;
+        -:  149:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  150:  (void)align;
+        -:  151:  return ::operator new(size);
+        -:  152:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  153:}
+------------------
+_ZN5boost4asio11aligned_newEmm:
+function _ZN5boost4asio11aligned_newEmm called 81 returned 100% blocks executed 55%
+       81:  117:inline void* aligned_new(std::size_t align, std::size_t size)
+        -:  118:{
+        -:  119:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+       81:  120:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+      81*:  121:  size = (size % align == 0) ? size : size + (align - size % align);
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+       81:  122:  void* ptr = std::aligned_alloc(align, size);
+       81:  123:  if (!ptr)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:  124:  {
+    #####:  125:    std::bad_alloc ex;
+call    0 never executed
+    #####:  126:    boost::asio::detail::throw_exception(ex);
+call    0 never executed
+    =====:  127:  }
+call    0 never executed
+       81:  128:  return ptr;
+        -:  129:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  130:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  131:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  132:  void* ptr = boost::alignment::aligned_alloc(align, size);
+        -:  133:  if (!ptr)
+        -:  134:  {
+        -:  135:    std::bad_alloc ex;
+        -:  136:    boost::asio::detail::throw_exception(ex);
+        -:  137:  }
+        -:  138:  return ptr;
+        -:  139:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  140:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  141:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  142:  void* ptr = _aligned_malloc(size, align);
+        -:  143:  if (!ptr)
+        -:  144:  {
+        -:  145:    std::bad_alloc ex;
+        -:  146:    boost::asio::detail::throw_exception(ex);
+        -:  147:  }
+        -:  148:  return ptr;
+        -:  149:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  150:  (void)align;
+        -:  151:  return ::operator new(size);
+        -:  152:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  153:}
+------------------
+_ZN5boost4asio11aligned_newEmm:
+function _ZN5boost4asio11aligned_newEmm called 86 returned 100% blocks executed 55%
+       86:  117:inline void* aligned_new(std::size_t align, std::size_t size)
+        -:  118:{
+        -:  119:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+       86:  120:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+      86*:  121:  size = (size % align == 0) ? size : size + (align - size % align);
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+       86:  122:  void* ptr = std::aligned_alloc(align, size);
+       86:  123:  if (!ptr)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:  124:  {
+    #####:  125:    std::bad_alloc ex;
+call    0 never executed
+    #####:  126:    boost::asio::detail::throw_exception(ex);
+call    0 never executed
+    =====:  127:  }
+call    0 never executed
+       86:  128:  return ptr;
+        -:  129:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  130:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  131:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  132:  void* ptr = boost::alignment::aligned_alloc(align, size);
+        -:  133:  if (!ptr)
+        -:  134:  {
+        -:  135:    std::bad_alloc ex;
+        -:  136:    boost::asio::detail::throw_exception(ex);
+        -:  137:  }
+        -:  138:  return ptr;
+        -:  139:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  140:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  141:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  142:  void* ptr = _aligned_malloc(size, align);
+        -:  143:  if (!ptr)
+        -:  144:  {
+        -:  145:    std::bad_alloc ex;
+        -:  146:    boost::asio::detail::throw_exception(ex);
+        -:  147:  }
+        -:  148:  return ptr;
+        -:  149:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  150:  (void)align;
+        -:  151:  return ::operator new(size);
+        -:  152:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  153:}
+------------------
+_ZN5boost4asio11aligned_newEmm:
+function _ZN5boost4asio11aligned_newEmm called 253 returned 100% blocks executed 55%
+      253:  117:inline void* aligned_new(std::size_t align, std::size_t size)
+        -:  118:{
+        -:  119:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+      253:  120:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+     253*:  121:  size = (size % align == 0) ? size : size + (align - size % align);
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+      253:  122:  void* ptr = std::aligned_alloc(align, size);
+      253:  123:  if (!ptr)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:  124:  {
+    #####:  125:    std::bad_alloc ex;
+call    0 never executed
+    #####:  126:    boost::asio::detail::throw_exception(ex);
+call    0 never executed
+    =====:  127:  }
+call    0 never executed
+      253:  128:  return ptr;
+        -:  129:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  130:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  131:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  132:  void* ptr = boost::alignment::aligned_alloc(align, size);
+        -:  133:  if (!ptr)
+        -:  134:  {
+        -:  135:    std::bad_alloc ex;
+        -:  136:    boost::asio::detail::throw_exception(ex);
+        -:  137:  }
+        -:  138:  return ptr;
+        -:  139:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  140:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  141:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  142:  void* ptr = _aligned_malloc(size, align);
+        -:  143:  if (!ptr)
+        -:  144:  {
+        -:  145:    std::bad_alloc ex;
+        -:  146:    boost::asio::detail::throw_exception(ex);
+        -:  147:  }
+        -:  148:  return ptr;
+        -:  149:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  150:  (void)align;
+        -:  151:  return ::operator new(size);
+        -:  152:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  153:}
+------------------
+_ZN5boost4asio11aligned_newEmm:
+function _ZN5boost4asio11aligned_newEmm called 0 returned 0% blocks executed 0%
+    #####:  117:inline void* aligned_new(std::size_t align, std::size_t size)
+        -:  118:{
+        -:  119:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+    #####:  120:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+    #####:  121:  size = (size % align == 0) ? size : size + (align - size % align);
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  122:  void* ptr = std::aligned_alloc(align, size);
+    #####:  123:  if (!ptr)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  124:  {
+    #####:  125:    std::bad_alloc ex;
+call    0 never executed
+    #####:  126:    boost::asio::detail::throw_exception(ex);
+call    0 never executed
+    =====:  127:  }
+call    0 never executed
+    #####:  128:  return ptr;
+        -:  129:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  130:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  131:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  132:  void* ptr = boost::alignment::aligned_alloc(align, size);
+        -:  133:  if (!ptr)
+        -:  134:  {
+        -:  135:    std::bad_alloc ex;
+        -:  136:    boost::asio::detail::throw_exception(ex);
+        -:  137:  }
+        -:  138:  return ptr;
+        -:  139:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  140:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  141:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  142:  void* ptr = _aligned_malloc(size, align);
+        -:  143:  if (!ptr)
+        -:  144:  {
+        -:  145:    std::bad_alloc ex;
+        -:  146:    boost::asio::detail::throw_exception(ex);
+        -:  147:  }
+        -:  148:  return ptr;
+        -:  149:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  150:  (void)align;
+        -:  151:  return ::operator new(size);
+        -:  152:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  153:}
+------------------
+_ZN5boost4asio11aligned_newEmm:
+function _ZN5boost4asio11aligned_newEmm called 0 returned 0% blocks executed 0%
+    #####:  117:inline void* aligned_new(std::size_t align, std::size_t size)
+        -:  118:{
+        -:  119:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+    #####:  120:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+    #####:  121:  size = (size % align == 0) ? size : size + (align - size % align);
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  122:  void* ptr = std::aligned_alloc(align, size);
+    #####:  123:  if (!ptr)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  124:  {
+    #####:  125:    std::bad_alloc ex;
+call    0 never executed
+    #####:  126:    boost::asio::detail::throw_exception(ex);
+call    0 never executed
+    =====:  127:  }
+call    0 never executed
+    #####:  128:  return ptr;
+        -:  129:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  130:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  131:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  132:  void* ptr = boost::alignment::aligned_alloc(align, size);
+        -:  133:  if (!ptr)
+        -:  134:  {
+        -:  135:    std::bad_alloc ex;
+        -:  136:    boost::asio::detail::throw_exception(ex);
+        -:  137:  }
+        -:  138:  return ptr;
+        -:  139:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  140:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  141:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  142:  void* ptr = _aligned_malloc(size, align);
+        -:  143:  if (!ptr)
+        -:  144:  {
+        -:  145:    std::bad_alloc ex;
+        -:  146:    boost::asio::detail::throw_exception(ex);
+        -:  147:  }
+        -:  148:  return ptr;
+        -:  149:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  150:  (void)align;
+        -:  151:  return ::operator new(size);
+        -:  152:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  153:}
+------------------
+_ZN5boost4asio11aligned_newEmm:
+function _ZN5boost4asio11aligned_newEmm called 0 returned 0% blocks executed 0%
+    #####:  117:inline void* aligned_new(std::size_t align, std::size_t size)
+        -:  118:{
+        -:  119:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+    #####:  120:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+    #####:  121:  size = (size % align == 0) ? size : size + (align - size % align);
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  122:  void* ptr = std::aligned_alloc(align, size);
+    #####:  123:  if (!ptr)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  124:  {
+    #####:  125:    std::bad_alloc ex;
+call    0 never executed
+    #####:  126:    boost::asio::detail::throw_exception(ex);
+call    0 never executed
+    =====:  127:  }
+call    0 never executed
+    #####:  128:  return ptr;
+        -:  129:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  130:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  131:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  132:  void* ptr = boost::alignment::aligned_alloc(align, size);
+        -:  133:  if (!ptr)
+        -:  134:  {
+        -:  135:    std::bad_alloc ex;
+        -:  136:    boost::asio::detail::throw_exception(ex);
+        -:  137:  }
+        -:  138:  return ptr;
+        -:  139:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  140:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  141:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  142:  void* ptr = _aligned_malloc(size, align);
+        -:  143:  if (!ptr)
+        -:  144:  {
+        -:  145:    std::bad_alloc ex;
+        -:  146:    boost::asio::detail::throw_exception(ex);
+        -:  147:  }
+        -:  148:  return ptr;
+        -:  149:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  150:  (void)align;
+        -:  151:  return ::operator new(size);
+        -:  152:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  153:}
+------------------
+_ZN5boost4asio11aligned_newEmm:
+function _ZN5boost4asio11aligned_newEmm called 0 returned 0% blocks executed 0%
+    #####:  117:inline void* aligned_new(std::size_t align, std::size_t size)
+        -:  118:{
+        -:  119:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+    #####:  120:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+    #####:  121:  size = (size % align == 0) ? size : size + (align - size % align);
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  122:  void* ptr = std::aligned_alloc(align, size);
+    #####:  123:  if (!ptr)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  124:  {
+    #####:  125:    std::bad_alloc ex;
+call    0 never executed
+    #####:  126:    boost::asio::detail::throw_exception(ex);
+call    0 never executed
+    =====:  127:  }
+call    0 never executed
+    #####:  128:  return ptr;
+        -:  129:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  130:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  131:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  132:  void* ptr = boost::alignment::aligned_alloc(align, size);
+        -:  133:  if (!ptr)
+        -:  134:  {
+        -:  135:    std::bad_alloc ex;
+        -:  136:    boost::asio::detail::throw_exception(ex);
+        -:  137:  }
+        -:  138:  return ptr;
+        -:  139:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  140:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  141:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  142:  void* ptr = _aligned_malloc(size, align);
+        -:  143:  if (!ptr)
+        -:  144:  {
+        -:  145:    std::bad_alloc ex;
+        -:  146:    boost::asio::detail::throw_exception(ex);
+        -:  147:  }
+        -:  148:  return ptr;
+        -:  149:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  150:  (void)align;
+        -:  151:  return ::operator new(size);
+        -:  152:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  153:}
+------------------
+_ZN5boost4asio11aligned_newEmm:
+function _ZN5boost4asio11aligned_newEmm called 0 returned 0% blocks executed 0%
+    #####:  117:inline void* aligned_new(std::size_t align, std::size_t size)
+        -:  118:{
+        -:  119:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+    #####:  120:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+    #####:  121:  size = (size % align == 0) ? size : size + (align - size % align);
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  122:  void* ptr = std::aligned_alloc(align, size);
+    #####:  123:  if (!ptr)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  124:  {
+    #####:  125:    std::bad_alloc ex;
+call    0 never executed
+    #####:  126:    boost::asio::detail::throw_exception(ex);
+call    0 never executed
+    =====:  127:  }
+call    0 never executed
+    #####:  128:  return ptr;
+        -:  129:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  130:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  131:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  132:  void* ptr = boost::alignment::aligned_alloc(align, size);
+        -:  133:  if (!ptr)
+        -:  134:  {
+        -:  135:    std::bad_alloc ex;
+        -:  136:    boost::asio::detail::throw_exception(ex);
+        -:  137:  }
+        -:  138:  return ptr;
+        -:  139:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  140:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  141:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  142:  void* ptr = _aligned_malloc(size, align);
+        -:  143:  if (!ptr)
+        -:  144:  {
+        -:  145:    std::bad_alloc ex;
+        -:  146:    boost::asio::detail::throw_exception(ex);
+        -:  147:  }
+        -:  148:  return ptr;
+        -:  149:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  150:  (void)align;
+        -:  151:  return ::operator new(size);
+        -:  152:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  153:}
+------------------
+_ZN5boost4asio11aligned_newEmm:
+function _ZN5boost4asio11aligned_newEmm called 0 returned 0% blocks executed 0%
+    #####:  117:inline void* aligned_new(std::size_t align, std::size_t size)
+        -:  118:{
+        -:  119:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+    #####:  120:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+    #####:  121:  size = (size % align == 0) ? size : size + (align - size % align);
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  122:  void* ptr = std::aligned_alloc(align, size);
+    #####:  123:  if (!ptr)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  124:  {
+    #####:  125:    std::bad_alloc ex;
+call    0 never executed
+    #####:  126:    boost::asio::detail::throw_exception(ex);
+call    0 never executed
+    =====:  127:  }
+call    0 never executed
+    #####:  128:  return ptr;
+        -:  129:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  130:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  131:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  132:  void* ptr = boost::alignment::aligned_alloc(align, size);
+        -:  133:  if (!ptr)
+        -:  134:  {
+        -:  135:    std::bad_alloc ex;
+        -:  136:    boost::asio::detail::throw_exception(ex);
+        -:  137:  }
+        -:  138:  return ptr;
+        -:  139:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  140:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  141:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  142:  void* ptr = _aligned_malloc(size, align);
+        -:  143:  if (!ptr)
+        -:  144:  {
+        -:  145:    std::bad_alloc ex;
+        -:  146:    boost::asio::detail::throw_exception(ex);
+        -:  147:  }
+        -:  148:  return ptr;
+        -:  149:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  150:  (void)align;
+        -:  151:  return ::operator new(size);
+        -:  152:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  153:}
+------------------
+_ZN5boost4asio11aligned_newEmm:
+function _ZN5boost4asio11aligned_newEmm called 0 returned 0% blocks executed 0%
+    #####:  117:inline void* aligned_new(std::size_t align, std::size_t size)
+        -:  118:{
+        -:  119:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+    #####:  120:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+    #####:  121:  size = (size % align == 0) ? size : size + (align - size % align);
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  122:  void* ptr = std::aligned_alloc(align, size);
+    #####:  123:  if (!ptr)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  124:  {
+    #####:  125:    std::bad_alloc ex;
+call    0 never executed
+    #####:  126:    boost::asio::detail::throw_exception(ex);
+call    0 never executed
+    =====:  127:  }
+call    0 never executed
+    #####:  128:  return ptr;
+        -:  129:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  130:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  131:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  132:  void* ptr = boost::alignment::aligned_alloc(align, size);
+        -:  133:  if (!ptr)
+        -:  134:  {
+        -:  135:    std::bad_alloc ex;
+        -:  136:    boost::asio::detail::throw_exception(ex);
+        -:  137:  }
+        -:  138:  return ptr;
+        -:  139:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  140:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  141:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  142:  void* ptr = _aligned_malloc(size, align);
+        -:  143:  if (!ptr)
+        -:  144:  {
+        -:  145:    std::bad_alloc ex;
+        -:  146:    boost::asio::detail::throw_exception(ex);
+        -:  147:  }
+        -:  148:  return ptr;
+        -:  149:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  150:  (void)align;
+        -:  151:  return ::operator new(size);
+        -:  152:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  153:}
+------------------
+_ZN5boost4asio11aligned_newEmm:
+function _ZN5boost4asio11aligned_newEmm called 0 returned 0% blocks executed 0%
+    #####:  117:inline void* aligned_new(std::size_t align, std::size_t size)
+        -:  118:{
+        -:  119:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+    #####:  120:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+    #####:  121:  size = (size % align == 0) ? size : size + (align - size % align);
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  122:  void* ptr = std::aligned_alloc(align, size);
+    #####:  123:  if (!ptr)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  124:  {
+    #####:  125:    std::bad_alloc ex;
+call    0 never executed
+    #####:  126:    boost::asio::detail::throw_exception(ex);
+call    0 never executed
+    =====:  127:  }
+call    0 never executed
+    #####:  128:  return ptr;
+        -:  129:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  130:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  131:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  132:  void* ptr = boost::alignment::aligned_alloc(align, size);
+        -:  133:  if (!ptr)
+        -:  134:  {
+        -:  135:    std::bad_alloc ex;
+        -:  136:    boost::asio::detail::throw_exception(ex);
+        -:  137:  }
+        -:  138:  return ptr;
+        -:  139:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  140:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  141:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  142:  void* ptr = _aligned_malloc(size, align);
+        -:  143:  if (!ptr)
+        -:  144:  {
+        -:  145:    std::bad_alloc ex;
+        -:  146:    boost::asio::detail::throw_exception(ex);
+        -:  147:  }
+        -:  148:  return ptr;
+        -:  149:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  150:  (void)align;
+        -:  151:  return ::operator new(size);
+        -:  152:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  153:}
+------------------
+_ZN5boost4asio11aligned_newEmm:
+function _ZN5boost4asio11aligned_newEmm called 0 returned 0% blocks executed 0%
+    #####:  117:inline void* aligned_new(std::size_t align, std::size_t size)
+        -:  118:{
+        -:  119:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+    #####:  120:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+    #####:  121:  size = (size % align == 0) ? size : size + (align - size % align);
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  122:  void* ptr = std::aligned_alloc(align, size);
+    #####:  123:  if (!ptr)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  124:  {
+    #####:  125:    std::bad_alloc ex;
+call    0 never executed
+    #####:  126:    boost::asio::detail::throw_exception(ex);
+call    0 never executed
+    =====:  127:  }
+call    0 never executed
+    #####:  128:  return ptr;
+        -:  129:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  130:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  131:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  132:  void* ptr = boost::alignment::aligned_alloc(align, size);
+        -:  133:  if (!ptr)
+        -:  134:  {
+        -:  135:    std::bad_alloc ex;
+        -:  136:    boost::asio::detail::throw_exception(ex);
+        -:  137:  }
+        -:  138:  return ptr;
+        -:  139:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  140:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  141:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  142:  void* ptr = _aligned_malloc(size, align);
+        -:  143:  if (!ptr)
+        -:  144:  {
+        -:  145:    std::bad_alloc ex;
+        -:  146:    boost::asio::detail::throw_exception(ex);
+        -:  147:  }
+        -:  148:  return ptr;
+        -:  149:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  150:  (void)align;
+        -:  151:  return ::operator new(size);
+        -:  152:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  153:}
+------------------
+_ZN5boost4asio11aligned_newEmm:
+function _ZN5boost4asio11aligned_newEmm called 996 returned 100% blocks executed 55%
+      996:  117:inline void* aligned_new(std::size_t align, std::size_t size)
+        -:  118:{
+        -:  119:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+      996:  120:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+     996*:  121:  size = (size % align == 0) ? size : size + (align - size % align);
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+      996:  122:  void* ptr = std::aligned_alloc(align, size);
+      996:  123:  if (!ptr)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:  124:  {
+    #####:  125:    std::bad_alloc ex;
+call    0 never executed
+    #####:  126:    boost::asio::detail::throw_exception(ex);
+call    0 never executed
+    =====:  127:  }
+call    0 never executed
+      996:  128:  return ptr;
+        -:  129:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  130:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  131:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  132:  void* ptr = boost::alignment::aligned_alloc(align, size);
+        -:  133:  if (!ptr)
+        -:  134:  {
+        -:  135:    std::bad_alloc ex;
+        -:  136:    boost::asio::detail::throw_exception(ex);
+        -:  137:  }
+        -:  138:  return ptr;
+        -:  139:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  140:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  141:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  142:  void* ptr = _aligned_malloc(size, align);
+        -:  143:  if (!ptr)
+        -:  144:  {
+        -:  145:    std::bad_alloc ex;
+        -:  146:    boost::asio::detail::throw_exception(ex);
+        -:  147:  }
+        -:  148:  return ptr;
+        -:  149:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  150:  (void)align;
+        -:  151:  return ::operator new(size);
+        -:  152:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  153:}
+------------------
+_ZN5boost4asio11aligned_newEmm:
+function _ZN5boost4asio11aligned_newEmm called 0 returned 0% blocks executed 0%
+    #####:  117:inline void* aligned_new(std::size_t align, std::size_t size)
+        -:  118:{
+        -:  119:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+    #####:  120:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+    #####:  121:  size = (size % align == 0) ? size : size + (align - size % align);
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  122:  void* ptr = std::aligned_alloc(align, size);
+    #####:  123:  if (!ptr)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  124:  {
+    #####:  125:    std::bad_alloc ex;
+call    0 never executed
+    #####:  126:    boost::asio::detail::throw_exception(ex);
+call    0 never executed
+    =====:  127:  }
+call    0 never executed
+    #####:  128:  return ptr;
+        -:  129:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  130:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  131:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  132:  void* ptr = boost::alignment::aligned_alloc(align, size);
+        -:  133:  if (!ptr)
+        -:  134:  {
+        -:  135:    std::bad_alloc ex;
+        -:  136:    boost::asio::detail::throw_exception(ex);
+        -:  137:  }
+        -:  138:  return ptr;
+        -:  139:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  140:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  141:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  142:  void* ptr = _aligned_malloc(size, align);
+        -:  143:  if (!ptr)
+        -:  144:  {
+        -:  145:    std::bad_alloc ex;
+        -:  146:    boost::asio::detail::throw_exception(ex);
+        -:  147:  }
+        -:  148:  return ptr;
+        -:  149:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  150:  (void)align;
+        -:  151:  return ::operator new(size);
+        -:  152:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  153:}
+------------------
+_ZN5boost4asio11aligned_newEmm:
+function _ZN5boost4asio11aligned_newEmm called 0 returned 0% blocks executed 0%
+    #####:  117:inline void* aligned_new(std::size_t align, std::size_t size)
+        -:  118:{
+        -:  119:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+    #####:  120:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+    #####:  121:  size = (size % align == 0) ? size : size + (align - size % align);
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  122:  void* ptr = std::aligned_alloc(align, size);
+    #####:  123:  if (!ptr)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  124:  {
+    #####:  125:    std::bad_alloc ex;
+call    0 never executed
+    #####:  126:    boost::asio::detail::throw_exception(ex);
+call    0 never executed
+    =====:  127:  }
+call    0 never executed
+    #####:  128:  return ptr;
+        -:  129:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  130:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  131:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  132:  void* ptr = boost::alignment::aligned_alloc(align, size);
+        -:  133:  if (!ptr)
+        -:  134:  {
+        -:  135:    std::bad_alloc ex;
+        -:  136:    boost::asio::detail::throw_exception(ex);
+        -:  137:  }
+        -:  138:  return ptr;
+        -:  139:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  140:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  141:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  142:  void* ptr = _aligned_malloc(size, align);
+        -:  143:  if (!ptr)
+        -:  144:  {
+        -:  145:    std::bad_alloc ex;
+        -:  146:    boost::asio::detail::throw_exception(ex);
+        -:  147:  }
+        -:  148:  return ptr;
+        -:  149:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  150:  (void)align;
+        -:  151:  return ::operator new(size);
+        -:  152:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  153:}
+------------------
+_ZN5boost4asio11aligned_newEmm:
+function _ZN5boost4asio11aligned_newEmm called 0 returned 0% blocks executed 0%
+    #####:  117:inline void* aligned_new(std::size_t align, std::size_t size)
+        -:  118:{
+        -:  119:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+    #####:  120:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+    #####:  121:  size = (size % align == 0) ? size : size + (align - size % align);
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  122:  void* ptr = std::aligned_alloc(align, size);
+    #####:  123:  if (!ptr)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  124:  {
+    #####:  125:    std::bad_alloc ex;
+call    0 never executed
+    #####:  126:    boost::asio::detail::throw_exception(ex);
+call    0 never executed
+    =====:  127:  }
+call    0 never executed
+    #####:  128:  return ptr;
+        -:  129:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  130:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  131:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  132:  void* ptr = boost::alignment::aligned_alloc(align, size);
+        -:  133:  if (!ptr)
+        -:  134:  {
+        -:  135:    std::bad_alloc ex;
+        -:  136:    boost::asio::detail::throw_exception(ex);
+        -:  137:  }
+        -:  138:  return ptr;
+        -:  139:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  140:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  141:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  142:  void* ptr = _aligned_malloc(size, align);
+        -:  143:  if (!ptr)
+        -:  144:  {
+        -:  145:    std::bad_alloc ex;
+        -:  146:    boost::asio::detail::throw_exception(ex);
+        -:  147:  }
+        -:  148:  return ptr;
+        -:  149:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  150:  (void)align;
+        -:  151:  return ::operator new(size);
+        -:  152:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  153:}
+------------------
+_ZN5boost4asio11aligned_newEmm:
+function _ZN5boost4asio11aligned_newEmm called 0 returned 0% blocks executed 0%
+    #####:  117:inline void* aligned_new(std::size_t align, std::size_t size)
+        -:  118:{
+        -:  119:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+    #####:  120:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+    #####:  121:  size = (size % align == 0) ? size : size + (align - size % align);
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  122:  void* ptr = std::aligned_alloc(align, size);
+    #####:  123:  if (!ptr)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  124:  {
+    #####:  125:    std::bad_alloc ex;
+call    0 never executed
+    #####:  126:    boost::asio::detail::throw_exception(ex);
+call    0 never executed
+    =====:  127:  }
+call    0 never executed
+    #####:  128:  return ptr;
+        -:  129:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  130:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  131:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  132:  void* ptr = boost::alignment::aligned_alloc(align, size);
+        -:  133:  if (!ptr)
+        -:  134:  {
+        -:  135:    std::bad_alloc ex;
+        -:  136:    boost::asio::detail::throw_exception(ex);
+        -:  137:  }
+        -:  138:  return ptr;
+        -:  139:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  140:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  141:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  142:  void* ptr = _aligned_malloc(size, align);
+        -:  143:  if (!ptr)
+        -:  144:  {
+        -:  145:    std::bad_alloc ex;
+        -:  146:    boost::asio::detail::throw_exception(ex);
+        -:  147:  }
+        -:  148:  return ptr;
+        -:  149:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  150:  (void)align;
+        -:  151:  return ::operator new(size);
+        -:  152:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  153:}
+------------------
+_ZN5boost4asio11aligned_newEmm:
+function _ZN5boost4asio11aligned_newEmm called 0 returned 0% blocks executed 0%
+    #####:  117:inline void* aligned_new(std::size_t align, std::size_t size)
+        -:  118:{
+        -:  119:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+    #####:  120:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+    #####:  121:  size = (size % align == 0) ? size : size + (align - size % align);
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  122:  void* ptr = std::aligned_alloc(align, size);
+    #####:  123:  if (!ptr)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  124:  {
+    #####:  125:    std::bad_alloc ex;
+call    0 never executed
+    #####:  126:    boost::asio::detail::throw_exception(ex);
+call    0 never executed
+    =====:  127:  }
+call    0 never executed
+    #####:  128:  return ptr;
+        -:  129:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  130:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  131:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  132:  void* ptr = boost::alignment::aligned_alloc(align, size);
+        -:  133:  if (!ptr)
+        -:  134:  {
+        -:  135:    std::bad_alloc ex;
+        -:  136:    boost::asio::detail::throw_exception(ex);
+        -:  137:  }
+        -:  138:  return ptr;
+        -:  139:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  140:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  141:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  142:  void* ptr = _aligned_malloc(size, align);
+        -:  143:  if (!ptr)
+        -:  144:  {
+        -:  145:    std::bad_alloc ex;
+        -:  146:    boost::asio::detail::throw_exception(ex);
+        -:  147:  }
+        -:  148:  return ptr;
+        -:  149:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  150:  (void)align;
+        -:  151:  return ::operator new(size);
+        -:  152:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  153:}
+------------------
+_ZN5boost4asio11aligned_newEmm:
+function _ZN5boost4asio11aligned_newEmm called 0 returned 0% blocks executed 0%
+    #####:  117:inline void* aligned_new(std::size_t align, std::size_t size)
+        -:  118:{
+        -:  119:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+    #####:  120:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+    #####:  121:  size = (size % align == 0) ? size : size + (align - size % align);
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  122:  void* ptr = std::aligned_alloc(align, size);
+    #####:  123:  if (!ptr)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  124:  {
+    #####:  125:    std::bad_alloc ex;
+call    0 never executed
+    #####:  126:    boost::asio::detail::throw_exception(ex);
+call    0 never executed
+    =====:  127:  }
+call    0 never executed
+    #####:  128:  return ptr;
+        -:  129:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  130:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  131:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  132:  void* ptr = boost::alignment::aligned_alloc(align, size);
+        -:  133:  if (!ptr)
+        -:  134:  {
+        -:  135:    std::bad_alloc ex;
+        -:  136:    boost::asio::detail::throw_exception(ex);
+        -:  137:  }
+        -:  138:  return ptr;
+        -:  139:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  140:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  141:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  142:  void* ptr = _aligned_malloc(size, align);
+        -:  143:  if (!ptr)
+        -:  144:  {
+        -:  145:    std::bad_alloc ex;
+        -:  146:    boost::asio::detail::throw_exception(ex);
+        -:  147:  }
+        -:  148:  return ptr;
+        -:  149:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  150:  (void)align;
+        -:  151:  return ::operator new(size);
+        -:  152:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  153:}
+------------------
+_ZN5boost4asio11aligned_newEmm:
+function _ZN5boost4asio11aligned_newEmm called 0 returned 0% blocks executed 0%
+    #####:  117:inline void* aligned_new(std::size_t align, std::size_t size)
+        -:  118:{
+        -:  119:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+    #####:  120:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+    #####:  121:  size = (size % align == 0) ? size : size + (align - size % align);
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  122:  void* ptr = std::aligned_alloc(align, size);
+    #####:  123:  if (!ptr)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  124:  {
+    #####:  125:    std::bad_alloc ex;
+call    0 never executed
+    #####:  126:    boost::asio::detail::throw_exception(ex);
+call    0 never executed
+    =====:  127:  }
+call    0 never executed
+    #####:  128:  return ptr;
+        -:  129:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  130:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  131:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  132:  void* ptr = boost::alignment::aligned_alloc(align, size);
+        -:  133:  if (!ptr)
+        -:  134:  {
+        -:  135:    std::bad_alloc ex;
+        -:  136:    boost::asio::detail::throw_exception(ex);
+        -:  137:  }
+        -:  138:  return ptr;
+        -:  139:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  140:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  141:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  142:  void* ptr = _aligned_malloc(size, align);
+        -:  143:  if (!ptr)
+        -:  144:  {
+        -:  145:    std::bad_alloc ex;
+        -:  146:    boost::asio::detail::throw_exception(ex);
+        -:  147:  }
+        -:  148:  return ptr;
+        -:  149:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  150:  (void)align;
+        -:  151:  return ::operator new(size);
+        -:  152:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  153:}
+------------------
+_ZN5boost4asio11aligned_newEmm:
+function _ZN5boost4asio11aligned_newEmm called 0 returned 0% blocks executed 0%
+    #####:  117:inline void* aligned_new(std::size_t align, std::size_t size)
+        -:  118:{
+        -:  119:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+    #####:  120:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+    #####:  121:  size = (size % align == 0) ? size : size + (align - size % align);
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  122:  void* ptr = std::aligned_alloc(align, size);
+    #####:  123:  if (!ptr)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  124:  {
+    #####:  125:    std::bad_alloc ex;
+call    0 never executed
+    #####:  126:    boost::asio::detail::throw_exception(ex);
+call    0 never executed
+    =====:  127:  }
+call    0 never executed
+    #####:  128:  return ptr;
+        -:  129:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  130:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  131:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  132:  void* ptr = boost::alignment::aligned_alloc(align, size);
+        -:  133:  if (!ptr)
+        -:  134:  {
+        -:  135:    std::bad_alloc ex;
+        -:  136:    boost::asio::detail::throw_exception(ex);
+        -:  137:  }
+        -:  138:  return ptr;
+        -:  139:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  140:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  141:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  142:  void* ptr = _aligned_malloc(size, align);
+        -:  143:  if (!ptr)
+        -:  144:  {
+        -:  145:    std::bad_alloc ex;
+        -:  146:    boost::asio::detail::throw_exception(ex);
+        -:  147:  }
+        -:  148:  return ptr;
+        -:  149:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  150:  (void)align;
+        -:  151:  return ::operator new(size);
+        -:  152:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  153:}
+------------------
+_ZN5boost4asio11aligned_newEmm:
+function _ZN5boost4asio11aligned_newEmm called 0 returned 0% blocks executed 0%
+    #####:  117:inline void* aligned_new(std::size_t align, std::size_t size)
+        -:  118:{
+        -:  119:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+    #####:  120:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+    #####:  121:  size = (size % align == 0) ? size : size + (align - size % align);
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  122:  void* ptr = std::aligned_alloc(align, size);
+    #####:  123:  if (!ptr)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  124:  {
+    #####:  125:    std::bad_alloc ex;
+call    0 never executed
+    #####:  126:    boost::asio::detail::throw_exception(ex);
+call    0 never executed
+    =====:  127:  }
+call    0 never executed
+    #####:  128:  return ptr;
+        -:  129:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  130:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  131:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  132:  void* ptr = boost::alignment::aligned_alloc(align, size);
+        -:  133:  if (!ptr)
+        -:  134:  {
+        -:  135:    std::bad_alloc ex;
+        -:  136:    boost::asio::detail::throw_exception(ex);
+        -:  137:  }
+        -:  138:  return ptr;
+        -:  139:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  140:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  141:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  142:  void* ptr = _aligned_malloc(size, align);
+        -:  143:  if (!ptr)
+        -:  144:  {
+        -:  145:    std::bad_alloc ex;
+        -:  146:    boost::asio::detail::throw_exception(ex);
+        -:  147:  }
+        -:  148:  return ptr;
+        -:  149:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  150:  (void)align;
+        -:  151:  return ::operator new(size);
+        -:  152:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  153:}
+------------------
+_ZN5boost4asio11aligned_newEmm:
+function _ZN5boost4asio11aligned_newEmm called 0 returned 0% blocks executed 0%
+    #####:  117:inline void* aligned_new(std::size_t align, std::size_t size)
+        -:  118:{
+        -:  119:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+    #####:  120:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+    #####:  121:  size = (size % align == 0) ? size : size + (align - size % align);
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  122:  void* ptr = std::aligned_alloc(align, size);
+    #####:  123:  if (!ptr)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  124:  {
+    #####:  125:    std::bad_alloc ex;
+call    0 never executed
+    #####:  126:    boost::asio::detail::throw_exception(ex);
+call    0 never executed
+    =====:  127:  }
+call    0 never executed
+    #####:  128:  return ptr;
+        -:  129:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  130:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  131:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  132:  void* ptr = boost::alignment::aligned_alloc(align, size);
+        -:  133:  if (!ptr)
+        -:  134:  {
+        -:  135:    std::bad_alloc ex;
+        -:  136:    boost::asio::detail::throw_exception(ex);
+        -:  137:  }
+        -:  138:  return ptr;
+        -:  139:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  140:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  141:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  142:  void* ptr = _aligned_malloc(size, align);
+        -:  143:  if (!ptr)
+        -:  144:  {
+        -:  145:    std::bad_alloc ex;
+        -:  146:    boost::asio::detail::throw_exception(ex);
+        -:  147:  }
+        -:  148:  return ptr;
+        -:  149:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  150:  (void)align;
+        -:  151:  return ::operator new(size);
+        -:  152:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  153:}
+------------------
+_ZN5boost4asio11aligned_newEmm:
+function _ZN5boost4asio11aligned_newEmm called 0 returned 0% blocks executed 0%
+    #####:  117:inline void* aligned_new(std::size_t align, std::size_t size)
+        -:  118:{
+        -:  119:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+    #####:  120:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+    #####:  121:  size = (size % align == 0) ? size : size + (align - size % align);
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  122:  void* ptr = std::aligned_alloc(align, size);
+    #####:  123:  if (!ptr)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  124:  {
+    #####:  125:    std::bad_alloc ex;
+call    0 never executed
+    #####:  126:    boost::asio::detail::throw_exception(ex);
+call    0 never executed
+    =====:  127:  }
+call    0 never executed
+    #####:  128:  return ptr;
+        -:  129:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  130:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  131:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  132:  void* ptr = boost::alignment::aligned_alloc(align, size);
+        -:  133:  if (!ptr)
+        -:  134:  {
+        -:  135:    std::bad_alloc ex;
+        -:  136:    boost::asio::detail::throw_exception(ex);
+        -:  137:  }
+        -:  138:  return ptr;
+        -:  139:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  140:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  141:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  142:  void* ptr = _aligned_malloc(size, align);
+        -:  143:  if (!ptr)
+        -:  144:  {
+        -:  145:    std::bad_alloc ex;
+        -:  146:    boost::asio::detail::throw_exception(ex);
+        -:  147:  }
+        -:  148:  return ptr;
+        -:  149:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  150:  (void)align;
+        -:  151:  return ::operator new(size);
+        -:  152:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  153:}
+------------------
+_ZN5boost4asio11aligned_newEmm:
+function _ZN5boost4asio11aligned_newEmm called 0 returned 0% blocks executed 0%
+    #####:  117:inline void* aligned_new(std::size_t align, std::size_t size)
+        -:  118:{
+        -:  119:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+    #####:  120:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+    #####:  121:  size = (size % align == 0) ? size : size + (align - size % align);
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  122:  void* ptr = std::aligned_alloc(align, size);
+    #####:  123:  if (!ptr)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  124:  {
+    #####:  125:    std::bad_alloc ex;
+call    0 never executed
+    #####:  126:    boost::asio::detail::throw_exception(ex);
+call    0 never executed
+    =====:  127:  }
+call    0 never executed
+    #####:  128:  return ptr;
+        -:  129:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  130:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  131:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  132:  void* ptr = boost::alignment::aligned_alloc(align, size);
+        -:  133:  if (!ptr)
+        -:  134:  {
+        -:  135:    std::bad_alloc ex;
+        -:  136:    boost::asio::detail::throw_exception(ex);
+        -:  137:  }
+        -:  138:  return ptr;
+        -:  139:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  140:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  141:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  142:  void* ptr = _aligned_malloc(size, align);
+        -:  143:  if (!ptr)
+        -:  144:  {
+        -:  145:    std::bad_alloc ex;
+        -:  146:    boost::asio::detail::throw_exception(ex);
+        -:  147:  }
+        -:  148:  return ptr;
+        -:  149:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  150:  (void)align;
+        -:  151:  return ::operator new(size);
+        -:  152:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  153:}
+------------------
+_ZN5boost4asio11aligned_newEmm:
+function _ZN5boost4asio11aligned_newEmm called 0 returned 0% blocks executed 0%
+    #####:  117:inline void* aligned_new(std::size_t align, std::size_t size)
+        -:  118:{
+        -:  119:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+    #####:  120:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+    #####:  121:  size = (size % align == 0) ? size : size + (align - size % align);
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  122:  void* ptr = std::aligned_alloc(align, size);
+    #####:  123:  if (!ptr)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  124:  {
+    #####:  125:    std::bad_alloc ex;
+call    0 never executed
+    #####:  126:    boost::asio::detail::throw_exception(ex);
+call    0 never executed
+    =====:  127:  }
+call    0 never executed
+    #####:  128:  return ptr;
+        -:  129:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  130:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  131:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  132:  void* ptr = boost::alignment::aligned_alloc(align, size);
+        -:  133:  if (!ptr)
+        -:  134:  {
+        -:  135:    std::bad_alloc ex;
+        -:  136:    boost::asio::detail::throw_exception(ex);
+        -:  137:  }
+        -:  138:  return ptr;
+        -:  139:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  140:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  141:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  142:  void* ptr = _aligned_malloc(size, align);
+        -:  143:  if (!ptr)
+        -:  144:  {
+        -:  145:    std::bad_alloc ex;
+        -:  146:    boost::asio::detail::throw_exception(ex);
+        -:  147:  }
+        -:  148:  return ptr;
+        -:  149:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  150:  (void)align;
+        -:  151:  return ::operator new(size);
+        -:  152:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  153:}
+------------------
+_ZN5boost4asio11aligned_newEmm:
+function _ZN5boost4asio11aligned_newEmm called 0 returned 0% blocks executed 0%
+    #####:  117:inline void* aligned_new(std::size_t align, std::size_t size)
+        -:  118:{
+        -:  119:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+    #####:  120:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+    #####:  121:  size = (size % align == 0) ? size : size + (align - size % align);
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  122:  void* ptr = std::aligned_alloc(align, size);
+    #####:  123:  if (!ptr)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  124:  {
+    #####:  125:    std::bad_alloc ex;
+call    0 never executed
+    #####:  126:    boost::asio::detail::throw_exception(ex);
+call    0 never executed
+    =====:  127:  }
+call    0 never executed
+    #####:  128:  return ptr;
+        -:  129:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  130:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  131:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  132:  void* ptr = boost::alignment::aligned_alloc(align, size);
+        -:  133:  if (!ptr)
+        -:  134:  {
+        -:  135:    std::bad_alloc ex;
+        -:  136:    boost::asio::detail::throw_exception(ex);
+        -:  137:  }
+        -:  138:  return ptr;
+        -:  139:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  140:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  141:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  142:  void* ptr = _aligned_malloc(size, align);
+        -:  143:  if (!ptr)
+        -:  144:  {
+        -:  145:    std::bad_alloc ex;
+        -:  146:    boost::asio::detail::throw_exception(ex);
+        -:  147:  }
+        -:  148:  return ptr;
+        -:  149:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  150:  (void)align;
+        -:  151:  return ::operator new(size);
+        -:  152:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  153:}
+------------------
+_ZN5boost4asio11aligned_newEmm:
+function _ZN5boost4asio11aligned_newEmm called 78 returned 100% blocks executed 55%
+       78:  117:inline void* aligned_new(std::size_t align, std::size_t size)
+        -:  118:{
+        -:  119:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+       78:  120:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+      78*:  121:  size = (size % align == 0) ? size : size + (align - size % align);
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+       78:  122:  void* ptr = std::aligned_alloc(align, size);
+       78:  123:  if (!ptr)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:  124:  {
+    #####:  125:    std::bad_alloc ex;
+call    0 never executed
+    #####:  126:    boost::asio::detail::throw_exception(ex);
+call    0 never executed
+    =====:  127:  }
+call    0 never executed
+       78:  128:  return ptr;
+        -:  129:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  130:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  131:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  132:  void* ptr = boost::alignment::aligned_alloc(align, size);
+        -:  133:  if (!ptr)
+        -:  134:  {
+        -:  135:    std::bad_alloc ex;
+        -:  136:    boost::asio::detail::throw_exception(ex);
+        -:  137:  }
+        -:  138:  return ptr;
+        -:  139:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  140:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  141:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  142:  void* ptr = _aligned_malloc(size, align);
+        -:  143:  if (!ptr)
+        -:  144:  {
+        -:  145:    std::bad_alloc ex;
+        -:  146:    boost::asio::detail::throw_exception(ex);
+        -:  147:  }
+        -:  148:  return ptr;
+        -:  149:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  150:  (void)align;
+        -:  151:  return ::operator new(size);
+        -:  152:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  153:}
+------------------
+_ZN5boost4asio11aligned_newEmm:
+function _ZN5boost4asio11aligned_newEmm called 0 returned 0% blocks executed 0%
+    #####:  117:inline void* aligned_new(std::size_t align, std::size_t size)
+        -:  118:{
+        -:  119:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+    #####:  120:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+    #####:  121:  size = (size % align == 0) ? size : size + (align - size % align);
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  122:  void* ptr = std::aligned_alloc(align, size);
+    #####:  123:  if (!ptr)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  124:  {
+    #####:  125:    std::bad_alloc ex;
+call    0 never executed
+    #####:  126:    boost::asio::detail::throw_exception(ex);
+call    0 never executed
+    =====:  127:  }
+call    0 never executed
+    #####:  128:  return ptr;
+        -:  129:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  130:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  131:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  132:  void* ptr = boost::alignment::aligned_alloc(align, size);
+        -:  133:  if (!ptr)
+        -:  134:  {
+        -:  135:    std::bad_alloc ex;
+        -:  136:    boost::asio::detail::throw_exception(ex);
+        -:  137:  }
+        -:  138:  return ptr;
+        -:  139:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  140:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  141:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  142:  void* ptr = _aligned_malloc(size, align);
+        -:  143:  if (!ptr)
+        -:  144:  {
+        -:  145:    std::bad_alloc ex;
+        -:  146:    boost::asio::detail::throw_exception(ex);
+        -:  147:  }
+        -:  148:  return ptr;
+        -:  149:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  150:  (void)align;
+        -:  151:  return ::operator new(size);
+        -:  152:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  153:}
+------------------
+_ZN5boost4asio11aligned_newEmm:
+function _ZN5boost4asio11aligned_newEmm called 52721 returned 100% blocks executed 64%
+    52721:  117:inline void* aligned_new(std::size_t align, std::size_t size)
+        -:  118:{
+        -:  119:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+    52721:  120:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+    52721:  121:  size = (size % align == 0) ? size : size + (align - size % align);
+branch  0 taken 101% (fallthrough)
+branch  1 taken -1%
+    52721:  122:  void* ptr = std::aligned_alloc(align, size);
+    52721:  123:  if (!ptr)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:  124:  {
+    #####:  125:    std::bad_alloc ex;
+call    0 never executed
+    #####:  126:    boost::asio::detail::throw_exception(ex);
+call    0 never executed
+    =====:  127:  }
+call    0 never executed
+    52721:  128:  return ptr;
+        -:  129:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  130:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  131:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  132:  void* ptr = boost::alignment::aligned_alloc(align, size);
+        -:  133:  if (!ptr)
+        -:  134:  {
+        -:  135:    std::bad_alloc ex;
+        -:  136:    boost::asio::detail::throw_exception(ex);
+        -:  137:  }
+        -:  138:  return ptr;
+        -:  139:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  140:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  141:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  142:  void* ptr = _aligned_malloc(size, align);
+        -:  143:  if (!ptr)
+        -:  144:  {
+        -:  145:    std::bad_alloc ex;
+        -:  146:    boost::asio::detail::throw_exception(ex);
+        -:  147:  }
+        -:  148:  return ptr;
+        -:  149:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  150:  (void)align;
+        -:  151:  return ::operator new(size);
+        -:  152:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  153:}
+------------------
+_ZN5boost4asio11aligned_newEmm:
+function _ZN5boost4asio11aligned_newEmm called 112 returned 100% blocks executed 55%
+      112:  117:inline void* aligned_new(std::size_t align, std::size_t size)
+        -:  118:{
+        -:  119:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+      112:  120:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+     112*:  121:  size = (size % align == 0) ? size : size + (align - size % align);
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+      112:  122:  void* ptr = std::aligned_alloc(align, size);
+      112:  123:  if (!ptr)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:  124:  {
+    #####:  125:    std::bad_alloc ex;
+call    0 never executed
+    #####:  126:    boost::asio::detail::throw_exception(ex);
+call    0 never executed
+    =====:  127:  }
+call    0 never executed
+      112:  128:  return ptr;
+        -:  129:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  130:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  131:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  132:  void* ptr = boost::alignment::aligned_alloc(align, size);
+        -:  133:  if (!ptr)
+        -:  134:  {
+        -:  135:    std::bad_alloc ex;
+        -:  136:    boost::asio::detail::throw_exception(ex);
+        -:  137:  }
+        -:  138:  return ptr;
+        -:  139:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  140:  align = (align < BOOST_ASIO_DEFAULT_ALIGN) ? BOOST_ASIO_DEFAULT_ALIGN : align;
+        -:  141:  size = (size % align == 0) ? size : size + (align - size % align);
+        -:  142:  void* ptr = _aligned_malloc(size, align);
+        -:  143:  if (!ptr)
+        -:  144:  {
+        -:  145:    std::bad_alloc ex;
+        -:  146:    boost::asio::detail::throw_exception(ex);
+        -:  147:  }
+        -:  148:  return ptr;
+        -:  149:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  150:  (void)align;
+        -:  151:  return ::operator new(size);
+        -:  152:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  153:}
+------------------
+        -:  154:
+   56161*:  155:inline void aligned_delete(void* ptr)
+        -:  156:{
+        -:  157:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+   56161*:  158:  std::free(ptr);
+        -:  159:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  160:  boost::alignment::aligned_free(ptr);
+        -:  161:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  162:  _aligned_free(ptr);
+        -:  163:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  164:  ::operator delete(ptr);
+        -:  165:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+   56161*:  166:}
+------------------
+_ZN5boost4asio14aligned_deleteEPv:
+function _ZN5boost4asio14aligned_deleteEPv called 30 returned 100% blocks executed 100%
+       30:  155:inline void aligned_delete(void* ptr)
+        -:  156:{
+        -:  157:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+       30:  158:  std::free(ptr);
+        -:  159:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  160:  boost::alignment::aligned_free(ptr);
+        -:  161:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  162:  _aligned_free(ptr);
+        -:  163:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  164:  ::operator delete(ptr);
+        -:  165:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+       30:  166:}
+------------------
+_ZN5boost4asio14aligned_deleteEPv:
+function _ZN5boost4asio14aligned_deleteEPv called 0 returned 0% blocks executed 0%
+    #####:  155:inline void aligned_delete(void* ptr)
+        -:  156:{
+        -:  157:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+    #####:  158:  std::free(ptr);
+        -:  159:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  160:  boost::alignment::aligned_free(ptr);
+        -:  161:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  162:  _aligned_free(ptr);
+        -:  163:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  164:  ::operator delete(ptr);
+        -:  165:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+    #####:  166:}
+------------------
+_ZN5boost4asio14aligned_deleteEPv:
+function _ZN5boost4asio14aligned_deleteEPv called 233 returned 100% blocks executed 100%
+      233:  155:inline void aligned_delete(void* ptr)
+        -:  156:{
+        -:  157:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+      233:  158:  std::free(ptr);
+        -:  159:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  160:  boost::alignment::aligned_free(ptr);
+        -:  161:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  162:  _aligned_free(ptr);
+        -:  163:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  164:  ::operator delete(ptr);
+        -:  165:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+      233:  166:}
+------------------
+_ZN5boost4asio14aligned_deleteEPv:
+function _ZN5boost4asio14aligned_deleteEPv called 0 returned 0% blocks executed 0%
+    #####:  155:inline void aligned_delete(void* ptr)
+        -:  156:{
+        -:  157:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+    #####:  158:  std::free(ptr);
+        -:  159:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  160:  boost::alignment::aligned_free(ptr);
+        -:  161:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  162:  _aligned_free(ptr);
+        -:  163:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  164:  ::operator delete(ptr);
+        -:  165:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+    #####:  166:}
+------------------
+_ZN5boost4asio14aligned_deleteEPv:
+function _ZN5boost4asio14aligned_deleteEPv called 119 returned 100% blocks executed 100%
+      119:  155:inline void aligned_delete(void* ptr)
+        -:  156:{
+        -:  157:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+      119:  158:  std::free(ptr);
+        -:  159:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  160:  boost::alignment::aligned_free(ptr);
+        -:  161:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  162:  _aligned_free(ptr);
+        -:  163:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  164:  ::operator delete(ptr);
+        -:  165:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+      119:  166:}
+------------------
+_ZN5boost4asio14aligned_deleteEPv:
+function _ZN5boost4asio14aligned_deleteEPv called 230 returned 100% blocks executed 100%
+      230:  155:inline void aligned_delete(void* ptr)
+        -:  156:{
+        -:  157:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+      230:  158:  std::free(ptr);
+        -:  159:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  160:  boost::alignment::aligned_free(ptr);
+        -:  161:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  162:  _aligned_free(ptr);
+        -:  163:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  164:  ::operator delete(ptr);
+        -:  165:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+      230:  166:}
+------------------
+_ZN5boost4asio14aligned_deleteEPv:
+function _ZN5boost4asio14aligned_deleteEPv called 44 returned 100% blocks executed 100%
+       44:  155:inline void aligned_delete(void* ptr)
+        -:  156:{
+        -:  157:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+       44:  158:  std::free(ptr);
+        -:  159:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  160:  boost::alignment::aligned_free(ptr);
+        -:  161:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  162:  _aligned_free(ptr);
+        -:  163:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  164:  ::operator delete(ptr);
+        -:  165:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+       44:  166:}
+------------------
+_ZN5boost4asio14aligned_deleteEPv:
+function _ZN5boost4asio14aligned_deleteEPv called 0 returned 0% blocks executed 0%
+    #####:  155:inline void aligned_delete(void* ptr)
+        -:  156:{
+        -:  157:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+    #####:  158:  std::free(ptr);
+        -:  159:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  160:  boost::alignment::aligned_free(ptr);
+        -:  161:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  162:  _aligned_free(ptr);
+        -:  163:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  164:  ::operator delete(ptr);
+        -:  165:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+    #####:  166:}
+------------------
+_ZN5boost4asio14aligned_deleteEPv:
+function _ZN5boost4asio14aligned_deleteEPv called 0 returned 0% blocks executed 0%
+    #####:  155:inline void aligned_delete(void* ptr)
+        -:  156:{
+        -:  157:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+    #####:  158:  std::free(ptr);
+        -:  159:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  160:  boost::alignment::aligned_free(ptr);
+        -:  161:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  162:  _aligned_free(ptr);
+        -:  163:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  164:  ::operator delete(ptr);
+        -:  165:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+    #####:  166:}
+------------------
+_ZN5boost4asio14aligned_deleteEPv:
+function _ZN5boost4asio14aligned_deleteEPv called 121 returned 100% blocks executed 100%
+      121:  155:inline void aligned_delete(void* ptr)
+        -:  156:{
+        -:  157:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+      121:  158:  std::free(ptr);
+        -:  159:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  160:  boost::alignment::aligned_free(ptr);
+        -:  161:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  162:  _aligned_free(ptr);
+        -:  163:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  164:  ::operator delete(ptr);
+        -:  165:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+      121:  166:}
+------------------
+_ZN5boost4asio14aligned_deleteEPv:
+function _ZN5boost4asio14aligned_deleteEPv called 64 returned 100% blocks executed 100%
+       64:  155:inline void aligned_delete(void* ptr)
+        -:  156:{
+        -:  157:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+       64:  158:  std::free(ptr);
+        -:  159:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  160:  boost::alignment::aligned_free(ptr);
+        -:  161:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  162:  _aligned_free(ptr);
+        -:  163:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  164:  ::operator delete(ptr);
+        -:  165:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+       64:  166:}
+------------------
+_ZN5boost4asio14aligned_deleteEPv:
+function _ZN5boost4asio14aligned_deleteEPv called 69 returned 100% blocks executed 100%
+       69:  155:inline void aligned_delete(void* ptr)
+        -:  156:{
+        -:  157:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+       69:  158:  std::free(ptr);
+        -:  159:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  160:  boost::alignment::aligned_free(ptr);
+        -:  161:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  162:  _aligned_free(ptr);
+        -:  163:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  164:  ::operator delete(ptr);
+        -:  165:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+       69:  166:}
+------------------
+_ZN5boost4asio14aligned_deleteEPv:
+function _ZN5boost4asio14aligned_deleteEPv called 81 returned 100% blocks executed 100%
+       81:  155:inline void aligned_delete(void* ptr)
+        -:  156:{
+        -:  157:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+       81:  158:  std::free(ptr);
+        -:  159:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  160:  boost::alignment::aligned_free(ptr);
+        -:  161:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  162:  _aligned_free(ptr);
+        -:  163:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  164:  ::operator delete(ptr);
+        -:  165:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+       81:  166:}
+------------------
+_ZN5boost4asio14aligned_deleteEPv:
+function _ZN5boost4asio14aligned_deleteEPv called 86 returned 100% blocks executed 100%
+       86:  155:inline void aligned_delete(void* ptr)
+        -:  156:{
+        -:  157:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+       86:  158:  std::free(ptr);
+        -:  159:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  160:  boost::alignment::aligned_free(ptr);
+        -:  161:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  162:  _aligned_free(ptr);
+        -:  163:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  164:  ::operator delete(ptr);
+        -:  165:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+       86:  166:}
+------------------
+_ZN5boost4asio14aligned_deleteEPv:
+function _ZN5boost4asio14aligned_deleteEPv called 253 returned 100% blocks executed 100%
+      253:  155:inline void aligned_delete(void* ptr)
+        -:  156:{
+        -:  157:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+      253:  158:  std::free(ptr);
+        -:  159:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  160:  boost::alignment::aligned_free(ptr);
+        -:  161:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  162:  _aligned_free(ptr);
+        -:  163:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  164:  ::operator delete(ptr);
+        -:  165:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+      253:  166:}
+------------------
+_ZN5boost4asio14aligned_deleteEPv:
+function _ZN5boost4asio14aligned_deleteEPv called 0 returned 0% blocks executed 0%
+    #####:  155:inline void aligned_delete(void* ptr)
+        -:  156:{
+        -:  157:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+    #####:  158:  std::free(ptr);
+        -:  159:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  160:  boost::alignment::aligned_free(ptr);
+        -:  161:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  162:  _aligned_free(ptr);
+        -:  163:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  164:  ::operator delete(ptr);
+        -:  165:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+    #####:  166:}
+------------------
+_ZN5boost4asio14aligned_deleteEPv:
+function _ZN5boost4asio14aligned_deleteEPv called 0 returned 0% blocks executed 0%
+    #####:  155:inline void aligned_delete(void* ptr)
+        -:  156:{
+        -:  157:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+    #####:  158:  std::free(ptr);
+        -:  159:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  160:  boost::alignment::aligned_free(ptr);
+        -:  161:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  162:  _aligned_free(ptr);
+        -:  163:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  164:  ::operator delete(ptr);
+        -:  165:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+    #####:  166:}
+------------------
+_ZN5boost4asio14aligned_deleteEPv:
+function _ZN5boost4asio14aligned_deleteEPv called 0 returned 0% blocks executed 0%
+    #####:  155:inline void aligned_delete(void* ptr)
+        -:  156:{
+        -:  157:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+    #####:  158:  std::free(ptr);
+        -:  159:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  160:  boost::alignment::aligned_free(ptr);
+        -:  161:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  162:  _aligned_free(ptr);
+        -:  163:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  164:  ::operator delete(ptr);
+        -:  165:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+    #####:  166:}
+------------------
+_ZN5boost4asio14aligned_deleteEPv:
+function _ZN5boost4asio14aligned_deleteEPv called 0 returned 0% blocks executed 0%
+    #####:  155:inline void aligned_delete(void* ptr)
+        -:  156:{
+        -:  157:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+    #####:  158:  std::free(ptr);
+        -:  159:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  160:  boost::alignment::aligned_free(ptr);
+        -:  161:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  162:  _aligned_free(ptr);
+        -:  163:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  164:  ::operator delete(ptr);
+        -:  165:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+    #####:  166:}
+------------------
+_ZN5boost4asio14aligned_deleteEPv:
+function _ZN5boost4asio14aligned_deleteEPv called 0 returned 0% blocks executed 0%
+    #####:  155:inline void aligned_delete(void* ptr)
+        -:  156:{
+        -:  157:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+    #####:  158:  std::free(ptr);
+        -:  159:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  160:  boost::alignment::aligned_free(ptr);
+        -:  161:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  162:  _aligned_free(ptr);
+        -:  163:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  164:  ::operator delete(ptr);
+        -:  165:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+    #####:  166:}
+------------------
+_ZN5boost4asio14aligned_deleteEPv:
+function _ZN5boost4asio14aligned_deleteEPv called 0 returned 0% blocks executed 0%
+    #####:  155:inline void aligned_delete(void* ptr)
+        -:  156:{
+        -:  157:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+    #####:  158:  std::free(ptr);
+        -:  159:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  160:  boost::alignment::aligned_free(ptr);
+        -:  161:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  162:  _aligned_free(ptr);
+        -:  163:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  164:  ::operator delete(ptr);
+        -:  165:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+    #####:  166:}
+------------------
+_ZN5boost4asio14aligned_deleteEPv:
+function _ZN5boost4asio14aligned_deleteEPv called 0 returned 0% blocks executed 0%
+    #####:  155:inline void aligned_delete(void* ptr)
+        -:  156:{
+        -:  157:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+    #####:  158:  std::free(ptr);
+        -:  159:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  160:  boost::alignment::aligned_free(ptr);
+        -:  161:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  162:  _aligned_free(ptr);
+        -:  163:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  164:  ::operator delete(ptr);
+        -:  165:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+    #####:  166:}
+------------------
+_ZN5boost4asio14aligned_deleteEPv:
+function _ZN5boost4asio14aligned_deleteEPv called 0 returned 0% blocks executed 0%
+    #####:  155:inline void aligned_delete(void* ptr)
+        -:  156:{
+        -:  157:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+    #####:  158:  std::free(ptr);
+        -:  159:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  160:  boost::alignment::aligned_free(ptr);
+        -:  161:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  162:  _aligned_free(ptr);
+        -:  163:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  164:  ::operator delete(ptr);
+        -:  165:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+    #####:  166:}
+------------------
+_ZN5boost4asio14aligned_deleteEPv:
+function _ZN5boost4asio14aligned_deleteEPv called 0 returned 0% blocks executed 0%
+    #####:  155:inline void aligned_delete(void* ptr)
+        -:  156:{
+        -:  157:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+    #####:  158:  std::free(ptr);
+        -:  159:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  160:  boost::alignment::aligned_free(ptr);
+        -:  161:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  162:  _aligned_free(ptr);
+        -:  163:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  164:  ::operator delete(ptr);
+        -:  165:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+    #####:  166:}
+------------------
+_ZN5boost4asio14aligned_deleteEPv:
+function _ZN5boost4asio14aligned_deleteEPv called 1021 returned 100% blocks executed 100%
+     1021:  155:inline void aligned_delete(void* ptr)
+        -:  156:{
+        -:  157:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+     1021:  158:  std::free(ptr);
+        -:  159:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  160:  boost::alignment::aligned_free(ptr);
+        -:  161:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  162:  _aligned_free(ptr);
+        -:  163:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  164:  ::operator delete(ptr);
+        -:  165:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+     1021:  166:}
+------------------
+_ZN5boost4asio14aligned_deleteEPv:
+function _ZN5boost4asio14aligned_deleteEPv called 0 returned 0% blocks executed 0%
+    #####:  155:inline void aligned_delete(void* ptr)
+        -:  156:{
+        -:  157:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+    #####:  158:  std::free(ptr);
+        -:  159:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  160:  boost::alignment::aligned_free(ptr);
+        -:  161:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  162:  _aligned_free(ptr);
+        -:  163:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  164:  ::operator delete(ptr);
+        -:  165:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+    #####:  166:}
+------------------
+_ZN5boost4asio14aligned_deleteEPv:
+function _ZN5boost4asio14aligned_deleteEPv called 0 returned 0% blocks executed 0%
+    #####:  155:inline void aligned_delete(void* ptr)
+        -:  156:{
+        -:  157:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+    #####:  158:  std::free(ptr);
+        -:  159:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  160:  boost::alignment::aligned_free(ptr);
+        -:  161:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  162:  _aligned_free(ptr);
+        -:  163:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  164:  ::operator delete(ptr);
+        -:  165:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+    #####:  166:}
+------------------
+_ZN5boost4asio14aligned_deleteEPv:
+function _ZN5boost4asio14aligned_deleteEPv called 0 returned 0% blocks executed 0%
+    #####:  155:inline void aligned_delete(void* ptr)
+        -:  156:{
+        -:  157:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+    #####:  158:  std::free(ptr);
+        -:  159:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  160:  boost::alignment::aligned_free(ptr);
+        -:  161:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  162:  _aligned_free(ptr);
+        -:  163:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  164:  ::operator delete(ptr);
+        -:  165:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+    #####:  166:}
+------------------
+_ZN5boost4asio14aligned_deleteEPv:
+function _ZN5boost4asio14aligned_deleteEPv called 0 returned 0% blocks executed 0%
+    #####:  155:inline void aligned_delete(void* ptr)
+        -:  156:{
+        -:  157:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+    #####:  158:  std::free(ptr);
+        -:  159:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  160:  boost::alignment::aligned_free(ptr);
+        -:  161:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  162:  _aligned_free(ptr);
+        -:  163:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  164:  ::operator delete(ptr);
+        -:  165:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+    #####:  166:}
+------------------
+_ZN5boost4asio14aligned_deleteEPv:
+function _ZN5boost4asio14aligned_deleteEPv called 0 returned 0% blocks executed 0%
+    #####:  155:inline void aligned_delete(void* ptr)
+        -:  156:{
+        -:  157:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+    #####:  158:  std::free(ptr);
+        -:  159:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  160:  boost::alignment::aligned_free(ptr);
+        -:  161:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  162:  _aligned_free(ptr);
+        -:  163:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  164:  ::operator delete(ptr);
+        -:  165:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+    #####:  166:}
+------------------
+_ZN5boost4asio14aligned_deleteEPv:
+function _ZN5boost4asio14aligned_deleteEPv called 0 returned 0% blocks executed 0%
+    #####:  155:inline void aligned_delete(void* ptr)
+        -:  156:{
+        -:  157:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+    #####:  158:  std::free(ptr);
+        -:  159:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  160:  boost::alignment::aligned_free(ptr);
+        -:  161:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  162:  _aligned_free(ptr);
+        -:  163:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  164:  ::operator delete(ptr);
+        -:  165:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+    #####:  166:}
+------------------
+_ZN5boost4asio14aligned_deleteEPv:
+function _ZN5boost4asio14aligned_deleteEPv called 0 returned 0% blocks executed 0%
+    #####:  155:inline void aligned_delete(void* ptr)
+        -:  156:{
+        -:  157:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+    #####:  158:  std::free(ptr);
+        -:  159:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  160:  boost::alignment::aligned_free(ptr);
+        -:  161:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  162:  _aligned_free(ptr);
+        -:  163:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  164:  ::operator delete(ptr);
+        -:  165:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+    #####:  166:}
+------------------
+_ZN5boost4asio14aligned_deleteEPv:
+function _ZN5boost4asio14aligned_deleteEPv called 0 returned 0% blocks executed 0%
+    #####:  155:inline void aligned_delete(void* ptr)
+        -:  156:{
+        -:  157:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+    #####:  158:  std::free(ptr);
+        -:  159:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  160:  boost::alignment::aligned_free(ptr);
+        -:  161:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  162:  _aligned_free(ptr);
+        -:  163:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  164:  ::operator delete(ptr);
+        -:  165:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+    #####:  166:}
+------------------
+_ZN5boost4asio14aligned_deleteEPv:
+function _ZN5boost4asio14aligned_deleteEPv called 0 returned 0% blocks executed 0%
+    #####:  155:inline void aligned_delete(void* ptr)
+        -:  156:{
+        -:  157:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+    #####:  158:  std::free(ptr);
+        -:  159:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  160:  boost::alignment::aligned_free(ptr);
+        -:  161:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  162:  _aligned_free(ptr);
+        -:  163:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  164:  ::operator delete(ptr);
+        -:  165:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+    #####:  166:}
+------------------
+_ZN5boost4asio14aligned_deleteEPv:
+function _ZN5boost4asio14aligned_deleteEPv called 0 returned 0% blocks executed 0%
+    #####:  155:inline void aligned_delete(void* ptr)
+        -:  156:{
+        -:  157:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+    #####:  158:  std::free(ptr);
+        -:  159:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  160:  boost::alignment::aligned_free(ptr);
+        -:  161:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  162:  _aligned_free(ptr);
+        -:  163:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  164:  ::operator delete(ptr);
+        -:  165:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+    #####:  166:}
+------------------
+_ZN5boost4asio14aligned_deleteEPv:
+function _ZN5boost4asio14aligned_deleteEPv called 0 returned 0% blocks executed 0%
+    #####:  155:inline void aligned_delete(void* ptr)
+        -:  156:{
+        -:  157:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+    #####:  158:  std::free(ptr);
+        -:  159:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  160:  boost::alignment::aligned_free(ptr);
+        -:  161:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  162:  _aligned_free(ptr);
+        -:  163:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  164:  ::operator delete(ptr);
+        -:  165:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+    #####:  166:}
+------------------
+_ZN5boost4asio14aligned_deleteEPv:
+function _ZN5boost4asio14aligned_deleteEPv called 0 returned 0% blocks executed 0%
+    #####:  155:inline void aligned_delete(void* ptr)
+        -:  156:{
+        -:  157:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+    #####:  158:  std::free(ptr);
+        -:  159:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  160:  boost::alignment::aligned_free(ptr);
+        -:  161:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  162:  _aligned_free(ptr);
+        -:  163:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  164:  ::operator delete(ptr);
+        -:  165:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+    #####:  166:}
+------------------
+_ZN5boost4asio14aligned_deleteEPv:
+function _ZN5boost4asio14aligned_deleteEPv called 0 returned 0% blocks executed 0%
+    #####:  155:inline void aligned_delete(void* ptr)
+        -:  156:{
+        -:  157:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+    #####:  158:  std::free(ptr);
+        -:  159:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  160:  boost::alignment::aligned_free(ptr);
+        -:  161:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  162:  _aligned_free(ptr);
+        -:  163:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  164:  ::operator delete(ptr);
+        -:  165:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+    #####:  166:}
+------------------
+_ZN5boost4asio14aligned_deleteEPv:
+function _ZN5boost4asio14aligned_deleteEPv called 0 returned 0% blocks executed 0%
+    #####:  155:inline void aligned_delete(void* ptr)
+        -:  156:{
+        -:  157:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+    #####:  158:  std::free(ptr);
+        -:  159:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  160:  boost::alignment::aligned_free(ptr);
+        -:  161:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  162:  _aligned_free(ptr);
+        -:  163:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  164:  ::operator delete(ptr);
+        -:  165:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+    #####:  166:}
+------------------
+_ZN5boost4asio14aligned_deleteEPv:
+function _ZN5boost4asio14aligned_deleteEPv called 78 returned 100% blocks executed 100%
+       78:  155:inline void aligned_delete(void* ptr)
+        -:  156:{
+        -:  157:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+       78:  158:  std::free(ptr);
+        -:  159:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  160:  boost::alignment::aligned_free(ptr);
+        -:  161:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  162:  _aligned_free(ptr);
+        -:  163:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  164:  ::operator delete(ptr);
+        -:  165:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+       78:  166:}
+------------------
+_ZN5boost4asio14aligned_deleteEPv:
+function _ZN5boost4asio14aligned_deleteEPv called 0 returned 0% blocks executed 0%
+    #####:  155:inline void aligned_delete(void* ptr)
+        -:  156:{
+        -:  157:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+    #####:  158:  std::free(ptr);
+        -:  159:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  160:  boost::alignment::aligned_free(ptr);
+        -:  161:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  162:  _aligned_free(ptr);
+        -:  163:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  164:  ::operator delete(ptr);
+        -:  165:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+    #####:  166:}
+------------------
+_ZN5boost4asio14aligned_deleteEPv:
+function _ZN5boost4asio14aligned_deleteEPv called 53620 returned 100% blocks executed 100%
+    53620:  155:inline void aligned_delete(void* ptr)
+        -:  156:{
+        -:  157:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+    53620:  158:  std::free(ptr);
+        -:  159:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  160:  boost::alignment::aligned_free(ptr);
+        -:  161:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  162:  _aligned_free(ptr);
+        -:  163:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  164:  ::operator delete(ptr);
+        -:  165:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+    53620:  166:}
+------------------
+_ZN5boost4asio14aligned_deleteEPv:
+function _ZN5boost4asio14aligned_deleteEPv called 112 returned 100% blocks executed 100%
+      112:  155:inline void aligned_delete(void* ptr)
+        -:  156:{
+        -:  157:#if defined(BOOST_ASIO_HAS_STD_ALIGNED_ALLOC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+      112:  158:  std::free(ptr);
+        -:  159:#elif defined(BOOST_ASIO_HAS_BOOST_ALIGN) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  160:  boost::alignment::aligned_free(ptr);
+        -:  161:#elif defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  162:  _aligned_free(ptr);
+        -:  163:#else // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+        -:  164:  ::operator delete(ptr);
+        -:  165:#endif // defined(BOOST_ASIO_MSVC) && defined(BOOST_ASIO_HAS_ALIGNOF)
+      112:  166:}
+------------------
+        -:  167:
+        -:  168:} // namespace asio
+        -:  169:} // namespace boost
+        -:  170:
+        -:  171:#endif // BOOST_ASIO_DETAIL_MEMORY_HPP

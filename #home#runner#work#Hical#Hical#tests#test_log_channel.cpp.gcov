@@ -1,0 +1,1674 @@
+        -:    0:Source:/home/runner/work/Hical/Hical/tests/test_log_channel.cpp
+        -:    1:#include "core/Log.h"
+        -:    2:#include "core/LogChannel.h"
+        -:    3:#include "core/LogFormatter.h"
+        -:    4:#include "core/LogRecord.h"
+        -:    5:#include "core/LogSink.h"
+        -:    6:#include <gtest/gtest.h>
+        -:    7:#include <memory>
+        -:    8:#include <mutex>
+        -:    9:#include <string>
+        -:   10:
+        -:   11:using namespace hical;
+        -:   12:
+        -:   13:// 简单的内存 Sink 用于测试
+        -:   14:class TestSink : public LogSink
+        -:   15:{
+        -:   16:public:
+function _ZN8TestSink5writeESt17basic_string_viewIcSt11char_traitsIcEE called 8 returned 100% blocks executed 78%
+        8:   17:	void write(std::string_view formattedLine) override
+        -:   18:	{
+        8:   19:		std::lock_guard<std::mutex> lock(m_mutex);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        8:   20:		m_data.append(formattedLine.data(), formattedLine.size());
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+        8:   21:	}
+call    0 returned 100%
+call    1 never executed
+        -:   22:
+function _ZN8TestSink5flushEv called 0 returned 0% blocks executed 0%
+    #####:   23:	void flush() override
+        -:   24:	{
+    #####:   25:	}
+        -:   26:
+function _ZN8TestSink4dataB5cxx11Ev called 10 returned 100% blocks executed 78%
+       10:   27:	std::string data()
+        -:   28:	{
+       10:   29:		std::lock_guard<std::mutex> lock(m_mutex);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       20:   30:		return m_data;
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       10:   31:	}
+call    0 returned 100%
+call    1 never executed
+        -:   32:
+        -:   33:	void clear()
+        -:   34:	{
+        -:   35:		std::lock_guard<std::mutex> lock(m_mutex);
+        -:   36:		m_data.clear();
+        -:   37:	}
+        -:   38:
+        -:   39:private:
+        -:   40:	std::mutex m_mutex;
+        -:   41:	std::string m_data;
+        -:   42:};
+        -:   43:
+function _ZL10makeRecordN5hical8LogLevelEPKc called 7 returned 100% blocks executed 86%
+        7:   44:static LogRecord makeRecord(LogLevel lvl = LogLevel::hInfo, const char* msg = "channel test")
+        -:   45:{
+        7:   46:	LogRecord r;
+call    0 returned 100%
+        7:   47:	r.level = lvl;
+        7:   48:	r.timestamp = std::chrono::system_clock::now();
+call    0 returned 100%
+        7:   49:	r.threadId = 999;
+        7:   50:	r.file = "test.cpp";
+        7:   51:	r.line = 10;
+        7:   52:	r.message = msg;
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        7:   53:	return r;
+    =====:   54:}
+call    0 never executed
+        -:   55:
+        -:   56:// ============ LogChannel 测试 ============
+        -:   57:
+        4:   58:TEST(LogChannelTest, BasicEmit)
+        -:   59:{
+        1:   60:	auto sink = std::make_shared<TestSink>();
+        1:   61:	LogChannel ch("test");
+        1:   62:	ch.addSink(sink);
+        -:   63:
+        1:   64:	auto record = makeRecord();
+        1:   65:	ch.emit(record);
+        -:   66:
+       1*:   67:	EXPECT_NE(sink->data().find("channel test"), std::string::npos);
+        1:   68:}
+------------------
+_ZN29LogChannelTest_BasicEmit_TestC2Ev:
+function _ZN29LogChannelTest_BasicEmit_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:   58:TEST(LogChannelTest, BasicEmit)
+call    0 returned 100%
+------------------
+_ZN29LogChannelTest_BasicEmit_TestD0Ev:
+function _ZN29LogChannelTest_BasicEmit_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:   58:TEST(LogChannelTest, BasicEmit)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN29LogChannelTest_BasicEmit_TestD2Ev:
+function _ZN29LogChannelTest_BasicEmit_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:   58:TEST(LogChannelTest, BasicEmit)
+call    0 returned 100%
+------------------
+_ZN29LogChannelTest_BasicEmit_Test8TestBodyEv:
+function _ZN29LogChannelTest_BasicEmit_Test8TestBodyEv called 1 returned 100% blocks executed 42%
+        1:   58:TEST(LogChannelTest, BasicEmit)
+        -:   59:{
+        1:   60:	auto sink = std::make_shared<TestSink>();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:   61:	LogChannel ch("test");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+        1:   62:	ch.addSink(sink);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 never executed
+        -:   63:
+        1:   64:	auto record = makeRecord();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:   65:	ch.emit(record);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:   66:
+       1*:   67:	EXPECT_NE(sink->data().find("channel test"), std::string::npos);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+call    8 returned 100%
+call    9 returned 100%
+branch 10 taken 0% (fallthrough)
+branch 11 taken 100%
+call   12 never executed
+branch 13 never executed (fallthrough)
+branch 14 never executed (throw)
+call   15 never executed
+call   16 never executed
+branch 17 never executed (fallthrough)
+branch 18 never executed (throw)
+call   19 never executed
+branch 20 never executed (fallthrough)
+branch 21 never executed (throw)
+call   22 never executed
+call   23 never executed
+call   24 returned 100%
+call   25 never executed
+call   26 never executed
+call   27 never executed
+call   28 never executed
+        1:   68:}
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 never executed
+call    4 never executed
+call    5 never executed
+------------------
+        -:   69:
+        4:   70:TEST(LogChannelTest, LevelFilter)
+        -:   71:{
+        1:   72:	auto sink = std::make_shared<TestSink>();
+        1:   73:	LogChannel ch("test");
+        1:   74:	ch.addSink(sink);
+        1:   75:	ch.setLevel(LogLevel::hWarn);
+        -:   76:
+        1:   77:	auto infoRecord = makeRecord(LogLevel::hInfo, "should be filtered");
+        1:   78:	ch.emit(infoRecord);
+       1*:   79:	EXPECT_TRUE(sink->data().empty());
+        -:   80:
+        1:   81:	auto warnRecord = makeRecord(LogLevel::hWarn, "should pass");
+        1:   82:	ch.emit(warnRecord);
+       1*:   83:	EXPECT_NE(sink->data().find("should pass"), std::string::npos);
+        1:   84:}
+------------------
+_ZN31LogChannelTest_LevelFilter_TestC2Ev:
+function _ZN31LogChannelTest_LevelFilter_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:   70:TEST(LogChannelTest, LevelFilter)
+call    0 returned 100%
+------------------
+_ZN31LogChannelTest_LevelFilter_TestD0Ev:
+function _ZN31LogChannelTest_LevelFilter_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:   70:TEST(LogChannelTest, LevelFilter)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN31LogChannelTest_LevelFilter_TestD2Ev:
+function _ZN31LogChannelTest_LevelFilter_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:   70:TEST(LogChannelTest, LevelFilter)
+call    0 returned 100%
+------------------
+_ZN31LogChannelTest_LevelFilter_Test8TestBodyEv:
+function _ZN31LogChannelTest_LevelFilter_Test8TestBodyEv called 1 returned 100% blocks executed 38%
+        1:   70:TEST(LogChannelTest, LevelFilter)
+        -:   71:{
+        1:   72:	auto sink = std::make_shared<TestSink>();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:   73:	LogChannel ch("test");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+        1:   74:	ch.addSink(sink);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 never executed
+        1:   75:	ch.setLevel(LogLevel::hWarn);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:   76:
+        1:   77:	auto infoRecord = makeRecord(LogLevel::hInfo, "should be filtered");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:   78:	ch.emit(infoRecord);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       1*:   79:	EXPECT_TRUE(sink->data().empty());
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 returned 100%
+call    6 returned 100%
+call    7 returned 100%
+branch  8 taken 0% (fallthrough)
+branch  9 taken 100%
+call   10 never executed
+branch 11 never executed (fallthrough)
+branch 12 never executed (throw)
+call   13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed (throw)
+call   16 never executed
+call   17 never executed
+branch 18 never executed (fallthrough)
+branch 19 never executed (throw)
+call   20 never executed
+branch 21 never executed (fallthrough)
+branch 22 never executed (throw)
+call   23 never executed
+call   24 never executed
+call   25 never executed
+call   26 returned 100%
+call   27 never executed
+call   28 never executed
+call   29 never executed
+call   30 never executed
+        -:   80:
+        1:   81:	auto warnRecord = makeRecord(LogLevel::hWarn, "should pass");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:   82:	ch.emit(warnRecord);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       1*:   83:	EXPECT_NE(sink->data().find("should pass"), std::string::npos);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+call    8 returned 100%
+call    9 returned 100%
+branch 10 taken 0% (fallthrough)
+branch 11 taken 100%
+call   12 never executed
+branch 13 never executed (fallthrough)
+branch 14 never executed (throw)
+call   15 never executed
+call   16 never executed
+branch 17 never executed (fallthrough)
+branch 18 never executed (throw)
+call   19 never executed
+branch 20 never executed (fallthrough)
+branch 21 never executed (throw)
+call   22 never executed
+call   23 never executed
+call   24 returned 100%
+call   25 never executed
+call   26 never executed
+call   27 never executed
+call   28 never executed
+        1:   84:}
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 never executed
+call    5 never executed
+call    6 never executed
+call    7 never executed
+------------------
+        -:   85:
+        4:   86:TEST(LogChannelTest, CustomFormatter)
+        -:   87:{
+        1:   88:	auto sink = std::make_shared<TestSink>();
+        1:   89:	LogChannel ch("json-channel");
+        1:   90:	ch.addSink(sink);
+        1:   91:	ch.setFormatter(std::make_shared<JsonFormatter>());
+        -:   92:
+        1:   93:	auto record = makeRecord();
+        1:   94:	record.fields["key"] = "value";
+        1:   95:	ch.emit(record);
+        -:   96:
+        1:   97:	auto data = sink->data();
+       1*:   98:	EXPECT_NE(data.find("\"level\":\"INFO\""), std::string::npos);
+       1*:   99:	EXPECT_NE(data.find("\"key\":\"value\""), std::string::npos);
+        1:  100:}
+------------------
+_ZN35LogChannelTest_CustomFormatter_TestC2Ev:
+function _ZN35LogChannelTest_CustomFormatter_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:   86:TEST(LogChannelTest, CustomFormatter)
+call    0 returned 100%
+------------------
+_ZN35LogChannelTest_CustomFormatter_TestD0Ev:
+function _ZN35LogChannelTest_CustomFormatter_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:   86:TEST(LogChannelTest, CustomFormatter)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN35LogChannelTest_CustomFormatter_TestD2Ev:
+function _ZN35LogChannelTest_CustomFormatter_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:   86:TEST(LogChannelTest, CustomFormatter)
+call    0 returned 100%
+------------------
+_ZN35LogChannelTest_CustomFormatter_Test8TestBodyEv:
+function _ZN35LogChannelTest_CustomFormatter_Test8TestBodyEv called 1 returned 100% blocks executed 40%
+        1:   86:TEST(LogChannelTest, CustomFormatter)
+        -:   87:{
+        1:   88:	auto sink = std::make_shared<TestSink>();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:   89:	LogChannel ch("json-channel");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+        1:   90:	ch.addSink(sink);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 never executed
+        1:   91:	ch.setFormatter(std::make_shared<JsonFormatter>());
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+call    7 returned 100%
+call    8 returned 100%
+call    9 never executed
+call   10 never executed
+        -:   92:
+        1:   93:	auto record = makeRecord();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:   94:	record.fields["key"] = "value";
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+        1:   95:	ch.emit(record);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:   96:
+        1:   97:	auto data = sink->data();
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+       1*:   98:	EXPECT_NE(data.find("\"level\":\"INFO\""), std::string::npos);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 0% (fallthrough)
+branch  6 taken 100%
+call    7 never executed
+branch  8 never executed (fallthrough)
+branch  9 never executed (throw)
+call   10 never executed
+call   11 never executed
+branch 12 never executed (fallthrough)
+branch 13 never executed (throw)
+call   14 never executed
+branch 15 never executed (fallthrough)
+branch 16 never executed (throw)
+call   17 never executed
+call   18 never executed
+call   19 returned 100%
+call   20 never executed
+call   21 never executed
+call   22 never executed
+       1*:   99:	EXPECT_NE(data.find("\"key\":\"value\""), std::string::npos);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 0% (fallthrough)
+branch  6 taken 100%
+call    7 never executed
+branch  8 never executed (fallthrough)
+branch  9 never executed (throw)
+call   10 never executed
+call   11 never executed
+branch 12 never executed (fallthrough)
+branch 13 never executed (throw)
+call   14 never executed
+branch 15 never executed (fallthrough)
+branch 16 never executed (throw)
+call   17 never executed
+call   18 never executed
+call   19 returned 100%
+call   20 never executed
+call   21 never executed
+call   22 never executed
+        1:  100:}
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 never executed
+call    5 never executed
+call    6 never executed
+call    7 never executed
+------------------
+        -:  101:
+        4:  102:TEST(LogChannelTest, MultipleSinks)
+        -:  103:{
+        1:  104:	auto sink1 = std::make_shared<TestSink>();
+        1:  105:	auto sink2 = std::make_shared<TestSink>();
+        1:  106:	LogChannel ch("multi");
+        1:  107:	ch.addSink(sink1);
+        1:  108:	ch.addSink(sink2);
+        -:  109:
+        1:  110:	ch.emit(makeRecord());
+        -:  111:
+       1*:  112:	EXPECT_NE(sink1->data().find("channel test"), std::string::npos);
+       1*:  113:	EXPECT_NE(sink2->data().find("channel test"), std::string::npos);
+        1:  114:}
+------------------
+_ZN33LogChannelTest_MultipleSinks_TestC2Ev:
+function _ZN33LogChannelTest_MultipleSinks_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:  102:TEST(LogChannelTest, MultipleSinks)
+call    0 returned 100%
+------------------
+_ZN33LogChannelTest_MultipleSinks_TestD0Ev:
+function _ZN33LogChannelTest_MultipleSinks_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:  102:TEST(LogChannelTest, MultipleSinks)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN33LogChannelTest_MultipleSinks_TestD2Ev:
+function _ZN33LogChannelTest_MultipleSinks_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:  102:TEST(LogChannelTest, MultipleSinks)
+call    0 returned 100%
+------------------
+_ZN33LogChannelTest_MultipleSinks_Test8TestBodyEv:
+function _ZN33LogChannelTest_MultipleSinks_Test8TestBodyEv called 1 returned 100% blocks executed 38%
+        1:  102:TEST(LogChannelTest, MultipleSinks)
+        -:  103:{
+        1:  104:	auto sink1 = std::make_shared<TestSink>();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  105:	auto sink2 = std::make_shared<TestSink>();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  106:	LogChannel ch("multi");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+        1:  107:	ch.addSink(sink1);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 never executed
+        1:  108:	ch.addSink(sink2);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 never executed
+        -:  109:
+        1:  110:	ch.emit(makeRecord());
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+        -:  111:
+       1*:  112:	EXPECT_NE(sink1->data().find("channel test"), std::string::npos);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+call    8 returned 100%
+call    9 returned 100%
+branch 10 taken 0% (fallthrough)
+branch 11 taken 100%
+call   12 never executed
+branch 13 never executed (fallthrough)
+branch 14 never executed (throw)
+call   15 never executed
+call   16 never executed
+branch 17 never executed (fallthrough)
+branch 18 never executed (throw)
+call   19 never executed
+branch 20 never executed (fallthrough)
+branch 21 never executed (throw)
+call   22 never executed
+call   23 never executed
+call   24 returned 100%
+call   25 never executed
+call   26 never executed
+call   27 never executed
+call   28 never executed
+       1*:  113:	EXPECT_NE(sink2->data().find("channel test"), std::string::npos);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+call    8 returned 100%
+call    9 returned 100%
+branch 10 taken 0% (fallthrough)
+branch 11 taken 100%
+call   12 never executed
+branch 13 never executed (fallthrough)
+branch 14 never executed (throw)
+call   15 never executed
+call   16 never executed
+branch 17 never executed (fallthrough)
+branch 18 never executed (throw)
+call   19 never executed
+branch 20 never executed (fallthrough)
+branch 21 never executed (throw)
+call   22 never executed
+call   23 never executed
+call   24 returned 100%
+call   25 never executed
+call   26 never executed
+call   27 never executed
+call   28 never executed
+        1:  114:}
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 never executed
+call    4 never executed
+call    5 never executed
+------------------
+        -:  115:
+        4:  116:TEST(LogChannelTest, ClearSinks)
+        -:  117:{
+        1:  118:	auto sink = std::make_shared<TestSink>();
+        1:  119:	LogChannel ch("test");
+        1:  120:	ch.addSink(sink);
+        1:  121:	ch.emit(makeRecord(LogLevel::hInfo, "before"));
+        -:  122:
+        1:  123:	ch.clearSinks();
+        1:  124:	ch.emit(makeRecord(LogLevel::hInfo, "after"));
+        -:  125:
+       1*:  126:	EXPECT_NE(sink->data().find("before"), std::string::npos);
+       1*:  127:	EXPECT_EQ(sink->data().find("after"), std::string::npos);
+        1:  128:}
+------------------
+_ZN30LogChannelTest_ClearSinks_TestC2Ev:
+function _ZN30LogChannelTest_ClearSinks_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:  116:TEST(LogChannelTest, ClearSinks)
+call    0 returned 100%
+------------------
+_ZN30LogChannelTest_ClearSinks_TestD0Ev:
+function _ZN30LogChannelTest_ClearSinks_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:  116:TEST(LogChannelTest, ClearSinks)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN30LogChannelTest_ClearSinks_TestD2Ev:
+function _ZN30LogChannelTest_ClearSinks_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:  116:TEST(LogChannelTest, ClearSinks)
+call    0 returned 100%
+------------------
+_ZN30LogChannelTest_ClearSinks_Test8TestBodyEv:
+function _ZN30LogChannelTest_ClearSinks_Test8TestBodyEv called 1 returned 100% blocks executed 39%
+        1:  116:TEST(LogChannelTest, ClearSinks)
+        -:  117:{
+        1:  118:	auto sink = std::make_shared<TestSink>();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  119:	LogChannel ch("test");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+        1:  120:	ch.addSink(sink);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 never executed
+        1:  121:	ch.emit(makeRecord(LogLevel::hInfo, "before"));
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+        -:  122:
+        1:  123:	ch.clearSinks();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  124:	ch.emit(makeRecord(LogLevel::hInfo, "after"));
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+        -:  125:
+       1*:  126:	EXPECT_NE(sink->data().find("before"), std::string::npos);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+call    8 returned 100%
+call    9 returned 100%
+branch 10 taken 0% (fallthrough)
+branch 11 taken 100%
+call   12 never executed
+branch 13 never executed (fallthrough)
+branch 14 never executed (throw)
+call   15 never executed
+call   16 never executed
+branch 17 never executed (fallthrough)
+branch 18 never executed (throw)
+call   19 never executed
+branch 20 never executed (fallthrough)
+branch 21 never executed (throw)
+call   22 never executed
+call   23 never executed
+call   24 returned 100%
+call   25 never executed
+call   26 never executed
+call   27 never executed
+call   28 never executed
+       1*:  127:	EXPECT_EQ(sink->data().find("after"), std::string::npos);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+call    8 returned 100%
+call    9 returned 100%
+branch 10 taken 0% (fallthrough)
+branch 11 taken 100%
+call   12 never executed
+branch 13 never executed (fallthrough)
+branch 14 never executed (throw)
+call   15 never executed
+call   16 never executed
+branch 17 never executed (fallthrough)
+branch 18 never executed (throw)
+call   19 never executed
+branch 20 never executed (fallthrough)
+branch 21 never executed (throw)
+call   22 never executed
+call   23 never executed
+call   24 returned 100%
+call   25 never executed
+call   26 never executed
+call   27 never executed
+call   28 never executed
+        1:  128:}
+call    0 returned 100%
+call    1 returned 100%
+call    2 never executed
+call    3 never executed
+------------------
+        -:  129:
+        4:  130:TEST(LogChannelTest, NameAccessor)
+        -:  131:{
+        1:  132:	LogChannel ch("my-channel");
+       1*:  133:	EXPECT_EQ(ch.name(), "my-channel");
+        1:  134:}
+------------------
+_ZN32LogChannelTest_NameAccessor_TestC2Ev:
+function _ZN32LogChannelTest_NameAccessor_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:  130:TEST(LogChannelTest, NameAccessor)
+call    0 returned 100%
+------------------
+_ZN32LogChannelTest_NameAccessor_TestD0Ev:
+function _ZN32LogChannelTest_NameAccessor_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:  130:TEST(LogChannelTest, NameAccessor)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN32LogChannelTest_NameAccessor_TestD2Ev:
+function _ZN32LogChannelTest_NameAccessor_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:  130:TEST(LogChannelTest, NameAccessor)
+call    0 returned 100%
+------------------
+_ZN32LogChannelTest_NameAccessor_Test8TestBodyEv:
+function _ZN32LogChannelTest_NameAccessor_Test8TestBodyEv called 1 returned 100% blocks executed 37%
+        1:  130:TEST(LogChannelTest, NameAccessor)
+        -:  131:{
+        1:  132:	LogChannel ch("my-channel");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+       1*:  133:	EXPECT_EQ(ch.name(), "my-channel");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 0% (fallthrough)
+branch  8 taken 100%
+call    9 never executed
+branch 10 never executed (fallthrough)
+branch 11 never executed (throw)
+call   12 never executed
+call   13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed (throw)
+call   16 never executed
+branch 17 never executed (fallthrough)
+branch 18 never executed (throw)
+call   19 never executed
+call   20 never executed
+call   21 returned 100%
+call   22 never executed
+call   23 never executed
+call   24 never executed
+        1:  134:}
+call    0 returned 100%
+call    1 never executed
+------------------
+        -:  135:
+        -:  136:// ============ LogChannelRegistry 测试 ============
+        -:  137:
+        4:  138:TEST(LogChannelRegistryTest, GetOrCreate)
+        -:  139:{
+        1:  140:	LogChannelRegistry registry;
+        1:  141:	auto ch = registry.getOrCreate("access");
+       1*:  142:	ASSERT_NE(ch, nullptr);
+       1*:  143:	EXPECT_EQ(ch->name(), "access");
+        -:  144:
+        -:  145:	// 第二次获取应返回同一对象
+        1:  146:	auto ch2 = registry.getOrCreate("access");
+       1*:  147:	EXPECT_EQ(ch.get(), ch2.get());
+        1:  148:}
+------------------
+_ZN39LogChannelRegistryTest_GetOrCreate_TestC2Ev:
+function _ZN39LogChannelRegistryTest_GetOrCreate_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:  138:TEST(LogChannelRegistryTest, GetOrCreate)
+call    0 returned 100%
+------------------
+_ZN39LogChannelRegistryTest_GetOrCreate_TestD0Ev:
+function _ZN39LogChannelRegistryTest_GetOrCreate_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:  138:TEST(LogChannelRegistryTest, GetOrCreate)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN39LogChannelRegistryTest_GetOrCreate_TestD2Ev:
+function _ZN39LogChannelRegistryTest_GetOrCreate_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:  138:TEST(LogChannelRegistryTest, GetOrCreate)
+call    0 returned 100%
+------------------
+_ZN39LogChannelRegistryTest_GetOrCreate_Test8TestBodyEv:
+function _ZN39LogChannelRegistryTest_GetOrCreate_Test8TestBodyEv called 1 returned 100% blocks executed 37%
+        1:  138:TEST(LogChannelRegistryTest, GetOrCreate)
+        -:  139:{
+        1:  140:	LogChannelRegistry registry;
+call    0 returned 100%
+        1:  141:	auto ch = registry.getOrCreate("access");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+       1*:  142:	ASSERT_NE(ch, nullptr);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 0% (fallthrough)
+branch  5 taken 100%
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed (throw)
+call    9 never executed
+call   10 never executed
+branch 11 never executed (fallthrough)
+branch 12 never executed (throw)
+call   13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed (throw)
+call   16 never executed
+call   17 never executed
+call   18 returned 100%
+branch 19 taken 100% (fallthrough)
+branch 20 taken 0%
+call   21 never executed
+call   22 never executed
+call   23 never executed
+       1*:  143:	EXPECT_EQ(ch->name(), "access");
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+call    7 returned 100%
+branch  8 taken 0% (fallthrough)
+branch  9 taken 100%
+call   10 never executed
+branch 11 never executed (fallthrough)
+branch 12 never executed (throw)
+call   13 never executed
+call   14 never executed
+branch 15 never executed (fallthrough)
+branch 16 never executed (throw)
+call   17 never executed
+branch 18 never executed (fallthrough)
+branch 19 never executed (throw)
+call   20 never executed
+call   21 never executed
+call   22 returned 100%
+call   23 never executed
+call   24 never executed
+call   25 never executed
+        -:  144:
+        -:  145:	// 第二次获取应返回同一对象
+        1:  146:	auto ch2 = registry.getOrCreate("access");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+       1*:  147:	EXPECT_EQ(ch.get(), ch2.get());
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+branch  6 taken 0% (fallthrough)
+branch  7 taken 100%
+call    8 never executed
+branch  9 never executed (fallthrough)
+branch 10 never executed (throw)
+call   11 never executed
+call   12 never executed
+branch 13 never executed (fallthrough)
+branch 14 never executed (throw)
+call   15 never executed
+branch 16 never executed (fallthrough)
+branch 17 never executed (throw)
+call   18 never executed
+call   19 never executed
+call   20 returned 100%
+call   21 never executed
+call   22 never executed
+call   23 never executed
+        1:  148:}
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0%
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0%
+call    7 never executed
+call    8 never executed
+call    9 never executed
+------------------
+        -:  149:
+        4:  150:TEST(LogChannelRegistryTest, GetNonExistent)
+        -:  151:{
+        1:  152:	LogChannelRegistry registry;
+        1:  153:	auto ch = registry.get("nonexistent");
+       1*:  154:	EXPECT_EQ(ch, nullptr);
+        1:  155:}
+------------------
+_ZN42LogChannelRegistryTest_GetNonExistent_TestC2Ev:
+function _ZN42LogChannelRegistryTest_GetNonExistent_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:  150:TEST(LogChannelRegistryTest, GetNonExistent)
+call    0 returned 100%
+------------------
+_ZN42LogChannelRegistryTest_GetNonExistent_TestD0Ev:
+function _ZN42LogChannelRegistryTest_GetNonExistent_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:  150:TEST(LogChannelRegistryTest, GetNonExistent)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN42LogChannelRegistryTest_GetNonExistent_TestD2Ev:
+function _ZN42LogChannelRegistryTest_GetNonExistent_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:  150:TEST(LogChannelRegistryTest, GetNonExistent)
+call    0 returned 100%
+------------------
+_ZN42LogChannelRegistryTest_GetNonExistent_Test8TestBodyEv:
+function _ZN42LogChannelRegistryTest_GetNonExistent_Test8TestBodyEv called 1 returned 100% blocks executed 36%
+        1:  150:TEST(LogChannelRegistryTest, GetNonExistent)
+        -:  151:{
+        1:  152:	LogChannelRegistry registry;
+call    0 returned 100%
+        1:  153:	auto ch = registry.get("nonexistent");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+       1*:  154:	EXPECT_EQ(ch, nullptr);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 0% (fallthrough)
+branch  5 taken 100%
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed (throw)
+call    9 never executed
+call   10 never executed
+branch 11 never executed (fallthrough)
+branch 12 never executed (throw)
+call   13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed (throw)
+call   16 never executed
+call   17 never executed
+call   18 returned 100%
+call   19 never executed
+call   20 never executed
+call   21 never executed
+        1:  155:}
+call    0 returned 100%
+call    1 returned 100%
+call    2 never executed
+call    3 never executed
+------------------
+        -:  156:
+        4:  157:TEST(LogChannelRegistryTest, ListChannels)
+        -:  158:{
+        1:  159:	LogChannelRegistry registry;
+        2:  160:	registry.getOrCreate("access")->setLevel(LogLevel::hInfo);
+        1:  161:	registry.getOrCreate("audit")->setLevel(LogLevel::hWarn);
+        -:  162:
+        1:  163:	auto list = registry.listChannels();
+       1*:  164:	EXPECT_EQ(list.size(), 2u);
+        -:  165:
+        1:  166:	bool foundAccess = false;
+        1:  167:	bool foundAudit = false;
+        3:  168:	for (const auto& [name, lvl] : list)
+        -:  169:	{
+        2:  170:		if (name == "access")
+        -:  171:		{
+        1:  172:			foundAccess = true;
+       1*:  173:			EXPECT_EQ(lvl, LogLevel::hInfo);
+        -:  174:		}
+        2:  175:		if (name == "audit")
+        -:  176:		{
+        1:  177:			foundAudit = true;
+       1*:  178:			EXPECT_EQ(lvl, LogLevel::hWarn);
+        -:  179:		}
+        -:  180:	}
+       1*:  181:	EXPECT_TRUE(foundAccess);
+       1*:  182:	EXPECT_TRUE(foundAudit);
+        1:  183:}
+------------------
+_ZN40LogChannelRegistryTest_ListChannels_TestC2Ev:
+function _ZN40LogChannelRegistryTest_ListChannels_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:  157:TEST(LogChannelRegistryTest, ListChannels)
+call    0 returned 100%
+------------------
+_ZN40LogChannelRegistryTest_ListChannels_TestD0Ev:
+function _ZN40LogChannelRegistryTest_ListChannels_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:  157:TEST(LogChannelRegistryTest, ListChannels)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN40LogChannelRegistryTest_ListChannels_TestD2Ev:
+function _ZN40LogChannelRegistryTest_ListChannels_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:  157:TEST(LogChannelRegistryTest, ListChannels)
+call    0 returned 100%
+------------------
+_ZN40LogChannelRegistryTest_ListChannels_Test8TestBodyEv:
+function _ZN40LogChannelRegistryTest_ListChannels_Test8TestBodyEv called 1 returned 100% blocks executed 34%
+        1:  157:TEST(LogChannelRegistryTest, ListChannels)
+        -:  158:{
+        1:  159:	LogChannelRegistry registry;
+call    0 returned 100%
+        2:  160:	registry.getOrCreate("access")->setLevel(LogLevel::hInfo);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 returned 100%
+branch  8 taken 100% (fallthrough)
+branch  9 taken 0% (throw)
+call   10 returned 100%
+call   11 returned 100%
+call   12 never executed
+call   13 never executed
+        1:  161:	registry.getOrCreate("audit")->setLevel(LogLevel::hWarn);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 returned 100%
+branch  8 taken 100% (fallthrough)
+branch  9 taken 0% (throw)
+call   10 returned 100%
+call   11 returned 100%
+call   12 never executed
+call   13 never executed
+        -:  162:
+        1:  163:	auto list = registry.listChannels();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       1*:  164:	EXPECT_EQ(list.size(), 2u);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 0% (fallthrough)
+branch  6 taken 100%
+call    7 never executed
+branch  8 never executed (fallthrough)
+branch  9 never executed (throw)
+call   10 never executed
+call   11 never executed
+branch 12 never executed (fallthrough)
+branch 13 never executed (throw)
+call   14 never executed
+branch 15 never executed (fallthrough)
+branch 16 never executed (throw)
+call   17 never executed
+call   18 never executed
+call   19 returned 100%
+call   20 never executed
+call   21 never executed
+call   22 never executed
+        -:  165:
+        1:  166:	bool foundAccess = false;
+        1:  167:	bool foundAudit = false;
+        3:  168:	for (const auto& [name, lvl] : list)
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+call    5 returned 100%
+call    6 returned 100%
+branch  7 taken 67%
+branch  8 taken 33% (fallthrough)
+        -:  169:	{
+        2:  170:		if (name == "access")
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+branch  3 taken 50% (fallthrough)
+branch  4 taken 50%
+        -:  171:		{
+        1:  172:			foundAccess = true;
+       1*:  173:			EXPECT_EQ(lvl, LogLevel::hInfo);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 0% (fallthrough)
+branch  5 taken 100%
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed (throw)
+call    9 never executed
+call   10 never executed
+branch 11 never executed (fallthrough)
+branch 12 never executed (throw)
+call   13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed (throw)
+call   16 never executed
+call   17 never executed
+call   18 returned 100%
+call   19 never executed
+call   20 never executed
+call   21 never executed
+        -:  174:		}
+        2:  175:		if (name == "audit")
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+branch  3 taken 50% (fallthrough)
+branch  4 taken 50%
+        -:  176:		{
+        1:  177:			foundAudit = true;
+       1*:  178:			EXPECT_EQ(lvl, LogLevel::hWarn);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 0% (fallthrough)
+branch  5 taken 100%
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed (throw)
+call    9 never executed
+call   10 never executed
+branch 11 never executed (fallthrough)
+branch 12 never executed (throw)
+call   13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed (throw)
+call   16 never executed
+call   17 never executed
+call   18 returned 100%
+call   19 never executed
+call   20 never executed
+call   21 never executed
+        -:  179:		}
+        -:  180:	}
+       1*:  181:	EXPECT_TRUE(foundAccess);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 0% (fallthrough)
+branch  3 taken 100%
+call    4 never executed
+branch  5 never executed (fallthrough)
+branch  6 never executed (throw)
+call    7 never executed
+branch  8 never executed (fallthrough)
+branch  9 never executed (throw)
+call   10 never executed
+call   11 never executed
+branch 12 never executed (fallthrough)
+branch 13 never executed (throw)
+call   14 never executed
+branch 15 never executed (fallthrough)
+branch 16 never executed (throw)
+call   17 never executed
+call   18 never executed
+call   19 never executed
+call   20 returned 100%
+call   21 never executed
+call   22 never executed
+call   23 never executed
+call   24 never executed
+       1*:  182:	EXPECT_TRUE(foundAudit);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 0% (fallthrough)
+branch  3 taken 100%
+call    4 never executed
+branch  5 never executed (fallthrough)
+branch  6 never executed (throw)
+call    7 never executed
+branch  8 never executed (fallthrough)
+branch  9 never executed (throw)
+call   10 never executed
+call   11 never executed
+branch 12 never executed (fallthrough)
+branch 13 never executed (throw)
+call   14 never executed
+branch 15 never executed (fallthrough)
+branch 16 never executed (throw)
+call   17 never executed
+call   18 never executed
+call   19 never executed
+call   20 returned 100%
+call   21 never executed
+call   22 never executed
+call   23 never executed
+call   24 never executed
+        1:  183:}
+call    0 returned 100%
+call    1 returned 100%
+call    2 never executed
+call    3 never executed
+------------------
+        -:  184:
+        -:  185:// ============ 通道宏集成测试 ============
+        -:  186:
+        4:  187:TEST(LogChannelTest, MacroHICAL_LOG_TO)
+        -:  188:{
+        1:  189:	auto sink = std::make_shared<TestSink>();
+        2:  190:	auto ch = Logger::instance().channels().getOrCreate("test_macro");
+        1:  191:	ch->addSink(sink);
+        1:  192:	ch->setLevel(LogLevel::hTrace);
+        -:  193:
+       4*:  194:	HICAL_LOG_TO("test_macro", Info, "macro test port={}", 8080);
+        -:  195:
+        1:  196:	auto data = sink->data();
+       1*:  197:	EXPECT_NE(data.find("macro test port=8080"), std::string::npos);
+        -:  198:
+        -:  199:	// 清理
+        1:  200:	ch->clearSinks();
+        1:  201:}
+------------------
+_ZN37LogChannelTest_MacroHICAL_LOG_TO_TestC2Ev:
+function _ZN37LogChannelTest_MacroHICAL_LOG_TO_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:  187:TEST(LogChannelTest, MacroHICAL_LOG_TO)
+call    0 returned 100%
+------------------
+_ZN37LogChannelTest_MacroHICAL_LOG_TO_TestD0Ev:
+function _ZN37LogChannelTest_MacroHICAL_LOG_TO_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:  187:TEST(LogChannelTest, MacroHICAL_LOG_TO)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN37LogChannelTest_MacroHICAL_LOG_TO_TestD2Ev:
+function _ZN37LogChannelTest_MacroHICAL_LOG_TO_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:  187:TEST(LogChannelTest, MacroHICAL_LOG_TO)
+call    0 returned 100%
+------------------
+_ZN37LogChannelTest_MacroHICAL_LOG_TO_Test8TestBodyEv:
+function _ZN37LogChannelTest_MacroHICAL_LOG_TO_Test8TestBodyEv called 1 returned 100% blocks executed 53%
+        1:  187:TEST(LogChannelTest, MacroHICAL_LOG_TO)
+        -:  188:{
+        1:  189:	auto sink = std::make_shared<TestSink>();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        2:  190:	auto ch = Logger::instance().channels().getOrCreate("test_macro");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+call    9 returned 100%
+branch 10 taken 100% (fallthrough)
+branch 11 taken 0% (throw)
+call   12 returned 100%
+call   13 never executed
+        1:  191:	ch->addSink(sink);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+call    6 never executed
+        1:  192:	ch->setLevel(LogLevel::hTrace);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:  193:
+       4*:  194:	HICAL_LOG_TO("test_macro", Info, "macro test port={}", 8080);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+call    9 returned 100%
+branch 10 taken 100% (fallthrough)
+branch 11 taken 0% (throw)
+call   12 returned 100%
+call   13 returned 100%
+branch 14 taken 100% (fallthrough)
+branch 15 taken 0%
+call   16 returned 100%
+call   17 returned 100%
+branch 18 taken 100% (fallthrough)
+branch 19 taken 0% (throw)
+branch 20 taken 100% (fallthrough)
+branch 21 taken 0%
+branch 22 taken 100% (fallthrough)
+branch 23 taken 0%
+call   24 returned 100%
+branch 25 taken 100% (fallthrough)
+branch 26 taken 0% (throw)
+call   27 returned 100%
+call   28 returned 100%
+branch 29 taken 100% (fallthrough)
+branch 30 taken 0% (throw)
+call   31 returned 100%
+call   32 returned 100%
+call   33 returned 100%
+call   34 returned 100%
+branch 35 taken 100% (fallthrough)
+branch 36 taken 0% (throw)
+call   37 returned 100%
+call   38 returned 100%
+call   39 never executed
+call   40 never executed
+call   41 never executed
+        -:  195:
+        1:  196:	auto data = sink->data();
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+       1*:  197:	EXPECT_NE(data.find("macro test port=8080"), std::string::npos);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 0% (fallthrough)
+branch  6 taken 100%
+call    7 never executed
+branch  8 never executed (fallthrough)
+branch  9 never executed (throw)
+call   10 never executed
+call   11 never executed
+branch 12 never executed (fallthrough)
+branch 13 never executed (throw)
+call   14 never executed
+branch 15 never executed (fallthrough)
+branch 16 never executed (throw)
+call   17 never executed
+call   18 never executed
+call   19 returned 100%
+call   20 never executed
+call   21 never executed
+call   22 never executed
+        -:  198:
+        -:  199:	// 清理
+        1:  200:	ch->clearSinks();
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        1:  201:}
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 never executed
+call    4 never executed
+call    5 never executed
+------------------
+        -:  202:
+        4:  203:TEST(LogChannelTest, MacroHICAL_LOG_TO_F)
+        -:  204:{
+        1:  205:	auto sink = std::make_shared<TestSink>();
+        2:  206:	auto ch = Logger::instance().channels().getOrCreate("test_macro_f");
+        1:  207:	ch->addSink(sink);
+        1:  208:	ch->setFormatter(std::make_shared<JsonFormatter>());
+        1:  209:	ch->setLevel(LogLevel::hTrace);
+        -:  210:
+        1:  211:	boost::json::object fields;
+        1:  212:	fields["status"] = 200;
+       4*:  213:	HICAL_LOG_TO_F("test_macro_f", Info, fields, "GET /api");
+        -:  214:
+        1:  215:	auto data = sink->data();
+       1*:  216:	EXPECT_NE(data.find("\"status\":200"), std::string::npos);
+       1*:  217:	EXPECT_NE(data.find("GET /api"), std::string::npos);
+        -:  218:
+        1:  219:	ch->clearSinks();
+        1:  220:}
+------------------
+_ZN39LogChannelTest_MacroHICAL_LOG_TO_F_TestC2Ev:
+function _ZN39LogChannelTest_MacroHICAL_LOG_TO_F_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:  203:TEST(LogChannelTest, MacroHICAL_LOG_TO_F)
+call    0 returned 100%
+------------------
+_ZN39LogChannelTest_MacroHICAL_LOG_TO_F_TestD0Ev:
+function _ZN39LogChannelTest_MacroHICAL_LOG_TO_F_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:  203:TEST(LogChannelTest, MacroHICAL_LOG_TO_F)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN39LogChannelTest_MacroHICAL_LOG_TO_F_TestD2Ev:
+function _ZN39LogChannelTest_MacroHICAL_LOG_TO_F_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:  203:TEST(LogChannelTest, MacroHICAL_LOG_TO_F)
+call    0 returned 100%
+------------------
+_ZN39LogChannelTest_MacroHICAL_LOG_TO_F_Test8TestBodyEv:
+function _ZN39LogChannelTest_MacroHICAL_LOG_TO_F_Test8TestBodyEv called 1 returned 100% blocks executed 50%
+        1:  203:TEST(LogChannelTest, MacroHICAL_LOG_TO_F)
+        -:  204:{
+        1:  205:	auto sink = std::make_shared<TestSink>();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        2:  206:	auto ch = Logger::instance().channels().getOrCreate("test_macro_f");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+call    9 returned 100%
+branch 10 taken 100% (fallthrough)
+branch 11 taken 0% (throw)
+call   12 returned 100%
+call   13 never executed
+        1:  207:	ch->addSink(sink);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+call    6 never executed
+        1:  208:	ch->setFormatter(std::make_shared<JsonFormatter>());
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+call    8 returned 100%
+call    9 returned 100%
+call   10 never executed
+call   11 never executed
+        1:  209:	ch->setLevel(LogLevel::hTrace);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:  210:
+        1:  211:	boost::json::object fields;
+call    0 returned 100%
+        1:  212:	fields["status"] = 200;
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+       4*:  213:	HICAL_LOG_TO_F("test_macro_f", Info, fields, "GET /api");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+call    9 returned 100%
+branch 10 taken 100% (fallthrough)
+branch 11 taken 0% (throw)
+call   12 returned 100%
+call   13 returned 100%
+branch 14 taken 100% (fallthrough)
+branch 15 taken 0%
+call   16 returned 100%
+call   17 returned 100%
+branch 18 taken 100% (fallthrough)
+branch 19 taken 0% (throw)
+branch 20 taken 100% (fallthrough)
+branch 21 taken 0%
+branch 22 taken 100% (fallthrough)
+branch 23 taken 0%
+call   24 returned 100%
+branch 25 taken 100% (fallthrough)
+branch 26 taken 0% (throw)
+call   27 returned 100%
+call   28 returned 100%
+branch 29 taken 100% (fallthrough)
+branch 30 taken 0% (throw)
+call   31 returned 100%
+call   32 returned 100%
+call   33 returned 100%
+branch 34 taken 100% (fallthrough)
+branch 35 taken 0% (throw)
+call   36 returned 100%
+call   37 returned 100%
+branch 38 taken 100% (fallthrough)
+branch 39 taken 0% (throw)
+call   40 returned 100%
+call   41 returned 100%
+call   42 never executed
+call   43 never executed
+call   44 never executed
+        -:  214:
+        1:  215:	auto data = sink->data();
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+       1*:  216:	EXPECT_NE(data.find("\"status\":200"), std::string::npos);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 0% (fallthrough)
+branch  6 taken 100%
+call    7 never executed
+branch  8 never executed (fallthrough)
+branch  9 never executed (throw)
+call   10 never executed
+call   11 never executed
+branch 12 never executed (fallthrough)
+branch 13 never executed (throw)
+call   14 never executed
+branch 15 never executed (fallthrough)
+branch 16 never executed (throw)
+call   17 never executed
+call   18 never executed
+call   19 returned 100%
+call   20 never executed
+call   21 never executed
+call   22 never executed
+       1*:  217:	EXPECT_NE(data.find("GET /api"), std::string::npos);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 0% (fallthrough)
+branch  6 taken 100%
+call    7 never executed
+branch  8 never executed (fallthrough)
+branch  9 never executed (throw)
+call   10 never executed
+call   11 never executed
+branch 12 never executed (fallthrough)
+branch 13 never executed (throw)
+call   14 never executed
+branch 15 never executed (fallthrough)
+branch 16 never executed (throw)
+call   17 never executed
+call   18 never executed
+call   19 returned 100%
+call   20 never executed
+call   21 never executed
+call   22 never executed
+        -:  218:
+        1:  219:	ch->clearSinks();
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        1:  220:}
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 never executed
+call    5 never executed
+call    6 never executed
+call    7 never executed
+------------------

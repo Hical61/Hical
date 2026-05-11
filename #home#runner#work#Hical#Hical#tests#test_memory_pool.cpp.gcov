@@ -1,0 +1,2987 @@
+        -:    0:Source:/home/runner/work/Hical/Hical/tests/test_memory_pool.cpp
+        -:    1:#include "core/MemoryPool.h"
+        -:    2:#include "core/PmrBuffer.h"
+        -:    3:#include <gtest/gtest.h>
+        -:    4:#include <array>
+        -:    5:#include <stdexcept>
+        -:    6:#include <thread>
+        -:    7:#include <vector>
+        -:    8:
+        -:    9:using namespace hical;
+        -:   10:
+        -:   11:// ============ MemoryPool 测试 ============
+        -:   12:
+        -:   13:// 测试单例模式
+        4:   14:TEST(MemoryPoolTest, Singleton)
+        -:   15:{
+        1:   16:	auto& pool1 = MemoryPool::instance();
+        1:   17:	auto& pool2 = MemoryPool::instance();
+       1*:   18:	EXPECT_EQ(&pool1, &pool2);
+        1:   19:}
+------------------
+_ZN29MemoryPoolTest_Singleton_TestC2Ev:
+function _ZN29MemoryPoolTest_Singleton_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:   14:TEST(MemoryPoolTest, Singleton)
+call    0 returned 100%
+------------------
+_ZN29MemoryPoolTest_Singleton_TestD0Ev:
+function _ZN29MemoryPoolTest_Singleton_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:   14:TEST(MemoryPoolTest, Singleton)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN29MemoryPoolTest_Singleton_TestD2Ev:
+function _ZN29MemoryPoolTest_Singleton_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:   14:TEST(MemoryPoolTest, Singleton)
+call    0 returned 100%
+------------------
+_ZN29MemoryPoolTest_Singleton_Test8TestBodyEv:
+function _ZN29MemoryPoolTest_Singleton_Test8TestBodyEv called 1 returned 100% blocks executed 32%
+        1:   14:TEST(MemoryPoolTest, Singleton)
+        -:   15:{
+        1:   16:	auto& pool1 = MemoryPool::instance();
+call    0 returned 100%
+        1:   17:	auto& pool2 = MemoryPool::instance();
+call    0 returned 100%
+       1*:   18:	EXPECT_EQ(&pool1, &pool2);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 0% (fallthrough)
+branch  5 taken 100%
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed (throw)
+call    9 never executed
+call   10 never executed
+branch 11 never executed (fallthrough)
+branch 12 never executed (throw)
+call   13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed (throw)
+call   16 never executed
+call   17 never executed
+call   18 returned 100%
+call   19 never executed
+call   20 never executed
+call   21 never executed
+        1:   19:}
+------------------
+        -:   20:
+        -:   21:// 测试全局分配器可用
+        4:   22:TEST(MemoryPoolTest, GlobalAllocator)
+        -:   23:{
+        1:   24:	auto allocator = MemoryPool::instance().globalAllocator();
+        1:   25:	std::pmr::vector<int> vec(allocator);
+        1:   26:	vec.push_back(1);
+        1:   27:	vec.push_back(2);
+        1:   28:	vec.push_back(3);
+        -:   29:
+       1*:   30:	EXPECT_EQ(vec.size(), 3);
+       1*:   31:	EXPECT_EQ(vec[0], 1);
+       1*:   32:	EXPECT_EQ(vec[2], 3);
+        1:   33:}
+------------------
+_ZN35MemoryPoolTest_GlobalAllocator_TestC2Ev:
+function _ZN35MemoryPoolTest_GlobalAllocator_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:   22:TEST(MemoryPoolTest, GlobalAllocator)
+call    0 returned 100%
+------------------
+_ZN35MemoryPoolTest_GlobalAllocator_TestD0Ev:
+function _ZN35MemoryPoolTest_GlobalAllocator_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:   22:TEST(MemoryPoolTest, GlobalAllocator)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN35MemoryPoolTest_GlobalAllocator_TestD2Ev:
+function _ZN35MemoryPoolTest_GlobalAllocator_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:   22:TEST(MemoryPoolTest, GlobalAllocator)
+call    0 returned 100%
+------------------
+_ZN35MemoryPoolTest_GlobalAllocator_Test8TestBodyEv:
+function _ZN35MemoryPoolTest_GlobalAllocator_Test8TestBodyEv called 1 returned 100% blocks executed 30%
+        1:   22:TEST(MemoryPoolTest, GlobalAllocator)
+        -:   23:{
+        1:   24:	auto allocator = MemoryPool::instance().globalAllocator();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+        1:   25:	std::pmr::vector<int> vec(allocator);
+call    0 returned 100%
+call    1 returned 100%
+        1:   26:	vec.push_back(1);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:   27:	vec.push_back(2);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:   28:	vec.push_back(3);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:   29:
+       1*:   30:	EXPECT_EQ(vec.size(), 3);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 0% (fallthrough)
+branch  6 taken 100%
+call    7 never executed
+branch  8 never executed (fallthrough)
+branch  9 never executed (throw)
+call   10 never executed
+call   11 never executed
+branch 12 never executed (fallthrough)
+branch 13 never executed (throw)
+call   14 never executed
+branch 15 never executed (fallthrough)
+branch 16 never executed (throw)
+call   17 never executed
+call   18 never executed
+call   19 returned 100%
+call   20 never executed
+call   21 never executed
+call   22 never executed
+       1*:   31:	EXPECT_EQ(vec[0], 1);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 0% (fallthrough)
+branch  6 taken 100%
+call    7 never executed
+branch  8 never executed (fallthrough)
+branch  9 never executed (throw)
+call   10 never executed
+call   11 never executed
+branch 12 never executed (fallthrough)
+branch 13 never executed (throw)
+call   14 never executed
+branch 15 never executed (fallthrough)
+branch 16 never executed (throw)
+call   17 never executed
+call   18 never executed
+call   19 returned 100%
+call   20 never executed
+call   21 never executed
+call   22 never executed
+       1*:   32:	EXPECT_EQ(vec[2], 3);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 0% (fallthrough)
+branch  6 taken 100%
+call    7 never executed
+branch  8 never executed (fallthrough)
+branch  9 never executed (throw)
+call   10 never executed
+call   11 never executed
+branch 12 never executed (fallthrough)
+branch 13 never executed (throw)
+call   14 never executed
+branch 15 never executed (fallthrough)
+branch 16 never executed (throw)
+call   17 never executed
+call   18 never executed
+call   19 returned 100%
+call   20 never executed
+call   21 never executed
+call   22 never executed
+        1:   33:}
+call    0 returned 100%
+call    1 never executed
+------------------
+        -:   34:
+        -:   35:// 测试线程本地分配器可用
+        4:   36:TEST(MemoryPoolTest, ThreadLocalAllocator)
+        -:   37:{
+        1:   38:	auto allocator = MemoryPool::instance().threadLocalAllocator();
+        1:   39:	std::pmr::vector<char> buffer(allocator);
+        1:   40:	buffer.resize(4096);
+        -:   41:
+       1*:   42:	EXPECT_EQ(buffer.size(), 4096);
+        1:   43:}
+------------------
+_ZN40MemoryPoolTest_ThreadLocalAllocator_TestC2Ev:
+function _ZN40MemoryPoolTest_ThreadLocalAllocator_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:   36:TEST(MemoryPoolTest, ThreadLocalAllocator)
+call    0 returned 100%
+------------------
+_ZN40MemoryPoolTest_ThreadLocalAllocator_TestD0Ev:
+function _ZN40MemoryPoolTest_ThreadLocalAllocator_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:   36:TEST(MemoryPoolTest, ThreadLocalAllocator)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN40MemoryPoolTest_ThreadLocalAllocator_TestD2Ev:
+function _ZN40MemoryPoolTest_ThreadLocalAllocator_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:   36:TEST(MemoryPoolTest, ThreadLocalAllocator)
+call    0 returned 100%
+------------------
+_ZN40MemoryPoolTest_ThreadLocalAllocator_Test8TestBodyEv:
+function _ZN40MemoryPoolTest_ThreadLocalAllocator_Test8TestBodyEv called 1 returned 100% blocks executed 39%
+        1:   36:TEST(MemoryPoolTest, ThreadLocalAllocator)
+        -:   37:{
+        1:   38:	auto allocator = MemoryPool::instance().threadLocalAllocator();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+        1:   39:	std::pmr::vector<char> buffer(allocator);
+call    0 returned 100%
+call    1 returned 100%
+        1:   40:	buffer.resize(4096);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:   41:
+       1*:   42:	EXPECT_EQ(buffer.size(), 4096);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 0% (fallthrough)
+branch  6 taken 100%
+call    7 never executed
+branch  8 never executed (fallthrough)
+branch  9 never executed (throw)
+call   10 never executed
+call   11 never executed
+branch 12 never executed (fallthrough)
+branch 13 never executed (throw)
+call   14 never executed
+branch 15 never executed (fallthrough)
+branch 16 never executed (throw)
+call   17 never executed
+call   18 never executed
+call   19 returned 100%
+call   20 never executed
+call   21 never executed
+call   22 never executed
+        1:   43:}
+call    0 returned 100%
+call    1 never executed
+------------------
+        -:   44:
+        -:   45:// 测试请求级单调池
+        4:   46:TEST(MemoryPoolTest, RequestPool)
+        -:   47:{
+        1:   48:	auto pool = MemoryPool::instance().createRequestPool(1024);
+       1*:   49:	EXPECT_NE(pool.get(), nullptr);
+        -:   50:
+        1:   51:	std::pmr::polymorphic_allocator<std::byte> allocator(pool.get());
+        2:   52:	std::pmr::vector<int> vec(allocator);
+      101:   53:	for (int i = 0; i < 100; ++i)
+        -:   54:	{
+      100:   55:		vec.push_back(i);
+        -:   56:	}
+        -:   57:
+       1*:   58:	EXPECT_EQ(vec.size(), 100);
+       1*:   59:	EXPECT_EQ(vec[99], 99);
+        -:   60:	// pool 析构时整体释放内存
+        1:   61:}
+------------------
+_ZN31MemoryPoolTest_RequestPool_TestC2Ev:
+function _ZN31MemoryPoolTest_RequestPool_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:   46:TEST(MemoryPoolTest, RequestPool)
+call    0 returned 100%
+------------------
+_ZN31MemoryPoolTest_RequestPool_TestD0Ev:
+function _ZN31MemoryPoolTest_RequestPool_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:   46:TEST(MemoryPoolTest, RequestPool)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN31MemoryPoolTest_RequestPool_TestD2Ev:
+function _ZN31MemoryPoolTest_RequestPool_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:   46:TEST(MemoryPoolTest, RequestPool)
+call    0 returned 100%
+------------------
+_ZN31MemoryPoolTest_RequestPool_Test8TestBodyEv:
+function _ZN31MemoryPoolTest_RequestPool_Test8TestBodyEv called 1 returned 100% blocks executed 33%
+        1:   46:TEST(MemoryPoolTest, RequestPool)
+        -:   47:{
+        1:   48:	auto pool = MemoryPool::instance().createRequestPool(1024);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+       1*:   49:	EXPECT_NE(pool.get(), nullptr);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 0% (fallthrough)
+branch  6 taken 100%
+call    7 never executed
+branch  8 never executed (fallthrough)
+branch  9 never executed (throw)
+call   10 never executed
+call   11 never executed
+branch 12 never executed (fallthrough)
+branch 13 never executed (throw)
+call   14 never executed
+branch 15 never executed (fallthrough)
+branch 16 never executed (throw)
+call   17 never executed
+call   18 never executed
+call   19 returned 100%
+call   20 never executed
+call   21 never executed
+call   22 never executed
+        -:   50:
+        1:   51:	std::pmr::polymorphic_allocator<std::byte> allocator(pool.get());
+call    0 returned 100%
+call    1 returned 100%
+        2:   52:	std::pmr::vector<int> vec(allocator);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 never executed
+      101:   53:	for (int i = 0; i < 100; ++i)
+branch  0 taken 99%
+branch  1 taken 1% (fallthrough)
+        -:   54:	{
+      100:   55:		vec.push_back(i);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:   56:	}
+        -:   57:
+       1*:   58:	EXPECT_EQ(vec.size(), 100);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 0% (fallthrough)
+branch  6 taken 100%
+call    7 never executed
+branch  8 never executed (fallthrough)
+branch  9 never executed (throw)
+call   10 never executed
+call   11 never executed
+branch 12 never executed (fallthrough)
+branch 13 never executed (throw)
+call   14 never executed
+branch 15 never executed (fallthrough)
+branch 16 never executed (throw)
+call   17 never executed
+call   18 never executed
+call   19 returned 100%
+call   20 never executed
+call   21 never executed
+call   22 never executed
+       1*:   59:	EXPECT_EQ(vec[99], 99);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 0% (fallthrough)
+branch  6 taken 100%
+call    7 never executed
+branch  8 never executed (fallthrough)
+branch  9 never executed (throw)
+call   10 never executed
+call   11 never executed
+branch 12 never executed (fallthrough)
+branch 13 never executed (throw)
+call   14 never executed
+branch 15 never executed (fallthrough)
+branch 16 never executed (throw)
+call   17 never executed
+call   18 never executed
+call   19 returned 100%
+call   20 never executed
+call   21 never executed
+call   22 never executed
+        -:   60:	// pool 析构时整体释放内存
+        1:   61:}
+call    0 returned 100%
+call    1 never executed
+------------------
+        -:   62:
+        -:   63:// 测试多线程安全
+        4:   64:TEST(MemoryPoolTest, MultiThreadSafety)
+        -:   65:{
+        1:   66:	const int numThreads = 8;
+        1:   67:	const int iterations = 1000;
+        1:   68:	std::vector<std::thread> threads;
+        -:   69:
+        9:   70:	for (int i = 0; i < numThreads; ++i)
+        -:   71:	{
+        8:   72:		threads.emplace_back(
+       16:   73:			[iterations]()
+        -:   74:			{
+        8:   75:				auto allocator = MemoryPool::instance().threadLocalAllocator();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+     8005:   76:				for (int j = 0; j < iterations; ++j)
+branch  0 taken 100%
+branch  1 taken 1% (fallthrough)
+        -:   77:				{
+     7997:   78:					std::pmr::vector<char> buffer(allocator);
+call    0 returned 100%
+call    1 returned 100%
+     7998:   79:					buffer.resize(256);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+     7994:   80:					buffer[0] = 'x';
+call    0 returned 100%
+     7992:   81:				}
+call    0 returned 100%
+call    1 never executed
+        8:   82:			});
+        -:   83:	}
+        -:   84:
+        9:   85:	for (auto& t : threads)
+        -:   86:	{
+        8:   87:		t.join();
+        -:   88:	}
+        -:   89:
+        1:   90:	auto stats = MemoryPool::instance().getStats();
+       1*:   91:	EXPECT_GT(stats.totalAllocations, 0);
+        1:   92:}
+------------------
+_ZN37MemoryPoolTest_MultiThreadSafety_TestC2Ev:
+function _ZN37MemoryPoolTest_MultiThreadSafety_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:   64:TEST(MemoryPoolTest, MultiThreadSafety)
+call    0 returned 100%
+------------------
+_ZN37MemoryPoolTest_MultiThreadSafety_TestD0Ev:
+function _ZN37MemoryPoolTest_MultiThreadSafety_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:   64:TEST(MemoryPoolTest, MultiThreadSafety)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN37MemoryPoolTest_MultiThreadSafety_TestD2Ev:
+function _ZN37MemoryPoolTest_MultiThreadSafety_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:   64:TEST(MemoryPoolTest, MultiThreadSafety)
+call    0 returned 100%
+------------------
+_ZN37MemoryPoolTest_MultiThreadSafety_Test8TestBodyEv:
+function _ZN37MemoryPoolTest_MultiThreadSafety_Test8TestBodyEv called 1 returned 100% blocks executed 49%
+        1:   64:TEST(MemoryPoolTest, MultiThreadSafety)
+        -:   65:{
+        1:   66:	const int numThreads = 8;
+        1:   67:	const int iterations = 1000;
+        1:   68:	std::vector<std::thread> threads;
+        -:   69:
+        9:   70:	for (int i = 0; i < numThreads; ++i)
+branch  0 taken 89%
+branch  1 taken 11% (fallthrough)
+        -:   71:	{
+        8:   72:		threads.emplace_back(
+        8:   73:			[iterations]()
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:   74:			{
+        -:   75:				auto allocator = MemoryPool::instance().threadLocalAllocator();
+        -:   76:				for (int j = 0; j < iterations; ++j)
+        -:   77:				{
+        -:   78:					std::pmr::vector<char> buffer(allocator);
+        -:   79:					buffer.resize(256);
+        -:   80:					buffer[0] = 'x';
+        -:   81:				}
+        -:   82:			});
+        -:   83:	}
+        -:   84:
+        9:   85:	for (auto& t : threads)
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 89%
+branch  6 taken 11% (fallthrough)
+        -:   86:	{
+        8:   87:		t.join();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:   88:	}
+        -:   89:
+        1:   90:	auto stats = MemoryPool::instance().getStats();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+       1*:   91:	EXPECT_GT(stats.totalAllocations, 0);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 0% (fallthrough)
+branch  5 taken 100%
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed (throw)
+call    9 never executed
+call   10 never executed
+branch 11 never executed (fallthrough)
+branch 12 never executed (throw)
+call   13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed (throw)
+call   16 never executed
+call   17 never executed
+call   18 returned 100%
+call   19 never executed
+call   20 never executed
+call   21 never executed
+        1:   92:}
+call    0 returned 100%
+call    1 never executed
+------------------
+        -:   93:
+        -:   94:// 测试统计信息
+        4:   95:TEST(MemoryPoolTest, Stats)
+        -:   96:{
+        1:   97:	MemoryPool::instance().resetStats();
+        -:   98:
+        -:   99:	// 直接通过 trackedResource 分配（绕过 pool 缓存）
+        1:  100:	auto& tracked = MemoryPool::instance().trackedResource();
+        1:  101:	auto* p = tracked.allocate(256, 8);
+        1:  102:	tracked.deallocate(p, 256, 8);
+        -:  103:
+        1:  104:	auto stats = MemoryPool::instance().getStats();
+       1*:  105:	EXPECT_GE(stats.totalAllocations, 1);
+       1*:  106:	EXPECT_GE(stats.totalDeallocations, 1);
+       1*:  107:	EXPECT_GE(stats.peakBytesAllocated, 256);
+        1:  108:}
+------------------
+_ZN25MemoryPoolTest_Stats_TestC2Ev:
+function _ZN25MemoryPoolTest_Stats_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:   95:TEST(MemoryPoolTest, Stats)
+call    0 returned 100%
+------------------
+_ZN25MemoryPoolTest_Stats_TestD0Ev:
+function _ZN25MemoryPoolTest_Stats_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:   95:TEST(MemoryPoolTest, Stats)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN25MemoryPoolTest_Stats_TestD2Ev:
+function _ZN25MemoryPoolTest_Stats_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:   95:TEST(MemoryPoolTest, Stats)
+call    0 returned 100%
+------------------
+_ZN25MemoryPoolTest_Stats_Test8TestBodyEv:
+function _ZN25MemoryPoolTest_Stats_Test8TestBodyEv called 1 returned 100% blocks executed 30%
+        1:   95:TEST(MemoryPoolTest, Stats)
+        -:   96:{
+        1:   97:	MemoryPool::instance().resetStats();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+        -:   98:
+        -:   99:	// 直接通过 trackedResource 分配（绕过 pool 缓存）
+        1:  100:	auto& tracked = MemoryPool::instance().trackedResource();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+        1:  101:	auto* p = tracked.allocate(256, 8);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  102:	tracked.deallocate(p, 256, 8);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  103:
+        1:  104:	auto stats = MemoryPool::instance().getStats();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+       1*:  105:	EXPECT_GE(stats.totalAllocations, 1);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 0% (fallthrough)
+branch  5 taken 100%
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed (throw)
+call    9 never executed
+call   10 never executed
+branch 11 never executed (fallthrough)
+branch 12 never executed (throw)
+call   13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed (throw)
+call   16 never executed
+call   17 never executed
+call   18 returned 100%
+call   19 never executed
+call   20 never executed
+call   21 never executed
+       1*:  106:	EXPECT_GE(stats.totalDeallocations, 1);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 0% (fallthrough)
+branch  5 taken 100%
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed (throw)
+call    9 never executed
+call   10 never executed
+branch 11 never executed (fallthrough)
+branch 12 never executed (throw)
+call   13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed (throw)
+call   16 never executed
+call   17 never executed
+call   18 returned 100%
+call   19 never executed
+call   20 never executed
+call   21 never executed
+       1*:  107:	EXPECT_GE(stats.peakBytesAllocated, 256);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 0% (fallthrough)
+branch  5 taken 100%
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed (throw)
+call    9 never executed
+call   10 never executed
+branch 11 never executed (fallthrough)
+branch 12 never executed (throw)
+call   13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed (throw)
+call   16 never executed
+call   17 never executed
+call   18 returned 100%
+call   19 never executed
+call   20 never executed
+call   21 never executed
+        1:  108:}
+------------------
+        -:  109:
+        -:  110:// ============ PmrBuffer 测试 ============
+        -:  111:
+        -:  112:// 测试默认构造
+        4:  113:TEST(PmrBufferTest, DefaultConstruction)
+        -:  114:{
+        1:  115:	PmrBuffer buffer;
+       1*:  116:	EXPECT_EQ(buffer.readableBytes(), 0);
+       1*:  117:	EXPECT_GT(buffer.writableBytes(), 0);
+        1:  118:}
+------------------
+_ZN38PmrBufferTest_DefaultConstruction_TestC2Ev:
+function _ZN38PmrBufferTest_DefaultConstruction_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:  113:TEST(PmrBufferTest, DefaultConstruction)
+call    0 returned 100%
+------------------
+_ZN38PmrBufferTest_DefaultConstruction_TestD0Ev:
+function _ZN38PmrBufferTest_DefaultConstruction_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:  113:TEST(PmrBufferTest, DefaultConstruction)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN38PmrBufferTest_DefaultConstruction_TestD2Ev:
+function _ZN38PmrBufferTest_DefaultConstruction_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:  113:TEST(PmrBufferTest, DefaultConstruction)
+call    0 returned 100%
+------------------
+_ZN38PmrBufferTest_DefaultConstruction_Test8TestBodyEv:
+function _ZN38PmrBufferTest_DefaultConstruction_Test8TestBodyEv called 1 returned 100% blocks executed 28%
+        1:  113:TEST(PmrBufferTest, DefaultConstruction)
+        -:  114:{
+        1:  115:	PmrBuffer buffer;
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+       1*:  116:	EXPECT_EQ(buffer.readableBytes(), 0);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 0% (fallthrough)
+branch  6 taken 100%
+call    7 never executed
+branch  8 never executed (fallthrough)
+branch  9 never executed (throw)
+call   10 never executed
+call   11 never executed
+branch 12 never executed (fallthrough)
+branch 13 never executed (throw)
+call   14 never executed
+branch 15 never executed (fallthrough)
+branch 16 never executed (throw)
+call   17 never executed
+call   18 never executed
+call   19 returned 100%
+call   20 never executed
+call   21 never executed
+call   22 never executed
+       1*:  117:	EXPECT_GT(buffer.writableBytes(), 0);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 0% (fallthrough)
+branch  6 taken 100%
+call    7 never executed
+branch  8 never executed (fallthrough)
+branch  9 never executed (throw)
+call   10 never executed
+call   11 never executed
+branch 12 never executed (fallthrough)
+branch 13 never executed (throw)
+call   14 never executed
+branch 15 never executed (fallthrough)
+branch 16 never executed (throw)
+call   17 never executed
+call   18 never executed
+call   19 returned 100%
+call   20 never executed
+call   21 never executed
+call   22 never executed
+        1:  118:}
+call    0 returned 100%
+call    1 never executed
+------------------
+        -:  119:
+        -:  120:// 测试使用 pmr 分配器构造
+        4:  121:TEST(PmrBufferTest, PmrAllocatorConstruction)
+        -:  122:{
+        1:  123:	auto allocator = MemoryPool::instance().threadLocalAllocator();
+        1:  124:	PmrBuffer buffer(allocator);
+       1*:  125:	EXPECT_EQ(buffer.readableBytes(), 0);
+        1:  126:}
+------------------
+_ZN43PmrBufferTest_PmrAllocatorConstruction_TestC2Ev:
+function _ZN43PmrBufferTest_PmrAllocatorConstruction_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:  121:TEST(PmrBufferTest, PmrAllocatorConstruction)
+call    0 returned 100%
+------------------
+_ZN43PmrBufferTest_PmrAllocatorConstruction_TestD0Ev:
+function _ZN43PmrBufferTest_PmrAllocatorConstruction_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:  121:TEST(PmrBufferTest, PmrAllocatorConstruction)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN43PmrBufferTest_PmrAllocatorConstruction_TestD2Ev:
+function _ZN43PmrBufferTest_PmrAllocatorConstruction_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:  121:TEST(PmrBufferTest, PmrAllocatorConstruction)
+call    0 returned 100%
+------------------
+_ZN43PmrBufferTest_PmrAllocatorConstruction_Test8TestBodyEv:
+function _ZN43PmrBufferTest_PmrAllocatorConstruction_Test8TestBodyEv called 1 returned 100% blocks executed 35%
+        1:  121:TEST(PmrBufferTest, PmrAllocatorConstruction)
+        -:  122:{
+        1:  123:	auto allocator = MemoryPool::instance().threadLocalAllocator();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+        1:  124:	PmrBuffer buffer(allocator);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       1*:  125:	EXPECT_EQ(buffer.readableBytes(), 0);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 0% (fallthrough)
+branch  6 taken 100%
+call    7 never executed
+branch  8 never executed (fallthrough)
+branch  9 never executed (throw)
+call   10 never executed
+call   11 never executed
+branch 12 never executed (fallthrough)
+branch 13 never executed (throw)
+call   14 never executed
+branch 15 never executed (fallthrough)
+branch 16 never executed (throw)
+call   17 never executed
+call   18 never executed
+call   19 returned 100%
+call   20 never executed
+call   21 never executed
+call   22 never executed
+        1:  126:}
+call    0 returned 100%
+call    1 never executed
+------------------
+        -:  127:
+        -:  128:// 测试 append 和 read
+        4:  129:TEST(PmrBufferTest, AppendAndRead)
+        -:  130:{
+        1:  131:	PmrBuffer buffer;
+        -:  132:
+        2:  133:	buffer.append("Hello, ");
+        1:  134:	buffer.append("World!");
+        -:  135:
+       1*:  136:	EXPECT_EQ(buffer.readableBytes(), 13);
+        -:  137:
+        1:  138:	auto data = buffer.read(7);
+       1*:  139:	EXPECT_EQ(data, "Hello, ");
+       1*:  140:	EXPECT_EQ(buffer.readableBytes(), 6);
+        -:  141:
+        1:  142:	auto rest = buffer.readAll();
+       1*:  143:	EXPECT_EQ(rest, "World!");
+       1*:  144:	EXPECT_EQ(buffer.readableBytes(), 0);
+        1:  145:}
+------------------
+_ZN32PmrBufferTest_AppendAndRead_TestC2Ev:
+function _ZN32PmrBufferTest_AppendAndRead_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:  129:TEST(PmrBufferTest, AppendAndRead)
+call    0 returned 100%
+------------------
+_ZN32PmrBufferTest_AppendAndRead_TestD0Ev:
+function _ZN32PmrBufferTest_AppendAndRead_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:  129:TEST(PmrBufferTest, AppendAndRead)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN32PmrBufferTest_AppendAndRead_TestD2Ev:
+function _ZN32PmrBufferTest_AppendAndRead_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:  129:TEST(PmrBufferTest, AppendAndRead)
+call    0 returned 100%
+------------------
+_ZN32PmrBufferTest_AppendAndRead_Test8TestBodyEv:
+function _ZN32PmrBufferTest_AppendAndRead_Test8TestBodyEv called 1 returned 100% blocks executed 30%
+        1:  129:TEST(PmrBufferTest, AppendAndRead)
+        -:  130:{
+        1:  131:	PmrBuffer buffer;
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:  132:
+        2:  133:	buffer.append("Hello, ");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+        1:  134:	buffer.append("World!");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+        -:  135:
+       1*:  136:	EXPECT_EQ(buffer.readableBytes(), 13);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 0% (fallthrough)
+branch  6 taken 100%
+call    7 never executed
+branch  8 never executed (fallthrough)
+branch  9 never executed (throw)
+call   10 never executed
+call   11 never executed
+branch 12 never executed (fallthrough)
+branch 13 never executed (throw)
+call   14 never executed
+branch 15 never executed (fallthrough)
+branch 16 never executed (throw)
+call   17 never executed
+call   18 never executed
+call   19 returned 100%
+call   20 never executed
+call   21 never executed
+call   22 never executed
+        -:  137:
+        1:  138:	auto data = buffer.read(7);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       1*:  139:	EXPECT_EQ(data, "Hello, ");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 0% (fallthrough)
+branch  5 taken 100%
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed (throw)
+call    9 never executed
+call   10 never executed
+branch 11 never executed (fallthrough)
+branch 12 never executed (throw)
+call   13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed (throw)
+call   16 never executed
+call   17 never executed
+call   18 returned 100%
+call   19 never executed
+call   20 never executed
+call   21 never executed
+       1*:  140:	EXPECT_EQ(buffer.readableBytes(), 6);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 0% (fallthrough)
+branch  6 taken 100%
+call    7 never executed
+branch  8 never executed (fallthrough)
+branch  9 never executed (throw)
+call   10 never executed
+call   11 never executed
+branch 12 never executed (fallthrough)
+branch 13 never executed (throw)
+call   14 never executed
+branch 15 never executed (fallthrough)
+branch 16 never executed (throw)
+call   17 never executed
+call   18 never executed
+call   19 returned 100%
+call   20 never executed
+call   21 never executed
+call   22 never executed
+        -:  141:
+        1:  142:	auto rest = buffer.readAll();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       1*:  143:	EXPECT_EQ(rest, "World!");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 0% (fallthrough)
+branch  5 taken 100%
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed (throw)
+call    9 never executed
+call   10 never executed
+branch 11 never executed (fallthrough)
+branch 12 never executed (throw)
+call   13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed (throw)
+call   16 never executed
+call   17 never executed
+call   18 returned 100%
+call   19 never executed
+call   20 never executed
+call   21 never executed
+       1*:  144:	EXPECT_EQ(buffer.readableBytes(), 0);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 0% (fallthrough)
+branch  6 taken 100%
+call    7 never executed
+branch  8 never executed (fallthrough)
+branch  9 never executed (throw)
+call   10 never executed
+call   11 never executed
+branch 12 never executed (fallthrough)
+branch 13 never executed (throw)
+call   14 never executed
+branch 15 never executed (fallthrough)
+branch 16 never executed (throw)
+call   17 never executed
+call   18 never executed
+call   19 returned 100%
+call   20 never executed
+call   21 never executed
+call   22 never executed
+        1:  145:}
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 never executed
+call    4 never executed
+call    5 never executed
+------------------
+        -:  146:
+        -:  147:// 测试 peek
+        4:  148:TEST(PmrBufferTest, Peek)
+        -:  149:{
+        1:  150:	PmrBuffer buffer;
+        2:  151:	buffer.append("test data");
+        -:  152:
+       2*:  153:	EXPECT_EQ(std::string(buffer.peek(), 4), "test");
+        -:  154:	// peek 不消费数据
+       1*:  155:	EXPECT_EQ(buffer.readableBytes(), 9);
+        1:  156:}
+------------------
+_ZN23PmrBufferTest_Peek_TestC2Ev:
+function _ZN23PmrBufferTest_Peek_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:  148:TEST(PmrBufferTest, Peek)
+call    0 returned 100%
+------------------
+_ZN23PmrBufferTest_Peek_TestD0Ev:
+function _ZN23PmrBufferTest_Peek_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:  148:TEST(PmrBufferTest, Peek)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN23PmrBufferTest_Peek_TestD2Ev:
+function _ZN23PmrBufferTest_Peek_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:  148:TEST(PmrBufferTest, Peek)
+call    0 returned 100%
+------------------
+_ZN23PmrBufferTest_Peek_Test8TestBodyEv:
+function _ZN23PmrBufferTest_Peek_Test8TestBodyEv called 1 returned 100% blocks executed 35%
+        1:  148:TEST(PmrBufferTest, Peek)
+        -:  149:{
+        1:  150:	PmrBuffer buffer;
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        2:  151:	buffer.append("test data");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+        -:  152:
+       2*:  153:	EXPECT_EQ(std::string(buffer.peek(), 4), "test");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+call    9 returned 100%
+call   10 returned 100%
+branch 11 taken 0% (fallthrough)
+branch 12 taken 100%
+call   13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed (throw)
+call   16 never executed
+call   17 never executed
+branch 18 never executed (fallthrough)
+branch 19 never executed (throw)
+call   20 never executed
+branch 21 never executed (fallthrough)
+branch 22 never executed (throw)
+call   23 never executed
+call   24 never executed
+call   25 returned 100%
+call   26 never executed
+call   27 never executed
+call   28 never executed
+call   29 never executed
+        -:  154:	// peek 不消费数据
+       1*:  155:	EXPECT_EQ(buffer.readableBytes(), 9);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 0% (fallthrough)
+branch  6 taken 100%
+call    7 never executed
+branch  8 never executed (fallthrough)
+branch  9 never executed (throw)
+call   10 never executed
+call   11 never executed
+branch 12 never executed (fallthrough)
+branch 13 never executed (throw)
+call   14 never executed
+branch 15 never executed (fallthrough)
+branch 16 never executed (throw)
+call   17 never executed
+call   18 never executed
+call   19 returned 100%
+call   20 never executed
+call   21 never executed
+call   22 never executed
+        1:  156:}
+call    0 returned 100%
+call    1 never executed
+------------------
+        -:  157:
+        -:  158:// 测试 retrieve
+        4:  159:TEST(PmrBufferTest, Retrieve)
+        -:  160:{
+        1:  161:	PmrBuffer buffer;
+        1:  162:	buffer.append("Hello, World!");
+        -:  163:
+        1:  164:	buffer.retrieve(7);
+       1*:  165:	EXPECT_EQ(buffer.readableBytes(), 6);
+       2*:  166:	EXPECT_EQ(std::string(buffer.peek(), buffer.readableBytes()), "World!");
+        1:  167:}
+------------------
+_ZN27PmrBufferTest_Retrieve_TestC2Ev:
+function _ZN27PmrBufferTest_Retrieve_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:  159:TEST(PmrBufferTest, Retrieve)
+call    0 returned 100%
+------------------
+_ZN27PmrBufferTest_Retrieve_TestD0Ev:
+function _ZN27PmrBufferTest_Retrieve_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:  159:TEST(PmrBufferTest, Retrieve)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN27PmrBufferTest_Retrieve_TestD2Ev:
+function _ZN27PmrBufferTest_Retrieve_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:  159:TEST(PmrBufferTest, Retrieve)
+call    0 returned 100%
+------------------
+_ZN27PmrBufferTest_Retrieve_Test8TestBodyEv:
+function _ZN27PmrBufferTest_Retrieve_Test8TestBodyEv called 1 returned 100% blocks executed 36%
+        1:  159:TEST(PmrBufferTest, Retrieve)
+        -:  160:{
+        1:  161:	PmrBuffer buffer;
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        1:  162:	buffer.append("Hello, World!");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+        -:  163:
+        1:  164:	buffer.retrieve(7);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       1*:  165:	EXPECT_EQ(buffer.readableBytes(), 6);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 0% (fallthrough)
+branch  6 taken 100%
+call    7 never executed
+branch  8 never executed (fallthrough)
+branch  9 never executed (throw)
+call   10 never executed
+call   11 never executed
+branch 12 never executed (fallthrough)
+branch 13 never executed (throw)
+call   14 never executed
+branch 15 never executed (fallthrough)
+branch 16 never executed (throw)
+call   17 never executed
+call   18 never executed
+call   19 returned 100%
+call   20 never executed
+call   21 never executed
+call   22 never executed
+       2*:  166:	EXPECT_EQ(std::string(buffer.peek(), buffer.readableBytes()), "World!");
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+call    7 returned 100%
+branch  8 taken 100% (fallthrough)
+branch  9 taken 0% (throw)
+call   10 returned 100%
+call   11 returned 100%
+branch 12 taken 0% (fallthrough)
+branch 13 taken 100%
+call   14 never executed
+branch 15 never executed (fallthrough)
+branch 16 never executed (throw)
+call   17 never executed
+call   18 never executed
+branch 19 never executed (fallthrough)
+branch 20 never executed (throw)
+call   21 never executed
+branch 22 never executed (fallthrough)
+branch 23 never executed (throw)
+call   24 never executed
+call   25 never executed
+call   26 returned 100%
+call   27 never executed
+call   28 never executed
+call   29 never executed
+call   30 never executed
+        1:  167:}
+call    0 returned 100%
+call    1 never executed
+------------------
+        -:  168:
+        -:  169:// 测试 retrieveAll
+        4:  170:TEST(PmrBufferTest, RetrieveAll)
+        -:  171:{
+        1:  172:	PmrBuffer buffer;
+        1:  173:	buffer.append("test");
+       1*:  174:	EXPECT_EQ(buffer.readableBytes(), 4);
+        -:  175:
+        1:  176:	buffer.retrieveAll();
+       1*:  177:	EXPECT_EQ(buffer.readableBytes(), 0);
+        1:  178:}
+------------------
+_ZN30PmrBufferTest_RetrieveAll_TestC2Ev:
+function _ZN30PmrBufferTest_RetrieveAll_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:  170:TEST(PmrBufferTest, RetrieveAll)
+call    0 returned 100%
+------------------
+_ZN30PmrBufferTest_RetrieveAll_TestD0Ev:
+function _ZN30PmrBufferTest_RetrieveAll_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:  170:TEST(PmrBufferTest, RetrieveAll)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN30PmrBufferTest_RetrieveAll_TestD2Ev:
+function _ZN30PmrBufferTest_RetrieveAll_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:  170:TEST(PmrBufferTest, RetrieveAll)
+call    0 returned 100%
+------------------
+_ZN30PmrBufferTest_RetrieveAll_Test8TestBodyEv:
+function _ZN30PmrBufferTest_RetrieveAll_Test8TestBodyEv called 1 returned 100% blocks executed 33%
+        1:  170:TEST(PmrBufferTest, RetrieveAll)
+        -:  171:{
+        1:  172:	PmrBuffer buffer;
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        1:  173:	buffer.append("test");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+       1*:  174:	EXPECT_EQ(buffer.readableBytes(), 4);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 0% (fallthrough)
+branch  6 taken 100%
+call    7 never executed
+branch  8 never executed (fallthrough)
+branch  9 never executed (throw)
+call   10 never executed
+call   11 never executed
+branch 12 never executed (fallthrough)
+branch 13 never executed (throw)
+call   14 never executed
+branch 15 never executed (fallthrough)
+branch 16 never executed (throw)
+call   17 never executed
+call   18 never executed
+call   19 returned 100%
+call   20 never executed
+call   21 never executed
+call   22 never executed
+        -:  175:
+        1:  176:	buffer.retrieveAll();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       1*:  177:	EXPECT_EQ(buffer.readableBytes(), 0);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 0% (fallthrough)
+branch  6 taken 100%
+call    7 never executed
+branch  8 never executed (fallthrough)
+branch  9 never executed (throw)
+call   10 never executed
+call   11 never executed
+branch 12 never executed (fallthrough)
+branch 13 never executed (throw)
+call   14 never executed
+branch 15 never executed (fallthrough)
+branch 16 never executed (throw)
+call   17 never executed
+call   18 never executed
+call   19 returned 100%
+call   20 never executed
+call   21 never executed
+call   22 never executed
+        1:  178:}
+call    0 returned 100%
+call    1 never executed
+------------------
+        -:  179:
+        -:  180:// 测试 findCRLF
+        4:  181:TEST(PmrBufferTest, FindCRLF)
+        -:  182:{
+        1:  183:	PmrBuffer buffer;
+        1:  184:	buffer.append("line1\r\nline2");
+        -:  185:
+        1:  186:	auto crlf = buffer.findCRLF();
+       1*:  187:	EXPECT_NE(crlf, nullptr);
+       1*:  188:	EXPECT_EQ(crlf - buffer.peek(), 5);
+        1:  189:}
+------------------
+_ZN27PmrBufferTest_FindCRLF_TestC2Ev:
+function _ZN27PmrBufferTest_FindCRLF_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:  181:TEST(PmrBufferTest, FindCRLF)
+call    0 returned 100%
+------------------
+_ZN27PmrBufferTest_FindCRLF_TestD0Ev:
+function _ZN27PmrBufferTest_FindCRLF_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:  181:TEST(PmrBufferTest, FindCRLF)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN27PmrBufferTest_FindCRLF_TestD2Ev:
+function _ZN27PmrBufferTest_FindCRLF_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:  181:TEST(PmrBufferTest, FindCRLF)
+call    0 returned 100%
+------------------
+_ZN27PmrBufferTest_FindCRLF_Test8TestBodyEv:
+function _ZN27PmrBufferTest_FindCRLF_Test8TestBodyEv called 1 returned 100% blocks executed 32%
+        1:  181:TEST(PmrBufferTest, FindCRLF)
+        -:  182:{
+        1:  183:	PmrBuffer buffer;
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        1:  184:	buffer.append("line1\r\nline2");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+        -:  185:
+        1:  186:	auto crlf = buffer.findCRLF();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       1*:  187:	EXPECT_NE(crlf, nullptr);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 0% (fallthrough)
+branch  5 taken 100%
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed (throw)
+call    9 never executed
+call   10 never executed
+branch 11 never executed (fallthrough)
+branch 12 never executed (throw)
+call   13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed (throw)
+call   16 never executed
+call   17 never executed
+call   18 returned 100%
+call   19 never executed
+call   20 never executed
+call   21 never executed
+       1*:  188:	EXPECT_EQ(crlf - buffer.peek(), 5);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 0% (fallthrough)
+branch  8 taken 100%
+call    9 never executed
+branch 10 never executed (fallthrough)
+branch 11 never executed (throw)
+call   12 never executed
+call   13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed (throw)
+call   16 never executed
+branch 17 never executed (fallthrough)
+branch 18 never executed (throw)
+call   19 never executed
+call   20 never executed
+call   21 returned 100%
+call   22 never executed
+call   23 never executed
+call   24 never executed
+        1:  189:}
+call    0 returned 100%
+call    1 never executed
+------------------
+        -:  190:
+        -:  191:// 测试 findCRLF 未找到
+        4:  192:TEST(PmrBufferTest, FindCRLFNotFound)
+        -:  193:{
+        1:  194:	PmrBuffer buffer;
+        1:  195:	buffer.append("no crlf here");
+        -:  196:
+        1:  197:	auto crlf = buffer.findCRLF();
+       1*:  198:	EXPECT_EQ(crlf, nullptr);
+        1:  199:}
+------------------
+_ZN35PmrBufferTest_FindCRLFNotFound_TestC2Ev:
+function _ZN35PmrBufferTest_FindCRLFNotFound_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:  192:TEST(PmrBufferTest, FindCRLFNotFound)
+call    0 returned 100%
+------------------
+_ZN35PmrBufferTest_FindCRLFNotFound_TestD0Ev:
+function _ZN35PmrBufferTest_FindCRLFNotFound_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:  192:TEST(PmrBufferTest, FindCRLFNotFound)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN35PmrBufferTest_FindCRLFNotFound_TestD2Ev:
+function _ZN35PmrBufferTest_FindCRLFNotFound_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:  192:TEST(PmrBufferTest, FindCRLFNotFound)
+call    0 returned 100%
+------------------
+_ZN35PmrBufferTest_FindCRLFNotFound_Test8TestBodyEv:
+function _ZN35PmrBufferTest_FindCRLFNotFound_Test8TestBodyEv called 1 returned 100% blocks executed 38%
+        1:  192:TEST(PmrBufferTest, FindCRLFNotFound)
+        -:  193:{
+        1:  194:	PmrBuffer buffer;
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        1:  195:	buffer.append("no crlf here");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+        -:  196:
+        1:  197:	auto crlf = buffer.findCRLF();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       1*:  198:	EXPECT_EQ(crlf, nullptr);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 0% (fallthrough)
+branch  5 taken 100%
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed (throw)
+call    9 never executed
+call   10 never executed
+branch 11 never executed (fallthrough)
+branch 12 never executed (throw)
+call   13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed (throw)
+call   16 never executed
+call   17 never executed
+call   18 returned 100%
+call   19 never executed
+call   20 never executed
+call   21 never executed
+        1:  199:}
+call    0 returned 100%
+call    1 never executed
+------------------
+        -:  200:
+        -:  201:// 测试 findEOL
+        4:  202:TEST(PmrBufferTest, FindEOL)
+        -:  203:{
+        1:  204:	PmrBuffer buffer;
+        1:  205:	buffer.append("line1\nline2");
+        -:  206:
+        1:  207:	auto eol = buffer.findEOL();
+       1*:  208:	EXPECT_NE(eol, nullptr);
+       1*:  209:	EXPECT_EQ(eol - buffer.peek(), 5);
+        1:  210:}
+------------------
+_ZN26PmrBufferTest_FindEOL_TestC2Ev:
+function _ZN26PmrBufferTest_FindEOL_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:  202:TEST(PmrBufferTest, FindEOL)
+call    0 returned 100%
+------------------
+_ZN26PmrBufferTest_FindEOL_TestD0Ev:
+function _ZN26PmrBufferTest_FindEOL_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:  202:TEST(PmrBufferTest, FindEOL)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN26PmrBufferTest_FindEOL_TestD2Ev:
+function _ZN26PmrBufferTest_FindEOL_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:  202:TEST(PmrBufferTest, FindEOL)
+call    0 returned 100%
+------------------
+_ZN26PmrBufferTest_FindEOL_Test8TestBodyEv:
+function _ZN26PmrBufferTest_FindEOL_Test8TestBodyEv called 1 returned 100% blocks executed 32%
+        1:  202:TEST(PmrBufferTest, FindEOL)
+        -:  203:{
+        1:  204:	PmrBuffer buffer;
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        1:  205:	buffer.append("line1\nline2");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+        -:  206:
+        1:  207:	auto eol = buffer.findEOL();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       1*:  208:	EXPECT_NE(eol, nullptr);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 0% (fallthrough)
+branch  5 taken 100%
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed (throw)
+call    9 never executed
+call   10 never executed
+branch 11 never executed (fallthrough)
+branch 12 never executed (throw)
+call   13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed (throw)
+call   16 never executed
+call   17 never executed
+call   18 returned 100%
+call   19 never executed
+call   20 never executed
+call   21 never executed
+       1*:  209:	EXPECT_EQ(eol - buffer.peek(), 5);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 0% (fallthrough)
+branch  8 taken 100%
+call    9 never executed
+branch 10 never executed (fallthrough)
+branch 11 never executed (throw)
+call   12 never executed
+call   13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed (throw)
+call   16 never executed
+branch 17 never executed (fallthrough)
+branch 18 never executed (throw)
+call   19 never executed
+call   20 never executed
+call   21 returned 100%
+call   22 never executed
+call   23 never executed
+call   24 never executed
+        1:  210:}
+call    0 returned 100%
+call    1 never executed
+------------------
+        -:  211:
+        -:  212:// 测试确保可写空间
+        4:  213:TEST(PmrBufferTest, EnsureWritableBytes)
+        -:  214:{
+        1:  215:	PmrBuffer buffer({}, 16); // 初始大小 16
+        -:  216:
+        1:  217:	buffer.ensureWritableBytes(1024);
+       1*:  218:	EXPECT_GE(buffer.writableBytes(), 1024);
+        1:  219:}
+------------------
+_ZN38PmrBufferTest_EnsureWritableBytes_TestC2Ev:
+function _ZN38PmrBufferTest_EnsureWritableBytes_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:  213:TEST(PmrBufferTest, EnsureWritableBytes)
+call    0 returned 100%
+------------------
+_ZN38PmrBufferTest_EnsureWritableBytes_TestD0Ev:
+function _ZN38PmrBufferTest_EnsureWritableBytes_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:  213:TEST(PmrBufferTest, EnsureWritableBytes)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN38PmrBufferTest_EnsureWritableBytes_TestD2Ev:
+function _ZN38PmrBufferTest_EnsureWritableBytes_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:  213:TEST(PmrBufferTest, EnsureWritableBytes)
+call    0 returned 100%
+------------------
+_ZN38PmrBufferTest_EnsureWritableBytes_Test8TestBodyEv:
+function _ZN38PmrBufferTest_EnsureWritableBytes_Test8TestBodyEv called 1 returned 100% blocks executed 34%
+        1:  213:TEST(PmrBufferTest, EnsureWritableBytes)
+        -:  214:{
+        1:  215:	PmrBuffer buffer({}, 16); // 初始大小 16
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:  216:
+        1:  217:	buffer.ensureWritableBytes(1024);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       1*:  218:	EXPECT_GE(buffer.writableBytes(), 1024);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 0% (fallthrough)
+branch  6 taken 100%
+call    7 never executed
+branch  8 never executed (fallthrough)
+branch  9 never executed (throw)
+call   10 never executed
+call   11 never executed
+branch 12 never executed (fallthrough)
+branch 13 never executed (throw)
+call   14 never executed
+branch 15 never executed (fallthrough)
+branch 16 never executed (throw)
+call   17 never executed
+call   18 never executed
+call   19 returned 100%
+call   20 never executed
+call   21 never executed
+call   22 never executed
+        1:  219:}
+call    0 returned 100%
+call    1 never executed
+------------------
+        -:  220:
+        -:  221:// 测试大量数据
+        4:  222:TEST(PmrBufferTest, LargeData)
+        -:  223:{
+        1:  224:	PmrBuffer buffer;
+        1:  225:	std::string largeData(100000, 'x');
+        1:  226:	buffer.append(largeData);
+        -:  227:
+       1*:  228:	EXPECT_EQ(buffer.readableBytes(), 100000);
+        1:  229:	auto result = buffer.readAll();
+       1*:  230:	EXPECT_EQ(result, largeData);
+        1:  231:}
+------------------
+_ZN28PmrBufferTest_LargeData_TestC2Ev:
+function _ZN28PmrBufferTest_LargeData_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:  222:TEST(PmrBufferTest, LargeData)
+call    0 returned 100%
+------------------
+_ZN28PmrBufferTest_LargeData_TestD0Ev:
+function _ZN28PmrBufferTest_LargeData_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:  222:TEST(PmrBufferTest, LargeData)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN28PmrBufferTest_LargeData_TestD2Ev:
+function _ZN28PmrBufferTest_LargeData_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:  222:TEST(PmrBufferTest, LargeData)
+call    0 returned 100%
+------------------
+_ZN28PmrBufferTest_LargeData_Test8TestBodyEv:
+function _ZN28PmrBufferTest_LargeData_Test8TestBodyEv called 1 returned 100% blocks executed 33%
+        1:  222:TEST(PmrBufferTest, LargeData)
+        -:  223:{
+        1:  224:	PmrBuffer buffer;
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        1:  225:	std::string largeData(100000, 'x');
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  226:	buffer.append(largeData);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  227:
+       1*:  228:	EXPECT_EQ(buffer.readableBytes(), 100000);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 0% (fallthrough)
+branch  6 taken 100%
+call    7 never executed
+branch  8 never executed (fallthrough)
+branch  9 never executed (throw)
+call   10 never executed
+call   11 never executed
+branch 12 never executed (fallthrough)
+branch 13 never executed (throw)
+call   14 never executed
+branch 15 never executed (fallthrough)
+branch 16 never executed (throw)
+call   17 never executed
+call   18 never executed
+call   19 returned 100%
+call   20 never executed
+call   21 never executed
+call   22 never executed
+        1:  229:	auto result = buffer.readAll();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       1*:  230:	EXPECT_EQ(result, largeData);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 0% (fallthrough)
+branch  5 taken 100%
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed (throw)
+call    9 never executed
+call   10 never executed
+branch 11 never executed (fallthrough)
+branch 12 never executed (throw)
+call   13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed (throw)
+call   16 never executed
+call   17 never executed
+call   18 returned 100%
+call   19 never executed
+call   20 never executed
+call   21 never executed
+        1:  231:}
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 never executed
+call    4 never executed
+call    5 never executed
+------------------
+        -:  232:
+        -:  233:// 测试 swap
+        4:  234:TEST(PmrBufferTest, Swap)
+        -:  235:{
+        1:  236:	PmrBuffer buf1;
+        1:  237:	PmrBuffer buf2;
+        -:  238:
+        2:  239:	buf1.append("aaa");
+        1:  240:	buf2.append("bbbbb");
+        -:  241:
+        1:  242:	buf1.swap(buf2);
+        -:  243:
+       1*:  244:	EXPECT_EQ(buf1.readableBytes(), 5);
+       1*:  245:	EXPECT_EQ(buf2.readableBytes(), 3);
+        1:  246:}
+------------------
+_ZN23PmrBufferTest_Swap_TestC2Ev:
+function _ZN23PmrBufferTest_Swap_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:  234:TEST(PmrBufferTest, Swap)
+call    0 returned 100%
+------------------
+_ZN23PmrBufferTest_Swap_TestD0Ev:
+function _ZN23PmrBufferTest_Swap_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:  234:TEST(PmrBufferTest, Swap)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN23PmrBufferTest_Swap_TestD2Ev:
+function _ZN23PmrBufferTest_Swap_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:  234:TEST(PmrBufferTest, Swap)
+call    0 returned 100%
+------------------
+_ZN23PmrBufferTest_Swap_Test8TestBodyEv:
+function _ZN23PmrBufferTest_Swap_Test8TestBodyEv called 1 returned 100% blocks executed 36%
+        1:  234:TEST(PmrBufferTest, Swap)
+        -:  235:{
+        1:  236:	PmrBuffer buf1;
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        1:  237:	PmrBuffer buf2;
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:  238:
+        2:  239:	buf1.append("aaa");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+        1:  240:	buf2.append("bbbbb");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+        -:  241:
+        1:  242:	buf1.swap(buf2);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  243:
+       1*:  244:	EXPECT_EQ(buf1.readableBytes(), 5);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 0% (fallthrough)
+branch  6 taken 100%
+call    7 never executed
+branch  8 never executed (fallthrough)
+branch  9 never executed (throw)
+call   10 never executed
+call   11 never executed
+branch 12 never executed (fallthrough)
+branch 13 never executed (throw)
+call   14 never executed
+branch 15 never executed (fallthrough)
+branch 16 never executed (throw)
+call   17 never executed
+call   18 never executed
+call   19 returned 100%
+call   20 never executed
+call   21 never executed
+call   22 never executed
+       1*:  245:	EXPECT_EQ(buf2.readableBytes(), 3);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 0% (fallthrough)
+branch  6 taken 100%
+call    7 never executed
+branch  8 never executed (fallthrough)
+branch  9 never executed (throw)
+call   10 never executed
+call   11 never executed
+branch 12 never executed (fallthrough)
+branch 13 never executed (throw)
+call   14 never executed
+branch 15 never executed (fallthrough)
+branch 16 never executed (throw)
+call   17 never executed
+call   18 never executed
+call   19 returned 100%
+call   20 never executed
+call   21 never executed
+call   22 never executed
+        1:  246:}
+call    0 returned 100%
+call    1 returned 100%
+call    2 never executed
+call    3 never executed
+------------------
+        -:  247:
+        -:  248:// 测试 append 另一个 PmrBuffer
+        4:  249:TEST(PmrBufferTest, AppendBuffer)
+        -:  250:{
+        1:  251:	PmrBuffer buf1;
+        1:  252:	PmrBuffer buf2;
+        -:  253:
+        2:  254:	buf1.append("Hello, ");
+        1:  255:	buf2.append("World!");
+        -:  256:
+        1:  257:	buf1.append(buf2);
+       1*:  258:	EXPECT_EQ(buf1.readableBytes(), 13);
+       2*:  259:	EXPECT_EQ(std::string(buf1.peek(), buf1.readableBytes()), "Hello, World!");
+        1:  260:}
+------------------
+_ZN31PmrBufferTest_AppendBuffer_TestC2Ev:
+function _ZN31PmrBufferTest_AppendBuffer_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:  249:TEST(PmrBufferTest, AppendBuffer)
+call    0 returned 100%
+------------------
+_ZN31PmrBufferTest_AppendBuffer_TestD0Ev:
+function _ZN31PmrBufferTest_AppendBuffer_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:  249:TEST(PmrBufferTest, AppendBuffer)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN31PmrBufferTest_AppendBuffer_TestD2Ev:
+function _ZN31PmrBufferTest_AppendBuffer_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:  249:TEST(PmrBufferTest, AppendBuffer)
+call    0 returned 100%
+------------------
+_ZN31PmrBufferTest_AppendBuffer_Test8TestBodyEv:
+function _ZN31PmrBufferTest_AppendBuffer_Test8TestBodyEv called 1 returned 100% blocks executed 39%
+        1:  249:TEST(PmrBufferTest, AppendBuffer)
+        -:  250:{
+        1:  251:	PmrBuffer buf1;
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        1:  252:	PmrBuffer buf2;
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:  253:
+        2:  254:	buf1.append("Hello, ");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+        1:  255:	buf2.append("World!");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+        -:  256:
+        1:  257:	buf1.append(buf2);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       1*:  258:	EXPECT_EQ(buf1.readableBytes(), 13);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 0% (fallthrough)
+branch  6 taken 100%
+call    7 never executed
+branch  8 never executed (fallthrough)
+branch  9 never executed (throw)
+call   10 never executed
+call   11 never executed
+branch 12 never executed (fallthrough)
+branch 13 never executed (throw)
+call   14 never executed
+branch 15 never executed (fallthrough)
+branch 16 never executed (throw)
+call   17 never executed
+call   18 never executed
+call   19 returned 100%
+call   20 never executed
+call   21 never executed
+call   22 never executed
+       2*:  259:	EXPECT_EQ(std::string(buf1.peek(), buf1.readableBytes()), "Hello, World!");
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+call    7 returned 100%
+branch  8 taken 100% (fallthrough)
+branch  9 taken 0% (throw)
+call   10 returned 100%
+call   11 returned 100%
+branch 12 taken 0% (fallthrough)
+branch 13 taken 100%
+call   14 never executed
+branch 15 never executed (fallthrough)
+branch 16 never executed (throw)
+call   17 never executed
+call   18 never executed
+branch 19 never executed (fallthrough)
+branch 20 never executed (throw)
+call   21 never executed
+branch 22 never executed (fallthrough)
+branch 23 never executed (throw)
+call   24 never executed
+call   25 never executed
+call   26 returned 100%
+call   27 never executed
+call   28 never executed
+call   29 never executed
+call   30 never executed
+        1:  260:}
+call    0 returned 100%
+call    1 returned 100%
+call    2 never executed
+call    3 never executed
+------------------
+        -:  261:
+        -:  262:// 测试空间回收（数据移动到前面）
+        4:  263:TEST(PmrBufferTest, SpaceReclaim)
+        -:  264:{
+        1:  265:	PmrBuffer buffer({}, 32);
+        -:  266:
+        -:  267:	// 先写入再读出，制造 readIndex 前移
+        1:  268:	buffer.append("12345678901234567890"); // 20 字节
+        1:  269:	buffer.retrieve(18);                   // 消费 18 字节，剩余 2 字节
+        -:  270:
+        -:  271:	// 此时 readIndex 前面有大量空闲空间
+        -:  272:	// 追加新数据应该触发数据前移而非扩容
+        1:  273:	buffer.append("new data");
+       1*:  274:	EXPECT_EQ(buffer.readableBytes(), 10);
+       2*:  275:	EXPECT_EQ(std::string(buffer.peek(), 2), "90");
+        1:  276:}
+------------------
+_ZN31PmrBufferTest_SpaceReclaim_TestC2Ev:
+function _ZN31PmrBufferTest_SpaceReclaim_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:  263:TEST(PmrBufferTest, SpaceReclaim)
+call    0 returned 100%
+------------------
+_ZN31PmrBufferTest_SpaceReclaim_TestD0Ev:
+function _ZN31PmrBufferTest_SpaceReclaim_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:  263:TEST(PmrBufferTest, SpaceReclaim)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN31PmrBufferTest_SpaceReclaim_TestD2Ev:
+function _ZN31PmrBufferTest_SpaceReclaim_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:  263:TEST(PmrBufferTest, SpaceReclaim)
+call    0 returned 100%
+------------------
+_ZN31PmrBufferTest_SpaceReclaim_Test8TestBodyEv:
+function _ZN31PmrBufferTest_SpaceReclaim_Test8TestBodyEv called 1 returned 100% blocks executed 38%
+        1:  263:TEST(PmrBufferTest, SpaceReclaim)
+        -:  264:{
+        1:  265:	PmrBuffer buffer({}, 32);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:  266:
+        -:  267:	// 先写入再读出，制造 readIndex 前移
+        1:  268:	buffer.append("12345678901234567890"); // 20 字节
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+        1:  269:	buffer.retrieve(18);                   // 消费 18 字节，剩余 2 字节
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  270:
+        -:  271:	// 此时 readIndex 前面有大量空闲空间
+        -:  272:	// 追加新数据应该触发数据前移而非扩容
+        1:  273:	buffer.append("new data");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+       1*:  274:	EXPECT_EQ(buffer.readableBytes(), 10);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 0% (fallthrough)
+branch  6 taken 100%
+call    7 never executed
+branch  8 never executed (fallthrough)
+branch  9 never executed (throw)
+call   10 never executed
+call   11 never executed
+branch 12 never executed (fallthrough)
+branch 13 never executed (throw)
+call   14 never executed
+branch 15 never executed (fallthrough)
+branch 16 never executed (throw)
+call   17 never executed
+call   18 never executed
+call   19 returned 100%
+call   20 never executed
+call   21 never executed
+call   22 never executed
+       2*:  275:	EXPECT_EQ(std::string(buffer.peek(), 2), "90");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+call    9 returned 100%
+call   10 returned 100%
+branch 11 taken 0% (fallthrough)
+branch 12 taken 100%
+call   13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed (throw)
+call   16 never executed
+call   17 never executed
+branch 18 never executed (fallthrough)
+branch 19 never executed (throw)
+call   20 never executed
+branch 21 never executed (fallthrough)
+branch 22 never executed (throw)
+call   23 never executed
+call   24 never executed
+call   25 returned 100%
+call   26 never executed
+call   27 never executed
+call   28 never executed
+call   29 never executed
+        1:  276:}
+call    0 returned 100%
+call    1 never executed
+------------------
+        -:  277:
+        -:  278:// 测试 hasWritten
+        4:  279:TEST(PmrBufferTest, HasWritten)
+        -:  280:{
+        1:  281:	PmrBuffer buffer;
+        1:  282:	buffer.ensureWritableBytes(10);
+        -:  283:
+        -:  284:	// 手动写入数据
+        1:  285:	char* writePos = buffer.beginWrite();
+        1:  286:	std::memcpy(writePos, "test", 4);
+        1:  287:	buffer.hasWritten(4);
+        -:  288:
+       1*:  289:	EXPECT_EQ(buffer.readableBytes(), 4);
+       2*:  290:	EXPECT_EQ(std::string(buffer.peek(), 4), "test");
+        1:  291:}
+------------------
+_ZN29PmrBufferTest_HasWritten_TestC2Ev:
+function _ZN29PmrBufferTest_HasWritten_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:  279:TEST(PmrBufferTest, HasWritten)
+call    0 returned 100%
+------------------
+_ZN29PmrBufferTest_HasWritten_TestD0Ev:
+function _ZN29PmrBufferTest_HasWritten_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:  279:TEST(PmrBufferTest, HasWritten)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN29PmrBufferTest_HasWritten_TestD2Ev:
+function _ZN29PmrBufferTest_HasWritten_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:  279:TEST(PmrBufferTest, HasWritten)
+call    0 returned 100%
+------------------
+_ZN29PmrBufferTest_HasWritten_Test8TestBodyEv:
+function _ZN29PmrBufferTest_HasWritten_Test8TestBodyEv called 1 returned 100% blocks executed 35%
+        1:  279:TEST(PmrBufferTest, HasWritten)
+        -:  280:{
+        1:  281:	PmrBuffer buffer;
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        1:  282:	buffer.ensureWritableBytes(10);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  283:
+        -:  284:	// 手动写入数据
+        1:  285:	char* writePos = buffer.beginWrite();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  286:	std::memcpy(writePos, "test", 4);
+        1:  287:	buffer.hasWritten(4);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  288:
+       1*:  289:	EXPECT_EQ(buffer.readableBytes(), 4);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 0% (fallthrough)
+branch  6 taken 100%
+call    7 never executed
+branch  8 never executed (fallthrough)
+branch  9 never executed (throw)
+call   10 never executed
+call   11 never executed
+branch 12 never executed (fallthrough)
+branch 13 never executed (throw)
+call   14 never executed
+branch 15 never executed (fallthrough)
+branch 16 never executed (throw)
+call   17 never executed
+call   18 never executed
+call   19 returned 100%
+call   20 never executed
+call   21 never executed
+call   22 never executed
+       2*:  290:	EXPECT_EQ(std::string(buffer.peek(), 4), "test");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+call    9 returned 100%
+call   10 returned 100%
+branch 11 taken 0% (fallthrough)
+branch 12 taken 100%
+call   13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed (throw)
+call   16 never executed
+call   17 never executed
+branch 18 never executed (fallthrough)
+branch 19 never executed (throw)
+call   20 never executed
+branch 21 never executed (fallthrough)
+branch 22 never executed (throw)
+call   23 never executed
+call   24 never executed
+call   25 returned 100%
+call   26 never executed
+call   27 never executed
+call   28 never executed
+call   29 never executed
+        1:  291:}
+call    0 returned 100%
+call    1 never executed
+------------------
+        -:  292:
+        -:  293:// 测试 swap 不同分配器抛异常
+        4:  294:TEST(PmrBufferTest, SwapDifferentAllocatorThrows)
+        -:  295:{
+        -:  296:	std::array<std::byte, 4096> storage1;
+        -:  297:	std::array<std::byte, 4096> storage2;
+        3:  298:	std::pmr::monotonic_buffer_resource res1(storage1.data(), storage1.size(), std::pmr::null_memory_resource());
+        3:  299:	std::pmr::monotonic_buffer_resource res2(storage2.data(), storage2.size(), std::pmr::null_memory_resource());
+        -:  300:
+        1:  301:	PmrBuffer buf1(std::pmr::polymorphic_allocator<std::byte>(&res1), 64);
+        1:  302:	PmrBuffer buf2(std::pmr::polymorphic_allocator<std::byte>(&res2), 64);
+        -:  303:
+        2:  304:	buf1.append("aaa");
+        1:  305:	buf2.append("bbb");
+        -:  306:
+       1*:  307:	EXPECT_THROW(buf1.swap(buf2), std::logic_error);
+        1:  308:}
+------------------
+_ZN47PmrBufferTest_SwapDifferentAllocatorThrows_TestC2Ev:
+function _ZN47PmrBufferTest_SwapDifferentAllocatorThrows_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:  294:TEST(PmrBufferTest, SwapDifferentAllocatorThrows)
+call    0 returned 100%
+------------------
+_ZN47PmrBufferTest_SwapDifferentAllocatorThrows_TestD0Ev:
+function _ZN47PmrBufferTest_SwapDifferentAllocatorThrows_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:  294:TEST(PmrBufferTest, SwapDifferentAllocatorThrows)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN47PmrBufferTest_SwapDifferentAllocatorThrows_TestD2Ev:
+function _ZN47PmrBufferTest_SwapDifferentAllocatorThrows_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:  294:TEST(PmrBufferTest, SwapDifferentAllocatorThrows)
+call    0 returned 100%
+------------------
+_ZN47PmrBufferTest_SwapDifferentAllocatorThrows_Test8TestBodyEv:
+function _ZN47PmrBufferTest_SwapDifferentAllocatorThrows_Test8TestBodyEv called 1 returned 100% blocks executed 41%
+        1:  294:TEST(PmrBufferTest, SwapDifferentAllocatorThrows)
+        -:  295:{
+        -:  296:	std::array<std::byte, 4096> storage1;
+        -:  297:	std::array<std::byte, 4096> storage2;
+        3:  298:	std::pmr::monotonic_buffer_resource res1(storage1.data(), storage1.size(), std::pmr::null_memory_resource());
+call    0 returned 100%
+        3:  299:	std::pmr::monotonic_buffer_resource res2(storage2.data(), storage2.size(), std::pmr::null_memory_resource());
+call    0 returned 100%
+        -:  300:
+        1:  301:	PmrBuffer buf1(std::pmr::polymorphic_allocator<std::byte>(&res1), 64);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        1:  302:	PmrBuffer buf2(std::pmr::polymorphic_allocator<std::byte>(&res2), 64);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:  303:
+        2:  304:	buf1.append("aaa");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+        1:  305:	buf2.append("bbb");
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 never executed
+        -:  306:
+       1*:  307:	EXPECT_THROW(buf1.swap(buf2), std::logic_error);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0%
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0%
+call    9 returned 100%
+branch 10 taken 0% (fallthrough)
+branch 11 taken 100% (throw)
+branch 12 taken 0% (fallthrough)
+branch 13 taken 100%
+call   14 never executed
+branch 15 never executed (fallthrough)
+branch 16 never executed (throw)
+call   17 never executed
+branch 18 never executed (fallthrough)
+branch 19 never executed (throw)
+call   20 never executed
+call   21 never executed
+branch 22 never executed (fallthrough)
+branch 23 never executed (throw)
+call   24 never executed
+branch 25 never executed (fallthrough)
+branch 26 never executed (throw)
+call   27 never executed
+call   28 never executed
+call   29 returned 100%
+branch 30 taken 100%
+branch 31 taken 0%
+branch 32 taken 0%
+call   33 returned 100%
+call   34 returned 100%
+call   35 never executed
+call   36 never executed
+branch 37 never executed (fallthrough)
+branch 38 never executed (throw)
+call   39 never executed
+branch 40 never executed (fallthrough)
+branch 41 never executed (throw)
+call   42 never executed
+branch 43 never executed (fallthrough)
+branch 44 never executed (throw)
+call   45 never executed
+call   46 never executed
+branch 47 never executed (fallthrough)
+branch 48 never executed (throw)
+call   49 never executed
+call   50 never executed
+branch 51 never executed (fallthrough)
+branch 52 never executed (throw)
+call   53 never executed
+branch 54 never executed (fallthrough)
+branch 55 never executed (throw)
+call   56 never executed
+call   57 never executed
+call   58 never executed
+branch 59 never executed (fallthrough)
+branch 60 never executed (throw)
+call   61 never executed
+branch 62 never executed (fallthrough)
+branch 63 never executed (throw)
+call   64 never executed
+call   65 never executed
+call   66 never executed
+call   67 never executed
+call   68 never executed
+call   69 never executed
+        1:  308:}
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 never executed
+call    5 never executed
+call    6 never executed
+call    7 never executed
+------------------
+        -:  309:
+        -:  310:// 测试 ensureWritableBytes 在不可扩容的分配器上抛 std::bad_alloc
+        4:  311:TEST(PmrBufferTest, EnsureWritableBytesThrowsOnAllocationFailure)
+        -:  312:{
+        -:  313:	std::array<std::byte, 128> storage;
+        3:  314:	std::pmr::monotonic_buffer_resource res(storage.data(), storage.size(), std::pmr::null_memory_resource());
+        -:  315:
+        1:  316:	PmrBuffer buffer(std::pmr::polymorphic_allocator<std::byte>(&res), 32);
+        -:  317:
+        -:  318:	// 请求远超可用空间的容量，上游 null_memory_resource 会抛 std::bad_alloc
+       1*:  319:	EXPECT_THROW(buffer.ensureWritableBytes(65536), std::bad_alloc);
+        1:  320:}
+------------------
+_ZN63PmrBufferTest_EnsureWritableBytesThrowsOnAllocationFailure_TestC2Ev:
+function _ZN63PmrBufferTest_EnsureWritableBytesThrowsOnAllocationFailure_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:  311:TEST(PmrBufferTest, EnsureWritableBytesThrowsOnAllocationFailure)
+call    0 returned 100%
+------------------
+_ZN63PmrBufferTest_EnsureWritableBytesThrowsOnAllocationFailure_TestD0Ev:
+function _ZN63PmrBufferTest_EnsureWritableBytesThrowsOnAllocationFailure_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:  311:TEST(PmrBufferTest, EnsureWritableBytesThrowsOnAllocationFailure)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN63PmrBufferTest_EnsureWritableBytesThrowsOnAllocationFailure_TestD2Ev:
+function _ZN63PmrBufferTest_EnsureWritableBytesThrowsOnAllocationFailure_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:  311:TEST(PmrBufferTest, EnsureWritableBytesThrowsOnAllocationFailure)
+call    0 returned 100%
+------------------
+_ZN63PmrBufferTest_EnsureWritableBytesThrowsOnAllocationFailure_Test8TestBodyEv:
+function _ZN63PmrBufferTest_EnsureWritableBytesThrowsOnAllocationFailure_Test8TestBodyEv called 1 returned 100% blocks executed 33%
+        1:  311:TEST(PmrBufferTest, EnsureWritableBytesThrowsOnAllocationFailure)
+        -:  312:{
+        -:  313:	std::array<std::byte, 128> storage;
+        3:  314:	std::pmr::monotonic_buffer_resource res(storage.data(), storage.size(), std::pmr::null_memory_resource());
+call    0 returned 100%
+        -:  315:
+        1:  316:	PmrBuffer buffer(std::pmr::polymorphic_allocator<std::byte>(&res), 32);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:  317:
+        -:  318:	// 请求远超可用空间的容量，上游 null_memory_resource 会抛 std::bad_alloc
+       1*:  319:	EXPECT_THROW(buffer.ensureWritableBytes(65536), std::bad_alloc);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0%
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0%
+call    9 returned 100%
+branch 10 taken 0% (fallthrough)
+branch 11 taken 100% (throw)
+branch 12 taken 0% (fallthrough)
+branch 13 taken 100%
+call   14 never executed
+branch 15 never executed (fallthrough)
+branch 16 never executed (throw)
+call   17 never executed
+branch 18 never executed (fallthrough)
+branch 19 never executed (throw)
+call   20 never executed
+call   21 never executed
+branch 22 never executed (fallthrough)
+branch 23 never executed (throw)
+call   24 never executed
+branch 25 never executed (fallthrough)
+branch 26 never executed (throw)
+call   27 never executed
+call   28 never executed
+call   29 returned 100%
+branch 30 taken 100%
+branch 31 taken 0%
+branch 32 taken 0%
+call   33 returned 100%
+call   34 returned 100%
+call   35 never executed
+call   36 never executed
+branch 37 never executed (fallthrough)
+branch 38 never executed (throw)
+call   39 never executed
+branch 40 never executed (fallthrough)
+branch 41 never executed (throw)
+call   42 never executed
+branch 43 never executed (fallthrough)
+branch 44 never executed (throw)
+call   45 never executed
+call   46 never executed
+branch 47 never executed (fallthrough)
+branch 48 never executed (throw)
+call   49 never executed
+call   50 never executed
+branch 51 never executed (fallthrough)
+branch 52 never executed (throw)
+call   53 never executed
+branch 54 never executed (fallthrough)
+branch 55 never executed (throw)
+call   56 never executed
+call   57 never executed
+call   58 never executed
+branch 59 never executed (fallthrough)
+branch 60 never executed (throw)
+call   61 never executed
+branch 62 never executed (fallthrough)
+branch 63 never executed (throw)
+call   64 never executed
+call   65 never executed
+call   66 never executed
+call   67 never executed
+call   68 never executed
+call   69 never executed
+        1:  320:}
+call    0 returned 100%
+call    1 returned 100%
+call    2 never executed
+call    3 never executed
+------------------
+        -:  321:
+        -:  322:// ============ MemoryPool GC 测试 ============
+        -:  323:
+        -:  324:// 测试 getStats 返回扩展字段
+        4:  325:TEST(MemoryPoolGcTest, StatsIncludeThreadPoolCount)
+        -:  326:{
+        1:  327:	auto& pool = MemoryPool::instance();
+        -:  328:
+        -:  329:	// 触发 thread-local 池创建
+        1:  330:	auto alloc = pool.threadLocalAllocator();
+        -:  331:	(void)alloc;
+        -:  332:
+        1:  333:	auto stats = pool.getStats();
+       1*:  334:	EXPECT_GE(stats.threadPoolCount, 1);
+        1:  335:}
+------------------
+_ZN49MemoryPoolGcTest_StatsIncludeThreadPoolCount_TestC2Ev:
+function _ZN49MemoryPoolGcTest_StatsIncludeThreadPoolCount_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:  325:TEST(MemoryPoolGcTest, StatsIncludeThreadPoolCount)
+call    0 returned 100%
+------------------
+_ZN49MemoryPoolGcTest_StatsIncludeThreadPoolCount_TestD0Ev:
+function _ZN49MemoryPoolGcTest_StatsIncludeThreadPoolCount_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:  325:TEST(MemoryPoolGcTest, StatsIncludeThreadPoolCount)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN49MemoryPoolGcTest_StatsIncludeThreadPoolCount_TestD2Ev:
+function _ZN49MemoryPoolGcTest_StatsIncludeThreadPoolCount_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:  325:TEST(MemoryPoolGcTest, StatsIncludeThreadPoolCount)
+call    0 returned 100%
+------------------
+_ZN49MemoryPoolGcTest_StatsIncludeThreadPoolCount_Test8TestBodyEv:
+function _ZN49MemoryPoolGcTest_StatsIncludeThreadPoolCount_Test8TestBodyEv called 1 returned 100% blocks executed 35%
+        1:  325:TEST(MemoryPoolGcTest, StatsIncludeThreadPoolCount)
+        -:  326:{
+        1:  327:	auto& pool = MemoryPool::instance();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  328:
+        -:  329:	// 触发 thread-local 池创建
+        1:  330:	auto alloc = pool.threadLocalAllocator();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  331:	(void)alloc;
+        -:  332:
+        1:  333:	auto stats = pool.getStats();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       1*:  334:	EXPECT_GE(stats.threadPoolCount, 1);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 0% (fallthrough)
+branch  5 taken 100%
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed (throw)
+call    9 never executed
+call   10 never executed
+branch 11 never executed (fallthrough)
+branch 12 never executed (throw)
+call   13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed (throw)
+call   16 never executed
+call   17 never executed
+call   18 returned 100%
+call   19 never executed
+call   20 never executed
+call   21 never executed
+        1:  335:}
+------------------
+        -:  336:
+        -:  337:// 测试 gc() 不崩溃，gcCycles 递增
+        4:  338:TEST(MemoryPoolGcTest, GcIncrementsCycles)
+        -:  339:{
+        1:  340:	auto& pool = MemoryPool::instance();
+        -:  341:
+        -:  342:	// 确保有 thread-local 池
+        1:  343:	auto alloc = pool.threadLocalAllocator();
+        -:  344:	(void)alloc;
+        -:  345:
+        1:  346:	auto beforeStats = pool.getStats();
+        1:  347:	pool.gc(std::chrono::seconds(0)); // maxIdle=0 意味着所有池都视为过期
+        -:  348:
+        1:  349:	auto afterStats = pool.getStats();
+       1*:  350:	EXPECT_GT(afterStats.gcCycles, beforeStats.gcCycles);
+        1:  351:}
+------------------
+_ZN40MemoryPoolGcTest_GcIncrementsCycles_TestC2Ev:
+function _ZN40MemoryPoolGcTest_GcIncrementsCycles_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:  338:TEST(MemoryPoolGcTest, GcIncrementsCycles)
+call    0 returned 100%
+------------------
+_ZN40MemoryPoolGcTest_GcIncrementsCycles_TestD0Ev:
+function _ZN40MemoryPoolGcTest_GcIncrementsCycles_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:  338:TEST(MemoryPoolGcTest, GcIncrementsCycles)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN40MemoryPoolGcTest_GcIncrementsCycles_TestD2Ev:
+function _ZN40MemoryPoolGcTest_GcIncrementsCycles_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:  338:TEST(MemoryPoolGcTest, GcIncrementsCycles)
+call    0 returned 100%
+------------------
+_ZN40MemoryPoolGcTest_GcIncrementsCycles_Test8TestBodyEv:
+function _ZN40MemoryPoolGcTest_GcIncrementsCycles_Test8TestBodyEv called 1 returned 100% blocks executed 40%
+        1:  338:TEST(MemoryPoolGcTest, GcIncrementsCycles)
+        -:  339:{
+        1:  340:	auto& pool = MemoryPool::instance();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  341:
+        -:  342:	// 确保有 thread-local 池
+        1:  343:	auto alloc = pool.threadLocalAllocator();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  344:	(void)alloc;
+        -:  345:
+        1:  346:	auto beforeStats = pool.getStats();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  347:	pool.gc(std::chrono::seconds(0)); // maxIdle=0 意味着所有池都视为过期
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:  348:
+        1:  349:	auto afterStats = pool.getStats();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       1*:  350:	EXPECT_GT(afterStats.gcCycles, beforeStats.gcCycles);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 0% (fallthrough)
+branch  5 taken 100%
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed (throw)
+call    9 never executed
+call   10 never executed
+branch 11 never executed (fallthrough)
+branch 12 never executed (throw)
+call   13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed (throw)
+call   16 never executed
+call   17 never executed
+call   18 returned 100%
+call   19 never executed
+call   20 never executed
+call   21 never executed
+        1:  351:}
+------------------
+        -:  352:
+        -:  353:// 测试 gc() 在多线程场景下不崩溃
+        4:  354:TEST(MemoryPoolGcTest, GcThreadSafety)
+        -:  355:{
+        1:  356:	auto& pool = MemoryPool::instance();
+        -:  357:
+        1:  358:	std::vector<std::thread> threads;
+        5:  359:	for (int i = 0; i < 4; ++i)
+        -:  360:	{
+        4:  361:		threads.emplace_back(
+        8:  362:			[&pool]()
+        -:  363:			{
+        -:  364:				// 创建 thread-local 池并分配一些内存
+        4:  365:				auto alloc = pool.threadLocalAllocator();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        4:  366:				std::pmr::vector<int> vec(alloc);
+call    0 returned 100%
+call    1 returned 100%
+      404:  367:				for (int j = 0; j < 100; ++j)
+branch  0 taken 99%
+branch  1 taken 1% (fallthrough)
+        -:  368:				{
+      400:  369:					vec.push_back(j);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  370:				}
+        4:  371:			});
+call    0 returned 100%
+call    1 never executed
+        -:  372:	}
+        -:  373:
+        5:  374:	for (auto& t : threads)
+        -:  375:	{
+        4:  376:		t.join();
+        -:  377:	}
+        -:  378:
+        -:  379:	// 线程已退出，GC 应该能安全回收
+       1*:  380:	EXPECT_NO_THROW(pool.gc(std::chrono::seconds(0)));
+        -:  381:
+        1:  382:	auto stats = pool.getStats();
+       1*:  383:	EXPECT_GE(stats.threadPoolCount, 4);
+        1:  384:}
+------------------
+_ZN36MemoryPoolGcTest_GcThreadSafety_TestC2Ev:
+function _ZN36MemoryPoolGcTest_GcThreadSafety_TestC2Ev called 1 returned 100% blocks executed 100%
+        1:  354:TEST(MemoryPoolGcTest, GcThreadSafety)
+call    0 returned 100%
+------------------
+_ZN36MemoryPoolGcTest_GcThreadSafety_TestD0Ev:
+function _ZN36MemoryPoolGcTest_GcThreadSafety_TestD0Ev called 1 returned 100% blocks executed 100%
+        1:  354:TEST(MemoryPoolGcTest, GcThreadSafety)
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN36MemoryPoolGcTest_GcThreadSafety_TestD2Ev:
+function _ZN36MemoryPoolGcTest_GcThreadSafety_TestD2Ev called 1 returned 100% blocks executed 100%
+        1:  354:TEST(MemoryPoolGcTest, GcThreadSafety)
+call    0 returned 100%
+------------------
+_ZN36MemoryPoolGcTest_GcThreadSafety_Test8TestBodyEv:
+function _ZN36MemoryPoolGcTest_GcThreadSafety_Test8TestBodyEv called 1 returned 100% blocks executed 30%
+        1:  354:TEST(MemoryPoolGcTest, GcThreadSafety)
+        -:  355:{
+        1:  356:	auto& pool = MemoryPool::instance();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  357:
+        1:  358:	std::vector<std::thread> threads;
+        5:  359:	for (int i = 0; i < 4; ++i)
+branch  0 taken 80%
+branch  1 taken 20% (fallthrough)
+        -:  360:	{
+        4:  361:		threads.emplace_back(
+        4:  362:			[&pool]()
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  363:			{
+        -:  364:				// 创建 thread-local 池并分配一些内存
+        -:  365:				auto alloc = pool.threadLocalAllocator();
+        -:  366:				std::pmr::vector<int> vec(alloc);
+        -:  367:				for (int j = 0; j < 100; ++j)
+        -:  368:				{
+        -:  369:					vec.push_back(j);
+        -:  370:				}
+        -:  371:			});
+        -:  372:	}
+        -:  373:
+        5:  374:	for (auto& t : threads)
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 80%
+branch  6 taken 20% (fallthrough)
+        -:  375:	{
+        4:  376:		t.join();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  377:	}
+        -:  378:
+        -:  379:	// 线程已退出，GC 应该能安全回收
+       1*:  380:	EXPECT_NO_THROW(pool.gc(std::chrono::seconds(0)));
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0%
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0%
+call    9 returned 100%
+call   10 returned 100%
+branch 11 taken 100% (fallthrough)
+branch 12 taken 0% (throw)
+call   13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed (throw)
+call   16 never executed
+branch 17 never executed (fallthrough)
+branch 18 never executed (throw)
+call   19 never executed
+call   20 never executed
+branch 21 never executed (fallthrough)
+branch 22 never executed (throw)
+call   23 never executed
+branch 24 never executed (fallthrough)
+branch 25 never executed (throw)
+call   26 never executed
+call   27 never executed
+call   28 never executed
+call   29 returned 100%
+branch 30 never executed
+branch 31 never executed
+call   32 never executed
+call   33 never executed
+branch 34 never executed (fallthrough)
+branch 35 never executed (throw)
+call   36 never executed
+branch 37 never executed (fallthrough)
+branch 38 never executed (throw)
+call   39 never executed
+branch 40 never executed (fallthrough)
+branch 41 never executed (throw)
+call   42 never executed
+call   43 never executed
+branch 44 never executed (fallthrough)
+branch 45 never executed (throw)
+call   46 never executed
+call   47 never executed
+branch 48 never executed (fallthrough)
+branch 49 never executed (throw)
+call   50 never executed
+branch 51 never executed (fallthrough)
+branch 52 never executed (throw)
+call   53 never executed
+call   54 never executed
+call   55 never executed
+branch 56 never executed (fallthrough)
+branch 57 never executed (throw)
+call   58 never executed
+branch 59 never executed (fallthrough)
+branch 60 never executed (throw)
+call   61 never executed
+call   62 never executed
+call   63 never executed
+call   64 never executed
+call   65 never executed
+call   66 never executed
+call   67 never executed
+        -:  381:
+        1:  382:	auto stats = pool.getStats();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       1*:  383:	EXPECT_GE(stats.threadPoolCount, 4);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 0% (fallthrough)
+branch  5 taken 100%
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed (throw)
+call    9 never executed
+call   10 never executed
+branch 11 never executed (fallthrough)
+branch 12 never executed (throw)
+call   13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed (throw)
+call   16 never executed
+call   17 never executed
+call   18 returned 100%
+call   19 never executed
+call   20 never executed
+call   21 never executed
+        1:  384:}
+call    0 returned 100%
+call    1 never executed
+------------------

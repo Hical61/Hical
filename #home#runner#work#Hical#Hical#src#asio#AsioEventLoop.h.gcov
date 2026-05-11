@@ -1,0 +1,90 @@
+        -:    0:Source:/home/runner/work/Hical/Hical/src/asio/AsioEventLoop.h
+        -:    1:#pragma once
+        -:    2:
+        -:    3:#include "../core/EventLoop.h"
+        -:    4:#include "../core/MemoryPool.h"
+        -:    5:#include <boost/asio.hpp>
+        -:    6:#include <atomic>
+        -:    7:#include <map>
+        -:    8:#include <memory>
+        -:    9:#include <mutex>
+        -:   10:#include <thread>
+        -:   11:
+        -:   12:namespace hical
+        -:   13:{
+        -:   14:
+        -:   15:	class AsioTimer;
+        -:   16:
+        -:   17:	/**
+        -:   18:	 * @brief 基于 Boost.Asio 的事件循环实现
+        -:   19:	 * 将 hical::EventLoop 接口映射到 Boost.Asio io_context。
+        -:   20:	 * 线程模型：1 Thread : 1 io_context
+        -:   21:	 * 每个实例持有独立的 per-thread pmr pool resource
+        -:   22:	 */
+        -:   23:	class AsioEventLoop : public EventLoop
+        -:   24:	{
+        -:   25:	public:
+        -:   26:		AsioEventLoop();
+        -:   27:		~AsioEventLoop() override;
+        -:   28:
+        -:   29:		// ============ 生命周期 ============
+        -:   30:
+        -:   31:		void run() override;
+        -:   32:		void stop() override;
+        -:   33:		bool isRunning() const override;
+        -:   34:
+        -:   35:		// ============ 任务调度 ============
+        -:   36:
+        -:   37:		void dispatch(Func cb) override;
+        -:   38:		void post(Func cb) override;
+        -:   39:
+        -:   40:		// ============ 定时器 ============
+        -:   41:
+        -:   42:		TimerId runAfter(double delay, Func cb) override;
+        -:   43:		TimerId runEvery(double interval, Func cb) override;
+        -:   44:		void cancelTimer(TimerId id) override;
+        -:   45:
+        -:   46:		// ============ 线程属性 ============
+        -:   47:
+        -:   48:		bool isInLoopThread() const override;
+        -:   49:		size_t index() const override;
+        -:   50:		void setIndex(size_t index) override;
+        -:   51:
+        -:   52:		// ============ 退出钩子 ============
+        -:   53:
+        -:   54:		void runOnQuit(Func cb) override;
+        -:   55:
+        -:   56:		// ============ pmr 支持 ============
+        -:   57:
+        -:   58:		std::pmr::polymorphic_allocator<std::byte> allocator() const override;
+        -:   59:
+        -:   60:		// ============ Asio 特有接口 ============
+        -:   61:
+        -:   62:		/**
+        -:   63:		 * @brief 获取底层 io_context
+        -:   64:		 * @return io_context 引用
+        -:   65:		 */
+     170*:   66:		boost::asio::io_context& getIoContext()
+        -:   67:		{
+     170*:   68:			return ioContext_;
+        -:   69:		}
+        -:   70:
+        -:   71:	private:
+        -:   72:		boost::asio::io_context ioContext_;
+        -:   73:		std::unique_ptr<boost::asio::executor_work_guard<boost::asio::io_context::executor_type>> workGuard_;
+        -:   74:		std::thread::id threadId_;
+        -:   75:		std::atomic<bool> running_ {false};
+        -:   76:		std::atomic<bool> quit_ {false};
+        -:   77:		size_t index_ {0};
+        -:   78:
+        -:   79:		// 定时器管理（使用独立 AsioTimer 类）
+        -:   80:		std::atomic<TimerId> nextTimerId_ {1};
+        -:   81:		std::map<TimerId, std::shared_ptr<AsioTimer>> timers_;
+        -:   82:		std::mutex timersMutex_;
+        -:   83:
+        -:   84:		// 退出回调
+        -:   85:		std::vector<Func> quitCallbacks_;
+        -:   86:		std::mutex quitMutex_;
+        -:   87:	};
+        -:   88:
+        -:   89:} // namespace hical

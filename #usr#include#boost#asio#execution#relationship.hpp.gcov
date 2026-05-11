@@ -1,0 +1,1491 @@
+        -:    0:Source:/usr/include/boost/asio/execution/relationship.hpp
+        -:    1://
+        -:    2:// execution/relationship.hpp
+        -:    3:// ~~~~~~~~~~~~~~~~~~~~~~~~~~
+        -:    4://
+        -:    5:// Copyright (c) 2003-2023 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+        -:    6://
+        -:    7:// Distributed under the Boost Software License, Version 1.0. (See accompanying
+        -:    8:// file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+        -:    9://
+        -:   10:
+        -:   11:#ifndef BOOST_ASIO_EXECUTION_RELATIONSHIP_HPP
+        -:   12:#define BOOST_ASIO_EXECUTION_RELATIONSHIP_HPP
+        -:   13:
+        -:   14:#if defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   15:# pragma once
+        -:   16:#endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   17:
+        -:   18:#include <boost/asio/detail/config.hpp>
+        -:   19:#include <boost/asio/detail/type_traits.hpp>
+        -:   20:#include <boost/asio/execution/executor.hpp>
+        -:   21:#include <boost/asio/execution/scheduler.hpp>
+        -:   22:#include <boost/asio/execution/sender.hpp>
+        -:   23:#include <boost/asio/is_applicable_property.hpp>
+        -:   24:#include <boost/asio/query.hpp>
+        -:   25:#include <boost/asio/traits/query_free.hpp>
+        -:   26:#include <boost/asio/traits/query_member.hpp>
+        -:   27:#include <boost/asio/traits/query_static_constexpr_member.hpp>
+        -:   28:#include <boost/asio/traits/static_query.hpp>
+        -:   29:#include <boost/asio/traits/static_require.hpp>
+        -:   30:
+        -:   31:#include <boost/asio/detail/push_options.hpp>
+        -:   32:
+        -:   33:namespace boost {
+        -:   34:namespace asio {
+        -:   35:
+        -:   36:#if defined(GENERATING_DOCUMENTATION)
+        -:   37:
+        -:   38:namespace execution {
+        -:   39:
+        -:   40:/// A property to describe whether submitted tasks represent continuations of
+        -:   41:/// the calling context.
+        -:   42:struct relationship_t
+        -:   43:{
+        -:   44:  /// The relationship_t property applies to executors, senders, and schedulers.
+        -:   45:  template <typename T>
+        -:   46:  static constexpr bool is_applicable_property_v =
+        -:   47:    is_executor_v<T> || is_sender_v<T> || is_scheduler_v<T>;
+        -:   48:
+        -:   49:  /// The top-level relationship_t property cannot be required.
+        -:   50:  static constexpr bool is_requirable = false;
+        -:   51:
+        -:   52:  /// The top-level relationship_t property cannot be preferred.
+        -:   53:  static constexpr bool is_preferable = false;
+        -:   54:
+        -:   55:  /// The type returned by queries against an @c any_executor.
+        -:   56:  typedef relationship_t polymorphic_query_result_type;
+        -:   57:
+        -:   58:  /// A sub-property that indicates that the executor does not represent a
+        -:   59:  /// continuation of the calling context.
+        -:   60:  struct fork_t
+        -:   61:  {
+        -:   62:    /// The relationship_t::fork_t property applies to executors, senders, and
+        -:   63:    /// schedulers.
+        -:   64:    template <typename T>
+        -:   65:    static constexpr bool is_applicable_property_v =
+        -:   66:      is_executor_v<T> || is_sender_v<T> || is_scheduler_v<T>;
+        -:   67:
+        -:   68:    /// The relationship_t::fork_t property can be required.
+        -:   69:    static constexpr bool is_requirable = true;
+        -:   70:
+        -:   71:    /// The relationship_t::fork_t property can be preferred.
+        -:   72:    static constexpr bool is_preferable = true;
+        -:   73:
+        -:   74:    /// The type returned by queries against an @c any_executor.
+        -:   75:    typedef relationship_t polymorphic_query_result_type;
+        -:   76:
+        -:   77:    /// Default constructor.
+        -:   78:    constexpr fork_t();
+        -:   79:
+        -:   80:    /// Get the value associated with a property object.
+        -:   81:    /**
+        -:   82:     * @returns fork_t();
+        -:   83:     */
+        -:   84:    static constexpr relationship_t value();
+        -:   85:  };
+        -:   86:
+        -:   87:  /// A sub-property that indicates that the executor represents a continuation
+        -:   88:  /// of the calling context.
+        -:   89:  struct continuation_t
+        -:   90:  {
+        -:   91:    /// The relationship_t::continuation_t property applies to executors,
+        -:   92:    /// senders, and schedulers.
+        -:   93:    template <typename T>
+        -:   94:    static constexpr bool is_applicable_property_v =
+        -:   95:      is_executor_v<T> || is_sender_v<T> || is_scheduler_v<T>;
+        -:   96:
+        -:   97:    /// The relationship_t::continuation_t property can be required.
+        -:   98:    static constexpr bool is_requirable = true;
+        -:   99:
+        -:  100:    /// The relationship_t::continuation_t property can be preferred.
+        -:  101:    static constexpr bool is_preferable = true;
+        -:  102:
+        -:  103:    /// The type returned by queries against an @c any_executor.
+        -:  104:    typedef relationship_t polymorphic_query_result_type;
+        -:  105:
+        -:  106:    /// Default constructor.
+        -:  107:    constexpr continuation_t();
+        -:  108:
+        -:  109:    /// Get the value associated with a property object.
+        -:  110:    /**
+        -:  111:     * @returns continuation_t();
+        -:  112:     */
+        -:  113:    static constexpr relationship_t value();
+        -:  114:  };
+        -:  115:
+        -:  116:  /// A special value used for accessing the relationship_t::fork_t property.
+        -:  117:  static constexpr fork_t fork;
+        -:  118:
+        -:  119:  /// A special value used for accessing the relationship_t::continuation_t
+        -:  120:  /// property.
+        -:  121:  static constexpr continuation_t continuation;
+        -:  122:
+        -:  123:  /// Default constructor.
+        -:  124:  constexpr relationship_t();
+        -:  125:
+        -:  126:  /// Construct from a sub-property value.
+        -:  127:  constexpr relationship_t(fork_t);
+        -:  128:
+        -:  129:  /// Construct from a sub-property value.
+        -:  130:  constexpr relationship_t(continuation_t);
+        -:  131:
+        -:  132:  /// Compare property values for equality.
+        -:  133:  friend constexpr bool operator==(
+        -:  134:      const relationship_t& a, const relationship_t& b) noexcept;
+        -:  135:
+        -:  136:  /// Compare property values for inequality.
+        -:  137:  friend constexpr bool operator!=(
+        -:  138:      const relationship_t& a, const relationship_t& b) noexcept;
+        -:  139:};
+        -:  140:
+        -:  141:/// A special value used for accessing the relationship_t property.
+        -:  142:constexpr relationship_t relationship;
+        -:  143:
+        -:  144:} // namespace execution
+        -:  145:
+        -:  146:#else // defined(GENERATING_DOCUMENTATION)
+        -:  147:
+        -:  148:namespace execution {
+        -:  149:namespace detail {
+        -:  150:namespace relationship {
+        -:  151:
+        -:  152:template <int I> struct fork_t;
+        -:  153:template <int I> struct continuation_t;
+        -:  154:
+        -:  155:} // namespace relationship
+        -:  156:
+        -:  157:template <int I = 0>
+        -:  158:struct relationship_t
+        -:  159:{
+        -:  160:#if defined(BOOST_ASIO_HAS_VARIABLE_TEMPLATES)
+        -:  161:# if defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  162:  template <typename T>
+        -:  163:  BOOST_ASIO_STATIC_CONSTEXPR(bool,
+        -:  164:    is_applicable_property_v = (
+        -:  165:      is_executor<T>::value));
+        -:  166:# else // defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  167:  template <typename T>
+        -:  168:  BOOST_ASIO_STATIC_CONSTEXPR(bool,
+        -:  169:    is_applicable_property_v = (
+        -:  170:      is_executor<T>::value
+        -:  171:        || conditional<
+        -:  172:            is_executor<T>::value,
+        -:  173:            false_type,
+        -:  174:            is_sender<T>
+        -:  175:          >::type::value
+        -:  176:        || conditional<
+        -:  177:            is_executor<T>::value,
+        -:  178:            false_type,
+        -:  179:            is_scheduler<T>
+        -:  180:          >::type::value
+        -:  181:      ));
+        -:  182:# endif // defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  183:#endif // defined(BOOST_ASIO_HAS_VARIABLE_TEMPLATES)
+        -:  184:
+        -:  185:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_requirable = false);
+        -:  186:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_preferable = false);
+        -:  187:  typedef relationship_t polymorphic_query_result_type;
+        -:  188:
+        -:  189:  typedef detail::relationship::fork_t<I> fork_t;
+        -:  190:  typedef detail::relationship::continuation_t<I> continuation_t;
+        -:  191:
+        -:  192:  BOOST_ASIO_CONSTEXPR relationship_t()
+        -:  193:    : value_(-1)
+        -:  194:  {
+        -:  195:  }
+        -:  196:
+    #####:  197:  BOOST_ASIO_CONSTEXPR relationship_t(fork_t)
+    #####:  198:    : value_(0)
+        -:  199:  {
+    #####:  200:  }
+------------------
+_ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship6fork_tILi0EEE:
+function _ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship6fork_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  197:  BOOST_ASIO_CONSTEXPR relationship_t(fork_t)
+    #####:  198:    : value_(0)
+        -:  199:  {
+    #####:  200:  }
+------------------
+_ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship6fork_tILi0EEE:
+function _ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship6fork_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  197:  BOOST_ASIO_CONSTEXPR relationship_t(fork_t)
+    #####:  198:    : value_(0)
+        -:  199:  {
+    #####:  200:  }
+------------------
+_ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship6fork_tILi0EEE:
+function _ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship6fork_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  197:  BOOST_ASIO_CONSTEXPR relationship_t(fork_t)
+    #####:  198:    : value_(0)
+        -:  199:  {
+    #####:  200:  }
+------------------
+_ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship6fork_tILi0EEE:
+function _ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship6fork_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  197:  BOOST_ASIO_CONSTEXPR relationship_t(fork_t)
+    #####:  198:    : value_(0)
+        -:  199:  {
+    #####:  200:  }
+------------------
+_ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship6fork_tILi0EEE:
+function _ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship6fork_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  197:  BOOST_ASIO_CONSTEXPR relationship_t(fork_t)
+    #####:  198:    : value_(0)
+        -:  199:  {
+    #####:  200:  }
+------------------
+_ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship6fork_tILi0EEE:
+function _ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship6fork_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  197:  BOOST_ASIO_CONSTEXPR relationship_t(fork_t)
+    #####:  198:    : value_(0)
+        -:  199:  {
+    #####:  200:  }
+------------------
+_ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship6fork_tILi0EEE:
+function _ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship6fork_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  197:  BOOST_ASIO_CONSTEXPR relationship_t(fork_t)
+    #####:  198:    : value_(0)
+        -:  199:  {
+    #####:  200:  }
+------------------
+_ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship6fork_tILi0EEE:
+function _ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship6fork_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  197:  BOOST_ASIO_CONSTEXPR relationship_t(fork_t)
+    #####:  198:    : value_(0)
+        -:  199:  {
+    #####:  200:  }
+------------------
+_ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship6fork_tILi0EEE:
+function _ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship6fork_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  197:  BOOST_ASIO_CONSTEXPR relationship_t(fork_t)
+    #####:  198:    : value_(0)
+        -:  199:  {
+    #####:  200:  }
+------------------
+_ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship6fork_tILi0EEE:
+function _ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship6fork_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  197:  BOOST_ASIO_CONSTEXPR relationship_t(fork_t)
+    #####:  198:    : value_(0)
+        -:  199:  {
+    #####:  200:  }
+------------------
+_ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship6fork_tILi0EEE:
+function _ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship6fork_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  197:  BOOST_ASIO_CONSTEXPR relationship_t(fork_t)
+    #####:  198:    : value_(0)
+        -:  199:  {
+    #####:  200:  }
+------------------
+_ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship6fork_tILi0EEE:
+function _ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship6fork_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  197:  BOOST_ASIO_CONSTEXPR relationship_t(fork_t)
+    #####:  198:    : value_(0)
+        -:  199:  {
+    #####:  200:  }
+------------------
+_ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship6fork_tILi0EEE:
+function _ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship6fork_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  197:  BOOST_ASIO_CONSTEXPR relationship_t(fork_t)
+    #####:  198:    : value_(0)
+        -:  199:  {
+    #####:  200:  }
+------------------
+_ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship6fork_tILi0EEE:
+function _ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship6fork_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  197:  BOOST_ASIO_CONSTEXPR relationship_t(fork_t)
+    #####:  198:    : value_(0)
+        -:  199:  {
+    #####:  200:  }
+------------------
+_ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship6fork_tILi0EEE:
+function _ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship6fork_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  197:  BOOST_ASIO_CONSTEXPR relationship_t(fork_t)
+    #####:  198:    : value_(0)
+        -:  199:  {
+    #####:  200:  }
+------------------
+_ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship6fork_tILi0EEE:
+function _ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship6fork_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  197:  BOOST_ASIO_CONSTEXPR relationship_t(fork_t)
+    #####:  198:    : value_(0)
+        -:  199:  {
+    #####:  200:  }
+------------------
+_ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship6fork_tILi0EEE:
+function _ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship6fork_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  197:  BOOST_ASIO_CONSTEXPR relationship_t(fork_t)
+    #####:  198:    : value_(0)
+        -:  199:  {
+    #####:  200:  }
+------------------
+_ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship6fork_tILi0EEE:
+function _ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship6fork_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  197:  BOOST_ASIO_CONSTEXPR relationship_t(fork_t)
+    #####:  198:    : value_(0)
+        -:  199:  {
+    #####:  200:  }
+------------------
+_ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship6fork_tILi0EEE:
+function _ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship6fork_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  197:  BOOST_ASIO_CONSTEXPR relationship_t(fork_t)
+    #####:  198:    : value_(0)
+        -:  199:  {
+    #####:  200:  }
+------------------
+_ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship6fork_tILi0EEE:
+function _ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship6fork_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  197:  BOOST_ASIO_CONSTEXPR relationship_t(fork_t)
+    #####:  198:    : value_(0)
+        -:  199:  {
+    #####:  200:  }
+------------------
+_ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship6fork_tILi0EEE:
+function _ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship6fork_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  197:  BOOST_ASIO_CONSTEXPR relationship_t(fork_t)
+    #####:  198:    : value_(0)
+        -:  199:  {
+    #####:  200:  }
+------------------
+_ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship6fork_tILi0EEE:
+function _ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship6fork_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  197:  BOOST_ASIO_CONSTEXPR relationship_t(fork_t)
+    #####:  198:    : value_(0)
+        -:  199:  {
+    #####:  200:  }
+------------------
+_ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship6fork_tILi0EEE:
+function _ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship6fork_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  197:  BOOST_ASIO_CONSTEXPR relationship_t(fork_t)
+    #####:  198:    : value_(0)
+        -:  199:  {
+    #####:  200:  }
+------------------
+_ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship6fork_tILi0EEE:
+function _ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship6fork_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  197:  BOOST_ASIO_CONSTEXPR relationship_t(fork_t)
+    #####:  198:    : value_(0)
+        -:  199:  {
+    #####:  200:  }
+------------------
+_ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship6fork_tILi0EEE:
+function _ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship6fork_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  197:  BOOST_ASIO_CONSTEXPR relationship_t(fork_t)
+    #####:  198:    : value_(0)
+        -:  199:  {
+    #####:  200:  }
+------------------
+_ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship6fork_tILi0EEE:
+function _ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship6fork_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  197:  BOOST_ASIO_CONSTEXPR relationship_t(fork_t)
+    #####:  198:    : value_(0)
+        -:  199:  {
+    #####:  200:  }
+------------------
+_ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship6fork_tILi0EEE:
+function _ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship6fork_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  197:  BOOST_ASIO_CONSTEXPR relationship_t(fork_t)
+    #####:  198:    : value_(0)
+        -:  199:  {
+    #####:  200:  }
+------------------
+_ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship6fork_tILi0EEE:
+function _ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship6fork_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  197:  BOOST_ASIO_CONSTEXPR relationship_t(fork_t)
+    #####:  198:    : value_(0)
+        -:  199:  {
+    #####:  200:  }
+------------------
+_ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship6fork_tILi0EEE:
+function _ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship6fork_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  197:  BOOST_ASIO_CONSTEXPR relationship_t(fork_t)
+    #####:  198:    : value_(0)
+        -:  199:  {
+    #####:  200:  }
+------------------
+_ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship6fork_tILi0EEE:
+function _ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship6fork_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  197:  BOOST_ASIO_CONSTEXPR relationship_t(fork_t)
+    #####:  198:    : value_(0)
+        -:  199:  {
+    #####:  200:  }
+------------------
+_ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship6fork_tILi0EEE:
+function _ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship6fork_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  197:  BOOST_ASIO_CONSTEXPR relationship_t(fork_t)
+    #####:  198:    : value_(0)
+        -:  199:  {
+    #####:  200:  }
+------------------
+_ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship6fork_tILi0EEE:
+function _ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship6fork_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  197:  BOOST_ASIO_CONSTEXPR relationship_t(fork_t)
+    #####:  198:    : value_(0)
+        -:  199:  {
+    #####:  200:  }
+------------------
+_ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship6fork_tILi0EEE:
+function _ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship6fork_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  197:  BOOST_ASIO_CONSTEXPR relationship_t(fork_t)
+    #####:  198:    : value_(0)
+        -:  199:  {
+    #####:  200:  }
+------------------
+_ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship6fork_tILi0EEE:
+function _ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship6fork_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  197:  BOOST_ASIO_CONSTEXPR relationship_t(fork_t)
+    #####:  198:    : value_(0)
+        -:  199:  {
+    #####:  200:  }
+------------------
+_ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship6fork_tILi0EEE:
+function _ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship6fork_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  197:  BOOST_ASIO_CONSTEXPR relationship_t(fork_t)
+    #####:  198:    : value_(0)
+        -:  199:  {
+    #####:  200:  }
+------------------
+_ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship6fork_tILi0EEE:
+function _ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship6fork_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  197:  BOOST_ASIO_CONSTEXPR relationship_t(fork_t)
+    #####:  198:    : value_(0)
+        -:  199:  {
+    #####:  200:  }
+------------------
+_ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship6fork_tILi0EEE:
+function _ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship6fork_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  197:  BOOST_ASIO_CONSTEXPR relationship_t(fork_t)
+    #####:  198:    : value_(0)
+        -:  199:  {
+    #####:  200:  }
+------------------
+_ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship6fork_tILi0EEE:
+function _ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship6fork_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  197:  BOOST_ASIO_CONSTEXPR relationship_t(fork_t)
+    #####:  198:    : value_(0)
+        -:  199:  {
+    #####:  200:  }
+------------------
+_ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship6fork_tILi0EEE:
+function _ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship6fork_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  197:  BOOST_ASIO_CONSTEXPR relationship_t(fork_t)
+    #####:  198:    : value_(0)
+        -:  199:  {
+    #####:  200:  }
+------------------
+_ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship6fork_tILi0EEE:
+function _ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship6fork_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  197:  BOOST_ASIO_CONSTEXPR relationship_t(fork_t)
+    #####:  198:    : value_(0)
+        -:  199:  {
+    #####:  200:  }
+------------------
+_ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship6fork_tILi0EEE:
+function _ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship6fork_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  197:  BOOST_ASIO_CONSTEXPR relationship_t(fork_t)
+    #####:  198:    : value_(0)
+        -:  199:  {
+    #####:  200:  }
+------------------
+_ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship6fork_tILi0EEE:
+function _ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship6fork_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  197:  BOOST_ASIO_CONSTEXPR relationship_t(fork_t)
+    #####:  198:    : value_(0)
+        -:  199:  {
+    #####:  200:  }
+------------------
+        -:  201:
+    #####:  202:  BOOST_ASIO_CONSTEXPR relationship_t(continuation_t)
+    #####:  203:    : value_(1)
+        -:  204:  {
+    #####:  205:  }
+------------------
+_ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship14continuation_tILi0EEE:
+function _ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship14continuation_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  202:  BOOST_ASIO_CONSTEXPR relationship_t(continuation_t)
+    #####:  203:    : value_(1)
+        -:  204:  {
+    #####:  205:  }
+------------------
+_ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship14continuation_tILi0EEE:
+function _ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship14continuation_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  202:  BOOST_ASIO_CONSTEXPR relationship_t(continuation_t)
+    #####:  203:    : value_(1)
+        -:  204:  {
+    #####:  205:  }
+------------------
+_ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship14continuation_tILi0EEE:
+function _ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship14continuation_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  202:  BOOST_ASIO_CONSTEXPR relationship_t(continuation_t)
+    #####:  203:    : value_(1)
+        -:  204:  {
+    #####:  205:  }
+------------------
+_ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship14continuation_tILi0EEE:
+function _ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship14continuation_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  202:  BOOST_ASIO_CONSTEXPR relationship_t(continuation_t)
+    #####:  203:    : value_(1)
+        -:  204:  {
+    #####:  205:  }
+------------------
+_ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship14continuation_tILi0EEE:
+function _ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship14continuation_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  202:  BOOST_ASIO_CONSTEXPR relationship_t(continuation_t)
+    #####:  203:    : value_(1)
+        -:  204:  {
+    #####:  205:  }
+------------------
+_ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship14continuation_tILi0EEE:
+function _ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship14continuation_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  202:  BOOST_ASIO_CONSTEXPR relationship_t(continuation_t)
+    #####:  203:    : value_(1)
+        -:  204:  {
+    #####:  205:  }
+------------------
+_ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship14continuation_tILi0EEE:
+function _ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship14continuation_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  202:  BOOST_ASIO_CONSTEXPR relationship_t(continuation_t)
+    #####:  203:    : value_(1)
+        -:  204:  {
+    #####:  205:  }
+------------------
+_ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship14continuation_tILi0EEE:
+function _ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship14continuation_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  202:  BOOST_ASIO_CONSTEXPR relationship_t(continuation_t)
+    #####:  203:    : value_(1)
+        -:  204:  {
+    #####:  205:  }
+------------------
+_ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship14continuation_tILi0EEE:
+function _ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship14continuation_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  202:  BOOST_ASIO_CONSTEXPR relationship_t(continuation_t)
+    #####:  203:    : value_(1)
+        -:  204:  {
+    #####:  205:  }
+------------------
+_ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship14continuation_tILi0EEE:
+function _ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship14continuation_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  202:  BOOST_ASIO_CONSTEXPR relationship_t(continuation_t)
+    #####:  203:    : value_(1)
+        -:  204:  {
+    #####:  205:  }
+------------------
+_ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship14continuation_tILi0EEE:
+function _ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship14continuation_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  202:  BOOST_ASIO_CONSTEXPR relationship_t(continuation_t)
+    #####:  203:    : value_(1)
+        -:  204:  {
+    #####:  205:  }
+------------------
+_ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship14continuation_tILi0EEE:
+function _ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship14continuation_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  202:  BOOST_ASIO_CONSTEXPR relationship_t(continuation_t)
+    #####:  203:    : value_(1)
+        -:  204:  {
+    #####:  205:  }
+------------------
+_ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship14continuation_tILi0EEE:
+function _ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship14continuation_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  202:  BOOST_ASIO_CONSTEXPR relationship_t(continuation_t)
+    #####:  203:    : value_(1)
+        -:  204:  {
+    #####:  205:  }
+------------------
+_ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship14continuation_tILi0EEE:
+function _ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship14continuation_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  202:  BOOST_ASIO_CONSTEXPR relationship_t(continuation_t)
+    #####:  203:    : value_(1)
+        -:  204:  {
+    #####:  205:  }
+------------------
+_ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship14continuation_tILi0EEE:
+function _ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship14continuation_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  202:  BOOST_ASIO_CONSTEXPR relationship_t(continuation_t)
+    #####:  203:    : value_(1)
+        -:  204:  {
+    #####:  205:  }
+------------------
+_ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship14continuation_tILi0EEE:
+function _ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship14continuation_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  202:  BOOST_ASIO_CONSTEXPR relationship_t(continuation_t)
+    #####:  203:    : value_(1)
+        -:  204:  {
+    #####:  205:  }
+------------------
+_ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship14continuation_tILi0EEE:
+function _ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship14continuation_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  202:  BOOST_ASIO_CONSTEXPR relationship_t(continuation_t)
+    #####:  203:    : value_(1)
+        -:  204:  {
+    #####:  205:  }
+------------------
+_ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship14continuation_tILi0EEE:
+function _ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship14continuation_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  202:  BOOST_ASIO_CONSTEXPR relationship_t(continuation_t)
+    #####:  203:    : value_(1)
+        -:  204:  {
+    #####:  205:  }
+------------------
+_ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship14continuation_tILi0EEE:
+function _ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship14continuation_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  202:  BOOST_ASIO_CONSTEXPR relationship_t(continuation_t)
+    #####:  203:    : value_(1)
+        -:  204:  {
+    #####:  205:  }
+------------------
+_ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship14continuation_tILi0EEE:
+function _ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship14continuation_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  202:  BOOST_ASIO_CONSTEXPR relationship_t(continuation_t)
+    #####:  203:    : value_(1)
+        -:  204:  {
+    #####:  205:  }
+------------------
+_ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship14continuation_tILi0EEE:
+function _ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship14continuation_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  202:  BOOST_ASIO_CONSTEXPR relationship_t(continuation_t)
+    #####:  203:    : value_(1)
+        -:  204:  {
+    #####:  205:  }
+------------------
+_ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship14continuation_tILi0EEE:
+function _ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship14continuation_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  202:  BOOST_ASIO_CONSTEXPR relationship_t(continuation_t)
+    #####:  203:    : value_(1)
+        -:  204:  {
+    #####:  205:  }
+------------------
+_ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship14continuation_tILi0EEE:
+function _ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship14continuation_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  202:  BOOST_ASIO_CONSTEXPR relationship_t(continuation_t)
+    #####:  203:    : value_(1)
+        -:  204:  {
+    #####:  205:  }
+------------------
+_ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship14continuation_tILi0EEE:
+function _ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship14continuation_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  202:  BOOST_ASIO_CONSTEXPR relationship_t(continuation_t)
+    #####:  203:    : value_(1)
+        -:  204:  {
+    #####:  205:  }
+------------------
+_ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship14continuation_tILi0EEE:
+function _ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship14continuation_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  202:  BOOST_ASIO_CONSTEXPR relationship_t(continuation_t)
+    #####:  203:    : value_(1)
+        -:  204:  {
+    #####:  205:  }
+------------------
+_ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship14continuation_tILi0EEE:
+function _ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship14continuation_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  202:  BOOST_ASIO_CONSTEXPR relationship_t(continuation_t)
+    #####:  203:    : value_(1)
+        -:  204:  {
+    #####:  205:  }
+------------------
+_ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship14continuation_tILi0EEE:
+function _ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship14continuation_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  202:  BOOST_ASIO_CONSTEXPR relationship_t(continuation_t)
+    #####:  203:    : value_(1)
+        -:  204:  {
+    #####:  205:  }
+------------------
+_ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship14continuation_tILi0EEE:
+function _ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship14continuation_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  202:  BOOST_ASIO_CONSTEXPR relationship_t(continuation_t)
+    #####:  203:    : value_(1)
+        -:  204:  {
+    #####:  205:  }
+------------------
+_ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship14continuation_tILi0EEE:
+function _ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship14continuation_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  202:  BOOST_ASIO_CONSTEXPR relationship_t(continuation_t)
+    #####:  203:    : value_(1)
+        -:  204:  {
+    #####:  205:  }
+------------------
+_ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship14continuation_tILi0EEE:
+function _ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship14continuation_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  202:  BOOST_ASIO_CONSTEXPR relationship_t(continuation_t)
+    #####:  203:    : value_(1)
+        -:  204:  {
+    #####:  205:  }
+------------------
+_ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship14continuation_tILi0EEE:
+function _ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship14continuation_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  202:  BOOST_ASIO_CONSTEXPR relationship_t(continuation_t)
+    #####:  203:    : value_(1)
+        -:  204:  {
+    #####:  205:  }
+------------------
+_ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship14continuation_tILi0EEE:
+function _ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship14continuation_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  202:  BOOST_ASIO_CONSTEXPR relationship_t(continuation_t)
+    #####:  203:    : value_(1)
+        -:  204:  {
+    #####:  205:  }
+------------------
+_ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship14continuation_tILi0EEE:
+function _ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship14continuation_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  202:  BOOST_ASIO_CONSTEXPR relationship_t(continuation_t)
+    #####:  203:    : value_(1)
+        -:  204:  {
+    #####:  205:  }
+------------------
+_ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship14continuation_tILi0EEE:
+function _ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship14continuation_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  202:  BOOST_ASIO_CONSTEXPR relationship_t(continuation_t)
+    #####:  203:    : value_(1)
+        -:  204:  {
+    #####:  205:  }
+------------------
+_ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship14continuation_tILi0EEE:
+function _ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship14continuation_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  202:  BOOST_ASIO_CONSTEXPR relationship_t(continuation_t)
+    #####:  203:    : value_(1)
+        -:  204:  {
+    #####:  205:  }
+------------------
+_ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship14continuation_tILi0EEE:
+function _ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship14continuation_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  202:  BOOST_ASIO_CONSTEXPR relationship_t(continuation_t)
+    #####:  203:    : value_(1)
+        -:  204:  {
+    #####:  205:  }
+------------------
+_ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship14continuation_tILi0EEE:
+function _ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship14continuation_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  202:  BOOST_ASIO_CONSTEXPR relationship_t(continuation_t)
+    #####:  203:    : value_(1)
+        -:  204:  {
+    #####:  205:  }
+------------------
+_ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship14continuation_tILi0EEE:
+function _ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship14continuation_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  202:  BOOST_ASIO_CONSTEXPR relationship_t(continuation_t)
+    #####:  203:    : value_(1)
+        -:  204:  {
+    #####:  205:  }
+------------------
+_ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship14continuation_tILi0EEE:
+function _ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship14continuation_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  202:  BOOST_ASIO_CONSTEXPR relationship_t(continuation_t)
+    #####:  203:    : value_(1)
+        -:  204:  {
+    #####:  205:  }
+------------------
+_ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship14continuation_tILi0EEE:
+function _ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship14continuation_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  202:  BOOST_ASIO_CONSTEXPR relationship_t(continuation_t)
+    #####:  203:    : value_(1)
+        -:  204:  {
+    #####:  205:  }
+------------------
+_ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship14continuation_tILi0EEE:
+function _ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship14continuation_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  202:  BOOST_ASIO_CONSTEXPR relationship_t(continuation_t)
+    #####:  203:    : value_(1)
+        -:  204:  {
+    #####:  205:  }
+------------------
+_ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship14continuation_tILi0EEE:
+function _ZN5boost4asio9execution6detail14relationship_tILi0EEC2ENS2_12relationship14continuation_tILi0EEE called 0 returned 0% blocks executed 0%
+    #####:  202:  BOOST_ASIO_CONSTEXPR relationship_t(continuation_t)
+    #####:  203:    : value_(1)
+        -:  204:  {
+    #####:  205:  }
+------------------
+        -:  206:
+        -:  207:  template <typename T>
+        -:  208:  struct proxy
+        -:  209:  {
+        -:  210:#if defined(BOOST_ASIO_HAS_DEDUCED_QUERY_MEMBER_TRAIT)
+        -:  211:    struct type
+        -:  212:    {
+        -:  213:      template <typename P>
+        -:  214:      auto query(BOOST_ASIO_MOVE_ARG(P) p) const
+        -:  215:        noexcept(
+        -:  216:          noexcept(
+        -:  217:            declval<typename conditional<true, T, P>::type>().query(
+        -:  218:              BOOST_ASIO_MOVE_CAST(P)(p))
+        -:  219:          )
+        -:  220:        )
+        -:  221:        -> decltype(
+        -:  222:          declval<typename conditional<true, T, P>::type>().query(
+        -:  223:            BOOST_ASIO_MOVE_CAST(P)(p))
+        -:  224:        );
+        -:  225:    };
+        -:  226:#else // defined(BOOST_ASIO_HAS_DEDUCED_QUERY_MEMBER_TRAIT)
+        -:  227:    typedef T type;
+        -:  228:#endif // defined(BOOST_ASIO_HAS_DEDUCED_QUERY_MEMBER_TRAIT)
+        -:  229:  };
+        -:  230:
+        -:  231:  template <typename T>
+        -:  232:  struct static_proxy
+        -:  233:  {
+        -:  234:#if defined(BOOST_ASIO_HAS_DEDUCED_QUERY_STATIC_CONSTEXPR_MEMBER_TRAIT)
+        -:  235:    struct type
+        -:  236:    {
+        -:  237:      template <typename P>
+        -:  238:      static constexpr auto query(BOOST_ASIO_MOVE_ARG(P) p)
+        -:  239:        noexcept(
+        -:  240:          noexcept(
+        -:  241:            conditional<true, T, P>::type::query(BOOST_ASIO_MOVE_CAST(P)(p))
+        -:  242:          )
+        -:  243:        )
+        -:  244:        -> decltype(
+        -:  245:          conditional<true, T, P>::type::query(BOOST_ASIO_MOVE_CAST(P)(p))
+        -:  246:        )
+        -:  247:      {
+        -:  248:        return T::query(BOOST_ASIO_MOVE_CAST(P)(p));
+        -:  249:      }
+        -:  250:    };
+        -:  251:#else // defined(BOOST_ASIO_HAS_DEDUCED_QUERY_STATIC_CONSTEXPR_MEMBER_TRAIT)
+        -:  252:    typedef T type;
+        -:  253:#endif // defined(BOOST_ASIO_HAS_DEDUCED_QUERY_STATIC_CONSTEXPR_MEMBER_TRAIT)
+        -:  254:  };
+        -:  255:
+        -:  256:  template <typename T>
+        -:  257:  struct query_member :
+        -:  258:    traits::query_member<typename proxy<T>::type, relationship_t> {};
+        -:  259:
+        -:  260:  template <typename T>
+        -:  261:  struct query_static_constexpr_member :
+        -:  262:    traits::query_static_constexpr_member<
+        -:  263:      typename static_proxy<T>::type, relationship_t> {};
+        -:  264:
+        -:  265:#if defined(BOOST_ASIO_HAS_DEDUCED_STATIC_QUERY_TRAIT) \
+        -:  266:  && defined(BOOST_ASIO_HAS_SFINAE_VARIABLE_TEMPLATES)
+        -:  267:  template <typename T>
+        -:  268:  static BOOST_ASIO_CONSTEXPR
+        -:  269:  typename query_static_constexpr_member<T>::result_type
+        -:  270:  static_query()
+        -:  271:    BOOST_ASIO_NOEXCEPT_IF((
+        -:  272:      query_static_constexpr_member<T>::is_noexcept))
+        -:  273:  {
+        -:  274:    return query_static_constexpr_member<T>::value();
+        -:  275:  }
+        -:  276:
+        -:  277:  template <typename T>
+        -:  278:  static BOOST_ASIO_CONSTEXPR
+        -:  279:  typename traits::static_query<T, fork_t>::result_type
+        -:  280:  static_query(
+        -:  281:      typename enable_if<
+        -:  282:        !query_static_constexpr_member<T>::is_valid
+        -:  283:      >::type* = 0,
+        -:  284:      typename enable_if<
+        -:  285:        !query_member<T>::is_valid
+        -:  286:      >::type* = 0,
+        -:  287:      typename enable_if<
+        -:  288:        traits::static_query<T, fork_t>::is_valid
+        -:  289:      >::type* = 0) BOOST_ASIO_NOEXCEPT
+        -:  290:  {
+        -:  291:    return traits::static_query<T, fork_t>::value();
+        -:  292:  }
+        -:  293:
+        -:  294:  template <typename T>
+        -:  295:  static BOOST_ASIO_CONSTEXPR
+        -:  296:  typename traits::static_query<T, continuation_t>::result_type
+        -:  297:  static_query(
+        -:  298:      typename enable_if<
+        -:  299:        !query_static_constexpr_member<T>::is_valid
+        -:  300:      >::type* = 0,
+        -:  301:      typename enable_if<
+        -:  302:        !query_member<T>::is_valid
+        -:  303:      >::type* = 0,
+        -:  304:      typename enable_if<
+        -:  305:        !traits::static_query<T, fork_t>::is_valid
+        -:  306:      >::type* = 0,
+        -:  307:      typename enable_if<
+        -:  308:        traits::static_query<T, continuation_t>::is_valid
+        -:  309:      >::type* = 0) BOOST_ASIO_NOEXCEPT
+        -:  310:  {
+        -:  311:    return traits::static_query<T, continuation_t>::value();
+        -:  312:  }
+        -:  313:
+        -:  314:  template <typename E,
+        -:  315:      typename T = decltype(relationship_t::static_query<E>())>
+        -:  316:  static BOOST_ASIO_CONSTEXPR const T static_query_v
+        -:  317:    = relationship_t::static_query<E>();
+        -:  318:#endif // defined(BOOST_ASIO_HAS_DEDUCED_STATIC_QUERY_TRAIT)
+        -:  319:       //   && defined(BOOST_ASIO_HAS_SFINAE_VARIABLE_TEMPLATES)
+        -:  320:
+        -:  321:  friend BOOST_ASIO_CONSTEXPR bool operator==(
+        -:  322:      const relationship_t& a, const relationship_t& b)
+        -:  323:  {
+        -:  324:    return a.value_ == b.value_;
+        -:  325:  }
+        -:  326:
+        -:  327:  friend BOOST_ASIO_CONSTEXPR bool operator!=(
+        -:  328:      const relationship_t& a, const relationship_t& b)
+        -:  329:  {
+        -:  330:    return a.value_ != b.value_;
+        -:  331:  }
+        -:  332:
+        -:  333:  struct convertible_from_relationship_t
+        -:  334:  {
+        -:  335:    BOOST_ASIO_CONSTEXPR convertible_from_relationship_t(relationship_t)
+        -:  336:    {
+        -:  337:    }
+        -:  338:  };
+        -:  339:
+        -:  340:  template <typename Executor>
+        -:  341:  friend BOOST_ASIO_CONSTEXPR relationship_t query(
+        -:  342:      const Executor& ex, convertible_from_relationship_t,
+        -:  343:      typename enable_if<
+        -:  344:        can_query<const Executor&, fork_t>::value
+        -:  345:      >::type* = 0)
+        -:  346:#if !defined(__clang__) // Clang crashes if noexcept is used here.
+        -:  347:#if defined(BOOST_ASIO_MSVC) // Visual C++ wants the type to be qualified.
+        -:  348:    BOOST_ASIO_NOEXCEPT_IF((
+        -:  349:      is_nothrow_query<const Executor&, relationship_t<>::fork_t>::value))
+        -:  350:#else // defined(BOOST_ASIO_MSVC)
+        -:  351:    BOOST_ASIO_NOEXCEPT_IF((
+        -:  352:      is_nothrow_query<const Executor&, fork_t>::value))
+        -:  353:#endif // defined(BOOST_ASIO_MSVC)
+        -:  354:#endif // !defined(__clang__)
+        -:  355:  {
+        -:  356:    return boost::asio::query(ex, fork_t());
+        -:  357:  }
+        -:  358:
+        -:  359:  template <typename Executor>
+        -:  360:  friend BOOST_ASIO_CONSTEXPR relationship_t query(
+        -:  361:      const Executor& ex, convertible_from_relationship_t,
+        -:  362:      typename enable_if<
+        -:  363:        !can_query<const Executor&, fork_t>::value
+        -:  364:      >::type* = 0,
+        -:  365:      typename enable_if<
+        -:  366:        can_query<const Executor&, continuation_t>::value
+        -:  367:      >::type* = 0)
+        -:  368:#if !defined(__clang__) // Clang crashes if noexcept is used here.
+        -:  369:#if defined(BOOST_ASIO_MSVC) // Visual C++ wants the type to be qualified.
+        -:  370:    BOOST_ASIO_NOEXCEPT_IF((
+        -:  371:      is_nothrow_query<const Executor&,
+        -:  372:        relationship_t<>::continuation_t>::value))
+        -:  373:#else // defined(BOOST_ASIO_MSVC)
+        -:  374:    BOOST_ASIO_NOEXCEPT_IF((
+        -:  375:      is_nothrow_query<const Executor&, continuation_t>::value))
+        -:  376:#endif // defined(BOOST_ASIO_MSVC)
+        -:  377:#endif // !defined(__clang__)
+        -:  378:  {
+        -:  379:    return boost::asio::query(ex, continuation_t());
+        -:  380:  }
+        -:  381:
+        -:  382:  BOOST_ASIO_STATIC_CONSTEXPR_DEFAULT_INIT(fork_t, fork);
+        -:  383:  BOOST_ASIO_STATIC_CONSTEXPR_DEFAULT_INIT(continuation_t, continuation);
+        -:  384:
+        -:  385:#if !defined(BOOST_ASIO_HAS_CONSTEXPR)
+        -:  386:  static const relationship_t instance;
+        -:  387:#endif // !defined(BOOST_ASIO_HAS_CONSTEXPR)
+        -:  388:
+        -:  389:private:
+        -:  390:  int value_;
+        -:  391:};
+        -:  392:
+        -:  393:#if defined(BOOST_ASIO_HAS_DEDUCED_STATIC_QUERY_TRAIT) \
+        -:  394:  && defined(BOOST_ASIO_HAS_SFINAE_VARIABLE_TEMPLATES)
+        -:  395:template <int I> template <typename E, typename T>
+        -:  396:const T relationship_t<I>::static_query_v;
+        -:  397:#endif // defined(BOOST_ASIO_HAS_DEDUCED_STATIC_QUERY_TRAIT)
+        -:  398:       //   && defined(BOOST_ASIO_HAS_SFINAE_VARIABLE_TEMPLATES)
+        -:  399:
+        -:  400:#if !defined(BOOST_ASIO_HAS_CONSTEXPR)
+        -:  401:template <int I>
+        -:  402:const relationship_t<I> relationship_t<I>::instance;
+        -:  403:#endif
+        -:  404:
+        -:  405:template <int I>
+        -:  406:const typename relationship_t<I>::fork_t
+        -:  407:relationship_t<I>::fork;
+        -:  408:
+        -:  409:template <int I>
+        -:  410:const typename relationship_t<I>::continuation_t
+        -:  411:relationship_t<I>::continuation;
+        -:  412:
+        -:  413:namespace relationship {
+        -:  414:
+        -:  415:template <int I = 0>
+        -:  416:struct fork_t
+        -:  417:{
+        -:  418:#if defined(BOOST_ASIO_HAS_VARIABLE_TEMPLATES)
+        -:  419:# if defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  420:  template <typename T>
+        -:  421:  BOOST_ASIO_STATIC_CONSTEXPR(bool,
+        -:  422:    is_applicable_property_v = (
+        -:  423:      is_executor<T>::value));
+        -:  424:# else // defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  425:  template <typename T>
+        -:  426:  BOOST_ASIO_STATIC_CONSTEXPR(bool,
+        -:  427:    is_applicable_property_v = (
+        -:  428:      is_executor<T>::value
+        -:  429:        || conditional<
+        -:  430:            is_executor<T>::value,
+        -:  431:            false_type,
+        -:  432:            is_sender<T>
+        -:  433:          >::type::value
+        -:  434:        || conditional<
+        -:  435:            is_executor<T>::value,
+        -:  436:            false_type,
+        -:  437:            is_scheduler<T>
+        -:  438:          >::type::value
+        -:  439:      ));
+        -:  440:# endif // defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  441:#endif // defined(BOOST_ASIO_HAS_VARIABLE_TEMPLATES)
+        -:  442:
+        -:  443:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_requirable = true);
+        -:  444:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_preferable = true);
+        -:  445:  typedef relationship_t<I> polymorphic_query_result_type;
+        -:  446:
+        -:  447:  BOOST_ASIO_CONSTEXPR fork_t()
+        -:  448:  {
+        -:  449:  }
+        -:  450:
+        -:  451:  template <typename T>
+        -:  452:  struct query_member :
+        -:  453:    traits::query_member<
+        -:  454:      typename relationship_t<I>::template proxy<T>::type, fork_t> {};
+        -:  455:
+        -:  456:  template <typename T>
+        -:  457:  struct query_static_constexpr_member :
+        -:  458:    traits::query_static_constexpr_member<
+        -:  459:      typename relationship_t<I>::template static_proxy<T>::type, fork_t> {};
+        -:  460:
+        -:  461:#if defined(BOOST_ASIO_HAS_DEDUCED_STATIC_QUERY_TRAIT) \
+        -:  462:  && defined(BOOST_ASIO_HAS_SFINAE_VARIABLE_TEMPLATES)
+        -:  463:  template <typename T>
+        -:  464:  static BOOST_ASIO_CONSTEXPR
+        -:  465:  typename query_static_constexpr_member<T>::result_type
+        -:  466:  static_query()
+        -:  467:    BOOST_ASIO_NOEXCEPT_IF((
+        -:  468:      query_static_constexpr_member<T>::is_noexcept))
+        -:  469:  {
+        -:  470:    return query_static_constexpr_member<T>::value();
+        -:  471:  }
+        -:  472:
+        -:  473:  template <typename T>
+        -:  474:  static BOOST_ASIO_CONSTEXPR fork_t static_query(
+        -:  475:      typename enable_if<
+        -:  476:        !query_static_constexpr_member<T>::is_valid
+        -:  477:      >::type* = 0,
+        -:  478:      typename enable_if<
+        -:  479:        !query_member<T>::is_valid
+        -:  480:      >::type* = 0,
+        -:  481:      typename enable_if<
+        -:  482:        !traits::query_free<T, fork_t>::is_valid
+        -:  483:      >::type* = 0,
+        -:  484:      typename enable_if<
+        -:  485:        !can_query<T, continuation_t<I> >::value
+        -:  486:      >::type* = 0) BOOST_ASIO_NOEXCEPT
+        -:  487:  {
+        -:  488:    return fork_t();
+        -:  489:  }
+        -:  490:
+        -:  491:  template <typename E, typename T = decltype(fork_t::static_query<E>())>
+        -:  492:  static BOOST_ASIO_CONSTEXPR const T static_query_v
+        -:  493:    = fork_t::static_query<E>();
+        -:  494:#endif // defined(BOOST_ASIO_HAS_DEDUCED_STATIC_QUERY_TRAIT)
+        -:  495:       //   && defined(BOOST_ASIO_HAS_SFINAE_VARIABLE_TEMPLATES)
+        -:  496:
+        -:  497:  static BOOST_ASIO_CONSTEXPR relationship_t<I> value()
+        -:  498:  {
+        -:  499:    return fork_t();
+        -:  500:  }
+        -:  501:
+        -:  502:  friend BOOST_ASIO_CONSTEXPR bool operator==(
+        -:  503:      const fork_t&, const fork_t&)
+        -:  504:  {
+        -:  505:    return true;
+        -:  506:  }
+        -:  507:
+        -:  508:  friend BOOST_ASIO_CONSTEXPR bool operator!=(
+        -:  509:      const fork_t&, const fork_t&)
+        -:  510:  {
+        -:  511:    return false;
+        -:  512:  }
+        -:  513:};
+        -:  514:
+        -:  515:#if defined(BOOST_ASIO_HAS_DEDUCED_STATIC_QUERY_TRAIT) \
+        -:  516:  && defined(BOOST_ASIO_HAS_SFINAE_VARIABLE_TEMPLATES)
+        -:  517:template <int I> template <typename E, typename T>
+        -:  518:const T fork_t<I>::static_query_v;
+        -:  519:#endif // defined(BOOST_ASIO_HAS_DEDUCED_STATIC_QUERY_TRAIT)
+        -:  520:       //   && defined(BOOST_ASIO_HAS_SFINAE_VARIABLE_TEMPLATES)
+        -:  521:
+        -:  522:template <int I = 0>
+        -:  523:struct continuation_t
+        -:  524:{
+        -:  525:#if defined(BOOST_ASIO_HAS_VARIABLE_TEMPLATES)
+        -:  526:# if defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  527:  template <typename T>
+        -:  528:  BOOST_ASIO_STATIC_CONSTEXPR(bool,
+        -:  529:    is_applicable_property_v = (
+        -:  530:      is_executor<T>::value));
+        -:  531:# else // defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  532:  template <typename T>
+        -:  533:  BOOST_ASIO_STATIC_CONSTEXPR(bool,
+        -:  534:    is_applicable_property_v = (
+        -:  535:      is_executor<T>::value
+        -:  536:        || conditional<
+        -:  537:            is_executor<T>::value,
+        -:  538:            false_type,
+        -:  539:            is_sender<T>
+        -:  540:          >::type::value
+        -:  541:        || conditional<
+        -:  542:            is_executor<T>::value,
+        -:  543:            false_type,
+        -:  544:            is_scheduler<T>
+        -:  545:          >::type::value
+        -:  546:      ));
+        -:  547:# endif // defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  548:#endif // defined(BOOST_ASIO_HAS_VARIABLE_TEMPLATES)
+        -:  549:
+        -:  550:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_requirable = true);
+        -:  551:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_preferable = true);
+        -:  552:  typedef relationship_t<I> polymorphic_query_result_type;
+        -:  553:
+        -:  554:  BOOST_ASIO_CONSTEXPR continuation_t()
+        -:  555:  {
+        -:  556:  }
+        -:  557:
+        -:  558:  template <typename T>
+        -:  559:  struct query_member :
+        -:  560:    traits::query_member<
+        -:  561:      typename relationship_t<I>::template proxy<T>::type, continuation_t> {};
+        -:  562:
+        -:  563:  template <typename T>
+        -:  564:  struct query_static_constexpr_member :
+        -:  565:    traits::query_static_constexpr_member<
+        -:  566:      typename relationship_t<I>::template static_proxy<T>::type,
+        -:  567:        continuation_t> {};
+        -:  568:
+        -:  569:#if defined(BOOST_ASIO_HAS_DEDUCED_STATIC_QUERY_TRAIT) \
+        -:  570:  && defined(BOOST_ASIO_HAS_SFINAE_VARIABLE_TEMPLATES)
+        -:  571:  template <typename T>
+        -:  572:  static BOOST_ASIO_CONSTEXPR
+        -:  573:  typename query_static_constexpr_member<T>::result_type
+        -:  574:  static_query()
+        -:  575:    BOOST_ASIO_NOEXCEPT_IF((
+        -:  576:      query_static_constexpr_member<T>::is_noexcept))
+        -:  577:  {
+        -:  578:    return query_static_constexpr_member<T>::value();
+        -:  579:  }
+        -:  580:
+        -:  581:  template <typename E,
+        -:  582:      typename T = decltype(continuation_t::static_query<E>())>
+        -:  583:  static BOOST_ASIO_CONSTEXPR const T static_query_v
+        -:  584:    = continuation_t::static_query<E>();
+        -:  585:#endif // defined(BOOST_ASIO_HAS_DEDUCED_STATIC_QUERY_TRAIT)
+        -:  586:       //   && defined(BOOST_ASIO_HAS_SFINAE_VARIABLE_TEMPLATES)
+        -:  587:
+        -:  588:  static BOOST_ASIO_CONSTEXPR relationship_t<I> value()
+        -:  589:  {
+        -:  590:    return continuation_t();
+        -:  591:  }
+        -:  592:
+        -:  593:  friend BOOST_ASIO_CONSTEXPR bool operator==(
+        -:  594:      const continuation_t&, const continuation_t&)
+        -:  595:  {
+        -:  596:    return true;
+        -:  597:  }
+        -:  598:
+        -:  599:  friend BOOST_ASIO_CONSTEXPR bool operator!=(
+        -:  600:      const continuation_t&, const continuation_t&)
+        -:  601:  {
+        -:  602:    return false;
+        -:  603:  }
+        -:  604:};
+        -:  605:
+        -:  606:#if defined(BOOST_ASIO_HAS_DEDUCED_STATIC_QUERY_TRAIT) \
+        -:  607:  && defined(BOOST_ASIO_HAS_SFINAE_VARIABLE_TEMPLATES)
+        -:  608:template <int I> template <typename E, typename T>
+        -:  609:const T continuation_t<I>::static_query_v;
+        -:  610:#endif // defined(BOOST_ASIO_HAS_DEDUCED_STATIC_QUERY_TRAIT)
+        -:  611:       //   && defined(BOOST_ASIO_HAS_SFINAE_VARIABLE_TEMPLATES)
+        -:  612:
+        -:  613:} // namespace relationship
+        -:  614:} // namespace detail
+        -:  615:
+        -:  616:typedef detail::relationship_t<> relationship_t;
+        -:  617:
+        -:  618:#if defined(BOOST_ASIO_HAS_CONSTEXPR) || defined(GENERATING_DOCUMENTATION)
+        -:  619:constexpr relationship_t relationship;
+        -:  620:#else // defined(BOOST_ASIO_HAS_CONSTEXPR) || defined(GENERATING_DOCUMENTATION)
+        -:  621:namespace { static const relationship_t&
+        -:  622:  relationship = relationship_t::instance; }
+        -:  623:#endif
+        -:  624:
+        -:  625:} // namespace execution
+        -:  626:
+        -:  627:#if !defined(BOOST_ASIO_HAS_VARIABLE_TEMPLATES)
+        -:  628:
+        -:  629:template <typename T>
+        -:  630:struct is_applicable_property<T, execution::relationship_t>
+        -:  631:  : integral_constant<bool,
+        -:  632:      execution::is_executor<T>::value
+        -:  633:#if !defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  634:        || conditional<
+        -:  635:            execution::is_executor<T>::value,
+        -:  636:            false_type,
+        -:  637:            execution::is_sender<T>
+        -:  638:          >::type::value
+        -:  639:        || conditional<
+        -:  640:            execution::is_executor<T>::value,
+        -:  641:            false_type,
+        -:  642:            execution::is_scheduler<T>
+        -:  643:          >::type::value
+        -:  644:#endif // !defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  645:    >
+        -:  646:{
+        -:  647:};
+        -:  648:
+        -:  649:template <typename T>
+        -:  650:struct is_applicable_property<T, execution::relationship_t::fork_t>
+        -:  651:  : integral_constant<bool,
+        -:  652:      execution::is_executor<T>::value
+        -:  653:#if !defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  654:        || conditional<
+        -:  655:            execution::is_executor<T>::value,
+        -:  656:            false_type,
+        -:  657:            execution::is_sender<T>
+        -:  658:          >::type::value
+        -:  659:        || conditional<
+        -:  660:            execution::is_executor<T>::value,
+        -:  661:            false_type,
+        -:  662:            execution::is_scheduler<T>
+        -:  663:          >::type::value
+        -:  664:#endif // !defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  665:    >
+        -:  666:{
+        -:  667:};
+        -:  668:
+        -:  669:template <typename T>
+        -:  670:struct is_applicable_property<T, execution::relationship_t::continuation_t>
+        -:  671:  : integral_constant<bool,
+        -:  672:      execution::is_executor<T>::value
+        -:  673:#if !defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  674:        || conditional<
+        -:  675:            execution::is_executor<T>::value,
+        -:  676:            false_type,
+        -:  677:            execution::is_sender<T>
+        -:  678:          >::type::value
+        -:  679:        || conditional<
+        -:  680:            execution::is_executor<T>::value,
+        -:  681:            false_type,
+        -:  682:            execution::is_scheduler<T>
+        -:  683:          >::type::value
+        -:  684:#endif // !defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  685:    >
+        -:  686:{
+        -:  687:};
+        -:  688:
+        -:  689:#endif // !defined(BOOST_ASIO_HAS_VARIABLE_TEMPLATES)
+        -:  690:
+        -:  691:namespace traits {
+        -:  692:
+        -:  693:#if !defined(BOOST_ASIO_HAS_DEDUCED_QUERY_FREE_TRAIT)
+        -:  694:
+        -:  695:template <typename T>
+        -:  696:struct query_free_default<T, execution::relationship_t,
+        -:  697:  typename enable_if<
+        -:  698:    can_query<T, execution::relationship_t::fork_t>::value
+        -:  699:  >::type>
+        -:  700:{
+        -:  701:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_valid = true);
+        -:  702:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_noexcept =
+        -:  703:    (is_nothrow_query<T, execution::relationship_t::fork_t>::value));
+        -:  704:
+        -:  705:  typedef execution::relationship_t result_type;
+        -:  706:};
+        -:  707:
+        -:  708:template <typename T>
+        -:  709:struct query_free_default<T, execution::relationship_t,
+        -:  710:  typename enable_if<
+        -:  711:    !can_query<T, execution::relationship_t::fork_t>::value
+        -:  712:      && can_query<T, execution::relationship_t::continuation_t>::value
+        -:  713:  >::type>
+        -:  714:{
+        -:  715:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_valid = true);
+        -:  716:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_noexcept =
+        -:  717:    (is_nothrow_query<T, execution::relationship_t::continuation_t>::value));
+        -:  718:
+        -:  719:  typedef execution::relationship_t result_type;
+        -:  720:};
+        -:  721:
+        -:  722:#endif // !defined(BOOST_ASIO_HAS_DEDUCED_QUERY_FREE_TRAIT)
+        -:  723:
+        -:  724:#if !defined(BOOST_ASIO_HAS_DEDUCED_STATIC_QUERY_TRAIT) \
+        -:  725:  || !defined(BOOST_ASIO_HAS_SFINAE_VARIABLE_TEMPLATES)
+        -:  726:
+        -:  727:template <typename T>
+        -:  728:struct static_query<T, execution::relationship_t,
+        -:  729:  typename enable_if<
+        -:  730:    execution::detail::relationship_t<0>::
+        -:  731:      query_static_constexpr_member<T>::is_valid
+        -:  732:  >::type>
+        -:  733:{
+        -:  734:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_valid = true);
+        -:  735:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_noexcept = true);
+        -:  736:
+        -:  737:  typedef typename execution::detail::relationship_t<0>::
+        -:  738:    query_static_constexpr_member<T>::result_type result_type;
+        -:  739:
+        -:  740:  static BOOST_ASIO_CONSTEXPR result_type value()
+        -:  741:  {
+        -:  742:    return execution::detail::relationship_t<0>::
+        -:  743:      query_static_constexpr_member<T>::value();
+        -:  744:  }
+        -:  745:};
+        -:  746:
+        -:  747:template <typename T>
+        -:  748:struct static_query<T, execution::relationship_t,
+        -:  749:  typename enable_if<
+        -:  750:    !execution::detail::relationship_t<0>::
+        -:  751:        query_static_constexpr_member<T>::is_valid
+        -:  752:      && !execution::detail::relationship_t<0>::
+        -:  753:        query_member<T>::is_valid
+        -:  754:      && traits::static_query<T,
+        -:  755:        execution::relationship_t::fork_t>::is_valid
+        -:  756:  >::type>
+        -:  757:{
+        -:  758:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_valid = true);
+        -:  759:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_noexcept = true);
+        -:  760:
+        -:  761:  typedef typename traits::static_query<T,
+        -:  762:    execution::relationship_t::fork_t>::result_type result_type;
+        -:  763:
+        -:  764:  static BOOST_ASIO_CONSTEXPR result_type value()
+        -:  765:  {
+        -:  766:    return traits::static_query<T,
+        -:  767:        execution::relationship_t::fork_t>::value();
+        -:  768:  }
+        -:  769:};
+        -:  770:
+        -:  771:template <typename T>
+        -:  772:struct static_query<T, execution::relationship_t,
+        -:  773:  typename enable_if<
+        -:  774:    !execution::detail::relationship_t<0>::
+        -:  775:        query_static_constexpr_member<T>::is_valid
+        -:  776:      && !execution::detail::relationship_t<0>::
+        -:  777:        query_member<T>::is_valid
+        -:  778:      && !traits::static_query<T,
+        -:  779:        execution::relationship_t::fork_t>::is_valid
+        -:  780:      && traits::static_query<T,
+        -:  781:        execution::relationship_t::continuation_t>::is_valid
+        -:  782:  >::type>
+        -:  783:{
+        -:  784:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_valid = true);
+        -:  785:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_noexcept = true);
+        -:  786:
+        -:  787:  typedef typename traits::static_query<T,
+        -:  788:    execution::relationship_t::continuation_t>::result_type result_type;
+        -:  789:
+        -:  790:  static BOOST_ASIO_CONSTEXPR result_type value()
+        -:  791:  {
+        -:  792:    return traits::static_query<T,
+        -:  793:        execution::relationship_t::continuation_t>::value();
+        -:  794:  }
+        -:  795:};
+        -:  796:
+        -:  797:template <typename T>
+        -:  798:struct static_query<T, execution::relationship_t::fork_t,
+        -:  799:  typename enable_if<
+        -:  800:    execution::detail::relationship::fork_t<0>::
+        -:  801:      query_static_constexpr_member<T>::is_valid
+        -:  802:  >::type>
+        -:  803:{
+        -:  804:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_valid = true);
+        -:  805:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_noexcept = true);
+        -:  806:
+        -:  807:  typedef typename execution::detail::relationship::fork_t<0>::
+        -:  808:    query_static_constexpr_member<T>::result_type result_type;
+        -:  809:
+        -:  810:  static BOOST_ASIO_CONSTEXPR result_type value()
+        -:  811:  {
+        -:  812:    return execution::detail::relationship::fork_t<0>::
+        -:  813:      query_static_constexpr_member<T>::value();
+        -:  814:  }
+        -:  815:};
+        -:  816:
+        -:  817:template <typename T>
+        -:  818:struct static_query<T, execution::relationship_t::fork_t,
+        -:  819:  typename enable_if<
+        -:  820:    !execution::detail::relationship::fork_t<0>::
+        -:  821:        query_static_constexpr_member<T>::is_valid
+        -:  822:      && !execution::detail::relationship::fork_t<0>::
+        -:  823:        query_member<T>::is_valid
+        -:  824:      && !traits::query_free<T,
+        -:  825:        execution::relationship_t::fork_t>::is_valid
+        -:  826:      && !can_query<T, execution::relationship_t::continuation_t>::value
+        -:  827:  >::type>
+        -:  828:{
+        -:  829:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_valid = true);
+        -:  830:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_noexcept = true);
+        -:  831:
+        -:  832:  typedef execution::relationship_t::fork_t result_type;
+        -:  833:
+        -:  834:  static BOOST_ASIO_CONSTEXPR result_type value()
+        -:  835:  {
+        -:  836:    return result_type();
+        -:  837:  }
+        -:  838:};
+        -:  839:
+        -:  840:template <typename T>
+        -:  841:struct static_query<T, execution::relationship_t::continuation_t,
+        -:  842:  typename enable_if<
+        -:  843:    execution::detail::relationship::continuation_t<0>::
+        -:  844:      query_static_constexpr_member<T>::is_valid
+        -:  845:  >::type>
+        -:  846:{
+        -:  847:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_valid = true);
+        -:  848:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_noexcept = true);
+        -:  849:
+        -:  850:  typedef typename execution::detail::relationship::continuation_t<0>::
+        -:  851:    query_static_constexpr_member<T>::result_type result_type;
+        -:  852:
+        -:  853:  static BOOST_ASIO_CONSTEXPR result_type value()
+        -:  854:  {
+        -:  855:    return execution::detail::relationship::continuation_t<0>::
+        -:  856:      query_static_constexpr_member<T>::value();
+        -:  857:  }
+        -:  858:};
+        -:  859:
+        -:  860:#endif // !defined(BOOST_ASIO_HAS_DEDUCED_STATIC_QUERY_TRAIT)
+        -:  861:       //   || !defined(BOOST_ASIO_HAS_SFINAE_VARIABLE_TEMPLATES)
+        -:  862:
+        -:  863:#if !defined(BOOST_ASIO_HAS_DEDUCED_STATIC_REQUIRE_TRAIT)
+        -:  864:
+        -:  865:template <typename T>
+        -:  866:struct static_require<T, execution::relationship_t::fork_t,
+        -:  867:  typename enable_if<
+        -:  868:    static_query<T, execution::relationship_t::fork_t>::is_valid
+        -:  869:  >::type>
+        -:  870:{
+        -:  871:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_valid =
+        -:  872:    (is_same<typename static_query<T,
+        -:  873:      execution::relationship_t::fork_t>::result_type,
+        -:  874:        execution::relationship_t::fork_t>::value));
+        -:  875:};
+        -:  876:
+        -:  877:template <typename T>
+        -:  878:struct static_require<T, execution::relationship_t::continuation_t,
+        -:  879:  typename enable_if<
+        -:  880:    static_query<T, execution::relationship_t::continuation_t>::is_valid
+        -:  881:  >::type>
+        -:  882:{
+        -:  883:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_valid =
+        -:  884:    (is_same<typename static_query<T,
+        -:  885:      execution::relationship_t::continuation_t>::result_type,
+        -:  886:        execution::relationship_t::continuation_t>::value));
+        -:  887:};
+        -:  888:
+        -:  889:#endif // !defined(BOOST_ASIO_HAS_DEDUCED_STATIC_REQUIRE_TRAIT)
+        -:  890:
+        -:  891:} // namespace traits
+        -:  892:
+        -:  893:#endif // defined(GENERATING_DOCUMENTATION)
+        -:  894:
+        -:  895:} // namespace asio
+        -:  896:} // namespace boost
+        -:  897:
+        -:  898:#include <boost/asio/detail/pop_options.hpp>
+        -:  899:
+        -:  900:#endif // BOOST_ASIO_EXECUTION_RELATIONSHIP_HPP

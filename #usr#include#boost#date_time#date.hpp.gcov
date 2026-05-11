@@ -1,0 +1,318 @@
+        -:    0:Source:/usr/include/boost/date_time/date.hpp
+        -:    1:#ifndef DATE_TIME_DATE_HPP___
+        -:    2:#define DATE_TIME_DATE_HPP___
+        -:    3:
+        -:    4:/* Copyright (c) 2002,2003 CrystalClear Software, Inc.
+        -:    5: * Use, modification and distribution is subject to the
+        -:    6: * Boost Software License, Version 1.0. (See accompanying
+        -:    7: * file LICENSE_1_0.txt or http://www.boost.org/LICENSE_1_0.txt)
+        -:    8: * Author: Jeff Garland, Bart Garst
+        -:    9: * $Date$
+        -:   10: */
+        -:   11:
+        -:   12:#include <boost/operators.hpp>
+        -:   13:#include <boost/date_time/compiler_config.hpp>
+        -:   14:#include <boost/date_time/year_month_day.hpp>
+        -:   15:#include <boost/date_time/special_defs.hpp>
+        -:   16:
+        -:   17:namespace boost {
+        -:   18:namespace date_time {
+        -:   19:
+        -:   20:  //!Representation of timepoint at the one day level resolution.
+        -:   21:  /*!
+        -:   22:    The date template represents an interface shell for a date class
+        -:   23:    that is based on a year-month-day system such as the gregorian
+        -:   24:    or ISO 8601 systems.  It provides basic operations to enable calculation
+        -:   25:    and comparisons.
+        -:   26:
+        -:   27:    <b>Theory</b>
+        -:   28:
+        -:   29:    This date representation fundamentally departs from the C tm struct
+        -:   30:    approach.  The goal for this type is to provide efficient date
+        -:   31:    operations (add, subtract) and storage (minimize space to represent)
+        -:   32:    in a concrete class.  Thus, the date uses a count internally to
+        -:   33:    represent a particular date.  The calendar parameter defines
+        -:   34:    the policies for converting the the year-month-day and internal
+        -:   35:    counted form here.  Applications that need to perform heavy
+        -:   36:    formatting of the same date repeatedly will perform better
+        -:   37:    by using the year-month-day representation.
+        -:   38:
+        -:   39:    Internally the date uses a day number to represent the date.
+        -:   40:    This is a monotonic time representation. This representation
+        -:   41:    allows for fast comparison as well as simplifying
+        -:   42:    the creation of writing numeric operations.  Essentially, the
+        -:   43:    internal day number is like adjusted julian day.  The adjustment
+        -:   44:    is determined by the Epoch date which is represented as day 1 of
+        -:   45:    the calendar.  Day 0 is reserved for negative infinity so that
+        -:   46:    any actual date is automatically greater than negative infinity.
+        -:   47:    When a date is constructed from a date or formatted for output,
+        -:   48:    the appropriate conversions are applied to create the year, month,
+        -:   49:    day representations.
+        -:   50:  */
+        -:   51:
+        -:   52:
+        -:   53:  template<class T, class calendar, class duration_type_>
+        -:   54:  class BOOST_SYMBOL_VISIBLE date : private
+        -:   55:       boost::less_than_comparable<T
+        -:   56:     , boost::equality_comparable<T
+        -:   57:    > >
+        -:   58:  {
+        -:   59:  public:
+        -:   60:    typedef T date_type;
+        -:   61:    typedef calendar calendar_type;
+        -:   62:    typedef typename calendar::date_traits_type traits_type;
+        -:   63:    typedef duration_type_ duration_type;
+        -:   64:    typedef typename calendar::year_type year_type;
+        -:   65:    typedef typename calendar::month_type month_type;
+        -:   66:    typedef typename calendar::day_type day_type;
+        -:   67:    typedef typename calendar::ymd_type ymd_type;
+        -:   68:    typedef typename calendar::date_rep_type date_rep_type;
+        -:   69:    typedef typename calendar::date_int_type date_int_type;
+        -:   70:    typedef typename calendar::day_of_week_type day_of_week_type;
+    #####:   71:    BOOST_CXX14_CONSTEXPR date(year_type y, month_type m, day_type d)
+    #####:   72:      : days_(calendar::day_number(ymd_type(y, m, d)))
+    #####:   73:    {}
+------------------
+_ZN5boost9date_time4dateINS_9gregorian4dateENS2_18gregorian_calendarENS2_13date_durationEEC2ENS2_9greg_yearENS2_10greg_monthENS2_8greg_dayE:
+function _ZN5boost9date_time4dateINS_9gregorian4dateENS2_18gregorian_calendarENS2_13date_durationEEC2ENS2_9greg_yearENS2_10greg_monthENS2_8greg_dayE called 0 returned 0% blocks executed 0%
+    #####:   71:    BOOST_CXX14_CONSTEXPR date(year_type y, month_type m, day_type d)
+    #####:   72:      : days_(calendar::day_number(ymd_type(y, m, d)))
+call    0 never executed
+call    1 never executed
+    #####:   73:    {}
+------------------
+_ZN5boost9date_time4dateINS_9gregorian4dateENS2_18gregorian_calendarENS2_13date_durationEEC2ENS2_9greg_yearENS2_10greg_monthENS2_8greg_dayE:
+function _ZN5boost9date_time4dateINS_9gregorian4dateENS2_18gregorian_calendarENS2_13date_durationEEC2ENS2_9greg_yearENS2_10greg_monthENS2_8greg_dayE called 0 returned 0% blocks executed 0%
+    #####:   71:    BOOST_CXX14_CONSTEXPR date(year_type y, month_type m, day_type d)
+    #####:   72:      : days_(calendar::day_number(ymd_type(y, m, d)))
+call    0 never executed
+call    1 never executed
+    #####:   73:    {}
+------------------
+        -:   74:    BOOST_CXX14_CONSTEXPR date(const ymd_type& ymd)
+        -:   75:      : days_(calendar::day_number(ymd))
+        -:   76:    {}
+        -:   77:    //let the compiler write copy, assignment, and destructor
+        -:   78:    BOOST_CXX14_CONSTEXPR year_type        year() const
+        -:   79:    {
+        -:   80:      ymd_type ymd = calendar::from_day_number(days_);
+        -:   81:      return ymd.year;
+        -:   82:    }
+        -:   83:    BOOST_CXX14_CONSTEXPR month_type       month() const
+        -:   84:    {
+        -:   85:      ymd_type ymd = calendar::from_day_number(days_);
+        -:   86:      return ymd.month;
+        -:   87:    }
+        -:   88:    BOOST_CXX14_CONSTEXPR day_type         day() const
+        -:   89:    {
+        -:   90:      ymd_type ymd = calendar::from_day_number(days_);
+        -:   91:      return ymd.day;
+        -:   92:    }
+        -:   93:    BOOST_CXX14_CONSTEXPR day_of_week_type day_of_week() const
+        -:   94:    {
+        -:   95:      ymd_type ymd = calendar::from_day_number(days_);
+        -:   96:      return calendar::day_of_week(ymd);
+        -:   97:    }
+        -:   98:    BOOST_CXX14_CONSTEXPR ymd_type         year_month_day() const
+        -:   99:    {
+        -:  100:      return calendar::from_day_number(days_);
+        -:  101:    }
+        -:  102:    BOOST_CONSTEXPR bool operator<(const date_type& rhs)  const
+        -:  103:    {
+        -:  104:      return days_ < rhs.days_;
+        -:  105:    }
+        -:  106:    BOOST_CONSTEXPR bool operator==(const date_type& rhs) const
+        -:  107:    {
+        -:  108:      return days_ == rhs.days_;
+        -:  109:    }
+        -:  110:    //! check to see if date is a special value
+        -:  111:    BOOST_CONSTEXPR bool is_special()const
+        -:  112:    {
+        -:  113:      return(is_not_a_date() || is_infinity());
+        -:  114:    }
+        -:  115:    //! check to see if date is not a value
+    #####:  116:    BOOST_CONSTEXPR bool is_not_a_date()  const
+        -:  117:    {
+    #####:  118:      return traits_type::is_not_a_number(days_);
+        -:  119:    }
+------------------
+_ZNK5boost9date_time4dateINS_9gregorian4dateENS2_18gregorian_calendarENS2_13date_durationEE13is_not_a_dateEv:
+function _ZNK5boost9date_time4dateINS_9gregorian4dateENS2_18gregorian_calendarENS2_13date_durationEE13is_not_a_dateEv called 0 returned 0% blocks executed 0%
+    #####:  116:    BOOST_CONSTEXPR bool is_not_a_date()  const
+        -:  117:    {
+    #####:  118:      return traits_type::is_not_a_number(days_);
+call    0 never executed
+        -:  119:    }
+------------------
+_ZNK5boost9date_time4dateINS_9gregorian4dateENS2_18gregorian_calendarENS2_13date_durationEE13is_not_a_dateEv:
+function _ZNK5boost9date_time4dateINS_9gregorian4dateENS2_18gregorian_calendarENS2_13date_durationEE13is_not_a_dateEv called 0 returned 0% blocks executed 0%
+    #####:  116:    BOOST_CONSTEXPR bool is_not_a_date()  const
+        -:  117:    {
+    #####:  118:      return traits_type::is_not_a_number(days_);
+call    0 never executed
+        -:  119:    }
+------------------
+_ZNK5boost9date_time4dateINS_9gregorian4dateENS2_18gregorian_calendarENS2_13date_durationEE13is_not_a_dateEv:
+function _ZNK5boost9date_time4dateINS_9gregorian4dateENS2_18gregorian_calendarENS2_13date_durationEE13is_not_a_dateEv called 0 returned 0% blocks executed 0%
+    #####:  116:    BOOST_CONSTEXPR bool is_not_a_date()  const
+        -:  117:    {
+    #####:  118:      return traits_type::is_not_a_number(days_);
+call    0 never executed
+        -:  119:    }
+------------------
+        -:  120:    //! check to see if date is one of the infinity values
+    #####:  121:    BOOST_CONSTEXPR bool is_infinity()  const
+        -:  122:    {
+    #####:  123:      return traits_type::is_inf(days_);
+        -:  124:    }
+------------------
+_ZNK5boost9date_time4dateINS_9gregorian4dateENS2_18gregorian_calendarENS2_13date_durationEE11is_infinityEv:
+function _ZNK5boost9date_time4dateINS_9gregorian4dateENS2_18gregorian_calendarENS2_13date_durationEE11is_infinityEv called 0 returned 0% blocks executed 0%
+    #####:  121:    BOOST_CONSTEXPR bool is_infinity()  const
+        -:  122:    {
+    #####:  123:      return traits_type::is_inf(days_);
+call    0 never executed
+        -:  124:    }
+------------------
+_ZNK5boost9date_time4dateINS_9gregorian4dateENS2_18gregorian_calendarENS2_13date_durationEE11is_infinityEv:
+function _ZNK5boost9date_time4dateINS_9gregorian4dateENS2_18gregorian_calendarENS2_13date_durationEE11is_infinityEv called 0 returned 0% blocks executed 0%
+    #####:  121:    BOOST_CONSTEXPR bool is_infinity()  const
+        -:  122:    {
+    #####:  123:      return traits_type::is_inf(days_);
+call    0 never executed
+        -:  124:    }
+------------------
+_ZNK5boost9date_time4dateINS_9gregorian4dateENS2_18gregorian_calendarENS2_13date_durationEE11is_infinityEv:
+function _ZNK5boost9date_time4dateINS_9gregorian4dateENS2_18gregorian_calendarENS2_13date_durationEE11is_infinityEv called 0 returned 0% blocks executed 0%
+    #####:  121:    BOOST_CONSTEXPR bool is_infinity()  const
+        -:  122:    {
+    #####:  123:      return traits_type::is_inf(days_);
+call    0 never executed
+        -:  124:    }
+------------------
+        -:  125:    //! check to see if date is greater than all possible dates
+        -:  126:    BOOST_CONSTEXPR bool is_pos_infinity()  const
+        -:  127:    {
+        -:  128:      return traits_type::is_pos_inf(days_);
+        -:  129:    }
+        -:  130:    //! check to see if date is greater than all possible dates
+        -:  131:    BOOST_CONSTEXPR bool is_neg_infinity()  const
+        -:  132:    {
+        -:  133:      return traits_type::is_neg_inf(days_);
+        -:  134:    }
+        -:  135:    //! return as a special value or a not_special if a normal date
+        -:  136:    BOOST_CXX14_CONSTEXPR special_values as_special()  const
+        -:  137:    {
+        -:  138:      return traits_type::to_special(days_);
+        -:  139:    }
+        -:  140:    BOOST_CXX14_CONSTEXPR duration_type operator-(const date_type& d) const
+        -:  141:    {
+        -:  142:      if (!this->is_special() && !d.is_special())
+        -:  143:      {
+        -:  144:        // The duration underlying type may be wider than the date underlying type.
+        -:  145:        // Thus we calculate the difference in terms of two durations from some common fixed base date.
+        -:  146:        typedef typename duration_type::duration_rep_type duration_rep_type;
+        -:  147:        return duration_type(static_cast< duration_rep_type >(days_) - static_cast< duration_rep_type >(d.days_));
+        -:  148:      }
+        -:  149:      else
+        -:  150:      {
+        -:  151:        // In this case the difference will be a special value, too
+        -:  152:        date_rep_type val = date_rep_type(days_) - date_rep_type(d.days_);
+        -:  153:        return duration_type(val.as_special());
+        -:  154:      }
+        -:  155:    }
+        -:  156:
+        -:  157:    BOOST_CXX14_CONSTEXPR date_type operator-(const duration_type& dd) const
+        -:  158:    {
+        -:  159:      if(dd.is_special())
+        -:  160:      {
+        -:  161:        return date_type(date_rep_type(days_) - dd.get_rep());
+        -:  162:      }
+        -:  163:      return date_type(date_rep_type(days_) - static_cast<date_int_type>(dd.days()));
+        -:  164:    }
+        -:  165:    BOOST_CXX14_CONSTEXPR date_type operator-=(const duration_type& dd)
+        -:  166:    {
+        -:  167:      *this = *this - dd;
+        -:  168:      return date_type(days_);
+        -:  169:    }
+    #####:  170:    BOOST_CONSTEXPR date_rep_type day_count() const
+        -:  171:    {
+    #####:  172:      return days_;
+        -:  173:    }
+------------------
+_ZNK5boost9date_time4dateINS_9gregorian4dateENS2_18gregorian_calendarENS2_13date_durationEE9day_countEv:
+function _ZNK5boost9date_time4dateINS_9gregorian4dateENS2_18gregorian_calendarENS2_13date_durationEE9day_countEv called 0 returned 0% blocks executed 0%
+    #####:  170:    BOOST_CONSTEXPR date_rep_type day_count() const
+        -:  171:    {
+    #####:  172:      return days_;
+call    0 never executed
+        -:  173:    }
+------------------
+_ZNK5boost9date_time4dateINS_9gregorian4dateENS2_18gregorian_calendarENS2_13date_durationEE9day_countEv:
+function _ZNK5boost9date_time4dateINS_9gregorian4dateENS2_18gregorian_calendarENS2_13date_durationEE9day_countEv called 0 returned 0% blocks executed 0%
+    #####:  170:    BOOST_CONSTEXPR date_rep_type day_count() const
+        -:  171:    {
+    #####:  172:      return days_;
+call    0 never executed
+        -:  173:    }
+------------------
+_ZNK5boost9date_time4dateINS_9gregorian4dateENS2_18gregorian_calendarENS2_13date_durationEE9day_countEv:
+function _ZNK5boost9date_time4dateINS_9gregorian4dateENS2_18gregorian_calendarENS2_13date_durationEE9day_countEv called 0 returned 0% blocks executed 0%
+    #####:  170:    BOOST_CONSTEXPR date_rep_type day_count() const
+        -:  171:    {
+    #####:  172:      return days_;
+call    0 never executed
+        -:  173:    }
+------------------
+        -:  174:    //allow internal access from operators
+        -:  175:    BOOST_CXX14_CONSTEXPR date_type operator+(const duration_type& dd) const
+        -:  176:    {
+        -:  177:      if(dd.is_special())
+        -:  178:      {
+        -:  179:        return date_type(date_rep_type(days_) + dd.get_rep());
+        -:  180:      }
+        -:  181:      return date_type(date_rep_type(days_) + static_cast<date_int_type>(dd.days()));
+        -:  182:    }
+        -:  183:    BOOST_CXX14_CONSTEXPR date_type operator+=(const duration_type& dd)
+        -:  184:    {
+        -:  185:      *this = *this + dd;
+        -:  186:      return date_type(days_);
+        -:  187:    }
+        -:  188:
+        -:  189:    //see reference
+        -:  190:  protected:
+        -:  191:    /*! This is a private constructor which allows for the creation of new
+        -:  192:      dates.  It is not exposed to users since that would require class
+        -:  193:      users to understand the inner workings of the date class.
+        -:  194:    */
+        -:  195:    BOOST_CONSTEXPR explicit date(date_int_type days) : days_(days) {}
+    #####:  196:    BOOST_CXX14_CONSTEXPR explicit date(date_rep_type days) : days_(days.as_number()) {}
+------------------
+_ZN5boost9date_time4dateINS_9gregorian4dateENS2_18gregorian_calendarENS2_13date_durationEEC2ENS0_11int_adapterIjEE:
+function _ZN5boost9date_time4dateINS_9gregorian4dateENS2_18gregorian_calendarENS2_13date_durationEEC2ENS0_11int_adapterIjEE called 0 returned 0% blocks executed 0%
+    #####:  196:    BOOST_CXX14_CONSTEXPR explicit date(date_rep_type days) : days_(days.as_number()) {}
+call    0 never executed
+------------------
+_ZN5boost9date_time4dateINS_9gregorian4dateENS2_18gregorian_calendarENS2_13date_durationEEC2ENS0_11int_adapterIjEE:
+function _ZN5boost9date_time4dateINS_9gregorian4dateENS2_18gregorian_calendarENS2_13date_durationEEC2ENS0_11int_adapterIjEE called 0 returned 0% blocks executed 0%
+    #####:  196:    BOOST_CXX14_CONSTEXPR explicit date(date_rep_type days) : days_(days.as_number()) {}
+call    0 never executed
+------------------
+_ZN5boost9date_time4dateINS_9gregorian4dateENS2_18gregorian_calendarENS2_13date_durationEEC2ENS0_11int_adapterIjEE:
+function _ZN5boost9date_time4dateINS_9gregorian4dateENS2_18gregorian_calendarENS2_13date_durationEEC2ENS0_11int_adapterIjEE called 0 returned 0% blocks executed 0%
+    #####:  196:    BOOST_CXX14_CONSTEXPR explicit date(date_rep_type days) : days_(days.as_number()) {}
+call    0 never executed
+------------------
+        -:  197:    date_int_type days_;
+        -:  198:
+        -:  199:  };
+        -:  200:
+        -:  201:
+        -:  202:
+        -:  203:
+        -:  204:} } // namespace date_time
+        -:  205:
+        -:  206:
+        -:  207:
+        -:  208:
+        -:  209:#endif

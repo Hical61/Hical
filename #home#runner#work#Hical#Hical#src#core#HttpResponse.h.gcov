@@ -1,0 +1,436 @@
+        -:    0:Source:/home/runner/work/Hical/Hical/src/core/HttpResponse.h
+        -:    1:#pragma once
+        -:    2:
+        -:    3:#include "Cookie.h"
+        -:    4:#include "FixedBuffer.h"
+        -:    5:#include "HeaderMap.h"
+        -:    6:#include "HttpTypes.h"
+        -:    7:#include <boost/json.hpp>
+        -:    8:#include <charconv>
+        -:    9:#include <string>
+        -:   10:#include <string_view>
+        -:   11:
+        -:   12:namespace hical
+        -:   13:{
+        -:   14:
+        -:   15:	/**
+        -:   16:	 * @brief HTTP 响应的原生内部表示
+        -:   17:	 * 自研 HTTP 响应内部表示，零外部依赖。
+        -:   18:	 * @warning serialize() / serializeHeadTo() 不做 CRLF 注入检查。
+        -:   19:	 * 所有头部写入应通过 HttpResponse 的 setHeader() 方法（内含 CRLF 防护），
+        -:   20:	 * 或确保数据源可信（如 picohttpparser 解析的请求头、框架内部设置的固定头部）。
+        -:   21:	 * 直接操作 headers 的代码需自行保证不含 CR/LF。
+        -:   22:	 */
+        -:   23:	struct NativeResponse
+        -:   24:	{
+        -:   25:		HttpStatusCode status = HttpStatusCode::hOk;
+        -:   26:		int httpVersionMinor = 1;
+        -:   27:		HeaderMap headers;
+        -:   28:		std::string body;
+        -:   29:		bool keepAlive = true;
+        -:   30:
+        -:   31:		/**
+        -:   32:		 * @brief 设置 Content-Length 头部
+        -:   33:		 * 空 body 且状态码非 204/304 时设置 Content-Length: 0
+        -:   34:		 */
+   10224*:   35:		void preparePayload()
+        -:   36:		{
+   10224*:   37:			if (body.empty())
+        -:   38:			{
+       9*:   39:				auto code = static_cast<unsigned>(status);
+       9*:   40:				if (code != 204 && code != 304)
+        -:   41:				{
+       7*:   42:					headers.set("Content-Length", "0");
+        -:   43:				}
+        -:   44:			}
+        -:   45:			else
+        -:   46:			{
+        -:   47:				char buf[20];
+   10196*:   48:				auto [ptr, ec] = std::to_chars(buf, buf + 20, body.size());
+   10240*:   49:				headers.set("Content-Length", std::string_view(buf, static_cast<size_t>(ptr - buf)));
+        -:   50:			}
+   10233*:   51:		}
+------------------
+_ZN5hical14NativeResponse14preparePayloadEv:
+function _ZN5hical14NativeResponse14preparePayloadEv called 0 returned 0% blocks executed 0%
+    #####:   35:		void preparePayload()
+        -:   36:		{
+    #####:   37:			if (body.empty())
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+        -:   38:			{
+    #####:   39:				auto code = static_cast<unsigned>(status);
+    #####:   40:				if (code != 204 && code != 304)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed
+        -:   41:				{
+    #####:   42:					headers.set("Content-Length", "0");
+call    0 never executed
+call    1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed (throw)
+call    5 never executed
+        -:   43:				}
+        -:   44:			}
+        -:   45:			else
+        -:   46:			{
+        -:   47:				char buf[20];
+    #####:   48:				auto [ptr, ec] = std::to_chars(buf, buf + 20, body.size());
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+    #####:   49:				headers.set("Content-Length", std::string_view(buf, static_cast<size_t>(ptr - buf)));
+call    0 never executed
+call    1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed (throw)
+        -:   50:			}
+    #####:   51:		}
+------------------
+_ZN5hical14NativeResponse14preparePayloadEv:
+function _ZN5hical14NativeResponse14preparePayloadEv called 10208 returned 100% blocks executed 80%
+    10208:   35:		void preparePayload()
+        -:   36:		{
+    10208:   37:			if (body.empty())
+call    0 returned 100%
+branch  1 taken 1% (fallthrough)
+branch  2 taken 100%
+        -:   38:			{
+        7:   39:				auto code = static_cast<unsigned>(status);
+        7:   40:				if (code != 204 && code != 304)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0%
+        -:   41:				{
+        7:   42:					headers.set("Content-Length", "0");
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 never executed
+        -:   43:				}
+        -:   44:			}
+        -:   45:			else
+        -:   46:			{
+        -:   47:				char buf[20];
+    10182:   48:				auto [ptr, ec] = std::to_chars(buf, buf + 20, body.size());
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+    10226:   49:				headers.set("Content-Length", std::string_view(buf, static_cast<size_t>(ptr - buf)));
+call    0 returned 99%
+call    1 returned 99%
+call    2 returned 102%
+branch  3 taken 102% (fallthrough)
+branch  4 taken 0% (throw)
+        -:   50:			}
+    10217:   51:		}
+------------------
+_ZN5hical14NativeResponse14preparePayloadEv:
+function _ZN5hical14NativeResponse14preparePayloadEv called 16 returned 100% blocks executed 60%
+       16:   35:		void preparePayload()
+        -:   36:		{
+       16:   37:			if (body.empty())
+call    0 returned 100%
+branch  1 taken 12% (fallthrough)
+branch  2 taken 88%
+        -:   38:			{
+        2:   39:				auto code = static_cast<unsigned>(status);
+        2:   40:				if (code != 204 && code != 304)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+branch  2 taken 0% (fallthrough)
+branch  3 taken 100%
+        -:   41:				{
+    #####:   42:					headers.set("Content-Length", "0");
+call    0 never executed
+call    1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed (throw)
+call    5 never executed
+        -:   43:				}
+        -:   44:			}
+        -:   45:			else
+        -:   46:			{
+        -:   47:				char buf[20];
+       14:   48:				auto [ptr, ec] = std::to_chars(buf, buf + 20, body.size());
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+       14:   49:				headers.set("Content-Length", std::string_view(buf, static_cast<size_t>(ptr - buf)));
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+        -:   50:			}
+       16:   51:		}
+------------------
+        -:   52:
+        -:   53:		/**
+        -:   54:		 * @brief 序列化为完整的 HTTP 响应字节流
+        -:   55:		 * @return 包含状态行 + 头部 + 空行 + body 的字符串
+        -:   56:		 */
+        -:   57:		std::string serialize() const
+        -:   58:		{
+        -:   59:			std::string result;
+        -:   60:			result.reserve(256 + body.size());
+        -:   61:
+        -:   62:			// 状态行
+        -:   63:			result.append("HTTP/1.");
+        -:   64:			result += static_cast<char>('0' + httpVersionMinor);
+        -:   65:			result += ' ';
+        -:   66:			appendStatusCode(result);
+        -:   67:			result.append("\r\n");
+        -:   68:
+        -:   69:			// 头部
+        -:   70:			for (const auto& [name, value] : headers)
+        -:   71:			{
+        -:   72:				result.append(name);
+        -:   73:				result.append(": ");
+        -:   74:				result.append(value);
+        -:   75:				result.append("\r\n");
+        -:   76:			}
+        -:   77:
+        -:   78:			// 空行 + body
+        -:   79:			result.append("\r\n");
+        -:   80:			result.append(body);
+        -:   81:			return result;
+        -:   82:		}
+        -:   83:
+        -:   84:		/**
+        -:   85:		 * @brief 将状态行 + 头部序列化到栈缓冲区（零堆分配，用于 scatter-gather I/O）
+        -:   86:		 * @param buf 输出缓冲区（512 字节栈缓冲，覆盖典型 3-5 个 header 的响应头）
+        -:   87:		 */
+function _ZNK5hical14NativeResponse15serializeHeadToERNS_11FixedBufferILm512EEE called 221 returned 100% blocks executed 97%
+      221:   88:		void serializeHeadTo(FixedBuffer<512>& buf) const
+        -:   89:		{
+        -:   90:			// 200 OK + HTTP/1.1 快速路径（覆盖 80%+ 请求，1 次 append vs 7 次）
+      221:   91:			if (status == HttpStatusCode::hOk && httpVersionMinor == 1)
+branch  0 taken 97% (fallthrough)
+branch  1 taken 3%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0%
+        -:   92:			{
+      214:   93:				buf.append("HTTP/1.1 200 OK\r\n", 17);
+call    0 returned 100%
+        -:   94:			}
+        -:   95:			else
+        -:   96:			{
+        7:   97:				buf << "HTTP/1.";
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        7:   98:				buf << static_cast<char>('0' + httpVersionMinor);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        7:   99:				buf << ' ';
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  100:
+        -:  101:				char codeBuf[4];
+        7:  102:				auto [ptr, ec] = std::to_chars(codeBuf, codeBuf + 4, static_cast<unsigned>(status));
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        7:  103:				buf.append(codeBuf, static_cast<size_t>(ptr - codeBuf));
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        7:  104:				buf << ' ';
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        7:  105:				buf << httpStatusCodeToString(status);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+        7:  106:				buf << "\r\n";
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  107:			}
+        -:  108:
+        -:  109:			// 头部
+     1112:  110:			for (const auto& [name, value] : headers)
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+call    5 returned 100%
+call    6 returned 100%
+branch  7 taken 80%
+branch  8 taken 20% (fallthrough)
+        -:  111:			{
+      891:  112:				buf << name;
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+      891:  113:				buf << ": ";
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+      891:  114:				buf << value;
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+      891:  115:				buf << "\r\n";
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  116:			}
+        -:  117:
+        -:  118:			// 空行
+      221:  119:			buf << "\r\n";
+call    0 returned 100%
+      221:  120:		}
+        -:  121:
+        -:  122:	private:
+        -:  123:		void appendStatusCode(std::string& out) const
+        -:  124:		{
+        -:  125:			char buf[4];
+        -:  126:			auto [ptr, ec] = std::to_chars(buf, buf + 4, static_cast<unsigned>(status));
+        -:  127:			out.append(buf, static_cast<size_t>(ptr - buf));
+        -:  128:			out += ' ';
+        -:  129:			out.append(httpStatusCodeToString(status));
+        -:  130:		}
+        -:  131:	};
+        -:  132:
+        -:  133:	/**
+        -:  134:	 * @brief HTTP 响应封装
+        -:  135:	 * 对自研 NativeResponse 的 hical 风格封装。
+        -:  136:	 * 提供简洁的接口设置状态码、头部和消息体。
+        -:  137:	 */
+        -:  138:	class HttpResponse
+        -:  139:	{
+        -:  140:	public:
+        -:  141:		HttpResponse();
+        -:  142:
+        -:  143:		/**
+        -:  144:		 * @brief 获取状态码
+        -:  145:		 * @return HTTP 状态码
+        -:  146:		 */
+        -:  147:		HttpStatusCode statusCode() const;
+        -:  148:
+        -:  149:		/**
+        -:  150:		 * @brief 设置状态码
+        -:  151:		 * @param code HTTP 状态码
+        -:  152:		 */
+        -:  153:		void setStatus(HttpStatusCode code);
+        -:  154:
+        -:  155:		/**
+        -:  156:		 * @brief 获取指定头部字段
+        -:  157:		 * @param name 字段名
+        -:  158:		 * @return 字段值
+        -:  159:		 */
+        -:  160:		std::string_view header(std::string_view name) const;
+        -:  161:
+        -:  162:		/**
+        -:  163:		 * @brief 设置头部字段
+        -:  164:		 * @param name 字段名
+        -:  165:		 * @param value 字段值
+        -:  166:		 */
+        -:  167:		void setHeader(const std::string& name, const std::string& value);
+        -:  168:
+        -:  169:		/**
+        -:  170:		 * @brief 获取消息体
+        -:  171:		 * @return 消息体字符串
+        -:  172:		 */
+        -:  173:		const std::string& body() const;
+        -:  174:
+        -:  175:		/**
+        -:  176:		 * @brief 设置消息体（纯文本）
+        -:  177:		 * @param body 消息体
+        -:  178:		 * @param contentType Content-Type（默认 text/plain）
+        -:  179:		 */
+        -:  180:		void setBody(const std::string& body, const std::string& contentType = "text/plain");
+        -:  181:
+        -:  182:		/**
+        -:  183:		 * @brief 设置 JSON 消息体
+        -:  184:		 * @param json JSON 值
+        -:  185:		 */
+        -:  186:		void setJsonBody(const boost::json::value& json);
+        -:  187:
+        -:  188:		/**
+        -:  189:		 * @brief 添加 Set-Cookie 响应头
+        -:  190:		 * @param name Cookie 名称
+        -:  191:		 * @param value Cookie 值
+        -:  192:		 * @param options Cookie 设置选项（有效期、路径、HttpOnly 等）
+        -:  193:		 * 可多次调用以设置多个 Cookie，每次追加一个 Set-Cookie 头。
+        -:  194:		 */
+        -:  195:		void setCookie(const std::string& name, const std::string& value, const CookieOptions& options = {});
+        -:  196:
+        -:  197:		/**
+        -:  198:		 * @brief 获取底层原生响应的引用
+        -:  199:		 * @return NativeResponse 引用
+        -:  200:		 */
+        -:  201:		NativeResponse& native();
+        -:  202:		const NativeResponse& native() const;
+        -:  203:
+        -:  204:		// ============ 快捷工厂方法 ============
+        -:  205:
+        -:  206:		/**
+        -:  207:		 * @brief 创建 200 OK 响应
+        -:  208:		 * @param body 消息体
+        -:  209:		 * @return HttpResponse
+        -:  210:		 */
+        -:  211:		static HttpResponse ok(const std::string& body = "");
+        -:  212:
+        -:  213:		/**
+        -:  214:		 * @brief 创建 JSON 200 OK 响应
+        -:  215:		 * @param json JSON 值
+        -:  216:		 * @return HttpResponse
+        -:  217:		 */
+        -:  218:		static HttpResponse json(const boost::json::value& json);
+        -:  219:
+        -:  220:		/**
+        -:  221:		 * @brief 创建 404 Not Found 响应
+        -:  222:		 * @return HttpResponse
+        -:  223:		 */
+        -:  224:		static HttpResponse notFound();
+        -:  225:
+        -:  226:		/**
+        -:  227:		 * @brief 创建 400 Bad Request 响应
+        -:  228:		 * @param message 错误信息
+        -:  229:		 * @return HttpResponse
+        -:  230:		 */
+        -:  231:		static HttpResponse badRequest(const std::string& message = "Bad Request");
+        -:  232:
+        -:  233:		/**
+        -:  234:		 * @brief 创建 500 Internal Server Error 响应
+        -:  235:		 * @return HttpResponse
+        -:  236:		 */
+        -:  237:		static HttpResponse serverError();
+        -:  238:
+        -:  239:		/**
+        -:  240:		 * @brief 创建重定向响应
+        -:  241:		 * @param location 重定向目标 URL
+        -:  242:		 * @param code 状态码（默认 302 Found，支持 301/302/307/308）
+        -:  243:		 * @return HttpResponse
+        -:  244:		 */
+        -:  245:		static HttpResponse redirect(const std::string& location, HttpStatusCode code = HttpStatusCode::hFound);
+        -:  246:
+        -:  247:	private:
+        -:  248:		NativeResponse m_res;
+        -:  249:	};
+        -:  250:
+        -:  251:} // namespace hical

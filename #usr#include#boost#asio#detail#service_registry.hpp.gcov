@@ -1,0 +1,383 @@
+        -:    0:Source:/usr/include/boost/asio/detail/service_registry.hpp
+        -:    1://
+        -:    2:// detail/service_registry.hpp
+        -:    3:// ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        -:    4://
+        -:    5:// Copyright (c) 2003-2023 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+        -:    6://
+        -:    7:// Distributed under the Boost Software License, Version 1.0. (See accompanying
+        -:    8:// file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+        -:    9://
+        -:   10:
+        -:   11:#ifndef BOOST_ASIO_DETAIL_SERVICE_REGISTRY_HPP
+        -:   12:#define BOOST_ASIO_DETAIL_SERVICE_REGISTRY_HPP
+        -:   13:
+        -:   14:#if defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   15:# pragma once
+        -:   16:#endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   17:
+        -:   18:#include <boost/asio/detail/config.hpp>
+        -:   19:#include <typeinfo>
+        -:   20:#include <boost/asio/detail/mutex.hpp>
+        -:   21:#include <boost/asio/detail/noncopyable.hpp>
+        -:   22:#include <boost/asio/detail/type_traits.hpp>
+        -:   23:#include <boost/asio/execution_context.hpp>
+        -:   24:
+        -:   25:#include <boost/asio/detail/push_options.hpp>
+        -:   26:
+        -:   27:namespace boost {
+        -:   28:namespace asio {
+        -:   29:
+        -:   30:class io_context;
+        -:   31:
+        -:   32:namespace detail {
+        -:   33:
+        -:   34:template <typename T>
+        -:   35:class typeid_wrapper {};
+        -:   36:
+        -:   37:class service_registry
+        -:   38:  : private noncopyable
+        -:   39:{
+        -:   40:public:
+        -:   41:  // Constructor.
+        -:   42:  BOOST_ASIO_DECL service_registry(execution_context& owner);
+        -:   43:
+        -:   44:  // Destructor.
+        -:   45:  BOOST_ASIO_DECL ~service_registry();
+        -:   46:
+        -:   47:  // Shutdown all services.
+        -:   48:  BOOST_ASIO_DECL void shutdown_services();
+        -:   49:
+        -:   50:  // Destroy all services.
+        -:   51:  BOOST_ASIO_DECL void destroy_services();
+        -:   52:
+        -:   53:  // Notify all services of a fork event.
+        -:   54:  BOOST_ASIO_DECL void notify_fork(execution_context::fork_event fork_ev);
+        -:   55:
+        -:   56:  // Get the service object corresponding to the specified service type. Will
+        -:   57:  // create a new service object automatically if no such object already
+        -:   58:  // exists. Ownership of the service object is not transferred to the caller.
+        -:   59:  template <typename Service>
+        -:   60:  Service& use_service();
+        -:   61:
+        -:   62:  // Get the service object corresponding to the specified service type. Will
+        -:   63:  // create a new service object automatically if no such object already
+        -:   64:  // exists. Ownership of the service object is not transferred to the caller.
+        -:   65:  // This overload is used for backwards compatibility with services that
+        -:   66:  // inherit from io_context::service.
+        -:   67:  template <typename Service>
+        -:   68:  Service& use_service(io_context& owner);
+        -:   69:
+        -:   70:  // Add a service object. Throws on error, in which case ownership of the
+        -:   71:  // object is retained by the caller.
+        -:   72:  template <typename Service>
+        -:   73:  void add_service(Service* new_service);
+        -:   74:
+        -:   75:  // Check whether a service object of the specified type already exists.
+        -:   76:  template <typename Service>
+        -:   77:  bool has_service() const;
+        -:   78:
+        -:   79:private:
+        -:   80:  // Initalise a service's key when the key_type typedef is not available.
+        -:   81:  template <typename Service>
+        -:   82:  static void init_key(execution_context::service::key& key, ...);
+        -:   83:
+        -:   84:#if !defined(BOOST_ASIO_NO_TYPEID)
+        -:   85:  // Initalise a service's key when the key_type typedef is available.
+        -:   86:  template <typename Service>
+        -:   87:  static void init_key(execution_context::service::key& key,
+        -:   88:      typename enable_if<
+        -:   89:        is_base_of<typename Service::key_type, Service>::value>::type*);
+        -:   90:#endif // !defined(BOOST_ASIO_NO_TYPEID)
+        -:   91:
+        -:   92:  // Initialise a service's key based on its id.
+        -:   93:  BOOST_ASIO_DECL static void init_key_from_id(
+        -:   94:      execution_context::service::key& key,
+        -:   95:      const execution_context::id& id);
+        -:   96:
+        -:   97:#if !defined(BOOST_ASIO_NO_TYPEID)
+        -:   98:  // Initialise a service's key based on its id.
+        -:   99:  template <typename Service>
+        -:  100:  static void init_key_from_id(execution_context::service::key& key,
+        -:  101:      const service_id<Service>& /*id*/);
+        -:  102:#endif // !defined(BOOST_ASIO_NO_TYPEID)
+        -:  103:
+        -:  104:  // Check if a service matches the given id.
+        -:  105:  BOOST_ASIO_DECL static bool keys_match(
+        -:  106:      const execution_context::service::key& key1,
+        -:  107:      const execution_context::service::key& key2);
+        -:  108:
+        -:  109:  // The type of a factory function used for creating a service instance.
+        -:  110:  typedef execution_context::service*(*factory_type)(void*);
+        -:  111:
+        -:  112:  // Factory function for creating a service instance.
+        -:  113:  template <typename Service, typename Owner>
+        -:  114:  static execution_context::service* create(void* owner);
+        -:  115:
+        -:  116:  // Destroy a service instance.
+        -:  117:  BOOST_ASIO_DECL static void destroy(execution_context::service* service);
+        -:  118:
+        -:  119:  // Helper class to manage service pointers.
+        -:  120:  struct auto_service_ptr;
+        -:  121:  friend struct auto_service_ptr;
+        -:  122:  struct auto_service_ptr
+        -:  123:  {
+        -:  124:    execution_context::service* ptr_;
+     312*:  125:    ~auto_service_ptr() { destroy(ptr_); }
+------------------
+_ZN5boost4asio6detail16service_registry16auto_service_ptrD2Ev:
+function _ZN5boost4asio6detail16service_registry16auto_service_ptrD2Ev called 0 returned 0% blocks executed 0%
+    #####:  125:    ~auto_service_ptr() { destroy(ptr_); }
+call    0 never executed
+------------------
+_ZN5boost4asio6detail16service_registry16auto_service_ptrD2Ev:
+function _ZN5boost4asio6detail16service_registry16auto_service_ptrD2Ev called 0 returned 0% blocks executed 0%
+    #####:  125:    ~auto_service_ptr() { destroy(ptr_); }
+call    0 never executed
+------------------
+_ZN5boost4asio6detail16service_registry16auto_service_ptrD2Ev:
+function _ZN5boost4asio6detail16service_registry16auto_service_ptrD2Ev called 40 returned 100% blocks executed 100%
+       40:  125:    ~auto_service_ptr() { destroy(ptr_); }
+call    0 returned 100%
+------------------
+_ZN5boost4asio6detail16service_registry16auto_service_ptrD2Ev:
+function _ZN5boost4asio6detail16service_registry16auto_service_ptrD2Ev called 0 returned 0% blocks executed 0%
+    #####:  125:    ~auto_service_ptr() { destroy(ptr_); }
+call    0 never executed
+------------------
+_ZN5boost4asio6detail16service_registry16auto_service_ptrD2Ev:
+function _ZN5boost4asio6detail16service_registry16auto_service_ptrD2Ev called 28 returned 100% blocks executed 100%
+       28:  125:    ~auto_service_ptr() { destroy(ptr_); }
+call    0 returned 100%
+------------------
+_ZN5boost4asio6detail16service_registry16auto_service_ptrD2Ev:
+function _ZN5boost4asio6detail16service_registry16auto_service_ptrD2Ev called 46 returned 100% blocks executed 100%
+       46:  125:    ~auto_service_ptr() { destroy(ptr_); }
+call    0 returned 100%
+------------------
+_ZN5boost4asio6detail16service_registry16auto_service_ptrD2Ev:
+function _ZN5boost4asio6detail16service_registry16auto_service_ptrD2Ev called 0 returned 0% blocks executed 0%
+    #####:  125:    ~auto_service_ptr() { destroy(ptr_); }
+call    0 never executed
+------------------
+_ZN5boost4asio6detail16service_registry16auto_service_ptrD2Ev:
+function _ZN5boost4asio6detail16service_registry16auto_service_ptrD2Ev called 0 returned 0% blocks executed 0%
+    #####:  125:    ~auto_service_ptr() { destroy(ptr_); }
+call    0 never executed
+------------------
+_ZN5boost4asio6detail16service_registry16auto_service_ptrD2Ev:
+function _ZN5boost4asio6detail16service_registry16auto_service_ptrD2Ev called 0 returned 0% blocks executed 0%
+    #####:  125:    ~auto_service_ptr() { destroy(ptr_); }
+call    0 never executed
+------------------
+_ZN5boost4asio6detail16service_registry16auto_service_ptrD2Ev:
+function _ZN5boost4asio6detail16service_registry16auto_service_ptrD2Ev called 0 returned 0% blocks executed 0%
+    #####:  125:    ~auto_service_ptr() { destroy(ptr_); }
+call    0 never executed
+------------------
+_ZN5boost4asio6detail16service_registry16auto_service_ptrD2Ev:
+function _ZN5boost4asio6detail16service_registry16auto_service_ptrD2Ev called 0 returned 0% blocks executed 0%
+    #####:  125:    ~auto_service_ptr() { destroy(ptr_); }
+call    0 never executed
+------------------
+_ZN5boost4asio6detail16service_registry16auto_service_ptrD2Ev:
+function _ZN5boost4asio6detail16service_registry16auto_service_ptrD2Ev called 10 returned 100% blocks executed 100%
+       10:  125:    ~auto_service_ptr() { destroy(ptr_); }
+call    0 returned 100%
+------------------
+_ZN5boost4asio6detail16service_registry16auto_service_ptrD2Ev:
+function _ZN5boost4asio6detail16service_registry16auto_service_ptrD2Ev called 16 returned 100% blocks executed 100%
+       16:  125:    ~auto_service_ptr() { destroy(ptr_); }
+call    0 returned 100%
+------------------
+_ZN5boost4asio6detail16service_registry16auto_service_ptrD2Ev:
+function _ZN5boost4asio6detail16service_registry16auto_service_ptrD2Ev called 0 returned 0% blocks executed 0%
+    #####:  125:    ~auto_service_ptr() { destroy(ptr_); }
+call    0 never executed
+------------------
+_ZN5boost4asio6detail16service_registry16auto_service_ptrD2Ev:
+function _ZN5boost4asio6detail16service_registry16auto_service_ptrD2Ev called 54 returned 100% blocks executed 100%
+       54:  125:    ~auto_service_ptr() { destroy(ptr_); }
+call    0 returned 100%
+------------------
+_ZN5boost4asio6detail16service_registry16auto_service_ptrD2Ev:
+function _ZN5boost4asio6detail16service_registry16auto_service_ptrD2Ev called 0 returned 0% blocks executed 0%
+    #####:  125:    ~auto_service_ptr() { destroy(ptr_); }
+call    0 never executed
+------------------
+_ZN5boost4asio6detail16service_registry16auto_service_ptrD2Ev:
+function _ZN5boost4asio6detail16service_registry16auto_service_ptrD2Ev called 0 returned 0% blocks executed 0%
+    #####:  125:    ~auto_service_ptr() { destroy(ptr_); }
+call    0 never executed
+------------------
+_ZN5boost4asio6detail16service_registry16auto_service_ptrD2Ev:
+function _ZN5boost4asio6detail16service_registry16auto_service_ptrD2Ev called 0 returned 0% blocks executed 0%
+    #####:  125:    ~auto_service_ptr() { destroy(ptr_); }
+call    0 never executed
+------------------
+_ZN5boost4asio6detail16service_registry16auto_service_ptrD2Ev:
+function _ZN5boost4asio6detail16service_registry16auto_service_ptrD2Ev called 0 returned 0% blocks executed 0%
+    #####:  125:    ~auto_service_ptr() { destroy(ptr_); }
+call    0 never executed
+------------------
+_ZN5boost4asio6detail16service_registry16auto_service_ptrD2Ev:
+function _ZN5boost4asio6detail16service_registry16auto_service_ptrD2Ev called 0 returned 0% blocks executed 0%
+    #####:  125:    ~auto_service_ptr() { destroy(ptr_); }
+call    0 never executed
+------------------
+_ZN5boost4asio6detail16service_registry16auto_service_ptrD2Ev:
+function _ZN5boost4asio6detail16service_registry16auto_service_ptrD2Ev called 0 returned 0% blocks executed 0%
+    #####:  125:    ~auto_service_ptr() { destroy(ptr_); }
+call    0 never executed
+------------------
+_ZN5boost4asio6detail16service_registry16auto_service_ptrD2Ev:
+function _ZN5boost4asio6detail16service_registry16auto_service_ptrD2Ev called 0 returned 0% blocks executed 0%
+    #####:  125:    ~auto_service_ptr() { destroy(ptr_); }
+call    0 never executed
+------------------
+_ZN5boost4asio6detail16service_registry16auto_service_ptrD2Ev:
+function _ZN5boost4asio6detail16service_registry16auto_service_ptrD2Ev called 0 returned 0% blocks executed 0%
+    #####:  125:    ~auto_service_ptr() { destroy(ptr_); }
+call    0 never executed
+------------------
+_ZN5boost4asio6detail16service_registry16auto_service_ptrD2Ev:
+function _ZN5boost4asio6detail16service_registry16auto_service_ptrD2Ev called 0 returned 0% blocks executed 0%
+    #####:  125:    ~auto_service_ptr() { destroy(ptr_); }
+call    0 never executed
+------------------
+_ZN5boost4asio6detail16service_registry16auto_service_ptrD2Ev:
+function _ZN5boost4asio6detail16service_registry16auto_service_ptrD2Ev called 22 returned 100% blocks executed 100%
+       22:  125:    ~auto_service_ptr() { destroy(ptr_); }
+call    0 returned 100%
+------------------
+_ZN5boost4asio6detail16service_registry16auto_service_ptrD2Ev:
+function _ZN5boost4asio6detail16service_registry16auto_service_ptrD2Ev called 0 returned 0% blocks executed 0%
+    #####:  125:    ~auto_service_ptr() { destroy(ptr_); }
+call    0 never executed
+------------------
+_ZN5boost4asio6detail16service_registry16auto_service_ptrD2Ev:
+function _ZN5boost4asio6detail16service_registry16auto_service_ptrD2Ev called 0 returned 0% blocks executed 0%
+    #####:  125:    ~auto_service_ptr() { destroy(ptr_); }
+call    0 never executed
+------------------
+_ZN5boost4asio6detail16service_registry16auto_service_ptrD2Ev:
+function _ZN5boost4asio6detail16service_registry16auto_service_ptrD2Ev called 0 returned 0% blocks executed 0%
+    #####:  125:    ~auto_service_ptr() { destroy(ptr_); }
+call    0 never executed
+------------------
+_ZN5boost4asio6detail16service_registry16auto_service_ptrD2Ev:
+function _ZN5boost4asio6detail16service_registry16auto_service_ptrD2Ev called 0 returned 0% blocks executed 0%
+    #####:  125:    ~auto_service_ptr() { destroy(ptr_); }
+call    0 never executed
+------------------
+_ZN5boost4asio6detail16service_registry16auto_service_ptrD2Ev:
+function _ZN5boost4asio6detail16service_registry16auto_service_ptrD2Ev called 0 returned 0% blocks executed 0%
+    #####:  125:    ~auto_service_ptr() { destroy(ptr_); }
+call    0 never executed
+------------------
+_ZN5boost4asio6detail16service_registry16auto_service_ptrD2Ev:
+function _ZN5boost4asio6detail16service_registry16auto_service_ptrD2Ev called 0 returned 0% blocks executed 0%
+    #####:  125:    ~auto_service_ptr() { destroy(ptr_); }
+call    0 never executed
+------------------
+_ZN5boost4asio6detail16service_registry16auto_service_ptrD2Ev:
+function _ZN5boost4asio6detail16service_registry16auto_service_ptrD2Ev called 0 returned 0% blocks executed 0%
+    #####:  125:    ~auto_service_ptr() { destroy(ptr_); }
+call    0 never executed
+------------------
+_ZN5boost4asio6detail16service_registry16auto_service_ptrD2Ev:
+function _ZN5boost4asio6detail16service_registry16auto_service_ptrD2Ev called 0 returned 0% blocks executed 0%
+    #####:  125:    ~auto_service_ptr() { destroy(ptr_); }
+call    0 never executed
+------------------
+_ZN5boost4asio6detail16service_registry16auto_service_ptrD2Ev:
+function _ZN5boost4asio6detail16service_registry16auto_service_ptrD2Ev called 0 returned 0% blocks executed 0%
+    #####:  125:    ~auto_service_ptr() { destroy(ptr_); }
+call    0 never executed
+------------------
+_ZN5boost4asio6detail16service_registry16auto_service_ptrD2Ev:
+function _ZN5boost4asio6detail16service_registry16auto_service_ptrD2Ev called 0 returned 0% blocks executed 0%
+    #####:  125:    ~auto_service_ptr() { destroy(ptr_); }
+call    0 never executed
+------------------
+_ZN5boost4asio6detail16service_registry16auto_service_ptrD2Ev:
+function _ZN5boost4asio6detail16service_registry16auto_service_ptrD2Ev called 0 returned 0% blocks executed 0%
+    #####:  125:    ~auto_service_ptr() { destroy(ptr_); }
+call    0 never executed
+------------------
+_ZN5boost4asio6detail16service_registry16auto_service_ptrD2Ev:
+function _ZN5boost4asio6detail16service_registry16auto_service_ptrD2Ev called 0 returned 0% blocks executed 0%
+    #####:  125:    ~auto_service_ptr() { destroy(ptr_); }
+call    0 never executed
+------------------
+_ZN5boost4asio6detail16service_registry16auto_service_ptrD2Ev:
+function _ZN5boost4asio6detail16service_registry16auto_service_ptrD2Ev called 0 returned 0% blocks executed 0%
+    #####:  125:    ~auto_service_ptr() { destroy(ptr_); }
+call    0 never executed
+------------------
+_ZN5boost4asio6detail16service_registry16auto_service_ptrD2Ev:
+function _ZN5boost4asio6detail16service_registry16auto_service_ptrD2Ev called 0 returned 0% blocks executed 0%
+    #####:  125:    ~auto_service_ptr() { destroy(ptr_); }
+call    0 never executed
+------------------
+_ZN5boost4asio6detail16service_registry16auto_service_ptrD2Ev:
+function _ZN5boost4asio6detail16service_registry16auto_service_ptrD2Ev called 8 returned 100% blocks executed 100%
+        8:  125:    ~auto_service_ptr() { destroy(ptr_); }
+call    0 returned 100%
+------------------
+_ZN5boost4asio6detail16service_registry16auto_service_ptrD2Ev:
+function _ZN5boost4asio6detail16service_registry16auto_service_ptrD2Ev called 0 returned 0% blocks executed 0%
+    #####:  125:    ~auto_service_ptr() { destroy(ptr_); }
+call    0 never executed
+------------------
+_ZN5boost4asio6detail16service_registry16auto_service_ptrD2Ev:
+function _ZN5boost4asio6detail16service_registry16auto_service_ptrD2Ev called 86 returned 100% blocks executed 100%
+       86:  125:    ~auto_service_ptr() { destroy(ptr_); }
+call    0 returned 100%
+------------------
+_ZN5boost4asio6detail16service_registry16auto_service_ptrD2Ev:
+function _ZN5boost4asio6detail16service_registry16auto_service_ptrD2Ev called 2 returned 100% blocks executed 100%
+        2:  125:    ~auto_service_ptr() { destroy(ptr_); }
+call    0 returned 100%
+------------------
+        -:  126:  };
+        -:  127:
+        -:  128:  // Get the service object corresponding to the specified service key. Will
+        -:  129:  // create a new service object automatically if no such object already
+        -:  130:  // exists. Ownership of the service object is not transferred to the caller.
+        -:  131:  BOOST_ASIO_DECL execution_context::service* do_use_service(
+        -:  132:      const execution_context::service::key& key,
+        -:  133:      factory_type factory, void* owner);
+        -:  134:
+        -:  135:  // Add a service object. Throws on error, in which case ownership of the
+        -:  136:  // object is retained by the caller.
+        -:  137:  BOOST_ASIO_DECL void do_add_service(
+        -:  138:      const execution_context::service::key& key,
+        -:  139:      execution_context::service* new_service);
+        -:  140:
+        -:  141:  // Check whether a service object with the specified key already exists.
+        -:  142:  BOOST_ASIO_DECL bool do_has_service(
+        -:  143:      const execution_context::service::key& key) const;
+        -:  144:
+        -:  145:  // Mutex to protect access to internal data.
+        -:  146:  mutable boost::asio::detail::mutex mutex_;
+        -:  147:
+        -:  148:  // The owner of this service registry and the services it contains.
+        -:  149:  execution_context& owner_;
+        -:  150:
+        -:  151:  // The first service in the list of contained services.
+        -:  152:  execution_context::service* first_service_;
+        -:  153:};
+        -:  154:
+        -:  155:} // namespace detail
+        -:  156:} // namespace asio
+        -:  157:} // namespace boost
+        -:  158:
+        -:  159:#include <boost/asio/detail/pop_options.hpp>
+        -:  160:
+        -:  161:#include <boost/asio/detail/impl/service_registry.hpp>
+        -:  162:#if defined(BOOST_ASIO_HEADER_ONLY)
+        -:  163:# include <boost/asio/detail/impl/service_registry.ipp>
+        -:  164:#endif // defined(BOOST_ASIO_HEADER_ONLY)
+        -:  165:
+        -:  166:#endif // BOOST_ASIO_DETAIL_SERVICE_REGISTRY_HPP

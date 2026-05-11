@@ -1,0 +1,2128 @@
+        -:    0:Source:/usr/include/boost/asio/any_io_executor.hpp
+        -:    1://
+        -:    2:// any_io_executor.hpp
+        -:    3:// ~~~~~~~~~~~~~~~~~~~
+        -:    4://
+        -:    5:// Copyright (c) 2003-2023 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+        -:    6://
+        -:    7:// Distributed under the Boost Software License, Version 1.0. (See accompanying
+        -:    8:// file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+        -:    9://
+        -:   10:
+        -:   11:#ifndef BOOST_ASIO_ANY_IO_EXECUTOR_HPP
+        -:   12:#define BOOST_ASIO_ANY_IO_EXECUTOR_HPP
+        -:   13:
+        -:   14:#if defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   15:# pragma once
+        -:   16:#endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   17:
+        -:   18:#include <boost/asio/detail/config.hpp>
+        -:   19:#if defined(BOOST_ASIO_USE_TS_EXECUTOR_AS_DEFAULT)
+        -:   20:# include <boost/asio/executor.hpp>
+        -:   21:#else // defined(BOOST_ASIO_USE_TS_EXECUTOR_AS_DEFAULT)
+        -:   22:# include <boost/asio/execution.hpp>
+        -:   23:# include <boost/asio/execution_context.hpp>
+        -:   24:#endif // defined(BOOST_ASIO_USE_TS_EXECUTOR_AS_DEFAULT)
+        -:   25:
+        -:   26:#include <boost/asio/detail/push_options.hpp>
+        -:   27:
+        -:   28:namespace boost {
+        -:   29:namespace asio {
+        -:   30:
+        -:   31:#if defined(BOOST_ASIO_USE_TS_EXECUTOR_AS_DEFAULT)
+        -:   32:
+        -:   33:typedef executor any_io_executor;
+        -:   34:
+        -:   35:#else // defined(BOOST_ASIO_USE_TS_EXECUTOR_AS_DEFAULT)
+        -:   36:
+        -:   37:/// Polymorphic executor type for use with I/O objects.
+        -:   38:/**
+        -:   39: * The @c any_io_executor type is a polymorphic executor that supports the set
+        -:   40: * of properties required by I/O objects. It is defined as the
+        -:   41: * execution::any_executor class template parameterised as follows:
+        -:   42: * @code execution::any_executor<
+        -:   43: *   execution::context_as_t<execution_context&>,
+        -:   44: *   execution::blocking_t::never_t,
+        -:   45: *   execution::prefer_only<execution::blocking_t::possibly_t>,
+        -:   46: *   execution::prefer_only<execution::outstanding_work_t::tracked_t>,
+        -:   47: *   execution::prefer_only<execution::outstanding_work_t::untracked_t>,
+        -:   48: *   execution::prefer_only<execution::relationship_t::fork_t>,
+        -:   49: *   execution::prefer_only<execution::relationship_t::continuation_t>
+        -:   50: * > @endcode
+        -:   51: */
+        -:   52:class any_io_executor :
+        -:   53:#if defined(GENERATING_DOCUMENTATION)
+        -:   54:  public execution::any_executor<...>
+        -:   55:#else // defined(GENERATING_DOCUMENTATION)
+        -:   56:  public execution::any_executor<
+        -:   57:      execution::context_as_t<execution_context&>,
+        -:   58:      execution::blocking_t::never_t,
+        -:   59:      execution::prefer_only<execution::blocking_t::possibly_t>,
+        -:   60:      execution::prefer_only<execution::outstanding_work_t::tracked_t>,
+        -:   61:      execution::prefer_only<execution::outstanding_work_t::untracked_t>,
+        -:   62:      execution::prefer_only<execution::relationship_t::fork_t>,
+        -:   63:      execution::prefer_only<execution::relationship_t::continuation_t>
+        -:   64:    >
+        -:   65:#endif // defined(GENERATING_DOCUMENTATION)
+        -:   66:{
+        -:   67:public:
+        -:   68:#if !defined(GENERATING_DOCUMENTATION)
+        -:   69:  typedef execution::any_executor<
+        -:   70:      execution::context_as_t<execution_context&>,
+        -:   71:      execution::blocking_t::never_t,
+        -:   72:      execution::prefer_only<execution::blocking_t::possibly_t>,
+        -:   73:      execution::prefer_only<execution::outstanding_work_t::tracked_t>,
+        -:   74:      execution::prefer_only<execution::outstanding_work_t::untracked_t>,
+        -:   75:      execution::prefer_only<execution::relationship_t::fork_t>,
+        -:   76:      execution::prefer_only<execution::relationship_t::continuation_t>
+        -:   77:    > base_type;
+        -:   78:
+        -:   79:  typedef void supportable_properties_type(
+        -:   80:      execution::context_as_t<execution_context&>,
+        -:   81:      execution::blocking_t::never_t,
+        -:   82:      execution::prefer_only<execution::blocking_t::possibly_t>,
+        -:   83:      execution::prefer_only<execution::outstanding_work_t::tracked_t>,
+        -:   84:      execution::prefer_only<execution::outstanding_work_t::untracked_t>,
+        -:   85:      execution::prefer_only<execution::relationship_t::fork_t>,
+        -:   86:      execution::prefer_only<execution::relationship_t::continuation_t>
+        -:   87:    );
+        -:   88:#endif // !defined(GENERATING_DOCUMENTATION)
+        -:   89:
+        -:   90:  /// Default constructor.
+        -:   91:  BOOST_ASIO_DECL any_io_executor() BOOST_ASIO_NOEXCEPT;
+        -:   92:
+        -:   93:  /// Construct in an empty state. Equivalent effects to default constructor.
+        -:   94:  BOOST_ASIO_DECL any_io_executor(nullptr_t) BOOST_ASIO_NOEXCEPT;
+        -:   95:
+        -:   96:  /// Copy constructor.
+        -:   97:  BOOST_ASIO_DECL any_io_executor(const any_io_executor& e) BOOST_ASIO_NOEXCEPT;
+        -:   98:
+        -:   99:#if defined(BOOST_ASIO_HAS_MOVE) || defined(GENERATING_DOCUMENTATION)
+        -:  100:  /// Move constructor.
+        -:  101:  BOOST_ASIO_DECL any_io_executor(any_io_executor&& e) BOOST_ASIO_NOEXCEPT;
+        -:  102:#endif // defined(BOOST_ASIO_HAS_MOVE) || defined(GENERATING_DOCUMENTATION)
+        -:  103:
+        -:  104:  /// Construct to point to the same target as another any_executor.
+        -:  105:#if defined(GENERATING_DOCUMENTATION)
+        -:  106:  template <class... OtherSupportableProperties>
+        -:  107:    any_io_executor(execution::any_executor<OtherSupportableProperties...> e);
+        -:  108:#else // defined(GENERATING_DOCUMENTATION)
+        -:  109:  template <typename OtherAnyExecutor>
+   28967*:  110:  any_io_executor(OtherAnyExecutor e,
+        -:  111:      typename constraint<
+        -:  112:        conditional<
+        -:  113:          !is_same<OtherAnyExecutor, any_io_executor>::value
+        -:  114:            && is_base_of<execution::detail::any_executor_base,
+        -:  115:              OtherAnyExecutor>::value,
+        -:  116:          typename execution::detail::supportable_properties<
+        -:  117:            0, supportable_properties_type>::template
+        -:  118:              is_valid_target<OtherAnyExecutor>,
+        -:  119:          false_type
+        -:  120:        >::type::value
+        -:  121:      >::type = 0)
+   28967*:  122:    : base_type(BOOST_ASIO_MOVE_CAST(OtherAnyExecutor)(e))
+        -:  123:  {
+   29207*:  124:  }
+------------------
+_ZN5boost4asio15any_io_executorC2INS0_9execution12any_executorIJNS3_12context_as_tIRNS0_17execution_contextEEENS3_6detail8blocking7never_tILi0EEENS3_11prefer_onlyINSA_10possibly_tILi0EEEEENSD_INS9_16outstanding_work9tracked_tILi0EEEEENSD_INSH_11untracked_tILi0EEEEENSD_INS9_12relationship6fork_tILi0EEEEENSD_INSO_14continuation_tILi0EEEEEEEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameISW_S1_E5valuesrSt10is_base_ofINS9_17any_executor_baseESW_E5valueENS9_22supportable_propertiesILm0EFvS8_SC_SG_SK_SN_SR_SU_EE15is_valid_targetISW_EESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE:
+function _ZN5boost4asio15any_io_executorC2INS0_9execution12any_executorIJNS3_12context_as_tIRNS0_17execution_contextEEENS3_6detail8blocking7never_tILi0EEENS3_11prefer_onlyINSA_10possibly_tILi0EEEEENSD_INS9_16outstanding_work9tracked_tILi0EEEEENSD_INSH_11untracked_tILi0EEEEENSD_INS9_12relationship6fork_tILi0EEEEENSD_INSO_14continuation_tILi0EEEEEEEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameISW_S1_E5valuesrSt10is_base_ofINS9_17any_executor_baseESW_E5valueENS9_22supportable_propertiesILm0EFvS8_SC_SG_SK_SN_SR_SU_EE15is_valid_targetISW_EESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE called 16 returned 100% blocks executed 100%
+       16:  110:  any_io_executor(OtherAnyExecutor e,
+        -:  111:      typename constraint<
+        -:  112:        conditional<
+        -:  113:          !is_same<OtherAnyExecutor, any_io_executor>::value
+        -:  114:            && is_base_of<execution::detail::any_executor_base,
+        -:  115:              OtherAnyExecutor>::value,
+        -:  116:          typename execution::detail::supportable_properties<
+        -:  117:            0, supportable_properties_type>::template
+        -:  118:              is_valid_target<OtherAnyExecutor>,
+        -:  119:          false_type
+        -:  120:        >::type::value
+        -:  121:      >::type = 0)
+       16:  122:    : base_type(BOOST_ASIO_MOVE_CAST(OtherAnyExecutor)(e))
+call    0 returned 100%
+        -:  123:  {
+       16:  124:  }
+------------------
+_ZN5boost4asio15any_io_executorC2INS0_9execution12any_executorIJNS3_12context_as_tIRNS0_17execution_contextEEENS3_6detail8blocking7never_tILi0EEENS3_11prefer_onlyINSA_10possibly_tILi0EEEEENSD_INS9_16outstanding_work9tracked_tILi0EEEEENSD_INSH_11untracked_tILi0EEEEENSD_INS9_12relationship6fork_tILi0EEEEENSD_INSO_14continuation_tILi0EEEEEEEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameISW_S1_E5valuesrSt10is_base_ofINS9_17any_executor_baseESW_E5valueENS9_22supportable_propertiesILm0EFvS8_SC_SG_SK_SN_SR_SU_EE15is_valid_targetISW_EESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE:
+function _ZN5boost4asio15any_io_executorC2INS0_9execution12any_executorIJNS3_12context_as_tIRNS0_17execution_contextEEENS3_6detail8blocking7never_tILi0EEENS3_11prefer_onlyINSA_10possibly_tILi0EEEEENSD_INS9_16outstanding_work9tracked_tILi0EEEEENSD_INSH_11untracked_tILi0EEEEENSD_INS9_12relationship6fork_tILi0EEEEENSD_INSO_14continuation_tILi0EEEEEEEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameISW_S1_E5valuesrSt10is_base_ofINS9_17any_executor_baseESW_E5valueENS9_22supportable_propertiesILm0EFvS8_SC_SG_SK_SN_SR_SU_EE15is_valid_targetISW_EESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE called 72 returned 100% blocks executed 100%
+       72:  110:  any_io_executor(OtherAnyExecutor e,
+        -:  111:      typename constraint<
+        -:  112:        conditional<
+        -:  113:          !is_same<OtherAnyExecutor, any_io_executor>::value
+        -:  114:            && is_base_of<execution::detail::any_executor_base,
+        -:  115:              OtherAnyExecutor>::value,
+        -:  116:          typename execution::detail::supportable_properties<
+        -:  117:            0, supportable_properties_type>::template
+        -:  118:              is_valid_target<OtherAnyExecutor>,
+        -:  119:          false_type
+        -:  120:        >::type::value
+        -:  121:      >::type = 0)
+       72:  122:    : base_type(BOOST_ASIO_MOVE_CAST(OtherAnyExecutor)(e))
+call    0 returned 100%
+        -:  123:  {
+       72:  124:  }
+------------------
+_ZN5boost4asio15any_io_executorC2INS0_9execution12any_executorIJNS3_12context_as_tIRNS0_17execution_contextEEENS3_6detail8blocking7never_tILi0EEENS3_11prefer_onlyINSA_10possibly_tILi0EEEEENSD_INS9_16outstanding_work9tracked_tILi0EEEEENSD_INSH_11untracked_tILi0EEEEENSD_INS9_12relationship6fork_tILi0EEEEENSD_INSO_14continuation_tILi0EEEEEEEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameISW_S1_E5valuesrSt10is_base_ofINS9_17any_executor_baseESW_E5valueENS9_22supportable_propertiesILm0EFvS8_SC_SG_SK_SN_SR_SU_EE15is_valid_targetISW_EESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE:
+function _ZN5boost4asio15any_io_executorC2INS0_9execution12any_executorIJNS3_12context_as_tIRNS0_17execution_contextEEENS3_6detail8blocking7never_tILi0EEENS3_11prefer_onlyINSA_10possibly_tILi0EEEEENSD_INS9_16outstanding_work9tracked_tILi0EEEEENSD_INSH_11untracked_tILi0EEEEENSD_INS9_12relationship6fork_tILi0EEEEENSD_INSO_14continuation_tILi0EEEEEEEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameISW_S1_E5valuesrSt10is_base_ofINS9_17any_executor_baseESW_E5valueENS9_22supportable_propertiesILm0EFvS8_SC_SG_SK_SN_SR_SU_EE15is_valid_targetISW_EESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  110:  any_io_executor(OtherAnyExecutor e,
+        -:  111:      typename constraint<
+        -:  112:        conditional<
+        -:  113:          !is_same<OtherAnyExecutor, any_io_executor>::value
+        -:  114:            && is_base_of<execution::detail::any_executor_base,
+        -:  115:              OtherAnyExecutor>::value,
+        -:  116:          typename execution::detail::supportable_properties<
+        -:  117:            0, supportable_properties_type>::template
+        -:  118:              is_valid_target<OtherAnyExecutor>,
+        -:  119:          false_type
+        -:  120:        >::type::value
+        -:  121:      >::type = 0)
+    #####:  122:    : base_type(BOOST_ASIO_MOVE_CAST(OtherAnyExecutor)(e))
+call    0 never executed
+        -:  123:  {
+    #####:  124:  }
+------------------
+_ZN5boost4asio15any_io_executorC2INS0_9execution12any_executorIJNS3_12context_as_tIRNS0_17execution_contextEEENS3_6detail8blocking7never_tILi0EEENS3_11prefer_onlyINSA_10possibly_tILi0EEEEENSD_INS9_16outstanding_work9tracked_tILi0EEEEENSD_INSH_11untracked_tILi0EEEEENSD_INS9_12relationship6fork_tILi0EEEEENSD_INSO_14continuation_tILi0EEEEEEEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameISW_S1_E5valuesrSt10is_base_ofINS9_17any_executor_baseESW_E5valueENS9_22supportable_propertiesILm0EFvS8_SC_SG_SK_SN_SR_SU_EE15is_valid_targetISW_EESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE:
+function _ZN5boost4asio15any_io_executorC2INS0_9execution12any_executorIJNS3_12context_as_tIRNS0_17execution_contextEEENS3_6detail8blocking7never_tILi0EEENS3_11prefer_onlyINSA_10possibly_tILi0EEEEENSD_INS9_16outstanding_work9tracked_tILi0EEEEENSD_INSH_11untracked_tILi0EEEEENSD_INS9_12relationship6fork_tILi0EEEEENSD_INSO_14continuation_tILi0EEEEEEEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameISW_S1_E5valuesrSt10is_base_ofINS9_17any_executor_baseESW_E5valueENS9_22supportable_propertiesILm0EFvS8_SC_SG_SK_SN_SR_SU_EE15is_valid_targetISW_EESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE called 40 returned 100% blocks executed 100%
+       40:  110:  any_io_executor(OtherAnyExecutor e,
+        -:  111:      typename constraint<
+        -:  112:        conditional<
+        -:  113:          !is_same<OtherAnyExecutor, any_io_executor>::value
+        -:  114:            && is_base_of<execution::detail::any_executor_base,
+        -:  115:              OtherAnyExecutor>::value,
+        -:  116:          typename execution::detail::supportable_properties<
+        -:  117:            0, supportable_properties_type>::template
+        -:  118:              is_valid_target<OtherAnyExecutor>,
+        -:  119:          false_type
+        -:  120:        >::type::value
+        -:  121:      >::type = 0)
+       40:  122:    : base_type(BOOST_ASIO_MOVE_CAST(OtherAnyExecutor)(e))
+call    0 returned 100%
+        -:  123:  {
+       40:  124:  }
+------------------
+_ZN5boost4asio15any_io_executorC2INS0_9execution12any_executorIJNS3_12context_as_tIRNS0_17execution_contextEEENS3_6detail8blocking7never_tILi0EEENS3_11prefer_onlyINSA_10possibly_tILi0EEEEENSD_INS9_16outstanding_work9tracked_tILi0EEEEENSD_INSH_11untracked_tILi0EEEEENSD_INS9_12relationship6fork_tILi0EEEEENSD_INSO_14continuation_tILi0EEEEEEEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameISW_S1_E5valuesrSt10is_base_ofINS9_17any_executor_baseESW_E5valueENS9_22supportable_propertiesILm0EFvS8_SC_SG_SK_SN_SR_SU_EE15is_valid_targetISW_EESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE:
+function _ZN5boost4asio15any_io_executorC2INS0_9execution12any_executorIJNS3_12context_as_tIRNS0_17execution_contextEEENS3_6detail8blocking7never_tILi0EEENS3_11prefer_onlyINSA_10possibly_tILi0EEEEENSD_INS9_16outstanding_work9tracked_tILi0EEEEENSD_INSH_11untracked_tILi0EEEEENSD_INS9_12relationship6fork_tILi0EEEEENSD_INSO_14continuation_tILi0EEEEEEEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameISW_S1_E5valuesrSt10is_base_ofINS9_17any_executor_baseESW_E5valueENS9_22supportable_propertiesILm0EFvS8_SC_SG_SK_SN_SR_SU_EE15is_valid_targetISW_EESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE called 72 returned 100% blocks executed 100%
+       72:  110:  any_io_executor(OtherAnyExecutor e,
+        -:  111:      typename constraint<
+        -:  112:        conditional<
+        -:  113:          !is_same<OtherAnyExecutor, any_io_executor>::value
+        -:  114:            && is_base_of<execution::detail::any_executor_base,
+        -:  115:              OtherAnyExecutor>::value,
+        -:  116:          typename execution::detail::supportable_properties<
+        -:  117:            0, supportable_properties_type>::template
+        -:  118:              is_valid_target<OtherAnyExecutor>,
+        -:  119:          false_type
+        -:  120:        >::type::value
+        -:  121:      >::type = 0)
+       72:  122:    : base_type(BOOST_ASIO_MOVE_CAST(OtherAnyExecutor)(e))
+call    0 returned 100%
+        -:  123:  {
+       72:  124:  }
+------------------
+_ZN5boost4asio15any_io_executorC2INS0_9execution12any_executorIJNS3_12context_as_tIRNS0_17execution_contextEEENS3_6detail8blocking7never_tILi0EEENS3_11prefer_onlyINSA_10possibly_tILi0EEEEENSD_INS9_16outstanding_work9tracked_tILi0EEEEENSD_INSH_11untracked_tILi0EEEEENSD_INS9_12relationship6fork_tILi0EEEEENSD_INSO_14continuation_tILi0EEEEEEEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameISW_S1_E5valuesrSt10is_base_ofINS9_17any_executor_baseESW_E5valueENS9_22supportable_propertiesILm0EFvS8_SC_SG_SK_SN_SR_SU_EE15is_valid_targetISW_EESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE:
+function _ZN5boost4asio15any_io_executorC2INS0_9execution12any_executorIJNS3_12context_as_tIRNS0_17execution_contextEEENS3_6detail8blocking7never_tILi0EEENS3_11prefer_onlyINSA_10possibly_tILi0EEEEENSD_INS9_16outstanding_work9tracked_tILi0EEEEENSD_INSH_11untracked_tILi0EEEEENSD_INS9_12relationship6fork_tILi0EEEEENSD_INSO_14continuation_tILi0EEEEEEEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameISW_S1_E5valuesrSt10is_base_ofINS9_17any_executor_baseESW_E5valueENS9_22supportable_propertiesILm0EFvS8_SC_SG_SK_SN_SR_SU_EE15is_valid_targetISW_EESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE called 15 returned 100% blocks executed 100%
+       15:  110:  any_io_executor(OtherAnyExecutor e,
+        -:  111:      typename constraint<
+        -:  112:        conditional<
+        -:  113:          !is_same<OtherAnyExecutor, any_io_executor>::value
+        -:  114:            && is_base_of<execution::detail::any_executor_base,
+        -:  115:              OtherAnyExecutor>::value,
+        -:  116:          typename execution::detail::supportable_properties<
+        -:  117:            0, supportable_properties_type>::template
+        -:  118:              is_valid_target<OtherAnyExecutor>,
+        -:  119:          false_type
+        -:  120:        >::type::value
+        -:  121:      >::type = 0)
+       15:  122:    : base_type(BOOST_ASIO_MOVE_CAST(OtherAnyExecutor)(e))
+call    0 returned 100%
+        -:  123:  {
+       15:  124:  }
+------------------
+_ZN5boost4asio15any_io_executorC2INS0_9execution12any_executorIJNS3_12context_as_tIRNS0_17execution_contextEEENS3_6detail8blocking7never_tILi0EEENS3_11prefer_onlyINSA_10possibly_tILi0EEEEENSD_INS9_16outstanding_work9tracked_tILi0EEEEENSD_INSH_11untracked_tILi0EEEEENSD_INS9_12relationship6fork_tILi0EEEEENSD_INSO_14continuation_tILi0EEEEEEEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameISW_S1_E5valuesrSt10is_base_ofINS9_17any_executor_baseESW_E5valueENS9_22supportable_propertiesILm0EFvS8_SC_SG_SK_SN_SR_SU_EE15is_valid_targetISW_EESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE:
+function _ZN5boost4asio15any_io_executorC2INS0_9execution12any_executorIJNS3_12context_as_tIRNS0_17execution_contextEEENS3_6detail8blocking7never_tILi0EEENS3_11prefer_onlyINSA_10possibly_tILi0EEEEENSD_INS9_16outstanding_work9tracked_tILi0EEEEENSD_INSH_11untracked_tILi0EEEEENSD_INS9_12relationship6fork_tILi0EEEEENSD_INSO_14continuation_tILi0EEEEEEEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameISW_S1_E5valuesrSt10is_base_ofINS9_17any_executor_baseESW_E5valueENS9_22supportable_propertiesILm0EFvS8_SC_SG_SK_SN_SR_SU_EE15is_valid_targetISW_EESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  110:  any_io_executor(OtherAnyExecutor e,
+        -:  111:      typename constraint<
+        -:  112:        conditional<
+        -:  113:          !is_same<OtherAnyExecutor, any_io_executor>::value
+        -:  114:            && is_base_of<execution::detail::any_executor_base,
+        -:  115:              OtherAnyExecutor>::value,
+        -:  116:          typename execution::detail::supportable_properties<
+        -:  117:            0, supportable_properties_type>::template
+        -:  118:              is_valid_target<OtherAnyExecutor>,
+        -:  119:          false_type
+        -:  120:        >::type::value
+        -:  121:      >::type = 0)
+    #####:  122:    : base_type(BOOST_ASIO_MOVE_CAST(OtherAnyExecutor)(e))
+call    0 never executed
+        -:  123:  {
+    #####:  124:  }
+------------------
+_ZN5boost4asio15any_io_executorC2INS0_9execution12any_executorIJNS3_12context_as_tIRNS0_17execution_contextEEENS3_6detail8blocking7never_tILi0EEENS3_11prefer_onlyINSA_10possibly_tILi0EEEEENSD_INS9_16outstanding_work9tracked_tILi0EEEEENSD_INSH_11untracked_tILi0EEEEENSD_INS9_12relationship6fork_tILi0EEEEENSD_INSO_14continuation_tILi0EEEEEEEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameISW_S1_E5valuesrSt10is_base_ofINS9_17any_executor_baseESW_E5valueENS9_22supportable_propertiesILm0EFvS8_SC_SG_SK_SN_SR_SU_EE15is_valid_targetISW_EESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE:
+function _ZN5boost4asio15any_io_executorC2INS0_9execution12any_executorIJNS3_12context_as_tIRNS0_17execution_contextEEENS3_6detail8blocking7never_tILi0EEENS3_11prefer_onlyINSA_10possibly_tILi0EEEEENSD_INS9_16outstanding_work9tracked_tILi0EEEEENSD_INSH_11untracked_tILi0EEEEENSD_INS9_12relationship6fork_tILi0EEEEENSD_INSO_14continuation_tILi0EEEEEEEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameISW_S1_E5valuesrSt10is_base_ofINS9_17any_executor_baseESW_E5valueENS9_22supportable_propertiesILm0EFvS8_SC_SG_SK_SN_SR_SU_EE15is_valid_targetISW_EESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  110:  any_io_executor(OtherAnyExecutor e,
+        -:  111:      typename constraint<
+        -:  112:        conditional<
+        -:  113:          !is_same<OtherAnyExecutor, any_io_executor>::value
+        -:  114:            && is_base_of<execution::detail::any_executor_base,
+        -:  115:              OtherAnyExecutor>::value,
+        -:  116:          typename execution::detail::supportable_properties<
+        -:  117:            0, supportable_properties_type>::template
+        -:  118:              is_valid_target<OtherAnyExecutor>,
+        -:  119:          false_type
+        -:  120:        >::type::value
+        -:  121:      >::type = 0)
+    #####:  122:    : base_type(BOOST_ASIO_MOVE_CAST(OtherAnyExecutor)(e))
+call    0 never executed
+        -:  123:  {
+    #####:  124:  }
+------------------
+_ZN5boost4asio15any_io_executorC2INS0_9execution12any_executorIJNS3_12context_as_tIRNS0_17execution_contextEEENS3_6detail8blocking7never_tILi0EEENS3_11prefer_onlyINSA_10possibly_tILi0EEEEENSD_INS9_16outstanding_work9tracked_tILi0EEEEENSD_INSH_11untracked_tILi0EEEEENSD_INS9_12relationship6fork_tILi0EEEEENSD_INSO_14continuation_tILi0EEEEEEEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameISW_S1_E5valuesrSt10is_base_ofINS9_17any_executor_baseESW_E5valueENS9_22supportable_propertiesILm0EFvS8_SC_SG_SK_SN_SR_SU_EE15is_valid_targetISW_EESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE:
+function _ZN5boost4asio15any_io_executorC2INS0_9execution12any_executorIJNS3_12context_as_tIRNS0_17execution_contextEEENS3_6detail8blocking7never_tILi0EEENS3_11prefer_onlyINSA_10possibly_tILi0EEEEENSD_INS9_16outstanding_work9tracked_tILi0EEEEENSD_INSH_11untracked_tILi0EEEEENSD_INS9_12relationship6fork_tILi0EEEEENSD_INSO_14continuation_tILi0EEEEEEEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameISW_S1_E5valuesrSt10is_base_ofINS9_17any_executor_baseESW_E5valueENS9_22supportable_propertiesILm0EFvS8_SC_SG_SK_SN_SR_SU_EE15is_valid_targetISW_EESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE called 42 returned 100% blocks executed 100%
+       42:  110:  any_io_executor(OtherAnyExecutor e,
+        -:  111:      typename constraint<
+        -:  112:        conditional<
+        -:  113:          !is_same<OtherAnyExecutor, any_io_executor>::value
+        -:  114:            && is_base_of<execution::detail::any_executor_base,
+        -:  115:              OtherAnyExecutor>::value,
+        -:  116:          typename execution::detail::supportable_properties<
+        -:  117:            0, supportable_properties_type>::template
+        -:  118:              is_valid_target<OtherAnyExecutor>,
+        -:  119:          false_type
+        -:  120:        >::type::value
+        -:  121:      >::type = 0)
+       42:  122:    : base_type(BOOST_ASIO_MOVE_CAST(OtherAnyExecutor)(e))
+call    0 returned 100%
+        -:  123:  {
+       42:  124:  }
+------------------
+_ZN5boost4asio15any_io_executorC2INS0_9execution12any_executorIJNS3_12context_as_tIRNS0_17execution_contextEEENS3_6detail8blocking7never_tILi0EEENS3_11prefer_onlyINSA_10possibly_tILi0EEEEENSD_INS9_16outstanding_work9tracked_tILi0EEEEENSD_INSH_11untracked_tILi0EEEEENSD_INS9_12relationship6fork_tILi0EEEEENSD_INSO_14continuation_tILi0EEEEEEEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameISW_S1_E5valuesrSt10is_base_ofINS9_17any_executor_baseESW_E5valueENS9_22supportable_propertiesILm0EFvS8_SC_SG_SK_SN_SR_SU_EE15is_valid_targetISW_EESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE:
+function _ZN5boost4asio15any_io_executorC2INS0_9execution12any_executorIJNS3_12context_as_tIRNS0_17execution_contextEEENS3_6detail8blocking7never_tILi0EEENS3_11prefer_onlyINSA_10possibly_tILi0EEEEENSD_INS9_16outstanding_work9tracked_tILi0EEEEENSD_INSH_11untracked_tILi0EEEEENSD_INS9_12relationship6fork_tILi0EEEEENSD_INSO_14continuation_tILi0EEEEEEEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameISW_S1_E5valuesrSt10is_base_ofINS9_17any_executor_baseESW_E5valueENS9_22supportable_propertiesILm0EFvS8_SC_SG_SK_SN_SR_SU_EE15is_valid_targetISW_EESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE called 48 returned 100% blocks executed 100%
+       48:  110:  any_io_executor(OtherAnyExecutor e,
+        -:  111:      typename constraint<
+        -:  112:        conditional<
+        -:  113:          !is_same<OtherAnyExecutor, any_io_executor>::value
+        -:  114:            && is_base_of<execution::detail::any_executor_base,
+        -:  115:              OtherAnyExecutor>::value,
+        -:  116:          typename execution::detail::supportable_properties<
+        -:  117:            0, supportable_properties_type>::template
+        -:  118:              is_valid_target<OtherAnyExecutor>,
+        -:  119:          false_type
+        -:  120:        >::type::value
+        -:  121:      >::type = 0)
+       48:  122:    : base_type(BOOST_ASIO_MOVE_CAST(OtherAnyExecutor)(e))
+call    0 returned 100%
+        -:  123:  {
+       48:  124:  }
+------------------
+_ZN5boost4asio15any_io_executorC2INS0_9execution12any_executorIJNS3_12context_as_tIRNS0_17execution_contextEEENS3_6detail8blocking7never_tILi0EEENS3_11prefer_onlyINSA_10possibly_tILi0EEEEENSD_INS9_16outstanding_work9tracked_tILi0EEEEENSD_INSH_11untracked_tILi0EEEEENSD_INS9_12relationship6fork_tILi0EEEEENSD_INSO_14continuation_tILi0EEEEEEEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameISW_S1_E5valuesrSt10is_base_ofINS9_17any_executor_baseESW_E5valueENS9_22supportable_propertiesILm0EFvS8_SC_SG_SK_SN_SR_SU_EE15is_valid_targetISW_EESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE:
+function _ZN5boost4asio15any_io_executorC2INS0_9execution12any_executorIJNS3_12context_as_tIRNS0_17execution_contextEEENS3_6detail8blocking7never_tILi0EEENS3_11prefer_onlyINSA_10possibly_tILi0EEEEENSD_INS9_16outstanding_work9tracked_tILi0EEEEENSD_INSH_11untracked_tILi0EEEEENSD_INS9_12relationship6fork_tILi0EEEEENSD_INSO_14continuation_tILi0EEEEEEEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameISW_S1_E5valuesrSt10is_base_ofINS9_17any_executor_baseESW_E5valueENS9_22supportable_propertiesILm0EFvS8_SC_SG_SK_SN_SR_SU_EE15is_valid_targetISW_EESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE called 15 returned 100% blocks executed 100%
+       15:  110:  any_io_executor(OtherAnyExecutor e,
+        -:  111:      typename constraint<
+        -:  112:        conditional<
+        -:  113:          !is_same<OtherAnyExecutor, any_io_executor>::value
+        -:  114:            && is_base_of<execution::detail::any_executor_base,
+        -:  115:              OtherAnyExecutor>::value,
+        -:  116:          typename execution::detail::supportable_properties<
+        -:  117:            0, supportable_properties_type>::template
+        -:  118:              is_valid_target<OtherAnyExecutor>,
+        -:  119:          false_type
+        -:  120:        >::type::value
+        -:  121:      >::type = 0)
+       15:  122:    : base_type(BOOST_ASIO_MOVE_CAST(OtherAnyExecutor)(e))
+call    0 returned 100%
+        -:  123:  {
+       15:  124:  }
+------------------
+_ZN5boost4asio15any_io_executorC2INS0_9execution12any_executorIJNS3_12context_as_tIRNS0_17execution_contextEEENS3_6detail8blocking7never_tILi0EEENS3_11prefer_onlyINSA_10possibly_tILi0EEEEENSD_INS9_16outstanding_work9tracked_tILi0EEEEENSD_INSH_11untracked_tILi0EEEEENSD_INS9_12relationship6fork_tILi0EEEEENSD_INSO_14continuation_tILi0EEEEEEEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameISW_S1_E5valuesrSt10is_base_ofINS9_17any_executor_baseESW_E5valueENS9_22supportable_propertiesILm0EFvS8_SC_SG_SK_SN_SR_SU_EE15is_valid_targetISW_EESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE:
+function _ZN5boost4asio15any_io_executorC2INS0_9execution12any_executorIJNS3_12context_as_tIRNS0_17execution_contextEEENS3_6detail8blocking7never_tILi0EEENS3_11prefer_onlyINSA_10possibly_tILi0EEEEENSD_INS9_16outstanding_work9tracked_tILi0EEEEENSD_INSH_11untracked_tILi0EEEEENSD_INS9_12relationship6fork_tILi0EEEEENSD_INSO_14continuation_tILi0EEEEEEEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameISW_S1_E5valuesrSt10is_base_ofINS9_17any_executor_baseESW_E5valueENS9_22supportable_propertiesILm0EFvS8_SC_SG_SK_SN_SR_SU_EE15is_valid_targetISW_EESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  110:  any_io_executor(OtherAnyExecutor e,
+        -:  111:      typename constraint<
+        -:  112:        conditional<
+        -:  113:          !is_same<OtherAnyExecutor, any_io_executor>::value
+        -:  114:            && is_base_of<execution::detail::any_executor_base,
+        -:  115:              OtherAnyExecutor>::value,
+        -:  116:          typename execution::detail::supportable_properties<
+        -:  117:            0, supportable_properties_type>::template
+        -:  118:              is_valid_target<OtherAnyExecutor>,
+        -:  119:          false_type
+        -:  120:        >::type::value
+        -:  121:      >::type = 0)
+    #####:  122:    : base_type(BOOST_ASIO_MOVE_CAST(OtherAnyExecutor)(e))
+call    0 never executed
+        -:  123:  {
+    #####:  124:  }
+------------------
+_ZN5boost4asio15any_io_executorC2INS0_9execution12any_executorIJNS3_12context_as_tIRNS0_17execution_contextEEENS3_6detail8blocking7never_tILi0EEENS3_11prefer_onlyINSA_10possibly_tILi0EEEEENSD_INS9_16outstanding_work9tracked_tILi0EEEEENSD_INSH_11untracked_tILi0EEEEENSD_INS9_12relationship6fork_tILi0EEEEENSD_INSO_14continuation_tILi0EEEEEEEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameISW_S1_E5valuesrSt10is_base_ofINS9_17any_executor_baseESW_E5valueENS9_22supportable_propertiesILm0EFvS8_SC_SG_SK_SN_SR_SU_EE15is_valid_targetISW_EESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE:
+function _ZN5boost4asio15any_io_executorC2INS0_9execution12any_executorIJNS3_12context_as_tIRNS0_17execution_contextEEENS3_6detail8blocking7never_tILi0EEENS3_11prefer_onlyINSA_10possibly_tILi0EEEEENSD_INS9_16outstanding_work9tracked_tILi0EEEEENSD_INSH_11untracked_tILi0EEEEENSD_INS9_12relationship6fork_tILi0EEEEENSD_INSO_14continuation_tILi0EEEEEEEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameISW_S1_E5valuesrSt10is_base_ofINS9_17any_executor_baseESW_E5valueENS9_22supportable_propertiesILm0EFvS8_SC_SG_SK_SN_SR_SU_EE15is_valid_targetISW_EESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE called 36 returned 100% blocks executed 100%
+       36:  110:  any_io_executor(OtherAnyExecutor e,
+        -:  111:      typename constraint<
+        -:  112:        conditional<
+        -:  113:          !is_same<OtherAnyExecutor, any_io_executor>::value
+        -:  114:            && is_base_of<execution::detail::any_executor_base,
+        -:  115:              OtherAnyExecutor>::value,
+        -:  116:          typename execution::detail::supportable_properties<
+        -:  117:            0, supportable_properties_type>::template
+        -:  118:              is_valid_target<OtherAnyExecutor>,
+        -:  119:          false_type
+        -:  120:        >::type::value
+        -:  121:      >::type = 0)
+       36:  122:    : base_type(BOOST_ASIO_MOVE_CAST(OtherAnyExecutor)(e))
+call    0 returned 100%
+        -:  123:  {
+       36:  124:  }
+------------------
+_ZN5boost4asio15any_io_executorC2INS0_9execution12any_executorIJNS3_12context_as_tIRNS0_17execution_contextEEENS3_6detail8blocking7never_tILi0EEENS3_11prefer_onlyINSA_10possibly_tILi0EEEEENSD_INS9_16outstanding_work9tracked_tILi0EEEEENSD_INSH_11untracked_tILi0EEEEENSD_INS9_12relationship6fork_tILi0EEEEENSD_INSO_14continuation_tILi0EEEEEEEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameISW_S1_E5valuesrSt10is_base_ofINS9_17any_executor_baseESW_E5valueENS9_22supportable_propertiesILm0EFvS8_SC_SG_SK_SN_SR_SU_EE15is_valid_targetISW_EESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE:
+function _ZN5boost4asio15any_io_executorC2INS0_9execution12any_executorIJNS3_12context_as_tIRNS0_17execution_contextEEENS3_6detail8blocking7never_tILi0EEENS3_11prefer_onlyINSA_10possibly_tILi0EEEEENSD_INS9_16outstanding_work9tracked_tILi0EEEEENSD_INSH_11untracked_tILi0EEEEENSD_INS9_12relationship6fork_tILi0EEEEENSD_INSO_14continuation_tILi0EEEEEEEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameISW_S1_E5valuesrSt10is_base_ofINS9_17any_executor_baseESW_E5valueENS9_22supportable_propertiesILm0EFvS8_SC_SG_SK_SN_SR_SU_EE15is_valid_targetISW_EESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE called 78 returned 100% blocks executed 100%
+       78:  110:  any_io_executor(OtherAnyExecutor e,
+        -:  111:      typename constraint<
+        -:  112:        conditional<
+        -:  113:          !is_same<OtherAnyExecutor, any_io_executor>::value
+        -:  114:            && is_base_of<execution::detail::any_executor_base,
+        -:  115:              OtherAnyExecutor>::value,
+        -:  116:          typename execution::detail::supportable_properties<
+        -:  117:            0, supportable_properties_type>::template
+        -:  118:              is_valid_target<OtherAnyExecutor>,
+        -:  119:          false_type
+        -:  120:        >::type::value
+        -:  121:      >::type = 0)
+       78:  122:    : base_type(BOOST_ASIO_MOVE_CAST(OtherAnyExecutor)(e))
+call    0 returned 100%
+        -:  123:  {
+       78:  124:  }
+------------------
+_ZN5boost4asio15any_io_executorC2INS0_9execution12any_executorIJNS3_12context_as_tIRNS0_17execution_contextEEENS3_6detail8blocking7never_tILi0EEENS3_11prefer_onlyINSA_10possibly_tILi0EEEEENSD_INS9_16outstanding_work9tracked_tILi0EEEEENSD_INSH_11untracked_tILi0EEEEENSD_INS9_12relationship6fork_tILi0EEEEENSD_INSO_14continuation_tILi0EEEEEEEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameISW_S1_E5valuesrSt10is_base_ofINS9_17any_executor_baseESW_E5valueENS9_22supportable_propertiesILm0EFvS8_SC_SG_SK_SN_SR_SU_EE15is_valid_targetISW_EESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE:
+function _ZN5boost4asio15any_io_executorC2INS0_9execution12any_executorIJNS3_12context_as_tIRNS0_17execution_contextEEENS3_6detail8blocking7never_tILi0EEENS3_11prefer_onlyINSA_10possibly_tILi0EEEEENSD_INS9_16outstanding_work9tracked_tILi0EEEEENSD_INSH_11untracked_tILi0EEEEENSD_INS9_12relationship6fork_tILi0EEEEENSD_INSO_14continuation_tILi0EEEEEEEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameISW_S1_E5valuesrSt10is_base_ofINS9_17any_executor_baseESW_E5valueENS9_22supportable_propertiesILm0EFvS8_SC_SG_SK_SN_SR_SU_EE15is_valid_targetISW_EESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  110:  any_io_executor(OtherAnyExecutor e,
+        -:  111:      typename constraint<
+        -:  112:        conditional<
+        -:  113:          !is_same<OtherAnyExecutor, any_io_executor>::value
+        -:  114:            && is_base_of<execution::detail::any_executor_base,
+        -:  115:              OtherAnyExecutor>::value,
+        -:  116:          typename execution::detail::supportable_properties<
+        -:  117:            0, supportable_properties_type>::template
+        -:  118:              is_valid_target<OtherAnyExecutor>,
+        -:  119:          false_type
+        -:  120:        >::type::value
+        -:  121:      >::type = 0)
+    #####:  122:    : base_type(BOOST_ASIO_MOVE_CAST(OtherAnyExecutor)(e))
+call    0 never executed
+        -:  123:  {
+    #####:  124:  }
+------------------
+_ZN5boost4asio15any_io_executorC2INS0_9execution12any_executorIJNS3_12context_as_tIRNS0_17execution_contextEEENS3_6detail8blocking7never_tILi0EEENS3_11prefer_onlyINSA_10possibly_tILi0EEEEENSD_INS9_16outstanding_work9tracked_tILi0EEEEENSD_INSH_11untracked_tILi0EEEEENSD_INS9_12relationship6fork_tILi0EEEEENSD_INSO_14continuation_tILi0EEEEEEEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameISW_S1_E5valuesrSt10is_base_ofINS9_17any_executor_baseESW_E5valueENS9_22supportable_propertiesILm0EFvS8_SC_SG_SK_SN_SR_SU_EE15is_valid_targetISW_EESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE:
+function _ZN5boost4asio15any_io_executorC2INS0_9execution12any_executorIJNS3_12context_as_tIRNS0_17execution_contextEEENS3_6detail8blocking7never_tILi0EEENS3_11prefer_onlyINSA_10possibly_tILi0EEEEENSD_INS9_16outstanding_work9tracked_tILi0EEEEENSD_INSH_11untracked_tILi0EEEEENSD_INS9_12relationship6fork_tILi0EEEEENSD_INSO_14continuation_tILi0EEEEEEEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameISW_S1_E5valuesrSt10is_base_ofINS9_17any_executor_baseESW_E5valueENS9_22supportable_propertiesILm0EFvS8_SC_SG_SK_SN_SR_SU_EE15is_valid_targetISW_EESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  110:  any_io_executor(OtherAnyExecutor e,
+        -:  111:      typename constraint<
+        -:  112:        conditional<
+        -:  113:          !is_same<OtherAnyExecutor, any_io_executor>::value
+        -:  114:            && is_base_of<execution::detail::any_executor_base,
+        -:  115:              OtherAnyExecutor>::value,
+        -:  116:          typename execution::detail::supportable_properties<
+        -:  117:            0, supportable_properties_type>::template
+        -:  118:              is_valid_target<OtherAnyExecutor>,
+        -:  119:          false_type
+        -:  120:        >::type::value
+        -:  121:      >::type = 0)
+    #####:  122:    : base_type(BOOST_ASIO_MOVE_CAST(OtherAnyExecutor)(e))
+call    0 never executed
+        -:  123:  {
+    #####:  124:  }
+------------------
+_ZN5boost4asio15any_io_executorC2INS0_9execution12any_executorIJNS3_12context_as_tIRNS0_17execution_contextEEENS3_6detail8blocking7never_tILi0EEENS3_11prefer_onlyINSA_10possibly_tILi0EEEEENSD_INS9_16outstanding_work9tracked_tILi0EEEEENSD_INSH_11untracked_tILi0EEEEENSD_INS9_12relationship6fork_tILi0EEEEENSD_INSO_14continuation_tILi0EEEEEEEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameISW_S1_E5valuesrSt10is_base_ofINS9_17any_executor_baseESW_E5valueENS9_22supportable_propertiesILm0EFvS8_SC_SG_SK_SN_SR_SU_EE15is_valid_targetISW_EESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE:
+function _ZN5boost4asio15any_io_executorC2INS0_9execution12any_executorIJNS3_12context_as_tIRNS0_17execution_contextEEENS3_6detail8blocking7never_tILi0EEENS3_11prefer_onlyINSA_10possibly_tILi0EEEEENSD_INS9_16outstanding_work9tracked_tILi0EEEEENSD_INSH_11untracked_tILi0EEEEENSD_INS9_12relationship6fork_tILi0EEEEENSD_INSO_14continuation_tILi0EEEEEEEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameISW_S1_E5valuesrSt10is_base_ofINS9_17any_executor_baseESW_E5valueENS9_22supportable_propertiesILm0EFvS8_SC_SG_SK_SN_SR_SU_EE15is_valid_targetISW_EESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  110:  any_io_executor(OtherAnyExecutor e,
+        -:  111:      typename constraint<
+        -:  112:        conditional<
+        -:  113:          !is_same<OtherAnyExecutor, any_io_executor>::value
+        -:  114:            && is_base_of<execution::detail::any_executor_base,
+        -:  115:              OtherAnyExecutor>::value,
+        -:  116:          typename execution::detail::supportable_properties<
+        -:  117:            0, supportable_properties_type>::template
+        -:  118:              is_valid_target<OtherAnyExecutor>,
+        -:  119:          false_type
+        -:  120:        >::type::value
+        -:  121:      >::type = 0)
+    #####:  122:    : base_type(BOOST_ASIO_MOVE_CAST(OtherAnyExecutor)(e))
+call    0 never executed
+        -:  123:  {
+    #####:  124:  }
+------------------
+_ZN5boost4asio15any_io_executorC2INS0_9execution12any_executorIJNS3_12context_as_tIRNS0_17execution_contextEEENS3_6detail8blocking7never_tILi0EEENS3_11prefer_onlyINSA_10possibly_tILi0EEEEENSD_INS9_16outstanding_work9tracked_tILi0EEEEENSD_INSH_11untracked_tILi0EEEEENSD_INS9_12relationship6fork_tILi0EEEEENSD_INSO_14continuation_tILi0EEEEEEEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameISW_S1_E5valuesrSt10is_base_ofINS9_17any_executor_baseESW_E5valueENS9_22supportable_propertiesILm0EFvS8_SC_SG_SK_SN_SR_SU_EE15is_valid_targetISW_EESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE:
+function _ZN5boost4asio15any_io_executorC2INS0_9execution12any_executorIJNS3_12context_as_tIRNS0_17execution_contextEEENS3_6detail8blocking7never_tILi0EEENS3_11prefer_onlyINSA_10possibly_tILi0EEEEENSD_INS9_16outstanding_work9tracked_tILi0EEEEENSD_INSH_11untracked_tILi0EEEEENSD_INS9_12relationship6fork_tILi0EEEEENSD_INSO_14continuation_tILi0EEEEEEEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameISW_S1_E5valuesrSt10is_base_ofINS9_17any_executor_baseESW_E5valueENS9_22supportable_propertiesILm0EFvS8_SC_SG_SK_SN_SR_SU_EE15is_valid_targetISW_EESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  110:  any_io_executor(OtherAnyExecutor e,
+        -:  111:      typename constraint<
+        -:  112:        conditional<
+        -:  113:          !is_same<OtherAnyExecutor, any_io_executor>::value
+        -:  114:            && is_base_of<execution::detail::any_executor_base,
+        -:  115:              OtherAnyExecutor>::value,
+        -:  116:          typename execution::detail::supportable_properties<
+        -:  117:            0, supportable_properties_type>::template
+        -:  118:              is_valid_target<OtherAnyExecutor>,
+        -:  119:          false_type
+        -:  120:        >::type::value
+        -:  121:      >::type = 0)
+    #####:  122:    : base_type(BOOST_ASIO_MOVE_CAST(OtherAnyExecutor)(e))
+call    0 never executed
+        -:  123:  {
+    #####:  124:  }
+------------------
+_ZN5boost4asio15any_io_executorC2INS0_9execution12any_executorIJNS3_12context_as_tIRNS0_17execution_contextEEENS3_6detail8blocking7never_tILi0EEENS3_11prefer_onlyINSA_10possibly_tILi0EEEEENSD_INS9_16outstanding_work9tracked_tILi0EEEEENSD_INSH_11untracked_tILi0EEEEENSD_INS9_12relationship6fork_tILi0EEEEENSD_INSO_14continuation_tILi0EEEEEEEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameISW_S1_E5valuesrSt10is_base_ofINS9_17any_executor_baseESW_E5valueENS9_22supportable_propertiesILm0EFvS8_SC_SG_SK_SN_SR_SU_EE15is_valid_targetISW_EESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE:
+function _ZN5boost4asio15any_io_executorC2INS0_9execution12any_executorIJNS3_12context_as_tIRNS0_17execution_contextEEENS3_6detail8blocking7never_tILi0EEENS3_11prefer_onlyINSA_10possibly_tILi0EEEEENSD_INS9_16outstanding_work9tracked_tILi0EEEEENSD_INSH_11untracked_tILi0EEEEENSD_INS9_12relationship6fork_tILi0EEEEENSD_INSO_14continuation_tILi0EEEEEEEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameISW_S1_E5valuesrSt10is_base_ofINS9_17any_executor_baseESW_E5valueENS9_22supportable_propertiesILm0EFvS8_SC_SG_SK_SN_SR_SU_EE15is_valid_targetISW_EESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  110:  any_io_executor(OtherAnyExecutor e,
+        -:  111:      typename constraint<
+        -:  112:        conditional<
+        -:  113:          !is_same<OtherAnyExecutor, any_io_executor>::value
+        -:  114:            && is_base_of<execution::detail::any_executor_base,
+        -:  115:              OtherAnyExecutor>::value,
+        -:  116:          typename execution::detail::supportable_properties<
+        -:  117:            0, supportable_properties_type>::template
+        -:  118:              is_valid_target<OtherAnyExecutor>,
+        -:  119:          false_type
+        -:  120:        >::type::value
+        -:  121:      >::type = 0)
+    #####:  122:    : base_type(BOOST_ASIO_MOVE_CAST(OtherAnyExecutor)(e))
+call    0 never executed
+        -:  123:  {
+    #####:  124:  }
+------------------
+_ZN5boost4asio15any_io_executorC2INS0_9execution12any_executorIJNS3_12context_as_tIRNS0_17execution_contextEEENS3_6detail8blocking7never_tILi0EEENS3_11prefer_onlyINSA_10possibly_tILi0EEEEENSD_INS9_16outstanding_work9tracked_tILi0EEEEENSD_INSH_11untracked_tILi0EEEEENSD_INS9_12relationship6fork_tILi0EEEEENSD_INSO_14continuation_tILi0EEEEEEEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameISW_S1_E5valuesrSt10is_base_ofINS9_17any_executor_baseESW_E5valueENS9_22supportable_propertiesILm0EFvS8_SC_SG_SK_SN_SR_SU_EE15is_valid_targetISW_EESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE:
+function _ZN5boost4asio15any_io_executorC2INS0_9execution12any_executorIJNS3_12context_as_tIRNS0_17execution_contextEEENS3_6detail8blocking7never_tILi0EEENS3_11prefer_onlyINSA_10possibly_tILi0EEEEENSD_INS9_16outstanding_work9tracked_tILi0EEEEENSD_INSH_11untracked_tILi0EEEEENSD_INS9_12relationship6fork_tILi0EEEEENSD_INSO_14continuation_tILi0EEEEEEEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameISW_S1_E5valuesrSt10is_base_ofINS9_17any_executor_baseESW_E5valueENS9_22supportable_propertiesILm0EFvS8_SC_SG_SK_SN_SR_SU_EE15is_valid_targetISW_EESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  110:  any_io_executor(OtherAnyExecutor e,
+        -:  111:      typename constraint<
+        -:  112:        conditional<
+        -:  113:          !is_same<OtherAnyExecutor, any_io_executor>::value
+        -:  114:            && is_base_of<execution::detail::any_executor_base,
+        -:  115:              OtherAnyExecutor>::value,
+        -:  116:          typename execution::detail::supportable_properties<
+        -:  117:            0, supportable_properties_type>::template
+        -:  118:              is_valid_target<OtherAnyExecutor>,
+        -:  119:          false_type
+        -:  120:        >::type::value
+        -:  121:      >::type = 0)
+    #####:  122:    : base_type(BOOST_ASIO_MOVE_CAST(OtherAnyExecutor)(e))
+call    0 never executed
+        -:  123:  {
+    #####:  124:  }
+------------------
+_ZN5boost4asio15any_io_executorC2INS0_9execution12any_executorIJNS3_12context_as_tIRNS0_17execution_contextEEENS3_6detail8blocking7never_tILi0EEENS3_11prefer_onlyINSA_10possibly_tILi0EEEEENSD_INS9_16outstanding_work9tracked_tILi0EEEEENSD_INSH_11untracked_tILi0EEEEENSD_INS9_12relationship6fork_tILi0EEEEENSD_INSO_14continuation_tILi0EEEEEEEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameISW_S1_E5valuesrSt10is_base_ofINS9_17any_executor_baseESW_E5valueENS9_22supportable_propertiesILm0EFvS8_SC_SG_SK_SN_SR_SU_EE15is_valid_targetISW_EESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE:
+function _ZN5boost4asio15any_io_executorC2INS0_9execution12any_executorIJNS3_12context_as_tIRNS0_17execution_contextEEENS3_6detail8blocking7never_tILi0EEENS3_11prefer_onlyINSA_10possibly_tILi0EEEEENSD_INS9_16outstanding_work9tracked_tILi0EEEEENSD_INSH_11untracked_tILi0EEEEENSD_INS9_12relationship6fork_tILi0EEEEENSD_INSO_14continuation_tILi0EEEEEEEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameISW_S1_E5valuesrSt10is_base_ofINS9_17any_executor_baseESW_E5valueENS9_22supportable_propertiesILm0EFvS8_SC_SG_SK_SN_SR_SU_EE15is_valid_targetISW_EESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  110:  any_io_executor(OtherAnyExecutor e,
+        -:  111:      typename constraint<
+        -:  112:        conditional<
+        -:  113:          !is_same<OtherAnyExecutor, any_io_executor>::value
+        -:  114:            && is_base_of<execution::detail::any_executor_base,
+        -:  115:              OtherAnyExecutor>::value,
+        -:  116:          typename execution::detail::supportable_properties<
+        -:  117:            0, supportable_properties_type>::template
+        -:  118:              is_valid_target<OtherAnyExecutor>,
+        -:  119:          false_type
+        -:  120:        >::type::value
+        -:  121:      >::type = 0)
+    #####:  122:    : base_type(BOOST_ASIO_MOVE_CAST(OtherAnyExecutor)(e))
+call    0 never executed
+        -:  123:  {
+    #####:  124:  }
+------------------
+_ZN5boost4asio15any_io_executorC2INS0_9execution12any_executorIJNS3_12context_as_tIRNS0_17execution_contextEEENS3_6detail8blocking7never_tILi0EEENS3_11prefer_onlyINSA_10possibly_tILi0EEEEENSD_INS9_16outstanding_work9tracked_tILi0EEEEENSD_INSH_11untracked_tILi0EEEEENSD_INS9_12relationship6fork_tILi0EEEEENSD_INSO_14continuation_tILi0EEEEEEEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameISW_S1_E5valuesrSt10is_base_ofINS9_17any_executor_baseESW_E5valueENS9_22supportable_propertiesILm0EFvS8_SC_SG_SK_SN_SR_SU_EE15is_valid_targetISW_EESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE:
+function _ZN5boost4asio15any_io_executorC2INS0_9execution12any_executorIJNS3_12context_as_tIRNS0_17execution_contextEEENS3_6detail8blocking7never_tILi0EEENS3_11prefer_onlyINSA_10possibly_tILi0EEEEENSD_INS9_16outstanding_work9tracked_tILi0EEEEENSD_INSH_11untracked_tILi0EEEEENSD_INS9_12relationship6fork_tILi0EEEEENSD_INSO_14continuation_tILi0EEEEEEEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameISW_S1_E5valuesrSt10is_base_ofINS9_17any_executor_baseESW_E5valueENS9_22supportable_propertiesILm0EFvS8_SC_SG_SK_SN_SR_SU_EE15is_valid_targetISW_EESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  110:  any_io_executor(OtherAnyExecutor e,
+        -:  111:      typename constraint<
+        -:  112:        conditional<
+        -:  113:          !is_same<OtherAnyExecutor, any_io_executor>::value
+        -:  114:            && is_base_of<execution::detail::any_executor_base,
+        -:  115:              OtherAnyExecutor>::value,
+        -:  116:          typename execution::detail::supportable_properties<
+        -:  117:            0, supportable_properties_type>::template
+        -:  118:              is_valid_target<OtherAnyExecutor>,
+        -:  119:          false_type
+        -:  120:        >::type::value
+        -:  121:      >::type = 0)
+    #####:  122:    : base_type(BOOST_ASIO_MOVE_CAST(OtherAnyExecutor)(e))
+call    0 never executed
+        -:  123:  {
+    #####:  124:  }
+------------------
+_ZN5boost4asio15any_io_executorC2INS0_9execution12any_executorIJNS3_12context_as_tIRNS0_17execution_contextEEENS3_6detail8blocking7never_tILi0EEENS3_11prefer_onlyINSA_10possibly_tILi0EEEEENSD_INS9_16outstanding_work9tracked_tILi0EEEEENSD_INSH_11untracked_tILi0EEEEENSD_INS9_12relationship6fork_tILi0EEEEENSD_INSO_14continuation_tILi0EEEEEEEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameISW_S1_E5valuesrSt10is_base_ofINS9_17any_executor_baseESW_E5valueENS9_22supportable_propertiesILm0EFvS8_SC_SG_SK_SN_SR_SU_EE15is_valid_targetISW_EESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE:
+function _ZN5boost4asio15any_io_executorC2INS0_9execution12any_executorIJNS3_12context_as_tIRNS0_17execution_contextEEENS3_6detail8blocking7never_tILi0EEENS3_11prefer_onlyINSA_10possibly_tILi0EEEEENSD_INS9_16outstanding_work9tracked_tILi0EEEEENSD_INSH_11untracked_tILi0EEEEENSD_INS9_12relationship6fork_tILi0EEEEENSD_INSO_14continuation_tILi0EEEEEEEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameISW_S1_E5valuesrSt10is_base_ofINS9_17any_executor_baseESW_E5valueENS9_22supportable_propertiesILm0EFvS8_SC_SG_SK_SN_SR_SU_EE15is_valid_targetISW_EESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  110:  any_io_executor(OtherAnyExecutor e,
+        -:  111:      typename constraint<
+        -:  112:        conditional<
+        -:  113:          !is_same<OtherAnyExecutor, any_io_executor>::value
+        -:  114:            && is_base_of<execution::detail::any_executor_base,
+        -:  115:              OtherAnyExecutor>::value,
+        -:  116:          typename execution::detail::supportable_properties<
+        -:  117:            0, supportable_properties_type>::template
+        -:  118:              is_valid_target<OtherAnyExecutor>,
+        -:  119:          false_type
+        -:  120:        >::type::value
+        -:  121:      >::type = 0)
+    #####:  122:    : base_type(BOOST_ASIO_MOVE_CAST(OtherAnyExecutor)(e))
+call    0 never executed
+        -:  123:  {
+    #####:  124:  }
+------------------
+_ZN5boost4asio15any_io_executorC2INS0_9execution12any_executorIJNS3_12context_as_tIRNS0_17execution_contextEEENS3_6detail8blocking7never_tILi0EEENS3_11prefer_onlyINSA_10possibly_tILi0EEEEENSD_INS9_16outstanding_work9tracked_tILi0EEEEENSD_INSH_11untracked_tILi0EEEEENSD_INS9_12relationship6fork_tILi0EEEEENSD_INSO_14continuation_tILi0EEEEEEEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameISW_S1_E5valuesrSt10is_base_ofINS9_17any_executor_baseESW_E5valueENS9_22supportable_propertiesILm0EFvS8_SC_SG_SK_SN_SR_SU_EE15is_valid_targetISW_EESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE:
+function _ZN5boost4asio15any_io_executorC2INS0_9execution12any_executorIJNS3_12context_as_tIRNS0_17execution_contextEEENS3_6detail8blocking7never_tILi0EEENS3_11prefer_onlyINSA_10possibly_tILi0EEEEENSD_INS9_16outstanding_work9tracked_tILi0EEEEENSD_INSH_11untracked_tILi0EEEEENSD_INS9_12relationship6fork_tILi0EEEEENSD_INSO_14continuation_tILi0EEEEEEEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameISW_S1_E5valuesrSt10is_base_ofINS9_17any_executor_baseESW_E5valueENS9_22supportable_propertiesILm0EFvS8_SC_SG_SK_SN_SR_SU_EE15is_valid_targetISW_EESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  110:  any_io_executor(OtherAnyExecutor e,
+        -:  111:      typename constraint<
+        -:  112:        conditional<
+        -:  113:          !is_same<OtherAnyExecutor, any_io_executor>::value
+        -:  114:            && is_base_of<execution::detail::any_executor_base,
+        -:  115:              OtherAnyExecutor>::value,
+        -:  116:          typename execution::detail::supportable_properties<
+        -:  117:            0, supportable_properties_type>::template
+        -:  118:              is_valid_target<OtherAnyExecutor>,
+        -:  119:          false_type
+        -:  120:        >::type::value
+        -:  121:      >::type = 0)
+    #####:  122:    : base_type(BOOST_ASIO_MOVE_CAST(OtherAnyExecutor)(e))
+call    0 never executed
+        -:  123:  {
+    #####:  124:  }
+------------------
+_ZN5boost4asio15any_io_executorC2INS0_9execution12any_executorIJNS3_12context_as_tIRNS0_17execution_contextEEENS3_6detail8blocking7never_tILi0EEENS3_11prefer_onlyINSA_10possibly_tILi0EEEEENSD_INS9_16outstanding_work9tracked_tILi0EEEEENSD_INSH_11untracked_tILi0EEEEENSD_INS9_12relationship6fork_tILi0EEEEENSD_INSO_14continuation_tILi0EEEEEEEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameISW_S1_E5valuesrSt10is_base_ofINS9_17any_executor_baseESW_E5valueENS9_22supportable_propertiesILm0EFvS8_SC_SG_SK_SN_SR_SU_EE15is_valid_targetISW_EESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE:
+function _ZN5boost4asio15any_io_executorC2INS0_9execution12any_executorIJNS3_12context_as_tIRNS0_17execution_contextEEENS3_6detail8blocking7never_tILi0EEENS3_11prefer_onlyINSA_10possibly_tILi0EEEEENSD_INS9_16outstanding_work9tracked_tILi0EEEEENSD_INSH_11untracked_tILi0EEEEENSD_INS9_12relationship6fork_tILi0EEEEENSD_INSO_14continuation_tILi0EEEEEEEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameISW_S1_E5valuesrSt10is_base_ofINS9_17any_executor_baseESW_E5valueENS9_22supportable_propertiesILm0EFvS8_SC_SG_SK_SN_SR_SU_EE15is_valid_targetISW_EESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  110:  any_io_executor(OtherAnyExecutor e,
+        -:  111:      typename constraint<
+        -:  112:        conditional<
+        -:  113:          !is_same<OtherAnyExecutor, any_io_executor>::value
+        -:  114:            && is_base_of<execution::detail::any_executor_base,
+        -:  115:              OtherAnyExecutor>::value,
+        -:  116:          typename execution::detail::supportable_properties<
+        -:  117:            0, supportable_properties_type>::template
+        -:  118:              is_valid_target<OtherAnyExecutor>,
+        -:  119:          false_type
+        -:  120:        >::type::value
+        -:  121:      >::type = 0)
+    #####:  122:    : base_type(BOOST_ASIO_MOVE_CAST(OtherAnyExecutor)(e))
+call    0 never executed
+        -:  123:  {
+    #####:  124:  }
+------------------
+_ZN5boost4asio15any_io_executorC2INS0_9execution12any_executorIJNS3_12context_as_tIRNS0_17execution_contextEEENS3_6detail8blocking7never_tILi0EEENS3_11prefer_onlyINSA_10possibly_tILi0EEEEENSD_INS9_16outstanding_work9tracked_tILi0EEEEENSD_INSH_11untracked_tILi0EEEEENSD_INS9_12relationship6fork_tILi0EEEEENSD_INSO_14continuation_tILi0EEEEEEEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameISW_S1_E5valuesrSt10is_base_ofINS9_17any_executor_baseESW_E5valueENS9_22supportable_propertiesILm0EFvS8_SC_SG_SK_SN_SR_SU_EE15is_valid_targetISW_EESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE:
+function _ZN5boost4asio15any_io_executorC2INS0_9execution12any_executorIJNS3_12context_as_tIRNS0_17execution_contextEEENS3_6detail8blocking7never_tILi0EEENS3_11prefer_onlyINSA_10possibly_tILi0EEEEENSD_INS9_16outstanding_work9tracked_tILi0EEEEENSD_INSH_11untracked_tILi0EEEEENSD_INS9_12relationship6fork_tILi0EEEEENSD_INSO_14continuation_tILi0EEEEEEEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameISW_S1_E5valuesrSt10is_base_ofINS9_17any_executor_baseESW_E5valueENS9_22supportable_propertiesILm0EFvS8_SC_SG_SK_SN_SR_SU_EE15is_valid_targetISW_EESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  110:  any_io_executor(OtherAnyExecutor e,
+        -:  111:      typename constraint<
+        -:  112:        conditional<
+        -:  113:          !is_same<OtherAnyExecutor, any_io_executor>::value
+        -:  114:            && is_base_of<execution::detail::any_executor_base,
+        -:  115:              OtherAnyExecutor>::value,
+        -:  116:          typename execution::detail::supportable_properties<
+        -:  117:            0, supportable_properties_type>::template
+        -:  118:              is_valid_target<OtherAnyExecutor>,
+        -:  119:          false_type
+        -:  120:        >::type::value
+        -:  121:      >::type = 0)
+    #####:  122:    : base_type(BOOST_ASIO_MOVE_CAST(OtherAnyExecutor)(e))
+call    0 never executed
+        -:  123:  {
+    #####:  124:  }
+------------------
+_ZN5boost4asio15any_io_executorC2INS0_9execution12any_executorIJNS3_12context_as_tIRNS0_17execution_contextEEENS3_6detail8blocking7never_tILi0EEENS3_11prefer_onlyINSA_10possibly_tILi0EEEEENSD_INS9_16outstanding_work9tracked_tILi0EEEEENSD_INSH_11untracked_tILi0EEEEENSD_INS9_12relationship6fork_tILi0EEEEENSD_INSO_14continuation_tILi0EEEEEEEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameISW_S1_E5valuesrSt10is_base_ofINS9_17any_executor_baseESW_E5valueENS9_22supportable_propertiesILm0EFvS8_SC_SG_SK_SN_SR_SU_EE15is_valid_targetISW_EESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE:
+function _ZN5boost4asio15any_io_executorC2INS0_9execution12any_executorIJNS3_12context_as_tIRNS0_17execution_contextEEENS3_6detail8blocking7never_tILi0EEENS3_11prefer_onlyINSA_10possibly_tILi0EEEEENSD_INS9_16outstanding_work9tracked_tILi0EEEEENSD_INSH_11untracked_tILi0EEEEENSD_INS9_12relationship6fork_tILi0EEEEENSD_INSO_14continuation_tILi0EEEEEEEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameISW_S1_E5valuesrSt10is_base_ofINS9_17any_executor_baseESW_E5valueENS9_22supportable_propertiesILm0EFvS8_SC_SG_SK_SN_SR_SU_EE15is_valid_targetISW_EESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  110:  any_io_executor(OtherAnyExecutor e,
+        -:  111:      typename constraint<
+        -:  112:        conditional<
+        -:  113:          !is_same<OtherAnyExecutor, any_io_executor>::value
+        -:  114:            && is_base_of<execution::detail::any_executor_base,
+        -:  115:              OtherAnyExecutor>::value,
+        -:  116:          typename execution::detail::supportable_properties<
+        -:  117:            0, supportable_properties_type>::template
+        -:  118:              is_valid_target<OtherAnyExecutor>,
+        -:  119:          false_type
+        -:  120:        >::type::value
+        -:  121:      >::type = 0)
+    #####:  122:    : base_type(BOOST_ASIO_MOVE_CAST(OtherAnyExecutor)(e))
+call    0 never executed
+        -:  123:  {
+    #####:  124:  }
+------------------
+_ZN5boost4asio15any_io_executorC2INS0_9execution12any_executorIJNS3_12context_as_tIRNS0_17execution_contextEEENS3_6detail8blocking7never_tILi0EEENS3_11prefer_onlyINSA_10possibly_tILi0EEEEENSD_INS9_16outstanding_work9tracked_tILi0EEEEENSD_INSH_11untracked_tILi0EEEEENSD_INS9_12relationship6fork_tILi0EEEEENSD_INSO_14continuation_tILi0EEEEEEEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameISW_S1_E5valuesrSt10is_base_ofINS9_17any_executor_baseESW_E5valueENS9_22supportable_propertiesILm0EFvS8_SC_SG_SK_SN_SR_SU_EE15is_valid_targetISW_EESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE:
+function _ZN5boost4asio15any_io_executorC2INS0_9execution12any_executorIJNS3_12context_as_tIRNS0_17execution_contextEEENS3_6detail8blocking7never_tILi0EEENS3_11prefer_onlyINSA_10possibly_tILi0EEEEENSD_INS9_16outstanding_work9tracked_tILi0EEEEENSD_INSH_11untracked_tILi0EEEEENSD_INS9_12relationship6fork_tILi0EEEEENSD_INSO_14continuation_tILi0EEEEEEEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameISW_S1_E5valuesrSt10is_base_ofINS9_17any_executor_baseESW_E5valueENS9_22supportable_propertiesILm0EFvS8_SC_SG_SK_SN_SR_SU_EE15is_valid_targetISW_EESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  110:  any_io_executor(OtherAnyExecutor e,
+        -:  111:      typename constraint<
+        -:  112:        conditional<
+        -:  113:          !is_same<OtherAnyExecutor, any_io_executor>::value
+        -:  114:            && is_base_of<execution::detail::any_executor_base,
+        -:  115:              OtherAnyExecutor>::value,
+        -:  116:          typename execution::detail::supportable_properties<
+        -:  117:            0, supportable_properties_type>::template
+        -:  118:              is_valid_target<OtherAnyExecutor>,
+        -:  119:          false_type
+        -:  120:        >::type::value
+        -:  121:      >::type = 0)
+    #####:  122:    : base_type(BOOST_ASIO_MOVE_CAST(OtherAnyExecutor)(e))
+call    0 never executed
+        -:  123:  {
+    #####:  124:  }
+------------------
+_ZN5boost4asio15any_io_executorC2INS0_9execution12any_executorIJNS3_12context_as_tIRNS0_17execution_contextEEENS3_6detail8blocking7never_tILi0EEENS3_11prefer_onlyINSA_10possibly_tILi0EEEEENSD_INS9_16outstanding_work9tracked_tILi0EEEEENSD_INSH_11untracked_tILi0EEEEENSD_INS9_12relationship6fork_tILi0EEEEENSD_INSO_14continuation_tILi0EEEEEEEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameISW_S1_E5valuesrSt10is_base_ofINS9_17any_executor_baseESW_E5valueENS9_22supportable_propertiesILm0EFvS8_SC_SG_SK_SN_SR_SU_EE15is_valid_targetISW_EESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE:
+function _ZN5boost4asio15any_io_executorC2INS0_9execution12any_executorIJNS3_12context_as_tIRNS0_17execution_contextEEENS3_6detail8blocking7never_tILi0EEENS3_11prefer_onlyINSA_10possibly_tILi0EEEEENSD_INS9_16outstanding_work9tracked_tILi0EEEEENSD_INSH_11untracked_tILi0EEEEENSD_INS9_12relationship6fork_tILi0EEEEENSD_INSO_14continuation_tILi0EEEEEEEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameISW_S1_E5valuesrSt10is_base_ofINS9_17any_executor_baseESW_E5valueENS9_22supportable_propertiesILm0EFvS8_SC_SG_SK_SN_SR_SU_EE15is_valid_targetISW_EESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  110:  any_io_executor(OtherAnyExecutor e,
+        -:  111:      typename constraint<
+        -:  112:        conditional<
+        -:  113:          !is_same<OtherAnyExecutor, any_io_executor>::value
+        -:  114:            && is_base_of<execution::detail::any_executor_base,
+        -:  115:              OtherAnyExecutor>::value,
+        -:  116:          typename execution::detail::supportable_properties<
+        -:  117:            0, supportable_properties_type>::template
+        -:  118:              is_valid_target<OtherAnyExecutor>,
+        -:  119:          false_type
+        -:  120:        >::type::value
+        -:  121:      >::type = 0)
+    #####:  122:    : base_type(BOOST_ASIO_MOVE_CAST(OtherAnyExecutor)(e))
+call    0 never executed
+        -:  123:  {
+    #####:  124:  }
+------------------
+_ZN5boost4asio15any_io_executorC2INS0_9execution12any_executorIJNS3_12context_as_tIRNS0_17execution_contextEEENS3_6detail8blocking7never_tILi0EEENS3_11prefer_onlyINSA_10possibly_tILi0EEEEENSD_INS9_16outstanding_work9tracked_tILi0EEEEENSD_INSH_11untracked_tILi0EEEEENSD_INS9_12relationship6fork_tILi0EEEEENSD_INSO_14continuation_tILi0EEEEEEEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameISW_S1_E5valuesrSt10is_base_ofINS9_17any_executor_baseESW_E5valueENS9_22supportable_propertiesILm0EFvS8_SC_SG_SK_SN_SR_SU_EE15is_valid_targetISW_EESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE:
+function _ZN5boost4asio15any_io_executorC2INS0_9execution12any_executorIJNS3_12context_as_tIRNS0_17execution_contextEEENS3_6detail8blocking7never_tILi0EEENS3_11prefer_onlyINSA_10possibly_tILi0EEEEENSD_INS9_16outstanding_work9tracked_tILi0EEEEENSD_INSH_11untracked_tILi0EEEEENSD_INS9_12relationship6fork_tILi0EEEEENSD_INSO_14continuation_tILi0EEEEEEEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameISW_S1_E5valuesrSt10is_base_ofINS9_17any_executor_baseESW_E5valueENS9_22supportable_propertiesILm0EFvS8_SC_SG_SK_SN_SR_SU_EE15is_valid_targetISW_EESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  110:  any_io_executor(OtherAnyExecutor e,
+        -:  111:      typename constraint<
+        -:  112:        conditional<
+        -:  113:          !is_same<OtherAnyExecutor, any_io_executor>::value
+        -:  114:            && is_base_of<execution::detail::any_executor_base,
+        -:  115:              OtherAnyExecutor>::value,
+        -:  116:          typename execution::detail::supportable_properties<
+        -:  117:            0, supportable_properties_type>::template
+        -:  118:              is_valid_target<OtherAnyExecutor>,
+        -:  119:          false_type
+        -:  120:        >::type::value
+        -:  121:      >::type = 0)
+    #####:  122:    : base_type(BOOST_ASIO_MOVE_CAST(OtherAnyExecutor)(e))
+call    0 never executed
+        -:  123:  {
+    #####:  124:  }
+------------------
+_ZN5boost4asio15any_io_executorC2INS0_9execution12any_executorIJNS3_12context_as_tIRNS0_17execution_contextEEENS3_6detail8blocking7never_tILi0EEENS3_11prefer_onlyINSA_10possibly_tILi0EEEEENSD_INS9_16outstanding_work9tracked_tILi0EEEEENSD_INSH_11untracked_tILi0EEEEENSD_INS9_12relationship6fork_tILi0EEEEENSD_INSO_14continuation_tILi0EEEEEEEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameISW_S1_E5valuesrSt10is_base_ofINS9_17any_executor_baseESW_E5valueENS9_22supportable_propertiesILm0EFvS8_SC_SG_SK_SN_SR_SU_EE15is_valid_targetISW_EESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE:
+function _ZN5boost4asio15any_io_executorC2INS0_9execution12any_executorIJNS3_12context_as_tIRNS0_17execution_contextEEENS3_6detail8blocking7never_tILi0EEENS3_11prefer_onlyINSA_10possibly_tILi0EEEEENSD_INS9_16outstanding_work9tracked_tILi0EEEEENSD_INSH_11untracked_tILi0EEEEENSD_INS9_12relationship6fork_tILi0EEEEENSD_INSO_14continuation_tILi0EEEEEEEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameISW_S1_E5valuesrSt10is_base_ofINS9_17any_executor_baseESW_E5valueENS9_22supportable_propertiesILm0EFvS8_SC_SG_SK_SN_SR_SU_EE15is_valid_targetISW_EESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  110:  any_io_executor(OtherAnyExecutor e,
+        -:  111:      typename constraint<
+        -:  112:        conditional<
+        -:  113:          !is_same<OtherAnyExecutor, any_io_executor>::value
+        -:  114:            && is_base_of<execution::detail::any_executor_base,
+        -:  115:              OtherAnyExecutor>::value,
+        -:  116:          typename execution::detail::supportable_properties<
+        -:  117:            0, supportable_properties_type>::template
+        -:  118:              is_valid_target<OtherAnyExecutor>,
+        -:  119:          false_type
+        -:  120:        >::type::value
+        -:  121:      >::type = 0)
+    #####:  122:    : base_type(BOOST_ASIO_MOVE_CAST(OtherAnyExecutor)(e))
+call    0 never executed
+        -:  123:  {
+    #####:  124:  }
+------------------
+_ZN5boost4asio15any_io_executorC2INS0_9execution12any_executorIJNS3_12context_as_tIRNS0_17execution_contextEEENS3_6detail8blocking7never_tILi0EEENS3_11prefer_onlyINSA_10possibly_tILi0EEEEENSD_INS9_16outstanding_work9tracked_tILi0EEEEENSD_INSH_11untracked_tILi0EEEEENSD_INS9_12relationship6fork_tILi0EEEEENSD_INSO_14continuation_tILi0EEEEEEEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameISW_S1_E5valuesrSt10is_base_ofINS9_17any_executor_baseESW_E5valueENS9_22supportable_propertiesILm0EFvS8_SC_SG_SK_SN_SR_SU_EE15is_valid_targetISW_EESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE:
+function _ZN5boost4asio15any_io_executorC2INS0_9execution12any_executorIJNS3_12context_as_tIRNS0_17execution_contextEEENS3_6detail8blocking7never_tILi0EEENS3_11prefer_onlyINSA_10possibly_tILi0EEEEENSD_INS9_16outstanding_work9tracked_tILi0EEEEENSD_INSH_11untracked_tILi0EEEEENSD_INS9_12relationship6fork_tILi0EEEEENSD_INSO_14continuation_tILi0EEEEEEEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameISW_S1_E5valuesrSt10is_base_ofINS9_17any_executor_baseESW_E5valueENS9_22supportable_propertiesILm0EFvS8_SC_SG_SK_SN_SR_SU_EE15is_valid_targetISW_EESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  110:  any_io_executor(OtherAnyExecutor e,
+        -:  111:      typename constraint<
+        -:  112:        conditional<
+        -:  113:          !is_same<OtherAnyExecutor, any_io_executor>::value
+        -:  114:            && is_base_of<execution::detail::any_executor_base,
+        -:  115:              OtherAnyExecutor>::value,
+        -:  116:          typename execution::detail::supportable_properties<
+        -:  117:            0, supportable_properties_type>::template
+        -:  118:              is_valid_target<OtherAnyExecutor>,
+        -:  119:          false_type
+        -:  120:        >::type::value
+        -:  121:      >::type = 0)
+    #####:  122:    : base_type(BOOST_ASIO_MOVE_CAST(OtherAnyExecutor)(e))
+call    0 never executed
+        -:  123:  {
+    #####:  124:  }
+------------------
+_ZN5boost4asio15any_io_executorC2INS0_9execution12any_executorIJNS3_12context_as_tIRNS0_17execution_contextEEENS3_6detail8blocking7never_tILi0EEENS3_11prefer_onlyINSA_10possibly_tILi0EEEEENSD_INS9_16outstanding_work9tracked_tILi0EEEEENSD_INSH_11untracked_tILi0EEEEENSD_INS9_12relationship6fork_tILi0EEEEENSD_INSO_14continuation_tILi0EEEEEEEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameISW_S1_E5valuesrSt10is_base_ofINS9_17any_executor_baseESW_E5valueENS9_22supportable_propertiesILm0EFvS8_SC_SG_SK_SN_SR_SU_EE15is_valid_targetISW_EESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE:
+function _ZN5boost4asio15any_io_executorC2INS0_9execution12any_executorIJNS3_12context_as_tIRNS0_17execution_contextEEENS3_6detail8blocking7never_tILi0EEENS3_11prefer_onlyINSA_10possibly_tILi0EEEEENSD_INS9_16outstanding_work9tracked_tILi0EEEEENSD_INSH_11untracked_tILi0EEEEENSD_INS9_12relationship6fork_tILi0EEEEENSD_INSO_14continuation_tILi0EEEEEEEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameISW_S1_E5valuesrSt10is_base_ofINS9_17any_executor_baseESW_E5valueENS9_22supportable_propertiesILm0EFvS8_SC_SG_SK_SN_SR_SU_EE15is_valid_targetISW_EESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  110:  any_io_executor(OtherAnyExecutor e,
+        -:  111:      typename constraint<
+        -:  112:        conditional<
+        -:  113:          !is_same<OtherAnyExecutor, any_io_executor>::value
+        -:  114:            && is_base_of<execution::detail::any_executor_base,
+        -:  115:              OtherAnyExecutor>::value,
+        -:  116:          typename execution::detail::supportable_properties<
+        -:  117:            0, supportable_properties_type>::template
+        -:  118:              is_valid_target<OtherAnyExecutor>,
+        -:  119:          false_type
+        -:  120:        >::type::value
+        -:  121:      >::type = 0)
+    #####:  122:    : base_type(BOOST_ASIO_MOVE_CAST(OtherAnyExecutor)(e))
+call    0 never executed
+        -:  123:  {
+    #####:  124:  }
+------------------
+_ZN5boost4asio15any_io_executorC2INS0_9execution12any_executorIJNS3_12context_as_tIRNS0_17execution_contextEEENS3_6detail8blocking7never_tILi0EEENS3_11prefer_onlyINSA_10possibly_tILi0EEEEENSD_INS9_16outstanding_work9tracked_tILi0EEEEENSD_INSH_11untracked_tILi0EEEEENSD_INS9_12relationship6fork_tILi0EEEEENSD_INSO_14continuation_tILi0EEEEEEEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameISW_S1_E5valuesrSt10is_base_ofINS9_17any_executor_baseESW_E5valueENS9_22supportable_propertiesILm0EFvS8_SC_SG_SK_SN_SR_SU_EE15is_valid_targetISW_EESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE:
+function _ZN5boost4asio15any_io_executorC2INS0_9execution12any_executorIJNS3_12context_as_tIRNS0_17execution_contextEEENS3_6detail8blocking7never_tILi0EEENS3_11prefer_onlyINSA_10possibly_tILi0EEEEENSD_INS9_16outstanding_work9tracked_tILi0EEEEENSD_INSH_11untracked_tILi0EEEEENSD_INS9_12relationship6fork_tILi0EEEEENSD_INSO_14continuation_tILi0EEEEEEEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameISW_S1_E5valuesrSt10is_base_ofINS9_17any_executor_baseESW_E5valueENS9_22supportable_propertiesILm0EFvS8_SC_SG_SK_SN_SR_SU_EE15is_valid_targetISW_EESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  110:  any_io_executor(OtherAnyExecutor e,
+        -:  111:      typename constraint<
+        -:  112:        conditional<
+        -:  113:          !is_same<OtherAnyExecutor, any_io_executor>::value
+        -:  114:            && is_base_of<execution::detail::any_executor_base,
+        -:  115:              OtherAnyExecutor>::value,
+        -:  116:          typename execution::detail::supportable_properties<
+        -:  117:            0, supportable_properties_type>::template
+        -:  118:              is_valid_target<OtherAnyExecutor>,
+        -:  119:          false_type
+        -:  120:        >::type::value
+        -:  121:      >::type = 0)
+    #####:  122:    : base_type(BOOST_ASIO_MOVE_CAST(OtherAnyExecutor)(e))
+call    0 never executed
+        -:  123:  {
+    #####:  124:  }
+------------------
+_ZN5boost4asio15any_io_executorC2INS0_9execution12any_executorIJNS3_12context_as_tIRNS0_17execution_contextEEENS3_6detail8blocking7never_tILi0EEENS3_11prefer_onlyINSA_10possibly_tILi0EEEEENSD_INS9_16outstanding_work9tracked_tILi0EEEEENSD_INSH_11untracked_tILi0EEEEENSD_INS9_12relationship6fork_tILi0EEEEENSD_INSO_14continuation_tILi0EEEEEEEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameISW_S1_E5valuesrSt10is_base_ofINS9_17any_executor_baseESW_E5valueENS9_22supportable_propertiesILm0EFvS8_SC_SG_SK_SN_SR_SU_EE15is_valid_targetISW_EESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE:
+function _ZN5boost4asio15any_io_executorC2INS0_9execution12any_executorIJNS3_12context_as_tIRNS0_17execution_contextEEENS3_6detail8blocking7never_tILi0EEENS3_11prefer_onlyINSA_10possibly_tILi0EEEEENSD_INS9_16outstanding_work9tracked_tILi0EEEEENSD_INSH_11untracked_tILi0EEEEENSD_INS9_12relationship6fork_tILi0EEEEENSD_INSO_14continuation_tILi0EEEEEEEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameISW_S1_E5valuesrSt10is_base_ofINS9_17any_executor_baseESW_E5valueENS9_22supportable_propertiesILm0EFvS8_SC_SG_SK_SN_SR_SU_EE15is_valid_targetISW_EESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  110:  any_io_executor(OtherAnyExecutor e,
+        -:  111:      typename constraint<
+        -:  112:        conditional<
+        -:  113:          !is_same<OtherAnyExecutor, any_io_executor>::value
+        -:  114:            && is_base_of<execution::detail::any_executor_base,
+        -:  115:              OtherAnyExecutor>::value,
+        -:  116:          typename execution::detail::supportable_properties<
+        -:  117:            0, supportable_properties_type>::template
+        -:  118:              is_valid_target<OtherAnyExecutor>,
+        -:  119:          false_type
+        -:  120:        >::type::value
+        -:  121:      >::type = 0)
+    #####:  122:    : base_type(BOOST_ASIO_MOVE_CAST(OtherAnyExecutor)(e))
+call    0 never executed
+        -:  123:  {
+    #####:  124:  }
+------------------
+_ZN5boost4asio15any_io_executorC2INS0_9execution12any_executorIJNS3_12context_as_tIRNS0_17execution_contextEEENS3_6detail8blocking7never_tILi0EEENS3_11prefer_onlyINSA_10possibly_tILi0EEEEENSD_INS9_16outstanding_work9tracked_tILi0EEEEENSD_INSH_11untracked_tILi0EEEEENSD_INS9_12relationship6fork_tILi0EEEEENSD_INSO_14continuation_tILi0EEEEEEEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameISW_S1_E5valuesrSt10is_base_ofINS9_17any_executor_baseESW_E5valueENS9_22supportable_propertiesILm0EFvS8_SC_SG_SK_SN_SR_SU_EE15is_valid_targetISW_EESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE:
+function _ZN5boost4asio15any_io_executorC2INS0_9execution12any_executorIJNS3_12context_as_tIRNS0_17execution_contextEEENS3_6detail8blocking7never_tILi0EEENS3_11prefer_onlyINSA_10possibly_tILi0EEEEENSD_INS9_16outstanding_work9tracked_tILi0EEEEENSD_INSH_11untracked_tILi0EEEEENSD_INS9_12relationship6fork_tILi0EEEEENSD_INSO_14continuation_tILi0EEEEEEEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameISW_S1_E5valuesrSt10is_base_ofINS9_17any_executor_baseESW_E5valueENS9_22supportable_propertiesILm0EFvS8_SC_SG_SK_SN_SR_SU_EE15is_valid_targetISW_EESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  110:  any_io_executor(OtherAnyExecutor e,
+        -:  111:      typename constraint<
+        -:  112:        conditional<
+        -:  113:          !is_same<OtherAnyExecutor, any_io_executor>::value
+        -:  114:            && is_base_of<execution::detail::any_executor_base,
+        -:  115:              OtherAnyExecutor>::value,
+        -:  116:          typename execution::detail::supportable_properties<
+        -:  117:            0, supportable_properties_type>::template
+        -:  118:              is_valid_target<OtherAnyExecutor>,
+        -:  119:          false_type
+        -:  120:        >::type::value
+        -:  121:      >::type = 0)
+    #####:  122:    : base_type(BOOST_ASIO_MOVE_CAST(OtherAnyExecutor)(e))
+call    0 never executed
+        -:  123:  {
+    #####:  124:  }
+------------------
+_ZN5boost4asio15any_io_executorC2INS0_9execution12any_executorIJNS3_12context_as_tIRNS0_17execution_contextEEENS3_6detail8blocking7never_tILi0EEENS3_11prefer_onlyINSA_10possibly_tILi0EEEEENSD_INS9_16outstanding_work9tracked_tILi0EEEEENSD_INSH_11untracked_tILi0EEEEENSD_INS9_12relationship6fork_tILi0EEEEENSD_INSO_14continuation_tILi0EEEEEEEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameISW_S1_E5valuesrSt10is_base_ofINS9_17any_executor_baseESW_E5valueENS9_22supportable_propertiesILm0EFvS8_SC_SG_SK_SN_SR_SU_EE15is_valid_targetISW_EESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE:
+function _ZN5boost4asio15any_io_executorC2INS0_9execution12any_executorIJNS3_12context_as_tIRNS0_17execution_contextEEENS3_6detail8blocking7never_tILi0EEENS3_11prefer_onlyINSA_10possibly_tILi0EEEEENSD_INS9_16outstanding_work9tracked_tILi0EEEEENSD_INSH_11untracked_tILi0EEEEENSD_INS9_12relationship6fork_tILi0EEEEENSD_INSO_14continuation_tILi0EEEEEEEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameISW_S1_E5valuesrSt10is_base_ofINS9_17any_executor_baseESW_E5valueENS9_22supportable_propertiesILm0EFvS8_SC_SG_SK_SN_SR_SU_EE15is_valid_targetISW_EESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  110:  any_io_executor(OtherAnyExecutor e,
+        -:  111:      typename constraint<
+        -:  112:        conditional<
+        -:  113:          !is_same<OtherAnyExecutor, any_io_executor>::value
+        -:  114:            && is_base_of<execution::detail::any_executor_base,
+        -:  115:              OtherAnyExecutor>::value,
+        -:  116:          typename execution::detail::supportable_properties<
+        -:  117:            0, supportable_properties_type>::template
+        -:  118:              is_valid_target<OtherAnyExecutor>,
+        -:  119:          false_type
+        -:  120:        >::type::value
+        -:  121:      >::type = 0)
+    #####:  122:    : base_type(BOOST_ASIO_MOVE_CAST(OtherAnyExecutor)(e))
+call    0 never executed
+        -:  123:  {
+    #####:  124:  }
+------------------
+_ZN5boost4asio15any_io_executorC2INS0_9execution12any_executorIJNS3_12context_as_tIRNS0_17execution_contextEEENS3_6detail8blocking7never_tILi0EEENS3_11prefer_onlyINSA_10possibly_tILi0EEEEENSD_INS9_16outstanding_work9tracked_tILi0EEEEENSD_INSH_11untracked_tILi0EEEEENSD_INS9_12relationship6fork_tILi0EEEEENSD_INSO_14continuation_tILi0EEEEEEEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameISW_S1_E5valuesrSt10is_base_ofINS9_17any_executor_baseESW_E5valueENS9_22supportable_propertiesILm0EFvS8_SC_SG_SK_SN_SR_SU_EE15is_valid_targetISW_EESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE:
+function _ZN5boost4asio15any_io_executorC2INS0_9execution12any_executorIJNS3_12context_as_tIRNS0_17execution_contextEEENS3_6detail8blocking7never_tILi0EEENS3_11prefer_onlyINSA_10possibly_tILi0EEEEENSD_INS9_16outstanding_work9tracked_tILi0EEEEENSD_INSH_11untracked_tILi0EEEEENSD_INS9_12relationship6fork_tILi0EEEEENSD_INSO_14continuation_tILi0EEEEEEEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameISW_S1_E5valuesrSt10is_base_ofINS9_17any_executor_baseESW_E5valueENS9_22supportable_propertiesILm0EFvS8_SC_SG_SK_SN_SR_SU_EE15is_valid_targetISW_EESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE called 19 returned 100% blocks executed 100%
+       19:  110:  any_io_executor(OtherAnyExecutor e,
+        -:  111:      typename constraint<
+        -:  112:        conditional<
+        -:  113:          !is_same<OtherAnyExecutor, any_io_executor>::value
+        -:  114:            && is_base_of<execution::detail::any_executor_base,
+        -:  115:              OtherAnyExecutor>::value,
+        -:  116:          typename execution::detail::supportable_properties<
+        -:  117:            0, supportable_properties_type>::template
+        -:  118:              is_valid_target<OtherAnyExecutor>,
+        -:  119:          false_type
+        -:  120:        >::type::value
+        -:  121:      >::type = 0)
+       19:  122:    : base_type(BOOST_ASIO_MOVE_CAST(OtherAnyExecutor)(e))
+call    0 returned 100%
+        -:  123:  {
+       19:  124:  }
+------------------
+_ZN5boost4asio15any_io_executorC2INS0_9execution12any_executorIJNS3_12context_as_tIRNS0_17execution_contextEEENS3_6detail8blocking7never_tILi0EEENS3_11prefer_onlyINSA_10possibly_tILi0EEEEENSD_INS9_16outstanding_work9tracked_tILi0EEEEENSD_INSH_11untracked_tILi0EEEEENSD_INS9_12relationship6fork_tILi0EEEEENSD_INSO_14continuation_tILi0EEEEEEEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameISW_S1_E5valuesrSt10is_base_ofINS9_17any_executor_baseESW_E5valueENS9_22supportable_propertiesILm0EFvS8_SC_SG_SK_SN_SR_SU_EE15is_valid_targetISW_EESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE:
+function _ZN5boost4asio15any_io_executorC2INS0_9execution12any_executorIJNS3_12context_as_tIRNS0_17execution_contextEEENS3_6detail8blocking7never_tILi0EEENS3_11prefer_onlyINSA_10possibly_tILi0EEEEENSD_INS9_16outstanding_work9tracked_tILi0EEEEENSD_INSH_11untracked_tILi0EEEEENSD_INS9_12relationship6fork_tILi0EEEEENSD_INSO_14continuation_tILi0EEEEEEEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameISW_S1_E5valuesrSt10is_base_ofINS9_17any_executor_baseESW_E5valueENS9_22supportable_propertiesILm0EFvS8_SC_SG_SK_SN_SR_SU_EE15is_valid_targetISW_EESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  110:  any_io_executor(OtherAnyExecutor e,
+        -:  111:      typename constraint<
+        -:  112:        conditional<
+        -:  113:          !is_same<OtherAnyExecutor, any_io_executor>::value
+        -:  114:            && is_base_of<execution::detail::any_executor_base,
+        -:  115:              OtherAnyExecutor>::value,
+        -:  116:          typename execution::detail::supportable_properties<
+        -:  117:            0, supportable_properties_type>::template
+        -:  118:              is_valid_target<OtherAnyExecutor>,
+        -:  119:          false_type
+        -:  120:        >::type::value
+        -:  121:      >::type = 0)
+    #####:  122:    : base_type(BOOST_ASIO_MOVE_CAST(OtherAnyExecutor)(e))
+call    0 never executed
+        -:  123:  {
+    #####:  124:  }
+------------------
+_ZN5boost4asio15any_io_executorC2INS0_9execution12any_executorIJNS3_12context_as_tIRNS0_17execution_contextEEENS3_6detail8blocking7never_tILi0EEENS3_11prefer_onlyINSA_10possibly_tILi0EEEEENSD_INS9_16outstanding_work9tracked_tILi0EEEEENSD_INSH_11untracked_tILi0EEEEENSD_INS9_12relationship6fork_tILi0EEEEENSD_INSO_14continuation_tILi0EEEEEEEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameISW_S1_E5valuesrSt10is_base_ofINS9_17any_executor_baseESW_E5valueENS9_22supportable_propertiesILm0EFvS8_SC_SG_SK_SN_SR_SU_EE15is_valid_targetISW_EESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE:
+function _ZN5boost4asio15any_io_executorC2INS0_9execution12any_executorIJNS3_12context_as_tIRNS0_17execution_contextEEENS3_6detail8blocking7never_tILi0EEENS3_11prefer_onlyINSA_10possibly_tILi0EEEEENSD_INS9_16outstanding_work9tracked_tILi0EEEEENSD_INSH_11untracked_tILi0EEEEENSD_INS9_12relationship6fork_tILi0EEEEENSD_INSO_14continuation_tILi0EEEEEEEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameISW_S1_E5valuesrSt10is_base_ofINS9_17any_executor_baseESW_E5valueENS9_22supportable_propertiesILm0EFvS8_SC_SG_SK_SN_SR_SU_EE15is_valid_targetISW_EESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE called 28453 returned 101% blocks executed 100%
+    28453:  110:  any_io_executor(OtherAnyExecutor e,
+        -:  111:      typename constraint<
+        -:  112:        conditional<
+        -:  113:          !is_same<OtherAnyExecutor, any_io_executor>::value
+        -:  114:            && is_base_of<execution::detail::any_executor_base,
+        -:  115:              OtherAnyExecutor>::value,
+        -:  116:          typename execution::detail::supportable_properties<
+        -:  117:            0, supportable_properties_type>::template
+        -:  118:              is_valid_target<OtherAnyExecutor>,
+        -:  119:          false_type
+        -:  120:        >::type::value
+        -:  121:      >::type = 0)
+    28453:  122:    : base_type(BOOST_ASIO_MOVE_CAST(OtherAnyExecutor)(e))
+call    0 returned 101%
+        -:  123:  {
+    28693:  124:  }
+------------------
+_ZN5boost4asio15any_io_executorC2INS0_9execution12any_executorIJNS3_12context_as_tIRNS0_17execution_contextEEENS3_6detail8blocking7never_tILi0EEENS3_11prefer_onlyINSA_10possibly_tILi0EEEEENSD_INS9_16outstanding_work9tracked_tILi0EEEEENSD_INSH_11untracked_tILi0EEEEENSD_INS9_12relationship6fork_tILi0EEEEENSD_INSO_14continuation_tILi0EEEEEEEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameISW_S1_E5valuesrSt10is_base_ofINS9_17any_executor_baseESW_E5valueENS9_22supportable_propertiesILm0EFvS8_SC_SG_SK_SN_SR_SU_EE15is_valid_targetISW_EESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE:
+function _ZN5boost4asio15any_io_executorC2INS0_9execution12any_executorIJNS3_12context_as_tIRNS0_17execution_contextEEENS3_6detail8blocking7never_tILi0EEENS3_11prefer_onlyINSA_10possibly_tILi0EEEEENSD_INS9_16outstanding_work9tracked_tILi0EEEEENSD_INSH_11untracked_tILi0EEEEENSD_INS9_12relationship6fork_tILi0EEEEENSD_INSO_14continuation_tILi0EEEEEEEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameISW_S1_E5valuesrSt10is_base_ofINS9_17any_executor_baseESW_E5valueENS9_22supportable_propertiesILm0EFvS8_SC_SG_SK_SN_SR_SU_EE15is_valid_targetISW_EESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE called 52 returned 100% blocks executed 100%
+       52:  110:  any_io_executor(OtherAnyExecutor e,
+        -:  111:      typename constraint<
+        -:  112:        conditional<
+        -:  113:          !is_same<OtherAnyExecutor, any_io_executor>::value
+        -:  114:            && is_base_of<execution::detail::any_executor_base,
+        -:  115:              OtherAnyExecutor>::value,
+        -:  116:          typename execution::detail::supportable_properties<
+        -:  117:            0, supportable_properties_type>::template
+        -:  118:              is_valid_target<OtherAnyExecutor>,
+        -:  119:          false_type
+        -:  120:        >::type::value
+        -:  121:      >::type = 0)
+       52:  122:    : base_type(BOOST_ASIO_MOVE_CAST(OtherAnyExecutor)(e))
+call    0 returned 100%
+        -:  123:  {
+       52:  124:  }
+------------------
+_ZN5boost4asio15any_io_executorC2INS0_9execution12any_executorIJNS3_12context_as_tIRNS0_17execution_contextEEENS3_6detail8blocking7never_tILi0EEENS3_11prefer_onlyINSA_10possibly_tILi0EEEEENSD_INS9_16outstanding_work9tracked_tILi0EEEEENSD_INSH_11untracked_tILi0EEEEENSD_INS9_12relationship6fork_tILi0EEEEENSD_INSO_14continuation_tILi0EEEEEEEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameISW_S1_E5valuesrSt10is_base_ofINS9_17any_executor_baseESW_E5valueENS9_22supportable_propertiesILm0EFvS8_SC_SG_SK_SN_SR_SU_EE15is_valid_targetISW_EESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE:
+function _ZN5boost4asio15any_io_executorC2INS0_9execution12any_executorIJNS3_12context_as_tIRNS0_17execution_contextEEENS3_6detail8blocking7never_tILi0EEENS3_11prefer_onlyINSA_10possibly_tILi0EEEEENSD_INS9_16outstanding_work9tracked_tILi0EEEEENSD_INSH_11untracked_tILi0EEEEENSD_INS9_12relationship6fork_tILi0EEEEENSD_INSO_14continuation_tILi0EEEEEEEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameISW_S1_E5valuesrSt10is_base_ofINS9_17any_executor_baseESW_E5valueENS9_22supportable_propertiesILm0EFvS8_SC_SG_SK_SN_SR_SU_EE15is_valid_targetISW_EESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE called 9 returned 100% blocks executed 100%
+        9:  110:  any_io_executor(OtherAnyExecutor e,
+        -:  111:      typename constraint<
+        -:  112:        conditional<
+        -:  113:          !is_same<OtherAnyExecutor, any_io_executor>::value
+        -:  114:            && is_base_of<execution::detail::any_executor_base,
+        -:  115:              OtherAnyExecutor>::value,
+        -:  116:          typename execution::detail::supportable_properties<
+        -:  117:            0, supportable_properties_type>::template
+        -:  118:              is_valid_target<OtherAnyExecutor>,
+        -:  119:          false_type
+        -:  120:        >::type::value
+        -:  121:      >::type = 0)
+        9:  122:    : base_type(BOOST_ASIO_MOVE_CAST(OtherAnyExecutor)(e))
+call    0 returned 100%
+        -:  123:  {
+        9:  124:  }
+------------------
+        -:  125:#endif // defined(GENERATING_DOCUMENTATION)
+        -:  126:
+        -:  127:  /// Construct to point to the same target as another any_executor.
+        -:  128:#if defined(GENERATING_DOCUMENTATION)
+        -:  129:  template <class... OtherSupportableProperties>
+        -:  130:    any_io_executor(std::nothrow_t,
+        -:  131:      execution::any_executor<OtherSupportableProperties...> e);
+        -:  132:#else // defined(GENERATING_DOCUMENTATION)
+        -:  133:  template <typename OtherAnyExecutor>
+        -:  134:  any_io_executor(std::nothrow_t, OtherAnyExecutor e,
+        -:  135:      typename constraint<
+        -:  136:        conditional<
+        -:  137:          !is_same<OtherAnyExecutor, any_io_executor>::value
+        -:  138:            && is_base_of<execution::detail::any_executor_base,
+        -:  139:              OtherAnyExecutor>::value,
+        -:  140:          typename execution::detail::supportable_properties<
+        -:  141:            0, supportable_properties_type>::template
+        -:  142:              is_valid_target<OtherAnyExecutor>,
+        -:  143:          false_type
+        -:  144:        >::type::value
+        -:  145:      >::type = 0) BOOST_ASIO_NOEXCEPT
+        -:  146:    : base_type(std::nothrow, BOOST_ASIO_MOVE_CAST(OtherAnyExecutor)(e))
+        -:  147:  {
+        -:  148:  }
+        -:  149:#endif // defined(GENERATING_DOCUMENTATION)
+        -:  150:
+        -:  151:  /// Construct to point to the same target as another any_executor.
+        -:  152:  BOOST_ASIO_DECL any_io_executor(std::nothrow_t,
+        -:  153:      const any_io_executor& e) BOOST_ASIO_NOEXCEPT;
+        -:  154:
+        -:  155:#if defined(BOOST_ASIO_HAS_MOVE) || defined(GENERATING_DOCUMENTATION)
+        -:  156:  /// Construct to point to the same target as another any_executor.
+        -:  157:  BOOST_ASIO_DECL any_io_executor(std::nothrow_t,
+        -:  158:      any_io_executor&& e) BOOST_ASIO_NOEXCEPT;
+        -:  159:#endif // defined(BOOST_ASIO_HAS_MOVE) || defined(GENERATING_DOCUMENTATION)
+        -:  160:
+        -:  161:  /// Construct a polymorphic wrapper for the specified executor.
+        -:  162:#if defined(GENERATING_DOCUMENTATION)
+        -:  163:  template <BOOST_ASIO_EXECUTION_EXECUTOR Executor>
+        -:  164:  any_io_executor(Executor e);
+        -:  165:#else // defined(GENERATING_DOCUMENTATION)
+        -:  166:  template <BOOST_ASIO_EXECUTION_EXECUTOR Executor>
+    9873*:  167:  any_io_executor(Executor e,
+        -:  168:      typename constraint<
+        -:  169:        conditional<
+        -:  170:          !is_same<Executor, any_io_executor>::value
+        -:  171:            && !is_base_of<execution::detail::any_executor_base,
+        -:  172:              Executor>::value,
+        -:  173:          execution::detail::is_valid_target_executor<
+        -:  174:            Executor, supportable_properties_type>,
+        -:  175:          false_type
+        -:  176:        >::type::value
+        -:  177:      >::type = 0)
+    9873*:  178:    : base_type(BOOST_ASIO_MOVE_CAST(Executor)(e))
+        -:  179:  {
+    9886*:  180:  }
+------------------
+_ZN5boost4asio15any_io_executorC2INS0_10io_context19basic_executor_typeISaIvELm0EEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameIS7_S1_E5valuentsrSt10is_base_ofINS0_9execution6detail17any_executor_baseES7_E5valueENSE_24is_valid_target_executorIS7_FvNSD_12context_as_tIRNS0_17execution_contextEEENSE_8blocking7never_tILi0EEENSD_11prefer_onlyINSM_10possibly_tILi0EEEEENSP_INSE_16outstanding_work9tracked_tILi0EEEEENSP_INST_11untracked_tILi0EEEEENSP_INSE_12relationship6fork_tILi0EEEEENSP_INS10_14continuation_tILi0EEEEEEEESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE:
+function _ZN5boost4asio15any_io_executorC2INS0_10io_context19basic_executor_typeISaIvELm0EEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameIS7_S1_E5valuentsrSt10is_base_ofINS0_9execution6detail17any_executor_baseES7_E5valueENSE_24is_valid_target_executorIS7_FvNSD_12context_as_tIRNS0_17execution_contextEEENSE_8blocking7never_tILi0EEENSD_11prefer_onlyINSM_10possibly_tILi0EEEEENSP_INSE_16outstanding_work9tracked_tILi0EEEEENSP_INST_11untracked_tILi0EEEEENSP_INSE_12relationship6fork_tILi0EEEEENSP_INS10_14continuation_tILi0EEEEEEEESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE called 24 returned 100% blocks executed 71%
+       24:  167:  any_io_executor(Executor e,
+        -:  168:      typename constraint<
+        -:  169:        conditional<
+        -:  170:          !is_same<Executor, any_io_executor>::value
+        -:  171:            && !is_base_of<execution::detail::any_executor_base,
+        -:  172:              Executor>::value,
+        -:  173:          execution::detail::is_valid_target_executor<
+        -:  174:            Executor, supportable_properties_type>,
+        -:  175:          false_type
+        -:  176:        >::type::value
+        -:  177:      >::type = 0)
+       24:  178:    : base_type(BOOST_ASIO_MOVE_CAST(Executor)(e))
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 never executed
+        -:  179:  {
+       24:  180:  }
+------------------
+_ZN5boost4asio15any_io_executorC2INS0_10io_context19basic_executor_typeISaIvELm0EEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameIS7_S1_E5valuentsrSt10is_base_ofINS0_9execution6detail17any_executor_baseES7_E5valueENSE_24is_valid_target_executorIS7_FvNSD_12context_as_tIRNS0_17execution_contextEEENSE_8blocking7never_tILi0EEENSD_11prefer_onlyINSM_10possibly_tILi0EEEEENSP_INSE_16outstanding_work9tracked_tILi0EEEEENSP_INST_11untracked_tILi0EEEEENSP_INSE_12relationship6fork_tILi0EEEEENSP_INS10_14continuation_tILi0EEEEEEEESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE:
+function _ZN5boost4asio15any_io_executorC2INS0_10io_context19basic_executor_typeISaIvELm0EEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameIS7_S1_E5valuentsrSt10is_base_ofINS0_9execution6detail17any_executor_baseES7_E5valueENSE_24is_valid_target_executorIS7_FvNSD_12context_as_tIRNS0_17execution_contextEEENSE_8blocking7never_tILi0EEENSD_11prefer_onlyINSM_10possibly_tILi0EEEEENSP_INSE_16outstanding_work9tracked_tILi0EEEEENSP_INST_11untracked_tILi0EEEEENSP_INSE_12relationship6fork_tILi0EEEEENSP_INS10_14continuation_tILi0EEEEEEEESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE called 30 returned 100% blocks executed 71%
+       30:  167:  any_io_executor(Executor e,
+        -:  168:      typename constraint<
+        -:  169:        conditional<
+        -:  170:          !is_same<Executor, any_io_executor>::value
+        -:  171:            && !is_base_of<execution::detail::any_executor_base,
+        -:  172:              Executor>::value,
+        -:  173:          execution::detail::is_valid_target_executor<
+        -:  174:            Executor, supportable_properties_type>,
+        -:  175:          false_type
+        -:  176:        >::type::value
+        -:  177:      >::type = 0)
+       30:  178:    : base_type(BOOST_ASIO_MOVE_CAST(Executor)(e))
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 never executed
+        -:  179:  {
+       30:  180:  }
+------------------
+_ZN5boost4asio15any_io_executorC2INS0_10io_context19basic_executor_typeISaIvELm0EEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameIS7_S1_E5valuentsrSt10is_base_ofINS0_9execution6detail17any_executor_baseES7_E5valueENSE_24is_valid_target_executorIS7_FvNSD_12context_as_tIRNS0_17execution_contextEEENSE_8blocking7never_tILi0EEENSD_11prefer_onlyINSM_10possibly_tILi0EEEEENSP_INSE_16outstanding_work9tracked_tILi0EEEEENSP_INST_11untracked_tILi0EEEEENSP_INSE_12relationship6fork_tILi0EEEEENSP_INS10_14continuation_tILi0EEEEEEEESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE:
+function _ZN5boost4asio15any_io_executorC2INS0_10io_context19basic_executor_typeISaIvELm0EEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameIS7_S1_E5valuentsrSt10is_base_ofINS0_9execution6detail17any_executor_baseES7_E5valueENSE_24is_valid_target_executorIS7_FvNSD_12context_as_tIRNS0_17execution_contextEEENSE_8blocking7never_tILi0EEENSD_11prefer_onlyINSM_10possibly_tILi0EEEEENSP_INSE_16outstanding_work9tracked_tILi0EEEEENSP_INST_11untracked_tILi0EEEEENSP_INSE_12relationship6fork_tILi0EEEEENSP_INS10_14continuation_tILi0EEEEEEEESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  167:  any_io_executor(Executor e,
+        -:  168:      typename constraint<
+        -:  169:        conditional<
+        -:  170:          !is_same<Executor, any_io_executor>::value
+        -:  171:            && !is_base_of<execution::detail::any_executor_base,
+        -:  172:              Executor>::value,
+        -:  173:          execution::detail::is_valid_target_executor<
+        -:  174:            Executor, supportable_properties_type>,
+        -:  175:          false_type
+        -:  176:        >::type::value
+        -:  177:      >::type = 0)
+    #####:  178:    : base_type(BOOST_ASIO_MOVE_CAST(Executor)(e))
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+call    5 never executed
+        -:  179:  {
+    #####:  180:  }
+------------------
+_ZN5boost4asio15any_io_executorC2INS0_10io_context19basic_executor_typeISaIvELm0EEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameIS7_S1_E5valuentsrSt10is_base_ofINS0_9execution6detail17any_executor_baseES7_E5valueENSE_24is_valid_target_executorIS7_FvNSD_12context_as_tIRNS0_17execution_contextEEENSE_8blocking7never_tILi0EEENSD_11prefer_onlyINSM_10possibly_tILi0EEEEENSP_INSE_16outstanding_work9tracked_tILi0EEEEENSP_INST_11untracked_tILi0EEEEENSP_INSE_12relationship6fork_tILi0EEEEENSP_INS10_14continuation_tILi0EEEEEEEESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE:
+function _ZN5boost4asio15any_io_executorC2INS0_10io_context19basic_executor_typeISaIvELm0EEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameIS7_S1_E5valuentsrSt10is_base_ofINS0_9execution6detail17any_executor_baseES7_E5valueENSE_24is_valid_target_executorIS7_FvNSD_12context_as_tIRNS0_17execution_contextEEENSE_8blocking7never_tILi0EEENSD_11prefer_onlyINSM_10possibly_tILi0EEEEENSP_INSE_16outstanding_work9tracked_tILi0EEEEENSP_INST_11untracked_tILi0EEEEENSP_INSE_12relationship6fork_tILi0EEEEENSP_INS10_14continuation_tILi0EEEEEEEESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE called 22 returned 100% blocks executed 71%
+       22:  167:  any_io_executor(Executor e,
+        -:  168:      typename constraint<
+        -:  169:        conditional<
+        -:  170:          !is_same<Executor, any_io_executor>::value
+        -:  171:            && !is_base_of<execution::detail::any_executor_base,
+        -:  172:              Executor>::value,
+        -:  173:          execution::detail::is_valid_target_executor<
+        -:  174:            Executor, supportable_properties_type>,
+        -:  175:          false_type
+        -:  176:        >::type::value
+        -:  177:      >::type = 0)
+       22:  178:    : base_type(BOOST_ASIO_MOVE_CAST(Executor)(e))
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 never executed
+        -:  179:  {
+       22:  180:  }
+------------------
+_ZN5boost4asio15any_io_executorC2INS0_10io_context19basic_executor_typeISaIvELm0EEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameIS7_S1_E5valuentsrSt10is_base_ofINS0_9execution6detail17any_executor_baseES7_E5valueENSE_24is_valid_target_executorIS7_FvNSD_12context_as_tIRNS0_17execution_contextEEENSE_8blocking7never_tILi0EEENSD_11prefer_onlyINSM_10possibly_tILi0EEEEENSP_INSE_16outstanding_work9tracked_tILi0EEEEENSP_INST_11untracked_tILi0EEEEENSP_INSE_12relationship6fork_tILi0EEEEENSP_INS10_14continuation_tILi0EEEEEEEESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE:
+function _ZN5boost4asio15any_io_executorC2INS0_10io_context19basic_executor_typeISaIvELm0EEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameIS7_S1_E5valuentsrSt10is_base_ofINS0_9execution6detail17any_executor_baseES7_E5valueENSE_24is_valid_target_executorIS7_FvNSD_12context_as_tIRNS0_17execution_contextEEENSE_8blocking7never_tILi0EEENSD_11prefer_onlyINSM_10possibly_tILi0EEEEENSP_INSE_16outstanding_work9tracked_tILi0EEEEENSP_INST_11untracked_tILi0EEEEENSP_INSE_12relationship6fork_tILi0EEEEENSP_INS10_14continuation_tILi0EEEEEEEESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE called 35 returned 100% blocks executed 71%
+       35:  167:  any_io_executor(Executor e,
+        -:  168:      typename constraint<
+        -:  169:        conditional<
+        -:  170:          !is_same<Executor, any_io_executor>::value
+        -:  171:            && !is_base_of<execution::detail::any_executor_base,
+        -:  172:              Executor>::value,
+        -:  173:          execution::detail::is_valid_target_executor<
+        -:  174:            Executor, supportable_properties_type>,
+        -:  175:          false_type
+        -:  176:        >::type::value
+        -:  177:      >::type = 0)
+       35:  178:    : base_type(BOOST_ASIO_MOVE_CAST(Executor)(e))
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 never executed
+        -:  179:  {
+       35:  180:  }
+------------------
+_ZN5boost4asio15any_io_executorC2INS0_10io_context19basic_executor_typeISaIvELm0EEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameIS7_S1_E5valuentsrSt10is_base_ofINS0_9execution6detail17any_executor_baseES7_E5valueENSE_24is_valid_target_executorIS7_FvNSD_12context_as_tIRNS0_17execution_contextEEENSE_8blocking7never_tILi0EEENSD_11prefer_onlyINSM_10possibly_tILi0EEEEENSP_INSE_16outstanding_work9tracked_tILi0EEEEENSP_INST_11untracked_tILi0EEEEENSP_INSE_12relationship6fork_tILi0EEEEENSP_INS10_14continuation_tILi0EEEEEEEESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE:
+function _ZN5boost4asio15any_io_executorC2INS0_10io_context19basic_executor_typeISaIvELm0EEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameIS7_S1_E5valuentsrSt10is_base_ofINS0_9execution6detail17any_executor_baseES7_E5valueENSE_24is_valid_target_executorIS7_FvNSD_12context_as_tIRNS0_17execution_contextEEENSE_8blocking7never_tILi0EEENSD_11prefer_onlyINSM_10possibly_tILi0EEEEENSP_INSE_16outstanding_work9tracked_tILi0EEEEENSP_INST_11untracked_tILi0EEEEENSP_INSE_12relationship6fork_tILi0EEEEENSP_INS10_14continuation_tILi0EEEEEEEESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE called 5 returned 100% blocks executed 71%
+        5:  167:  any_io_executor(Executor e,
+        -:  168:      typename constraint<
+        -:  169:        conditional<
+        -:  170:          !is_same<Executor, any_io_executor>::value
+        -:  171:            && !is_base_of<execution::detail::any_executor_base,
+        -:  172:              Executor>::value,
+        -:  173:          execution::detail::is_valid_target_executor<
+        -:  174:            Executor, supportable_properties_type>,
+        -:  175:          false_type
+        -:  176:        >::type::value
+        -:  177:      >::type = 0)
+        5:  178:    : base_type(BOOST_ASIO_MOVE_CAST(Executor)(e))
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 never executed
+        -:  179:  {
+        5:  180:  }
+------------------
+_ZN5boost4asio15any_io_executorC2INS0_10io_context19basic_executor_typeISaIvELm0EEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameIS7_S1_E5valuentsrSt10is_base_ofINS0_9execution6detail17any_executor_baseES7_E5valueENSE_24is_valid_target_executorIS7_FvNSD_12context_as_tIRNS0_17execution_contextEEENSE_8blocking7never_tILi0EEENSD_11prefer_onlyINSM_10possibly_tILi0EEEEENSP_INSE_16outstanding_work9tracked_tILi0EEEEENSP_INST_11untracked_tILi0EEEEENSP_INSE_12relationship6fork_tILi0EEEEENSP_INS10_14continuation_tILi0EEEEEEEESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE:
+function _ZN5boost4asio15any_io_executorC2INS0_10io_context19basic_executor_typeISaIvELm0EEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameIS7_S1_E5valuentsrSt10is_base_ofINS0_9execution6detail17any_executor_baseES7_E5valueENSE_24is_valid_target_executorIS7_FvNSD_12context_as_tIRNS0_17execution_contextEEENSE_8blocking7never_tILi0EEENSD_11prefer_onlyINSM_10possibly_tILi0EEEEENSP_INSE_16outstanding_work9tracked_tILi0EEEEENSP_INST_11untracked_tILi0EEEEENSP_INSE_12relationship6fork_tILi0EEEEENSP_INS10_14continuation_tILi0EEEEEEEESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  167:  any_io_executor(Executor e,
+        -:  168:      typename constraint<
+        -:  169:        conditional<
+        -:  170:          !is_same<Executor, any_io_executor>::value
+        -:  171:            && !is_base_of<execution::detail::any_executor_base,
+        -:  172:              Executor>::value,
+        -:  173:          execution::detail::is_valid_target_executor<
+        -:  174:            Executor, supportable_properties_type>,
+        -:  175:          false_type
+        -:  176:        >::type::value
+        -:  177:      >::type = 0)
+    #####:  178:    : base_type(BOOST_ASIO_MOVE_CAST(Executor)(e))
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+call    5 never executed
+        -:  179:  {
+    #####:  180:  }
+------------------
+_ZN5boost4asio15any_io_executorC2INS0_10io_context19basic_executor_typeISaIvELm0EEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameIS7_S1_E5valuentsrSt10is_base_ofINS0_9execution6detail17any_executor_baseES7_E5valueENSE_24is_valid_target_executorIS7_FvNSD_12context_as_tIRNS0_17execution_contextEEENSE_8blocking7never_tILi0EEENSD_11prefer_onlyINSM_10possibly_tILi0EEEEENSP_INSE_16outstanding_work9tracked_tILi0EEEEENSP_INST_11untracked_tILi0EEEEENSP_INSE_12relationship6fork_tILi0EEEEENSP_INS10_14continuation_tILi0EEEEEEEESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE:
+function _ZN5boost4asio15any_io_executorC2INS0_10io_context19basic_executor_typeISaIvELm0EEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameIS7_S1_E5valuentsrSt10is_base_ofINS0_9execution6detail17any_executor_baseES7_E5valueENSE_24is_valid_target_executorIS7_FvNSD_12context_as_tIRNS0_17execution_contextEEENSE_8blocking7never_tILi0EEENSD_11prefer_onlyINSM_10possibly_tILi0EEEEENSP_INSE_16outstanding_work9tracked_tILi0EEEEENSP_INST_11untracked_tILi0EEEEENSP_INSE_12relationship6fork_tILi0EEEEENSP_INS10_14continuation_tILi0EEEEEEEESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  167:  any_io_executor(Executor e,
+        -:  168:      typename constraint<
+        -:  169:        conditional<
+        -:  170:          !is_same<Executor, any_io_executor>::value
+        -:  171:            && !is_base_of<execution::detail::any_executor_base,
+        -:  172:              Executor>::value,
+        -:  173:          execution::detail::is_valid_target_executor<
+        -:  174:            Executor, supportable_properties_type>,
+        -:  175:          false_type
+        -:  176:        >::type::value
+        -:  177:      >::type = 0)
+    #####:  178:    : base_type(BOOST_ASIO_MOVE_CAST(Executor)(e))
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+call    5 never executed
+        -:  179:  {
+    #####:  180:  }
+------------------
+_ZN5boost4asio15any_io_executorC2INS0_10io_context19basic_executor_typeISaIvELm0EEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameIS7_S1_E5valuentsrSt10is_base_ofINS0_9execution6detail17any_executor_baseES7_E5valueENSE_24is_valid_target_executorIS7_FvNSD_12context_as_tIRNS0_17execution_contextEEENSE_8blocking7never_tILi0EEENSD_11prefer_onlyINSM_10possibly_tILi0EEEEENSP_INSE_16outstanding_work9tracked_tILi0EEEEENSP_INST_11untracked_tILi0EEEEENSP_INSE_12relationship6fork_tILi0EEEEENSP_INS10_14continuation_tILi0EEEEEEEESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE:
+function _ZN5boost4asio15any_io_executorC2INS0_10io_context19basic_executor_typeISaIvELm0EEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameIS7_S1_E5valuentsrSt10is_base_ofINS0_9execution6detail17any_executor_baseES7_E5valueENSE_24is_valid_target_executorIS7_FvNSD_12context_as_tIRNS0_17execution_contextEEENSE_8blocking7never_tILi0EEENSD_11prefer_onlyINSM_10possibly_tILi0EEEEENSP_INSE_16outstanding_work9tracked_tILi0EEEEENSP_INST_11untracked_tILi0EEEEENSP_INSE_12relationship6fork_tILi0EEEEENSP_INS10_14continuation_tILi0EEEEEEEESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE called 14 returned 100% blocks executed 71%
+       14:  167:  any_io_executor(Executor e,
+        -:  168:      typename constraint<
+        -:  169:        conditional<
+        -:  170:          !is_same<Executor, any_io_executor>::value
+        -:  171:            && !is_base_of<execution::detail::any_executor_base,
+        -:  172:              Executor>::value,
+        -:  173:          execution::detail::is_valid_target_executor<
+        -:  174:            Executor, supportable_properties_type>,
+        -:  175:          false_type
+        -:  176:        >::type::value
+        -:  177:      >::type = 0)
+       14:  178:    : base_type(BOOST_ASIO_MOVE_CAST(Executor)(e))
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 never executed
+        -:  179:  {
+       14:  180:  }
+------------------
+_ZN5boost4asio15any_io_executorC2INS0_10io_context19basic_executor_typeISaIvELm0EEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameIS7_S1_E5valuentsrSt10is_base_ofINS0_9execution6detail17any_executor_baseES7_E5valueENSE_24is_valid_target_executorIS7_FvNSD_12context_as_tIRNS0_17execution_contextEEENSE_8blocking7never_tILi0EEENSD_11prefer_onlyINSM_10possibly_tILi0EEEEENSP_INSE_16outstanding_work9tracked_tILi0EEEEENSP_INST_11untracked_tILi0EEEEENSP_INSE_12relationship6fork_tILi0EEEEENSP_INS10_14continuation_tILi0EEEEEEEESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE:
+function _ZN5boost4asio15any_io_executorC2INS0_10io_context19basic_executor_typeISaIvELm0EEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameIS7_S1_E5valuentsrSt10is_base_ofINS0_9execution6detail17any_executor_baseES7_E5valueENSE_24is_valid_target_executorIS7_FvNSD_12context_as_tIRNS0_17execution_contextEEENSE_8blocking7never_tILi0EEENSD_11prefer_onlyINSM_10possibly_tILi0EEEEENSP_INSE_16outstanding_work9tracked_tILi0EEEEENSP_INST_11untracked_tILi0EEEEENSP_INSE_12relationship6fork_tILi0EEEEENSP_INS10_14continuation_tILi0EEEEEEEESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE called 16 returned 100% blocks executed 71%
+       16:  167:  any_io_executor(Executor e,
+        -:  168:      typename constraint<
+        -:  169:        conditional<
+        -:  170:          !is_same<Executor, any_io_executor>::value
+        -:  171:            && !is_base_of<execution::detail::any_executor_base,
+        -:  172:              Executor>::value,
+        -:  173:          execution::detail::is_valid_target_executor<
+        -:  174:            Executor, supportable_properties_type>,
+        -:  175:          false_type
+        -:  176:        >::type::value
+        -:  177:      >::type = 0)
+       16:  178:    : base_type(BOOST_ASIO_MOVE_CAST(Executor)(e))
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 never executed
+        -:  179:  {
+       16:  180:  }
+------------------
+_ZN5boost4asio15any_io_executorC2INS0_10io_context19basic_executor_typeISaIvELm0EEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameIS7_S1_E5valuentsrSt10is_base_ofINS0_9execution6detail17any_executor_baseES7_E5valueENSE_24is_valid_target_executorIS7_FvNSD_12context_as_tIRNS0_17execution_contextEEENSE_8blocking7never_tILi0EEENSD_11prefer_onlyINSM_10possibly_tILi0EEEEENSP_INSE_16outstanding_work9tracked_tILi0EEEEENSP_INST_11untracked_tILi0EEEEENSP_INSE_12relationship6fork_tILi0EEEEENSP_INS10_14continuation_tILi0EEEEEEEESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE:
+function _ZN5boost4asio15any_io_executorC2INS0_10io_context19basic_executor_typeISaIvELm0EEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameIS7_S1_E5valuentsrSt10is_base_ofINS0_9execution6detail17any_executor_baseES7_E5valueENSE_24is_valid_target_executorIS7_FvNSD_12context_as_tIRNS0_17execution_contextEEENSE_8blocking7never_tILi0EEENSD_11prefer_onlyINSM_10possibly_tILi0EEEEENSP_INSE_16outstanding_work9tracked_tILi0EEEEENSP_INST_11untracked_tILi0EEEEENSP_INSE_12relationship6fork_tILi0EEEEENSP_INS10_14continuation_tILi0EEEEEEEESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE called 5 returned 100% blocks executed 71%
+        5:  167:  any_io_executor(Executor e,
+        -:  168:      typename constraint<
+        -:  169:        conditional<
+        -:  170:          !is_same<Executor, any_io_executor>::value
+        -:  171:            && !is_base_of<execution::detail::any_executor_base,
+        -:  172:              Executor>::value,
+        -:  173:          execution::detail::is_valid_target_executor<
+        -:  174:            Executor, supportable_properties_type>,
+        -:  175:          false_type
+        -:  176:        >::type::value
+        -:  177:      >::type = 0)
+        5:  178:    : base_type(BOOST_ASIO_MOVE_CAST(Executor)(e))
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 never executed
+        -:  179:  {
+        5:  180:  }
+------------------
+_ZN5boost4asio15any_io_executorC2INS0_10io_context19basic_executor_typeISaIvELm0EEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameIS7_S1_E5valuentsrSt10is_base_ofINS0_9execution6detail17any_executor_baseES7_E5valueENSE_24is_valid_target_executorIS7_FvNSD_12context_as_tIRNS0_17execution_contextEEENSE_8blocking7never_tILi0EEENSD_11prefer_onlyINSM_10possibly_tILi0EEEEENSP_INSE_16outstanding_work9tracked_tILi0EEEEENSP_INST_11untracked_tILi0EEEEENSP_INSE_12relationship6fork_tILi0EEEEENSP_INS10_14continuation_tILi0EEEEEEEESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE:
+function _ZN5boost4asio15any_io_executorC2INS0_10io_context19basic_executor_typeISaIvELm0EEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameIS7_S1_E5valuentsrSt10is_base_ofINS0_9execution6detail17any_executor_baseES7_E5valueENSE_24is_valid_target_executorIS7_FvNSD_12context_as_tIRNS0_17execution_contextEEENSE_8blocking7never_tILi0EEENSD_11prefer_onlyINSM_10possibly_tILi0EEEEENSP_INSE_16outstanding_work9tracked_tILi0EEEEENSP_INST_11untracked_tILi0EEEEENSP_INSE_12relationship6fork_tILi0EEEEENSP_INS10_14continuation_tILi0EEEEEEEESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  167:  any_io_executor(Executor e,
+        -:  168:      typename constraint<
+        -:  169:        conditional<
+        -:  170:          !is_same<Executor, any_io_executor>::value
+        -:  171:            && !is_base_of<execution::detail::any_executor_base,
+        -:  172:              Executor>::value,
+        -:  173:          execution::detail::is_valid_target_executor<
+        -:  174:            Executor, supportable_properties_type>,
+        -:  175:          false_type
+        -:  176:        >::type::value
+        -:  177:      >::type = 0)
+    #####:  178:    : base_type(BOOST_ASIO_MOVE_CAST(Executor)(e))
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+call    5 never executed
+        -:  179:  {
+    #####:  180:  }
+------------------
+_ZN5boost4asio15any_io_executorC2INS0_10io_context19basic_executor_typeISaIvELm0EEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameIS7_S1_E5valuentsrSt10is_base_ofINS0_9execution6detail17any_executor_baseES7_E5valueENSE_24is_valid_target_executorIS7_FvNSD_12context_as_tIRNS0_17execution_contextEEENSE_8blocking7never_tILi0EEENSD_11prefer_onlyINSM_10possibly_tILi0EEEEENSP_INSE_16outstanding_work9tracked_tILi0EEEEENSP_INST_11untracked_tILi0EEEEENSP_INSE_12relationship6fork_tILi0EEEEENSP_INS10_14continuation_tILi0EEEEEEEESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE:
+function _ZN5boost4asio15any_io_executorC2INS0_10io_context19basic_executor_typeISaIvELm0EEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameIS7_S1_E5valuentsrSt10is_base_ofINS0_9execution6detail17any_executor_baseES7_E5valueENSE_24is_valid_target_executorIS7_FvNSD_12context_as_tIRNS0_17execution_contextEEENSE_8blocking7never_tILi0EEENSD_11prefer_onlyINSM_10possibly_tILi0EEEEENSP_INSE_16outstanding_work9tracked_tILi0EEEEENSP_INST_11untracked_tILi0EEEEENSP_INSE_12relationship6fork_tILi0EEEEENSP_INS10_14continuation_tILi0EEEEEEEESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE called 12 returned 100% blocks executed 71%
+       12:  167:  any_io_executor(Executor e,
+        -:  168:      typename constraint<
+        -:  169:        conditional<
+        -:  170:          !is_same<Executor, any_io_executor>::value
+        -:  171:            && !is_base_of<execution::detail::any_executor_base,
+        -:  172:              Executor>::value,
+        -:  173:          execution::detail::is_valid_target_executor<
+        -:  174:            Executor, supportable_properties_type>,
+        -:  175:          false_type
+        -:  176:        >::type::value
+        -:  177:      >::type = 0)
+       12:  178:    : base_type(BOOST_ASIO_MOVE_CAST(Executor)(e))
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 never executed
+        -:  179:  {
+       12:  180:  }
+------------------
+_ZN5boost4asio15any_io_executorC2INS0_10io_context19basic_executor_typeISaIvELm0EEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameIS7_S1_E5valuentsrSt10is_base_ofINS0_9execution6detail17any_executor_baseES7_E5valueENSE_24is_valid_target_executorIS7_FvNSD_12context_as_tIRNS0_17execution_contextEEENSE_8blocking7never_tILi0EEENSD_11prefer_onlyINSM_10possibly_tILi0EEEEENSP_INSE_16outstanding_work9tracked_tILi0EEEEENSP_INST_11untracked_tILi0EEEEENSP_INSE_12relationship6fork_tILi0EEEEENSP_INS10_14continuation_tILi0EEEEEEEESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE:
+function _ZN5boost4asio15any_io_executorC2INS0_10io_context19basic_executor_typeISaIvELm0EEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameIS7_S1_E5valuentsrSt10is_base_ofINS0_9execution6detail17any_executor_baseES7_E5valueENSE_24is_valid_target_executorIS7_FvNSD_12context_as_tIRNS0_17execution_contextEEENSE_8blocking7never_tILi0EEENSD_11prefer_onlyINSM_10possibly_tILi0EEEEENSP_INSE_16outstanding_work9tracked_tILi0EEEEENSP_INST_11untracked_tILi0EEEEENSP_INSE_12relationship6fork_tILi0EEEEENSP_INS10_14continuation_tILi0EEEEEEEESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE called 41 returned 100% blocks executed 71%
+       41:  167:  any_io_executor(Executor e,
+        -:  168:      typename constraint<
+        -:  169:        conditional<
+        -:  170:          !is_same<Executor, any_io_executor>::value
+        -:  171:            && !is_base_of<execution::detail::any_executor_base,
+        -:  172:              Executor>::value,
+        -:  173:          execution::detail::is_valid_target_executor<
+        -:  174:            Executor, supportable_properties_type>,
+        -:  175:          false_type
+        -:  176:        >::type::value
+        -:  177:      >::type = 0)
+       41:  178:    : base_type(BOOST_ASIO_MOVE_CAST(Executor)(e))
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 never executed
+        -:  179:  {
+       41:  180:  }
+------------------
+_ZN5boost4asio15any_io_executorC2INS0_10io_context19basic_executor_typeISaIvELm0EEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameIS7_S1_E5valuentsrSt10is_base_ofINS0_9execution6detail17any_executor_baseES7_E5valueENSE_24is_valid_target_executorIS7_FvNSD_12context_as_tIRNS0_17execution_contextEEENSE_8blocking7never_tILi0EEENSD_11prefer_onlyINSM_10possibly_tILi0EEEEENSP_INSE_16outstanding_work9tracked_tILi0EEEEENSP_INST_11untracked_tILi0EEEEENSP_INSE_12relationship6fork_tILi0EEEEENSP_INS10_14continuation_tILi0EEEEEEEESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE:
+function _ZN5boost4asio15any_io_executorC2INS0_10io_context19basic_executor_typeISaIvELm0EEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameIS7_S1_E5valuentsrSt10is_base_ofINS0_9execution6detail17any_executor_baseES7_E5valueENSE_24is_valid_target_executorIS7_FvNSD_12context_as_tIRNS0_17execution_contextEEENSE_8blocking7never_tILi0EEENSD_11prefer_onlyINSM_10possibly_tILi0EEEEENSP_INSE_16outstanding_work9tracked_tILi0EEEEENSP_INST_11untracked_tILi0EEEEENSP_INSE_12relationship6fork_tILi0EEEEENSP_INS10_14continuation_tILi0EEEEEEEESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  167:  any_io_executor(Executor e,
+        -:  168:      typename constraint<
+        -:  169:        conditional<
+        -:  170:          !is_same<Executor, any_io_executor>::value
+        -:  171:            && !is_base_of<execution::detail::any_executor_base,
+        -:  172:              Executor>::value,
+        -:  173:          execution::detail::is_valid_target_executor<
+        -:  174:            Executor, supportable_properties_type>,
+        -:  175:          false_type
+        -:  176:        >::type::value
+        -:  177:      >::type = 0)
+    #####:  178:    : base_type(BOOST_ASIO_MOVE_CAST(Executor)(e))
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+call    5 never executed
+        -:  179:  {
+    #####:  180:  }
+------------------
+_ZN5boost4asio15any_io_executorC2INS0_10io_context19basic_executor_typeISaIvELm0EEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameIS7_S1_E5valuentsrSt10is_base_ofINS0_9execution6detail17any_executor_baseES7_E5valueENSE_24is_valid_target_executorIS7_FvNSD_12context_as_tIRNS0_17execution_contextEEENSE_8blocking7never_tILi0EEENSD_11prefer_onlyINSM_10possibly_tILi0EEEEENSP_INSE_16outstanding_work9tracked_tILi0EEEEENSP_INST_11untracked_tILi0EEEEENSP_INSE_12relationship6fork_tILi0EEEEENSP_INS10_14continuation_tILi0EEEEEEEESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE:
+function _ZN5boost4asio15any_io_executorC2INS0_10io_context19basic_executor_typeISaIvELm0EEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameIS7_S1_E5valuentsrSt10is_base_ofINS0_9execution6detail17any_executor_baseES7_E5valueENSE_24is_valid_target_executorIS7_FvNSD_12context_as_tIRNS0_17execution_contextEEENSE_8blocking7never_tILi0EEENSD_11prefer_onlyINSM_10possibly_tILi0EEEEENSP_INSE_16outstanding_work9tracked_tILi0EEEEENSP_INST_11untracked_tILi0EEEEENSP_INSE_12relationship6fork_tILi0EEEEENSP_INS10_14continuation_tILi0EEEEEEEESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  167:  any_io_executor(Executor e,
+        -:  168:      typename constraint<
+        -:  169:        conditional<
+        -:  170:          !is_same<Executor, any_io_executor>::value
+        -:  171:            && !is_base_of<execution::detail::any_executor_base,
+        -:  172:              Executor>::value,
+        -:  173:          execution::detail::is_valid_target_executor<
+        -:  174:            Executor, supportable_properties_type>,
+        -:  175:          false_type
+        -:  176:        >::type::value
+        -:  177:      >::type = 0)
+    #####:  178:    : base_type(BOOST_ASIO_MOVE_CAST(Executor)(e))
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+call    5 never executed
+        -:  179:  {
+    #####:  180:  }
+------------------
+_ZN5boost4asio15any_io_executorC2INS0_10io_context19basic_executor_typeISaIvELm0EEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameIS7_S1_E5valuentsrSt10is_base_ofINS0_9execution6detail17any_executor_baseES7_E5valueENSE_24is_valid_target_executorIS7_FvNSD_12context_as_tIRNS0_17execution_contextEEENSE_8blocking7never_tILi0EEENSD_11prefer_onlyINSM_10possibly_tILi0EEEEENSP_INSE_16outstanding_work9tracked_tILi0EEEEENSP_INST_11untracked_tILi0EEEEENSP_INSE_12relationship6fork_tILi0EEEEENSP_INS10_14continuation_tILi0EEEEEEEESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE:
+function _ZN5boost4asio15any_io_executorC2INS0_10io_context19basic_executor_typeISaIvELm0EEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameIS7_S1_E5valuentsrSt10is_base_ofINS0_9execution6detail17any_executor_baseES7_E5valueENSE_24is_valid_target_executorIS7_FvNSD_12context_as_tIRNS0_17execution_contextEEENSE_8blocking7never_tILi0EEENSD_11prefer_onlyINSM_10possibly_tILi0EEEEENSP_INSE_16outstanding_work9tracked_tILi0EEEEENSP_INST_11untracked_tILi0EEEEENSP_INSE_12relationship6fork_tILi0EEEEENSP_INS10_14continuation_tILi0EEEEEEEESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  167:  any_io_executor(Executor e,
+        -:  168:      typename constraint<
+        -:  169:        conditional<
+        -:  170:          !is_same<Executor, any_io_executor>::value
+        -:  171:            && !is_base_of<execution::detail::any_executor_base,
+        -:  172:              Executor>::value,
+        -:  173:          execution::detail::is_valid_target_executor<
+        -:  174:            Executor, supportable_properties_type>,
+        -:  175:          false_type
+        -:  176:        >::type::value
+        -:  177:      >::type = 0)
+    #####:  178:    : base_type(BOOST_ASIO_MOVE_CAST(Executor)(e))
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+call    5 never executed
+        -:  179:  {
+    #####:  180:  }
+------------------
+_ZN5boost4asio15any_io_executorC2INS0_10io_context19basic_executor_typeISaIvELm0EEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameIS7_S1_E5valuentsrSt10is_base_ofINS0_9execution6detail17any_executor_baseES7_E5valueENSE_24is_valid_target_executorIS7_FvNSD_12context_as_tIRNS0_17execution_contextEEENSE_8blocking7never_tILi0EEENSD_11prefer_onlyINSM_10possibly_tILi0EEEEENSP_INSE_16outstanding_work9tracked_tILi0EEEEENSP_INST_11untracked_tILi0EEEEENSP_INSE_12relationship6fork_tILi0EEEEENSP_INS10_14continuation_tILi0EEEEEEEESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE:
+function _ZN5boost4asio15any_io_executorC2INS0_10io_context19basic_executor_typeISaIvELm0EEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameIS7_S1_E5valuentsrSt10is_base_ofINS0_9execution6detail17any_executor_baseES7_E5valueENSE_24is_valid_target_executorIS7_FvNSD_12context_as_tIRNS0_17execution_contextEEENSE_8blocking7never_tILi0EEENSD_11prefer_onlyINSM_10possibly_tILi0EEEEENSP_INSE_16outstanding_work9tracked_tILi0EEEEENSP_INST_11untracked_tILi0EEEEENSP_INSE_12relationship6fork_tILi0EEEEENSP_INS10_14continuation_tILi0EEEEEEEESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  167:  any_io_executor(Executor e,
+        -:  168:      typename constraint<
+        -:  169:        conditional<
+        -:  170:          !is_same<Executor, any_io_executor>::value
+        -:  171:            && !is_base_of<execution::detail::any_executor_base,
+        -:  172:              Executor>::value,
+        -:  173:          execution::detail::is_valid_target_executor<
+        -:  174:            Executor, supportable_properties_type>,
+        -:  175:          false_type
+        -:  176:        >::type::value
+        -:  177:      >::type = 0)
+    #####:  178:    : base_type(BOOST_ASIO_MOVE_CAST(Executor)(e))
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+call    5 never executed
+        -:  179:  {
+    #####:  180:  }
+------------------
+_ZN5boost4asio15any_io_executorC2INS0_10io_context19basic_executor_typeISaIvELm0EEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameIS7_S1_E5valuentsrSt10is_base_ofINS0_9execution6detail17any_executor_baseES7_E5valueENSE_24is_valid_target_executorIS7_FvNSD_12context_as_tIRNS0_17execution_contextEEENSE_8blocking7never_tILi0EEENSD_11prefer_onlyINSM_10possibly_tILi0EEEEENSP_INSE_16outstanding_work9tracked_tILi0EEEEENSP_INST_11untracked_tILi0EEEEENSP_INSE_12relationship6fork_tILi0EEEEENSP_INS10_14continuation_tILi0EEEEEEEESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE:
+function _ZN5boost4asio15any_io_executorC2INS0_10io_context19basic_executor_typeISaIvELm0EEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameIS7_S1_E5valuentsrSt10is_base_ofINS0_9execution6detail17any_executor_baseES7_E5valueENSE_24is_valid_target_executorIS7_FvNSD_12context_as_tIRNS0_17execution_contextEEENSE_8blocking7never_tILi0EEENSD_11prefer_onlyINSM_10possibly_tILi0EEEEENSP_INSE_16outstanding_work9tracked_tILi0EEEEENSP_INST_11untracked_tILi0EEEEENSP_INSE_12relationship6fork_tILi0EEEEENSP_INS10_14continuation_tILi0EEEEEEEESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  167:  any_io_executor(Executor e,
+        -:  168:      typename constraint<
+        -:  169:        conditional<
+        -:  170:          !is_same<Executor, any_io_executor>::value
+        -:  171:            && !is_base_of<execution::detail::any_executor_base,
+        -:  172:              Executor>::value,
+        -:  173:          execution::detail::is_valid_target_executor<
+        -:  174:            Executor, supportable_properties_type>,
+        -:  175:          false_type
+        -:  176:        >::type::value
+        -:  177:      >::type = 0)
+    #####:  178:    : base_type(BOOST_ASIO_MOVE_CAST(Executor)(e))
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+call    5 never executed
+        -:  179:  {
+    #####:  180:  }
+------------------
+_ZN5boost4asio15any_io_executorC2INS0_10io_context19basic_executor_typeISaIvELm0EEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameIS7_S1_E5valuentsrSt10is_base_ofINS0_9execution6detail17any_executor_baseES7_E5valueENSE_24is_valid_target_executorIS7_FvNSD_12context_as_tIRNS0_17execution_contextEEENSE_8blocking7never_tILi0EEENSD_11prefer_onlyINSM_10possibly_tILi0EEEEENSP_INSE_16outstanding_work9tracked_tILi0EEEEENSP_INST_11untracked_tILi0EEEEENSP_INSE_12relationship6fork_tILi0EEEEENSP_INS10_14continuation_tILi0EEEEEEEESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE:
+function _ZN5boost4asio15any_io_executorC2INS0_10io_context19basic_executor_typeISaIvELm0EEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameIS7_S1_E5valuentsrSt10is_base_ofINS0_9execution6detail17any_executor_baseES7_E5valueENSE_24is_valid_target_executorIS7_FvNSD_12context_as_tIRNS0_17execution_contextEEENSE_8blocking7never_tILi0EEENSD_11prefer_onlyINSM_10possibly_tILi0EEEEENSP_INSE_16outstanding_work9tracked_tILi0EEEEENSP_INST_11untracked_tILi0EEEEENSP_INSE_12relationship6fork_tILi0EEEEENSP_INS10_14continuation_tILi0EEEEEEEESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  167:  any_io_executor(Executor e,
+        -:  168:      typename constraint<
+        -:  169:        conditional<
+        -:  170:          !is_same<Executor, any_io_executor>::value
+        -:  171:            && !is_base_of<execution::detail::any_executor_base,
+        -:  172:              Executor>::value,
+        -:  173:          execution::detail::is_valid_target_executor<
+        -:  174:            Executor, supportable_properties_type>,
+        -:  175:          false_type
+        -:  176:        >::type::value
+        -:  177:      >::type = 0)
+    #####:  178:    : base_type(BOOST_ASIO_MOVE_CAST(Executor)(e))
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+call    5 never executed
+        -:  179:  {
+    #####:  180:  }
+------------------
+_ZN5boost4asio15any_io_executorC2INS0_10io_context19basic_executor_typeISaIvELm0EEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameIS7_S1_E5valuentsrSt10is_base_ofINS0_9execution6detail17any_executor_baseES7_E5valueENSE_24is_valid_target_executorIS7_FvNSD_12context_as_tIRNS0_17execution_contextEEENSE_8blocking7never_tILi0EEENSD_11prefer_onlyINSM_10possibly_tILi0EEEEENSP_INSE_16outstanding_work9tracked_tILi0EEEEENSP_INST_11untracked_tILi0EEEEENSP_INSE_12relationship6fork_tILi0EEEEENSP_INS10_14continuation_tILi0EEEEEEEESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE:
+function _ZN5boost4asio15any_io_executorC2INS0_10io_context19basic_executor_typeISaIvELm0EEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameIS7_S1_E5valuentsrSt10is_base_ofINS0_9execution6detail17any_executor_baseES7_E5valueENSE_24is_valid_target_executorIS7_FvNSD_12context_as_tIRNS0_17execution_contextEEENSE_8blocking7never_tILi0EEENSD_11prefer_onlyINSM_10possibly_tILi0EEEEENSP_INSE_16outstanding_work9tracked_tILi0EEEEENSP_INST_11untracked_tILi0EEEEENSP_INSE_12relationship6fork_tILi0EEEEENSP_INS10_14continuation_tILi0EEEEEEEESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  167:  any_io_executor(Executor e,
+        -:  168:      typename constraint<
+        -:  169:        conditional<
+        -:  170:          !is_same<Executor, any_io_executor>::value
+        -:  171:            && !is_base_of<execution::detail::any_executor_base,
+        -:  172:              Executor>::value,
+        -:  173:          execution::detail::is_valid_target_executor<
+        -:  174:            Executor, supportable_properties_type>,
+        -:  175:          false_type
+        -:  176:        >::type::value
+        -:  177:      >::type = 0)
+    #####:  178:    : base_type(BOOST_ASIO_MOVE_CAST(Executor)(e))
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+call    5 never executed
+        -:  179:  {
+    #####:  180:  }
+------------------
+_ZN5boost4asio15any_io_executorC2INS0_10io_context19basic_executor_typeISaIvELm0EEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameIS7_S1_E5valuentsrSt10is_base_ofINS0_9execution6detail17any_executor_baseES7_E5valueENSE_24is_valid_target_executorIS7_FvNSD_12context_as_tIRNS0_17execution_contextEEENSE_8blocking7never_tILi0EEENSD_11prefer_onlyINSM_10possibly_tILi0EEEEENSP_INSE_16outstanding_work9tracked_tILi0EEEEENSP_INST_11untracked_tILi0EEEEENSP_INSE_12relationship6fork_tILi0EEEEENSP_INS10_14continuation_tILi0EEEEEEEESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE:
+function _ZN5boost4asio15any_io_executorC2INS0_10io_context19basic_executor_typeISaIvELm0EEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameIS7_S1_E5valuentsrSt10is_base_ofINS0_9execution6detail17any_executor_baseES7_E5valueENSE_24is_valid_target_executorIS7_FvNSD_12context_as_tIRNS0_17execution_contextEEENSE_8blocking7never_tILi0EEENSD_11prefer_onlyINSM_10possibly_tILi0EEEEENSP_INSE_16outstanding_work9tracked_tILi0EEEEENSP_INST_11untracked_tILi0EEEEENSP_INSE_12relationship6fork_tILi0EEEEENSP_INS10_14continuation_tILi0EEEEEEEESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  167:  any_io_executor(Executor e,
+        -:  168:      typename constraint<
+        -:  169:        conditional<
+        -:  170:          !is_same<Executor, any_io_executor>::value
+        -:  171:            && !is_base_of<execution::detail::any_executor_base,
+        -:  172:              Executor>::value,
+        -:  173:          execution::detail::is_valid_target_executor<
+        -:  174:            Executor, supportable_properties_type>,
+        -:  175:          false_type
+        -:  176:        >::type::value
+        -:  177:      >::type = 0)
+    #####:  178:    : base_type(BOOST_ASIO_MOVE_CAST(Executor)(e))
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+call    5 never executed
+        -:  179:  {
+    #####:  180:  }
+------------------
+_ZN5boost4asio15any_io_executorC2INS0_10io_context19basic_executor_typeISaIvELm0EEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameIS7_S1_E5valuentsrSt10is_base_ofINS0_9execution6detail17any_executor_baseES7_E5valueENSE_24is_valid_target_executorIS7_FvNSD_12context_as_tIRNS0_17execution_contextEEENSE_8blocking7never_tILi0EEENSD_11prefer_onlyINSM_10possibly_tILi0EEEEENSP_INSE_16outstanding_work9tracked_tILi0EEEEENSP_INST_11untracked_tILi0EEEEENSP_INSE_12relationship6fork_tILi0EEEEENSP_INS10_14continuation_tILi0EEEEEEEESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE:
+function _ZN5boost4asio15any_io_executorC2INS0_10io_context19basic_executor_typeISaIvELm0EEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameIS7_S1_E5valuentsrSt10is_base_ofINS0_9execution6detail17any_executor_baseES7_E5valueENSE_24is_valid_target_executorIS7_FvNSD_12context_as_tIRNS0_17execution_contextEEENSE_8blocking7never_tILi0EEENSD_11prefer_onlyINSM_10possibly_tILi0EEEEENSP_INSE_16outstanding_work9tracked_tILi0EEEEENSP_INST_11untracked_tILi0EEEEENSP_INSE_12relationship6fork_tILi0EEEEENSP_INS10_14continuation_tILi0EEEEEEEESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  167:  any_io_executor(Executor e,
+        -:  168:      typename constraint<
+        -:  169:        conditional<
+        -:  170:          !is_same<Executor, any_io_executor>::value
+        -:  171:            && !is_base_of<execution::detail::any_executor_base,
+        -:  172:              Executor>::value,
+        -:  173:          execution::detail::is_valid_target_executor<
+        -:  174:            Executor, supportable_properties_type>,
+        -:  175:          false_type
+        -:  176:        >::type::value
+        -:  177:      >::type = 0)
+    #####:  178:    : base_type(BOOST_ASIO_MOVE_CAST(Executor)(e))
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+call    5 never executed
+        -:  179:  {
+    #####:  180:  }
+------------------
+_ZN5boost4asio15any_io_executorC2INS0_10io_context19basic_executor_typeISaIvELm0EEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameIS7_S1_E5valuentsrSt10is_base_ofINS0_9execution6detail17any_executor_baseES7_E5valueENSE_24is_valid_target_executorIS7_FvNSD_12context_as_tIRNS0_17execution_contextEEENSE_8blocking7never_tILi0EEENSD_11prefer_onlyINSM_10possibly_tILi0EEEEENSP_INSE_16outstanding_work9tracked_tILi0EEEEENSP_INST_11untracked_tILi0EEEEENSP_INSE_12relationship6fork_tILi0EEEEENSP_INS10_14continuation_tILi0EEEEEEEESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE:
+function _ZN5boost4asio15any_io_executorC2INS0_10io_context19basic_executor_typeISaIvELm0EEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameIS7_S1_E5valuentsrSt10is_base_ofINS0_9execution6detail17any_executor_baseES7_E5valueENSE_24is_valid_target_executorIS7_FvNSD_12context_as_tIRNS0_17execution_contextEEENSE_8blocking7never_tILi0EEENSD_11prefer_onlyINSM_10possibly_tILi0EEEEENSP_INSE_16outstanding_work9tracked_tILi0EEEEENSP_INST_11untracked_tILi0EEEEENSP_INSE_12relationship6fork_tILi0EEEEENSP_INS10_14continuation_tILi0EEEEEEEESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE called 11 returned 100% blocks executed 71%
+       11:  167:  any_io_executor(Executor e,
+        -:  168:      typename constraint<
+        -:  169:        conditional<
+        -:  170:          !is_same<Executor, any_io_executor>::value
+        -:  171:            && !is_base_of<execution::detail::any_executor_base,
+        -:  172:              Executor>::value,
+        -:  173:          execution::detail::is_valid_target_executor<
+        -:  174:            Executor, supportable_properties_type>,
+        -:  175:          false_type
+        -:  176:        >::type::value
+        -:  177:      >::type = 0)
+       11:  178:    : base_type(BOOST_ASIO_MOVE_CAST(Executor)(e))
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 never executed
+        -:  179:  {
+       11:  180:  }
+------------------
+_ZN5boost4asio15any_io_executorC2INS0_10io_context19basic_executor_typeISaIvELm0EEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameIS7_S1_E5valuentsrSt10is_base_ofINS0_9execution6detail17any_executor_baseES7_E5valueENSE_24is_valid_target_executorIS7_FvNSD_12context_as_tIRNS0_17execution_contextEEENSE_8blocking7never_tILi0EEENSD_11prefer_onlyINSM_10possibly_tILi0EEEEENSP_INSE_16outstanding_work9tracked_tILi0EEEEENSP_INST_11untracked_tILi0EEEEENSP_INSE_12relationship6fork_tILi0EEEEENSP_INS10_14continuation_tILi0EEEEEEEESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE:
+function _ZN5boost4asio15any_io_executorC2INS0_10io_context19basic_executor_typeISaIvELm0EEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameIS7_S1_E5valuentsrSt10is_base_ofINS0_9execution6detail17any_executor_baseES7_E5valueENSE_24is_valid_target_executorIS7_FvNSD_12context_as_tIRNS0_17execution_contextEEENSE_8blocking7never_tILi0EEENSD_11prefer_onlyINSM_10possibly_tILi0EEEEENSP_INSE_16outstanding_work9tracked_tILi0EEEEENSP_INST_11untracked_tILi0EEEEENSP_INSE_12relationship6fork_tILi0EEEEENSP_INS10_14continuation_tILi0EEEEEEEESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  167:  any_io_executor(Executor e,
+        -:  168:      typename constraint<
+        -:  169:        conditional<
+        -:  170:          !is_same<Executor, any_io_executor>::value
+        -:  171:            && !is_base_of<execution::detail::any_executor_base,
+        -:  172:              Executor>::value,
+        -:  173:          execution::detail::is_valid_target_executor<
+        -:  174:            Executor, supportable_properties_type>,
+        -:  175:          false_type
+        -:  176:        >::type::value
+        -:  177:      >::type = 0)
+    #####:  178:    : base_type(BOOST_ASIO_MOVE_CAST(Executor)(e))
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+call    5 never executed
+        -:  179:  {
+    #####:  180:  }
+------------------
+_ZN5boost4asio15any_io_executorC2INS0_10io_context19basic_executor_typeISaIvELm0EEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameIS7_S1_E5valuentsrSt10is_base_ofINS0_9execution6detail17any_executor_baseES7_E5valueENSE_24is_valid_target_executorIS7_FvNSD_12context_as_tIRNS0_17execution_contextEEENSE_8blocking7never_tILi0EEENSD_11prefer_onlyINSM_10possibly_tILi0EEEEENSP_INSE_16outstanding_work9tracked_tILi0EEEEENSP_INST_11untracked_tILi0EEEEENSP_INSE_12relationship6fork_tILi0EEEEENSP_INS10_14continuation_tILi0EEEEEEEESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE:
+function _ZN5boost4asio15any_io_executorC2INS0_10io_context19basic_executor_typeISaIvELm0EEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameIS7_S1_E5valuentsrSt10is_base_ofINS0_9execution6detail17any_executor_baseES7_E5valueENSE_24is_valid_target_executorIS7_FvNSD_12context_as_tIRNS0_17execution_contextEEENSE_8blocking7never_tILi0EEENSD_11prefer_onlyINSM_10possibly_tILi0EEEEENSP_INSE_16outstanding_work9tracked_tILi0EEEEENSP_INST_11untracked_tILi0EEEEENSP_INSE_12relationship6fork_tILi0EEEEENSP_INS10_14continuation_tILi0EEEEEEEESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  167:  any_io_executor(Executor e,
+        -:  168:      typename constraint<
+        -:  169:        conditional<
+        -:  170:          !is_same<Executor, any_io_executor>::value
+        -:  171:            && !is_base_of<execution::detail::any_executor_base,
+        -:  172:              Executor>::value,
+        -:  173:          execution::detail::is_valid_target_executor<
+        -:  174:            Executor, supportable_properties_type>,
+        -:  175:          false_type
+        -:  176:        >::type::value
+        -:  177:      >::type = 0)
+    #####:  178:    : base_type(BOOST_ASIO_MOVE_CAST(Executor)(e))
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+call    5 never executed
+        -:  179:  {
+    #####:  180:  }
+------------------
+_ZN5boost4asio15any_io_executorC2INS0_10io_context19basic_executor_typeISaIvELm0EEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameIS7_S1_E5valuentsrSt10is_base_ofINS0_9execution6detail17any_executor_baseES7_E5valueENSE_24is_valid_target_executorIS7_FvNSD_12context_as_tIRNS0_17execution_contextEEENSE_8blocking7never_tILi0EEENSD_11prefer_onlyINSM_10possibly_tILi0EEEEENSP_INSE_16outstanding_work9tracked_tILi0EEEEENSP_INST_11untracked_tILi0EEEEENSP_INSE_12relationship6fork_tILi0EEEEENSP_INS10_14continuation_tILi0EEEEEEEESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE:
+function _ZN5boost4asio15any_io_executorC2INS0_10io_context19basic_executor_typeISaIvELm0EEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameIS7_S1_E5valuentsrSt10is_base_ofINS0_9execution6detail17any_executor_baseES7_E5valueENSE_24is_valid_target_executorIS7_FvNSD_12context_as_tIRNS0_17execution_contextEEENSE_8blocking7never_tILi0EEENSD_11prefer_onlyINSM_10possibly_tILi0EEEEENSP_INSE_16outstanding_work9tracked_tILi0EEEEENSP_INST_11untracked_tILi0EEEEENSP_INSE_12relationship6fork_tILi0EEEEENSP_INS10_14continuation_tILi0EEEEEEEESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  167:  any_io_executor(Executor e,
+        -:  168:      typename constraint<
+        -:  169:        conditional<
+        -:  170:          !is_same<Executor, any_io_executor>::value
+        -:  171:            && !is_base_of<execution::detail::any_executor_base,
+        -:  172:              Executor>::value,
+        -:  173:          execution::detail::is_valid_target_executor<
+        -:  174:            Executor, supportable_properties_type>,
+        -:  175:          false_type
+        -:  176:        >::type::value
+        -:  177:      >::type = 0)
+    #####:  178:    : base_type(BOOST_ASIO_MOVE_CAST(Executor)(e))
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+call    5 never executed
+        -:  179:  {
+    #####:  180:  }
+------------------
+_ZN5boost4asio15any_io_executorC2INS0_10io_context19basic_executor_typeISaIvELm0EEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameIS7_S1_E5valuentsrSt10is_base_ofINS0_9execution6detail17any_executor_baseES7_E5valueENSE_24is_valid_target_executorIS7_FvNSD_12context_as_tIRNS0_17execution_contextEEENSE_8blocking7never_tILi0EEENSD_11prefer_onlyINSM_10possibly_tILi0EEEEENSP_INSE_16outstanding_work9tracked_tILi0EEEEENSP_INST_11untracked_tILi0EEEEENSP_INSE_12relationship6fork_tILi0EEEEENSP_INS10_14continuation_tILi0EEEEEEEESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE:
+function _ZN5boost4asio15any_io_executorC2INS0_10io_context19basic_executor_typeISaIvELm0EEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameIS7_S1_E5valuentsrSt10is_base_ofINS0_9execution6detail17any_executor_baseES7_E5valueENSE_24is_valid_target_executorIS7_FvNSD_12context_as_tIRNS0_17execution_contextEEENSE_8blocking7never_tILi0EEENSD_11prefer_onlyINSM_10possibly_tILi0EEEEENSP_INSE_16outstanding_work9tracked_tILi0EEEEENSP_INST_11untracked_tILi0EEEEENSP_INSE_12relationship6fork_tILi0EEEEENSP_INS10_14continuation_tILi0EEEEEEEESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  167:  any_io_executor(Executor e,
+        -:  168:      typename constraint<
+        -:  169:        conditional<
+        -:  170:          !is_same<Executor, any_io_executor>::value
+        -:  171:            && !is_base_of<execution::detail::any_executor_base,
+        -:  172:              Executor>::value,
+        -:  173:          execution::detail::is_valid_target_executor<
+        -:  174:            Executor, supportable_properties_type>,
+        -:  175:          false_type
+        -:  176:        >::type::value
+        -:  177:      >::type = 0)
+    #####:  178:    : base_type(BOOST_ASIO_MOVE_CAST(Executor)(e))
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+call    5 never executed
+        -:  179:  {
+    #####:  180:  }
+------------------
+_ZN5boost4asio15any_io_executorC2INS0_10io_context19basic_executor_typeISaIvELm0EEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameIS7_S1_E5valuentsrSt10is_base_ofINS0_9execution6detail17any_executor_baseES7_E5valueENSE_24is_valid_target_executorIS7_FvNSD_12context_as_tIRNS0_17execution_contextEEENSE_8blocking7never_tILi0EEENSD_11prefer_onlyINSM_10possibly_tILi0EEEEENSP_INSE_16outstanding_work9tracked_tILi0EEEEENSP_INST_11untracked_tILi0EEEEENSP_INSE_12relationship6fork_tILi0EEEEENSP_INS10_14continuation_tILi0EEEEEEEESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE:
+function _ZN5boost4asio15any_io_executorC2INS0_10io_context19basic_executor_typeISaIvELm0EEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameIS7_S1_E5valuentsrSt10is_base_ofINS0_9execution6detail17any_executor_baseES7_E5valueENSE_24is_valid_target_executorIS7_FvNSD_12context_as_tIRNS0_17execution_contextEEENSE_8blocking7never_tILi0EEENSD_11prefer_onlyINSM_10possibly_tILi0EEEEENSP_INSE_16outstanding_work9tracked_tILi0EEEEENSP_INST_11untracked_tILi0EEEEENSP_INSE_12relationship6fork_tILi0EEEEENSP_INS10_14continuation_tILi0EEEEEEEESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  167:  any_io_executor(Executor e,
+        -:  168:      typename constraint<
+        -:  169:        conditional<
+        -:  170:          !is_same<Executor, any_io_executor>::value
+        -:  171:            && !is_base_of<execution::detail::any_executor_base,
+        -:  172:              Executor>::value,
+        -:  173:          execution::detail::is_valid_target_executor<
+        -:  174:            Executor, supportable_properties_type>,
+        -:  175:          false_type
+        -:  176:        >::type::value
+        -:  177:      >::type = 0)
+    #####:  178:    : base_type(BOOST_ASIO_MOVE_CAST(Executor)(e))
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+call    5 never executed
+        -:  179:  {
+    #####:  180:  }
+------------------
+_ZN5boost4asio15any_io_executorC2INS0_10io_context19basic_executor_typeISaIvELm0EEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameIS7_S1_E5valuentsrSt10is_base_ofINS0_9execution6detail17any_executor_baseES7_E5valueENSE_24is_valid_target_executorIS7_FvNSD_12context_as_tIRNS0_17execution_contextEEENSE_8blocking7never_tILi0EEENSD_11prefer_onlyINSM_10possibly_tILi0EEEEENSP_INSE_16outstanding_work9tracked_tILi0EEEEENSP_INST_11untracked_tILi0EEEEENSP_INSE_12relationship6fork_tILi0EEEEENSP_INS10_14continuation_tILi0EEEEEEEESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE:
+function _ZN5boost4asio15any_io_executorC2INS0_10io_context19basic_executor_typeISaIvELm0EEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameIS7_S1_E5valuentsrSt10is_base_ofINS0_9execution6detail17any_executor_baseES7_E5valueENSE_24is_valid_target_executorIS7_FvNSD_12context_as_tIRNS0_17execution_contextEEENSE_8blocking7never_tILi0EEENSD_11prefer_onlyINSM_10possibly_tILi0EEEEENSP_INSE_16outstanding_work9tracked_tILi0EEEEENSP_INST_11untracked_tILi0EEEEENSP_INSE_12relationship6fork_tILi0EEEEENSP_INS10_14continuation_tILi0EEEEEEEESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  167:  any_io_executor(Executor e,
+        -:  168:      typename constraint<
+        -:  169:        conditional<
+        -:  170:          !is_same<Executor, any_io_executor>::value
+        -:  171:            && !is_base_of<execution::detail::any_executor_base,
+        -:  172:              Executor>::value,
+        -:  173:          execution::detail::is_valid_target_executor<
+        -:  174:            Executor, supportable_properties_type>,
+        -:  175:          false_type
+        -:  176:        >::type::value
+        -:  177:      >::type = 0)
+    #####:  178:    : base_type(BOOST_ASIO_MOVE_CAST(Executor)(e))
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+call    5 never executed
+        -:  179:  {
+    #####:  180:  }
+------------------
+_ZN5boost4asio15any_io_executorC2INS0_10io_context19basic_executor_typeISaIvELm0EEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameIS7_S1_E5valuentsrSt10is_base_ofINS0_9execution6detail17any_executor_baseES7_E5valueENSE_24is_valid_target_executorIS7_FvNSD_12context_as_tIRNS0_17execution_contextEEENSE_8blocking7never_tILi0EEENSD_11prefer_onlyINSM_10possibly_tILi0EEEEENSP_INSE_16outstanding_work9tracked_tILi0EEEEENSP_INST_11untracked_tILi0EEEEENSP_INSE_12relationship6fork_tILi0EEEEENSP_INS10_14continuation_tILi0EEEEEEEESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE:
+function _ZN5boost4asio15any_io_executorC2INS0_10io_context19basic_executor_typeISaIvELm0EEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameIS7_S1_E5valuentsrSt10is_base_ofINS0_9execution6detail17any_executor_baseES7_E5valueENSE_24is_valid_target_executorIS7_FvNSD_12context_as_tIRNS0_17execution_contextEEENSE_8blocking7never_tILi0EEENSD_11prefer_onlyINSM_10possibly_tILi0EEEEENSP_INSE_16outstanding_work9tracked_tILi0EEEEENSP_INST_11untracked_tILi0EEEEENSP_INSE_12relationship6fork_tILi0EEEEENSP_INS10_14continuation_tILi0EEEEEEEESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  167:  any_io_executor(Executor e,
+        -:  168:      typename constraint<
+        -:  169:        conditional<
+        -:  170:          !is_same<Executor, any_io_executor>::value
+        -:  171:            && !is_base_of<execution::detail::any_executor_base,
+        -:  172:              Executor>::value,
+        -:  173:          execution::detail::is_valid_target_executor<
+        -:  174:            Executor, supportable_properties_type>,
+        -:  175:          false_type
+        -:  176:        >::type::value
+        -:  177:      >::type = 0)
+    #####:  178:    : base_type(BOOST_ASIO_MOVE_CAST(Executor)(e))
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+call    5 never executed
+        -:  179:  {
+    #####:  180:  }
+------------------
+_ZN5boost4asio15any_io_executorC2INS0_10io_context19basic_executor_typeISaIvELm0EEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameIS7_S1_E5valuentsrSt10is_base_ofINS0_9execution6detail17any_executor_baseES7_E5valueENSE_24is_valid_target_executorIS7_FvNSD_12context_as_tIRNS0_17execution_contextEEENSE_8blocking7never_tILi0EEENSD_11prefer_onlyINSM_10possibly_tILi0EEEEENSP_INSE_16outstanding_work9tracked_tILi0EEEEENSP_INST_11untracked_tILi0EEEEENSP_INSE_12relationship6fork_tILi0EEEEENSP_INS10_14continuation_tILi0EEEEEEEESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE:
+function _ZN5boost4asio15any_io_executorC2INS0_10io_context19basic_executor_typeISaIvELm0EEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameIS7_S1_E5valuentsrSt10is_base_ofINS0_9execution6detail17any_executor_baseES7_E5valueENSE_24is_valid_target_executorIS7_FvNSD_12context_as_tIRNS0_17execution_contextEEENSE_8blocking7never_tILi0EEENSD_11prefer_onlyINSM_10possibly_tILi0EEEEENSP_INSE_16outstanding_work9tracked_tILi0EEEEENSP_INST_11untracked_tILi0EEEEENSP_INSE_12relationship6fork_tILi0EEEEENSP_INS10_14continuation_tILi0EEEEEEEESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  167:  any_io_executor(Executor e,
+        -:  168:      typename constraint<
+        -:  169:        conditional<
+        -:  170:          !is_same<Executor, any_io_executor>::value
+        -:  171:            && !is_base_of<execution::detail::any_executor_base,
+        -:  172:              Executor>::value,
+        -:  173:          execution::detail::is_valid_target_executor<
+        -:  174:            Executor, supportable_properties_type>,
+        -:  175:          false_type
+        -:  176:        >::type::value
+        -:  177:      >::type = 0)
+    #####:  178:    : base_type(BOOST_ASIO_MOVE_CAST(Executor)(e))
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+call    5 never executed
+        -:  179:  {
+    #####:  180:  }
+------------------
+_ZN5boost4asio15any_io_executorC2INS0_10io_context19basic_executor_typeISaIvELm0EEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameIS7_S1_E5valuentsrSt10is_base_ofINS0_9execution6detail17any_executor_baseES7_E5valueENSE_24is_valid_target_executorIS7_FvNSD_12context_as_tIRNS0_17execution_contextEEENSE_8blocking7never_tILi0EEENSD_11prefer_onlyINSM_10possibly_tILi0EEEEENSP_INSE_16outstanding_work9tracked_tILi0EEEEENSP_INST_11untracked_tILi0EEEEENSP_INSE_12relationship6fork_tILi0EEEEENSP_INS10_14continuation_tILi0EEEEEEEESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE:
+function _ZN5boost4asio15any_io_executorC2INS0_10io_context19basic_executor_typeISaIvELm0EEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameIS7_S1_E5valuentsrSt10is_base_ofINS0_9execution6detail17any_executor_baseES7_E5valueENSE_24is_valid_target_executorIS7_FvNSD_12context_as_tIRNS0_17execution_contextEEENSE_8blocking7never_tILi0EEENSD_11prefer_onlyINSM_10possibly_tILi0EEEEENSP_INSE_16outstanding_work9tracked_tILi0EEEEENSP_INST_11untracked_tILi0EEEEENSP_INSE_12relationship6fork_tILi0EEEEENSP_INS10_14continuation_tILi0EEEEEEEESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  167:  any_io_executor(Executor e,
+        -:  168:      typename constraint<
+        -:  169:        conditional<
+        -:  170:          !is_same<Executor, any_io_executor>::value
+        -:  171:            && !is_base_of<execution::detail::any_executor_base,
+        -:  172:              Executor>::value,
+        -:  173:          execution::detail::is_valid_target_executor<
+        -:  174:            Executor, supportable_properties_type>,
+        -:  175:          false_type
+        -:  176:        >::type::value
+        -:  177:      >::type = 0)
+    #####:  178:    : base_type(BOOST_ASIO_MOVE_CAST(Executor)(e))
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+call    5 never executed
+        -:  179:  {
+    #####:  180:  }
+------------------
+_ZN5boost4asio15any_io_executorC2INS0_10io_context19basic_executor_typeISaIvELm0EEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameIS7_S1_E5valuentsrSt10is_base_ofINS0_9execution6detail17any_executor_baseES7_E5valueENSE_24is_valid_target_executorIS7_FvNSD_12context_as_tIRNS0_17execution_contextEEENSE_8blocking7never_tILi0EEENSD_11prefer_onlyINSM_10possibly_tILi0EEEEENSP_INSE_16outstanding_work9tracked_tILi0EEEEENSP_INST_11untracked_tILi0EEEEENSP_INSE_12relationship6fork_tILi0EEEEENSP_INS10_14continuation_tILi0EEEEEEEESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE:
+function _ZN5boost4asio15any_io_executorC2INS0_10io_context19basic_executor_typeISaIvELm0EEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameIS7_S1_E5valuentsrSt10is_base_ofINS0_9execution6detail17any_executor_baseES7_E5valueENSE_24is_valid_target_executorIS7_FvNSD_12context_as_tIRNS0_17execution_contextEEENSE_8blocking7never_tILi0EEENSD_11prefer_onlyINSM_10possibly_tILi0EEEEENSP_INSE_16outstanding_work9tracked_tILi0EEEEENSP_INST_11untracked_tILi0EEEEENSP_INSE_12relationship6fork_tILi0EEEEENSP_INS10_14continuation_tILi0EEEEEEEESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  167:  any_io_executor(Executor e,
+        -:  168:      typename constraint<
+        -:  169:        conditional<
+        -:  170:          !is_same<Executor, any_io_executor>::value
+        -:  171:            && !is_base_of<execution::detail::any_executor_base,
+        -:  172:              Executor>::value,
+        -:  173:          execution::detail::is_valid_target_executor<
+        -:  174:            Executor, supportable_properties_type>,
+        -:  175:          false_type
+        -:  176:        >::type::value
+        -:  177:      >::type = 0)
+    #####:  178:    : base_type(BOOST_ASIO_MOVE_CAST(Executor)(e))
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+call    5 never executed
+        -:  179:  {
+    #####:  180:  }
+------------------
+_ZN5boost4asio15any_io_executorC2INS0_10io_context19basic_executor_typeISaIvELm0EEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameIS7_S1_E5valuentsrSt10is_base_ofINS0_9execution6detail17any_executor_baseES7_E5valueENSE_24is_valid_target_executorIS7_FvNSD_12context_as_tIRNS0_17execution_contextEEENSE_8blocking7never_tILi0EEENSD_11prefer_onlyINSM_10possibly_tILi0EEEEENSP_INSE_16outstanding_work9tracked_tILi0EEEEENSP_INST_11untracked_tILi0EEEEENSP_INSE_12relationship6fork_tILi0EEEEENSP_INS10_14continuation_tILi0EEEEEEEESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE:
+function _ZN5boost4asio15any_io_executorC2INS0_10io_context19basic_executor_typeISaIvELm0EEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameIS7_S1_E5valuentsrSt10is_base_ofINS0_9execution6detail17any_executor_baseES7_E5valueENSE_24is_valid_target_executorIS7_FvNSD_12context_as_tIRNS0_17execution_contextEEENSE_8blocking7never_tILi0EEENSD_11prefer_onlyINSM_10possibly_tILi0EEEEENSP_INSE_16outstanding_work9tracked_tILi0EEEEENSP_INST_11untracked_tILi0EEEEENSP_INSE_12relationship6fork_tILi0EEEEENSP_INS10_14continuation_tILi0EEEEEEEESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  167:  any_io_executor(Executor e,
+        -:  168:      typename constraint<
+        -:  169:        conditional<
+        -:  170:          !is_same<Executor, any_io_executor>::value
+        -:  171:            && !is_base_of<execution::detail::any_executor_base,
+        -:  172:              Executor>::value,
+        -:  173:          execution::detail::is_valid_target_executor<
+        -:  174:            Executor, supportable_properties_type>,
+        -:  175:          false_type
+        -:  176:        >::type::value
+        -:  177:      >::type = 0)
+    #####:  178:    : base_type(BOOST_ASIO_MOVE_CAST(Executor)(e))
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+call    5 never executed
+        -:  179:  {
+    #####:  180:  }
+------------------
+_ZN5boost4asio15any_io_executorC2INS0_10io_context19basic_executor_typeISaIvELm0EEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameIS7_S1_E5valuentsrSt10is_base_ofINS0_9execution6detail17any_executor_baseES7_E5valueENSE_24is_valid_target_executorIS7_FvNSD_12context_as_tIRNS0_17execution_contextEEENSE_8blocking7never_tILi0EEENSD_11prefer_onlyINSM_10possibly_tILi0EEEEENSP_INSE_16outstanding_work9tracked_tILi0EEEEENSP_INST_11untracked_tILi0EEEEENSP_INSE_12relationship6fork_tILi0EEEEENSP_INS10_14continuation_tILi0EEEEEEEESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE:
+function _ZN5boost4asio15any_io_executorC2INS0_10io_context19basic_executor_typeISaIvELm0EEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameIS7_S1_E5valuentsrSt10is_base_ofINS0_9execution6detail17any_executor_baseES7_E5valueENSE_24is_valid_target_executorIS7_FvNSD_12context_as_tIRNS0_17execution_contextEEENSE_8blocking7never_tILi0EEENSD_11prefer_onlyINSM_10possibly_tILi0EEEEENSP_INSE_16outstanding_work9tracked_tILi0EEEEENSP_INST_11untracked_tILi0EEEEENSP_INSE_12relationship6fork_tILi0EEEEENSP_INS10_14continuation_tILi0EEEEEEEESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  167:  any_io_executor(Executor e,
+        -:  168:      typename constraint<
+        -:  169:        conditional<
+        -:  170:          !is_same<Executor, any_io_executor>::value
+        -:  171:            && !is_base_of<execution::detail::any_executor_base,
+        -:  172:              Executor>::value,
+        -:  173:          execution::detail::is_valid_target_executor<
+        -:  174:            Executor, supportable_properties_type>,
+        -:  175:          false_type
+        -:  176:        >::type::value
+        -:  177:      >::type = 0)
+    #####:  178:    : base_type(BOOST_ASIO_MOVE_CAST(Executor)(e))
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+call    5 never executed
+        -:  179:  {
+    #####:  180:  }
+------------------
+_ZN5boost4asio15any_io_executorC2INS0_10io_context19basic_executor_typeISaIvELm0EEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameIS7_S1_E5valuentsrSt10is_base_ofINS0_9execution6detail17any_executor_baseES7_E5valueENSE_24is_valid_target_executorIS7_FvNSD_12context_as_tIRNS0_17execution_contextEEENSE_8blocking7never_tILi0EEENSD_11prefer_onlyINSM_10possibly_tILi0EEEEENSP_INSE_16outstanding_work9tracked_tILi0EEEEENSP_INST_11untracked_tILi0EEEEENSP_INSE_12relationship6fork_tILi0EEEEENSP_INS10_14continuation_tILi0EEEEEEEESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE:
+function _ZN5boost4asio15any_io_executorC2INS0_10io_context19basic_executor_typeISaIvELm0EEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameIS7_S1_E5valuentsrSt10is_base_ofINS0_9execution6detail17any_executor_baseES7_E5valueENSE_24is_valid_target_executorIS7_FvNSD_12context_as_tIRNS0_17execution_contextEEENSE_8blocking7never_tILi0EEENSD_11prefer_onlyINSM_10possibly_tILi0EEEEENSP_INSE_16outstanding_work9tracked_tILi0EEEEENSP_INST_11untracked_tILi0EEEEENSP_INSE_12relationship6fork_tILi0EEEEENSP_INS10_14continuation_tILi0EEEEEEEESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  167:  any_io_executor(Executor e,
+        -:  168:      typename constraint<
+        -:  169:        conditional<
+        -:  170:          !is_same<Executor, any_io_executor>::value
+        -:  171:            && !is_base_of<execution::detail::any_executor_base,
+        -:  172:              Executor>::value,
+        -:  173:          execution::detail::is_valid_target_executor<
+        -:  174:            Executor, supportable_properties_type>,
+        -:  175:          false_type
+        -:  176:        >::type::value
+        -:  177:      >::type = 0)
+    #####:  178:    : base_type(BOOST_ASIO_MOVE_CAST(Executor)(e))
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+call    5 never executed
+        -:  179:  {
+    #####:  180:  }
+------------------
+_ZN5boost4asio15any_io_executorC2INS0_10io_context19basic_executor_typeISaIvELm0EEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameIS7_S1_E5valuentsrSt10is_base_ofINS0_9execution6detail17any_executor_baseES7_E5valueENSE_24is_valid_target_executorIS7_FvNSD_12context_as_tIRNS0_17execution_contextEEENSE_8blocking7never_tILi0EEENSD_11prefer_onlyINSM_10possibly_tILi0EEEEENSP_INSE_16outstanding_work9tracked_tILi0EEEEENSP_INST_11untracked_tILi0EEEEENSP_INSE_12relationship6fork_tILi0EEEEENSP_INS10_14continuation_tILi0EEEEEEEESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE:
+function _ZN5boost4asio15any_io_executorC2INS0_10io_context19basic_executor_typeISaIvELm0EEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameIS7_S1_E5valuentsrSt10is_base_ofINS0_9execution6detail17any_executor_baseES7_E5valueENSE_24is_valid_target_executorIS7_FvNSD_12context_as_tIRNS0_17execution_contextEEENSE_8blocking7never_tILi0EEENSD_11prefer_onlyINSM_10possibly_tILi0EEEEENSP_INSE_16outstanding_work9tracked_tILi0EEEEENSP_INST_11untracked_tILi0EEEEENSP_INSE_12relationship6fork_tILi0EEEEENSP_INS10_14continuation_tILi0EEEEEEEESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE called 13 returned 100% blocks executed 71%
+       13:  167:  any_io_executor(Executor e,
+        -:  168:      typename constraint<
+        -:  169:        conditional<
+        -:  170:          !is_same<Executor, any_io_executor>::value
+        -:  171:            && !is_base_of<execution::detail::any_executor_base,
+        -:  172:              Executor>::value,
+        -:  173:          execution::detail::is_valid_target_executor<
+        -:  174:            Executor, supportable_properties_type>,
+        -:  175:          false_type
+        -:  176:        >::type::value
+        -:  177:      >::type = 0)
+       13:  178:    : base_type(BOOST_ASIO_MOVE_CAST(Executor)(e))
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 never executed
+        -:  179:  {
+       13:  180:  }
+------------------
+_ZN5boost4asio15any_io_executorC2INS0_10io_context19basic_executor_typeISaIvELm0EEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameIS7_S1_E5valuentsrSt10is_base_ofINS0_9execution6detail17any_executor_baseES7_E5valueENSE_24is_valid_target_executorIS7_FvNSD_12context_as_tIRNS0_17execution_contextEEENSE_8blocking7never_tILi0EEENSD_11prefer_onlyINSM_10possibly_tILi0EEEEENSP_INSE_16outstanding_work9tracked_tILi0EEEEENSP_INST_11untracked_tILi0EEEEENSP_INSE_12relationship6fork_tILi0EEEEENSP_INS10_14continuation_tILi0EEEEEEEESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE:
+function _ZN5boost4asio15any_io_executorC2INS0_10io_context19basic_executor_typeISaIvELm0EEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameIS7_S1_E5valuentsrSt10is_base_ofINS0_9execution6detail17any_executor_baseES7_E5valueENSE_24is_valid_target_executorIS7_FvNSD_12context_as_tIRNS0_17execution_contextEEENSE_8blocking7never_tILi0EEENSD_11prefer_onlyINSM_10possibly_tILi0EEEEENSP_INSE_16outstanding_work9tracked_tILi0EEEEENSP_INST_11untracked_tILi0EEEEENSP_INSE_12relationship6fork_tILi0EEEEENSP_INS10_14continuation_tILi0EEEEEEEESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  167:  any_io_executor(Executor e,
+        -:  168:      typename constraint<
+        -:  169:        conditional<
+        -:  170:          !is_same<Executor, any_io_executor>::value
+        -:  171:            && !is_base_of<execution::detail::any_executor_base,
+        -:  172:              Executor>::value,
+        -:  173:          execution::detail::is_valid_target_executor<
+        -:  174:            Executor, supportable_properties_type>,
+        -:  175:          false_type
+        -:  176:        >::type::value
+        -:  177:      >::type = 0)
+    #####:  178:    : base_type(BOOST_ASIO_MOVE_CAST(Executor)(e))
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+call    5 never executed
+        -:  179:  {
+    #####:  180:  }
+------------------
+_ZN5boost4asio15any_io_executorC2INS0_10io_context19basic_executor_typeISaIvELm0EEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameIS7_S1_E5valuentsrSt10is_base_ofINS0_9execution6detail17any_executor_baseES7_E5valueENSE_24is_valid_target_executorIS7_FvNSD_12context_as_tIRNS0_17execution_contextEEENSE_8blocking7never_tILi0EEENSD_11prefer_onlyINSM_10possibly_tILi0EEEEENSP_INSE_16outstanding_work9tracked_tILi0EEEEENSP_INST_11untracked_tILi0EEEEENSP_INSE_12relationship6fork_tILi0EEEEENSP_INS10_14continuation_tILi0EEEEEEEESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE:
+function _ZN5boost4asio15any_io_executorC2INS0_10io_context19basic_executor_typeISaIvELm0EEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameIS7_S1_E5valuentsrSt10is_base_ofINS0_9execution6detail17any_executor_baseES7_E5valueENSE_24is_valid_target_executorIS7_FvNSD_12context_as_tIRNS0_17execution_contextEEENSE_8blocking7never_tILi0EEENSD_11prefer_onlyINSM_10possibly_tILi0EEEEENSP_INSE_16outstanding_work9tracked_tILi0EEEEENSP_INST_11untracked_tILi0EEEEENSP_INSE_12relationship6fork_tILi0EEEEENSP_INS10_14continuation_tILi0EEEEEEEESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE called 9616 returned 100% blocks executed 71%
+     9616:  167:  any_io_executor(Executor e,
+        -:  168:      typename constraint<
+        -:  169:        conditional<
+        -:  170:          !is_same<Executor, any_io_executor>::value
+        -:  171:            && !is_base_of<execution::detail::any_executor_base,
+        -:  172:              Executor>::value,
+        -:  173:          execution::detail::is_valid_target_executor<
+        -:  174:            Executor, supportable_properties_type>,
+        -:  175:          false_type
+        -:  176:        >::type::value
+        -:  177:      >::type = 0)
+     9616:  178:    : base_type(BOOST_ASIO_MOVE_CAST(Executor)(e))
+call    0 returned 101%
+call    1 returned 99%
+branch  2 taken 99% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 never executed
+        -:  179:  {
+     9629:  180:  }
+------------------
+_ZN5boost4asio15any_io_executorC2INS0_10io_context19basic_executor_typeISaIvELm0EEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameIS7_S1_E5valuentsrSt10is_base_ofINS0_9execution6detail17any_executor_baseES7_E5valueENSE_24is_valid_target_executorIS7_FvNSD_12context_as_tIRNS0_17execution_contextEEENSE_8blocking7never_tILi0EEENSD_11prefer_onlyINSM_10possibly_tILi0EEEEENSP_INSE_16outstanding_work9tracked_tILi0EEEEENSP_INST_11untracked_tILi0EEEEENSP_INSE_12relationship6fork_tILi0EEEEENSP_INS10_14continuation_tILi0EEEEEEEESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE:
+function _ZN5boost4asio15any_io_executorC2INS0_10io_context19basic_executor_typeISaIvELm0EEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameIS7_S1_E5valuentsrSt10is_base_ofINS0_9execution6detail17any_executor_baseES7_E5valueENSE_24is_valid_target_executorIS7_FvNSD_12context_as_tIRNS0_17execution_contextEEENSE_8blocking7never_tILi0EEENSD_11prefer_onlyINSM_10possibly_tILi0EEEEENSP_INSE_16outstanding_work9tracked_tILi0EEEEENSP_INST_11untracked_tILi0EEEEENSP_INSE_12relationship6fork_tILi0EEEEENSP_INS10_14continuation_tILi0EEEEEEEESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE called 18 returned 100% blocks executed 71%
+       18:  167:  any_io_executor(Executor e,
+        -:  168:      typename constraint<
+        -:  169:        conditional<
+        -:  170:          !is_same<Executor, any_io_executor>::value
+        -:  171:            && !is_base_of<execution::detail::any_executor_base,
+        -:  172:              Executor>::value,
+        -:  173:          execution::detail::is_valid_target_executor<
+        -:  174:            Executor, supportable_properties_type>,
+        -:  175:          false_type
+        -:  176:        >::type::value
+        -:  177:      >::type = 0)
+       18:  178:    : base_type(BOOST_ASIO_MOVE_CAST(Executor)(e))
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 never executed
+        -:  179:  {
+       18:  180:  }
+------------------
+_ZN5boost4asio15any_io_executorC2INS0_10io_context19basic_executor_typeISaIvELm0EEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameIS7_S1_E5valuentsrSt10is_base_ofINS0_9execution6detail17any_executor_baseES7_E5valueENSE_24is_valid_target_executorIS7_FvNSD_12context_as_tIRNS0_17execution_contextEEENSE_8blocking7never_tILi0EEENSD_11prefer_onlyINSM_10possibly_tILi0EEEEENSP_INSE_16outstanding_work9tracked_tILi0EEEEENSP_INST_11untracked_tILi0EEEEENSP_INSE_12relationship6fork_tILi0EEEEENSP_INS10_14continuation_tILi0EEEEEEEESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE:
+function _ZN5boost4asio15any_io_executorC2INS0_10io_context19basic_executor_typeISaIvELm0EEEEET_NS0_10constraintIXsrNSt11conditionalIXaantsrSt7is_sameIS7_S1_E5valuentsrSt10is_base_ofINS0_9execution6detail17any_executor_baseES7_E5valueENSE_24is_valid_target_executorIS7_FvNSD_12context_as_tIRNS0_17execution_contextEEENSE_8blocking7never_tILi0EEENSD_11prefer_onlyINSM_10possibly_tILi0EEEEENSP_INSE_16outstanding_work9tracked_tILi0EEEEENSP_INST_11untracked_tILi0EEEEENSP_INSE_12relationship6fork_tILi0EEEEENSP_INS10_14continuation_tILi0EEEEEEEESt17integral_constantIbLb0EEE4typeE5valueEiE4typeE called 11 returned 100% blocks executed 71%
+       11:  167:  any_io_executor(Executor e,
+        -:  168:      typename constraint<
+        -:  169:        conditional<
+        -:  170:          !is_same<Executor, any_io_executor>::value
+        -:  171:            && !is_base_of<execution::detail::any_executor_base,
+        -:  172:              Executor>::value,
+        -:  173:          execution::detail::is_valid_target_executor<
+        -:  174:            Executor, supportable_properties_type>,
+        -:  175:          false_type
+        -:  176:        >::type::value
+        -:  177:      >::type = 0)
+       11:  178:    : base_type(BOOST_ASIO_MOVE_CAST(Executor)(e))
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 never executed
+        -:  179:  {
+       11:  180:  }
+------------------
+        -:  181:#endif // defined(GENERATING_DOCUMENTATION)
+        -:  182:
+        -:  183:  /// Construct a polymorphic wrapper for the specified executor.
+        -:  184:#if defined(GENERATING_DOCUMENTATION)
+        -:  185:  template <BOOST_ASIO_EXECUTION_EXECUTOR Executor>
+        -:  186:  any_io_executor(std::nothrow_t, Executor e);
+        -:  187:#else // defined(GENERATING_DOCUMENTATION)
+        -:  188:  template <BOOST_ASIO_EXECUTION_EXECUTOR Executor>
+        -:  189:  any_io_executor(std::nothrow_t, Executor e,
+        -:  190:      typename constraint<
+        -:  191:        conditional<
+        -:  192:          !is_same<Executor, any_io_executor>::value
+        -:  193:            && !is_base_of<execution::detail::any_executor_base,
+        -:  194:              Executor>::value,
+        -:  195:          execution::detail::is_valid_target_executor<
+        -:  196:            Executor, supportable_properties_type>,
+        -:  197:          false_type
+        -:  198:        >::type::value
+        -:  199:      >::type = 0) BOOST_ASIO_NOEXCEPT
+        -:  200:    : base_type(std::nothrow, BOOST_ASIO_MOVE_CAST(Executor)(e))
+        -:  201:  {
+        -:  202:  }
+        -:  203:#endif // defined(GENERATING_DOCUMENTATION)
+        -:  204:
+        -:  205:  /// Assignment operator.
+        -:  206:  BOOST_ASIO_DECL any_io_executor& operator=(
+        -:  207:      const any_io_executor& e) BOOST_ASIO_NOEXCEPT;
+        -:  208:
+        -:  209:#if defined(BOOST_ASIO_HAS_MOVE) || defined(GENERATING_DOCUMENTATION)
+        -:  210:  /// Move assignment operator.
+        -:  211:  BOOST_ASIO_DECL any_io_executor& operator=(
+        -:  212:      any_io_executor&& e) BOOST_ASIO_NOEXCEPT;
+        -:  213:#endif // defined(BOOST_ASIO_HAS_MOVE) || defined(GENERATING_DOCUMENTATION)
+        -:  214:
+        -:  215:  /// Assignment operator that sets the polymorphic wrapper to the empty state.
+        -:  216:  BOOST_ASIO_DECL any_io_executor& operator=(nullptr_t);
+        -:  217:
+        -:  218:  /// Destructor.
+        -:  219:  BOOST_ASIO_DECL ~any_io_executor();
+        -:  220:
+        -:  221:  /// Swap targets with another polymorphic wrapper.
+        -:  222:  BOOST_ASIO_DECL void swap(any_io_executor& other) BOOST_ASIO_NOEXCEPT;
+        -:  223:
+        -:  224:  /// Obtain a polymorphic wrapper with the specified property.
+        -:  225:  /**
+        -:  226:   * Do not call this function directly. It is intended for use with the
+        -:  227:   * boost::asio::require and boost::asio::prefer customisation points.
+        -:  228:   *
+        -:  229:   * For example:
+        -:  230:   * @code any_io_executor ex = ...;
+        -:  231:   * auto ex2 = boost::asio::require(ex, execution::blocking.possibly); @endcode
+        -:  232:   */
+        -:  233:  template <typename Property>
+        -:  234:  any_io_executor require(const Property& p,
+        -:  235:      typename constraint<
+        -:  236:        traits::require_member<const base_type&, const Property&>::is_valid
+        -:  237:      >::type = 0) const
+        -:  238:  {
+        -:  239:    return static_cast<const base_type&>(*this).require(p);
+        -:  240:  }
+        -:  241:
+        -:  242:  /// Obtain a polymorphic wrapper with the specified property.
+        -:  243:  /**
+        -:  244:   * Do not call this function directly. It is intended for use with the
+        -:  245:   * boost::asio::prefer customisation point.
+        -:  246:   *
+        -:  247:   * For example:
+        -:  248:   * @code any_io_executor ex = ...;
+        -:  249:   * auto ex2 = boost::asio::prefer(ex, execution::blocking.possibly); @endcode
+        -:  250:   */
+        -:  251:  template <typename Property>
+        -:  252:  any_io_executor prefer(const Property& p,
+        -:  253:      typename constraint<
+        -:  254:        traits::prefer_member<const base_type&, const Property&>::is_valid
+        -:  255:      >::type = 0) const
+        -:  256:  {
+        -:  257:    return static_cast<const base_type&>(*this).prefer(p);
+        -:  258:  }
+        -:  259:};
+        -:  260:
+        -:  261:#if !defined(GENERATING_DOCUMENTATION)
+        -:  262:
+        -:  263:template <>
+        -:  264:BOOST_ASIO_DECL any_io_executor any_io_executor::require(
+        -:  265:    const execution::blocking_t::never_t&, int) const;
+        -:  266:
+        -:  267:template <>
+        -:  268:BOOST_ASIO_DECL any_io_executor any_io_executor::prefer(
+        -:  269:    const execution::blocking_t::possibly_t&, int) const;
+        -:  270:
+        -:  271:template <>
+        -:  272:BOOST_ASIO_DECL any_io_executor any_io_executor::prefer(
+        -:  273:    const execution::outstanding_work_t::tracked_t&, int) const;
+        -:  274:
+        -:  275:template <>
+        -:  276:BOOST_ASIO_DECL any_io_executor any_io_executor::prefer(
+        -:  277:    const execution::outstanding_work_t::untracked_t&, int) const;
+        -:  278:
+        -:  279:template <>
+        -:  280:BOOST_ASIO_DECL any_io_executor any_io_executor::prefer(
+        -:  281:    const execution::relationship_t::fork_t&, int) const;
+        -:  282:
+        -:  283:template <>
+        -:  284:BOOST_ASIO_DECL any_io_executor any_io_executor::prefer(
+        -:  285:    const execution::relationship_t::continuation_t&, int) const;
+        -:  286:
+        -:  287:namespace traits {
+        -:  288:
+        -:  289:#if !defined(BOOST_ASIO_HAS_DEDUCED_EQUALITY_COMPARABLE_TRAIT)
+        -:  290:
+        -:  291:template <>
+        -:  292:struct equality_comparable<any_io_executor>
+        -:  293:{
+        -:  294:  static const bool is_valid = true;
+        -:  295:  static const bool is_noexcept = true;
+        -:  296:};
+        -:  297:
+        -:  298:#endif // !defined(BOOST_ASIO_HAS_DEDUCED_EQUALITY_COMPARABLE_TRAIT)
+        -:  299:
+        -:  300:#if !defined(BOOST_ASIO_HAS_DEDUCED_EXECUTE_MEMBER_TRAIT)
+        -:  301:
+        -:  302:template <typename F>
+        -:  303:struct execute_member<any_io_executor, F>
+        -:  304:{
+        -:  305:  static const bool is_valid = true;
+        -:  306:  static const bool is_noexcept = false;
+        -:  307:  typedef void result_type;
+        -:  308:};
+        -:  309:
+        -:  310:#endif // !defined(BOOST_ASIO_HAS_DEDUCED_EXECUTE_MEMBER_TRAIT)
+        -:  311:
+        -:  312:#if !defined(BOOST_ASIO_HAS_DEDUCED_QUERY_MEMBER_TRAIT)
+        -:  313:
+        -:  314:template <typename Prop>
+        -:  315:struct query_member<any_io_executor, Prop> :
+        -:  316:  query_member<any_io_executor::base_type, Prop>
+        -:  317:{
+        -:  318:};
+        -:  319:
+        -:  320:#endif // !defined(BOOST_ASIO_HAS_DEDUCED_QUERY_MEMBER_TRAIT)
+        -:  321:
+        -:  322:#if !defined(BOOST_ASIO_HAS_DEDUCED_REQUIRE_MEMBER_TRAIT)
+        -:  323:
+        -:  324:template <typename Prop>
+        -:  325:struct require_member<any_io_executor, Prop> :
+        -:  326:  require_member<any_io_executor::base_type, Prop>
+        -:  327:{
+        -:  328:  typedef any_io_executor result_type;
+        -:  329:};
+        -:  330:
+        -:  331:#endif // !defined(BOOST_ASIO_HAS_DEDUCED_REQUIRE_MEMBER_TRAIT)
+        -:  332:
+        -:  333:#if !defined(BOOST_ASIO_HAS_DEDUCED_PREFER_MEMBER_TRAIT)
+        -:  334:
+        -:  335:template <typename Prop>
+        -:  336:struct prefer_member<any_io_executor, Prop> :
+        -:  337:  prefer_member<any_io_executor::base_type, Prop>
+        -:  338:{
+        -:  339:  typedef any_io_executor result_type;
+        -:  340:};
+        -:  341:
+        -:  342:#endif // !defined(BOOST_ASIO_HAS_DEDUCED_PREFER_MEMBER_TRAIT)
+        -:  343:
+        -:  344:} // namespace traits
+        -:  345:
+        -:  346:#endif // !defined(GENERATING_DOCUMENTATION)
+        -:  347:
+        -:  348:#endif // defined(BOOST_ASIO_USE_TS_EXECUTOR_AS_DEFAULT)
+        -:  349:
+        -:  350:} // namespace asio
+        -:  351:} // namespace boost
+        -:  352:
+        -:  353:#include <boost/asio/detail/pop_options.hpp>
+        -:  354:
+        -:  355:#if defined(BOOST_ASIO_HEADER_ONLY) \
+        -:  356:  && !defined(BOOST_ASIO_USE_TS_EXECUTOR_AS_DEFAULT)
+        -:  357:# include <boost/asio/impl/any_io_executor.ipp>
+        -:  358:#endif // defined(BOOST_ASIO_HEADER_ONLY)
+        -:  359:       //   && !defined(BOOST_ASIO_USE_TS_EXECUTOR_AS_DEFAULT)
+        -:  360:
+        -:  361:#endif // BOOST_ASIO_ANY_IO_EXECUTOR_HPP

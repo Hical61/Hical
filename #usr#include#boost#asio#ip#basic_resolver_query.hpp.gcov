@@ -1,0 +1,344 @@
+        -:    0:Source:/usr/include/boost/asio/ip/basic_resolver_query.hpp
+        -:    1://
+        -:    2:// ip/basic_resolver_query.hpp
+        -:    3:// ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        -:    4://
+        -:    5:// Copyright (c) 2003-2023 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+        -:    6://
+        -:    7:// Distributed under the Boost Software License, Version 1.0. (See accompanying
+        -:    8:// file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+        -:    9://
+        -:   10:
+        -:   11:#ifndef BOOST_ASIO_IP_BASIC_RESOLVER_QUERY_HPP
+        -:   12:#define BOOST_ASIO_IP_BASIC_RESOLVER_QUERY_HPP
+        -:   13:
+        -:   14:#if defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   15:# pragma once
+        -:   16:#endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   17:
+        -:   18:#include <boost/asio/detail/config.hpp>
+        -:   19:#include <string>
+        -:   20:#include <boost/asio/detail/socket_ops.hpp>
+        -:   21:#include <boost/asio/ip/resolver_query_base.hpp>
+        -:   22:
+        -:   23:#include <boost/asio/detail/push_options.hpp>
+        -:   24:
+        -:   25:namespace boost {
+        -:   26:namespace asio {
+        -:   27:namespace ip {
+        -:   28:
+        -:   29:/// An query to be passed to a resolver.
+        -:   30:/**
+        -:   31: * The boost::asio::ip::basic_resolver_query class template describes a query
+        -:   32: * that can be passed to a resolver.
+        -:   33: *
+        -:   34: * @par Thread Safety
+        -:   35: * @e Distinct @e objects: Safe.@n
+        -:   36: * @e Shared @e objects: Unsafe.
+        -:   37: */
+        -:   38:template <typename InternetProtocol>
+        -:   39:class basic_resolver_query
+        -:   40:  : public resolver_query_base
+        -:   41:{
+        -:   42:public:
+        -:   43:  /// The protocol type associated with the endpoint query.
+        -:   44:  typedef InternetProtocol protocol_type;
+        -:   45:
+        -:   46:  /// Construct with specified service name for any protocol.
+        -:   47:  /**
+        -:   48:   * This constructor is typically used to perform name resolution for local
+        -:   49:   * service binding.
+        -:   50:   *
+        -:   51:   * @param service A string identifying the requested service. This may be a
+        -:   52:   * descriptive name or a numeric string corresponding to a port number.
+        -:   53:   *
+        -:   54:   * @param resolve_flags A set of flags that determine how name resolution
+        -:   55:   * should be performed. The default flags are suitable for local service
+        -:   56:   * binding.
+        -:   57:   *
+        -:   58:   * @note On POSIX systems, service names are typically defined in the file
+        -:   59:   * <tt>/etc/services</tt>. On Windows, service names may be found in the file
+        -:   60:   * <tt>c:\\windows\\system32\\drivers\\etc\\services</tt>. Operating systems
+        -:   61:   * may use additional locations when resolving service names.
+        -:   62:   */
+        -:   63:  basic_resolver_query(const std::string& service,
+        -:   64:      resolver_query_base::flags resolve_flags = passive | address_configured)
+        -:   65:    : hints_(),
+        -:   66:      host_name_(),
+        -:   67:      service_name_(service)
+        -:   68:  {
+        -:   69:    typename InternetProtocol::endpoint endpoint;
+        -:   70:    hints_.ai_flags = static_cast<int>(resolve_flags);
+        -:   71:    hints_.ai_family = PF_UNSPEC;
+        -:   72:    hints_.ai_socktype = endpoint.protocol().type();
+        -:   73:    hints_.ai_protocol = endpoint.protocol().protocol();
+        -:   74:    hints_.ai_addrlen = 0;
+        -:   75:    hints_.ai_canonname = 0;
+        -:   76:    hints_.ai_addr = 0;
+        -:   77:    hints_.ai_next = 0;
+        -:   78:  }
+        -:   79:
+        -:   80:  /// Construct with specified service name for a given protocol.
+        -:   81:  /**
+        -:   82:   * This constructor is typically used to perform name resolution for local
+        -:   83:   * service binding with a specific protocol version.
+        -:   84:   *
+        -:   85:   * @param protocol A protocol object, normally representing either the IPv4 or
+        -:   86:   * IPv6 version of an internet protocol.
+        -:   87:   *
+        -:   88:   * @param service A string identifying the requested service. This may be a
+        -:   89:   * descriptive name or a numeric string corresponding to a port number.
+        -:   90:   *
+        -:   91:   * @param resolve_flags A set of flags that determine how name resolution
+        -:   92:   * should be performed. The default flags are suitable for local service
+        -:   93:   * binding.
+        -:   94:   *
+        -:   95:   * @note On POSIX systems, service names are typically defined in the file
+        -:   96:   * <tt>/etc/services</tt>. On Windows, service names may be found in the file
+        -:   97:   * <tt>c:\\windows\\system32\\drivers\\etc\\services</tt>. Operating systems
+        -:   98:   * may use additional locations when resolving service names.
+        -:   99:   */
+        -:  100:  basic_resolver_query(const protocol_type& protocol,
+        -:  101:      const std::string& service,
+        -:  102:      resolver_query_base::flags resolve_flags = passive | address_configured)
+        -:  103:    : hints_(),
+        -:  104:      host_name_(),
+        -:  105:      service_name_(service)
+        -:  106:  {
+        -:  107:    hints_.ai_flags = static_cast<int>(resolve_flags);
+        -:  108:    hints_.ai_family = protocol.family();
+        -:  109:    hints_.ai_socktype = protocol.type();
+        -:  110:    hints_.ai_protocol = protocol.protocol();
+        -:  111:    hints_.ai_addrlen = 0;
+        -:  112:    hints_.ai_canonname = 0;
+        -:  113:    hints_.ai_addr = 0;
+        -:  114:    hints_.ai_next = 0;
+        -:  115:  }
+        -:  116:
+        -:  117:  /// Construct with specified host name and service name for any protocol.
+        -:  118:  /**
+        -:  119:   * This constructor is typically used to perform name resolution for
+        -:  120:   * communication with remote hosts.
+        -:  121:   *
+        -:  122:   * @param host A string identifying a location. May be a descriptive name or
+        -:  123:   * a numeric address string. If an empty string and the passive flag has been
+        -:  124:   * specified, the resolved endpoints are suitable for local service binding.
+        -:  125:   * If an empty string and passive is not specified, the resolved endpoints
+        -:  126:   * will use the loopback address.
+        -:  127:   *
+        -:  128:   * @param service A string identifying the requested service. This may be a
+        -:  129:   * descriptive name or a numeric string corresponding to a port number. May
+        -:  130:   * be an empty string, in which case all resolved endpoints will have a port
+        -:  131:   * number of 0.
+        -:  132:   *
+        -:  133:   * @param resolve_flags A set of flags that determine how name resolution
+        -:  134:   * should be performed. The default flags are suitable for communication with
+        -:  135:   * remote hosts.
+        -:  136:   *
+        -:  137:   * @note On POSIX systems, host names may be locally defined in the file
+        -:  138:   * <tt>/etc/hosts</tt>. On Windows, host names may be defined in the file
+        -:  139:   * <tt>c:\\windows\\system32\\drivers\\etc\\hosts</tt>. Remote host name
+        -:  140:   * resolution is performed using DNS. Operating systems may use additional
+        -:  141:   * locations when resolving host names (such as NETBIOS names on Windows).
+        -:  142:   *
+        -:  143:   * On POSIX systems, service names are typically defined in the file
+        -:  144:   * <tt>/etc/services</tt>. On Windows, service names may be found in the file
+        -:  145:   * <tt>c:\\windows\\system32\\drivers\\etc\\services</tt>. Operating systems
+        -:  146:   * may use additional locations when resolving service names.
+        -:  147:   */
+    #####:  148:  basic_resolver_query(const std::string& host, const std::string& service,
+        -:  149:      resolver_query_base::flags resolve_flags = address_configured)
+    #####:  150:    : hints_(),
+    #####:  151:      host_name_(host),
+    #####:  152:      service_name_(service)
+        -:  153:  {
+    #####:  154:    typename InternetProtocol::endpoint endpoint;
+    #####:  155:    hints_.ai_flags = static_cast<int>(resolve_flags);
+    #####:  156:    hints_.ai_family = BOOST_ASIO_OS_DEF(AF_UNSPEC);
+    #####:  157:    hints_.ai_socktype = endpoint.protocol().type();
+    #####:  158:    hints_.ai_protocol = endpoint.protocol().protocol();
+    #####:  159:    hints_.ai_addrlen = 0;
+    #####:  160:    hints_.ai_canonname = 0;
+    #####:  161:    hints_.ai_addr = 0;
+    #####:  162:    hints_.ai_next = 0;
+    #####:  163:  }
+------------------
+_ZN5boost4asio2ip20basic_resolver_queryINS1_3tcpEEC2ERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEESC_NS1_13resolver_base5flagsE:
+function _ZN5boost4asio2ip20basic_resolver_queryINS1_3tcpEEC2ERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEESC_NS1_13resolver_base5flagsE called 0 returned 0% blocks executed 0%
+    #####:  148:  basic_resolver_query(const std::string& host, const std::string& service,
+        -:  149:      resolver_query_base::flags resolve_flags = address_configured)
+    #####:  150:    : hints_(),
+    #####:  151:      host_name_(host),
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  152:      service_name_(service)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:  153:  {
+    #####:  154:    typename InternetProtocol::endpoint endpoint;
+call    0 never executed
+    #####:  155:    hints_.ai_flags = static_cast<int>(resolve_flags);
+    #####:  156:    hints_.ai_family = BOOST_ASIO_OS_DEF(AF_UNSPEC);
+    #####:  157:    hints_.ai_socktype = endpoint.protocol().type();
+call    0 never executed
+call    1 never executed
+    #####:  158:    hints_.ai_protocol = endpoint.protocol().protocol();
+call    0 never executed
+call    1 never executed
+    #####:  159:    hints_.ai_addrlen = 0;
+    #####:  160:    hints_.ai_canonname = 0;
+    #####:  161:    hints_.ai_addr = 0;
+    #####:  162:    hints_.ai_next = 0;
+    #####:  163:  }
+call    0 never executed
+call    1 never executed
+------------------
+_ZN5boost4asio2ip20basic_resolver_queryINS1_3tcpEEC2ERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEESC_NS1_13resolver_base5flagsE:
+function _ZN5boost4asio2ip20basic_resolver_queryINS1_3tcpEEC2ERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEESC_NS1_13resolver_base5flagsE called 0 returned 0% blocks executed 0%
+    #####:  148:  basic_resolver_query(const std::string& host, const std::string& service,
+        -:  149:      resolver_query_base::flags resolve_flags = address_configured)
+    #####:  150:    : hints_(),
+    #####:  151:      host_name_(host),
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  152:      service_name_(service)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:  153:  {
+    #####:  154:    typename InternetProtocol::endpoint endpoint;
+call    0 never executed
+    #####:  155:    hints_.ai_flags = static_cast<int>(resolve_flags);
+    #####:  156:    hints_.ai_family = BOOST_ASIO_OS_DEF(AF_UNSPEC);
+    #####:  157:    hints_.ai_socktype = endpoint.protocol().type();
+call    0 never executed
+call    1 never executed
+    #####:  158:    hints_.ai_protocol = endpoint.protocol().protocol();
+call    0 never executed
+call    1 never executed
+    #####:  159:    hints_.ai_addrlen = 0;
+    #####:  160:    hints_.ai_canonname = 0;
+    #####:  161:    hints_.ai_addr = 0;
+    #####:  162:    hints_.ai_next = 0;
+    #####:  163:  }
+call    0 never executed
+call    1 never executed
+------------------
+        -:  164:
+        -:  165:  /// Construct with specified host name and service name for a given protocol.
+        -:  166:  /**
+        -:  167:   * This constructor is typically used to perform name resolution for
+        -:  168:   * communication with remote hosts.
+        -:  169:   *
+        -:  170:   * @param protocol A protocol object, normally representing either the IPv4 or
+        -:  171:   * IPv6 version of an internet protocol.
+        -:  172:   *
+        -:  173:   * @param host A string identifying a location. May be a descriptive name or
+        -:  174:   * a numeric address string. If an empty string and the passive flag has been
+        -:  175:   * specified, the resolved endpoints are suitable for local service binding.
+        -:  176:   * If an empty string and passive is not specified, the resolved endpoints
+        -:  177:   * will use the loopback address.
+        -:  178:   *
+        -:  179:   * @param service A string identifying the requested service. This may be a
+        -:  180:   * descriptive name or a numeric string corresponding to a port number. May
+        -:  181:   * be an empty string, in which case all resolved endpoints will have a port
+        -:  182:   * number of 0.
+        -:  183:   *
+        -:  184:   * @param resolve_flags A set of flags that determine how name resolution
+        -:  185:   * should be performed. The default flags are suitable for communication with
+        -:  186:   * remote hosts.
+        -:  187:   *
+        -:  188:   * @note On POSIX systems, host names may be locally defined in the file
+        -:  189:   * <tt>/etc/hosts</tt>. On Windows, host names may be defined in the file
+        -:  190:   * <tt>c:\\windows\\system32\\drivers\\etc\\hosts</tt>. Remote host name
+        -:  191:   * resolution is performed using DNS. Operating systems may use additional
+        -:  192:   * locations when resolving host names (such as NETBIOS names on Windows).
+        -:  193:   *
+        -:  194:   * On POSIX systems, service names are typically defined in the file
+        -:  195:   * <tt>/etc/services</tt>. On Windows, service names may be found in the file
+        -:  196:   * <tt>c:\\windows\\system32\\drivers\\etc\\services</tt>. Operating systems
+        -:  197:   * may use additional locations when resolving service names.
+        -:  198:   */
+        -:  199:  basic_resolver_query(const protocol_type& protocol,
+        -:  200:      const std::string& host, const std::string& service,
+        -:  201:      resolver_query_base::flags resolve_flags = address_configured)
+        -:  202:    : hints_(),
+        -:  203:      host_name_(host),
+        -:  204:      service_name_(service)
+        -:  205:  {
+        -:  206:    hints_.ai_flags = static_cast<int>(resolve_flags);
+        -:  207:    hints_.ai_family = protocol.family();
+        -:  208:    hints_.ai_socktype = protocol.type();
+        -:  209:    hints_.ai_protocol = protocol.protocol();
+        -:  210:    hints_.ai_addrlen = 0;
+        -:  211:    hints_.ai_canonname = 0;
+        -:  212:    hints_.ai_addr = 0;
+        -:  213:    hints_.ai_next = 0;
+        -:  214:  }
+        -:  215:
+        -:  216:  /// Get the hints associated with the query.
+    #####:  217:  const boost::asio::detail::addrinfo_type& hints() const
+        -:  218:  {
+    #####:  219:    return hints_;
+        -:  220:  }
+------------------
+_ZNK5boost4asio2ip20basic_resolver_queryINS1_3tcpEE5hintsEv:
+function _ZNK5boost4asio2ip20basic_resolver_queryINS1_3tcpEE5hintsEv called 0 returned 0% blocks executed 0%
+    #####:  217:  const boost::asio::detail::addrinfo_type& hints() const
+        -:  218:  {
+    #####:  219:    return hints_;
+        -:  220:  }
+------------------
+_ZNK5boost4asio2ip20basic_resolver_queryINS1_3tcpEE5hintsEv:
+function _ZNK5boost4asio2ip20basic_resolver_queryINS1_3tcpEE5hintsEv called 0 returned 0% blocks executed 0%
+    #####:  217:  const boost::asio::detail::addrinfo_type& hints() const
+        -:  218:  {
+    #####:  219:    return hints_;
+        -:  220:  }
+------------------
+        -:  221:
+        -:  222:  /// Get the host name associated with the query.
+    #####:  223:  std::string host_name() const
+        -:  224:  {
+    #####:  225:    return host_name_;
+        -:  226:  }
+------------------
+_ZNK5boost4asio2ip20basic_resolver_queryINS1_3tcpEE9host_nameB5cxx11Ev:
+function _ZNK5boost4asio2ip20basic_resolver_queryINS1_3tcpEE9host_nameB5cxx11Ev called 0 returned 0% blocks executed 0%
+    #####:  223:  std::string host_name() const
+        -:  224:  {
+    #####:  225:    return host_name_;
+call    0 never executed
+        -:  226:  }
+------------------
+_ZNK5boost4asio2ip20basic_resolver_queryINS1_3tcpEE9host_nameB5cxx11Ev:
+function _ZNK5boost4asio2ip20basic_resolver_queryINS1_3tcpEE9host_nameB5cxx11Ev called 0 returned 0% blocks executed 0%
+    #####:  223:  std::string host_name() const
+        -:  224:  {
+    #####:  225:    return host_name_;
+call    0 never executed
+        -:  226:  }
+------------------
+        -:  227:
+        -:  228:  /// Get the service name associated with the query.
+    #####:  229:  std::string service_name() const
+        -:  230:  {
+    #####:  231:    return service_name_;
+        -:  232:  }
+        -:  233:
+        -:  234:private:
+        -:  235:  boost::asio::detail::addrinfo_type hints_;
+        -:  236:  std::string host_name_;
+        -:  237:  std::string service_name_;
+        -:  238:};
+        -:  239:
+        -:  240:} // namespace ip
+        -:  241:} // namespace asio
+        -:  242:} // namespace boost
+        -:  243:
+        -:  244:#include <boost/asio/detail/pop_options.hpp>
+        -:  245:
+        -:  246:#endif // BOOST_ASIO_IP_BASIC_RESOLVER_QUERY_HPP

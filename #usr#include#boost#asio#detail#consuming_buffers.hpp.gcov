@@ -1,0 +1,1500 @@
+        -:    0:Source:/usr/include/boost/asio/detail/consuming_buffers.hpp
+        -:    1://
+        -:    2:// detail/consuming_buffers.hpp
+        -:    3:// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        -:    4://
+        -:    5:// Copyright (c) 2003-2023 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+        -:    6://
+        -:    7:// Distributed under the Boost Software License, Version 1.0. (See accompanying
+        -:    8:// file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+        -:    9://
+        -:   10:
+        -:   11:#ifndef BOOST_ASIO_DETAIL_CONSUMING_BUFFERS_HPP
+        -:   12:#define BOOST_ASIO_DETAIL_CONSUMING_BUFFERS_HPP
+        -:   13:
+        -:   14:#if defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   15:# pragma once
+        -:   16:#endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   17:
+        -:   18:#include <boost/asio/detail/config.hpp>
+        -:   19:#include <cstddef>
+        -:   20:#include <boost/asio/buffer.hpp>
+        -:   21:#include <boost/asio/detail/buffer_sequence_adapter.hpp>
+        -:   22:#include <boost/asio/detail/limits.hpp>
+        -:   23:#include <boost/asio/registered_buffer.hpp>
+        -:   24:
+        -:   25:#include <boost/asio/detail/push_options.hpp>
+        -:   26:
+        -:   27:namespace boost {
+        -:   28:namespace asio {
+        -:   29:namespace detail {
+        -:   30:
+        -:   31:// Helper template to determine the maximum number of prepared buffers.
+        -:   32:template <typename Buffers>
+        -:   33:struct prepared_buffers_max
+        -:   34:{
+        -:   35:  enum { value = buffer_sequence_adapter_base::max_buffers };
+        -:   36:};
+        -:   37:
+        -:   38:template <typename Elem, std::size_t N>
+        -:   39:struct prepared_buffers_max<boost::array<Elem, N> >
+        -:   40:{
+        -:   41:  enum { value = N };
+        -:   42:};
+        -:   43:
+        -:   44:#if defined(BOOST_ASIO_HAS_STD_ARRAY)
+        -:   45:
+        -:   46:template <typename Elem, std::size_t N>
+        -:   47:struct prepared_buffers_max<std::array<Elem, N> >
+        -:   48:{
+        -:   49:  enum { value = N };
+        -:   50:};
+        -:   51:
+        -:   52:#endif // defined(BOOST_ASIO_HAS_STD_ARRAY)
+        -:   53:
+        -:   54:// A buffer sequence used to represent a subsequence of the buffers.
+        -:   55:template <typename Buffer, std::size_t MaxBuffers>
+        -:   56:struct prepared_buffers
+        -:   57:{
+        -:   58:  typedef Buffer value_type;
+        -:   59:  typedef const Buffer* const_iterator;
+        -:   60:
+        -:   61:  enum { max_buffers = MaxBuffers < 16 ? MaxBuffers : 16 };
+        -:   62:
+function _ZN5boost4asio6detail16prepared_buffersINS0_12const_bufferELm64EEC2Ev called 0 returned 0% blocks executed 0%
+    #####:   63:  prepared_buffers() : count(0) {}
+call    0 never executed
+branch  1 never executed
+branch  2 never executed (fallthrough)
+function _ZNK5boost4asio6detail16prepared_buffersINS0_12const_bufferELm64EE5beginEv called 0 returned 0% blocks executed 0%
+    #####:   64:  const_iterator begin() const { return elems; }
+function _ZNK5boost4asio6detail16prepared_buffersINS0_12const_bufferELm64EE3endEv called 0 returned 0% blocks executed 0%
+    #####:   65:  const_iterator end() const { return elems + count; }
+        -:   66:
+        -:   67:  Buffer elems[max_buffers];
+        -:   68:  std::size_t count;
+        -:   69:};
+        -:   70:
+        -:   71:// A proxy for a sub-range in a list of buffers.
+        -:   72:template <typename Buffer, typename Buffers, typename Buffer_Iterator>
+        -:   73:class consuming_buffers
+        -:   74:{
+        -:   75:public:
+        -:   76:  typedef prepared_buffers<Buffer, prepared_buffers_max<Buffers>::value>
+        -:   77:    prepared_buffers_type;
+        -:   78:
+        -:   79:  // Construct to represent the entire list of buffers.
+    #####:   80:  explicit consuming_buffers(const Buffers& buffers)
+    #####:   81:    : buffers_(buffers),
+    #####:   82:      total_consumed_(0),
+    #####:   83:      next_elem_(0),
+    #####:   84:      next_elem_offset_(0)
+        -:   85:  {
+        -:   86:    using boost::asio::buffer_size;
+    #####:   87:    total_size_ = buffer_size(buffers);
+    #####:   88:  }
+------------------
+_ZN5boost4asio6detail17consuming_buffersINS0_12const_bufferESt6vectorIS3_SaIS3_EEN9__gnu_cxx17__normal_iteratorIPKS3_S6_EEEC2ERKS6_:
+function _ZN5boost4asio6detail17consuming_buffersINS0_12const_bufferESt6vectorIS3_SaIS3_EEN9__gnu_cxx17__normal_iteratorIPKS3_S6_EEEC2ERKS6_ called 0 returned 0% blocks executed 0%
+    #####:   80:  explicit consuming_buffers(const Buffers& buffers)
+    #####:   81:    : buffers_(buffers),
+call    0 never executed
+    #####:   82:      total_consumed_(0),
+    #####:   83:      next_elem_(0),
+    #####:   84:      next_elem_offset_(0)
+        -:   85:  {
+        -:   86:    using boost::asio::buffer_size;
+    #####:   87:    total_size_ = buffer_size(buffers);
+call    0 never executed
+    #####:   88:  }
+------------------
+_ZN5boost4asio6detail17consuming_buffersINS0_12const_bufferESt4spanIKS3_Lm18446744073709551615EEN9__gnu_cxx17__normal_iteratorIPS5_S6_EEEC2ERKS6_:
+function _ZN5boost4asio6detail17consuming_buffersINS0_12const_bufferESt4spanIKS3_Lm18446744073709551615EEN9__gnu_cxx17__normal_iteratorIPS5_S6_EEEC2ERKS6_ called 0 returned 0% blocks executed 0%
+    #####:   80:  explicit consuming_buffers(const Buffers& buffers)
+    #####:   81:    : buffers_(buffers),
+    #####:   82:      total_consumed_(0),
+    #####:   83:      next_elem_(0),
+    #####:   84:      next_elem_offset_(0)
+        -:   85:  {
+        -:   86:    using boost::asio::buffer_size;
+    #####:   87:    total_size_ = buffer_size(buffers);
+call    0 never executed
+    #####:   88:  }
+------------------
+        -:   89:
+        -:   90:  // Determine if we are at the end of the buffers.
+    #####:   91:  bool empty() const
+        -:   92:  {
+    #####:   93:    return total_consumed_ >= total_size_;
+        -:   94:  }
+------------------
+_ZNK5boost4asio6detail17consuming_buffersINS0_12const_bufferESt6vectorIS3_SaIS3_EEN9__gnu_cxx17__normal_iteratorIPKS3_S6_EEE5emptyEv:
+function _ZNK5boost4asio6detail17consuming_buffersINS0_12const_bufferESt6vectorIS3_SaIS3_EEN9__gnu_cxx17__normal_iteratorIPKS3_S6_EEE5emptyEv called 0 returned 0% blocks executed 0%
+    #####:   91:  bool empty() const
+        -:   92:  {
+    #####:   93:    return total_consumed_ >= total_size_;
+        -:   94:  }
+------------------
+_ZNK5boost4asio6detail17consuming_buffersINS0_12const_bufferESt4spanIKS3_Lm18446744073709551615EEN9__gnu_cxx17__normal_iteratorIPS5_S6_EEE5emptyEv:
+function _ZNK5boost4asio6detail17consuming_buffersINS0_12const_bufferESt4spanIKS3_Lm18446744073709551615EEN9__gnu_cxx17__normal_iteratorIPS5_S6_EEE5emptyEv called 0 returned 0% blocks executed 0%
+    #####:   91:  bool empty() const
+        -:   92:  {
+    #####:   93:    return total_consumed_ >= total_size_;
+        -:   94:  }
+------------------
+        -:   95:
+        -:   96:  // Get the buffer for a single transfer, with a size.
+    #####:   97:  prepared_buffers_type prepare(std::size_t max_size)
+        -:   98:  {
+    #####:   99:    prepared_buffers_type result;
+        -:  100:
+    #####:  101:    Buffer_Iterator next = boost::asio::buffer_sequence_begin(buffers_);
+    #####:  102:    Buffer_Iterator end = boost::asio::buffer_sequence_end(buffers_);
+        -:  103:
+    #####:  104:    std::advance(next, next_elem_);
+    #####:  105:    std::size_t elem_offset = next_elem_offset_;
+    #####:  106:    while (next != end && max_size > 0 && (result.count) < result.max_buffers)
+        -:  107:    {
+    #####:  108:      Buffer next_buf = Buffer(*next) + elem_offset;
+    #####:  109:      result.elems[result.count] = boost::asio::buffer(next_buf, max_size);
+    #####:  110:      max_size -= result.elems[result.count].size();
+    #####:  111:      elem_offset = 0;
+    #####:  112:      if (result.elems[result.count].size() > 0)
+    #####:  113:        ++result.count;
+    #####:  114:      ++next;
+        -:  115:    }
+        -:  116:
+    #####:  117:    return result;
+        -:  118:  }
+------------------
+_ZN5boost4asio6detail17consuming_buffersINS0_12const_bufferESt6vectorIS3_SaIS3_EEN9__gnu_cxx17__normal_iteratorIPKS3_S6_EEE7prepareEm:
+function _ZN5boost4asio6detail17consuming_buffersINS0_12const_bufferESt6vectorIS3_SaIS3_EEN9__gnu_cxx17__normal_iteratorIPKS3_S6_EEE7prepareEm called 0 returned 0% blocks executed 0%
+    #####:   97:  prepared_buffers_type prepare(std::size_t max_size)
+        -:   98:  {
+    #####:   99:    prepared_buffers_type result;
+call    0 never executed
+        -:  100:
+    #####:  101:    Buffer_Iterator next = boost::asio::buffer_sequence_begin(buffers_);
+call    0 never executed
+call    1 never executed
+    #####:  102:    Buffer_Iterator end = boost::asio::buffer_sequence_end(buffers_);
+call    0 never executed
+call    1 never executed
+        -:  103:
+    #####:  104:    std::advance(next, next_elem_);
+    #####:  105:    std::size_t elem_offset = next_elem_offset_;
+    #####:  106:    while (next != end && max_size > 0 && (result.count) < result.max_buffers)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed
+branch  5 never executed (fallthrough)
+branch  6 never executed
+branch  7 never executed
+branch  8 never executed (fallthrough)
+        -:  107:    {
+    #####:  108:      Buffer next_buf = Buffer(*next) + elem_offset;
+call    0 never executed
+call    1 never executed
+    #####:  109:      result.elems[result.count] = boost::asio::buffer(next_buf, max_size);
+call    0 never executed
+    #####:  110:      max_size -= result.elems[result.count].size();
+call    0 never executed
+    #####:  111:      elem_offset = 0;
+    #####:  112:      if (result.elems[result.count].size() > 0)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+    #####:  113:        ++result.count;
+    #####:  114:      ++next;
+call    0 never executed
+        -:  115:    }
+        -:  116:
+    #####:  117:    return result;
+        -:  118:  }
+------------------
+_ZN5boost4asio6detail17consuming_buffersINS0_12const_bufferESt4spanIKS3_Lm18446744073709551615EEN9__gnu_cxx17__normal_iteratorIPS5_S6_EEE7prepareEm:
+function _ZN5boost4asio6detail17consuming_buffersINS0_12const_bufferESt4spanIKS3_Lm18446744073709551615EEN9__gnu_cxx17__normal_iteratorIPS5_S6_EEE7prepareEm called 0 returned 0% blocks executed 0%
+    #####:   97:  prepared_buffers_type prepare(std::size_t max_size)
+        -:   98:  {
+    #####:   99:    prepared_buffers_type result;
+call    0 never executed
+        -:  100:
+    #####:  101:    Buffer_Iterator next = boost::asio::buffer_sequence_begin(buffers_);
+call    0 never executed
+    #####:  102:    Buffer_Iterator end = boost::asio::buffer_sequence_end(buffers_);
+call    0 never executed
+        -:  103:
+    #####:  104:    std::advance(next, next_elem_);
+    #####:  105:    std::size_t elem_offset = next_elem_offset_;
+    #####:  106:    while (next != end && max_size > 0 && (result.count) < result.max_buffers)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed
+branch  5 never executed (fallthrough)
+branch  6 never executed
+branch  7 never executed
+branch  8 never executed (fallthrough)
+        -:  107:    {
+    #####:  108:      Buffer next_buf = Buffer(*next) + elem_offset;
+call    0 never executed
+call    1 never executed
+    #####:  109:      result.elems[result.count] = boost::asio::buffer(next_buf, max_size);
+call    0 never executed
+    #####:  110:      max_size -= result.elems[result.count].size();
+call    0 never executed
+    #####:  111:      elem_offset = 0;
+    #####:  112:      if (result.elems[result.count].size() > 0)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+    #####:  113:        ++result.count;
+    #####:  114:      ++next;
+call    0 never executed
+        -:  115:    }
+        -:  116:
+    #####:  117:    return result;
+        -:  118:  }
+------------------
+        -:  119:
+        -:  120:  // Consume the specified number of bytes from the buffers.
+    #####:  121:  void consume(std::size_t size)
+        -:  122:  {
+    #####:  123:    total_consumed_ += size;
+        -:  124:
+    #####:  125:    Buffer_Iterator next = boost::asio::buffer_sequence_begin(buffers_);
+    #####:  126:    Buffer_Iterator end = boost::asio::buffer_sequence_end(buffers_);
+        -:  127:
+    #####:  128:    std::advance(next, next_elem_);
+    #####:  129:    while (next != end && size > 0)
+        -:  130:    {
+    #####:  131:      Buffer next_buf = Buffer(*next) + next_elem_offset_;
+    #####:  132:      if (size < next_buf.size())
+        -:  133:      {
+    #####:  134:        next_elem_offset_ += size;
+    #####:  135:        size = 0;
+        -:  136:      }
+        -:  137:      else
+        -:  138:      {
+    #####:  139:        size -= next_buf.size();
+    #####:  140:        next_elem_offset_ = 0;
+    #####:  141:        ++next_elem_;
+    #####:  142:        ++next;
+        -:  143:      }
+        -:  144:    }
+    #####:  145:  }
+------------------
+_ZN5boost4asio6detail17consuming_buffersINS0_12const_bufferESt6vectorIS3_SaIS3_EEN9__gnu_cxx17__normal_iteratorIPKS3_S6_EEE7consumeEm:
+function _ZN5boost4asio6detail17consuming_buffersINS0_12const_bufferESt6vectorIS3_SaIS3_EEN9__gnu_cxx17__normal_iteratorIPKS3_S6_EEE7consumeEm called 0 returned 0% blocks executed 0%
+    #####:  121:  void consume(std::size_t size)
+        -:  122:  {
+    #####:  123:    total_consumed_ += size;
+        -:  124:
+    #####:  125:    Buffer_Iterator next = boost::asio::buffer_sequence_begin(buffers_);
+call    0 never executed
+call    1 never executed
+    #####:  126:    Buffer_Iterator end = boost::asio::buffer_sequence_end(buffers_);
+call    0 never executed
+call    1 never executed
+        -:  127:
+    #####:  128:    std::advance(next, next_elem_);
+    #####:  129:    while (next != end && size > 0)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed
+branch  5 never executed
+branch  6 never executed (fallthrough)
+        -:  130:    {
+    #####:  131:      Buffer next_buf = Buffer(*next) + next_elem_offset_;
+call    0 never executed
+call    1 never executed
+    #####:  132:      if (size < next_buf.size())
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+        -:  133:      {
+    #####:  134:        next_elem_offset_ += size;
+    #####:  135:        size = 0;
+        -:  136:      }
+        -:  137:      else
+        -:  138:      {
+    #####:  139:        size -= next_buf.size();
+call    0 never executed
+    #####:  140:        next_elem_offset_ = 0;
+    #####:  141:        ++next_elem_;
+    #####:  142:        ++next;
+call    0 never executed
+        -:  143:      }
+        -:  144:    }
+    #####:  145:  }
+------------------
+_ZN5boost4asio6detail17consuming_buffersINS0_12const_bufferESt4spanIKS3_Lm18446744073709551615EEN9__gnu_cxx17__normal_iteratorIPS5_S6_EEE7consumeEm:
+function _ZN5boost4asio6detail17consuming_buffersINS0_12const_bufferESt4spanIKS3_Lm18446744073709551615EEN9__gnu_cxx17__normal_iteratorIPS5_S6_EEE7consumeEm called 0 returned 0% blocks executed 0%
+    #####:  121:  void consume(std::size_t size)
+        -:  122:  {
+    #####:  123:    total_consumed_ += size;
+        -:  124:
+    #####:  125:    Buffer_Iterator next = boost::asio::buffer_sequence_begin(buffers_);
+call    0 never executed
+    #####:  126:    Buffer_Iterator end = boost::asio::buffer_sequence_end(buffers_);
+call    0 never executed
+        -:  127:
+    #####:  128:    std::advance(next, next_elem_);
+    #####:  129:    while (next != end && size > 0)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed
+branch  5 never executed
+branch  6 never executed (fallthrough)
+        -:  130:    {
+    #####:  131:      Buffer next_buf = Buffer(*next) + next_elem_offset_;
+call    0 never executed
+call    1 never executed
+    #####:  132:      if (size < next_buf.size())
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+        -:  133:      {
+    #####:  134:        next_elem_offset_ += size;
+    #####:  135:        size = 0;
+        -:  136:      }
+        -:  137:      else
+        -:  138:      {
+    #####:  139:        size -= next_buf.size();
+call    0 never executed
+    #####:  140:        next_elem_offset_ = 0;
+    #####:  141:        ++next_elem_;
+    #####:  142:        ++next;
+call    0 never executed
+        -:  143:      }
+        -:  144:    }
+    #####:  145:  }
+------------------
+        -:  146:
+        -:  147:  // Get the total number of bytes consumed from the buffers.
+    #####:  148:  std::size_t total_consumed() const
+        -:  149:  {
+    #####:  150:    return total_consumed_;
+        -:  151:  }
+------------------
+_ZNK5boost4asio6detail17consuming_buffersINS0_12const_bufferESt6vectorIS3_SaIS3_EEN9__gnu_cxx17__normal_iteratorIPKS3_S6_EEE14total_consumedEv:
+function _ZNK5boost4asio6detail17consuming_buffersINS0_12const_bufferESt6vectorIS3_SaIS3_EEN9__gnu_cxx17__normal_iteratorIPKS3_S6_EEE14total_consumedEv called 0 returned 0% blocks executed 0%
+    #####:  148:  std::size_t total_consumed() const
+        -:  149:  {
+    #####:  150:    return total_consumed_;
+        -:  151:  }
+------------------
+_ZNK5boost4asio6detail17consuming_buffersINS0_12const_bufferESt4spanIKS3_Lm18446744073709551615EEN9__gnu_cxx17__normal_iteratorIPS5_S6_EEE14total_consumedEv:
+function _ZNK5boost4asio6detail17consuming_buffersINS0_12const_bufferESt4spanIKS3_Lm18446744073709551615EEN9__gnu_cxx17__normal_iteratorIPS5_S6_EEE14total_consumedEv called 0 returned 0% blocks executed 0%
+    #####:  148:  std::size_t total_consumed() const
+        -:  149:  {
+    #####:  150:    return total_consumed_;
+        -:  151:  }
+------------------
+        -:  152:
+        -:  153:private:
+        -:  154:  Buffers buffers_;
+        -:  155:  std::size_t total_size_;
+        -:  156:  std::size_t total_consumed_;
+        -:  157:  std::size_t next_elem_;
+        -:  158:  std::size_t next_elem_offset_;
+        -:  159:};
+        -:  160:
+        -:  161:// Base class of all consuming_buffers specialisations for single buffers.
+        -:  162:template <typename Buffer>
+        -:  163:class consuming_single_buffer
+        -:  164:{
+        -:  165:public:
+        -:  166:  // Construct to represent the entire list of buffers.
+        -:  167:  template <typename Buffer1>
+     462*:  168:  explicit consuming_single_buffer(const Buffer1& buffer)
+     462*:  169:    : buffer_(buffer),
+     463*:  170:      total_consumed_(0)
+        -:  171:  {
+     463*:  172:  }
+------------------
+_ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EEC2INS0_17mutable_buffers_1EEERKT_:
+function _ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EEC2INS0_17mutable_buffers_1EEERKT_ called 14 returned 100% blocks executed 100%
+       14:  168:  explicit consuming_single_buffer(const Buffer1& buffer)
+       14:  169:    : buffer_(buffer),
+call    0 returned 100%
+call    1 returned 100%
+       14:  170:      total_consumed_(0)
+        -:  171:  {
+       14:  172:  }
+------------------
+_ZN5boost4asio6detail23consuming_single_bufferINS0_17mutable_buffers_1EEC2IS3_EERKT_:
+function _ZN5boost4asio6detail23consuming_single_bufferINS0_17mutable_buffers_1EEC2IS3_EERKT_ called 0 returned 0% blocks executed 0%
+    #####:  168:  explicit consuming_single_buffer(const Buffer1& buffer)
+    #####:  169:    : buffer_(buffer),
+    #####:  170:      total_consumed_(0)
+        -:  171:  {
+    #####:  172:  }
+------------------
+_ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EEC2INS0_17mutable_buffers_1EEERKT_:
+function _ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EEC2INS0_17mutable_buffers_1EEERKT_ called 0 returned 0% blocks executed 0%
+    #####:  168:  explicit consuming_single_buffer(const Buffer1& buffer)
+    #####:  169:    : buffer_(buffer),
+call    0 never executed
+call    1 never executed
+    #####:  170:      total_consumed_(0)
+        -:  171:  {
+    #####:  172:  }
+------------------
+_ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EEC2INS0_17mutable_buffers_1EEERKT_:
+function _ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EEC2INS0_17mutable_buffers_1EEERKT_ called 0 returned 0% blocks executed 0%
+    #####:  168:  explicit consuming_single_buffer(const Buffer1& buffer)
+    #####:  169:    : buffer_(buffer),
+call    0 never executed
+call    1 never executed
+    #####:  170:      total_consumed_(0)
+        -:  171:  {
+    #####:  172:  }
+------------------
+_ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EEC2INS0_17mutable_buffers_1EEERKT_:
+function _ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EEC2INS0_17mutable_buffers_1EEERKT_ called 0 returned 0% blocks executed 0%
+    #####:  168:  explicit consuming_single_buffer(const Buffer1& buffer)
+    #####:  169:    : buffer_(buffer),
+call    0 never executed
+call    1 never executed
+    #####:  170:      total_consumed_(0)
+        -:  171:  {
+    #####:  172:  }
+------------------
+_ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EEC2INS0_17mutable_buffers_1EEERKT_:
+function _ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EEC2INS0_17mutable_buffers_1EEERKT_ called 6 returned 100% blocks executed 100%
+        6:  168:  explicit consuming_single_buffer(const Buffer1& buffer)
+        6:  169:    : buffer_(buffer),
+call    0 returned 100%
+call    1 returned 100%
+        6:  170:      total_consumed_(0)
+        -:  171:  {
+        6:  172:  }
+------------------
+_ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EEC2INS0_17mutable_buffers_1EEERKT_:
+function _ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EEC2INS0_17mutable_buffers_1EEERKT_ called 2 returned 100% blocks executed 100%
+        2:  168:  explicit consuming_single_buffer(const Buffer1& buffer)
+        2:  169:    : buffer_(buffer),
+call    0 returned 100%
+call    1 returned 100%
+        2:  170:      total_consumed_(0)
+        -:  171:  {
+        2:  172:  }
+------------------
+_ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EEC2INS0_17mutable_buffers_1EEERKT_:
+function _ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EEC2INS0_17mutable_buffers_1EEERKT_ called 5 returned 100% blocks executed 100%
+        5:  168:  explicit consuming_single_buffer(const Buffer1& buffer)
+        5:  169:    : buffer_(buffer),
+call    0 returned 100%
+call    1 returned 100%
+        5:  170:      total_consumed_(0)
+        -:  171:  {
+        5:  172:  }
+------------------
+_ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EEC2INS0_17mutable_buffers_1EEERKT_:
+function _ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EEC2INS0_17mutable_buffers_1EEERKT_ called 2 returned 100% blocks executed 100%
+        2:  168:  explicit consuming_single_buffer(const Buffer1& buffer)
+        2:  169:    : buffer_(buffer),
+call    0 returned 100%
+call    1 returned 100%
+        2:  170:      total_consumed_(0)
+        -:  171:  {
+        2:  172:  }
+------------------
+_ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EEC2INS0_17mutable_buffers_1EEERKT_:
+function _ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EEC2INS0_17mutable_buffers_1EEERKT_ called 0 returned 0% blocks executed 0%
+    #####:  168:  explicit consuming_single_buffer(const Buffer1& buffer)
+    #####:  169:    : buffer_(buffer),
+call    0 never executed
+call    1 never executed
+    #####:  170:      total_consumed_(0)
+        -:  171:  {
+    #####:  172:  }
+------------------
+_ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EEC2INS0_17mutable_buffers_1EEERKT_:
+function _ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EEC2INS0_17mutable_buffers_1EEERKT_ called 206 returned 100% blocks executed 100%
+      206:  168:  explicit consuming_single_buffer(const Buffer1& buffer)
+      206:  169:    : buffer_(buffer),
+call    0 returned 100%
+call    1 returned 100%
+      207:  170:      total_consumed_(0)
+        -:  171:  {
+      207:  172:  }
+------------------
+_ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EEC2INS0_17mutable_buffers_1EEERKT_:
+function _ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EEC2INS0_17mutable_buffers_1EEERKT_ called 1 returned 100% blocks executed 100%
+        1:  168:  explicit consuming_single_buffer(const Buffer1& buffer)
+        1:  169:    : buffer_(buffer),
+call    0 returned 100%
+call    1 returned 100%
+        1:  170:      total_consumed_(0)
+        -:  171:  {
+        1:  172:  }
+------------------
+_ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EEC2INS0_14mutable_bufferEEERKT_:
+function _ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EEC2INS0_14mutable_bufferEEERKT_ called 0 returned 0% blocks executed 0%
+    #####:  168:  explicit consuming_single_buffer(const Buffer1& buffer)
+    #####:  169:    : buffer_(buffer),
+call    0 never executed
+call    1 never executed
+    #####:  170:      total_consumed_(0)
+        -:  171:  {
+    #####:  172:  }
+------------------
+_ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EEC2INS0_17mutable_buffers_1EEERKT_:
+function _ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EEC2INS0_17mutable_buffers_1EEERKT_ called 0 returned 0% blocks executed 0%
+    #####:  168:  explicit consuming_single_buffer(const Buffer1& buffer)
+    #####:  169:    : buffer_(buffer),
+call    0 never executed
+call    1 never executed
+    #####:  170:      total_consumed_(0)
+        -:  171:  {
+    #####:  172:  }
+------------------
+_ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EEC2INS0_17mutable_buffers_1EEERKT_:
+function _ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EEC2INS0_17mutable_buffers_1EEERKT_ called 0 returned 0% blocks executed 0%
+    #####:  168:  explicit consuming_single_buffer(const Buffer1& buffer)
+    #####:  169:    : buffer_(buffer),
+call    0 never executed
+call    1 never executed
+    #####:  170:      total_consumed_(0)
+        -:  171:  {
+    #####:  172:  }
+------------------
+_ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EEC2IS3_EERKT_:
+function _ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EEC2IS3_EERKT_ called 224 returned 100% blocks executed 100%
+      224:  168:  explicit consuming_single_buffer(const Buffer1& buffer)
+      224:  169:    : buffer_(buffer),
+      224:  170:      total_consumed_(0)
+        -:  171:  {
+      224:  172:  }
+------------------
+_ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EEC2INS0_14mutable_bufferEEERKT_:
+function _ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EEC2INS0_14mutable_bufferEEERKT_ called 0 returned 0% blocks executed 0%
+    #####:  168:  explicit consuming_single_buffer(const Buffer1& buffer)
+    #####:  169:    : buffer_(buffer),
+call    0 never executed
+call    1 never executed
+    #####:  170:      total_consumed_(0)
+        -:  171:  {
+    #####:  172:  }
+------------------
+_ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EEC2INS0_12const_bufferEEERKT_:
+function _ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EEC2INS0_12const_bufferEEERKT_ called 2 returned 100% blocks executed 100%
+        2:  168:  explicit consuming_single_buffer(const Buffer1& buffer)
+        2:  169:    : buffer_(buffer),
+call    0 returned 100%
+        2:  170:      total_consumed_(0)
+        -:  171:  {
+        2:  172:  }
+------------------
+        -:  173:
+        -:  174:  // Determine if we are at the end of the buffers.
+     711*:  175:  bool empty() const
+        -:  176:  {
+     711*:  177:    return total_consumed_ >= buffer_.size();
+        -:  178:  }
+------------------
+_ZNK5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE5emptyEv:
+function _ZNK5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE5emptyEv called 0 returned 0% blocks executed 0%
+    #####:  175:  bool empty() const
+        -:  176:  {
+    #####:  177:    return total_consumed_ >= buffer_.size();
+call    0 never executed
+        -:  178:  }
+------------------
+_ZNK5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE5emptyEv:
+function _ZNK5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE5emptyEv called 0 returned 0% blocks executed 0%
+    #####:  175:  bool empty() const
+        -:  176:  {
+    #####:  177:    return total_consumed_ >= buffer_.size();
+call    0 never executed
+        -:  178:  }
+------------------
+_ZNK5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE5emptyEv:
+function _ZNK5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE5emptyEv called 0 returned 0% blocks executed 0%
+    #####:  175:  bool empty() const
+        -:  176:  {
+    #####:  177:    return total_consumed_ >= buffer_.size();
+call    0 never executed
+        -:  178:  }
+------------------
+_ZNK5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE5emptyEv:
+function _ZNK5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE5emptyEv called 0 returned 0% blocks executed 0%
+    #####:  175:  bool empty() const
+        -:  176:  {
+    #####:  177:    return total_consumed_ >= buffer_.size();
+call    0 never executed
+        -:  178:  }
+------------------
+_ZNK5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE5emptyEv:
+function _ZNK5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE5emptyEv called 2 returned 100% blocks executed 100%
+        2:  175:  bool empty() const
+        -:  176:  {
+        2:  177:    return total_consumed_ >= buffer_.size();
+call    0 returned 100%
+        -:  178:  }
+------------------
+_ZNK5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE5emptyEv:
+function _ZNK5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE5emptyEv called 635 returned 100% blocks executed 100%
+      635:  175:  bool empty() const
+        -:  176:  {
+      635:  177:    return total_consumed_ >= buffer_.size();
+call    0 returned 100%
+        -:  178:  }
+------------------
+_ZNK5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE5emptyEv:
+function _ZNK5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE5emptyEv called 29 returned 100% blocks executed 100%
+       29:  175:  bool empty() const
+        -:  176:  {
+       29:  177:    return total_consumed_ >= buffer_.size();
+call    0 returned 100%
+        -:  178:  }
+------------------
+_ZNK5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE5emptyEv:
+function _ZNK5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE5emptyEv called 6 returned 100% blocks executed 100%
+        6:  175:  bool empty() const
+        -:  176:  {
+        6:  177:    return total_consumed_ >= buffer_.size();
+call    0 returned 100%
+        -:  178:  }
+------------------
+_ZNK5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE5emptyEv:
+function _ZNK5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE5emptyEv called 15 returned 100% blocks executed 100%
+       15:  175:  bool empty() const
+        -:  176:  {
+       15:  177:    return total_consumed_ >= buffer_.size();
+call    0 returned 100%
+        -:  178:  }
+------------------
+_ZNK5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE5emptyEv:
+function _ZNK5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE5emptyEv called 6 returned 100% blocks executed 100%
+        6:  175:  bool empty() const
+        -:  176:  {
+        6:  177:    return total_consumed_ >= buffer_.size();
+call    0 returned 100%
+        -:  178:  }
+------------------
+_ZNK5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE5emptyEv:
+function _ZNK5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE5emptyEv called 18 returned 100% blocks executed 100%
+       18:  175:  bool empty() const
+        -:  176:  {
+       18:  177:    return total_consumed_ >= buffer_.size();
+call    0 returned 100%
+        -:  178:  }
+------------------
+_ZNK5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE5emptyEv:
+function _ZNK5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE5emptyEv called 0 returned 0% blocks executed 0%
+    #####:  175:  bool empty() const
+        -:  176:  {
+    #####:  177:    return total_consumed_ >= buffer_.size();
+call    0 never executed
+        -:  178:  }
+------------------
+_ZNK5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE5emptyEv:
+function _ZNK5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE5emptyEv called 0 returned 0% blocks executed 0%
+    #####:  175:  bool empty() const
+        -:  176:  {
+    #####:  177:    return total_consumed_ >= buffer_.size();
+call    0 never executed
+        -:  178:  }
+------------------
+_ZNK5boost4asio6detail23consuming_single_bufferINS0_17mutable_buffers_1EE5emptyEv:
+function _ZNK5boost4asio6detail23consuming_single_bufferINS0_17mutable_buffers_1EE5emptyEv called 0 returned 0% blocks executed 0%
+    #####:  175:  bool empty() const
+        -:  176:  {
+    #####:  177:    return total_consumed_ >= buffer_.size();
+call    0 never executed
+        -:  178:  }
+------------------
+_ZNK5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE5emptyEv:
+function _ZNK5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE5emptyEv called 0 returned 0% blocks executed 0%
+    #####:  175:  bool empty() const
+        -:  176:  {
+    #####:  177:    return total_consumed_ >= buffer_.size();
+call    0 never executed
+        -:  178:  }
+------------------
+        -:  179:
+        -:  180:  // Get the buffer for a single transfer, with a size.
+     478*:  181:  Buffer prepare(std::size_t max_size)
+        -:  182:  {
+     478*:  183:    return boost::asio::buffer(buffer_ + total_consumed_, max_size);
+        -:  184:  }
+------------------
+_ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE7prepareEm:
+function _ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE7prepareEm called 0 returned 0% blocks executed 0%
+    #####:  181:  Buffer prepare(std::size_t max_size)
+        -:  182:  {
+    #####:  183:    return boost::asio::buffer(buffer_ + total_consumed_, max_size);
+call    0 never executed
+call    1 never executed
+        -:  184:  }
+------------------
+_ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE7prepareEm:
+function _ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE7prepareEm called 0 returned 0% blocks executed 0%
+    #####:  181:  Buffer prepare(std::size_t max_size)
+        -:  182:  {
+    #####:  183:    return boost::asio::buffer(buffer_ + total_consumed_, max_size);
+call    0 never executed
+call    1 never executed
+        -:  184:  }
+------------------
+_ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE7prepareEm:
+function _ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE7prepareEm called 0 returned 0% blocks executed 0%
+    #####:  181:  Buffer prepare(std::size_t max_size)
+        -:  182:  {
+    #####:  183:    return boost::asio::buffer(buffer_ + total_consumed_, max_size);
+call    0 never executed
+call    1 never executed
+        -:  184:  }
+------------------
+_ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE7prepareEm:
+function _ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE7prepareEm called 0 returned 0% blocks executed 0%
+    #####:  181:  Buffer prepare(std::size_t max_size)
+        -:  182:  {
+    #####:  183:    return boost::asio::buffer(buffer_ + total_consumed_, max_size);
+call    0 never executed
+call    1 never executed
+        -:  184:  }
+------------------
+_ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE7prepareEm:
+function _ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE7prepareEm called 1 returned 100% blocks executed 100%
+        1:  181:  Buffer prepare(std::size_t max_size)
+        -:  182:  {
+        1:  183:    return boost::asio::buffer(buffer_ + total_consumed_, max_size);
+call    0 returned 100%
+call    1 returned 100%
+        -:  184:  }
+------------------
+_ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE7prepareEm:
+function _ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE7prepareEm called 428 returned 100% blocks executed 100%
+      428:  181:  Buffer prepare(std::size_t max_size)
+        -:  182:  {
+      428:  183:    return boost::asio::buffer(buffer_ + total_consumed_, max_size);
+call    0 returned 100%
+call    1 returned 100%
+        -:  184:  }
+------------------
+_ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE7prepareEm:
+function _ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE7prepareEm called 19 returned 100% blocks executed 100%
+       19:  181:  Buffer prepare(std::size_t max_size)
+        -:  182:  {
+       19:  183:    return boost::asio::buffer(buffer_ + total_consumed_, max_size);
+call    0 returned 100%
+call    1 returned 100%
+        -:  184:  }
+------------------
+_ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE7prepareEm:
+function _ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE7prepareEm called 4 returned 100% blocks executed 100%
+        4:  181:  Buffer prepare(std::size_t max_size)
+        -:  182:  {
+        4:  183:    return boost::asio::buffer(buffer_ + total_consumed_, max_size);
+call    0 returned 100%
+call    1 returned 100%
+        -:  184:  }
+------------------
+_ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE7prepareEm:
+function _ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE7prepareEm called 10 returned 100% blocks executed 100%
+       10:  181:  Buffer prepare(std::size_t max_size)
+        -:  182:  {
+       10:  183:    return boost::asio::buffer(buffer_ + total_consumed_, max_size);
+call    0 returned 100%
+call    1 returned 100%
+        -:  184:  }
+------------------
+_ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE7prepareEm:
+function _ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE7prepareEm called 4 returned 100% blocks executed 100%
+        4:  181:  Buffer prepare(std::size_t max_size)
+        -:  182:  {
+        4:  183:    return boost::asio::buffer(buffer_ + total_consumed_, max_size);
+call    0 returned 100%
+call    1 returned 100%
+        -:  184:  }
+------------------
+_ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE7prepareEm:
+function _ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE7prepareEm called 12 returned 100% blocks executed 100%
+       12:  181:  Buffer prepare(std::size_t max_size)
+        -:  182:  {
+       12:  183:    return boost::asio::buffer(buffer_ + total_consumed_, max_size);
+call    0 returned 100%
+call    1 returned 100%
+        -:  184:  }
+------------------
+_ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE7prepareEm:
+function _ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE7prepareEm called 0 returned 0% blocks executed 0%
+    #####:  181:  Buffer prepare(std::size_t max_size)
+        -:  182:  {
+    #####:  183:    return boost::asio::buffer(buffer_ + total_consumed_, max_size);
+call    0 never executed
+call    1 never executed
+        -:  184:  }
+------------------
+_ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE7prepareEm:
+function _ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE7prepareEm called 0 returned 0% blocks executed 0%
+    #####:  181:  Buffer prepare(std::size_t max_size)
+        -:  182:  {
+    #####:  183:    return boost::asio::buffer(buffer_ + total_consumed_, max_size);
+call    0 never executed
+call    1 never executed
+        -:  184:  }
+------------------
+_ZN5boost4asio6detail23consuming_single_bufferINS0_17mutable_buffers_1EE7prepareEm:
+function _ZN5boost4asio6detail23consuming_single_bufferINS0_17mutable_buffers_1EE7prepareEm called 0 returned 0% blocks executed 0%
+    #####:  181:  Buffer prepare(std::size_t max_size)
+        -:  182:  {
+    #####:  183:    return boost::asio::buffer(buffer_ + total_consumed_, max_size);
+call    0 never executed
+call    1 never executed
+        -:  184:  }
+------------------
+_ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE7prepareEm:
+function _ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE7prepareEm called 0 returned 0% blocks executed 0%
+    #####:  181:  Buffer prepare(std::size_t max_size)
+        -:  182:  {
+    #####:  183:    return boost::asio::buffer(buffer_ + total_consumed_, max_size);
+call    0 never executed
+call    1 never executed
+        -:  184:  }
+------------------
+        -:  185:
+        -:  186:  // Consume the specified number of bytes from the buffers.
+     478*:  187:  void consume(std::size_t size)
+        -:  188:  {
+     478*:  189:    total_consumed_ += size;
+     478*:  190:  }
+------------------
+_ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE7consumeEm:
+function _ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE7consumeEm called 0 returned 0% blocks executed 0%
+    #####:  187:  void consume(std::size_t size)
+        -:  188:  {
+    #####:  189:    total_consumed_ += size;
+    #####:  190:  }
+------------------
+_ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE7consumeEm:
+function _ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE7consumeEm called 0 returned 0% blocks executed 0%
+    #####:  187:  void consume(std::size_t size)
+        -:  188:  {
+    #####:  189:    total_consumed_ += size;
+    #####:  190:  }
+------------------
+_ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE7consumeEm:
+function _ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE7consumeEm called 0 returned 0% blocks executed 0%
+    #####:  187:  void consume(std::size_t size)
+        -:  188:  {
+    #####:  189:    total_consumed_ += size;
+    #####:  190:  }
+------------------
+_ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE7consumeEm:
+function _ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE7consumeEm called 0 returned 0% blocks executed 0%
+    #####:  187:  void consume(std::size_t size)
+        -:  188:  {
+    #####:  189:    total_consumed_ += size;
+    #####:  190:  }
+------------------
+_ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE7consumeEm:
+function _ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE7consumeEm called 1 returned 100% blocks executed 100%
+        1:  187:  void consume(std::size_t size)
+        -:  188:  {
+        1:  189:    total_consumed_ += size;
+        1:  190:  }
+------------------
+_ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE7consumeEm:
+function _ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE7consumeEm called 428 returned 100% blocks executed 100%
+      428:  187:  void consume(std::size_t size)
+        -:  188:  {
+      428:  189:    total_consumed_ += size;
+      428:  190:  }
+------------------
+_ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE7consumeEm:
+function _ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE7consumeEm called 19 returned 100% blocks executed 100%
+       19:  187:  void consume(std::size_t size)
+        -:  188:  {
+       19:  189:    total_consumed_ += size;
+       19:  190:  }
+------------------
+_ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE7consumeEm:
+function _ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE7consumeEm called 4 returned 100% blocks executed 100%
+        4:  187:  void consume(std::size_t size)
+        -:  188:  {
+        4:  189:    total_consumed_ += size;
+        4:  190:  }
+------------------
+_ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE7consumeEm:
+function _ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE7consumeEm called 10 returned 100% blocks executed 100%
+       10:  187:  void consume(std::size_t size)
+        -:  188:  {
+       10:  189:    total_consumed_ += size;
+       10:  190:  }
+------------------
+_ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE7consumeEm:
+function _ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE7consumeEm called 4 returned 100% blocks executed 100%
+        4:  187:  void consume(std::size_t size)
+        -:  188:  {
+        4:  189:    total_consumed_ += size;
+        4:  190:  }
+------------------
+_ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE7consumeEm:
+function _ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE7consumeEm called 12 returned 100% blocks executed 100%
+       12:  187:  void consume(std::size_t size)
+        -:  188:  {
+       12:  189:    total_consumed_ += size;
+       12:  190:  }
+------------------
+_ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE7consumeEm:
+function _ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE7consumeEm called 0 returned 0% blocks executed 0%
+    #####:  187:  void consume(std::size_t size)
+        -:  188:  {
+    #####:  189:    total_consumed_ += size;
+    #####:  190:  }
+------------------
+_ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE7consumeEm:
+function _ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE7consumeEm called 0 returned 0% blocks executed 0%
+    #####:  187:  void consume(std::size_t size)
+        -:  188:  {
+    #####:  189:    total_consumed_ += size;
+    #####:  190:  }
+------------------
+_ZN5boost4asio6detail23consuming_single_bufferINS0_17mutable_buffers_1EE7consumeEm:
+function _ZN5boost4asio6detail23consuming_single_bufferINS0_17mutable_buffers_1EE7consumeEm called 0 returned 0% blocks executed 0%
+    #####:  187:  void consume(std::size_t size)
+        -:  188:  {
+    #####:  189:    total_consumed_ += size;
+    #####:  190:  }
+------------------
+_ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE7consumeEm:
+function _ZN5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE7consumeEm called 0 returned 0% blocks executed 0%
+    #####:  187:  void consume(std::size_t size)
+        -:  188:  {
+    #####:  189:    total_consumed_ += size;
+    #####:  190:  }
+------------------
+        -:  191:
+        -:  192:  // Get the total number of bytes consumed from the buffers.
+     942*:  193:  std::size_t total_consumed() const
+        -:  194:  {
+     942*:  195:    return total_consumed_;
+        -:  196:  }
+------------------
+_ZNK5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE14total_consumedEv:
+function _ZNK5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE14total_consumedEv called 0 returned 0% blocks executed 0%
+    #####:  193:  std::size_t total_consumed() const
+        -:  194:  {
+    #####:  195:    return total_consumed_;
+        -:  196:  }
+------------------
+_ZNK5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE14total_consumedEv:
+function _ZNK5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE14total_consumedEv called 0 returned 0% blocks executed 0%
+    #####:  193:  std::size_t total_consumed() const
+        -:  194:  {
+    #####:  195:    return total_consumed_;
+        -:  196:  }
+------------------
+_ZNK5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE14total_consumedEv:
+function _ZNK5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE14total_consumedEv called 0 returned 0% blocks executed 0%
+    #####:  193:  std::size_t total_consumed() const
+        -:  194:  {
+    #####:  195:    return total_consumed_;
+        -:  196:  }
+------------------
+_ZNK5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE14total_consumedEv:
+function _ZNK5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE14total_consumedEv called 0 returned 0% blocks executed 0%
+    #####:  193:  std::size_t total_consumed() const
+        -:  194:  {
+    #####:  195:    return total_consumed_;
+        -:  196:  }
+------------------
+_ZNK5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE14total_consumedEv:
+function _ZNK5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE14total_consumedEv called 2 returned 100% blocks executed 100%
+        2:  193:  std::size_t total_consumed() const
+        -:  194:  {
+        2:  195:    return total_consumed_;
+        -:  196:  }
+------------------
+_ZNK5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE14total_consumedEv:
+function _ZNK5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE14total_consumedEv called 842 returned 100% blocks executed 100%
+      842:  193:  std::size_t total_consumed() const
+        -:  194:  {
+      842:  195:    return total_consumed_;
+        -:  196:  }
+------------------
+_ZNK5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE14total_consumedEv:
+function _ZNK5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE14total_consumedEv called 38 returned 100% blocks executed 100%
+       38:  193:  std::size_t total_consumed() const
+        -:  194:  {
+       38:  195:    return total_consumed_;
+        -:  196:  }
+------------------
+_ZNK5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE14total_consumedEv:
+function _ZNK5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE14total_consumedEv called 8 returned 100% blocks executed 100%
+        8:  193:  std::size_t total_consumed() const
+        -:  194:  {
+        8:  195:    return total_consumed_;
+        -:  196:  }
+------------------
+_ZNK5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE14total_consumedEv:
+function _ZNK5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE14total_consumedEv called 20 returned 100% blocks executed 100%
+       20:  193:  std::size_t total_consumed() const
+        -:  194:  {
+       20:  195:    return total_consumed_;
+        -:  196:  }
+------------------
+_ZNK5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE14total_consumedEv:
+function _ZNK5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE14total_consumedEv called 8 returned 100% blocks executed 100%
+        8:  193:  std::size_t total_consumed() const
+        -:  194:  {
+        8:  195:    return total_consumed_;
+        -:  196:  }
+------------------
+_ZNK5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE14total_consumedEv:
+function _ZNK5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE14total_consumedEv called 24 returned 100% blocks executed 100%
+       24:  193:  std::size_t total_consumed() const
+        -:  194:  {
+       24:  195:    return total_consumed_;
+        -:  196:  }
+------------------
+_ZNK5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE14total_consumedEv:
+function _ZNK5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE14total_consumedEv called 0 returned 0% blocks executed 0%
+    #####:  193:  std::size_t total_consumed() const
+        -:  194:  {
+    #####:  195:    return total_consumed_;
+        -:  196:  }
+------------------
+_ZNK5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE14total_consumedEv:
+function _ZNK5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE14total_consumedEv called 0 returned 0% blocks executed 0%
+    #####:  193:  std::size_t total_consumed() const
+        -:  194:  {
+    #####:  195:    return total_consumed_;
+        -:  196:  }
+------------------
+_ZNK5boost4asio6detail23consuming_single_bufferINS0_17mutable_buffers_1EE14total_consumedEv:
+function _ZNK5boost4asio6detail23consuming_single_bufferINS0_17mutable_buffers_1EE14total_consumedEv called 0 returned 0% blocks executed 0%
+    #####:  193:  std::size_t total_consumed() const
+        -:  194:  {
+    #####:  195:    return total_consumed_;
+        -:  196:  }
+------------------
+_ZNK5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE14total_consumedEv:
+function _ZNK5boost4asio6detail23consuming_single_bufferINS0_15const_buffers_1EE14total_consumedEv called 0 returned 0% blocks executed 0%
+    #####:  193:  std::size_t total_consumed() const
+        -:  194:  {
+    #####:  195:    return total_consumed_;
+        -:  196:  }
+------------------
+        -:  197:
+        -:  198:private:
+        -:  199:  Buffer buffer_;
+        -:  200:  std::size_t total_consumed_;
+        -:  201:};
+        -:  202:
+        -:  203:template <>
+        -:  204:class consuming_buffers<mutable_buffer, mutable_buffer, const mutable_buffer*>
+        -:  205:  : public consuming_single_buffer<BOOST_ASIO_MUTABLE_BUFFER>
+        -:  206:{
+        -:  207:public:
+        -:  208:  explicit consuming_buffers(const mutable_buffer& buffer)
+        -:  209:    : consuming_single_buffer<BOOST_ASIO_MUTABLE_BUFFER>(buffer)
+        -:  210:  {
+        -:  211:  }
+        -:  212:};
+        -:  213:
+        -:  214:template <>
+        -:  215:class consuming_buffers<const_buffer, mutable_buffer, const mutable_buffer*>
+        -:  216:  : public consuming_single_buffer<BOOST_ASIO_CONST_BUFFER>
+        -:  217:{
+        -:  218:public:
+    #####:  219:  explicit consuming_buffers(const mutable_buffer& buffer)
+    #####:  220:    : consuming_single_buffer<BOOST_ASIO_CONST_BUFFER>(buffer)
+        -:  221:  {
+    #####:  222:  }
+------------------
+_ZN5boost4asio6detail17consuming_buffersINS0_12const_bufferENS0_14mutable_bufferEPKS4_EC2ERS5_:
+function _ZN5boost4asio6detail17consuming_buffersINS0_12const_bufferENS0_14mutable_bufferEPKS4_EC2ERS5_ called 0 returned 0% blocks executed 0%
+    #####:  219:  explicit consuming_buffers(const mutable_buffer& buffer)
+    #####:  220:    : consuming_single_buffer<BOOST_ASIO_CONST_BUFFER>(buffer)
+call    0 never executed
+        -:  221:  {
+    #####:  222:  }
+------------------
+_ZN5boost4asio6detail17consuming_buffersINS0_12const_bufferENS0_14mutable_bufferEPKS4_EC2ERS5_:
+function _ZN5boost4asio6detail17consuming_buffersINS0_12const_bufferENS0_14mutable_bufferEPKS4_EC2ERS5_ called 0 returned 0% blocks executed 0%
+    #####:  219:  explicit consuming_buffers(const mutable_buffer& buffer)
+    #####:  220:    : consuming_single_buffer<BOOST_ASIO_CONST_BUFFER>(buffer)
+call    0 never executed
+        -:  221:  {
+    #####:  222:  }
+------------------
+        -:  223:};
+        -:  224:
+        -:  225:template <>
+        -:  226:class consuming_buffers<const_buffer, const_buffer, const const_buffer*>
+        -:  227:  : public consuming_single_buffer<BOOST_ASIO_CONST_BUFFER>
+        -:  228:{
+        -:  229:public:
+function _ZN5boost4asio6detail17consuming_buffersINS0_12const_bufferES3_PKS3_EC2ERS4_ called 2 returned 100% blocks executed 100%
+        2:  230:  explicit consuming_buffers(const const_buffer& buffer)
+        2:  231:    : consuming_single_buffer<BOOST_ASIO_CONST_BUFFER>(buffer)
+call    0 returned 100%
+        -:  232:  {
+        2:  233:  }
+        -:  234:};
+        -:  235:
+        -:  236:#if !defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  237:
+        -:  238:template <>
+        -:  239:class consuming_buffers<mutable_buffer,
+        -:  240:    mutable_buffers_1, const mutable_buffer*>
+        -:  241:  : public consuming_single_buffer<BOOST_ASIO_MUTABLE_BUFFER>
+        -:  242:{
+        -:  243:public:
+function _ZN5boost4asio6detail17consuming_buffersINS0_14mutable_bufferENS0_17mutable_buffers_1EPKS3_EC2ERKS4_ called 0 returned 0% blocks executed 0%
+    #####:  244:  explicit consuming_buffers(const mutable_buffers_1& buffer)
+    #####:  245:    : consuming_single_buffer<BOOST_ASIO_MUTABLE_BUFFER>(buffer)
+call    0 never executed
+        -:  246:  {
+    #####:  247:  }
+        -:  248:};
+        -:  249:
+        -:  250:template <>
+        -:  251:class consuming_buffers<const_buffer, mutable_buffers_1, const mutable_buffer*>
+        -:  252:  : public consuming_single_buffer<BOOST_ASIO_CONST_BUFFER>
+        -:  253:{
+        -:  254:public:
+     237*:  255:  explicit consuming_buffers(const mutable_buffers_1& buffer)
+     237*:  256:    : consuming_single_buffer<BOOST_ASIO_CONST_BUFFER>(buffer)
+        -:  257:  {
+     237*:  258:  }
+------------------
+_ZN5boost4asio6detail17consuming_buffersINS0_12const_bufferENS0_17mutable_buffers_1EPKNS0_14mutable_bufferEEC2ERKS4_:
+function _ZN5boost4asio6detail17consuming_buffersINS0_12const_bufferENS0_17mutable_buffers_1EPKNS0_14mutable_bufferEEC2ERKS4_ called 0 returned 0% blocks executed 0%
+    #####:  255:  explicit consuming_buffers(const mutable_buffers_1& buffer)
+    #####:  256:    : consuming_single_buffer<BOOST_ASIO_CONST_BUFFER>(buffer)
+call    0 never executed
+        -:  257:  {
+    #####:  258:  }
+------------------
+_ZN5boost4asio6detail17consuming_buffersINS0_12const_bufferENS0_17mutable_buffers_1EPKNS0_14mutable_bufferEEC2ERKS4_:
+function _ZN5boost4asio6detail17consuming_buffersINS0_12const_bufferENS0_17mutable_buffers_1EPKNS0_14mutable_bufferEEC2ERKS4_ called 0 returned 0% blocks executed 0%
+    #####:  255:  explicit consuming_buffers(const mutable_buffers_1& buffer)
+    #####:  256:    : consuming_single_buffer<BOOST_ASIO_CONST_BUFFER>(buffer)
+call    0 never executed
+        -:  257:  {
+    #####:  258:  }
+------------------
+_ZN5boost4asio6detail17consuming_buffersINS0_12const_bufferENS0_17mutable_buffers_1EPKNS0_14mutable_bufferEEC2ERKS4_:
+function _ZN5boost4asio6detail17consuming_buffersINS0_12const_bufferENS0_17mutable_buffers_1EPKNS0_14mutable_bufferEEC2ERKS4_ called 0 returned 0% blocks executed 0%
+    #####:  255:  explicit consuming_buffers(const mutable_buffers_1& buffer)
+    #####:  256:    : consuming_single_buffer<BOOST_ASIO_CONST_BUFFER>(buffer)
+call    0 never executed
+        -:  257:  {
+    #####:  258:  }
+------------------
+_ZN5boost4asio6detail17consuming_buffersINS0_12const_bufferENS0_17mutable_buffers_1EPKNS0_14mutable_bufferEEC2ERKS4_:
+function _ZN5boost4asio6detail17consuming_buffersINS0_12const_bufferENS0_17mutable_buffers_1EPKNS0_14mutable_bufferEEC2ERKS4_ called 1 returned 100% blocks executed 100%
+        1:  255:  explicit consuming_buffers(const mutable_buffers_1& buffer)
+        1:  256:    : consuming_single_buffer<BOOST_ASIO_CONST_BUFFER>(buffer)
+call    0 returned 100%
+        -:  257:  {
+        1:  258:  }
+------------------
+_ZN5boost4asio6detail17consuming_buffersINS0_12const_bufferENS0_17mutable_buffers_1EPKNS0_14mutable_bufferEEC2ERKS4_:
+function _ZN5boost4asio6detail17consuming_buffersINS0_12const_bufferENS0_17mutable_buffers_1EPKNS0_14mutable_bufferEEC2ERKS4_ called 207 returned 100% blocks executed 100%
+      207:  255:  explicit consuming_buffers(const mutable_buffers_1& buffer)
+      207:  256:    : consuming_single_buffer<BOOST_ASIO_CONST_BUFFER>(buffer)
+call    0 returned 100%
+        -:  257:  {
+      207:  258:  }
+------------------
+_ZN5boost4asio6detail17consuming_buffersINS0_12const_bufferENS0_17mutable_buffers_1EPKNS0_14mutable_bufferEEC2ERKS4_:
+function _ZN5boost4asio6detail17consuming_buffersINS0_12const_bufferENS0_17mutable_buffers_1EPKNS0_14mutable_bufferEEC2ERKS4_ called 14 returned 100% blocks executed 100%
+       14:  255:  explicit consuming_buffers(const mutable_buffers_1& buffer)
+       14:  256:    : consuming_single_buffer<BOOST_ASIO_CONST_BUFFER>(buffer)
+call    0 returned 100%
+        -:  257:  {
+       14:  258:  }
+------------------
+_ZN5boost4asio6detail17consuming_buffersINS0_12const_bufferENS0_17mutable_buffers_1EPKNS0_14mutable_bufferEEC2ERKS4_:
+function _ZN5boost4asio6detail17consuming_buffersINS0_12const_bufferENS0_17mutable_buffers_1EPKNS0_14mutable_bufferEEC2ERKS4_ called 2 returned 100% blocks executed 100%
+        2:  255:  explicit consuming_buffers(const mutable_buffers_1& buffer)
+        2:  256:    : consuming_single_buffer<BOOST_ASIO_CONST_BUFFER>(buffer)
+call    0 returned 100%
+        -:  257:  {
+        2:  258:  }
+------------------
+_ZN5boost4asio6detail17consuming_buffersINS0_12const_bufferENS0_17mutable_buffers_1EPKNS0_14mutable_bufferEEC2ERKS4_:
+function _ZN5boost4asio6detail17consuming_buffersINS0_12const_bufferENS0_17mutable_buffers_1EPKNS0_14mutable_bufferEEC2ERKS4_ called 5 returned 100% blocks executed 100%
+        5:  255:  explicit consuming_buffers(const mutable_buffers_1& buffer)
+        5:  256:    : consuming_single_buffer<BOOST_ASIO_CONST_BUFFER>(buffer)
+call    0 returned 100%
+        -:  257:  {
+        5:  258:  }
+------------------
+_ZN5boost4asio6detail17consuming_buffersINS0_12const_bufferENS0_17mutable_buffers_1EPKNS0_14mutable_bufferEEC2ERKS4_:
+function _ZN5boost4asio6detail17consuming_buffersINS0_12const_bufferENS0_17mutable_buffers_1EPKNS0_14mutable_bufferEEC2ERKS4_ called 2 returned 100% blocks executed 100%
+        2:  255:  explicit consuming_buffers(const mutable_buffers_1& buffer)
+        2:  256:    : consuming_single_buffer<BOOST_ASIO_CONST_BUFFER>(buffer)
+call    0 returned 100%
+        -:  257:  {
+        2:  258:  }
+------------------
+_ZN5boost4asio6detail17consuming_buffersINS0_12const_bufferENS0_17mutable_buffers_1EPKNS0_14mutable_bufferEEC2ERKS4_:
+function _ZN5boost4asio6detail17consuming_buffersINS0_12const_bufferENS0_17mutable_buffers_1EPKNS0_14mutable_bufferEEC2ERKS4_ called 6 returned 100% blocks executed 100%
+        6:  255:  explicit consuming_buffers(const mutable_buffers_1& buffer)
+        6:  256:    : consuming_single_buffer<BOOST_ASIO_CONST_BUFFER>(buffer)
+call    0 returned 100%
+        -:  257:  {
+        6:  258:  }
+------------------
+_ZN5boost4asio6detail17consuming_buffersINS0_12const_bufferENS0_17mutable_buffers_1EPKNS0_14mutable_bufferEEC2ERKS4_:
+function _ZN5boost4asio6detail17consuming_buffersINS0_12const_bufferENS0_17mutable_buffers_1EPKNS0_14mutable_bufferEEC2ERKS4_ called 0 returned 0% blocks executed 0%
+    #####:  255:  explicit consuming_buffers(const mutable_buffers_1& buffer)
+    #####:  256:    : consuming_single_buffer<BOOST_ASIO_CONST_BUFFER>(buffer)
+call    0 never executed
+        -:  257:  {
+    #####:  258:  }
+------------------
+_ZN5boost4asio6detail17consuming_buffersINS0_12const_bufferENS0_17mutable_buffers_1EPKNS0_14mutable_bufferEEC2ERKS4_:
+function _ZN5boost4asio6detail17consuming_buffersINS0_12const_bufferENS0_17mutable_buffers_1EPKNS0_14mutable_bufferEEC2ERKS4_ called 0 returned 0% blocks executed 0%
+    #####:  255:  explicit consuming_buffers(const mutable_buffers_1& buffer)
+    #####:  256:    : consuming_single_buffer<BOOST_ASIO_CONST_BUFFER>(buffer)
+call    0 never executed
+        -:  257:  {
+    #####:  258:  }
+------------------
+_ZN5boost4asio6detail17consuming_buffersINS0_12const_bufferENS0_17mutable_buffers_1EPKNS0_14mutable_bufferEEC2ERKS4_:
+function _ZN5boost4asio6detail17consuming_buffersINS0_12const_bufferENS0_17mutable_buffers_1EPKNS0_14mutable_bufferEEC2ERKS4_ called 0 returned 0% blocks executed 0%
+    #####:  255:  explicit consuming_buffers(const mutable_buffers_1& buffer)
+    #####:  256:    : consuming_single_buffer<BOOST_ASIO_CONST_BUFFER>(buffer)
+call    0 never executed
+        -:  257:  {
+    #####:  258:  }
+------------------
+        -:  259:};
+        -:  260:
+        -:  261:template <>
+        -:  262:class consuming_buffers<const_buffer, const_buffers_1, const const_buffer*>
+        -:  263:  : public consuming_single_buffer<BOOST_ASIO_CONST_BUFFER>
+        -:  264:{
+        -:  265:public:
+function _ZN5boost4asio6detail17consuming_buffersINS0_12const_bufferENS0_15const_buffers_1EPKS3_EC2ERKS4_ called 224 returned 100% blocks executed 100%
+      224:  266:  explicit consuming_buffers(const const_buffers_1& buffer)
+      224:  267:    : consuming_single_buffer<BOOST_ASIO_CONST_BUFFER>(buffer)
+call    0 returned 100%
+        -:  268:  {
+      224:  269:  }
+        -:  270:};
+        -:  271:
+        -:  272:#endif // !defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  273:
+        -:  274:template <>
+        -:  275:class consuming_buffers<mutable_buffer,
+        -:  276:    mutable_registered_buffer, const mutable_buffer*>
+        -:  277:  : public consuming_single_buffer<mutable_registered_buffer>
+        -:  278:{
+        -:  279:public:
+        -:  280:  explicit consuming_buffers(const mutable_registered_buffer& buffer)
+        -:  281:    : consuming_single_buffer<mutable_registered_buffer>(buffer)
+        -:  282:  {
+        -:  283:  }
+        -:  284:};
+        -:  285:
+        -:  286:template <>
+        -:  287:class consuming_buffers<const_buffer,
+        -:  288:    mutable_registered_buffer, const mutable_buffer*>
+        -:  289:  : public consuming_single_buffer<mutable_registered_buffer>
+        -:  290:{
+        -:  291:public:
+        -:  292:  explicit consuming_buffers(const mutable_registered_buffer& buffer)
+        -:  293:    : consuming_single_buffer<mutable_registered_buffer>(buffer)
+        -:  294:  {
+        -:  295:  }
+        -:  296:};
+        -:  297:
+        -:  298:template <>
+        -:  299:class consuming_buffers<const_buffer,
+        -:  300:    const_registered_buffer, const const_buffer*>
+        -:  301:  : public consuming_single_buffer<const_registered_buffer>
+        -:  302:{
+        -:  303:public:
+        -:  304:  explicit consuming_buffers(const const_registered_buffer& buffer)
+        -:  305:    : consuming_single_buffer<const_registered_buffer>(buffer)
+        -:  306:  {
+        -:  307:  }
+        -:  308:};
+        -:  309:
+        -:  310:template <typename Buffer, typename Elem>
+        -:  311:class consuming_buffers<Buffer, boost::array<Elem, 2>,
+        -:  312:    typename boost::array<Elem, 2>::const_iterator>
+        -:  313:{
+        -:  314:public:
+        -:  315:  // Construct to represent the entire list of buffers.
+        -:  316:  explicit consuming_buffers(const boost::array<Elem, 2>& buffers)
+        -:  317:    : buffers_(buffers),
+        -:  318:      total_consumed_(0)
+        -:  319:  {
+        -:  320:  }
+        -:  321:
+        -:  322:  // Determine if we are at the end of the buffers.
+        -:  323:  bool empty() const
+        -:  324:  {
+        -:  325:    return total_consumed_ >=
+        -:  326:      Buffer(buffers_[0]).size() + Buffer(buffers_[1]).size();
+        -:  327:  }
+        -:  328:
+        -:  329:  // Get the buffer for a single transfer, with a size.
+        -:  330:  boost::array<Buffer, 2> prepare(std::size_t max_size)
+        -:  331:  {
+        -:  332:    boost::array<Buffer, 2> result = {{
+        -:  333:      Buffer(buffers_[0]), Buffer(buffers_[1]) }};
+        -:  334:    std::size_t buffer0_size = result[0].size();
+        -:  335:    result[0] = boost::asio::buffer(result[0] + total_consumed_, max_size);
+        -:  336:    result[1] = boost::asio::buffer(
+        -:  337:        result[1] + (total_consumed_ < buffer0_size
+        -:  338:          ? 0 : total_consumed_ - buffer0_size),
+        -:  339:        max_size - result[0].size());
+        -:  340:    return result;
+        -:  341:  }
+        -:  342:
+        -:  343:  // Consume the specified number of bytes from the buffers.
+        -:  344:  void consume(std::size_t size)
+        -:  345:  {
+        -:  346:    total_consumed_ += size;
+        -:  347:  }
+        -:  348:
+        -:  349:  // Get the total number of bytes consumed from the buffers.
+        -:  350:  std::size_t total_consumed() const
+        -:  351:  {
+        -:  352:    return total_consumed_;
+        -:  353:  }
+        -:  354:
+        -:  355:private:
+        -:  356:  boost::array<Elem, 2> buffers_;
+        -:  357:  std::size_t total_consumed_;
+        -:  358:};
+        -:  359:
+        -:  360:#if defined(BOOST_ASIO_HAS_STD_ARRAY)
+        -:  361:
+        -:  362:template <typename Buffer, typename Elem>
+        -:  363:class consuming_buffers<Buffer, std::array<Elem, 2>,
+        -:  364:    typename std::array<Elem, 2>::const_iterator>
+        -:  365:{
+        -:  366:public:
+        -:  367:  // Construct to represent the entire list of buffers.
+function _ZN5boost4asio6detail17consuming_buffersINS0_12const_bufferESt5arrayIS3_Lm2EEPKS3_EC2ERKS5_ called 1 returned 100% blocks executed 100%
+        1:  368:  explicit consuming_buffers(const std::array<Elem, 2>& buffers)
+        1:  369:    : buffers_(buffers),
+        1:  370:      total_consumed_(0)
+        -:  371:  {
+        1:  372:  }
+        -:  373:
+        -:  374:  // Determine if we are at the end of the buffers.
+function _ZNK5boost4asio6detail17consuming_buffersINS0_12const_bufferESt5arrayIS3_Lm2EEPKS3_E5emptyEv called 17 returned 100% blocks executed 100%
+       17:  375:  bool empty() const
+        -:  376:  {
+       17:  377:    return total_consumed_ >=
+       17:  378:      Buffer(buffers_[0]).size() + Buffer(buffers_[1]).size();
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+        -:  379:  }
+        -:  380:
+        -:  381:  // Get the buffer for a single transfer, with a size.
+function _ZN5boost4asio6detail17consuming_buffersINS0_12const_bufferESt5arrayIS3_Lm2EEPKS3_E7prepareEm called 17 returned 100% blocks executed 100%
+       17:  382:  std::array<Buffer, 2> prepare(std::size_t max_size)
+        -:  383:  {
+       34:  384:    std::array<Buffer, 2> result = {{
+       17:  385:      Buffer(buffers_[0]), Buffer(buffers_[1]) }};
+call    0 returned 100%
+call    1 returned 100%
+       17:  386:    std::size_t buffer0_size = result[0].size();
+call    0 returned 100%
+call    1 returned 100%
+       17:  387:    result[0] = boost::asio::buffer(result[0] + total_consumed_, max_size);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+       17:  388:    result[1] = boost::asio::buffer(
+call    0 returned 100%
+call    1 returned 100%
+       33:  389:        result[1] + (total_consumed_ < buffer0_size
+branch  0 taken 94% (fallthrough)
+branch  1 taken 6%
+call    2 returned 100%
+call    3 returned 100%
+       16:  390:          ? 0 : total_consumed_ - buffer0_size),
+       17:  391:        max_size - result[0].size());
+call    0 returned 100%
+call    1 returned 100%
+       17:  392:    return result;
+        -:  393:  }
+        -:  394:
+        -:  395:  // Consume the specified number of bytes from the buffers.
+function _ZN5boost4asio6detail17consuming_buffersINS0_12const_bufferESt5arrayIS3_Lm2EEPKS3_E7consumeEm called 17 returned 100% blocks executed 100%
+       17:  396:  void consume(std::size_t size)
+        -:  397:  {
+       17:  398:    total_consumed_ += size;
+       17:  399:  }
+        -:  400:
+        -:  401:  // Get the total number of bytes consumed from the buffers.
+function _ZNK5boost4asio6detail17consuming_buffersINS0_12const_bufferESt5arrayIS3_Lm2EEPKS3_E14total_consumedEv called 18 returned 100% blocks executed 100%
+       18:  402:  std::size_t total_consumed() const
+        -:  403:  {
+       18:  404:    return total_consumed_;
+        -:  405:  }
+        -:  406:
+        -:  407:private:
+        -:  408:  std::array<Elem, 2> buffers_;
+        -:  409:  std::size_t total_consumed_;
+        -:  410:};
+        -:  411:
+        -:  412:#endif // defined(BOOST_ASIO_HAS_STD_ARRAY)
+        -:  413:
+        -:  414:// Specialisation for null_buffers to ensure that the null_buffers type is
+        -:  415:// always passed through to the underlying read or write operation.
+        -:  416:template <typename Buffer>
+        -:  417:class consuming_buffers<Buffer, null_buffers, const mutable_buffer*>
+        -:  418:  : public boost::asio::null_buffers
+        -:  419:{
+        -:  420:public:
+        -:  421:  consuming_buffers(const null_buffers&)
+        -:  422:  {
+        -:  423:    // No-op.
+        -:  424:  }
+        -:  425:
+        -:  426:  bool empty()
+        -:  427:  {
+        -:  428:    return false;
+        -:  429:  }
+        -:  430:
+        -:  431:  null_buffers prepare(std::size_t)
+        -:  432:  {
+        -:  433:    return null_buffers();
+        -:  434:  }
+        -:  435:
+        -:  436:  void consume(std::size_t)
+        -:  437:  {
+        -:  438:    // No-op.
+        -:  439:  }
+        -:  440:
+        -:  441:  std::size_t total_consumed() const
+        -:  442:  {
+        -:  443:    return 0;
+        -:  444:  }
+        -:  445:};
+        -:  446:
+        -:  447:} // namespace detail
+        -:  448:} // namespace asio
+        -:  449:} // namespace boost
+        -:  450:
+        -:  451:#include <boost/asio/detail/pop_options.hpp>
+        -:  452:
+        -:  453:#endif // BOOST_ASIO_DETAIL_CONSUMING_BUFFERS_HPP

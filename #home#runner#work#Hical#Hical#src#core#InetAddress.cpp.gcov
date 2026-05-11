@@ -1,0 +1,142 @@
+        -:    0:Source:/home/runner/work/Hical/Hical/src/core/InetAddress.cpp
+        -:    1:#include "InetAddress.h"
+        -:    2:#include <cstring>
+        -:    3:
+        -:    4:#ifdef _WIN32
+        -:    5:	#include <winsock2.h>
+        -:    6:	#include <ws2tcpip.h>
+        -:    7:#else
+        -:    8:	#include <arpa/inet.h>
+        -:    9:#endif
+        -:   10:
+        -:   11:namespace hical
+        -:   12:{
+        -:   13:
+function _ZN5hical11InetAddressC2ERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEt called 34 returned 100% blocks executed 56%
+       34:   14:	InetAddress::InetAddress(const std::string& ip, uint16_t port)
+        -:   15:	{
+       34:   16:		std::memset(&addr_, 0, sizeof(addr_));
+        -:   17:
+        -:   18:		// 尝试解析为 IPv4
+       34:   19:		if (inet_pton(AF_INET, ip.c_str(), &addr_.sin_addr) == 1)
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0%
+        -:   20:		{
+       34:   21:			addr_.sin_family = AF_INET;
+       34:   22:			addr_.sin_port = htons(port);
+       34:   23:			isIpV6_ = false;
+        -:   24:		}
+        -:   25:		else
+        -:   26:		{
+        -:   27:			// 尝试解析为 IPv6
+    #####:   28:			std::memset(&addr6_, 0, sizeof(addr6_));
+    #####:   29:			if (inet_pton(AF_INET6, ip.c_str(), &addr6_.sin6_addr) == 1)
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed
+        -:   30:			{
+    #####:   31:				addr6_.sin6_family = AF_INET6;
+    #####:   32:				addr6_.sin6_port = htons(port);
+    #####:   33:				isIpV6_ = true;
+        -:   34:			}
+        -:   35:		}
+       34:   36:	}
+        -:   37:
+function _ZN5hical11InetAddressC2ERK11sockaddr_in called 0 returned 0% blocks executed 0%
+    #####:   38:	InetAddress::InetAddress(const struct sockaddr_in& addr)
+        -:   39:	{
+    #####:   40:		addr_ = addr;
+    #####:   41:		isIpV6_ = false;
+    #####:   42:	}
+        -:   43:
+function _ZN5hical11InetAddressC2ERK12sockaddr_in6 called 0 returned 0% blocks executed 0%
+    #####:   44:	InetAddress::InetAddress(const struct sockaddr_in6& addr)
+        -:   45:	{
+    #####:   46:		addr6_ = addr;
+    #####:   47:		isIpV6_ = true;
+    #####:   48:	}
+        -:   49:
+function _ZNK5hical11InetAddress4toIpB5cxx11Ev called 0 returned 0% blocks executed 0%
+    #####:   50:	std::string InetAddress::toIp() const
+        -:   51:	{
+        -:   52:		char buf[INET6_ADDRSTRLEN];
+    #####:   53:		if (isIpV6_)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:   54:		{
+    #####:   55:			inet_ntop(AF_INET6, &addr6_.sin6_addr, buf, sizeof(buf));
+call    0 never executed
+        -:   56:		}
+        -:   57:		else
+        -:   58:		{
+    #####:   59:			inet_ntop(AF_INET, &addr_.sin_addr, buf, sizeof(buf));
+call    0 never executed
+        -:   60:		}
+    #####:   61:		return buf;
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:   62:	}
+        -:   63:
+function _ZNK5hical11InetAddress8toIpPortB5cxx11Ev called 0 returned 0% blocks executed 0%
+    #####:   64:	std::string InetAddress::toIpPort() const
+        -:   65:	{
+    #####:   66:		return toIp() + ":" + std::to_string(port());
+call    0 never executed
+call    1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed (throw)
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed (throw)
+call    8 never executed
+branch  9 never executed (fallthrough)
+branch 10 never executed (throw)
+call   11 never executed
+call   12 never executed
+call   13 never executed
+call   14 never executed
+call   15 never executed
+call   16 never executed
+        -:   67:	}
+        -:   68:
+function _ZNK5hical11InetAddress4portEv called 9 returned 100% blocks executed 80%
+        9:   69:	uint16_t InetAddress::port() const
+        -:   70:	{
+       9*:   71:		return ntohs(isIpV6_ ? addr6_.sin6_port : addr_.sin_port);
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:   72:	}
+        -:   73:
+function _ZNK5hical11InetAddress6isIpV6Ev called 4 returned 100% blocks executed 100%
+        4:   74:	bool InetAddress::isIpV6() const
+        -:   75:	{
+        4:   76:		return isIpV6_;
+        -:   77:	}
+        -:   78:
+function _ZNK5hical11InetAddress11getSockAddrEv called 0 returned 0% blocks executed 0%
+    #####:   79:	const struct sockaddr* InetAddress::getSockAddr() const
+        -:   80:	{
+        -:   81:		return isIpV6_ ? reinterpret_cast<const struct sockaddr*>(&addr6_)
+    #####:   82:					   : reinterpret_cast<const struct sockaddr*>(&addr_);
+        -:   83:	}
+        -:   84:
+function _ZN5hical11InetAddress16setSockAddrInet4ERK11sockaddr_in called 0 returned 0% blocks executed 0%
+    #####:   85:	void InetAddress::setSockAddrInet4(const struct sockaddr_in& addr)
+        -:   86:	{
+    #####:   87:		addr_ = addr;
+    #####:   88:		isIpV6_ = false;
+    #####:   89:	}
+        -:   90:
+function _ZN5hical11InetAddress16setSockAddrInet6ERK12sockaddr_in6 called 0 returned 0% blocks executed 0%
+    #####:   91:	void InetAddress::setSockAddrInet6(const struct sockaddr_in6& addr)
+        -:   92:	{
+    #####:   93:		addr6_ = addr;
+    #####:   94:		isIpV6_ = true;
+    #####:   95:	}
+        -:   96:
+        -:   97:} // namespace hical

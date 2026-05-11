@@ -1,0 +1,3570 @@
+        -:    0:Source:/usr/include/boost/asio/basic_socket.hpp
+        -:    1://
+        -:    2:// basic_socket.hpp
+        -:    3:// ~~~~~~~~~~~~~~~~
+        -:    4://
+        -:    5:// Copyright (c) 2003-2023 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+        -:    6://
+        -:    7:// Distributed under the Boost Software License, Version 1.0. (See accompanying
+        -:    8:// file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+        -:    9://
+        -:   10:
+        -:   11:#ifndef BOOST_ASIO_BASIC_SOCKET_HPP
+        -:   12:#define BOOST_ASIO_BASIC_SOCKET_HPP
+        -:   13:
+        -:   14:#if defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   15:# pragma once
+        -:   16:#endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   17:
+        -:   18:#include <boost/asio/any_io_executor.hpp>
+        -:   19:#include <boost/asio/detail/config.hpp>
+        -:   20:#include <boost/asio/async_result.hpp>
+        -:   21:#include <boost/asio/detail/handler_type_requirements.hpp>
+        -:   22:#include <boost/asio/detail/io_object_impl.hpp>
+        -:   23:#include <boost/asio/detail/non_const_lvalue.hpp>
+        -:   24:#include <boost/asio/detail/throw_error.hpp>
+        -:   25:#include <boost/asio/detail/type_traits.hpp>
+        -:   26:#include <boost/asio/error.hpp>
+        -:   27:#include <boost/asio/execution_context.hpp>
+        -:   28:#include <boost/asio/post.hpp>
+        -:   29:#include <boost/asio/socket_base.hpp>
+        -:   30:
+        -:   31:#if defined(BOOST_ASIO_WINDOWS_RUNTIME)
+        -:   32:# include <boost/asio/detail/null_socket_service.hpp>
+        -:   33:#elif defined(BOOST_ASIO_HAS_IOCP)
+        -:   34:# include <boost/asio/detail/win_iocp_socket_service.hpp>
+        -:   35:#elif defined(BOOST_ASIO_HAS_IO_URING_AS_DEFAULT)
+        -:   36:# include <boost/asio/detail/io_uring_socket_service.hpp>
+        -:   37:#else
+        -:   38:# include <boost/asio/detail/reactive_socket_service.hpp>
+        -:   39:#endif
+        -:   40:
+        -:   41:#if defined(BOOST_ASIO_HAS_MOVE)
+        -:   42:# include <utility>
+        -:   43:#endif // defined(BOOST_ASIO_HAS_MOVE)
+        -:   44:
+        -:   45:#include <boost/asio/detail/push_options.hpp>
+        -:   46:
+        -:   47:namespace boost {
+        -:   48:namespace asio {
+        -:   49:
+        -:   50:#if !defined(BOOST_ASIO_BASIC_SOCKET_FWD_DECL)
+        -:   51:#define BOOST_ASIO_BASIC_SOCKET_FWD_DECL
+        -:   52:
+        -:   53:// Forward declaration with defaulted arguments.
+        -:   54:template <typename Protocol, typename Executor = any_io_executor>
+        -:   55:class basic_socket;
+        -:   56:
+        -:   57:#endif // !defined(BOOST_ASIO_BASIC_SOCKET_FWD_DECL)
+        -:   58:
+        -:   59:/// Provides socket functionality.
+        -:   60:/**
+        -:   61: * The basic_socket class template provides functionality that is common to both
+        -:   62: * stream-oriented and datagram-oriented sockets.
+        -:   63: *
+        -:   64: * @par Thread Safety
+        -:   65: * @e Distinct @e objects: Safe.@n
+        -:   66: * @e Shared @e objects: Unsafe.
+        -:   67: */
+        -:   68:template <typename Protocol, typename Executor>
+        -:   69:class basic_socket
+        -:   70:  : public socket_base
+        -:   71:{
+        -:   72:private:
+        -:   73:  class initiate_async_connect;
+        -:   74:  class initiate_async_wait;
+        -:   75:
+        -:   76:public:
+        -:   77:  /// The type of the executor associated with the object.
+        -:   78:  typedef Executor executor_type;
+        -:   79:
+        -:   80:  /// Rebinds the socket type to another executor.
+        -:   81:  template <typename Executor1>
+        -:   82:  struct rebind_executor
+        -:   83:  {
+        -:   84:    /// The socket type when rebound to the specified executor.
+        -:   85:    typedef basic_socket<Protocol, Executor1> other;
+        -:   86:  };
+        -:   87:
+        -:   88:  /// The native representation of a socket.
+        -:   89:#if defined(GENERATING_DOCUMENTATION)
+        -:   90:  typedef implementation_defined native_handle_type;
+        -:   91:#elif defined(BOOST_ASIO_WINDOWS_RUNTIME)
+        -:   92:  typedef typename detail::null_socket_service<
+        -:   93:    Protocol>::native_handle_type native_handle_type;
+        -:   94:#elif defined(BOOST_ASIO_HAS_IOCP)
+        -:   95:  typedef typename detail::win_iocp_socket_service<
+        -:   96:    Protocol>::native_handle_type native_handle_type;
+        -:   97:#elif defined(BOOST_ASIO_HAS_IO_URING_AS_DEFAULT)
+        -:   98:  typedef typename detail::io_uring_socket_service<
+        -:   99:    Protocol>::native_handle_type native_handle_type;
+        -:  100:#else
+        -:  101:  typedef typename detail::reactive_socket_service<
+        -:  102:    Protocol>::native_handle_type native_handle_type;
+        -:  103:#endif
+        -:  104:
+        -:  105:  /// The protocol type.
+        -:  106:  typedef Protocol protocol_type;
+        -:  107:
+        -:  108:  /// The endpoint type.
+        -:  109:  typedef typename Protocol::endpoint endpoint_type;
+        -:  110:
+        -:  111:#if !defined(BOOST_ASIO_NO_EXTENSIONS)
+        -:  112:  /// A basic_socket is always the lowest layer.
+        -:  113:  typedef basic_socket<Protocol, Executor> lowest_layer_type;
+        -:  114:#endif // !defined(BOOST_ASIO_NO_EXTENSIONS)
+        -:  115:
+        -:  116:  /// Construct a basic_socket without opening it.
+        -:  117:  /**
+        -:  118:   * This constructor creates a socket without opening it.
+        -:  119:   *
+        -:  120:   * @param ex The I/O executor that the socket will use, by default, to
+        -:  121:   * dispatch handlers for any asynchronous operations performed on the socket.
+        -:  122:   */
+     104*:  123:  explicit basic_socket(const executor_type& ex)
+     104*:  124:    : impl_(0, ex)
+        -:  125:  {
+     104*:  126:  }
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEEC2ERKS4_:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEEC2ERKS4_ called 9 returned 100% blocks executed 75%
+        9:  123:  explicit basic_socket(const executor_type& ex)
+        9:  124:    : impl_(0, ex)
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  125:  {
+        9:  126:  }
+call    0 never executed
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEEC2ERKS4_:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEEC2ERKS4_ called 95 returned 100% blocks executed 75%
+       95:  123:  explicit basic_socket(const executor_type& ex)
+       95:  124:    : impl_(0, ex)
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  125:  {
+       95:  126:  }
+call    0 never executed
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEEC2ERKS4_:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEEC2ERKS4_ called 0 returned 0% blocks executed 0%
+    #####:  123:  explicit basic_socket(const executor_type& ex)
+    #####:  124:    : impl_(0, ex)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:  125:  {
+    #####:  126:  }
+call    0 never executed
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEEC2ERKS4_:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEEC2ERKS4_ called 0 returned 0% blocks executed 0%
+    #####:  123:  explicit basic_socket(const executor_type& ex)
+    #####:  124:    : impl_(0, ex)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:  125:  {
+    #####:  126:  }
+call    0 never executed
+------------------
+        -:  127:
+        -:  128:  /// Construct a basic_socket without opening it.
+        -:  129:  /**
+        -:  130:   * This constructor creates a socket without opening it.
+        -:  131:   *
+        -:  132:   * @param context An execution context which provides the I/O executor that
+        -:  133:   * the socket will use, by default, to dispatch handlers for any asynchronous
+        -:  134:   * operations performed on the socket.
+        -:  135:   */
+        -:  136:  template <typename ExecutionContext>
+      92*:  137:  explicit basic_socket(ExecutionContext& context,
+        -:  138:      typename constraint<
+        -:  139:        is_convertible<ExecutionContext&, execution_context&>::value
+        -:  140:      >::type = 0)
+      92*:  141:    : impl_(0, 0, context)
+        -:  142:  {
+      92*:  143:  }
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEEC2INS0_10io_contextEEERT_NS0_10constraintIXsrSt14is_convertibleIS9_RNS0_17execution_contextEE5valueEiE4typeE:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEEC2INS0_10io_contextEEERT_NS0_10constraintIXsrSt14is_convertibleIS9_RNS0_17execution_contextEE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  137:  explicit basic_socket(ExecutionContext& context,
+        -:  138:      typename constraint<
+        -:  139:        is_convertible<ExecutionContext&, execution_context&>::value
+        -:  140:      >::type = 0)
+    #####:  141:    : impl_(0, 0, context)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:  142:  {
+    #####:  143:  }
+call    0 never executed
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEEC2INS0_10io_contextEEERT_NS0_10constraintIXsrSt14is_convertibleIS9_RNS0_17execution_contextEE5valueEiE4typeE:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEEC2INS0_10io_contextEEERT_NS0_10constraintIXsrSt14is_convertibleIS9_RNS0_17execution_contextEE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  137:  explicit basic_socket(ExecutionContext& context,
+        -:  138:      typename constraint<
+        -:  139:        is_convertible<ExecutionContext&, execution_context&>::value
+        -:  140:      >::type = 0)
+    #####:  141:    : impl_(0, 0, context)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:  142:  {
+    #####:  143:  }
+call    0 never executed
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEEC2INS0_10io_contextEEERT_NS0_10constraintIXsrSt14is_convertibleIS9_RNS0_17execution_contextEE5valueEiE4typeE:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEEC2INS0_10io_contextEEERT_NS0_10constraintIXsrSt14is_convertibleIS9_RNS0_17execution_contextEE5valueEiE4typeE called 5 returned 100% blocks executed 75%
+        5:  137:  explicit basic_socket(ExecutionContext& context,
+        -:  138:      typename constraint<
+        -:  139:        is_convertible<ExecutionContext&, execution_context&>::value
+        -:  140:      >::type = 0)
+        5:  141:    : impl_(0, 0, context)
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  142:  {
+        5:  143:  }
+call    0 never executed
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEEC2INS0_10io_contextEEERT_NS0_10constraintIXsrSt14is_convertibleIS9_RNS0_17execution_contextEE5valueEiE4typeE:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEEC2INS0_10io_contextEEERT_NS0_10constraintIXsrSt14is_convertibleIS9_RNS0_17execution_contextEE5valueEiE4typeE called 31 returned 100% blocks executed 75%
+       31:  137:  explicit basic_socket(ExecutionContext& context,
+        -:  138:      typename constraint<
+        -:  139:        is_convertible<ExecutionContext&, execution_context&>::value
+        -:  140:      >::type = 0)
+       31:  141:    : impl_(0, 0, context)
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  142:  {
+       31:  143:  }
+call    0 never executed
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEEC2INS0_10io_contextEEERT_NS0_10constraintIXsrSt14is_convertibleIS9_RNS0_17execution_contextEE5valueEiE4typeE:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEEC2INS0_10io_contextEEERT_NS0_10constraintIXsrSt14is_convertibleIS9_RNS0_17execution_contextEE5valueEiE4typeE called 10 returned 100% blocks executed 75%
+       10:  137:  explicit basic_socket(ExecutionContext& context,
+        -:  138:      typename constraint<
+        -:  139:        is_convertible<ExecutionContext&, execution_context&>::value
+        -:  140:      >::type = 0)
+       10:  141:    : impl_(0, 0, context)
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  142:  {
+       10:  143:  }
+call    0 never executed
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEEC2INS0_10io_contextEEERT_NS0_10constraintIXsrSt14is_convertibleIS9_RNS0_17execution_contextEE5valueEiE4typeE:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEEC2INS0_10io_contextEEERT_NS0_10constraintIXsrSt14is_convertibleIS9_RNS0_17execution_contextEE5valueEiE4typeE called 6 returned 100% blocks executed 75%
+        6:  137:  explicit basic_socket(ExecutionContext& context,
+        -:  138:      typename constraint<
+        -:  139:        is_convertible<ExecutionContext&, execution_context&>::value
+        -:  140:      >::type = 0)
+        6:  141:    : impl_(0, 0, context)
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  142:  {
+        6:  143:  }
+call    0 never executed
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEEC2INS0_10io_contextEEERT_NS0_10constraintIXsrSt14is_convertibleIS9_RNS0_17execution_contextEE5valueEiE4typeE:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEEC2INS0_10io_contextEEERT_NS0_10constraintIXsrSt14is_convertibleIS9_RNS0_17execution_contextEE5valueEiE4typeE called 11 returned 100% blocks executed 75%
+       11:  137:  explicit basic_socket(ExecutionContext& context,
+        -:  138:      typename constraint<
+        -:  139:        is_convertible<ExecutionContext&, execution_context&>::value
+        -:  140:      >::type = 0)
+       11:  141:    : impl_(0, 0, context)
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  142:  {
+       11:  143:  }
+call    0 never executed
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEEC2INS0_10io_contextEEERT_NS0_10constraintIXsrSt14is_convertibleIS9_RNS0_17execution_contextEE5valueEiE4typeE:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEEC2INS0_10io_contextEEERT_NS0_10constraintIXsrSt14is_convertibleIS9_RNS0_17execution_contextEE5valueEiE4typeE called 16 returned 100% blocks executed 75%
+       16:  137:  explicit basic_socket(ExecutionContext& context,
+        -:  138:      typename constraint<
+        -:  139:        is_convertible<ExecutionContext&, execution_context&>::value
+        -:  140:      >::type = 0)
+       16:  141:    : impl_(0, 0, context)
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  142:  {
+       16:  143:  }
+call    0 never executed
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEEC2INS0_10io_contextEEERT_NS0_10constraintIXsrSt14is_convertibleIS9_RNS0_17execution_contextEE5valueEiE4typeE:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEEC2INS0_10io_contextEEERT_NS0_10constraintIXsrSt14is_convertibleIS9_RNS0_17execution_contextEE5valueEiE4typeE called 13 returned 100% blocks executed 75%
+       13:  137:  explicit basic_socket(ExecutionContext& context,
+        -:  138:      typename constraint<
+        -:  139:        is_convertible<ExecutionContext&, execution_context&>::value
+        -:  140:      >::type = 0)
+       13:  141:    : impl_(0, 0, context)
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  142:  {
+       13:  143:  }
+call    0 never executed
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEEC2INS0_10io_contextEEERT_NS0_10constraintIXsrSt14is_convertibleIS9_RNS0_17execution_contextEE5valueEiE4typeE:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEEC2INS0_10io_contextEEERT_NS0_10constraintIXsrSt14is_convertibleIS9_RNS0_17execution_contextEE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  137:  explicit basic_socket(ExecutionContext& context,
+        -:  138:      typename constraint<
+        -:  139:        is_convertible<ExecutionContext&, execution_context&>::value
+        -:  140:      >::type = 0)
+    #####:  141:    : impl_(0, 0, context)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:  142:  {
+    #####:  143:  }
+call    0 never executed
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEEC2INS0_10io_contextEEERT_NS0_10constraintIXsrSt14is_convertibleIS9_RNS0_17execution_contextEE5valueEiE4typeE:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEEC2INS0_10io_contextEEERT_NS0_10constraintIXsrSt14is_convertibleIS9_RNS0_17execution_contextEE5valueEiE4typeE called 0 returned 0% blocks executed 0%
+    #####:  137:  explicit basic_socket(ExecutionContext& context,
+        -:  138:      typename constraint<
+        -:  139:        is_convertible<ExecutionContext&, execution_context&>::value
+        -:  140:      >::type = 0)
+    #####:  141:    : impl_(0, 0, context)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:  142:  {
+    #####:  143:  }
+call    0 never executed
+------------------
+        -:  144:
+        -:  145:  /// Construct and open a basic_socket.
+        -:  146:  /**
+        -:  147:   * This constructor creates and opens a socket.
+        -:  148:   *
+        -:  149:   * @param ex The I/O executor that the socket will use, by default, to
+        -:  150:   * dispatch handlers for any asynchronous operations performed on the socket.
+        -:  151:   *
+        -:  152:   * @param protocol An object specifying protocol parameters to be used.
+        -:  153:   *
+        -:  154:   * @throws boost::system::system_error Thrown on failure.
+        -:  155:   */
+        -:  156:  basic_socket(const executor_type& ex, const protocol_type& protocol)
+        -:  157:    : impl_(0, ex)
+        -:  158:  {
+        -:  159:    boost::system::error_code ec;
+        -:  160:    impl_.get_service().open(impl_.get_implementation(), protocol, ec);
+        -:  161:    boost::asio::detail::throw_error(ec, "open");
+        -:  162:  }
+        -:  163:
+        -:  164:  /// Construct and open a basic_socket.
+        -:  165:  /**
+        -:  166:   * This constructor creates and opens a socket.
+        -:  167:   *
+        -:  168:   * @param context An execution context which provides the I/O executor that
+        -:  169:   * the socket will use, by default, to dispatch handlers for any asynchronous
+        -:  170:   * operations performed on the socket.
+        -:  171:   *
+        -:  172:   * @param protocol An object specifying protocol parameters to be used.
+        -:  173:   *
+        -:  174:   * @throws boost::system::system_error Thrown on failure.
+        -:  175:   */
+        -:  176:  template <typename ExecutionContext>
+        -:  177:  basic_socket(ExecutionContext& context, const protocol_type& protocol,
+        -:  178:      typename constraint<
+        -:  179:        is_convertible<ExecutionContext&, execution_context&>::value,
+        -:  180:        defaulted_constraint
+        -:  181:      >::type = defaulted_constraint())
+        -:  182:    : impl_(0, 0, context)
+        -:  183:  {
+        -:  184:    boost::system::error_code ec;
+        -:  185:    impl_.get_service().open(impl_.get_implementation(), protocol, ec);
+        -:  186:    boost::asio::detail::throw_error(ec, "open");
+        -:  187:  }
+        -:  188:
+        -:  189:  /// Construct a basic_socket, opening it and binding it to the given local
+        -:  190:  /// endpoint.
+        -:  191:  /**
+        -:  192:   * This constructor creates a socket and automatically opens it bound to the
+        -:  193:   * specified endpoint on the local machine. The protocol used is the protocol
+        -:  194:   * associated with the given endpoint.
+        -:  195:   *
+        -:  196:   * @param ex The I/O executor that the socket will use, by default, to
+        -:  197:   * dispatch handlers for any asynchronous operations performed on the socket.
+        -:  198:   *
+        -:  199:   * @param endpoint An endpoint on the local machine to which the socket will
+        -:  200:   * be bound.
+        -:  201:   *
+        -:  202:   * @throws boost::system::system_error Thrown on failure.
+        -:  203:   */
+        -:  204:  basic_socket(const executor_type& ex, const endpoint_type& endpoint)
+        -:  205:    : impl_(0, ex)
+        -:  206:  {
+        -:  207:    boost::system::error_code ec;
+        -:  208:    const protocol_type protocol = endpoint.protocol();
+        -:  209:    impl_.get_service().open(impl_.get_implementation(), protocol, ec);
+        -:  210:    boost::asio::detail::throw_error(ec, "open");
+        -:  211:    impl_.get_service().bind(impl_.get_implementation(), endpoint, ec);
+        -:  212:    boost::asio::detail::throw_error(ec, "bind");
+        -:  213:  }
+        -:  214:
+        -:  215:  /// Construct a basic_socket, opening it and binding it to the given local
+        -:  216:  /// endpoint.
+        -:  217:  /**
+        -:  218:   * This constructor creates a socket and automatically opens it bound to the
+        -:  219:   * specified endpoint on the local machine. The protocol used is the protocol
+        -:  220:   * associated with the given endpoint.
+        -:  221:   *
+        -:  222:   * @param context An execution context which provides the I/O executor that
+        -:  223:   * the socket will use, by default, to dispatch handlers for any asynchronous
+        -:  224:   * operations performed on the socket.
+        -:  225:   *
+        -:  226:   * @param endpoint An endpoint on the local machine to which the socket will
+        -:  227:   * be bound.
+        -:  228:   *
+        -:  229:   * @throws boost::system::system_error Thrown on failure.
+        -:  230:   */
+        -:  231:  template <typename ExecutionContext>
+        -:  232:  basic_socket(ExecutionContext& context, const endpoint_type& endpoint,
+        -:  233:      typename constraint<
+        -:  234:        is_convertible<ExecutionContext&, execution_context&>::value
+        -:  235:      >::type = 0)
+        -:  236:    : impl_(0, 0, context)
+        -:  237:  {
+        -:  238:    boost::system::error_code ec;
+        -:  239:    const protocol_type protocol = endpoint.protocol();
+        -:  240:    impl_.get_service().open(impl_.get_implementation(), protocol, ec);
+        -:  241:    boost::asio::detail::throw_error(ec, "open");
+        -:  242:    impl_.get_service().bind(impl_.get_implementation(), endpoint, ec);
+        -:  243:    boost::asio::detail::throw_error(ec, "bind");
+        -:  244:  }
+        -:  245:
+        -:  246:  /// Construct a basic_socket on an existing native socket.
+        -:  247:  /**
+        -:  248:   * This constructor creates a socket object to hold an existing native socket.
+        -:  249:   *
+        -:  250:   * @param ex The I/O executor that the socket will use, by default, to
+        -:  251:   * dispatch handlers for any asynchronous operations performed on the socket.
+        -:  252:   *
+        -:  253:   * @param protocol An object specifying protocol parameters to be used.
+        -:  254:   *
+        -:  255:   * @param native_socket A native socket.
+        -:  256:   *
+        -:  257:   * @throws boost::system::system_error Thrown on failure.
+        -:  258:   */
+        -:  259:  basic_socket(const executor_type& ex, const protocol_type& protocol,
+        -:  260:      const native_handle_type& native_socket)
+        -:  261:    : impl_(0, ex)
+        -:  262:  {
+        -:  263:    boost::system::error_code ec;
+        -:  264:    impl_.get_service().assign(impl_.get_implementation(),
+        -:  265:        protocol, native_socket, ec);
+        -:  266:    boost::asio::detail::throw_error(ec, "assign");
+        -:  267:  }
+        -:  268:
+        -:  269:  /// Construct a basic_socket on an existing native socket.
+        -:  270:  /**
+        -:  271:   * This constructor creates a socket object to hold an existing native socket.
+        -:  272:   *
+        -:  273:   * @param context An execution context which provides the I/O executor that
+        -:  274:   * the socket will use, by default, to dispatch handlers for any asynchronous
+        -:  275:   * operations performed on the socket.
+        -:  276:   *
+        -:  277:   * @param protocol An object specifying protocol parameters to be used.
+        -:  278:   *
+        -:  279:   * @param native_socket A native socket.
+        -:  280:   *
+        -:  281:   * @throws boost::system::system_error Thrown on failure.
+        -:  282:   */
+        -:  283:  template <typename ExecutionContext>
+        -:  284:  basic_socket(ExecutionContext& context, const protocol_type& protocol,
+        -:  285:      const native_handle_type& native_socket,
+        -:  286:      typename constraint<
+        -:  287:        is_convertible<ExecutionContext&, execution_context&>::value
+        -:  288:      >::type = 0)
+        -:  289:    : impl_(0, 0, context)
+        -:  290:  {
+        -:  291:    boost::system::error_code ec;
+        -:  292:    impl_.get_service().assign(impl_.get_implementation(),
+        -:  293:        protocol, native_socket, ec);
+        -:  294:    boost::asio::detail::throw_error(ec, "assign");
+        -:  295:  }
+        -:  296:
+        -:  297:#if defined(BOOST_ASIO_HAS_MOVE) || defined(GENERATING_DOCUMENTATION)
+        -:  298:  /// Move-construct a basic_socket from another.
+        -:  299:  /**
+        -:  300:   * This constructor moves a socket from one object to another.
+        -:  301:   *
+        -:  302:   * @param other The other basic_socket object from which the move will
+        -:  303:   * occur.
+        -:  304:   *
+        -:  305:   * @note Following the move, the moved-from object is in the same state as if
+        -:  306:   * constructed using the @c basic_socket(const executor_type&) constructor.
+        -:  307:   */
+     453*:  308:  basic_socket(basic_socket&& other) BOOST_ASIO_NOEXCEPT
+     453*:  309:    : impl_(std::move(other.impl_))
+        -:  310:  {
+     453*:  311:  }
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEEC2EOS5_:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEEC2EOS5_ called 0 returned 0% blocks executed 0%
+    #####:  308:  basic_socket(basic_socket&& other) BOOST_ASIO_NOEXCEPT
+    #####:  309:    : impl_(std::move(other.impl_))
+call    0 never executed
+call    1 never executed
+        -:  310:  {
+    #####:  311:  }
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEEC2EOS5_:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEEC2EOS5_ called 0 returned 0% blocks executed 0%
+    #####:  308:  basic_socket(basic_socket&& other) BOOST_ASIO_NOEXCEPT
+    #####:  309:    : impl_(std::move(other.impl_))
+call    0 never executed
+call    1 never executed
+        -:  310:  {
+    #####:  311:  }
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEEC2EOS5_:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEEC2EOS5_ called 0 returned 0% blocks executed 0%
+    #####:  308:  basic_socket(basic_socket&& other) BOOST_ASIO_NOEXCEPT
+    #####:  309:    : impl_(std::move(other.impl_))
+call    0 never executed
+call    1 never executed
+        -:  310:  {
+    #####:  311:  }
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEEC2EOS5_:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEEC2EOS5_ called 0 returned 0% blocks executed 0%
+    #####:  308:  basic_socket(basic_socket&& other) BOOST_ASIO_NOEXCEPT
+    #####:  309:    : impl_(std::move(other.impl_))
+call    0 never executed
+call    1 never executed
+        -:  310:  {
+    #####:  311:  }
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEEC2EOS5_:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEEC2EOS5_ called 389 returned 100% blocks executed 100%
+      389:  308:  basic_socket(basic_socket&& other) BOOST_ASIO_NOEXCEPT
+      389:  309:    : impl_(std::move(other.impl_))
+call    0 returned 100%
+call    1 returned 100%
+        -:  310:  {
+      389:  311:  }
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEEC2EOS5_:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEEC2EOS5_ called 0 returned 0% blocks executed 0%
+    #####:  308:  basic_socket(basic_socket&& other) BOOST_ASIO_NOEXCEPT
+    #####:  309:    : impl_(std::move(other.impl_))
+call    0 never executed
+call    1 never executed
+        -:  310:  {
+    #####:  311:  }
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEEC2EOS5_:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEEC2EOS5_ called 32 returned 100% blocks executed 100%
+       32:  308:  basic_socket(basic_socket&& other) BOOST_ASIO_NOEXCEPT
+       32:  309:    : impl_(std::move(other.impl_))
+call    0 returned 100%
+call    1 returned 100%
+        -:  310:  {
+       32:  311:  }
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEEC2EOS5_:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEEC2EOS5_ called 32 returned 100% blocks executed 100%
+       32:  308:  basic_socket(basic_socket&& other) BOOST_ASIO_NOEXCEPT
+       32:  309:    : impl_(std::move(other.impl_))
+call    0 returned 100%
+call    1 returned 100%
+        -:  310:  {
+       32:  311:  }
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEEC2EOS5_:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEEC2EOS5_ called 0 returned 0% blocks executed 0%
+    #####:  308:  basic_socket(basic_socket&& other) BOOST_ASIO_NOEXCEPT
+    #####:  309:    : impl_(std::move(other.impl_))
+call    0 never executed
+call    1 never executed
+        -:  310:  {
+    #####:  311:  }
+------------------
+        -:  312:
+        -:  313:  /// Move-assign a basic_socket from another.
+        -:  314:  /**
+        -:  315:   * This assignment operator moves a socket from one object to another.
+        -:  316:   *
+        -:  317:   * @param other The other basic_socket object from which the move will
+        -:  318:   * occur.
+        -:  319:   *
+        -:  320:   * @note Following the move, the moved-from object is in the same state as if
+        -:  321:   * constructed using the @c basic_socket(const executor_type&) constructor.
+        -:  322:   */
+        -:  323:  basic_socket& operator=(basic_socket&& other)
+        -:  324:  {
+        -:  325:    impl_ = std::move(other.impl_);
+        -:  326:    return *this;
+        -:  327:  }
+        -:  328:
+        -:  329:  // All sockets have access to each other's implementations.
+        -:  330:  template <typename Protocol1, typename Executor1>
+        -:  331:  friend class basic_socket;
+        -:  332:
+        -:  333:  /// Move-construct a basic_socket from a socket of another protocol type.
+        -:  334:  /**
+        -:  335:   * This constructor moves a socket from one object to another.
+        -:  336:   *
+        -:  337:   * @param other The other basic_socket object from which the move will
+        -:  338:   * occur.
+        -:  339:   *
+        -:  340:   * @note Following the move, the moved-from object is in the same state as if
+        -:  341:   * constructed using the @c basic_socket(const executor_type&) constructor.
+        -:  342:   */
+        -:  343:  template <typename Protocol1, typename Executor1>
+        -:  344:  basic_socket(basic_socket<Protocol1, Executor1>&& other,
+        -:  345:      typename constraint<
+        -:  346:        is_convertible<Protocol1, Protocol>::value
+        -:  347:          && is_convertible<Executor1, Executor>::value
+        -:  348:      >::type = 0)
+        -:  349:    : impl_(std::move(other.impl_))
+        -:  350:  {
+        -:  351:  }
+        -:  352:
+        -:  353:  /// Move-assign a basic_socket from a socket of another protocol type.
+        -:  354:  /**
+        -:  355:   * This assignment operator moves a socket from one object to another.
+        -:  356:   *
+        -:  357:   * @param other The other basic_socket object from which the move will
+        -:  358:   * occur.
+        -:  359:   *
+        -:  360:   * @note Following the move, the moved-from object is in the same state as if
+        -:  361:   * constructed using the @c basic_socket(const executor_type&) constructor.
+        -:  362:   */
+        -:  363:  template <typename Protocol1, typename Executor1>
+        -:  364:  typename constraint<
+        -:  365:    is_convertible<Protocol1, Protocol>::value
+        -:  366:      && is_convertible<Executor1, Executor>::value,
+        -:  367:    basic_socket&
+        -:  368:  >::type operator=(basic_socket<Protocol1, Executor1>&& other)
+        -:  369:  {
+        -:  370:    basic_socket tmp(std::move(other));
+        -:  371:    impl_ = std::move(tmp.impl_);
+        -:  372:    return *this;
+        -:  373:  }
+        -:  374:#endif // defined(BOOST_ASIO_HAS_MOVE) || defined(GENERATING_DOCUMENTATION)
+        -:  375:
+        -:  376:  /// Get the executor associated with the object.
+     154*:  377:  const executor_type& get_executor() BOOST_ASIO_NOEXCEPT
+        -:  378:  {
+     154*:  379:    return impl_.get_executor();
+        -:  380:  }
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE12get_executorEv:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE12get_executorEv called 5 returned 100% blocks executed 100%
+        5:  377:  const executor_type& get_executor() BOOST_ASIO_NOEXCEPT
+        -:  378:  {
+        5:  379:    return impl_.get_executor();
+call    0 returned 100%
+        -:  380:  }
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE12get_executorEv:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE12get_executorEv called 8 returned 100% blocks executed 100%
+        8:  377:  const executor_type& get_executor() BOOST_ASIO_NOEXCEPT
+        -:  378:  {
+        8:  379:    return impl_.get_executor();
+call    0 returned 100%
+        -:  380:  }
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE12get_executorEv:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE12get_executorEv called 141 returned 100% blocks executed 100%
+      141:  377:  const executor_type& get_executor() BOOST_ASIO_NOEXCEPT
+        -:  378:  {
+      141:  379:    return impl_.get_executor();
+call    0 returned 100%
+        -:  380:  }
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE12get_executorEv:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE12get_executorEv called 0 returned 0% blocks executed 0%
+    #####:  377:  const executor_type& get_executor() BOOST_ASIO_NOEXCEPT
+        -:  378:  {
+    #####:  379:    return impl_.get_executor();
+call    0 never executed
+        -:  380:  }
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE12get_executorEv:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE12get_executorEv called 0 returned 0% blocks executed 0%
+    #####:  377:  const executor_type& get_executor() BOOST_ASIO_NOEXCEPT
+        -:  378:  {
+    #####:  379:    return impl_.get_executor();
+call    0 never executed
+        -:  380:  }
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE12get_executorEv:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE12get_executorEv called 0 returned 0% blocks executed 0%
+    #####:  377:  const executor_type& get_executor() BOOST_ASIO_NOEXCEPT
+        -:  378:  {
+    #####:  379:    return impl_.get_executor();
+call    0 never executed
+        -:  380:  }
+------------------
+        -:  381:
+        -:  382:#if !defined(BOOST_ASIO_NO_EXTENSIONS)
+        -:  383:  /// Get a reference to the lowest layer.
+        -:  384:  /**
+        -:  385:   * This function returns a reference to the lowest layer in a stack of
+        -:  386:   * layers. Since a basic_socket cannot contain any further layers, it simply
+        -:  387:   * returns a reference to itself.
+        -:  388:   *
+        -:  389:   * @return A reference to the lowest layer in the stack of layers. Ownership
+        -:  390:   * is not transferred to the caller.
+        -:  391:   */
+    #####:  392:  lowest_layer_type& lowest_layer()
+        -:  393:  {
+    #####:  394:    return *this;
+        -:  395:  }
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE12lowest_layerEv:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE12lowest_layerEv called 0 returned 0% blocks executed 0%
+    #####:  392:  lowest_layer_type& lowest_layer()
+        -:  393:  {
+    #####:  394:    return *this;
+        -:  395:  }
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE12lowest_layerEv:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE12lowest_layerEv called 0 returned 0% blocks executed 0%
+    #####:  392:  lowest_layer_type& lowest_layer()
+        -:  393:  {
+    #####:  394:    return *this;
+        -:  395:  }
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE12lowest_layerEv:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE12lowest_layerEv called 0 returned 0% blocks executed 0%
+    #####:  392:  lowest_layer_type& lowest_layer()
+        -:  393:  {
+    #####:  394:    return *this;
+        -:  395:  }
+------------------
+        -:  396:
+        -:  397:  /// Get a const reference to the lowest layer.
+        -:  398:  /**
+        -:  399:   * This function returns a const reference to the lowest layer in a stack of
+        -:  400:   * layers. Since a basic_socket cannot contain any further layers, it simply
+        -:  401:   * returns a reference to itself.
+        -:  402:   *
+        -:  403:   * @return A const reference to the lowest layer in the stack of layers.
+        -:  404:   * Ownership is not transferred to the caller.
+        -:  405:   */
+        -:  406:  const lowest_layer_type& lowest_layer() const
+        -:  407:  {
+        -:  408:    return *this;
+        -:  409:  }
+        -:  410:#endif // !defined(BOOST_ASIO_NO_EXTENSIONS)
+        -:  411:
+        -:  412:  /// Open the socket using the specified protocol.
+        -:  413:  /**
+        -:  414:   * This function opens the socket so that it will use the specified protocol.
+        -:  415:   *
+        -:  416:   * @param protocol An object specifying protocol parameters to be used.
+        -:  417:   *
+        -:  418:   * @throws boost::system::system_error Thrown on failure.
+        -:  419:   *
+        -:  420:   * @par Example
+        -:  421:   * @code
+        -:  422:   * boost::asio::ip::tcp::socket socket(my_context);
+        -:  423:   * socket.open(boost::asio::ip::tcp::v4());
+        -:  424:   * @endcode
+        -:  425:   */
+        -:  426:  void open(const protocol_type& protocol = protocol_type())
+        -:  427:  {
+        -:  428:    boost::system::error_code ec;
+        -:  429:    impl_.get_service().open(impl_.get_implementation(), protocol, ec);
+        -:  430:    boost::asio::detail::throw_error(ec, "open");
+        -:  431:  }
+        -:  432:
+        -:  433:  /// Open the socket using the specified protocol.
+        -:  434:  /**
+        -:  435:   * This function opens the socket so that it will use the specified protocol.
+        -:  436:   *
+        -:  437:   * @param protocol An object specifying which protocol is to be used.
+        -:  438:   *
+        -:  439:   * @param ec Set to indicate what error occurred, if any.
+        -:  440:   *
+        -:  441:   * @par Example
+        -:  442:   * @code
+        -:  443:   * boost::asio::ip::tcp::socket socket(my_context);
+        -:  444:   * boost::system::error_code ec;
+        -:  445:   * socket.open(boost::asio::ip::tcp::v4(), ec);
+        -:  446:   * if (ec)
+        -:  447:   * {
+        -:  448:   *   // An error occurred.
+        -:  449:   * }
+        -:  450:   * @endcode
+        -:  451:   */
+        -:  452:  BOOST_ASIO_SYNC_OP_VOID open(const protocol_type& protocol,
+        -:  453:      boost::system::error_code& ec)
+        -:  454:  {
+        -:  455:    impl_.get_service().open(impl_.get_implementation(), protocol, ec);
+        -:  456:    BOOST_ASIO_SYNC_OP_VOID_RETURN(ec);
+        -:  457:  }
+        -:  458:
+        -:  459:  /// Assign an existing native socket to the socket.
+        -:  460:  /*
+        -:  461:   * This function opens the socket to hold an existing native socket.
+        -:  462:   *
+        -:  463:   * @param protocol An object specifying which protocol is to be used.
+        -:  464:   *
+        -:  465:   * @param native_socket A native socket.
+        -:  466:   *
+        -:  467:   * @throws boost::system::system_error Thrown on failure.
+        -:  468:   */
+        -:  469:  void assign(const protocol_type& protocol,
+        -:  470:      const native_handle_type& native_socket)
+        -:  471:  {
+        -:  472:    boost::system::error_code ec;
+        -:  473:    impl_.get_service().assign(impl_.get_implementation(),
+        -:  474:        protocol, native_socket, ec);
+        -:  475:    boost::asio::detail::throw_error(ec, "assign");
+        -:  476:  }
+        -:  477:
+        -:  478:  /// Assign an existing native socket to the socket.
+        -:  479:  /*
+        -:  480:   * This function opens the socket to hold an existing native socket.
+        -:  481:   *
+        -:  482:   * @param protocol An object specifying which protocol is to be used.
+        -:  483:   *
+        -:  484:   * @param native_socket A native socket.
+        -:  485:   *
+        -:  486:   * @param ec Set to indicate what error occurred, if any.
+        -:  487:   */
+      84*:  488:  BOOST_ASIO_SYNC_OP_VOID assign(const protocol_type& protocol,
+        -:  489:      const native_handle_type& native_socket, boost::system::error_code& ec)
+        -:  490:  {
+      84*:  491:    impl_.get_service().assign(impl_.get_implementation(),
+        -:  492:        protocol, native_socket, ec);
+      84*:  493:    BOOST_ASIO_SYNC_OP_VOID_RETURN(ec);
+        -:  494:  }
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE6assignERKS3_RKiRNS_6system10error_codeE:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE6assignERKS3_RKiRNS_6system10error_codeE called 5 returned 100% blocks executed 100%
+        5:  488:  BOOST_ASIO_SYNC_OP_VOID assign(const protocol_type& protocol,
+        -:  489:      const native_handle_type& native_socket, boost::system::error_code& ec)
+        -:  490:  {
+        5:  491:    impl_.get_service().assign(impl_.get_implementation(),
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+        -:  492:        protocol, native_socket, ec);
+        5:  493:    BOOST_ASIO_SYNC_OP_VOID_RETURN(ec);
+        -:  494:  }
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE6assignERKS3_RKiRNS_6system10error_codeE:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE6assignERKS3_RKiRNS_6system10error_codeE called 71 returned 100% blocks executed 100%
+       71:  488:  BOOST_ASIO_SYNC_OP_VOID assign(const protocol_type& protocol,
+        -:  489:      const native_handle_type& native_socket, boost::system::error_code& ec)
+        -:  490:  {
+       71:  491:    impl_.get_service().assign(impl_.get_implementation(),
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+        -:  492:        protocol, native_socket, ec);
+       71:  493:    BOOST_ASIO_SYNC_OP_VOID_RETURN(ec);
+        -:  494:  }
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE6assignERKS3_RKiRNS_6system10error_codeE:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE6assignERKS3_RKiRNS_6system10error_codeE called 0 returned 0% blocks executed 0%
+    #####:  488:  BOOST_ASIO_SYNC_OP_VOID assign(const protocol_type& protocol,
+        -:  489:      const native_handle_type& native_socket, boost::system::error_code& ec)
+        -:  490:  {
+    #####:  491:    impl_.get_service().assign(impl_.get_implementation(),
+call    0 never executed
+call    1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed (throw)
+        -:  492:        protocol, native_socket, ec);
+    #####:  493:    BOOST_ASIO_SYNC_OP_VOID_RETURN(ec);
+        -:  494:  }
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE6assignERKS3_RKiRNS_6system10error_codeE:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE6assignERKS3_RKiRNS_6system10error_codeE called 8 returned 100% blocks executed 100%
+        8:  488:  BOOST_ASIO_SYNC_OP_VOID assign(const protocol_type& protocol,
+        -:  489:      const native_handle_type& native_socket, boost::system::error_code& ec)
+        -:  490:  {
+        8:  491:    impl_.get_service().assign(impl_.get_implementation(),
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+        -:  492:        protocol, native_socket, ec);
+        8:  493:    BOOST_ASIO_SYNC_OP_VOID_RETURN(ec);
+        -:  494:  }
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE6assignERKS3_RKiRNS_6system10error_codeE:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE6assignERKS3_RKiRNS_6system10error_codeE called 0 returned 0% blocks executed 0%
+    #####:  488:  BOOST_ASIO_SYNC_OP_VOID assign(const protocol_type& protocol,
+        -:  489:      const native_handle_type& native_socket, boost::system::error_code& ec)
+        -:  490:  {
+    #####:  491:    impl_.get_service().assign(impl_.get_implementation(),
+call    0 never executed
+call    1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed (throw)
+        -:  492:        protocol, native_socket, ec);
+    #####:  493:    BOOST_ASIO_SYNC_OP_VOID_RETURN(ec);
+        -:  494:  }
+------------------
+        -:  495:
+        -:  496:  /// Determine whether the socket is open.
+     179*:  497:  bool is_open() const
+        -:  498:  {
+     179*:  499:    return impl_.get_service().is_open(impl_.get_implementation());
+        -:  500:  }
+------------------
+_ZNK5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE7is_openEv:
+function _ZNK5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE7is_openEv called 0 returned 0% blocks executed 0%
+    #####:  497:  bool is_open() const
+        -:  498:  {
+    #####:  499:    return impl_.get_service().is_open(impl_.get_implementation());
+call    0 never executed
+call    1 never executed
+call    2 never executed
+        -:  500:  }
+------------------
+_ZNK5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE7is_openEv:
+function _ZNK5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE7is_openEv called 0 returned 0% blocks executed 0%
+    #####:  497:  bool is_open() const
+        -:  498:  {
+    #####:  499:    return impl_.get_service().is_open(impl_.get_implementation());
+call    0 never executed
+call    1 never executed
+call    2 never executed
+        -:  500:  }
+------------------
+_ZNK5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE7is_openEv:
+function _ZNK5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE7is_openEv called 0 returned 0% blocks executed 0%
+    #####:  497:  bool is_open() const
+        -:  498:  {
+    #####:  499:    return impl_.get_service().is_open(impl_.get_implementation());
+call    0 never executed
+call    1 never executed
+call    2 never executed
+        -:  500:  }
+------------------
+_ZNK5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE7is_openEv:
+function _ZNK5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE7is_openEv called 0 returned 0% blocks executed 0%
+    #####:  497:  bool is_open() const
+        -:  498:  {
+    #####:  499:    return impl_.get_service().is_open(impl_.get_implementation());
+call    0 never executed
+call    1 never executed
+call    2 never executed
+        -:  500:  }
+------------------
+_ZNK5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE7is_openEv:
+function _ZNK5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE7is_openEv called 0 returned 0% blocks executed 0%
+    #####:  497:  bool is_open() const
+        -:  498:  {
+    #####:  499:    return impl_.get_service().is_open(impl_.get_implementation());
+call    0 never executed
+call    1 never executed
+call    2 never executed
+        -:  500:  }
+------------------
+_ZNK5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE7is_openEv:
+function _ZNK5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE7is_openEv called 0 returned 0% blocks executed 0%
+    #####:  497:  bool is_open() const
+        -:  498:  {
+    #####:  499:    return impl_.get_service().is_open(impl_.get_implementation());
+call    0 never executed
+call    1 never executed
+call    2 never executed
+        -:  500:  }
+------------------
+_ZNK5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE7is_openEv:
+function _ZNK5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE7is_openEv called 10 returned 100% blocks executed 100%
+       10:  497:  bool is_open() const
+        -:  498:  {
+       10:  499:    return impl_.get_service().is_open(impl_.get_implementation());
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+        -:  500:  }
+------------------
+_ZNK5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE7is_openEv:
+function _ZNK5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE7is_openEv called 62 returned 100% blocks executed 100%
+       62:  497:  bool is_open() const
+        -:  498:  {
+       62:  499:    return impl_.get_service().is_open(impl_.get_implementation());
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+        -:  500:  }
+------------------
+_ZNK5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE7is_openEv:
+function _ZNK5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE7is_openEv called 24 returned 100% blocks executed 100%
+       24:  497:  bool is_open() const
+        -:  498:  {
+       24:  499:    return impl_.get_service().is_open(impl_.get_implementation());
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+        -:  500:  }
+------------------
+_ZNK5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE7is_openEv:
+function _ZNK5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE7is_openEv called 10 returned 100% blocks executed 100%
+       10:  497:  bool is_open() const
+        -:  498:  {
+       10:  499:    return impl_.get_service().is_open(impl_.get_implementation());
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+        -:  500:  }
+------------------
+_ZNK5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE7is_openEv:
+function _ZNK5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE7is_openEv called 22 returned 100% blocks executed 100%
+       22:  497:  bool is_open() const
+        -:  498:  {
+       22:  499:    return impl_.get_service().is_open(impl_.get_implementation());
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+        -:  500:  }
+------------------
+_ZNK5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE7is_openEv:
+function _ZNK5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE7is_openEv called 26 returned 100% blocks executed 100%
+       26:  497:  bool is_open() const
+        -:  498:  {
+       26:  499:    return impl_.get_service().is_open(impl_.get_implementation());
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+        -:  500:  }
+------------------
+_ZNK5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE7is_openEv:
+function _ZNK5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE7is_openEv called 25 returned 100% blocks executed 100%
+       25:  497:  bool is_open() const
+        -:  498:  {
+       25:  499:    return impl_.get_service().is_open(impl_.get_implementation());
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+        -:  500:  }
+------------------
+_ZNK5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE7is_openEv:
+function _ZNK5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE7is_openEv called 0 returned 0% blocks executed 0%
+    #####:  497:  bool is_open() const
+        -:  498:  {
+    #####:  499:    return impl_.get_service().is_open(impl_.get_implementation());
+call    0 never executed
+call    1 never executed
+call    2 never executed
+        -:  500:  }
+------------------
+_ZNK5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE7is_openEv:
+function _ZNK5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE7is_openEv called 0 returned 0% blocks executed 0%
+    #####:  497:  bool is_open() const
+        -:  498:  {
+    #####:  499:    return impl_.get_service().is_open(impl_.get_implementation());
+call    0 never executed
+call    1 never executed
+call    2 never executed
+        -:  500:  }
+------------------
+        -:  501:
+        -:  502:  /// Close the socket.
+        -:  503:  /**
+        -:  504:   * This function is used to close the socket. Any asynchronous send, receive
+        -:  505:   * or connect operations will be cancelled immediately, and will complete
+        -:  506:   * with the boost::asio::error::operation_aborted error.
+        -:  507:   *
+        -:  508:   * @throws boost::system::system_error Thrown on failure. Note that, even if
+        -:  509:   * the function indicates an error, the underlying descriptor is closed.
+        -:  510:   *
+        -:  511:   * @note For portable behaviour with respect to graceful closure of a
+        -:  512:   * connected socket, call shutdown() before closing the socket.
+        -:  513:   */
+      33*:  514:  void close()
+        -:  515:  {
+      33*:  516:    boost::system::error_code ec;
+      33*:  517:    impl_.get_service().close(impl_.get_implementation(), ec);
+      33*:  518:    boost::asio::detail::throw_error(ec, "close");
+      33*:  519:  }
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE5closeEv:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE5closeEv called 5 returned 100% blocks executed 78%
+        5:  514:  void close()
+        -:  515:  {
+        5:  516:    boost::system::error_code ec;
+        5:  517:    impl_.get_service().close(impl_.get_implementation(), ec);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+        5:  518:    boost::asio::detail::throw_error(ec, "close");
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        5:  519:  }
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE5closeEv:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE5closeEv called 6 returned 100% blocks executed 78%
+        6:  514:  void close()
+        -:  515:  {
+        6:  516:    boost::system::error_code ec;
+        6:  517:    impl_.get_service().close(impl_.get_implementation(), ec);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+        6:  518:    boost::asio::detail::throw_error(ec, "close");
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        6:  519:  }
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE5closeEv:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE5closeEv called 5 returned 100% blocks executed 78%
+        5:  514:  void close()
+        -:  515:  {
+        5:  516:    boost::system::error_code ec;
+        5:  517:    impl_.get_service().close(impl_.get_implementation(), ec);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+        5:  518:    boost::asio::detail::throw_error(ec, "close");
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        5:  519:  }
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE5closeEv:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE5closeEv called 4 returned 100% blocks executed 78%
+        4:  514:  void close()
+        -:  515:  {
+        4:  516:    boost::system::error_code ec;
+        4:  517:    impl_.get_service().close(impl_.get_implementation(), ec);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+        4:  518:    boost::asio::detail::throw_error(ec, "close");
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        4:  519:  }
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE5closeEv:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE5closeEv called 6 returned 100% blocks executed 78%
+        6:  514:  void close()
+        -:  515:  {
+        6:  516:    boost::system::error_code ec;
+        6:  517:    impl_.get_service().close(impl_.get_implementation(), ec);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+        6:  518:    boost::asio::detail::throw_error(ec, "close");
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        6:  519:  }
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE5closeEv:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE5closeEv called 7 returned 100% blocks executed 78%
+        7:  514:  void close()
+        -:  515:  {
+        7:  516:    boost::system::error_code ec;
+        7:  517:    impl_.get_service().close(impl_.get_implementation(), ec);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+        7:  518:    boost::asio::detail::throw_error(ec, "close");
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        7:  519:  }
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE5closeEv:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE5closeEv called 0 returned 0% blocks executed 0%
+    #####:  514:  void close()
+        -:  515:  {
+    #####:  516:    boost::system::error_code ec;
+    #####:  517:    impl_.get_service().close(impl_.get_implementation(), ec);
+call    0 never executed
+call    1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed (throw)
+    #####:  518:    boost::asio::detail::throw_error(ec, "close");
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+    #####:  519:  }
+------------------
+        -:  520:
+        -:  521:  /// Close the socket.
+        -:  522:  /**
+        -:  523:   * This function is used to close the socket. Any asynchronous send, receive
+        -:  524:   * or connect operations will be cancelled immediately, and will complete
+        -:  525:   * with the boost::asio::error::operation_aborted error.
+        -:  526:   *
+        -:  527:   * @param ec Set to indicate what error occurred, if any. Note that, even if
+        -:  528:   * the function indicates an error, the underlying descriptor is closed.
+        -:  529:   *
+        -:  530:   * @par Example
+        -:  531:   * @code
+        -:  532:   * boost::asio::ip::tcp::socket socket(my_context);
+        -:  533:   * ...
+        -:  534:   * boost::system::error_code ec;
+        -:  535:   * socket.close(ec);
+        -:  536:   * if (ec)
+        -:  537:   * {
+        -:  538:   *   // An error occurred.
+        -:  539:   * }
+        -:  540:   * @endcode
+        -:  541:   *
+        -:  542:   * @note For portable behaviour with respect to graceful closure of a
+        -:  543:   * connected socket, call shutdown() before closing the socket.
+        -:  544:   */
+      80*:  545:  BOOST_ASIO_SYNC_OP_VOID close(boost::system::error_code& ec)
+        -:  546:  {
+      80*:  547:    impl_.get_service().close(impl_.get_implementation(), ec);
+      80*:  548:    BOOST_ASIO_SYNC_OP_VOID_RETURN(ec);
+        -:  549:  }
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE5closeERNS_6system10error_codeE:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE5closeERNS_6system10error_codeE called 13 returned 100% blocks executed 100%
+       13:  545:  BOOST_ASIO_SYNC_OP_VOID close(boost::system::error_code& ec)
+        -:  546:  {
+       13:  547:    impl_.get_service().close(impl_.get_implementation(), ec);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+       13:  548:    BOOST_ASIO_SYNC_OP_VOID_RETURN(ec);
+        -:  549:  }
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE5closeERNS_6system10error_codeE:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE5closeERNS_6system10error_codeE called 0 returned 0% blocks executed 0%
+    #####:  545:  BOOST_ASIO_SYNC_OP_VOID close(boost::system::error_code& ec)
+        -:  546:  {
+    #####:  547:    impl_.get_service().close(impl_.get_implementation(), ec);
+call    0 never executed
+call    1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed (throw)
+    #####:  548:    BOOST_ASIO_SYNC_OP_VOID_RETURN(ec);
+        -:  549:  }
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE5closeERNS_6system10error_codeE:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE5closeERNS_6system10error_codeE called 0 returned 0% blocks executed 0%
+    #####:  545:  BOOST_ASIO_SYNC_OP_VOID close(boost::system::error_code& ec)
+        -:  546:  {
+    #####:  547:    impl_.get_service().close(impl_.get_implementation(), ec);
+call    0 never executed
+call    1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed (throw)
+    #####:  548:    BOOST_ASIO_SYNC_OP_VOID_RETURN(ec);
+        -:  549:  }
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE5closeERNS_6system10error_codeE:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE5closeERNS_6system10error_codeE called 62 returned 100% blocks executed 100%
+       62:  545:  BOOST_ASIO_SYNC_OP_VOID close(boost::system::error_code& ec)
+        -:  546:  {
+       62:  547:    impl_.get_service().close(impl_.get_implementation(), ec);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+       62:  548:    BOOST_ASIO_SYNC_OP_VOID_RETURN(ec);
+        -:  549:  }
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE5closeERNS_6system10error_codeE:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE5closeERNS_6system10error_codeE called 5 returned 100% blocks executed 100%
+        5:  545:  BOOST_ASIO_SYNC_OP_VOID close(boost::system::error_code& ec)
+        -:  546:  {
+        5:  547:    impl_.get_service().close(impl_.get_implementation(), ec);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+        5:  548:    BOOST_ASIO_SYNC_OP_VOID_RETURN(ec);
+        -:  549:  }
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE5closeERNS_6system10error_codeE:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE5closeERNS_6system10error_codeE called 0 returned 0% blocks executed 0%
+    #####:  545:  BOOST_ASIO_SYNC_OP_VOID close(boost::system::error_code& ec)
+        -:  546:  {
+    #####:  547:    impl_.get_service().close(impl_.get_implementation(), ec);
+call    0 never executed
+call    1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed (throw)
+    #####:  548:    BOOST_ASIO_SYNC_OP_VOID_RETURN(ec);
+        -:  549:  }
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE5closeERNS_6system10error_codeE:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE5closeERNS_6system10error_codeE called 0 returned 0% blocks executed 0%
+    #####:  545:  BOOST_ASIO_SYNC_OP_VOID close(boost::system::error_code& ec)
+        -:  546:  {
+    #####:  547:    impl_.get_service().close(impl_.get_implementation(), ec);
+call    0 never executed
+call    1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed (throw)
+    #####:  548:    BOOST_ASIO_SYNC_OP_VOID_RETURN(ec);
+        -:  549:  }
+------------------
+        -:  550:
+        -:  551:  /// Release ownership of the underlying native socket.
+        -:  552:  /**
+        -:  553:   * This function causes all outstanding asynchronous connect, send and receive
+        -:  554:   * operations to finish immediately, and the handlers for cancelled operations
+        -:  555:   * will be passed the boost::asio::error::operation_aborted error. Ownership
+        -:  556:   * of the native socket is then transferred to the caller.
+        -:  557:   *
+        -:  558:   * @throws boost::system::system_error Thrown on failure.
+        -:  559:   *
+        -:  560:   * @note This function is unsupported on Windows versions prior to Windows
+        -:  561:   * 8.1, and will fail with boost::asio::error::operation_not_supported on
+        -:  562:   * these platforms.
+        -:  563:   */
+        -:  564:#if defined(BOOST_ASIO_MSVC) && (BOOST_ASIO_MSVC >= 1400) \
+        -:  565:  && (!defined(_WIN32_WINNT) || _WIN32_WINNT < 0x0603)
+        -:  566:  __declspec(deprecated("This function always fails with "
+        -:  567:        "operation_not_supported when used on Windows versions "
+        -:  568:        "prior to Windows 8.1."))
+        -:  569:#endif
+        -:  570:  native_handle_type release()
+        -:  571:  {
+        -:  572:    boost::system::error_code ec;
+        -:  573:    native_handle_type s = impl_.get_service().release(
+        -:  574:        impl_.get_implementation(), ec);
+        -:  575:    boost::asio::detail::throw_error(ec, "release");
+        -:  576:    return s;
+        -:  577:  }
+        -:  578:
+        -:  579:  /// Release ownership of the underlying native socket.
+        -:  580:  /**
+        -:  581:   * This function causes all outstanding asynchronous connect, send and receive
+        -:  582:   * operations to finish immediately, and the handlers for cancelled operations
+        -:  583:   * will be passed the boost::asio::error::operation_aborted error. Ownership
+        -:  584:   * of the native socket is then transferred to the caller.
+        -:  585:   *
+        -:  586:   * @param ec Set to indicate what error occurred, if any.
+        -:  587:   *
+        -:  588:   * @note This function is unsupported on Windows versions prior to Windows
+        -:  589:   * 8.1, and will fail with boost::asio::error::operation_not_supported on
+        -:  590:   * these platforms.
+        -:  591:   */
+        -:  592:#if defined(BOOST_ASIO_MSVC) && (BOOST_ASIO_MSVC >= 1400) \
+        -:  593:  && (!defined(_WIN32_WINNT) || _WIN32_WINNT < 0x0603)
+        -:  594:  __declspec(deprecated("This function always fails with "
+        -:  595:        "operation_not_supported when used on Windows versions "
+        -:  596:        "prior to Windows 8.1."))
+        -:  597:#endif
+        -:  598:  native_handle_type release(boost::system::error_code& ec)
+        -:  599:  {
+        -:  600:    return impl_.get_service().release(impl_.get_implementation(), ec);
+        -:  601:  }
+        -:  602:
+        -:  603:  /// Get the native socket representation.
+        -:  604:  /**
+        -:  605:   * This function may be used to obtain the underlying representation of the
+        -:  606:   * socket. This is intended to allow access to native socket functionality
+        -:  607:   * that is not otherwise provided.
+        -:  608:   */
+        -:  609:  native_handle_type native_handle()
+        -:  610:  {
+        -:  611:    return impl_.get_service().native_handle(impl_.get_implementation());
+        -:  612:  }
+        -:  613:
+        -:  614:  /// Cancel all asynchronous operations associated with the socket.
+        -:  615:  /**
+        -:  616:   * This function causes all outstanding asynchronous connect, send and receive
+        -:  617:   * operations to finish immediately, and the handlers for cancelled operations
+        -:  618:   * will be passed the boost::asio::error::operation_aborted error.
+        -:  619:   *
+        -:  620:   * @throws boost::system::system_error Thrown on failure.
+        -:  621:   *
+        -:  622:   * @note Calls to cancel() will always fail with
+        -:  623:   * boost::asio::error::operation_not_supported when run on Windows XP, Windows
+        -:  624:   * Server 2003, and earlier versions of Windows, unless
+        -:  625:   * BOOST_ASIO_ENABLE_CANCELIO is defined. However, the CancelIo function has
+        -:  626:   * two issues that should be considered before enabling its use:
+        -:  627:   *
+        -:  628:   * @li It will only cancel asynchronous operations that were initiated in the
+        -:  629:   * current thread.
+        -:  630:   *
+        -:  631:   * @li It can appear to complete without error, but the request to cancel the
+        -:  632:   * unfinished operations may be silently ignored by the operating system.
+        -:  633:   * Whether it works or not seems to depend on the drivers that are installed.
+        -:  634:   *
+        -:  635:   * For portable cancellation, consider using one of the following
+        -:  636:   * alternatives:
+        -:  637:   *
+        -:  638:   * @li Disable asio's I/O completion port backend by defining
+        -:  639:   * BOOST_ASIO_DISABLE_IOCP.
+        -:  640:   *
+        -:  641:   * @li Use the close() function to simultaneously cancel the outstanding
+        -:  642:   * operations and close the socket.
+        -:  643:   *
+        -:  644:   * When running on Windows Vista, Windows Server 2008, and later, the
+        -:  645:   * CancelIoEx function is always used. This function does not have the
+        -:  646:   * problems described above.
+        -:  647:   */
+        -:  648:#if defined(BOOST_ASIO_MSVC) && (BOOST_ASIO_MSVC >= 1400) \
+        -:  649:  && (!defined(_WIN32_WINNT) || _WIN32_WINNT < 0x0600) \
+        -:  650:  && !defined(BOOST_ASIO_ENABLE_CANCELIO)
+        -:  651:  __declspec(deprecated("By default, this function always fails with "
+        -:  652:        "operation_not_supported when used on Windows XP, Windows Server 2003, "
+        -:  653:        "or earlier. Consult documentation for details."))
+        -:  654:#endif
+        -:  655:  void cancel()
+        -:  656:  {
+        -:  657:    boost::system::error_code ec;
+        -:  658:    impl_.get_service().cancel(impl_.get_implementation(), ec);
+        -:  659:    boost::asio::detail::throw_error(ec, "cancel");
+        -:  660:  }
+        -:  661:
+        -:  662:  /// Cancel all asynchronous operations associated with the socket.
+        -:  663:  /**
+        -:  664:   * This function causes all outstanding asynchronous connect, send and receive
+        -:  665:   * operations to finish immediately, and the handlers for cancelled operations
+        -:  666:   * will be passed the boost::asio::error::operation_aborted error.
+        -:  667:   *
+        -:  668:   * @param ec Set to indicate what error occurred, if any.
+        -:  669:   *
+        -:  670:   * @note Calls to cancel() will always fail with
+        -:  671:   * boost::asio::error::operation_not_supported when run on Windows XP, Windows
+        -:  672:   * Server 2003, and earlier versions of Windows, unless
+        -:  673:   * BOOST_ASIO_ENABLE_CANCELIO is defined. However, the CancelIo function has
+        -:  674:   * two issues that should be considered before enabling its use:
+        -:  675:   *
+        -:  676:   * @li It will only cancel asynchronous operations that were initiated in the
+        -:  677:   * current thread.
+        -:  678:   *
+        -:  679:   * @li It can appear to complete without error, but the request to cancel the
+        -:  680:   * unfinished operations may be silently ignored by the operating system.
+        -:  681:   * Whether it works or not seems to depend on the drivers that are installed.
+        -:  682:   *
+        -:  683:   * For portable cancellation, consider using one of the following
+        -:  684:   * alternatives:
+        -:  685:   *
+        -:  686:   * @li Disable asio's I/O completion port backend by defining
+        -:  687:   * BOOST_ASIO_DISABLE_IOCP.
+        -:  688:   *
+        -:  689:   * @li Use the close() function to simultaneously cancel the outstanding
+        -:  690:   * operations and close the socket.
+        -:  691:   *
+        -:  692:   * When running on Windows Vista, Windows Server 2008, and later, the
+        -:  693:   * CancelIoEx function is always used. This function does not have the
+        -:  694:   * problems described above.
+        -:  695:   */
+        -:  696:#if defined(BOOST_ASIO_MSVC) && (BOOST_ASIO_MSVC >= 1400) \
+        -:  697:  && (!defined(_WIN32_WINNT) || _WIN32_WINNT < 0x0600) \
+        -:  698:  && !defined(BOOST_ASIO_ENABLE_CANCELIO)
+        -:  699:  __declspec(deprecated("By default, this function always fails with "
+        -:  700:        "operation_not_supported when used on Windows XP, Windows Server 2003, "
+        -:  701:        "or earlier. Consult documentation for details."))
+        -:  702:#endif
+        -:  703:  BOOST_ASIO_SYNC_OP_VOID cancel(boost::system::error_code& ec)
+        -:  704:  {
+        -:  705:    impl_.get_service().cancel(impl_.get_implementation(), ec);
+        -:  706:    BOOST_ASIO_SYNC_OP_VOID_RETURN(ec);
+        -:  707:  }
+        -:  708:
+        -:  709:  /// Determine whether the socket is at the out-of-band data mark.
+        -:  710:  /**
+        -:  711:   * This function is used to check whether the socket input is currently
+        -:  712:   * positioned at the out-of-band data mark.
+        -:  713:   *
+        -:  714:   * @return A bool indicating whether the socket is at the out-of-band data
+        -:  715:   * mark.
+        -:  716:   *
+        -:  717:   * @throws boost::system::system_error Thrown on failure.
+        -:  718:   */
+        -:  719:  bool at_mark() const
+        -:  720:  {
+        -:  721:    boost::system::error_code ec;
+        -:  722:    bool b = impl_.get_service().at_mark(impl_.get_implementation(), ec);
+        -:  723:    boost::asio::detail::throw_error(ec, "at_mark");
+        -:  724:    return b;
+        -:  725:  }
+        -:  726:
+        -:  727:  /// Determine whether the socket is at the out-of-band data mark.
+        -:  728:  /**
+        -:  729:   * This function is used to check whether the socket input is currently
+        -:  730:   * positioned at the out-of-band data mark.
+        -:  731:   *
+        -:  732:   * @param ec Set to indicate what error occurred, if any.
+        -:  733:   *
+        -:  734:   * @return A bool indicating whether the socket is at the out-of-band data
+        -:  735:   * mark.
+        -:  736:   */
+        -:  737:  bool at_mark(boost::system::error_code& ec) const
+        -:  738:  {
+        -:  739:    return impl_.get_service().at_mark(impl_.get_implementation(), ec);
+        -:  740:  }
+        -:  741:
+        -:  742:  /// Determine the number of bytes available for reading.
+        -:  743:  /**
+        -:  744:   * This function is used to determine the number of bytes that may be read
+        -:  745:   * without blocking.
+        -:  746:   *
+        -:  747:   * @return The number of bytes that may be read without blocking, or 0 if an
+        -:  748:   * error occurs.
+        -:  749:   *
+        -:  750:   * @throws boost::system::system_error Thrown on failure.
+        -:  751:   */
+        -:  752:  std::size_t available() const
+        -:  753:  {
+        -:  754:    boost::system::error_code ec;
+        -:  755:    std::size_t s = impl_.get_service().available(
+        -:  756:        impl_.get_implementation(), ec);
+        -:  757:    boost::asio::detail::throw_error(ec, "available");
+        -:  758:    return s;
+        -:  759:  }
+        -:  760:
+        -:  761:  /// Determine the number of bytes available for reading.
+        -:  762:  /**
+        -:  763:   * This function is used to determine the number of bytes that may be read
+        -:  764:   * without blocking.
+        -:  765:   *
+        -:  766:   * @param ec Set to indicate what error occurred, if any.
+        -:  767:   *
+        -:  768:   * @return The number of bytes that may be read without blocking, or 0 if an
+        -:  769:   * error occurs.
+        -:  770:   */
+        -:  771:  std::size_t available(boost::system::error_code& ec) const
+        -:  772:  {
+        -:  773:    return impl_.get_service().available(impl_.get_implementation(), ec);
+        -:  774:  }
+        -:  775:
+        -:  776:  /// Bind the socket to the given local endpoint.
+        -:  777:  /**
+        -:  778:   * This function binds the socket to the specified endpoint on the local
+        -:  779:   * machine.
+        -:  780:   *
+        -:  781:   * @param endpoint An endpoint on the local machine to which the socket will
+        -:  782:   * be bound.
+        -:  783:   *
+        -:  784:   * @throws boost::system::system_error Thrown on failure.
+        -:  785:   *
+        -:  786:   * @par Example
+        -:  787:   * @code
+        -:  788:   * boost::asio::ip::tcp::socket socket(my_context);
+        -:  789:   * socket.open(boost::asio::ip::tcp::v4());
+        -:  790:   * socket.bind(boost::asio::ip::tcp::endpoint(
+        -:  791:   *       boost::asio::ip::tcp::v4(), 12345));
+        -:  792:   * @endcode
+        -:  793:   */
+        -:  794:  void bind(const endpoint_type& endpoint)
+        -:  795:  {
+        -:  796:    boost::system::error_code ec;
+        -:  797:    impl_.get_service().bind(impl_.get_implementation(), endpoint, ec);
+        -:  798:    boost::asio::detail::throw_error(ec, "bind");
+        -:  799:  }
+        -:  800:
+        -:  801:  /// Bind the socket to the given local endpoint.
+        -:  802:  /**
+        -:  803:   * This function binds the socket to the specified endpoint on the local
+        -:  804:   * machine.
+        -:  805:   *
+        -:  806:   * @param endpoint An endpoint on the local machine to which the socket will
+        -:  807:   * be bound.
+        -:  808:   *
+        -:  809:   * @param ec Set to indicate what error occurred, if any.
+        -:  810:   *
+        -:  811:   * @par Example
+        -:  812:   * @code
+        -:  813:   * boost::asio::ip::tcp::socket socket(my_context);
+        -:  814:   * socket.open(boost::asio::ip::tcp::v4());
+        -:  815:   * boost::system::error_code ec;
+        -:  816:   * socket.bind(boost::asio::ip::tcp::endpoint(
+        -:  817:   *       boost::asio::ip::tcp::v4(), 12345), ec);
+        -:  818:   * if (ec)
+        -:  819:   * {
+        -:  820:   *   // An error occurred.
+        -:  821:   * }
+        -:  822:   * @endcode
+        -:  823:   */
+        -:  824:  BOOST_ASIO_SYNC_OP_VOID bind(const endpoint_type& endpoint,
+        -:  825:      boost::system::error_code& ec)
+        -:  826:  {
+        -:  827:    impl_.get_service().bind(impl_.get_implementation(), endpoint, ec);
+        -:  828:    BOOST_ASIO_SYNC_OP_VOID_RETURN(ec);
+        -:  829:  }
+        -:  830:
+        -:  831:  /// Connect the socket to the specified endpoint.
+        -:  832:  /**
+        -:  833:   * This function is used to connect a socket to the specified remote endpoint.
+        -:  834:   * The function call will block until the connection is successfully made or
+        -:  835:   * an error occurs.
+        -:  836:   *
+        -:  837:   * The socket is automatically opened if it is not already open. If the
+        -:  838:   * connect fails, and the socket was automatically opened, the socket is
+        -:  839:   * not returned to the closed state.
+        -:  840:   *
+        -:  841:   * @param peer_endpoint The remote endpoint to which the socket will be
+        -:  842:   * connected.
+        -:  843:   *
+        -:  844:   * @throws boost::system::system_error Thrown on failure.
+        -:  845:   *
+        -:  846:   * @par Example
+        -:  847:   * @code
+        -:  848:   * boost::asio::ip::tcp::socket socket(my_context);
+        -:  849:   * boost::asio::ip::tcp::endpoint endpoint(
+        -:  850:   *     boost::asio::ip::address::from_string("1.2.3.4"), 12345);
+        -:  851:   * socket.connect(endpoint);
+        -:  852:   * @endcode
+        -:  853:   */
+       84:  854:  void connect(const endpoint_type& peer_endpoint)
+        -:  855:  {
+       84:  856:    boost::system::error_code ec;
+       84:  857:    if (!is_open())
+        -:  858:    {
+      168:  859:      impl_.get_service().open(impl_.get_implementation(),
+       84:  860:          peer_endpoint.protocol(), ec);
+       84:  861:      boost::asio::detail::throw_error(ec, "connect");
+        -:  862:    }
+       84:  863:    impl_.get_service().connect(impl_.get_implementation(), peer_endpoint, ec);
+       84:  864:    boost::asio::detail::throw_error(ec, "connect");
+       84:  865:  }
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE7connectERKNS2_14basic_endpointIS3_EE:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE7connectERKNS2_14basic_endpointIS3_EE called 5 returned 100% blocks executed 76%
+        5:  854:  void connect(const endpoint_type& peer_endpoint)
+        -:  855:  {
+        5:  856:    boost::system::error_code ec;
+        5:  857:    if (!is_open())
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0%
+        -:  858:    {
+       10:  859:      impl_.get_service().open(impl_.get_implementation(),
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+        5:  860:          peer_endpoint.protocol(), ec);
+call    0 returned 100%
+        5:  861:      boost::asio::detail::throw_error(ec, "connect");
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:  862:    }
+        5:  863:    impl_.get_service().connect(impl_.get_implementation(), peer_endpoint, ec);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+        5:  864:    boost::asio::detail::throw_error(ec, "connect");
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        5:  865:  }
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE7connectERKNS2_14basic_endpointIS3_EE:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE7connectERKNS2_14basic_endpointIS3_EE called 31 returned 100% blocks executed 76%
+       31:  854:  void connect(const endpoint_type& peer_endpoint)
+        -:  855:  {
+       31:  856:    boost::system::error_code ec;
+       31:  857:    if (!is_open())
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0%
+        -:  858:    {
+       62:  859:      impl_.get_service().open(impl_.get_implementation(),
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+       31:  860:          peer_endpoint.protocol(), ec);
+call    0 returned 100%
+       31:  861:      boost::asio::detail::throw_error(ec, "connect");
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:  862:    }
+       31:  863:    impl_.get_service().connect(impl_.get_implementation(), peer_endpoint, ec);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+       31:  864:    boost::asio::detail::throw_error(ec, "connect");
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+       31:  865:  }
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE7connectERKNS2_14basic_endpointIS3_EE:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE7connectERKNS2_14basic_endpointIS3_EE called 10 returned 100% blocks executed 76%
+       10:  854:  void connect(const endpoint_type& peer_endpoint)
+        -:  855:  {
+       10:  856:    boost::system::error_code ec;
+       10:  857:    if (!is_open())
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0%
+        -:  858:    {
+       20:  859:      impl_.get_service().open(impl_.get_implementation(),
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+       10:  860:          peer_endpoint.protocol(), ec);
+call    0 returned 100%
+       10:  861:      boost::asio::detail::throw_error(ec, "connect");
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:  862:    }
+       10:  863:    impl_.get_service().connect(impl_.get_implementation(), peer_endpoint, ec);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+       10:  864:    boost::asio::detail::throw_error(ec, "connect");
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+       10:  865:  }
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE7connectERKNS2_14basic_endpointIS3_EE:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE7connectERKNS2_14basic_endpointIS3_EE called 6 returned 100% blocks executed 76%
+        6:  854:  void connect(const endpoint_type& peer_endpoint)
+        -:  855:  {
+        6:  856:    boost::system::error_code ec;
+        6:  857:    if (!is_open())
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0%
+        -:  858:    {
+       12:  859:      impl_.get_service().open(impl_.get_implementation(),
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+        6:  860:          peer_endpoint.protocol(), ec);
+call    0 returned 100%
+        6:  861:      boost::asio::detail::throw_error(ec, "connect");
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:  862:    }
+        6:  863:    impl_.get_service().connect(impl_.get_implementation(), peer_endpoint, ec);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+        6:  864:    boost::asio::detail::throw_error(ec, "connect");
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        6:  865:  }
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE7connectERKNS2_14basic_endpointIS3_EE:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE7connectERKNS2_14basic_endpointIS3_EE called 11 returned 100% blocks executed 76%
+       11:  854:  void connect(const endpoint_type& peer_endpoint)
+        -:  855:  {
+       11:  856:    boost::system::error_code ec;
+       11:  857:    if (!is_open())
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0%
+        -:  858:    {
+       22:  859:      impl_.get_service().open(impl_.get_implementation(),
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+       11:  860:          peer_endpoint.protocol(), ec);
+call    0 returned 100%
+       11:  861:      boost::asio::detail::throw_error(ec, "connect");
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:  862:    }
+       11:  863:    impl_.get_service().connect(impl_.get_implementation(), peer_endpoint, ec);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+       11:  864:    boost::asio::detail::throw_error(ec, "connect");
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+       11:  865:  }
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE7connectERKNS2_14basic_endpointIS3_EE:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE7connectERKNS2_14basic_endpointIS3_EE called 8 returned 100% blocks executed 76%
+        8:  854:  void connect(const endpoint_type& peer_endpoint)
+        -:  855:  {
+        8:  856:    boost::system::error_code ec;
+        8:  857:    if (!is_open())
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0%
+        -:  858:    {
+       16:  859:      impl_.get_service().open(impl_.get_implementation(),
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+        8:  860:          peer_endpoint.protocol(), ec);
+call    0 returned 100%
+        8:  861:      boost::asio::detail::throw_error(ec, "connect");
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:  862:    }
+        8:  863:    impl_.get_service().connect(impl_.get_implementation(), peer_endpoint, ec);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+        8:  864:    boost::asio::detail::throw_error(ec, "connect");
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        8:  865:  }
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE7connectERKNS2_14basic_endpointIS3_EE:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE7connectERKNS2_14basic_endpointIS3_EE called 13 returned 100% blocks executed 76%
+       13:  854:  void connect(const endpoint_type& peer_endpoint)
+        -:  855:  {
+       13:  856:    boost::system::error_code ec;
+       13:  857:    if (!is_open())
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0%
+        -:  858:    {
+       26:  859:      impl_.get_service().open(impl_.get_implementation(),
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+       13:  860:          peer_endpoint.protocol(), ec);
+call    0 returned 100%
+       13:  861:      boost::asio::detail::throw_error(ec, "connect");
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:  862:    }
+       13:  863:    impl_.get_service().connect(impl_.get_implementation(), peer_endpoint, ec);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+       13:  864:    boost::asio::detail::throw_error(ec, "connect");
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+       13:  865:  }
+------------------
+        -:  866:
+        -:  867:  /// Connect the socket to the specified endpoint.
+        -:  868:  /**
+        -:  869:   * This function is used to connect a socket to the specified remote endpoint.
+        -:  870:   * The function call will block until the connection is successfully made or
+        -:  871:   * an error occurs.
+        -:  872:   *
+        -:  873:   * The socket is automatically opened if it is not already open. If the
+        -:  874:   * connect fails, and the socket was automatically opened, the socket is
+        -:  875:   * not returned to the closed state.
+        -:  876:   *
+        -:  877:   * @param peer_endpoint The remote endpoint to which the socket will be
+        -:  878:   * connected.
+        -:  879:   *
+        -:  880:   * @param ec Set to indicate what error occurred, if any.
+        -:  881:   *
+        -:  882:   * @par Example
+        -:  883:   * @code
+        -:  884:   * boost::asio::ip::tcp::socket socket(my_context);
+        -:  885:   * boost::asio::ip::tcp::endpoint endpoint(
+        -:  886:   *     boost::asio::ip::address::from_string("1.2.3.4"), 12345);
+        -:  887:   * boost::system::error_code ec;
+        -:  888:   * socket.connect(endpoint, ec);
+        -:  889:   * if (ec)
+        -:  890:   * {
+        -:  891:   *   // An error occurred.
+        -:  892:   * }
+        -:  893:   * @endcode
+        -:  894:   */
+        -:  895:  BOOST_ASIO_SYNC_OP_VOID connect(const endpoint_type& peer_endpoint,
+        -:  896:      boost::system::error_code& ec)
+        -:  897:  {
+        -:  898:    if (!is_open())
+        -:  899:    {
+        -:  900:      impl_.get_service().open(impl_.get_implementation(),
+        -:  901:            peer_endpoint.protocol(), ec);
+        -:  902:      if (ec)
+        -:  903:      {
+        -:  904:        BOOST_ASIO_SYNC_OP_VOID_RETURN(ec);
+        -:  905:      }
+        -:  906:    }
+        -:  907:
+        -:  908:    impl_.get_service().connect(impl_.get_implementation(), peer_endpoint, ec);
+        -:  909:    BOOST_ASIO_SYNC_OP_VOID_RETURN(ec);
+        -:  910:  }
+        -:  911:
+        -:  912:  /// Start an asynchronous connect.
+        -:  913:  /**
+        -:  914:   * This function is used to asynchronously connect a socket to the specified
+        -:  915:   * remote endpoint. It is an initiating function for an @ref
+        -:  916:   * asynchronous_operation, and always returns immediately.
+        -:  917:   *
+        -:  918:   * The socket is automatically opened if it is not already open. If the
+        -:  919:   * connect fails, and the socket was automatically opened, the socket is
+        -:  920:   * not returned to the closed state.
+        -:  921:   *
+        -:  922:   * @param peer_endpoint The remote endpoint to which the socket will be
+        -:  923:   * connected. Copies will be made of the endpoint object as required.
+        -:  924:   *
+        -:  925:   * @param token The @ref completion_token that will be used to produce a
+        -:  926:   * completion handler, which will be called when the connect completes.
+        -:  927:   * Potential completion tokens include @ref use_future, @ref use_awaitable,
+        -:  928:   * @ref yield_context, or a function object with the correct completion
+        -:  929:   * signature. The function signature of the completion handler must be:
+        -:  930:   * @code void handler(
+        -:  931:   *   const boost::system::error_code& error // Result of operation.
+        -:  932:   * ); @endcode
+        -:  933:   * Regardless of whether the asynchronous operation completes immediately or
+        -:  934:   * not, the completion handler will not be invoked from within this function.
+        -:  935:   * On immediate completion, invocation of the handler will be performed in a
+        -:  936:   * manner equivalent to using boost::asio::post().
+        -:  937:   *
+        -:  938:   * @par Completion Signature
+        -:  939:   * @code void(boost::system::error_code) @endcode
+        -:  940:   *
+        -:  941:   * @par Example
+        -:  942:   * @code
+        -:  943:   * void connect_handler(const boost::system::error_code& error)
+        -:  944:   * {
+        -:  945:   *   if (!error)
+        -:  946:   *   {
+        -:  947:   *     // Connect succeeded.
+        -:  948:   *   }
+        -:  949:   * }
+        -:  950:   *
+        -:  951:   * ...
+        -:  952:   *
+        -:  953:   * boost::asio::ip::tcp::socket socket(my_context);
+        -:  954:   * boost::asio::ip::tcp::endpoint endpoint(
+        -:  955:   *     boost::asio::ip::address::from_string("1.2.3.4"), 12345);
+        -:  956:   * socket.async_connect(endpoint, connect_handler);
+        -:  957:   * @endcode
+        -:  958:   *
+        -:  959:   * @par Per-Operation Cancellation
+        -:  960:   * On POSIX or Windows operating systems, this asynchronous operation supports
+        -:  961:   * cancellation for the following boost::asio::cancellation_type values:
+        -:  962:   *
+        -:  963:   * @li @c cancellation_type::terminal
+        -:  964:   *
+        -:  965:   * @li @c cancellation_type::partial
+        -:  966:   *
+        -:  967:   * @li @c cancellation_type::total
+        -:  968:   */
+        -:  969:  template <
+        -:  970:      BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code))
+        -:  971:        ConnectToken BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(executor_type)>
+        -:  972:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(ConnectToken,
+        -:  973:      void (boost::system::error_code))
+    #####:  974:  async_connect(const endpoint_type& peer_endpoint,
+        -:  975:      BOOST_ASIO_MOVE_ARG(ConnectToken) token
+        -:  976:        BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type))
+        -:  977:    BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:  978:      async_initiate<ConnectToken, void (boost::system::error_code)>(
+        -:  979:          declval<initiate_async_connect>(), token,
+        -:  980:          peer_endpoint, declval<boost::system::error_code&>())))
+        -:  981:  {
+    #####:  982:    boost::system::error_code open_ec;
+    #####:  983:    if (!is_open())
+        -:  984:    {
+    #####:  985:      const protocol_type protocol = peer_endpoint.protocol();
+    #####:  986:      impl_.get_service().open(impl_.get_implementation(), protocol, open_ec);
+        -:  987:    }
+        -:  988:
+    #####:  989:    return async_initiate<ConnectToken, void (boost::system::error_code)>(
+    #####:  990:        initiate_async_connect(this), token, peer_endpoint, open_ec);
+        -:  991:  }
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE13async_connectIRKNS0_15use_awaitable_tIS4_EEEEDaRKNS2_14basic_endpointIS3_EEOT_:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE13async_connectIRKNS0_15use_awaitable_tIS4_EEEEDaRKNS2_14basic_endpointIS3_EEOT_ called 0 returned 0% blocks executed 0%
+    #####:  974:  async_connect(const endpoint_type& peer_endpoint,
+        -:  975:      BOOST_ASIO_MOVE_ARG(ConnectToken) token
+        -:  976:        BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type))
+        -:  977:    BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:  978:      async_initiate<ConnectToken, void (boost::system::error_code)>(
+        -:  979:          declval<initiate_async_connect>(), token,
+        -:  980:          peer_endpoint, declval<boost::system::error_code&>())))
+        -:  981:  {
+    #####:  982:    boost::system::error_code open_ec;
+    #####:  983:    if (!is_open())
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+branch  3 never executed (fallthrough)
+branch  4 never executed
+        -:  984:    {
+    #####:  985:      const protocol_type protocol = peer_endpoint.protocol();
+call    0 never executed
+    #####:  986:      impl_.get_service().open(impl_.get_implementation(), protocol, open_ec);
+call    0 never executed
+call    1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed (throw)
+        -:  987:    }
+        -:  988:
+        -:  989:    return async_initiate<ConnectToken, void (boost::system::error_code)>(
+    #####:  990:        initiate_async_connect(this), token, peer_endpoint, open_ec);
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+        -:  991:  }
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE13async_connectINS0_6detail16range_connect_opIS3_S4_NS2_22basic_resolver_resultsIS3_EENS7_25default_connect_conditionENS7_17awaitable_handlerIS4_JNS_6system10error_codeENS2_14basic_endpointIS3_EEEEEEEEEDaRKSG_OT_:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE13async_connectINS0_6detail16range_connect_opIS3_S4_NS2_22basic_resolver_resultsIS3_EENS7_25default_connect_conditionENS7_17awaitable_handlerIS4_JNS_6system10error_codeENS2_14basic_endpointIS3_EEEEEEEEEDaRKSG_OT_ called 0 returned 0% blocks executed 0%
+    #####:  974:  async_connect(const endpoint_type& peer_endpoint,
+        -:  975:      BOOST_ASIO_MOVE_ARG(ConnectToken) token
+        -:  976:        BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type))
+        -:  977:    BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:  978:      async_initiate<ConnectToken, void (boost::system::error_code)>(
+        -:  979:          declval<initiate_async_connect>(), token,
+        -:  980:          peer_endpoint, declval<boost::system::error_code&>())))
+        -:  981:  {
+    #####:  982:    boost::system::error_code open_ec;
+    #####:  983:    if (!is_open())
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+branch  3 never executed (fallthrough)
+branch  4 never executed
+        -:  984:    {
+    #####:  985:      const protocol_type protocol = peer_endpoint.protocol();
+call    0 never executed
+    #####:  986:      impl_.get_service().open(impl_.get_implementation(), protocol, open_ec);
+call    0 never executed
+call    1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed (throw)
+        -:  987:    }
+        -:  988:
+    #####:  989:    return async_initiate<ConnectToken, void (boost::system::error_code)>(
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  990:        initiate_async_connect(this), token, peer_endpoint, open_ec);
+call    0 never executed
+        -:  991:  }
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE13async_connectINS0_6detail16range_connect_opIS3_S4_NS2_22basic_resolver_resultsIS3_EENS7_25default_connect_conditionEZN15BenchmarkClientC4ERNS0_10io_contextERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEESM_iRSt6atomicIiESP_EUlNS_6system10error_codeENS2_14basic_endpointIS3_EEE_EEEEDaRKST_OT_:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE13async_connectINS0_6detail16range_connect_opIS3_S4_NS2_22basic_resolver_resultsIS3_EENS7_25default_connect_conditionEZN15BenchmarkClientC4ERNS0_10io_contextERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEESM_iRSt6atomicIiESP_EUlNS_6system10error_codeENS2_14basic_endpointIS3_EEE_EEEEDaRKST_OT_ called 0 returned 0% blocks executed 0%
+    #####:  974:  async_connect(const endpoint_type& peer_endpoint,
+        -:  975:      BOOST_ASIO_MOVE_ARG(ConnectToken) token
+        -:  976:        BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type))
+        -:  977:    BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -:  978:      async_initiate<ConnectToken, void (boost::system::error_code)>(
+        -:  979:          declval<initiate_async_connect>(), token,
+        -:  980:          peer_endpoint, declval<boost::system::error_code&>())))
+        -:  981:  {
+    #####:  982:    boost::system::error_code open_ec;
+    #####:  983:    if (!is_open())
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+branch  3 never executed (fallthrough)
+branch  4 never executed
+        -:  984:    {
+    #####:  985:      const protocol_type protocol = peer_endpoint.protocol();
+call    0 never executed
+    #####:  986:      impl_.get_service().open(impl_.get_implementation(), protocol, open_ec);
+call    0 never executed
+call    1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed (throw)
+        -:  987:    }
+        -:  988:
+    #####:  989:    return async_initiate<ConnectToken, void (boost::system::error_code)>(
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  990:        initiate_async_connect(this), token, peer_endpoint, open_ec);
+call    0 never executed
+        -:  991:  }
+------------------
+        -:  992:
+        -:  993:  /// Set an option on the socket.
+        -:  994:  /**
+        -:  995:   * This function is used to set an option on the socket.
+        -:  996:   *
+        -:  997:   * @param option The new option value to be set on the socket.
+        -:  998:   *
+        -:  999:   * @throws boost::system::system_error Thrown on failure.
+        -: 1000:   *
+        -: 1001:   * @sa SettableSocketOption @n
+        -: 1002:   * boost::asio::socket_base::broadcast @n
+        -: 1003:   * boost::asio::socket_base::do_not_route @n
+        -: 1004:   * boost::asio::socket_base::keep_alive @n
+        -: 1005:   * boost::asio::socket_base::linger @n
+        -: 1006:   * boost::asio::socket_base::receive_buffer_size @n
+        -: 1007:   * boost::asio::socket_base::receive_low_watermark @n
+        -: 1008:   * boost::asio::socket_base::reuse_address @n
+        -: 1009:   * boost::asio::socket_base::send_buffer_size @n
+        -: 1010:   * boost::asio::socket_base::send_low_watermark @n
+        -: 1011:   * boost::asio::ip::multicast::join_group @n
+        -: 1012:   * boost::asio::ip::multicast::leave_group @n
+        -: 1013:   * boost::asio::ip::multicast::enable_loopback @n
+        -: 1014:   * boost::asio::ip::multicast::outbound_interface @n
+        -: 1015:   * boost::asio::ip::multicast::hops @n
+        -: 1016:   * boost::asio::ip::tcp::no_delay
+        -: 1017:   *
+        -: 1018:   * @par Example
+        -: 1019:   * Setting the IPPROTO_TCP/TCP_NODELAY option:
+        -: 1020:   * @code
+        -: 1021:   * boost::asio::ip::tcp::socket socket(my_context);
+        -: 1022:   * ...
+        -: 1023:   * boost::asio::ip::tcp::no_delay option(true);
+        -: 1024:   * socket.set_option(option);
+        -: 1025:   * @endcode
+        -: 1026:   */
+        -: 1027:  template <typename SettableSocketOption>
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE10set_optionINS0_6detail13socket_option7booleanILi6ELi1EEEEEvRKT_ called 68 returned 100% blocks executed 78%
+       68: 1028:  void set_option(const SettableSocketOption& option)
+        -: 1029:  {
+       68: 1030:    boost::system::error_code ec;
+       68: 1031:    impl_.get_service().set_option(impl_.get_implementation(), option, ec);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+       68: 1032:    boost::asio::detail::throw_error(ec, "set_option");
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+       68: 1033:  }
+        -: 1034:
+        -: 1035:  /// Set an option on the socket.
+        -: 1036:  /**
+        -: 1037:   * This function is used to set an option on the socket.
+        -: 1038:   *
+        -: 1039:   * @param option The new option value to be set on the socket.
+        -: 1040:   *
+        -: 1041:   * @param ec Set to indicate what error occurred, if any.
+        -: 1042:   *
+        -: 1043:   * @sa SettableSocketOption @n
+        -: 1044:   * boost::asio::socket_base::broadcast @n
+        -: 1045:   * boost::asio::socket_base::do_not_route @n
+        -: 1046:   * boost::asio::socket_base::keep_alive @n
+        -: 1047:   * boost::asio::socket_base::linger @n
+        -: 1048:   * boost::asio::socket_base::receive_buffer_size @n
+        -: 1049:   * boost::asio::socket_base::receive_low_watermark @n
+        -: 1050:   * boost::asio::socket_base::reuse_address @n
+        -: 1051:   * boost::asio::socket_base::send_buffer_size @n
+        -: 1052:   * boost::asio::socket_base::send_low_watermark @n
+        -: 1053:   * boost::asio::ip::multicast::join_group @n
+        -: 1054:   * boost::asio::ip::multicast::leave_group @n
+        -: 1055:   * boost::asio::ip::multicast::enable_loopback @n
+        -: 1056:   * boost::asio::ip::multicast::outbound_interface @n
+        -: 1057:   * boost::asio::ip::multicast::hops @n
+        -: 1058:   * boost::asio::ip::tcp::no_delay
+        -: 1059:   *
+        -: 1060:   * @par Example
+        -: 1061:   * Setting the IPPROTO_TCP/TCP_NODELAY option:
+        -: 1062:   * @code
+        -: 1063:   * boost::asio::ip::tcp::socket socket(my_context);
+        -: 1064:   * ...
+        -: 1065:   * boost::asio::ip::tcp::no_delay option(true);
+        -: 1066:   * boost::system::error_code ec;
+        -: 1067:   * socket.set_option(option, ec);
+        -: 1068:   * if (ec)
+        -: 1069:   * {
+        -: 1070:   *   // An error occurred.
+        -: 1071:   * }
+        -: 1072:   * @endcode
+        -: 1073:   */
+        -: 1074:  template <typename SettableSocketOption>
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE10set_optionINS0_6detail13socket_option7booleanILi6ELi1EEEEENS_6system10error_codeERKT_RSC_ called 1 returned 100% blocks executed 100%
+        1: 1075:  BOOST_ASIO_SYNC_OP_VOID set_option(const SettableSocketOption& option,
+        -: 1076:      boost::system::error_code& ec)
+        -: 1077:  {
+        1: 1078:    impl_.get_service().set_option(impl_.get_implementation(), option, ec);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+        1: 1079:    BOOST_ASIO_SYNC_OP_VOID_RETURN(ec);
+        -: 1080:  }
+        -: 1081:
+        -: 1082:  /// Get an option from the socket.
+        -: 1083:  /**
+        -: 1084:   * This function is used to get the current value of an option on the socket.
+        -: 1085:   *
+        -: 1086:   * @param option The option value to be obtained from the socket.
+        -: 1087:   *
+        -: 1088:   * @throws boost::system::system_error Thrown on failure.
+        -: 1089:   *
+        -: 1090:   * @sa GettableSocketOption @n
+        -: 1091:   * boost::asio::socket_base::broadcast @n
+        -: 1092:   * boost::asio::socket_base::do_not_route @n
+        -: 1093:   * boost::asio::socket_base::keep_alive @n
+        -: 1094:   * boost::asio::socket_base::linger @n
+        -: 1095:   * boost::asio::socket_base::receive_buffer_size @n
+        -: 1096:   * boost::asio::socket_base::receive_low_watermark @n
+        -: 1097:   * boost::asio::socket_base::reuse_address @n
+        -: 1098:   * boost::asio::socket_base::send_buffer_size @n
+        -: 1099:   * boost::asio::socket_base::send_low_watermark @n
+        -: 1100:   * boost::asio::ip::multicast::join_group @n
+        -: 1101:   * boost::asio::ip::multicast::leave_group @n
+        -: 1102:   * boost::asio::ip::multicast::enable_loopback @n
+        -: 1103:   * boost::asio::ip::multicast::outbound_interface @n
+        -: 1104:   * boost::asio::ip::multicast::hops @n
+        -: 1105:   * boost::asio::ip::tcp::no_delay
+        -: 1106:   *
+        -: 1107:   * @par Example
+        -: 1108:   * Getting the value of the SOL_SOCKET/SO_KEEPALIVE option:
+        -: 1109:   * @code
+        -: 1110:   * boost::asio::ip::tcp::socket socket(my_context);
+        -: 1111:   * ...
+        -: 1112:   * boost::asio::ip::tcp::socket::keep_alive option;
+        -: 1113:   * socket.get_option(option);
+        -: 1114:   * bool is_set = option.value();
+        -: 1115:   * @endcode
+        -: 1116:   */
+        -: 1117:  template <typename GettableSocketOption>
+        -: 1118:  void get_option(GettableSocketOption& option) const
+        -: 1119:  {
+        -: 1120:    boost::system::error_code ec;
+        -: 1121:    impl_.get_service().get_option(impl_.get_implementation(), option, ec);
+        -: 1122:    boost::asio::detail::throw_error(ec, "get_option");
+        -: 1123:  }
+        -: 1124:
+        -: 1125:  /// Get an option from the socket.
+        -: 1126:  /**
+        -: 1127:   * This function is used to get the current value of an option on the socket.
+        -: 1128:   *
+        -: 1129:   * @param option The option value to be obtained from the socket.
+        -: 1130:   *
+        -: 1131:   * @param ec Set to indicate what error occurred, if any.
+        -: 1132:   *
+        -: 1133:   * @sa GettableSocketOption @n
+        -: 1134:   * boost::asio::socket_base::broadcast @n
+        -: 1135:   * boost::asio::socket_base::do_not_route @n
+        -: 1136:   * boost::asio::socket_base::keep_alive @n
+        -: 1137:   * boost::asio::socket_base::linger @n
+        -: 1138:   * boost::asio::socket_base::receive_buffer_size @n
+        -: 1139:   * boost::asio::socket_base::receive_low_watermark @n
+        -: 1140:   * boost::asio::socket_base::reuse_address @n
+        -: 1141:   * boost::asio::socket_base::send_buffer_size @n
+        -: 1142:   * boost::asio::socket_base::send_low_watermark @n
+        -: 1143:   * boost::asio::ip::multicast::join_group @n
+        -: 1144:   * boost::asio::ip::multicast::leave_group @n
+        -: 1145:   * boost::asio::ip::multicast::enable_loopback @n
+        -: 1146:   * boost::asio::ip::multicast::outbound_interface @n
+        -: 1147:   * boost::asio::ip::multicast::hops @n
+        -: 1148:   * boost::asio::ip::tcp::no_delay
+        -: 1149:   *
+        -: 1150:   * @par Example
+        -: 1151:   * Getting the value of the SOL_SOCKET/SO_KEEPALIVE option:
+        -: 1152:   * @code
+        -: 1153:   * boost::asio::ip::tcp::socket socket(my_context);
+        -: 1154:   * ...
+        -: 1155:   * boost::asio::ip::tcp::socket::keep_alive option;
+        -: 1156:   * boost::system::error_code ec;
+        -: 1157:   * socket.get_option(option, ec);
+        -: 1158:   * if (ec)
+        -: 1159:   * {
+        -: 1160:   *   // An error occurred.
+        -: 1161:   * }
+        -: 1162:   * bool is_set = option.value();
+        -: 1163:   * @endcode
+        -: 1164:   */
+        -: 1165:  template <typename GettableSocketOption>
+        -: 1166:  BOOST_ASIO_SYNC_OP_VOID get_option(GettableSocketOption& option,
+        -: 1167:      boost::system::error_code& ec) const
+        -: 1168:  {
+        -: 1169:    impl_.get_service().get_option(impl_.get_implementation(), option, ec);
+        -: 1170:    BOOST_ASIO_SYNC_OP_VOID_RETURN(ec);
+        -: 1171:  }
+        -: 1172:
+        -: 1173:  /// Perform an IO control command on the socket.
+        -: 1174:  /**
+        -: 1175:   * This function is used to execute an IO control command on the socket.
+        -: 1176:   *
+        -: 1177:   * @param command The IO control command to be performed on the socket.
+        -: 1178:   *
+        -: 1179:   * @throws boost::system::system_error Thrown on failure.
+        -: 1180:   *
+        -: 1181:   * @sa IoControlCommand @n
+        -: 1182:   * boost::asio::socket_base::bytes_readable @n
+        -: 1183:   * boost::asio::socket_base::non_blocking_io
+        -: 1184:   *
+        -: 1185:   * @par Example
+        -: 1186:   * Getting the number of bytes ready to read:
+        -: 1187:   * @code
+        -: 1188:   * boost::asio::ip::tcp::socket socket(my_context);
+        -: 1189:   * ...
+        -: 1190:   * boost::asio::ip::tcp::socket::bytes_readable command;
+        -: 1191:   * socket.io_control(command);
+        -: 1192:   * std::size_t bytes_readable = command.get();
+        -: 1193:   * @endcode
+        -: 1194:   */
+        -: 1195:  template <typename IoControlCommand>
+        -: 1196:  void io_control(IoControlCommand& command)
+        -: 1197:  {
+        -: 1198:    boost::system::error_code ec;
+        -: 1199:    impl_.get_service().io_control(impl_.get_implementation(), command, ec);
+        -: 1200:    boost::asio::detail::throw_error(ec, "io_control");
+        -: 1201:  }
+        -: 1202:
+        -: 1203:  /// Perform an IO control command on the socket.
+        -: 1204:  /**
+        -: 1205:   * This function is used to execute an IO control command on the socket.
+        -: 1206:   *
+        -: 1207:   * @param command The IO control command to be performed on the socket.
+        -: 1208:   *
+        -: 1209:   * @param ec Set to indicate what error occurred, if any.
+        -: 1210:   *
+        -: 1211:   * @sa IoControlCommand @n
+        -: 1212:   * boost::asio::socket_base::bytes_readable @n
+        -: 1213:   * boost::asio::socket_base::non_blocking_io
+        -: 1214:   *
+        -: 1215:   * @par Example
+        -: 1216:   * Getting the number of bytes ready to read:
+        -: 1217:   * @code
+        -: 1218:   * boost::asio::ip::tcp::socket socket(my_context);
+        -: 1219:   * ...
+        -: 1220:   * boost::asio::ip::tcp::socket::bytes_readable command;
+        -: 1221:   * boost::system::error_code ec;
+        -: 1222:   * socket.io_control(command, ec);
+        -: 1223:   * if (ec)
+        -: 1224:   * {
+        -: 1225:   *   // An error occurred.
+        -: 1226:   * }
+        -: 1227:   * std::size_t bytes_readable = command.get();
+        -: 1228:   * @endcode
+        -: 1229:   */
+        -: 1230:  template <typename IoControlCommand>
+        -: 1231:  BOOST_ASIO_SYNC_OP_VOID io_control(IoControlCommand& command,
+        -: 1232:      boost::system::error_code& ec)
+        -: 1233:  {
+        -: 1234:    impl_.get_service().io_control(impl_.get_implementation(), command, ec);
+        -: 1235:    BOOST_ASIO_SYNC_OP_VOID_RETURN(ec);
+        -: 1236:  }
+        -: 1237:
+        -: 1238:  /// Gets the non-blocking mode of the socket.
+        -: 1239:  /**
+        -: 1240:   * @returns @c true if the socket's synchronous operations will fail with
+        -: 1241:   * boost::asio::error::would_block if they are unable to perform the requested
+        -: 1242:   * operation immediately. If @c false, synchronous operations will block
+        -: 1243:   * until complete.
+        -: 1244:   *
+        -: 1245:   * @note The non-blocking mode has no effect on the behaviour of asynchronous
+        -: 1246:   * operations. Asynchronous operations will never fail with the error
+        -: 1247:   * boost::asio::error::would_block.
+        -: 1248:   */
+        -: 1249:  bool non_blocking() const
+        -: 1250:  {
+        -: 1251:    return impl_.get_service().non_blocking(impl_.get_implementation());
+        -: 1252:  }
+        -: 1253:
+        -: 1254:  /// Sets the non-blocking mode of the socket.
+        -: 1255:  /**
+        -: 1256:   * @param mode If @c true, the socket's synchronous operations will fail with
+        -: 1257:   * boost::asio::error::would_block if they are unable to perform the requested
+        -: 1258:   * operation immediately. If @c false, synchronous operations will block
+        -: 1259:   * until complete.
+        -: 1260:   *
+        -: 1261:   * @throws boost::system::system_error Thrown on failure.
+        -: 1262:   *
+        -: 1263:   * @note The non-blocking mode has no effect on the behaviour of asynchronous
+        -: 1264:   * operations. Asynchronous operations will never fail with the error
+        -: 1265:   * boost::asio::error::would_block.
+        -: 1266:   */
+        -: 1267:  void non_blocking(bool mode)
+        -: 1268:  {
+        -: 1269:    boost::system::error_code ec;
+        -: 1270:    impl_.get_service().non_blocking(impl_.get_implementation(), mode, ec);
+        -: 1271:    boost::asio::detail::throw_error(ec, "non_blocking");
+        -: 1272:  }
+        -: 1273:
+        -: 1274:  /// Sets the non-blocking mode of the socket.
+        -: 1275:  /**
+        -: 1276:   * @param mode If @c true, the socket's synchronous operations will fail with
+        -: 1277:   * boost::asio::error::would_block if they are unable to perform the requested
+        -: 1278:   * operation immediately. If @c false, synchronous operations will block
+        -: 1279:   * until complete.
+        -: 1280:   *
+        -: 1281:   * @param ec Set to indicate what error occurred, if any.
+        -: 1282:   *
+        -: 1283:   * @note The non-blocking mode has no effect on the behaviour of asynchronous
+        -: 1284:   * operations. Asynchronous operations will never fail with the error
+        -: 1285:   * boost::asio::error::would_block.
+        -: 1286:   */
+        -: 1287:  BOOST_ASIO_SYNC_OP_VOID non_blocking(
+        -: 1288:      bool mode, boost::system::error_code& ec)
+        -: 1289:  {
+        -: 1290:    impl_.get_service().non_blocking(impl_.get_implementation(), mode, ec);
+        -: 1291:    BOOST_ASIO_SYNC_OP_VOID_RETURN(ec);
+        -: 1292:  }
+        -: 1293:
+        -: 1294:  /// Gets the non-blocking mode of the native socket implementation.
+        -: 1295:  /**
+        -: 1296:   * This function is used to retrieve the non-blocking mode of the underlying
+        -: 1297:   * native socket. This mode has no effect on the behaviour of the socket
+        -: 1298:   * object's synchronous operations.
+        -: 1299:   *
+        -: 1300:   * @returns @c true if the underlying socket is in non-blocking mode and
+        -: 1301:   * direct system calls may fail with boost::asio::error::would_block (or the
+        -: 1302:   * equivalent system error).
+        -: 1303:   *
+        -: 1304:   * @note The current non-blocking mode is cached by the socket object.
+        -: 1305:   * Consequently, the return value may be incorrect if the non-blocking mode
+        -: 1306:   * was set directly on the native socket.
+        -: 1307:   *
+        -: 1308:   * @par Example
+        -: 1309:   * This function is intended to allow the encapsulation of arbitrary
+        -: 1310:   * non-blocking system calls as asynchronous operations, in a way that is
+        -: 1311:   * transparent to the user of the socket object. The following example
+        -: 1312:   * illustrates how Linux's @c sendfile system call might be encapsulated:
+        -: 1313:   * @code template <typename Handler>
+        -: 1314:   * struct sendfile_op
+        -: 1315:   * {
+        -: 1316:   *   tcp::socket& sock_;
+        -: 1317:   *   int fd_;
+        -: 1318:   *   Handler handler_;
+        -: 1319:   *   off_t offset_;
+        -: 1320:   *   std::size_t total_bytes_transferred_;
+        -: 1321:   *
+        -: 1322:   *   // Function call operator meeting WriteHandler requirements.
+        -: 1323:   *   // Used as the handler for the async_write_some operation.
+        -: 1324:   *   void operator()(boost::system::error_code ec, std::size_t)
+        -: 1325:   *   {
+        -: 1326:   *     // Put the underlying socket into non-blocking mode.
+        -: 1327:   *     if (!ec)
+        -: 1328:   *       if (!sock_.native_non_blocking())
+        -: 1329:   *         sock_.native_non_blocking(true, ec);
+        -: 1330:   *
+        -: 1331:   *     if (!ec)
+        -: 1332:   *     {
+        -: 1333:   *       for (;;)
+        -: 1334:   *       {
+        -: 1335:   *         // Try the system call.
+        -: 1336:   *         errno = 0;
+        -: 1337:   *         int n = ::sendfile(sock_.native_handle(), fd_, &offset_, 65536);
+        -: 1338:   *         ec = boost::system::error_code(n < 0 ? errno : 0,
+        -: 1339:   *             boost::asio::error::get_system_category());
+        -: 1340:   *         total_bytes_transferred_ += ec ? 0 : n;
+        -: 1341:   *
+        -: 1342:   *         // Retry operation immediately if interrupted by signal.
+        -: 1343:   *         if (ec == boost::asio::error::interrupted)
+        -: 1344:   *           continue;
+        -: 1345:   *
+        -: 1346:   *         // Check if we need to run the operation again.
+        -: 1347:   *         if (ec == boost::asio::error::would_block
+        -: 1348:   *             || ec == boost::asio::error::try_again)
+        -: 1349:   *         {
+        -: 1350:   *           // We have to wait for the socket to become ready again.
+        -: 1351:   *           sock_.async_wait(tcp::socket::wait_write, *this);
+        -: 1352:   *           return;
+        -: 1353:   *         }
+        -: 1354:   *
+        -: 1355:   *         if (ec || n == 0)
+        -: 1356:   *         {
+        -: 1357:   *           // An error occurred, or we have reached the end of the file.
+        -: 1358:   *           // Either way we must exit the loop so we can call the handler.
+        -: 1359:   *           break;
+        -: 1360:   *         }
+        -: 1361:   *
+        -: 1362:   *         // Loop around to try calling sendfile again.
+        -: 1363:   *       }
+        -: 1364:   *     }
+        -: 1365:   *
+        -: 1366:   *     // Pass result back to user's handler.
+        -: 1367:   *     handler_(ec, total_bytes_transferred_);
+        -: 1368:   *   }
+        -: 1369:   * };
+        -: 1370:   *
+        -: 1371:   * template <typename Handler>
+        -: 1372:   * void async_sendfile(tcp::socket& sock, int fd, Handler h)
+        -: 1373:   * {
+        -: 1374:   *   sendfile_op<Handler> op = { sock, fd, h, 0, 0 };
+        -: 1375:   *   sock.async_wait(tcp::socket::wait_write, op);
+        -: 1376:   * } @endcode
+        -: 1377:   */
+        -: 1378:  bool native_non_blocking() const
+        -: 1379:  {
+        -: 1380:    return impl_.get_service().native_non_blocking(impl_.get_implementation());
+        -: 1381:  }
+        -: 1382:
+        -: 1383:  /// Sets the non-blocking mode of the native socket implementation.
+        -: 1384:  /**
+        -: 1385:   * This function is used to modify the non-blocking mode of the underlying
+        -: 1386:   * native socket. It has no effect on the behaviour of the socket object's
+        -: 1387:   * synchronous operations.
+        -: 1388:   *
+        -: 1389:   * @param mode If @c true, the underlying socket is put into non-blocking
+        -: 1390:   * mode and direct system calls may fail with boost::asio::error::would_block
+        -: 1391:   * (or the equivalent system error).
+        -: 1392:   *
+        -: 1393:   * @throws boost::system::system_error Thrown on failure. If the @c mode is
+        -: 1394:   * @c false, but the current value of @c non_blocking() is @c true, this
+        -: 1395:   * function fails with boost::asio::error::invalid_argument, as the
+        -: 1396:   * combination does not make sense.
+        -: 1397:   *
+        -: 1398:   * @par Example
+        -: 1399:   * This function is intended to allow the encapsulation of arbitrary
+        -: 1400:   * non-blocking system calls as asynchronous operations, in a way that is
+        -: 1401:   * transparent to the user of the socket object. The following example
+        -: 1402:   * illustrates how Linux's @c sendfile system call might be encapsulated:
+        -: 1403:   * @code template <typename Handler>
+        -: 1404:   * struct sendfile_op
+        -: 1405:   * {
+        -: 1406:   *   tcp::socket& sock_;
+        -: 1407:   *   int fd_;
+        -: 1408:   *   Handler handler_;
+        -: 1409:   *   off_t offset_;
+        -: 1410:   *   std::size_t total_bytes_transferred_;
+        -: 1411:   *
+        -: 1412:   *   // Function call operator meeting WriteHandler requirements.
+        -: 1413:   *   // Used as the handler for the async_write_some operation.
+        -: 1414:   *   void operator()(boost::system::error_code ec, std::size_t)
+        -: 1415:   *   {
+        -: 1416:   *     // Put the underlying socket into non-blocking mode.
+        -: 1417:   *     if (!ec)
+        -: 1418:   *       if (!sock_.native_non_blocking())
+        -: 1419:   *         sock_.native_non_blocking(true, ec);
+        -: 1420:   *
+        -: 1421:   *     if (!ec)
+        -: 1422:   *     {
+        -: 1423:   *       for (;;)
+        -: 1424:   *       {
+        -: 1425:   *         // Try the system call.
+        -: 1426:   *         errno = 0;
+        -: 1427:   *         int n = ::sendfile(sock_.native_handle(), fd_, &offset_, 65536);
+        -: 1428:   *         ec = boost::system::error_code(n < 0 ? errno : 0,
+        -: 1429:   *             boost::asio::error::get_system_category());
+        -: 1430:   *         total_bytes_transferred_ += ec ? 0 : n;
+        -: 1431:   *
+        -: 1432:   *         // Retry operation immediately if interrupted by signal.
+        -: 1433:   *         if (ec == boost::asio::error::interrupted)
+        -: 1434:   *           continue;
+        -: 1435:   *
+        -: 1436:   *         // Check if we need to run the operation again.
+        -: 1437:   *         if (ec == boost::asio::error::would_block
+        -: 1438:   *             || ec == boost::asio::error::try_again)
+        -: 1439:   *         {
+        -: 1440:   *           // We have to wait for the socket to become ready again.
+        -: 1441:   *           sock_.async_wait(tcp::socket::wait_write, *this);
+        -: 1442:   *           return;
+        -: 1443:   *         }
+        -: 1444:   *
+        -: 1445:   *         if (ec || n == 0)
+        -: 1446:   *         {
+        -: 1447:   *           // An error occurred, or we have reached the end of the file.
+        -: 1448:   *           // Either way we must exit the loop so we can call the handler.
+        -: 1449:   *           break;
+        -: 1450:   *         }
+        -: 1451:   *
+        -: 1452:   *         // Loop around to try calling sendfile again.
+        -: 1453:   *       }
+        -: 1454:   *     }
+        -: 1455:   *
+        -: 1456:   *     // Pass result back to user's handler.
+        -: 1457:   *     handler_(ec, total_bytes_transferred_);
+        -: 1458:   *   }
+        -: 1459:   * };
+        -: 1460:   *
+        -: 1461:   * template <typename Handler>
+        -: 1462:   * void async_sendfile(tcp::socket& sock, int fd, Handler h)
+        -: 1463:   * {
+        -: 1464:   *   sendfile_op<Handler> op = { sock, fd, h, 0, 0 };
+        -: 1465:   *   sock.async_wait(tcp::socket::wait_write, op);
+        -: 1466:   * } @endcode
+        -: 1467:   */
+        -: 1468:  void native_non_blocking(bool mode)
+        -: 1469:  {
+        -: 1470:    boost::system::error_code ec;
+        -: 1471:    impl_.get_service().native_non_blocking(
+        -: 1472:        impl_.get_implementation(), mode, ec);
+        -: 1473:    boost::asio::detail::throw_error(ec, "native_non_blocking");
+        -: 1474:  }
+        -: 1475:
+        -: 1476:  /// Sets the non-blocking mode of the native socket implementation.
+        -: 1477:  /**
+        -: 1478:   * This function is used to modify the non-blocking mode of the underlying
+        -: 1479:   * native socket. It has no effect on the behaviour of the socket object's
+        -: 1480:   * synchronous operations.
+        -: 1481:   *
+        -: 1482:   * @param mode If @c true, the underlying socket is put into non-blocking
+        -: 1483:   * mode and direct system calls may fail with boost::asio::error::would_block
+        -: 1484:   * (or the equivalent system error).
+        -: 1485:   *
+        -: 1486:   * @param ec Set to indicate what error occurred, if any. If the @c mode is
+        -: 1487:   * @c false, but the current value of @c non_blocking() is @c true, this
+        -: 1488:   * function fails with boost::asio::error::invalid_argument, as the
+        -: 1489:   * combination does not make sense.
+        -: 1490:   *
+        -: 1491:   * @par Example
+        -: 1492:   * This function is intended to allow the encapsulation of arbitrary
+        -: 1493:   * non-blocking system calls as asynchronous operations, in a way that is
+        -: 1494:   * transparent to the user of the socket object. The following example
+        -: 1495:   * illustrates how Linux's @c sendfile system call might be encapsulated:
+        -: 1496:   * @code template <typename Handler>
+        -: 1497:   * struct sendfile_op
+        -: 1498:   * {
+        -: 1499:   *   tcp::socket& sock_;
+        -: 1500:   *   int fd_;
+        -: 1501:   *   Handler handler_;
+        -: 1502:   *   off_t offset_;
+        -: 1503:   *   std::size_t total_bytes_transferred_;
+        -: 1504:   *
+        -: 1505:   *   // Function call operator meeting WriteHandler requirements.
+        -: 1506:   *   // Used as the handler for the async_write_some operation.
+        -: 1507:   *   void operator()(boost::system::error_code ec, std::size_t)
+        -: 1508:   *   {
+        -: 1509:   *     // Put the underlying socket into non-blocking mode.
+        -: 1510:   *     if (!ec)
+        -: 1511:   *       if (!sock_.native_non_blocking())
+        -: 1512:   *         sock_.native_non_blocking(true, ec);
+        -: 1513:   *
+        -: 1514:   *     if (!ec)
+        -: 1515:   *     {
+        -: 1516:   *       for (;;)
+        -: 1517:   *       {
+        -: 1518:   *         // Try the system call.
+        -: 1519:   *         errno = 0;
+        -: 1520:   *         int n = ::sendfile(sock_.native_handle(), fd_, &offset_, 65536);
+        -: 1521:   *         ec = boost::system::error_code(n < 0 ? errno : 0,
+        -: 1522:   *             boost::asio::error::get_system_category());
+        -: 1523:   *         total_bytes_transferred_ += ec ? 0 : n;
+        -: 1524:   *
+        -: 1525:   *         // Retry operation immediately if interrupted by signal.
+        -: 1526:   *         if (ec == boost::asio::error::interrupted)
+        -: 1527:   *           continue;
+        -: 1528:   *
+        -: 1529:   *         // Check if we need to run the operation again.
+        -: 1530:   *         if (ec == boost::asio::error::would_block
+        -: 1531:   *             || ec == boost::asio::error::try_again)
+        -: 1532:   *         {
+        -: 1533:   *           // We have to wait for the socket to become ready again.
+        -: 1534:   *           sock_.async_wait(tcp::socket::wait_write, *this);
+        -: 1535:   *           return;
+        -: 1536:   *         }
+        -: 1537:   *
+        -: 1538:   *         if (ec || n == 0)
+        -: 1539:   *         {
+        -: 1540:   *           // An error occurred, or we have reached the end of the file.
+        -: 1541:   *           // Either way we must exit the loop so we can call the handler.
+        -: 1542:   *           break;
+        -: 1543:   *         }
+        -: 1544:   *
+        -: 1545:   *         // Loop around to try calling sendfile again.
+        -: 1546:   *       }
+        -: 1547:   *     }
+        -: 1548:   *
+        -: 1549:   *     // Pass result back to user's handler.
+        -: 1550:   *     handler_(ec, total_bytes_transferred_);
+        -: 1551:   *   }
+        -: 1552:   * };
+        -: 1553:   *
+        -: 1554:   * template <typename Handler>
+        -: 1555:   * void async_sendfile(tcp::socket& sock, int fd, Handler h)
+        -: 1556:   * {
+        -: 1557:   *   sendfile_op<Handler> op = { sock, fd, h, 0, 0 };
+        -: 1558:   *   sock.async_wait(tcp::socket::wait_write, op);
+        -: 1559:   * } @endcode
+        -: 1560:   */
+        -: 1561:  BOOST_ASIO_SYNC_OP_VOID native_non_blocking(
+        -: 1562:      bool mode, boost::system::error_code& ec)
+        -: 1563:  {
+        -: 1564:    impl_.get_service().native_non_blocking(
+        -: 1565:        impl_.get_implementation(), mode, ec);
+        -: 1566:    BOOST_ASIO_SYNC_OP_VOID_RETURN(ec);
+        -: 1567:  }
+        -: 1568:
+        -: 1569:  /// Get the local endpoint of the socket.
+        -: 1570:  /**
+        -: 1571:   * This function is used to obtain the locally bound endpoint of the socket.
+        -: 1572:   *
+        -: 1573:   * @returns An object that represents the local endpoint of the socket.
+        -: 1574:   *
+        -: 1575:   * @throws boost::system::system_error Thrown on failure.
+        -: 1576:   *
+        -: 1577:   * @par Example
+        -: 1578:   * @code
+        -: 1579:   * boost::asio::ip::tcp::socket socket(my_context);
+        -: 1580:   * ...
+        -: 1581:   * boost::asio::ip::tcp::endpoint endpoint = socket.local_endpoint();
+        -: 1582:   * @endcode
+        -: 1583:   */
+function _ZNK5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE14local_endpointEv called 5 returned 100% blocks executed 90%
+        5: 1584:  endpoint_type local_endpoint() const
+        -: 1585:  {
+        5: 1586:    boost::system::error_code ec;
+       10: 1587:    endpoint_type ep = impl_.get_service().local_endpoint(
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        5: 1588:        impl_.get_implementation(), ec);
+call    0 returned 100%
+        5: 1589:    boost::asio::detail::throw_error(ec, "local_endpoint");
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+       10: 1590:    return ep;
+        -: 1591:  }
+        -: 1592:
+        -: 1593:  /// Get the local endpoint of the socket.
+        -: 1594:  /**
+        -: 1595:   * This function is used to obtain the locally bound endpoint of the socket.
+        -: 1596:   *
+        -: 1597:   * @param ec Set to indicate what error occurred, if any.
+        -: 1598:   *
+        -: 1599:   * @returns An object that represents the local endpoint of the socket.
+        -: 1600:   * Returns a default-constructed endpoint object if an error occurred.
+        -: 1601:   *
+        -: 1602:   * @par Example
+        -: 1603:   * @code
+        -: 1604:   * boost::asio::ip::tcp::socket socket(my_context);
+        -: 1605:   * ...
+        -: 1606:   * boost::system::error_code ec;
+        -: 1607:   * boost::asio::ip::tcp::endpoint endpoint = socket.local_endpoint(ec);
+        -: 1608:   * if (ec)
+        -: 1609:   * {
+        -: 1610:   *   // An error occurred.
+        -: 1611:   * }
+        -: 1612:   * @endcode
+        -: 1613:   */
+        -: 1614:  endpoint_type local_endpoint(boost::system::error_code& ec) const
+        -: 1615:  {
+        -: 1616:    return impl_.get_service().local_endpoint(impl_.get_implementation(), ec);
+        -: 1617:  }
+        -: 1618:
+        -: 1619:  /// Get the remote endpoint of the socket.
+        -: 1620:  /**
+        -: 1621:   * This function is used to obtain the remote endpoint of the socket.
+        -: 1622:   *
+        -: 1623:   * @returns An object that represents the remote endpoint of the socket.
+        -: 1624:   *
+        -: 1625:   * @throws boost::system::system_error Thrown on failure.
+        -: 1626:   *
+        -: 1627:   * @par Example
+        -: 1628:   * @code
+        -: 1629:   * boost::asio::ip::tcp::socket socket(my_context);
+        -: 1630:   * ...
+        -: 1631:   * boost::asio::ip::tcp::endpoint endpoint = socket.remote_endpoint();
+        -: 1632:   * @endcode
+        -: 1633:   */
+function _ZNK5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE15remote_endpointEv called 5 returned 100% blocks executed 90%
+        5: 1634:  endpoint_type remote_endpoint() const
+        -: 1635:  {
+        5: 1636:    boost::system::error_code ec;
+       10: 1637:    endpoint_type ep = impl_.get_service().remote_endpoint(
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        5: 1638:        impl_.get_implementation(), ec);
+call    0 returned 100%
+        5: 1639:    boost::asio::detail::throw_error(ec, "remote_endpoint");
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+       10: 1640:    return ep;
+        -: 1641:  }
+        -: 1642:
+        -: 1643:  /// Get the remote endpoint of the socket.
+        -: 1644:  /**
+        -: 1645:   * This function is used to obtain the remote endpoint of the socket.
+        -: 1646:   *
+        -: 1647:   * @param ec Set to indicate what error occurred, if any.
+        -: 1648:   *
+        -: 1649:   * @returns An object that represents the remote endpoint of the socket.
+        -: 1650:   * Returns a default-constructed endpoint object if an error occurred.
+        -: 1651:   *
+        -: 1652:   * @par Example
+        -: 1653:   * @code
+        -: 1654:   * boost::asio::ip::tcp::socket socket(my_context);
+        -: 1655:   * ...
+        -: 1656:   * boost::system::error_code ec;
+        -: 1657:   * boost::asio::ip::tcp::endpoint endpoint = socket.remote_endpoint(ec);
+        -: 1658:   * if (ec)
+        -: 1659:   * {
+        -: 1660:   *   // An error occurred.
+        -: 1661:   * }
+        -: 1662:   * @endcode
+        -: 1663:   */
+        -: 1664:  endpoint_type remote_endpoint(boost::system::error_code& ec) const
+        -: 1665:  {
+        -: 1666:    return impl_.get_service().remote_endpoint(impl_.get_implementation(), ec);
+        -: 1667:  }
+        -: 1668:
+        -: 1669:  /// Disable sends or receives on the socket.
+        -: 1670:  /**
+        -: 1671:   * This function is used to disable send operations, receive operations, or
+        -: 1672:   * both.
+        -: 1673:   *
+        -: 1674:   * @param what Determines what types of operation will no longer be allowed.
+        -: 1675:   *
+        -: 1676:   * @throws boost::system::system_error Thrown on failure.
+        -: 1677:   *
+        -: 1678:   * @par Example
+        -: 1679:   * Shutting down the send side of the socket:
+        -: 1680:   * @code
+        -: 1681:   * boost::asio::ip::tcp::socket socket(my_context);
+        -: 1682:   * ...
+        -: 1683:   * socket.shutdown(boost::asio::ip::tcp::socket::shutdown_send);
+        -: 1684:   * @endcode
+        -: 1685:   */
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE8shutdownENS0_11socket_base13shutdown_typeE called 1 returned 100% blocks executed 88%
+        1: 1686:  void shutdown(shutdown_type what)
+        -: 1687:  {
+        1: 1688:    boost::system::error_code ec;
+        1: 1689:    impl_.get_service().shutdown(impl_.get_implementation(), what, ec);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+        1: 1690:    boost::asio::detail::throw_error(ec, "shutdown");
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        1: 1691:  }
+        -: 1692:
+        -: 1693:  /// Disable sends or receives on the socket.
+        -: 1694:  /**
+        -: 1695:   * This function is used to disable send operations, receive operations, or
+        -: 1696:   * both.
+        -: 1697:   *
+        -: 1698:   * @param what Determines what types of operation will no longer be allowed.
+        -: 1699:   *
+        -: 1700:   * @param ec Set to indicate what error occurred, if any.
+        -: 1701:   *
+        -: 1702:   * @par Example
+        -: 1703:   * Shutting down the send side of the socket:
+        -: 1704:   * @code
+        -: 1705:   * boost::asio::ip::tcp::socket socket(my_context);
+        -: 1706:   * ...
+        -: 1707:   * boost::system::error_code ec;
+        -: 1708:   * socket.shutdown(boost::asio::ip::tcp::socket::shutdown_send, ec);
+        -: 1709:   * if (ec)
+        -: 1710:   * {
+        -: 1711:   *   // An error occurred.
+        -: 1712:   * }
+        -: 1713:   * @endcode
+        -: 1714:   */
+      80*: 1715:  BOOST_ASIO_SYNC_OP_VOID shutdown(shutdown_type what,
+        -: 1716:      boost::system::error_code& ec)
+        -: 1717:  {
+      80*: 1718:    impl_.get_service().shutdown(impl_.get_implementation(), what, ec);
+      80*: 1719:    BOOST_ASIO_SYNC_OP_VOID_RETURN(ec);
+        -: 1720:  }
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE8shutdownENS0_11socket_base13shutdown_typeERNS_6system10error_codeE:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE8shutdownENS0_11socket_base13shutdown_typeERNS_6system10error_codeE called 0 returned 0% blocks executed 0%
+    #####: 1715:  BOOST_ASIO_SYNC_OP_VOID shutdown(shutdown_type what,
+        -: 1716:      boost::system::error_code& ec)
+        -: 1717:  {
+    #####: 1718:    impl_.get_service().shutdown(impl_.get_implementation(), what, ec);
+call    0 never executed
+call    1 never executed
+call    2 never executed
+    #####: 1719:    BOOST_ASIO_SYNC_OP_VOID_RETURN(ec);
+        -: 1720:  }
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE8shutdownENS0_11socket_base13shutdown_typeERNS_6system10error_codeE:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE8shutdownENS0_11socket_base13shutdown_typeERNS_6system10error_codeE called 0 returned 0% blocks executed 0%
+    #####: 1715:  BOOST_ASIO_SYNC_OP_VOID shutdown(shutdown_type what,
+        -: 1716:      boost::system::error_code& ec)
+        -: 1717:  {
+    #####: 1718:    impl_.get_service().shutdown(impl_.get_implementation(), what, ec);
+call    0 never executed
+call    1 never executed
+call    2 never executed
+    #####: 1719:    BOOST_ASIO_SYNC_OP_VOID_RETURN(ec);
+        -: 1720:  }
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE8shutdownENS0_11socket_base13shutdown_typeERNS_6system10error_codeE:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE8shutdownENS0_11socket_base13shutdown_typeERNS_6system10error_codeE called 0 returned 0% blocks executed 0%
+    #####: 1715:  BOOST_ASIO_SYNC_OP_VOID shutdown(shutdown_type what,
+        -: 1716:      boost::system::error_code& ec)
+        -: 1717:  {
+    #####: 1718:    impl_.get_service().shutdown(impl_.get_implementation(), what, ec);
+call    0 never executed
+call    1 never executed
+call    2 never executed
+    #####: 1719:    BOOST_ASIO_SYNC_OP_VOID_RETURN(ec);
+        -: 1720:  }
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE8shutdownENS0_11socket_base13shutdown_typeERNS_6system10error_codeE:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE8shutdownENS0_11socket_base13shutdown_typeERNS_6system10error_codeE called 34 returned 100% blocks executed 100%
+       34: 1715:  BOOST_ASIO_SYNC_OP_VOID shutdown(shutdown_type what,
+        -: 1716:      boost::system::error_code& ec)
+        -: 1717:  {
+       34: 1718:    impl_.get_service().shutdown(impl_.get_implementation(), what, ec);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+       34: 1719:    BOOST_ASIO_SYNC_OP_VOID_RETURN(ec);
+        -: 1720:  }
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE8shutdownENS0_11socket_base13shutdown_typeERNS_6system10error_codeE:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE8shutdownENS0_11socket_base13shutdown_typeERNS_6system10error_codeE called 7 returned 100% blocks executed 100%
+        7: 1715:  BOOST_ASIO_SYNC_OP_VOID shutdown(shutdown_type what,
+        -: 1716:      boost::system::error_code& ec)
+        -: 1717:  {
+        7: 1718:    impl_.get_service().shutdown(impl_.get_implementation(), what, ec);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+        7: 1719:    BOOST_ASIO_SYNC_OP_VOID_RETURN(ec);
+        -: 1720:  }
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE8shutdownENS0_11socket_base13shutdown_typeERNS_6system10error_codeE:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE8shutdownENS0_11socket_base13shutdown_typeERNS_6system10error_codeE called 5 returned 100% blocks executed 100%
+        5: 1715:  BOOST_ASIO_SYNC_OP_VOID shutdown(shutdown_type what,
+        -: 1716:      boost::system::error_code& ec)
+        -: 1717:  {
+        5: 1718:    impl_.get_service().shutdown(impl_.get_implementation(), what, ec);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+        5: 1719:    BOOST_ASIO_SYNC_OP_VOID_RETURN(ec);
+        -: 1720:  }
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE8shutdownENS0_11socket_base13shutdown_typeERNS_6system10error_codeE:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE8shutdownENS0_11socket_base13shutdown_typeERNS_6system10error_codeE called 16 returned 100% blocks executed 100%
+       16: 1715:  BOOST_ASIO_SYNC_OP_VOID shutdown(shutdown_type what,
+        -: 1716:      boost::system::error_code& ec)
+        -: 1717:  {
+       16: 1718:    impl_.get_service().shutdown(impl_.get_implementation(), what, ec);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+       16: 1719:    BOOST_ASIO_SYNC_OP_VOID_RETURN(ec);
+        -: 1720:  }
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE8shutdownENS0_11socket_base13shutdown_typeERNS_6system10error_codeE:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE8shutdownENS0_11socket_base13shutdown_typeERNS_6system10error_codeE called 18 returned 100% blocks executed 100%
+       18: 1715:  BOOST_ASIO_SYNC_OP_VOID shutdown(shutdown_type what,
+        -: 1716:      boost::system::error_code& ec)
+        -: 1717:  {
+       18: 1718:    impl_.get_service().shutdown(impl_.get_implementation(), what, ec);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+       18: 1719:    BOOST_ASIO_SYNC_OP_VOID_RETURN(ec);
+        -: 1720:  }
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE8shutdownENS0_11socket_base13shutdown_typeERNS_6system10error_codeE:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE8shutdownENS0_11socket_base13shutdown_typeERNS_6system10error_codeE called 0 returned 0% blocks executed 0%
+    #####: 1715:  BOOST_ASIO_SYNC_OP_VOID shutdown(shutdown_type what,
+        -: 1716:      boost::system::error_code& ec)
+        -: 1717:  {
+    #####: 1718:    impl_.get_service().shutdown(impl_.get_implementation(), what, ec);
+call    0 never executed
+call    1 never executed
+call    2 never executed
+    #####: 1719:    BOOST_ASIO_SYNC_OP_VOID_RETURN(ec);
+        -: 1720:  }
+------------------
+        -: 1721:
+        -: 1722:  /// Wait for the socket to become ready to read, ready to write, or to have
+        -: 1723:  /// pending error conditions.
+        -: 1724:  /**
+        -: 1725:   * This function is used to perform a blocking wait for a socket to enter
+        -: 1726:   * a ready to read, write or error condition state.
+        -: 1727:   *
+        -: 1728:   * @param w Specifies the desired socket state.
+        -: 1729:   *
+        -: 1730:   * @par Example
+        -: 1731:   * Waiting for a socket to become readable.
+        -: 1732:   * @code
+        -: 1733:   * boost::asio::ip::tcp::socket socket(my_context);
+        -: 1734:   * ...
+        -: 1735:   * socket.wait(boost::asio::ip::tcp::socket::wait_read);
+        -: 1736:   * @endcode
+        -: 1737:   */
+        -: 1738:  void wait(wait_type w)
+        -: 1739:  {
+        -: 1740:    boost::system::error_code ec;
+        -: 1741:    impl_.get_service().wait(impl_.get_implementation(), w, ec);
+        -: 1742:    boost::asio::detail::throw_error(ec, "wait");
+        -: 1743:  }
+        -: 1744:
+        -: 1745:  /// Wait for the socket to become ready to read, ready to write, or to have
+        -: 1746:  /// pending error conditions.
+        -: 1747:  /**
+        -: 1748:   * This function is used to perform a blocking wait for a socket to enter
+        -: 1749:   * a ready to read, write or error condition state.
+        -: 1750:   *
+        -: 1751:   * @param w Specifies the desired socket state.
+        -: 1752:   *
+        -: 1753:   * @param ec Set to indicate what error occurred, if any.
+        -: 1754:   *
+        -: 1755:   * @par Example
+        -: 1756:   * Waiting for a socket to become readable.
+        -: 1757:   * @code
+        -: 1758:   * boost::asio::ip::tcp::socket socket(my_context);
+        -: 1759:   * ...
+        -: 1760:   * boost::system::error_code ec;
+        -: 1761:   * socket.wait(boost::asio::ip::tcp::socket::wait_read, ec);
+        -: 1762:   * @endcode
+        -: 1763:   */
+        -: 1764:  BOOST_ASIO_SYNC_OP_VOID wait(wait_type w, boost::system::error_code& ec)
+        -: 1765:  {
+        -: 1766:    impl_.get_service().wait(impl_.get_implementation(), w, ec);
+        -: 1767:    BOOST_ASIO_SYNC_OP_VOID_RETURN(ec);
+        -: 1768:  }
+        -: 1769:
+        -: 1770:  /// Asynchronously wait for the socket to become ready to read, ready to
+        -: 1771:  /// write, or to have pending error conditions.
+        -: 1772:  /**
+        -: 1773:   * This function is used to perform an asynchronous wait for a socket to enter
+        -: 1774:   * a ready to read, write or error condition state. It is an initiating
+        -: 1775:   * function for an @ref asynchronous_operation, and always returns
+        -: 1776:   * immediately.
+        -: 1777:   *
+        -: 1778:   * @param w Specifies the desired socket state.
+        -: 1779:   *
+        -: 1780:   * @param token The @ref completion_token that will be used to produce a
+        -: 1781:   * completion handler, which will be called when the wait completes. Potential
+        -: 1782:   * completion tokens include @ref use_future, @ref use_awaitable, @ref
+        -: 1783:   * yield_context, or a function object with the correct completion signature.
+        -: 1784:   * The function signature of the completion handler must be:
+        -: 1785:   * @code void handler(
+        -: 1786:   *   const boost::system::error_code& error // Result of operation.
+        -: 1787:   * ); @endcode
+        -: 1788:   * Regardless of whether the asynchronous operation completes immediately or
+        -: 1789:   * not, the completion handler will not be invoked from within this function.
+        -: 1790:   * On immediate completion, invocation of the handler will be performed in a
+        -: 1791:   * manner equivalent to using boost::asio::post().
+        -: 1792:   *
+        -: 1793:   * @par Completion Signature
+        -: 1794:   * @code void(boost::system::error_code) @endcode
+        -: 1795:   *
+        -: 1796:   * @par Example
+        -: 1797:   * @code
+        -: 1798:   * void wait_handler(const boost::system::error_code& error)
+        -: 1799:   * {
+        -: 1800:   *   if (!error)
+        -: 1801:   *   {
+        -: 1802:   *     // Wait succeeded.
+        -: 1803:   *   }
+        -: 1804:   * }
+        -: 1805:   *
+        -: 1806:   * ...
+        -: 1807:   *
+        -: 1808:   * boost::asio::ip::tcp::socket socket(my_context);
+        -: 1809:   * ...
+        -: 1810:   * socket.async_wait(boost::asio::ip::tcp::socket::wait_read, wait_handler);
+        -: 1811:   * @endcode
+        -: 1812:   *
+        -: 1813:   * @par Per-Operation Cancellation
+        -: 1814:   * On POSIX or Windows operating systems, this asynchronous operation supports
+        -: 1815:   * cancellation for the following boost::asio::cancellation_type values:
+        -: 1816:   *
+        -: 1817:   * @li @c cancellation_type::terminal
+        -: 1818:   *
+        -: 1819:   * @li @c cancellation_type::partial
+        -: 1820:   *
+        -: 1821:   * @li @c cancellation_type::total
+        -: 1822:   */
+        -: 1823:  template <
+        -: 1824:      BOOST_ASIO_COMPLETION_TOKEN_FOR(void (boost::system::error_code))
+        -: 1825:        WaitToken BOOST_ASIO_DEFAULT_COMPLETION_TOKEN_TYPE(executor_type)>
+        -: 1826:  BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_PREFIX(WaitToken,
+        -: 1827:      void (boost::system::error_code))
+        -: 1828:  async_wait(wait_type w,
+        -: 1829:      BOOST_ASIO_MOVE_ARG(WaitToken) token
+        -: 1830:        BOOST_ASIO_DEFAULT_COMPLETION_TOKEN(executor_type))
+        -: 1831:    BOOST_ASIO_INITFN_AUTO_RESULT_TYPE_SUFFIX((
+        -: 1832:      async_initiate<WaitToken, void (boost::system::error_code)>(
+        -: 1833:          declval<initiate_async_wait>(), token, w)))
+        -: 1834:  {
+        -: 1835:    return async_initiate<WaitToken, void (boost::system::error_code)>(
+        -: 1836:        initiate_async_wait(this), token, w);
+        -: 1837:  }
+        -: 1838:
+        -: 1839:protected:
+        -: 1840:  /// Protected destructor to prevent deletion through this type.
+        -: 1841:  /**
+        -: 1842:   * This function destroys the socket, cancelling any outstanding asynchronous
+        -: 1843:   * operations associated with the socket as if by calling @c cancel.
+        -: 1844:   */
+     649*: 1845:  ~basic_socket()
+        -: 1846:  {
+     649*: 1847:  }
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEED2Ev:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEED2Ev called 0 returned 0% blocks executed 0%
+    #####: 1845:  ~basic_socket()
+        -: 1846:  {
+    #####: 1847:  }
+call    0 never executed
+call    1 never executed
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEED2Ev:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEED2Ev called 0 returned 0% blocks executed 0%
+    #####: 1845:  ~basic_socket()
+        -: 1846:  {
+    #####: 1847:  }
+call    0 never executed
+call    1 never executed
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEED2Ev:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEED2Ev called 0 returned 0% blocks executed 0%
+    #####: 1845:  ~basic_socket()
+        -: 1846:  {
+    #####: 1847:  }
+call    0 never executed
+call    1 never executed
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEED2Ev:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEED2Ev called 0 returned 0% blocks executed 0%
+    #####: 1845:  ~basic_socket()
+        -: 1846:  {
+    #####: 1847:  }
+call    0 never executed
+call    1 never executed
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEED2Ev:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEED2Ev called 0 returned 0% blocks executed 0%
+    #####: 1845:  ~basic_socket()
+        -: 1846:  {
+    #####: 1847:  }
+call    0 never executed
+call    1 never executed
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEED2Ev:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEED2Ev called 0 returned 0% blocks executed 0%
+    #####: 1845:  ~basic_socket()
+        -: 1846:  {
+    #####: 1847:  }
+call    0 never executed
+call    1 never executed
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEED2Ev:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEED2Ev called 46 returned 100% blocks executed 100%
+       46: 1845:  ~basic_socket()
+        -: 1846:  {
+       46: 1847:  }
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEED2Ev:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEED2Ev called 229 returned 100% blocks executed 100%
+      229: 1845:  ~basic_socket()
+        -: 1846:  {
+      229: 1847:  }
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEED2Ev:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEED2Ev called 96 returned 100% blocks executed 100%
+       96: 1845:  ~basic_socket()
+        -: 1846:  {
+       96: 1847:  }
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEED2Ev:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEED2Ev called 42 returned 100% blocks executed 100%
+       42: 1845:  ~basic_socket()
+        -: 1846:  {
+       42: 1847:  }
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEED2Ev:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEED2Ev called 87 returned 100% blocks executed 100%
+       87: 1845:  ~basic_socket()
+        -: 1846:  {
+       87: 1847:  }
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEED2Ev:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEED2Ev called 48 returned 100% blocks executed 100%
+       48: 1845:  ~basic_socket()
+        -: 1846:  {
+       48: 1847:  }
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEED2Ev:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEED2Ev called 101 returned 100% blocks executed 100%
+      101: 1845:  ~basic_socket()
+        -: 1846:  {
+      101: 1847:  }
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEED2Ev:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEED2Ev called 0 returned 0% blocks executed 0%
+    #####: 1845:  ~basic_socket()
+        -: 1846:  {
+    #####: 1847:  }
+call    0 never executed
+call    1 never executed
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEED2Ev:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEED2Ev called 0 returned 0% blocks executed 0%
+    #####: 1845:  ~basic_socket()
+        -: 1846:  {
+    #####: 1847:  }
+call    0 never executed
+call    1 never executed
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEED2Ev:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEED2Ev called 0 returned 0% blocks executed 0%
+    #####: 1845:  ~basic_socket()
+        -: 1846:  {
+    #####: 1847:  }
+call    0 never executed
+call    1 never executed
+------------------
+        -: 1848:
+        -: 1849:#if defined(BOOST_ASIO_WINDOWS_RUNTIME)
+        -: 1850:  detail::io_object_impl<
+        -: 1851:    detail::null_socket_service<Protocol>, Executor> impl_;
+        -: 1852:#elif defined(BOOST_ASIO_HAS_IOCP)
+        -: 1853:  detail::io_object_impl<
+        -: 1854:    detail::win_iocp_socket_service<Protocol>, Executor> impl_;
+        -: 1855:#elif defined(BOOST_ASIO_HAS_IO_URING_AS_DEFAULT)
+        -: 1856:  detail::io_object_impl<
+        -: 1857:    detail::io_uring_socket_service<Protocol>, Executor> impl_;
+        -: 1858:#else
+        -: 1859:  detail::io_object_impl<
+        -: 1860:    detail::reactive_socket_service<Protocol>, Executor> impl_;
+        -: 1861:#endif
+        -: 1862:
+        -: 1863:private:
+        -: 1864:  // Disallow copying and assignment.
+        -: 1865:  basic_socket(const basic_socket&) BOOST_ASIO_DELETED;
+        -: 1866:  basic_socket& operator=(const basic_socket&) BOOST_ASIO_DELETED;
+        -: 1867:
+        -: 1868:  class initiate_async_connect
+        -: 1869:  {
+        -: 1870:  public:
+        -: 1871:    typedef Executor executor_type;
+        -: 1872:
+    #####: 1873:    explicit initiate_async_connect(basic_socket* self)
+    #####: 1874:      : self_(self)
+        -: 1875:    {
+    #####: 1876:    }
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE22initiate_async_connectC2EPS5_:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE22initiate_async_connectC2EPS5_ called 0 returned 0% blocks executed 0%
+    #####: 1873:    explicit initiate_async_connect(basic_socket* self)
+    #####: 1874:      : self_(self)
+        -: 1875:    {
+    #####: 1876:    }
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE22initiate_async_connectC2EPS5_:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE22initiate_async_connectC2EPS5_ called 0 returned 0% blocks executed 0%
+    #####: 1873:    explicit initiate_async_connect(basic_socket* self)
+    #####: 1874:      : self_(self)
+        -: 1875:    {
+    #####: 1876:    }
+------------------
+_ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE22initiate_async_connectC2EPS5_:
+function _ZN5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE22initiate_async_connectC2EPS5_ called 0 returned 0% blocks executed 0%
+    #####: 1873:    explicit initiate_async_connect(basic_socket* self)
+    #####: 1874:      : self_(self)
+        -: 1875:    {
+    #####: 1876:    }
+------------------
+        -: 1877:
+        -: 1878:    const executor_type& get_executor() const BOOST_ASIO_NOEXCEPT
+        -: 1879:    {
+        -: 1880:      return self_->get_executor();
+        -: 1881:    }
+        -: 1882:
+        -: 1883:    template <typename ConnectHandler>
+    #####: 1884:    void operator()(BOOST_ASIO_MOVE_ARG(ConnectHandler) handler,
+        -: 1885:        const endpoint_type& peer_endpoint,
+        -: 1886:        const boost::system::error_code& open_ec) const
+        -: 1887:    {
+        -: 1888:      // If you get an error on the following line it means that your handler
+        -: 1889:      // does not meet the documented type requirements for a ConnectHandler.
+        -: 1890:      BOOST_ASIO_CONNECT_HANDLER_CHECK(ConnectHandler, handler) type_check;
+        -: 1891:
+    #####: 1892:      if (open_ec)
+        -: 1893:      {
+    #####: 1894:          boost::asio::post(self_->impl_.get_executor(),
+    #####: 1895:              boost::asio::detail::bind_handler(
+        -: 1896:                BOOST_ASIO_MOVE_CAST(ConnectHandler)(handler), open_ec));
+        -: 1897:      }
+        -: 1898:      else
+        -: 1899:      {
+    #####: 1900:        detail::non_const_lvalue<ConnectHandler> handler2(handler);
+    #####: 1901:        self_->impl_.get_service().async_connect(
+    #####: 1902:            self_->impl_.get_implementation(), peer_endpoint,
+    #####: 1903:            handler2.value, self_->impl_.get_executor());
+        -: 1904:      }
+    #####: 1905:    }
+------------------
+_ZNK5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE22initiate_async_connectclINS0_6detail17awaitable_handlerIS4_JNS_6system10error_codeEEEEEEvOT_RKNS2_14basic_endpointIS3_EERKSB_:
+function _ZNK5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE22initiate_async_connectclINS0_6detail17awaitable_handlerIS4_JNS_6system10error_codeEEEEEEvOT_RKNS2_14basic_endpointIS3_EERKSB_ called 0 returned 0% blocks executed 0%
+    #####: 1884:    void operator()(BOOST_ASIO_MOVE_ARG(ConnectHandler) handler,
+        -: 1885:        const endpoint_type& peer_endpoint,
+        -: 1886:        const boost::system::error_code& open_ec) const
+        -: 1887:    {
+        -: 1888:      // If you get an error on the following line it means that your handler
+        -: 1889:      // does not meet the documented type requirements for a ConnectHandler.
+        -: 1890:      BOOST_ASIO_CONNECT_HANDLER_CHECK(ConnectHandler, handler) type_check;
+        -: 1891:
+    #####: 1892:      if (open_ec)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+        -: 1893:      {
+    #####: 1894:          boost::asio::post(self_->impl_.get_executor(),
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+    #####: 1895:              boost::asio::detail::bind_handler(
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+call    4 never executed
+call    5 never executed
+        -: 1896:                BOOST_ASIO_MOVE_CAST(ConnectHandler)(handler), open_ec));
+        -: 1897:      }
+        -: 1898:      else
+        -: 1899:      {
+    #####: 1900:        detail::non_const_lvalue<ConnectHandler> handler2(handler);
+call    0 never executed
+    #####: 1901:        self_->impl_.get_service().async_connect(
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+    #####: 1902:            self_->impl_.get_implementation(), peer_endpoint,
+    #####: 1903:            handler2.value, self_->impl_.get_executor());
+call    0 never executed
+call    1 never executed
+        -: 1904:      }
+    #####: 1905:    }
+------------------
+_ZNK5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE22initiate_async_connectclINS0_6detail16range_connect_opIS3_S4_NS2_22basic_resolver_resultsIS3_EENS8_25default_connect_conditionENS8_17awaitable_handlerIS4_JNS_6system10error_codeENS2_14basic_endpointIS3_EEEEEEEEEvOT_RKSH_RKSF_:
+function _ZNK5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE22initiate_async_connectclINS0_6detail16range_connect_opIS3_S4_NS2_22basic_resolver_resultsIS3_EENS8_25default_connect_conditionENS8_17awaitable_handlerIS4_JNS_6system10error_codeENS2_14basic_endpointIS3_EEEEEEEEEvOT_RKSH_RKSF_ called 0 returned 0% blocks executed 0%
+    #####: 1884:    void operator()(BOOST_ASIO_MOVE_ARG(ConnectHandler) handler,
+        -: 1885:        const endpoint_type& peer_endpoint,
+        -: 1886:        const boost::system::error_code& open_ec) const
+        -: 1887:    {
+        -: 1888:      // If you get an error on the following line it means that your handler
+        -: 1889:      // does not meet the documented type requirements for a ConnectHandler.
+        -: 1890:      BOOST_ASIO_CONNECT_HANDLER_CHECK(ConnectHandler, handler) type_check;
+        -: 1891:
+    #####: 1892:      if (open_ec)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+        -: 1893:      {
+    #####: 1894:          boost::asio::post(self_->impl_.get_executor(),
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+    #####: 1895:              boost::asio::detail::bind_handler(
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+call    4 never executed
+call    5 never executed
+        -: 1896:                BOOST_ASIO_MOVE_CAST(ConnectHandler)(handler), open_ec));
+        -: 1897:      }
+        -: 1898:      else
+        -: 1899:      {
+    #####: 1900:        detail::non_const_lvalue<ConnectHandler> handler2(handler);
+call    0 never executed
+    #####: 1901:        self_->impl_.get_service().async_connect(
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+    #####: 1902:            self_->impl_.get_implementation(), peer_endpoint,
+    #####: 1903:            handler2.value, self_->impl_.get_executor());
+call    0 never executed
+call    1 never executed
+        -: 1904:      }
+    #####: 1905:    }
+------------------
+_ZNK5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE22initiate_async_connectclINS0_6detail16range_connect_opIS3_S4_NS2_22basic_resolver_resultsIS3_EENS8_25default_connect_conditionEZN15BenchmarkClientC4ERNS0_10io_contextERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEESN_iRSt6atomicIiESQ_EUlNS_6system10error_codeENS2_14basic_endpointIS3_EEE_EEEEvOT_RKSU_RKSS_:
+function _ZNK5boost4asio12basic_socketINS0_2ip3tcpENS0_15any_io_executorEE22initiate_async_connectclINS0_6detail16range_connect_opIS3_S4_NS2_22basic_resolver_resultsIS3_EENS8_25default_connect_conditionEZN15BenchmarkClientC4ERNS0_10io_contextERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEESN_iRSt6atomicIiESQ_EUlNS_6system10error_codeENS2_14basic_endpointIS3_EEE_EEEEvOT_RKSU_RKSS_ called 0 returned 0% blocks executed 0%
+    #####: 1884:    void operator()(BOOST_ASIO_MOVE_ARG(ConnectHandler) handler,
+        -: 1885:        const endpoint_type& peer_endpoint,
+        -: 1886:        const boost::system::error_code& open_ec) const
+        -: 1887:    {
+        -: 1888:      // If you get an error on the following line it means that your handler
+        -: 1889:      // does not meet the documented type requirements for a ConnectHandler.
+        -: 1890:      BOOST_ASIO_CONNECT_HANDLER_CHECK(ConnectHandler, handler) type_check;
+        -: 1891:
+    #####: 1892:      if (open_ec)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+        -: 1893:      {
+    #####: 1894:          boost::asio::post(self_->impl_.get_executor(),
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+    #####: 1895:              boost::asio::detail::bind_handler(
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+call    4 never executed
+call    5 never executed
+        -: 1896:                BOOST_ASIO_MOVE_CAST(ConnectHandler)(handler), open_ec));
+        -: 1897:      }
+        -: 1898:      else
+        -: 1899:      {
+    #####: 1900:        detail::non_const_lvalue<ConnectHandler> handler2(handler);
+call    0 never executed
+    #####: 1901:        self_->impl_.get_service().async_connect(
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+    #####: 1902:            self_->impl_.get_implementation(), peer_endpoint,
+    #####: 1903:            handler2.value, self_->impl_.get_executor());
+call    0 never executed
+call    1 never executed
+        -: 1904:      }
+    #####: 1905:    }
+------------------
+        -: 1906:
+        -: 1907:  private:
+        -: 1908:    basic_socket* self_;
+        -: 1909:  };
+        -: 1910:
+        -: 1911:  class initiate_async_wait
+        -: 1912:  {
+        -: 1913:  public:
+        -: 1914:    typedef Executor executor_type;
+        -: 1915:
+        -: 1916:    explicit initiate_async_wait(basic_socket* self)
+        -: 1917:      : self_(self)
+        -: 1918:    {
+        -: 1919:    }
+        -: 1920:
+        -: 1921:    const executor_type& get_executor() const BOOST_ASIO_NOEXCEPT
+        -: 1922:    {
+        -: 1923:      return self_->get_executor();
+        -: 1924:    }
+        -: 1925:
+        -: 1926:    template <typename WaitHandler>
+        -: 1927:    void operator()(BOOST_ASIO_MOVE_ARG(WaitHandler) handler, wait_type w) const
+        -: 1928:    {
+        -: 1929:      // If you get an error on the following line it means that your handler
+        -: 1930:      // does not meet the documented type requirements for a WaitHandler.
+        -: 1931:      BOOST_ASIO_WAIT_HANDLER_CHECK(WaitHandler, handler) type_check;
+        -: 1932:
+        -: 1933:      detail::non_const_lvalue<WaitHandler> handler2(handler);
+        -: 1934:      self_->impl_.get_service().async_wait(
+        -: 1935:          self_->impl_.get_implementation(), w,
+        -: 1936:          handler2.value, self_->impl_.get_executor());
+        -: 1937:    }
+        -: 1938:
+        -: 1939:  private:
+        -: 1940:    basic_socket* self_;
+        -: 1941:  };
+        -: 1942:};
+        -: 1943:
+        -: 1944:} // namespace asio
+        -: 1945:} // namespace boost
+        -: 1946:
+        -: 1947:#include <boost/asio/detail/pop_options.hpp>
+        -: 1948:
+        -: 1949:#endif // BOOST_ASIO_BASIC_SOCKET_HPP

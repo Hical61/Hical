@@ -1,0 +1,1150 @@
+        -:    0:Source:/home/runner/work/Hical/Hical/tests/test_router_perf.cpp
+        -:    1:#include "core/Router.h"
+        -:    2:#include <gtest/gtest.h>
+        -:    3:#include <chrono>
+        -:    4:#include <iostream>
+        -:    5:#include <string>
+        -:    6:
+        -:    7:using namespace hical;
+        -:    8:
+        -:    9:namespace
+        -:   10:{
+        -:   11:
+        -:   12:	/**
+        -:   13:	 * @brief 创建指定数量的静态路由
+        -:   14:	 */
+function _ZN12_GLOBAL__N_128createRouterWithStaticRoutesEi called 0 returned 0% blocks executed 0%
+    #####:   15:	Router createRouterWithStaticRoutes(int count)
+        -:   16:	{
+    #####:   17:		Router router;
+call    0 never executed
+    #####:   18:		for (int i = 0; i < count; ++i)
+branch  0 never executed
+branch  1 never executed (fallthrough)
+        -:   19:		{
+    #####:   20:			std::string path = "/api/v1/route" + std::to_string(i);
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+call    5 never executed
+    #####:   21:			router.get(path,
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+call    5 never executed
+function _ZZN12_GLOBAL__N_128createRouterWithStaticRoutesEiENKUlRKN5hical11HttpRequestEE_clES3_ called 0 returned 0% blocks executed 0%
+    #####:   22:					   [](const HttpRequest&) -> HttpResponse
+        -:   23:					   {
+    #####:   24:						   return HttpResponse::ok("ok");
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+call    6 never executed
+call    7 never executed
+        -:   25:					   });
+    #####:   26:		}
+call    0 never executed
+call    1 never executed
+    #####:   27:		return router;
+    =====:   28:	}
+call    0 never executed
+        -:   29:
+        -:   30:	/**
+        -:   31:	 * @brief 创建指定数量的参数路由
+        -:   32:	 */
+function _ZN12_GLOBAL__N_127createRouterWithParamRoutesEi called 0 returned 0% blocks executed 0%
+    #####:   33:	Router createRouterWithParamRoutes(int count)
+        -:   34:	{
+    #####:   35:		Router router;
+call    0 never executed
+    #####:   36:		for (int i = 0; i < count; ++i)
+branch  0 never executed
+branch  1 never executed (fallthrough)
+        -:   37:		{
+    #####:   38:			std::string path = "/api/v1/resource" + std::to_string(i) + "/{id}";
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+branch  5 never executed (fallthrough)
+branch  6 never executed (throw)
+call    7 never executed
+call    8 never executed
+call    9 never executed
+call   10 never executed
+    #####:   39:			router.get(path,
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+call    5 never executed
+function _ZZN12_GLOBAL__N_127createRouterWithParamRoutesEiENKUlRKN5hical11HttpRequestEE_clES3_ called 0 returned 0% blocks executed 0%
+    #####:   40:					   [](const HttpRequest&) -> HttpResponse
+        -:   41:					   {
+    #####:   42:						   return HttpResponse::ok("ok");
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+call    6 never executed
+call    7 never executed
+        -:   43:					   });
+    #####:   44:		}
+call    0 never executed
+call    1 never executed
+    #####:   45:		return router;
+    =====:   46:	}
+call    0 never executed
+        -:   47:
+        -:   48:	class RouterPerfTest : public ::testing::Test
+        -:   49:	{
+        -:   50:	protected:
+        -:   51:		static constexpr int hWarmupIterations = 1000;
+        -:   52:		static constexpr int hBenchIterations = 100000;
+        -:   53:	};
+        -:   54:
+        -:   55:} // namespace
+        -:   56:
+        -:   57:/**
+        -:   58: * @brief 静态路由查找性能：命中首条
+        -:   59: */
+    #####:   60:TEST_F(RouterPerfTest, StaticRouteFirstHit)
+        -:   61:{
+    #####:   62:	auto router = createRouterWithStaticRoutes(100);
+        -:   63:
+    #####:   64:	HttpRequest req;
+    #####:   65:	req.setMethod(HttpMethod::hGet);
+    #####:   66:	req.setTarget("/api/v1/route0");
+        -:   67:
+        -:   68:	// 预热
+    #####:   69:	boost::asio::io_context io;
+    #####:   70:	for (int i = 0; i < hWarmupIterations; ++i)
+        -:   71:	{
+    #####:   72:		boost::asio::co_spawn(
+        -:   73:			io,
+    #####:   74:			[&]() -> Awaitable<void>
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:   75:			{
+        -:   76:				co_await router.dispatch(req);
+    #####:   77:			},
+call    0 never executed
+call    1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed (throw)
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed
+call    8 never executed
+branch  9 never executed (fallthrough)
+branch 10 never executed
+call   11 never executed
+call   12 never executed
+branch 13 never executed (fallthrough)
+branch 14 never executed (throw)
+call   15 never executed
+call   16 never executed
+        -:   78:			boost::asio::detached);
+        -:   79:	}
+    #####:   80:	io.run();
+    #####:   81:	io.restart();
+        -:   82:
+        -:   83:	// 计时
+    #####:   84:	auto start = std::chrono::high_resolution_clock::now();
+    #####:   85:	for (int i = 0; i < hBenchIterations; ++i)
+        -:   86:	{
+    #####:   87:		boost::asio::co_spawn(
+        -:   88:			io,
+    #####:   89:			[&]() -> Awaitable<void>
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:   90:			{
+        -:   91:				co_await router.dispatch(req);
+    #####:   92:			},
+call    0 never executed
+call    1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed (throw)
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed
+call    8 never executed
+branch  9 never executed (fallthrough)
+branch 10 never executed
+call   11 never executed
+call   12 never executed
+branch 13 never executed (fallthrough)
+branch 14 never executed (throw)
+call   15 never executed
+call   16 never executed
+        -:   93:			boost::asio::detached);
+        -:   94:	}
+    #####:   95:	io.run();
+    #####:   96:	auto end = std::chrono::high_resolution_clock::now();
+        -:   97:
+    #####:   98:	double totalMs = std::chrono::duration<double, std::milli>(end - start).count();
+    #####:   99:	double nsPerOp = (totalMs * 1000000.0) / hBenchIterations;
+        -:  100:
+    #####:  101:	std::cout << "[静态路由-首条命中] " << hBenchIterations << " 次分发, 总耗时: " << totalMs
+    #####:  102:			  << " ms, 每次: " << nsPerOp << " ns\n";
+        -:  103:
+        -:  104:	// 性能断言：每次分发不应超过 10us（宽松）
+    #####:  105:	EXPECT_LT(nsPerOp, 10000.0);
+    #####:  106:}
+------------------
+_ZN39RouterPerfTest_StaticRouteFirstHit_TestC2Ev:
+function _ZN39RouterPerfTest_StaticRouteFirstHit_TestC2Ev called 0 returned 0% blocks executed 0%
+    #####:   60:TEST_F(RouterPerfTest, StaticRouteFirstHit)
+call    0 never executed
+------------------
+_ZN39RouterPerfTest_StaticRouteFirstHit_TestD0Ev:
+function _ZN39RouterPerfTest_StaticRouteFirstHit_TestD0Ev called 0 returned 0% blocks executed 0%
+    #####:   60:TEST_F(RouterPerfTest, StaticRouteFirstHit)
+call    0 never executed
+call    1 never executed
+------------------
+_ZN39RouterPerfTest_StaticRouteFirstHit_TestD2Ev:
+function _ZN39RouterPerfTest_StaticRouteFirstHit_TestD2Ev called 0 returned 0% blocks executed 0%
+    #####:   60:TEST_F(RouterPerfTest, StaticRouteFirstHit)
+call    0 never executed
+------------------
+_ZN39RouterPerfTest_StaticRouteFirstHit_Test8TestBodyEv:
+function _ZN39RouterPerfTest_StaticRouteFirstHit_Test8TestBodyEv called 0 returned 0% blocks executed 0%
+    #####:   60:TEST_F(RouterPerfTest, StaticRouteFirstHit)
+        -:   61:{
+    #####:   62:	auto router = createRouterWithStaticRoutes(100);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:   63:
+    #####:   64:	HttpRequest req;
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:   65:	req.setMethod(HttpMethod::hGet);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:   66:	req.setTarget("/api/v1/route0");
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+call    6 never executed
+call    7 never executed
+        -:   67:
+        -:   68:	// 预热
+    #####:   69:	boost::asio::io_context io;
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:   70:	for (int i = 0; i < hWarmupIterations; ++i)
+branch  0 never executed
+branch  1 never executed (fallthrough)
+        -:   71:	{
+    #####:   72:		boost::asio::co_spawn(
+        -:   73:			io,
+    #####:   74:			[&]() -> Awaitable<void>
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:   75:			{
+        -:   76:				co_await router.dispatch(req);
+        -:   77:			},
+        -:   78:			boost::asio::detached);
+        -:   79:	}
+    #####:   80:	io.run();
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:   81:	io.restart();
+call    0 never executed
+        -:   82:
+        -:   83:	// 计时
+    #####:   84:	auto start = std::chrono::high_resolution_clock::now();
+call    0 never executed
+    #####:   85:	for (int i = 0; i < hBenchIterations; ++i)
+branch  0 never executed
+branch  1 never executed (fallthrough)
+        -:   86:	{
+    #####:   87:		boost::asio::co_spawn(
+        -:   88:			io,
+    #####:   89:			[&]() -> Awaitable<void>
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:   90:			{
+        -:   91:				co_await router.dispatch(req);
+        -:   92:			},
+        -:   93:			boost::asio::detached);
+        -:   94:	}
+    #####:   95:	io.run();
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:   96:	auto end = std::chrono::high_resolution_clock::now();
+call    0 never executed
+        -:   97:
+    #####:   98:	double totalMs = std::chrono::duration<double, std::milli>(end - start).count();
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+call    6 never executed
+    #####:   99:	double nsPerOp = (totalMs * 1000000.0) / hBenchIterations;
+        -:  100:
+    #####:  101:	std::cout << "[静态路由-首条命中] " << hBenchIterations << " 次分发, 总耗时: " << totalMs
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed (throw)
+call    9 never executed
+branch 10 never executed (fallthrough)
+branch 11 never executed (throw)
+    #####:  102:			  << " ms, 每次: " << nsPerOp << " ns\n";
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed (throw)
+        -:  103:
+        -:  104:	// 性能断言：每次分发不应超过 10us（宽松）
+    #####:  105:	EXPECT_LT(nsPerOp, 10000.0);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed (throw)
+call    9 never executed
+call   10 never executed
+branch 11 never executed (fallthrough)
+branch 12 never executed (throw)
+call   13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed (throw)
+call   16 never executed
+call   17 never executed
+call   18 never executed
+call   19 never executed
+call   20 never executed
+call   21 never executed
+    #####:  106:}
+call    0 never executed
+call    1 never executed
+call    2 never executed
+call    3 never executed
+call    4 never executed
+call    5 never executed
+------------------
+        -:  107:
+        -:  108:/**
+        -:  109: * @brief 静态路由查找性能：命中末条
+        -:  110: */
+    #####:  111:TEST_F(RouterPerfTest, StaticRouteLastHit)
+        -:  112:{
+    #####:  113:	auto router = createRouterWithStaticRoutes(100);
+        -:  114:
+    #####:  115:	HttpRequest req;
+    #####:  116:	req.setMethod(HttpMethod::hGet);
+    #####:  117:	req.setTarget("/api/v1/route99");
+        -:  118:
+    #####:  119:	boost::asio::io_context io;
+        -:  120:
+    #####:  121:	auto start = std::chrono::high_resolution_clock::now();
+    #####:  122:	for (int i = 0; i < hBenchIterations; ++i)
+        -:  123:	{
+    #####:  124:		boost::asio::co_spawn(
+        -:  125:			io,
+    #####:  126:			[&]() -> Awaitable<void>
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:  127:			{
+        -:  128:				co_await router.dispatch(req);
+    #####:  129:			},
+call    0 never executed
+call    1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed (throw)
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed
+call    8 never executed
+branch  9 never executed (fallthrough)
+branch 10 never executed
+call   11 never executed
+call   12 never executed
+branch 13 never executed (fallthrough)
+branch 14 never executed (throw)
+call   15 never executed
+call   16 never executed
+        -:  130:			boost::asio::detached);
+        -:  131:	}
+    #####:  132:	io.run();
+    #####:  133:	auto end = std::chrono::high_resolution_clock::now();
+        -:  134:
+    #####:  135:	double totalMs = std::chrono::duration<double, std::milli>(end - start).count();
+    #####:  136:	double nsPerOp = (totalMs * 1000000.0) / hBenchIterations;
+        -:  137:
+    #####:  138:	std::cout << "[静态路由-末条命中] " << hBenchIterations << " 次分发, 总耗时: " << totalMs
+    #####:  139:			  << " ms, 每次: " << nsPerOp << " ns\n";
+        -:  140:
+        -:  141:	// 哈希表查找：首条和末条应该性能接近
+    #####:  142:	EXPECT_LT(nsPerOp, 10000.0);
+    #####:  143:}
+------------------
+_ZN38RouterPerfTest_StaticRouteLastHit_TestC2Ev:
+function _ZN38RouterPerfTest_StaticRouteLastHit_TestC2Ev called 0 returned 0% blocks executed 0%
+    #####:  111:TEST_F(RouterPerfTest, StaticRouteLastHit)
+call    0 never executed
+------------------
+_ZN38RouterPerfTest_StaticRouteLastHit_TestD0Ev:
+function _ZN38RouterPerfTest_StaticRouteLastHit_TestD0Ev called 0 returned 0% blocks executed 0%
+    #####:  111:TEST_F(RouterPerfTest, StaticRouteLastHit)
+call    0 never executed
+call    1 never executed
+------------------
+_ZN38RouterPerfTest_StaticRouteLastHit_TestD2Ev:
+function _ZN38RouterPerfTest_StaticRouteLastHit_TestD2Ev called 0 returned 0% blocks executed 0%
+    #####:  111:TEST_F(RouterPerfTest, StaticRouteLastHit)
+call    0 never executed
+------------------
+_ZN38RouterPerfTest_StaticRouteLastHit_Test8TestBodyEv:
+function _ZN38RouterPerfTest_StaticRouteLastHit_Test8TestBodyEv called 0 returned 0% blocks executed 0%
+    #####:  111:TEST_F(RouterPerfTest, StaticRouteLastHit)
+        -:  112:{
+    #####:  113:	auto router = createRouterWithStaticRoutes(100);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:  114:
+    #####:  115:	HttpRequest req;
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  116:	req.setMethod(HttpMethod::hGet);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  117:	req.setTarget("/api/v1/route99");
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+call    6 never executed
+call    7 never executed
+        -:  118:
+    #####:  119:	boost::asio::io_context io;
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:  120:
+    #####:  121:	auto start = std::chrono::high_resolution_clock::now();
+call    0 never executed
+    #####:  122:	for (int i = 0; i < hBenchIterations; ++i)
+branch  0 never executed
+branch  1 never executed (fallthrough)
+        -:  123:	{
+    #####:  124:		boost::asio::co_spawn(
+        -:  125:			io,
+    #####:  126:			[&]() -> Awaitable<void>
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:  127:			{
+        -:  128:				co_await router.dispatch(req);
+        -:  129:			},
+        -:  130:			boost::asio::detached);
+        -:  131:	}
+    #####:  132:	io.run();
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  133:	auto end = std::chrono::high_resolution_clock::now();
+call    0 never executed
+        -:  134:
+    #####:  135:	double totalMs = std::chrono::duration<double, std::milli>(end - start).count();
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+call    6 never executed
+    #####:  136:	double nsPerOp = (totalMs * 1000000.0) / hBenchIterations;
+        -:  137:
+    #####:  138:	std::cout << "[静态路由-末条命中] " << hBenchIterations << " 次分发, 总耗时: " << totalMs
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed (throw)
+call    9 never executed
+branch 10 never executed (fallthrough)
+branch 11 never executed (throw)
+    #####:  139:			  << " ms, 每次: " << nsPerOp << " ns\n";
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed (throw)
+        -:  140:
+        -:  141:	// 哈希表查找：首条和末条应该性能接近
+    #####:  142:	EXPECT_LT(nsPerOp, 10000.0);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed (throw)
+call    9 never executed
+call   10 never executed
+branch 11 never executed (fallthrough)
+branch 12 never executed (throw)
+call   13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed (throw)
+call   16 never executed
+call   17 never executed
+call   18 never executed
+call   19 never executed
+call   20 never executed
+call   21 never executed
+    #####:  143:}
+call    0 never executed
+call    1 never executed
+call    2 never executed
+call    3 never executed
+call    4 never executed
+call    5 never executed
+------------------
+        -:  144:
+        -:  145:/**
+        -:  146: * @brief 静态路由查找性能：未命中
+        -:  147: */
+    #####:  148:TEST_F(RouterPerfTest, StaticRouteMiss)
+        -:  149:{
+    #####:  150:	auto router = createRouterWithStaticRoutes(100);
+        -:  151:
+    #####:  152:	HttpRequest req;
+    #####:  153:	req.setMethod(HttpMethod::hGet);
+    #####:  154:	req.setTarget("/api/v1/nonexistent");
+        -:  155:
+    #####:  156:	boost::asio::io_context io;
+        -:  157:
+    #####:  158:	auto start = std::chrono::high_resolution_clock::now();
+    #####:  159:	for (int i = 0; i < hBenchIterations; ++i)
+        -:  160:	{
+    #####:  161:		boost::asio::co_spawn(
+        -:  162:			io,
+    #####:  163:			[&]() -> Awaitable<void>
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:  164:			{
+        -:  165:				co_await router.dispatch(req);
+    #####:  166:			},
+call    0 never executed
+call    1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed (throw)
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed
+call    8 never executed
+branch  9 never executed (fallthrough)
+branch 10 never executed
+call   11 never executed
+call   12 never executed
+branch 13 never executed (fallthrough)
+branch 14 never executed (throw)
+call   15 never executed
+call   16 never executed
+        -:  167:			boost::asio::detached);
+        -:  168:	}
+    #####:  169:	io.run();
+    #####:  170:	auto end = std::chrono::high_resolution_clock::now();
+        -:  171:
+    #####:  172:	double totalMs = std::chrono::duration<double, std::milli>(end - start).count();
+    #####:  173:	double nsPerOp = (totalMs * 1000000.0) / hBenchIterations;
+        -:  174:
+    #####:  175:	std::cout << "[静态路由-未命中]   " << hBenchIterations << " 次分发, 总耗时: " << totalMs
+    #####:  176:			  << " ms, 每次: " << nsPerOp << " ns\n";
+        -:  177:
+    #####:  178:	EXPECT_LT(nsPerOp, 10000.0);
+    #####:  179:}
+------------------
+_ZN35RouterPerfTest_StaticRouteMiss_TestC2Ev:
+function _ZN35RouterPerfTest_StaticRouteMiss_TestC2Ev called 0 returned 0% blocks executed 0%
+    #####:  148:TEST_F(RouterPerfTest, StaticRouteMiss)
+call    0 never executed
+------------------
+_ZN35RouterPerfTest_StaticRouteMiss_TestD0Ev:
+function _ZN35RouterPerfTest_StaticRouteMiss_TestD0Ev called 0 returned 0% blocks executed 0%
+    #####:  148:TEST_F(RouterPerfTest, StaticRouteMiss)
+call    0 never executed
+call    1 never executed
+------------------
+_ZN35RouterPerfTest_StaticRouteMiss_TestD2Ev:
+function _ZN35RouterPerfTest_StaticRouteMiss_TestD2Ev called 0 returned 0% blocks executed 0%
+    #####:  148:TEST_F(RouterPerfTest, StaticRouteMiss)
+call    0 never executed
+------------------
+_ZN35RouterPerfTest_StaticRouteMiss_Test8TestBodyEv:
+function _ZN35RouterPerfTest_StaticRouteMiss_Test8TestBodyEv called 0 returned 0% blocks executed 0%
+    #####:  148:TEST_F(RouterPerfTest, StaticRouteMiss)
+        -:  149:{
+    #####:  150:	auto router = createRouterWithStaticRoutes(100);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:  151:
+    #####:  152:	HttpRequest req;
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  153:	req.setMethod(HttpMethod::hGet);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  154:	req.setTarget("/api/v1/nonexistent");
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+call    6 never executed
+call    7 never executed
+        -:  155:
+    #####:  156:	boost::asio::io_context io;
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:  157:
+    #####:  158:	auto start = std::chrono::high_resolution_clock::now();
+call    0 never executed
+    #####:  159:	for (int i = 0; i < hBenchIterations; ++i)
+branch  0 never executed
+branch  1 never executed (fallthrough)
+        -:  160:	{
+    #####:  161:		boost::asio::co_spawn(
+        -:  162:			io,
+    #####:  163:			[&]() -> Awaitable<void>
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:  164:			{
+        -:  165:				co_await router.dispatch(req);
+        -:  166:			},
+        -:  167:			boost::asio::detached);
+        -:  168:	}
+    #####:  169:	io.run();
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  170:	auto end = std::chrono::high_resolution_clock::now();
+call    0 never executed
+        -:  171:
+    #####:  172:	double totalMs = std::chrono::duration<double, std::milli>(end - start).count();
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+call    6 never executed
+    #####:  173:	double nsPerOp = (totalMs * 1000000.0) / hBenchIterations;
+        -:  174:
+    #####:  175:	std::cout << "[静态路由-未命中]   " << hBenchIterations << " 次分发, 总耗时: " << totalMs
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed (throw)
+call    9 never executed
+branch 10 never executed (fallthrough)
+branch 11 never executed (throw)
+    #####:  176:			  << " ms, 每次: " << nsPerOp << " ns\n";
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed (throw)
+        -:  177:
+    #####:  178:	EXPECT_LT(nsPerOp, 10000.0);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed (throw)
+call    9 never executed
+call   10 never executed
+branch 11 never executed (fallthrough)
+branch 12 never executed (throw)
+call   13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed (throw)
+call   16 never executed
+call   17 never executed
+call   18 never executed
+call   19 never executed
+call   20 never executed
+call   21 never executed
+    #####:  179:}
+call    0 never executed
+call    1 never executed
+call    2 never executed
+call    3 never executed
+call    4 never executed
+call    5 never executed
+------------------
+        -:  180:
+        -:  181:/**
+        -:  182: * @brief 参数路由查找性能
+        -:  183: */
+    #####:  184:TEST_F(RouterPerfTest, ParamRouteMatch)
+        -:  185:{
+    #####:  186:	auto router = createRouterWithParamRoutes(20);
+        -:  187:
+    #####:  188:	HttpRequest req;
+    #####:  189:	req.setMethod(HttpMethod::hGet);
+    #####:  190:	req.setTarget("/api/v1/resource10/12345");
+        -:  191:
+    #####:  192:	boost::asio::io_context io;
+        -:  193:
+    #####:  194:	auto start = std::chrono::high_resolution_clock::now();
+    #####:  195:	for (int i = 0; i < hBenchIterations; ++i)
+        -:  196:	{
+    #####:  197:		boost::asio::co_spawn(
+        -:  198:			io,
+    #####:  199:			[&]() -> Awaitable<void>
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:  200:			{
+        -:  201:				co_await router.dispatch(req);
+    #####:  202:			},
+call    0 never executed
+call    1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed (throw)
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed
+call    8 never executed
+branch  9 never executed (fallthrough)
+branch 10 never executed
+call   11 never executed
+call   12 never executed
+branch 13 never executed (fallthrough)
+branch 14 never executed (throw)
+call   15 never executed
+call   16 never executed
+        -:  203:			boost::asio::detached);
+        -:  204:	}
+    #####:  205:	io.run();
+    #####:  206:	auto end = std::chrono::high_resolution_clock::now();
+        -:  207:
+    #####:  208:	double totalMs = std::chrono::duration<double, std::milli>(end - start).count();
+    #####:  209:	double nsPerOp = (totalMs * 1000000.0) / hBenchIterations;
+        -:  210:
+    #####:  211:	std::cout << "[参数路由-命中]     " << hBenchIterations << " 次分发, 总耗时: " << totalMs
+    #####:  212:			  << " ms, 每次: " << nsPerOp << " ns\n";
+        -:  213:
+    #####:  214:	EXPECT_LT(nsPerOp, 50000.0);
+    #####:  215:}
+------------------
+_ZN35RouterPerfTest_ParamRouteMatch_TestC2Ev:
+function _ZN35RouterPerfTest_ParamRouteMatch_TestC2Ev called 0 returned 0% blocks executed 0%
+    #####:  184:TEST_F(RouterPerfTest, ParamRouteMatch)
+call    0 never executed
+------------------
+_ZN35RouterPerfTest_ParamRouteMatch_TestD0Ev:
+function _ZN35RouterPerfTest_ParamRouteMatch_TestD0Ev called 0 returned 0% blocks executed 0%
+    #####:  184:TEST_F(RouterPerfTest, ParamRouteMatch)
+call    0 never executed
+call    1 never executed
+------------------
+_ZN35RouterPerfTest_ParamRouteMatch_TestD2Ev:
+function _ZN35RouterPerfTest_ParamRouteMatch_TestD2Ev called 0 returned 0% blocks executed 0%
+    #####:  184:TEST_F(RouterPerfTest, ParamRouteMatch)
+call    0 never executed
+------------------
+_ZN35RouterPerfTest_ParamRouteMatch_Test8TestBodyEv:
+function _ZN35RouterPerfTest_ParamRouteMatch_Test8TestBodyEv called 0 returned 0% blocks executed 0%
+    #####:  184:TEST_F(RouterPerfTest, ParamRouteMatch)
+        -:  185:{
+    #####:  186:	auto router = createRouterWithParamRoutes(20);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:  187:
+    #####:  188:	HttpRequest req;
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  189:	req.setMethod(HttpMethod::hGet);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  190:	req.setTarget("/api/v1/resource10/12345");
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+call    6 never executed
+call    7 never executed
+        -:  191:
+    #####:  192:	boost::asio::io_context io;
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:  193:
+    #####:  194:	auto start = std::chrono::high_resolution_clock::now();
+call    0 never executed
+    #####:  195:	for (int i = 0; i < hBenchIterations; ++i)
+branch  0 never executed
+branch  1 never executed (fallthrough)
+        -:  196:	{
+    #####:  197:		boost::asio::co_spawn(
+        -:  198:			io,
+    #####:  199:			[&]() -> Awaitable<void>
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:  200:			{
+        -:  201:				co_await router.dispatch(req);
+        -:  202:			},
+        -:  203:			boost::asio::detached);
+        -:  204:	}
+    #####:  205:	io.run();
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  206:	auto end = std::chrono::high_resolution_clock::now();
+call    0 never executed
+        -:  207:
+    #####:  208:	double totalMs = std::chrono::duration<double, std::milli>(end - start).count();
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+call    6 never executed
+    #####:  209:	double nsPerOp = (totalMs * 1000000.0) / hBenchIterations;
+        -:  210:
+    #####:  211:	std::cout << "[参数路由-命中]     " << hBenchIterations << " 次分发, 总耗时: " << totalMs
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed (throw)
+call    9 never executed
+branch 10 never executed (fallthrough)
+branch 11 never executed (throw)
+    #####:  212:			  << " ms, 每次: " << nsPerOp << " ns\n";
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed (throw)
+        -:  213:
+    #####:  214:	EXPECT_LT(nsPerOp, 50000.0);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed (throw)
+call    9 never executed
+call   10 never executed
+branch 11 never executed (fallthrough)
+branch 12 never executed (throw)
+call   13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed (throw)
+call   16 never executed
+call   17 never executed
+call   18 never executed
+call   19 never executed
+call   20 never executed
+call   21 never executed
+    #####:  215:}
+call    0 never executed
+call    1 never executed
+call    2 never executed
+call    3 never executed
+call    4 never executed
+call    5 never executed
+------------------
+        -:  216:
+        -:  217:/**
+        -:  218: * @brief 大量路由下的查找性能
+        -:  219: */
+    #####:  220:TEST_F(RouterPerfTest, LargeRouteSet)
+        -:  221:{
+    #####:  222:	auto router = createRouterWithStaticRoutes(1000);
+        -:  223:
+    #####:  224:	HttpRequest req;
+    #####:  225:	req.setMethod(HttpMethod::hGet);
+    #####:  226:	req.setTarget("/api/v1/route500");
+        -:  227:
+    #####:  228:	boost::asio::io_context io;
+        -:  229:
+    #####:  230:	auto start = std::chrono::high_resolution_clock::now();
+    #####:  231:	for (int i = 0; i < hBenchIterations; ++i)
+        -:  232:	{
+    #####:  233:		boost::asio::co_spawn(
+        -:  234:			io,
+    #####:  235:			[&]() -> Awaitable<void>
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:  236:			{
+        -:  237:				co_await router.dispatch(req);
+    #####:  238:			},
+call    0 never executed
+call    1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed (throw)
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed
+call    8 never executed
+branch  9 never executed (fallthrough)
+branch 10 never executed
+call   11 never executed
+call   12 never executed
+branch 13 never executed (fallthrough)
+branch 14 never executed (throw)
+call   15 never executed
+call   16 never executed
+        -:  239:			boost::asio::detached);
+        -:  240:	}
+    #####:  241:	io.run();
+    #####:  242:	auto end = std::chrono::high_resolution_clock::now();
+        -:  243:
+    #####:  244:	double totalMs = std::chrono::duration<double, std::milli>(end - start).count();
+    #####:  245:	double nsPerOp = (totalMs * 1000000.0) / hBenchIterations;
+        -:  246:
+    #####:  247:	std::cout << "[1000路由-中间命中] " << hBenchIterations << " 次分发, 总耗时: " << totalMs
+    #####:  248:			  << " ms, 每次: " << nsPerOp << " ns\n";
+        -:  249:
+        -:  250:	// 哈希表：1000 路由和 100 路由应该性能相当
+    #####:  251:	EXPECT_LT(nsPerOp, 10000.0);
+    #####:  252:}
+------------------
+_ZN33RouterPerfTest_LargeRouteSet_TestC2Ev:
+function _ZN33RouterPerfTest_LargeRouteSet_TestC2Ev called 0 returned 0% blocks executed 0%
+    #####:  220:TEST_F(RouterPerfTest, LargeRouteSet)
+call    0 never executed
+------------------
+_ZN33RouterPerfTest_LargeRouteSet_TestD0Ev:
+function _ZN33RouterPerfTest_LargeRouteSet_TestD0Ev called 0 returned 0% blocks executed 0%
+    #####:  220:TEST_F(RouterPerfTest, LargeRouteSet)
+call    0 never executed
+call    1 never executed
+------------------
+_ZN33RouterPerfTest_LargeRouteSet_TestD2Ev:
+function _ZN33RouterPerfTest_LargeRouteSet_TestD2Ev called 0 returned 0% blocks executed 0%
+    #####:  220:TEST_F(RouterPerfTest, LargeRouteSet)
+call    0 never executed
+------------------
+_ZN33RouterPerfTest_LargeRouteSet_Test8TestBodyEv:
+function _ZN33RouterPerfTest_LargeRouteSet_Test8TestBodyEv called 0 returned 0% blocks executed 0%
+    #####:  220:TEST_F(RouterPerfTest, LargeRouteSet)
+        -:  221:{
+    #####:  222:	auto router = createRouterWithStaticRoutes(1000);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:  223:
+    #####:  224:	HttpRequest req;
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  225:	req.setMethod(HttpMethod::hGet);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  226:	req.setTarget("/api/v1/route500");
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+call    6 never executed
+call    7 never executed
+        -:  227:
+    #####:  228:	boost::asio::io_context io;
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:  229:
+    #####:  230:	auto start = std::chrono::high_resolution_clock::now();
+call    0 never executed
+    #####:  231:	for (int i = 0; i < hBenchIterations; ++i)
+branch  0 never executed
+branch  1 never executed (fallthrough)
+        -:  232:	{
+    #####:  233:		boost::asio::co_spawn(
+        -:  234:			io,
+    #####:  235:			[&]() -> Awaitable<void>
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:  236:			{
+        -:  237:				co_await router.dispatch(req);
+        -:  238:			},
+        -:  239:			boost::asio::detached);
+        -:  240:	}
+    #####:  241:	io.run();
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  242:	auto end = std::chrono::high_resolution_clock::now();
+call    0 never executed
+        -:  243:
+    #####:  244:	double totalMs = std::chrono::duration<double, std::milli>(end - start).count();
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+call    6 never executed
+    #####:  245:	double nsPerOp = (totalMs * 1000000.0) / hBenchIterations;
+        -:  246:
+    #####:  247:	std::cout << "[1000路由-中间命中] " << hBenchIterations << " 次分发, 总耗时: " << totalMs
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed (throw)
+call    9 never executed
+branch 10 never executed (fallthrough)
+branch 11 never executed (throw)
+    #####:  248:			  << " ms, 每次: " << nsPerOp << " ns\n";
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed (throw)
+        -:  249:
+        -:  250:	// 哈希表：1000 路由和 100 路由应该性能相当
+    #####:  251:	EXPECT_LT(nsPerOp, 10000.0);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed (throw)
+call    9 never executed
+call   10 never executed
+branch 11 never executed (fallthrough)
+branch 12 never executed (throw)
+call   13 never executed
+branch 14 never executed (fallthrough)
+branch 15 never executed (throw)
+call   16 never executed
+call   17 never executed
+call   18 never executed
+call   19 never executed
+call   20 never executed
+call   21 never executed
+    #####:  252:}
+call    0 never executed
+call    1 never executed
+call    2 never executed
+call    3 never executed
+call    4 never executed
+call    5 never executed
+------------------

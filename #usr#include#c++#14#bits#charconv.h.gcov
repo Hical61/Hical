@@ -1,0 +1,3111 @@
+        -:    0:Source:/usr/include/c++/14/bits/charconv.h
+        -:    1:// Numeric conversions (to_string, to_chars) -*- C++ -*-
+        -:    2:
+        -:    3:// Copyright (C) 2017-2024 Free Software Foundation, Inc.
+        -:    4://
+        -:    5:// This file is part of the GNU ISO C++ Library.  This library is free
+        -:    6:// software; you can redistribute it and/or modify it under the
+        -:    7:// terms of the GNU General Public License as published by the
+        -:    8:// Free Software Foundation; either version 3, or (at your option)
+        -:    9:// any later version.
+        -:   10:
+        -:   11:// This library is distributed in the hope that it will be useful,
+        -:   12:// but WITHOUT ANY WARRANTY; without even the implied warranty of
+        -:   13:// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+        -:   14:// GNU General Public License for more details.
+        -:   15:
+        -:   16:// Under Section 7 of GPL version 3, you are granted additional
+        -:   17:// permissions described in the GCC Runtime Library Exception, version
+        -:   18:// 3.1, as published by the Free Software Foundation.
+        -:   19:
+        -:   20:// You should have received a copy of the GNU General Public License and
+        -:   21:// a copy of the GCC Runtime Library Exception along with this program;
+        -:   22:// see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
+        -:   23:// <http://www.gnu.org/licenses/>.
+        -:   24:
+        -:   25:/** @file bits/charconv.h
+        -:   26: *  This is an internal header file, included by other library headers.
+        -:   27: *  Do not attempt to use it directly. @headername{charconv}
+        -:   28: */
+        -:   29:
+        -:   30:#ifndef _GLIBCXX_CHARCONV_H
+        -:   31:#define _GLIBCXX_CHARCONV_H 1
+        -:   32:
+        -:   33:#pragma GCC system_header
+        -:   34:
+        -:   35:#if __cplusplus >= 201103L
+        -:   36:
+        -:   37:#include <type_traits>
+        -:   38:#include <ext/numeric_traits.h>
+        -:   39:
+        -:   40:namespace std _GLIBCXX_VISIBILITY(default)
+        -:   41:{
+        -:   42:_GLIBCXX_BEGIN_NAMESPACE_VERSION
+        -:   43:namespace __detail
+        -:   44:{
+        -:   45:#if __cpp_variable_templates
+        -:   46:  // This accepts 128-bit integers even in strict mode.
+        -:   47:  template<typename _Tp>
+        -:   48:    constexpr bool __integer_to_chars_is_unsigned
+        -:   49:      = ! __gnu_cxx::__int_traits<_Tp>::__is_signed;
+        -:   50:#endif
+        -:   51:
+        -:   52:  // Generic implementation for arbitrary bases.
+        -:   53:  template<typename _Tp>
+        -:   54:    _GLIBCXX14_CONSTEXPR unsigned
+   35163*:   55:    __to_chars_len(_Tp __value, int __base = 10) noexcept
+        -:   56:    {
+        -:   57:#if __cpp_variable_templates
+        -:   58:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   59:#endif
+        -:   60:
+   35163*:   61:      unsigned __n = 1;
+   35163*:   62:      const unsigned __b2 = __base  * __base;
+   35163*:   63:      const unsigned __b3 = __b2 * __base;
+   35163*:   64:      const unsigned long __b4 = __b3 * __base;
+        -:   65:      for (;;)
+        -:   66:	{
+   37458*:   67:	  if (__value < (unsigned)__base) return __n;
+   24217*:   68:	  if (__value < __b2) return __n + 1;
+    2446*:   69:	  if (__value < __b3) return __n + 2;
+    1387*:   70:	  if (__value < __b4) return __n + 3;
+    2295*:   71:	  __value /= __b4;
+    2295*:   72:	  __n += 4;
+        -:   73:	}
+        -:   74:    }
+------------------
+_ZNSt8__detail14__to_chars_lenImEEjT_i:
+function _ZNSt8__detail14__to_chars_lenImEEjT_i called 7 returned 100% blocks executed 73%
+        7:   55:    __to_chars_len(_Tp __value, int __base = 10) noexcept
+        -:   56:    {
+        -:   57:#if __cpp_variable_templates
+        -:   58:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   59:#endif
+        -:   60:
+        7:   61:      unsigned __n = 1;
+        7:   62:      const unsigned __b2 = __base  * __base;
+        7:   63:      const unsigned __b3 = __b2 * __base;
+        7:   64:      const unsigned long __b4 = __b3 * __base;
+        -:   65:      for (;;)
+        -:   66:	{
+      21*:   67:	  if (__value < (unsigned)__base) return __n;
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+      21*:   68:	  if (__value < __b2) return __n + 1;
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+      21*:   69:	  if (__value < __b3) return __n + 2;
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+       21:   70:	  if (__value < __b4) return __n + 3;
+branch  0 taken 33% (fallthrough)
+branch  1 taken 67%
+       14:   71:	  __value /= __b4;
+       14:   72:	  __n += 4;
+        -:   73:	}
+        -:   74:    }
+------------------
+_ZNSt8__detail14__to_chars_lenImEEjT_i:
+function _ZNSt8__detail14__to_chars_lenImEEjT_i called 1 returned 100% blocks executed 73%
+        1:   55:    __to_chars_len(_Tp __value, int __base = 10) noexcept
+        -:   56:    {
+        -:   57:#if __cpp_variable_templates
+        -:   58:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   59:#endif
+        -:   60:
+        1:   61:      unsigned __n = 1;
+        1:   62:      const unsigned __b2 = __base  * __base;
+        1:   63:      const unsigned __b3 = __b2 * __base;
+        1:   64:      const unsigned long __b4 = __b3 * __base;
+        -:   65:      for (;;)
+        -:   66:	{
+       4*:   67:	  if (__value < (unsigned)__base) return __n;
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+       4*:   68:	  if (__value < __b2) return __n + 1;
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        4:   69:	  if (__value < __b3) return __n + 2;
+branch  0 taken 25% (fallthrough)
+branch  1 taken 75%
+       3*:   70:	  if (__value < __b4) return __n + 3;
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        3:   71:	  __value /= __b4;
+        3:   72:	  __n += 4;
+        -:   73:	}
+        -:   74:    }
+------------------
+_ZNSt8__detail14__to_chars_lenIjEEjT_i:
+function _ZNSt8__detail14__to_chars_lenIjEEjT_i called 1 returned 100% blocks executed 45%
+        1:   55:    __to_chars_len(_Tp __value, int __base = 10) noexcept
+        -:   56:    {
+        -:   57:#if __cpp_variable_templates
+        -:   58:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   59:#endif
+        -:   60:
+        1:   61:      unsigned __n = 1;
+        1:   62:      const unsigned __b2 = __base  * __base;
+        1:   63:      const unsigned __b3 = __b2 * __base;
+        1:   64:      const unsigned long __b4 = __b3 * __base;
+        -:   65:      for (;;)
+        -:   66:	{
+       1*:   67:	  if (__value < (unsigned)__base) return __n;
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        1:   68:	  if (__value < __b2) return __n + 1;
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+    #####:   69:	  if (__value < __b3) return __n + 2;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   70:	  if (__value < __b4) return __n + 3;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   71:	  __value /= __b4;
+    #####:   72:	  __n += 4;
+        -:   73:	}
+        -:   74:    }
+------------------
+_ZNSt8__detail14__to_chars_lenImEEjT_i:
+function _ZNSt8__detail14__to_chars_lenImEEjT_i called 10003 returned 100% blocks executed 100%
+    10003:   55:    __to_chars_len(_Tp __value, int __base = 10) noexcept
+        -:   56:    {
+        -:   57:#if __cpp_variable_templates
+        -:   58:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   59:#endif
+        -:   60:
+    10003:   61:      unsigned __n = 1;
+    10003:   62:      const unsigned __b2 = __base  * __base;
+    10003:   63:      const unsigned __b3 = __b2 * __base;
+    10003:   64:      const unsigned long __b4 = __b3 * __base;
+        -:   65:      for (;;)
+        -:   66:	{
+    10100:   67:	  if (__value < (unsigned)__base) return __n;
+branch  0 taken 100% (fallthrough)
+branch  1 taken 1%
+        8:   68:	  if (__value < __b2) return __n + 1;
+branch  0 taken 25% (fallthrough)
+branch  1 taken 75%
+        6:   69:	  if (__value < __b3) return __n + 2;
+branch  0 taken 50% (fallthrough)
+branch  1 taken 50%
+        3:   70:	  if (__value < __b4) return __n + 3;
+branch  0 taken -3133% (fallthrough)
+branch  1 taken 3233%
+       97:   71:	  __value /= __b4;
+       97:   72:	  __n += 4;
+        -:   73:	}
+        -:   74:    }
+------------------
+_ZNSt8__detail14__to_chars_lenIjEEjT_i:
+function _ZNSt8__detail14__to_chars_lenIjEEjT_i called 22502 returned 100% blocks executed 100%
+    22502:   55:    __to_chars_len(_Tp __value, int __base = 10) noexcept
+        -:   56:    {
+        -:   57:#if __cpp_variable_templates
+        -:   58:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   59:#endif
+        -:   60:
+    22502:   61:      unsigned __n = 1;
+    22502:   62:      const unsigned __b2 = __base  * __base;
+    22502:   63:      const unsigned __b3 = __b2 * __base;
+    22502:   64:      const unsigned long __b4 = __b3 * __base;
+        -:   65:      for (;;)
+        -:   66:	{
+    23301:   67:	  if (__value < (unsigned)__base) return __n;
+branch  0 taken 10% (fallthrough)
+branch  1 taken 90%
+    20895:   68:	  if (__value < __b2) return __n + 1;
+branch  0 taken 100% (fallthrough)
+branch  1 taken -0%
+    #####:   69:	  if (__value < __b3) return __n + 2;
+branch  0 taken -3% (fallthrough)
+branch  1 taken 103%
+    #####:   70:	  if (__value < __b4) return __n + 3;
+branch  0 taken 2319% (fallthrough)
+branch  1 taken -2219%
+      799:   71:	  __value /= __b4;
+      799:   72:	  __n += 4;
+        -:   73:	}
+        -:   74:    }
+------------------
+_ZNSt8__detail14__to_chars_lenIoEEjT_i:
+function _ZNSt8__detail14__to_chars_lenIoEEjT_i called 0 returned 0% blocks executed 0%
+    #####:   55:    __to_chars_len(_Tp __value, int __base = 10) noexcept
+        -:   56:    {
+        -:   57:#if __cpp_variable_templates
+        -:   58:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   59:#endif
+        -:   60:
+    #####:   61:      unsigned __n = 1;
+    #####:   62:      const unsigned __b2 = __base  * __base;
+    #####:   63:      const unsigned __b3 = __b2 * __base;
+    #####:   64:      const unsigned long __b4 = __b3 * __base;
+        -:   65:      for (;;)
+        -:   66:	{
+    #####:   67:	  if (__value < (unsigned)__base) return __n;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   68:	  if (__value < __b2) return __n + 1;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   69:	  if (__value < __b3) return __n + 2;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   70:	  if (__value < __b4) return __n + 3;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   71:	  __value /= __b4;
+    #####:   72:	  __n += 4;
+        -:   73:	}
+        -:   74:    }
+------------------
+_ZNSt8__detail14__to_chars_lenIyEEjT_i:
+function _ZNSt8__detail14__to_chars_lenIyEEjT_i called 0 returned 0% blocks executed 0%
+    #####:   55:    __to_chars_len(_Tp __value, int __base = 10) noexcept
+        -:   56:    {
+        -:   57:#if __cpp_variable_templates
+        -:   58:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   59:#endif
+        -:   60:
+    #####:   61:      unsigned __n = 1;
+    #####:   62:      const unsigned __b2 = __base  * __base;
+    #####:   63:      const unsigned __b3 = __b2 * __base;
+    #####:   64:      const unsigned long __b4 = __b3 * __base;
+        -:   65:      for (;;)
+        -:   66:	{
+    #####:   67:	  if (__value < (unsigned)__base) return __n;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   68:	  if (__value < __b2) return __n + 1;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   69:	  if (__value < __b3) return __n + 2;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   70:	  if (__value < __b4) return __n + 3;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   71:	  __value /= __b4;
+    #####:   72:	  __n += 4;
+        -:   73:	}
+        -:   74:    }
+------------------
+_ZNSt8__detail14__to_chars_lenImEEjT_i:
+function _ZNSt8__detail14__to_chars_lenImEEjT_i called 431 returned 100% blocks executed 73%
+      431:   55:    __to_chars_len(_Tp __value, int __base = 10) noexcept
+        -:   56:    {
+        -:   57:#if __cpp_variable_templates
+        -:   58:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   59:#endif
+        -:   60:
+      431:   61:      unsigned __n = 1;
+      431:   62:      const unsigned __b2 = __base  * __base;
+      431:   63:      const unsigned __b3 = __b2 * __base;
+      431:   64:      const unsigned long __b4 = __b3 * __base;
+        -:   65:      for (;;)
+        -:   66:	{
+    1719*:   67:	  if (__value < (unsigned)__base) return __n;
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    1719*:   68:	  if (__value < __b2) return __n + 1;
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+     1719:   69:	  if (__value < __b3) return __n + 2;
+branch  0 taken 25% (fallthrough)
+branch  1 taken 75%
+    1288*:   70:	  if (__value < __b4) return __n + 3;
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+     1288:   71:	  __value /= __b4;
+     1288:   72:	  __n += 4;
+        -:   73:	}
+        -:   74:    }
+------------------
+_ZNSt8__detail14__to_chars_lenIjEEjT_i:
+function _ZNSt8__detail14__to_chars_lenIjEEjT_i called 1132 returned 100% blocks executed 100%
+     1132:   55:    __to_chars_len(_Tp __value, int __base = 10) noexcept
+        -:   56:    {
+        -:   57:#if __cpp_variable_templates
+        -:   58:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   59:#endif
+        -:   60:
+     1132:   61:      unsigned __n = 1;
+     1132:   62:      const unsigned __b2 = __base  * __base;
+     1132:   63:      const unsigned __b3 = __b2 * __base;
+     1132:   64:      const unsigned long __b4 = __b3 * __base;
+        -:   65:      for (;;)
+        -:   66:	{
+     1130:   67:	  if (__value < (unsigned)__base) return __n;
+branch  0 taken 30% (fallthrough)
+branch  1 taken 70%
+      792:   68:	  if (__value < __b2) return __n + 1;
+branch  0 taken 45% (fallthrough)
+branch  1 taken 55%
+      432:   69:	  if (__value < __b3) return __n + 2;
+branch  0 taken 100% (fallthrough)
+branch  1 taken 1%
+        1:   70:	  if (__value < __b4) return __n + 3;
+branch  0 taken 300% (fallthrough)
+branch  1 taken -200%
+    #####:   71:	  __value /= __b4;
+    #####:   72:	  __n += 4;
+        -:   73:	}
+        -:   74:    }
+------------------
+_ZNSt8__detail14__to_chars_lenIjEEjT_i:
+function _ZNSt8__detail14__to_chars_lenIjEEjT_i called 257 returned 100% blocks executed 73%
+      257:   55:    __to_chars_len(_Tp __value, int __base = 10) noexcept
+        -:   56:    {
+        -:   57:#if __cpp_variable_templates
+        -:   58:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   59:#endif
+        -:   60:
+      257:   61:      unsigned __n = 1;
+      257:   62:      const unsigned __b2 = __base  * __base;
+      257:   63:      const unsigned __b3 = __b2 * __base;
+      257:   64:      const unsigned long __b4 = __b3 * __base;
+        -:   65:      for (;;)
+        -:   66:	{
+      257:   67:	  if (__value < (unsigned)__base) return __n;
+branch  0 taken 4% (fallthrough)
+branch  1 taken 96%
+      247:   68:	  if (__value < __b2) return __n + 1;
+branch  0 taken 36% (fallthrough)
+branch  1 taken 64%
+      157:   69:	  if (__value < __b3) return __n + 2;
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+    #####:   70:	  if (__value < __b4) return __n + 3;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   71:	  __value /= __b4;
+    #####:   72:	  __n += 4;
+        -:   73:	}
+        -:   74:    }
+------------------
+_ZNSt8__detail14__to_chars_lenIjEEjT_i:
+function _ZNSt8__detail14__to_chars_lenIjEEjT_i called 5 returned 100% blocks executed 82%
+        5:   55:    __to_chars_len(_Tp __value, int __base = 10) noexcept
+        -:   56:    {
+        -:   57:#if __cpp_variable_templates
+        -:   58:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   59:#endif
+        -:   60:
+        5:   61:      unsigned __n = 1;
+        5:   62:      const unsigned __b2 = __base  * __base;
+        5:   63:      const unsigned __b3 = __b2 * __base;
+        5:   64:      const unsigned long __b4 = __b3 * __base;
+        -:   65:      for (;;)
+        -:   66:	{
+        9:   67:	  if (__value < (unsigned)__base) return __n;
+branch  0 taken 44% (fallthrough)
+branch  1 taken 56%
+       5*:   68:	  if (__value < __b2) return __n + 1;
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        5:   69:	  if (__value < __b3) return __n + 2;
+branch  0 taken 20% (fallthrough)
+branch  1 taken 80%
+       4*:   70:	  if (__value < __b4) return __n + 3;
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        4:   71:	  __value /= __b4;
+        4:   72:	  __n += 4;
+        -:   73:	}
+        -:   74:    }
+------------------
+_ZNSt8__detail14__to_chars_lenIyEEjT_i:
+function _ZNSt8__detail14__to_chars_lenIyEEjT_i called 0 returned 0% blocks executed 0%
+    #####:   55:    __to_chars_len(_Tp __value, int __base = 10) noexcept
+        -:   56:    {
+        -:   57:#if __cpp_variable_templates
+        -:   58:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   59:#endif
+        -:   60:
+    #####:   61:      unsigned __n = 1;
+    #####:   62:      const unsigned __b2 = __base  * __base;
+    #####:   63:      const unsigned __b3 = __b2 * __base;
+    #####:   64:      const unsigned long __b4 = __b3 * __base;
+        -:   65:      for (;;)
+        -:   66:	{
+    #####:   67:	  if (__value < (unsigned)__base) return __n;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   68:	  if (__value < __b2) return __n + 1;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   69:	  if (__value < __b3) return __n + 2;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   70:	  if (__value < __b4) return __n + 3;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   71:	  __value /= __b4;
+    #####:   72:	  __n += 4;
+        -:   73:	}
+        -:   74:    }
+------------------
+_ZNSt8__detail14__to_chars_lenIjEEjT_i:
+function _ZNSt8__detail14__to_chars_lenIjEEjT_i called 30 returned 100% blocks executed 55%
+       30:   55:    __to_chars_len(_Tp __value, int __base = 10) noexcept
+        -:   56:    {
+        -:   57:#if __cpp_variable_templates
+        -:   58:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   59:#endif
+        -:   60:
+       30:   61:      unsigned __n = 1;
+       30:   62:      const unsigned __b2 = __base  * __base;
+       30:   63:      const unsigned __b3 = __b2 * __base;
+       30:   64:      const unsigned long __b4 = __b3 * __base;
+        -:   65:      for (;;)
+        -:   66:	{
+       30:   67:	  if (__value < (unsigned)__base) return __n;
+branch  0 taken 67% (fallthrough)
+branch  1 taken 33%
+       10:   68:	  if (__value < __b2) return __n + 1;
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+    #####:   69:	  if (__value < __b3) return __n + 2;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   70:	  if (__value < __b4) return __n + 3;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   71:	  __value /= __b4;
+    #####:   72:	  __n += 4;
+        -:   73:	}
+        -:   74:    }
+------------------
+_ZNSt8__detail14__to_chars_lenIjEEjT_i:
+function _ZNSt8__detail14__to_chars_lenIjEEjT_i called 14 returned 100% blocks executed 82%
+       14:   55:    __to_chars_len(_Tp __value, int __base = 10) noexcept
+        -:   56:    {
+        -:   57:#if __cpp_variable_templates
+        -:   58:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   59:#endif
+        -:   60:
+       14:   61:      unsigned __n = 1;
+       14:   62:      const unsigned __b2 = __base  * __base;
+       14:   63:      const unsigned __b3 = __b2 * __base;
+       14:   64:      const unsigned long __b4 = __b3 * __base;
+        -:   65:      for (;;)
+        -:   66:	{
+       27:   67:	  if (__value < (unsigned)__base) return __n;
+branch  0 taken 48% (fallthrough)
+branch  1 taken 52%
+      14*:   68:	  if (__value < __b2) return __n + 1;
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+      14*:   69:	  if (__value < __b3) return __n + 2;
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+       14:   70:	  if (__value < __b4) return __n + 3;
+branch  0 taken 7% (fallthrough)
+branch  1 taken 93%
+       13:   71:	  __value /= __b4;
+       13:   72:	  __n += 4;
+        -:   73:	}
+        -:   74:    }
+------------------
+_ZNSt8__detail14__to_chars_lenImEEjT_i:
+function _ZNSt8__detail14__to_chars_lenImEEjT_i called 38 returned 100% blocks executed 91%
+       38:   55:    __to_chars_len(_Tp __value, int __base = 10) noexcept
+        -:   56:    {
+        -:   57:#if __cpp_variable_templates
+        -:   58:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   59:#endif
+        -:   60:
+       38:   61:      unsigned __n = 1;
+       38:   62:      const unsigned __b2 = __base  * __base;
+       38:   63:      const unsigned __b3 = __b2 * __base;
+       38:   64:      const unsigned long __b4 = __b3 * __base;
+        -:   65:      for (;;)
+        -:   66:	{
+       86:   67:	  if (__value < (unsigned)__base) return __n;
+branch  0 taken 5% (fallthrough)
+branch  1 taken 95%
+       82:   68:	  if (__value < __b2) return __n + 1;
+branch  0 taken 27% (fallthrough)
+branch  1 taken 73%
+       60:   69:	  if (__value < __b3) return __n + 2;
+branch  0 taken 20% (fallthrough)
+branch  1 taken 80%
+      48*:   70:	  if (__value < __b4) return __n + 3;
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+       48:   71:	  __value /= __b4;
+       48:   72:	  __n += 4;
+        -:   73:	}
+        -:   74:    }
+------------------
+_ZNSt8__detail14__to_chars_lenImEEjT_i:
+function _ZNSt8__detail14__to_chars_lenImEEjT_i called 1 returned 100% blocks executed 73%
+        1:   55:    __to_chars_len(_Tp __value, int __base = 10) noexcept
+        -:   56:    {
+        -:   57:#if __cpp_variable_templates
+        -:   58:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   59:#endif
+        -:   60:
+        1:   61:      unsigned __n = 1;
+        1:   62:      const unsigned __b2 = __base  * __base;
+        1:   63:      const unsigned __b3 = __b2 * __base;
+        1:   64:      const unsigned long __b4 = __b3 * __base;
+        -:   65:      for (;;)
+        -:   66:	{
+        4:   67:	  if (__value < (unsigned)__base) return __n;
+branch  0 taken 25% (fallthrough)
+branch  1 taken 75%
+       3*:   68:	  if (__value < __b2) return __n + 1;
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+       3*:   69:	  if (__value < __b3) return __n + 2;
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+       3*:   70:	  if (__value < __b4) return __n + 3;
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        3:   71:	  __value /= __b4;
+        3:   72:	  __n += 4;
+        -:   73:	}
+        -:   74:    }
+------------------
+_ZNSt8__detail14__to_chars_lenIjEEjT_i:
+function _ZNSt8__detail14__to_chars_lenIjEEjT_i called 4 returned 100% blocks executed 91%
+        4:   55:    __to_chars_len(_Tp __value, int __base = 10) noexcept
+        -:   56:    {
+        -:   57:#if __cpp_variable_templates
+        -:   58:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   59:#endif
+        -:   60:
+        4:   61:      unsigned __n = 1;
+        4:   62:      const unsigned __b2 = __base  * __base;
+        4:   63:      const unsigned __b3 = __b2 * __base;
+        4:   64:      const unsigned long __b4 = __b3 * __base;
+        -:   65:      for (;;)
+        -:   66:	{
+       6*:   67:	  if (__value < (unsigned)__base) return __n;
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        6:   68:	  if (__value < __b2) return __n + 1;
+branch  0 taken 33% (fallthrough)
+branch  1 taken 67%
+        4:   69:	  if (__value < __b3) return __n + 2;
+branch  0 taken 25% (fallthrough)
+branch  1 taken 75%
+        3:   70:	  if (__value < __b4) return __n + 3;
+branch  0 taken 33% (fallthrough)
+branch  1 taken 67%
+        2:   71:	  __value /= __b4;
+        2:   72:	  __n += 4;
+        -:   73:	}
+        -:   74:    }
+------------------
+_ZNSt8__detail14__to_chars_lenImEEjT_i:
+function _ZNSt8__detail14__to_chars_lenImEEjT_i called 14 returned 100% blocks executed 55%
+       14:   55:    __to_chars_len(_Tp __value, int __base = 10) noexcept
+        -:   56:    {
+        -:   57:#if __cpp_variable_templates
+        -:   58:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   59:#endif
+        -:   60:
+       14:   61:      unsigned __n = 1;
+       14:   62:      const unsigned __b2 = __base  * __base;
+       14:   63:      const unsigned __b3 = __b2 * __base;
+       14:   64:      const unsigned long __b4 = __b3 * __base;
+        -:   65:      for (;;)
+        -:   66:	{
+       14:   67:	  if (__value < (unsigned)__base) return __n;
+branch  0 taken 50% (fallthrough)
+branch  1 taken 50%
+        7:   68:	  if (__value < __b2) return __n + 1;
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+    #####:   69:	  if (__value < __b3) return __n + 2;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   70:	  if (__value < __b4) return __n + 3;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   71:	  __value /= __b4;
+    #####:   72:	  __n += 4;
+        -:   73:	}
+        -:   74:    }
+------------------
+_ZNSt8__detail14__to_chars_lenIjEEjT_i:
+function _ZNSt8__detail14__to_chars_lenIjEEjT_i called 0 returned 0% blocks executed 0%
+    #####:   55:    __to_chars_len(_Tp __value, int __base = 10) noexcept
+        -:   56:    {
+        -:   57:#if __cpp_variable_templates
+        -:   58:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   59:#endif
+        -:   60:
+    #####:   61:      unsigned __n = 1;
+    #####:   62:      const unsigned __b2 = __base  * __base;
+    #####:   63:      const unsigned __b3 = __b2 * __base;
+    #####:   64:      const unsigned long __b4 = __b3 * __base;
+        -:   65:      for (;;)
+        -:   66:	{
+    #####:   67:	  if (__value < (unsigned)__base) return __n;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   68:	  if (__value < __b2) return __n + 1;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   69:	  if (__value < __b3) return __n + 2;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   70:	  if (__value < __b4) return __n + 3;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   71:	  __value /= __b4;
+    #####:   72:	  __n += 4;
+        -:   73:	}
+        -:   74:    }
+------------------
+_ZNSt8__detail14__to_chars_lenIjEEjT_i:
+function _ZNSt8__detail14__to_chars_lenIjEEjT_i called 0 returned 0% blocks executed 0%
+    #####:   55:    __to_chars_len(_Tp __value, int __base = 10) noexcept
+        -:   56:    {
+        -:   57:#if __cpp_variable_templates
+        -:   58:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   59:#endif
+        -:   60:
+    #####:   61:      unsigned __n = 1;
+    #####:   62:      const unsigned __b2 = __base  * __base;
+    #####:   63:      const unsigned __b3 = __b2 * __base;
+    #####:   64:      const unsigned long __b4 = __b3 * __base;
+        -:   65:      for (;;)
+        -:   66:	{
+    #####:   67:	  if (__value < (unsigned)__base) return __n;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   68:	  if (__value < __b2) return __n + 1;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   69:	  if (__value < __b3) return __n + 2;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   70:	  if (__value < __b4) return __n + 3;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   71:	  __value /= __b4;
+    #####:   72:	  __n += 4;
+        -:   73:	}
+        -:   74:    }
+------------------
+_ZNSt8__detail14__to_chars_lenImEEjT_i:
+function _ZNSt8__detail14__to_chars_lenImEEjT_i called 0 returned 0% blocks executed 0%
+    #####:   55:    __to_chars_len(_Tp __value, int __base = 10) noexcept
+        -:   56:    {
+        -:   57:#if __cpp_variable_templates
+        -:   58:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   59:#endif
+        -:   60:
+    #####:   61:      unsigned __n = 1;
+    #####:   62:      const unsigned __b2 = __base  * __base;
+    #####:   63:      const unsigned __b3 = __b2 * __base;
+    #####:   64:      const unsigned long __b4 = __b3 * __base;
+        -:   65:      for (;;)
+        -:   66:	{
+    #####:   67:	  if (__value < (unsigned)__base) return __n;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   68:	  if (__value < __b2) return __n + 1;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   69:	  if (__value < __b3) return __n + 2;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   70:	  if (__value < __b4) return __n + 3;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   71:	  __value /= __b4;
+    #####:   72:	  __n += 4;
+        -:   73:	}
+        -:   74:    }
+------------------
+_ZNSt8__detail14__to_chars_lenIjEEjT_i:
+function _ZNSt8__detail14__to_chars_lenIjEEjT_i called 0 returned 0% blocks executed 0%
+    #####:   55:    __to_chars_len(_Tp __value, int __base = 10) noexcept
+        -:   56:    {
+        -:   57:#if __cpp_variable_templates
+        -:   58:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   59:#endif
+        -:   60:
+    #####:   61:      unsigned __n = 1;
+    #####:   62:      const unsigned __b2 = __base  * __base;
+    #####:   63:      const unsigned __b3 = __b2 * __base;
+    #####:   64:      const unsigned long __b4 = __b3 * __base;
+        -:   65:      for (;;)
+        -:   66:	{
+    #####:   67:	  if (__value < (unsigned)__base) return __n;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   68:	  if (__value < __b2) return __n + 1;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   69:	  if (__value < __b3) return __n + 2;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   70:	  if (__value < __b4) return __n + 3;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   71:	  __value /= __b4;
+    #####:   72:	  __n += 4;
+        -:   73:	}
+        -:   74:    }
+------------------
+_ZNSt8__detail14__to_chars_lenIoEEjT_i:
+function _ZNSt8__detail14__to_chars_lenIoEEjT_i called 0 returned 0% blocks executed 0%
+    #####:   55:    __to_chars_len(_Tp __value, int __base = 10) noexcept
+        -:   56:    {
+        -:   57:#if __cpp_variable_templates
+        -:   58:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   59:#endif
+        -:   60:
+    #####:   61:      unsigned __n = 1;
+    #####:   62:      const unsigned __b2 = __base  * __base;
+    #####:   63:      const unsigned __b3 = __b2 * __base;
+    #####:   64:      const unsigned long __b4 = __b3 * __base;
+        -:   65:      for (;;)
+        -:   66:	{
+    #####:   67:	  if (__value < (unsigned)__base) return __n;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   68:	  if (__value < __b2) return __n + 1;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   69:	  if (__value < __b3) return __n + 2;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   70:	  if (__value < __b4) return __n + 3;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   71:	  __value /= __b4;
+    #####:   72:	  __n += 4;
+        -:   73:	}
+        -:   74:    }
+------------------
+_ZNSt8__detail14__to_chars_lenIjEEjT_i:
+function _ZNSt8__detail14__to_chars_lenIjEEjT_i called 0 returned 0% blocks executed 0%
+    #####:   55:    __to_chars_len(_Tp __value, int __base = 10) noexcept
+        -:   56:    {
+        -:   57:#if __cpp_variable_templates
+        -:   58:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   59:#endif
+        -:   60:
+    #####:   61:      unsigned __n = 1;
+    #####:   62:      const unsigned __b2 = __base  * __base;
+    #####:   63:      const unsigned __b3 = __b2 * __base;
+    #####:   64:      const unsigned long __b4 = __b3 * __base;
+        -:   65:      for (;;)
+        -:   66:	{
+    #####:   67:	  if (__value < (unsigned)__base) return __n;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   68:	  if (__value < __b2) return __n + 1;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   69:	  if (__value < __b3) return __n + 2;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   70:	  if (__value < __b4) return __n + 3;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   71:	  __value /= __b4;
+    #####:   72:	  __n += 4;
+        -:   73:	}
+        -:   74:    }
+------------------
+_ZNSt8__detail14__to_chars_lenImEEjT_i:
+function _ZNSt8__detail14__to_chars_lenImEEjT_i called 0 returned 0% blocks executed 0%
+    #####:   55:    __to_chars_len(_Tp __value, int __base = 10) noexcept
+        -:   56:    {
+        -:   57:#if __cpp_variable_templates
+        -:   58:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   59:#endif
+        -:   60:
+    #####:   61:      unsigned __n = 1;
+    #####:   62:      const unsigned __b2 = __base  * __base;
+    #####:   63:      const unsigned __b3 = __b2 * __base;
+    #####:   64:      const unsigned long __b4 = __b3 * __base;
+        -:   65:      for (;;)
+        -:   66:	{
+    #####:   67:	  if (__value < (unsigned)__base) return __n;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   68:	  if (__value < __b2) return __n + 1;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   69:	  if (__value < __b3) return __n + 2;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   70:	  if (__value < __b4) return __n + 3;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   71:	  __value /= __b4;
+    #####:   72:	  __n += 4;
+        -:   73:	}
+        -:   74:    }
+------------------
+_ZNSt8__detail14__to_chars_lenIjEEjT_i:
+function _ZNSt8__detail14__to_chars_lenIjEEjT_i called 0 returned 0% blocks executed 0%
+    #####:   55:    __to_chars_len(_Tp __value, int __base = 10) noexcept
+        -:   56:    {
+        -:   57:#if __cpp_variable_templates
+        -:   58:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   59:#endif
+        -:   60:
+    #####:   61:      unsigned __n = 1;
+    #####:   62:      const unsigned __b2 = __base  * __base;
+    #####:   63:      const unsigned __b3 = __b2 * __base;
+    #####:   64:      const unsigned long __b4 = __b3 * __base;
+        -:   65:      for (;;)
+        -:   66:	{
+    #####:   67:	  if (__value < (unsigned)__base) return __n;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   68:	  if (__value < __b2) return __n + 1;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   69:	  if (__value < __b3) return __n + 2;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   70:	  if (__value < __b4) return __n + 3;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   71:	  __value /= __b4;
+    #####:   72:	  __n += 4;
+        -:   73:	}
+        -:   74:    }
+------------------
+_ZNSt8__detail14__to_chars_lenIjEEjT_i:
+function _ZNSt8__detail14__to_chars_lenIjEEjT_i called 0 returned 0% blocks executed 0%
+    #####:   55:    __to_chars_len(_Tp __value, int __base = 10) noexcept
+        -:   56:    {
+        -:   57:#if __cpp_variable_templates
+        -:   58:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   59:#endif
+        -:   60:
+    #####:   61:      unsigned __n = 1;
+    #####:   62:      const unsigned __b2 = __base  * __base;
+    #####:   63:      const unsigned __b3 = __b2 * __base;
+    #####:   64:      const unsigned long __b4 = __b3 * __base;
+        -:   65:      for (;;)
+        -:   66:	{
+    #####:   67:	  if (__value < (unsigned)__base) return __n;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   68:	  if (__value < __b2) return __n + 1;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   69:	  if (__value < __b3) return __n + 2;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   70:	  if (__value < __b4) return __n + 3;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   71:	  __value /= __b4;
+    #####:   72:	  __n += 4;
+        -:   73:	}
+        -:   74:    }
+------------------
+_ZNSt8__detail14__to_chars_lenImEEjT_i:
+function _ZNSt8__detail14__to_chars_lenImEEjT_i called 100 returned 100% blocks executed 91%
+      100:   55:    __to_chars_len(_Tp __value, int __base = 10) noexcept
+        -:   56:    {
+        -:   57:#if __cpp_variable_templates
+        -:   58:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   59:#endif
+        -:   60:
+      100:   61:      unsigned __n = 1;
+      100:   62:      const unsigned __b2 = __base  * __base;
+      100:   63:      const unsigned __b3 = __b2 * __base;
+      100:   64:      const unsigned long __b4 = __b3 * __base;
+        -:   65:      for (;;)
+        -:   66:	{
+      101:   67:	  if (__value < (unsigned)__base) return __n;
+branch  0 taken 61% (fallthrough)
+branch  1 taken 39%
+       39:   68:	  if (__value < __b2) return __n + 1;
+branch  0 taken 79% (fallthrough)
+branch  1 taken 21%
+        8:   69:	  if (__value < __b3) return __n + 2;
+branch  0 taken 88% (fallthrough)
+branch  1 taken 12%
+       1*:   70:	  if (__value < __b4) return __n + 3;
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        1:   71:	  __value /= __b4;
+        1:   72:	  __n += 4;
+        -:   73:	}
+        -:   74:    }
+------------------
+_ZNSt8__detail14__to_chars_lenIjEEjT_i:
+function _ZNSt8__detail14__to_chars_lenIjEEjT_i called 0 returned 0% blocks executed 0%
+    #####:   55:    __to_chars_len(_Tp __value, int __base = 10) noexcept
+        -:   56:    {
+        -:   57:#if __cpp_variable_templates
+        -:   58:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   59:#endif
+        -:   60:
+    #####:   61:      unsigned __n = 1;
+    #####:   62:      const unsigned __b2 = __base  * __base;
+    #####:   63:      const unsigned __b3 = __b2 * __base;
+    #####:   64:      const unsigned long __b4 = __b3 * __base;
+        -:   65:      for (;;)
+        -:   66:	{
+    #####:   67:	  if (__value < (unsigned)__base) return __n;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   68:	  if (__value < __b2) return __n + 1;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   69:	  if (__value < __b3) return __n + 2;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   70:	  if (__value < __b4) return __n + 3;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   71:	  __value /= __b4;
+    #####:   72:	  __n += 4;
+        -:   73:	}
+        -:   74:    }
+------------------
+_ZNSt8__detail14__to_chars_lenImEEjT_i:
+function _ZNSt8__detail14__to_chars_lenImEEjT_i called 19 returned 100% blocks executed 55%
+       19:   55:    __to_chars_len(_Tp __value, int __base = 10) noexcept
+        -:   56:    {
+        -:   57:#if __cpp_variable_templates
+        -:   58:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   59:#endif
+        -:   60:
+       19:   61:      unsigned __n = 1;
+       19:   62:      const unsigned __b2 = __base  * __base;
+       19:   63:      const unsigned __b3 = __b2 * __base;
+       19:   64:      const unsigned long __b4 = __b3 * __base;
+        -:   65:      for (;;)
+        -:   66:	{
+       19:   67:	  if (__value < (unsigned)__base) return __n;
+branch  0 taken 47% (fallthrough)
+branch  1 taken 53%
+       10:   68:	  if (__value < __b2) return __n + 1;
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+    #####:   69:	  if (__value < __b3) return __n + 2;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   70:	  if (__value < __b4) return __n + 3;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   71:	  __value /= __b4;
+    #####:   72:	  __n += 4;
+        -:   73:	}
+        -:   74:    }
+------------------
+_ZNSt8__detail14__to_chars_lenIjEEjT_i:
+function _ZNSt8__detail14__to_chars_lenIjEEjT_i called 9 returned 100% blocks executed 73%
+        9:   55:    __to_chars_len(_Tp __value, int __base = 10) noexcept
+        -:   56:    {
+        -:   57:#if __cpp_variable_templates
+        -:   58:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   59:#endif
+        -:   60:
+        9:   61:      unsigned __n = 1;
+        9:   62:      const unsigned __b2 = __base  * __base;
+        9:   63:      const unsigned __b3 = __b2 * __base;
+        9:   64:      const unsigned long __b4 = __b3 * __base;
+        -:   65:      for (;;)
+        -:   66:	{
+       9*:   67:	  if (__value < (unsigned)__base) return __n;
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+       9*:   68:	  if (__value < __b2) return __n + 1;
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        9:   69:	  if (__value < __b3) return __n + 2;
+branch  0 taken 89% (fallthrough)
+branch  1 taken 11%
+        1:   70:	  if (__value < __b4) return __n + 3;
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+    #####:   71:	  __value /= __b4;
+    #####:   72:	  __n += 4;
+        -:   73:	}
+        -:   74:    }
+------------------
+_ZNSt8__detail14__to_chars_lenImEEjT_i:
+function _ZNSt8__detail14__to_chars_lenImEEjT_i called 11 returned 100% blocks executed 73%
+       11:   55:    __to_chars_len(_Tp __value, int __base = 10) noexcept
+        -:   56:    {
+        -:   57:#if __cpp_variable_templates
+        -:   58:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   59:#endif
+        -:   60:
+       11:   61:      unsigned __n = 1;
+       11:   62:      const unsigned __b2 = __base  * __base;
+       11:   63:      const unsigned __b3 = __b2 * __base;
+       11:   64:      const unsigned long __b4 = __b3 * __base;
+        -:   65:      for (;;)
+        -:   66:	{
+       22:   67:	  if (__value < (unsigned)__base) return __n;
+branch  0 taken 50% (fallthrough)
+branch  1 taken 50%
+      11*:   68:	  if (__value < __b2) return __n + 1;
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+      11*:   69:	  if (__value < __b3) return __n + 2;
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+      11*:   70:	  if (__value < __b4) return __n + 3;
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+       11:   71:	  __value /= __b4;
+       11:   72:	  __n += 4;
+        -:   73:	}
+        -:   74:    }
+------------------
+_ZNSt8__detail14__to_chars_lenIjEEjT_i:
+function _ZNSt8__detail14__to_chars_lenIjEEjT_i called 11 returned 100% blocks executed 45%
+       11:   55:    __to_chars_len(_Tp __value, int __base = 10) noexcept
+        -:   56:    {
+        -:   57:#if __cpp_variable_templates
+        -:   58:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   59:#endif
+        -:   60:
+       11:   61:      unsigned __n = 1;
+       11:   62:      const unsigned __b2 = __base  * __base;
+       11:   63:      const unsigned __b3 = __b2 * __base;
+       11:   64:      const unsigned long __b4 = __b3 * __base;
+        -:   65:      for (;;)
+        -:   66:	{
+      11*:   67:	  if (__value < (unsigned)__base) return __n;
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+       11:   68:	  if (__value < __b2) return __n + 1;
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+    #####:   69:	  if (__value < __b3) return __n + 2;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   70:	  if (__value < __b4) return __n + 3;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   71:	  __value /= __b4;
+    #####:   72:	  __n += 4;
+        -:   73:	}
+        -:   74:    }
+------------------
+_ZNSt8__detail14__to_chars_lenImEEjT_i:
+function _ZNSt8__detail14__to_chars_lenImEEjT_i called 0 returned 0% blocks executed 0%
+    #####:   55:    __to_chars_len(_Tp __value, int __base = 10) noexcept
+        -:   56:    {
+        -:   57:#if __cpp_variable_templates
+        -:   58:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   59:#endif
+        -:   60:
+    #####:   61:      unsigned __n = 1;
+    #####:   62:      const unsigned __b2 = __base  * __base;
+    #####:   63:      const unsigned __b3 = __b2 * __base;
+    #####:   64:      const unsigned long __b4 = __b3 * __base;
+        -:   65:      for (;;)
+        -:   66:	{
+    #####:   67:	  if (__value < (unsigned)__base) return __n;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   68:	  if (__value < __b2) return __n + 1;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   69:	  if (__value < __b3) return __n + 2;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   70:	  if (__value < __b4) return __n + 3;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   71:	  __value /= __b4;
+    #####:   72:	  __n += 4;
+        -:   73:	}
+        -:   74:    }
+------------------
+_ZNSt8__detail14__to_chars_lenIyEEjT_i:
+function _ZNSt8__detail14__to_chars_lenIyEEjT_i called 0 returned 0% blocks executed 0%
+    #####:   55:    __to_chars_len(_Tp __value, int __base = 10) noexcept
+        -:   56:    {
+        -:   57:#if __cpp_variable_templates
+        -:   58:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   59:#endif
+        -:   60:
+    #####:   61:      unsigned __n = 1;
+    #####:   62:      const unsigned __b2 = __base  * __base;
+    #####:   63:      const unsigned __b3 = __b2 * __base;
+    #####:   64:      const unsigned long __b4 = __b3 * __base;
+        -:   65:      for (;;)
+        -:   66:	{
+    #####:   67:	  if (__value < (unsigned)__base) return __n;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   68:	  if (__value < __b2) return __n + 1;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   69:	  if (__value < __b3) return __n + 2;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   70:	  if (__value < __b4) return __n + 3;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   71:	  __value /= __b4;
+    #####:   72:	  __n += 4;
+        -:   73:	}
+        -:   74:    }
+------------------
+_ZNSt8__detail14__to_chars_lenImEEjT_i:
+function _ZNSt8__detail14__to_chars_lenImEEjT_i called 0 returned 0% blocks executed 0%
+    #####:   55:    __to_chars_len(_Tp __value, int __base = 10) noexcept
+        -:   56:    {
+        -:   57:#if __cpp_variable_templates
+        -:   58:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   59:#endif
+        -:   60:
+    #####:   61:      unsigned __n = 1;
+    #####:   62:      const unsigned __b2 = __base  * __base;
+    #####:   63:      const unsigned __b3 = __b2 * __base;
+    #####:   64:      const unsigned long __b4 = __b3 * __base;
+        -:   65:      for (;;)
+        -:   66:	{
+    #####:   67:	  if (__value < (unsigned)__base) return __n;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   68:	  if (__value < __b2) return __n + 1;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   69:	  if (__value < __b3) return __n + 2;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   70:	  if (__value < __b4) return __n + 3;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   71:	  __value /= __b4;
+    #####:   72:	  __n += 4;
+        -:   73:	}
+        -:   74:    }
+------------------
+_ZNSt8__detail14__to_chars_lenIjEEjT_i:
+function _ZNSt8__detail14__to_chars_lenIjEEjT_i called 0 returned 0% blocks executed 0%
+    #####:   55:    __to_chars_len(_Tp __value, int __base = 10) noexcept
+        -:   56:    {
+        -:   57:#if __cpp_variable_templates
+        -:   58:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   59:#endif
+        -:   60:
+    #####:   61:      unsigned __n = 1;
+    #####:   62:      const unsigned __b2 = __base  * __base;
+    #####:   63:      const unsigned __b3 = __b2 * __base;
+    #####:   64:      const unsigned long __b4 = __b3 * __base;
+        -:   65:      for (;;)
+        -:   66:	{
+    #####:   67:	  if (__value < (unsigned)__base) return __n;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   68:	  if (__value < __b2) return __n + 1;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   69:	  if (__value < __b3) return __n + 2;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   70:	  if (__value < __b4) return __n + 3;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   71:	  __value /= __b4;
+    #####:   72:	  __n += 4;
+        -:   73:	}
+        -:   74:    }
+------------------
+_ZNSt8__detail14__to_chars_lenIoEEjT_i:
+function _ZNSt8__detail14__to_chars_lenIoEEjT_i called 0 returned 0% blocks executed 0%
+    #####:   55:    __to_chars_len(_Tp __value, int __base = 10) noexcept
+        -:   56:    {
+        -:   57:#if __cpp_variable_templates
+        -:   58:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   59:#endif
+        -:   60:
+    #####:   61:      unsigned __n = 1;
+    #####:   62:      const unsigned __b2 = __base  * __base;
+    #####:   63:      const unsigned __b3 = __b2 * __base;
+    #####:   64:      const unsigned long __b4 = __b3 * __base;
+        -:   65:      for (;;)
+        -:   66:	{
+    #####:   67:	  if (__value < (unsigned)__base) return __n;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   68:	  if (__value < __b2) return __n + 1;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   69:	  if (__value < __b3) return __n + 2;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   70:	  if (__value < __b4) return __n + 3;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   71:	  __value /= __b4;
+    #####:   72:	  __n += 4;
+        -:   73:	}
+        -:   74:    }
+------------------
+_ZNSt8__detail14__to_chars_lenIyEEjT_i:
+function _ZNSt8__detail14__to_chars_lenIyEEjT_i called 0 returned 0% blocks executed 0%
+    #####:   55:    __to_chars_len(_Tp __value, int __base = 10) noexcept
+        -:   56:    {
+        -:   57:#if __cpp_variable_templates
+        -:   58:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   59:#endif
+        -:   60:
+    #####:   61:      unsigned __n = 1;
+    #####:   62:      const unsigned __b2 = __base  * __base;
+    #####:   63:      const unsigned __b3 = __b2 * __base;
+    #####:   64:      const unsigned long __b4 = __b3 * __base;
+        -:   65:      for (;;)
+        -:   66:	{
+    #####:   67:	  if (__value < (unsigned)__base) return __n;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   68:	  if (__value < __b2) return __n + 1;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   69:	  if (__value < __b3) return __n + 2;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   70:	  if (__value < __b4) return __n + 3;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   71:	  __value /= __b4;
+    #####:   72:	  __n += 4;
+        -:   73:	}
+        -:   74:    }
+------------------
+_ZNSt8__detail14__to_chars_lenImEEjT_i:
+function _ZNSt8__detail14__to_chars_lenImEEjT_i called 5 returned 100% blocks executed 55%
+        5:   55:    __to_chars_len(_Tp __value, int __base = 10) noexcept
+        -:   56:    {
+        -:   57:#if __cpp_variable_templates
+        -:   58:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   59:#endif
+        -:   60:
+        5:   61:      unsigned __n = 1;
+        5:   62:      const unsigned __b2 = __base  * __base;
+        5:   63:      const unsigned __b3 = __b2 * __base;
+        5:   64:      const unsigned long __b4 = __b3 * __base;
+        -:   65:      for (;;)
+        -:   66:	{
+       5*:   67:	  if (__value < (unsigned)__base) return __n;
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+       5*:   68:	  if (__value < __b2) return __n + 1;
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        5:   69:	  if (__value < __b3) return __n + 2;
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+    #####:   70:	  if (__value < __b4) return __n + 3;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   71:	  __value /= __b4;
+    #####:   72:	  __n += 4;
+        -:   73:	}
+        -:   74:    }
+------------------
+_ZNSt8__detail14__to_chars_lenIjEEjT_i:
+function _ZNSt8__detail14__to_chars_lenIjEEjT_i called 7 returned 100% blocks executed 82%
+        7:   55:    __to_chars_len(_Tp __value, int __base = 10) noexcept
+        -:   56:    {
+        -:   57:#if __cpp_variable_templates
+        -:   58:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   59:#endif
+        -:   60:
+        7:   61:      unsigned __n = 1;
+        7:   62:      const unsigned __b2 = __base  * __base;
+        7:   63:      const unsigned __b3 = __b2 * __base;
+        7:   64:      const unsigned long __b4 = __b3 * __base;
+        -:   65:      for (;;)
+        -:   66:	{
+       7*:   67:	  if (__value < (unsigned)__base) return __n;
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        7:   68:	  if (__value < __b2) return __n + 1;
+branch  0 taken 71% (fallthrough)
+branch  1 taken 29%
+        2:   69:	  if (__value < __b3) return __n + 2;
+branch  0 taken 50% (fallthrough)
+branch  1 taken 50%
+        1:   70:	  if (__value < __b4) return __n + 3;
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+    #####:   71:	  __value /= __b4;
+    #####:   72:	  __n += 4;
+        -:   73:	}
+        -:   74:    }
+------------------
+_ZNSt8__detail14__to_chars_lenImEEjT_i:
+function _ZNSt8__detail14__to_chars_lenImEEjT_i called 7 returned 100% blocks executed 73%
+        7:   55:    __to_chars_len(_Tp __value, int __base = 10) noexcept
+        -:   56:    {
+        -:   57:#if __cpp_variable_templates
+        -:   58:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   59:#endif
+        -:   60:
+        7:   61:      unsigned __n = 1;
+        7:   62:      const unsigned __b2 = __base  * __base;
+        7:   63:      const unsigned __b3 = __b2 * __base;
+        7:   64:      const unsigned long __b4 = __b3 * __base;
+        -:   65:      for (;;)
+        -:   66:	{
+      21*:   67:	  if (__value < (unsigned)__base) return __n;
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+      21*:   68:	  if (__value < __b2) return __n + 1;
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+      21*:   69:	  if (__value < __b3) return __n + 2;
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+       21:   70:	  if (__value < __b4) return __n + 3;
+branch  0 taken 33% (fallthrough)
+branch  1 taken 67%
+       14:   71:	  __value /= __b4;
+       14:   72:	  __n += 4;
+        -:   73:	}
+        -:   74:    }
+------------------
+_ZNSt8__detail14__to_chars_lenIjEEjT_i:
+function _ZNSt8__detail14__to_chars_lenIjEEjT_i called 554 returned 100% blocks executed 55%
+      554:   55:    __to_chars_len(_Tp __value, int __base = 10) noexcept
+        -:   56:    {
+        -:   57:#if __cpp_variable_templates
+        -:   58:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   59:#endif
+        -:   60:
+      554:   61:      unsigned __n = 1;
+      554:   62:      const unsigned __b2 = __base  * __base;
+      554:   63:      const unsigned __b3 = __b2 * __base;
+      554:   64:      const unsigned long __b4 = __b3 * __base;
+        -:   65:      for (;;)
+        -:   66:	{
+      554:   67:	  if (__value < (unsigned)__base) return __n;
+branch  0 taken 48% (fallthrough)
+branch  1 taken 52%
+      290:   68:	  if (__value < __b2) return __n + 1;
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+    #####:   69:	  if (__value < __b3) return __n + 2;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   70:	  if (__value < __b4) return __n + 3;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   71:	  __value /= __b4;
+    #####:   72:	  __n += 4;
+        -:   73:	}
+        -:   74:    }
+------------------
+_ZNSt8__detail14__to_chars_lenIoEEjT_i:
+function _ZNSt8__detail14__to_chars_lenIoEEjT_i called 0 returned 0% blocks executed 0%
+    #####:   55:    __to_chars_len(_Tp __value, int __base = 10) noexcept
+        -:   56:    {
+        -:   57:#if __cpp_variable_templates
+        -:   58:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   59:#endif
+        -:   60:
+    #####:   61:      unsigned __n = 1;
+    #####:   62:      const unsigned __b2 = __base  * __base;
+    #####:   63:      const unsigned __b3 = __b2 * __base;
+    #####:   64:      const unsigned long __b4 = __b3 * __base;
+        -:   65:      for (;;)
+        -:   66:	{
+    #####:   67:	  if (__value < (unsigned)__base) return __n;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   68:	  if (__value < __b2) return __n + 1;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   69:	  if (__value < __b3) return __n + 2;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   70:	  if (__value < __b4) return __n + 3;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:   71:	  __value /= __b4;
+    #####:   72:	  __n += 4;
+        -:   73:	}
+        -:   74:    }
+------------------
+        -:   75:
+        -:   76:  // Write an unsigned integer value to the range [first,first+len).
+        -:   77:  // The caller is required to provide a buffer of exactly the right size
+        -:   78:  // (which can be determined by the __to_chars_len function).
+        -:   79:  template<typename _Tp>
+        -:   80:    _GLIBCXX23_CONSTEXPR void
+   35047*:   81:    __to_chars_10_impl(char* __first, unsigned __len, _Tp __val) noexcept
+        -:   82:    {
+        -:   83:#if __cpp_variable_templates
+        -:   84:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   85:#endif
+        -:   86:
+   35047*:   87:      constexpr char __digits[201] =
+        -:   88:	"0001020304050607080910111213141516171819"
+        -:   89:	"2021222324252627282930313233343536373839"
+        -:   90:	"4041424344454647484950515253545556575859"
+        -:   91:	"6061626364656667686970717273747576777879"
+        -:   92:	"8081828384858687888990919293949596979899";
+   35047*:   93:      unsigned __pos = __len - 1;
+   38923*:   94:      while (__val >= 100)
+        -:   95:	{
+    3876*:   96:	  auto const __num = (__val % 100) * 2;
+    3876*:   97:	  __val /= 100;
+    3876*:   98:	  __first[__pos] = __digits[__num + 1];
+    3876*:   99:	  __first[__pos - 1] = __digits[__num];
+    3876*:  100:	  __pos -= 2;
+        -:  101:	}
+   35047*:  102:      if (__val >= 10)
+        -:  103:	{
+   21574*:  104:	  auto const __num = __val * 2;
+   21574*:  105:	  __first[1] = __digits[__num + 1];
+   21574*:  106:	  __first[0] = __digits[__num];
+        -:  107:	}
+        -:  108:      else
+   13473*:  109:	__first[0] = '0' + __val;
+   35047*:  110:    }
+------------------
+_ZNSt8__detail18__to_chars_10_implImEEvPcjT_:
+function _ZNSt8__detail18__to_chars_10_implImEEvPcjT_ called 7 returned 100% blocks executed 86%
+        7:   81:    __to_chars_10_impl(char* __first, unsigned __len, _Tp __val) noexcept
+        -:   82:    {
+        -:   83:#if __cpp_variable_templates
+        -:   84:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   85:#endif
+        -:   86:
+        7:   87:      constexpr char __digits[201] =
+        -:   88:	"0001020304050607080910111213141516171819"
+        -:   89:	"2021222324252627282930313233343536373839"
+        -:   90:	"4041424344454647484950515253545556575859"
+        -:   91:	"6061626364656667686970717273747576777879"
+        -:   92:	"8081828384858687888990919293949596979899";
+        7:   93:      unsigned __pos = __len - 1;
+       42:   94:      while (__val >= 100)
+branch  0 taken 83%
+branch  1 taken 17% (fallthrough)
+        -:   95:	{
+       35:   96:	  auto const __num = (__val % 100) * 2;
+       35:   97:	  __val /= 100;
+       35:   98:	  __first[__pos] = __digits[__num + 1];
+       35:   99:	  __first[__pos - 1] = __digits[__num];
+       35:  100:	  __pos -= 2;
+        -:  101:	}
+        7:  102:      if (__val >= 10)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:  103:	{
+        7:  104:	  auto const __num = __val * 2;
+        7:  105:	  __first[1] = __digits[__num + 1];
+        7:  106:	  __first[0] = __digits[__num];
+        -:  107:	}
+        -:  108:      else
+    #####:  109:	__first[0] = '0' + __val;
+        7:  110:    }
+------------------
+_ZNSt8__detail18__to_chars_10_implImEEvPcjT_:
+function _ZNSt8__detail18__to_chars_10_implImEEvPcjT_ called 1 returned 100% blocks executed 86%
+        1:   81:    __to_chars_10_impl(char* __first, unsigned __len, _Tp __val) noexcept
+        -:   82:    {
+        -:   83:#if __cpp_variable_templates
+        -:   84:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   85:#endif
+        -:   86:
+        1:   87:      constexpr char __digits[201] =
+        -:   88:	"0001020304050607080910111213141516171819"
+        -:   89:	"2021222324252627282930313233343536373839"
+        -:   90:	"4041424344454647484950515253545556575859"
+        -:   91:	"6061626364656667686970717273747576777879"
+        -:   92:	"8081828384858687888990919293949596979899";
+        1:   93:      unsigned __pos = __len - 1;
+        8:   94:      while (__val >= 100)
+branch  0 taken 88%
+branch  1 taken 12% (fallthrough)
+        -:   95:	{
+        7:   96:	  auto const __num = (__val % 100) * 2;
+        7:   97:	  __val /= 100;
+        7:   98:	  __first[__pos] = __digits[__num + 1];
+        7:   99:	  __first[__pos - 1] = __digits[__num];
+        7:  100:	  __pos -= 2;
+        -:  101:	}
+        1:  102:      if (__val >= 10)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:  103:	{
+    #####:  104:	  auto const __num = __val * 2;
+    #####:  105:	  __first[1] = __digits[__num + 1];
+    #####:  106:	  __first[0] = __digits[__num];
+        -:  107:	}
+        -:  108:      else
+        1:  109:	__first[0] = '0' + __val;
+        1:  110:    }
+------------------
+_ZNSt8__detail18__to_chars_10_implIjEEvPcjT_:
+function _ZNSt8__detail18__to_chars_10_implIjEEvPcjT_ called 1 returned 100% blocks executed 71%
+        1:   81:    __to_chars_10_impl(char* __first, unsigned __len, _Tp __val) noexcept
+        -:   82:    {
+        -:   83:#if __cpp_variable_templates
+        -:   84:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   85:#endif
+        -:   86:
+        1:   87:      constexpr char __digits[201] =
+        -:   88:	"0001020304050607080910111213141516171819"
+        -:   89:	"2021222324252627282930313233343536373839"
+        -:   90:	"4041424344454647484950515253545556575859"
+        -:   91:	"6061626364656667686970717273747576777879"
+        -:   92:	"8081828384858687888990919293949596979899";
+        1:   93:      unsigned __pos = __len - 1;
+        1:   94:      while (__val >= 100)
+branch  0 taken 0%
+branch  1 taken 100% (fallthrough)
+        -:   95:	{
+    #####:   96:	  auto const __num = (__val % 100) * 2;
+    #####:   97:	  __val /= 100;
+    #####:   98:	  __first[__pos] = __digits[__num + 1];
+    #####:   99:	  __first[__pos - 1] = __digits[__num];
+    #####:  100:	  __pos -= 2;
+        -:  101:	}
+        1:  102:      if (__val >= 10)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:  103:	{
+        1:  104:	  auto const __num = __val * 2;
+        1:  105:	  __first[1] = __digits[__num + 1];
+        1:  106:	  __first[0] = __digits[__num];
+        -:  107:	}
+        -:  108:      else
+    #####:  109:	__first[0] = '0' + __val;
+        1:  110:    }
+------------------
+_ZNSt8__detail18__to_chars_10_implImEEvPcjT_:
+function _ZNSt8__detail18__to_chars_10_implImEEvPcjT_ called 10054 returned 100% blocks executed 100%
+    10054:   81:    __to_chars_10_impl(char* __first, unsigned __len, _Tp __val) noexcept
+        -:   82:    {
+        -:   83:#if __cpp_variable_templates
+        -:   84:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   85:#endif
+        -:   86:
+    10054:   87:      constexpr char __digits[201] =
+        -:   88:	"0001020304050607080910111213141516171819"
+        -:   89:	"2021222324252627282930313233343536373839"
+        -:   90:	"4041424344454647484950515253545556575859"
+        -:   91:	"6061626364656667686970717273747576777879"
+        -:   92:	"8081828384858687888990919293949596979899";
+    10054:   93:      unsigned __pos = __len - 1;
+    10063:   94:      while (__val >= 100)
+branch  0 taken 1%
+branch  1 taken 100% (fallthrough)
+        -:   95:	{
+        9:   96:	  auto const __num = (__val % 100) * 2;
+        9:   97:	  __val /= 100;
+        9:   98:	  __first[__pos] = __digits[__num + 1];
+        9:   99:	  __first[__pos - 1] = __digits[__num];
+        9:  100:	  __pos -= 2;
+        -:  101:	}
+    10054:  102:      if (__val >= 10)
+branch  0 taken 1% (fallthrough)
+branch  1 taken 100%
+        -:  103:	{
+        2:  104:	  auto const __num = __val * 2;
+        2:  105:	  __first[1] = __digits[__num + 1];
+        2:  106:	  __first[0] = __digits[__num];
+        -:  107:	}
+        -:  108:      else
+    10052:  109:	__first[0] = '0' + __val;
+    10054:  110:    }
+------------------
+_ZNSt8__detail18__to_chars_10_implIjEEvPcjT_:
+function _ZNSt8__detail18__to_chars_10_implIjEEvPcjT_ called 22340 returned 100% blocks executed 100%
+    22340:   81:    __to_chars_10_impl(char* __first, unsigned __len, _Tp __val) noexcept
+        -:   82:    {
+        -:   83:#if __cpp_variable_templates
+        -:   84:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   85:#endif
+        -:   86:
+    22340:   87:      constexpr char __digits[201] =
+        -:   88:	"0001020304050607080910111213141516171819"
+        -:   89:	"2021222324252627282930313233343536373839"
+        -:   90:	"4041424344454647484950515253545556575859"
+        -:   91:	"6061626364656667686970717273747576777879"
+        -:   92:	"8081828384858687888990919293949596979899";
+    22340:   93:      unsigned __pos = __len - 1;
+    22341:   94:      while (__val >= 100)
+branch  0 taken 1%
+branch  1 taken 100% (fallthrough)
+        -:   95:	{
+        1:   96:	  auto const __num = (__val % 100) * 2;
+        1:   97:	  __val /= 100;
+        1:   98:	  __first[__pos] = __digits[__num + 1];
+        1:   99:	  __first[__pos - 1] = __digits[__num];
+        1:  100:	  __pos -= 2;
+        -:  101:	}
+    22340:  102:      if (__val >= 10)
+branch  0 taken 93% (fallthrough)
+branch  1 taken 7%
+        -:  103:	{
+    20712:  104:	  auto const __num = __val * 2;
+    20712:  105:	  __first[1] = __digits[__num + 1];
+    20712:  106:	  __first[0] = __digits[__num];
+        -:  107:	}
+        -:  108:      else
+     1628:  109:	__first[0] = '0' + __val;
+    22340:  110:    }
+------------------
+_ZNSt8__detail18__to_chars_10_implIoEEvPcjT_:
+function _ZNSt8__detail18__to_chars_10_implIoEEvPcjT_ called 0 returned 0% blocks executed 0%
+    #####:   81:    __to_chars_10_impl(char* __first, unsigned __len, _Tp __val) noexcept
+        -:   82:    {
+        -:   83:#if __cpp_variable_templates
+        -:   84:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   85:#endif
+        -:   86:
+    #####:   87:      constexpr char __digits[201] =
+        -:   88:	"0001020304050607080910111213141516171819"
+        -:   89:	"2021222324252627282930313233343536373839"
+        -:   90:	"4041424344454647484950515253545556575859"
+        -:   91:	"6061626364656667686970717273747576777879"
+        -:   92:	"8081828384858687888990919293949596979899";
+    #####:   93:      unsigned __pos = __len - 1;
+    #####:   94:      while (__val >= 100)
+branch  0 never executed
+branch  1 never executed (fallthrough)
+        -:   95:	{
+    #####:   96:	  auto const __num = (__val % 100) * 2;
+    #####:   97:	  __val /= 100;
+    #####:   98:	  __first[__pos] = __digits[__num + 1];
+    #####:   99:	  __first[__pos - 1] = __digits[__num];
+    #####:  100:	  __pos -= 2;
+        -:  101:	}
+    #####:  102:      if (__val >= 10)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  103:	{
+    #####:  104:	  auto const __num = __val * 2;
+    #####:  105:	  __first[1] = __digits[__num + 1];
+    #####:  106:	  __first[0] = __digits[__num];
+        -:  107:	}
+        -:  108:      else
+    #####:  109:	__first[0] = '0' + __val;
+    #####:  110:    }
+------------------
+_ZNSt8__detail18__to_chars_10_implIyEEvPcjT_:
+function _ZNSt8__detail18__to_chars_10_implIyEEvPcjT_ called 0 returned 0% blocks executed 0%
+    #####:   81:    __to_chars_10_impl(char* __first, unsigned __len, _Tp __val) noexcept
+        -:   82:    {
+        -:   83:#if __cpp_variable_templates
+        -:   84:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   85:#endif
+        -:   86:
+    #####:   87:      constexpr char __digits[201] =
+        -:   88:	"0001020304050607080910111213141516171819"
+        -:   89:	"2021222324252627282930313233343536373839"
+        -:   90:	"4041424344454647484950515253545556575859"
+        -:   91:	"6061626364656667686970717273747576777879"
+        -:   92:	"8081828384858687888990919293949596979899";
+    #####:   93:      unsigned __pos = __len - 1;
+    #####:   94:      while (__val >= 100)
+branch  0 never executed
+branch  1 never executed (fallthrough)
+        -:   95:	{
+    #####:   96:	  auto const __num = (__val % 100) * 2;
+    #####:   97:	  __val /= 100;
+    #####:   98:	  __first[__pos] = __digits[__num + 1];
+    #####:   99:	  __first[__pos - 1] = __digits[__num];
+    #####:  100:	  __pos -= 2;
+        -:  101:	}
+    #####:  102:      if (__val >= 10)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  103:	{
+    #####:  104:	  auto const __num = __val * 2;
+    #####:  105:	  __first[1] = __digits[__num + 1];
+    #####:  106:	  __first[0] = __digits[__num];
+        -:  107:	}
+        -:  108:      else
+    #####:  109:	__first[0] = '0' + __val;
+    #####:  110:    }
+------------------
+_ZNSt8__detail18__to_chars_10_implImEEvPcjT_:
+function _ZNSt8__detail18__to_chars_10_implImEEvPcjT_ called 430 returned 100% blocks executed 86%
+      430:   81:    __to_chars_10_impl(char* __first, unsigned __len, _Tp __val) noexcept
+        -:   82:    {
+        -:   83:#if __cpp_variable_templates
+        -:   84:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   85:#endif
+        -:   86:
+      430:   87:      constexpr char __digits[201] =
+        -:   88:	"0001020304050607080910111213141516171819"
+        -:   89:	"2021222324252627282930313233343536373839"
+        -:   90:	"4041424344454647484950515253545556575859"
+        -:   91:	"6061626364656667686970717273747576777879"
+        -:   92:	"8081828384858687888990919293949596979899";
+      430:   93:      unsigned __pos = __len - 1;
+     3424:   94:      while (__val >= 100)
+branch  0 taken 87%
+branch  1 taken 13% (fallthrough)
+        -:   95:	{
+     2994:   96:	  auto const __num = (__val % 100) * 2;
+     2994:   97:	  __val /= 100;
+     2994:   98:	  __first[__pos] = __digits[__num + 1];
+     2994:   99:	  __first[__pos - 1] = __digits[__num];
+     2994:  100:	  __pos -= 2;
+        -:  101:	}
+      430:  102:      if (__val >= 10)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:  103:	{
+    #####:  104:	  auto const __num = __val * 2;
+    #####:  105:	  __first[1] = __digits[__num + 1];
+    #####:  106:	  __first[0] = __digits[__num];
+        -:  107:	}
+        -:  108:      else
+      430:  109:	__first[0] = '0' + __val;
+      430:  110:    }
+------------------
+_ZNSt8__detail18__to_chars_10_implIjEEvPcjT_:
+function _ZNSt8__detail18__to_chars_10_implIjEEvPcjT_ called 1128 returned 100% blocks executed 100%
+     1128:   81:    __to_chars_10_impl(char* __first, unsigned __len, _Tp __val) noexcept
+        -:   82:    {
+        -:   83:#if __cpp_variable_templates
+        -:   84:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   85:#endif
+        -:   86:
+     1128:   87:      constexpr char __digits[201] =
+        -:   88:	"0001020304050607080910111213141516171819"
+        -:   89:	"2021222324252627282930313233343536373839"
+        -:   90:	"4041424344454647484950515253545556575859"
+        -:   91:	"6061626364656667686970717273747576777879"
+        -:   92:	"8081828384858687888990919293949596979899";
+     1128:   93:      unsigned __pos = __len - 1;
+     1563:   94:      while (__val >= 100)
+branch  0 taken 28%
+branch  1 taken 72% (fallthrough)
+        -:   95:	{
+      435:   96:	  auto const __num = (__val % 100) * 2;
+      435:   97:	  __val /= 100;
+      435:   98:	  __first[__pos] = __digits[__num + 1];
+      435:   99:	  __first[__pos - 1] = __digits[__num];
+      435:  100:	  __pos -= 2;
+        -:  101:	}
+     1128:  102:      if (__val >= 10)
+branch  0 taken 32% (fallthrough)
+branch  1 taken 68%
+        -:  103:	{
+      363:  104:	  auto const __num = __val * 2;
+      363:  105:	  __first[1] = __digits[__num + 1];
+      363:  106:	  __first[0] = __digits[__num];
+        -:  107:	}
+        -:  108:      else
+      765:  109:	__first[0] = '0' + __val;
+     1128:  110:    }
+------------------
+_ZNSt8__detail18__to_chars_10_implIjEEvPcjT_:
+function _ZNSt8__detail18__to_chars_10_implIjEEvPcjT_ called 257 returned 100% blocks executed 100%
+      257:   81:    __to_chars_10_impl(char* __first, unsigned __len, _Tp __val) noexcept
+        -:   82:    {
+        -:   83:#if __cpp_variable_templates
+        -:   84:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   85:#endif
+        -:   86:
+      257:   87:      constexpr char __digits[201] =
+        -:   88:	"0001020304050607080910111213141516171819"
+        -:   89:	"2021222324252627282930313233343536373839"
+        -:   90:	"4041424344454647484950515253545556575859"
+        -:   91:	"6061626364656667686970717273747576777879"
+        -:   92:	"8081828384858687888990919293949596979899";
+      257:   93:      unsigned __pos = __len - 1;
+      414:   94:      while (__val >= 100)
+branch  0 taken 38%
+branch  1 taken 62% (fallthrough)
+        -:   95:	{
+      157:   96:	  auto const __num = (__val % 100) * 2;
+      157:   97:	  __val /= 100;
+      157:   98:	  __first[__pos] = __digits[__num + 1];
+      157:   99:	  __first[__pos - 1] = __digits[__num];
+      157:  100:	  __pos -= 2;
+        -:  101:	}
+      257:  102:      if (__val >= 10)
+branch  0 taken 35% (fallthrough)
+branch  1 taken 65%
+        -:  103:	{
+       90:  104:	  auto const __num = __val * 2;
+       90:  105:	  __first[1] = __digits[__num + 1];
+       90:  106:	  __first[0] = __digits[__num];
+        -:  107:	}
+        -:  108:      else
+      167:  109:	__first[0] = '0' + __val;
+      257:  110:    }
+------------------
+_ZNSt8__detail18__to_chars_10_implIjEEvPcjT_:
+function _ZNSt8__detail18__to_chars_10_implIjEEvPcjT_ called 5 returned 100% blocks executed 86%
+        5:   81:    __to_chars_10_impl(char* __first, unsigned __len, _Tp __val) noexcept
+        -:   82:    {
+        -:   83:#if __cpp_variable_templates
+        -:   84:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   85:#endif
+        -:   86:
+        5:   87:      constexpr char __digits[201] =
+        -:   88:	"0001020304050607080910111213141516171819"
+        -:   89:	"2021222324252627282930313233343536373839"
+        -:   90:	"4041424344454647484950515253545556575859"
+        -:   91:	"6061626364656667686970717273747576777879"
+        -:   92:	"8081828384858687888990919293949596979899";
+        5:   93:      unsigned __pos = __len - 1;
+       14:   94:      while (__val >= 100)
+branch  0 taken 64%
+branch  1 taken 36% (fallthrough)
+        -:   95:	{
+        9:   96:	  auto const __num = (__val % 100) * 2;
+        9:   97:	  __val /= 100;
+        9:   98:	  __first[__pos] = __digits[__num + 1];
+        9:   99:	  __first[__pos - 1] = __digits[__num];
+        9:  100:	  __pos -= 2;
+        -:  101:	}
+        5:  102:      if (__val >= 10)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:  103:	{
+    #####:  104:	  auto const __num = __val * 2;
+    #####:  105:	  __first[1] = __digits[__num + 1];
+    #####:  106:	  __first[0] = __digits[__num];
+        -:  107:	}
+        -:  108:      else
+        5:  109:	__first[0] = '0' + __val;
+        5:  110:    }
+------------------
+_ZNSt8__detail18__to_chars_10_implIyEEvPcjT_:
+function _ZNSt8__detail18__to_chars_10_implIyEEvPcjT_ called 0 returned 0% blocks executed 0%
+    #####:   81:    __to_chars_10_impl(char* __first, unsigned __len, _Tp __val) noexcept
+        -:   82:    {
+        -:   83:#if __cpp_variable_templates
+        -:   84:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   85:#endif
+        -:   86:
+    #####:   87:      constexpr char __digits[201] =
+        -:   88:	"0001020304050607080910111213141516171819"
+        -:   89:	"2021222324252627282930313233343536373839"
+        -:   90:	"4041424344454647484950515253545556575859"
+        -:   91:	"6061626364656667686970717273747576777879"
+        -:   92:	"8081828384858687888990919293949596979899";
+    #####:   93:      unsigned __pos = __len - 1;
+    #####:   94:      while (__val >= 100)
+branch  0 never executed
+branch  1 never executed (fallthrough)
+        -:   95:	{
+    #####:   96:	  auto const __num = (__val % 100) * 2;
+    #####:   97:	  __val /= 100;
+    #####:   98:	  __first[__pos] = __digits[__num + 1];
+    #####:   99:	  __first[__pos - 1] = __digits[__num];
+    #####:  100:	  __pos -= 2;
+        -:  101:	}
+    #####:  102:      if (__val >= 10)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  103:	{
+    #####:  104:	  auto const __num = __val * 2;
+    #####:  105:	  __first[1] = __digits[__num + 1];
+    #####:  106:	  __first[0] = __digits[__num];
+        -:  107:	}
+        -:  108:      else
+    #####:  109:	__first[0] = '0' + __val;
+    #####:  110:    }
+------------------
+_ZNSt8__detail18__to_chars_10_implIjEEvPcjT_:
+function _ZNSt8__detail18__to_chars_10_implIjEEvPcjT_ called 30 returned 100% blocks executed 86%
+       30:   81:    __to_chars_10_impl(char* __first, unsigned __len, _Tp __val) noexcept
+        -:   82:    {
+        -:   83:#if __cpp_variable_templates
+        -:   84:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   85:#endif
+        -:   86:
+       30:   87:      constexpr char __digits[201] =
+        -:   88:	"0001020304050607080910111213141516171819"
+        -:   89:	"2021222324252627282930313233343536373839"
+        -:   90:	"4041424344454647484950515253545556575859"
+        -:   91:	"6061626364656667686970717273747576777879"
+        -:   92:	"8081828384858687888990919293949596979899";
+       30:   93:      unsigned __pos = __len - 1;
+       30:   94:      while (__val >= 100)
+branch  0 taken 0%
+branch  1 taken 100% (fallthrough)
+        -:   95:	{
+    #####:   96:	  auto const __num = (__val % 100) * 2;
+    #####:   97:	  __val /= 100;
+    #####:   98:	  __first[__pos] = __digits[__num + 1];
+    #####:   99:	  __first[__pos - 1] = __digits[__num];
+    #####:  100:	  __pos -= 2;
+        -:  101:	}
+       30:  102:      if (__val >= 10)
+branch  0 taken 33% (fallthrough)
+branch  1 taken 67%
+        -:  103:	{
+       10:  104:	  auto const __num = __val * 2;
+       10:  105:	  __first[1] = __digits[__num + 1];
+       10:  106:	  __first[0] = __digits[__num];
+        -:  107:	}
+        -:  108:      else
+       20:  109:	__first[0] = '0' + __val;
+       30:  110:    }
+------------------
+_ZNSt8__detail18__to_chars_10_implIjEEvPcjT_:
+function _ZNSt8__detail18__to_chars_10_implIjEEvPcjT_ called 14 returned 100% blocks executed 100%
+       14:   81:    __to_chars_10_impl(char* __first, unsigned __len, _Tp __val) noexcept
+        -:   82:    {
+        -:   83:#if __cpp_variable_templates
+        -:   84:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   85:#endif
+        -:   86:
+       14:   87:      constexpr char __digits[201] =
+        -:   88:	"0001020304050607080910111213141516171819"
+        -:   89:	"2021222324252627282930313233343536373839"
+        -:   90:	"4041424344454647484950515253545556575859"
+        -:   91:	"6061626364656667686970717273747576777879"
+        -:   92:	"8081828384858687888990919293949596979899";
+       14:   93:      unsigned __pos = __len - 1;
+       41:   94:      while (__val >= 100)
+branch  0 taken 66%
+branch  1 taken 34% (fallthrough)
+        -:   95:	{
+       27:   96:	  auto const __num = (__val % 100) * 2;
+       27:   97:	  __val /= 100;
+       27:   98:	  __first[__pos] = __digits[__num + 1];
+       27:   99:	  __first[__pos - 1] = __digits[__num];
+       27:  100:	  __pos -= 2;
+        -:  101:	}
+       14:  102:      if (__val >= 10)
+branch  0 taken 7% (fallthrough)
+branch  1 taken 93%
+        -:  103:	{
+        1:  104:	  auto const __num = __val * 2;
+        1:  105:	  __first[1] = __digits[__num + 1];
+        1:  106:	  __first[0] = __digits[__num];
+        -:  107:	}
+        -:  108:      else
+       13:  109:	__first[0] = '0' + __val;
+       14:  110:    }
+------------------
+_ZNSt8__detail18__to_chars_10_implImEEvPcjT_:
+function _ZNSt8__detail18__to_chars_10_implImEEvPcjT_ called 38 returned 100% blocks executed 100%
+       38:   81:    __to_chars_10_impl(char* __first, unsigned __len, _Tp __val) noexcept
+        -:   82:    {
+        -:   83:#if __cpp_variable_templates
+        -:   84:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   85:#endif
+        -:   86:
+       38:   87:      constexpr char __digits[201] =
+        -:   88:	"0001020304050607080910111213141516171819"
+        -:   89:	"2021222324252627282930313233343536373839"
+        -:   90:	"4041424344454647484950515253545556575859"
+        -:   91:	"6061626364656667686970717273747576777879"
+        -:   92:	"8081828384858687888990919293949596979899";
+       38:   93:      unsigned __pos = __len - 1;
+      146:   94:      while (__val >= 100)
+branch  0 taken 74%
+branch  1 taken 26% (fallthrough)
+        -:   95:	{
+      108:   96:	  auto const __num = (__val % 100) * 2;
+      108:   97:	  __val /= 100;
+      108:   98:	  __first[__pos] = __digits[__num + 1];
+      108:   99:	  __first[__pos - 1] = __digits[__num];
+      108:  100:	  __pos -= 2;
+        -:  101:	}
+       38:  102:      if (__val >= 10)
+branch  0 taken 58% (fallthrough)
+branch  1 taken 42%
+        -:  103:	{
+       22:  104:	  auto const __num = __val * 2;
+       22:  105:	  __first[1] = __digits[__num + 1];
+       22:  106:	  __first[0] = __digits[__num];
+        -:  107:	}
+        -:  108:      else
+       16:  109:	__first[0] = '0' + __val;
+       38:  110:    }
+------------------
+_ZNSt8__detail18__to_chars_10_implImEEvPcjT_:
+function _ZNSt8__detail18__to_chars_10_implImEEvPcjT_ called 1 returned 100% blocks executed 86%
+        1:   81:    __to_chars_10_impl(char* __first, unsigned __len, _Tp __val) noexcept
+        -:   82:    {
+        -:   83:#if __cpp_variable_templates
+        -:   84:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   85:#endif
+        -:   86:
+        1:   87:      constexpr char __digits[201] =
+        -:   88:	"0001020304050607080910111213141516171819"
+        -:   89:	"2021222324252627282930313233343536373839"
+        -:   90:	"4041424344454647484950515253545556575859"
+        -:   91:	"6061626364656667686970717273747576777879"
+        -:   92:	"8081828384858687888990919293949596979899";
+        1:   93:      unsigned __pos = __len - 1;
+        7:   94:      while (__val >= 100)
+branch  0 taken 86%
+branch  1 taken 14% (fallthrough)
+        -:   95:	{
+        6:   96:	  auto const __num = (__val % 100) * 2;
+        6:   97:	  __val /= 100;
+        6:   98:	  __first[__pos] = __digits[__num + 1];
+        6:   99:	  __first[__pos - 1] = __digits[__num];
+        6:  100:	  __pos -= 2;
+        -:  101:	}
+        1:  102:      if (__val >= 10)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:  103:	{
+    #####:  104:	  auto const __num = __val * 2;
+    #####:  105:	  __first[1] = __digits[__num + 1];
+    #####:  106:	  __first[0] = __digits[__num];
+        -:  107:	}
+        -:  108:      else
+        1:  109:	__first[0] = '0' + __val;
+        1:  110:    }
+------------------
+_ZNSt8__detail18__to_chars_10_implIjEEvPcjT_:
+function _ZNSt8__detail18__to_chars_10_implIjEEvPcjT_ called 4 returned 100% blocks executed 100%
+        4:   81:    __to_chars_10_impl(char* __first, unsigned __len, _Tp __val) noexcept
+        -:   82:    {
+        -:   83:#if __cpp_variable_templates
+        -:   84:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   85:#endif
+        -:   86:
+        4:   87:      constexpr char __digits[201] =
+        -:   88:	"0001020304050607080910111213141516171819"
+        -:   89:	"2021222324252627282930313233343536373839"
+        -:   90:	"4041424344454647484950515253545556575859"
+        -:   91:	"6061626364656667686970717273747576777879"
+        -:   92:	"8081828384858687888990919293949596979899";
+        4:   93:      unsigned __pos = __len - 1;
+       10:   94:      while (__val >= 100)
+branch  0 taken 60%
+branch  1 taken 40% (fallthrough)
+        -:   95:	{
+        6:   96:	  auto const __num = (__val % 100) * 2;
+        6:   97:	  __val /= 100;
+        6:   98:	  __first[__pos] = __digits[__num + 1];
+        6:   99:	  __first[__pos - 1] = __digits[__num];
+        6:  100:	  __pos -= 2;
+        -:  101:	}
+        4:  102:      if (__val >= 10)
+branch  0 taken 75% (fallthrough)
+branch  1 taken 25%
+        -:  103:	{
+        3:  104:	  auto const __num = __val * 2;
+        3:  105:	  __first[1] = __digits[__num + 1];
+        3:  106:	  __first[0] = __digits[__num];
+        -:  107:	}
+        -:  108:      else
+        1:  109:	__first[0] = '0' + __val;
+        4:  110:    }
+------------------
+_ZNSt8__detail18__to_chars_10_implImEEvPcjT_:
+function _ZNSt8__detail18__to_chars_10_implImEEvPcjT_ called 14 returned 100% blocks executed 86%
+       14:   81:    __to_chars_10_impl(char* __first, unsigned __len, _Tp __val) noexcept
+        -:   82:    {
+        -:   83:#if __cpp_variable_templates
+        -:   84:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   85:#endif
+        -:   86:
+       14:   87:      constexpr char __digits[201] =
+        -:   88:	"0001020304050607080910111213141516171819"
+        -:   89:	"2021222324252627282930313233343536373839"
+        -:   90:	"4041424344454647484950515253545556575859"
+        -:   91:	"6061626364656667686970717273747576777879"
+        -:   92:	"8081828384858687888990919293949596979899";
+       14:   93:      unsigned __pos = __len - 1;
+       14:   94:      while (__val >= 100)
+branch  0 taken 0%
+branch  1 taken 100% (fallthrough)
+        -:   95:	{
+    #####:   96:	  auto const __num = (__val % 100) * 2;
+    #####:   97:	  __val /= 100;
+    #####:   98:	  __first[__pos] = __digits[__num + 1];
+    #####:   99:	  __first[__pos - 1] = __digits[__num];
+    #####:  100:	  __pos -= 2;
+        -:  101:	}
+       14:  102:      if (__val >= 10)
+branch  0 taken 50% (fallthrough)
+branch  1 taken 50%
+        -:  103:	{
+        7:  104:	  auto const __num = __val * 2;
+        7:  105:	  __first[1] = __digits[__num + 1];
+        7:  106:	  __first[0] = __digits[__num];
+        -:  107:	}
+        -:  108:      else
+        7:  109:	__first[0] = '0' + __val;
+       14:  110:    }
+------------------
+_ZNSt8__detail18__to_chars_10_implIjEEvPcjT_:
+function _ZNSt8__detail18__to_chars_10_implIjEEvPcjT_ called 0 returned 0% blocks executed 0%
+    #####:   81:    __to_chars_10_impl(char* __first, unsigned __len, _Tp __val) noexcept
+        -:   82:    {
+        -:   83:#if __cpp_variable_templates
+        -:   84:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   85:#endif
+        -:   86:
+    #####:   87:      constexpr char __digits[201] =
+        -:   88:	"0001020304050607080910111213141516171819"
+        -:   89:	"2021222324252627282930313233343536373839"
+        -:   90:	"4041424344454647484950515253545556575859"
+        -:   91:	"6061626364656667686970717273747576777879"
+        -:   92:	"8081828384858687888990919293949596979899";
+    #####:   93:      unsigned __pos = __len - 1;
+    #####:   94:      while (__val >= 100)
+branch  0 never executed
+branch  1 never executed (fallthrough)
+        -:   95:	{
+    #####:   96:	  auto const __num = (__val % 100) * 2;
+    #####:   97:	  __val /= 100;
+    #####:   98:	  __first[__pos] = __digits[__num + 1];
+    #####:   99:	  __first[__pos - 1] = __digits[__num];
+    #####:  100:	  __pos -= 2;
+        -:  101:	}
+    #####:  102:      if (__val >= 10)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  103:	{
+    #####:  104:	  auto const __num = __val * 2;
+    #####:  105:	  __first[1] = __digits[__num + 1];
+    #####:  106:	  __first[0] = __digits[__num];
+        -:  107:	}
+        -:  108:      else
+    #####:  109:	__first[0] = '0' + __val;
+    #####:  110:    }
+------------------
+_ZNSt8__detail18__to_chars_10_implIjEEvPcjT_:
+function _ZNSt8__detail18__to_chars_10_implIjEEvPcjT_ called 0 returned 0% blocks executed 0%
+    #####:   81:    __to_chars_10_impl(char* __first, unsigned __len, _Tp __val) noexcept
+        -:   82:    {
+        -:   83:#if __cpp_variable_templates
+        -:   84:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   85:#endif
+        -:   86:
+    #####:   87:      constexpr char __digits[201] =
+        -:   88:	"0001020304050607080910111213141516171819"
+        -:   89:	"2021222324252627282930313233343536373839"
+        -:   90:	"4041424344454647484950515253545556575859"
+        -:   91:	"6061626364656667686970717273747576777879"
+        -:   92:	"8081828384858687888990919293949596979899";
+    #####:   93:      unsigned __pos = __len - 1;
+    #####:   94:      while (__val >= 100)
+branch  0 never executed
+branch  1 never executed (fallthrough)
+        -:   95:	{
+    #####:   96:	  auto const __num = (__val % 100) * 2;
+    #####:   97:	  __val /= 100;
+    #####:   98:	  __first[__pos] = __digits[__num + 1];
+    #####:   99:	  __first[__pos - 1] = __digits[__num];
+    #####:  100:	  __pos -= 2;
+        -:  101:	}
+    #####:  102:      if (__val >= 10)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  103:	{
+    #####:  104:	  auto const __num = __val * 2;
+    #####:  105:	  __first[1] = __digits[__num + 1];
+    #####:  106:	  __first[0] = __digits[__num];
+        -:  107:	}
+        -:  108:      else
+    #####:  109:	__first[0] = '0' + __val;
+    #####:  110:    }
+------------------
+_ZNSt8__detail18__to_chars_10_implImEEvPcjT_:
+function _ZNSt8__detail18__to_chars_10_implImEEvPcjT_ called 0 returned 0% blocks executed 0%
+    #####:   81:    __to_chars_10_impl(char* __first, unsigned __len, _Tp __val) noexcept
+        -:   82:    {
+        -:   83:#if __cpp_variable_templates
+        -:   84:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   85:#endif
+        -:   86:
+    #####:   87:      constexpr char __digits[201] =
+        -:   88:	"0001020304050607080910111213141516171819"
+        -:   89:	"2021222324252627282930313233343536373839"
+        -:   90:	"4041424344454647484950515253545556575859"
+        -:   91:	"6061626364656667686970717273747576777879"
+        -:   92:	"8081828384858687888990919293949596979899";
+    #####:   93:      unsigned __pos = __len - 1;
+    #####:   94:      while (__val >= 100)
+branch  0 never executed
+branch  1 never executed (fallthrough)
+        -:   95:	{
+    #####:   96:	  auto const __num = (__val % 100) * 2;
+    #####:   97:	  __val /= 100;
+    #####:   98:	  __first[__pos] = __digits[__num + 1];
+    #####:   99:	  __first[__pos - 1] = __digits[__num];
+    #####:  100:	  __pos -= 2;
+        -:  101:	}
+    #####:  102:      if (__val >= 10)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  103:	{
+    #####:  104:	  auto const __num = __val * 2;
+    #####:  105:	  __first[1] = __digits[__num + 1];
+    #####:  106:	  __first[0] = __digits[__num];
+        -:  107:	}
+        -:  108:      else
+    #####:  109:	__first[0] = '0' + __val;
+    #####:  110:    }
+------------------
+_ZNSt8__detail18__to_chars_10_implIjEEvPcjT_:
+function _ZNSt8__detail18__to_chars_10_implIjEEvPcjT_ called 0 returned 0% blocks executed 0%
+    #####:   81:    __to_chars_10_impl(char* __first, unsigned __len, _Tp __val) noexcept
+        -:   82:    {
+        -:   83:#if __cpp_variable_templates
+        -:   84:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   85:#endif
+        -:   86:
+    #####:   87:      constexpr char __digits[201] =
+        -:   88:	"0001020304050607080910111213141516171819"
+        -:   89:	"2021222324252627282930313233343536373839"
+        -:   90:	"4041424344454647484950515253545556575859"
+        -:   91:	"6061626364656667686970717273747576777879"
+        -:   92:	"8081828384858687888990919293949596979899";
+    #####:   93:      unsigned __pos = __len - 1;
+    #####:   94:      while (__val >= 100)
+branch  0 never executed
+branch  1 never executed (fallthrough)
+        -:   95:	{
+    #####:   96:	  auto const __num = (__val % 100) * 2;
+    #####:   97:	  __val /= 100;
+    #####:   98:	  __first[__pos] = __digits[__num + 1];
+    #####:   99:	  __first[__pos - 1] = __digits[__num];
+    #####:  100:	  __pos -= 2;
+        -:  101:	}
+    #####:  102:      if (__val >= 10)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  103:	{
+    #####:  104:	  auto const __num = __val * 2;
+    #####:  105:	  __first[1] = __digits[__num + 1];
+    #####:  106:	  __first[0] = __digits[__num];
+        -:  107:	}
+        -:  108:      else
+    #####:  109:	__first[0] = '0' + __val;
+    #####:  110:    }
+------------------
+_ZNSt8__detail18__to_chars_10_implIoEEvPcjT_:
+function _ZNSt8__detail18__to_chars_10_implIoEEvPcjT_ called 0 returned 0% blocks executed 0%
+    #####:   81:    __to_chars_10_impl(char* __first, unsigned __len, _Tp __val) noexcept
+        -:   82:    {
+        -:   83:#if __cpp_variable_templates
+        -:   84:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   85:#endif
+        -:   86:
+    #####:   87:      constexpr char __digits[201] =
+        -:   88:	"0001020304050607080910111213141516171819"
+        -:   89:	"2021222324252627282930313233343536373839"
+        -:   90:	"4041424344454647484950515253545556575859"
+        -:   91:	"6061626364656667686970717273747576777879"
+        -:   92:	"8081828384858687888990919293949596979899";
+    #####:   93:      unsigned __pos = __len - 1;
+    #####:   94:      while (__val >= 100)
+branch  0 never executed
+branch  1 never executed (fallthrough)
+        -:   95:	{
+    #####:   96:	  auto const __num = (__val % 100) * 2;
+    #####:   97:	  __val /= 100;
+    #####:   98:	  __first[__pos] = __digits[__num + 1];
+    #####:   99:	  __first[__pos - 1] = __digits[__num];
+    #####:  100:	  __pos -= 2;
+        -:  101:	}
+    #####:  102:      if (__val >= 10)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  103:	{
+    #####:  104:	  auto const __num = __val * 2;
+    #####:  105:	  __first[1] = __digits[__num + 1];
+    #####:  106:	  __first[0] = __digits[__num];
+        -:  107:	}
+        -:  108:      else
+    #####:  109:	__first[0] = '0' + __val;
+    #####:  110:    }
+------------------
+_ZNSt8__detail18__to_chars_10_implIjEEvPcjT_:
+function _ZNSt8__detail18__to_chars_10_implIjEEvPcjT_ called 0 returned 0% blocks executed 0%
+    #####:   81:    __to_chars_10_impl(char* __first, unsigned __len, _Tp __val) noexcept
+        -:   82:    {
+        -:   83:#if __cpp_variable_templates
+        -:   84:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   85:#endif
+        -:   86:
+    #####:   87:      constexpr char __digits[201] =
+        -:   88:	"0001020304050607080910111213141516171819"
+        -:   89:	"2021222324252627282930313233343536373839"
+        -:   90:	"4041424344454647484950515253545556575859"
+        -:   91:	"6061626364656667686970717273747576777879"
+        -:   92:	"8081828384858687888990919293949596979899";
+    #####:   93:      unsigned __pos = __len - 1;
+    #####:   94:      while (__val >= 100)
+branch  0 never executed
+branch  1 never executed (fallthrough)
+        -:   95:	{
+    #####:   96:	  auto const __num = (__val % 100) * 2;
+    #####:   97:	  __val /= 100;
+    #####:   98:	  __first[__pos] = __digits[__num + 1];
+    #####:   99:	  __first[__pos - 1] = __digits[__num];
+    #####:  100:	  __pos -= 2;
+        -:  101:	}
+    #####:  102:      if (__val >= 10)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  103:	{
+    #####:  104:	  auto const __num = __val * 2;
+    #####:  105:	  __first[1] = __digits[__num + 1];
+    #####:  106:	  __first[0] = __digits[__num];
+        -:  107:	}
+        -:  108:      else
+    #####:  109:	__first[0] = '0' + __val;
+    #####:  110:    }
+------------------
+_ZNSt8__detail18__to_chars_10_implImEEvPcjT_:
+function _ZNSt8__detail18__to_chars_10_implImEEvPcjT_ called 0 returned 0% blocks executed 0%
+    #####:   81:    __to_chars_10_impl(char* __first, unsigned __len, _Tp __val) noexcept
+        -:   82:    {
+        -:   83:#if __cpp_variable_templates
+        -:   84:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   85:#endif
+        -:   86:
+    #####:   87:      constexpr char __digits[201] =
+        -:   88:	"0001020304050607080910111213141516171819"
+        -:   89:	"2021222324252627282930313233343536373839"
+        -:   90:	"4041424344454647484950515253545556575859"
+        -:   91:	"6061626364656667686970717273747576777879"
+        -:   92:	"8081828384858687888990919293949596979899";
+    #####:   93:      unsigned __pos = __len - 1;
+    #####:   94:      while (__val >= 100)
+branch  0 never executed
+branch  1 never executed (fallthrough)
+        -:   95:	{
+    #####:   96:	  auto const __num = (__val % 100) * 2;
+    #####:   97:	  __val /= 100;
+    #####:   98:	  __first[__pos] = __digits[__num + 1];
+    #####:   99:	  __first[__pos - 1] = __digits[__num];
+    #####:  100:	  __pos -= 2;
+        -:  101:	}
+    #####:  102:      if (__val >= 10)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  103:	{
+    #####:  104:	  auto const __num = __val * 2;
+    #####:  105:	  __first[1] = __digits[__num + 1];
+    #####:  106:	  __first[0] = __digits[__num];
+        -:  107:	}
+        -:  108:      else
+    #####:  109:	__first[0] = '0' + __val;
+    #####:  110:    }
+------------------
+_ZNSt8__detail18__to_chars_10_implIjEEvPcjT_:
+function _ZNSt8__detail18__to_chars_10_implIjEEvPcjT_ called 0 returned 0% blocks executed 0%
+    #####:   81:    __to_chars_10_impl(char* __first, unsigned __len, _Tp __val) noexcept
+        -:   82:    {
+        -:   83:#if __cpp_variable_templates
+        -:   84:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   85:#endif
+        -:   86:
+    #####:   87:      constexpr char __digits[201] =
+        -:   88:	"0001020304050607080910111213141516171819"
+        -:   89:	"2021222324252627282930313233343536373839"
+        -:   90:	"4041424344454647484950515253545556575859"
+        -:   91:	"6061626364656667686970717273747576777879"
+        -:   92:	"8081828384858687888990919293949596979899";
+    #####:   93:      unsigned __pos = __len - 1;
+    #####:   94:      while (__val >= 100)
+branch  0 never executed
+branch  1 never executed (fallthrough)
+        -:   95:	{
+    #####:   96:	  auto const __num = (__val % 100) * 2;
+    #####:   97:	  __val /= 100;
+    #####:   98:	  __first[__pos] = __digits[__num + 1];
+    #####:   99:	  __first[__pos - 1] = __digits[__num];
+    #####:  100:	  __pos -= 2;
+        -:  101:	}
+    #####:  102:      if (__val >= 10)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  103:	{
+    #####:  104:	  auto const __num = __val * 2;
+    #####:  105:	  __first[1] = __digits[__num + 1];
+    #####:  106:	  __first[0] = __digits[__num];
+        -:  107:	}
+        -:  108:      else
+    #####:  109:	__first[0] = '0' + __val;
+    #####:  110:    }
+------------------
+_ZNSt8__detail18__to_chars_10_implIjEEvPcjT_:
+function _ZNSt8__detail18__to_chars_10_implIjEEvPcjT_ called 0 returned 0% blocks executed 0%
+    #####:   81:    __to_chars_10_impl(char* __first, unsigned __len, _Tp __val) noexcept
+        -:   82:    {
+        -:   83:#if __cpp_variable_templates
+        -:   84:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   85:#endif
+        -:   86:
+    #####:   87:      constexpr char __digits[201] =
+        -:   88:	"0001020304050607080910111213141516171819"
+        -:   89:	"2021222324252627282930313233343536373839"
+        -:   90:	"4041424344454647484950515253545556575859"
+        -:   91:	"6061626364656667686970717273747576777879"
+        -:   92:	"8081828384858687888990919293949596979899";
+    #####:   93:      unsigned __pos = __len - 1;
+    #####:   94:      while (__val >= 100)
+branch  0 never executed
+branch  1 never executed (fallthrough)
+        -:   95:	{
+    #####:   96:	  auto const __num = (__val % 100) * 2;
+    #####:   97:	  __val /= 100;
+    #####:   98:	  __first[__pos] = __digits[__num + 1];
+    #####:   99:	  __first[__pos - 1] = __digits[__num];
+    #####:  100:	  __pos -= 2;
+        -:  101:	}
+    #####:  102:      if (__val >= 10)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  103:	{
+    #####:  104:	  auto const __num = __val * 2;
+    #####:  105:	  __first[1] = __digits[__num + 1];
+    #####:  106:	  __first[0] = __digits[__num];
+        -:  107:	}
+        -:  108:      else
+    #####:  109:	__first[0] = '0' + __val;
+    #####:  110:    }
+------------------
+_ZNSt8__detail18__to_chars_10_implImEEvPcjT_:
+function _ZNSt8__detail18__to_chars_10_implImEEvPcjT_ called 100 returned 100% blocks executed 100%
+      100:   81:    __to_chars_10_impl(char* __first, unsigned __len, _Tp __val) noexcept
+        -:   82:    {
+        -:   83:#if __cpp_variable_templates
+        -:   84:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   85:#endif
+        -:   86:
+      100:   87:      constexpr char __digits[201] =
+        -:   88:	"0001020304050607080910111213141516171819"
+        -:   89:	"2021222324252627282930313233343536373839"
+        -:   90:	"4041424344454647484950515253545556575859"
+        -:   91:	"6061626364656667686970717273747576777879"
+        -:   92:	"8081828384858687888990919293949596979899";
+      100:   93:      unsigned __pos = __len - 1;
+      109:   94:      while (__val >= 100)
+branch  0 taken 8%
+branch  1 taken 92% (fallthrough)
+        -:   95:	{
+        9:   96:	  auto const __num = (__val % 100) * 2;
+        9:   97:	  __val /= 100;
+        9:   98:	  __first[__pos] = __digits[__num + 1];
+        9:   99:	  __first[__pos - 1] = __digits[__num];
+        9:  100:	  __pos -= 2;
+        -:  101:	}
+      100:  102:      if (__val >= 10)
+branch  0 taken 31% (fallthrough)
+branch  1 taken 69%
+        -:  103:	{
+       31:  104:	  auto const __num = __val * 2;
+       31:  105:	  __first[1] = __digits[__num + 1];
+       31:  106:	  __first[0] = __digits[__num];
+        -:  107:	}
+        -:  108:      else
+       69:  109:	__first[0] = '0' + __val;
+      100:  110:    }
+------------------
+_ZNSt8__detail18__to_chars_10_implIjEEvPcjT_:
+function _ZNSt8__detail18__to_chars_10_implIjEEvPcjT_ called 0 returned 0% blocks executed 0%
+    #####:   81:    __to_chars_10_impl(char* __first, unsigned __len, _Tp __val) noexcept
+        -:   82:    {
+        -:   83:#if __cpp_variable_templates
+        -:   84:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   85:#endif
+        -:   86:
+    #####:   87:      constexpr char __digits[201] =
+        -:   88:	"0001020304050607080910111213141516171819"
+        -:   89:	"2021222324252627282930313233343536373839"
+        -:   90:	"4041424344454647484950515253545556575859"
+        -:   91:	"6061626364656667686970717273747576777879"
+        -:   92:	"8081828384858687888990919293949596979899";
+    #####:   93:      unsigned __pos = __len - 1;
+    #####:   94:      while (__val >= 100)
+branch  0 never executed
+branch  1 never executed (fallthrough)
+        -:   95:	{
+    #####:   96:	  auto const __num = (__val % 100) * 2;
+    #####:   97:	  __val /= 100;
+    #####:   98:	  __first[__pos] = __digits[__num + 1];
+    #####:   99:	  __first[__pos - 1] = __digits[__num];
+    #####:  100:	  __pos -= 2;
+        -:  101:	}
+    #####:  102:      if (__val >= 10)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  103:	{
+    #####:  104:	  auto const __num = __val * 2;
+    #####:  105:	  __first[1] = __digits[__num + 1];
+    #####:  106:	  __first[0] = __digits[__num];
+        -:  107:	}
+        -:  108:      else
+    #####:  109:	__first[0] = '0' + __val;
+    #####:  110:    }
+------------------
+_ZNSt8__detail18__to_chars_10_implImEEvPcjT_:
+function _ZNSt8__detail18__to_chars_10_implImEEvPcjT_ called 19 returned 100% blocks executed 86%
+       19:   81:    __to_chars_10_impl(char* __first, unsigned __len, _Tp __val) noexcept
+        -:   82:    {
+        -:   83:#if __cpp_variable_templates
+        -:   84:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   85:#endif
+        -:   86:
+       19:   87:      constexpr char __digits[201] =
+        -:   88:	"0001020304050607080910111213141516171819"
+        -:   89:	"2021222324252627282930313233343536373839"
+        -:   90:	"4041424344454647484950515253545556575859"
+        -:   91:	"6061626364656667686970717273747576777879"
+        -:   92:	"8081828384858687888990919293949596979899";
+       19:   93:      unsigned __pos = __len - 1;
+       19:   94:      while (__val >= 100)
+branch  0 taken 0%
+branch  1 taken 100% (fallthrough)
+        -:   95:	{
+    #####:   96:	  auto const __num = (__val % 100) * 2;
+    #####:   97:	  __val /= 100;
+    #####:   98:	  __first[__pos] = __digits[__num + 1];
+    #####:   99:	  __first[__pos - 1] = __digits[__num];
+    #####:  100:	  __pos -= 2;
+        -:  101:	}
+       19:  102:      if (__val >= 10)
+branch  0 taken 53% (fallthrough)
+branch  1 taken 47%
+        -:  103:	{
+       10:  104:	  auto const __num = __val * 2;
+       10:  105:	  __first[1] = __digits[__num + 1];
+       10:  106:	  __first[0] = __digits[__num];
+        -:  107:	}
+        -:  108:      else
+        9:  109:	__first[0] = '0' + __val;
+       19:  110:    }
+------------------
+_ZNSt8__detail18__to_chars_10_implIjEEvPcjT_:
+function _ZNSt8__detail18__to_chars_10_implIjEEvPcjT_ called 9 returned 100% blocks executed 100%
+        9:   81:    __to_chars_10_impl(char* __first, unsigned __len, _Tp __val) noexcept
+        -:   82:    {
+        -:   83:#if __cpp_variable_templates
+        -:   84:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   85:#endif
+        -:   86:
+        9:   87:      constexpr char __digits[201] =
+        -:   88:	"0001020304050607080910111213141516171819"
+        -:   89:	"2021222324252627282930313233343536373839"
+        -:   90:	"4041424344454647484950515253545556575859"
+        -:   91:	"6061626364656667686970717273747576777879"
+        -:   92:	"8081828384858687888990919293949596979899";
+        9:   93:      unsigned __pos = __len - 1;
+       18:   94:      while (__val >= 100)
+branch  0 taken 50%
+branch  1 taken 50% (fallthrough)
+        -:   95:	{
+        9:   96:	  auto const __num = (__val % 100) * 2;
+        9:   97:	  __val /= 100;
+        9:   98:	  __first[__pos] = __digits[__num + 1];
+        9:   99:	  __first[__pos - 1] = __digits[__num];
+        9:  100:	  __pos -= 2;
+        -:  101:	}
+        9:  102:      if (__val >= 10)
+branch  0 taken 11% (fallthrough)
+branch  1 taken 89%
+        -:  103:	{
+        1:  104:	  auto const __num = __val * 2;
+        1:  105:	  __first[1] = __digits[__num + 1];
+        1:  106:	  __first[0] = __digits[__num];
+        -:  107:	}
+        -:  108:      else
+        8:  109:	__first[0] = '0' + __val;
+        9:  110:    }
+------------------
+_ZNSt8__detail18__to_chars_10_implImEEvPcjT_:
+function _ZNSt8__detail18__to_chars_10_implImEEvPcjT_ called 11 returned 100% blocks executed 86%
+       11:   81:    __to_chars_10_impl(char* __first, unsigned __len, _Tp __val) noexcept
+        -:   82:    {
+        -:   83:#if __cpp_variable_templates
+        -:   84:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   85:#endif
+        -:   86:
+       11:   87:      constexpr char __digits[201] =
+        -:   88:	"0001020304050607080910111213141516171819"
+        -:   89:	"2021222324252627282930313233343536373839"
+        -:   90:	"4041424344454647484950515253545556575859"
+        -:   91:	"6061626364656667686970717273747576777879"
+        -:   92:	"8081828384858687888990919293949596979899";
+       11:   93:      unsigned __pos = __len - 1;
+       33:   94:      while (__val >= 100)
+branch  0 taken 67%
+branch  1 taken 33% (fallthrough)
+        -:   95:	{
+       22:   96:	  auto const __num = (__val % 100) * 2;
+       22:   97:	  __val /= 100;
+       22:   98:	  __first[__pos] = __digits[__num + 1];
+       22:   99:	  __first[__pos - 1] = __digits[__num];
+       22:  100:	  __pos -= 2;
+        -:  101:	}
+       11:  102:      if (__val >= 10)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:  103:	{
+    #####:  104:	  auto const __num = __val * 2;
+    #####:  105:	  __first[1] = __digits[__num + 1];
+    #####:  106:	  __first[0] = __digits[__num];
+        -:  107:	}
+        -:  108:      else
+       11:  109:	__first[0] = '0' + __val;
+       11:  110:    }
+------------------
+_ZNSt8__detail18__to_chars_10_implIjEEvPcjT_:
+function _ZNSt8__detail18__to_chars_10_implIjEEvPcjT_ called 11 returned 100% blocks executed 71%
+       11:   81:    __to_chars_10_impl(char* __first, unsigned __len, _Tp __val) noexcept
+        -:   82:    {
+        -:   83:#if __cpp_variable_templates
+        -:   84:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   85:#endif
+        -:   86:
+       11:   87:      constexpr char __digits[201] =
+        -:   88:	"0001020304050607080910111213141516171819"
+        -:   89:	"2021222324252627282930313233343536373839"
+        -:   90:	"4041424344454647484950515253545556575859"
+        -:   91:	"6061626364656667686970717273747576777879"
+        -:   92:	"8081828384858687888990919293949596979899";
+       11:   93:      unsigned __pos = __len - 1;
+       11:   94:      while (__val >= 100)
+branch  0 taken 0%
+branch  1 taken 100% (fallthrough)
+        -:   95:	{
+    #####:   96:	  auto const __num = (__val % 100) * 2;
+    #####:   97:	  __val /= 100;
+    #####:   98:	  __first[__pos] = __digits[__num + 1];
+    #####:   99:	  __first[__pos - 1] = __digits[__num];
+    #####:  100:	  __pos -= 2;
+        -:  101:	}
+       11:  102:      if (__val >= 10)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:  103:	{
+       11:  104:	  auto const __num = __val * 2;
+       11:  105:	  __first[1] = __digits[__num + 1];
+       11:  106:	  __first[0] = __digits[__num];
+        -:  107:	}
+        -:  108:      else
+    #####:  109:	__first[0] = '0' + __val;
+       11:  110:    }
+------------------
+_ZNSt8__detail18__to_chars_10_implImEEvPcjT_:
+function _ZNSt8__detail18__to_chars_10_implImEEvPcjT_ called 0 returned 0% blocks executed 0%
+    #####:   81:    __to_chars_10_impl(char* __first, unsigned __len, _Tp __val) noexcept
+        -:   82:    {
+        -:   83:#if __cpp_variable_templates
+        -:   84:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   85:#endif
+        -:   86:
+    #####:   87:      constexpr char __digits[201] =
+        -:   88:	"0001020304050607080910111213141516171819"
+        -:   89:	"2021222324252627282930313233343536373839"
+        -:   90:	"4041424344454647484950515253545556575859"
+        -:   91:	"6061626364656667686970717273747576777879"
+        -:   92:	"8081828384858687888990919293949596979899";
+    #####:   93:      unsigned __pos = __len - 1;
+    #####:   94:      while (__val >= 100)
+branch  0 never executed
+branch  1 never executed (fallthrough)
+        -:   95:	{
+    #####:   96:	  auto const __num = (__val % 100) * 2;
+    #####:   97:	  __val /= 100;
+    #####:   98:	  __first[__pos] = __digits[__num + 1];
+    #####:   99:	  __first[__pos - 1] = __digits[__num];
+    #####:  100:	  __pos -= 2;
+        -:  101:	}
+    #####:  102:      if (__val >= 10)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  103:	{
+    #####:  104:	  auto const __num = __val * 2;
+    #####:  105:	  __first[1] = __digits[__num + 1];
+    #####:  106:	  __first[0] = __digits[__num];
+        -:  107:	}
+        -:  108:      else
+    #####:  109:	__first[0] = '0' + __val;
+    #####:  110:    }
+------------------
+_ZNSt8__detail18__to_chars_10_implIyEEvPcjT_:
+function _ZNSt8__detail18__to_chars_10_implIyEEvPcjT_ called 0 returned 0% blocks executed 0%
+    #####:   81:    __to_chars_10_impl(char* __first, unsigned __len, _Tp __val) noexcept
+        -:   82:    {
+        -:   83:#if __cpp_variable_templates
+        -:   84:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   85:#endif
+        -:   86:
+    #####:   87:      constexpr char __digits[201] =
+        -:   88:	"0001020304050607080910111213141516171819"
+        -:   89:	"2021222324252627282930313233343536373839"
+        -:   90:	"4041424344454647484950515253545556575859"
+        -:   91:	"6061626364656667686970717273747576777879"
+        -:   92:	"8081828384858687888990919293949596979899";
+    #####:   93:      unsigned __pos = __len - 1;
+    #####:   94:      while (__val >= 100)
+branch  0 never executed
+branch  1 never executed (fallthrough)
+        -:   95:	{
+    #####:   96:	  auto const __num = (__val % 100) * 2;
+    #####:   97:	  __val /= 100;
+    #####:   98:	  __first[__pos] = __digits[__num + 1];
+    #####:   99:	  __first[__pos - 1] = __digits[__num];
+    #####:  100:	  __pos -= 2;
+        -:  101:	}
+    #####:  102:      if (__val >= 10)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  103:	{
+    #####:  104:	  auto const __num = __val * 2;
+    #####:  105:	  __first[1] = __digits[__num + 1];
+    #####:  106:	  __first[0] = __digits[__num];
+        -:  107:	}
+        -:  108:      else
+    #####:  109:	__first[0] = '0' + __val;
+    #####:  110:    }
+------------------
+_ZNSt8__detail18__to_chars_10_implImEEvPcjT_:
+function _ZNSt8__detail18__to_chars_10_implImEEvPcjT_ called 0 returned 0% blocks executed 0%
+    #####:   81:    __to_chars_10_impl(char* __first, unsigned __len, _Tp __val) noexcept
+        -:   82:    {
+        -:   83:#if __cpp_variable_templates
+        -:   84:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   85:#endif
+        -:   86:
+    #####:   87:      constexpr char __digits[201] =
+        -:   88:	"0001020304050607080910111213141516171819"
+        -:   89:	"2021222324252627282930313233343536373839"
+        -:   90:	"4041424344454647484950515253545556575859"
+        -:   91:	"6061626364656667686970717273747576777879"
+        -:   92:	"8081828384858687888990919293949596979899";
+    #####:   93:      unsigned __pos = __len - 1;
+    #####:   94:      while (__val >= 100)
+branch  0 never executed
+branch  1 never executed (fallthrough)
+        -:   95:	{
+    #####:   96:	  auto const __num = (__val % 100) * 2;
+    #####:   97:	  __val /= 100;
+    #####:   98:	  __first[__pos] = __digits[__num + 1];
+    #####:   99:	  __first[__pos - 1] = __digits[__num];
+    #####:  100:	  __pos -= 2;
+        -:  101:	}
+    #####:  102:      if (__val >= 10)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  103:	{
+    #####:  104:	  auto const __num = __val * 2;
+    #####:  105:	  __first[1] = __digits[__num + 1];
+    #####:  106:	  __first[0] = __digits[__num];
+        -:  107:	}
+        -:  108:      else
+    #####:  109:	__first[0] = '0' + __val;
+    #####:  110:    }
+------------------
+_ZNSt8__detail18__to_chars_10_implIjEEvPcjT_:
+function _ZNSt8__detail18__to_chars_10_implIjEEvPcjT_ called 0 returned 0% blocks executed 0%
+    #####:   81:    __to_chars_10_impl(char* __first, unsigned __len, _Tp __val) noexcept
+        -:   82:    {
+        -:   83:#if __cpp_variable_templates
+        -:   84:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   85:#endif
+        -:   86:
+    #####:   87:      constexpr char __digits[201] =
+        -:   88:	"0001020304050607080910111213141516171819"
+        -:   89:	"2021222324252627282930313233343536373839"
+        -:   90:	"4041424344454647484950515253545556575859"
+        -:   91:	"6061626364656667686970717273747576777879"
+        -:   92:	"8081828384858687888990919293949596979899";
+    #####:   93:      unsigned __pos = __len - 1;
+    #####:   94:      while (__val >= 100)
+branch  0 never executed
+branch  1 never executed (fallthrough)
+        -:   95:	{
+    #####:   96:	  auto const __num = (__val % 100) * 2;
+    #####:   97:	  __val /= 100;
+    #####:   98:	  __first[__pos] = __digits[__num + 1];
+    #####:   99:	  __first[__pos - 1] = __digits[__num];
+    #####:  100:	  __pos -= 2;
+        -:  101:	}
+    #####:  102:      if (__val >= 10)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  103:	{
+    #####:  104:	  auto const __num = __val * 2;
+    #####:  105:	  __first[1] = __digits[__num + 1];
+    #####:  106:	  __first[0] = __digits[__num];
+        -:  107:	}
+        -:  108:      else
+    #####:  109:	__first[0] = '0' + __val;
+    #####:  110:    }
+------------------
+_ZNSt8__detail18__to_chars_10_implIoEEvPcjT_:
+function _ZNSt8__detail18__to_chars_10_implIoEEvPcjT_ called 0 returned 0% blocks executed 0%
+    #####:   81:    __to_chars_10_impl(char* __first, unsigned __len, _Tp __val) noexcept
+        -:   82:    {
+        -:   83:#if __cpp_variable_templates
+        -:   84:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   85:#endif
+        -:   86:
+    #####:   87:      constexpr char __digits[201] =
+        -:   88:	"0001020304050607080910111213141516171819"
+        -:   89:	"2021222324252627282930313233343536373839"
+        -:   90:	"4041424344454647484950515253545556575859"
+        -:   91:	"6061626364656667686970717273747576777879"
+        -:   92:	"8081828384858687888990919293949596979899";
+    #####:   93:      unsigned __pos = __len - 1;
+    #####:   94:      while (__val >= 100)
+branch  0 never executed
+branch  1 never executed (fallthrough)
+        -:   95:	{
+    #####:   96:	  auto const __num = (__val % 100) * 2;
+    #####:   97:	  __val /= 100;
+    #####:   98:	  __first[__pos] = __digits[__num + 1];
+    #####:   99:	  __first[__pos - 1] = __digits[__num];
+    #####:  100:	  __pos -= 2;
+        -:  101:	}
+    #####:  102:      if (__val >= 10)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  103:	{
+    #####:  104:	  auto const __num = __val * 2;
+    #####:  105:	  __first[1] = __digits[__num + 1];
+    #####:  106:	  __first[0] = __digits[__num];
+        -:  107:	}
+        -:  108:      else
+    #####:  109:	__first[0] = '0' + __val;
+    #####:  110:    }
+------------------
+_ZNSt8__detail18__to_chars_10_implIyEEvPcjT_:
+function _ZNSt8__detail18__to_chars_10_implIyEEvPcjT_ called 0 returned 0% blocks executed 0%
+    #####:   81:    __to_chars_10_impl(char* __first, unsigned __len, _Tp __val) noexcept
+        -:   82:    {
+        -:   83:#if __cpp_variable_templates
+        -:   84:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   85:#endif
+        -:   86:
+    #####:   87:      constexpr char __digits[201] =
+        -:   88:	"0001020304050607080910111213141516171819"
+        -:   89:	"2021222324252627282930313233343536373839"
+        -:   90:	"4041424344454647484950515253545556575859"
+        -:   91:	"6061626364656667686970717273747576777879"
+        -:   92:	"8081828384858687888990919293949596979899";
+    #####:   93:      unsigned __pos = __len - 1;
+    #####:   94:      while (__val >= 100)
+branch  0 never executed
+branch  1 never executed (fallthrough)
+        -:   95:	{
+    #####:   96:	  auto const __num = (__val % 100) * 2;
+    #####:   97:	  __val /= 100;
+    #####:   98:	  __first[__pos] = __digits[__num + 1];
+    #####:   99:	  __first[__pos - 1] = __digits[__num];
+    #####:  100:	  __pos -= 2;
+        -:  101:	}
+    #####:  102:      if (__val >= 10)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  103:	{
+    #####:  104:	  auto const __num = __val * 2;
+    #####:  105:	  __first[1] = __digits[__num + 1];
+    #####:  106:	  __first[0] = __digits[__num];
+        -:  107:	}
+        -:  108:      else
+    #####:  109:	__first[0] = '0' + __val;
+    #####:  110:    }
+------------------
+_ZNSt8__detail18__to_chars_10_implImEEvPcjT_:
+function _ZNSt8__detail18__to_chars_10_implImEEvPcjT_ called 5 returned 100% blocks executed 86%
+        5:   81:    __to_chars_10_impl(char* __first, unsigned __len, _Tp __val) noexcept
+        -:   82:    {
+        -:   83:#if __cpp_variable_templates
+        -:   84:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   85:#endif
+        -:   86:
+        5:   87:      constexpr char __digits[201] =
+        -:   88:	"0001020304050607080910111213141516171819"
+        -:   89:	"2021222324252627282930313233343536373839"
+        -:   90:	"4041424344454647484950515253545556575859"
+        -:   91:	"6061626364656667686970717273747576777879"
+        -:   92:	"8081828384858687888990919293949596979899";
+        5:   93:      unsigned __pos = __len - 1;
+       10:   94:      while (__val >= 100)
+branch  0 taken 50%
+branch  1 taken 50% (fallthrough)
+        -:   95:	{
+        5:   96:	  auto const __num = (__val % 100) * 2;
+        5:   97:	  __val /= 100;
+        5:   98:	  __first[__pos] = __digits[__num + 1];
+        5:   99:	  __first[__pos - 1] = __digits[__num];
+        5:  100:	  __pos -= 2;
+        -:  101:	}
+        5:  102:      if (__val >= 10)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:  103:	{
+    #####:  104:	  auto const __num = __val * 2;
+    #####:  105:	  __first[1] = __digits[__num + 1];
+    #####:  106:	  __first[0] = __digits[__num];
+        -:  107:	}
+        -:  108:      else
+        5:  109:	__first[0] = '0' + __val;
+        5:  110:    }
+------------------
+_ZNSt8__detail18__to_chars_10_implIjEEvPcjT_:
+function _ZNSt8__detail18__to_chars_10_implIjEEvPcjT_ called 7 returned 100% blocks executed 100%
+        7:   81:    __to_chars_10_impl(char* __first, unsigned __len, _Tp __val) noexcept
+        -:   82:    {
+        -:   83:#if __cpp_variable_templates
+        -:   84:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   85:#endif
+        -:   86:
+        7:   87:      constexpr char __digits[201] =
+        -:   88:	"0001020304050607080910111213141516171819"
+        -:   89:	"2021222324252627282930313233343536373839"
+        -:   90:	"4041424344454647484950515253545556575859"
+        -:   91:	"6061626364656667686970717273747576777879"
+        -:   92:	"8081828384858687888990919293949596979899";
+        7:   93:      unsigned __pos = __len - 1;
+        9:   94:      while (__val >= 100)
+branch  0 taken 22%
+branch  1 taken 78% (fallthrough)
+        -:   95:	{
+        2:   96:	  auto const __num = (__val % 100) * 2;
+        2:   97:	  __val /= 100;
+        2:   98:	  __first[__pos] = __digits[__num + 1];
+        2:   99:	  __first[__pos - 1] = __digits[__num];
+        2:  100:	  __pos -= 2;
+        -:  101:	}
+        7:  102:      if (__val >= 10)
+branch  0 taken 86% (fallthrough)
+branch  1 taken 14%
+        -:  103:	{
+        6:  104:	  auto const __num = __val * 2;
+        6:  105:	  __first[1] = __digits[__num + 1];
+        6:  106:	  __first[0] = __digits[__num];
+        -:  107:	}
+        -:  108:      else
+        1:  109:	__first[0] = '0' + __val;
+        7:  110:    }
+------------------
+_ZNSt8__detail18__to_chars_10_implImEEvPcjT_:
+function _ZNSt8__detail18__to_chars_10_implImEEvPcjT_ called 7 returned 100% blocks executed 86%
+        7:   81:    __to_chars_10_impl(char* __first, unsigned __len, _Tp __val) noexcept
+        -:   82:    {
+        -:   83:#if __cpp_variable_templates
+        -:   84:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   85:#endif
+        -:   86:
+        7:   87:      constexpr char __digits[201] =
+        -:   88:	"0001020304050607080910111213141516171819"
+        -:   89:	"2021222324252627282930313233343536373839"
+        -:   90:	"4041424344454647484950515253545556575859"
+        -:   91:	"6061626364656667686970717273747576777879"
+        -:   92:	"8081828384858687888990919293949596979899";
+        7:   93:      unsigned __pos = __len - 1;
+       42:   94:      while (__val >= 100)
+branch  0 taken 83%
+branch  1 taken 17% (fallthrough)
+        -:   95:	{
+       35:   96:	  auto const __num = (__val % 100) * 2;
+       35:   97:	  __val /= 100;
+       35:   98:	  __first[__pos] = __digits[__num + 1];
+       35:   99:	  __first[__pos - 1] = __digits[__num];
+       35:  100:	  __pos -= 2;
+        -:  101:	}
+        7:  102:      if (__val >= 10)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:  103:	{
+        7:  104:	  auto const __num = __val * 2;
+        7:  105:	  __first[1] = __digits[__num + 1];
+        7:  106:	  __first[0] = __digits[__num];
+        -:  107:	}
+        -:  108:      else
+    #####:  109:	__first[0] = '0' + __val;
+        7:  110:    }
+------------------
+_ZNSt8__detail18__to_chars_10_implIjEEvPcjT_:
+function _ZNSt8__detail18__to_chars_10_implIjEEvPcjT_ called 554 returned 100% blocks executed 86%
+      554:   81:    __to_chars_10_impl(char* __first, unsigned __len, _Tp __val) noexcept
+        -:   82:    {
+        -:   83:#if __cpp_variable_templates
+        -:   84:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   85:#endif
+        -:   86:
+      554:   87:      constexpr char __digits[201] =
+        -:   88:	"0001020304050607080910111213141516171819"
+        -:   89:	"2021222324252627282930313233343536373839"
+        -:   90:	"4041424344454647484950515253545556575859"
+        -:   91:	"6061626364656667686970717273747576777879"
+        -:   92:	"8081828384858687888990919293949596979899";
+      554:   93:      unsigned __pos = __len - 1;
+      554:   94:      while (__val >= 100)
+branch  0 taken 0%
+branch  1 taken 100% (fallthrough)
+        -:   95:	{
+    #####:   96:	  auto const __num = (__val % 100) * 2;
+    #####:   97:	  __val /= 100;
+    #####:   98:	  __first[__pos] = __digits[__num + 1];
+    #####:   99:	  __first[__pos - 1] = __digits[__num];
+    #####:  100:	  __pos -= 2;
+        -:  101:	}
+      554:  102:      if (__val >= 10)
+branch  0 taken 52% (fallthrough)
+branch  1 taken 48%
+        -:  103:	{
+      290:  104:	  auto const __num = __val * 2;
+      290:  105:	  __first[1] = __digits[__num + 1];
+      290:  106:	  __first[0] = __digits[__num];
+        -:  107:	}
+        -:  108:      else
+      264:  109:	__first[0] = '0' + __val;
+      554:  110:    }
+------------------
+_ZNSt8__detail18__to_chars_10_implIoEEvPcjT_:
+function _ZNSt8__detail18__to_chars_10_implIoEEvPcjT_ called 0 returned 0% blocks executed 0%
+    #####:   81:    __to_chars_10_impl(char* __first, unsigned __len, _Tp __val) noexcept
+        -:   82:    {
+        -:   83:#if __cpp_variable_templates
+        -:   84:      static_assert(__integer_to_chars_is_unsigned<_Tp>, "implementation bug");
+        -:   85:#endif
+        -:   86:
+    #####:   87:      constexpr char __digits[201] =
+        -:   88:	"0001020304050607080910111213141516171819"
+        -:   89:	"2021222324252627282930313233343536373839"
+        -:   90:	"4041424344454647484950515253545556575859"
+        -:   91:	"6061626364656667686970717273747576777879"
+        -:   92:	"8081828384858687888990919293949596979899";
+    #####:   93:      unsigned __pos = __len - 1;
+    #####:   94:      while (__val >= 100)
+branch  0 never executed
+branch  1 never executed (fallthrough)
+        -:   95:	{
+    #####:   96:	  auto const __num = (__val % 100) * 2;
+    #####:   97:	  __val /= 100;
+    #####:   98:	  __first[__pos] = __digits[__num + 1];
+    #####:   99:	  __first[__pos - 1] = __digits[__num];
+    #####:  100:	  __pos -= 2;
+        -:  101:	}
+    #####:  102:      if (__val >= 10)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  103:	{
+    #####:  104:	  auto const __num = __val * 2;
+    #####:  105:	  __first[1] = __digits[__num + 1];
+    #####:  106:	  __first[0] = __digits[__num];
+        -:  107:	}
+        -:  108:      else
+    #####:  109:	__first[0] = '0' + __val;
+    #####:  110:    }
+------------------
+        -:  111:
+        -:  112:} // namespace __detail
+        -:  113:_GLIBCXX_END_NAMESPACE_VERSION
+        -:  114:} // namespace std
+        -:  115:#endif // C++11
+        -:  116:#endif // _GLIBCXX_CHARCONV_H

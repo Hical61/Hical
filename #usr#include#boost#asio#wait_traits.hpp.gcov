@@ -1,0 +1,59 @@
+        -:    0:Source:/usr/include/boost/asio/wait_traits.hpp
+        -:    1://
+        -:    2:// wait_traits.hpp
+        -:    3:// ~~~~~~~~~~~~~~~
+        -:    4://
+        -:    5:// Copyright (c) 2003-2023 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+        -:    6://
+        -:    7:// Distributed under the Boost Software License, Version 1.0. (See accompanying
+        -:    8:// file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+        -:    9://
+        -:   10:
+        -:   11:#ifndef BOOST_ASIO_WAIT_TRAITS_HPP
+        -:   12:#define BOOST_ASIO_WAIT_TRAITS_HPP
+        -:   13:
+        -:   14:#if defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   15:# pragma once
+        -:   16:#endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   17:
+        -:   18:#include <boost/asio/detail/push_options.hpp>
+        -:   19:
+        -:   20:namespace boost {
+        -:   21:namespace asio {
+        -:   22:
+        -:   23:/// Wait traits suitable for use with the basic_waitable_timer class template.
+        -:   24:template <typename Clock>
+        -:   25:struct wait_traits
+        -:   26:{
+        -:   27:  /// Convert a clock duration into a duration used for waiting.
+        -:   28:  /**
+        -:   29:   * @returns @c d.
+        -:   30:   */
+      56*:   31:  static typename Clock::duration to_wait_duration(
+        -:   32:      const typename Clock::duration& d)
+        -:   33:  {
+      56*:   34:    return d;
+        -:   35:  }
+        -:   36:
+        -:   37:  /// Convert a clock duration into a duration used for waiting.
+        -:   38:  /**
+        -:   39:   * @returns @c d.
+        -:   40:   */
+        -:   41:  static typename Clock::duration to_wait_duration(
+        -:   42:      const typename Clock::time_point& t)
+        -:   43:  {
+        -:   44:    typename Clock::time_point now = Clock::now();
+        -:   45:    if (now + (Clock::duration::max)() < t)
+        -:   46:      return (Clock::duration::max)();
+        -:   47:    if (now + (Clock::duration::min)() > t)
+        -:   48:      return (Clock::duration::min)();
+        -:   49:    return t - now;
+        -:   50:  }
+        -:   51:};
+        -:   52:
+        -:   53:} // namespace asio
+        -:   54:} // namespace boost
+        -:   55:
+        -:   56:#include <boost/asio/detail/pop_options.hpp>
+        -:   57:
+        -:   58:#endif // BOOST_ASIO_WAIT_TRAITS_HPP

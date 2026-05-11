@@ -1,0 +1,614 @@
+        -:    0:Source:/home/runner/work/Hical/Hical/src/asio/TcpServer.cpp
+        -:    1:#include "TcpServer.h"
+        -:    2:#include "GenericConnection.h"
+        -:    3:#include "SslConnection.h"
+        -:    4:#include <algorithm>
+        -:    5:#include <vector>
+        -:    6:
+        -:    7:namespace hical
+        -:    8:{
+        -:    9:
+function _ZN5hical9TcpServerC2EPNS_13AsioEventLoopERKNS_11InetAddressERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEE called 4 returned 100% blocks executed 45%
+        4:   10:	TcpServer::TcpServer(AsioEventLoop* baseLoop, const InetAddress& listenAddr, const std::string& name)
+        4:   11:		: baseLoop_(baseLoop)
+        4:   12:		, listenAddr_(listenAddr)
+        4:   13:		, name_(name)
+call    0 returned 100%
+        4:   14:		, acceptor_(baseLoop->getIoContext())
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        4:   15:		, alive_(std::make_shared<std::atomic<bool>>(true))
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+call    5 returned 100%
+call    6 returned 100%
+call    7 returned 100%
+call    8 returned 100%
+branch  9 taken 100% (fallthrough)
+branch 10 taken 0% (throw)
+call   11 returned 100%
+branch 12 taken 100% (fallthrough)
+branch 13 taken 0% (throw)
+        -:   16:	{
+        4:   17:	}
+call    0 never executed
+call    1 never executed
+call    2 never executed
+call    3 never executed
+call    4 never executed
+call    5 never executed
+call    6 never executed
+call    7 never executed
+call    8 never executed
+        -:   18:
+function _ZN5hical9TcpServerD2Ev called 4 returned 100% blocks executed 94%
+        4:   19:	TcpServer::~TcpServer()
+        -:   20:	{
+        4:   21:		alive_->store(false);
+call    0 returned 100%
+call    1 returned 100%
+        4:   22:		if (running_.load())
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+        -:   23:		{
+    #####:   24:			stop();
+call    0 never executed
+        -:   25:		}
+        4:   26:	}
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+call    5 returned 100%
+call    6 returned 100%
+call    7 returned 100%
+call    8 returned 100%
+call    9 returned 100%
+        -:   27:
+function _ZN5hical9TcpServer12setIoLoopNumEm called 1 returned 100% blocks executed 100%
+        1:   28:	void TcpServer::setIoLoopNum(size_t num)
+        -:   29:	{
+        1:   30:		ioLoopNum_ = num;
+        1:   31:	}
+        -:   32:
+function _ZN5hical9TcpServer5startEv called 4 returned 100% blocks executed 59%
+        4:   33:	void TcpServer::start()
+        -:   34:	{
+        4:   35:		if (running_.exchange(true))
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+        -:   36:		{
+    #####:   37:			return;
+        -:   38:		}
+        -:   39:
+        -:   40:		// 创建并启动 IO 线程池
+        4:   41:		if (ioLoopNum_ > 0)
+branch  0 taken 25% (fallthrough)
+branch  1 taken 75%
+        -:   42:		{
+        1:   43:			ioPool_ = std::make_unique<EventLoopPool>(ioLoopNum_);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+        1:   44:			ioPool_->start();
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:   45:		}
+        -:   46:
+        -:   47:		// 打开 acceptor
+        -:   48:		using boost::asio::ip::tcp;
+       4*:   49:		auto endpoint = tcp::endpoint(listenAddr_.isIpV6() ? tcp::v6() : tcp::v4(), listenAddr_.port());
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+branch  6 taken 0% (fallthrough)
+branch  7 taken 100%
+call    8 never executed
+call    9 returned 100%
+call   10 returned 100%
+        -:   50:
+        4:   51:		acceptor_.open(endpoint.protocol());
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        4:   52:		acceptor_.set_option(boost::asio::socket_base::reuse_address(true));
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        4:   53:		acceptor_.bind(endpoint);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        4:   54:		acceptor_.listen();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:   55:
+        -:   56:		// 获取实际监听端口（端口 0 时由系统分配）
+        4:   57:		auto actualEndpoint = acceptor_.local_endpoint();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        4:   58:		listenAddr_ = InetAddress(actualEndpoint.address().to_string(), actualEndpoint.port());
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+call    8 returned 100%
+call    9 never executed
+        -:   59:
+        -:   60:		// 启动协程式 accept 循环
+        -:   61:		// 捕获 alive_ 标志防止 TcpServer 析构后协程访问悬空 this
+        4:   62:		auto aliveFlag = alive_;
+call    0 returned 100%
+        4:   63:		coSpawn(baseLoop_->getIoContext(),
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+function _ZZN5hical9TcpServer5startEvENKUlvE_clEv called 4 returned 100% blocks executed 44%
+       12:   64:				[this, aliveFlag]() -> Awaitable<void>
+call    0 returned 100%
+call    1 returned 100%
+call    2 never executed
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+        -:   65:				{
+        -:   66:					co_await acceptLoop();
+        8:   67:				});
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed
+call    8 never executed
+branch  9 never executed (fallthrough)
+branch 10 never executed
+call   11 never executed
+call   12 never executed
+branch 13 never executed (fallthrough)
+branch 14 never executed (throw)
+call   15 never executed
+call   16 never executed
+        -:   68:
+        -:   69:		// 启动空闲连接超时扫描协程
+        4:   70:		if (idleTimeout_ > 0)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:   71:		{
+    #####:   72:			coSpawn(baseLoop_->getIoContext(),
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+function _ZZN5hical9TcpServer5startEvENKUlvE0_clEv called 0 returned 0% blocks executed 0%
+    #####:   73:					[this, aliveFlag]() -> Awaitable<void>
+call    0 never executed
+call    1 never executed
+call    2 never executed
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+        -:   74:					{
+        -:   75:						co_await idleCheckLoop();
+    #####:   76:					});
+call    0 never executed
+call    1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed (throw)
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed
+call    8 never executed
+branch  9 never executed (fallthrough)
+branch 10 never executed
+call   11 never executed
+call   12 never executed
+branch 13 never executed (fallthrough)
+branch 14 never executed (throw)
+call   15 never executed
+call   16 never executed
+        -:   77:		}
+        4:   78:	}
+call    0 returned 100%
+call    1 never executed
+        -:   79:
+function _ZN5hical9TcpServer4stopEv called 4 returned 100% blocks executed 78%
+        4:   80:	void TcpServer::stop()
+        -:   81:	{
+        4:   82:		if (!running_.exchange(false))
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+        -:   83:		{
+    #####:   84:			return;
+        -:   85:		}
+        -:   86:
+        -:   87:		// 关闭 acceptor
+        4:   88:		boost::system::error_code ec;
+        4:   89:		acceptor_.close(ec);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:   90:
+        -:   91:		// 关闭所有连接
+        -:   92:		{
+        4:   93:			std::lock_guard<std::mutex> lock(connectionsMutex_);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        9:   94:			for (auto& conn : connections_)
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 56%
+branch  6 taken 44% (fallthrough)
+        -:   95:			{
+        5:   96:				conn->close();
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:   97:			}
+        4:   98:			connections_.clear();
+call    0 returned 100%
+        4:   99:		}
+call    0 returned 100%
+call    1 never executed
+        -:  100:
+        -:  101:		// 停止 IO 线程池
+        4:  102:		if (ioPool_)
+call    0 returned 100%
+branch  1 taken 25% (fallthrough)
+branch  2 taken 75%
+        -:  103:		{
+        1:  104:			ioPool_->stop();
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:  105:		}
+        -:  106:	}
+        -:  107:
+function _ZN5hical9TcpServer15onNewConnectionESt8functionIFvRKSt10shared_ptrINS_13TcpConnectionEEEE called 2 returned 100% blocks executed 100%
+        2:  108:	void TcpServer::onNewConnection(NewConnectionCallback cb)
+        -:  109:	{
+        2:  110:		newConnectionCallback_ = std::move(cb);
+call    0 returned 100%
+call    1 returned 100%
+        2:  111:	}
+        -:  112:
+function _ZN5hical9TcpServer9onMessageESt8functionIFvRKSt10shared_ptrINS_13TcpConnectionEEPNS_9PmrBufferEEE called 1 returned 100% blocks executed 100%
+        1:  113:	void TcpServer::onMessage(TcpConnection::MessageCallback cb)
+        -:  114:	{
+        1:  115:		messageCallback_ = std::move(cb);
+call    0 returned 100%
+call    1 returned 100%
+        1:  116:	}
+        -:  117:
+function _ZN5hical9TcpServer7onCloseESt8functionIFvRKSt10shared_ptrINS_13TcpConnectionEEEE called 0 returned 0% blocks executed 0%
+    #####:  118:	void TcpServer::onClose(TcpConnection::CloseCallback cb)
+        -:  119:	{
+    #####:  120:		closeCallback_ = std::move(cb);
+call    0 never executed
+call    1 never executed
+    #####:  121:	}
+        -:  122:
+function _ZN5hical9TcpServer9enableSslESt10shared_ptrINS_10SslContextEE called 0 returned 0% blocks executed 0%
+    #####:  123:	void TcpServer::enableSsl(std::shared_ptr<SslContext> ctx)
+        -:  124:	{
+    #####:  125:		sslCtx_ = std::move(ctx);
+call    0 never executed
+call    1 never executed
+    #####:  126:	}
+        -:  127:
+function _ZNK5hical9TcpServer4nameB5cxx11Ev called 1 returned 100% blocks executed 100%
+        1:  128:	const std::string& TcpServer::name() const
+        -:  129:	{
+        1:  130:		return name_;
+        -:  131:	}
+        -:  132:
+function _ZNK5hical9TcpServer10listenAddrEv called 3 returned 100% blocks executed 100%
+        3:  133:	const InetAddress& TcpServer::listenAddr() const
+        -:  134:	{
+        3:  135:		return listenAddr_;
+        -:  136:	}
+        -:  137:
+function _ZNK5hical9TcpServer15connectionCountEv called 1 returned 100% blocks executed 100%
+        1:  138:	size_t TcpServer::connectionCount() const
+        -:  139:	{
+        1:  140:		std::lock_guard<std::mutex> lock(connectionsMutex_);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        2:  141:		return connections_.size();
+call    0 returned 100%
+        1:  142:	}
+call    0 returned 100%
+        -:  143:
+function _ZNK5hical9TcpServer9isRunningEv called 3 returned 100% blocks executed 100%
+        3:  144:	bool TcpServer::isRunning() const
+        -:  145:	{
+        3:  146:		return running_.load();
+call    0 returned 100%
+        -:  147:	}
+        -:  148:
+function _ZN5hical9TcpServer14setIdleTimeoutEd called 0 returned 0% blocks executed 0%
+    #####:  149:	void TcpServer::setIdleTimeout(double seconds)
+        -:  150:	{
+    #####:  151:		idleTimeout_ = seconds;
+    #####:  152:	}
+        -:  153:
+function _ZN5hical9TcpServer13getNextIoLoopEv called 5 returned 100% blocks executed 100%
+        5:  154:	AsioEventLoop* TcpServer::getNextIoLoop()
+        -:  155:	{
+        5:  156:		if (ioPool_ && ioPool_->size() > 0)
+call    0 returned 100%
+branch  1 taken 60% (fallthrough)
+branch  2 taken 40%
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0%
+branch  7 taken 60% (fallthrough)
+branch  8 taken 40%
+        -:  157:		{
+        3:  158:			return ioPool_->getNextLoop();
+call    0 returned 100%
+call    1 returned 100%
+        -:  159:		}
+        2:  160:		return baseLoop_;
+        -:  161:	}
+        -:  162:
+function _ZN5hical9TcpServer13addConnectionERKSt10shared_ptrINS_13TcpConnectionEE called 5 returned 100% blocks executed 71%
+        5:  163:	void TcpServer::addConnection(const TcpConnection::Ptr& conn)
+        -:  164:	{
+        5:  165:		std::lock_guard<std::mutex> lock(connectionsMutex_);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        5:  166:		connections_.insert(conn);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        5:  167:	}
+call    0 returned 100%
+call    1 never executed
+        -:  168:
+function _ZN5hical9TcpServer16removeConnectionERKSt10shared_ptrINS_13TcpConnectionEE called 1 returned 100% blocks executed 71%
+        1:  169:	void TcpServer::removeConnection(const TcpConnection::Ptr& conn)
+        -:  170:	{
+        1:  171:		std::lock_guard<std::mutex> lock(connectionsMutex_);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  172:		connections_.erase(conn);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  173:	}
+call    0 returned 100%
+call    1 never executed
+        -:  174:
+function _ZN5hical9TcpServer10acceptLoopEv called 4 returned 100% blocks executed 44%
+        4:  175:	Awaitable<void> TcpServer::acceptLoop()
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  176:	{
+        -:  177:		using boost::asio::ip::tcp;
+        -:  178:
+        -:  179:		while (running_.load() && alive_->load())
+        -:  180:		{
+        -:  181:			bool needSleep = false;
+        -:  182:
+        -:  183:			try
+        -:  184:			{
+        -:  185:				tcp::socket socket = co_await acceptor_.async_accept(boost::asio::use_awaitable);
+        -:  186:
+        -:  187:				// co_await 恢复后再次检查 TcpServer 是否仍存活
+        -:  188:				if (!alive_->load())
+        -:  189:				{
+        -:  190:					break;
+        -:  191:				}
+        -:  192:
+        -:  193:				// 获取地址信息
+        -:  194:				auto remoteEp = socket.remote_endpoint();
+        -:  195:				auto localEp = socket.local_endpoint();
+        -:  196:
+        -:  197:				InetAddress peerAddr(remoteEp.address().to_string(), remoteEp.port());
+        -:  198:				InetAddress localAddr(localEp.address().to_string(), localEp.port());
+        -:  199:
+        -:  200:				// 获取目标 IO 循环
+        -:  201:				auto* ioLoop = getNextIoLoop();
+        -:  202:
+        -:  203:				// 创建连接
+        -:  204:				TcpConnection::Ptr conn;
+        -:  205:
+        -:  206:				if (sslCtx_)
+        -:  207:				{
+        -:  208:					boost::asio::ssl::stream<tcp::socket> sslStream(std::move(socket), sslCtx_->native());
+        -:  209:					conn = std::make_shared<SslConnection>(ioLoop, std::move(sslStream), localAddr, peerAddr);
+        -:  210:				}
+        -:  211:				else
+        -:  212:				{
+        -:  213:					conn = std::make_shared<PlainConnection>(ioLoop, std::move(socket), localAddr, peerAddr);
+        -:  214:				}
+        -:  215:
+        -:  216:				// 设置回调
+        -:  217:				if (messageCallback_)
+        -:  218:				{
+        -:  219:					conn->onMessage(messageCallback_);
+        -:  220:				}
+        -:  221:
+        -:  222:				// 设置关闭回调（在原始回调之上添加连接移除逻辑）
+        -:  223:				// 使用 alive_ 标志防止 TcpServer 析构后回调中的 use-after-free
+        -:  224:				auto aliveFlag = alive_;
+        -:  225:				auto* self = this;
+        -:  226:				conn->onClose(
+function _ZZN5hical9TcpServer10acceptLoopEvENKUlRKSt10shared_ptrINS_13TcpConnectionEEE_clES5_ called 1 returned 100% blocks executed 88%
+        1:  227:					[aliveFlag, self, userCb = closeCallback_](const TcpConnection::Ptr& c)
+        -:  228:					{
+        1:  229:						if (userCb)
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+        -:  230:						{
+    #####:  231:							userCb(c);
+call    0 never executed
+        -:  232:						}
+        1:  233:						if (aliveFlag->load())
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0%
+        -:  234:						{
+        1:  235:							self->removeConnection(c);
+call    0 returned 100%
+        -:  236:						}
+        1:  237:					});
+        -:  238:
+        -:  239:				addConnection(conn);
+        -:  240:
+        -:  241:				// 通知新连接
+        -:  242:				if (newConnectionCallback_)
+        -:  243:				{
+        -:  244:					newConnectionCallback_(conn);
+        -:  245:				}
+        -:  246:
+        -:  247:				// 建立连接（SSL 会触发握手）
+        -:  248:				conn->connectEstablished();
+        -:  249:			}
+        -:  250:			catch (const boost::system::system_error& e)
+        -:  251:			{
+        -:  252:				if (e.code() == boost::asio::error::operation_aborted)
+        -:  253:				{
+        -:  254:					break; // acceptor 被关闭
+        -:  255:				}
+        -:  256:
+        -:  257:				// fd 耗尽处理：释放预留 fd → accept 并关闭 → 重新预留
+        -:  258:				if (e.code() == boost::asio::error::no_descriptors)
+        -:  259:				{
+        -:  260:					idleFd_.temporaryRelease();
+        -:  261:					{
+        -:  262:						boost::system::error_code acceptEc;
+        -:  263:						tcp::socket tmpSocket(baseLoop_->getIoContext());
+        -:  264:						acceptor_.accept(tmpSocket, acceptEc);
+        -:  265:					}
+        -:  266:					idleFd_.reacquire();
+        -:  267:				}
+        -:  268:
+        -:  269:				needSleep = true;
+        -:  270:			}
+        -:  271:
+        -:  272:			// MSVC 不允许在 catch 块内 co_await，延迟到块外
+        -:  273:			if (needSleep)
+        -:  274:			{
+        -:  275:				co_await hical::sleep(0.05);
+        -:  276:			}
+        -:  277:		}
+        8:  278:	}
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed
+call    8 never executed
+branch  9 never executed (fallthrough)
+branch 10 never executed
+call   11 never executed
+call   12 never executed
+branch 13 never executed (fallthrough)
+branch 14 never executed (throw)
+call   15 never executed
+call   16 never executed
+        -:  279:
+function _ZN5hical9TcpServer13idleCheckLoopEv called 0 returned 0% blocks executed 0%
+    #####:  280:	Awaitable<void> TcpServer::idleCheckLoop()
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:  281:	{
+        -:  282:		// 扫描间隔：超时时间的 1/4，至少 1 秒
+        -:  283:		auto intervalSec = (std::max)(1.0, idleTimeout_ / 4.0);
+        -:  284:
+        -:  285:		while (running_.load() && alive_->load())
+        -:  286:		{
+        -:  287:			co_await hical::sleep(intervalSec);
+        -:  288:
+        -:  289:			if (!running_.load() || !alive_->load())
+        -:  290:			{
+        -:  291:				break;
+        -:  292:			}
+        -:  293:
+        -:  294:			auto now = std::chrono::steady_clock::now();
+        -:  295:			auto timeout = std::chrono::milliseconds(static_cast<int64_t>(idleTimeout_ * 1000));
+        -:  296:
+        -:  297:			std::vector<TcpConnection::Ptr> toClose;
+        -:  298:			{
+        -:  299:				std::lock_guard<std::mutex> lock(connectionsMutex_);
+        -:  300:				for (const auto& conn : connections_)
+        -:  301:				{
+        -:  302:					if (now - conn->lastActiveTime() > timeout)
+        -:  303:					{
+        -:  304:						toClose.push_back(conn);
+        -:  305:					}
+        -:  306:				}
+        -:  307:			}
+        -:  308:
+        -:  309:			for (const auto& conn : toClose)
+        -:  310:			{
+        -:  311:				conn->close();
+        -:  312:			}
+        -:  313:		}
+    #####:  314:	}
+call    0 never executed
+call    1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed (throw)
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed
+call    8 never executed
+branch  9 never executed (fallthrough)
+branch 10 never executed
+call   11 never executed
+call   12 never executed
+branch 13 never executed (fallthrough)
+branch 14 never executed (throw)
+call   15 never executed
+call   16 never executed
+        -:  315:
+        -:  316:} // namespace hical

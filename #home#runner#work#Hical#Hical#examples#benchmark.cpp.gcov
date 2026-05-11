@@ -1,0 +1,326 @@
+        -:    0:Source:/home/runner/work/Hical/Hical/examples/benchmark.cpp
+        -:    1:#include <boost/asio.hpp>
+        -:    2:#include <iostream>
+        -:    3:#include <chrono>
+        -:    4:#include <atomic>
+        -:    5:#include <vector>
+        -:    6:#include <thread>
+        -:    7:
+        -:    8:using boost::asio::ip::tcp;
+        -:    9:
+        -:   10:class BenchmarkClient
+        -:   11:{
+        -:   12:public:
+function _ZN15BenchmarkClientC2ERN5boost4asio10io_contextERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEESB_iRSt6atomicIiESE_ called 0 returned 0% blocks executed 0%
+    #####:   13:	BenchmarkClient(boost::asio::io_context& io,
+        -:   14:					const std::string& host,
+        -:   15:					const std::string& port,
+        -:   16:					int num_requests,
+        -:   17:					std::atomic<int>& completed,
+        -:   18:					std::atomic<int>& errors)
+    #####:   19:		: socket_(io), resolver_(io), num_requests_(num_requests), completed_(completed), errors_(errors)
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+        -:   20:	{
+    #####:   21:		auto endpoints = resolver_.resolve(host, port);
+call    0 never executed
+call    1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed (throw)
+    #####:   22:		boost::asio::async_connect(socket_,
+        -:   23:								   endpoints,
+function _ZZN15BenchmarkClientC4ERN5boost4asio10io_contextERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEESB_iRSt6atomicIiESE_ENKUlNS0_6system10error_codeENS1_2ip14basic_endpointINSH_3tcpEEEE_clESG_SK_ called 0 returned 0% blocks executed 0%
+    #####:   24:								   [this](boost::system::error_code ec, tcp::endpoint)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:   25:								   {
+    #####:   26:									   if (!ec)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+        -:   27:									   {
+    #####:   28:										   send_request();
+call    0 never executed
+        -:   29:									   }
+        -:   30:									   else
+        -:   31:									   {
+    #####:   32:										   errors_++;
+call    0 never executed
+        -:   33:									   }
+    #####:   34:								   });
+    #####:   35:	}
+call    0 never executed
+call    1 never executed
+call    2 never executed
+call    3 never executed
+        -:   36:
+        -:   37:private:
+function _ZN15BenchmarkClient12send_requestEv called 0 returned 0% blocks executed 0%
+    #####:   38:	void send_request()
+        -:   39:	{
+    #####:   40:		if (current_request_ >= num_requests_)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:   41:		{
+    #####:   42:			socket_.close();
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:   43:			return;
+        -:   44:		}
+        -:   45:
+    #####:   46:		std::string msg = "Benchmark test message " + std::to_string(current_request_) + "\n";
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+branch  5 never executed (fallthrough)
+branch  6 never executed (throw)
+call    7 never executed
+call    8 never executed
+call    9 never executed
+call   10 never executed
+        -:   47:
+    #####:   48:		boost::asio::async_write(socket_,
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:   49:								 boost::asio::buffer(msg),
+call    0 never executed
+function _ZZN15BenchmarkClient12send_requestEvENKUlN5boost6system10error_codeEmE_clES2_m called 0 returned 0% blocks executed 0%
+    #####:   50:								 [this, msg](boost::system::error_code ec, std::size_t)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+call    4 never executed
+        -:   51:								 {
+    #####:   52:									 if (!ec)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+        -:   53:									 {
+    #####:   54:										 receive_response(msg.length());
+call    0 never executed
+call    1 never executed
+        -:   55:									 }
+        -:   56:									 else
+        -:   57:									 {
+    #####:   58:										 errors_++;
+call    0 never executed
+    #####:   59:										 socket_.close();
+call    0 never executed
+        -:   60:									 }
+    #####:   61:								 });
+    #####:   62:	}
+call    0 never executed
+call    1 never executed
+        -:   63:
+function _ZN15BenchmarkClient16receive_responseEm called 0 returned 0% blocks executed 0%
+    #####:   64:	void receive_response(std::size_t expected_len)
+        -:   65:	{
+    #####:   66:		boost::asio::async_read(socket_,
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:   67:								boost::asio::buffer(buffer_, expected_len),
+function _ZZN15BenchmarkClient16receive_responseEmENKUlN5boost6system10error_codeEmE_clES2_m called 0 returned 0% blocks executed 0%
+    #####:   68:								[this](boost::system::error_code ec, std::size_t)
+call    0 never executed
+        -:   69:								{
+    #####:   70:									if (!ec)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+        -:   71:									{
+    #####:   72:										completed_++;
+call    0 never executed
+    #####:   73:										current_request_++;
+    #####:   74:										send_request();
+call    0 never executed
+        -:   75:									}
+        -:   76:									else
+        -:   77:									{
+    #####:   78:										errors_++;
+call    0 never executed
+    #####:   79:										socket_.close();
+call    0 never executed
+        -:   80:									}
+    #####:   81:								});
+    #####:   82:	}
+        -:   83:
+        -:   84:	tcp::socket socket_;
+        -:   85:	tcp::resolver resolver_;
+        -:   86:	int num_requests_;
+        -:   87:	int current_request_ = 0;
+        -:   88:	std::atomic<int>& completed_;
+        -:   89:	std::atomic<int>& errors_;
+        -:   90:	char buffer_[1024];
+        -:   91:};
+        -:   92:
+function main called 0 returned 0% blocks executed 0%
+    #####:   93:int main(int argc, char* argv[])
+        -:   94:{
+    #####:   95:	if (argc != 5)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:   96:	{
+    #####:   97:		std::cerr << "用法: benchmark <host> <port> <并发数> <每连接请求数>\n";
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:   98:		std::cerr << "示例: benchmark localhost 8888 100 1000\n";
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:   99:		return 1;
+        -:  100:	}
+        -:  101:
+    #####:  102:	std::string host = argv[1];
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  103:	std::string port = argv[2];
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  104:	int num_clients = std::atoi(argv[3]);
+    #####:  105:	int requests_per_client = std::atoi(argv[4]);
+        -:  106:
+    #####:  107:	std::atomic<int> completed {0};
+    #####:  108:	std::atomic<int> errors {0};
+        -:  109:
+    #####:  110:	auto start = std::chrono::high_resolution_clock::now();
+call    0 never executed
+        -:  111:
+    #####:  112:	boost::asio::io_context io;
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:  113:
+        -:  114:	// 创建多个客户端
+    #####:  115:	std::vector<std::unique_ptr<BenchmarkClient>> clients;
+    #####:  116:	for (int i = 0; i < num_clients; ++i)
+branch  0 never executed
+branch  1 never executed (fallthrough)
+        -:  117:	{
+    #####:  118:		clients.push_back(std::make_unique<BenchmarkClient>(io, host, port, requests_per_client, completed, errors));
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+call    6 never executed
+call    7 never executed
+        -:  119:	}
+        -:  120:
+        -:  121:	// 运行事件循环
+    #####:  122:	io.run();
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:  123:
+    #####:  124:	auto end = std::chrono::high_resolution_clock::now();
+call    0 never executed
+    #####:  125:	auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+call    6 never executed
+        -:  126:
+    #####:  127:	int total_requests = num_clients * requests_per_client;
+    #####:  128:	double seconds = duration / 1000.0;
+call    0 never executed
+    #####:  129:	double qps = completed.load() / seconds;
+        -:  130:
+    #####:  131:	std::cout << "\n========== 压力测试结果 ==========\n";
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  132:	std::cout << "总请求数: " << total_requests << "\n";
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed (throw)
+    #####:  133:	std::cout << "成功请求: " << completed.load() << "\n";
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+call    4 never executed
+branch  5 never executed (fallthrough)
+branch  6 never executed (throw)
+call    7 never executed
+branch  8 never executed (fallthrough)
+branch  9 never executed (throw)
+    #####:  134:	std::cout << "失败请求: " << errors.load() << "\n";
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+call    4 never executed
+branch  5 never executed (fallthrough)
+branch  6 never executed (throw)
+call    7 never executed
+branch  8 never executed (fallthrough)
+branch  9 never executed (throw)
+    #####:  135:	std::cout << "总耗时: " << duration << " ms\n";
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed (throw)
+    #####:  136:	std::cout << "QPS: " << static_cast<int>(qps) << " req/s\n";
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed (throw)
+    #####:  137:	std::cout << "平均延迟: " << (duration * 1.0 / completed.load()) << " ms\n";
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+call    4 never executed
+branch  5 never executed (fallthrough)
+branch  6 never executed (throw)
+call    7 never executed
+branch  8 never executed (fallthrough)
+branch  9 never executed (throw)
+    #####:  138:	std::cout << "==================================\n";
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:  139:
+    #####:  140:	return 0;
+    #####:  141:}
+call    0 never executed
+call    1 never executed
+call    2 never executed
+call    3 never executed
+call    4 never executed
+call    5 never executed
+call    6 never executed
+call    7 never executed

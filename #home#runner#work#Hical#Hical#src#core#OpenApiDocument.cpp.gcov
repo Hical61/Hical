@@ -1,0 +1,989 @@
+        -:    0:Source:/home/runner/work/Hical/Hical/src/core/OpenApiDocument.cpp
+        -:    1:#include "core/OpenApiDocument.h"
+        -:    2:#include <algorithm>
+        -:    3:
+        -:    4:namespace hical::meta::openapi
+        -:    5:{
+        -:    6:
+function _ZN5hical4meta7openapi15OpenApiDocumentC2ESt10shared_ptrIKNS1_15OpenApiRegistryEENS1_13OpenApiConfigE called 14 returned 100% blocks executed 100%
+       14:    7:	OpenApiDocument::OpenApiDocument(std::shared_ptr<const OpenApiRegistry> registry, OpenApiConfig config)
+       14:    8:		: m_registry(std::move(registry)), m_config(std::move(config))
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+call    5 returned 100%
+        -:    9:	{
+       14:   10:	}
+        -:   11:
+function _ZN5hical4meta7openapi15OpenApiDocument14generateStringB5cxx11Ev called 14 returned 100% blocks executed 63%
+       14:   12:	const std::string& OpenApiDocument::generateString()
+        -:   13:	{
+       14:   14:		std::lock_guard lock(m_mutex);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       14:   15:		if (!m_generated)
+branch  0 taken 93% (fallthrough)
+branch  1 taken 7%
+        -:   16:		{
+       13:   17:			auto doc = buildDocument();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       13:   18:			m_cached = boost::json::serialize(doc);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+       13:   19:			m_generated = true;
+       13:   20:		}
+call    0 returned 100%
+call    1 never executed
+       14:   21:		return m_cached;
+       14:   22:	}
+call    0 returned 100%
+call    1 never executed
+        -:   23:
+function _ZN5hical4meta7openapi15OpenApiDocument10invalidateEv called 1 returned 100% blocks executed 100%
+        1:   24:	void OpenApiDocument::invalidate()
+        -:   25:	{
+        1:   26:		std::lock_guard lock(m_mutex);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:   27:		m_generated = false;
+        1:   28:		m_cached.clear();
+call    0 returned 100%
+        1:   29:	}
+call    0 returned 100%
+        -:   30:
+function _ZN5hical4meta7openapi15OpenApiDocument13buildDocumentEv called 13 returned 100% blocks executed 67%
+       13:   31:	boost::json::object OpenApiDocument::buildDocument()
+        -:   32:	{
+       13:   33:		boost::json::object doc;
+call    0 returned 100%
+       13:   34:		doc["openapi"] = "3.0.3";
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+       13:   35:		doc["info"] = buildInfo();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+call    7 returned 100%
+branch  8 taken 100% (fallthrough)
+branch  9 taken 0% (throw)
+call   10 returned 100%
+call   11 never executed
+        -:   36:
+       13:   37:		auto servers = buildServers();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       13:   38:		if (!servers.empty())
+call    0 returned 100%
+branch  1 taken 8% (fallthrough)
+branch  2 taken 92%
+        -:   39:		{
+        1:   40:			doc["servers"] = std::move(servers);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+        -:   41:		}
+        -:   42:
+       13:   43:		doc["paths"] = buildPaths();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+call    7 returned 100%
+branch  8 taken 100% (fallthrough)
+branch  9 taken 0% (throw)
+call   10 returned 100%
+call   11 never executed
+        -:   44:
+       13:   45:		auto components = buildComponents();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       13:   46:		if (!components.empty())
+call    0 returned 100%
+branch  1 taken 15% (fallthrough)
+branch  2 taken 85%
+        -:   47:		{
+        2:   48:			doc["components"] = std::move(components);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+        -:   49:		}
+        -:   50:
+       13:   51:		return doc;
+       13:   52:	}
+call    0 returned 100%
+call    1 returned 100%
+call    2 never executed
+call    3 never executed
+call    4 never executed
+        -:   53:
+function _ZNK5hical4meta7openapi15OpenApiDocument9buildInfoEv called 13 returned 100% blocks executed 73%
+       13:   54:	boost::json::object OpenApiDocument::buildInfo() const
+        -:   55:	{
+       13:   56:		boost::json::object info;
+call    0 returned 100%
+       13:   57:		info["title"] = m_config.title;
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+       13:   58:		info["version"] = m_config.version;
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+       13:   59:		if (!m_config.description.empty())
+call    0 returned 100%
+branch  1 taken 15% (fallthrough)
+branch  2 taken 85%
+        -:   60:		{
+        2:   61:			info["description"] = m_config.description;
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+        -:   62:		}
+       13:   63:		return info;
+    =====:   64:	}
+call    0 never executed
+        -:   65:
+function _ZNK5hical4meta7openapi15OpenApiDocument12buildServersEv called 13 returned 100% blocks executed 66%
+       13:   66:	boost::json::array OpenApiDocument::buildServers() const
+        -:   67:	{
+       13:   68:		boost::json::array servers;
+call    0 returned 100%
+       15:   69:		for (const auto& s : m_config.servers)
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 13%
+branch  6 taken 87% (fallthrough)
+        -:   70:		{
+        2:   71:			boost::json::object server;
+call    0 returned 100%
+        2:   72:			server["url"] = s.url;
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+        2:   73:			if (!s.description.empty())
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0%
+        -:   74:			{
+        2:   75:				server["description"] = s.description;
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+        -:   76:			}
+        2:   77:			servers.push_back(std::move(server));
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 returned 100%
+call    8 never executed
+call    9 never executed
+        2:   78:		}
+call    0 returned 100%
+call    1 never executed
+       13:   79:		return servers;
+    =====:   80:	}
+call    0 never executed
+        -:   81:
+function _ZNK5hical4meta7openapi15OpenApiDocument10buildPathsEv called 13 returned 100% blocks executed 68%
+       13:   82:	boost::json::object OpenApiDocument::buildPaths() const
+        -:   83:	{
+        -:   84:		// 获取路由快照
+       13:   85:		auto allRoutes = m_registry->routes();
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:   86:
+        -:   87:		// 按 path 分组，同路径不同 method 合并到一个 Path Item Object
+       13:   88:		std::unordered_map<std::string, std::vector<const RegisteredRoute*>> pathGroups;
+call    0 returned 100%
+       26:   89:		for (const auto& route : allRoutes)
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+branch  4 taken 50%
+branch  5 taken 50% (fallthrough)
+        -:   90:		{
+       13:   91:			pathGroups[route.path].push_back(&route);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+        -:   92:		}
+        -:   93:
+       13:   94:		boost::json::object paths;
+call    0 returned 100%
+       24:   95:		for (const auto& [path, routes] : pathGroups)
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+call    5 returned 100%
+call    6 returned 100%
+branch  7 taken 46%
+branch  8 taken 54% (fallthrough)
+        -:   96:		{
+       11:   97:			boost::json::object pathItem;
+call    0 returned 100%
+       24:   98:			for (const auto* route : routes)
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 54%
+branch  6 taken 46% (fallthrough)
+        -:   99:			{
+       13:  100:				std::string method = methodToLower(route->method);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       13:  101:				pathItem[method] = buildOperation(*route);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+call    7 returned 100%
+branch  8 taken 100% (fallthrough)
+branch  9 taken 0% (throw)
+call   10 returned 100%
+call   11 never executed
+       13:  102:			}
+call    0 returned 100%
+call    1 never executed
+       11:  103:			paths[path] = std::move(pathItem);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+       11:  104:		}
+call    0 returned 100%
+call    1 never executed
+       13:  105:		return paths;
+       13:  106:	}
+call    0 returned 100%
+call    1 returned 100%
+call    2 never executed
+call    3 never executed
+call    4 never executed
+        -:  107:
+function _ZNK5hical4meta7openapi15OpenApiDocument14buildOperationERKNS1_15RegisteredRouteE called 13 returned 100% blocks executed 66%
+       13:  108:	boost::json::object OpenApiDocument::buildOperation(const RegisteredRoute& route) const
+        -:  109:	{
+       13:  110:		boost::json::object op;
+call    0 returned 100%
+       13:  111:		const auto& info = route.apiInfo;
+        -:  112:
+        -:  113:		// operationId
+       13:  114:		if (!info.operationId.empty())
+call    0 returned 100%
+branch  1 taken 38% (fallthrough)
+branch  2 taken 62%
+        -:  115:		{
+        5:  116:			op["operationId"] = info.operationId;
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+        -:  117:		}
+        -:  118:		else
+        -:  119:		{
+        8:  120:			op["operationId"] = route.handlerName;
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+        -:  121:		}
+        -:  122:
+        -:  123:		// summary / description
+       13:  124:		if (!info.summary.empty())
+call    0 returned 100%
+branch  1 taken 31% (fallthrough)
+branch  2 taken 69%
+        -:  125:		{
+        4:  126:			op["summary"] = info.summary;
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+        -:  127:		}
+       13:  128:		if (!info.description.empty())
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+        -:  129:		{
+    #####:  130:			op["description"] = info.description;
+call    0 never executed
+call    1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed (throw)
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed (throw)
+        -:  131:		}
+        -:  132:
+        -:  133:		// tags
+       13:  134:		if (!info.tags.empty())
+call    0 returned 100%
+branch  1 taken 8% (fallthrough)
+branch  2 taken 92%
+        -:  135:		{
+        1:  136:			boost::json::array tagsArr;
+call    0 returned 100%
+        2:  137:			for (const auto& tag : info.tags)
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+branch  4 taken 50%
+branch  5 taken 50% (fallthrough)
+        -:  138:			{
+        1:  139:				tagsArr.push_back(boost::json::value(tag));
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+call    8 returned 100%
+call    9 returned 100%
+call   10 returned 100%
+call   11 never executed
+call   12 never executed
+        -:  140:			}
+        1:  141:			op["tags"] = std::move(tagsArr);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+        1:  142:		}
+call    0 returned 100%
+call    1 never executed
+        -:  143:
+        -:  144:		// parameters（路径参数自动提取 + 用户覆盖）
+       13:  145:		auto pathParams = extractPathParams(route.path);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+       13:  146:		if (!pathParams.empty())
+call    0 returned 100%
+branch  1 taken 15% (fallthrough)
+branch  2 taken 85%
+        -:  147:		{
+        2:  148:			boost::json::array params;
+call    0 returned 100%
+        4:  149:			for (const auto& paramName : pathParams)
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 50%
+branch  6 taken 50% (fallthrough)
+        -:  150:			{
+        2:  151:				boost::json::object param;
+call    0 returned 100%
+        2:  152:				param["name"] = paramName;
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+        2:  153:				param["in"] = "path";
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+        2:  154:				param["required"] = true;
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+        -:  155:
+        -:  156:				// 查找用户是否提供了类型覆盖
+        2:  157:				std::string schemaType = "string";
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        2:  158:				std::string paramDesc;
+call    0 returned 100%
+       2*:  159:				for (const auto& userParam : info.parameters)
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 never executed
+call    4 returned 100%
+branch  5 taken 50%
+branch  6 taken 50% (fallthrough)
+        -:  160:				{
+        1:  161:					if (userParam.name == paramName)
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0%
+        -:  162:					{
+        1:  163:						schemaType = userParam.schemaType;
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  164:						paramDesc = userParam.description;
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  165:						break;
+        -:  166:					}
+        -:  167:				}
+        -:  168:
+        2:  169:				boost::json::object schema;
+call    0 returned 100%
+        2:  170:				schema["type"] = schemaType;
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+        2:  171:				param["schema"] = std::move(schema);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+        -:  172:
+        2:  173:				if (!paramDesc.empty())
+call    0 returned 100%
+branch  1 taken 50% (fallthrough)
+branch  2 taken 50%
+        -:  174:				{
+        1:  175:					param["description"] = paramDesc;
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+        -:  176:				}
+        -:  177:
+        2:  178:				params.push_back(std::move(param));
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 returned 100%
+call    8 never executed
+call    9 never executed
+        2:  179:			}
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 never executed
+call    5 never executed
+call    6 never executed
+call    7 never executed
+        2:  180:			op["parameters"] = std::move(params);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+        2:  181:		}
+call    0 returned 100%
+call    1 never executed
+        -:  182:
+        -:  183:		// requestBody
+       13:  184:		if (info.requestBodySchema)
+call    0 returned 100%
+branch  1 taken 15% (fallthrough)
+branch  2 taken 85%
+        -:  185:		{
+        2:  186:			boost::json::object reqBody;
+call    0 returned 100%
+        2:  187:			if (!info.requestBodyDescription.empty())
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0%
+        -:  188:			{
+        2:  189:				reqBody["description"] = info.requestBodyDescription;
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+        -:  190:			}
+        2:  191:			reqBody["required"] = info.requestBodyRequired;
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+        -:  192:
+        2:  193:			boost::json::object content;
+call    0 returned 100%
+        2:  194:			boost::json::object jsonMedia;
+call    0 returned 100%
+        2:  195:			jsonMedia["schema"] = info.requestBodySchema();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+call    7 returned 100%
+branch  8 taken 100% (fallthrough)
+branch  9 taken 0% (throw)
+call   10 returned 100%
+call   11 never executed
+        2:  196:			content["application/json"] = std::move(jsonMedia);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+        2:  197:			reqBody["content"] = std::move(content);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+        -:  198:
+        2:  199:			op["requestBody"] = std::move(reqBody);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+        2:  200:		}
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 never executed
+call    4 never executed
+call    5 never executed
+        -:  201:
+        -:  202:		// responses
+       13:  203:		boost::json::object responses;
+call    0 returned 100%
+       13:  204:		if (!info.responses.empty())
+call    0 returned 100%
+branch  1 taken 15% (fallthrough)
+branch  2 taken 85%
+        -:  205:		{
+        5:  206:			for (const auto& [code, respInfo] : info.responses)
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+call    5 returned 100%
+call    6 returned 100%
+branch  7 taken 60%
+branch  8 taken 40% (fallthrough)
+        -:  207:			{
+        3:  208:				boost::json::object resp;
+call    0 returned 100%
+        3:  209:				resp["description"] = respInfo.description;
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+        3:  210:				if (respInfo.schema)
+call    0 returned 100%
+branch  1 taken 67% (fallthrough)
+branch  2 taken 33%
+        -:  211:				{
+        2:  212:					boost::json::object content;
+call    0 returned 100%
+        2:  213:					boost::json::object jsonMedia;
+call    0 returned 100%
+        2:  214:					jsonMedia["schema"] = respInfo.schema();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+call    7 returned 100%
+branch  8 taken 100% (fallthrough)
+branch  9 taken 0% (throw)
+call   10 returned 100%
+call   11 never executed
+        2:  215:					content["application/json"] = std::move(jsonMedia);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+        2:  216:					resp["content"] = std::move(content);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+        2:  217:				}
+call    0 returned 100%
+call    1 returned 100%
+call    2 never executed
+call    3 never executed
+        3:  218:				responses[std::to_string(code)] = std::move(resp);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+call    9 returned 100%
+call   10 never executed
+        3:  219:			}
+call    0 returned 100%
+call    1 never executed
+        -:  220:		}
+        -:  221:		else
+        -:  222:		{
+        -:  223:			// 无标注时生成默认 200 响应
+       11:  224:			boost::json::object defaultResp;
+call    0 returned 100%
+       11:  225:			defaultResp["description"] = "OK";
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+       11:  226:			responses["200"] = std::move(defaultResp);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+       11:  227:		}
+call    0 returned 100%
+call    1 never executed
+       13:  228:		op["responses"] = std::move(responses);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+        -:  229:
+       13:  230:		return op;
+       13:  231:	}
+call    0 returned 100%
+call    1 returned 100%
+call    2 never executed
+call    3 never executed
+call    4 never executed
+        -:  232:
+function _ZNK5hical4meta7openapi15OpenApiDocument15buildComponentsEv called 13 returned 100% blocks executed 76%
+       13:  233:	boost::json::object OpenApiDocument::buildComponents() const
+        -:  234:	{
+       13:  235:		const auto& schemas = m_registry->schemas();
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+       13:  236:		if (schemas.empty())
+call    0 returned 100%
+branch  1 taken 85% (fallthrough)
+branch  2 taken 15%
+        -:  237:		{
+       11:  238:			return {};
+call    0 returned 100%
+        -:  239:		}
+        -:  240:
+        2:  241:		boost::json::object components;
+call    0 returned 100%
+        2:  242:		boost::json::object schemasObj;
+call    0 returned 100%
+        4:  243:		for (const auto& [name, schema] : schemas)
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+call    5 returned 100%
+branch  6 taken 50%
+branch  7 taken 50% (fallthrough)
+        -:  244:		{
+        2:  245:			schemasObj[name] = schema;
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+call    7 returned 100%
+        -:  246:		}
+        2:  247:		components["schemas"] = std::move(schemasObj);
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0% (throw)
+        2:  248:		return components;
+call    0 returned 100%
+       13:  249:	}
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 never executed
+call    4 never executed
+call    5 never executed
+        -:  250:
+function _ZN5hical4meta7openapi15OpenApiDocument13methodToLowerB5cxx11ENS_10HttpMethodE called 13 returned 100% blocks executed 20%
+       13:  251:	std::string OpenApiDocument::methodToLower(HttpMethod method)
+        -:  252:	{
+       13:  253:		switch (method)
+branch  0 taken 77%
+branch  1 taken 23%
+branch  2 taken 0%
+branch  3 taken 0%
+branch  4 taken 0%
+branch  5 taken 0%
+branch  6 taken 0%
+branch  7 taken 0%
+        -:  254:		{
+       10:  255:			case HttpMethod::hGet:
+       20:  256:				return "get";
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 never executed
+        3:  257:			case HttpMethod::hPost:
+        6:  258:				return "post";
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 never executed
+    #####:  259:			case HttpMethod::hPut:
+    #####:  260:				return "put";
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+    #####:  261:			case HttpMethod::hDelete:
+    #####:  262:				return "delete";
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+    #####:  263:			case HttpMethod::hPatch:
+    #####:  264:				return "patch";
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+    #####:  265:			case HttpMethod::hHead:
+    #####:  266:				return "head";
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+    #####:  267:			case HttpMethod::hOptions:
+    #####:  268:				return "options";
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+    #####:  269:			default:
+    #####:  270:				return "unknown";
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:  271:		}
+        -:  272:	}
+        -:  273:
+function _ZN5hical4meta7openapi15OpenApiDocument17extractPathParamsB5cxx11ESt17basic_string_viewIcSt11char_traitsIcEE called 13 returned 100% blocks executed 82%
+       13:  274:	std::vector<std::string> OpenApiDocument::extractPathParams(std::string_view path)
+        -:  275:	{
+       13:  276:		std::vector<std::string> params;
+       13:  277:		size_t pos = 0;
+       15:  278:		while (pos < path.size())
+call    0 returned 100%
+branch  1 taken 87%
+branch  2 taken 13% (fallthrough)
+        -:  279:		{
+       13:  280:			auto start = path.find('{', pos);
+call    0 returned 100%
+       13:  281:			if (start == std::string_view::npos)
+branch  0 taken 85% (fallthrough)
+branch  1 taken 15%
+        -:  282:			{
+       11:  283:				break;
+        -:  284:			}
+        2:  285:			auto end = path.find('}', start + 1);
+call    0 returned 100%
+        2:  286:			if (end == std::string_view::npos)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:  287:			{
+    #####:  288:				break;
+        -:  289:			}
+        2:  290:			params.emplace_back(path.substr(start + 1, end - start - 1));
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+        2:  291:			pos = end + 1;
+        -:  292:		}
+       13:  293:		return params;
+    =====:  294:	}
+call    0 never executed
+        -:  295:
+        -:  296:} // namespace hical::meta::openapi

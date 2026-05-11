@@ -1,0 +1,163 @@
+        -:    0:Source:/home/runner/work/Hical/Hical/src/core/EventLoop.h
+        -:    1:#pragma once
+        -:    2:
+        -:    3:#include <chrono>
+        -:    4:#include <cstdint>
+        -:    5:#include <functional>
+        -:    6:#include <memory_resource>
+        -:    7:
+        -:    8:namespace hical
+        -:    9:{
+        -:   10:
+        -:   11:	using Func = std::function<void()>;
+        -:   12:	using TimerId = uint64_t;
+        -:   13:
+        -:   14:	enum : TimerId
+        -:   15:	{
+        -:   16:		hInvalidTimerId = 0
+        -:   17:	};
+        -:   18:
+        -:   19:	/**
+        -:   20:	 * @brief 事件循环抽象接口（hical 风格）
+        -:   21:	 * 定义了事件循环的核心操作，采用现代 C++ 命名风格。
+        -:   22:	 * 与旧版 IEventLoop 的区别：
+        -:   23:	 * - loop() -> run()
+        -:   24:	 * - quit() -> stop()
+        -:   25:	 * - queueInLoop() -> post()
+        -:   26:	 * - runInLoop() -> dispatch()
+        -:   27:	 * - 新增 pmr 分配器支持
+        -:   28:	 */
+        -:   29:	class EventLoop
+        -:   30:	{
+        -:   31:	public:
+     120*:   32:		virtual ~EventLoop() = default;
+------------------
+_ZN5hical9EventLoopD0Ev:
+function _ZN5hical9EventLoopD0Ev called 0 returned 0% blocks executed 0%
+    #####:   32:		virtual ~EventLoop() = default;
+call    0 never executed
+call    1 never executed
+------------------
+_ZN5hical9EventLoopD2Ev:
+function _ZN5hical9EventLoopD2Ev called 120 returned 100% blocks executed 100%
+      120:   32:		virtual ~EventLoop() = default;
+------------------
+        -:   33:
+        -:   34:		// ============ 生命周期 ============
+        -:   35:
+        -:   36:		/**
+        -:   37:		 * @brief 启动事件循环（阻塞直到退出）
+        -:   38:		 */
+        -:   39:		virtual void run() = 0;
+        -:   40:
+        -:   41:		/**
+        -:   42:		 * @brief 停止事件循环
+        -:   43:		 */
+        -:   44:		virtual void stop() = 0;
+        -:   45:
+        -:   46:		/**
+        -:   47:		 * @brief 事件循环是否正在运行
+        -:   48:		 * @return true 如果正在运行
+        -:   49:		 */
+        -:   50:		virtual bool isRunning() const = 0;
+        -:   51:
+        -:   52:		// ============ 任务调度 ============
+        -:   53:
+        -:   54:		/**
+        -:   55:		 * @brief 在事件循环线程中执行任务（智能调度）
+        -:   56:		 * @param cb 要执行的回调
+        -:   57:		 * @note 如果当前线程就是事件循环线程，则直接执行；否则投递到队列
+        -:   58:		 */
+        -:   59:		virtual void dispatch(Func cb) = 0;
+        -:   60:
+        -:   61:		/**
+        -:   62:		 * @brief 将任务投递到事件循环队列（总是异步）
+        -:   63:		 * @param cb 要执行的回调
+        -:   64:		 * @note 无论当前是否在事件循环线程，都投递到队列异步执行
+        -:   65:		 */
+        -:   66:		virtual void post(Func cb) = 0;
+        -:   67:
+        -:   68:		// ============ 定时器 ============
+        -:   69:
+        -:   70:		/**
+        -:   71:		 * @brief 延迟执行任务
+        -:   72:		 * @param delay 延迟时间（秒）
+        -:   73:		 * @param cb 要执行的回调
+        -:   74:		 * @return 定时器 ID，可用于取消
+        -:   75:		 */
+        -:   76:		virtual TimerId runAfter(double delay, Func cb) = 0;
+        -:   77:
+        -:   78:		/**
+        -:   79:		 * @brief 延迟执行任务（chrono 版本）
+        -:   80:		 * @param delay 延迟时间
+        -:   81:		 * @param cb 要执行的回调
+        -:   82:		 * @return 定时器 ID
+        -:   83:		 */
+        -:   84:		TimerId runAfter(const std::chrono::duration<double>& delay, Func cb)
+        -:   85:		{
+        -:   86:			return runAfter(delay.count(), std::move(cb));
+        -:   87:		}
+        -:   88:
+        -:   89:		/**
+        -:   90:		 * @brief 周期性执行任务
+        -:   91:		 * @param interval 间隔时间（秒）
+        -:   92:		 * @param cb 要执行的回调
+        -:   93:		 * @return 定时器 ID，可用于取消
+        -:   94:		 */
+        -:   95:		virtual TimerId runEvery(double interval, Func cb) = 0;
+        -:   96:
+        -:   97:		/**
+        -:   98:		 * @brief 周期性执行任务（chrono 版本）
+        -:   99:		 * @param interval 间隔时间
+        -:  100:		 * @param cb 要执行的回调
+        -:  101:		 * @return 定时器 ID
+        -:  102:		 */
+        -:  103:		TimerId runEvery(const std::chrono::duration<double>& interval, Func cb)
+        -:  104:		{
+        -:  105:			return runEvery(interval.count(), std::move(cb));
+        -:  106:		}
+        -:  107:
+        -:  108:		/**
+        -:  109:		 * @brief 取消定时器
+        -:  110:		 * @param id 定时器 ID
+        -:  111:		 */
+        -:  112:		virtual void cancelTimer(TimerId id) = 0;
+        -:  113:
+        -:  114:		// ============ 线程属性 ============
+        -:  115:
+        -:  116:		/**
+        -:  117:		 * @brief 当前线程是否为事件循环所属线程
+        -:  118:		 * @return true 如果在事件循环线程中
+        -:  119:		 */
+        -:  120:		virtual bool isInLoopThread() const = 0;
+        -:  121:
+        -:  122:		/**
+        -:  123:		 * @brief 获取事件循环索引（用于多线程池场景）
+        -:  124:		 * @return 索引值
+        -:  125:		 */
+        -:  126:		virtual size_t index() const = 0;
+        -:  127:
+        -:  128:		/**
+        -:  129:		 * @brief 设置事件循环索引
+        -:  130:		 * @param index 索引值
+        -:  131:		 */
+        -:  132:		virtual void setIndex(size_t index) = 0;
+        -:  133:
+        -:  134:		// ============ 退出钩子 ============
+        -:  135:
+        -:  136:		/**
+        -:  137:		 * @brief 注册退出时执行的回调
+        -:  138:		 * @param cb 要执行的回调
+        -:  139:		 */
+        -:  140:		virtual void runOnQuit(Func cb) = 0;
+        -:  141:
+        -:  142:		// ============ pmr 支持 ============
+        -:  143:
+        -:  144:		/**
+        -:  145:		 * @brief 获取事件循环关联的 pmr 分配器
+        -:  146:		 * @return pmr 分配器（通常是线程本地池）
+        -:  147:		 */
+        -:  148:		virtual std::pmr::polymorphic_allocator<std::byte> allocator() const = 0;
+        -:  149:	};
+        -:  150:
+        -:  151:} // namespace hical

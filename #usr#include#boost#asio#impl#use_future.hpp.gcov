@@ -1,0 +1,1232 @@
+        -:    0:Source:/usr/include/boost/asio/impl/use_future.hpp
+        -:    1://
+        -:    2:// impl/use_future.hpp
+        -:    3:// ~~~~~~~~~~~~~~~~~~~
+        -:    4://
+        -:    5:// Copyright (c) 2003-2023 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+        -:    6://
+        -:    7:// Distributed under the Boost Software License, Version 1.0. (See accompanying
+        -:    8:// file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+        -:    9://
+        -:   10:
+        -:   11:#ifndef BOOST_ASIO_IMPL_USE_FUTURE_HPP
+        -:   12:#define BOOST_ASIO_IMPL_USE_FUTURE_HPP
+        -:   13:
+        -:   14:#if defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   15:# pragma once
+        -:   16:#endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   17:
+        -:   18:#include <boost/asio/detail/config.hpp>
+        -:   19:#include <tuple>
+        -:   20:#include <boost/asio/async_result.hpp>
+        -:   21:#include <boost/asio/detail/memory.hpp>
+        -:   22:#include <boost/asio/dispatch.hpp>
+        -:   23:#include <boost/system/error_code.hpp>
+        -:   24:#include <boost/asio/execution.hpp>
+        -:   25:#include <boost/asio/packaged_task.hpp>
+        -:   26:#include <boost/system/system_error.hpp>
+        -:   27:#include <boost/asio/system_executor.hpp>
+        -:   28:
+        -:   29:#include <boost/asio/detail/push_options.hpp>
+        -:   30:
+        -:   31:namespace boost {
+        -:   32:namespace asio {
+        -:   33:namespace detail {
+        -:   34:
+        -:   35:#if defined(BOOST_ASIO_HAS_VARIADIC_TEMPLATES)
+        -:   36:
+        -:   37:template <typename T, typename F, typename... Args>
+        -:   38:inline void promise_invoke_and_set(std::promise<T>& p,
+        -:   39:    F& f, BOOST_ASIO_MOVE_ARG(Args)... args)
+        -:   40:{
+        -:   41:#if !defined(BOOST_ASIO_NO_EXCEPTIONS)
+        -:   42:  try
+        -:   43:#endif // !defined(BOOST_ASIO_NO_EXCEPTIONS)
+        -:   44:  {
+        -:   45:    p.set_value(f(BOOST_ASIO_MOVE_CAST(Args)(args)...));
+        -:   46:  }
+        -:   47:#if !defined(BOOST_ASIO_NO_EXCEPTIONS)
+        -:   48:  catch (...)
+        -:   49:  {
+        -:   50:    p.set_exception(std::current_exception());
+        -:   51:  }
+        -:   52:#endif // !defined(BOOST_ASIO_NO_EXCEPTIONS)
+        -:   53:}
+        -:   54:
+        -:   55:template <typename F, typename... Args>
+        -:   56:inline void promise_invoke_and_set(std::promise<void>& p,
+        -:   57:    F& f, BOOST_ASIO_MOVE_ARG(Args)... args)
+        -:   58:{
+        -:   59:#if !defined(BOOST_ASIO_NO_EXCEPTIONS)
+        -:   60:  try
+        -:   61:#endif // !defined(BOOST_ASIO_NO_EXCEPTIONS)
+        -:   62:  {
+        -:   63:    f(BOOST_ASIO_MOVE_CAST(Args)(args)...);
+        -:   64:    p.set_value();
+        -:   65:  }
+        -:   66:#if !defined(BOOST_ASIO_NO_EXCEPTIONS)
+        -:   67:  catch (...)
+        -:   68:  {
+        -:   69:    p.set_exception(std::current_exception());
+        -:   70:  }
+        -:   71:#endif // !defined(BOOST_ASIO_NO_EXCEPTIONS)
+        -:   72:}
+        -:   73:
+        -:   74:#else // defined(BOOST_ASIO_HAS_VARIADIC_TEMPLATES)
+        -:   75:
+        -:   76:template <typename T, typename F>
+        -:   77:inline void promise_invoke_and_set(std::promise<T>& p, F& f)
+        -:   78:{
+        -:   79:#if !defined(BOOST_ASIO_NO_EXCEPTIONS)
+        -:   80:  try
+        -:   81:#endif // !defined(BOOST_ASIO_NO_EXCEPTIONS)
+        -:   82:  {
+        -:   83:    p.set_value(f());
+        -:   84:  }
+        -:   85:#if !defined(BOOST_ASIO_NO_EXCEPTIONS)
+        -:   86:  catch (...)
+        -:   87:  {
+        -:   88:    p.set_exception(std::current_exception());
+        -:   89:  }
+        -:   90:#endif // !defined(BOOST_ASIO_NO_EXCEPTIONS)
+        -:   91:}
+        -:   92:
+        -:   93:template <typename F, typename Args>
+        -:   94:inline void promise_invoke_and_set(std::promise<void>& p, F& f)
+        -:   95:{
+        -:   96:#if !defined(BOOST_ASIO_NO_EXCEPTIONS)
+        -:   97:  try
+        -:   98:#endif // !defined(BOOST_ASIO_NO_EXCEPTIONS)
+        -:   99:  {
+        -:  100:    f();
+        -:  101:    p.set_value();
+        -:  102:#if !defined(BOOST_ASIO_NO_EXCEPTIONS)
+        -:  103:  }
+        -:  104:  catch (...)
+        -:  105:  {
+        -:  106:    p.set_exception(std::current_exception());
+        -:  107:  }
+        -:  108:#endif // !defined(BOOST_ASIO_NO_EXCEPTIONS)
+        -:  109:}
+        -:  110:
+        -:  111:#if defined(BOOST_ASIO_NO_EXCEPTIONS)
+        -:  112:
+        -:  113:#define BOOST_ASIO_PRIVATE_PROMISE_INVOKE_DEF(n) \
+        -:  114:  template <typename T, typename F, BOOST_ASIO_VARIADIC_TPARAMS(n)> \
+        -:  115:  inline void promise_invoke_and_set(std::promise<T>& p, \
+        -:  116:      F& f, BOOST_ASIO_VARIADIC_MOVE_PARAMS(n)) \
+        -:  117:  { \
+        -:  118:    p.set_value(f(BOOST_ASIO_VARIADIC_MOVE_ARGS(n))); \
+        -:  119:  } \
+        -:  120:  \
+        -:  121:  template <typename F, BOOST_ASIO_VARIADIC_TPARAMS(n)> \
+        -:  122:  inline void promise_invoke_and_set(std::promise<void>& p, \
+        -:  123:      F& f, BOOST_ASIO_VARIADIC_MOVE_PARAMS(n)) \
+        -:  124:  { \
+        -:  125:    f(BOOST_ASIO_VARIADIC_MOVE_ARGS(n)); \
+        -:  126:    p.set_value(); \
+        -:  127:  } \
+        -:  128:  /**/
+        -:  129:  BOOST_ASIO_VARIADIC_GENERATE(BOOST_ASIO_PRIVATE_PROMISE_INVOKE_DEF)
+        -:  130:#undef BOOST_ASIO_PRIVATE_PROMISE_INVOKE_DEF
+        -:  131:
+        -:  132:#else // defined(BOOST_ASIO_NO_EXCEPTIONS)
+        -:  133:
+        -:  134:#define BOOST_ASIO_PRIVATE_PROMISE_INVOKE_DEF(n) \
+        -:  135:  template <typename T, typename F, BOOST_ASIO_VARIADIC_TPARAMS(n)> \
+        -:  136:  inline void promise_invoke_and_set(std::promise<T>& p, \
+        -:  137:      F& f, BOOST_ASIO_VARIADIC_MOVE_PARAMS(n)) \
+        -:  138:  { \
+        -:  139:    try \
+        -:  140:    { \
+        -:  141:      p.set_value(f(BOOST_ASIO_VARIADIC_MOVE_ARGS(n))); \
+        -:  142:    } \
+        -:  143:    catch (...) \
+        -:  144:    { \
+        -:  145:      p.set_exception(std::current_exception()); \
+        -:  146:    } \
+        -:  147:  } \
+        -:  148:  \
+        -:  149:  template <typename F, BOOST_ASIO_VARIADIC_TPARAMS(n)> \
+        -:  150:  inline void promise_invoke_and_set(std::promise<void>& p, \
+        -:  151:      F& f, BOOST_ASIO_VARIADIC_MOVE_PARAMS(n)) \
+        -:  152:  { \
+        -:  153:    try \
+        -:  154:    { \
+        -:  155:      f(BOOST_ASIO_VARIADIC_MOVE_ARGS(n)); \
+        -:  156:      p.set_value(); \
+        -:  157:    } \
+        -:  158:    catch (...) \
+        -:  159:    { \
+        -:  160:      p.set_exception(std::current_exception()); \
+        -:  161:    } \
+        -:  162:  } \
+        -:  163:  /**/
+        -:  164:  BOOST_ASIO_VARIADIC_GENERATE(BOOST_ASIO_PRIVATE_PROMISE_INVOKE_DEF)
+        -:  165:#undef BOOST_ASIO_PRIVATE_PROMISE_INVOKE_DEF
+        -:  166:
+        -:  167:#endif // defined(BOOST_ASIO_NO_EXCEPTIONS)
+        -:  168:
+        -:  169:#endif // defined(BOOST_ASIO_HAS_VARIADIC_TEMPLATES)
+        -:  170:
+        -:  171:// A function object adapter to invoke a nullary function object and capture
+        -:  172:// any exception thrown into a promise.
+        -:  173:template <typename T, typename F>
+        -:  174:class promise_invoker
+        -:  175:{
+        -:  176:public:
+      16*:  177:  promise_invoker(const shared_ptr<std::promise<T> >& p,
+        -:  178:      BOOST_ASIO_MOVE_ARG(F) f)
+      16*:  179:    : p_(p), f_(BOOST_ASIO_MOVE_CAST(F)(f))
+        -:  180:  {
+      16*:  181:  }
+------------------
+_ZN5boost4asio6detail15promise_invokerIN5hical12HttpResponseENS1_7binder0IZNS1_20co_spawn_entry_pointIS4_NS1_15promise_handlerIFvNSt15__exception_ptr13exception_ptrES4_ESaIvEEENS0_15any_io_executorENS1_21awaitable_as_functionIS4_SD_EEEENS0_9awaitableINS1_28awaitable_thread_entry_pointET1_EEPNSG_IT_SI_EENS1_14co_spawn_stateIT0_SI_T2_vEEEUlvE0_EEEC2ERKSt10shared_ptrISt7promiseIS4_EEOSS_:
+function _ZN5boost4asio6detail15promise_invokerIN5hical12HttpResponseENS1_7binder0IZNS1_20co_spawn_entry_pointIS4_NS1_15promise_handlerIFvNSt15__exception_ptr13exception_ptrES4_ESaIvEEENS0_15any_io_executorENS1_21awaitable_as_functionIS4_SD_EEEENS0_9awaitableINS1_28awaitable_thread_entry_pointET1_EEPNSG_IT_SI_EENS1_14co_spawn_stateIT0_SI_T2_vEEEUlvE0_EEEC2ERKSt10shared_ptrISt7promiseIS4_EEOSS_ called 0 returned 0% blocks executed 0%
+    #####:  177:  promise_invoker(const shared_ptr<std::promise<T> >& p,
+        -:  178:      BOOST_ASIO_MOVE_ARG(F) f)
+    #####:  179:    : p_(p), f_(BOOST_ASIO_MOVE_CAST(F)(f))
+call    0 never executed
+call    1 never executed
+        -:  180:  {
+    #####:  181:  }
+------------------
+_ZN5boost4asio6detail15promise_invokerIN5hical12HttpResponseENS1_7binder0IZNS1_20co_spawn_entry_pointIS4_NS1_15promise_handlerIFvNSt15__exception_ptr13exception_ptrES4_ESaIvEEENS0_15any_io_executorENS1_21awaitable_as_functionIS4_SD_EEEENS0_9awaitableINS1_28awaitable_thread_entry_pointET1_EEPNSG_IT_SI_EENS1_14co_spawn_stateIT0_SI_T2_vEEEUlvE_EEEC2ERKSt10shared_ptrISt7promiseIS4_EEOSS_:
+function _ZN5boost4asio6detail15promise_invokerIN5hical12HttpResponseENS1_7binder0IZNS1_20co_spawn_entry_pointIS4_NS1_15promise_handlerIFvNSt15__exception_ptr13exception_ptrES4_ESaIvEEENS0_15any_io_executorENS1_21awaitable_as_functionIS4_SD_EEEENS0_9awaitableINS1_28awaitable_thread_entry_pointET1_EEPNSG_IT_SI_EENS1_14co_spawn_stateIT0_SI_T2_vEEEUlvE_EEEC2ERKSt10shared_ptrISt7promiseIS4_EEOSS_ called 16 returned 100% blocks executed 100%
+       16:  177:  promise_invoker(const shared_ptr<std::promise<T> >& p,
+        -:  178:      BOOST_ASIO_MOVE_ARG(F) f)
+       16:  179:    : p_(p), f_(BOOST_ASIO_MOVE_CAST(F)(f))
+call    0 returned 100%
+call    1 returned 100%
+        -:  180:  {
+       16:  181:  }
+------------------
+        -:  182:
+      16*:  183:  void operator()()
+        -:  184:  {
+        -:  185:#if !defined(BOOST_ASIO_NO_EXCEPTIONS)
+        -:  186:    try
+        -:  187:#endif // !defined(BOOST_ASIO_NO_EXCEPTIONS)
+        -:  188:    {
+      16*:  189:      f_();
+        -:  190:    }
+        -:  191:#if !defined(BOOST_ASIO_NO_EXCEPTIONS)
+    =====:  192:    catch (...)
+        -:  193:    {
+    =====:  194:      p_->set_exception(std::current_exception());
+        -:  195:    }
+        -:  196:#endif // !defined(BOOST_ASIO_NO_EXCEPTIONS)
+      16*:  197:  }
+------------------
+_ZN5boost4asio6detail15promise_invokerIN5hical12HttpResponseENS1_7binder0IZNS1_20co_spawn_entry_pointIS4_NS1_15promise_handlerIFvNSt15__exception_ptr13exception_ptrES4_ESaIvEEENS0_15any_io_executorENS1_21awaitable_as_functionIS4_SD_EEEENS0_9awaitableINS1_28awaitable_thread_entry_pointET1_EEPNSG_IT_SI_EENS1_14co_spawn_stateIT0_SI_T2_vEEEUlvE0_EEEclEv:
+function _ZN5boost4asio6detail15promise_invokerIN5hical12HttpResponseENS1_7binder0IZNS1_20co_spawn_entry_pointIS4_NS1_15promise_handlerIFvNSt15__exception_ptr13exception_ptrES4_ESaIvEEENS0_15any_io_executorENS1_21awaitable_as_functionIS4_SD_EEEENS0_9awaitableINS1_28awaitable_thread_entry_pointET1_EEPNSG_IT_SI_EENS1_14co_spawn_stateIT0_SI_T2_vEEEUlvE0_EEEclEv called 0 returned 0% blocks executed 0%
+    #####:  183:  void operator()()
+        -:  184:  {
+        -:  185:#if !defined(BOOST_ASIO_NO_EXCEPTIONS)
+        -:  186:    try
+        -:  187:#endif // !defined(BOOST_ASIO_NO_EXCEPTIONS)
+        -:  188:    {
+    #####:  189:      f_();
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:  190:    }
+        -:  191:#if !defined(BOOST_ASIO_NO_EXCEPTIONS)
+    =====:  192:    catch (...)
+call    0 never executed
+call    1 never executed
+        -:  193:    {
+    =====:  194:      p_->set_exception(std::current_exception());
+call    0 never executed
+call    1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed (throw)
+call    5 never executed
+call    6 never executed
+call    7 never executed
+        -:  195:    }
+        -:  196:#endif // !defined(BOOST_ASIO_NO_EXCEPTIONS)
+    #####:  197:  }
+------------------
+_ZN5boost4asio6detail15promise_invokerIN5hical12HttpResponseENS1_7binder0IZNS1_20co_spawn_entry_pointIS4_NS1_15promise_handlerIFvNSt15__exception_ptr13exception_ptrES4_ESaIvEEENS0_15any_io_executorENS1_21awaitable_as_functionIS4_SD_EEEENS0_9awaitableINS1_28awaitable_thread_entry_pointET1_EEPNSG_IT_SI_EENS1_14co_spawn_stateIT0_SI_T2_vEEEUlvE_EEEclEv:
+function _ZN5boost4asio6detail15promise_invokerIN5hical12HttpResponseENS1_7binder0IZNS1_20co_spawn_entry_pointIS4_NS1_15promise_handlerIFvNSt15__exception_ptr13exception_ptrES4_ESaIvEEENS0_15any_io_executorENS1_21awaitable_as_functionIS4_SD_EEEENS0_9awaitableINS1_28awaitable_thread_entry_pointET1_EEPNSG_IT_SI_EENS1_14co_spawn_stateIT0_SI_T2_vEEEUlvE_EEEclEv called 16 returned 100% blocks executed 21%
+       16:  183:  void operator()()
+        -:  184:  {
+        -:  185:#if !defined(BOOST_ASIO_NO_EXCEPTIONS)
+        -:  186:    try
+        -:  187:#endif // !defined(BOOST_ASIO_NO_EXCEPTIONS)
+        -:  188:    {
+       16:  189:      f_();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  190:    }
+        -:  191:#if !defined(BOOST_ASIO_NO_EXCEPTIONS)
+    =====:  192:    catch (...)
+call    0 never executed
+call    1 never executed
+        -:  193:    {
+    =====:  194:      p_->set_exception(std::current_exception());
+call    0 never executed
+call    1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed (throw)
+call    5 never executed
+call    6 never executed
+call    7 never executed
+        -:  195:    }
+        -:  196:#endif // !defined(BOOST_ASIO_NO_EXCEPTIONS)
+       16:  197:  }
+------------------
+        -:  198:
+        -:  199:private:
+        -:  200:  shared_ptr<std::promise<T> > p_;
+        -:  201:  typename decay<F>::type f_;
+        -:  202:};
+        -:  203:
+        -:  204:// An executor that adapts the system_executor to capture any exeption thrown
+        -:  205:// by a submitted function object and save it into a promise.
+        -:  206:template <typename T, typename Blocking = execution::blocking_t::possibly_t>
+        -:  207:class promise_executor
+        -:  208:{
+        -:  209:public:
+function _ZN5boost4asio6detail16promise_executorIN5hical12HttpResponseENS0_9execution6detail8blocking10possibly_tILi0EEEEC2ERKSt10shared_ptrISt7promiseIS4_EE called 16 returned 100% blocks executed 100%
+       16:  210:  explicit promise_executor(const shared_ptr<std::promise<T> >& p)
+       16:  211:    : p_(p)
+call    0 returned 100%
+        -:  212:  {
+       16:  213:  }
+        -:  214:
+        -:  215:  execution_context& query(execution::context_t) const BOOST_ASIO_NOEXCEPT
+        -:  216:  {
+        -:  217:    return boost::asio::query(system_executor(), execution::context);
+        -:  218:  }
+        -:  219:
+        -:  220:  static BOOST_ASIO_CONSTEXPR Blocking query(execution::blocking_t)
+        -:  221:  {
+        -:  222:    return Blocking();
+        -:  223:  }
+        -:  224:
+        -:  225:  promise_executor<T, execution::blocking_t::possibly_t>
+        -:  226:  require(execution::blocking_t::possibly_t) const
+        -:  227:  {
+        -:  228:    return promise_executor<T, execution::blocking_t::possibly_t>(p_);
+        -:  229:  }
+        -:  230:
+        -:  231:  promise_executor<T, execution::blocking_t::never_t>
+        -:  232:  require(execution::blocking_t::never_t) const
+        -:  233:  {
+        -:  234:    return promise_executor<T, execution::blocking_t::never_t>(p_);
+        -:  235:  }
+        -:  236:
+        -:  237:  template <typename F>
+      16*:  238:  void execute(BOOST_ASIO_MOVE_ARG(F) f) const
+        -:  239:  {
+        -:  240:#if defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  241:    boost::asio::require(system_executor(), Blocking()).execute(
+        -:  242:        promise_invoker<T, F>(p_, BOOST_ASIO_MOVE_CAST(F)(f)));
+        -:  243:#else // defined(BOOST_ASIO_NO_DEPRECATED)
+      16*:  244:    execution::execute(
+      16*:  245:        boost::asio::require(system_executor(), Blocking()),
+      32*:  246:        promise_invoker<T, F>(p_, BOOST_ASIO_MOVE_CAST(F)(f)));
+        -:  247:#endif // defined(BOOST_ASIO_NO_DEPRECATED)
+      16*:  248:  }
+------------------
+_ZNK5boost4asio6detail16promise_executorIN5hical12HttpResponseENS0_9execution6detail8blocking10possibly_tILi0EEEE7executeINS1_7binder0IZNS1_20co_spawn_entry_pointIS4_NS1_15promise_handlerIFvNSt15__exception_ptr13exception_ptrES4_ESaIvEEENS0_15any_io_executorENS1_21awaitable_as_functionIS4_SK_EEEENS0_9awaitableINS1_28awaitable_thread_entry_pointET1_EEPNSN_IT_SP_EENS1_14co_spawn_stateIT0_SP_T2_vEEEUlvE0_EEEEvOSR_:
+function _ZNK5boost4asio6detail16promise_executorIN5hical12HttpResponseENS0_9execution6detail8blocking10possibly_tILi0EEEE7executeINS1_7binder0IZNS1_20co_spawn_entry_pointIS4_NS1_15promise_handlerIFvNSt15__exception_ptr13exception_ptrES4_ESaIvEEENS0_15any_io_executorENS1_21awaitable_as_functionIS4_SK_EEEENS0_9awaitableINS1_28awaitable_thread_entry_pointET1_EEPNSN_IT_SP_EENS1_14co_spawn_stateIT0_SP_T2_vEEEUlvE0_EEEEvOSR_ called 0 returned 0% blocks executed 0%
+    #####:  238:  void execute(BOOST_ASIO_MOVE_ARG(F) f) const
+        -:  239:  {
+        -:  240:#if defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  241:    boost::asio::require(system_executor(), Blocking()).execute(
+        -:  242:        promise_invoker<T, F>(p_, BOOST_ASIO_MOVE_CAST(F)(f)));
+        -:  243:#else // defined(BOOST_ASIO_NO_DEPRECATED)
+    #####:  244:    execution::execute(
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  245:        boost::asio::require(system_executor(), Blocking()),
+call    0 never executed
+call    1 never executed
+call    2 never executed
+    #####:  246:        promise_invoker<T, F>(p_, BOOST_ASIO_MOVE_CAST(F)(f)));
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+call    4 never executed
+        -:  247:#endif // defined(BOOST_ASIO_NO_DEPRECATED)
+    #####:  248:  }
+------------------
+_ZNK5boost4asio6detail16promise_executorIN5hical12HttpResponseENS0_9execution6detail8blocking10possibly_tILi0EEEE7executeINS1_7binder0IZNS1_20co_spawn_entry_pointIS4_NS1_15promise_handlerIFvNSt15__exception_ptr13exception_ptrES4_ESaIvEEENS0_15any_io_executorENS1_21awaitable_as_functionIS4_SK_EEEENS0_9awaitableINS1_28awaitable_thread_entry_pointET1_EEPNSN_IT_SP_EENS1_14co_spawn_stateIT0_SP_T2_vEEEUlvE_EEEEvOSR_:
+function _ZNK5boost4asio6detail16promise_executorIN5hical12HttpResponseENS0_9execution6detail8blocking10possibly_tILi0EEEE7executeINS1_7binder0IZNS1_20co_spawn_entry_pointIS4_NS1_15promise_handlerIFvNSt15__exception_ptr13exception_ptrES4_ESaIvEEENS0_15any_io_executorENS1_21awaitable_as_functionIS4_SK_EEEENS0_9awaitableINS1_28awaitable_thread_entry_pointET1_EEPNSN_IT_SP_EENS1_14co_spawn_stateIT0_SP_T2_vEEEUlvE_EEEEvOSR_ called 16 returned 100% blocks executed 67%
+       16:  238:  void execute(BOOST_ASIO_MOVE_ARG(F) f) const
+        -:  239:  {
+        -:  240:#if defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  241:    boost::asio::require(system_executor(), Blocking()).execute(
+        -:  242:        promise_invoker<T, F>(p_, BOOST_ASIO_MOVE_CAST(F)(f)));
+        -:  243:#else // defined(BOOST_ASIO_NO_DEPRECATED)
+       16:  244:    execution::execute(
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       16:  245:        boost::asio::require(system_executor(), Blocking()),
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+       32:  246:        promise_invoker<T, F>(p_, BOOST_ASIO_MOVE_CAST(F)(f)));
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 never executed
+        -:  247:#endif // defined(BOOST_ASIO_NO_DEPRECATED)
+       16:  248:  }
+------------------
+        -:  249:
+        -:  250:#if !defined(BOOST_ASIO_NO_TS_EXECUTORS)
+        -:  251:  execution_context& context() const BOOST_ASIO_NOEXCEPT
+        -:  252:  {
+        -:  253:    return system_executor().context();
+        -:  254:  }
+        -:  255:
+        -:  256:  void on_work_started() const BOOST_ASIO_NOEXCEPT {}
+        -:  257:  void on_work_finished() const BOOST_ASIO_NOEXCEPT {}
+        -:  258:
+        -:  259:  template <typename F, typename A>
+        -:  260:  void dispatch(BOOST_ASIO_MOVE_ARG(F) f, const A&) const
+        -:  261:  {
+        -:  262:    promise_invoker<T, F>(p_, BOOST_ASIO_MOVE_CAST(F)(f))();
+        -:  263:  }
+        -:  264:
+        -:  265:  template <typename F, typename A>
+        -:  266:  void post(BOOST_ASIO_MOVE_ARG(F) f, const A& a) const
+        -:  267:  {
+        -:  268:    system_executor().post(
+        -:  269:        promise_invoker<T, F>(p_, BOOST_ASIO_MOVE_CAST(F)(f)), a);
+        -:  270:  }
+        -:  271:
+        -:  272:  template <typename F, typename A>
+        -:  273:  void defer(BOOST_ASIO_MOVE_ARG(F) f, const A& a) const
+        -:  274:  {
+        -:  275:    system_executor().defer(
+        -:  276:        promise_invoker<T, F>(p_, BOOST_ASIO_MOVE_CAST(F)(f)), a);
+        -:  277:  }
+        -:  278:#endif // !defined(BOOST_ASIO_NO_TS_EXECUTORS)
+        -:  279:
+        -:  280:  friend bool operator==(const promise_executor& a,
+        -:  281:      const promise_executor& b) BOOST_ASIO_NOEXCEPT
+        -:  282:  {
+        -:  283:    return a.p_ == b.p_;
+        -:  284:  }
+        -:  285:
+        -:  286:  friend bool operator!=(const promise_executor& a,
+        -:  287:      const promise_executor& b) BOOST_ASIO_NOEXCEPT
+        -:  288:  {
+        -:  289:    return a.p_ != b.p_;
+        -:  290:  }
+        -:  291:
+        -:  292:private:
+        -:  293:  shared_ptr<std::promise<T> > p_;
+        -:  294:};
+        -:  295:
+        -:  296:// The base class for all completion handlers that create promises.
+        -:  297:template <typename T>
+        -:  298:class promise_creator
+        -:  299:{
+        -:  300:public:
+        -:  301:  typedef promise_executor<T> executor_type;
+        -:  302:
+function _ZNK5boost4asio6detail15promise_creatorIN5hical12HttpResponseEE12get_executorEv called 16 returned 100% blocks executed 100%
+       16:  303:  executor_type get_executor() const BOOST_ASIO_NOEXCEPT
+        -:  304:  {
+       16:  305:    return executor_type(p_);
+call    0 returned 100%
+        -:  306:  }
+        -:  307:
+        -:  308:  typedef std::future<T> future_type;
+        -:  309:
+function _ZN5boost4asio6detail15promise_creatorIN5hical12HttpResponseEE10get_futureEv called 16 returned 100% blocks executed 100%
+       16:  310:  future_type get_future()
+        -:  311:  {
+       16:  312:    return p_->get_future();
+call    0 returned 100%
+call    1 returned 100%
+        -:  313:  }
+        -:  314:
+        -:  315:protected:
+        -:  316:  template <typename Allocator>
+function _ZN5boost4asio6detail15promise_creatorIN5hical12HttpResponseEE14create_promiseISaIvEEEvRKT_ called 16 returned 100% blocks executed 67%
+       16:  317:  void create_promise(const Allocator& a)
+        -:  318:  {
+        -:  319:    BOOST_ASIO_REBIND_ALLOC(Allocator, char) b(a);
+       16:  320:    p_ = std::allocate_shared<std::promise<T>>(b, std::allocator_arg, b);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+       16:  321:  }
+        -:  322:
+        -:  323:  shared_ptr<std::promise<T> > p_;
+        -:  324:};
+        -:  325:
+        -:  326:// For completion signature void().
+        -:  327:class promise_handler_0
+        -:  328:  : public promise_creator<void>
+        -:  329:{
+        -:  330:public:
+        -:  331:  void operator()()
+        -:  332:  {
+        -:  333:    this->p_->set_value();
+        -:  334:  }
+        -:  335:};
+        -:  336:
+        -:  337:// For completion signature void(error_code).
+        -:  338:class promise_handler_ec_0
+        -:  339:  : public promise_creator<void>
+        -:  340:{
+        -:  341:public:
+        -:  342:  void operator()(const boost::system::error_code& ec)
+        -:  343:  {
+        -:  344:    if (ec)
+        -:  345:    {
+        -:  346:      this->p_->set_exception(
+        -:  347:          std::make_exception_ptr(
+        -:  348:            boost::system::system_error(ec)));
+        -:  349:    }
+        -:  350:    else
+        -:  351:    {
+        -:  352:      this->p_->set_value();
+        -:  353:    }
+        -:  354:  }
+        -:  355:};
+        -:  356:
+        -:  357:// For completion signature void(exception_ptr).
+        -:  358:class promise_handler_ex_0
+        -:  359:  : public promise_creator<void>
+        -:  360:{
+        -:  361:public:
+        -:  362:  void operator()(const std::exception_ptr& ex)
+        -:  363:  {
+        -:  364:    if (ex)
+        -:  365:    {
+        -:  366:      this->p_->set_exception(ex);
+        -:  367:    }
+        -:  368:    else
+        -:  369:    {
+        -:  370:      this->p_->set_value();
+        -:  371:    }
+        -:  372:  }
+        -:  373:};
+        -:  374:
+        -:  375:// For completion signature void(T).
+        -:  376:template <typename T>
+        -:  377:class promise_handler_1
+        -:  378:  : public promise_creator<T>
+        -:  379:{
+        -:  380:public:
+        -:  381:  template <typename Arg>
+        -:  382:  void operator()(BOOST_ASIO_MOVE_ARG(Arg) arg)
+        -:  383:  {
+        -:  384:    this->p_->set_value(BOOST_ASIO_MOVE_CAST(Arg)(arg));
+        -:  385:  }
+        -:  386:};
+        -:  387:
+        -:  388:// For completion signature void(error_code, T).
+        -:  389:template <typename T>
+        -:  390:class promise_handler_ec_1
+        -:  391:  : public promise_creator<T>
+        -:  392:{
+        -:  393:public:
+        -:  394:  template <typename Arg>
+        -:  395:  void operator()(const boost::system::error_code& ec,
+        -:  396:      BOOST_ASIO_MOVE_ARG(Arg) arg)
+        -:  397:  {
+        -:  398:    if (ec)
+        -:  399:    {
+        -:  400:      this->p_->set_exception(
+        -:  401:          std::make_exception_ptr(
+        -:  402:            boost::system::system_error(ec)));
+        -:  403:    }
+        -:  404:    else
+        -:  405:      this->p_->set_value(BOOST_ASIO_MOVE_CAST(Arg)(arg));
+        -:  406:  }
+        -:  407:};
+        -:  408:
+        -:  409:// For completion signature void(exception_ptr, T).
+        -:  410:template <typename T>
+        -:  411:class promise_handler_ex_1
+        -:  412:  : public promise_creator<T>
+        -:  413:{
+        -:  414:public:
+        -:  415:  template <typename Arg>
+function _ZN5boost4asio6detail20promise_handler_ex_1IN5hical12HttpResponseEEclIS4_EEvRKNSt15__exception_ptr13exception_ptrEOT_ called 16 returned 100% blocks executed 46%
+       16:  416:  void operator()(const std::exception_ptr& ex,
+        -:  417:      BOOST_ASIO_MOVE_ARG(Arg) arg)
+        -:  418:  {
+       16:  419:    if (ex)
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+    #####:  420:      this->p_->set_exception(ex);
+call    0 never executed
+call    1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed (throw)
+call    5 never executed
+call    6 never executed
+        -:  421:    else
+       16:  422:      this->p_->set_value(BOOST_ASIO_MOVE_CAST(Arg)(arg));
+call    0 returned 100%
+call    1 returned 100%
+       16:  423:  }
+        -:  424:};
+        -:  425:
+        -:  426:// For completion signature void(T1, ..., Tn);
+        -:  427:template <typename T>
+        -:  428:class promise_handler_n
+        -:  429:  : public promise_creator<T>
+        -:  430:{
+        -:  431:public:
+        -:  432:#if defined(BOOST_ASIO_HAS_VARIADIC_TEMPLATES)
+        -:  433:
+        -:  434:  template <typename... Args>
+        -:  435:  void operator()(BOOST_ASIO_MOVE_ARG(Args)... args)
+        -:  436:  {
+        -:  437:    this->p_->set_value(
+        -:  438:        std::forward_as_tuple(
+        -:  439:          BOOST_ASIO_MOVE_CAST(Args)(args)...));
+        -:  440:  }
+        -:  441:
+        -:  442:#else // defined(BOOST_ASIO_HAS_VARIADIC_TEMPLATES)
+        -:  443:
+        -:  444:#define BOOST_ASIO_PRIVATE_CALL_OP_DEF(n) \
+        -:  445:  template <BOOST_ASIO_VARIADIC_TPARAMS(n)> \
+        -:  446:  void operator()(BOOST_ASIO_VARIADIC_MOVE_PARAMS(n)) \
+        -:  447:  {\
+        -:  448:    this->p_->set_value( \
+        -:  449:        std::forward_as_tuple( \
+        -:  450:          BOOST_ASIO_VARIADIC_MOVE_ARGS(n))); \
+        -:  451:  } \
+        -:  452:  /**/
+        -:  453:  BOOST_ASIO_VARIADIC_GENERATE(BOOST_ASIO_PRIVATE_CALL_OP_DEF)
+        -:  454:#undef BOOST_ASIO_PRIVATE_CALL_OP_DEF
+        -:  455:
+        -:  456:#endif // defined(BOOST_ASIO_HAS_VARIADIC_TEMPLATES)
+        -:  457:};
+        -:  458:
+        -:  459:// For completion signature void(error_code, T1, ..., Tn);
+        -:  460:template <typename T>
+        -:  461:class promise_handler_ec_n
+        -:  462:  : public promise_creator<T>
+        -:  463:{
+        -:  464:public:
+        -:  465:#if defined(BOOST_ASIO_HAS_VARIADIC_TEMPLATES)
+        -:  466:
+        -:  467:  template <typename... Args>
+        -:  468:  void operator()(const boost::system::error_code& ec,
+        -:  469:      BOOST_ASIO_MOVE_ARG(Args)... args)
+        -:  470:  {
+        -:  471:    if (ec)
+        -:  472:    {
+        -:  473:      this->p_->set_exception(
+        -:  474:          std::make_exception_ptr(
+        -:  475:            boost::system::system_error(ec)));
+        -:  476:    }
+        -:  477:    else
+        -:  478:    {
+        -:  479:      this->p_->set_value(
+        -:  480:          std::forward_as_tuple(
+        -:  481:            BOOST_ASIO_MOVE_CAST(Args)(args)...));
+        -:  482:    }
+        -:  483:  }
+        -:  484:
+        -:  485:#else // defined(BOOST_ASIO_HAS_VARIADIC_TEMPLATES)
+        -:  486:
+        -:  487:#define BOOST_ASIO_PRIVATE_CALL_OP_DEF(n) \
+        -:  488:  template <BOOST_ASIO_VARIADIC_TPARAMS(n)> \
+        -:  489:  void operator()(const boost::system::error_code& ec, \
+        -:  490:      BOOST_ASIO_VARIADIC_MOVE_PARAMS(n)) \
+        -:  491:  {\
+        -:  492:    if (ec) \
+        -:  493:    { \
+        -:  494:      this->p_->set_exception( \
+        -:  495:          std::make_exception_ptr( \
+        -:  496:            boost::system::system_error(ec))); \
+        -:  497:    } \
+        -:  498:    else \
+        -:  499:    { \
+        -:  500:      this->p_->set_value( \
+        -:  501:          std::forward_as_tuple( \
+        -:  502:            BOOST_ASIO_VARIADIC_MOVE_ARGS(n))); \
+        -:  503:    } \
+        -:  504:  } \
+        -:  505:  /**/
+        -:  506:  BOOST_ASIO_VARIADIC_GENERATE(BOOST_ASIO_PRIVATE_CALL_OP_DEF)
+        -:  507:#undef BOOST_ASIO_PRIVATE_CALL_OP_DEF
+        -:  508:
+        -:  509:#endif // defined(BOOST_ASIO_HAS_VARIADIC_TEMPLATES)
+        -:  510:};
+        -:  511:
+        -:  512:// For completion signature void(exception_ptr, T1, ..., Tn);
+        -:  513:template <typename T>
+        -:  514:class promise_handler_ex_n
+        -:  515:  : public promise_creator<T>
+        -:  516:{
+        -:  517:public:
+        -:  518:#if defined(BOOST_ASIO_HAS_VARIADIC_TEMPLATES)
+        -:  519:
+        -:  520:  template <typename... Args>
+        -:  521:  void operator()(const std::exception_ptr& ex,
+        -:  522:      BOOST_ASIO_MOVE_ARG(Args)... args)
+        -:  523:  {
+        -:  524:    if (ex)
+        -:  525:      this->p_->set_exception(ex);
+        -:  526:    else
+        -:  527:    {
+        -:  528:      this->p_->set_value(
+        -:  529:          std::forward_as_tuple(
+        -:  530:            BOOST_ASIO_MOVE_CAST(Args)(args)...));
+        -:  531:    }
+        -:  532:  }
+        -:  533:
+        -:  534:#else // defined(BOOST_ASIO_HAS_VARIADIC_TEMPLATES)
+        -:  535:
+        -:  536:#define BOOST_ASIO_PRIVATE_CALL_OP_DEF(n) \
+        -:  537:  template <BOOST_ASIO_VARIADIC_TPARAMS(n)> \
+        -:  538:  void operator()(const std::exception_ptr& ex, \
+        -:  539:      BOOST_ASIO_VARIADIC_MOVE_PARAMS(n)) \
+        -:  540:  {\
+        -:  541:    if (ex) \
+        -:  542:      this->p_->set_exception(ex); \
+        -:  543:    else \
+        -:  544:    { \
+        -:  545:      this->p_->set_value( \
+        -:  546:          std::forward_as_tuple( \
+        -:  547:            BOOST_ASIO_VARIADIC_MOVE_ARGS(n))); \
+        -:  548:    } \
+        -:  549:  } \
+        -:  550:  /**/
+        -:  551:  BOOST_ASIO_VARIADIC_GENERATE(BOOST_ASIO_PRIVATE_CALL_OP_DEF)
+        -:  552:#undef BOOST_ASIO_PRIVATE_CALL_OP_DEF
+        -:  553:
+        -:  554:#endif // defined(BOOST_ASIO_HAS_VARIADIC_TEMPLATES)
+        -:  555:};
+        -:  556:
+        -:  557:// Helper template to choose the appropriate concrete promise handler
+        -:  558:// implementation based on the supplied completion signature.
+        -:  559:template <typename> class promise_handler_selector;
+        -:  560:
+        -:  561:template <>
+        -:  562:class promise_handler_selector<void()>
+        -:  563:  : public promise_handler_0 {};
+        -:  564:
+        -:  565:template <>
+        -:  566:class promise_handler_selector<void(boost::system::error_code)>
+        -:  567:  : public promise_handler_ec_0 {};
+        -:  568:
+        -:  569:template <>
+        -:  570:class promise_handler_selector<void(std::exception_ptr)>
+        -:  571:  : public promise_handler_ex_0 {};
+        -:  572:
+        -:  573:template <typename Arg>
+        -:  574:class promise_handler_selector<void(Arg)>
+        -:  575:  : public promise_handler_1<Arg> {};
+        -:  576:
+        -:  577:template <typename Arg>
+        -:  578:class promise_handler_selector<void(boost::system::error_code, Arg)>
+        -:  579:  : public promise_handler_ec_1<Arg> {};
+        -:  580:
+        -:  581:template <typename Arg>
+        -:  582:class promise_handler_selector<void(std::exception_ptr, Arg)>
+        -:  583:  : public promise_handler_ex_1<Arg> {};
+        -:  584:
+        -:  585:#if defined(BOOST_ASIO_HAS_VARIADIC_TEMPLATES)
+        -:  586:
+        -:  587:template <typename... Arg>
+        -:  588:class promise_handler_selector<void(Arg...)>
+        -:  589:  : public promise_handler_n<std::tuple<Arg...> > {};
+        -:  590:
+        -:  591:template <typename... Arg>
+        -:  592:class promise_handler_selector<void(boost::system::error_code, Arg...)>
+        -:  593:  : public promise_handler_ec_n<std::tuple<Arg...> > {};
+        -:  594:
+        -:  595:template <typename... Arg>
+        -:  596:class promise_handler_selector<void(std::exception_ptr, Arg...)>
+        -:  597:  : public promise_handler_ex_n<std::tuple<Arg...> > {};
+        -:  598:
+        -:  599:#else // defined(BOOST_ASIO_HAS_VARIADIC_TEMPLATES)
+        -:  600:
+        -:  601:#define BOOST_ASIO_PRIVATE_PROMISE_SELECTOR_DEF(n) \
+        -:  602:  template <typename Arg, BOOST_ASIO_VARIADIC_TPARAMS(n)> \
+        -:  603:  class promise_handler_selector< \
+        -:  604:    void(Arg, BOOST_ASIO_VARIADIC_TARGS(n))> \
+        -:  605:      : public promise_handler_n< \
+        -:  606:        std::tuple<Arg, BOOST_ASIO_VARIADIC_TARGS(n)> > {}; \
+        -:  607:  \
+        -:  608:  template <typename Arg, BOOST_ASIO_VARIADIC_TPARAMS(n)> \
+        -:  609:  class promise_handler_selector< \
+        -:  610:    void(boost::system::error_code, Arg, BOOST_ASIO_VARIADIC_TARGS(n))> \
+        -:  611:      : public promise_handler_ec_n< \
+        -:  612:        std::tuple<Arg, BOOST_ASIO_VARIADIC_TARGS(n)> > {}; \
+        -:  613:  \
+        -:  614:  template <typename Arg, BOOST_ASIO_VARIADIC_TPARAMS(n)> \
+        -:  615:  class promise_handler_selector< \
+        -:  616:    void(std::exception_ptr, Arg, BOOST_ASIO_VARIADIC_TARGS(n))> \
+        -:  617:      : public promise_handler_ex_n< \
+        -:  618:        std::tuple<Arg, BOOST_ASIO_VARIADIC_TARGS(n)> > {}; \
+        -:  619:  /**/
+        -:  620:  BOOST_ASIO_VARIADIC_GENERATE_5(BOOST_ASIO_PRIVATE_PROMISE_SELECTOR_DEF)
+        -:  621:#undef BOOST_ASIO_PRIVATE_PROMISE_SELECTOR_DEF
+        -:  622:
+        -:  623:#endif // defined(BOOST_ASIO_HAS_VARIADIC_TEMPLATES)
+        -:  624:
+        -:  625:// Completion handlers produced from the use_future completion token, when not
+        -:  626:// using use_future::operator().
+        -:  627:template <typename Signature, typename Allocator>
+        -:  628:class promise_handler
+        -:  629:  : public promise_handler_selector<Signature>
+        -:  630:{
+        -:  631:public:
+        -:  632:  typedef Allocator allocator_type;
+        -:  633:  typedef void result_type;
+        -:  634:
+function _ZN5boost4asio6detail15promise_handlerIFvNSt15__exception_ptr13exception_ptrEN5hical12HttpResponseEESaIvEEC2ENS0_12use_future_tIS8_EE called 16 returned 100% blocks executed 83%
+       16:  635:  promise_handler(use_future_t<Allocator> u)
+       16:  636:    : allocator_(u.get_allocator())
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:  637:  {
+       16:  638:    this->create_promise(allocator_);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       16:  639:  }
+call    0 never executed
+        -:  640:
+        -:  641:  allocator_type get_allocator() const BOOST_ASIO_NOEXCEPT
+        -:  642:  {
+        -:  643:    return allocator_;
+        -:  644:  }
+        -:  645:
+        -:  646:private:
+        -:  647:  Allocator allocator_;
+        -:  648:};
+        -:  649:
+        -:  650:template <typename Function>
+        -:  651:struct promise_function_wrapper
+        -:  652:{
+        -:  653:  explicit promise_function_wrapper(Function& f)
+        -:  654:    : function_(BOOST_ASIO_MOVE_CAST(Function)(f))
+        -:  655:  {
+        -:  656:  }
+        -:  657:
+        -:  658:  explicit promise_function_wrapper(const Function& f)
+        -:  659:    : function_(f)
+        -:  660:  {
+        -:  661:  }
+        -:  662:
+        -:  663:  void operator()()
+        -:  664:  {
+        -:  665:    function_();
+        -:  666:  }
+        -:  667:
+        -:  668:  Function function_;
+        -:  669:};
+        -:  670:
+        -:  671:#if !defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  672:
+        -:  673:template <typename Function, typename Signature, typename Allocator>
+        -:  674:inline void asio_handler_invoke(Function& f,
+        -:  675:    promise_handler<Signature, Allocator>* h)
+        -:  676:{
+        -:  677:  typename promise_handler<Signature, Allocator>::executor_type
+        -:  678:    ex(h->get_executor());
+        -:  679:  boost::asio::dispatch(ex, promise_function_wrapper<Function>(f));
+        -:  680:}
+        -:  681:
+        -:  682:template <typename Function, typename Signature, typename Allocator>
+        -:  683:inline void asio_handler_invoke(const Function& f,
+        -:  684:    promise_handler<Signature, Allocator>* h)
+        -:  685:{
+        -:  686:  typename promise_handler<Signature, Allocator>::executor_type
+        -:  687:    ex(h->get_executor());
+        -:  688:  boost::asio::dispatch(ex, promise_function_wrapper<Function>(f));
+        -:  689:}
+        -:  690:
+        -:  691:#endif // !defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  692:
+        -:  693:// Helper base class for async_result specialisation.
+        -:  694:template <typename Signature, typename Allocator>
+        -:  695:class promise_async_result
+        -:  696:{
+        -:  697:public:
+        -:  698:  typedef promise_handler<Signature, Allocator> completion_handler_type;
+        -:  699:  typedef typename completion_handler_type::future_type return_type;
+        -:  700:
+function _ZN5boost4asio6detail20promise_async_resultIFvNSt15__exception_ptr13exception_ptrEN5hical12HttpResponseEESaIvEEC2ERNS1_15promise_handlerIS7_S8_EE called 16 returned 100% blocks executed 100%
+       16:  701:  explicit promise_async_result(completion_handler_type& h)
+       16:  702:    : future_(h.get_future())
+call    0 returned 100%
+        -:  703:  {
+       16:  704:  }
+        -:  705:
+function _ZN5boost4asio6detail20promise_async_resultIFvNSt15__exception_ptr13exception_ptrEN5hical12HttpResponseEESaIvEE3getEv called 16 returned 100% blocks executed 100%
+       16:  706:  return_type get()
+        -:  707:  {
+       16:  708:    return BOOST_ASIO_MOVE_CAST(return_type)(future_);
+call    0 returned 100%
+        -:  709:  }
+        -:  710:
+        -:  711:private:
+        -:  712:  return_type future_;
+        -:  713:};
+        -:  714:
+        -:  715:// Return value from use_future::operator().
+        -:  716:template <typename Function, typename Allocator>
+        -:  717:class packaged_token
+        -:  718:{
+        -:  719:public:
+        -:  720:  packaged_token(Function f, const Allocator& a)
+        -:  721:    : function_(BOOST_ASIO_MOVE_CAST(Function)(f)),
+        -:  722:      allocator_(a)
+        -:  723:  {
+        -:  724:  }
+        -:  725:
+        -:  726://private:
+        -:  727:  Function function_;
+        -:  728:  Allocator allocator_;
+        -:  729:};
+        -:  730:
+        -:  731:// Completion handlers produced from the use_future completion token, when
+        -:  732:// using use_future::operator().
+        -:  733:template <typename Function, typename Allocator, typename Result>
+        -:  734:class packaged_handler
+        -:  735:  : public promise_creator<Result>
+        -:  736:{
+        -:  737:public:
+        -:  738:  typedef Allocator allocator_type;
+        -:  739:  typedef void result_type;
+        -:  740:
+        -:  741:  packaged_handler(packaged_token<Function, Allocator> t)
+        -:  742:    : function_(BOOST_ASIO_MOVE_CAST(Function)(t.function_)),
+        -:  743:      allocator_(t.allocator_)
+        -:  744:  {
+        -:  745:    this->create_promise(allocator_);
+        -:  746:  }
+        -:  747:
+        -:  748:  allocator_type get_allocator() const BOOST_ASIO_NOEXCEPT
+        -:  749:  {
+        -:  750:    return allocator_;
+        -:  751:  }
+        -:  752:
+        -:  753:#if defined(BOOST_ASIO_HAS_VARIADIC_TEMPLATES)
+        -:  754:
+        -:  755:  template <typename... Args>
+        -:  756:  void operator()(BOOST_ASIO_MOVE_ARG(Args)... args)
+        -:  757:  {
+        -:  758:    (promise_invoke_and_set)(*this->p_,
+        -:  759:        function_, BOOST_ASIO_MOVE_CAST(Args)(args)...);
+        -:  760:  }
+        -:  761:
+        -:  762:#else // defined(BOOST_ASIO_HAS_VARIADIC_TEMPLATES)
+        -:  763:
+        -:  764:  void operator()()
+        -:  765:  {
+        -:  766:    (promise_invoke_and_set)(*this->p_, function_);
+        -:  767:  }
+        -:  768:
+        -:  769:#define BOOST_ASIO_PRIVATE_CALL_OP_DEF(n) \
+        -:  770:  template <BOOST_ASIO_VARIADIC_TPARAMS(n)> \
+        -:  771:  void operator()(BOOST_ASIO_VARIADIC_MOVE_PARAMS(n)) \
+        -:  772:  {\
+        -:  773:    (promise_invoke_and_set)(*this->p_, \
+        -:  774:        function_, BOOST_ASIO_VARIADIC_MOVE_ARGS(n)); \
+        -:  775:  } \
+        -:  776:  /**/
+        -:  777:  BOOST_ASIO_VARIADIC_GENERATE(BOOST_ASIO_PRIVATE_CALL_OP_DEF)
+        -:  778:#undef BOOST_ASIO_PRIVATE_CALL_OP_DEF
+        -:  779:
+        -:  780:#endif // defined(BOOST_ASIO_HAS_VARIADIC_TEMPLATES)
+        -:  781:
+        -:  782:private:
+        -:  783:  Function function_;
+        -:  784:  Allocator allocator_;
+        -:  785:};
+        -:  786:
+        -:  787:#if !defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  788:
+        -:  789:template <typename Function,
+        -:  790:    typename Function1, typename Allocator, typename Result>
+        -:  791:inline void asio_handler_invoke(Function& f,
+        -:  792:    packaged_handler<Function1, Allocator, Result>* h)
+        -:  793:{
+        -:  794:  typename packaged_handler<Function1, Allocator, Result>::executor_type
+        -:  795:    ex(h->get_executor());
+        -:  796:  boost::asio::dispatch(ex, promise_function_wrapper<Function>(f));
+        -:  797:}
+        -:  798:
+        -:  799:template <typename Function,
+        -:  800:    typename Function1, typename Allocator, typename Result>
+        -:  801:inline void asio_handler_invoke(const Function& f,
+        -:  802:    packaged_handler<Function1, Allocator, Result>* h)
+        -:  803:{
+        -:  804:  typename packaged_handler<Function1, Allocator, Result>::executor_type
+        -:  805:    ex(h->get_executor());
+        -:  806:  boost::asio::dispatch(ex, promise_function_wrapper<Function>(f));
+        -:  807:}
+        -:  808:
+        -:  809:#endif // !defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  810:
+        -:  811:// Helper base class for async_result specialisation.
+        -:  812:template <typename Function, typename Allocator, typename Result>
+        -:  813:class packaged_async_result
+        -:  814:{
+        -:  815:public:
+        -:  816:  typedef packaged_handler<Function, Allocator, Result> completion_handler_type;
+        -:  817:  typedef typename completion_handler_type::future_type return_type;
+        -:  818:
+        -:  819:  explicit packaged_async_result(completion_handler_type& h)
+        -:  820:    : future_(h.get_future())
+        -:  821:  {
+        -:  822:  }
+        -:  823:
+        -:  824:  return_type get()
+        -:  825:  {
+        -:  826:    return BOOST_ASIO_MOVE_CAST(return_type)(future_);
+        -:  827:  }
+        -:  828:
+        -:  829:private:
+        -:  830:  return_type future_;
+        -:  831:};
+        -:  832:
+        -:  833:} // namespace detail
+        -:  834:
+        -:  835:template <typename Allocator> template <typename Function>
+        -:  836:inline detail::packaged_token<typename decay<Function>::type, Allocator>
+        -:  837:use_future_t<Allocator>::operator()(BOOST_ASIO_MOVE_ARG(Function) f) const
+        -:  838:{
+        -:  839:  return detail::packaged_token<typename decay<Function>::type, Allocator>(
+        -:  840:      BOOST_ASIO_MOVE_CAST(Function)(f), allocator_);
+        -:  841:}
+        -:  842:
+        -:  843:#if !defined(GENERATING_DOCUMENTATION)
+        -:  844:
+        -:  845:#if defined(BOOST_ASIO_HAS_VARIADIC_TEMPLATES)
+        -:  846:
+        -:  847:template <typename Allocator, typename Result, typename... Args>
+        -:  848:class async_result<use_future_t<Allocator>, Result(Args...)>
+        -:  849:  : public detail::promise_async_result<
+        -:  850:      void(typename decay<Args>::type...), Allocator>
+        -:  851:{
+        -:  852:public:
+function _ZN5boost4asio12async_resultINS0_12use_future_tISaIvEEEJFvNSt15__exception_ptr13exception_ptrEN5hical12HttpResponseEEEEC2ERNS0_6detail15promise_handlerIS9_S3_EE called 16 returned 100% blocks executed 100%
+       16:  853:  explicit async_result(
+        -:  854:    typename detail::promise_async_result<void(typename decay<Args>::type...),
+        -:  855:      Allocator>::completion_handler_type& h)
+        -:  856:    : detail::promise_async_result<
+       16:  857:        void(typename decay<Args>::type...), Allocator>(h)
+call    0 returned 100%
+        -:  858:  {
+       16:  859:  }
+        -:  860:};
+        -:  861:
+        -:  862:template <typename Function, typename Allocator,
+        -:  863:    typename Result, typename... Args>
+        -:  864:class async_result<detail::packaged_token<Function, Allocator>, Result(Args...)>
+        -:  865:  : public detail::packaged_async_result<Function, Allocator,
+        -:  866:      typename result_of<Function(Args...)>::type>
+        -:  867:{
+        -:  868:public:
+        -:  869:  explicit async_result(
+        -:  870:    typename detail::packaged_async_result<Function, Allocator,
+        -:  871:      typename result_of<Function(Args...)>::type>::completion_handler_type& h)
+        -:  872:    : detail::packaged_async_result<Function, Allocator,
+        -:  873:        typename result_of<Function(Args...)>::type>(h)
+        -:  874:  {
+        -:  875:  }
+        -:  876:};
+        -:  877:
+        -:  878:#else // defined(BOOST_ASIO_HAS_VARIADIC_TEMPLATES)
+        -:  879:
+        -:  880:template <typename Allocator, typename Result>
+        -:  881:class async_result<use_future_t<Allocator>, Result()>
+        -:  882:  : public detail::promise_async_result<void(), Allocator>
+        -:  883:{
+        -:  884:public:
+        -:  885:  explicit async_result(
+        -:  886:    typename detail::promise_async_result<
+        -:  887:      void(), Allocator>::completion_handler_type& h)
+        -:  888:    : detail::promise_async_result<void(), Allocator>(h)
+        -:  889:  {
+        -:  890:  }
+        -:  891:};
+        -:  892:
+        -:  893:template <typename Function, typename Allocator, typename Result>
+        -:  894:class async_result<detail::packaged_token<Function, Allocator>, Result()>
+        -:  895:  : public detail::packaged_async_result<Function, Allocator,
+        -:  896:      typename result_of<Function()>::type>
+        -:  897:{
+        -:  898:public:
+        -:  899:  explicit async_result(
+        -:  900:    typename detail::packaged_async_result<Function, Allocator,
+        -:  901:      typename result_of<Function()>::type>::completion_handler_type& h)
+        -:  902:    : detail::packaged_async_result<Function, Allocator,
+        -:  903:        typename result_of<Function()>::type>(h)
+        -:  904:  {
+        -:  905:  }
+        -:  906:};
+        -:  907:
+        -:  908:#define BOOST_ASIO_PRIVATE_ASYNC_RESULT_DEF(n) \
+        -:  909:  template <typename Allocator, \
+        -:  910:      typename Result, BOOST_ASIO_VARIADIC_TPARAMS(n)> \
+        -:  911:  class async_result<use_future_t<Allocator>, \
+        -:  912:      Result(BOOST_ASIO_VARIADIC_TARGS(n))> \
+        -:  913:    : public detail::promise_async_result< \
+        -:  914:        void(BOOST_ASIO_VARIADIC_DECAY(n)), Allocator> \
+        -:  915:  { \
+        -:  916:  public: \
+        -:  917:    explicit async_result( \
+        -:  918:      typename detail::promise_async_result< \
+        -:  919:        void(BOOST_ASIO_VARIADIC_DECAY(n)), \
+        -:  920:        Allocator>::completion_handler_type& h) \
+        -:  921:      : detail::promise_async_result< \
+        -:  922:          void(BOOST_ASIO_VARIADIC_DECAY(n)), Allocator>(h) \
+        -:  923:    { \
+        -:  924:    } \
+        -:  925:  }; \
+        -:  926:  \
+        -:  927:  template <typename Function, typename Allocator, \
+        -:  928:      typename Result, BOOST_ASIO_VARIADIC_TPARAMS(n)> \
+        -:  929:  class async_result<detail::packaged_token<Function, Allocator>, \
+        -:  930:      Result(BOOST_ASIO_VARIADIC_TARGS(n))> \
+        -:  931:    : public detail::packaged_async_result<Function, Allocator, \
+        -:  932:        typename result_of<Function(BOOST_ASIO_VARIADIC_TARGS(n))>::type> \
+        -:  933:  { \
+        -:  934:  public: \
+        -:  935:    explicit async_result( \
+        -:  936:      typename detail::packaged_async_result<Function, Allocator, \
+        -:  937:        typename result_of<Function(BOOST_ASIO_VARIADIC_TARGS(n))>::type \
+        -:  938:        >::completion_handler_type& h) \
+        -:  939:      : detail::packaged_async_result<Function, Allocator, \
+        -:  940:          typename result_of<Function(BOOST_ASIO_VARIADIC_TARGS(n))>::type>(h) \
+        -:  941:    { \
+        -:  942:    } \
+        -:  943:  }; \
+        -:  944:  /**/
+        -:  945:  BOOST_ASIO_VARIADIC_GENERATE(BOOST_ASIO_PRIVATE_ASYNC_RESULT_DEF)
+        -:  946:#undef BOOST_ASIO_PRIVATE_ASYNC_RESULT_DEF
+        -:  947:
+        -:  948:#endif // defined(BOOST_ASIO_HAS_VARIADIC_TEMPLATES)
+        -:  949:
+        -:  950:namespace traits {
+        -:  951:
+        -:  952:#if !defined(BOOST_ASIO_HAS_DEDUCED_EQUALITY_COMPARABLE_TRAIT)
+        -:  953:
+        -:  954:template <typename T, typename Blocking>
+        -:  955:struct equality_comparable<
+        -:  956:    boost::asio::detail::promise_executor<T, Blocking> >
+        -:  957:{
+        -:  958:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_valid = true);
+        -:  959:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_noexcept = true);
+        -:  960:};
+        -:  961:
+        -:  962:#endif // !defined(BOOST_ASIO_HAS_DEDUCED_EQUALITY_COMPARABLE_TRAIT)
+        -:  963:
+        -:  964:#if !defined(BOOST_ASIO_HAS_DEDUCED_EXECUTE_MEMBER_TRAIT)
+        -:  965:
+        -:  966:template <typename T, typename Blocking, typename Function>
+        -:  967:struct execute_member<
+        -:  968:    boost::asio::detail::promise_executor<T, Blocking>, Function>
+        -:  969:{
+        -:  970:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_valid = true);
+        -:  971:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_noexcept = false);
+        -:  972:  typedef void result_type;
+        -:  973:};
+        -:  974:
+        -:  975:#endif // !defined(BOOST_ASIO_HAS_DEDUCED_EXECUTE_MEMBER_TRAIT)
+        -:  976:
+        -:  977:#if !defined(BOOST_ASIO_HAS_DEDUCED_QUERY_STATIC_CONSTEXPR_MEMBER_TRAIT)
+        -:  978:
+        -:  979:template <typename T, typename Blocking, typename Property>
+        -:  980:struct query_static_constexpr_member<
+        -:  981:    boost::asio::detail::promise_executor<T, Blocking>,
+        -:  982:    Property,
+        -:  983:    typename boost::asio::enable_if<
+        -:  984:      boost::asio::is_convertible<
+        -:  985:        Property,
+        -:  986:        boost::asio::execution::blocking_t
+        -:  987:      >::value
+        -:  988:    >::type
+        -:  989:  >
+        -:  990:{
+        -:  991:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_valid = true);
+        -:  992:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_noexcept = true);
+        -:  993:  typedef Blocking result_type;
+        -:  994:
+        -:  995:  static BOOST_ASIO_CONSTEXPR result_type value() BOOST_ASIO_NOEXCEPT
+        -:  996:  {
+        -:  997:    return Blocking();
+        -:  998:  }
+        -:  999:};
+        -: 1000:
+        -: 1001:#endif // !defined(BOOST_ASIO_HAS_DEDUCED_QUERY_STATIC_CONSTEXPR_MEMBER_TRAIT)
+        -: 1002:
+        -: 1003:#if !defined(BOOST_ASIO_HAS_DEDUCED_QUERY_MEMBER_TRAIT)
+        -: 1004:
+        -: 1005:template <typename T, typename Blocking>
+        -: 1006:struct query_member<
+        -: 1007:    boost::asio::detail::promise_executor<T, Blocking>,
+        -: 1008:    execution::context_t
+        -: 1009:  >
+        -: 1010:{
+        -: 1011:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_valid = true);
+        -: 1012:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_noexcept = true);
+        -: 1013:  typedef boost::asio::system_context& result_type;
+        -: 1014:};
+        -: 1015:
+        -: 1016:#endif // !defined(BOOST_ASIO_HAS_DEDUCED_QUERY_MEMBER_TRAIT)
+        -: 1017:
+        -: 1018:#if !defined(BOOST_ASIO_HAS_DEDUCED_REQUIRE_MEMBER_TRAIT)
+        -: 1019:
+        -: 1020:template <typename T, typename Blocking>
+        -: 1021:struct require_member<
+        -: 1022:    boost::asio::detail::promise_executor<T, Blocking>,
+        -: 1023:    execution::blocking_t::possibly_t
+        -: 1024:  >
+        -: 1025:{
+        -: 1026:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_valid = true);
+        -: 1027:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_noexcept = true);
+        -: 1028:  typedef boost::asio::detail::promise_executor<T,
+        -: 1029:      execution::blocking_t::possibly_t> result_type;
+        -: 1030:};
+        -: 1031:
+        -: 1032:template <typename T, typename Blocking>
+        -: 1033:struct require_member<
+        -: 1034:    boost::asio::detail::promise_executor<T, Blocking>,
+        -: 1035:    execution::blocking_t::never_t
+        -: 1036:  >
+        -: 1037:{
+        -: 1038:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_valid = true);
+        -: 1039:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_noexcept = true);
+        -: 1040:  typedef boost::asio::detail::promise_executor<T,
+        -: 1041:      execution::blocking_t::never_t> result_type;
+        -: 1042:};
+        -: 1043:
+        -: 1044:#endif // !defined(BOOST_ASIO_HAS_DEDUCED_REQUIRE_MEMBER_TRAIT)
+        -: 1045:
+        -: 1046:} // namespace traits
+        -: 1047:
+        -: 1048:#endif // !defined(GENERATING_DOCUMENTATION)
+        -: 1049:
+        -: 1050:} // namespace asio
+        -: 1051:} // namespace boost
+        -: 1052:
+        -: 1053:#include <boost/asio/detail/pop_options.hpp>
+        -: 1054:
+        -: 1055:#endif // BOOST_ASIO_IMPL_USE_FUTURE_HPP

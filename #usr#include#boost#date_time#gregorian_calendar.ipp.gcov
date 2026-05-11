@@ -1,0 +1,306 @@
+        -:    0:Source:/usr/include/boost/date_time/gregorian_calendar.ipp
+        -:    1:/* Copyright (c) 2002,2003 CrystalClear Software, Inc.
+        -:    2: * Use, modification and distribution is subject to the
+        -:    3: * Boost Software License, Version 1.0. (See accompanying
+        -:    4: * file LICENSE_1_0.txt or http://www.boost.org/LICENSE_1_0.txt)
+        -:    5: * Author: Jeff Garland, Bart Garst
+        -:    6: * $Date$
+        -:    7: */
+        -:    8:
+        -:    9:
+        -:   10:namespace boost {
+        -:   11:namespace date_time {
+        -:   12:  //! Return the day of the week (0==Sunday, 1==Monday, etc)
+        -:   13:  /*! Converts a year-month-day into a day of the week number
+        -:   14:   */
+        -:   15:  template<typename ymd_type_, typename date_int_type_>
+        -:   16:  BOOST_CXX14_CONSTEXPR
+        -:   17:  inline
+        -:   18:  unsigned short
+        -:   19:  gregorian_calendar_base<ymd_type_,date_int_type_>::day_of_week(const ymd_type& ymd) {
+        -:   20:    unsigned short a = static_cast<unsigned short>((14-ymd.month)/12);
+        -:   21:    unsigned short y = static_cast<unsigned short>(ymd.year - a);
+        -:   22:    unsigned short m = static_cast<unsigned short>(ymd.month + 12*a - 2);
+        -:   23:    unsigned short d = static_cast<unsigned short>((ymd.day + y + (y/4) - (y/100) + (y/400) + (31*m)/12) % 7);
+        -:   24:    //std::cout << year << "-" << month << "-" << day << " is day: " << d << "\n";
+        -:   25:    return d;
+        -:   26:  }
+        -:   27:
+        -:   28:  //!Return the ISO 8601 week number for the date
+        -:   29:  /*!Implements the rules associated with the ISO 8601 week number.
+        -:   30:    Basically the rule is that Week 1 of the year is the week that contains
+        -:   31:    January 4th or the week that contains the first Thursday in January.
+        -:   32:    Reference for this algorithm is the Calendar FAQ by Claus Tondering, April 2000.
+        -:   33:  */
+        -:   34:  template<typename ymd_type_, typename date_int_type_>
+        -:   35:  BOOST_CXX14_CONSTEXPR
+        -:   36:  inline
+        -:   37:  int
+        -:   38:  gregorian_calendar_base<ymd_type_,date_int_type_>::week_number(const ymd_type& ymd) {
+        -:   39:    unsigned long julianbegin = julian_day_number(ymd_type(ymd.year,1,1));
+        -:   40:    unsigned long juliantoday = julian_day_number(ymd);
+        -:   41:    unsigned long day = (julianbegin + 3) % 7;
+        -:   42:    unsigned long week = (juliantoday + day - julianbegin + 4)/7;
+        -:   43:
+        -:   44:    if ((week >= 1) && (week <= 52)) {
+        -:   45:      return static_cast<int>(week);
+        -:   46:    }
+        -:   47:
+        -:   48:    if (week == 53) {
+        -:   49:      if((day==6) ||(day == 5 && is_leap_year(ymd.year))) {
+        -:   50:        return static_cast<int>(week); //under these circumstances week == 53.
+        -:   51:      } else {
+        -:   52:        return 1; //monday - wednesday is in week 1 of next year
+        -:   53:      }
+        -:   54:    }
+        -:   55:    //if the week is not in current year recalculate using the previous year as the beginning year
+        -:   56:    else if (week == 0) {
+        -:   57:      julianbegin = julian_day_number(ymd_type(static_cast<unsigned short>(ymd.year-1),1,1));
+        -:   58:      juliantoday = julian_day_number(ymd);
+        -:   59:      day = (julianbegin + 3) % 7;
+        -:   60:      week = (juliantoday + day - julianbegin + 4)/7;
+        -:   61:      return static_cast<int>(week);
+        -:   62:    }
+        -:   63:
+        -:   64:    return static_cast<int>(week);  //not reachable -- well except if day == 5 and is_leap_year != true
+        -:   65:
+        -:   66:  }
+        -:   67:
+        -:   68:  //! Convert a ymd_type into a day number
+        -:   69:  /*! The day number is an absolute number of days since the start of count
+        -:   70:   */
+        -:   71:  template<typename ymd_type_, typename date_int_type_>
+        -:   72:  BOOST_CXX14_CONSTEXPR
+        -:   73:  inline
+        -:   74:  date_int_type_
+    #####:   75:  gregorian_calendar_base<ymd_type_,date_int_type_>::day_number(const ymd_type& ymd)
+        -:   76:  {
+    #####:   77:    unsigned short a = static_cast<unsigned short>((14-ymd.month)/12);
+    #####:   78:    unsigned short y = static_cast<unsigned short>(ymd.year + 4800 - a);
+    #####:   79:    unsigned short m = static_cast<unsigned short>(ymd.month + 12*a - 3);
+    #####:   80:    unsigned long  d = static_cast<unsigned long>(ymd.day) + ((153*m + 2)/5) + 365*y + (y/4) - (y/100) + (y/400) - 32045;
+    #####:   81:    return static_cast<date_int_type>(d);
+        -:   82:  }
+------------------
+_ZN5boost9date_time23gregorian_calendar_baseINS0_19year_month_day_baseINS_9gregorian9greg_yearENS3_10greg_monthENS3_8greg_dayEEEjE10day_numberERKS7_:
+function _ZN5boost9date_time23gregorian_calendar_baseINS0_19year_month_day_baseINS_9gregorian9greg_yearENS3_10greg_monthENS3_8greg_dayEEEjE10day_numberERKS7_ called 0 returned 0% blocks executed 0%
+    #####:   75:  gregorian_calendar_base<ymd_type_,date_int_type_>::day_number(const ymd_type& ymd)
+        -:   76:  {
+    #####:   77:    unsigned short a = static_cast<unsigned short>((14-ymd.month)/12);
+call    0 never executed
+    #####:   78:    unsigned short y = static_cast<unsigned short>(ymd.year + 4800 - a);
+call    0 never executed
+    #####:   79:    unsigned short m = static_cast<unsigned short>(ymd.month + 12*a - 3);
+call    0 never executed
+    #####:   80:    unsigned long  d = static_cast<unsigned long>(ymd.day) + ((153*m + 2)/5) + 365*y + (y/4) - (y/100) + (y/400) - 32045;
+call    0 never executed
+    #####:   81:    return static_cast<date_int_type>(d);
+        -:   82:  }
+------------------
+_ZN5boost9date_time23gregorian_calendar_baseINS0_19year_month_day_baseINS_9gregorian9greg_yearENS3_10greg_monthENS3_8greg_dayEEEjE10day_numberERKS7_:
+function _ZN5boost9date_time23gregorian_calendar_baseINS0_19year_month_day_baseINS_9gregorian9greg_yearENS3_10greg_monthENS3_8greg_dayEEEjE10day_numberERKS7_ called 0 returned 0% blocks executed 0%
+    #####:   75:  gregorian_calendar_base<ymd_type_,date_int_type_>::day_number(const ymd_type& ymd)
+        -:   76:  {
+    #####:   77:    unsigned short a = static_cast<unsigned short>((14-ymd.month)/12);
+call    0 never executed
+    #####:   78:    unsigned short y = static_cast<unsigned short>(ymd.year + 4800 - a);
+call    0 never executed
+    #####:   79:    unsigned short m = static_cast<unsigned short>(ymd.month + 12*a - 3);
+call    0 never executed
+    #####:   80:    unsigned long  d = static_cast<unsigned long>(ymd.day) + ((153*m + 2)/5) + 365*y + (y/4) - (y/100) + (y/400) - 32045;
+call    0 never executed
+    #####:   81:    return static_cast<date_int_type>(d);
+        -:   82:  }
+------------------
+_ZN5boost9date_time23gregorian_calendar_baseINS0_19year_month_day_baseINS_9gregorian9greg_yearENS3_10greg_monthENS3_8greg_dayEEEjE10day_numberERKS7_:
+function _ZN5boost9date_time23gregorian_calendar_baseINS0_19year_month_day_baseINS_9gregorian9greg_yearENS3_10greg_monthENS3_8greg_dayEEEjE10day_numberERKS7_ called 0 returned 0% blocks executed 0%
+    #####:   75:  gregorian_calendar_base<ymd_type_,date_int_type_>::day_number(const ymd_type& ymd)
+        -:   76:  {
+    #####:   77:    unsigned short a = static_cast<unsigned short>((14-ymd.month)/12);
+call    0 never executed
+    #####:   78:    unsigned short y = static_cast<unsigned short>(ymd.year + 4800 - a);
+call    0 never executed
+    #####:   79:    unsigned short m = static_cast<unsigned short>(ymd.month + 12*a - 3);
+call    0 never executed
+    #####:   80:    unsigned long  d = static_cast<unsigned long>(ymd.day) + ((153*m + 2)/5) + 365*y + (y/4) - (y/100) + (y/400) - 32045;
+call    0 never executed
+    #####:   81:    return static_cast<date_int_type>(d);
+        -:   82:  }
+------------------
+        -:   83:
+        -:   84:  //! Convert a year-month-day into the julian day number
+        -:   85:  /*! Since this implementation uses julian day internally, this is the same as the day_number.
+        -:   86:   */
+        -:   87:  template<typename ymd_type_, typename date_int_type_>
+        -:   88:  BOOST_CXX14_CONSTEXPR
+        -:   89:  inline
+        -:   90:  date_int_type_
+        -:   91:  gregorian_calendar_base<ymd_type_,date_int_type_>::julian_day_number(const ymd_type& ymd)
+        -:   92:  {
+        -:   93:    return day_number(ymd);
+        -:   94:  }
+        -:   95:
+        -:   96:  //! Convert year-month-day into a modified julian day number
+        -:   97:  /*! The day number is an absolute number of days.
+        -:   98:   *  MJD 0 thus started on 17 Nov 1858(Gregorian) at 00:00:00 UTC
+        -:   99:   */
+        -:  100:  template<typename ymd_type_, typename date_int_type_>
+        -:  101:  BOOST_CXX14_CONSTEXPR
+        -:  102:  inline
+        -:  103:  date_int_type_
+        -:  104:  gregorian_calendar_base<ymd_type_,date_int_type_>::modjulian_day_number(const ymd_type& ymd)
+        -:  105:  {
+        -:  106:    return julian_day_number(ymd)-2400001; //prerounded
+        -:  107:  }
+        -:  108:
+        -:  109:  //! Change a day number into a year-month-day
+        -:  110:  template<typename ymd_type_, typename date_int_type_>
+        -:  111:  BOOST_CXX14_CONSTEXPR
+        -:  112:  inline
+        -:  113:  ymd_type_
+        -:  114:  gregorian_calendar_base<ymd_type_,date_int_type_>::from_day_number(date_int_type dayNumber)
+        -:  115:  {
+        -:  116:    date_int_type a = dayNumber + 32044;
+        -:  117:    date_int_type b = (4*a + 3)/146097;
+        -:  118:    date_int_type c = a-((146097*b)/4);
+        -:  119:    date_int_type d = (4*c + 3)/1461;
+        -:  120:    date_int_type e = c - (1461*d)/4;
+        -:  121:    date_int_type m = (5*e + 2)/153;
+        -:  122:    unsigned short day = static_cast<unsigned short>(e - ((153*m + 2)/5) + 1);
+        -:  123:    unsigned short month = static_cast<unsigned short>(m + 3 - 12 * (m/10));
+        -:  124:    year_type year = static_cast<unsigned short>(100*b + d - 4800 + (m/10));
+        -:  125:    //std::cout << year << "-" << month << "-" << day << "\n";
+        -:  126:
+        -:  127:    return ymd_type(static_cast<unsigned short>(year),month,day);
+        -:  128:  }
+        -:  129:
+        -:  130:  //! Change a day number into a year-month-day
+        -:  131:  template<typename ymd_type_, typename date_int_type_>
+        -:  132:  BOOST_CXX14_CONSTEXPR
+        -:  133:  inline
+        -:  134:  ymd_type_
+        -:  135:  gregorian_calendar_base<ymd_type_,date_int_type_>::from_julian_day_number(date_int_type dayNumber)
+        -:  136:  {
+        -:  137:    date_int_type a = dayNumber + 32044;
+        -:  138:    date_int_type b = (4*a+3)/146097;
+        -:  139:    date_int_type c = a - ((146097*b)/4);
+        -:  140:    date_int_type d = (4*c + 3)/1461;
+        -:  141:    date_int_type e = c - ((1461*d)/4);
+        -:  142:    date_int_type m = (5*e + 2)/153;
+        -:  143:    unsigned short day = static_cast<unsigned short>(e - ((153*m + 2)/5) + 1);
+        -:  144:    unsigned short month = static_cast<unsigned short>(m + 3 - 12 * (m/10));
+        -:  145:    year_type year = static_cast<year_type>(100*b + d - 4800 + (m/10));
+        -:  146:    //std::cout << year << "-" << month << "-" << day << "\n";
+        -:  147:
+        -:  148:    return ymd_type(year,month,day);
+        -:  149:  }
+        -:  150:
+        -:  151:  //! Change a modified julian day number into a year-month-day
+        -:  152:  template<typename ymd_type_, typename date_int_type_>
+        -:  153:  BOOST_CXX14_CONSTEXPR
+        -:  154:  inline
+        -:  155:  ymd_type_
+        -:  156:  gregorian_calendar_base<ymd_type_,date_int_type_>::from_modjulian_day_number(date_int_type dayNumber) {
+        -:  157:    date_int_type jd = dayNumber + 2400001; //is 2400000.5 prerounded
+        -:  158:    return from_julian_day_number(jd);
+        -:  159:  }
+        -:  160:
+        -:  161:  //! Determine if the provided year is a leap year
+        -:  162:  /*!
+        -:  163:   *@return true if year is a leap year, false otherwise
+        -:  164:   */
+        -:  165:  template<typename ymd_type_, typename date_int_type_>
+        -:  166:  BOOST_CXX14_CONSTEXPR
+        -:  167:  inline
+        -:  168:  bool
+    #####:  169:  gregorian_calendar_base<ymd_type_,date_int_type_>::is_leap_year(year_type year)
+        -:  170:  {
+        -:  171:    //divisible by 4, not if divisible by 100, but true if divisible by 400
+    #####:  172:    return (!(year % 4))  && ((year % 100) || (!(year % 400)));
+        -:  173:  }
+------------------
+_ZN5boost9date_time23gregorian_calendar_baseINS0_19year_month_day_baseINS_9gregorian9greg_yearENS3_10greg_monthENS3_8greg_dayEEEjE12is_leap_yearES4_:
+function _ZN5boost9date_time23gregorian_calendar_baseINS0_19year_month_day_baseINS_9gregorian9greg_yearENS3_10greg_monthENS3_8greg_dayEEEjE12is_leap_yearES4_ called 0 returned 0% blocks executed 0%
+    #####:  169:  gregorian_calendar_base<ymd_type_,date_int_type_>::is_leap_year(year_type year)
+        -:  170:  {
+        -:  171:    //divisible by 4, not if divisible by 100, but true if divisible by 400
+    #####:  172:    return (!(year % 4))  && ((year % 100) || (!(year % 400)));
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed
+        -:  173:  }
+------------------
+_ZN5boost9date_time23gregorian_calendar_baseINS0_19year_month_day_baseINS_9gregorian9greg_yearENS3_10greg_monthENS3_8greg_dayEEEjE12is_leap_yearES4_:
+function _ZN5boost9date_time23gregorian_calendar_baseINS0_19year_month_day_baseINS_9gregorian9greg_yearENS3_10greg_monthENS3_8greg_dayEEEjE12is_leap_yearES4_ called 0 returned 0% blocks executed 0%
+    #####:  169:  gregorian_calendar_base<ymd_type_,date_int_type_>::is_leap_year(year_type year)
+        -:  170:  {
+        -:  171:    //divisible by 4, not if divisible by 100, but true if divisible by 400
+    #####:  172:    return (!(year % 4))  && ((year % 100) || (!(year % 400)));
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed
+        -:  173:  }
+------------------
+        -:  174:
+        -:  175:  //! Calculate the last day of the month
+        -:  176:  /*! Find the day which is the end of the month given year and month
+        -:  177:   *  No error checking is performed.
+        -:  178:   */
+        -:  179:  template<typename ymd_type_, typename date_int_type_>
+        -:  180:  BOOST_CXX14_CONSTEXPR
+        -:  181:  inline
+        -:  182:  unsigned short
+    #####:  183:  gregorian_calendar_base<ymd_type_,date_int_type_>::end_of_month_day(year_type year,
+        -:  184:                                                                      month_type month)
+        -:  185:  {
+    #####:  186:    switch (month) {
+    #####:  187:    case 2:
+    #####:  188:      if (is_leap_year(year)) {
+    #####:  189:        return 29;
+        -:  190:      } else {
+    #####:  191:        return 28;
+        -:  192:      }
+    #####:  193:    case 4:
+        -:  194:    case 6:
+        -:  195:    case 9:
+        -:  196:    case 11:
+    #####:  197:      return 30;
+    #####:  198:    default:
+    #####:  199:      return 31;
+        -:  200:    }
+        -:  201:  }
+        -:  202:
+        -:  203:  //! Provide the ymd_type specification for the calendar start
+        -:  204:  template<typename ymd_type_, typename date_int_type_>
+        -:  205:  BOOST_CXX14_CONSTEXPR
+        -:  206:  inline
+        -:  207:  ymd_type_
+        -:  208:  gregorian_calendar_base<ymd_type_,date_int_type_>::epoch()
+        -:  209:  {
+        -:  210:    return ymd_type(1400,1,1);
+        -:  211:  }
+        -:  212:
+        -:  213:  //! Defines length of a week for week calculations
+        -:  214:  template<typename ymd_type_, typename date_int_type_>
+        -:  215:  BOOST_CXX14_CONSTEXPR
+        -:  216:  inline
+        -:  217:  unsigned short
+        -:  218:  gregorian_calendar_base<ymd_type_,date_int_type_>::days_in_week()
+        -:  219:  {
+        -:  220:    return 7;
+        -:  221:  }
+        -:  222:
+        -:  223:
+        -:  224:} } //namespace gregorian

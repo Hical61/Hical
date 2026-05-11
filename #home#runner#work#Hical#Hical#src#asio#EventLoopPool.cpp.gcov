@@ -1,0 +1,201 @@
+        -:    0:Source:/home/runner/work/Hical/Hical/src/asio/EventLoopPool.cpp
+        -:    1:#include "EventLoopPool.h"
+        -:    2:
+        -:    3:namespace hical
+        -:    4:{
+        -:    5:
+function _ZN5hical13EventLoopPoolC2Em called 5 returned 100% blocks executed 71%
+        5:    6:	EventLoopPool::EventLoopPool(size_t numThreads)
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+        -:    7:	{
+       18:    8:		for (size_t i = 0; i < numThreads; ++i)
+branch  0 taken 72%
+branch  1 taken 28% (fallthrough)
+        -:    9:		{
+       13:   10:			auto loop = std::make_unique<AsioEventLoop>();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       13:   11:			loop->setIndex(i);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+       13:   12:			loops_.push_back(std::move(loop));
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+       13:   13:		}
+call    0 returned 100%
+call    1 never executed
+        5:   14:	}
+call    0 never executed
+call    1 never executed
+        -:   15:
+function _ZN5hical13EventLoopPoolD2Ev called 5 returned 100% blocks executed 83%
+        5:   16:	EventLoopPool::~EventLoopPool()
+        -:   17:	{
+        5:   18:		if (running_.load())
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+        -:   19:		{
+    #####:   20:			stop();
+call    0 never executed
+        -:   21:		}
+        5:   22:	}
+call    0 returned 100%
+call    1 returned 100%
+        -:   23:
+function _ZN5hical13EventLoopPool5startEv called 4 returned 100% blocks executed 87%
+        4:   24:	void EventLoopPool::start()
+        -:   25:	{
+        4:   26:		if (running_.exchange(true))
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+        -:   27:		{
+    #####:   28:			return; // 已经启动
+        -:   29:		}
+        -:   30:
+       13:   31:		for (auto& loop : loops_)
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+branch  4 taken 69%
+branch  5 taken 31% (fallthrough)
+        -:   32:		{
+        9:   33:			auto* ptr = loop.get();
+call    0 returned 100%
+        9:   34:			threads_.emplace_back(
+function _ZZN5hical13EventLoopPool5startEvENKUlvE_clEv called 9 returned 100% blocks executed 100%
+        9:   35:				[ptr]()
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+        -:   36:				{
+        9:   37:					ptr->run();
+call    0 returned 100%
+        9:   38:				});
+        -:   39:		}
+        -:   40:	}
+        -:   41:
+function _ZN5hical13EventLoopPool4stopEv called 4 returned 100% blocks executed 92%
+        4:   42:	void EventLoopPool::stop()
+        -:   43:	{
+        4:   44:		if (!running_.exchange(false))
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+        -:   45:		{
+    #####:   46:			return; // 已经停止
+        -:   47:		}
+        -:   48:
+       13:   49:		for (auto& loop : loops_)
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 69%
+branch  6 taken 31% (fallthrough)
+        -:   50:		{
+        9:   51:			loop->stop();
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:   52:		}
+        -:   53:
+       13:   54:		for (auto& thread : threads_)
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 69%
+branch  6 taken 31% (fallthrough)
+        -:   55:		{
+        9:   56:			if (thread.joinable())
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0%
+        -:   57:			{
+        9:   58:				thread.join();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:   59:			}
+        -:   60:		}
+        -:   61:
+        4:   62:		threads_.clear();
+call    0 returned 100%
+        -:   63:	}
+        -:   64:
+function _ZN5hical13EventLoopPool11getNextLoopEv called 8 returned 100% blocks executed 89%
+        8:   65:	AsioEventLoop* EventLoopPool::getNextLoop()
+        -:   66:	{
+        8:   67:		if (loops_.empty())
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+        -:   68:		{
+    #####:   69:			return nullptr;
+        -:   70:		}
+        -:   71:
+       16:   72:		size_t index = nextIndex_.fetch_add(1) % loops_.size();
+call    0 returned 100%
+        8:   73:		return loops_[index].get();
+call    0 returned 100%
+call    1 returned 100%
+        -:   74:	}
+        -:   75:
+function _ZN5hical13EventLoopPool11getAllLoopsEv called 1 returned 100% blocks executed 81%
+        1:   76:	std::vector<AsioEventLoop*> EventLoopPool::getAllLoops()
+        -:   77:	{
+        1:   78:		std::vector<AsioEventLoop*> result;
+        1:   79:		result.reserve(loops_.size());
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        5:   80:		for (auto& loop : loops_)
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+branch  4 taken 80%
+branch  5 taken 20% (fallthrough)
+        -:   81:		{
+        4:   82:			result.push_back(loop.get());
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+        -:   83:		}
+        1:   84:		return result;
+    =====:   85:	}
+call    0 never executed
+        -:   86:
+function _ZNK5hical13EventLoopPool4sizeEv called 4 returned 100% blocks executed 100%
+        4:   87:	size_t EventLoopPool::size() const
+        -:   88:	{
+        4:   89:		return loops_.size();
+call    0 returned 100%
+        -:   90:	}
+        -:   91:
+function _ZNK5hical13EventLoopPool9isRunningEv called 3 returned 100% blocks executed 100%
+        3:   92:	bool EventLoopPool::isRunning() const
+        -:   93:	{
+        3:   94:		return running_.load();
+call    0 returned 100%
+        -:   95:	}
+        -:   96:
+        -:   97:} // namespace hical

@@ -1,0 +1,644 @@
+        -:    0:Source:/usr/include/boost/asio/detail/epoll_reactor.hpp
+        -:    1://
+        -:    2:// detail/epoll_reactor.hpp
+        -:    3:// ~~~~~~~~~~~~~~~~~~~~~~~~
+        -:    4://
+        -:    5:// Copyright (c) 2003-2023 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+        -:    6://
+        -:    7:// Distributed under the Boost Software License, Version 1.0. (See accompanying
+        -:    8:// file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+        -:    9://
+        -:   10:
+        -:   11:#ifndef BOOST_ASIO_DETAIL_EPOLL_REACTOR_HPP
+        -:   12:#define BOOST_ASIO_DETAIL_EPOLL_REACTOR_HPP
+        -:   13:
+        -:   14:#if defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   15:# pragma once
+        -:   16:#endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   17:
+        -:   18:#include <boost/asio/detail/config.hpp>
+        -:   19:
+        -:   20:#if defined(BOOST_ASIO_HAS_EPOLL)
+        -:   21:
+        -:   22:#include <boost/asio/detail/atomic_count.hpp>
+        -:   23:#include <boost/asio/detail/conditionally_enabled_mutex.hpp>
+        -:   24:#include <boost/asio/detail/limits.hpp>
+        -:   25:#include <boost/asio/detail/object_pool.hpp>
+        -:   26:#include <boost/asio/detail/op_queue.hpp>
+        -:   27:#include <boost/asio/detail/reactor_op.hpp>
+        -:   28:#include <boost/asio/detail/scheduler_task.hpp>
+        -:   29:#include <boost/asio/detail/select_interrupter.hpp>
+        -:   30:#include <boost/asio/detail/socket_types.hpp>
+        -:   31:#include <boost/asio/detail/timer_queue_base.hpp>
+        -:   32:#include <boost/asio/detail/timer_queue_set.hpp>
+        -:   33:#include <boost/asio/detail/wait_op.hpp>
+        -:   34:#include <boost/asio/execution_context.hpp>
+        -:   35:
+        -:   36:#if defined(BOOST_ASIO_HAS_TIMERFD)
+        -:   37:# include <sys/timerfd.h>
+        -:   38:#endif // defined(BOOST_ASIO_HAS_TIMERFD)
+        -:   39:
+        -:   40:#include <boost/asio/detail/push_options.hpp>
+        -:   41:
+        -:   42:namespace boost {
+        -:   43:namespace asio {
+        -:   44:namespace detail {
+        -:   45:
+        -:   46:class epoll_reactor
+        -:   47:  : public execution_context_service_base<epoll_reactor>,
+        -:   48:    public scheduler_task
+        -:   49:{
+        -:   50:private:
+        -:   51:  // The mutex type used by this reactor.
+        -:   52:  typedef conditionally_enabled_mutex mutex;
+        -:   53:
+        -:   54:public:
+        -:   55:  enum op_types { read_op = 0, write_op = 1,
+        -:   56:    connect_op = 1, except_op = 2, max_ops = 3 };
+        -:   57:
+        -:   58:  // Per-descriptor queues.
+        -:   59:  class descriptor_state : operation
+        -:   60:  {
+        -:   61:    friend class epoll_reactor;
+        -:   62:    friend class object_pool_access;
+        -:   63:
+        -:   64:    descriptor_state* next_;
+        -:   65:    descriptor_state* prev_;
+        -:   66:
+        -:   67:    mutex mutex_;
+        -:   68:    epoll_reactor* reactor_;
+        -:   69:    int descriptor_;
+        -:   70:    uint32_t registered_events_;
+        -:   71:    op_queue<reactor_op> op_queue_[max_ops];
+        -:   72:    bool try_speculative_[max_ops];
+        -:   73:    bool shutdown_;
+        -:   74:
+        -:   75:    BOOST_ASIO_DECL descriptor_state(bool locking);
+     263*:   76:    void set_ready_events(uint32_t events) { task_result_ = events; }
+------------------
+_ZN5boost4asio6detail13epoll_reactor16descriptor_state16set_ready_eventsEj:
+function _ZN5boost4asio6detail13epoll_reactor16descriptor_state16set_ready_eventsEj called 0 returned 0% blocks executed 0%
+    #####:   76:    void set_ready_events(uint32_t events) { task_result_ = events; }
+------------------
+_ZN5boost4asio6detail13epoll_reactor16descriptor_state16set_ready_eventsEj:
+function _ZN5boost4asio6detail13epoll_reactor16descriptor_state16set_ready_eventsEj called 0 returned 0% blocks executed 0%
+    #####:   76:    void set_ready_events(uint32_t events) { task_result_ = events; }
+------------------
+_ZN5boost4asio6detail13epoll_reactor16descriptor_state16set_ready_eventsEj:
+function _ZN5boost4asio6detail13epoll_reactor16descriptor_state16set_ready_eventsEj called 12 returned 100% blocks executed 100%
+       12:   76:    void set_ready_events(uint32_t events) { task_result_ = events; }
+------------------
+_ZN5boost4asio6detail13epoll_reactor16descriptor_state16set_ready_eventsEj:
+function _ZN5boost4asio6detail13epoll_reactor16descriptor_state16set_ready_eventsEj called 0 returned 0% blocks executed 0%
+    #####:   76:    void set_ready_events(uint32_t events) { task_result_ = events; }
+------------------
+_ZN5boost4asio6detail13epoll_reactor16descriptor_state16set_ready_eventsEj:
+function _ZN5boost4asio6detail13epoll_reactor16descriptor_state16set_ready_eventsEj called 6 returned 100% blocks executed 100%
+        6:   76:    void set_ready_events(uint32_t events) { task_result_ = events; }
+------------------
+_ZN5boost4asio6detail13epoll_reactor16descriptor_state16set_ready_eventsEj:
+function _ZN5boost4asio6detail13epoll_reactor16descriptor_state16set_ready_eventsEj called 11 returned 100% blocks executed 100%
+       11:   76:    void set_ready_events(uint32_t events) { task_result_ = events; }
+------------------
+_ZN5boost4asio6detail13epoll_reactor16descriptor_state16set_ready_eventsEj:
+function _ZN5boost4asio6detail13epoll_reactor16descriptor_state16set_ready_eventsEj called 0 returned 0% blocks executed 0%
+    #####:   76:    void set_ready_events(uint32_t events) { task_result_ = events; }
+------------------
+_ZN5boost4asio6detail13epoll_reactor16descriptor_state16set_ready_eventsEj:
+function _ZN5boost4asio6detail13epoll_reactor16descriptor_state16set_ready_eventsEj called 0 returned 0% blocks executed 0%
+    #####:   76:    void set_ready_events(uint32_t events) { task_result_ = events; }
+------------------
+_ZN5boost4asio6detail13epoll_reactor16descriptor_state16set_ready_eventsEj:
+function _ZN5boost4asio6detail13epoll_reactor16descriptor_state16set_ready_eventsEj called 0 returned 0% blocks executed 0%
+    #####:   76:    void set_ready_events(uint32_t events) { task_result_ = events; }
+------------------
+_ZN5boost4asio6detail13epoll_reactor16descriptor_state16set_ready_eventsEj:
+function _ZN5boost4asio6detail13epoll_reactor16descriptor_state16set_ready_eventsEj called 0 returned 0% blocks executed 0%
+    #####:   76:    void set_ready_events(uint32_t events) { task_result_ = events; }
+------------------
+_ZN5boost4asio6detail13epoll_reactor16descriptor_state16set_ready_eventsEj:
+function _ZN5boost4asio6detail13epoll_reactor16descriptor_state16set_ready_eventsEj called 0 returned 0% blocks executed 0%
+    #####:   76:    void set_ready_events(uint32_t events) { task_result_ = events; }
+------------------
+_ZN5boost4asio6detail13epoll_reactor16descriptor_state16set_ready_eventsEj:
+function _ZN5boost4asio6detail13epoll_reactor16descriptor_state16set_ready_eventsEj called 0 returned 0% blocks executed 0%
+    #####:   76:    void set_ready_events(uint32_t events) { task_result_ = events; }
+------------------
+_ZN5boost4asio6detail13epoll_reactor16descriptor_state16set_ready_eventsEj:
+function _ZN5boost4asio6detail13epoll_reactor16descriptor_state16set_ready_eventsEj called 14 returned 100% blocks executed 100%
+       14:   76:    void set_ready_events(uint32_t events) { task_result_ = events; }
+------------------
+_ZN5boost4asio6detail13epoll_reactor16descriptor_state16set_ready_eventsEj:
+function _ZN5boost4asio6detail13epoll_reactor16descriptor_state16set_ready_eventsEj called 0 returned 0% blocks executed 0%
+    #####:   76:    void set_ready_events(uint32_t events) { task_result_ = events; }
+------------------
+_ZN5boost4asio6detail13epoll_reactor16descriptor_state16set_ready_eventsEj:
+function _ZN5boost4asio6detail13epoll_reactor16descriptor_state16set_ready_eventsEj called 13 returned 100% blocks executed 100%
+       13:   76:    void set_ready_events(uint32_t events) { task_result_ = events; }
+------------------
+_ZN5boost4asio6detail13epoll_reactor16descriptor_state16set_ready_eventsEj:
+function _ZN5boost4asio6detail13epoll_reactor16descriptor_state16set_ready_eventsEj called 0 returned 0% blocks executed 0%
+    #####:   76:    void set_ready_events(uint32_t events) { task_result_ = events; }
+------------------
+_ZN5boost4asio6detail13epoll_reactor16descriptor_state16set_ready_eventsEj:
+function _ZN5boost4asio6detail13epoll_reactor16descriptor_state16set_ready_eventsEj called 0 returned 0% blocks executed 0%
+    #####:   76:    void set_ready_events(uint32_t events) { task_result_ = events; }
+------------------
+_ZN5boost4asio6detail13epoll_reactor16descriptor_state16set_ready_eventsEj:
+function _ZN5boost4asio6detail13epoll_reactor16descriptor_state16set_ready_eventsEj called 0 returned 0% blocks executed 0%
+    #####:   76:    void set_ready_events(uint32_t events) { task_result_ = events; }
+------------------
+_ZN5boost4asio6detail13epoll_reactor16descriptor_state16set_ready_eventsEj:
+function _ZN5boost4asio6detail13epoll_reactor16descriptor_state16set_ready_eventsEj called 0 returned 0% blocks executed 0%
+    #####:   76:    void set_ready_events(uint32_t events) { task_result_ = events; }
+------------------
+_ZN5boost4asio6detail13epoll_reactor16descriptor_state16set_ready_eventsEj:
+function _ZN5boost4asio6detail13epoll_reactor16descriptor_state16set_ready_eventsEj called 0 returned 0% blocks executed 0%
+    #####:   76:    void set_ready_events(uint32_t events) { task_result_ = events; }
+------------------
+_ZN5boost4asio6detail13epoll_reactor16descriptor_state16set_ready_eventsEj:
+function _ZN5boost4asio6detail13epoll_reactor16descriptor_state16set_ready_eventsEj called 0 returned 0% blocks executed 0%
+    #####:   76:    void set_ready_events(uint32_t events) { task_result_ = events; }
+------------------
+_ZN5boost4asio6detail13epoll_reactor16descriptor_state16set_ready_eventsEj:
+function _ZN5boost4asio6detail13epoll_reactor16descriptor_state16set_ready_eventsEj called 0 returned 0% blocks executed 0%
+    #####:   76:    void set_ready_events(uint32_t events) { task_result_ = events; }
+------------------
+_ZN5boost4asio6detail13epoll_reactor16descriptor_state16set_ready_eventsEj:
+function _ZN5boost4asio6detail13epoll_reactor16descriptor_state16set_ready_eventsEj called 0 returned 0% blocks executed 0%
+    #####:   76:    void set_ready_events(uint32_t events) { task_result_ = events; }
+------------------
+_ZN5boost4asio6detail13epoll_reactor16descriptor_state16set_ready_eventsEj:
+function _ZN5boost4asio6detail13epoll_reactor16descriptor_state16set_ready_eventsEj called 0 returned 0% blocks executed 0%
+    #####:   76:    void set_ready_events(uint32_t events) { task_result_ = events; }
+------------------
+_ZN5boost4asio6detail13epoll_reactor16descriptor_state16set_ready_eventsEj:
+function _ZN5boost4asio6detail13epoll_reactor16descriptor_state16set_ready_eventsEj called 0 returned 0% blocks executed 0%
+    #####:   76:    void set_ready_events(uint32_t events) { task_result_ = events; }
+------------------
+_ZN5boost4asio6detail13epoll_reactor16descriptor_state16set_ready_eventsEj:
+function _ZN5boost4asio6detail13epoll_reactor16descriptor_state16set_ready_eventsEj called 0 returned 0% blocks executed 0%
+    #####:   76:    void set_ready_events(uint32_t events) { task_result_ = events; }
+------------------
+_ZN5boost4asio6detail13epoll_reactor16descriptor_state16set_ready_eventsEj:
+function _ZN5boost4asio6detail13epoll_reactor16descriptor_state16set_ready_eventsEj called 0 returned 0% blocks executed 0%
+    #####:   76:    void set_ready_events(uint32_t events) { task_result_ = events; }
+------------------
+_ZN5boost4asio6detail13epoll_reactor16descriptor_state16set_ready_eventsEj:
+function _ZN5boost4asio6detail13epoll_reactor16descriptor_state16set_ready_eventsEj called 0 returned 0% blocks executed 0%
+    #####:   76:    void set_ready_events(uint32_t events) { task_result_ = events; }
+------------------
+_ZN5boost4asio6detail13epoll_reactor16descriptor_state16set_ready_eventsEj:
+function _ZN5boost4asio6detail13epoll_reactor16descriptor_state16set_ready_eventsEj called 0 returned 0% blocks executed 0%
+    #####:   76:    void set_ready_events(uint32_t events) { task_result_ = events; }
+------------------
+_ZN5boost4asio6detail13epoll_reactor16descriptor_state16set_ready_eventsEj:
+function _ZN5boost4asio6detail13epoll_reactor16descriptor_state16set_ready_eventsEj called 0 returned 0% blocks executed 0%
+    #####:   76:    void set_ready_events(uint32_t events) { task_result_ = events; }
+------------------
+_ZN5boost4asio6detail13epoll_reactor16descriptor_state16set_ready_eventsEj:
+function _ZN5boost4asio6detail13epoll_reactor16descriptor_state16set_ready_eventsEj called 0 returned 0% blocks executed 0%
+    #####:   76:    void set_ready_events(uint32_t events) { task_result_ = events; }
+------------------
+_ZN5boost4asio6detail13epoll_reactor16descriptor_state16set_ready_eventsEj:
+function _ZN5boost4asio6detail13epoll_reactor16descriptor_state16set_ready_eventsEj called 0 returned 0% blocks executed 0%
+    #####:   76:    void set_ready_events(uint32_t events) { task_result_ = events; }
+------------------
+_ZN5boost4asio6detail13epoll_reactor16descriptor_state16set_ready_eventsEj:
+function _ZN5boost4asio6detail13epoll_reactor16descriptor_state16set_ready_eventsEj called 0 returned 0% blocks executed 0%
+    #####:   76:    void set_ready_events(uint32_t events) { task_result_ = events; }
+------------------
+_ZN5boost4asio6detail13epoll_reactor16descriptor_state16set_ready_eventsEj:
+function _ZN5boost4asio6detail13epoll_reactor16descriptor_state16set_ready_eventsEj called 0 returned 0% blocks executed 0%
+    #####:   76:    void set_ready_events(uint32_t events) { task_result_ = events; }
+------------------
+_ZN5boost4asio6detail13epoll_reactor16descriptor_state16set_ready_eventsEj:
+function _ZN5boost4asio6detail13epoll_reactor16descriptor_state16set_ready_eventsEj called 0 returned 0% blocks executed 0%
+    #####:   76:    void set_ready_events(uint32_t events) { task_result_ = events; }
+------------------
+_ZN5boost4asio6detail13epoll_reactor16descriptor_state16set_ready_eventsEj:
+function _ZN5boost4asio6detail13epoll_reactor16descriptor_state16set_ready_eventsEj called 0 returned 0% blocks executed 0%
+    #####:   76:    void set_ready_events(uint32_t events) { task_result_ = events; }
+------------------
+_ZN5boost4asio6detail13epoll_reactor16descriptor_state16set_ready_eventsEj:
+function _ZN5boost4asio6detail13epoll_reactor16descriptor_state16set_ready_eventsEj called 0 returned 0% blocks executed 0%
+    #####:   76:    void set_ready_events(uint32_t events) { task_result_ = events; }
+------------------
+_ZN5boost4asio6detail13epoll_reactor16descriptor_state16set_ready_eventsEj:
+function _ZN5boost4asio6detail13epoll_reactor16descriptor_state16set_ready_eventsEj called 0 returned 0% blocks executed 0%
+    #####:   76:    void set_ready_events(uint32_t events) { task_result_ = events; }
+------------------
+_ZN5boost4asio6detail13epoll_reactor16descriptor_state16set_ready_eventsEj:
+function _ZN5boost4asio6detail13epoll_reactor16descriptor_state16set_ready_eventsEj called 0 returned 0% blocks executed 0%
+    #####:   76:    void set_ready_events(uint32_t events) { task_result_ = events; }
+------------------
+_ZN5boost4asio6detail13epoll_reactor16descriptor_state16set_ready_eventsEj:
+function _ZN5boost4asio6detail13epoll_reactor16descriptor_state16set_ready_eventsEj called 12 returned 100% blocks executed 100%
+       12:   76:    void set_ready_events(uint32_t events) { task_result_ = events; }
+------------------
+_ZN5boost4asio6detail13epoll_reactor16descriptor_state16set_ready_eventsEj:
+function _ZN5boost4asio6detail13epoll_reactor16descriptor_state16set_ready_eventsEj called 0 returned 0% blocks executed 0%
+    #####:   76:    void set_ready_events(uint32_t events) { task_result_ = events; }
+------------------
+_ZN5boost4asio6detail13epoll_reactor16descriptor_state16set_ready_eventsEj:
+function _ZN5boost4asio6detail13epoll_reactor16descriptor_state16set_ready_eventsEj called 195 returned 100% blocks executed 100%
+      195:   76:    void set_ready_events(uint32_t events) { task_result_ = events; }
+------------------
+_ZN5boost4asio6detail13epoll_reactor16descriptor_state16set_ready_eventsEj:
+function _ZN5boost4asio6detail13epoll_reactor16descriptor_state16set_ready_eventsEj called 0 returned 0% blocks executed 0%
+    #####:   76:    void set_ready_events(uint32_t events) { task_result_ = events; }
+------------------
+    #####:   77:    void add_ready_events(uint32_t events) { task_result_ |= events; }
+------------------
+_ZN5boost4asio6detail13epoll_reactor16descriptor_state16add_ready_eventsEj:
+function _ZN5boost4asio6detail13epoll_reactor16descriptor_state16add_ready_eventsEj called 0 returned 0% blocks executed 0%
+    #####:   77:    void add_ready_events(uint32_t events) { task_result_ |= events; }
+------------------
+_ZN5boost4asio6detail13epoll_reactor16descriptor_state16add_ready_eventsEj:
+function _ZN5boost4asio6detail13epoll_reactor16descriptor_state16add_ready_eventsEj called 0 returned 0% blocks executed 0%
+    #####:   77:    void add_ready_events(uint32_t events) { task_result_ |= events; }
+------------------
+_ZN5boost4asio6detail13epoll_reactor16descriptor_state16add_ready_eventsEj:
+function _ZN5boost4asio6detail13epoll_reactor16descriptor_state16add_ready_eventsEj called 0 returned 0% blocks executed 0%
+    #####:   77:    void add_ready_events(uint32_t events) { task_result_ |= events; }
+------------------
+_ZN5boost4asio6detail13epoll_reactor16descriptor_state16add_ready_eventsEj:
+function _ZN5boost4asio6detail13epoll_reactor16descriptor_state16add_ready_eventsEj called 0 returned 0% blocks executed 0%
+    #####:   77:    void add_ready_events(uint32_t events) { task_result_ |= events; }
+------------------
+_ZN5boost4asio6detail13epoll_reactor16descriptor_state16add_ready_eventsEj:
+function _ZN5boost4asio6detail13epoll_reactor16descriptor_state16add_ready_eventsEj called 0 returned 0% blocks executed 0%
+    #####:   77:    void add_ready_events(uint32_t events) { task_result_ |= events; }
+------------------
+_ZN5boost4asio6detail13epoll_reactor16descriptor_state16add_ready_eventsEj:
+function _ZN5boost4asio6detail13epoll_reactor16descriptor_state16add_ready_eventsEj called 0 returned 0% blocks executed 0%
+    #####:   77:    void add_ready_events(uint32_t events) { task_result_ |= events; }
+------------------
+_ZN5boost4asio6detail13epoll_reactor16descriptor_state16add_ready_eventsEj:
+function _ZN5boost4asio6detail13epoll_reactor16descriptor_state16add_ready_eventsEj called 0 returned 0% blocks executed 0%
+    #####:   77:    void add_ready_events(uint32_t events) { task_result_ |= events; }
+------------------
+_ZN5boost4asio6detail13epoll_reactor16descriptor_state16add_ready_eventsEj:
+function _ZN5boost4asio6detail13epoll_reactor16descriptor_state16add_ready_eventsEj called 0 returned 0% blocks executed 0%
+    #####:   77:    void add_ready_events(uint32_t events) { task_result_ |= events; }
+------------------
+_ZN5boost4asio6detail13epoll_reactor16descriptor_state16add_ready_eventsEj:
+function _ZN5boost4asio6detail13epoll_reactor16descriptor_state16add_ready_eventsEj called 0 returned 0% blocks executed 0%
+    #####:   77:    void add_ready_events(uint32_t events) { task_result_ |= events; }
+------------------
+_ZN5boost4asio6detail13epoll_reactor16descriptor_state16add_ready_eventsEj:
+function _ZN5boost4asio6detail13epoll_reactor16descriptor_state16add_ready_eventsEj called 0 returned 0% blocks executed 0%
+    #####:   77:    void add_ready_events(uint32_t events) { task_result_ |= events; }
+------------------
+_ZN5boost4asio6detail13epoll_reactor16descriptor_state16add_ready_eventsEj:
+function _ZN5boost4asio6detail13epoll_reactor16descriptor_state16add_ready_eventsEj called 0 returned 0% blocks executed 0%
+    #####:   77:    void add_ready_events(uint32_t events) { task_result_ |= events; }
+------------------
+_ZN5boost4asio6detail13epoll_reactor16descriptor_state16add_ready_eventsEj:
+function _ZN5boost4asio6detail13epoll_reactor16descriptor_state16add_ready_eventsEj called 0 returned 0% blocks executed 0%
+    #####:   77:    void add_ready_events(uint32_t events) { task_result_ |= events; }
+------------------
+_ZN5boost4asio6detail13epoll_reactor16descriptor_state16add_ready_eventsEj:
+function _ZN5boost4asio6detail13epoll_reactor16descriptor_state16add_ready_eventsEj called 0 returned 0% blocks executed 0%
+    #####:   77:    void add_ready_events(uint32_t events) { task_result_ |= events; }
+------------------
+_ZN5boost4asio6detail13epoll_reactor16descriptor_state16add_ready_eventsEj:
+function _ZN5boost4asio6detail13epoll_reactor16descriptor_state16add_ready_eventsEj called 0 returned 0% blocks executed 0%
+    #####:   77:    void add_ready_events(uint32_t events) { task_result_ |= events; }
+------------------
+_ZN5boost4asio6detail13epoll_reactor16descriptor_state16add_ready_eventsEj:
+function _ZN5boost4asio6detail13epoll_reactor16descriptor_state16add_ready_eventsEj called 0 returned 0% blocks executed 0%
+    #####:   77:    void add_ready_events(uint32_t events) { task_result_ |= events; }
+------------------
+_ZN5boost4asio6detail13epoll_reactor16descriptor_state16add_ready_eventsEj:
+function _ZN5boost4asio6detail13epoll_reactor16descriptor_state16add_ready_eventsEj called 0 returned 0% blocks executed 0%
+    #####:   77:    void add_ready_events(uint32_t events) { task_result_ |= events; }
+------------------
+_ZN5boost4asio6detail13epoll_reactor16descriptor_state16add_ready_eventsEj:
+function _ZN5boost4asio6detail13epoll_reactor16descriptor_state16add_ready_eventsEj called 0 returned 0% blocks executed 0%
+    #####:   77:    void add_ready_events(uint32_t events) { task_result_ |= events; }
+------------------
+_ZN5boost4asio6detail13epoll_reactor16descriptor_state16add_ready_eventsEj:
+function _ZN5boost4asio6detail13epoll_reactor16descriptor_state16add_ready_eventsEj called 0 returned 0% blocks executed 0%
+    #####:   77:    void add_ready_events(uint32_t events) { task_result_ |= events; }
+------------------
+_ZN5boost4asio6detail13epoll_reactor16descriptor_state16add_ready_eventsEj:
+function _ZN5boost4asio6detail13epoll_reactor16descriptor_state16add_ready_eventsEj called 0 returned 0% blocks executed 0%
+    #####:   77:    void add_ready_events(uint32_t events) { task_result_ |= events; }
+------------------
+_ZN5boost4asio6detail13epoll_reactor16descriptor_state16add_ready_eventsEj:
+function _ZN5boost4asio6detail13epoll_reactor16descriptor_state16add_ready_eventsEj called 0 returned 0% blocks executed 0%
+    #####:   77:    void add_ready_events(uint32_t events) { task_result_ |= events; }
+------------------
+_ZN5boost4asio6detail13epoll_reactor16descriptor_state16add_ready_eventsEj:
+function _ZN5boost4asio6detail13epoll_reactor16descriptor_state16add_ready_eventsEj called 0 returned 0% blocks executed 0%
+    #####:   77:    void add_ready_events(uint32_t events) { task_result_ |= events; }
+------------------
+_ZN5boost4asio6detail13epoll_reactor16descriptor_state16add_ready_eventsEj:
+function _ZN5boost4asio6detail13epoll_reactor16descriptor_state16add_ready_eventsEj called 0 returned 0% blocks executed 0%
+    #####:   77:    void add_ready_events(uint32_t events) { task_result_ |= events; }
+------------------
+_ZN5boost4asio6detail13epoll_reactor16descriptor_state16add_ready_eventsEj:
+function _ZN5boost4asio6detail13epoll_reactor16descriptor_state16add_ready_eventsEj called 0 returned 0% blocks executed 0%
+    #####:   77:    void add_ready_events(uint32_t events) { task_result_ |= events; }
+------------------
+_ZN5boost4asio6detail13epoll_reactor16descriptor_state16add_ready_eventsEj:
+function _ZN5boost4asio6detail13epoll_reactor16descriptor_state16add_ready_eventsEj called 0 returned 0% blocks executed 0%
+    #####:   77:    void add_ready_events(uint32_t events) { task_result_ |= events; }
+------------------
+_ZN5boost4asio6detail13epoll_reactor16descriptor_state16add_ready_eventsEj:
+function _ZN5boost4asio6detail13epoll_reactor16descriptor_state16add_ready_eventsEj called 0 returned 0% blocks executed 0%
+    #####:   77:    void add_ready_events(uint32_t events) { task_result_ |= events; }
+------------------
+_ZN5boost4asio6detail13epoll_reactor16descriptor_state16add_ready_eventsEj:
+function _ZN5boost4asio6detail13epoll_reactor16descriptor_state16add_ready_eventsEj called 0 returned 0% blocks executed 0%
+    #####:   77:    void add_ready_events(uint32_t events) { task_result_ |= events; }
+------------------
+_ZN5boost4asio6detail13epoll_reactor16descriptor_state16add_ready_eventsEj:
+function _ZN5boost4asio6detail13epoll_reactor16descriptor_state16add_ready_eventsEj called 0 returned 0% blocks executed 0%
+    #####:   77:    void add_ready_events(uint32_t events) { task_result_ |= events; }
+------------------
+_ZN5boost4asio6detail13epoll_reactor16descriptor_state16add_ready_eventsEj:
+function _ZN5boost4asio6detail13epoll_reactor16descriptor_state16add_ready_eventsEj called 0 returned 0% blocks executed 0%
+    #####:   77:    void add_ready_events(uint32_t events) { task_result_ |= events; }
+------------------
+_ZN5boost4asio6detail13epoll_reactor16descriptor_state16add_ready_eventsEj:
+function _ZN5boost4asio6detail13epoll_reactor16descriptor_state16add_ready_eventsEj called 0 returned 0% blocks executed 0%
+    #####:   77:    void add_ready_events(uint32_t events) { task_result_ |= events; }
+------------------
+_ZN5boost4asio6detail13epoll_reactor16descriptor_state16add_ready_eventsEj:
+function _ZN5boost4asio6detail13epoll_reactor16descriptor_state16add_ready_eventsEj called 0 returned 0% blocks executed 0%
+    #####:   77:    void add_ready_events(uint32_t events) { task_result_ |= events; }
+------------------
+_ZN5boost4asio6detail13epoll_reactor16descriptor_state16add_ready_eventsEj:
+function _ZN5boost4asio6detail13epoll_reactor16descriptor_state16add_ready_eventsEj called 0 returned 0% blocks executed 0%
+    #####:   77:    void add_ready_events(uint32_t events) { task_result_ |= events; }
+------------------
+_ZN5boost4asio6detail13epoll_reactor16descriptor_state16add_ready_eventsEj:
+function _ZN5boost4asio6detail13epoll_reactor16descriptor_state16add_ready_eventsEj called 0 returned 0% blocks executed 0%
+    #####:   77:    void add_ready_events(uint32_t events) { task_result_ |= events; }
+------------------
+_ZN5boost4asio6detail13epoll_reactor16descriptor_state16add_ready_eventsEj:
+function _ZN5boost4asio6detail13epoll_reactor16descriptor_state16add_ready_eventsEj called 0 returned 0% blocks executed 0%
+    #####:   77:    void add_ready_events(uint32_t events) { task_result_ |= events; }
+------------------
+_ZN5boost4asio6detail13epoll_reactor16descriptor_state16add_ready_eventsEj:
+function _ZN5boost4asio6detail13epoll_reactor16descriptor_state16add_ready_eventsEj called 0 returned 0% blocks executed 0%
+    #####:   77:    void add_ready_events(uint32_t events) { task_result_ |= events; }
+------------------
+_ZN5boost4asio6detail13epoll_reactor16descriptor_state16add_ready_eventsEj:
+function _ZN5boost4asio6detail13epoll_reactor16descriptor_state16add_ready_eventsEj called 0 returned 0% blocks executed 0%
+    #####:   77:    void add_ready_events(uint32_t events) { task_result_ |= events; }
+------------------
+_ZN5boost4asio6detail13epoll_reactor16descriptor_state16add_ready_eventsEj:
+function _ZN5boost4asio6detail13epoll_reactor16descriptor_state16add_ready_eventsEj called 0 returned 0% blocks executed 0%
+    #####:   77:    void add_ready_events(uint32_t events) { task_result_ |= events; }
+------------------
+_ZN5boost4asio6detail13epoll_reactor16descriptor_state16add_ready_eventsEj:
+function _ZN5boost4asio6detail13epoll_reactor16descriptor_state16add_ready_eventsEj called 0 returned 0% blocks executed 0%
+    #####:   77:    void add_ready_events(uint32_t events) { task_result_ |= events; }
+------------------
+_ZN5boost4asio6detail13epoll_reactor16descriptor_state16add_ready_eventsEj:
+function _ZN5boost4asio6detail13epoll_reactor16descriptor_state16add_ready_eventsEj called 0 returned 0% blocks executed 0%
+    #####:   77:    void add_ready_events(uint32_t events) { task_result_ |= events; }
+------------------
+_ZN5boost4asio6detail13epoll_reactor16descriptor_state16add_ready_eventsEj:
+function _ZN5boost4asio6detail13epoll_reactor16descriptor_state16add_ready_eventsEj called 0 returned 0% blocks executed 0%
+    #####:   77:    void add_ready_events(uint32_t events) { task_result_ |= events; }
+------------------
+_ZN5boost4asio6detail13epoll_reactor16descriptor_state16add_ready_eventsEj:
+function _ZN5boost4asio6detail13epoll_reactor16descriptor_state16add_ready_eventsEj called 0 returned 0% blocks executed 0%
+    #####:   77:    void add_ready_events(uint32_t events) { task_result_ |= events; }
+------------------
+_ZN5boost4asio6detail13epoll_reactor16descriptor_state16add_ready_eventsEj:
+function _ZN5boost4asio6detail13epoll_reactor16descriptor_state16add_ready_eventsEj called 0 returned 0% blocks executed 0%
+    #####:   77:    void add_ready_events(uint32_t events) { task_result_ |= events; }
+------------------
+_ZN5boost4asio6detail13epoll_reactor16descriptor_state16add_ready_eventsEj:
+function _ZN5boost4asio6detail13epoll_reactor16descriptor_state16add_ready_eventsEj called 0 returned 0% blocks executed 0%
+    #####:   77:    void add_ready_events(uint32_t events) { task_result_ |= events; }
+------------------
+_ZN5boost4asio6detail13epoll_reactor16descriptor_state16add_ready_eventsEj:
+function _ZN5boost4asio6detail13epoll_reactor16descriptor_state16add_ready_eventsEj called 0 returned 0% blocks executed 0%
+    #####:   77:    void add_ready_events(uint32_t events) { task_result_ |= events; }
+------------------
+        -:   78:    BOOST_ASIO_DECL operation* perform_io(uint32_t events);
+        -:   79:    BOOST_ASIO_DECL static void do_complete(
+        -:   80:        void* owner, operation* base,
+        -:   81:        const boost::system::error_code& ec, std::size_t bytes_transferred);
+        -:   82:  };
+        -:   83:
+        -:   84:  // Per-descriptor data.
+        -:   85:  typedef descriptor_state* per_descriptor_data;
+        -:   86:
+        -:   87:  // Constructor.
+        -:   88:  BOOST_ASIO_DECL epoll_reactor(boost::asio::execution_context& ctx);
+        -:   89:
+        -:   90:  // Destructor.
+        -:   91:  BOOST_ASIO_DECL ~epoll_reactor();
+        -:   92:
+        -:   93:  // Destroy all user-defined handler objects owned by the service.
+        -:   94:  BOOST_ASIO_DECL void shutdown();
+        -:   95:
+        -:   96:  // Recreate internal descriptors following a fork.
+        -:   97:  BOOST_ASIO_DECL void notify_fork(
+        -:   98:      boost::asio::execution_context::fork_event fork_ev);
+        -:   99:
+        -:  100:  // Initialise the task.
+        -:  101:  BOOST_ASIO_DECL void init_task();
+        -:  102:
+        -:  103:  // Register a socket with the reactor. Returns 0 on success, system error
+        -:  104:  // code on failure.
+        -:  105:  BOOST_ASIO_DECL int register_descriptor(socket_type descriptor,
+        -:  106:      per_descriptor_data& descriptor_data);
+        -:  107:
+        -:  108:  // Register a descriptor with an associated single operation. Returns 0 on
+        -:  109:  // success, system error code on failure.
+        -:  110:  BOOST_ASIO_DECL int register_internal_descriptor(
+        -:  111:      int op_type, socket_type descriptor,
+        -:  112:      per_descriptor_data& descriptor_data, reactor_op* op);
+        -:  113:
+        -:  114:  // Move descriptor registration from one descriptor_data object to another.
+        -:  115:  BOOST_ASIO_DECL void move_descriptor(socket_type descriptor,
+        -:  116:      per_descriptor_data& target_descriptor_data,
+        -:  117:      per_descriptor_data& source_descriptor_data);
+        -:  118:
+        -:  119:  // Post a reactor operation for immediate completion.
+        -:  120:  void post_immediate_completion(operation* op, bool is_continuation) const;
+        -:  121:
+        -:  122:  // Post a reactor operation for immediate completion.
+        -:  123:  BOOST_ASIO_DECL static void call_post_immediate_completion(
+        -:  124:      operation* op, bool is_continuation, const void* self);
+        -:  125:
+        -:  126:  // Start a new operation. The reactor operation will be performed when the
+        -:  127:  // given descriptor is flagged as ready, or an error has occurred.
+        -:  128:  BOOST_ASIO_DECL void start_op(int op_type, socket_type descriptor,
+        -:  129:      per_descriptor_data& descriptor_data, reactor_op* op,
+        -:  130:      bool is_continuation, bool allow_speculative,
+        -:  131:      void (*on_immediate)(operation*, bool, const void*),
+        -:  132:      const void* immediate_arg);
+        -:  133:
+        -:  134:  // Start a new operation. The reactor operation will be performed when the
+        -:  135:  // given descriptor is flagged as ready, or an error has occurred.
+        -:  136:  void start_op(int op_type, socket_type descriptor,
+        -:  137:      per_descriptor_data& descriptor_data, reactor_op* op,
+        -:  138:      bool is_continuation, bool allow_speculative)
+        -:  139:  {
+        -:  140:    start_op(op_type, descriptor, descriptor_data,
+        -:  141:        op, is_continuation, allow_speculative,
+        -:  142:        &epoll_reactor::call_post_immediate_completion, this);
+        -:  143:  }
+        -:  144:
+        -:  145:  // Cancel all operations associated with the given descriptor. The
+        -:  146:  // handlers associated with the descriptor will be invoked with the
+        -:  147:  // operation_aborted error.
+        -:  148:  BOOST_ASIO_DECL void cancel_ops(socket_type descriptor,
+        -:  149:      per_descriptor_data& descriptor_data);
+        -:  150:
+        -:  151:  // Cancel all operations associated with the given descriptor and key. The
+        -:  152:  // handlers associated with the descriptor will be invoked with the
+        -:  153:  // operation_aborted error.
+        -:  154:  BOOST_ASIO_DECL void cancel_ops_by_key(socket_type descriptor,
+        -:  155:      per_descriptor_data& descriptor_data,
+        -:  156:      int op_type, void* cancellation_key);
+        -:  157:
+        -:  158:  // Cancel any operations that are running against the descriptor and remove
+        -:  159:  // its registration from the reactor. The reactor resources associated with
+        -:  160:  // the descriptor must be released by calling cleanup_descriptor_data.
+        -:  161:  BOOST_ASIO_DECL void deregister_descriptor(socket_type descriptor,
+        -:  162:      per_descriptor_data& descriptor_data, bool closing);
+        -:  163:
+        -:  164:  // Remove the descriptor's registration from the reactor. The reactor
+        -:  165:  // resources associated with the descriptor must be released by calling
+        -:  166:  // cleanup_descriptor_data.
+        -:  167:  BOOST_ASIO_DECL void deregister_internal_descriptor(
+        -:  168:      socket_type descriptor, per_descriptor_data& descriptor_data);
+        -:  169:
+        -:  170:  // Perform any post-deregistration cleanup tasks associated with the
+        -:  171:  // descriptor data.
+        -:  172:  BOOST_ASIO_DECL void cleanup_descriptor_data(
+        -:  173:      per_descriptor_data& descriptor_data);
+        -:  174:
+        -:  175:  // Add a new timer queue to the reactor.
+        -:  176:  template <typename Time_Traits>
+        -:  177:  void add_timer_queue(timer_queue<Time_Traits>& timer_queue);
+        -:  178:
+        -:  179:  // Remove a timer queue from the reactor.
+        -:  180:  template <typename Time_Traits>
+        -:  181:  void remove_timer_queue(timer_queue<Time_Traits>& timer_queue);
+        -:  182:
+        -:  183:  // Schedule a new operation in the given timer queue to expire at the
+        -:  184:  // specified absolute time.
+        -:  185:  template <typename Time_Traits>
+        -:  186:  void schedule_timer(timer_queue<Time_Traits>& queue,
+        -:  187:      const typename Time_Traits::time_type& time,
+        -:  188:      typename timer_queue<Time_Traits>::per_timer_data& timer, wait_op* op);
+        -:  189:
+        -:  190:  // Cancel the timer operations associated with the given token. Returns the
+        -:  191:  // number of operations that have been posted or dispatched.
+        -:  192:  template <typename Time_Traits>
+        -:  193:  std::size_t cancel_timer(timer_queue<Time_Traits>& queue,
+        -:  194:      typename timer_queue<Time_Traits>::per_timer_data& timer,
+        -:  195:      std::size_t max_cancelled = (std::numeric_limits<std::size_t>::max)());
+        -:  196:
+        -:  197:  // Cancel the timer operations associated with the given key.
+        -:  198:  template <typename Time_Traits>
+        -:  199:  void cancel_timer_by_key(timer_queue<Time_Traits>& queue,
+        -:  200:      typename timer_queue<Time_Traits>::per_timer_data* timer,
+        -:  201:      void* cancellation_key);
+        -:  202:
+        -:  203:  // Move the timer operations associated with the given timer.
+        -:  204:  template <typename Time_Traits>
+        -:  205:  void move_timer(timer_queue<Time_Traits>& queue,
+        -:  206:      typename timer_queue<Time_Traits>::per_timer_data& target,
+        -:  207:      typename timer_queue<Time_Traits>::per_timer_data& source);
+        -:  208:
+        -:  209:  // Run epoll once until interrupted or events are ready to be dispatched.
+        -:  210:  BOOST_ASIO_DECL void run(long usec, op_queue<operation>& ops);
+        -:  211:
+        -:  212:  // Interrupt the select loop.
+        -:  213:  BOOST_ASIO_DECL void interrupt();
+        -:  214:
+        -:  215:private:
+        -:  216:  // The hint to pass to epoll_create to size its data structures.
+        -:  217:  enum { epoll_size = 20000 };
+        -:  218:
+        -:  219:  // Create the epoll file descriptor. Throws an exception if the descriptor
+        -:  220:  // cannot be created.
+        -:  221:  BOOST_ASIO_DECL static int do_epoll_create();
+        -:  222:
+        -:  223:  // Create the timerfd file descriptor. Does not throw.
+        -:  224:  BOOST_ASIO_DECL static int do_timerfd_create();
+        -:  225:
+        -:  226:  // Allocate a new descriptor state object.
+        -:  227:  BOOST_ASIO_DECL descriptor_state* allocate_descriptor_state();
+        -:  228:
+        -:  229:  // Free an existing descriptor state object.
+        -:  230:  BOOST_ASIO_DECL void free_descriptor_state(descriptor_state* s);
+        -:  231:
+        -:  232:  // Helper function to add a new timer queue.
+        -:  233:  BOOST_ASIO_DECL void do_add_timer_queue(timer_queue_base& queue);
+        -:  234:
+        -:  235:  // Helper function to remove a timer queue.
+        -:  236:  BOOST_ASIO_DECL void do_remove_timer_queue(timer_queue_base& queue);
+        -:  237:
+        -:  238:  // Called to recalculate and update the timeout.
+        -:  239:  BOOST_ASIO_DECL void update_timeout();
+        -:  240:
+        -:  241:  // Get the timeout value for the epoll_wait call. The timeout value is
+        -:  242:  // returned as a number of milliseconds. A return value of -1 indicates
+        -:  243:  // that epoll_wait should block indefinitely.
+        -:  244:  BOOST_ASIO_DECL int get_timeout(int msec);
+        -:  245:
+        -:  246:#if defined(BOOST_ASIO_HAS_TIMERFD)
+        -:  247:  // Get the timeout value for the timer descriptor. The return value is the
+        -:  248:  // flag argument to be used when calling timerfd_settime.
+        -:  249:  BOOST_ASIO_DECL int get_timeout(itimerspec& ts);
+        -:  250:#endif // defined(BOOST_ASIO_HAS_TIMERFD)
+        -:  251:
+        -:  252:  // The scheduler implementation used to post completions.
+        -:  253:  scheduler& scheduler_;
+        -:  254:
+        -:  255:  // Mutex to protect access to internal data.
+        -:  256:  mutex mutex_;
+        -:  257:
+        -:  258:  // The interrupter is used to break a blocking epoll_wait call.
+        -:  259:  select_interrupter interrupter_;
+        -:  260:
+        -:  261:  // The epoll file descriptor.
+        -:  262:  int epoll_fd_;
+        -:  263:
+        -:  264:  // The timer file descriptor.
+        -:  265:  int timer_fd_;
+        -:  266:
+        -:  267:  // The timer queues.
+        -:  268:  timer_queue_set timer_queues_;
+        -:  269:
+        -:  270:  // Whether the service has been shut down.
+        -:  271:  bool shutdown_;
+        -:  272:
+        -:  273:  // Mutex to protect access to the registered descriptors.
+        -:  274:  mutex registered_descriptors_mutex_;
+        -:  275:
+        -:  276:  // Keep track of all registered descriptors.
+        -:  277:  object_pool<descriptor_state> registered_descriptors_;
+        -:  278:
+        -:  279:  // Helper class to do post-perform_io cleanup.
+        -:  280:  struct perform_io_cleanup_on_block_exit;
+        -:  281:  friend struct perform_io_cleanup_on_block_exit;
+        -:  282:};
+        -:  283:
+        -:  284:} // namespace detail
+        -:  285:} // namespace asio
+        -:  286:} // namespace boost
+        -:  287:
+        -:  288:#include <boost/asio/detail/pop_options.hpp>
+        -:  289:
+        -:  290:#include <boost/asio/detail/impl/epoll_reactor.hpp>
+        -:  291:#if defined(BOOST_ASIO_HEADER_ONLY)
+        -:  292:# include <boost/asio/detail/impl/epoll_reactor.ipp>
+        -:  293:#endif // defined(BOOST_ASIO_HEADER_ONLY)
+        -:  294:
+        -:  295:#endif // defined(BOOST_ASIO_HAS_EPOLL)
+        -:  296:
+        -:  297:#endif // BOOST_ASIO_DETAIL_EPOLL_REACTOR_HPP

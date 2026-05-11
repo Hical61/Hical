@@ -1,0 +1,461 @@
+        -:    0:Source:/usr/include/boost/json/detail/value.hpp
+        -:    1://
+        -:    2:// Copyright (c) 2019 Vinnie Falco (vinnie.falco@gmail.com)
+        -:    3://
+        -:    4:// Distributed under the Boost Software License, Version 1.0. (See accompanying
+        -:    5:// file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+        -:    6://
+        -:    7:// Official repository: https://github.com/boostorg/json
+        -:    8://
+        -:    9:
+        -:   10:#ifndef BOOST_JSON_DETAIL_VALUE_HPP
+        -:   11:#define BOOST_JSON_DETAIL_VALUE_HPP
+        -:   12:
+        -:   13:#include <boost/json/kind.hpp>
+        -:   14:#include <boost/json/storage_ptr.hpp>
+        -:   15:#include <cstdint>
+        -:   16:#include <limits>
+        -:   17:#include <new>
+        -:   18:#include <utility>
+        -:   19:
+        -:   20:namespace boost {
+        -:   21:namespace json {
+        -:   22:namespace detail {
+        -:   23:
+        -:   24:struct key_t
+        -:   25:{
+        -:   26:};
+        -:   27:
+        -:   28:#if 0
+        -:   29:template<class T>
+        -:   30:struct to_number_limit
+        -:   31:    : std::numeric_limits<T>
+        -:   32:{
+        -:   33:};
+        -:   34:
+        -:   35:template<class T>
+        -:   36:struct to_number_limit<T const>
+        -:   37:    : to_number_limit<T>
+        -:   38:{
+        -:   39:};
+        -:   40:
+        -:   41:template<>
+        -:   42:struct to_number_limit<long long>
+        -:   43:{
+        -:   44:    static constexpr long long (min)() noexcept
+        -:   45:    {
+        -:   46:        return -9223372036854774784;
+        -:   47:    }
+        -:   48:
+        -:   49:    static constexpr long long (max)() noexcept
+        -:   50:    {
+        -:   51:        return 9223372036854774784;
+        -:   52:    }
+        -:   53:};
+        -:   54:
+        -:   55:template<>
+        -:   56:struct to_number_limit<unsigned long long>
+        -:   57:{
+        -:   58:    static constexpr
+        -:   59:    unsigned long long (min)() noexcept
+        -:   60:    {
+        -:   61:        return 0;
+        -:   62:    }
+        -:   63:
+        -:   64:    static constexpr
+        -:   65:    unsigned long long (max)() noexcept
+        -:   66:    {
+        -:   67:        return 18446744073709549568ULL;
+        -:   68:    }
+        -:   69:};
+        -:   70:#else
+        -:   71:
+        -:   72:template<class T>
+        -:   73:class to_number_limit
+        -:   74:{
+        -:   75:    // unsigned
+        -:   76:
+        -:   77:    static constexpr
+        -:   78:    double min1(std::false_type)
+        -:   79:    {
+        -:   80:        return 0.0;
+        -:   81:    }
+        -:   82:
+        -:   83:    static constexpr
+        -:   84:    double max1(std::false_type)
+        -:   85:    {
+        -:   86:        return max2u(std::integral_constant<
+        -:   87:            bool, (std::numeric_limits<T>::max)() ==
+        -:   88:            UINT64_MAX>{});
+        -:   89:    }
+        -:   90:
+        -:   91:    static constexpr
+        -:   92:    double max2u(std::false_type)
+        -:   93:    {
+        -:   94:        return static_cast<double>(
+        -:   95:            (std::numeric_limits<T>::max)());
+        -:   96:    }
+        -:   97:
+        -:   98:    static constexpr
+        -:   99:    double max2u(std::true_type)
+        -:  100:    {
+        -:  101:        return 18446744073709549568.0;
+        -:  102:    }
+        -:  103:
+        -:  104:    // signed
+        -:  105:
+        -:  106:    static constexpr
+        -:  107:    double min1(std::true_type)
+        -:  108:    {
+        -:  109:        return min2s(std::integral_constant<
+        -:  110:            bool, (std::numeric_limits<T>::max)() ==
+        -:  111:            INT64_MAX>{});
+        -:  112:    }
+        -:  113:
+        -:  114:    static constexpr
+        -:  115:    double min2s(std::false_type)
+        -:  116:    {
+        -:  117:        return static_cast<double>(
+        -:  118:            (std::numeric_limits<T>::min)());
+        -:  119:    }
+        -:  120:
+        -:  121:    static constexpr
+        -:  122:    double min2s(std::true_type)
+        -:  123:    {
+        -:  124:        return -9223372036854774784.0;
+        -:  125:    }
+        -:  126:
+        -:  127:    static constexpr
+        -:  128:    double max1(std::true_type)
+        -:  129:    {
+        -:  130:        return max2s(std::integral_constant<
+        -:  131:            bool, (std::numeric_limits<T>::max)() ==
+        -:  132:            INT64_MAX>{});
+        -:  133:    }
+        -:  134:
+        -:  135:    static constexpr
+        -:  136:    double max2s(std::false_type)
+        -:  137:    {
+        -:  138:        return static_cast<double>(
+        -:  139:            (std::numeric_limits<T>::max)());
+        -:  140:    }
+        -:  141:
+        -:  142:    static constexpr
+        -:  143:    double max2s(std::true_type)
+        -:  144:    {
+        -:  145:        return 9223372036854774784.0;
+        -:  146:    }
+        -:  147:
+        -:  148:public:
+        -:  149:    static constexpr
+        -:  150:    double (min)() noexcept
+        -:  151:    {
+        -:  152:        return min1(std::is_signed<T>{});
+        -:  153:    }
+        -:  154:
+        -:  155:    static constexpr
+        -:  156:    double (max)() noexcept
+        -:  157:    {
+        -:  158:        return max1(std::is_signed<T>{});
+        -:  159:    }
+        -:  160:};
+        -:  161:
+        -:  162:#endif
+        -:  163:
+        -:  164:struct scalar
+        -:  165:{
+        -:  166:    storage_ptr sp; // must come first
+        -:  167:    kind k;         // must come second
+        -:  168:    union
+        -:  169:    {
+        -:  170:        bool b;
+        -:  171:        std::int64_t i;
+        -:  172:        std::uint64_t u;
+        -:  173:        double d;
+        -:  174:    };
+        -:  175:
+        -:  176:    explicit
+function _ZN5boost4json6detail6scalarC2ENS0_11storage_ptrE called 0 returned 0% blocks executed 0%
+    #####:  177:    scalar(storage_ptr sp_ = {}) noexcept
+    #####:  178:        : sp(std::move(sp_))
+call    0 never executed
+call    1 never executed
+    #####:  179:        , k(json::kind::null)
+        -:  180:    {
+    #####:  181:    }
+        -:  182:
+        -:  183:    explicit
+       3*:  184:    scalar(bool b_,
+        -:  185:        storage_ptr sp_ = {}) noexcept
+       3*:  186:        : sp(std::move(sp_))
+       3*:  187:        , k(json::kind::bool_)
+       3*:  188:        , b(b_)
+        -:  189:    {
+       3*:  190:    }
+------------------
+_ZN5boost4json6detail6scalarC2EbNS0_11storage_ptrE:
+function _ZN5boost4json6detail6scalarC2EbNS0_11storage_ptrE called 0 returned 0% blocks executed 0%
+    #####:  184:    scalar(bool b_,
+        -:  185:        storage_ptr sp_ = {}) noexcept
+    #####:  186:        : sp(std::move(sp_))
+call    0 never executed
+call    1 never executed
+    #####:  187:        , k(json::kind::bool_)
+    #####:  188:        , b(b_)
+        -:  189:    {
+    #####:  190:    }
+------------------
+_ZN5boost4json6detail6scalarC2EbNS0_11storage_ptrE:
+function _ZN5boost4json6detail6scalarC2EbNS0_11storage_ptrE called 2 returned 100% blocks executed 100%
+        2:  184:    scalar(bool b_,
+        -:  185:        storage_ptr sp_ = {}) noexcept
+        2:  186:        : sp(std::move(sp_))
+call    0 returned 100%
+call    1 returned 100%
+        2:  187:        , k(json::kind::bool_)
+        2:  188:        , b(b_)
+        -:  189:    {
+        2:  190:    }
+------------------
+_ZN5boost4json6detail6scalarC2EbNS0_11storage_ptrE:
+function _ZN5boost4json6detail6scalarC2EbNS0_11storage_ptrE called 1 returned 100% blocks executed 100%
+        1:  184:    scalar(bool b_,
+        -:  185:        storage_ptr sp_ = {}) noexcept
+        1:  186:        : sp(std::move(sp_))
+call    0 returned 100%
+call    1 returned 100%
+        1:  187:        , k(json::kind::bool_)
+        1:  188:        , b(b_)
+        -:  189:    {
+        1:  190:    }
+------------------
+        -:  191:
+        -:  192:    explicit
+      64*:  193:    scalar(std::int64_t i_,
+        -:  194:        storage_ptr sp_ = {}) noexcept
+      64*:  195:        : sp(std::move(sp_))
+      64*:  196:        , k(json::kind::int64)
+      64*:  197:        , i(i_)
+        -:  198:    {
+      64*:  199:    }
+------------------
+_ZN5boost4json6detail6scalarC2ElNS0_11storage_ptrE:
+function _ZN5boost4json6detail6scalarC2ElNS0_11storage_ptrE called 0 returned 0% blocks executed 0%
+    #####:  193:    scalar(std::int64_t i_,
+        -:  194:        storage_ptr sp_ = {}) noexcept
+    #####:  195:        : sp(std::move(sp_))
+call    0 never executed
+call    1 never executed
+    #####:  196:        , k(json::kind::int64)
+    #####:  197:        , i(i_)
+        -:  198:    {
+    #####:  199:    }
+------------------
+_ZN5boost4json6detail6scalarC2ElNS0_11storage_ptrE:
+function _ZN5boost4json6detail6scalarC2ElNS0_11storage_ptrE called 0 returned 0% blocks executed 0%
+    #####:  193:    scalar(std::int64_t i_,
+        -:  194:        storage_ptr sp_ = {}) noexcept
+    #####:  195:        : sp(std::move(sp_))
+call    0 never executed
+call    1 never executed
+    #####:  196:        , k(json::kind::int64)
+    #####:  197:        , i(i_)
+        -:  198:    {
+    #####:  199:    }
+------------------
+_ZN5boost4json6detail6scalarC2ElNS0_11storage_ptrE:
+function _ZN5boost4json6detail6scalarC2ElNS0_11storage_ptrE called 0 returned 0% blocks executed 0%
+    #####:  193:    scalar(std::int64_t i_,
+        -:  194:        storage_ptr sp_ = {}) noexcept
+    #####:  195:        : sp(std::move(sp_))
+call    0 never executed
+call    1 never executed
+    #####:  196:        , k(json::kind::int64)
+    #####:  197:        , i(i_)
+        -:  198:    {
+    #####:  199:    }
+------------------
+_ZN5boost4json6detail6scalarC2ElNS0_11storage_ptrE:
+function _ZN5boost4json6detail6scalarC2ElNS0_11storage_ptrE called 0 returned 0% blocks executed 0%
+    #####:  193:    scalar(std::int64_t i_,
+        -:  194:        storage_ptr sp_ = {}) noexcept
+    #####:  195:        : sp(std::move(sp_))
+call    0 never executed
+call    1 never executed
+    #####:  196:        , k(json::kind::int64)
+    #####:  197:        , i(i_)
+        -:  198:    {
+    #####:  199:    }
+------------------
+_ZN5boost4json6detail6scalarC2ElNS0_11storage_ptrE:
+function _ZN5boost4json6detail6scalarC2ElNS0_11storage_ptrE called 1 returned 100% blocks executed 100%
+        1:  193:    scalar(std::int64_t i_,
+        -:  194:        storage_ptr sp_ = {}) noexcept
+        1:  195:        : sp(std::move(sp_))
+call    0 returned 100%
+call    1 returned 100%
+        1:  196:        , k(json::kind::int64)
+        1:  197:        , i(i_)
+        -:  198:    {
+        1:  199:    }
+------------------
+_ZN5boost4json6detail6scalarC2ElNS0_11storage_ptrE:
+function _ZN5boost4json6detail6scalarC2ElNS0_11storage_ptrE called 1 returned 100% blocks executed 100%
+        1:  193:    scalar(std::int64_t i_,
+        -:  194:        storage_ptr sp_ = {}) noexcept
+        1:  195:        : sp(std::move(sp_))
+call    0 returned 100%
+call    1 returned 100%
+        1:  196:        , k(json::kind::int64)
+        1:  197:        , i(i_)
+        -:  198:    {
+        1:  199:    }
+------------------
+_ZN5boost4json6detail6scalarC2ElNS0_11storage_ptrE:
+function _ZN5boost4json6detail6scalarC2ElNS0_11storage_ptrE called 62 returned 100% blocks executed 100%
+       62:  193:    scalar(std::int64_t i_,
+        -:  194:        storage_ptr sp_ = {}) noexcept
+       62:  195:        : sp(std::move(sp_))
+call    0 returned 100%
+call    1 returned 100%
+       62:  196:        , k(json::kind::int64)
+       62:  197:        , i(i_)
+        -:  198:    {
+       62:  199:    }
+------------------
+_ZN5boost4json6detail6scalarC2ElNS0_11storage_ptrE:
+function _ZN5boost4json6detail6scalarC2ElNS0_11storage_ptrE called 0 returned 0% blocks executed 0%
+    #####:  193:    scalar(std::int64_t i_,
+        -:  194:        storage_ptr sp_ = {}) noexcept
+    #####:  195:        : sp(std::move(sp_))
+call    0 never executed
+call    1 never executed
+    #####:  196:        , k(json::kind::int64)
+    #####:  197:        , i(i_)
+        -:  198:    {
+    #####:  199:    }
+------------------
+_ZN5boost4json6detail6scalarC2ElNS0_11storage_ptrE:
+function _ZN5boost4json6detail6scalarC2ElNS0_11storage_ptrE called 0 returned 0% blocks executed 0%
+    #####:  193:    scalar(std::int64_t i_,
+        -:  194:        storage_ptr sp_ = {}) noexcept
+    #####:  195:        : sp(std::move(sp_))
+call    0 never executed
+call    1 never executed
+    #####:  196:        , k(json::kind::int64)
+    #####:  197:        , i(i_)
+        -:  198:    {
+    #####:  199:    }
+------------------
+        -:  200:
+        -:  201:    explicit
+       6*:  202:    scalar(std::uint64_t u_,
+        -:  203:        storage_ptr sp_ = {}) noexcept
+       6*:  204:        : sp(std::move(sp_))
+       6*:  205:        , k(json::kind::uint64)
+       6*:  206:        , u(u_)
+        -:  207:    {
+       6*:  208:    }
+------------------
+_ZN5boost4json6detail6scalarC2EmNS0_11storage_ptrE:
+function _ZN5boost4json6detail6scalarC2EmNS0_11storage_ptrE called 0 returned 0% blocks executed 0%
+    #####:  202:    scalar(std::uint64_t u_,
+        -:  203:        storage_ptr sp_ = {}) noexcept
+    #####:  204:        : sp(std::move(sp_))
+call    0 never executed
+call    1 never executed
+    #####:  205:        , k(json::kind::uint64)
+    #####:  206:        , u(u_)
+        -:  207:    {
+    #####:  208:    }
+------------------
+_ZN5boost4json6detail6scalarC2EmNS0_11storage_ptrE:
+function _ZN5boost4json6detail6scalarC2EmNS0_11storage_ptrE called 6 returned 100% blocks executed 100%
+        6:  202:    scalar(std::uint64_t u_,
+        -:  203:        storage_ptr sp_ = {}) noexcept
+        6:  204:        : sp(std::move(sp_))
+call    0 returned 100%
+call    1 returned 100%
+        6:  205:        , k(json::kind::uint64)
+        6:  206:        , u(u_)
+        -:  207:    {
+        6:  208:    }
+------------------
+        -:  209:
+        -:  210:    explicit
+function _ZN5boost4json6detail6scalarC2EdNS0_11storage_ptrE called 1 returned 100% blocks executed 100%
+        1:  211:    scalar(double d_,
+        -:  212:        storage_ptr sp_ = {}) noexcept
+        1:  213:        : sp(std::move(sp_))
+call    0 returned 100%
+call    1 returned 100%
+        1:  214:        , k(json::kind::double_)
+        1:  215:        , d(d_)
+        -:  216:    {
+        1:  217:    }
+        -:  218:};
+        -:  219:
+        -:  220:struct access
+        -:  221:{
+        -:  222:    template<class Value, class... Args>
+        -:  223:    static
+        -:  224:    Value&
+        -:  225:    construct_value(Value* p, Args&&... args)
+        -:  226:    {
+        -:  227:        return *reinterpret_cast<
+        -:  228:            Value*>(::new(p) Value(
+        -:  229:            std::forward<Args>(args)...));
+        -:  230:    }
+        -:  231:
+        -:  232:    template<class KeyValuePair, class... Args>
+        -:  233:    static
+        -:  234:    KeyValuePair&
+        -:  235:    construct_key_value_pair(
+        -:  236:        KeyValuePair* p, Args&&... args)
+        -:  237:    {
+        -:  238:        return *reinterpret_cast<
+        -:  239:            KeyValuePair*>(::new(p)
+        -:  240:                KeyValuePair(
+        -:  241:                    std::forward<Args>(args)...));
+        -:  242:    }
+        -:  243:
+        -:  244:    template<class Value>
+        -:  245:    static
+        -:  246:    char const*
+        -:  247:    release_key(
+        -:  248:        Value& jv,
+        -:  249:        std::size_t& len) noexcept
+        -:  250:    {
+        -:  251:        BOOST_ASSERT(jv.is_string());
+        -:  252:        jv.str_.sp_.~storage_ptr();
+        -:  253:        return jv.str_.impl_.release_key(len);
+        -:  254:    }
+        -:  255:
+        -:  256:    using index_t = std::uint32_t;
+        -:  257:
+        -:  258:    template<class KeyValuePair>
+        -:  259:    static
+        -:  260:    index_t&
+        -:  261:    next(KeyValuePair& e) noexcept
+        -:  262:    {
+        -:  263:        return e.next_;
+        -:  264:    }
+        -:  265:
+        -:  266:    template<class KeyValuePair>
+        -:  267:    static
+        -:  268:    index_t const&
+        -:  269:    next(KeyValuePair const& e) noexcept
+        -:  270:    {
+        -:  271:        return e.next_;
+        -:  272:    }
+        -:  273:};
+        -:  274:
+        -:  275:BOOST_JSON_DECL
+        -:  276:std::size_t
+        -:  277:hash_value_impl( value const& jv ) noexcept;
+        -:  278:
+        -:  279:} // detail
+        -:  280:} // namespace json
+        -:  281:} // namespace boost
+        -:  282:
+        -:  283:#endif

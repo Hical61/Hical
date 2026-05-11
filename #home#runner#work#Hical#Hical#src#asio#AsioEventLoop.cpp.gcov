@@ -1,0 +1,356 @@
+        -:    0:Source:/home/runner/work/Hical/Hical/src/asio/AsioEventLoop.cpp
+        -:    1:#include "AsioEventLoop.h"
+        -:    2:#include "AsioTimer.h"
+        -:    3:
+        -:    4:namespace hical
+        -:    5:{
+        -:    6:
+function _ZN5hical13AsioEventLoopC2Ev called 120 returned 100% blocks executed 71%
+      120:    7:	AsioEventLoop::AsioEventLoop()
+      120:    8:		: workGuard_(std::make_unique<boost::asio::executor_work_guard<boost::asio::io_context::executor_type>>(
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+      240:    9:			  boost::asio::make_work_guard(ioContext_)))
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 returned 100%
+call    6 returned 100%
+call    7 returned 100%
+call    8 returned 100%
+call    9 returned 100%
+call   10 returned 100%
+call   11 returned 100%
+call   12 returned 100%
+call   13 returned 100%
+call   14 never executed
+        -:   10:	{
+      120:   11:	}
+call    0 never executed
+call    1 never executed
+        -:   12:
+      133:   13:	AsioEventLoop::~AsioEventLoop()
+        -:   14:	{
+      120:   15:		if (running_.load())
+        -:   16:		{
+    #####:   17:			stop();
+        -:   18:		}
+      133:   19:	}
+------------------
+_ZN5hical13AsioEventLoopD0Ev:
+function _ZN5hical13AsioEventLoopD0Ev called 13 returned 100% blocks executed 100%
+       13:   13:	AsioEventLoop::~AsioEventLoop()
+        -:   14:	{
+        -:   15:		if (running_.load())
+        -:   16:		{
+        -:   17:			stop();
+        -:   18:		}
+       13:   19:	}
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN5hical13AsioEventLoopD2Ev:
+function _ZN5hical13AsioEventLoopD2Ev called 120 returned 100% blocks executed 89%
+      120:   13:	AsioEventLoop::~AsioEventLoop()
+        -:   14:	{
+      120:   15:		if (running_.load())
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+        -:   16:		{
+    #####:   17:			stop();
+call    0 never executed
+        -:   18:		}
+      120:   19:	}
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+------------------
+        -:   20:
+        -:   21:	// ============ 生命周期 ============
+        -:   22:
+function _ZN5hical13AsioEventLoop3runEv called 102 returned 100% blocks executed 85%
+      102:   23:	void AsioEventLoop::run()
+        -:   24:	{
+      102:   25:		threadId_ = std::this_thread::get_id();
+call    0 returned 100%
+      102:   26:		running_.store(true);
+call    0 returned 100%
+      102:   27:		quit_.store(false);
+call    0 returned 100%
+        -:   28:
+        -:   29:		// 运行事件循环（阻塞）
+      102:   30:		ioContext_.run();
+call    0 returned 100%
+        -:   31:
+        -:   32:		// 执行退出回调
+        -:   33:		{
+      102:   34:			std::lock_guard<std::mutex> lock(quitMutex_);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+      104:   35:			for (auto& cb : quitCallbacks_)
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 2%
+branch  6 taken 98% (fallthrough)
+        -:   36:			{
+        2:   37:				cb();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:   38:			}
+      102:   39:			quitCallbacks_.clear();
+call    0 returned 100%
+      102:   40:		}
+call    0 returned 100%
+call    1 never executed
+        -:   41:
+      102:   42:		running_.store(false);
+call    0 returned 100%
+      102:   43:	}
+        -:   44:
+function _ZN5hical13AsioEventLoop4stopEv called 107 returned 100% blocks executed 100%
+      107:   45:	void AsioEventLoop::stop()
+        -:   46:	{
+      107:   47:		quit_.store(true);
+call    0 returned 100%
+      107:   48:		workGuard_.reset();
+call    0 returned 100%
+      107:   49:		ioContext_.stop();
+call    0 returned 100%
+      107:   50:	}
+        -:   51:
+function _ZNK5hical13AsioEventLoop9isRunningEv called 4 returned 100% blocks executed 100%
+        4:   52:	bool AsioEventLoop::isRunning() const
+        -:   53:	{
+        4:   54:		return running_.load() && !quit_.load();
+call    0 returned 100%
+branch  1 taken 25% (fallthrough)
+branch  2 taken 75%
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0%
+        -:   55:	}
+        -:   56:
+        -:   57:	// ============ 任务调度 ============
+        -:   58:
+function _ZN5hical13AsioEventLoop8dispatchESt8functionIFvvEE called 35 returned 100% blocks executed 83%
+       35:   59:	void AsioEventLoop::dispatch(Func cb)
+        -:   60:	{
+       35:   61:		if (isInLoopThread())
+call    0 returned 100%
+branch  1 taken 37% (fallthrough)
+branch  2 taken 63%
+        -:   62:		{
+       13:   63:			cb();
+call    0 returned 100%
+        -:   64:		}
+        -:   65:		else
+        -:   66:		{
+       22:   67:			post(std::move(cb));
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+call    6 never executed
+        -:   68:		}
+       35:   69:	}
+        -:   70:
+function _ZN5hical13AsioEventLoop4postESt8functionIFvvEE called 1020 returned 101% blocks executed 100%
+     1020:   71:	void AsioEventLoop::post(Func cb)
+        -:   72:	{
+     1020:   73:		boost::asio::post(ioContext_, std::move(cb));
+call    0 returned 100%
+call    1 returned 101%
+     1029:   74:	}
+        -:   75:
+        -:   76:	// ============ 定时器 ============
+        -:   77:
+function _ZN5hical13AsioEventLoop8runAfterEdSt8functionIFvvEE called 4 returned 100% blocks executed 64%
+        4:   78:	TimerId AsioEventLoop::runAfter(double delay, Func cb)
+        -:   79:	{
+        4:   80:		TimerId id = nextTimerId_.fetch_add(1);
+        -:   81:
+        4:   82:		auto timer = std::make_shared<AsioTimer>(this, delay, std::move(cb));
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:   83:
+        -:   84:		// 设置自动清理回调：单次定时器触发后自动从 map 中移除，防止内存泄漏
+        8:   85:		timer->setCleanup(id,
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 never executed
+function _ZZN5hical13AsioEventLoop8runAfterEdSt8functionIFvvEEENKUlmE_clEm called 2 returned 100% blocks executed 71%
+        4:   86:						  [this](uint64_t timerId)
+call    0 returned 100%
+        -:   87:						  {
+        2:   88:							  std::lock_guard<std::mutex> lock(timersMutex_);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        2:   89:							  timers_.erase(timerId);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        2:   90:						  });
+call    0 returned 100%
+call    1 never executed
+        -:   91:
+        -:   92:		{
+        4:   93:			std::lock_guard<std::mutex> lock(timersMutex_);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        4:   94:			timers_[id] = timer;
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+        4:   95:		}
+call    0 returned 100%
+call    1 never executed
+        -:   96:
+        4:   97:		timer->start();
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        4:   98:		return id;
+        4:   99:	}
+call    0 returned 100%
+call    1 never executed
+        -:  100:
+function _ZN5hical13AsioEventLoop8runEveryEdSt8functionIFvvEE called 1 returned 100% blocks executed 67%
+        1:  101:	TimerId AsioEventLoop::runEvery(double interval, Func cb)
+        -:  102:	{
+        1:  103:		TimerId id = nextTimerId_.fetch_add(1);
+        -:  104:
+        1:  105:		auto timer = std::make_shared<AsioTimer>(this, interval, std::move(cb), true);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:  106:
+        -:  107:		{
+        1:  108:			std::lock_guard<std::mutex> lock(timersMutex_);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  109:			timers_[id] = timer;
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+        1:  110:		}
+call    0 returned 100%
+call    1 never executed
+        -:  111:
+        1:  112:		timer->start();
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        1:  113:		return id;
+        1:  114:	}
+call    0 returned 100%
+call    1 never executed
+        -:  115:
+function _ZN5hical13AsioEventLoop11cancelTimerEm called 3 returned 100% blocks executed 86%
+        3:  116:	void AsioEventLoop::cancelTimer(TimerId id)
+        -:  117:	{
+        3:  118:		std::lock_guard<std::mutex> lock(timersMutex_);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        3:  119:		auto it = timers_.find(id);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        3:  120:		if (it != timers_.end())
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0%
+        -:  121:		{
+        3:  122:			it->second->cancel();
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+        3:  123:			timers_.erase(it);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  124:		}
+        3:  125:	}
+call    0 returned 100%
+call    1 never executed
+        -:  126:
+        -:  127:	// ============ 线程属性 ============
+        -:  128:
+function _ZNK5hical13AsioEventLoop14isInLoopThreadEv called 38 returned 100% blocks executed 100%
+       38:  129:	bool AsioEventLoop::isInLoopThread() const
+        -:  130:	{
+       38:  131:		return threadId_ == std::this_thread::get_id();
+call    0 returned 100%
+call    1 returned 100%
+        -:  132:	}
+        -:  133:
+function _ZNK5hical13AsioEventLoop5indexEv called 4 returned 100% blocks executed 100%
+        4:  134:	size_t AsioEventLoop::index() const
+        -:  135:	{
+        4:  136:		return index_;
+        -:  137:	}
+        -:  138:
+function _ZN5hical13AsioEventLoop8setIndexEm called 15 returned 100% blocks executed 100%
+       15:  139:	void AsioEventLoop::setIndex(size_t index)
+        -:  140:	{
+       15:  141:		index_ = index;
+       15:  142:	}
+        -:  143:
+        -:  144:	// ============ 退出钩子 ============
+        -:  145:
+function _ZN5hical13AsioEventLoop9runOnQuitESt8functionIFvvEE called 2 returned 100% blocks executed 75%
+        2:  146:	void AsioEventLoop::runOnQuit(Func cb)
+        -:  147:	{
+        2:  148:		std::lock_guard<std::mutex> lock(quitMutex_);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        2:  149:		quitCallbacks_.push_back(std::move(cb));
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        2:  150:	}
+call    0 returned 100%
+call    1 never executed
+        -:  151:
+        -:  152:	// ============ pmr 支持 ============
+        -:  153:
+function _ZNK5hical13AsioEventLoop9allocatorEv called 3 returned 100% blocks executed 100%
+        3:  154:	std::pmr::polymorphic_allocator<std::byte> AsioEventLoop::allocator() const
+        -:  155:	{
+        3:  156:		return MemoryPool::instance().threadLocalAllocator();
+call    0 returned 100%
+call    1 returned 100%
+        -:  157:	}
+        -:  158:
+        -:  159:} // namespace hical

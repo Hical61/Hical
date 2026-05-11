@@ -1,0 +1,275 @@
+        -:    0:Source:/usr/include/boost/asio/detail/work_dispatcher.hpp
+        -:    1://
+        -:    2:// detail/work_dispatcher.hpp
+        -:    3:// ~~~~~~~~~~~~~~~~~~~~~~~~~~
+        -:    4://
+        -:    5:// Copyright (c) 2003-2023 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+        -:    6://
+        -:    7:// Distributed under the Boost Software License, Version 1.0. (See accompanying
+        -:    8:// file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+        -:    9://
+        -:   10:
+        -:   11:#ifndef BOOST_ASIO_DETAIL_WORK_DISPATCHER_HPP
+        -:   12:#define BOOST_ASIO_DETAIL_WORK_DISPATCHER_HPP
+        -:   13:
+        -:   14:#if defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   15:# pragma once
+        -:   16:#endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   17:
+        -:   18:#include <boost/asio/detail/config.hpp>
+        -:   19:#include <boost/asio/detail/bind_handler.hpp>
+        -:   20:#include <boost/asio/detail/type_traits.hpp>
+        -:   21:#include <boost/asio/associated_executor.hpp>
+        -:   22:#include <boost/asio/associated_allocator.hpp>
+        -:   23:#include <boost/asio/executor_work_guard.hpp>
+        -:   24:#include <boost/asio/execution/executor.hpp>
+        -:   25:#include <boost/asio/execution/allocator.hpp>
+        -:   26:#include <boost/asio/execution/blocking.hpp>
+        -:   27:#include <boost/asio/execution/outstanding_work.hpp>
+        -:   28:#include <boost/asio/prefer.hpp>
+        -:   29:
+        -:   30:#include <boost/asio/detail/push_options.hpp>
+        -:   31:
+        -:   32:namespace boost {
+        -:   33:namespace asio {
+        -:   34:namespace detail {
+        -:   35:
+        -:   36:template <typename Handler, typename Executor, typename = void>
+        -:   37:struct is_work_dispatcher_required : true_type
+        -:   38:{
+        -:   39:};
+        -:   40:
+        -:   41:template <typename Handler, typename Executor>
+        -:   42:struct is_work_dispatcher_required<Handler, Executor,
+        -:   43:    typename enable_if<
+        -:   44:      is_same<
+        -:   45:        typename associated_executor<Handler,
+        -:   46:          Executor>::asio_associated_executor_is_unspecialised,
+        -:   47:        void
+        -:   48:      >::value
+        -:   49:    >::type> : false_type
+        -:   50:{
+        -:   51:};
+        -:   52:
+        -:   53:template <typename Handler, typename Executor, typename = void>
+        -:   54:class work_dispatcher
+        -:   55:{
+        -:   56:public:
+        -:   57:  template <typename CompletionHandler>
+    #####:   58:  work_dispatcher(BOOST_ASIO_MOVE_ARG(CompletionHandler) handler,
+        -:   59:      const Executor& handler_ex)
+    #####:   60:    : handler_(BOOST_ASIO_MOVE_CAST(CompletionHandler)(handler)),
+    #####:   61:      executor_(boost::asio::prefer(handler_ex,
+        -:   62:          execution::outstanding_work.tracked))
+        -:   63:  {
+    #####:   64:  }
+------------------
+_ZN5boost4asio6detail15work_dispatcherINS1_7binder1INS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEEEES7_EES5_vEC2IS9_EEOT_RKS5_:
+function _ZN5boost4asio6detail15work_dispatcherINS1_7binder1INS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEEEES7_EES5_vEC2IS9_EEOT_RKS5_ called 0 returned 0% blocks executed 0%
+    #####:   58:  work_dispatcher(BOOST_ASIO_MOVE_ARG(CompletionHandler) handler,
+        -:   59:      const Executor& handler_ex)
+    #####:   60:    : handler_(BOOST_ASIO_MOVE_CAST(CompletionHandler)(handler)),
+call    0 never executed
+    #####:   61:      executor_(boost::asio::prefer(handler_ex,
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:   62:          execution::outstanding_work.tracked))
+        -:   63:  {
+    #####:   64:  }
+call    0 never executed
+------------------
+_ZN5boost4asio6detail15work_dispatcherINS1_7binder1INS1_16range_connect_opINS0_2ip3tcpENS0_15any_io_executorENS5_22basic_resolver_resultsIS6_EENS1_25default_connect_conditionENS1_17awaitable_handlerIS7_JNS_6system10error_codeENS5_14basic_endpointIS6_EEEEEEESD_EES7_vEC2ISI_EEOT_RKS7_:
+function _ZN5boost4asio6detail15work_dispatcherINS1_7binder1INS1_16range_connect_opINS0_2ip3tcpENS0_15any_io_executorENS5_22basic_resolver_resultsIS6_EENS1_25default_connect_conditionENS1_17awaitable_handlerIS7_JNS_6system10error_codeENS5_14basic_endpointIS6_EEEEEEESD_EES7_vEC2ISI_EEOT_RKS7_ called 0 returned 0% blocks executed 0%
+    #####:   58:  work_dispatcher(BOOST_ASIO_MOVE_ARG(CompletionHandler) handler,
+        -:   59:      const Executor& handler_ex)
+    #####:   60:    : handler_(BOOST_ASIO_MOVE_CAST(CompletionHandler)(handler)),
+call    0 never executed
+    #####:   61:      executor_(boost::asio::prefer(handler_ex,
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:   62:          execution::outstanding_work.tracked))
+        -:   63:  {
+    #####:   64:  }
+call    0 never executed
+------------------
+        -:   65:
+        -:   66:#if defined(BOOST_ASIO_HAS_MOVE)
+        -:   67:  work_dispatcher(const work_dispatcher& other)
+        -:   68:    : handler_(other.handler_),
+        -:   69:      executor_(other.executor_)
+        -:   70:  {
+        -:   71:  }
+        -:   72:
+    #####:   73:  work_dispatcher(work_dispatcher&& other)
+    #####:   74:    : handler_(BOOST_ASIO_MOVE_CAST(Handler)(other.handler_)),
+    #####:   75:      executor_(BOOST_ASIO_MOVE_CAST(work_executor_type)(other.executor_))
+        -:   76:  {
+    #####:   77:  }
+------------------
+_ZN5boost4asio6detail15work_dispatcherINS1_7binder1INS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEEEES7_EES5_vEC2EOSA_:
+function _ZN5boost4asio6detail15work_dispatcherINS1_7binder1INS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEEEES7_EES5_vEC2EOSA_ called 0 returned 0% blocks executed 0%
+    #####:   73:  work_dispatcher(work_dispatcher&& other)
+    #####:   74:    : handler_(BOOST_ASIO_MOVE_CAST(Handler)(other.handler_)),
+call    0 never executed
+    #####:   75:      executor_(BOOST_ASIO_MOVE_CAST(work_executor_type)(other.executor_))
+call    0 never executed
+        -:   76:  {
+    #####:   77:  }
+------------------
+_ZN5boost4asio6detail15work_dispatcherINS1_7binder1INS1_16range_connect_opINS0_2ip3tcpENS0_15any_io_executorENS5_22basic_resolver_resultsIS6_EENS1_25default_connect_conditionENS1_17awaitable_handlerIS7_JNS_6system10error_codeENS5_14basic_endpointIS6_EEEEEEESD_EES7_vEC2EOSJ_:
+function _ZN5boost4asio6detail15work_dispatcherINS1_7binder1INS1_16range_connect_opINS0_2ip3tcpENS0_15any_io_executorENS5_22basic_resolver_resultsIS6_EENS1_25default_connect_conditionENS1_17awaitable_handlerIS7_JNS_6system10error_codeENS5_14basic_endpointIS6_EEEEEEESD_EES7_vEC2EOSJ_ called 0 returned 0% blocks executed 0%
+    #####:   73:  work_dispatcher(work_dispatcher&& other)
+    #####:   74:    : handler_(BOOST_ASIO_MOVE_CAST(Handler)(other.handler_)),
+call    0 never executed
+    #####:   75:      executor_(BOOST_ASIO_MOVE_CAST(work_executor_type)(other.executor_))
+call    0 never executed
+        -:   76:  {
+    #####:   77:  }
+------------------
+        -:   78:#endif // defined(BOOST_ASIO_HAS_MOVE)
+        -:   79:
+    #####:   80:  void operator()()
+        -:   81:  {
+        -:   82:    typename associated_allocator<Handler>::type alloc(
+    #####:   83:        (get_associated_allocator)(handler_));
+        -:   84:#if defined(BOOST_ASIO_NO_DEPRECATED)
+        -:   85:    boost::asio::prefer(executor_, execution::allocator(alloc)).execute(
+        -:   86:        boost::asio::detail::bind_handler(
+        -:   87:          BOOST_ASIO_MOVE_CAST(Handler)(handler_)));
+        -:   88:#else // defined(BOOST_ASIO_NO_DEPRECATED)
+    #####:   89:    execution::execute(
+    #####:   90:        boost::asio::prefer(executor_, execution::allocator(alloc)),
+    #####:   91:        boost::asio::detail::bind_handler(
+    #####:   92:          BOOST_ASIO_MOVE_CAST(Handler)(handler_)));
+        -:   93:#endif // defined(BOOST_ASIO_NO_DEPRECATED)
+    #####:   94:  }
+------------------
+_ZN5boost4asio6detail15work_dispatcherINS1_7binder1INS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEEEES7_EES5_vEclEv:
+function _ZN5boost4asio6detail15work_dispatcherINS1_7binder1INS1_17awaitable_handlerINS0_15any_io_executorEJNS_6system10error_codeEEEES7_EES5_vEclEv called 0 returned 0% blocks executed 0%
+    #####:   80:  void operator()()
+        -:   81:  {
+        -:   82:    typename associated_allocator<Handler>::type alloc(
+    #####:   83:        (get_associated_allocator)(handler_));
+call    0 never executed
+        -:   84:#if defined(BOOST_ASIO_NO_DEPRECATED)
+        -:   85:    boost::asio::prefer(executor_, execution::allocator(alloc)).execute(
+        -:   86:        boost::asio::detail::bind_handler(
+        -:   87:          BOOST_ASIO_MOVE_CAST(Handler)(handler_)));
+        -:   88:#else // defined(BOOST_ASIO_NO_DEPRECATED)
+    #####:   89:    execution::execute(
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:   90:        boost::asio::prefer(executor_, execution::allocator(alloc)),
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+    #####:   91:        boost::asio::detail::bind_handler(
+call    0 never executed
+call    1 never executed
+    #####:   92:          BOOST_ASIO_MOVE_CAST(Handler)(handler_)));
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:   93:#endif // defined(BOOST_ASIO_NO_DEPRECATED)
+    #####:   94:  }
+------------------
+_ZN5boost4asio6detail15work_dispatcherINS1_7binder1INS1_16range_connect_opINS0_2ip3tcpENS0_15any_io_executorENS5_22basic_resolver_resultsIS6_EENS1_25default_connect_conditionENS1_17awaitable_handlerIS7_JNS_6system10error_codeENS5_14basic_endpointIS6_EEEEEEESD_EES7_vEclEv:
+function _ZN5boost4asio6detail15work_dispatcherINS1_7binder1INS1_16range_connect_opINS0_2ip3tcpENS0_15any_io_executorENS5_22basic_resolver_resultsIS6_EENS1_25default_connect_conditionENS1_17awaitable_handlerIS7_JNS_6system10error_codeENS5_14basic_endpointIS6_EEEEEEESD_EES7_vEclEv called 0 returned 0% blocks executed 0%
+    #####:   80:  void operator()()
+        -:   81:  {
+        -:   82:    typename associated_allocator<Handler>::type alloc(
+    #####:   83:        (get_associated_allocator)(handler_));
+call    0 never executed
+        -:   84:#if defined(BOOST_ASIO_NO_DEPRECATED)
+        -:   85:    boost::asio::prefer(executor_, execution::allocator(alloc)).execute(
+        -:   86:        boost::asio::detail::bind_handler(
+        -:   87:          BOOST_ASIO_MOVE_CAST(Handler)(handler_)));
+        -:   88:#else // defined(BOOST_ASIO_NO_DEPRECATED)
+    #####:   89:    execution::execute(
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:   90:        boost::asio::prefer(executor_, execution::allocator(alloc)),
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+    #####:   91:        boost::asio::detail::bind_handler(
+call    0 never executed
+call    1 never executed
+    #####:   92:          BOOST_ASIO_MOVE_CAST(Handler)(handler_)));
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:   93:#endif // defined(BOOST_ASIO_NO_DEPRECATED)
+    #####:   94:  }
+------------------
+        -:   95:
+        -:   96:private:
+        -:   97:  typedef typename decay<
+        -:   98:      typename prefer_result<const Executor&,
+        -:   99:        execution::outstanding_work_t::tracked_t
+        -:  100:      >::type
+        -:  101:    >::type work_executor_type;
+        -:  102:
+        -:  103:  Handler handler_;
+        -:  104:  work_executor_type executor_;
+        -:  105:};
+        -:  106:
+        -:  107:#if !defined(BOOST_ASIO_NO_TS_EXECUTORS)
+        -:  108:
+        -:  109:template <typename Handler, typename Executor>
+        -:  110:class work_dispatcher<Handler, Executor,
+        -:  111:    typename enable_if<!execution::is_executor<Executor>::value>::type>
+        -:  112:{
+        -:  113:public:
+        -:  114:  template <typename CompletionHandler>
+        -:  115:  work_dispatcher(BOOST_ASIO_MOVE_ARG(CompletionHandler) handler,
+        -:  116:      const Executor& handler_ex)
+        -:  117:    : work_(handler_ex),
+        -:  118:      handler_(BOOST_ASIO_MOVE_CAST(CompletionHandler)(handler))
+        -:  119:  {
+        -:  120:  }
+        -:  121:
+        -:  122:#if defined(BOOST_ASIO_HAS_MOVE)
+        -:  123:  work_dispatcher(const work_dispatcher& other)
+        -:  124:    : work_(other.work_),
+        -:  125:      handler_(other.handler_)
+        -:  126:  {
+        -:  127:  }
+        -:  128:
+        -:  129:  work_dispatcher(work_dispatcher&& other)
+        -:  130:    : work_(BOOST_ASIO_MOVE_CAST(executor_work_guard<Executor>)(other.work_)),
+        -:  131:      handler_(BOOST_ASIO_MOVE_CAST(Handler)(other.handler_))
+        -:  132:  {
+        -:  133:  }
+        -:  134:#endif // defined(BOOST_ASIO_HAS_MOVE)
+        -:  135:
+        -:  136:  void operator()()
+        -:  137:  {
+        -:  138:    typename associated_allocator<Handler>::type alloc(
+        -:  139:        (get_associated_allocator)(handler_));
+        -:  140:    work_.get_executor().dispatch(
+        -:  141:        boost::asio::detail::bind_handler(
+        -:  142:          BOOST_ASIO_MOVE_CAST(Handler)(handler_)), alloc);
+        -:  143:    work_.reset();
+        -:  144:  }
+        -:  145:
+        -:  146:private:
+        -:  147:  executor_work_guard<Executor> work_;
+        -:  148:  Handler handler_;
+        -:  149:};
+        -:  150:
+        -:  151:#endif // !defined(BOOST_ASIO_NO_TS_EXECUTORS)
+        -:  152:
+        -:  153:} // namespace detail
+        -:  154:} // namespace asio
+        -:  155:} // namespace boost
+        -:  156:
+        -:  157:#include <boost/asio/detail/pop_options.hpp>
+        -:  158:
+        -:  159:#endif // BOOST_ASIO_DETAIL_WORK_DISPATCHER_HPP

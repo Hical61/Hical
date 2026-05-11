@@ -1,0 +1,203 @@
+        -:    0:Source:/home/runner/work/Hical/Hical/src/core/IdleFd.h
+        -:    1:#pragma once
+        -:    2:
+        -:    3:/**
+        -:    4: * @file IdleFd.h
+        -:    5: * @brief 空闲文件描述符预留机制（防止 fd 耗尽时 accept 循环空转）
+        -:    6: * 设计灵感来自 Trantor 网络库的 Acceptor::idleFd_ 机制。
+        -:    7: * 当系统 fd 耗尽（EMFILE）时：
+        -:    8: * 1. 释放预留的 fd（腾出一个名额）
+        -:    9: * 2. accept 新连接（消费掉 pending 的连接请求）
+        -:   10: * 3. 立即关闭该连接
+        -:   11: * 4. 重新预留 fd
+        -:   12: * 这样可以避免 accept 循环因 EMFILE 反复立即失败导致 CPU 空转（busy loop）。
+        -:   13: * 跨平台：
+        -:   14: * - POSIX（Linux/macOS）：预留 /dev/null 的 fd
+        -:   15: * - Windows：IOCP 模型下不需要此机制（空实现）
+        -:   16: */
+        -:   17:
+        -:   18:#if defined(_WIN32)
+        -:   19:
+        -:   20:namespace hical
+        -:   21:{
+        -:   22:
+        -:   23:	/**
+        -:   24:	 * @brief Windows 空实现（IOCP 模型不需要 idleFd 机制）
+        -:   25:	 */
+        -:   26:	class IdleFd
+        -:   27:	{
+        -:   28:	public:
+        -:   29:		IdleFd() = default;
+        -:   30:		~IdleFd() = default;
+        -:   31:
+        -:   32:		void temporaryRelease()
+        -:   33:		{
+        -:   34:		}
+        -:   35:
+        -:   36:		void reacquire()
+        -:   37:		{
+        -:   38:		}
+        -:   39:
+        -:   40:		IdleFd(const IdleFd&) = delete;
+        -:   41:		IdleFd& operator=(const IdleFd&) = delete;
+        -:   42:	};
+        -:   43:
+        -:   44:} // namespace hical
+        -:   45:
+        -:   46:#else // POSIX
+        -:   47:
+        -:   48:	#include <fcntl.h>
+        -:   49:	#include <unistd.h>
+        -:   50:
+        -:   51:namespace hical
+        -:   52:{
+        -:   53:
+        -:   54:	/**
+        -:   55:	 * @brief POSIX 实现：预留一个 fd 指向 /dev/null
+        -:   56:	 */
+        -:   57:	class IdleFd
+        -:   58:	{
+        -:   59:	public:
+       32:   60:		IdleFd() : fd_(::open("/dev/null", O_RDONLY | O_CLOEXEC))
+        -:   61:		{
+       32:   62:		}
+------------------
+_ZN5hical6IdleFdC2Ev:
+function _ZN5hical6IdleFdC2Ev called 4 returned 100% blocks executed 100%
+        4:   60:		IdleFd() : fd_(::open("/dev/null", O_RDONLY | O_CLOEXEC))
+call    0 returned 100%
+        -:   61:		{
+        4:   62:		}
+------------------
+_ZN5hical6IdleFdC2Ev:
+function _ZN5hical6IdleFdC2Ev called 28 returned 100% blocks executed 100%
+       28:   60:		IdleFd() : fd_(::open("/dev/null", O_RDONLY | O_CLOEXEC))
+call    0 returned 100%
+        -:   61:		{
+       28:   62:		}
+------------------
+        -:   63:
+       32:   64:		~IdleFd()
+        -:   65:		{
+       32:   66:			if (fd_ >= 0)
+        -:   67:			{
+       32:   68:				::close(fd_);
+        -:   69:			}
+       32:   70:		}
+------------------
+_ZN5hical6IdleFdD2Ev:
+function _ZN5hical6IdleFdD2Ev called 4 returned 100% blocks executed 100%
+        4:   64:		~IdleFd()
+        -:   65:		{
+        4:   66:			if (fd_ >= 0)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:   67:			{
+        4:   68:				::close(fd_);
+call    0 returned 100%
+        -:   69:			}
+        4:   70:		}
+------------------
+_ZN5hical6IdleFdD2Ev:
+function _ZN5hical6IdleFdD2Ev called 28 returned 100% blocks executed 100%
+       28:   64:		~IdleFd()
+        -:   65:		{
+       28:   66:			if (fd_ >= 0)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:   67:			{
+       28:   68:				::close(fd_);
+call    0 returned 100%
+        -:   69:			}
+       28:   70:		}
+------------------
+        -:   71:
+        -:   72:		/**
+        -:   73:		 * @brief 临时释放预留的 fd（为 accept 腾出空间）
+        -:   74:		 */
+    #####:   75:		void temporaryRelease()
+        -:   76:		{
+    #####:   77:			if (fd_ >= 0)
+        -:   78:			{
+    #####:   79:				::close(fd_);
+    #####:   80:				fd_ = -1;
+        -:   81:			}
+    #####:   82:		}
+------------------
+_ZN5hical6IdleFd16temporaryReleaseEv:
+function _ZN5hical6IdleFd16temporaryReleaseEv called 0 returned 0% blocks executed 0%
+    #####:   75:		void temporaryRelease()
+        -:   76:		{
+    #####:   77:			if (fd_ >= 0)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:   78:			{
+    #####:   79:				::close(fd_);
+call    0 never executed
+    #####:   80:				fd_ = -1;
+        -:   81:			}
+    #####:   82:		}
+------------------
+_ZN5hical6IdleFd16temporaryReleaseEv:
+function _ZN5hical6IdleFd16temporaryReleaseEv called 0 returned 0% blocks executed 0%
+    #####:   75:		void temporaryRelease()
+        -:   76:		{
+    #####:   77:			if (fd_ >= 0)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:   78:			{
+    #####:   79:				::close(fd_);
+call    0 never executed
+    #####:   80:				fd_ = -1;
+        -:   81:			}
+    #####:   82:		}
+------------------
+        -:   83:
+        -:   84:		/**
+        -:   85:		 * @brief 重新预留 fd
+        -:   86:		 */
+    #####:   87:		void reacquire()
+        -:   88:		{
+    #####:   89:			if (fd_ < 0)
+        -:   90:			{
+    #####:   91:				fd_ = ::open("/dev/null", O_RDONLY | O_CLOEXEC);
+        -:   92:			}
+    #####:   93:		}
+------------------
+_ZN5hical6IdleFd9reacquireEv:
+function _ZN5hical6IdleFd9reacquireEv called 0 returned 0% blocks executed 0%
+    #####:   87:		void reacquire()
+        -:   88:		{
+    #####:   89:			if (fd_ < 0)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:   90:			{
+    #####:   91:				fd_ = ::open("/dev/null", O_RDONLY | O_CLOEXEC);
+call    0 never executed
+        -:   92:			}
+    #####:   93:		}
+------------------
+_ZN5hical6IdleFd9reacquireEv:
+function _ZN5hical6IdleFd9reacquireEv called 0 returned 0% blocks executed 0%
+    #####:   87:		void reacquire()
+        -:   88:		{
+    #####:   89:			if (fd_ < 0)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:   90:			{
+    #####:   91:				fd_ = ::open("/dev/null", O_RDONLY | O_CLOEXEC);
+call    0 never executed
+        -:   92:			}
+    #####:   93:		}
+------------------
+        -:   94:
+        -:   95:		IdleFd(const IdleFd&) = delete;
+        -:   96:		IdleFd& operator=(const IdleFd&) = delete;
+        -:   97:
+        -:   98:	private:
+        -:   99:		int fd_ {-1};
+        -:  100:	};
+        -:  101:
+        -:  102:} // namespace hical
+        -:  103:
+        -:  104:#endif // _WIN32

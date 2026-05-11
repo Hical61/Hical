@@ -1,0 +1,1037 @@
+        -:    0:Source:/home/runner/work/Hical/Hical/src/third_party/picohttpparser/picohttpparser.c
+        -:    1:/*
+        -:    2: * Copyright (c) 2009-2014 Kazuho Oku, Tokuhiro Matsuno, Daisuke Murase,
+        -:    3: *                         Shigeo Mitsunari
+        -:    4: *
+        -:    5: * The software is licensed under either the MIT License (below) or the Perl
+        -:    6: * license.
+        -:    7: *
+        -:    8: * Permission is hereby granted, free of charge, to any person obtaining a copy
+        -:    9: * of this software and associated documentation files (the "Software"), to
+        -:   10: * deal in the Software without restriction, including without limitation the
+        -:   11: * rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
+        -:   12: * sell copies of the Software, and to permit persons to whom the Software is
+        -:   13: * furnished to do so, subject to the following conditions:
+        -:   14: *
+        -:   15: * The above copyright notice and this permission notice shall be included in
+        -:   16: * all copies or substantial portions of the Software.
+        -:   17: *
+        -:   18: * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+        -:   19: * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+        -:   20: * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+        -:   21: * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+        -:   22: * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+        -:   23: * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
+        -:   24: * IN THE SOFTWARE.
+        -:   25: */
+        -:   26:
+        -:   27:#include <assert.h>
+        -:   28:#include <stddef.h>
+        -:   29:#include <string.h>
+        -:   30:#ifdef __SSE4_2__
+        -:   31:#ifdef _MSC_VER
+        -:   32:#include <nmmintrin.h>
+        -:   33:#else
+        -:   34:#include <x86intrin.h>
+        -:   35:#endif
+        -:   36:#endif
+        -:   37:#include "picohttpparser.h"
+        -:   38:
+        -:   39:#if __GNUC__ >= 3
+        -:   40:#define likely(x) __builtin_expect(!!(x), 1)
+        -:   41:#define unlikely(x) __builtin_expect(!!(x), 0)
+        -:   42:#else
+        -:   43:#define likely(x) (x)
+        -:   44:#define unlikely(x) (x)
+        -:   45:#endif
+        -:   46:
+        -:   47:#ifdef _MSC_VER
+        -:   48:#define ALIGNED(n) _declspec(align(n))
+        -:   49:#else
+        -:   50:#define ALIGNED(n) __attribute__((aligned(n)))
+        -:   51:#endif
+        -:   52:
+        -:   53:#define IS_PRINTABLE_ASCII(c) ((unsigned char)(c)-040u < 0137u)
+        -:   54:
+        -:   55:#define CHECK_EOF()                                                                                                                \
+        -:   56:    if (buf == buf_end) {                                                                                                          \
+        -:   57:        *ret = -2;                                                                                                                 \
+        -:   58:        return NULL;                                                                                                               \
+        -:   59:    }
+        -:   60:
+        -:   61:#define EXPECT_CHAR_NO_CHECK(ch)                                                                                                   \
+        -:   62:    if (*buf++ != ch) {                                                                                                            \
+        -:   63:        *ret = -1;                                                                                                                 \
+        -:   64:        return NULL;                                                                                                               \
+        -:   65:    }
+        -:   66:
+        -:   67:#define EXPECT_CHAR(ch)                                                                                                            \
+        -:   68:    CHECK_EOF();                                                                                                                   \
+        -:   69:    EXPECT_CHAR_NO_CHECK(ch);
+        -:   70:
+        -:   71:#define ADVANCE_TOKEN(tok, toklen)                                                                                                 \
+        -:   72:    do {                                                                                                                           \
+        -:   73:        const char *tok_start = buf;                                                                                               \
+        -:   74:        static const char ALIGNED(16) ranges2[16] = "\000\040\177\177";                                                            \
+        -:   75:        int found2;                                                                                                                \
+        -:   76:        buf = findchar_fast(buf, buf_end, ranges2, 4, &found2);                                                                    \
+        -:   77:        if (!found2) {                                                                                                             \
+        -:   78:            CHECK_EOF();                                                                                                           \
+        -:   79:        }                                                                                                                          \
+        -:   80:        while (1) {                                                                                                                \
+        -:   81:            if (*buf == ' ') {                                                                                                     \
+        -:   82:                break;                                                                                                             \
+        -:   83:            } else if (unlikely(!IS_PRINTABLE_ASCII(*buf))) {                                                                      \
+        -:   84:                if ((unsigned char)*buf < '\040' || *buf == '\177') {                                                              \
+        -:   85:                    *ret = -1;                                                                                                     \
+        -:   86:                    return NULL;                                                                                                   \
+        -:   87:                }                                                                                                                  \
+        -:   88:            }                                                                                                                      \
+        -:   89:            ++buf;                                                                                                                 \
+        -:   90:            CHECK_EOF();                                                                                                           \
+        -:   91:        }                                                                                                                          \
+        -:   92:        tok = tok_start;                                                                                                           \
+        -:   93:        toklen = buf - tok_start;                                                                                                  \
+        -:   94:    } while (0)
+        -:   95:
+        -:   96:static const char *token_char_map = "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"
+        -:   97:                                    "\0\1\0\1\1\1\1\1\0\0\1\1\0\1\1\0\1\1\1\1\1\1\1\1\1\1\0\0\0\0\0\0"
+        -:   98:                                    "\0\1\1\1\1\1\1\1\1\1\1\1\1\1\1\1\1\1\1\1\1\1\1\1\1\1\1\0\0\0\1\1"
+        -:   99:                                    "\1\1\1\1\1\1\1\1\1\1\1\1\1\1\1\1\1\1\1\1\1\1\1\1\1\1\1\0\1\0\1\0"
+        -:  100:                                    "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"
+        -:  101:                                    "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"
+        -:  102:                                    "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"
+        -:  103:                                    "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0";
+        -:  104:
+function findchar_fast called 1793 returned 100% blocks executed 100%
+     1793:  105:static const char *findchar_fast(const char *buf, const char *buf_end, const char *ranges, size_t ranges_size, int *found)
+        -:  106:{
+     1793:  107:    *found = 0;
+        -:  108:#if __SSE4_2__
+        -:  109:    if (likely(buf_end - buf >= 16)) {
+        -:  110:        __m128i ranges16 = _mm_loadu_si128((const __m128i *)ranges);
+        -:  111:
+        -:  112:        size_t left = (buf_end - buf) & ~15;
+        -:  113:        do {
+        -:  114:            __m128i b16 = _mm_loadu_si128((const __m128i *)buf);
+        -:  115:            int r = _mm_cmpestri(ranges16, ranges_size, b16, 16, _SIDD_LEAST_SIGNIFICANT | _SIDD_CMP_RANGES | _SIDD_UBYTE_OPS);
+        -:  116:            if (unlikely(r != 16)) {
+        -:  117:                buf += r;
+        -:  118:                *found = 1;
+        -:  119:                break;
+        -:  120:            }
+        -:  121:            buf += 16;
+        -:  122:            left -= 16;
+        -:  123:        } while (likely(left != 0));
+        -:  124:    }
+        -:  125:#else
+        -:  126:    /* suppress unused parameter warning */
+        -:  127:    (void)buf_end;
+        -:  128:    (void)ranges;
+        -:  129:    (void)ranges_size;
+        -:  130:#endif
+     1793:  131:    return buf;
+        -:  132:}
+        -:  133:
+function get_token_to_eol called 1565 returned 100% blocks executed 84%
+     1565:  134:static const char *get_token_to_eol(const char *buf, const char *buf_end, const char **token, size_t *token_len, int *ret)
+     1053:  135:{
+     1565:  136:    const char *token_start = buf;
+        -:  137:
+        -:  138:#ifdef __SSE4_2__
+        -:  139:    static const char ALIGNED(16) ranges1[16] = "\0\010"    /* allow HT */
+        -:  140:                                                "\012\037"  /* allow SP and up to but not including DEL */
+        -:  141:                                                "\177\177"; /* allow chars w. MSB set */
+        -:  142:    int found;
+        -:  143:    buf = findchar_fast(buf, buf_end, ranges1, 6, &found);
+        -:  144:    if (found)
+        -:  145:        goto FOUND_CTL;
+        -:  146:#else
+        -:  147:    /* find non-printable char within the next 8 bytes, this is the hottest code; manually inlined */
+     2618:  148:    while (likely(buf_end - buf >= 8)) {
+branch  0 taken 86%
+branch  1 taken 14% (fallthrough)
+        -:  149:#define DOIT()                                                                                                                     \
+        -:  150:    do {                                                                                                                           \
+        -:  151:        if (unlikely(!IS_PRINTABLE_ASCII(*buf)))                                                                                   \
+        -:  152:            goto NonPrintable;                                                                                                     \
+        -:  153:        ++buf;                                                                                                                     \
+        -:  154:    } while (0)
+     2247:  155:        DOIT();
+branch  0 taken 1% (fallthrough)
+branch  1 taken 100%
+     2245:  156:        DOIT();
+branch  0 taken 19% (fallthrough)
+branch  1 taken 81%
+     1810:  157:        DOIT();
+branch  0 taken 13% (fallthrough)
+branch  1 taken 87%
+     1579:  158:        DOIT();
+branch  0 taken 27% (fallthrough)
+branch  1 taken 73%
+    1148*:  159:        DOIT();
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+     1148:  160:        DOIT();
+branch  0 taken 7% (fallthrough)
+branch  1 taken 93%
+     1073:  161:        DOIT();
+branch  0 taken 1% (fallthrough)
+branch  1 taken 100%
+     1069:  162:        DOIT();
+branch  0 taken 1% (fallthrough)
+branch  1 taken 99%
+        -:  163:#undef DOIT
+     1053:  164:        continue;
+     1194:  165:    NonPrintable:
+     1194:  166:        if ((likely((unsigned char)*buf < '\040') && likely(*buf != '\011')) || unlikely(*buf == '\177')) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 1%
+branch  2 taken 0% (fallthrough)
+branch  3 taken 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0%
+     1194:  167:            goto FOUND_CTL;
+        -:  168:        }
+    #####:  169:        ++buf;
+        -:  170:    }
+        -:  171:#endif
+      732:  172:    for (;; ++buf) {
+    1103*:  173:        CHECK_EOF();
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+     1103:  174:        if (unlikely(!IS_PRINTABLE_ASCII(*buf))) {
+branch  0 taken 34% (fallthrough)
+branch  1 taken 66%
+     370*:  175:            if ((likely((unsigned char)*buf < '\040') && likely(*buf != '\011')) || unlikely(*buf == '\177')) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+branch  2 taken 0% (fallthrough)
+branch  3 taken 100%
+branch  4 never executed (fallthrough)
+branch  5 never executed
+      371:  176:                goto FOUND_CTL;
+        -:  177:            }
+        -:  178:        }
+        -:  179:    }
+     1565:  180:FOUND_CTL:
+     1565:  181:    if (likely(*buf == '\015')) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 1%
+     1563:  182:        ++buf;
+    1563*:  183:        EXPECT_CHAR('\012');
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+branch  2 taken 0% (fallthrough)
+branch  3 taken 100%
+     1563:  184:        *token_len = buf - 2 - token_start;
+        2:  185:    } else if (*buf == '\012') {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  186:        *token_len = buf - token_start;
+    #####:  187:        ++buf;
+        -:  188:    } else {
+        2:  189:        *ret = -1;
+        2:  190:        return NULL;
+        -:  191:    }
+     1563:  192:    *token = token_start;
+        -:  193:
+     1563:  194:    return buf;
+        -:  195:}
+        -:  196:
+function is_complete called 0 returned 0% blocks executed 0%
+    #####:  197:static const char *is_complete(const char *buf, const char *buf_end, size_t last_len, int *ret)
+        -:  198:{
+    #####:  199:    int ret_cnt = 0;
+    #####:  200:    buf = last_len < 3 ? buf : buf + last_len - 3;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  201:
+        -:  202:    while (1) {
+    #####:  203:        CHECK_EOF();
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  204:        if (*buf == '\015') {
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  205:            ++buf;
+    #####:  206:            CHECK_EOF();
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  207:            EXPECT_CHAR('\012');
+branch  0 never executed (fallthrough)
+branch  1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed
+    #####:  208:            ++ret_cnt;
+    #####:  209:        } else if (*buf == '\012') {
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  210:            ++buf;
+    #####:  211:            ++ret_cnt;
+        -:  212:        } else {
+    #####:  213:            ++buf;
+    #####:  214:            ret_cnt = 0;
+        -:  215:        }
+    #####:  216:        if (ret_cnt == 2) {
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  217:            return buf;
+        -:  218:        }
+        -:  219:    }
+        -:  220:
+        -:  221:    *ret = -2;
+        -:  222:    return NULL;
+        -:  223:}
+        -:  224:
+        -:  225:#define PARSE_INT(valp_, mul_)                                                                                                     \
+        -:  226:    if (*buf < '0' || '9' < *buf) {                                                                                                \
+        -:  227:        buf++;                                                                                                                     \
+        -:  228:        *ret = -1;                                                                                                                 \
+        -:  229:        return NULL;                                                                                                               \
+        -:  230:    }                                                                                                                              \
+        -:  231:    *(valp_) = (mul_) * (*buf++ - '0');
+        -:  232:
+        -:  233:#define PARSE_INT_3(valp_)                                                                                                         \
+        -:  234:    do {                                                                                                                           \
+        -:  235:        int res_ = 0;                                                                                                              \
+        -:  236:        PARSE_INT(&res_, 100)                                                                                                      \
+        -:  237:        *valp_ = res_;                                                                                                             \
+        -:  238:        PARSE_INT(&res_, 10)                                                                                                       \
+        -:  239:        *valp_ += res_;                                                                                                            \
+        -:  240:        PARSE_INT(&res_, 1)                                                                                                        \
+        -:  241:        *valp_ += res_;                                                                                                            \
+        -:  242:    } while (0)
+        -:  243:
+        -:  244:/* returned pointer is always within [buf, buf_end), or null */
+function parse_token called 1570 returned 100% blocks executed 87%
+     1570:  245:static const char *parse_token(const char *buf, const char *buf_end, const char **token, size_t *token_len, char next_char,
+        -:  246:                               int *ret)
+        -:  247:{
+        -:  248:    /* We use pcmpestri to detect non-token characters. This instruction can take no more than eight character ranges (8*2*8=128
+        -:  249:     * bits that is the size of a SSE register). Due to this restriction, characters `|` and `~` are handled in the slow loop. */
+        -:  250:    static const char ALIGNED(16) ranges[] = "\x00 "  /* control chars and up to SP */
+        -:  251:                                             "\"\""   /* 0x22 */
+        -:  252:                                             "()"     /* 0x28,0x29 */
+        -:  253:                                             ",,"     /* 0x2c */
+        -:  254:                                             "//"     /* 0x2f */
+        -:  255:                                             ":@"     /* 0x3a-0x40 */
+        -:  256:                                             "[]"     /* 0x5b-0x5d */
+        -:  257:                                             "{\xff"; /* 0x7b-0xff */
+     1570:  258:    const char *buf_start = buf;
+        -:  259:    int found;
+     1570:  260:    buf = findchar_fast(buf, buf_end, ranges, sizeof(ranges) - 1, &found);
+call    0 returned 100%
+     1569:  261:    if (!found) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    1569*:  262:        CHECK_EOF();
+branch  0 taken 100%
+branch  1 taken 0% (fallthrough)
+        -:  263:    }
+        -:  264:    while (1) {
+    14884:  265:        if (*buf == next_char) {
+branch  0 taken 11% (fallthrough)
+branch  1 taken 89%
+     1570:  266:            break;
+    13314:  267:        } else if (!token_char_map[(unsigned char)*buf]) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  268:            *ret = -1;
+    #####:  269:            return NULL;
+        -:  270:        }
+    13314:  271:        ++buf;
+    13314:  272:        CHECK_EOF();
+branch  0 taken -0% (fallthrough)
+branch  1 taken 100%
+        -:  273:    }
+     1570:  274:    *token = buf_start;
+     1570:  275:    *token_len = buf - buf_start;
+     1570:  276:    return buf;
+        -:  277:}
+        -:  278:
+        -:  279:/* returned pointer is always within [buf, buf_end), or null */
+function parse_http_version called 444 returned 100% blocks executed 57%
+      444:  280:static const char *parse_http_version(const char *buf, const char *buf_end, int *minor_version, int *ret)
+        -:  281:{
+        -:  282:    /* we want at least [HTTP/1.<two chars>] to try to parse */
+      444:  283:    if (buf_end - buf < 9) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  284:        *ret = -2;
+    #####:  285:        return NULL;
+        -:  286:    }
+     444*:  287:    EXPECT_CHAR_NO_CHECK('H');
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+     444*:  288:    EXPECT_CHAR_NO_CHECK('T');
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+     444*:  289:    EXPECT_CHAR_NO_CHECK('T');
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+     444*:  290:    EXPECT_CHAR_NO_CHECK('P');
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+     444*:  291:    EXPECT_CHAR_NO_CHECK('/');
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+     444*:  292:    EXPECT_CHAR_NO_CHECK('1');
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+     444*:  293:    EXPECT_CHAR_NO_CHECK('.');
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+     444*:  294:    PARSE_INT(minor_version, 1);
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+branch  2 taken 0% (fallthrough)
+branch  3 taken 100%
+      444:  295:    return buf;
+        -:  296:}
+        -:  297:
+function parse_headers called 444 returned 100% blocks executed 73%
+      444:  298:static const char *parse_headers(const char *buf, const char *buf_end, struct phr_header *headers, size_t *num_headers,
+        -:  299:                                 size_t max_headers, int *ret)
+        -:  300:{
+     1345:  301:    for (;; ++*num_headers) {
+    1789*:  302:        CHECK_EOF();
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+     1789:  303:        if (*buf == '\015') {
+branch  0 taken 25% (fallthrough)
+branch  1 taken 75%
+      442:  304:            ++buf;
+     442*:  305:            EXPECT_CHAR('\012');
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+branch  2 taken 0% (fallthrough)
+branch  3 taken 100%
+      442:  306:            break;
+     1347:  307:        } else if (*buf == '\012') {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  308:            ++buf;
+    #####:  309:            break;
+        -:  310:        }
+     1347:  311:        if (*num_headers == max_headers) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  312:            *ret = -1;
+    #####:  313:            return NULL;
+        -:  314:        }
+     1347:  315:        if (!(*num_headers != 0 && (*buf == ' ' || *buf == '\t'))) {
+branch  0 taken 67% (fallthrough)
+branch  1 taken 33%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0%
+        -:  316:            /* parsing name, but do not discard SP before colon, see
+        -:  317:             * http://www.mozilla.org/security/announce/2006/mfsa2006-33.html */
+     1347:  318:            if ((buf = parse_token(buf, buf_end, &headers[*num_headers].name, &headers[*num_headers].name_len, ':', ret)) == NULL) {
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+    #####:  319:                return NULL;
+        -:  320:            }
+     1345:  321:            if (headers[*num_headers].name_len == 0) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  322:                *ret = -1;
+    #####:  323:                return NULL;
+        -:  324:            }
+     1345:  325:            ++buf;
+     1345:  326:            for (;; ++buf) {
+    2690*:  327:                CHECK_EOF();
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+     2690:  328:                if (!(*buf == ' ' || *buf == '\t')) {
+branch  0 taken 50% (fallthrough)
+branch  1 taken 50%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 1%
+     1345:  329:                    break;
+        -:  330:                }
+        -:  331:            }
+        -:  332:        } else {
+    #####:  333:            headers[*num_headers].name = NULL;
+    #####:  334:            headers[*num_headers].name_len = 0;
+        -:  335:        }
+        -:  336:        const char *value;
+        -:  337:        size_t value_len;
+     1345:  338:        if ((buf = get_token_to_eol(buf, buf_end, &value, &value_len, ret)) == NULL) {
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+    #####:  339:            return NULL;
+        -:  340:        }
+        -:  341:        /* remove trailing SPs and HTABs */
+     1345:  342:        const char *value_end = value + value_len;
+    1345*:  343:        for (; value_end != value; --value_end) {
+branch  0 taken 100%
+branch  1 taken 0% (fallthrough)
+     1345:  344:            const char c = *(value_end - 1);
+     1345:  345:            if (!(c == ' ' || c == '\t')) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0%
+     1345:  346:                break;
+        -:  347:            }
+        -:  348:        }
+     1345:  349:        headers[*num_headers].value = value;
+     1345:  350:        headers[*num_headers].value_len = value_end - value;
+        -:  351:    }
+      442:  352:    return buf;
+        -:  353:}
+        -:  354:
+function parse_request called 225 returned 100% blocks executed 56%
+      225:  355:static const char *parse_request(const char *buf, const char *buf_end, const char **method, size_t *method_len, const char **path,
+        -:  356:                                 size_t *path_len, int *minor_version, struct phr_header *headers, size_t *num_headers,
+        -:  357:                                 size_t max_headers, int *ret)
+        -:  358:{
+        -:  359:    /* skip first empty line (some clients add CRLF after POST content) */
+     225*:  360:    CHECK_EOF();
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+      225:  361:    if (*buf == '\015') {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  362:        ++buf;
+    #####:  363:        EXPECT_CHAR('\012');
+branch  0 never executed (fallthrough)
+branch  1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed
+      225:  364:    } else if (*buf == '\012') {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  365:        ++buf;
+        -:  366:    }
+        -:  367:
+        -:  368:    /* parse request line */
+      225:  369:    if ((buf = parse_token(buf, buf_end, method, method_len, ' ', ret)) == NULL) {
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+    #####:  370:        return NULL;
+        -:  371:    }
+        -:  372:    do {
+      225:  373:        ++buf;
+     225*:  374:        CHECK_EOF();
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+      225:  375:    } while (*buf == ' ');
+branch  0 taken 0%
+branch  1 taken 100% (fallthrough)
+     827*:  376:    ADVANCE_TOKEN(*path, *path_len);
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+branch  3 taken 100%
+branch  4 taken 0% (fallthrough)
+branch  5 taken 37% (fallthrough)
+branch  6 taken 63%
+branch  7 taken 0% (fallthrough)
+branch  8 taken 100%
+branch  9 never executed (fallthrough)
+branch 10 never executed
+branch 11 never executed (fallthrough)
+branch 12 never executed
+branch 13 taken 0% (fallthrough)
+branch 14 taken 100%
+        -:  377:    do {
+      225:  378:        ++buf;
+     225*:  379:        CHECK_EOF();
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+      225:  380:    } while (*buf == ' ');
+branch  0 taken 0%
+branch  1 taken 100% (fallthrough)
+      225:  381:    if (*method_len == 0 || *path_len == 0) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+branch  2 taken 0% (fallthrough)
+branch  3 taken 100%
+    #####:  382:        *ret = -1;
+    #####:  383:        return NULL;
+        -:  384:    }
+      225:  385:    if ((buf = parse_http_version(buf, buf_end, minor_version, ret)) == NULL) {
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+    #####:  386:        return NULL;
+        -:  387:    }
+      225:  388:    if (*buf == '\015') {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+      225:  389:        ++buf;
+     225*:  390:        EXPECT_CHAR('\012');
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+branch  2 taken 0% (fallthrough)
+branch  3 taken 100%
+    #####:  391:    } else if (*buf == '\012') {
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  392:        ++buf;
+        -:  393:    } else {
+    #####:  394:        *ret = -1;
+    #####:  395:        return NULL;
+        -:  396:    }
+        -:  397:
+      225:  398:    return parse_headers(buf, buf_end, headers, num_headers, max_headers, ret);
+call    0 returned 100%
+        -:  399:}
+        -:  400:
+function phr_parse_request called 225 returned 100% blocks executed 60%
+      225:  401:int phr_parse_request(const char *buf_start, size_t len, const char **method, size_t *method_len, const char **path,
+        -:  402:                      size_t *path_len, int *minor_version, struct phr_header *headers, size_t *num_headers, size_t last_len)
+        -:  403:{
+      225:  404:    const char *buf = buf_start, *buf_end = buf_start + len;
+      225:  405:    size_t max_headers = *num_headers;
+        -:  406:    int r;
+        -:  407:
+      225:  408:    *method = NULL;
+      225:  409:    *method_len = 0;
+      225:  410:    *path = NULL;
+      225:  411:    *path_len = 0;
+      225:  412:    *minor_version = -1;
+      225:  413:    *num_headers = 0;
+        -:  414:
+        -:  415:    /* if last_len != 0, check if the request is complete (a fast countermeasure
+        -:  416:       againt slowloris */
+     225*:  417:    if (last_len != 0 && is_complete(buf, buf_end, last_len, &r) == NULL) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed
+    #####:  418:        return r;
+        -:  419:    }
+        -:  420:
+      225:  421:    if ((buf = parse_request(buf, buf_end, method, method_len, path, path_len, minor_version, headers, num_headers, max_headers,
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+        -:  422:                             &r)) == NULL) {
+    #####:  423:        return r;
+        -:  424:    }
+        -:  425:
+      225:  426:    return (int)(buf - buf_start);
+        -:  427:}
+        -:  428:
+function parse_response called 219 returned 100% blocks executed 70%
+      219:  429:static const char *parse_response(const char *buf, const char *buf_end, int *minor_version, int *status, const char **msg,
+        -:  430:                                  size_t *msg_len, struct phr_header *headers, size_t *num_headers, size_t max_headers, int *ret)
+        -:  431:{
+        -:  432:    /* parse "HTTP/1.x" */
+      219:  433:    if ((buf = parse_http_version(buf, buf_end, minor_version, ret)) == NULL) {
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+    #####:  434:        return NULL;
+        -:  435:    }
+        -:  436:    /* skip space */
+      219:  437:    if (*buf != ' ') {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  438:        *ret = -1;
+    #####:  439:        return NULL;
+        -:  440:    }
+        -:  441:    do {
+      219:  442:        ++buf;
+     219*:  443:        CHECK_EOF();
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+      219:  444:    } while (*buf == ' ');
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:  445:    /* parse status code, we want at least [:digit:][:digit:][:digit:]<other char> to try to parse */
+      219:  446:    if (buf_end - buf < 4) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  447:        *ret = -2;
+    #####:  448:        return NULL;
+        -:  449:    }
+     219*:  450:    PARSE_INT_3(status);
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+branch  2 taken 0% (fallthrough)
+branch  3 taken 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0%
+branch  6 taken 0% (fallthrough)
+branch  7 taken 100%
+branch  8 taken 100% (fallthrough)
+branch  9 taken 1%
+branch 10 taken 0% (fallthrough)
+branch 11 taken 100%
+        -:  451:
+        -:  452:    /* get message including preceding space */
+      218:  453:    if ((buf = get_token_to_eol(buf, buf_end, msg, msg_len, ret)) == NULL) {
+call    0 returned 100%
+branch  1 taken 0%
+branch  2 taken 100%
+    #####:  454:        return NULL;
+        -:  455:    }
+      219:  456:    if (*msg_len == 0) {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:  457:        /* ok */
+      219:  458:    } else if (**msg == ' ') {
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:  459:        /* Remove preceding space. Successful return from `get_token_to_eol` guarantees that we would hit something other than SP
+        -:  460:         * before running past the end of the given buffer. */
+        -:  461:        do {
+      219:  462:            ++*msg;
+      219:  463:            --*msg_len;
+      219:  464:        } while (**msg == ' ');
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:  465:    } else {
+        -:  466:        /* garbage found after status code */
+    #####:  467:        *ret = -1;
+    #####:  468:        return NULL;
+        -:  469:    }
+        -:  470:
+      219:  471:    return parse_headers(buf, buf_end, headers, num_headers, max_headers, ret);
+call    0 returned 100%
+        -:  472:}
+        -:  473:
+function phr_parse_response called 218 returned 100% blocks executed 60%
+      218:  474:int phr_parse_response(const char *buf_start, size_t len, int *minor_version, int *status, const char **msg, size_t *msg_len,
+        -:  475:                       struct phr_header *headers, size_t *num_headers, size_t last_len)
+        -:  476:{
+      218:  477:    const char *buf = buf_start, *buf_end = buf + len;
+      218:  478:    size_t max_headers = *num_headers;
+        -:  479:    int r;
+        -:  480:
+      218:  481:    *minor_version = -1;
+      218:  482:    *status = 0;
+      218:  483:    *msg = NULL;
+      218:  484:    *msg_len = 0;
+      218:  485:    *num_headers = 0;
+        -:  486:
+        -:  487:    /* if last_len != 0, check if the response is complete (a fast countermeasure
+        -:  488:       against slowloris */
+     218*:  489:    if (last_len != 0 && is_complete(buf, buf_end, last_len, &r) == NULL) {
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed
+    #####:  490:        return r;
+        -:  491:    }
+        -:  492:
+      218:  493:    if ((buf = parse_response(buf, buf_end, minor_version, status, msg, msg_len, headers, num_headers, max_headers, &r)) == NULL) {
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+    #####:  494:        return r;
+        -:  495:    }
+        -:  496:
+      219:  497:    return (int)(buf - buf_start);
+        -:  498:}
+        -:  499:
+function phr_parse_headers called 0 returned 0% blocks executed 0%
+    #####:  500:int phr_parse_headers(const char *buf_start, size_t len, struct phr_header *headers, size_t *num_headers, size_t last_len)
+        -:  501:{
+    #####:  502:    const char *buf = buf_start, *buf_end = buf + len;
+    #####:  503:    size_t max_headers = *num_headers;
+        -:  504:    int r;
+        -:  505:
+    #####:  506:    *num_headers = 0;
+        -:  507:
+        -:  508:    /* if last_len != 0, check if the response is complete (a fast countermeasure
+        -:  509:       against slowloris */
+    #####:  510:    if (last_len != 0 && is_complete(buf, buf_end, last_len, &r) == NULL) {
+branch  0 never executed (fallthrough)
+branch  1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed
+    #####:  511:        return r;
+        -:  512:    }
+        -:  513:
+    #####:  514:    if ((buf = parse_headers(buf, buf_end, headers, num_headers, max_headers, &r)) == NULL) {
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+    #####:  515:        return r;
+        -:  516:    }
+        -:  517:
+    #####:  518:    return (int)(buf - buf_start);
+        -:  519:}
+        -:  520:
+        -:  521:enum {
+        -:  522:    CHUNKED_IN_CHUNK_SIZE,
+        -:  523:    CHUNKED_IN_CHUNK_EXT,
+        -:  524:    CHUNKED_IN_CHUNK_HEADER_EXPECT_LF,
+        -:  525:    CHUNKED_IN_CHUNK_DATA,
+        -:  526:    CHUNKED_IN_CHUNK_DATA_EXPECT_CR,
+        -:  527:    CHUNKED_IN_CHUNK_DATA_EXPECT_LF,
+        -:  528:    CHUNKED_IN_TRAILERS_LINE_HEAD,
+        -:  529:    CHUNKED_IN_TRAILERS_LINE_MIDDLE
+        -:  530:};
+        -:  531:
+function decode_hex called 0 returned 0% blocks executed 0%
+    #####:  532:static int decode_hex(int ch)
+        -:  533:{
+    #####:  534:    if ('0' <= ch && ch <= '9') {
+branch  0 never executed (fallthrough)
+branch  1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed
+    #####:  535:        return ch - '0';
+    #####:  536:    } else if ('A' <= ch && ch <= 'F') {
+branch  0 never executed (fallthrough)
+branch  1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed
+    #####:  537:        return ch - 'A' + 0xa;
+    #####:  538:    } else if ('a' <= ch && ch <= 'f') {
+branch  0 never executed (fallthrough)
+branch  1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed
+    #####:  539:        return ch - 'a' + 0xa;
+        -:  540:    } else {
+    #####:  541:        return -1;
+        -:  542:    }
+        -:  543:}
+        -:  544:
+function phr_decode_chunked called 0 returned 0% blocks executed 0%
+    #####:  545:ssize_t phr_decode_chunked(struct phr_chunked_decoder *decoder, char *buf, size_t *_bufsz)
+        -:  546:{
+    #####:  547:    size_t dst = 0, src = 0, bufsz = *_bufsz;
+    #####:  548:    ssize_t ret = -2; /* incomplete */
+        -:  549:
+    #####:  550:    decoder->_total_read += bufsz;
+        -:  551:
+        -:  552:    while (1) {
+    #####:  553:        switch (decoder->_state) {
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+branch  4 never executed
+branch  5 never executed
+branch  6 never executed
+branch  7 never executed
+branch  8 never executed
+    #####:  554:        case CHUNKED_IN_CHUNK_SIZE:
+    #####:  555:            for (;; ++src) {
+        -:  556:                int v;
+    #####:  557:                if (src == bufsz)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  558:                    goto Exit;
+    #####:  559:                if ((v = decode_hex(buf[src])) == -1) {
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+    #####:  560:                    if (decoder->_hex_count == 0) {
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  561:                        ret = -1;
+    #####:  562:                        goto Exit;
+        -:  563:                    }
+        -:  564:                    /* the only characters that may appear after the chunk size are BWS, semicolon, or CRLF */
+    #####:  565:                    switch (buf[src]) {
+branch  0 never executed
+branch  1 never executed
+    #####:  566:                    case ' ':
+        -:  567:                    case '\011':
+        -:  568:                    case ';':
+        -:  569:                    case '\012':
+        -:  570:                    case '\015':
+    #####:  571:                        break;
+    #####:  572:                    default:
+    #####:  573:                        ret = -1;
+    #####:  574:                        goto Exit;
+        -:  575:                    }
+    #####:  576:                    break;
+        -:  577:                }
+    #####:  578:                if (decoder->_hex_count == sizeof(size_t) * 2) {
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  579:                    ret = -1;
+    #####:  580:                    goto Exit;
+        -:  581:                }
+    #####:  582:                decoder->bytes_left_in_chunk = decoder->bytes_left_in_chunk * 16 + v;
+    #####:  583:                ++decoder->_hex_count;
+        -:  584:            }
+    #####:  585:            decoder->_hex_count = 0;
+    #####:  586:            decoder->_state = CHUNKED_IN_CHUNK_EXT;
+        -:  587:        /* fallthru */
+    #####:  588:        case CHUNKED_IN_CHUNK_EXT:
+        -:  589:            /* RFC 7230 A.2 "Line folding in chunk extensions is disallowed" */
+    #####:  590:            for (;; ++src) {
+    #####:  591:                if (src == bufsz)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  592:                    goto Exit;
+    #####:  593:                if (buf[src] == '\015') {
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  594:                    break;
+    #####:  595:                } else if (buf[src] == '\012') {
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  596:                    ret = -1;
+    #####:  597:                    goto Exit;
+        -:  598:                }
+        -:  599:            }
+    #####:  600:            ++src;
+    #####:  601:            decoder->_state = CHUNKED_IN_CHUNK_HEADER_EXPECT_LF;
+        -:  602:        /* fallthru */
+    #####:  603:        case CHUNKED_IN_CHUNK_HEADER_EXPECT_LF:
+    #####:  604:            if (src == bufsz)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  605:                goto Exit;
+    #####:  606:            if (buf[src] != '\012') {
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  607:                ret = -1;
+    #####:  608:                goto Exit;
+        -:  609:            }
+    #####:  610:            ++src;
+    #####:  611:            if (decoder->bytes_left_in_chunk == 0) {
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  612:                if (decoder->consume_trailer) {
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  613:                    decoder->_state = CHUNKED_IN_TRAILERS_LINE_HEAD;
+    #####:  614:                    break;
+        -:  615:                } else {
+    #####:  616:                    goto Complete;
+        -:  617:                }
+        -:  618:            }
+    #####:  619:            decoder->_state = CHUNKED_IN_CHUNK_DATA;
+        -:  620:        /* fallthru */
+    #####:  621:        case CHUNKED_IN_CHUNK_DATA: {
+    #####:  622:            size_t avail = bufsz - src;
+    #####:  623:            if (avail < decoder->bytes_left_in_chunk) {
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  624:                if (dst != src)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  625:                    memmove(buf + dst, buf + src, avail);
+    #####:  626:                src += avail;
+    #####:  627:                dst += avail;
+    #####:  628:                decoder->bytes_left_in_chunk -= avail;
+    #####:  629:                goto Exit;
+        -:  630:            }
+    #####:  631:            if (dst != src)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  632:                memmove(buf + dst, buf + src, decoder->bytes_left_in_chunk);
+    #####:  633:            src += decoder->bytes_left_in_chunk;
+    #####:  634:            dst += decoder->bytes_left_in_chunk;
+    #####:  635:            decoder->bytes_left_in_chunk = 0;
+    #####:  636:            decoder->_state = CHUNKED_IN_CHUNK_DATA_EXPECT_CR;
+        -:  637:        }
+        -:  638:        /* fallthru */
+    #####:  639:        case CHUNKED_IN_CHUNK_DATA_EXPECT_CR:
+    #####:  640:            if (src == bufsz)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  641:                goto Exit;
+    #####:  642:            if (buf[src] != '\015') {
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  643:                ret = -1;
+    #####:  644:                goto Exit;
+        -:  645:            }
+    #####:  646:            ++src;
+    #####:  647:            decoder->_state = CHUNKED_IN_CHUNK_DATA_EXPECT_LF;
+        -:  648:        /* fallthru */
+    #####:  649:        case CHUNKED_IN_CHUNK_DATA_EXPECT_LF:
+    #####:  650:            if (src == bufsz)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  651:                goto Exit;
+    #####:  652:            if (buf[src] != '\012') {
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  653:                ret = -1;
+    #####:  654:                goto Exit;
+        -:  655:            }
+    #####:  656:            ++src;
+    #####:  657:            decoder->_state = CHUNKED_IN_CHUNK_SIZE;
+    #####:  658:            break;
+    #####:  659:        case CHUNKED_IN_TRAILERS_LINE_HEAD:
+    #####:  660:            for (;; ++src) {
+    #####:  661:                if (src == bufsz)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  662:                    goto Exit;
+    #####:  663:                if (buf[src] != '\015')
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  664:                    break;
+        -:  665:            }
+    #####:  666:            if (buf[src++] == '\012')
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  667:                goto Complete;
+    #####:  668:            decoder->_state = CHUNKED_IN_TRAILERS_LINE_MIDDLE;
+        -:  669:        /* fallthru */
+    #####:  670:        case CHUNKED_IN_TRAILERS_LINE_MIDDLE:
+    #####:  671:            for (;; ++src) {
+    #####:  672:                if (src == bufsz)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  673:                    goto Exit;
+    #####:  674:                if (buf[src] == '\012')
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  675:                    break;
+        -:  676:            }
+    #####:  677:            ++src;
+    #####:  678:            decoder->_state = CHUNKED_IN_TRAILERS_LINE_HEAD;
+    #####:  679:            break;
+    #####:  680:        default:
+    #####:  681:            assert(!"decoder is corrupt");
+call    0 never executed
+        -:  682:        }
+        -:  683:    }
+        -:  684:
+    #####:  685:Complete:
+    #####:  686:    ret = bufsz - src;
+    #####:  687:Exit:
+    #####:  688:    if (dst != src)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  689:        memmove(buf + dst, buf + src, bufsz - src);
+    #####:  690:    *_bufsz = dst;
+        -:  691:    /* if incomplete but the overhead of the chunked encoding is >=100KB and >80%, signal an error */
+    #####:  692:    if (ret == -2) {
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  693:        decoder->_total_overhead += bufsz - dst;
+    #####:  694:        if (decoder->_total_overhead >= 100 * 1024 && decoder->_total_read - decoder->_total_overhead < decoder->_total_read / 4)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed
+    #####:  695:            ret = -1;
+        -:  696:    }
+    #####:  697:    return ret;
+        -:  698:}
+        -:  699:
+function phr_decode_chunked_is_in_data called 0 returned 0% blocks executed 0%
+    #####:  700:int phr_decode_chunked_is_in_data(struct phr_chunked_decoder *decoder)
+        -:  701:{
+    #####:  702:    return decoder->_state == CHUNKED_IN_CHUNK_DATA;
+        -:  703:}
+        -:  704:
+        -:  705:#undef CHECK_EOF
+        -:  706:#undef EXPECT_CHAR
+        -:  707:#undef ADVANCE_TOKEN

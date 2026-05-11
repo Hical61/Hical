@@ -1,0 +1,145 @@
+        -:    0:Source:/usr/include/boost/asio/ip/resolver_base.hpp
+        -:    1://
+        -:    2:// ip/resolver_base.hpp
+        -:    3:// ~~~~~~~~~~~~~~~~~~~~
+        -:    4://
+        -:    5:// Copyright (c) 2003-2023 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+        -:    6://
+        -:    7:// Distributed under the Boost Software License, Version 1.0. (See accompanying
+        -:    8:// file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+        -:    9://
+        -:   10:
+        -:   11:#ifndef BOOST_ASIO_IP_RESOLVER_BASE_HPP
+        -:   12:#define BOOST_ASIO_IP_RESOLVER_BASE_HPP
+        -:   13:
+        -:   14:#if defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   15:# pragma once
+        -:   16:#endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   17:
+        -:   18:#include <boost/asio/detail/config.hpp>
+        -:   19:#include <boost/asio/detail/socket_types.hpp>
+        -:   20:
+        -:   21:#include <boost/asio/detail/push_options.hpp>
+        -:   22:
+        -:   23:namespace boost {
+        -:   24:namespace asio {
+        -:   25:namespace ip {
+        -:   26:
+        -:   27:/// The resolver_base class is used as a base for the basic_resolver class
+        -:   28:/// templates to provide a common place to define the flag constants.
+        -:   29:class resolver_base
+        -:   30:{
+        -:   31:public:
+        -:   32:#if defined(GENERATING_DOCUMENTATION)
+        -:   33:  /// A bitmask type (C++ Std [lib.bitmask.types]).
+        -:   34:  typedef unspecified flags;
+        -:   35:
+        -:   36:  /// Determine the canonical name of the host specified in the query.
+        -:   37:  static const flags canonical_name = implementation_defined;
+        -:   38:
+        -:   39:  /// Indicate that returned endpoint is intended for use as a locally bound
+        -:   40:  /// socket endpoint.
+        -:   41:  static const flags passive = implementation_defined;
+        -:   42:
+        -:   43:  /// Host name should be treated as a numeric string defining an IPv4 or IPv6
+        -:   44:  /// address and no name resolution should be attempted.
+        -:   45:  static const flags numeric_host = implementation_defined;
+        -:   46:
+        -:   47:  /// Service name should be treated as a numeric string defining a port number
+        -:   48:  /// and no name resolution should be attempted.
+        -:   49:  static const flags numeric_service = implementation_defined;
+        -:   50:
+        -:   51:  /// If the query protocol family is specified as IPv6, return IPv4-mapped
+        -:   52:  /// IPv6 addresses on finding no IPv6 addresses.
+        -:   53:  static const flags v4_mapped = implementation_defined;
+        -:   54:
+        -:   55:  /// If used with v4_mapped, return all matching IPv6 and IPv4 addresses.
+        -:   56:  static const flags all_matching = implementation_defined;
+        -:   57:
+        -:   58:  /// Only return IPv4 addresses if a non-loopback IPv4 address is configured
+        -:   59:  /// for the system. Only return IPv6 addresses if a non-loopback IPv6 address
+        -:   60:  /// is configured for the system.
+        -:   61:  static const flags address_configured = implementation_defined;
+        -:   62:#else
+        -:   63:  enum flags
+        -:   64:  {
+        -:   65:    canonical_name = BOOST_ASIO_OS_DEF(AI_CANONNAME),
+        -:   66:    passive = BOOST_ASIO_OS_DEF(AI_PASSIVE),
+        -:   67:    numeric_host = BOOST_ASIO_OS_DEF(AI_NUMERICHOST),
+        -:   68:    numeric_service = BOOST_ASIO_OS_DEF(AI_NUMERICSERV),
+        -:   69:    v4_mapped = BOOST_ASIO_OS_DEF(AI_V4MAPPED),
+        -:   70:    all_matching = BOOST_ASIO_OS_DEF(AI_ALL),
+        -:   71:    address_configured = BOOST_ASIO_OS_DEF(AI_ADDRCONFIG)
+        -:   72:  };
+        -:   73:
+        -:   74:  // Implement bitmask operations as shown in C++ Std [lib.bitmask.types].
+        -:   75:
+        -:   76:  friend flags operator&(flags x, flags y)
+        -:   77:  {
+        -:   78:    return static_cast<flags>(
+        -:   79:        static_cast<unsigned int>(x) & static_cast<unsigned int>(y));
+        -:   80:  }
+        -:   81:
+        -:   82:  friend flags operator|(flags x, flags y)
+        -:   83:  {
+        -:   84:    return static_cast<flags>(
+        -:   85:        static_cast<unsigned int>(x) | static_cast<unsigned int>(y));
+        -:   86:  }
+        -:   87:
+        -:   88:  friend flags operator^(flags x, flags y)
+        -:   89:  {
+        -:   90:    return static_cast<flags>(
+        -:   91:        static_cast<unsigned int>(x) ^ static_cast<unsigned int>(y));
+        -:   92:  }
+        -:   93:
+        -:   94:  friend flags operator~(flags x)
+        -:   95:  {
+        -:   96:    return static_cast<flags>(~static_cast<unsigned int>(x));
+        -:   97:  }
+        -:   98:
+        -:   99:  friend flags& operator&=(flags& x, flags y)
+        -:  100:  {
+        -:  101:    x = x & y;
+        -:  102:    return x;
+        -:  103:  }
+        -:  104:
+        -:  105:  friend flags& operator|=(flags& x, flags y)
+        -:  106:  {
+        -:  107:    x = x | y;
+        -:  108:    return x;
+        -:  109:  }
+        -:  110:
+        -:  111:  friend flags& operator^=(flags& x, flags y)
+        -:  112:  {
+        -:  113:    x = x ^ y;
+        -:  114:    return x;
+        -:  115:  }
+        -:  116:#endif
+        -:  117:
+        -:  118:protected:
+        -:  119:  /// Protected destructor to prevent deletion through this type.
+    #####:  120:  ~resolver_base()
+        -:  121:  {
+    #####:  122:  }
+------------------
+_ZN5boost4asio2ip13resolver_baseD2Ev:
+function _ZN5boost4asio2ip13resolver_baseD2Ev called 0 returned 0% blocks executed 0%
+    #####:  120:  ~resolver_base()
+        -:  121:  {
+    #####:  122:  }
+------------------
+_ZN5boost4asio2ip13resolver_baseD2Ev:
+function _ZN5boost4asio2ip13resolver_baseD2Ev called 0 returned 0% blocks executed 0%
+    #####:  120:  ~resolver_base()
+        -:  121:  {
+    #####:  122:  }
+------------------
+        -:  123:};
+        -:  124:
+        -:  125:} // namespace ip
+        -:  126:} // namespace asio
+        -:  127:} // namespace boost
+        -:  128:
+        -:  129:#include <boost/asio/detail/pop_options.hpp>
+        -:  130:
+        -:  131:#endif // BOOST_ASIO_IP_RESOLVER_BASE_HPP

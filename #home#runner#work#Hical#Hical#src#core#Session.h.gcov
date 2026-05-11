@@ -1,0 +1,679 @@
+        -:    0:Source:/home/runner/work/Hical/Hical/src/core/Session.h
+        -:    1:#pragma once
+        -:    2:
+        -:    3:#include "Cookie.h"
+        -:    4:#include "HttpRequest.h"
+        -:    5:#include "HttpResponse.h"
+        -:    6:#include "Middleware.h"
+        -:    7:#include <any>
+        -:    8:#include <atomic>
+        -:    9:#include <chrono>
+        -:   10:#include <functional>
+        -:   11:#include <memory>
+        -:   12:#include <mutex>
+        -:   13:#include <shared_mutex>
+        -:   14:#include <optional>
+        -:   15:#include <string>
+        -:   16:#include <unordered_map>
+        -:   17:
+        -:   18:namespace hical
+        -:   19:{
+        -:   20:
+        -:   21:	/**
+        -:   22:	 * @brief Session 数据存储（单个会话）
+        -:   23:	 * 以字符串键存储任意类型的值（std::any）。
+        -:   24:	 * 线程安全：内部持有 mutex，set/get/touch 均在锁内执行，
+        -:   25:	 * 可安全地被多个 IO 线程并发访问（Keep-Alive 多路复用场景）。
+        -:   26:	 */
+        -:   27:	class Session
+        -:   28:	{
+        -:   29:	public:
+     717*:   30:		explicit Session(std::string id) : id_(std::move(id))
+        -:   31:		{
+     717*:   32:		}
+------------------
+_ZN5hical7SessionC2ENSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEE:
+function _ZN5hical7SessionC2ENSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEE called 0 returned 0% blocks executed 0%
+    #####:   30:		explicit Session(std::string id) : id_(std::move(id))
+call    0 never executed
+call    1 never executed
+call    2 never executed
+call    3 never executed
+call    4 never executed
+call    5 never executed
+call    6 never executed
+call    7 never executed
+        -:   31:		{
+    #####:   32:		}
+------------------
+_ZN5hical7SessionC2ENSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEE:
+function _ZN5hical7SessionC2ENSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEE called 717 returned 100% blocks executed 100%
+      717:   30:		explicit Session(std::string id) : id_(std::move(id))
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+call    5 returned 100%
+call    6 returned 100%
+call    7 returned 100%
+        -:   31:		{
+      717:   32:		}
+------------------
+        -:   33:
+        -:   34:		/**
+        -:   35:		 * @brief 获取 Session ID（只读，构造后不变，无需加锁）
+        -:   36:		 * @return Session ID 字符串
+        -:   37:		 */
+     311*:   38:		const std::string& id() const
+        -:   39:		{
+     311*:   40:			return id_;
+        -:   41:		}
+------------------
+_ZNK5hical7Session2idB5cxx11Ev:
+function _ZNK5hical7Session2idB5cxx11Ev called 0 returned 0% blocks executed 0%
+    #####:   38:		const std::string& id() const
+        -:   39:		{
+    #####:   40:			return id_;
+        -:   41:		}
+------------------
+_ZNK5hical7Session2idB5cxx11Ev:
+function _ZNK5hical7Session2idB5cxx11Ev called 311 returned 100% blocks executed 100%
+      311:   38:		const std::string& id() const
+        -:   39:		{
+      311:   40:			return id_;
+        -:   41:		}
+------------------
+        -:   42:
+        -:   43:		/**
+        -:   44:		 * @brief 设置 Session 属性
+        -:   45:		 * @param key 属性键
+        -:   46:		 * @param value 任意类型的值
+        -:   47:		 */
+function _ZN5hical7Session3setERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEESt3any called 512 returned 100% blocks executed 78%
+      512:   48:		void set(const std::string& key, std::any value)
+        -:   49:		{
+      512:   50:			std::unique_lock lk(mutex_);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+      512:   51:			data_[key] = std::move(value);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+      512:   52:			dirty_ = true;
+      512:   53:		}
+call    0 returned 100%
+call    1 never executed
+        -:   54:
+        -:   55:		/**
+        -:   56:		 * @brief 获取 Session 属性（类型安全版）
+        -:   57:		 * @tparam T 期望类型
+        -:   58:		 * @param key 属性键
+        -:   59:		 * @return 找到且类型匹配返回值，否则 nullopt
+        -:   60:		 */
+        -:   61:		template <typename T>
+      109:   62:		std::optional<T> get(const std::string& key) const
+        -:   63:		{
+      109:   64:			std::shared_lock lk(mutex_);
+      109:   65:			auto it = data_.find(key);
+      109:   66:			if (it == data_.end())
+        -:   67:			{
+       1*:   68:				return std::nullopt;
+        -:   69:			}
+      108:   70:			if (it->second.type() != typeid(T))
+        -:   71:			{
+       1*:   72:				return std::nullopt;
+        -:   73:			}
+      107:   74:			return std::any_cast<T>(it->second);
+      109:   75:		}
+------------------
+_ZNK5hical7Session3getIiEESt8optionalIT_ERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEE:
+function _ZNK5hical7Session3getIiEESt8optionalIT_ERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEE called 103 returned 100% blocks executed 64%
+      103:   62:		std::optional<T> get(const std::string& key) const
+        -:   63:		{
+      103:   64:			std::shared_lock lk(mutex_);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+      103:   65:			auto it = data_.find(key);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+      103:   66:			if (it == data_.end())
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 0% (fallthrough)
+branch  3 taken 100%
+        -:   67:			{
+    #####:   68:				return std::nullopt;
+call    0 never executed
+        -:   69:			}
+      103:   70:			if (it->second.type() != typeid(T))
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 0% (fallthrough)
+branch  4 taken 100%
+        -:   71:			{
+    #####:   72:				return std::nullopt;
+call    0 never executed
+        -:   73:			}
+      103:   74:			return std::any_cast<T>(it->second);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+      103:   75:		}
+call    0 returned 100%
+call    1 never executed
+------------------
+_ZNK5hical7Session3getINSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEEESt8optionalIT_ERKS7_:
+function _ZNK5hical7Session3getINSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEEESt8optionalIT_ERKS7_ called 6 returned 100% blocks executed 87%
+        6:   62:		std::optional<T> get(const std::string& key) const
+        -:   63:		{
+        6:   64:			std::shared_lock lk(mutex_);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        6:   65:			auto it = data_.find(key);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        6:   66:			if (it == data_.end())
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 17% (fallthrough)
+branch  3 taken 83%
+        -:   67:			{
+        1:   68:				return std::nullopt;
+call    0 returned 100%
+        -:   69:			}
+        5:   70:			if (it->second.type() != typeid(T))
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 20% (fallthrough)
+branch  4 taken 80%
+        -:   71:			{
+        1:   72:				return std::nullopt;
+call    0 returned 100%
+        -:   73:			}
+        4:   74:			return std::any_cast<T>(it->second);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+call    5 returned 100%
+        6:   75:		}
+call    0 returned 100%
+call    1 never executed
+------------------
+        -:   76:
+        -:   77:		/**
+        -:   78:		 * @brief 检查属性是否存在
+        -:   79:		 * @param key 属性键
+        -:   80:		 * @return true 如果存在
+        -:   81:		 */
+function _ZNK5hical7Session3hasERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEE called 9 returned 100% blocks executed 78%
+        9:   82:		bool has(const std::string& key) const
+        -:   83:		{
+        9:   84:			std::shared_lock lk(mutex_);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       18:   85:			return data_.count(key) > 0;
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        9:   86:		}
+call    0 returned 100%
+call    1 never executed
+        -:   87:
+        -:   88:		/**
+        -:   89:		 * @brief 删除指定属性
+        -:   90:		 * @param key 属性键
+        -:   91:		 */
+function _ZN5hical7Session6removeERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEE called 1 returned 100% blocks executed 71%
+        1:   92:		void remove(const std::string& key)
+        -:   93:		{
+        1:   94:			std::unique_lock lk(mutex_);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:   95:			data_.erase(key);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:   96:		}
+call    0 returned 100%
+call    1 never executed
+        -:   97:
+        -:   98:		/**
+        -:   99:		 * @brief 清空所有属性（不销毁 Session 本身）
+        -:  100:		 */
+function _ZN5hical7Session5clearEv called 1 returned 100% blocks executed 100%
+        1:  101:		void clear()
+        -:  102:		{
+        1:  103:			std::unique_lock lk(mutex_);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  104:			data_.clear();
+call    0 returned 100%
+        1:  105:		}
+call    0 returned 100%
+        -:  106:
+        -:  107:		/**
+        -:  108:		 * @brief 从另一个 Session 迁移所有数据（用于 ID 再生场景）
+        -:  109:		 * @param other 源 Session，迁移后 other 的数据被清空
+        -:  110:		 * @note 调用者需确保 other 不会被并发访问（通常在 SessionManager 写锁保护下调用）
+        -:  111:		 */
+     102*:  112:		void migrateFrom(Session& other)
+        -:  113:		{
+        -:  114:			// 先锁自己，再锁 other（固定顺序避免死锁：按 this 指针地址排序）
+     102*:  115:			if (this < &other)
+        -:  116:			{
+    #####:  117:				std::unique_lock lk1(mutex_);
+    #####:  118:				std::unique_lock lk2(other.mutex_);
+    #####:  119:				data_ = std::move(other.data_);
+    #####:  120:				other.data_.clear();
+    #####:  121:			}
+        -:  122:			else
+        -:  123:			{
+     102*:  124:				std::unique_lock lk1(other.mutex_);
+     102*:  125:				std::unique_lock lk2(mutex_);
+     102*:  126:				data_ = std::move(other.data_);
+     102*:  127:				other.data_.clear();
+     102*:  128:			}
+     102*:  129:			dirty_ = true;
+     102*:  130:		}
+------------------
+_ZN5hical7Session11migrateFromERS0_:
+function _ZN5hical7Session11migrateFromERS0_ called 0 returned 0% blocks executed 0%
+    #####:  112:		void migrateFrom(Session& other)
+        -:  113:		{
+        -:  114:			// 先锁自己，再锁 other（固定顺序避免死锁：按 this 指针地址排序）
+    #####:  115:			if (this < &other)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  116:			{
+    #####:  117:				std::unique_lock lk1(mutex_);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  118:				std::unique_lock lk2(other.mutex_);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  119:				data_ = std::move(other.data_);
+call    0 never executed
+call    1 never executed
+    #####:  120:				other.data_.clear();
+call    0 never executed
+    #####:  121:			}
+call    0 never executed
+call    1 never executed
+call    2 never executed
+        -:  122:			else
+        -:  123:			{
+    #####:  124:				std::unique_lock lk1(other.mutex_);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  125:				std::unique_lock lk2(mutex_);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  126:				data_ = std::move(other.data_);
+call    0 never executed
+call    1 never executed
+    #####:  127:				other.data_.clear();
+call    0 never executed
+    #####:  128:			}
+call    0 never executed
+call    1 never executed
+call    2 never executed
+    #####:  129:			dirty_ = true;
+    #####:  130:		}
+------------------
+_ZN5hical7Session11migrateFromERS0_:
+function _ZN5hical7Session11migrateFromERS0_ called 102 returned 100% blocks executed 46%
+      102:  112:		void migrateFrom(Session& other)
+        -:  113:		{
+        -:  114:			// 先锁自己，再锁 other（固定顺序避免死锁：按 this 指针地址排序）
+      102:  115:			if (this < &other)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:  116:			{
+    #####:  117:				std::unique_lock lk1(mutex_);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  118:				std::unique_lock lk2(other.mutex_);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  119:				data_ = std::move(other.data_);
+call    0 never executed
+call    1 never executed
+    #####:  120:				other.data_.clear();
+call    0 never executed
+    #####:  121:			}
+call    0 never executed
+call    1 never executed
+call    2 never executed
+        -:  122:			else
+        -:  123:			{
+      102:  124:				std::unique_lock lk1(other.mutex_);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+      102:  125:				std::unique_lock lk2(mutex_);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+      102:  126:				data_ = std::move(other.data_);
+call    0 returned 100%
+call    1 returned 100%
+      102:  127:				other.data_.clear();
+call    0 returned 100%
+      102:  128:			}
+call    0 returned 100%
+call    1 returned 100%
+call    2 never executed
+      102:  129:			dirty_ = true;
+      102:  130:		}
+------------------
+        -:  131:
+        -:  132:		/**
+        -:  133:		 * @brief 标记 Session 为已修改（由 set() 自动触发，通常无需手动调用）
+        -:  134:		 */
+function _ZN5hical7Session9markDirtyEv called 1 returned 100% blocks executed 100%
+        1:  135:		void markDirty()
+        -:  136:		{
+        1:  137:			std::unique_lock lk(mutex_);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        1:  138:			dirty_ = true;
+        1:  139:		}
+call    0 returned 100%
+        -:  140:
+        -:  141:		/**
+        -:  142:		 * @brief 是否已修改
+        -:  143:		 * @return true 如果需要写回 Cookie
+        -:  144:		 */
+       2*:  145:		bool isDirty() const
+        -:  146:		{
+       2*:  147:			std::shared_lock lk(mutex_);
+       2*:  148:			return dirty_;
+       2*:  149:		}
+------------------
+_ZNK5hical7Session7isDirtyEv:
+function _ZNK5hical7Session7isDirtyEv called 0 returned 0% blocks executed 0%
+    #####:  145:		bool isDirty() const
+        -:  146:		{
+    #####:  147:			std::shared_lock lk(mutex_);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  148:			return dirty_;
+    #####:  149:		}
+call    0 never executed
+------------------
+_ZNK5hical7Session7isDirtyEv:
+function _ZNK5hical7Session7isDirtyEv called 2 returned 100% blocks executed 100%
+        2:  145:		bool isDirty() const
+        -:  146:		{
+        2:  147:			std::shared_lock lk(mutex_);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        2:  148:			return dirty_;
+        2:  149:		}
+call    0 returned 100%
+------------------
+        -:  150:
+        -:  151:		/**
+        -:  152:		 * @brief 更新最后访问时间（无锁，原子操作）
+        -:  153:		 */
+    #####:  154:		void touch()
+        -:  155:		{
+    #####:  156:			auto now = std::chrono::steady_clock::now();
+    #####:  157:			lastAccessNs_.store(now.time_since_epoch().count(), std::memory_order_release);
+    #####:  158:		}
+------------------
+_ZN5hical7Session5touchEv:
+function _ZN5hical7Session5touchEv called 0 returned 0% blocks executed 0%
+    #####:  154:		void touch()
+        -:  155:		{
+    #####:  156:			auto now = std::chrono::steady_clock::now();
+call    0 never executed
+    #####:  157:			lastAccessNs_.store(now.time_since_epoch().count(), std::memory_order_release);
+call    0 never executed
+call    1 never executed
+    #####:  158:		}
+------------------
+_ZN5hical7Session5touchEv:
+function _ZN5hical7Session5touchEv called 0 returned 0% blocks executed 0%
+    #####:  154:		void touch()
+        -:  155:		{
+    #####:  156:			auto now = std::chrono::steady_clock::now();
+call    0 never executed
+    #####:  157:			lastAccessNs_.store(now.time_since_epoch().count(), std::memory_order_release);
+call    0 never executed
+call    1 never executed
+    #####:  158:		}
+------------------
+        -:  159:
+        -:  160:		/**
+        -:  161:		 * @brief 获取最后访问时间（无锁，原子操作）
+        -:  162:		 */
+function _ZNK5hical7Session10lastAccessEv called 5 returned 100% blocks executed 70%
+        5:  163:		std::chrono::steady_clock::time_point lastAccess() const
+        -:  164:		{
+        5:  165:			auto ns = lastAccessNs_.load(std::memory_order_acquire);
+call    0 returned 100%
+        5:  166:			return std::chrono::steady_clock::time_point(std::chrono::steady_clock::duration(ns));
+call    0 returned 100%
+call    1 returned 100%
+        -:  167:		}
+        -:  168:
+        -:  169:	private:
+        -:  170:		std::string id_; ///< 构造后不可变，无需加锁
+        -:  171:		mutable std::shared_mutex mutex_;
+        -:  172:		std::unordered_map<std::string, std::any> data_;
+        -:  173:		bool dirty_ = false;
+        -:  174:		/// 最后访问时间（纳秒时间戳），无锁原子操作，消除与 SessionManager::mutex_ 的嵌套锁
+        -:  175:		std::atomic<int64_t> lastAccessNs_ {std::chrono::steady_clock::now().time_since_epoch().count()};
+        -:  176:	};
+        -:  177:
+        -:  178:	/**
+        -:  179:	 * @brief Session 配置选项
+        -:  180:	 */
+        -:  181:	struct SessionOptions
+        -:  182:	{
+        -:  183:		static constexpr int kDefaultMaxAge = 3600;           ///< 默认有效期 1 小时（秒）
+        -:  184:		static constexpr int kDefaultGcInterval = 300;        ///< 默认 GC 间隔 5 分钟（秒）
+        -:  185:		static constexpr size_t kDefaultMaxSessions = 100000; ///< 默认最大 Session 数量
+        -:  186:
+        -:  187:		std::string cookieName = "HICAL_SESSION"; ///< Session Cookie 名称
+        -:  188:		int maxAge = kDefaultMaxAge;              ///< Session 有效期（秒，默认 1 小时）
+        -:  189:		bool httpOnly = true;                     ///< Cookie HttpOnly（防 XSS）
+        -:  190:		bool secure = true;                       ///< Cookie Secure（仅 HTTPS，开发环境需显式关闭）
+        -:  191:		std::string sameSite = "Lax";             ///< Cookie SameSite 策略
+        -:  192:		std::string path = "/";                   ///< Cookie Path
+        -:  193:		int gcInterval = kDefaultGcInterval;      ///< 懒 GC 触发间隔（秒，默认 5 分钟）
+        -:  194:		size_t maxSessions = kDefaultMaxSessions; ///< 最大 Session 数量（0 = 不限制），防 DoS 内存耗尽
+        -:  195:	};
+        -:  196:
+        -:  197:	/**
+        -:  198:	 * @brief Session 管理器（内存存储实现）
+        -:  199:	 * 线程安全：所有操作加互斥锁。
+        -:  200:	 * 生命周期：通常作为全局单例，与服务器共存亡。
+        -:  201:	 * 用法：通过 makeSessionMiddleware() 集成到中间件管道。
+        -:  202:	 */
+        -:  203:	class SessionManager
+        -:  204:	{
+        -:  205:	public:
+function _ZN5hical14SessionManagerC2ENS_14SessionOptionsE called 11 returned 100% blocks executed 100%
+       11:  206:		explicit SessionManager(SessionOptions opts = {}) : opts_(std::move(opts))
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+        -:  207:		{
+       11:  208:		}
+        -:  209:
+        -:  210:		/**
+        -:  211:		 * @brief 根据 Session ID 查找 Session
+        -:  212:		 * @param id Session ID
+        -:  213:		 * @return 找到返回 Session 指针，否则 nullptr
+        -:  214:		 */
+        -:  215:		std::shared_ptr<Session> find(const std::string& id);
+        -:  216:
+        -:  217:		/**
+        -:  218:		 * @brief 创建新 Session
+        -:  219:		 * @return 新创建的 Session（已写入存储）
+        -:  220:		 */
+        -:  221:		std::shared_ptr<Session> create();
+        -:  222:
+        -:  223:		/**
+        -:  224:		 * @brief 销毁指定 Session（登出场景）
+        -:  225:		 * @param id Session ID
+        -:  226:		 */
+        -:  227:		void destroy(const std::string& id);
+        -:  228:
+        -:  229:		/**
+        -:  230:		 * @brief 重新生成 Session ID（防 Session Fixation 攻击）
+        -:  231:		 * 保留 Session 内的所有数据，仅更换 ID。旧 ID 立即失效。
+        -:  232:		 * 典型场景：用户登录成功后调用此方法，确保攻击者无法利用预设的 Session ID。
+        -:  233:		 * @param oldId 当前 Session ID
+        -:  234:		 * @return 拥有相同数据但新 ID 的 Session，旧 ID 不存在时返回 nullptr
+        -:  235:		 */
+        -:  236:		std::shared_ptr<Session> regenerate(const std::string& oldId);
+        -:  237:
+        -:  238:		/**
+        -:  239:		 * @brief 清理过期的 Session（应定期调用）
+        -:  240:		 * @param force true 时跳过 gcInterval 双重检查，强制执行清理
+        -:  241:		 */
+        -:  242:		void gc(bool force = true);
+        -:  243:
+        -:  244:		/**
+        -:  245:		 * @brief 获取当前活跃 Session 数量
+        -:  246:		 * @return Session 数量
+        -:  247:		 */
+        -:  248:		size_t count();
+        -:  249:
+        -:  250:		/**
+        -:  251:		 * @brief 获取配置选项
+        -:  252:		 * @return SessionOptions 常量引用
+        -:  253:		 */
+    #####:  254:		const SessionOptions& options() const
+        -:  255:		{
+    #####:  256:			return opts_;
+        -:  257:		}
+        -:  258:
+        -:  259:		/**
+        -:  260:		 * @brief 请求上下文属性键（Session 存入 HttpRequest attribute 时使用的键名）
+        -:  261:		 */
+        -:  262:		static constexpr const char* hSessionKey = "hical.session";
+        -:  263:
+        -:  264:	private:
+        -:  265:		/**
+        -:  266:		 * @brief 生成随机 Session ID（64 位十六进制）
+        -:  267:		 * @return Session ID 字符串
+        -:  268:		 */
+        -:  269:		static std::string generateId();
+        -:  270:
+        -:  271:		SessionOptions opts_;
+        -:  272:		mutable std::shared_mutex mutex_;
+        -:  273:		std::unordered_map<std::string, std::shared_ptr<Session>> store_;
+        -:  274:		/// 上次懒 GC 触发时间（在写锁保护下访问）
+        -:  275:		std::chrono::steady_clock::time_point lastGc_ = std::chrono::steady_clock::now();
+        -:  276:	};
+        -:  277:
+        -:  278:	/**
+        -:  279:	 * @brief 创建 Session 中间件
+        -:  280:	 * Session 中间件做三件事：
+        -:  281:	 * 1. 从请求 Cookie 中读取 Session ID，查找或创建 Session
+        -:  282:	 * 2. 将 Session 对象注入 HttpRequest attribute（键：SessionManager::hSessionKey）
+        -:  283:	 * 3. 请求处理完毕后，若 Session 被标记为 dirty，向响应写入 Set-Cookie
+        -:  284:	 * 用法：
+        -:  285:	 * ```cpp
+        -:  286:	 * auto sessionMgr = std::make_shared<hical::SessionManager>();
+        -:  287:	 * server.use(hical::makeSessionMiddleware(sessionMgr));
+        -:  288:	 * // 在路由处理器中访问 Session
+        -:  289:	 * server.router().get("/profile", [](const HttpRequest& req) -> HttpResponse {
+        -:  290:	 *     auto session = req.getAttribute<std::shared_ptr<hical::Session>>(
+        -:  291:	 *         hical::SessionManager::hSessionKey);
+        -:  292:	 *     if (session && (*session)->has("user")) {
+        -:  293:	 *         auto user = (*session)->get<std::string>("user");
+        -:  294:	 *         return HttpResponse::ok("Hello " + *user);
+        -:  295:	 *     }
+        -:  296:	 *     return HttpResponse::badRequest("Not logged in");
+        -:  297:	 * });
+        -:  298:	 * ```
+        -:  299:	 * @param manager Session 管理器（shared_ptr，可多个中间件共享同一个 manager）
+        -:  300:	 * @return MiddlewareHandler 可传入 server.use() 的中间件
+        -:  301:	 */
+        -:  302:	inline MiddlewareHandler makeSessionMiddleware(std::shared_ptr<SessionManager> manager)
+        -:  303:	{
+        -:  304:		return [manager](HttpRequest& req, MiddlewareNext next) -> Awaitable<HttpResponse>
+        -:  305:		{
+        -:  306:			const auto& opts = manager->options();
+        -:  307:
+        -:  308:			// 1. 从 Cookie 中读取 Session ID
+        -:  309:			auto sessionId = req.cookie(opts.cookieName);
+        -:  310:			std::shared_ptr<Session> session;
+        -:  311:
+        -:  312:			if (!sessionId.empty())
+        -:  313:			{
+        -:  314:				session = manager->find(sessionId);
+        -:  315:				// find() 内部会检查过期：过期 Session 被删除并返回 nullptr，
+        -:  316:				// 随后走 create() 分配新 ID，下方 sessionId != session->id()
+        -:  317:				// 会触发 Set-Cookie 将新 ID 写回客户端。
+        -:  318:			}
+        -:  319:			if (!session)
+        -:  320:			{
+        -:  321:				// 新建 Session（可能因达到上限返回 nullptr）
+        -:  322:				session = manager->create();
+        -:  323:				if (!session)
+        -:  324:				{
+        -:  325:					HttpResponse errRes;
+        -:  326:					errRes.setStatus(HttpStatusCode::hServiceUnavailable);
+        -:  327:					errRes.setBody("Service Unavailable: session store full");
+        -:  328:					co_return errRes;
+        -:  329:				}
+        -:  330:			}
+        -:  331:			session->touch();
+        -:  332:
+        -:  333:			// 2. 注入到请求 attribute
+        -:  334:			req.setAttribute(SessionManager::hSessionKey, session);
+        -:  335:
+        -:  336:			// 3. 执行后续中间件/路由
+        -:  337:			auto res = co_await next(req);
+        -:  338:
+        -:  339:			// 4. 如果 Session 被写过数据（dirty），刷新 Cookie
+        -:  340:			if (session->isDirty() || sessionId != session->id())
+        -:  341:			{
+        -:  342:				CookieOptions cookieOpts;
+        -:  343:				cookieOpts.maxAge = opts.maxAge;
+        -:  344:				cookieOpts.httpOnly = opts.httpOnly;
+        -:  345:				cookieOpts.secure = opts.secure;
+        -:  346:				cookieOpts.sameSite = opts.sameSite;
+        -:  347:				cookieOpts.path = opts.path;
+        -:  348:				res.setCookie(opts.cookieName, session->id(), cookieOpts);
+        -:  349:			}
+        -:  350:
+        -:  351:			co_return res;
+        -:  352:		};
+        -:  353:	}
+        -:  354:
+        -:  355:} // namespace hical

@@ -1,0 +1,147 @@
+        -:    0:Source:/usr/include/boost/asio/detached.hpp
+        -:    1://
+        -:    2:// detached.hpp
+        -:    3:// ~~~~~~~~~~~~
+        -:    4://
+        -:    5:// Copyright (c) 2003-2023 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+        -:    6://
+        -:    7:// Distributed under the Boost Software License, Version 1.0. (See accompanying
+        -:    8:// file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+        -:    9://
+        -:   10:
+        -:   11:#ifndef BOOST_ASIO_DETACHED_HPP
+        -:   12:#define BOOST_ASIO_DETACHED_HPP
+        -:   13:
+        -:   14:#if defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   15:# pragma once
+        -:   16:#endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   17:
+        -:   18:#include <boost/asio/detail/config.hpp>
+        -:   19:#include <memory>
+        -:   20:#include <boost/asio/detail/type_traits.hpp>
+        -:   21:
+        -:   22:#include <boost/asio/detail/push_options.hpp>
+        -:   23:
+        -:   24:namespace boost {
+        -:   25:namespace asio {
+        -:   26:
+        -:   27:/// A @ref completion_token type used to specify that an asynchronous operation
+        -:   28:/// is detached.
+        -:   29:/**
+        -:   30: * The detached_t class is used to indicate that an asynchronous operation is
+        -:   31: * detached. That is, there is no completion handler waiting for the
+        -:   32: * operation's result. A detached_t object may be passed as a handler to an
+        -:   33: * asynchronous operation, typically using the special value
+        -:   34: * @c boost::asio::detached. For example:
+        -:   35: *
+        -:   36: * @code my_socket.async_send(my_buffer, boost::asio::detached);
+        -:   37: * @endcode
+        -:   38: */
+        -:   39:class detached_t
+        -:   40:{
+        -:   41:public:
+        -:   42:  /// Constructor. 
+    9671*:   43:  BOOST_ASIO_CONSTEXPR detached_t()
+        -:   44:  {
+    9671*:   45:  }
+------------------
+_ZN5boost4asio10detached_tC2Ev:
+function _ZN5boost4asio10detached_tC2Ev called 37 returned 100% blocks executed 100%
+       37:   43:  BOOST_ASIO_CONSTEXPR detached_t()
+        -:   44:  {
+       37:   45:  }
+------------------
+_ZN5boost4asio10detached_tC2Ev:
+function _ZN5boost4asio10detached_tC2Ev called 9634 returned 100% blocks executed 100%
+     9634:   43:  BOOST_ASIO_CONSTEXPR detached_t()
+        -:   44:  {
+     9634:   45:  }
+------------------
+_ZN5boost4asio10detached_tC2Ev:
+function _ZN5boost4asio10detached_tC2Ev called 0 returned 0% blocks executed 0%
+    #####:   43:  BOOST_ASIO_CONSTEXPR detached_t()
+        -:   44:  {
+    #####:   45:  }
+------------------
+_ZN5boost4asio10detached_tC2Ev:
+function _ZN5boost4asio10detached_tC2Ev called 0 returned 0% blocks executed 0%
+    #####:   43:  BOOST_ASIO_CONSTEXPR detached_t()
+        -:   44:  {
+    #####:   45:  }
+------------------
+_ZN5boost4asio10detached_tC2Ev:
+function _ZN5boost4asio10detached_tC2Ev called 0 returned 0% blocks executed 0%
+    #####:   43:  BOOST_ASIO_CONSTEXPR detached_t()
+        -:   44:  {
+    #####:   45:  }
+------------------
+        -:   46:
+        -:   47:  /// Adapts an executor to add the @c detached_t completion token as the
+        -:   48:  /// default.
+        -:   49:  template <typename InnerExecutor>
+        -:   50:  struct executor_with_default : InnerExecutor
+        -:   51:  {
+        -:   52:    /// Specify @c detached_t as the default completion token type.
+        -:   53:    typedef detached_t default_completion_token_type;
+        -:   54:
+        -:   55:    /// Construct the adapted executor from the inner executor type.
+        -:   56:    executor_with_default(const InnerExecutor& ex) BOOST_ASIO_NOEXCEPT
+        -:   57:      : InnerExecutor(ex)
+        -:   58:    {
+        -:   59:    }
+        -:   60:
+        -:   61:    /// Convert the specified executor to the inner executor type, then use
+        -:   62:    /// that to construct the adapted executor.
+        -:   63:    template <typename OtherExecutor>
+        -:   64:    executor_with_default(const OtherExecutor& ex,
+        -:   65:        typename constraint<
+        -:   66:          is_convertible<OtherExecutor, InnerExecutor>::value
+        -:   67:        >::type = 0) BOOST_ASIO_NOEXCEPT
+        -:   68:      : InnerExecutor(ex)
+        -:   69:    {
+        -:   70:    }
+        -:   71:  };
+        -:   72:
+        -:   73:  /// Type alias to adapt an I/O object to use @c detached_t as its
+        -:   74:  /// default completion token type.
+        -:   75:#if defined(BOOST_ASIO_HAS_ALIAS_TEMPLATES) \
+        -:   76:  || defined(GENERATING_DOCUMENTATION)
+        -:   77:  template <typename T>
+        -:   78:  using as_default_on_t = typename T::template rebind_executor<
+        -:   79:      executor_with_default<typename T::executor_type> >::other;
+        -:   80:#endif // defined(BOOST_ASIO_HAS_ALIAS_TEMPLATES)
+        -:   81:       //   || defined(GENERATING_DOCUMENTATION)
+        -:   82:
+        -:   83:  /// Function helper to adapt an I/O object to use @c detached_t as its
+        -:   84:  /// default completion token type.
+        -:   85:  template <typename T>
+        -:   86:  static typename decay<T>::type::template rebind_executor<
+        -:   87:      executor_with_default<typename decay<T>::type::executor_type>
+        -:   88:    >::other
+        -:   89:  as_default_on(BOOST_ASIO_MOVE_ARG(T) object)
+        -:   90:  {
+        -:   91:    return typename decay<T>::type::template rebind_executor<
+        -:   92:        executor_with_default<typename decay<T>::type::executor_type>
+        -:   93:      >::other(BOOST_ASIO_MOVE_CAST(T)(object));
+        -:   94:  }
+        -:   95:};
+        -:   96:
+        -:   97:/// A @ref completion_token object used to specify that an asynchronous
+        -:   98:/// operation is detached.
+        -:   99:/**
+        -:  100: * See the documentation for boost::asio::detached_t for a usage example.
+        -:  101: */
+        -:  102:#if defined(BOOST_ASIO_HAS_CONSTEXPR) || defined(GENERATING_DOCUMENTATION)
+        -:  103:constexpr detached_t detached;
+        -:  104:#elif defined(BOOST_ASIO_MSVC)
+        -:  105:__declspec(selectany) detached_t detached;
+        -:  106:#endif
+        -:  107:
+        -:  108:} // namespace asio
+        -:  109:} // namespace boost
+        -:  110:
+        -:  111:#include <boost/asio/detail/pop_options.hpp>
+        -:  112:
+        -:  113:#include <boost/asio/impl/detached.hpp>
+        -:  114:
+        -:  115:#endif // BOOST_ASIO_DETACHED_HPP

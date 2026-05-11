@@ -1,0 +1,111 @@
+        -:    0:Source:/usr/include/boost/asio/traits/static_query.hpp
+        -:    1://
+        -:    2:// traits/static_query.hpp
+        -:    3:// ~~~~~~~~~~~~~~~~~~~~~~~
+        -:    4://
+        -:    5:// Copyright (c) 2003-2023 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+        -:    6://
+        -:    7:// Distributed under the Boost Software License, Version 1.0. (See accompanying
+        -:    8:// file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+        -:    9://
+        -:   10:
+        -:   11:#ifndef BOOST_ASIO_TRAITS_STATIC_QUERY_HPP
+        -:   12:#define BOOST_ASIO_TRAITS_STATIC_QUERY_HPP
+        -:   13:
+        -:   14:#if defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   15:# pragma once
+        -:   16:#endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   17:
+        -:   18:#include <boost/asio/detail/config.hpp>
+        -:   19:#include <boost/asio/detail/type_traits.hpp>
+        -:   20:
+        -:   21:#if defined(BOOST_ASIO_HAS_DECLTYPE) \
+        -:   22:  && defined(BOOST_ASIO_HAS_NOEXCEPT) \
+        -:   23:  && defined(BOOST_ASIO_HAS_CONSTEXPR) \
+        -:   24:  && defined(BOOST_ASIO_HAS_VARIABLE_TEMPLATES) \
+        -:   25:  && defined(BOOST_ASIO_HAS_WORKING_EXPRESSION_SFINAE)
+        -:   26:# define BOOST_ASIO_HAS_DEDUCED_STATIC_QUERY_TRAIT 1
+        -:   27:#endif // defined(BOOST_ASIO_HAS_DECLTYPE)
+        -:   28:       //   && defined(BOOST_ASIO_HAS_NOEXCEPT)
+        -:   29:       //   && defined(BOOST_ASIO_HAS_CONSTEXPR)
+        -:   30:       //   && defined(BOOST_ASIO_HAS_VARIABLE_TEMPLATES)
+        -:   31:       //   && defined(BOOST_ASIO_HAS_WORKING_EXPRESSION_SFINAE)
+        -:   32:
+        -:   33:#include <boost/asio/detail/push_options.hpp>
+        -:   34:
+        -:   35:namespace boost {
+        -:   36:namespace asio {
+        -:   37:namespace traits {
+        -:   38:
+        -:   39:template <typename T, typename Property, typename = void>
+        -:   40:struct static_query_default;
+        -:   41:
+        -:   42:template <typename T, typename Property, typename = void>
+        -:   43:struct static_query;
+        -:   44:
+        -:   45:} // namespace traits
+        -:   46:namespace detail {
+        -:   47:
+        -:   48:struct no_static_query
+        -:   49:{
+        -:   50:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_valid = false);
+        -:   51:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_noexcept = false);
+        -:   52:};
+        -:   53:
+        -:   54:template <typename T, typename Property, typename = void>
+        -:   55:struct static_query_trait :
+        -:   56:  conditional<
+        -:   57:    is_same<T, typename decay<T>::type>::value
+        -:   58:      && is_same<Property, typename decay<Property>::type>::value,
+        -:   59:    no_static_query,
+        -:   60:    traits::static_query<
+        -:   61:      typename decay<T>::type,
+        -:   62:      typename decay<Property>::type>
+        -:   63:  >::type
+        -:   64:{
+        -:   65:};
+        -:   66:
+        -:   67:#if defined(BOOST_ASIO_HAS_DEDUCED_STATIC_QUERY_TRAIT)
+        -:   68:
+        -:   69:template <typename T, typename Property>
+        -:   70:struct static_query_trait<T, Property,
+        -:   71:  typename void_type<
+        -:   72:    decltype(decay<Property>::type::template static_query_v<T>)
+        -:   73:  >::type>
+        -:   74:{
+        -:   75:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_valid = true);
+        -:   76:
+        -:   77:  using result_type = decltype(
+        -:   78:      decay<Property>::type::template static_query_v<T>);
+        -:   79:
+        -:   80:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_noexcept =
+        -:   81:    noexcept(decay<Property>::type::template static_query_v<T>));
+        -:   82:
+    #####:   83:  static BOOST_ASIO_CONSTEXPR result_type value() noexcept(is_noexcept)
+        -:   84:  {
+    #####:   85:    return decay<Property>::type::template static_query_v<T>;
+        -:   86:  }
+        -:   87:};
+        -:   88:
+        -:   89:#endif // defined(BOOST_ASIO_HAS_DEDUCED_STATIC_QUERY_TRAIT)
+        -:   90:
+        -:   91:} // namespace detail
+        -:   92:namespace traits {
+        -:   93:
+        -:   94:template <typename T, typename Property, typename>
+        -:   95:struct static_query_default : detail::static_query_trait<T, Property>
+        -:   96:{
+        -:   97:};
+        -:   98:
+        -:   99:template <typename T, typename Property, typename>
+        -:  100:struct static_query : static_query_default<T, Property>
+        -:  101:{
+        -:  102:};
+        -:  103:
+        -:  104:} // namespace traits
+        -:  105:} // namespace asio
+        -:  106:} // namespace boost
+        -:  107:
+        -:  108:#include <boost/asio/detail/pop_options.hpp>
+        -:  109:
+        -:  110:#endif // BOOST_ASIO_TRAITS_STATIC_QUERY_HPP

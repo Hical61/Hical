@@ -1,0 +1,340 @@
+        -:    0:Source:/home/runner/work/Hical/Hical/src/core/WsDeflate.cpp
+        -:    1:#include "WsDeflate.h"
+        -:    2:#include <cstring>
+        -:    3:#include <stdexcept>
+        -:    4:#include <zlib.h>
+        -:    5:
+        -:    6:namespace hical
+        -:    7:{
+        -:    8:
+        -:    9:	struct WsDeflateContext::Impl
+        -:   10:	{
+        -:   11:		z_stream deflateStream {};
+        -:   12:		z_stream inflateStream {};
+        -:   13:		Config config;
+        -:   14:		bool deflateInit = false;
+        -:   15:		bool inflateInit = false;
+        -:   16:
+function _ZN5hical16WsDeflateContext4ImplC2ERKNS0_6ConfigE called 0 returned 0% blocks executed 0%
+    #####:   17:		explicit Impl(const Config& cfg) : config(cfg)
+        -:   18:		{
+        -:   19:			// deflateInit2: 负窗口位数 = raw deflate（无 zlib/gzip header/trailer），符合 RFC 7692
+    #####:   20:			int ret = deflateInit2(&deflateStream,
+call    0 never executed
+        -:   21:								   config.compLevel,
+        -:   22:								   Z_DEFLATED,
+        -:   23:								   -config.serverMaxWindowBits,
+        -:   24:								   config.memLevel,
+        -:   25:								   Z_DEFAULT_STRATEGY);
+    #####:   26:			if (ret != Z_OK)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:   27:			{
+    #####:   28:				throw std::runtime_error("WsDeflateContext: deflateInit2 failed");
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+call    5 never executed
+        -:   29:			}
+    #####:   30:			deflateInit = true;
+        -:   31:
+        -:   32:			// inflateInit2: 同理，raw inflate
+    #####:   33:			ret = inflateInit2(&inflateStream, -config.clientMaxWindowBits);
+call    0 never executed
+    #####:   34:			if (ret != Z_OK)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:   35:			{
+    #####:   36:				deflateEnd(&deflateStream);
+call    0 never executed
+    #####:   37:				throw std::runtime_error("WsDeflateContext: inflateInit2 failed");
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+call    5 never executed
+        -:   38:			}
+    #####:   39:			inflateInit = true;
+    #####:   40:		}
+        -:   41:
+function _ZN5hical16WsDeflateContext4ImplD2Ev called 0 returned 0% blocks executed 0%
+    #####:   42:		~Impl()
+        -:   43:		{
+    #####:   44:			if (deflateInit)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:   45:			{
+    #####:   46:				deflateEnd(&deflateStream);
+call    0 never executed
+        -:   47:			}
+    #####:   48:			if (inflateInit)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:   49:			{
+    #####:   50:				inflateEnd(&inflateStream);
+call    0 never executed
+        -:   51:			}
+    #####:   52:		}
+        -:   53:
+        -:   54:		Impl(const Impl&) = delete;
+        -:   55:		Impl& operator=(const Impl&) = delete;
+        -:   56:	};
+        -:   57:
+function _ZN5hical16WsDeflateContextC2ERKNS0_6ConfigE called 0 returned 0% blocks executed 0%
+    #####:   58:	WsDeflateContext::WsDeflateContext(const Config& config) : m_impl(std::make_unique<Impl>(config))
+call    0 never executed
+        -:   59:	{
+    #####:   60:	}
+        -:   61:
+function _ZN5hical16WsDeflateContextD2Ev called 0 returned 0% blocks executed 0%
+    #####:   62:	WsDeflateContext::~WsDeflateContext() = default;
+call    0 never executed
+        -:   63:
+function _ZN5hical16WsDeflateContextC2EOS0_ called 0 returned 0% blocks executed 0%
+    #####:   64:	WsDeflateContext::WsDeflateContext(WsDeflateContext&& other) noexcept = default;
+call    0 never executed
+        -:   65:
+function _ZN5hical16WsDeflateContextaSEOS0_ called 0 returned 0% blocks executed 0%
+    #####:   66:	WsDeflateContext& WsDeflateContext::operator=(WsDeflateContext&& other) noexcept = default;
+call    0 never executed
+        -:   67:
+function _ZN5hical16WsDeflateContext8compressB5cxx11ESt17basic_string_viewIcSt11char_traitsIcEE called 0 returned 0% blocks executed 0%
+    #####:   68:	std::string WsDeflateContext::compress(std::string_view input)
+        -:   69:	{
+    #####:   70:		auto& s = m_impl->deflateStream;
+call    0 never executed
+        -:   71:
+        -:   72:		// server_no_context_takeover: 每条消息重置压缩状态
+    #####:   73:		if (m_impl->config.serverNoContextTakeover)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+        -:   74:		{
+    #####:   75:			deflateReset(&s);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:   76:		}
+        -:   77:
+        -:   78:		// 输出缓冲区：预估压缩后大小（最坏情况下 deflate 输出略大于输入）
+    #####:   79:		std::string output;
+call    0 never executed
+    #####:   80:		output.resize(deflateBound(&s, static_cast<uLong>(input.size())));
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+branch  5 never executed (fallthrough)
+branch  6 never executed (throw)
+        -:   81:
+    #####:   82:		s.next_in = reinterpret_cast<Bytef*>(const_cast<char*>(input.data()));
+call    0 never executed
+    #####:   83:		s.avail_in = static_cast<uInt>(input.size());
+call    0 never executed
+    #####:   84:		s.next_out = reinterpret_cast<Bytef*>(output.data());
+call    0 never executed
+    #####:   85:		s.avail_out = static_cast<uInt>(output.size());
+call    0 never executed
+        -:   86:
+    #####:   87:		int ret = deflate(&s, Z_SYNC_FLUSH);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:   88:		if (ret != Z_OK)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:   89:		{
+    #####:   90:			throw std::runtime_error("WsDeflateContext::compress: deflate failed");
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+call    5 never executed
+        -:   91:		}
+        -:   92:
+    #####:   93:		size_t produced = output.size() - s.avail_out;
+call    0 never executed
+    #####:   94:		output.resize(produced);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:   95:
+        -:   96:		// RFC 7692 §7.2.1: Z_SYNC_FLUSH 在输出末尾追加 0x00 0x00 0xFF 0xFF。
+        -:   97:		// 压缩帧在发送前必须去除这 4 字节 sync marker。
+    #####:   98:		constexpr uint8_t kSyncMarker[] = {0x00, 0x00, 0xFF, 0xFF};
+    #####:   99:		if (output.size() >= 4 && std::memcmp(output.data() + output.size() - 4, kSyncMarker, 4) == 0)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+call    3 never executed
+call    4 never executed
+branch  5 never executed (fallthrough)
+branch  6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed
+        -:  100:		{
+    #####:  101:			output.resize(output.size() - 4);
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+        -:  102:		}
+        -:  103:
+    #####:  104:		return output;
+    =====:  105:	}
+call    0 never executed
+        -:  106:
+function _ZN5hical16WsDeflateContext10decompressB5cxx11ESt17basic_string_viewIcSt11char_traitsIcEEm called 0 returned 0% blocks executed 0%
+    #####:  107:	std::string WsDeflateContext::decompress(std::string_view input, size_t maxOutputSize)
+        -:  108:	{
+    #####:  109:		auto& s = m_impl->inflateStream;
+call    0 never executed
+        -:  110:
+        -:  111:		// client_no_context_takeover: 每条消息重置解压状态
+    #####:  112:		if (m_impl->config.clientNoContextTakeover)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+        -:  113:		{
+    #####:  114:			inflateReset(&s);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:  115:		}
+        -:  116:
+        -:  117:		// RFC 7692 §7.2.2: 解压前在输入末尾追加 sync marker
+    #####:  118:		std::string inputWithSync;
+call    0 never executed
+    #####:  119:		inputWithSync.reserve(input.size() + 4);
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+    #####:  120:		inputWithSync.append(input);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  121:		inputWithSync.append("\x00\x00\xFF\xFF", 4);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:  122:
+    #####:  123:		std::string output;
+call    0 never executed
+    #####:  124:		constexpr size_t kChunkSize = 4096;
+    #####:  125:		output.resize(kChunkSize);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:  126:
+    #####:  127:		s.next_in = reinterpret_cast<Bytef*>(inputWithSync.data());
+call    0 never executed
+    #####:  128:		s.avail_in = static_cast<uInt>(inputWithSync.size());
+call    0 never executed
+        -:  129:
+    #####:  130:		size_t totalProduced = 0;
+        -:  131:
+        -:  132:		for (;;)
+        -:  133:		{
+    #####:  134:			if (totalProduced >= output.size())
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+        -:  135:			{
+    #####:  136:				output.resize(output.size() * 2);
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+        -:  137:			}
+        -:  138:
+        -:  139:			// zip bomb 防护：解压输出超过上限时中止
+    #####:  140:			if (maxOutputSize > 0 && totalProduced > maxOutputSize)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed
+        -:  141:			{
+    #####:  142:				throw std::runtime_error("WsDeflateContext::decompress: output exceeds maxOutputSize");
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+call    4 never executed
+call    5 never executed
+        -:  143:			}
+        -:  144:
+    #####:  145:			s.next_out = reinterpret_cast<Bytef*>(output.data() + totalProduced);
+call    0 never executed
+    #####:  146:			s.avail_out = static_cast<uInt>(output.size() - totalProduced);
+call    0 never executed
+        -:  147:
+    #####:  148:			int ret = inflate(&s, Z_SYNC_FLUSH);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  149:			totalProduced = output.size() - s.avail_out;
+call    0 never executed
+        -:  150:
+    #####:  151:			if (ret == Z_STREAM_END || (ret == Z_OK && s.avail_in == 0 && s.avail_out > 0))
+branch  0 never executed (fallthrough)
+branch  1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed
+        -:  152:			{
+        -:  153:				break;
+        -:  154:			}
+    #####:  155:			if (ret == Z_OK && s.avail_out == 0)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed
+        -:  156:			{
+    #####:  157:				continue; // 输出缓冲区满，扩容后继续
+        -:  158:			}
+    #####:  159:			if (ret == Z_BUF_ERROR && s.avail_out == 0)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed
+        -:  160:			{
+    #####:  161:				continue; // 需要更多输出空间
+        -:  162:			}
+        -:  163:
+    #####:  164:			throw std::runtime_error("WsDeflateContext::decompress: inflate failed, ret=" + std::to_string(ret));
+call    0 never executed
+call    1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed (throw)
+call    5 never executed
+branch  6 never executed (fallthrough)
+branch  7 never executed (throw)
+call    8 never executed
+call    9 never executed
+call   10 never executed
+call   11 never executed
+call   12 never executed
+call   13 never executed
+    #####:  165:		}
+        -:  166:
+    #####:  167:		output.resize(totalProduced);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  168:		return output;
+    #####:  169:	}
+call    0 never executed
+call    1 never executed
+call    2 never executed
+        -:  170:
+        -:  171:} // namespace hical

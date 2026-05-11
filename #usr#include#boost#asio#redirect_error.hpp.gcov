@@ -1,0 +1,72 @@
+        -:    0:Source:/usr/include/boost/asio/redirect_error.hpp
+        -:    1://
+        -:    2:// redirect_error.hpp
+        -:    3:// ~~~~~~~~~~~~~~~~~~
+        -:    4://
+        -:    5:// Copyright (c) 2003-2023 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+        -:    6://
+        -:    7:// Distributed under the Boost Software License, Version 1.0. (See accompanying
+        -:    8:// file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+        -:    9://
+        -:   10:
+        -:   11:#ifndef BOOST_ASIO_REDIRECT_ERROR_HPP
+        -:   12:#define BOOST_ASIO_REDIRECT_ERROR_HPP
+        -:   13:
+        -:   14:#if defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   15:# pragma once
+        -:   16:#endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   17:
+        -:   18:#include <boost/asio/detail/config.hpp>
+        -:   19:#include <boost/asio/detail/type_traits.hpp>
+        -:   20:#include <boost/system/error_code.hpp>
+        -:   21:
+        -:   22:#include <boost/asio/detail/push_options.hpp>
+        -:   23:
+        -:   24:namespace boost {
+        -:   25:namespace asio {
+        -:   26:
+        -:   27:/// A @ref completion_token adapter used to specify that an error produced by an
+        -:   28:/// asynchronous operation is captured to an error_code variable.
+        -:   29:/**
+        -:   30: * The redirect_error_t class is used to indicate that any error_code produced
+        -:   31: * by an asynchronous operation is captured to a specified variable.
+        -:   32: */
+        -:   33:template <typename CompletionToken>
+        -:   34:class redirect_error_t
+        -:   35:{
+        -:   36:public:
+        -:   37:  /// Constructor. 
+        -:   38:  template <typename T>
+function _ZN5boost4asio16redirect_error_tINS0_15use_awaitable_tINS0_15any_io_executorEEEEC2IRKS4_EEOT_RNS_6system10error_codeE called 68 returned 100% blocks executed 100%
+       68:   39:  redirect_error_t(BOOST_ASIO_MOVE_ARG(T) completion_token,
+        -:   40:      boost::system::error_code& ec)
+        -:   41:    : token_(BOOST_ASIO_MOVE_CAST(T)(completion_token)),
+       68:   42:      ec_(ec)
+        -:   43:  {
+       68:   44:  }
+        -:   45:
+        -:   46://private:
+        -:   47:  CompletionToken token_;
+        -:   48:  boost::system::error_code& ec_;
+        -:   49:};
+        -:   50:
+        -:   51:/// Adapt a @ref completion_token to capture error_code values to a variable.
+        -:   52:template <typename CompletionToken>
+function _ZN5boost4asio14redirect_errorIRKNS0_15use_awaitable_tINS0_15any_io_executorEEEEENS0_16redirect_error_tINSt5decayIT_E4typeEEEOS9_RNS_6system10error_codeE called 68 returned 100% blocks executed 100%
+       68:   53:inline redirect_error_t<typename decay<CompletionToken>::type> redirect_error(
+        -:   54:    BOOST_ASIO_MOVE_ARG(CompletionToken) completion_token,
+        -:   55:    boost::system::error_code& ec)
+        -:   56:{
+       68:   57:  return redirect_error_t<typename decay<CompletionToken>::type>(
+call    0 returned 100%
+       68:   58:      BOOST_ASIO_MOVE_CAST(CompletionToken)(completion_token), ec);
+        -:   59:}
+        -:   60:
+        -:   61:} // namespace asio
+        -:   62:} // namespace boost
+        -:   63:
+        -:   64:#include <boost/asio/detail/pop_options.hpp>
+        -:   65:
+        -:   66:#include <boost/asio/impl/redirect_error.hpp>
+        -:   67:
+        -:   68:#endif // BOOST_ASIO_REDIRECT_ERROR_HPP

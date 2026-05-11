@@ -1,0 +1,1247 @@
+        -:    0:Source:/usr/include/boost/asio/detail/impl/signal_set_service.ipp
+        -:    1://
+        -:    2:// detail/impl/signal_set_service.ipp
+        -:    3:// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        -:    4://
+        -:    5:// Copyright (c) 2003-2023 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+        -:    6://
+        -:    7:// Distributed under the Boost Software License, Version 1.0. (See accompanying
+        -:    8:// file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+        -:    9://
+        -:   10:
+        -:   11:#ifndef BOOST_ASIO_DETAIL_IMPL_SIGNAL_SET_SERVICE_IPP
+        -:   12:#define BOOST_ASIO_DETAIL_IMPL_SIGNAL_SET_SERVICE_IPP
+        -:   13:
+        -:   14:#if defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   15:# pragma once
+        -:   16:#endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   17:
+        -:   18:#include <boost/asio/detail/config.hpp>
+        -:   19:
+        -:   20:#include <cstring>
+        -:   21:#include <stdexcept>
+        -:   22:#include <boost/asio/detail/signal_blocker.hpp>
+        -:   23:#include <boost/asio/detail/signal_set_service.hpp>
+        -:   24:#include <boost/asio/detail/static_mutex.hpp>
+        -:   25:#include <boost/asio/detail/throw_exception.hpp>
+        -:   26:
+        -:   27:#if defined(BOOST_ASIO_HAS_IO_URING_AS_DEFAULT)
+        -:   28:# include <boost/asio/detail/io_uring_service.hpp>
+        -:   29:#else // defined(BOOST_ASIO_HAS_IO_URING_AS_DEFAULT)
+        -:   30:# include <boost/asio/detail/reactor.hpp>
+        -:   31:#endif // defined(BOOST_ASIO_HAS_IO_URING_AS_DEFAULT)
+        -:   32:
+        -:   33:#include <boost/asio/detail/push_options.hpp>
+        -:   34:
+        -:   35:namespace boost {
+        -:   36:namespace asio {
+        -:   37:namespace detail {
+        -:   38:
+        -:   39:struct signal_state
+        -:   40:{
+        -:   41:  // Mutex used for protecting global state.
+        -:   42:  static_mutex mutex_;
+        -:   43:
+        -:   44:  // The read end of the pipe used for signal notifications.
+        -:   45:  int read_descriptor_;
+        -:   46:
+        -:   47:  // The write end of the pipe used for signal notifications.
+        -:   48:  int write_descriptor_;
+        -:   49:
+        -:   50:  // Whether the signal state has been prepared for a fork.
+        -:   51:  bool fork_prepared_;
+        -:   52:
+        -:   53:  // The head of a linked list of all signal_set_service instances.
+        -:   54:  class signal_set_service* service_list_;
+        -:   55:
+        -:   56:  // A count of the number of objects that are registered for each signal.
+        -:   57:  std::size_t registration_count_[max_signal_number];
+        -:   58:
+        -:   59:  // The flags used for each registered signal.
+        -:   60:  signal_set_base::flags_t flags_[max_signal_number];
+        -:   61:};
+        -:   62:
+function _ZN5boost4asio6detail16get_signal_stateEv called 336 returned 100% blocks executed 100%
+      336:   63:signal_state* get_signal_state()
+        -:   64:{
+        -:   65:  static signal_state state = {
+        -:   66:    BOOST_ASIO_STATIC_MUTEX_INIT, -1, -1, false, 0,
+        -:   67:    { 0 }, { signal_set_base::flags_t() } };
+      336:   68:  return &state;
+        -:   69:}
+        -:   70:
+function boost_asio_signal_handler called 0 returned 0% blocks executed 0%
+    #####:   71:void boost_asio_signal_handler(int signal_number)
+        -:   72:{
+        -:   73:#if defined(BOOST_ASIO_WINDOWS) \
+        -:   74:  || defined(BOOST_ASIO_WINDOWS_RUNTIME) \
+        -:   75:  || defined(__CYGWIN__)
+        -:   76:  signal_set_service::deliver_signal(signal_number);
+        -:   77:#else // defined(BOOST_ASIO_WINDOWS)
+        -:   78:      //   || defined(BOOST_ASIO_WINDOWS_RUNTIME)
+        -:   79:      //   || defined(__CYGWIN__)
+    #####:   80:  int saved_errno = errno;
+    #####:   81:  signal_state* state = get_signal_state();
+call    0 never executed
+    #####:   82:  signed_size_type result = ::write(state->write_descriptor_,
+call    0 never executed
+        -:   83:      &signal_number, sizeof(signal_number));
+        -:   84:  (void)result;
+    #####:   85:  errno = saved_errno;
+        -:   86:#endif // defined(BOOST_ASIO_WINDOWS)
+        -:   87:       //   || defined(BOOST_ASIO_WINDOWS_RUNTIME)
+        -:   88:       //   || defined(__CYGWIN__)
+        -:   89:
+        -:   90:#if defined(BOOST_ASIO_HAS_SIGNAL) && !defined(BOOST_ASIO_HAS_SIGACTION)
+        -:   91:  ::signal(signal_number, boost_asio_signal_handler);
+        -:   92:#endif // defined(BOOST_ASIO_HAS_SIGNAL) && !defined(BOOST_ASIO_HAS_SIGACTION)
+    #####:   93:}
+        -:   94:
+        -:   95:#if !defined(BOOST_ASIO_WINDOWS) \
+        -:   96:  && !defined(BOOST_ASIO_WINDOWS_RUNTIME) \
+        -:   97:  && !defined(__CYGWIN__)
+        -:   98:class signal_set_service::pipe_read_op :
+        -:   99:# if defined(BOOST_ASIO_HAS_IO_URING_AS_DEFAULT)
+        -:  100:  public io_uring_operation
+        -:  101:# else // defined(BOOST_ASIO_HAS_IO_URING_AS_DEFAULT)
+        -:  102:  public reactor_op
+        -:  103:# endif // defined(BOOST_ASIO_HAS_IO_URING_AS_DEFAULT)
+        -:  104:{
+        -:  105:public:
+        -:  106:# if defined(BOOST_ASIO_HAS_IO_URING_AS_DEFAULT)
+        -:  107:  pipe_read_op()
+        -:  108:    : io_uring_operation(boost::system::error_code(), &pipe_read_op::do_prepare,
+        -:  109:        &pipe_read_op::do_perform, pipe_read_op::do_complete)
+        -:  110:  {
+        -:  111:  }
+        -:  112:
+        -:  113:  static void do_prepare(io_uring_operation*, ::io_uring_sqe* sqe)
+        -:  114:  {
+        -:  115:    signal_state* state = get_signal_state();
+        -:  116:
+        -:  117:    int fd = state->read_descriptor_;
+        -:  118:    ::io_uring_prep_poll_add(sqe, fd, POLLIN);
+        -:  119:  }
+        -:  120:
+        -:  121:  static bool do_perform(io_uring_operation*, bool)
+        -:  122:  {
+        -:  123:    signal_state* state = get_signal_state();
+        -:  124:
+        -:  125:    int fd = state->read_descriptor_;
+        -:  126:    int signal_number = 0;
+        -:  127:    while (::read(fd, &signal_number, sizeof(int)) == sizeof(int))
+        -:  128:      if (signal_number >= 0 && signal_number < max_signal_number)
+        -:  129:        signal_set_service::deliver_signal(signal_number);
+        -:  130:
+        -:  131:    return false;
+        -:  132:  }
+        -:  133:# else // defined(BOOST_ASIO_HAS_IO_URING_AS_DEFAULT)
+function _ZN5boost4asio6detail18signal_set_service12pipe_read_opC2Ev called 28 returned 100% blocks executed 100%
+       28:  134:  pipe_read_op()
+       56:  135:    : reactor_op(boost::system::error_code(),
+       28:  136:        &pipe_read_op::do_perform, pipe_read_op::do_complete)
+call    0 returned 100%
+call    1 returned 100%
+        -:  137:  {
+       28:  138:  }
+        -:  139:
+function _ZN5boost4asio6detail18signal_set_service12pipe_read_op10do_performEPNS1_10reactor_opE called 0 returned 0% blocks executed 0%
+    #####:  140:  static status do_perform(reactor_op*)
+        -:  141:  {
+    #####:  142:    signal_state* state = get_signal_state();
+call    0 never executed
+        -:  143:
+    #####:  144:    int fd = state->read_descriptor_;
+    #####:  145:    int signal_number = 0;
+    #####:  146:    while (::read(fd, &signal_number, sizeof(int)) == sizeof(int))
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+branch  3 never executed
+branch  4 never executed (fallthrough)
+    #####:  147:      if (signal_number >= 0 && signal_number < max_signal_number)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed
+    #####:  148:        signal_set_service::deliver_signal(signal_number);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:  149:
+    #####:  150:    return not_done;
+        -:  151:  }
+        -:  152:# endif // defined(BOOST_ASIO_HAS_IO_URING_AS_DEFAULT)
+        -:  153:
+function _ZN5boost4asio6detail18signal_set_service12pipe_read_op11do_completeEPvPNS1_19scheduler_operationERKNS_6system10error_codeEm called 28 returned 100% blocks executed 100%
+       28:  154:  static void do_complete(void* /*owner*/, operation* base,
+        -:  155:      const boost::system::error_code& /*ec*/,
+        -:  156:      std::size_t /*bytes_transferred*/)
+        -:  157:  {
+       28:  158:    pipe_read_op* o(static_cast<pipe_read_op*>(base));
+       28:  159:    delete o;
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+call    2 returned 100%
+call    3 returned 100%
+       28:  160:  }
+        -:  161:};
+        -:  162:#endif // !defined(BOOST_ASIO_WINDOWS)
+        -:  163:       //   && !defined(BOOST_ASIO_WINDOWS_RUNTIME)
+        -:  164:       //   && !defined(__CYGWIN__)
+        -:  165:
+function _ZN5boost4asio6detail18signal_set_serviceC2ERNS0_17execution_contextE called 28 returned 100% blocks executed 92%
+       28:  166:signal_set_service::signal_set_service(execution_context& context)
+        -:  167:  : execution_context_service_base<signal_set_service>(context),
+       56:  168:    scheduler_(boost::asio::use_service<scheduler_impl>(context)),
+        -:  169:#if !defined(BOOST_ASIO_WINDOWS) \
+        -:  170:  && !defined(BOOST_ASIO_WINDOWS_RUNTIME) \
+        -:  171:  && !defined(__CYGWIN__)
+        -:  172:# if defined(BOOST_ASIO_HAS_IO_URING_AS_DEFAULT)
+        -:  173:    io_uring_service_(boost::asio::use_service<io_uring_service>(context)),
+        -:  174:# else // defined(BOOST_ASIO_HAS_IO_URING_AS_DEFAULT)
+       28:  175:    reactor_(boost::asio::use_service<reactor>(context)),
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  176:# endif // defined(BOOST_ASIO_HAS_IO_URING_AS_DEFAULT)
+        -:  177:#endif // !defined(BOOST_ASIO_WINDOWS)
+        -:  178:       //   && !defined(BOOST_ASIO_WINDOWS_RUNTIME)
+        -:  179:       //   && !defined(__CYGWIN__)
+       28:  180:    next_(0),
+       28:  181:    prev_(0)
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:  182:{
+       28:  183:  get_signal_state()->mutex_.init();
+call    0 returned 100%
+call    1 returned 100%
+        -:  184:
+        -:  185:#if !defined(BOOST_ASIO_WINDOWS) \
+        -:  186:  && !defined(BOOST_ASIO_WINDOWS_RUNTIME) \
+        -:  187:  && !defined(__CYGWIN__)
+        -:  188:# if defined(BOOST_ASIO_HAS_IO_URING_AS_DEFAULT)
+        -:  189:  io_uring_service_.init_task();
+        -:  190:# else // defined(BOOST_ASIO_HAS_IO_URING_AS_DEFAULT)
+       28:  191:  reactor_.init_task();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  192:# endif // defined(BOOST_ASIO_HAS_IO_URING_AS_DEFAULT)
+        -:  193:#endif // !defined(BOOST_ASIO_WINDOWS)
+        -:  194:       //   && !defined(BOOST_ASIO_WINDOWS_RUNTIME)
+        -:  195:       //   && !defined(__CYGWIN__)
+        -:  196:
+     1848:  197:  for (int i = 0; i < max_signal_number; ++i)
+branch  0 taken 98%
+branch  1 taken 2% (fallthrough)
+     1820:  198:    registrations_[i] = 0;
+        -:  199:
+       28:  200:  add_service(this);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       28:  201:}
+call    0 never executed
+        -:  202:
+       56:  203:signal_set_service::~signal_set_service()
+        -:  204:{
+       28:  205:  remove_service(this);
+       56:  206:}
+------------------
+_ZN5boost4asio6detail18signal_set_serviceD0Ev:
+function _ZN5boost4asio6detail18signal_set_serviceD0Ev called 28 returned 100% blocks executed 100%
+       28:  203:signal_set_service::~signal_set_service()
+        -:  204:{
+        -:  205:  remove_service(this);
+       28:  206:}
+call    0 returned 100%
+call    1 returned 100%
+------------------
+_ZN5boost4asio6detail18signal_set_serviceD2Ev:
+function _ZN5boost4asio6detail18signal_set_serviceD2Ev called 28 returned 100% blocks executed 100%
+       28:  203:signal_set_service::~signal_set_service()
+        -:  204:{
+       28:  205:  remove_service(this);
+call    0 returned 100%
+       28:  206:}
+call    0 returned 100%
+------------------
+        -:  207:
+function _ZN5boost4asio6detail18signal_set_service8shutdownEv called 56 returned 100% blocks executed 73%
+       56:  208:void signal_set_service::shutdown()
+        -:  209:{
+       56:  210:  remove_service(this);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  211:
+       56:  212:  op_queue<operation> ops;
+call    0 returned 100%
+        -:  213:
+     3696:  214:  for (int i = 0; i < max_signal_number; ++i)
+branch  0 taken 98%
+branch  1 taken 2% (fallthrough)
+        -:  215:  {
+     3640:  216:    registration* reg = registrations_[i];
+     3640:  217:    while (reg)
+branch  0 taken 0%
+branch  1 taken 100% (fallthrough)
+        -:  218:    {
+    #####:  219:      ops.push(*reg->queue_);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  220:      reg = reg->next_in_table_;
+        -:  221:    }
+        -:  222:  }
+        -:  223:
+       56:  224:  scheduler_.abandon_operations(ops);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       56:  225:}
+call    0 returned 100%
+call    1 never executed
+        -:  226:
+function _ZN5boost4asio6detail18signal_set_service11notify_forkENS0_17execution_context10fork_eventE called 0 returned 0% blocks executed 0%
+    #####:  227:void signal_set_service::notify_fork(execution_context::fork_event fork_ev)
+        -:  228:{
+        -:  229:#if !defined(BOOST_ASIO_WINDOWS) \
+        -:  230:  && !defined(BOOST_ASIO_WINDOWS_RUNTIME) \
+        -:  231:  && !defined(__CYGWIN__)
+    #####:  232:  signal_state* state = get_signal_state();
+call    0 never executed
+    #####:  233:  static_mutex::scoped_lock lock(state->mutex_);
+call    0 never executed
+        -:  234:
+    #####:  235:  switch (fork_ev)
+branch  0 never executed
+branch  1 never executed
+branch  2 never executed
+branch  3 never executed
+        -:  236:  {
+    #####:  237:  case execution_context::fork_prepare:
+        -:  238:    {
+    #####:  239:      int read_descriptor = state->read_descriptor_;
+    #####:  240:      state->fork_prepared_ = true;
+    #####:  241:      lock.unlock();
+call    0 never executed
+        -:  242:# if defined(BOOST_ASIO_HAS_IO_URING_AS_DEFAULT)
+        -:  243:      (void)read_descriptor;
+        -:  244:      io_uring_service_.deregister_io_object(io_object_data_);
+        -:  245:      io_uring_service_.cleanup_io_object(io_object_data_);
+        -:  246:# else // defined(BOOST_ASIO_HAS_IO_URING_AS_DEFAULT)
+    #####:  247:      reactor_.deregister_internal_descriptor(read_descriptor, reactor_data_);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  248:      reactor_.cleanup_descriptor_data(reactor_data_);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:  249:# endif // defined(BOOST_ASIO_HAS_IO_URING_AS_DEFAULT)
+        -:  250:    }
+    #####:  251:    break;
+    #####:  252:  case execution_context::fork_parent:
+    #####:  253:    if (state->fork_prepared_)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  254:    {
+    #####:  255:      int read_descriptor = state->read_descriptor_;
+    #####:  256:      state->fork_prepared_ = false;
+    #####:  257:      lock.unlock();
+call    0 never executed
+        -:  258:# if defined(BOOST_ASIO_HAS_IO_URING_AS_DEFAULT)
+        -:  259:      (void)read_descriptor;
+        -:  260:      io_uring_service_.register_internal_io_object(io_object_data_,
+        -:  261:          io_uring_service::read_op, new pipe_read_op);
+        -:  262:# else // defined(BOOST_ASIO_HAS_IO_URING_AS_DEFAULT)
+    #####:  263:      reactor_.register_internal_descriptor(reactor::read_op,
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  264:          read_descriptor, reactor_data_, new pipe_read_op);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+call    4 never executed
+branch  5 never executed (fallthrough)
+branch  6 never executed (throw)
+call    7 never executed
+        -:  265:# endif // defined(BOOST_ASIO_HAS_IO_URING_AS_DEFAULT)
+        -:  266:    }
+    #####:  267:    break;
+    #####:  268:  case execution_context::fork_child:
+    #####:  269:    if (state->fork_prepared_)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  270:    {
+    #####:  271:      boost::asio::detail::signal_blocker blocker;
+call    0 never executed
+    #####:  272:      close_descriptors();
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  273:      open_descriptors();
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  274:      int read_descriptor = state->read_descriptor_;
+    #####:  275:      state->fork_prepared_ = false;
+    #####:  276:      lock.unlock();
+call    0 never executed
+        -:  277:# if defined(BOOST_ASIO_HAS_IO_URING_AS_DEFAULT)
+        -:  278:      (void)read_descriptor;
+        -:  279:      io_uring_service_.register_internal_io_object(io_object_data_,
+        -:  280:          io_uring_service::read_op, new pipe_read_op);
+        -:  281:# else // defined(BOOST_ASIO_HAS_IO_URING_AS_DEFAULT)
+    #####:  282:      reactor_.register_internal_descriptor(reactor::read_op,
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  283:          read_descriptor, reactor_data_, new pipe_read_op);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+call    4 never executed
+branch  5 never executed (fallthrough)
+branch  6 never executed (throw)
+call    7 never executed
+        -:  284:# endif // defined(BOOST_ASIO_HAS_IO_URING_AS_DEFAULT)
+    #####:  285:    }
+call    0 never executed
+call    1 never executed
+    #####:  286:    break;
+    #####:  287:  default:
+    #####:  288:    break;
+        -:  289:  }
+        -:  290:#else // !defined(BOOST_ASIO_WINDOWS)
+        -:  291:      //   && !defined(BOOST_ASIO_WINDOWS_RUNTIME)
+        -:  292:      //   && !defined(__CYGWIN__)
+        -:  293:  (void)fork_ev;
+        -:  294:#endif // !defined(BOOST_ASIO_WINDOWS)
+        -:  295:       //   && !defined(BOOST_ASIO_WINDOWS_RUNTIME)
+        -:  296:       //   && !defined(__CYGWIN__)
+    #####:  297:}
+call    0 never executed
+call    1 never executed
+        -:  298:
+function _ZN5boost4asio6detail18signal_set_service9constructERNS2_19implementation_typeE called 28 returned 100% blocks executed 100%
+       28:  299:void signal_set_service::construct(
+        -:  300:    signal_set_service::implementation_type& impl)
+        -:  301:{
+       28:  302:  impl.signals_ = 0;
+       28:  303:}
+        -:  304:
+function _ZN5boost4asio6detail18signal_set_service7destroyERNS2_19implementation_typeE called 28 returned 100% blocks executed 67%
+       28:  305:void signal_set_service::destroy(
+        -:  306:    signal_set_service::implementation_type& impl)
+        -:  307:{
+       28:  308:  boost::system::error_code ignored_ec;
+       28:  309:  clear(impl, ignored_ec);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       28:  310:  cancel(impl, ignored_ec);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       28:  311:}
+        -:  312:
+function _ZN5boost4asio6detail18signal_set_service3addERNS2_19implementation_typeEiNS0_15signal_set_base5flagsERNS_6system10error_codeE called 56 returned 100% blocks executed 46%
+       56:  313:boost::system::error_code signal_set_service::add(
+        -:  314:    signal_set_service::implementation_type& impl, int signal_number,
+        -:  315:    signal_set_base::flags_t f, boost::system::error_code& ec)
+        -:  316:{
+        -:  317:  // Check that the signal number is valid.
+       56:  318:  if (signal_number < 0 || signal_number >= max_signal_number)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+branch  2 taken 0% (fallthrough)
+branch  3 taken 100%
+        -:  319:  {
+    #####:  320:    ec = boost::asio::error::invalid_argument;
+call    0 never executed
+    #####:  321:    return ec;
+        -:  322:  }
+        -:  323:
+        -:  324:  // Check that the specified flags are supported.
+        -:  325:#if !defined(BOOST_ASIO_HAS_SIGACTION)
+        -:  326:  if (f != signal_set_base::flags::dont_care)
+        -:  327:  {
+        -:  328:    ec = boost::asio::error::operation_not_supported;
+        -:  329:    return ec;
+        -:  330:  }
+        -:  331:#endif // !defined(BOOST_ASIO_HAS_SIGACTION)
+        -:  332:
+       56:  333:  signal_state* state = get_signal_state();
+call    0 returned 100%
+       56:  334:  static_mutex::scoped_lock lock(state->mutex_);
+call    0 returned 100%
+        -:  335:
+        -:  336:  // Find the appropriate place to insert the registration.
+       56:  337:  registration** insertion_point = &impl.signals_;
+       56:  338:  registration* next = impl.signals_;
+       84:  339:  while (next && next->signal_number_ < signal_number)
+branch  0 taken 33% (fallthrough)
+branch  1 taken 67%
+branch  2 taken 100%
+branch  3 taken 0% (fallthrough)
+        -:  340:  {
+       28:  341:    insertion_point = &next->next_in_set_;
+       28:  342:    next = next->next_in_set_;
+        -:  343:  }
+        -:  344:
+        -:  345:  // Only do something if the signal is not already registered.
+      56*:  346:  if (next == 0 || next->signal_number_ != signal_number)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+branch  2 never executed (fallthrough)
+branch  3 never executed
+        -:  347:  {
+       56:  348:    registration* new_registration = new registration;
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+        -:  349:
+        -:  350:#if defined(BOOST_ASIO_HAS_SIGNAL) || defined(BOOST_ASIO_HAS_SIGACTION)
+        -:  351:    // Register for the signal if we're the first.
+       56:  352:    if (state->registration_count_[signal_number] == 0)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:  353:    {
+        -:  354:# if defined(BOOST_ASIO_HAS_SIGACTION)
+        -:  355:      using namespace std; // For memset.
+        -:  356:      struct sigaction sa;
+       56:  357:      memset(&sa, 0, sizeof(sa));
+       56:  358:      sa.sa_handler = boost_asio_signal_handler;
+       56:  359:      sigfillset(&sa.sa_mask);
+call    0 returned 100%
+       56:  360:      if (f != signal_set_base::flags::dont_care)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  361:        sa.sa_flags = static_cast<int>(f);
+       56:  362:      if (::sigaction(signal_number, &sa, 0) == -1)
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+        -:  363:# else // defined(BOOST_ASIO_HAS_SIGACTION)
+        -:  364:      if (::signal(signal_number, boost_asio_signal_handler) == SIG_ERR)
+        -:  365:# endif // defined(BOOST_ASIO_HAS_SIGACTION)
+        -:  366:      {
+        -:  367:# if defined(BOOST_ASIO_WINDOWS) || defined(__CYGWIN__)
+        -:  368:        ec = boost::asio::error::invalid_argument;
+        -:  369:# else // defined(BOOST_ASIO_WINDOWS) || defined(__CYGWIN__)
+    #####:  370:        ec = boost::system::error_code(errno,
+    #####:  371:            boost::asio::error::get_system_category());
+call    0 never executed
+call    1 never executed
+        -:  372:# endif // defined(BOOST_ASIO_WINDOWS) || defined(__CYGWIN__)
+    #####:  373:        delete new_registration;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+call    2 never executed
+    #####:  374:        return ec;
+        -:  375:      }
+        -:  376:# if defined(BOOST_ASIO_HAS_SIGACTION)
+       56:  377:      state->flags_[signal_number] = f;
+        -:  378:# endif // defined(BOOST_ASIO_HAS_SIGACTION)
+        -:  379:    }
+        -:  380:# if defined(BOOST_ASIO_HAS_SIGACTION)
+        -:  381:    // Otherwise check to see if the flags have changed.
+    #####:  382:    else if (f != signal_set_base::flags::dont_care)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  383:    {
+    #####:  384:      if (f != state->flags_[signal_number])
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  385:      {
+        -:  386:        using namespace std; // For memset.
+    #####:  387:        if (state->flags_[signal_number] != signal_set_base::flags::dont_care)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  388:        {
+    #####:  389:          ec = boost::asio::error::invalid_argument;
+call    0 never executed
+    #####:  390:          delete new_registration;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+call    2 never executed
+    #####:  391:          return ec;
+        -:  392:        }
+        -:  393:        struct sigaction sa;
+    #####:  394:        memset(&sa, 0, sizeof(sa));
+    #####:  395:        sa.sa_handler = boost_asio_signal_handler;
+    #####:  396:        sigfillset(&sa.sa_mask);
+call    0 never executed
+    #####:  397:        sa.sa_flags = static_cast<int>(f);
+    #####:  398:        if (::sigaction(signal_number, &sa, 0) == -1)
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+        -:  399:        {
+    #####:  400:          ec = boost::system::error_code(errno,
+    #####:  401:              boost::asio::error::get_system_category());
+call    0 never executed
+call    1 never executed
+    #####:  402:          delete new_registration;
+branch  0 never executed (fallthrough)
+branch  1 never executed
+call    2 never executed
+    #####:  403:          return ec;
+        -:  404:        }
+    #####:  405:        state->flags_[signal_number] = f;
+        -:  406:      }
+        -:  407:    }
+        -:  408:# endif // defined(BOOST_ASIO_HAS_SIGACTION)
+        -:  409:#endif // defined(BOOST_ASIO_HAS_SIGNAL) || defined(BOOST_ASIO_HAS_SIGACTION)
+        -:  410:
+        -:  411:    // Record the new registration in the set.
+       56:  412:    new_registration->signal_number_ = signal_number;
+       56:  413:    new_registration->queue_ = &impl.queue_;
+       56:  414:    new_registration->next_in_set_ = next;
+       56:  415:    *insertion_point = new_registration;
+        -:  416:
+        -:  417:    // Insert registration into the registration table.
+       56:  418:    new_registration->next_in_table_ = registrations_[signal_number];
+       56:  419:    if (registrations_[signal_number])
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  420:      registrations_[signal_number]->prev_in_table_ = new_registration;
+       56:  421:    registrations_[signal_number] = new_registration;
+        -:  422:
+       56:  423:    ++state->registration_count_[signal_number];
+        -:  424:  }
+        -:  425:
+       56:  426:  ec = boost::system::error_code();
+call    0 returned 100%
+       56:  427:  return ec;
+       56:  428:}
+call    0 returned 100%
+call    1 never executed
+        -:  429:
+        -:  430:boost::system::error_code signal_set_service::remove(
+        -:  431:    signal_set_service::implementation_type& impl,
+        -:  432:    int signal_number, boost::system::error_code& ec)
+        -:  433:{
+        -:  434:  // Check that the signal number is valid.
+        -:  435:  if (signal_number < 0 || signal_number >= max_signal_number)
+        -:  436:  {
+        -:  437:    ec = boost::asio::error::invalid_argument;
+        -:  438:    return ec;
+        -:  439:  }
+        -:  440:
+        -:  441:  signal_state* state = get_signal_state();
+        -:  442:  static_mutex::scoped_lock lock(state->mutex_);
+        -:  443:
+        -:  444:  // Find the signal number in the list of registrations.
+        -:  445:  registration** deletion_point = &impl.signals_;
+        -:  446:  registration* reg = impl.signals_;
+        -:  447:  while (reg && reg->signal_number_ < signal_number)
+        -:  448:  {
+        -:  449:    deletion_point = &reg->next_in_set_;
+        -:  450:    reg = reg->next_in_set_;
+        -:  451:  }
+        -:  452:
+        -:  453:  if (reg != 0 && reg->signal_number_ == signal_number)
+        -:  454:  {
+        -:  455:#if defined(BOOST_ASIO_HAS_SIGNAL) || defined(BOOST_ASIO_HAS_SIGACTION)
+        -:  456:    // Set signal handler back to the default if we're the last.
+        -:  457:    if (state->registration_count_[signal_number] == 1)
+        -:  458:    {
+        -:  459:# if defined(BOOST_ASIO_HAS_SIGACTION)
+        -:  460:      using namespace std; // For memset.
+        -:  461:      struct sigaction sa;
+        -:  462:      memset(&sa, 0, sizeof(sa));
+        -:  463:      sa.sa_handler = SIG_DFL;
+        -:  464:      if (::sigaction(signal_number, &sa, 0) == -1)
+        -:  465:# else // defined(BOOST_ASIO_HAS_SIGACTION)
+        -:  466:      if (::signal(signal_number, SIG_DFL) == SIG_ERR)
+        -:  467:# endif // defined(BOOST_ASIO_HAS_SIGACTION)
+        -:  468:      {
+        -:  469:# if defined(BOOST_ASIO_WINDOWS) || defined(__CYGWIN__)
+        -:  470:        ec = boost::asio::error::invalid_argument;
+        -:  471:# else // defined(BOOST_ASIO_WINDOWS) || defined(__CYGWIN__)
+        -:  472:        ec = boost::system::error_code(errno,
+        -:  473:            boost::asio::error::get_system_category());
+        -:  474:# endif // defined(BOOST_ASIO_WINDOWS) || defined(__CYGWIN__)
+        -:  475:        return ec;
+        -:  476:      }
+        -:  477:# if defined(BOOST_ASIO_HAS_SIGACTION)
+        -:  478:      state->flags_[signal_number] = signal_set_base::flags_t();
+        -:  479:# endif // defined(BOOST_ASIO_HAS_SIGACTION)
+        -:  480:    }
+        -:  481:#endif // defined(BOOST_ASIO_HAS_SIGNAL) || defined(BOOST_ASIO_HAS_SIGACTION)
+        -:  482:
+        -:  483:    // Remove the registration from the set.
+        -:  484:    *deletion_point = reg->next_in_set_;
+        -:  485:
+        -:  486:    // Remove the registration from the registration table.
+        -:  487:    if (registrations_[signal_number] == reg)
+        -:  488:      registrations_[signal_number] = reg->next_in_table_;
+        -:  489:    if (reg->prev_in_table_)
+        -:  490:      reg->prev_in_table_->next_in_table_ = reg->next_in_table_;
+        -:  491:    if (reg->next_in_table_)
+        -:  492:      reg->next_in_table_->prev_in_table_ = reg->prev_in_table_;
+        -:  493:
+        -:  494:    --state->registration_count_[signal_number];
+        -:  495:
+        -:  496:    delete reg;
+        -:  497:  }
+        -:  498:
+        -:  499:  ec = boost::system::error_code();
+        -:  500:  return ec;
+        -:  501:}
+        -:  502:
+function _ZN5boost4asio6detail18signal_set_service5clearERNS2_19implementation_typeERNS_6system10error_codeE called 28 returned 100% blocks executed 79%
+       28:  503:boost::system::error_code signal_set_service::clear(
+        -:  504:    signal_set_service::implementation_type& impl,
+        -:  505:    boost::system::error_code& ec)
+        -:  506:{
+       28:  507:  signal_state* state = get_signal_state();
+call    0 returned 100%
+       28:  508:  static_mutex::scoped_lock lock(state->mutex_);
+call    0 returned 100%
+        -:  509:
+       84:  510:  while (registration* reg = impl.signals_)
+branch  0 taken 67% (fallthrough)
+branch  1 taken 33%
+        -:  511:  {
+        -:  512:#if defined(BOOST_ASIO_HAS_SIGNAL) || defined(BOOST_ASIO_HAS_SIGACTION)
+        -:  513:    // Set signal handler back to the default if we're the last.
+       56:  514:    if (state->registration_count_[reg->signal_number_] == 1)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:  515:    {
+        -:  516:# if defined(BOOST_ASIO_HAS_SIGACTION)
+        -:  517:      using namespace std; // For memset.
+        -:  518:      struct sigaction sa;
+       56:  519:      memset(&sa, 0, sizeof(sa));
+       56:  520:      sa.sa_handler = SIG_DFL;
+       56:  521:      if (::sigaction(reg->signal_number_, &sa, 0) == -1)
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+        -:  522:# else // defined(BOOST_ASIO_HAS_SIGACTION)
+        -:  523:      if (::signal(reg->signal_number_, SIG_DFL) == SIG_ERR)
+        -:  524:# endif // defined(BOOST_ASIO_HAS_SIGACTION)
+        -:  525:      {
+        -:  526:# if defined(BOOST_ASIO_WINDOWS) || defined(__CYGWIN__)
+        -:  527:        ec = boost::asio::error::invalid_argument;
+        -:  528:# else // defined(BOOST_ASIO_WINDOWS) || defined(__CYGWIN__)
+    #####:  529:        ec = boost::system::error_code(errno,
+    #####:  530:            boost::asio::error::get_system_category());
+call    0 never executed
+call    1 never executed
+        -:  531:# endif // defined(BOOST_ASIO_WINDOWS) || defined(__CYGWIN__)
+    #####:  532:        return ec;
+        -:  533:      }
+        -:  534:# if defined(BOOST_ASIO_HAS_SIGACTION)
+       56:  535:      state->flags_[reg->signal_number_] = signal_set_base::flags_t();
+        -:  536:# endif // defined(BOOST_ASIO_HAS_SIGACTION)
+        -:  537:    }
+        -:  538:#endif // defined(BOOST_ASIO_HAS_SIGNAL) || defined(BOOST_ASIO_HAS_SIGACTION)
+        -:  539:
+        -:  540:    // Remove the registration from the registration table.
+       56:  541:    if (registrations_[reg->signal_number_] == reg)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+       56:  542:      registrations_[reg->signal_number_] = reg->next_in_table_;
+       56:  543:    if (reg->prev_in_table_)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  544:      reg->prev_in_table_->next_in_table_ = reg->next_in_table_;
+       56:  545:    if (reg->next_in_table_)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  546:      reg->next_in_table_->prev_in_table_ = reg->prev_in_table_;
+        -:  547:
+       56:  548:    --state->registration_count_[reg->signal_number_];
+        -:  549:
+       56:  550:    impl.signals_ = reg->next_in_set_;
+       56:  551:    delete reg;
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+call    2 returned 100%
+       56:  552:  }
+        -:  553:
+       28:  554:  ec = boost::system::error_code();
+call    0 returned 100%
+       28:  555:  return ec;
+       28:  556:}
+call    0 returned 100%
+        -:  557:
+function _ZN5boost4asio6detail18signal_set_service6cancelERNS2_19implementation_typeERNS_6system10error_codeE called 28 returned 100% blocks executed 76%
+       28:  558:boost::system::error_code signal_set_service::cancel(
+        -:  559:    signal_set_service::implementation_type& impl,
+        -:  560:    boost::system::error_code& ec)
+        -:  561:{
+        -:  562:  BOOST_ASIO_HANDLER_OPERATION((scheduler_.context(),
+        -:  563:        "signal_set", &impl, 0, "cancel"));
+        -:  564:
+       28:  565:  op_queue<operation> ops;
+call    0 returned 100%
+        -:  566:  {
+       28:  567:    signal_state* state = get_signal_state();
+call    0 returned 100%
+       28:  568:    static_mutex::scoped_lock lock(state->mutex_);
+call    0 returned 100%
+        -:  569:
+       56:  570:    while (signal_op* op = impl.queue_.front())
+call    0 returned 100%
+branch  1 taken 50% (fallthrough)
+branch  2 taken 50%
+        -:  571:    {
+       28:  572:      op->ec_ = boost::asio::error::operation_aborted;
+call    0 returned 100%
+       28:  573:      impl.queue_.pop();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       28:  574:      ops.push(op);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       28:  575:    }
+       28:  576:  }
+call    0 returned 100%
+call    1 never executed
+        -:  577:
+       28:  578:  scheduler_.post_deferred_completions(ops);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  579:
+       28:  580:  ec = boost::system::error_code();
+call    0 returned 100%
+       28:  581:  return ec;
+       28:  582:}
+call    0 returned 100%
+call    1 never executed
+        -:  583:
+function _ZN5boost4asio6detail18signal_set_service17cancel_ops_by_keyERNS2_19implementation_typeEPv called 0 returned 0% blocks executed 0%
+    #####:  584:void signal_set_service::cancel_ops_by_key(
+        -:  585:    signal_set_service::implementation_type& impl, void* cancellation_key)
+        -:  586:{
+    #####:  587:  op_queue<operation> ops;
+call    0 never executed
+        -:  588:  {
+    #####:  589:    op_queue<signal_op> other_ops;
+call    0 never executed
+    #####:  590:    signal_state* state = get_signal_state();
+call    0 never executed
+    #####:  591:    static_mutex::scoped_lock lock(state->mutex_);
+call    0 never executed
+        -:  592:
+    #####:  593:    while (signal_op* op = impl.queue_.front())
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+        -:  594:    {
+    #####:  595:      impl.queue_.pop();
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  596:      if (op->cancellation_key_ == cancellation_key)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+        -:  597:      {
+    #####:  598:        op->ec_ = boost::asio::error::operation_aborted;
+call    0 never executed
+    #####:  599:        ops.push(op);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:  600:      }
+        -:  601:      else
+    #####:  602:        other_ops.push(op);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  603:    }
+        -:  604:
+    #####:  605:    impl.queue_.push(other_ops);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  606:  }
+call    0 never executed
+call    1 never executed
+call    2 never executed
+call    3 never executed
+        -:  607:
+    #####:  608:  scheduler_.post_deferred_completions(ops);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  609:}
+call    0 never executed
+call    1 never executed
+        -:  610:
+function _ZN5boost4asio6detail18signal_set_service14deliver_signalEi called 0 returned 0% blocks executed 0%
+    #####:  611:void signal_set_service::deliver_signal(int signal_number)
+        -:  612:{
+    #####:  613:  signal_state* state = get_signal_state();
+call    0 never executed
+    #####:  614:  static_mutex::scoped_lock lock(state->mutex_);
+call    0 never executed
+        -:  615:
+    #####:  616:  signal_set_service* service = state->service_list_;
+    #####:  617:  while (service)
+branch  0 never executed
+branch  1 never executed (fallthrough)
+        -:  618:  {
+    #####:  619:    op_queue<operation> ops;
+call    0 never executed
+        -:  620:
+    #####:  621:    registration* reg = service->registrations_[signal_number];
+    #####:  622:    while (reg)
+branch  0 never executed
+branch  1 never executed (fallthrough)
+        -:  623:    {
+    #####:  624:      if (reg->queue_->empty())
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+        -:  625:      {
+    #####:  626:        ++reg->undelivered_;
+        -:  627:      }
+        -:  628:      else
+        -:  629:      {
+    #####:  630:        while (signal_op* op = reg->queue_->front())
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed
+        -:  631:        {
+    #####:  632:          op->signal_number_ = signal_number;
+    #####:  633:          reg->queue_->pop();
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  634:          ops.push(op);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  635:        }
+        -:  636:      }
+        -:  637:
+    #####:  638:      reg = reg->next_in_table_;
+        -:  639:    }
+        -:  640:
+    #####:  641:    service->scheduler_.post_deferred_completions(ops);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:  642:
+    #####:  643:    service = service->next_;
+    #####:  644:  }
+call    0 never executed
+call    1 never executed
+    #####:  645:}
+call    0 never executed
+call    1 never executed
+        -:  646:
+function _ZN5boost4asio6detail18signal_set_service11add_serviceEPS2_ called 28 returned 100% blocks executed 42%
+       28:  647:void signal_set_service::add_service(signal_set_service* service)
+        -:  648:{
+       28:  649:  signal_state* state = get_signal_state();
+call    0 returned 100%
+       28:  650:  static_mutex::scoped_lock lock(state->mutex_);
+call    0 returned 100%
+        -:  651:
+        -:  652:#if !defined(BOOST_ASIO_WINDOWS) && !defined(__CYGWIN__)
+        -:  653:  // If this is the first service to be created, open a new pipe.
+       28:  654:  if (state->service_list_ == 0)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+       28:  655:    open_descriptors();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  656:#endif // !defined(BOOST_ASIO_WINDOWS) && !defined(__CYGWIN__)
+        -:  657:
+        -:  658:  // If a scheduler_ object is thread-unsafe then it must be the only
+        -:  659:  // scheduler used to create signal_set objects.
+       28:  660:  if (state->service_list_ != 0)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:  661:  {
+    #####:  662:    if (!BOOST_ASIO_CONCURRENCY_HINT_IS_LOCKING(SCHEDULER,
+call    0 never executed
+        -:  663:          service->scheduler_.concurrency_hint())
+    #####:  664:        || !BOOST_ASIO_CONCURRENCY_HINT_IS_LOCKING(SCHEDULER,
+branch  0 never executed (fallthrough)
+branch  1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed
+branch  5 never executed (fallthrough)
+branch  6 never executed
+        -:  665:          state->service_list_->scheduler_.concurrency_hint()))
+        -:  666:    {
+        -:  667:      std::logic_error ex(
+        -:  668:          "Thread-unsafe execution context objects require "
+    #####:  669:          "exclusive access to signal handling.");
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  670:      boost::asio::detail::throw_exception(ex);
+call    0 never executed
+    =====:  671:    }
+call    0 never executed
+        -:  672:  }
+        -:  673:
+        -:  674:  // Insert service into linked list of all services.
+       28:  675:  service->next_ = state->service_list_;
+       28:  676:  service->prev_ = 0;
+       28:  677:  if (state->service_list_)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  678:    state->service_list_->prev_ = service;
+       28:  679:  state->service_list_ = service;
+        -:  680:
+        -:  681:#if !defined(BOOST_ASIO_WINDOWS) \
+        -:  682:  && !defined(BOOST_ASIO_WINDOWS_RUNTIME) \
+        -:  683:  && !defined(__CYGWIN__)
+        -:  684:  // Register for pipe readiness notifications.
+       28:  685:  int read_descriptor = state->read_descriptor_;
+       28:  686:  lock.unlock();
+call    0 returned 100%
+        -:  687:# if defined(BOOST_ASIO_HAS_IO_URING_AS_DEFAULT)
+        -:  688:  (void)read_descriptor;
+        -:  689:  service->io_uring_service_.register_internal_io_object(
+        -:  690:      service->io_object_data_, io_uring_service::read_op, new pipe_read_op);
+        -:  691:# else // defined(BOOST_ASIO_HAS_IO_URING_AS_DEFAULT)
+    #####:  692:  service->reactor_.register_internal_descriptor(reactor::read_op,
+branch  0 never executed (fallthrough)
+branch  1 never executed
+       28:  693:      read_descriptor, service->reactor_data_, new pipe_read_op);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+call    7 never executed
+        -:  694:# endif // defined(BOOST_ASIO_HAS_IO_URING_AS_DEFAULT)
+        -:  695:#endif // !defined(BOOST_ASIO_WINDOWS)
+        -:  696:       //   && !defined(BOOST_ASIO_WINDOWS_RUNTIME)
+        -:  697:       //   && !defined(__CYGWIN__)
+       28:  698:}
+call    0 returned 100%
+call    1 never executed
+        -:  699:
+function _ZN5boost4asio6detail18signal_set_service14remove_serviceEPS2_ called 84 returned 100% blocks executed 82%
+       84:  700:void signal_set_service::remove_service(signal_set_service* service)
+        -:  701:{
+       84:  702:  signal_state* state = get_signal_state();
+call    0 returned 100%
+       84:  703:  static_mutex::scoped_lock lock(state->mutex_);
+call    0 returned 100%
+        -:  704:
+       84:  705:  if (service->next_ || service->prev_ || state->service_list_ == service)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0%
+branch  4 taken 33% (fallthrough)
+branch  5 taken 67%
+        -:  706:  {
+        -:  707:#if !defined(BOOST_ASIO_WINDOWS) \
+        -:  708:  && !defined(BOOST_ASIO_WINDOWS_RUNTIME) \
+        -:  709:  && !defined(__CYGWIN__)
+        -:  710:    // Disable the pipe readiness notifications.
+       28:  711:    int read_descriptor = state->read_descriptor_;
+       28:  712:    lock.unlock();
+call    0 returned 100%
+        -:  713:# if defined(BOOST_ASIO_HAS_IO_URING_AS_DEFAULT)
+        -:  714:    (void)read_descriptor;
+        -:  715:    service->io_uring_service_.deregister_io_object(service->io_object_data_);
+        -:  716:    service->io_uring_service_.cleanup_io_object(service->io_object_data_);
+        -:  717:    lock.lock();
+        -:  718:# else // defined(BOOST_ASIO_HAS_IO_URING_AS_DEFAULT)
+       28:  719:    service->reactor_.deregister_internal_descriptor(
+       28:  720:        read_descriptor, service->reactor_data_);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       28:  721:    service->reactor_.cleanup_descriptor_data(service->reactor_data_);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       28:  722:    lock.lock();
+call    0 returned 100%
+        -:  723:# endif // defined(BOOST_ASIO_HAS_IO_URING_AS_DEFAULT)
+        -:  724:#endif // !defined(BOOST_ASIO_WINDOWS)
+        -:  725:       //   && !defined(BOOST_ASIO_WINDOWS_RUNTIME)
+        -:  726:       //   && !defined(__CYGWIN__)
+        -:  727:
+        -:  728:    // Remove service from linked list of all services.
+       28:  729:    if (state->service_list_ == service)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+       28:  730:      state->service_list_ = service->next_;
+       28:  731:    if (service->prev_)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  732:      service->prev_->next_ = service->next_;
+       28:  733:    if (service->next_)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+    #####:  734:      service->next_->prev_= service->prev_;
+       28:  735:    service->next_ = 0;
+       28:  736:    service->prev_ = 0;
+        -:  737:
+        -:  738:#if !defined(BOOST_ASIO_WINDOWS) && !defined(__CYGWIN__)
+        -:  739:    // If this is the last service to be removed, close the pipe.
+       28:  740:    if (state->service_list_ == 0)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+       28:  741:      close_descriptors();
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  742:#endif // !defined(BOOST_ASIO_WINDOWS) && !defined(__CYGWIN__)
+        -:  743:  }
+       84:  744:}
+call    0 returned 100%
+call    1 never executed
+        -:  745:
+function _ZN5boost4asio6detail18signal_set_service16open_descriptorsEv called 28 returned 100% blocks executed 56%
+       28:  746:void signal_set_service::open_descriptors()
+        -:  747:{
+        -:  748:#if !defined(BOOST_ASIO_WINDOWS) \
+        -:  749:  && !defined(BOOST_ASIO_WINDOWS_RUNTIME) \
+        -:  750:  && !defined(__CYGWIN__)
+       28:  751:  signal_state* state = get_signal_state();
+call    0 returned 100%
+        -:  752:
+        -:  753:  int pipe_fds[2];
+       28:  754:  if (::pipe(pipe_fds) == 0)
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0%
+        -:  755:  {
+       28:  756:    state->read_descriptor_ = pipe_fds[0];
+       28:  757:    ::fcntl(state->read_descriptor_, F_SETFL, O_NONBLOCK);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  758:
+       28:  759:    state->write_descriptor_ = pipe_fds[1];
+       28:  760:    ::fcntl(state->write_descriptor_, F_SETFL, O_NONBLOCK);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  761:
+        -:  762:#if defined(FD_CLOEXEC)
+       28:  763:    ::fcntl(state->read_descriptor_, F_SETFD, FD_CLOEXEC);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       28:  764:    ::fcntl(state->write_descriptor_, F_SETFD, FD_CLOEXEC);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  765:#endif // defined(FD_CLOEXEC)
+        -:  766:  }
+        -:  767:  else
+        -:  768:  {
+    #####:  769:    boost::system::error_code ec(errno,
+    #####:  770:        boost::asio::error::get_system_category());
+call    0 never executed
+call    1 never executed
+    #####:  771:    boost::asio::detail::throw_error(ec, "signal_set_service pipe");
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+        -:  772:  }
+        -:  773:#endif // !defined(BOOST_ASIO_WINDOWS)
+        -:  774:       //   && !defined(BOOST_ASIO_WINDOWS_RUNTIME)
+        -:  775:       //   && !defined(__CYGWIN__)
+       28:  776:}
+        -:  777:
+function _ZN5boost4asio6detail18signal_set_service17close_descriptorsEv called 28 returned 100% blocks executed 100%
+       28:  778:void signal_set_service::close_descriptors()
+        -:  779:{
+        -:  780:#if !defined(BOOST_ASIO_WINDOWS) \
+        -:  781:  && !defined(BOOST_ASIO_WINDOWS_RUNTIME) \
+        -:  782:  && !defined(__CYGWIN__)
+       28:  783:  signal_state* state = get_signal_state();
+call    0 returned 100%
+        -:  784:
+       28:  785:  if (state->read_descriptor_ != -1)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+       28:  786:    ::close(state->read_descriptor_);
+call    0 returned 100%
+       28:  787:  state->read_descriptor_ = -1;
+        -:  788:
+       28:  789:  if (state->write_descriptor_ != -1)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+       28:  790:    ::close(state->write_descriptor_);
+call    0 returned 100%
+       28:  791:  state->write_descriptor_ = -1;
+        -:  792:#endif // !defined(BOOST_ASIO_WINDOWS)
+        -:  793:       //   && !defined(BOOST_ASIO_WINDOWS_RUNTIME)
+        -:  794:       //   && !defined(__CYGWIN__)
+       28:  795:}
+        -:  796:
+function _ZN5boost4asio6detail18signal_set_service13start_wait_opERNS2_19implementation_typeEPNS1_9signal_opE called 28 returned 100% blocks executed 75%
+       28:  797:void signal_set_service::start_wait_op(
+        -:  798:    signal_set_service::implementation_type& impl, signal_op* op)
+        -:  799:{
+       28:  800:  scheduler_.work_started();
+call    0 returned 100%
+        -:  801:
+       28:  802:  signal_state* state = get_signal_state();
+call    0 returned 100%
+       28:  803:  static_mutex::scoped_lock lock(state->mutex_);
+call    0 returned 100%
+        -:  804:
+       28:  805:  registration* reg = impl.signals_;
+       84:  806:  while (reg)
+branch  0 taken 67%
+branch  1 taken 33% (fallthrough)
+        -:  807:  {
+       56:  808:    if (reg->undelivered_ > 0)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:  809:    {
+    #####:  810:      --reg->undelivered_;
+    #####:  811:      op->signal_number_ = reg->signal_number_;
+    #####:  812:      scheduler_.post_deferred_completion(op);
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  813:      return;
+        -:  814:    }
+        -:  815:
+       56:  816:    reg = reg->next_in_set_;
+        -:  817:  }
+        -:  818:
+       28:  819:  impl.queue_.push(op);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       28:  820:}
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0%
+call    3 never executed
+        -:  821:
+        -:  822:} // namespace detail
+        -:  823:} // namespace asio
+        -:  824:} // namespace boost
+        -:  825:
+        -:  826:#include <boost/asio/detail/pop_options.hpp>
+        -:  827:
+        -:  828:#endif // BOOST_ASIO_DETAIL_IMPL_SIGNAL_SET_SERVICE_IPP

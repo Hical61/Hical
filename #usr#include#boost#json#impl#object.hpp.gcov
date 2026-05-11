@@ -1,0 +1,791 @@
+        -:    0:Source:/usr/include/boost/json/impl/object.hpp
+        -:    1://
+        -:    2:// Copyright (c) 2019 Vinnie Falco (vinnie.falco@gmail.com)
+        -:    3://
+        -:    4:// Distributed under the Boost Software License, Version 1.0. (See accompanying
+        -:    5:// file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+        -:    6://
+        -:    7:// Official repository: https://github.com/boostorg/json
+        -:    8://
+        -:    9:
+        -:   10:#ifndef BOOST_JSON_IMPL_OBJECT_HPP
+        -:   11:#define BOOST_JSON_IMPL_OBJECT_HPP
+        -:   12:
+        -:   13:#include <boost/json/value.hpp>
+        -:   14:#include <iterator>
+        -:   15:#include <cmath>
+        -:   16:#include <type_traits>
+        -:   17:#include <utility>
+        -:   18:
+        -:   19:namespace boost {
+        -:   20:namespace json {
+        -:   21:
+        -:   22:namespace detail {
+        -:   23:
+        -:   24:// Objects with size less than or equal
+        -:   25:// to this number will use a linear search
+        -:   26:// instead of the more expensive hash function.
+        -:   27:static
+        -:   28:constexpr
+        -:   29:std::size_t
+        -:   30:small_object_size_ = 18;
+        -:   31:
+        -:   32:BOOST_STATIC_ASSERT(
+        -:   33:    small_object_size_ <
+        -:   34:    BOOST_JSON_MAX_STRUCTURED_SIZE);
+        -:   35:
+        -:   36:} // detail
+        -:   37:
+        -:   38://----------------------------------------------------------
+        -:   39:
+        -:   40:struct alignas(key_value_pair)
+        -:   41:    object::table
+        -:   42:{
+        -:   43:    std::uint32_t size = 0;
+        -:   44:    std::uint32_t capacity = 0;
+        -:   45:    std::uintptr_t salt = 0;
+        -:   46:
+        -:   47:#if defined(_MSC_VER) && BOOST_JSON_ARCH == 32
+        -:   48:    // VFALCO If we make key_value_pair smaller,
+        -:   49:    //        then we might want to revisit this
+        -:   50:    //        padding.
+        -:   51:    BOOST_STATIC_ASSERT(
+        -:   52:        sizeof(key_value_pair) == 32);
+        -:   53:    char pad[4] = {}; // silence warnings
+        -:   54:#endif
+        -:   55:
+        -:   56:    constexpr table();
+        -:   57:
+        -:   58:    // returns true if we use a linear
+        -:   59:    // search instead of the hash table.
+        -:   60:    bool is_small() const noexcept
+        -:   61:    {
+        -:   62:        return capacity <=
+        -:   63:            detail::small_object_size_;
+        -:   64:    }
+        -:   65:
+        -:   66:    key_value_pair&
+      99*:   67:    operator[](
+        -:   68:        std::size_t pos) noexcept
+        -:   69:    {
+        -:   70:        return reinterpret_cast<
+        -:   71:            key_value_pair*>(
+      99*:   72:                this + 1)[pos];
+        -:   73:    }
+------------------
+_ZN5boost4json6object5tableixEm:
+function _ZN5boost4json6object5tableixEm called 16 returned 100% blocks executed 100%
+       16:   67:    operator[](
+        -:   68:        std::size_t pos) noexcept
+        -:   69:    {
+        -:   70:        return reinterpret_cast<
+        -:   71:            key_value_pair*>(
+       16:   72:                this + 1)[pos];
+        -:   73:    }
+------------------
+_ZN5boost4json6object5tableixEm:
+function _ZN5boost4json6object5tableixEm called 0 returned 0% blocks executed 0%
+    #####:   67:    operator[](
+        -:   68:        std::size_t pos) noexcept
+        -:   69:    {
+        -:   70:        return reinterpret_cast<
+        -:   71:            key_value_pair*>(
+    #####:   72:                this + 1)[pos];
+        -:   73:    }
+------------------
+_ZN5boost4json6object5tableixEm:
+function _ZN5boost4json6object5tableixEm called 1 returned 100% blocks executed 100%
+        1:   67:    operator[](
+        -:   68:        std::size_t pos) noexcept
+        -:   69:    {
+        -:   70:        return reinterpret_cast<
+        -:   71:            key_value_pair*>(
+        1:   72:                this + 1)[pos];
+        -:   73:    }
+------------------
+_ZN5boost4json6object5tableixEm:
+function _ZN5boost4json6object5tableixEm called 3 returned 100% blocks executed 100%
+        3:   67:    operator[](
+        -:   68:        std::size_t pos) noexcept
+        -:   69:    {
+        -:   70:        return reinterpret_cast<
+        -:   71:            key_value_pair*>(
+        3:   72:                this + 1)[pos];
+        -:   73:    }
+------------------
+_ZN5boost4json6object5tableixEm:
+function _ZN5boost4json6object5tableixEm called 78 returned 100% blocks executed 100%
+       78:   67:    operator[](
+        -:   68:        std::size_t pos) noexcept
+        -:   69:    {
+        -:   70:        return reinterpret_cast<
+        -:   71:            key_value_pair*>(
+       78:   72:                this + 1)[pos];
+        -:   73:    }
+------------------
+_ZN5boost4json6object5tableixEm:
+function _ZN5boost4json6object5tableixEm called 1 returned 100% blocks executed 100%
+        1:   67:    operator[](
+        -:   68:        std::size_t pos) noexcept
+        -:   69:    {
+        -:   70:        return reinterpret_cast<
+        -:   71:            key_value_pair*>(
+        1:   72:                this + 1)[pos];
+        -:   73:    }
+------------------
+_ZN5boost4json6object5tableixEm:
+function _ZN5boost4json6object5tableixEm called 0 returned 0% blocks executed 0%
+    #####:   67:    operator[](
+        -:   68:        std::size_t pos) noexcept
+        -:   69:    {
+        -:   70:        return reinterpret_cast<
+        -:   71:            key_value_pair*>(
+    #####:   72:                this + 1)[pos];
+        -:   73:    }
+------------------
+_ZN5boost4json6object5tableixEm:
+function _ZN5boost4json6object5tableixEm called 0 returned 0% blocks executed 0%
+    #####:   67:    operator[](
+        -:   68:        std::size_t pos) noexcept
+        -:   69:    {
+        -:   70:        return reinterpret_cast<
+        -:   71:            key_value_pair*>(
+    #####:   72:                this + 1)[pos];
+        -:   73:    }
+------------------
+        -:   74:
+        -:   75:    // VFALCO This is exported for tests
+        -:   76:    BOOST_JSON_DECL
+        -:   77:    std::size_t
+        -:   78:    digest(string_view key) const noexcept;
+        -:   79:
+        -:   80:    inline
+        -:   81:    index_t&
+        -:   82:    bucket(std::size_t hash) noexcept;
+        -:   83:
+        -:   84:    inline
+        -:   85:    index_t&
+        -:   86:    bucket(string_view key) noexcept;
+        -:   87:
+        -:   88:    inline
+        -:   89:    void
+        -:   90:    clear() noexcept;
+        -:   91:
+        -:   92:    static
+        -:   93:    inline
+        -:   94:    table*
+        -:   95:    allocate(
+        -:   96:        std::size_t capacity,
+        -:   97:        std::uintptr_t salt,
+        -:   98:        storage_ptr const& sp);
+        -:   99:
+        -:  100:    static
+        -:  101:    void
+        -:  102:    deallocate(
+        -:  103:        table* p,
+        -:  104:        storage_ptr const& sp) noexcept
+        -:  105:    {
+        -:  106:        if(p->capacity == 0)
+        -:  107:            return;
+        -:  108:        if(! p->is_small())
+        -:  109:            sp->deallocate(p,
+        -:  110:                sizeof(table) + p->capacity * (
+        -:  111:                    sizeof(key_value_pair) +
+        -:  112:                    sizeof(index_t)));
+        -:  113:        else
+        -:  114:            sp->deallocate(p,
+        -:  115:                sizeof(table) + p->capacity *
+        -:  116:                    sizeof(key_value_pair));
+        -:  117:    }
+        -:  118:};
+        -:  119:
+        -:  120://----------------------------------------------------------
+        -:  121:
+        -:  122:class object::revert_construct
+        -:  123:{
+        -:  124:    object* obj_;
+        -:  125:
+        -:  126:    BOOST_JSON_DECL
+        -:  127:    void
+        -:  128:    destroy() noexcept;
+        -:  129:
+        -:  130:public:
+        -:  131:    explicit
+        -:  132:    revert_construct(
+        -:  133:        object& obj) noexcept
+        -:  134:        : obj_(&obj)
+        -:  135:    {
+        -:  136:    }
+        -:  137:
+        -:  138:    ~revert_construct()
+        -:  139:    {
+        -:  140:        if(! obj_)
+        -:  141:            return;
+        -:  142:        destroy();
+        -:  143:    }
+        -:  144:
+        -:  145:    void
+        -:  146:    commit() noexcept
+        -:  147:    {
+        -:  148:        obj_ = nullptr;
+        -:  149:    }
+        -:  150:};
+        -:  151:
+        -:  152://----------------------------------------------------------
+        -:  153:
+        -:  154:class object::revert_insert
+        -:  155:{
+        -:  156:    object* obj_;
+        -:  157:    table* t_ = nullptr;
+        -:  158:    std::size_t size_;
+        -:  159:
+        -:  160:    BOOST_JSON_DECL
+        -:  161:    void
+        -:  162:    destroy() noexcept;
+        -:  163:
+        -:  164:public:
+        -:  165:    explicit
+        -:  166:    revert_insert(
+        -:  167:        object& obj,
+        -:  168:        std::size_t capacity)
+        -:  169:        : obj_(&obj)
+        -:  170:        , size_(obj_->size())
+        -:  171:    {
+        -:  172:        if( capacity > obj_->capacity() )
+        -:  173:            t_ = obj_->reserve_impl(capacity);
+        -:  174:    }
+        -:  175:
+        -:  176:    ~revert_insert()
+        -:  177:    {
+        -:  178:        if(! obj_)
+        -:  179:            return;
+        -:  180:
+        -:  181:        destroy();
+        -:  182:        if( t_ )
+        -:  183:        {
+        -:  184:            table::deallocate( obj_->t_, obj_->sp_ );
+        -:  185:            obj_->t_ = t_;
+        -:  186:        }
+        -:  187:        else
+        -:  188:        {
+        -:  189:            obj_->t_->size = static_cast<index_t>(size_);
+        -:  190:        }
+        -:  191:    }
+        -:  192:
+        -:  193:    void
+        -:  194:    commit() noexcept
+        -:  195:    {
+        -:  196:        BOOST_ASSERT(obj_);
+        -:  197:        if( t_ )
+        -:  198:            table::deallocate( t_, obj_->sp_ );
+        -:  199:        obj_ = nullptr;
+        -:  200:    }
+        -:  201:};
+        -:  202:
+        -:  203://----------------------------------------------------------
+        -:  204://
+        -:  205:// Iterators
+        -:  206://
+        -:  207://----------------------------------------------------------
+        -:  208:
+        -:  209:auto
+        -:  210:object::
+        -:  211:begin() noexcept ->
+        -:  212:    iterator
+        -:  213:{
+        -:  214:    return &(*t_)[0];
+        -:  215:}
+        -:  216:
+        -:  217:auto
+function _ZNK5boost4json6object5beginEv called 8 returned 100% blocks executed 100%
+        8:  218:object::
+        -:  219:begin() const noexcept ->
+        -:  220:    const_iterator
+        -:  221:{
+        8:  222:    return &(*t_)[0];
+call    0 returned 100%
+        -:  223:}
+        -:  224:
+        -:  225:auto
+        -:  226:object::
+        -:  227:cbegin() const noexcept ->
+        -:  228:    const_iterator
+        -:  229:{
+        -:  230:    return &(*t_)[0];
+        -:  231:}
+        -:  232:
+        -:  233:auto
+function _ZN5boost4json6object3endEv called 0 returned 0% blocks executed 0%
+    #####:  234:object::
+        -:  235:end() noexcept ->
+        -:  236:    iterator
+        -:  237:{
+    #####:  238:    return &(*t_)[t_->size];
+call    0 never executed
+        -:  239:}
+        -:  240:
+        -:  241:auto
+      91*:  242:object::
+        -:  243:end() const noexcept ->
+        -:  244:    const_iterator
+        -:  245:{
+      91*:  246:    return &(*t_)[t_->size];
+        -:  247:}
+------------------
+_ZNK5boost4json6object3endEv:
+function _ZNK5boost4json6object3endEv called 8 returned 100% blocks executed 100%
+        8:  242:object::
+        -:  243:end() const noexcept ->
+        -:  244:    const_iterator
+        -:  245:{
+        8:  246:    return &(*t_)[t_->size];
+call    0 returned 100%
+        -:  247:}
+------------------
+_ZNK5boost4json6object3endEv:
+function _ZNK5boost4json6object3endEv called 1 returned 100% blocks executed 100%
+        1:  242:object::
+        -:  243:end() const noexcept ->
+        -:  244:    const_iterator
+        -:  245:{
+        1:  246:    return &(*t_)[t_->size];
+call    0 returned 100%
+        -:  247:}
+------------------
+_ZNK5boost4json6object3endEv:
+function _ZNK5boost4json6object3endEv called 3 returned 100% blocks executed 100%
+        3:  242:object::
+        -:  243:end() const noexcept ->
+        -:  244:    const_iterator
+        -:  245:{
+        3:  246:    return &(*t_)[t_->size];
+call    0 returned 100%
+        -:  247:}
+------------------
+_ZNK5boost4json6object3endEv:
+function _ZNK5boost4json6object3endEv called 78 returned 100% blocks executed 100%
+       78:  242:object::
+        -:  243:end() const noexcept ->
+        -:  244:    const_iterator
+        -:  245:{
+       78:  246:    return &(*t_)[t_->size];
+call    0 returned 100%
+        -:  247:}
+------------------
+_ZNK5boost4json6object3endEv:
+function _ZNK5boost4json6object3endEv called 1 returned 100% blocks executed 100%
+        1:  242:object::
+        -:  243:end() const noexcept ->
+        -:  244:    const_iterator
+        -:  245:{
+        1:  246:    return &(*t_)[t_->size];
+call    0 returned 100%
+        -:  247:}
+------------------
+_ZNK5boost4json6object3endEv:
+function _ZNK5boost4json6object3endEv called 0 returned 0% blocks executed 0%
+    #####:  242:object::
+        -:  243:end() const noexcept ->
+        -:  244:    const_iterator
+        -:  245:{
+    #####:  246:    return &(*t_)[t_->size];
+call    0 never executed
+        -:  247:}
+------------------
+_ZNK5boost4json6object3endEv:
+function _ZNK5boost4json6object3endEv called 0 returned 0% blocks executed 0%
+    #####:  242:object::
+        -:  243:end() const noexcept ->
+        -:  244:    const_iterator
+        -:  245:{
+    #####:  246:    return &(*t_)[t_->size];
+call    0 never executed
+        -:  247:}
+------------------
+        -:  248:
+        -:  249:auto
+        -:  250:object::
+        -:  251:cend() const noexcept ->
+        -:  252:    const_iterator
+        -:  253:{
+        -:  254:    return &(*t_)[t_->size];
+        -:  255:}
+        -:  256:
+        -:  257:auto
+        -:  258:object::
+        -:  259:rbegin() noexcept ->
+        -:  260:    reverse_iterator
+        -:  261:{
+        -:  262:    return reverse_iterator(end());
+        -:  263:}
+        -:  264:
+        -:  265:auto
+        -:  266:object::
+        -:  267:rbegin() const noexcept ->
+        -:  268:    const_reverse_iterator
+        -:  269:{
+        -:  270:    return const_reverse_iterator(end());
+        -:  271:}
+        -:  272:
+        -:  273:auto
+        -:  274:object::
+        -:  275:crbegin() const noexcept ->
+        -:  276:    const_reverse_iterator
+        -:  277:{
+        -:  278:    return const_reverse_iterator(end());
+        -:  279:}
+        -:  280:
+        -:  281:auto
+        -:  282:object::
+        -:  283:rend() noexcept ->
+        -:  284:    reverse_iterator
+        -:  285:{
+        -:  286:    return reverse_iterator(begin());
+        -:  287:}
+        -:  288:
+        -:  289:auto
+        -:  290:object::
+        -:  291:rend() const noexcept ->
+        -:  292:    const_reverse_iterator
+        -:  293:{
+        -:  294:    return const_reverse_iterator(begin());
+        -:  295:}
+        -:  296:
+        -:  297:auto
+        -:  298:object::
+        -:  299:crend() const noexcept ->
+        -:  300:    const_reverse_iterator
+        -:  301:{
+        -:  302:    return const_reverse_iterator(begin());
+        -:  303:}
+        -:  304:
+        -:  305://----------------------------------------------------------
+        -:  306://
+        -:  307:// Capacity
+        -:  308://
+        -:  309://----------------------------------------------------------
+        -:  310:
+        -:  311:bool
+function _ZNK5boost4json6object5emptyEv called 13 returned 100% blocks executed 100%
+       13:  312:object::
+        -:  313:empty() const noexcept
+        -:  314:{
+       13:  315:    return t_->size == 0;
+        -:  316:}
+        -:  317:
+        -:  318:auto
+function _ZNK5boost4json6object4sizeEv called 3 returned 100% blocks executed 100%
+        3:  319:object::
+        -:  320:size() const noexcept ->
+        -:  321:    std::size_t
+        -:  322:{
+        3:  323:    return t_->size;
+        -:  324:}
+        -:  325:
+        -:  326:constexpr
+        -:  327:std::size_t
+        -:  328:object::
+        -:  329:max_size() noexcept
+        -:  330:{
+        -:  331:    // max_size depends on the address model
+        -:  332:    using min = std::integral_constant<std::size_t,
+        -:  333:        (std::size_t(-1) - sizeof(table)) /
+        -:  334:            (sizeof(key_value_pair) + sizeof(index_t))>;
+        -:  335:    return min::value < BOOST_JSON_MAX_STRUCTURED_SIZE ?
+        -:  336:        min::value : BOOST_JSON_MAX_STRUCTURED_SIZE;
+        -:  337:}
+        -:  338:
+        -:  339:auto
+        -:  340:object::
+        -:  341:capacity() const noexcept ->
+        -:  342:    std::size_t
+        -:  343:{
+        -:  344:    return t_->capacity;
+        -:  345:}
+        -:  346:
+        -:  347:void
+        -:  348:object::
+        -:  349:reserve(std::size_t new_capacity)
+        -:  350:{
+        -:  351:    if( new_capacity <= capacity() )
+        -:  352:        return;
+        -:  353:    table* const old_table = reserve_impl(new_capacity);
+        -:  354:    table::deallocate( old_table, sp_ );
+        -:  355:}
+        -:  356:
+        -:  357://----------------------------------------------------------
+        -:  358://
+        -:  359:// Lookup
+        -:  360://
+        -:  361://----------------------------------------------------------
+        -:  362:
+        -:  363:auto
+        8:  364:object::
+        -:  365:at(string_view key) & ->
+        -:  366:    value&
+        -:  367:{
+        8:  368:    auto const& self = *this;
+        8:  369:    return const_cast< value& >( self.at(key) );
+        -:  370:}
+------------------
+_ZNR5boost4json6object2atENS_4core17basic_string_viewIcEE:
+function _ZNR5boost4json6object2atENS_4core17basic_string_viewIcEE called 1 returned 100% blocks executed 100%
+        1:  364:object::
+        -:  365:at(string_view key) & ->
+        -:  366:    value&
+        -:  367:{
+        1:  368:    auto const& self = *this;
+        1:  369:    return const_cast< value& >( self.at(key) );
+call    0 returned 100%
+        -:  370:}
+------------------
+_ZNR5boost4json6object2atENS_4core17basic_string_viewIcEE:
+function _ZNR5boost4json6object2atENS_4core17basic_string_viewIcEE called 3 returned 100% blocks executed 100%
+        3:  364:object::
+        -:  365:at(string_view key) & ->
+        -:  366:    value&
+        -:  367:{
+        3:  368:    auto const& self = *this;
+        3:  369:    return const_cast< value& >( self.at(key) );
+call    0 returned 100%
+        -:  370:}
+------------------
+_ZNR5boost4json6object2atENS_4core17basic_string_viewIcEE:
+function _ZNR5boost4json6object2atENS_4core17basic_string_viewIcEE called 3 returned 100% blocks executed 100%
+        3:  364:object::
+        -:  365:at(string_view key) & ->
+        -:  366:    value&
+        -:  367:{
+        3:  368:    auto const& self = *this;
+        3:  369:    return const_cast< value& >( self.at(key) );
+call    0 returned 100%
+        -:  370:}
+------------------
+_ZNR5boost4json6object2atENS_4core17basic_string_viewIcEE:
+function _ZNR5boost4json6object2atENS_4core17basic_string_viewIcEE called 1 returned 100% blocks executed 100%
+        1:  364:object::
+        -:  365:at(string_view key) & ->
+        -:  366:    value&
+        -:  367:{
+        1:  368:    auto const& self = *this;
+        1:  369:    return const_cast< value& >( self.at(key) );
+call    0 returned 100%
+        -:  370:}
+------------------
+        -:  371:
+        -:  372:auto
+        -:  373:object::
+        -:  374:at(string_view key) && ->
+        -:  375:    value&&
+        -:  376:{
+        -:  377:    return std::move( at(key) );
+        -:  378:}
+        -:  379:
+        -:  380:auto
+        8:  381:object::
+        -:  382:at(string_view key) const& ->
+        -:  383:    value const&
+        -:  384:{
+        8:  385:    auto it = find(key);
+        8:  386:    if(it == end())
+        -:  387:    {
+        -:  388:        BOOST_STATIC_CONSTEXPR source_location loc = BOOST_CURRENT_LOCATION;
+    #####:  389:        detail::throw_system_error( error::out_of_range, &loc );
+        -:  390:    }
+        8:  391:    return it->value();
+        -:  392:}
+        -:  393:
+        -:  394://----------------------------------------------------------
+        -:  395:
+        -:  396:template<class P, class>
+        -:  397:auto
+        -:  398:object::
+        -:  399:insert(P&& p) ->
+        -:  400:    std::pair<iterator, bool>
+        -:  401:{
+        -:  402:    key_value_pair v(
+        -:  403:        std::forward<P>(p), sp_);
+        -:  404:    return emplace_impl( v.key(), pilfer(v) );
+        -:  405:}
+        -:  406:
+        -:  407:template<class M>
+        -:  408:auto
+        -:  409:object::
+        -:  410:insert_or_assign(
+        -:  411:    string_view key, M&& m) ->
+        -:  412:        std::pair<iterator, bool>
+        -:  413:{
+        -:  414:    std::pair<iterator, bool> result = emplace_impl(
+        -:  415:        key, key, static_cast<M&&>(m) );
+        -:  416:    if( !result.second )
+        -:  417:    {
+        -:  418:        value(static_cast<M>(m), sp_).swap(
+        -:  419:            result.first->value());
+        -:  420:    }
+        -:  421:    return result;
+        -:  422:}
+        -:  423:
+        -:  424:template<class Arg>
+        -:  425:auto
+        -:  426:object::
+        -:  427:emplace(
+        -:  428:    string_view key,
+        -:  429:    Arg&& arg) ->
+        -:  430:        std::pair<iterator, bool>
+        -:  431:{
+        -:  432:    return emplace_impl( key, key, static_cast<Arg&&>(arg) );
+        -:  433:}
+        -:  434:
+        -:  435://----------------------------------------------------------
+        -:  436://
+        -:  437:// (private)
+        -:  438://
+        -:  439://----------------------------------------------------------
+        -:  440:
+        -:  441:template<class InputIt>
+        -:  442:void
+        -:  443:object::
+        -:  444:construct(
+        -:  445:    InputIt first,
+        -:  446:    InputIt last,
+        -:  447:    std::size_t min_capacity,
+        -:  448:    std::input_iterator_tag)
+        -:  449:{
+        -:  450:    reserve(min_capacity);
+        -:  451:    revert_construct r(*this);
+        -:  452:    while(first != last)
+        -:  453:    {
+        -:  454:        insert(*first);
+        -:  455:        ++first;
+        -:  456:    }
+        -:  457:    r.commit();
+        -:  458:}
+        -:  459:
+        -:  460:template<class InputIt>
+        -:  461:void
+        -:  462:object::
+        -:  463:construct(
+        -:  464:    InputIt first,
+        -:  465:    InputIt last,
+        -:  466:    std::size_t min_capacity,
+        -:  467:    std::forward_iterator_tag)
+        -:  468:{
+        -:  469:    auto n = static_cast<
+        -:  470:        std::size_t>(std::distance(
+        -:  471:            first, last));
+        -:  472:    if( n < min_capacity)
+        -:  473:        n = min_capacity;
+        -:  474:    reserve(n);
+        -:  475:    revert_construct r(*this);
+        -:  476:    while(first != last)
+        -:  477:    {
+        -:  478:        insert(*first);
+        -:  479:        ++first;
+        -:  480:    }
+        -:  481:    r.commit();
+        -:  482:}
+        -:  483:
+        -:  484:template<class InputIt>
+        -:  485:void
+        -:  486:object::
+        -:  487:insert(
+        -:  488:    InputIt first,
+        -:  489:    InputIt last,
+        -:  490:    std::input_iterator_tag)
+        -:  491:{
+        -:  492:    // Since input iterators cannot be rewound,
+        -:  493:    // we keep inserted elements on an exception.
+        -:  494:    //
+        -:  495:    while(first != last)
+        -:  496:    {
+        -:  497:        insert(*first);
+        -:  498:        ++first;
+        -:  499:    }
+        -:  500:}
+        -:  501:
+        -:  502:template<class InputIt>
+        -:  503:void
+        -:  504:object::
+        -:  505:insert(
+        -:  506:    InputIt first,
+        -:  507:    InputIt last,
+        -:  508:    std::forward_iterator_tag)
+        -:  509:{
+        -:  510:    auto const n =
+        -:  511:        static_cast<std::size_t>(
+        -:  512:            std::distance(first, last));
+        -:  513:    auto const n0 = size();
+        -:  514:    if(n > max_size() - n0)
+        -:  515:    {
+        -:  516:        BOOST_STATIC_CONSTEXPR source_location loc = BOOST_CURRENT_LOCATION;
+        -:  517:        detail::throw_system_error( error::object_too_large, &loc );
+        -:  518:    }
+        -:  519:    revert_insert r( *this, n0 + n );
+        -:  520:    while(first != last)
+        -:  521:    {
+        -:  522:        insert(*first);
+        -:  523:        ++first;
+        -:  524:    }
+        -:  525:    r.commit();
+        -:  526:}
+        -:  527:
+        -:  528:template< class... Args >
+        -:  529:std::pair<object::iterator, bool>
+        -:  530:object::
+        -:  531:emplace_impl( string_view key, Args&& ... args )
+        -:  532:{
+        -:  533:    std::pair<iterator, std::size_t> search_result(nullptr, 0);
+        -:  534:    if( !empty() )
+        -:  535:    {
+        -:  536:        search_result = detail::find_in_object(*this, key);
+        -:  537:        if( search_result.first )
+        -:  538:            return { search_result.first, false };
+        -:  539:    }
+        -:  540:
+        -:  541:    // we create the new value before reserving, in case it is a reference to
+        -:  542:    // a subobject of the current object
+        -:  543:    key_value_pair kv( static_cast<Args&&>(args)..., sp_ );
+        -:  544:    // the key might get deallocated too
+        -:  545:    key = kv.key();
+        -:  546:
+        -:  547:    std::size_t const old_capacity = capacity();
+        -:  548:    reserve(size() + 1);
+        -:  549:    if( (empty() && capacity() > detail::small_object_size_)
+        -:  550:            || (capacity() != old_capacity) )
+        -:  551:        search_result.second = detail::digest(
+        -:  552:            key.begin(), key.end(), t_->salt);
+        -:  553:
+        -:  554:    BOOST_ASSERT(
+        -:  555:        t_->is_small() ||
+        -:  556:        (search_result.second ==
+        -:  557:            detail::digest(key.begin(), key.end(), t_->salt)) );
+        -:  558:
+        -:  559:    return { insert_impl(pilfer(kv), search_result.second), true };
+        -:  560:}
+        -:  561:
+        -:  562://----------------------------------------------------------
+        -:  563:
+        -:  564:namespace detail {
+        -:  565:
+        -:  566:unchecked_object::
+        -:  567:~unchecked_object()
+        -:  568:{
+        -:  569:    if(! data_)
+        -:  570:        return;
+        -:  571:    if(sp_.is_not_shared_and_deallocate_is_trivial())
+        -:  572:        return;
+        -:  573:    value* p = data_;
+        -:  574:    while(size_--)
+        -:  575:    {
+        -:  576:        p[0].~value();
+        -:  577:        p[1].~value();
+        -:  578:        p += 2;
+        -:  579:    }
+        -:  580:}
+        -:  581:
+        -:  582:} // detail
+        -:  583:
+        -:  584:} // namespace json
+        -:  585:} // namespace boost
+        -:  586:
+        -:  587:#endif

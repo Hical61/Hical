@@ -1,0 +1,655 @@
+        -:    0:Source:/usr/include/boost/asio/execution/allocator.hpp
+        -:    1://
+        -:    2:// execution/allocator.hpp
+        -:    3:// ~~~~~~~~~~~~~~~~~~~~~~~
+        -:    4://
+        -:    5:// Copyright (c) 2003-2023 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+        -:    6://
+        -:    7:// Distributed under the Boost Software License, Version 1.0. (See accompanying
+        -:    8:// file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+        -:    9://
+        -:   10:
+        -:   11:#ifndef BOOST_ASIO_EXECUTION_ALLOCATOR_HPP
+        -:   12:#define BOOST_ASIO_EXECUTION_ALLOCATOR_HPP
+        -:   13:
+        -:   14:#if defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   15:# pragma once
+        -:   16:#endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   17:
+        -:   18:#include <boost/asio/detail/config.hpp>
+        -:   19:#include <boost/asio/detail/type_traits.hpp>
+        -:   20:#include <boost/asio/execution/executor.hpp>
+        -:   21:#include <boost/asio/execution/scheduler.hpp>
+        -:   22:#include <boost/asio/execution/sender.hpp>
+        -:   23:#include <boost/asio/is_applicable_property.hpp>
+        -:   24:#include <boost/asio/traits/query_static_constexpr_member.hpp>
+        -:   25:#include <boost/asio/traits/static_query.hpp>
+        -:   26:
+        -:   27:#include <boost/asio/detail/push_options.hpp>
+        -:   28:
+        -:   29:namespace boost {
+        -:   30:namespace asio {
+        -:   31:
+        -:   32:#if defined(GENERATING_DOCUMENTATION)
+        -:   33:
+        -:   34:namespace execution {
+        -:   35:
+        -:   36:/// A property to describe which allocator an executor will use to allocate the
+        -:   37:/// memory required to store a submitted function object.
+        -:   38:template <typename ProtoAllocator>
+        -:   39:struct allocator_t
+        -:   40:{
+        -:   41:  /// The allocator_t property applies to executors, senders, and schedulers.
+        -:   42:  template <typename T>
+        -:   43:  static constexpr bool is_applicable_property_v =
+        -:   44:    is_executor_v<T> || is_sender_v<T> || is_scheduler_v<T>;
+        -:   45:
+        -:   46:  /// The allocator_t property can be required.
+        -:   47:  static constexpr bool is_requirable = true;
+        -:   48:
+        -:   49:  /// The allocator_t property can be preferred.
+        -:   50:  static constexpr bool is_preferable = true;
+        -:   51:
+        -:   52:  /// Default constructor.
+        -:   53:  constexpr allocator_t();
+        -:   54:
+        -:   55:  /// Obtain the allocator stored in the allocator_t property object.
+        -:   56:  /**
+        -:   57:   * Present only if @c ProtoAllocator is non-void.
+        -:   58:   */
+        -:   59:  constexpr ProtoAllocator value() const;
+        -:   60:
+        -:   61:  /// Create an allocator_t object with a different allocator.
+        -:   62:  /**
+        -:   63:   * Present only if @c ProtoAllocator is void.
+        -:   64:   */
+        -:   65:  template <typename OtherAllocator>
+        -:   66:  allocator_t<OtherAllocator operator()(const OtherAllocator& a);
+        -:   67:};
+        -:   68:
+        -:   69:/// A special value used for accessing the allocator_t property.
+        -:   70:constexpr allocator_t<void> allocator;
+        -:   71:
+        -:   72:} // namespace execution
+        -:   73:
+        -:   74:#else // defined(GENERATING_DOCUMENTATION)
+        -:   75:
+        -:   76:namespace execution {
+        -:   77:
+        -:   78:template <typename ProtoAllocator>
+        -:   79:struct allocator_t
+        -:   80:{
+        -:   81:#if defined(BOOST_ASIO_HAS_VARIABLE_TEMPLATES)
+        -:   82:# if defined(BOOST_ASIO_NO_DEPRECATED)
+        -:   83:  template <typename T>
+        -:   84:  BOOST_ASIO_STATIC_CONSTEXPR(bool,
+        -:   85:    is_applicable_property_v = (
+        -:   86:      is_executor<T>::value));
+        -:   87:# else // defined(BOOST_ASIO_NO_DEPRECATED)
+        -:   88:  template <typename T>
+        -:   89:  BOOST_ASIO_STATIC_CONSTEXPR(bool,
+        -:   90:    is_applicable_property_v = (
+        -:   91:      is_executor<T>::value
+        -:   92:        || conditional<
+        -:   93:            is_executor<T>::value,
+        -:   94:            false_type,
+        -:   95:            is_sender<T>
+        -:   96:          >::type::value
+        -:   97:        || conditional<
+        -:   98:            is_executor<T>::value,
+        -:   99:            false_type,
+        -:  100:            is_scheduler<T>
+        -:  101:          >::type::value
+        -:  102:      ));
+        -:  103:# endif // defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  104:#endif // defined(BOOST_ASIO_HAS_VARIABLE_TEMPLATES)
+        -:  105:
+        -:  106:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_requirable = true);
+        -:  107:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_preferable = true);
+        -:  108:
+        -:  109:  template <typename T>
+        -:  110:  struct static_proxy
+        -:  111:  {
+        -:  112:#if defined(BOOST_ASIO_HAS_DEDUCED_QUERY_STATIC_CONSTEXPR_MEMBER_TRAIT)
+        -:  113:    struct type
+        -:  114:    {
+        -:  115:      template <typename P>
+        -:  116:      static constexpr auto query(BOOST_ASIO_MOVE_ARG(P) p)
+        -:  117:        noexcept(
+        -:  118:          noexcept(
+        -:  119:            conditional<true, T, P>::type::query(BOOST_ASIO_MOVE_CAST(P)(p))
+        -:  120:          )
+        -:  121:        )
+        -:  122:        -> decltype(
+        -:  123:          conditional<true, T, P>::type::query(BOOST_ASIO_MOVE_CAST(P)(p))
+        -:  124:        )
+        -:  125:      {
+        -:  126:        return T::query(BOOST_ASIO_MOVE_CAST(P)(p));
+        -:  127:      }
+        -:  128:    };
+        -:  129:#else // defined(BOOST_ASIO_HAS_DEDUCED_QUERY_STATIC_CONSTEXPR_MEMBER_TRAIT)
+        -:  130:    typedef T type;
+        -:  131:#endif // defined(BOOST_ASIO_HAS_DEDUCED_QUERY_STATIC_CONSTEXPR_MEMBER_TRAIT)
+        -:  132:  };
+        -:  133:
+        -:  134:  template <typename T>
+        -:  135:  struct query_static_constexpr_member :
+        -:  136:    traits::query_static_constexpr_member<
+        -:  137:      typename static_proxy<T>::type, allocator_t> {};
+        -:  138:
+        -:  139:#if defined(BOOST_ASIO_HAS_DEDUCED_STATIC_QUERY_TRAIT) \
+        -:  140:  && defined(BOOST_ASIO_HAS_SFINAE_VARIABLE_TEMPLATES)
+        -:  141:  template <typename T>
+        -:  142:  static BOOST_ASIO_CONSTEXPR
+        -:  143:  typename query_static_constexpr_member<T>::result_type
+        -:  144:  static_query()
+        -:  145:    BOOST_ASIO_NOEXCEPT_IF((
+        -:  146:      query_static_constexpr_member<T>::is_noexcept))
+        -:  147:  {
+        -:  148:    return query_static_constexpr_member<T>::value();
+        -:  149:  }
+        -:  150:
+        -:  151:  template <typename E, typename T = decltype(allocator_t::static_query<E>())>
+        -:  152:  static BOOST_ASIO_CONSTEXPR const T static_query_v
+        -:  153:    = allocator_t::static_query<E>();
+        -:  154:#endif // defined(BOOST_ASIO_HAS_DEDUCED_STATIC_QUERY_TRAIT)
+        -:  155:       //   && defined(BOOST_ASIO_HAS_SFINAE_VARIABLE_TEMPLATES)
+        -:  156:
+function _ZNK5boost4asio9execution11allocator_tISaIvEE5valueEv called 1015 returned 100% blocks executed 100%
+     1015:  157:  BOOST_ASIO_CONSTEXPR ProtoAllocator value() const
+        -:  158:  {
+     1015:  159:    return a_;
+        -:  160:  }
+        -:  161:
+        -:  162:private:
+        -:  163:  friend struct allocator_t<void>;
+        -:  164:
+   29424*:  165:  explicit BOOST_ASIO_CONSTEXPR allocator_t(const ProtoAllocator& a)
+        -:  166:    : a_(a)
+        -:  167:  {
+   29424*:  168:  }
+------------------
+_ZN5boost4asio9execution11allocator_tISaIvEEC2ERKS3_:
+function _ZN5boost4asio9execution11allocator_tISaIvEEC2ERKS3_ called 32 returned 100% blocks executed 100%
+       32:  165:  explicit BOOST_ASIO_CONSTEXPR allocator_t(const ProtoAllocator& a)
+        -:  166:    : a_(a)
+        -:  167:  {
+       32:  168:  }
+------------------
+_ZN5boost4asio9execution11allocator_tISaIvEEC2ERKS3_:
+function _ZN5boost4asio9execution11allocator_tISaIvEEC2ERKS3_ called 66 returned 100% blocks executed 100%
+       66:  165:  explicit BOOST_ASIO_CONSTEXPR allocator_t(const ProtoAllocator& a)
+        -:  166:    : a_(a)
+        -:  167:  {
+       66:  168:  }
+------------------
+_ZN5boost4asio9execution11allocator_tISaIvEEC2ERKS3_:
+function _ZN5boost4asio9execution11allocator_tISaIvEEC2ERKS3_ called 0 returned 0% blocks executed 0%
+    #####:  165:  explicit BOOST_ASIO_CONSTEXPR allocator_t(const ProtoAllocator& a)
+        -:  166:    : a_(a)
+        -:  167:  {
+    #####:  168:  }
+------------------
+_ZN5boost4asio9execution11allocator_tISaIvEEC2ERKS3_:
+function _ZN5boost4asio9execution11allocator_tISaIvEEC2ERKS3_ called 36 returned 100% blocks executed 100%
+       36:  165:  explicit BOOST_ASIO_CONSTEXPR allocator_t(const ProtoAllocator& a)
+        -:  166:    : a_(a)
+        -:  167:  {
+       36:  168:  }
+------------------
+_ZN5boost4asio9execution11allocator_tISaIvEEC2ERKS3_:
+function _ZN5boost4asio9execution11allocator_tISaIvEEC2ERKS3_ called 74 returned 100% blocks executed 100%
+       74:  165:  explicit BOOST_ASIO_CONSTEXPR allocator_t(const ProtoAllocator& a)
+        -:  166:    : a_(a)
+        -:  167:  {
+       74:  168:  }
+------------------
+_ZN5boost4asio9execution11allocator_tISaIvEEC2ERKS3_:
+function _ZN5boost4asio9execution11allocator_tISaIvEEC2ERKS3_ called 15 returned 100% blocks executed 100%
+       15:  165:  explicit BOOST_ASIO_CONSTEXPR allocator_t(const ProtoAllocator& a)
+        -:  166:    : a_(a)
+        -:  167:  {
+       15:  168:  }
+------------------
+_ZN5boost4asio9execution11allocator_tISaIvEEC2ERKS3_:
+function _ZN5boost4asio9execution11allocator_tISaIvEEC2ERKS3_ called 0 returned 0% blocks executed 0%
+    #####:  165:  explicit BOOST_ASIO_CONSTEXPR allocator_t(const ProtoAllocator& a)
+        -:  166:    : a_(a)
+        -:  167:  {
+    #####:  168:  }
+------------------
+_ZN5boost4asio9execution11allocator_tISaIvEEC2ERKS3_:
+function _ZN5boost4asio9execution11allocator_tISaIvEEC2ERKS3_ called 0 returned 0% blocks executed 0%
+    #####:  165:  explicit BOOST_ASIO_CONSTEXPR allocator_t(const ProtoAllocator& a)
+        -:  166:    : a_(a)
+        -:  167:  {
+    #####:  168:  }
+------------------
+_ZN5boost4asio9execution11allocator_tISaIvEEC2ERKS3_:
+function _ZN5boost4asio9execution11allocator_tISaIvEEC2ERKS3_ called 42 returned 100% blocks executed 100%
+       42:  165:  explicit BOOST_ASIO_CONSTEXPR allocator_t(const ProtoAllocator& a)
+        -:  166:    : a_(a)
+        -:  167:  {
+       42:  168:  }
+------------------
+_ZN5boost4asio9execution11allocator_tISaIvEEC2ERKS3_:
+function _ZN5boost4asio9execution11allocator_tISaIvEEC2ERKS3_ called 48 returned 100% blocks executed 100%
+       48:  165:  explicit BOOST_ASIO_CONSTEXPR allocator_t(const ProtoAllocator& a)
+        -:  166:    : a_(a)
+        -:  167:  {
+       48:  168:  }
+------------------
+_ZN5boost4asio9execution11allocator_tISaIvEEC2ERKS3_:
+function _ZN5boost4asio9execution11allocator_tISaIvEEC2ERKS3_ called 15 returned 100% blocks executed 100%
+       15:  165:  explicit BOOST_ASIO_CONSTEXPR allocator_t(const ProtoAllocator& a)
+        -:  166:    : a_(a)
+        -:  167:  {
+       15:  168:  }
+------------------
+_ZN5boost4asio9execution11allocator_tISaIvEEC2ERKS3_:
+function _ZN5boost4asio9execution11allocator_tISaIvEEC2ERKS3_ called 0 returned 0% blocks executed 0%
+    #####:  165:  explicit BOOST_ASIO_CONSTEXPR allocator_t(const ProtoAllocator& a)
+        -:  166:    : a_(a)
+        -:  167:  {
+    #####:  168:  }
+------------------
+_ZN5boost4asio9execution11allocator_tISaIvEEC2ERKS3_:
+function _ZN5boost4asio9execution11allocator_tISaIvEEC2ERKS3_ called 36 returned 100% blocks executed 100%
+       36:  165:  explicit BOOST_ASIO_CONSTEXPR allocator_t(const ProtoAllocator& a)
+        -:  166:    : a_(a)
+        -:  167:  {
+       36:  168:  }
+------------------
+_ZN5boost4asio9execution11allocator_tISaIvEEC2ERKS3_:
+function _ZN5boost4asio9execution11allocator_tISaIvEEC2ERKS3_ called 83 returned 100% blocks executed 100%
+       83:  165:  explicit BOOST_ASIO_CONSTEXPR allocator_t(const ProtoAllocator& a)
+        -:  166:    : a_(a)
+        -:  167:  {
+       83:  168:  }
+------------------
+_ZN5boost4asio9execution11allocator_tISaIvEEC2ERKS3_:
+function _ZN5boost4asio9execution11allocator_tISaIvEEC2ERKS3_ called 0 returned 0% blocks executed 0%
+    #####:  165:  explicit BOOST_ASIO_CONSTEXPR allocator_t(const ProtoAllocator& a)
+        -:  166:    : a_(a)
+        -:  167:  {
+    #####:  168:  }
+------------------
+_ZN5boost4asio9execution11allocator_tISaIvEEC2ERKS3_:
+function _ZN5boost4asio9execution11allocator_tISaIvEEC2ERKS3_ called 0 returned 0% blocks executed 0%
+    #####:  165:  explicit BOOST_ASIO_CONSTEXPR allocator_t(const ProtoAllocator& a)
+        -:  166:    : a_(a)
+        -:  167:  {
+    #####:  168:  }
+------------------
+_ZN5boost4asio9execution11allocator_tISaIvEEC2ERKS3_:
+function _ZN5boost4asio9execution11allocator_tISaIvEEC2ERKS3_ called 0 returned 0% blocks executed 0%
+    #####:  165:  explicit BOOST_ASIO_CONSTEXPR allocator_t(const ProtoAllocator& a)
+        -:  166:    : a_(a)
+        -:  167:  {
+    #####:  168:  }
+------------------
+_ZN5boost4asio9execution11allocator_tISaIvEEC2ERKS3_:
+function _ZN5boost4asio9execution11allocator_tISaIvEEC2ERKS3_ called 0 returned 0% blocks executed 0%
+    #####:  165:  explicit BOOST_ASIO_CONSTEXPR allocator_t(const ProtoAllocator& a)
+        -:  166:    : a_(a)
+        -:  167:  {
+    #####:  168:  }
+------------------
+_ZN5boost4asio9execution11allocator_tISaIvEEC2ERKS3_:
+function _ZN5boost4asio9execution11allocator_tISaIvEEC2ERKS3_ called 0 returned 0% blocks executed 0%
+    #####:  165:  explicit BOOST_ASIO_CONSTEXPR allocator_t(const ProtoAllocator& a)
+        -:  166:    : a_(a)
+        -:  167:  {
+    #####:  168:  }
+------------------
+_ZN5boost4asio9execution11allocator_tISaIvEEC2ERKS3_:
+function _ZN5boost4asio9execution11allocator_tISaIvEEC2ERKS3_ called 0 returned 0% blocks executed 0%
+    #####:  165:  explicit BOOST_ASIO_CONSTEXPR allocator_t(const ProtoAllocator& a)
+        -:  166:    : a_(a)
+        -:  167:  {
+    #####:  168:  }
+------------------
+_ZN5boost4asio9execution11allocator_tISaIvEEC2ERKS3_:
+function _ZN5boost4asio9execution11allocator_tISaIvEEC2ERKS3_ called 0 returned 0% blocks executed 0%
+    #####:  165:  explicit BOOST_ASIO_CONSTEXPR allocator_t(const ProtoAllocator& a)
+        -:  166:    : a_(a)
+        -:  167:  {
+    #####:  168:  }
+------------------
+_ZN5boost4asio9execution11allocator_tISaIvEEC2ERKS3_:
+function _ZN5boost4asio9execution11allocator_tISaIvEEC2ERKS3_ called 0 returned 0% blocks executed 0%
+    #####:  165:  explicit BOOST_ASIO_CONSTEXPR allocator_t(const ProtoAllocator& a)
+        -:  166:    : a_(a)
+        -:  167:  {
+    #####:  168:  }
+------------------
+_ZN5boost4asio9execution11allocator_tISaIvEEC2ERKS3_:
+function _ZN5boost4asio9execution11allocator_tISaIvEEC2ERKS3_ called 0 returned 0% blocks executed 0%
+    #####:  165:  explicit BOOST_ASIO_CONSTEXPR allocator_t(const ProtoAllocator& a)
+        -:  166:    : a_(a)
+        -:  167:  {
+    #####:  168:  }
+------------------
+_ZN5boost4asio9execution11allocator_tISaIvEEC2ERKS3_:
+function _ZN5boost4asio9execution11allocator_tISaIvEEC2ERKS3_ called 998 returned 100% blocks executed 100%
+      998:  165:  explicit BOOST_ASIO_CONSTEXPR allocator_t(const ProtoAllocator& a)
+        -:  166:    : a_(a)
+        -:  167:  {
+      998:  168:  }
+------------------
+_ZN5boost4asio9execution11allocator_tISaIvEEC2ERKS3_:
+function _ZN5boost4asio9execution11allocator_tISaIvEEC2ERKS3_ called 0 returned 0% blocks executed 0%
+    #####:  165:  explicit BOOST_ASIO_CONSTEXPR allocator_t(const ProtoAllocator& a)
+        -:  166:    : a_(a)
+        -:  167:  {
+    #####:  168:  }
+------------------
+_ZN5boost4asio9execution11allocator_tISaIvEEC2ERKS3_:
+function _ZN5boost4asio9execution11allocator_tISaIvEEC2ERKS3_ called 0 returned 0% blocks executed 0%
+    #####:  165:  explicit BOOST_ASIO_CONSTEXPR allocator_t(const ProtoAllocator& a)
+        -:  166:    : a_(a)
+        -:  167:  {
+    #####:  168:  }
+------------------
+_ZN5boost4asio9execution11allocator_tISaIvEEC2ERKS3_:
+function _ZN5boost4asio9execution11allocator_tISaIvEEC2ERKS3_ called 0 returned 0% blocks executed 0%
+    #####:  165:  explicit BOOST_ASIO_CONSTEXPR allocator_t(const ProtoAllocator& a)
+        -:  166:    : a_(a)
+        -:  167:  {
+    #####:  168:  }
+------------------
+_ZN5boost4asio9execution11allocator_tISaIvEEC2ERKS3_:
+function _ZN5boost4asio9execution11allocator_tISaIvEEC2ERKS3_ called 0 returned 0% blocks executed 0%
+    #####:  165:  explicit BOOST_ASIO_CONSTEXPR allocator_t(const ProtoAllocator& a)
+        -:  166:    : a_(a)
+        -:  167:  {
+    #####:  168:  }
+------------------
+_ZN5boost4asio9execution11allocator_tISaIvEEC2ERKS3_:
+function _ZN5boost4asio9execution11allocator_tISaIvEEC2ERKS3_ called 0 returned 0% blocks executed 0%
+    #####:  165:  explicit BOOST_ASIO_CONSTEXPR allocator_t(const ProtoAllocator& a)
+        -:  166:    : a_(a)
+        -:  167:  {
+    #####:  168:  }
+------------------
+_ZN5boost4asio9execution11allocator_tISaIvEEC2ERKS3_:
+function _ZN5boost4asio9execution11allocator_tISaIvEEC2ERKS3_ called 0 returned 0% blocks executed 0%
+    #####:  165:  explicit BOOST_ASIO_CONSTEXPR allocator_t(const ProtoAllocator& a)
+        -:  166:    : a_(a)
+        -:  167:  {
+    #####:  168:  }
+------------------
+_ZN5boost4asio9execution11allocator_tISaIvEEC2ERKS3_:
+function _ZN5boost4asio9execution11allocator_tISaIvEEC2ERKS3_ called 0 returned 0% blocks executed 0%
+    #####:  165:  explicit BOOST_ASIO_CONSTEXPR allocator_t(const ProtoAllocator& a)
+        -:  166:    : a_(a)
+        -:  167:  {
+    #####:  168:  }
+------------------
+_ZN5boost4asio9execution11allocator_tISaIvEEC2ERKS3_:
+function _ZN5boost4asio9execution11allocator_tISaIvEEC2ERKS3_ called 0 returned 0% blocks executed 0%
+    #####:  165:  explicit BOOST_ASIO_CONSTEXPR allocator_t(const ProtoAllocator& a)
+        -:  166:    : a_(a)
+        -:  167:  {
+    #####:  168:  }
+------------------
+_ZN5boost4asio9execution11allocator_tISaIvEEC2ERKS3_:
+function _ZN5boost4asio9execution11allocator_tISaIvEEC2ERKS3_ called 0 returned 0% blocks executed 0%
+    #####:  165:  explicit BOOST_ASIO_CONSTEXPR allocator_t(const ProtoAllocator& a)
+        -:  166:    : a_(a)
+        -:  167:  {
+    #####:  168:  }
+------------------
+_ZN5boost4asio9execution11allocator_tISaIvEEC2ERKS3_:
+function _ZN5boost4asio9execution11allocator_tISaIvEEC2ERKS3_ called 0 returned 0% blocks executed 0%
+    #####:  165:  explicit BOOST_ASIO_CONSTEXPR allocator_t(const ProtoAllocator& a)
+        -:  166:    : a_(a)
+        -:  167:  {
+    #####:  168:  }
+------------------
+_ZN5boost4asio9execution11allocator_tISaIvEEC2ERKS3_:
+function _ZN5boost4asio9execution11allocator_tISaIvEEC2ERKS3_ called 0 returned 0% blocks executed 0%
+    #####:  165:  explicit BOOST_ASIO_CONSTEXPR allocator_t(const ProtoAllocator& a)
+        -:  166:    : a_(a)
+        -:  167:  {
+    #####:  168:  }
+------------------
+_ZN5boost4asio9execution11allocator_tISaIvEEC2ERKS3_:
+function _ZN5boost4asio9execution11allocator_tISaIvEEC2ERKS3_ called 0 returned 0% blocks executed 0%
+    #####:  165:  explicit BOOST_ASIO_CONSTEXPR allocator_t(const ProtoAllocator& a)
+        -:  166:    : a_(a)
+        -:  167:  {
+    #####:  168:  }
+------------------
+_ZN5boost4asio9execution11allocator_tISaIvEEC2ERKS3_:
+function _ZN5boost4asio9execution11allocator_tISaIvEEC2ERKS3_ called 0 returned 0% blocks executed 0%
+    #####:  165:  explicit BOOST_ASIO_CONSTEXPR allocator_t(const ProtoAllocator& a)
+        -:  166:    : a_(a)
+        -:  167:  {
+    #####:  168:  }
+------------------
+_ZN5boost4asio9execution11allocator_tISaIvEEC2ERKS3_:
+function _ZN5boost4asio9execution11allocator_tISaIvEEC2ERKS3_ called 27 returned 100% blocks executed 100%
+       27:  165:  explicit BOOST_ASIO_CONSTEXPR allocator_t(const ProtoAllocator& a)
+        -:  166:    : a_(a)
+        -:  167:  {
+       27:  168:  }
+------------------
+_ZN5boost4asio9execution11allocator_tISaIvEEC2ERKS3_:
+function _ZN5boost4asio9execution11allocator_tISaIvEEC2ERKS3_ called 0 returned 0% blocks executed 0%
+    #####:  165:  explicit BOOST_ASIO_CONSTEXPR allocator_t(const ProtoAllocator& a)
+        -:  166:    : a_(a)
+        -:  167:  {
+    #####:  168:  }
+------------------
+_ZN5boost4asio9execution11allocator_tISaIvEEC2ERKS3_:
+function _ZN5boost4asio9execution11allocator_tISaIvEEC2ERKS3_ called 27881 returned 100% blocks executed 100%
+    27881:  165:  explicit BOOST_ASIO_CONSTEXPR allocator_t(const ProtoAllocator& a)
+        -:  166:    : a_(a)
+        -:  167:  {
+    27881:  168:  }
+------------------
+_ZN5boost4asio9execution11allocator_tISaIvEEC2ERKS3_:
+function _ZN5boost4asio9execution11allocator_tISaIvEEC2ERKS3_ called 53 returned 100% blocks executed 100%
+       53:  165:  explicit BOOST_ASIO_CONSTEXPR allocator_t(const ProtoAllocator& a)
+        -:  166:    : a_(a)
+        -:  167:  {
+       53:  168:  }
+------------------
+_ZN5boost4asio9execution11allocator_tISaIvEEC2ERKS3_:
+function _ZN5boost4asio9execution11allocator_tISaIvEEC2ERKS3_ called 18 returned 100% blocks executed 100%
+       18:  165:  explicit BOOST_ASIO_CONSTEXPR allocator_t(const ProtoAllocator& a)
+        -:  166:    : a_(a)
+        -:  167:  {
+       18:  168:  }
+------------------
+        -:  169:
+        -:  170:  ProtoAllocator a_;
+        -:  171:};
+        -:  172:
+        -:  173:#if defined(BOOST_ASIO_HAS_DEDUCED_STATIC_QUERY_TRAIT) \
+        -:  174:  && defined(BOOST_ASIO_HAS_SFINAE_VARIABLE_TEMPLATES)
+        -:  175:template <typename ProtoAllocator> template <typename E, typename T>
+        -:  176:const T allocator_t<ProtoAllocator>::static_query_v;
+        -:  177:#endif // defined(BOOST_ASIO_HAS_DEDUCED_STATIC_QUERY_TRAIT)
+        -:  178:       //   && defined(BOOST_ASIO_HAS_SFINAE_VARIABLE_TEMPLATES)
+        -:  179:
+        -:  180:template <>
+        -:  181:struct allocator_t<void>
+        -:  182:{
+        -:  183:#if defined(BOOST_ASIO_HAS_VARIABLE_TEMPLATES)
+        -:  184:# if defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  185:  template <typename T>
+        -:  186:  BOOST_ASIO_STATIC_CONSTEXPR(bool,
+        -:  187:    is_applicable_property_v = (
+        -:  188:      is_executor<T>::value));
+        -:  189:# else // defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  190:  template <typename T>
+        -:  191:  BOOST_ASIO_STATIC_CONSTEXPR(bool,
+        -:  192:    is_applicable_property_v = (
+        -:  193:      is_executor<T>::value
+        -:  194:        || conditional<
+        -:  195:            is_executor<T>::value,
+        -:  196:            false_type,
+        -:  197:            is_sender<T>
+        -:  198:          >::type::value
+        -:  199:        || conditional<
+        -:  200:            is_executor<T>::value,
+        -:  201:            false_type,
+        -:  202:            is_scheduler<T>
+        -:  203:          >::type::value
+        -:  204:      ));
+        -:  205:# endif // defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  206:#endif // defined(BOOST_ASIO_HAS_VARIABLE_TEMPLATES)
+        -:  207:
+        -:  208:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_requirable = true);
+        -:  209:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_preferable = true);
+        -:  210:
+        -:  211:  BOOST_ASIO_CONSTEXPR allocator_t()
+        -:  212:  {
+        -:  213:  }
+        -:  214:
+        -:  215:  template <typename T>
+        -:  216:  struct static_proxy
+        -:  217:  {
+        -:  218:#if defined(BOOST_ASIO_HAS_DEDUCED_QUERY_STATIC_CONSTEXPR_MEMBER_TRAIT)
+        -:  219:    struct type
+        -:  220:    {
+        -:  221:      template <typename P>
+        -:  222:      static constexpr auto query(BOOST_ASIO_MOVE_ARG(P) p)
+        -:  223:        noexcept(
+        -:  224:          noexcept(
+        -:  225:            conditional<true, T, P>::type::query(BOOST_ASIO_MOVE_CAST(P)(p))
+        -:  226:          )
+        -:  227:        )
+        -:  228:        -> decltype(
+        -:  229:          conditional<true, T, P>::type::query(BOOST_ASIO_MOVE_CAST(P)(p))
+        -:  230:        )
+        -:  231:      {
+        -:  232:        return T::query(BOOST_ASIO_MOVE_CAST(P)(p));
+        -:  233:      }
+        -:  234:    };
+        -:  235:#else // defined(BOOST_ASIO_HAS_DEDUCED_QUERY_STATIC_CONSTEXPR_MEMBER_TRAIT)
+        -:  236:    typedef T type;
+        -:  237:#endif // defined(BOOST_ASIO_HAS_DEDUCED_QUERY_STATIC_CONSTEXPR_MEMBER_TRAIT)
+        -:  238:  };
+        -:  239:
+        -:  240:  template <typename T>
+        -:  241:  struct query_static_constexpr_member :
+        -:  242:    traits::query_static_constexpr_member<
+        -:  243:      typename static_proxy<T>::type, allocator_t> {};
+        -:  244:
+        -:  245:#if defined(BOOST_ASIO_HAS_DEDUCED_STATIC_QUERY_TRAIT) \
+        -:  246:  && defined(BOOST_ASIO_HAS_SFINAE_VARIABLE_TEMPLATES)
+        -:  247:  template <typename T>
+        -:  248:  static BOOST_ASIO_CONSTEXPR
+        -:  249:  typename query_static_constexpr_member<T>::result_type
+        -:  250:  static_query()
+        -:  251:    BOOST_ASIO_NOEXCEPT_IF((
+        -:  252:      query_static_constexpr_member<T>::is_noexcept))
+        -:  253:  {
+        -:  254:    return query_static_constexpr_member<T>::value();
+        -:  255:  }
+        -:  256:
+        -:  257:  template <typename E, typename T = decltype(allocator_t::static_query<E>())>
+        -:  258:  static BOOST_ASIO_CONSTEXPR const T static_query_v
+        -:  259:    = allocator_t::static_query<E>();
+        -:  260:#endif // defined(BOOST_ASIO_HAS_DEDUCED_STATIC_QUERY_TRAIT)
+        -:  261:       //   && defined(BOOST_ASIO_HAS_SFINAE_VARIABLE_TEMPLATES)
+        -:  262:
+        -:  263:  template <typename OtherProtoAllocator>
+   30667*:  264:  BOOST_ASIO_CONSTEXPR allocator_t<OtherProtoAllocator> operator()(
+        -:  265:      const OtherProtoAllocator& a) const
+        -:  266:  {
+   30667*:  267:    return allocator_t<OtherProtoAllocator>(a);
+        -:  268:  }
+        -:  269:};
+        -:  270:
+        -:  271:#if defined(BOOST_ASIO_HAS_DEDUCED_STATIC_QUERY_TRAIT) \
+        -:  272:  && defined(BOOST_ASIO_HAS_SFINAE_VARIABLE_TEMPLATES)
+        -:  273:template <typename E, typename T>
+        -:  274:const T allocator_t<void>::static_query_v;
+        -:  275:#endif // defined(BOOST_ASIO_HAS_DEDUCED_STATIC_QUERY_TRAIT)
+        -:  276:       //   && defined(BOOST_ASIO_HAS_SFINAE_VARIABLE_TEMPLATES)
+        -:  277:
+        -:  278:#if defined(BOOST_ASIO_HAS_CONSTEXPR) || defined(GENERATING_DOCUMENTATION)
+        -:  279:constexpr allocator_t<void> allocator;
+        -:  280:#else // defined(BOOST_ASIO_HAS_CONSTEXPR) || defined(GENERATING_DOCUMENTATION)
+        -:  281:template <typename T>
+        -:  282:struct allocator_instance
+        -:  283:{
+        -:  284:  static allocator_t<T> instance;
+        -:  285:};
+        -:  286:
+        -:  287:template <typename T>
+        -:  288:allocator_t<T> allocator_instance<T>::instance;
+        -:  289:
+        -:  290:namespace {
+        -:  291:static const allocator_t<void>& allocator = allocator_instance<void>::instance;
+        -:  292:} // namespace
+        -:  293:#endif
+        -:  294:
+        -:  295:} // namespace execution
+        -:  296:
+        -:  297:#if !defined(BOOST_ASIO_HAS_VARIABLE_TEMPLATES)
+        -:  298:
+        -:  299:template <typename T, typename ProtoAllocator>
+        -:  300:struct is_applicable_property<T, execution::allocator_t<ProtoAllocator> >
+        -:  301:  : integral_constant<bool,
+        -:  302:      execution::is_executor<T>::value
+        -:  303:#if !defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  304:        || conditional<
+        -:  305:            execution::is_executor<T>::value,
+        -:  306:            false_type,
+        -:  307:            execution::is_sender<T>
+        -:  308:          >::type::value
+        -:  309:        || conditional<
+        -:  310:            execution::is_executor<T>::value,
+        -:  311:            false_type,
+        -:  312:            execution::is_scheduler<T>
+        -:  313:          >::type::value
+        -:  314:#endif // !defined(BOOST_ASIO_NO_DEPRECATED)
+        -:  315:    >
+        -:  316:{
+        -:  317:};
+        -:  318:
+        -:  319:#endif // !defined(BOOST_ASIO_HAS_VARIABLE_TEMPLATES)
+        -:  320:
+        -:  321:namespace traits {
+        -:  322:
+        -:  323:#if !defined(BOOST_ASIO_HAS_DEDUCED_STATIC_QUERY_TRAIT) \
+        -:  324:  || !defined(BOOST_ASIO_HAS_SFINAE_VARIABLE_TEMPLATES)
+        -:  325:
+        -:  326:template <typename T, typename ProtoAllocator>
+        -:  327:struct static_query<T, execution::allocator_t<ProtoAllocator>,
+        -:  328:  typename enable_if<
+        -:  329:    execution::allocator_t<ProtoAllocator>::template
+        -:  330:      query_static_constexpr_member<T>::is_valid
+        -:  331:  >::type>
+        -:  332:{
+        -:  333:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_valid = true);
+        -:  334:  BOOST_ASIO_STATIC_CONSTEXPR(bool, is_noexcept = true);
+        -:  335:
+        -:  336:  typedef typename execution::allocator_t<ProtoAllocator>::template
+        -:  337:    query_static_constexpr_member<T>::result_type result_type;
+        -:  338:
+        -:  339:  static BOOST_ASIO_CONSTEXPR result_type value()
+        -:  340:  {
+        -:  341:    return execution::allocator_t<ProtoAllocator>::template
+        -:  342:      query_static_constexpr_member<T>::value();
+        -:  343:  }
+        -:  344:};
+        -:  345:
+        -:  346:#endif // !defined(BOOST_ASIO_HAS_DEDUCED_STATIC_QUERY_TRAIT)
+        -:  347:       //   || !defined(BOOST_ASIO_HAS_SFINAE_VARIABLE_TEMPLATES)
+        -:  348:
+        -:  349:} // namespace traits
+        -:  350:
+        -:  351:#endif // defined(GENERATING_DOCUMENTATION)
+        -:  352:
+        -:  353:} // namespace asio
+        -:  354:} // namespace boost
+        -:  355:
+        -:  356:#include <boost/asio/detail/pop_options.hpp>
+        -:  357:
+        -:  358:#endif // BOOST_ASIO_EXECUTION_ALLOCATOR_HPP

@@ -1,0 +1,86 @@
+        -:    0:Source:/usr/include/boost/asio/detail/eventfd_select_interrupter.hpp
+        -:    1://
+        -:    2:// detail/eventfd_select_interrupter.hpp
+        -:    3:// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        -:    4://
+        -:    5:// Copyright (c) 2003-2023 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+        -:    6:// Copyright (c) 2008 Roelof Naude (roelof.naude at gmail dot com)
+        -:    7://
+        -:    8:// Distributed under the Boost Software License, Version 1.0. (See accompanying
+        -:    9:// file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+        -:   10://
+        -:   11:
+        -:   12:#ifndef BOOST_ASIO_DETAIL_EVENTFD_SELECT_INTERRUPTER_HPP
+        -:   13:#define BOOST_ASIO_DETAIL_EVENTFD_SELECT_INTERRUPTER_HPP
+        -:   14:
+        -:   15:#if defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   16:# pragma once
+        -:   17:#endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   18:
+        -:   19:#include <boost/asio/detail/config.hpp>
+        -:   20:
+        -:   21:#if defined(BOOST_ASIO_HAS_EVENTFD)
+        -:   22:
+        -:   23:#include <boost/asio/detail/push_options.hpp>
+        -:   24:
+        -:   25:namespace boost {
+        -:   26:namespace asio {
+        -:   27:namespace detail {
+        -:   28:
+        -:   29:class eventfd_select_interrupter
+        -:   30:{
+        -:   31:public:
+        -:   32:  // Constructor.
+        -:   33:  BOOST_ASIO_DECL eventfd_select_interrupter();
+        -:   34:
+        -:   35:  // Destructor.
+        -:   36:  BOOST_ASIO_DECL ~eventfd_select_interrupter();
+        -:   37:
+        -:   38:  // Recreate the interrupter's descriptors. Used after a fork.
+        -:   39:  BOOST_ASIO_DECL void recreate();
+        -:   40:
+        -:   41:  // Interrupt the select call.
+        -:   42:  BOOST_ASIO_DECL void interrupt();
+        -:   43:
+        -:   44:  // Reset the select interrupter. Returns true if the reset was successful.
+        -:   45:  BOOST_ASIO_DECL bool reset();
+        -:   46:
+        -:   47:  // Get the read descriptor to be passed to select.
+     189*:   48:  int read_descriptor() const
+        -:   49:  {
+     189*:   50:    return read_descriptor_;
+        -:   51:  }
+        -:   52:
+        -:   53:private:
+        -:   54:  // Open the descriptors. Throws on error.
+        -:   55:  BOOST_ASIO_DECL void open_descriptors();
+        -:   56:
+        -:   57:  // Close the descriptors.
+        -:   58:  BOOST_ASIO_DECL void close_descriptors();
+        -:   59:
+        -:   60:  // The read end of a connection used to interrupt the select call. This file
+        -:   61:  // descriptor is passed to select such that when it is time to stop, a single
+        -:   62:  // 64bit value will be written on the other end of the connection and this
+        -:   63:  // descriptor will become readable.
+        -:   64:  int read_descriptor_;
+        -:   65:
+        -:   66:  // The write end of a connection used to interrupt the select call. A single
+        -:   67:  // 64bit non-zero value may be written to this to wake up the select which is
+        -:   68:  // waiting for the other end to become readable. This descriptor will only
+        -:   69:  // differ from the read descriptor when a pipe is used.
+        -:   70:  int write_descriptor_;
+        -:   71:};
+        -:   72:
+        -:   73:} // namespace detail
+        -:   74:} // namespace asio
+        -:   75:} // namespace boost
+        -:   76:
+        -:   77:#include <boost/asio/detail/pop_options.hpp>
+        -:   78:
+        -:   79:#if defined(BOOST_ASIO_HEADER_ONLY)
+        -:   80:# include <boost/asio/detail/impl/eventfd_select_interrupter.ipp>
+        -:   81:#endif // defined(BOOST_ASIO_HEADER_ONLY)
+        -:   82:
+        -:   83:#endif // defined(BOOST_ASIO_HAS_EVENTFD)
+        -:   84:
+        -:   85:#endif // BOOST_ASIO_DETAIL_EVENTFD_SELECT_INTERRUPTER_HPP

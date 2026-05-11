@@ -1,0 +1,168 @@
+        -:    0:Source:/usr/include/boost/asio/detail/resolver_service_base.hpp
+        -:    1://
+        -:    2:// detail/resolver_service_base.hpp
+        -:    3:// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        -:    4://
+        -:    5:// Copyright (c) 2003-2023 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+        -:    6://
+        -:    7:// Distributed under the Boost Software License, Version 1.0. (See accompanying
+        -:    8:// file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+        -:    9://
+        -:   10:
+        -:   11:#ifndef BOOST_ASIO_DETAIL_RESOLVER_SERVICE_BASE_HPP
+        -:   12:#define BOOST_ASIO_DETAIL_RESOLVER_SERVICE_BASE_HPP
+        -:   13:
+        -:   14:#if defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   15:# pragma once
+        -:   16:#endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   17:
+        -:   18:#include <boost/asio/detail/config.hpp>
+        -:   19:#include <boost/asio/error.hpp>
+        -:   20:#include <boost/asio/execution_context.hpp>
+        -:   21:#include <boost/asio/detail/mutex.hpp>
+        -:   22:#include <boost/asio/detail/noncopyable.hpp>
+        -:   23:#include <boost/asio/detail/resolve_op.hpp>
+        -:   24:#include <boost/asio/detail/socket_ops.hpp>
+        -:   25:#include <boost/asio/detail/socket_types.hpp>
+        -:   26:#include <boost/asio/detail/scoped_ptr.hpp>
+        -:   27:#include <boost/asio/detail/thread.hpp>
+        -:   28:
+        -:   29:#if defined(BOOST_ASIO_HAS_IOCP)
+        -:   30:# include <boost/asio/detail/win_iocp_io_context.hpp>
+        -:   31:#else // defined(BOOST_ASIO_HAS_IOCP)
+        -:   32:# include <boost/asio/detail/scheduler.hpp>
+        -:   33:#endif // defined(BOOST_ASIO_HAS_IOCP)
+        -:   34:
+        -:   35:#include <boost/asio/detail/push_options.hpp>
+        -:   36:
+        -:   37:namespace boost {
+        -:   38:namespace asio {
+        -:   39:namespace detail {
+        -:   40:
+        -:   41:class resolver_service_base
+        -:   42:{
+        -:   43:public:
+        -:   44:  // The implementation type of the resolver. A cancellation token is used to
+        -:   45:  // indicate to the background thread that the operation has been cancelled.
+        -:   46:  typedef socket_ops::shared_cancel_token_type implementation_type;
+        -:   47:
+        -:   48:  // Constructor.
+        -:   49:  BOOST_ASIO_DECL resolver_service_base(execution_context& context);
+        -:   50:
+        -:   51:  // Destructor.
+        -:   52:  BOOST_ASIO_DECL ~resolver_service_base();
+        -:   53:
+        -:   54:  // Destroy all user-defined handler objects owned by the service.
+        -:   55:  BOOST_ASIO_DECL void base_shutdown();
+        -:   56:
+        -:   57:  // Perform any fork-related housekeeping.
+        -:   58:  BOOST_ASIO_DECL void base_notify_fork(
+        -:   59:      execution_context::fork_event fork_ev);
+        -:   60:
+        -:   61:  // Construct a new resolver implementation.
+        -:   62:  BOOST_ASIO_DECL void construct(implementation_type& impl);
+        -:   63:
+        -:   64:  // Destroy a resolver implementation.
+        -:   65:  BOOST_ASIO_DECL void destroy(implementation_type&);
+        -:   66:
+        -:   67:  // Move-construct a new resolver implementation.
+        -:   68:  BOOST_ASIO_DECL void move_construct(implementation_type& impl,
+        -:   69:      implementation_type& other_impl);
+        -:   70:
+        -:   71:  // Move-assign from another resolver implementation.
+        -:   72:  BOOST_ASIO_DECL void move_assign(implementation_type& impl,
+        -:   73:      resolver_service_base& other_service,
+        -:   74:      implementation_type& other_impl);
+        -:   75:
+        -:   76:  // Move-construct a new timer implementation.
+        -:   77:  void converting_move_construct(implementation_type& impl,
+        -:   78:      resolver_service_base&, implementation_type& other_impl)
+        -:   79:  {
+        -:   80:    move_construct(impl, other_impl);
+        -:   81:  }
+        -:   82:
+        -:   83:  // Move-assign from another timer implementation.
+        -:   84:  void converting_move_assign(implementation_type& impl,
+        -:   85:      resolver_service_base& other_service,
+        -:   86:      implementation_type& other_impl)
+        -:   87:  {
+        -:   88:    move_assign(impl, other_service, other_impl);
+        -:   89:  }
+        -:   90:
+        -:   91:  // Cancel pending asynchronous operations.
+        -:   92:  BOOST_ASIO_DECL void cancel(implementation_type& impl);
+        -:   93:
+        -:   94:protected:
+        -:   95:  // Helper function to start an asynchronous resolve operation.
+        -:   96:  BOOST_ASIO_DECL void start_resolve_op(resolve_op* op);
+        -:   97:
+        -:   98:#if !defined(BOOST_ASIO_WINDOWS_RUNTIME)
+        -:   99:  // Helper class to perform exception-safe cleanup of addrinfo objects.
+        -:  100:  class auto_addrinfo
+        -:  101:    : private boost::asio::detail::noncopyable
+        -:  102:  {
+        -:  103:  public:
+function _ZN5boost4asio6detail21resolver_service_base13auto_addrinfoC2EP8addrinfo called 0 returned 0% blocks executed 0%
+    #####:  104:    explicit auto_addrinfo(boost::asio::detail::addrinfo_type* ai)
+    #####:  105:      : ai_(ai)
+call    0 never executed
+        -:  106:    {
+    #####:  107:    }
+        -:  108:
+function _ZN5boost4asio6detail21resolver_service_base13auto_addrinfoD2Ev called 0 returned 0% blocks executed 0%
+    #####:  109:    ~auto_addrinfo()
+        -:  110:    {
+    #####:  111:      if (ai_)
+branch  0 never executed (fallthrough)
+branch  1 never executed
+    #####:  112:        socket_ops::freeaddrinfo(ai_);
+call    0 never executed
+    #####:  113:    }
+call    0 never executed
+        -:  114:
+        -:  115:    operator boost::asio::detail::addrinfo_type*()
+        -:  116:    {
+        -:  117:      return ai_;
+        -:  118:    }
+        -:  119:
+        -:  120:  private:
+        -:  121:    boost::asio::detail::addrinfo_type* ai_;
+        -:  122:  };
+        -:  123:#endif // !defined(BOOST_ASIO_WINDOWS_RUNTIME)
+        -:  124:
+        -:  125:  // Helper class to run the work scheduler in a thread.
+        -:  126:  class work_scheduler_runner;
+        -:  127:
+        -:  128:  // Start the work scheduler if it's not already running.
+        -:  129:  BOOST_ASIO_DECL void start_work_thread();
+        -:  130:
+        -:  131:  // The scheduler implementation used to post completions.
+        -:  132:#if defined(BOOST_ASIO_HAS_IOCP)
+        -:  133:  typedef class win_iocp_io_context scheduler_impl;
+        -:  134:#else
+        -:  135:  typedef class scheduler scheduler_impl;
+        -:  136:#endif
+        -:  137:  scheduler_impl& scheduler_;
+        -:  138:
+        -:  139:private:
+        -:  140:  // Mutex to protect access to internal data.
+        -:  141:  boost::asio::detail::mutex mutex_;
+        -:  142:
+        -:  143:  // Private scheduler used for performing asynchronous host resolution.
+        -:  144:  boost::asio::detail::scoped_ptr<scheduler_impl> work_scheduler_;
+        -:  145:
+        -:  146:  // Thread used for running the work io_context's run loop.
+        -:  147:  boost::asio::detail::scoped_ptr<boost::asio::detail::thread> work_thread_;
+        -:  148:};
+        -:  149:
+        -:  150:} // namespace detail
+        -:  151:} // namespace asio
+        -:  152:} // namespace boost
+        -:  153:
+        -:  154:#include <boost/asio/detail/pop_options.hpp>
+        -:  155:
+        -:  156:#if defined(BOOST_ASIO_HEADER_ONLY)
+        -:  157:# include <boost/asio/detail/impl/resolver_service_base.ipp>
+        -:  158:#endif // defined(BOOST_ASIO_HEADER_ONLY)
+        -:  159:
+        -:  160:#endif // BOOST_ASIO_DETAIL_RESOLVER_SERVICE_BASE_HPP

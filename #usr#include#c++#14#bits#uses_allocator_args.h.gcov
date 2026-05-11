@@ -1,0 +1,1012 @@
+        -:    0:Source:/usr/include/c++/14/bits/uses_allocator_args.h
+        -:    1:// Utility functions for uses-allocator construction -*- C++ -*-
+        -:    2:
+        -:    3:// Copyright (C) 2019-2024 Free Software Foundation, Inc.
+        -:    4://
+        -:    5:// This file is part of the GNU ISO C++ Library.  This library is free
+        -:    6:// software; you can redistribute it and/or modify it under the
+        -:    7:// terms of the GNU General Public License as published by the
+        -:    8:// Free Software Foundation; either version 3, or (at your option)
+        -:    9:// any later version.
+        -:   10:
+        -:   11:// This library is distributed in the hope that it will be useful,
+        -:   12:// but WITHOUT ANY WARRANTY; without even the implied warranty of
+        -:   13:// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+        -:   14:// GNU General Public License for more details.
+        -:   15:
+        -:   16:// Under Section 7 of GPL version 3, you are granted additional
+        -:   17:// permissions described in the GCC Runtime Library Exception, version
+        -:   18:// 3.1, as published by the Free Software Foundation.
+        -:   19:
+        -:   20:// You should have received a copy of the GNU General Public License and
+        -:   21:// a copy of the GCC Runtime Library Exception along with this program;
+        -:   22:// see the files COPYING3 and COPYING.RUNTIME respectively.  If not, see
+        -:   23:// <http://www.gnu.org/licenses/>.
+        -:   24:
+        -:   25:/** @file include/bits/uses_allocator_args.h
+        -:   26: *  This is an internal header file, included by other library headers.
+        -:   27: *  Do not attempt to use it directly. @headername{memory}
+        -:   28: */
+        -:   29:
+        -:   30:#ifndef _USES_ALLOCATOR_ARGS
+        -:   31:#define _USES_ALLOCATOR_ARGS 1
+        -:   32:
+        -:   33:#pragma GCC system_header
+        -:   34:
+        -:   35:#include <bits/version.h>
+        -:   36:
+        -:   37:#ifdef __glibcxx_make_obj_using_allocator // C++ >= 20 && concepts
+        -:   38:#include <new>			// for placement operator new
+        -:   39:#include <tuple>		// for tuple, make_tuple, make_from_tuple
+        -:   40:#include <bits/stl_construct.h> // construct_at
+        -:   41:#include <bits/stl_pair.h>      // pair
+        -:   42:
+        -:   43:namespace std _GLIBCXX_VISIBILITY(default)
+        -:   44:{
+        -:   45:_GLIBCXX_BEGIN_NAMESPACE_VERSION
+        -:   46:
+        -:   47:  template<typename _Tp>
+        -:   48:    concept _Std_pair = __is_pair<remove_cv_t<_Tp>>;
+        -:   49:
+        -:   50:/** @addtogroup allocators
+        -:   51: *  @{
+        -:   52: */
+        -:   53:  template<typename _Tp, typename _Alloc, typename... _Args>
+        -:   54:    constexpr auto
+182671779*:   55:    uses_allocator_construction_args(const _Alloc& __a,
+        -:   56:				     _Args&&... __args) noexcept
+        -:   57:    requires (! _Std_pair<_Tp>)
+        -:   58:    {
+        -:   59:      if constexpr (uses_allocator_v<remove_cv_t<_Tp>, _Alloc>)
+        -:   60:	{
+        -:   61:	  if constexpr (is_constructible_v<_Tp, allocator_arg_t,
+        -:   62:					   const _Alloc&, _Args...>)
+        -:   63:	    {
+        -:   64:	      return tuple<allocator_arg_t, const _Alloc&, _Args&&...>(
+        -:   65:		  allocator_arg, __a, std::forward<_Args>(__args)...);
+        -:   66:	    }
+        -:   67:	  else
+        -:   68:	    {
+        -:   69:	      static_assert(is_constructible_v<_Tp, _Args..., const _Alloc&>,
+        -:   70:		  "construction with an allocator must be possible"
+        -:   71:		  " if uses_allocator is true");
+        -:   72:
+        -:   73:	      return tuple<_Args&&..., const _Alloc&>(
+        -:   74:		  std::forward<_Args>(__args)..., __a);
+        -:   75:	    }
+        -:   76:	}
+        -:   77:      else
+        -:   78:	{
+        -:   79:	  static_assert(is_constructible_v<_Tp, _Args...>);
+        -:   80:
+182671779*:   81:	  return tuple<_Args&&...>(std::forward<_Args>(__args)...);
+        -:   82:	}
+        -:   83:    }
+------------------
+_ZSt32uses_allocator_construction_argsIiNSt3pmr21polymorphic_allocatorIiEEJiEEDaRKT0_DpOT1_Qnt9_Std_pairIT_E:
+function _ZSt32uses_allocator_construction_argsIiNSt3pmr21polymorphic_allocatorIiEEJiEEDaRKT0_DpOT1_Qnt9_Std_pairIT_E called 641 returned 100% blocks executed 100%
+      641:   55:    uses_allocator_construction_args(const _Alloc& __a,
+        -:   56:				     _Args&&... __args) noexcept
+        -:   57:    requires (! _Std_pair<_Tp>)
+        -:   58:    {
+        -:   59:      if constexpr (uses_allocator_v<remove_cv_t<_Tp>, _Alloc>)
+        -:   60:	{
+        -:   61:	  if constexpr (is_constructible_v<_Tp, allocator_arg_t,
+        -:   62:					   const _Alloc&, _Args...>)
+        -:   63:	    {
+        -:   64:	      return tuple<allocator_arg_t, const _Alloc&, _Args&&...>(
+        -:   65:		  allocator_arg, __a, std::forward<_Args>(__args)...);
+        -:   66:	    }
+        -:   67:	  else
+        -:   68:	    {
+        -:   69:	      static_assert(is_constructible_v<_Tp, _Args..., const _Alloc&>,
+        -:   70:		  "construction with an allocator must be possible"
+        -:   71:		  " if uses_allocator is true");
+        -:   72:
+        -:   73:	      return tuple<_Args&&..., const _Alloc&>(
+        -:   74:		  std::forward<_Args>(__args)..., __a);
+        -:   75:	    }
+        -:   76:	}
+        -:   77:      else
+        -:   78:	{
+        -:   79:	  static_assert(is_constructible_v<_Tp, _Args...>);
+        -:   80:
+      641:   81:	  return tuple<_Args&&...>(std::forward<_Args>(__args)...);
+call    0 returned 100%
+call    1 returned 100%
+        -:   82:	}
+        -:   83:    }
+------------------
+_ZSt32uses_allocator_construction_argsISt4byteNSt3pmr21polymorphic_allocatorIS0_EEJEEDaRKT0_DpOT1_Qnt9_Std_pairIT_E:
+function _ZSt32uses_allocator_construction_argsISt4byteNSt3pmr21polymorphic_allocatorIS0_EEJEEDaRKT0_DpOT1_Qnt9_Std_pairIT_E called 0 returned 0% blocks executed 0%
+    #####:   55:    uses_allocator_construction_args(const _Alloc& __a,
+        -:   56:				     _Args&&... __args) noexcept
+        -:   57:    requires (! _Std_pair<_Tp>)
+        -:   58:    {
+        -:   59:      if constexpr (uses_allocator_v<remove_cv_t<_Tp>, _Alloc>)
+        -:   60:	{
+        -:   61:	  if constexpr (is_constructible_v<_Tp, allocator_arg_t,
+        -:   62:					   const _Alloc&, _Args...>)
+        -:   63:	    {
+        -:   64:	      return tuple<allocator_arg_t, const _Alloc&, _Args&&...>(
+        -:   65:		  allocator_arg, __a, std::forward<_Args>(__args)...);
+        -:   66:	    }
+        -:   67:	  else
+        -:   68:	    {
+        -:   69:	      static_assert(is_constructible_v<_Tp, _Args..., const _Alloc&>,
+        -:   70:		  "construction with an allocator must be possible"
+        -:   71:		  " if uses_allocator is true");
+        -:   72:
+        -:   73:	      return tuple<_Args&&..., const _Alloc&>(
+        -:   74:		  std::forward<_Args>(__args)..., __a);
+        -:   75:	    }
+        -:   76:	}
+        -:   77:      else
+        -:   78:	{
+        -:   79:	  static_assert(is_constructible_v<_Tp, _Args...>);
+        -:   80:
+    #####:   81:	  return tuple<_Args&&...>(std::forward<_Args>(__args)...);
+        -:   82:	}
+        -:   83:    }
+------------------
+_ZSt32uses_allocator_construction_argsISt4byteNSt3pmr21polymorphic_allocatorIS0_EEJS0_EEDaRKT0_DpOT1_Qnt9_Std_pairIT_E:
+function _ZSt32uses_allocator_construction_argsISt4byteNSt3pmr21polymorphic_allocatorIS0_EEJS0_EEDaRKT0_DpOT1_Qnt9_Std_pairIT_E called 0 returned 0% blocks executed 0%
+    #####:   55:    uses_allocator_construction_args(const _Alloc& __a,
+        -:   56:				     _Args&&... __args) noexcept
+        -:   57:    requires (! _Std_pair<_Tp>)
+        -:   58:    {
+        -:   59:      if constexpr (uses_allocator_v<remove_cv_t<_Tp>, _Alloc>)
+        -:   60:	{
+        -:   61:	  if constexpr (is_constructible_v<_Tp, allocator_arg_t,
+        -:   62:					   const _Alloc&, _Args...>)
+        -:   63:	    {
+        -:   64:	      return tuple<allocator_arg_t, const _Alloc&, _Args&&...>(
+        -:   65:		  allocator_arg, __a, std::forward<_Args>(__args)...);
+        -:   66:	    }
+        -:   67:	  else
+        -:   68:	    {
+        -:   69:	      static_assert(is_constructible_v<_Tp, _Args..., const _Alloc&>,
+        -:   70:		  "construction with an allocator must be possible"
+        -:   71:		  " if uses_allocator is true");
+        -:   72:
+        -:   73:	      return tuple<_Args&&..., const _Alloc&>(
+        -:   74:		  std::forward<_Args>(__args)..., __a);
+        -:   75:	    }
+        -:   76:	}
+        -:   77:      else
+        -:   78:	{
+        -:   79:	  static_assert(is_constructible_v<_Tp, _Args...>);
+        -:   80:
+    #####:   81:	  return tuple<_Args&&...>(std::forward<_Args>(__args)...);
+call    0 never executed
+call    1 never executed
+        -:   82:	}
+        -:   83:    }
+------------------
+_ZSt32uses_allocator_construction_argsIcNSt3pmr21polymorphic_allocatorIcEEJEEDaRKT0_DpOT1_Qnt9_Std_pairIT_E:
+function _ZSt32uses_allocator_construction_argsIcNSt3pmr21polymorphic_allocatorIcEEJEEDaRKT0_DpOT1_Qnt9_Std_pairIT_E called 0 returned 0% blocks executed 0%
+    #####:   55:    uses_allocator_construction_args(const _Alloc& __a,
+        -:   56:				     _Args&&... __args) noexcept
+        -:   57:    requires (! _Std_pair<_Tp>)
+        -:   58:    {
+        -:   59:      if constexpr (uses_allocator_v<remove_cv_t<_Tp>, _Alloc>)
+        -:   60:	{
+        -:   61:	  if constexpr (is_constructible_v<_Tp, allocator_arg_t,
+        -:   62:					   const _Alloc&, _Args...>)
+        -:   63:	    {
+        -:   64:	      return tuple<allocator_arg_t, const _Alloc&, _Args&&...>(
+        -:   65:		  allocator_arg, __a, std::forward<_Args>(__args)...);
+        -:   66:	    }
+        -:   67:	  else
+        -:   68:	    {
+        -:   69:	      static_assert(is_constructible_v<_Tp, _Args..., const _Alloc&>,
+        -:   70:		  "construction with an allocator must be possible"
+        -:   71:		  " if uses_allocator is true");
+        -:   72:
+        -:   73:	      return tuple<_Args&&..., const _Alloc&>(
+        -:   74:		  std::forward<_Args>(__args)..., __a);
+        -:   75:	    }
+        -:   76:	}
+        -:   77:      else
+        -:   78:	{
+        -:   79:	  static_assert(is_constructible_v<_Tp, _Args...>);
+        -:   80:
+    #####:   81:	  return tuple<_Args&&...>(std::forward<_Args>(__args)...);
+        -:   82:	}
+        -:   83:    }
+------------------
+_ZSt32uses_allocator_construction_argsISt4byteNSt3pmr21polymorphic_allocatorIS0_EEJEEDaRKT0_DpOT1_Qnt9_Std_pairIT_E:
+function _ZSt32uses_allocator_construction_argsISt4byteNSt3pmr21polymorphic_allocatorIS0_EEJEEDaRKT0_DpOT1_Qnt9_Std_pairIT_E called 0 returned 0% blocks executed 0%
+    #####:   55:    uses_allocator_construction_args(const _Alloc& __a,
+        -:   56:				     _Args&&... __args) noexcept
+        -:   57:    requires (! _Std_pair<_Tp>)
+        -:   58:    {
+        -:   59:      if constexpr (uses_allocator_v<remove_cv_t<_Tp>, _Alloc>)
+        -:   60:	{
+        -:   61:	  if constexpr (is_constructible_v<_Tp, allocator_arg_t,
+        -:   62:					   const _Alloc&, _Args...>)
+        -:   63:	    {
+        -:   64:	      return tuple<allocator_arg_t, const _Alloc&, _Args&&...>(
+        -:   65:		  allocator_arg, __a, std::forward<_Args>(__args)...);
+        -:   66:	    }
+        -:   67:	  else
+        -:   68:	    {
+        -:   69:	      static_assert(is_constructible_v<_Tp, _Args..., const _Alloc&>,
+        -:   70:		  "construction with an allocator must be possible"
+        -:   71:		  " if uses_allocator is true");
+        -:   72:
+        -:   73:	      return tuple<_Args&&..., const _Alloc&>(
+        -:   74:		  std::forward<_Args>(__args)..., __a);
+        -:   75:	    }
+        -:   76:	}
+        -:   77:      else
+        -:   78:	{
+        -:   79:	  static_assert(is_constructible_v<_Tp, _Args...>);
+        -:   80:
+    #####:   81:	  return tuple<_Args&&...>(std::forward<_Args>(__args)...);
+        -:   82:	}
+        -:   83:    }
+------------------
+_ZSt32uses_allocator_construction_argsIcNSt3pmr21polymorphic_allocatorIcEEJcEEDaRKT0_DpOT1_Qnt9_Std_pairIT_E:
+function _ZSt32uses_allocator_construction_argsIcNSt3pmr21polymorphic_allocatorIcEEJcEEDaRKT0_DpOT1_Qnt9_Std_pairIT_E called 0 returned 0% blocks executed 0%
+    #####:   55:    uses_allocator_construction_args(const _Alloc& __a,
+        -:   56:				     _Args&&... __args) noexcept
+        -:   57:    requires (! _Std_pair<_Tp>)
+        -:   58:    {
+        -:   59:      if constexpr (uses_allocator_v<remove_cv_t<_Tp>, _Alloc>)
+        -:   60:	{
+        -:   61:	  if constexpr (is_constructible_v<_Tp, allocator_arg_t,
+        -:   62:					   const _Alloc&, _Args...>)
+        -:   63:	    {
+        -:   64:	      return tuple<allocator_arg_t, const _Alloc&, _Args&&...>(
+        -:   65:		  allocator_arg, __a, std::forward<_Args>(__args)...);
+        -:   66:	    }
+        -:   67:	  else
+        -:   68:	    {
+        -:   69:	      static_assert(is_constructible_v<_Tp, _Args..., const _Alloc&>,
+        -:   70:		  "construction with an allocator must be possible"
+        -:   71:		  " if uses_allocator is true");
+        -:   72:
+        -:   73:	      return tuple<_Args&&..., const _Alloc&>(
+        -:   74:		  std::forward<_Args>(__args)..., __a);
+        -:   75:	    }
+        -:   76:	}
+        -:   77:      else
+        -:   78:	{
+        -:   79:	  static_assert(is_constructible_v<_Tp, _Args...>);
+        -:   80:
+    #####:   81:	  return tuple<_Args&&...>(std::forward<_Args>(__args)...);
+call    0 never executed
+call    1 never executed
+        -:   82:	}
+        -:   83:    }
+------------------
+_ZSt32uses_allocator_construction_argsISt4byteNSt3pmr21polymorphic_allocatorIS0_EEJS0_EEDaRKT0_DpOT1_Qnt9_Std_pairIT_E:
+function _ZSt32uses_allocator_construction_argsISt4byteNSt3pmr21polymorphic_allocatorIS0_EEJS0_EEDaRKT0_DpOT1_Qnt9_Std_pairIT_E called 0 returned 0% blocks executed 0%
+    #####:   55:    uses_allocator_construction_args(const _Alloc& __a,
+        -:   56:				     _Args&&... __args) noexcept
+        -:   57:    requires (! _Std_pair<_Tp>)
+        -:   58:    {
+        -:   59:      if constexpr (uses_allocator_v<remove_cv_t<_Tp>, _Alloc>)
+        -:   60:	{
+        -:   61:	  if constexpr (is_constructible_v<_Tp, allocator_arg_t,
+        -:   62:					   const _Alloc&, _Args...>)
+        -:   63:	    {
+        -:   64:	      return tuple<allocator_arg_t, const _Alloc&, _Args&&...>(
+        -:   65:		  allocator_arg, __a, std::forward<_Args>(__args)...);
+        -:   66:	    }
+        -:   67:	  else
+        -:   68:	    {
+        -:   69:	      static_assert(is_constructible_v<_Tp, _Args..., const _Alloc&>,
+        -:   70:		  "construction with an allocator must be possible"
+        -:   71:		  " if uses_allocator is true");
+        -:   72:
+        -:   73:	      return tuple<_Args&&..., const _Alloc&>(
+        -:   74:		  std::forward<_Args>(__args)..., __a);
+        -:   75:	    }
+        -:   76:	}
+        -:   77:      else
+        -:   78:	{
+        -:   79:	  static_assert(is_constructible_v<_Tp, _Args...>);
+        -:   80:
+    #####:   81:	  return tuple<_Args&&...>(std::forward<_Args>(__args)...);
+call    0 never executed
+call    1 never executed
+        -:   82:	}
+        -:   83:    }
+------------------
+_ZSt32uses_allocator_construction_argsISt4byteNSt3pmr21polymorphic_allocatorIS0_EEJEEDaRKT0_DpOT1_Qnt9_Std_pairIT_E:
+function _ZSt32uses_allocator_construction_argsISt4byteNSt3pmr21polymorphic_allocatorIS0_EEJEEDaRKT0_DpOT1_Qnt9_Std_pairIT_E called 30840 returned 100% blocks executed 100%
+    30840:   55:    uses_allocator_construction_args(const _Alloc& __a,
+        -:   56:				     _Args&&... __args) noexcept
+        -:   57:    requires (! _Std_pair<_Tp>)
+        -:   58:    {
+        -:   59:      if constexpr (uses_allocator_v<remove_cv_t<_Tp>, _Alloc>)
+        -:   60:	{
+        -:   61:	  if constexpr (is_constructible_v<_Tp, allocator_arg_t,
+        -:   62:					   const _Alloc&, _Args...>)
+        -:   63:	    {
+        -:   64:	      return tuple<allocator_arg_t, const _Alloc&, _Args&&...>(
+        -:   65:		  allocator_arg, __a, std::forward<_Args>(__args)...);
+        -:   66:	    }
+        -:   67:	  else
+        -:   68:	    {
+        -:   69:	      static_assert(is_constructible_v<_Tp, _Args..., const _Alloc&>,
+        -:   70:		  "construction with an allocator must be possible"
+        -:   71:		  " if uses_allocator is true");
+        -:   72:
+        -:   73:	      return tuple<_Args&&..., const _Alloc&>(
+        -:   74:		  std::forward<_Args>(__args)..., __a);
+        -:   75:	    }
+        -:   76:	}
+        -:   77:      else
+        -:   78:	{
+        -:   79:	  static_assert(is_constructible_v<_Tp, _Args...>);
+        -:   80:
+    30840:   81:	  return tuple<_Args&&...>(std::forward<_Args>(__args)...);
+        -:   82:	}
+        -:   83:    }
+------------------
+_ZSt32uses_allocator_construction_argsISt4byteNSt3pmr21polymorphic_allocatorIS0_EEJS0_EEDaRKT0_DpOT1_Qnt9_Std_pairIT_E:
+function _ZSt32uses_allocator_construction_argsISt4byteNSt3pmr21polymorphic_allocatorIS0_EEJS0_EEDaRKT0_DpOT1_Qnt9_Std_pairIT_E called 12336 returned 100% blocks executed 100%
+    12336:   55:    uses_allocator_construction_args(const _Alloc& __a,
+        -:   56:				     _Args&&... __args) noexcept
+        -:   57:    requires (! _Std_pair<_Tp>)
+        -:   58:    {
+        -:   59:      if constexpr (uses_allocator_v<remove_cv_t<_Tp>, _Alloc>)
+        -:   60:	{
+        -:   61:	  if constexpr (is_constructible_v<_Tp, allocator_arg_t,
+        -:   62:					   const _Alloc&, _Args...>)
+        -:   63:	    {
+        -:   64:	      return tuple<allocator_arg_t, const _Alloc&, _Args&&...>(
+        -:   65:		  allocator_arg, __a, std::forward<_Args>(__args)...);
+        -:   66:	    }
+        -:   67:	  else
+        -:   68:	    {
+        -:   69:	      static_assert(is_constructible_v<_Tp, _Args..., const _Alloc&>,
+        -:   70:		  "construction with an allocator must be possible"
+        -:   71:		  " if uses_allocator is true");
+        -:   72:
+        -:   73:	      return tuple<_Args&&..., const _Alloc&>(
+        -:   74:		  std::forward<_Args>(__args)..., __a);
+        -:   75:	    }
+        -:   76:	}
+        -:   77:      else
+        -:   78:	{
+        -:   79:	  static_assert(is_constructible_v<_Tp, _Args...>);
+        -:   80:
+    12336:   81:	  return tuple<_Args&&...>(std::forward<_Args>(__args)...);
+call    0 returned 100%
+call    1 returned 100%
+        -:   82:	}
+        -:   83:    }
+------------------
+_ZSt32uses_allocator_construction_argsIiNSt3pmr21polymorphic_allocatorIiEEJiEEDaRKT0_DpOT1_Qnt9_Std_pairIT_E:
+function _ZSt32uses_allocator_construction_argsIiNSt3pmr21polymorphic_allocatorIiEEJiEEDaRKT0_DpOT1_Qnt9_Std_pairIT_E called 6 returned 100% blocks executed 100%
+        6:   55:    uses_allocator_construction_args(const _Alloc& __a,
+        -:   56:				     _Args&&... __args) noexcept
+        -:   57:    requires (! _Std_pair<_Tp>)
+        -:   58:    {
+        -:   59:      if constexpr (uses_allocator_v<remove_cv_t<_Tp>, _Alloc>)
+        -:   60:	{
+        -:   61:	  if constexpr (is_constructible_v<_Tp, allocator_arg_t,
+        -:   62:					   const _Alloc&, _Args...>)
+        -:   63:	    {
+        -:   64:	      return tuple<allocator_arg_t, const _Alloc&, _Args&&...>(
+        -:   65:		  allocator_arg, __a, std::forward<_Args>(__args)...);
+        -:   66:	    }
+        -:   67:	  else
+        -:   68:	    {
+        -:   69:	      static_assert(is_constructible_v<_Tp, _Args..., const _Alloc&>,
+        -:   70:		  "construction with an allocator must be possible"
+        -:   71:		  " if uses_allocator is true");
+        -:   72:
+        -:   73:	      return tuple<_Args&&..., const _Alloc&>(
+        -:   74:		  std::forward<_Args>(__args)..., __a);
+        -:   75:	    }
+        -:   76:	}
+        -:   77:      else
+        -:   78:	{
+        -:   79:	  static_assert(is_constructible_v<_Tp, _Args...>);
+        -:   80:
+        6:   81:	  return tuple<_Args&&...>(std::forward<_Args>(__args)...);
+call    0 returned 100%
+call    1 returned 100%
+        -:   82:	}
+        -:   83:    }
+------------------
+_ZSt32uses_allocator_construction_argsIiNSt3pmr21polymorphic_allocatorIiEEJRKiEEDaRKT0_DpOT1_Qnt9_Std_pairIT_E:
+function _ZSt32uses_allocator_construction_argsIiNSt3pmr21polymorphic_allocatorIiEEJRKiEEDaRKT0_DpOT1_Qnt9_Std_pairIT_E called 500 returned 100% blocks executed 100%
+      500:   55:    uses_allocator_construction_args(const _Alloc& __a,
+        -:   56:				     _Args&&... __args) noexcept
+        -:   57:    requires (! _Std_pair<_Tp>)
+        -:   58:    {
+        -:   59:      if constexpr (uses_allocator_v<remove_cv_t<_Tp>, _Alloc>)
+        -:   60:	{
+        -:   61:	  if constexpr (is_constructible_v<_Tp, allocator_arg_t,
+        -:   62:					   const _Alloc&, _Args...>)
+        -:   63:	    {
+        -:   64:	      return tuple<allocator_arg_t, const _Alloc&, _Args&&...>(
+        -:   65:		  allocator_arg, __a, std::forward<_Args>(__args)...);
+        -:   66:	    }
+        -:   67:	  else
+        -:   68:	    {
+        -:   69:	      static_assert(is_constructible_v<_Tp, _Args..., const _Alloc&>,
+        -:   70:		  "construction with an allocator must be possible"
+        -:   71:		  " if uses_allocator is true");
+        -:   72:
+        -:   73:	      return tuple<_Args&&..., const _Alloc&>(
+        -:   74:		  std::forward<_Args>(__args)..., __a);
+        -:   75:	    }
+        -:   76:	}
+        -:   77:      else
+        -:   78:	{
+        -:   79:	  static_assert(is_constructible_v<_Tp, _Args...>);
+        -:   80:
+      500:   81:	  return tuple<_Args&&...>(std::forward<_Args>(__args)...);
+call    0 returned 100%
+call    1 returned 100%
+        -:   82:	}
+        -:   83:    }
+------------------
+_ZSt32uses_allocator_construction_argsISt4byteNSt3pmr21polymorphic_allocatorIS0_EEJS0_EEDaRKT0_DpOT1_Qnt9_Std_pairIT_E:
+function _ZSt32uses_allocator_construction_argsISt4byteNSt3pmr21polymorphic_allocatorIS0_EEJS0_EEDaRKT0_DpOT1_Qnt9_Std_pairIT_E called 0 returned 0% blocks executed 0%
+    #####:   55:    uses_allocator_construction_args(const _Alloc& __a,
+        -:   56:				     _Args&&... __args) noexcept
+        -:   57:    requires (! _Std_pair<_Tp>)
+        -:   58:    {
+        -:   59:      if constexpr (uses_allocator_v<remove_cv_t<_Tp>, _Alloc>)
+        -:   60:	{
+        -:   61:	  if constexpr (is_constructible_v<_Tp, allocator_arg_t,
+        -:   62:					   const _Alloc&, _Args...>)
+        -:   63:	    {
+        -:   64:	      return tuple<allocator_arg_t, const _Alloc&, _Args&&...>(
+        -:   65:		  allocator_arg, __a, std::forward<_Args>(__args)...);
+        -:   66:	    }
+        -:   67:	  else
+        -:   68:	    {
+        -:   69:	      static_assert(is_constructible_v<_Tp, _Args..., const _Alloc&>,
+        -:   70:		  "construction with an allocator must be possible"
+        -:   71:		  " if uses_allocator is true");
+        -:   72:
+        -:   73:	      return tuple<_Args&&..., const _Alloc&>(
+        -:   74:		  std::forward<_Args>(__args)..., __a);
+        -:   75:	    }
+        -:   76:	}
+        -:   77:      else
+        -:   78:	{
+        -:   79:	  static_assert(is_constructible_v<_Tp, _Args...>);
+        -:   80:
+    #####:   81:	  return tuple<_Args&&...>(std::forward<_Args>(__args)...);
+call    0 never executed
+call    1 never executed
+        -:   82:	}
+        -:   83:    }
+------------------
+_ZSt32uses_allocator_construction_argsISt4byteNSt3pmr21polymorphic_allocatorIS0_EEJEEDaRKT0_DpOT1_Qnt9_Std_pairIT_E:
+function _ZSt32uses_allocator_construction_argsISt4byteNSt3pmr21polymorphic_allocatorIS0_EEJEEDaRKT0_DpOT1_Qnt9_Std_pairIT_E called 130048 returned 100% blocks executed 100%
+   130048:   55:    uses_allocator_construction_args(const _Alloc& __a,
+        -:   56:				     _Args&&... __args) noexcept
+        -:   57:    requires (! _Std_pair<_Tp>)
+        -:   58:    {
+        -:   59:      if constexpr (uses_allocator_v<remove_cv_t<_Tp>, _Alloc>)
+        -:   60:	{
+        -:   61:	  if constexpr (is_constructible_v<_Tp, allocator_arg_t,
+        -:   62:					   const _Alloc&, _Args...>)
+        -:   63:	    {
+        -:   64:	      return tuple<allocator_arg_t, const _Alloc&, _Args&&...>(
+        -:   65:		  allocator_arg, __a, std::forward<_Args>(__args)...);
+        -:   66:	    }
+        -:   67:	  else
+        -:   68:	    {
+        -:   69:	      static_assert(is_constructible_v<_Tp, _Args..., const _Alloc&>,
+        -:   70:		  "construction with an allocator must be possible"
+        -:   71:		  " if uses_allocator is true");
+        -:   72:
+        -:   73:	      return tuple<_Args&&..., const _Alloc&>(
+        -:   74:		  std::forward<_Args>(__args)..., __a);
+        -:   75:	    }
+        -:   76:	}
+        -:   77:      else
+        -:   78:	{
+        -:   79:	  static_assert(is_constructible_v<_Tp, _Args...>);
+        -:   80:
+   130048:   81:	  return tuple<_Args&&...>(std::forward<_Args>(__args)...);
+        -:   82:	}
+        -:   83:    }
+------------------
+_ZSt32uses_allocator_construction_argsIcNSt3pmr21polymorphic_allocatorIcEEJEEDaRKT0_DpOT1_Qnt9_Std_pairIT_E:
+function _ZSt32uses_allocator_construction_argsIcNSt3pmr21polymorphic_allocatorIcEEJEEDaRKT0_DpOT1_Qnt9_Std_pairIT_E called 1384488 returned 100% blocks executed 100%
+  1384488:   55:    uses_allocator_construction_args(const _Alloc& __a,
+        -:   56:				     _Args&&... __args) noexcept
+        -:   57:    requires (! _Std_pair<_Tp>)
+        -:   58:    {
+        -:   59:      if constexpr (uses_allocator_v<remove_cv_t<_Tp>, _Alloc>)
+        -:   60:	{
+        -:   61:	  if constexpr (is_constructible_v<_Tp, allocator_arg_t,
+        -:   62:					   const _Alloc&, _Args...>)
+        -:   63:	    {
+        -:   64:	      return tuple<allocator_arg_t, const _Alloc&, _Args&&...>(
+        -:   65:		  allocator_arg, __a, std::forward<_Args>(__args)...);
+        -:   66:	    }
+        -:   67:	  else
+        -:   68:	    {
+        -:   69:	      static_assert(is_constructible_v<_Tp, _Args..., const _Alloc&>,
+        -:   70:		  "construction with an allocator must be possible"
+        -:   71:		  " if uses_allocator is true");
+        -:   72:
+        -:   73:	      return tuple<_Args&&..., const _Alloc&>(
+        -:   74:		  std::forward<_Args>(__args)..., __a);
+        -:   75:	    }
+        -:   76:	}
+        -:   77:      else
+        -:   78:	{
+        -:   79:	  static_assert(is_constructible_v<_Tp, _Args...>);
+        -:   80:
+  1384488:   81:	  return tuple<_Args&&...>(std::forward<_Args>(__args)...);
+        -:   82:	}
+        -:   83:    }
+------------------
+_ZSt32uses_allocator_construction_argsISt4byteNSt3pmr21polymorphic_allocatorIS0_EEJS0_EEDaRKT0_DpOT1_Qnt9_Std_pairIT_E:
+function _ZSt32uses_allocator_construction_argsISt4byteNSt3pmr21polymorphic_allocatorIS0_EEJS0_EEDaRKT0_DpOT1_Qnt9_Std_pairIT_E called 2080 returned 100% blocks executed 100%
+     2080:   55:    uses_allocator_construction_args(const _Alloc& __a,
+        -:   56:				     _Args&&... __args) noexcept
+        -:   57:    requires (! _Std_pair<_Tp>)
+        -:   58:    {
+        -:   59:      if constexpr (uses_allocator_v<remove_cv_t<_Tp>, _Alloc>)
+        -:   60:	{
+        -:   61:	  if constexpr (is_constructible_v<_Tp, allocator_arg_t,
+        -:   62:					   const _Alloc&, _Args...>)
+        -:   63:	    {
+        -:   64:	      return tuple<allocator_arg_t, const _Alloc&, _Args&&...>(
+        -:   65:		  allocator_arg, __a, std::forward<_Args>(__args)...);
+        -:   66:	    }
+        -:   67:	  else
+        -:   68:	    {
+        -:   69:	      static_assert(is_constructible_v<_Tp, _Args..., const _Alloc&>,
+        -:   70:		  "construction with an allocator must be possible"
+        -:   71:		  " if uses_allocator is true");
+        -:   72:
+        -:   73:	      return tuple<_Args&&..., const _Alloc&>(
+        -:   74:		  std::forward<_Args>(__args)..., __a);
+        -:   75:	    }
+        -:   76:	}
+        -:   77:      else
+        -:   78:	{
+        -:   79:	  static_assert(is_constructible_v<_Tp, _Args...>);
+        -:   80:
+     2080:   81:	  return tuple<_Args&&...>(std::forward<_Args>(__args)...);
+call    0 returned 100%
+call    1 returned 100%
+        -:   82:	}
+        -:   83:    }
+------------------
+_ZSt32uses_allocator_construction_argsIcNSt3pmr21polymorphic_allocatorIcEEJcEEDaRKT0_DpOT1_Qnt9_Std_pairIT_E:
+function _ZSt32uses_allocator_construction_argsIcNSt3pmr21polymorphic_allocatorIcEEJcEEDaRKT0_DpOT1_Qnt9_Std_pairIT_E called 0 returned 0% blocks executed 0%
+    #####:   55:    uses_allocator_construction_args(const _Alloc& __a,
+        -:   56:				     _Args&&... __args) noexcept
+        -:   57:    requires (! _Std_pair<_Tp>)
+        -:   58:    {
+        -:   59:      if constexpr (uses_allocator_v<remove_cv_t<_Tp>, _Alloc>)
+        -:   60:	{
+        -:   61:	  if constexpr (is_constructible_v<_Tp, allocator_arg_t,
+        -:   62:					   const _Alloc&, _Args...>)
+        -:   63:	    {
+        -:   64:	      return tuple<allocator_arg_t, const _Alloc&, _Args&&...>(
+        -:   65:		  allocator_arg, __a, std::forward<_Args>(__args)...);
+        -:   66:	    }
+        -:   67:	  else
+        -:   68:	    {
+        -:   69:	      static_assert(is_constructible_v<_Tp, _Args..., const _Alloc&>,
+        -:   70:		  "construction with an allocator must be possible"
+        -:   71:		  " if uses_allocator is true");
+        -:   72:
+        -:   73:	      return tuple<_Args&&..., const _Alloc&>(
+        -:   74:		  std::forward<_Args>(__args)..., __a);
+        -:   75:	    }
+        -:   76:	}
+        -:   77:      else
+        -:   78:	{
+        -:   79:	  static_assert(is_constructible_v<_Tp, _Args...>);
+        -:   80:
+    #####:   81:	  return tuple<_Args&&...>(std::forward<_Args>(__args)...);
+call    0 never executed
+call    1 never executed
+        -:   82:	}
+        -:   83:    }
+------------------
+_ZSt32uses_allocator_construction_argsIcNSt3pmr21polymorphic_allocatorIcEEJEEDaRKT0_DpOT1_Qnt9_Std_pairIT_E:
+function _ZSt32uses_allocator_construction_argsIcNSt3pmr21polymorphic_allocatorIcEEJEEDaRKT0_DpOT1_Qnt9_Std_pairIT_E called 26880000 returned 100% blocks executed 100%
+ 26880000:   55:    uses_allocator_construction_args(const _Alloc& __a,
+        -:   56:				     _Args&&... __args) noexcept
+        -:   57:    requires (! _Std_pair<_Tp>)
+        -:   58:    {
+        -:   59:      if constexpr (uses_allocator_v<remove_cv_t<_Tp>, _Alloc>)
+        -:   60:	{
+        -:   61:	  if constexpr (is_constructible_v<_Tp, allocator_arg_t,
+        -:   62:					   const _Alloc&, _Args...>)
+        -:   63:	    {
+        -:   64:	      return tuple<allocator_arg_t, const _Alloc&, _Args&&...>(
+        -:   65:		  allocator_arg, __a, std::forward<_Args>(__args)...);
+        -:   66:	    }
+        -:   67:	  else
+        -:   68:	    {
+        -:   69:	      static_assert(is_constructible_v<_Tp, _Args..., const _Alloc&>,
+        -:   70:		  "construction with an allocator must be possible"
+        -:   71:		  " if uses_allocator is true");
+        -:   72:
+        -:   73:	      return tuple<_Args&&..., const _Alloc&>(
+        -:   74:		  std::forward<_Args>(__args)..., __a);
+        -:   75:	    }
+        -:   76:	}
+        -:   77:      else
+        -:   78:	{
+        -:   79:	  static_assert(is_constructible_v<_Tp, _Args...>);
+        -:   80:
+ 26880000:   81:	  return tuple<_Args&&...>(std::forward<_Args>(__args)...);
+        -:   82:	}
+        -:   83:    }
+------------------
+_ZSt32uses_allocator_construction_argsISt4byteNSt3pmr21polymorphic_allocatorIS0_EEJEEDaRKT0_DpOT1_Qnt9_Std_pairIT_E:
+function _ZSt32uses_allocator_construction_argsISt4byteNSt3pmr21polymorphic_allocatorIS0_EEJEEDaRKT0_DpOT1_Qnt9_Std_pairIT_E called 82240000 returned 100% blocks executed 100%
+ 82240000:   55:    uses_allocator_construction_args(const _Alloc& __a,
+        -:   56:				     _Args&&... __args) noexcept
+        -:   57:    requires (! _Std_pair<_Tp>)
+        -:   58:    {
+        -:   59:      if constexpr (uses_allocator_v<remove_cv_t<_Tp>, _Alloc>)
+        -:   60:	{
+        -:   61:	  if constexpr (is_constructible_v<_Tp, allocator_arg_t,
+        -:   62:					   const _Alloc&, _Args...>)
+        -:   63:	    {
+        -:   64:	      return tuple<allocator_arg_t, const _Alloc&, _Args&&...>(
+        -:   65:		  allocator_arg, __a, std::forward<_Args>(__args)...);
+        -:   66:	    }
+        -:   67:	  else
+        -:   68:	    {
+        -:   69:	      static_assert(is_constructible_v<_Tp, _Args..., const _Alloc&>,
+        -:   70:		  "construction with an allocator must be possible"
+        -:   71:		  " if uses_allocator is true");
+        -:   72:
+        -:   73:	      return tuple<_Args&&..., const _Alloc&>(
+        -:   74:		  std::forward<_Args>(__args)..., __a);
+        -:   75:	    }
+        -:   76:	}
+        -:   77:      else
+        -:   78:	{
+        -:   79:	  static_assert(is_constructible_v<_Tp, _Args...>);
+        -:   80:
+ 82240000:   81:	  return tuple<_Args&&...>(std::forward<_Args>(__args)...);
+        -:   82:	}
+        -:   83:    }
+------------------
+_ZSt32uses_allocator_construction_argsISt4byteNSt3pmr21polymorphic_allocatorIS0_EEJS0_EEDaRKT0_DpOT1_Qnt9_Std_pairIT_E:
+function _ZSt32uses_allocator_construction_argsISt4byteNSt3pmr21polymorphic_allocatorIS0_EEJS0_EEDaRKT0_DpOT1_Qnt9_Std_pairIT_E called 71960000 returned 100% blocks executed 100%
+ 71960000:   55:    uses_allocator_construction_args(const _Alloc& __a,
+        -:   56:				     _Args&&... __args) noexcept
+        -:   57:    requires (! _Std_pair<_Tp>)
+        -:   58:    {
+        -:   59:      if constexpr (uses_allocator_v<remove_cv_t<_Tp>, _Alloc>)
+        -:   60:	{
+        -:   61:	  if constexpr (is_constructible_v<_Tp, allocator_arg_t,
+        -:   62:					   const _Alloc&, _Args...>)
+        -:   63:	    {
+        -:   64:	      return tuple<allocator_arg_t, const _Alloc&, _Args&&...>(
+        -:   65:		  allocator_arg, __a, std::forward<_Args>(__args)...);
+        -:   66:	    }
+        -:   67:	  else
+        -:   68:	    {
+        -:   69:	      static_assert(is_constructible_v<_Tp, _Args..., const _Alloc&>,
+        -:   70:		  "construction with an allocator must be possible"
+        -:   71:		  " if uses_allocator is true");
+        -:   72:
+        -:   73:	      return tuple<_Args&&..., const _Alloc&>(
+        -:   74:		  std::forward<_Args>(__args)..., __a);
+        -:   75:	    }
+        -:   76:	}
+        -:   77:      else
+        -:   78:	{
+        -:   79:	  static_assert(is_constructible_v<_Tp, _Args...>);
+        -:   80:
+ 71960000:   81:	  return tuple<_Args&&...>(std::forward<_Args>(__args)...);
+call    0 returned 100%
+call    1 returned 100%
+        -:   82:	}
+        -:   83:    }
+------------------
+_ZSt32uses_allocator_construction_argsISt4byteNSt3pmr21polymorphic_allocatorIS0_EEJEEDaRKT0_DpOT1_Qnt9_Std_pairIT_E:
+function _ZSt32uses_allocator_construction_argsISt4byteNSt3pmr21polymorphic_allocatorIS0_EEJEEDaRKT0_DpOT1_Qnt9_Std_pairIT_E called 20560 returned 100% blocks executed 100%
+    20560:   55:    uses_allocator_construction_args(const _Alloc& __a,
+        -:   56:				     _Args&&... __args) noexcept
+        -:   57:    requires (! _Std_pair<_Tp>)
+        -:   58:    {
+        -:   59:      if constexpr (uses_allocator_v<remove_cv_t<_Tp>, _Alloc>)
+        -:   60:	{
+        -:   61:	  if constexpr (is_constructible_v<_Tp, allocator_arg_t,
+        -:   62:					   const _Alloc&, _Args...>)
+        -:   63:	    {
+        -:   64:	      return tuple<allocator_arg_t, const _Alloc&, _Args&&...>(
+        -:   65:		  allocator_arg, __a, std::forward<_Args>(__args)...);
+        -:   66:	    }
+        -:   67:	  else
+        -:   68:	    {
+        -:   69:	      static_assert(is_constructible_v<_Tp, _Args..., const _Alloc&>,
+        -:   70:		  "construction with an allocator must be possible"
+        -:   71:		  " if uses_allocator is true");
+        -:   72:
+        -:   73:	      return tuple<_Args&&..., const _Alloc&>(
+        -:   74:		  std::forward<_Args>(__args)..., __a);
+        -:   75:	    }
+        -:   76:	}
+        -:   77:      else
+        -:   78:	{
+        -:   79:	  static_assert(is_constructible_v<_Tp, _Args...>);
+        -:   80:
+    20560:   81:	  return tuple<_Args&&...>(std::forward<_Args>(__args)...);
+        -:   82:	}
+        -:   83:    }
+------------------
+_ZSt32uses_allocator_construction_argsISt4byteNSt3pmr21polymorphic_allocatorIS0_EEJS0_EEDaRKT0_DpOT1_Qnt9_Std_pairIT_E:
+function _ZSt32uses_allocator_construction_argsISt4byteNSt3pmr21polymorphic_allocatorIS0_EEJS0_EEDaRKT0_DpOT1_Qnt9_Std_pairIT_E called 10280 returned 100% blocks executed 100%
+    10280:   55:    uses_allocator_construction_args(const _Alloc& __a,
+        -:   56:				     _Args&&... __args) noexcept
+        -:   57:    requires (! _Std_pair<_Tp>)
+        -:   58:    {
+        -:   59:      if constexpr (uses_allocator_v<remove_cv_t<_Tp>, _Alloc>)
+        -:   60:	{
+        -:   61:	  if constexpr (is_constructible_v<_Tp, allocator_arg_t,
+        -:   62:					   const _Alloc&, _Args...>)
+        -:   63:	    {
+        -:   64:	      return tuple<allocator_arg_t, const _Alloc&, _Args&&...>(
+        -:   65:		  allocator_arg, __a, std::forward<_Args>(__args)...);
+        -:   66:	    }
+        -:   67:	  else
+        -:   68:	    {
+        -:   69:	      static_assert(is_constructible_v<_Tp, _Args..., const _Alloc&>,
+        -:   70:		  "construction with an allocator must be possible"
+        -:   71:		  " if uses_allocator is true");
+        -:   72:
+        -:   73:	      return tuple<_Args&&..., const _Alloc&>(
+        -:   74:		  std::forward<_Args>(__args)..., __a);
+        -:   75:	    }
+        -:   76:	}
+        -:   77:      else
+        -:   78:	{
+        -:   79:	  static_assert(is_constructible_v<_Tp, _Args...>);
+        -:   80:
+    10280:   81:	  return tuple<_Args&&...>(std::forward<_Args>(__args)...);
+call    0 returned 100%
+call    1 returned 100%
+        -:   82:	}
+        -:   83:    }
+------------------
+_ZSt32uses_allocator_construction_argsISt4byteNSt3pmr21polymorphic_allocatorIS0_EEJEEDaRKT0_DpOT1_Qnt9_Std_pairIT_E:
+function _ZSt32uses_allocator_construction_argsISt4byteNSt3pmr21polymorphic_allocatorIS0_EEJEEDaRKT0_DpOT1_Qnt9_Std_pairIT_E called 0 returned 0% blocks executed 0%
+    #####:   55:    uses_allocator_construction_args(const _Alloc& __a,
+        -:   56:				     _Args&&... __args) noexcept
+        -:   57:    requires (! _Std_pair<_Tp>)
+        -:   58:    {
+        -:   59:      if constexpr (uses_allocator_v<remove_cv_t<_Tp>, _Alloc>)
+        -:   60:	{
+        -:   61:	  if constexpr (is_constructible_v<_Tp, allocator_arg_t,
+        -:   62:					   const _Alloc&, _Args...>)
+        -:   63:	    {
+        -:   64:	      return tuple<allocator_arg_t, const _Alloc&, _Args&&...>(
+        -:   65:		  allocator_arg, __a, std::forward<_Args>(__args)...);
+        -:   66:	    }
+        -:   67:	  else
+        -:   68:	    {
+        -:   69:	      static_assert(is_constructible_v<_Tp, _Args..., const _Alloc&>,
+        -:   70:		  "construction with an allocator must be possible"
+        -:   71:		  " if uses_allocator is true");
+        -:   72:
+        -:   73:	      return tuple<_Args&&..., const _Alloc&>(
+        -:   74:		  std::forward<_Args>(__args)..., __a);
+        -:   75:	    }
+        -:   76:	}
+        -:   77:      else
+        -:   78:	{
+        -:   79:	  static_assert(is_constructible_v<_Tp, _Args...>);
+        -:   80:
+    #####:   81:	  return tuple<_Args&&...>(std::forward<_Args>(__args)...);
+        -:   82:	}
+        -:   83:    }
+------------------
+        -:   84:
+        -:   85:  template<_Std_pair _Tp, typename _Alloc, typename _Tuple1, typename _Tuple2>
+        -:   86:    constexpr auto
+        -:   87:    uses_allocator_construction_args(const _Alloc& __a, piecewise_construct_t,
+        -:   88:				     _Tuple1&& __x, _Tuple2&& __y) noexcept;
+        -:   89:
+        -:   90:  template<_Std_pair _Tp, typename _Alloc>
+        -:   91:    constexpr auto
+        -:   92:    uses_allocator_construction_args(const _Alloc&) noexcept;
+        -:   93:
+        -:   94:  template<_Std_pair _Tp, typename _Alloc, typename _Up, typename _Vp>
+        -:   95:    constexpr auto
+        -:   96:    uses_allocator_construction_args(const _Alloc&, _Up&&, _Vp&&) noexcept;
+        -:   97:
+        -:   98:  template<_Std_pair _Tp, typename _Alloc, typename _Up, typename _Vp>
+        -:   99:    constexpr auto
+        -:  100:    uses_allocator_construction_args(const _Alloc&,
+        -:  101:				     const pair<_Up, _Vp>&) noexcept;
+        -:  102:
+        -:  103:  template<_Std_pair _Tp, typename _Alloc, typename _Up, typename _Vp>
+        -:  104:    constexpr auto
+        -:  105:    uses_allocator_construction_args(const _Alloc&, pair<_Up, _Vp>&&) noexcept;
+        -:  106:
+        -:  107:#if __cplusplus > 202002L
+        -:  108:  template<_Std_pair _Tp, typename _Alloc, typename _Up, typename _Vp>
+        -:  109:    constexpr auto
+        -:  110:    uses_allocator_construction_args(const _Alloc&,
+        -:  111:				     pair<_Up, _Vp>&) noexcept;
+        -:  112:
+        -:  113:  template<_Std_pair _Tp, typename _Alloc, typename _Up, typename _Vp>
+        -:  114:    constexpr auto
+        -:  115:    uses_allocator_construction_args(const _Alloc&, const pair<_Up, _Vp>&&) noexcept;
+        -:  116:#endif // C++23
+        -:  117:
+        -:  118:  template<_Std_pair _Tp, typename _Alloc, typename _Tuple1, typename _Tuple2>
+        -:  119:    constexpr auto
+        -:  120:    uses_allocator_construction_args(const _Alloc& __a, piecewise_construct_t,
+        -:  121:				     _Tuple1&& __x, _Tuple2&& __y) noexcept
+        -:  122:    {
+        -:  123:      using _Tp1 = typename _Tp::first_type;
+        -:  124:      using _Tp2 = typename _Tp::second_type;
+        -:  125:
+        -:  126:      return std::make_tuple(piecewise_construct,
+        -:  127:	  std::apply([&__a](auto&&... __args1) {
+        -:  128:	      return std::uses_allocator_construction_args<_Tp1>(
+        -:  129:		  __a, std::forward<decltype(__args1)>(__args1)...);
+        -:  130:	  }, std::forward<_Tuple1>(__x)),
+        -:  131:	  std::apply([&__a](auto&&... __args2) {
+        -:  132:	      return std::uses_allocator_construction_args<_Tp2>(
+        -:  133:		  __a, std::forward<decltype(__args2)>(__args2)...);
+        -:  134:	  }, std::forward<_Tuple2>(__y)));
+        -:  135:    }
+        -:  136:
+        -:  137:  template<_Std_pair _Tp, typename _Alloc>
+        -:  138:    constexpr auto
+        -:  139:    uses_allocator_construction_args(const _Alloc& __a) noexcept
+        -:  140:    {
+        -:  141:      using _Tp1 = typename _Tp::first_type;
+        -:  142:      using _Tp2 = typename _Tp::second_type;
+        -:  143:
+        -:  144:      return std::make_tuple(piecewise_construct,
+        -:  145:	  std::uses_allocator_construction_args<_Tp1>(__a),
+        -:  146:	  std::uses_allocator_construction_args<_Tp2>(__a));
+        -:  147:    }
+        -:  148:
+        -:  149:  template<_Std_pair _Tp, typename _Alloc, typename _Up, typename _Vp>
+        -:  150:    constexpr auto
+        -:  151:    uses_allocator_construction_args(const _Alloc& __a, _Up&& __u, _Vp&& __v)
+        -:  152:      noexcept
+        -:  153:    {
+        -:  154:      using _Tp1 = typename _Tp::first_type;
+        -:  155:      using _Tp2 = typename _Tp::second_type;
+        -:  156:
+        -:  157:      return std::make_tuple(piecewise_construct,
+        -:  158:	  std::uses_allocator_construction_args<_Tp1>(__a,
+        -:  159:	    std::forward<_Up>(__u)),
+        -:  160:	  std::uses_allocator_construction_args<_Tp2>(__a,
+        -:  161:	    std::forward<_Vp>(__v)));
+        -:  162:    }
+        -:  163:
+        -:  164:  template<_Std_pair _Tp, typename _Alloc, typename _Up, typename _Vp>
+        -:  165:    constexpr auto
+        -:  166:    uses_allocator_construction_args(const _Alloc& __a,
+        -:  167:				     const pair<_Up, _Vp>& __pr) noexcept
+        -:  168:    {
+        -:  169:      using _Tp1 = typename _Tp::first_type;
+        -:  170:      using _Tp2 = typename _Tp::second_type;
+        -:  171:
+        -:  172:      return std::make_tuple(piecewise_construct,
+        -:  173:	  std::uses_allocator_construction_args<_Tp1>(__a, __pr.first),
+        -:  174:	  std::uses_allocator_construction_args<_Tp2>(__a, __pr.second));
+        -:  175:    }
+        -:  176:
+        -:  177:  template<_Std_pair _Tp, typename _Alloc, typename _Up, typename _Vp>
+        -:  178:    constexpr auto
+        -:  179:    uses_allocator_construction_args(const _Alloc& __a,
+        -:  180:				     pair<_Up, _Vp>&& __pr) noexcept
+        -:  181:    {
+        -:  182:      using _Tp1 = typename _Tp::first_type;
+        -:  183:      using _Tp2 = typename _Tp::second_type;
+        -:  184:
+        -:  185:      // _GLIBCXX_RESOLVE_LIB_DEFECTS
+        -:  186:      // 3527. uses_allocator_construction_args handles rvalue pairs
+        -:  187:      // of rvalue references incorrectly
+        -:  188:      return std::make_tuple(piecewise_construct,
+        -:  189:	  std::uses_allocator_construction_args<_Tp1>(__a,
+        -:  190:	    std::get<0>(std::move(__pr))),
+        -:  191:	  std::uses_allocator_construction_args<_Tp2>(__a,
+        -:  192:	    std::get<1>(std::move(__pr))));
+        -:  193:    }
+        -:  194:
+        -:  195:#if __cplusplus > 202002L
+        -:  196:  template<_Std_pair _Tp, typename _Alloc, typename _Up, typename _Vp>
+        -:  197:    constexpr auto
+        -:  198:    uses_allocator_construction_args(const _Alloc& __a,
+        -:  199:				     pair<_Up, _Vp>& __pr) noexcept
+        -:  200:    {
+        -:  201:      using _Tp1 = typename _Tp::first_type;
+        -:  202:      using _Tp2 = typename _Tp::second_type;
+        -:  203:
+        -:  204:      return std::make_tuple(piecewise_construct,
+        -:  205:	  std::uses_allocator_construction_args<_Tp1>(__a, __pr.first),
+        -:  206:	  std::uses_allocator_construction_args<_Tp2>(__a, __pr.second));
+        -:  207:    }
+        -:  208:
+        -:  209:  template<_Std_pair _Tp, typename _Alloc, typename _Up, typename _Vp>
+        -:  210:    constexpr auto
+        -:  211:    uses_allocator_construction_args(const _Alloc& __a,
+        -:  212:				     const pair<_Up, _Vp>&& __pr) noexcept
+        -:  213:    {
+        -:  214:      using _Tp1 = typename _Tp::first_type;
+        -:  215:      using _Tp2 = typename _Tp::second_type;
+        -:  216:
+        -:  217:      return std::make_tuple(piecewise_construct,
+        -:  218:	  std::uses_allocator_construction_args<_Tp1>(__a,
+        -:  219:	    std::get<0>(std::move(__pr))),
+        -:  220:	  std::uses_allocator_construction_args<_Tp2>(__a,
+        -:  221:	    std::get<1>(std::move(__pr))));
+        -:  222:    }
+        -:  223:#endif // C++23
+        -:  224:
+        -:  225:  template<typename _Tp, typename _Alloc, typename... _Args>
+        -:  226:    constexpr _Tp
+        -:  227:    make_obj_using_allocator(const _Alloc& __a, _Args&&... __args)
+        -:  228:    {
+        -:  229:      return std::make_from_tuple<_Tp>(
+        -:  230:	  std::uses_allocator_construction_args<_Tp>(__a,
+        -:  231:	    std::forward<_Args>(__args)...));
+        -:  232:    }
+        -:  233:
+        -:  234:  template<typename _Tp, typename _Alloc, typename... _Args>
+        -:  235:    constexpr _Tp*
+182666513*:  236:    uninitialized_construct_using_allocator(_Tp* __p, const _Alloc& __a,
+        -:  237:					    _Args&&... __args)
+        -:  238:    {
+365421469*:  239:      return std::apply([&](auto&&... __xs) {
+182747008*:  240:	return std::construct_at(__p, std::forward<decltype(__xs)>(__xs)...);
+call    0 never executed
+call    1 never executed
+call    2 never executed
+call    3 returned 100%
+call    4 returned 100%
+call    5 returned 100%
+call    6 returned 100%
+call    7 returned 100%
+call    8 returned 100%
+call    9 returned 100%
+call   10 never executed
+call   11 never executed
+call   12 returned 100%
+call   13 returned 100%
+call   14 returned 97%
+call   15 returned 100%
+call   16 returned 100%
+call   17 returned 100%
+call   18 returned 100%
+call   19 returned 100%
+call   20 returned 100%
+call   21 returned 100%
+call   22 returned 100%
+call   23 returned 100%
+call   24 returned 100%
+call   25 never executed
+call   26 never executed
+call   27 never executed
+call   28 never executed
+call   29 never executed
+call   30 never executed
+call   31 never executed
+call   32 never executed
+call   33 never executed
+365348911*:  241:      }, std::uses_allocator_construction_args<_Tp>(__a,
+365364796*:  242:	std::forward<_Args>(__args)...));
+        -:  243:    }
+        -:  244:/// @}
+        -:  245:_GLIBCXX_END_NAMESPACE_VERSION
+        -:  246:} // namespace std
+        -:  247:#endif // __glibcxx_make_obj_using_allocator
+        -:  248:#endif // _USES_ALLOCATOR_ARGS

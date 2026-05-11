@@ -1,0 +1,168 @@
+        -:    0:Source:/usr/include/boost/asio/detail/type_traits.hpp
+        -:    1://
+        -:    2:// detail/type_traits.hpp
+        -:    3:// ~~~~~~~~~~~~~~~~~~~~~~
+        -:    4://
+        -:    5:// Copyright (c) 2003-2023 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+        -:    6://
+        -:    7:// Distributed under the Boost Software License, Version 1.0. (See accompanying
+        -:    8:// file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+        -:    9://
+        -:   10:
+        -:   11:#ifndef BOOST_ASIO_DETAIL_TYPE_TRAITS_HPP
+        -:   12:#define BOOST_ASIO_DETAIL_TYPE_TRAITS_HPP
+        -:   13:
+        -:   14:#if defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   15:# pragma once
+        -:   16:#endif // defined(_MSC_VER) && (_MSC_VER >= 1200)
+        -:   17:
+        -:   18:#include <boost/asio/detail/config.hpp>
+        -:   19:
+        -:   20:#if defined(BOOST_ASIO_HAS_STD_TYPE_TRAITS)
+        -:   21:# include <type_traits>
+        -:   22:#else // defined(BOOST_ASIO_HAS_STD_TYPE_TRAITS)
+        -:   23:# include <boost/type_traits/add_const.hpp>
+        -:   24:# include <boost/type_traits/add_lvalue_reference.hpp>
+        -:   25:# include <boost/type_traits/aligned_storage.hpp>
+        -:   26:# include <boost/type_traits/alignment_of.hpp>
+        -:   27:# include <boost/type_traits/conditional.hpp>
+        -:   28:# include <boost/type_traits/decay.hpp>
+        -:   29:# include <boost/type_traits/has_nothrow_copy.hpp>
+        -:   30:# include <boost/type_traits/has_nothrow_destructor.hpp>
+        -:   31:# include <boost/type_traits/integral_constant.hpp>
+        -:   32:# include <boost/type_traits/is_base_of.hpp>
+        -:   33:# include <boost/type_traits/is_class.hpp>
+        -:   34:# include <boost/type_traits/is_const.hpp>
+        -:   35:# include <boost/type_traits/is_convertible.hpp>
+        -:   36:# include <boost/type_traits/is_constructible.hpp>
+        -:   37:# include <boost/type_traits/is_copy_constructible.hpp>
+        -:   38:# include <boost/type_traits/is_destructible.hpp>
+        -:   39:# include <boost/type_traits/is_function.hpp>
+        -:   40:# include <boost/type_traits/is_object.hpp>
+        -:   41:# include <boost/type_traits/is_pointer.hpp>
+        -:   42:# include <boost/type_traits/is_same.hpp>
+        -:   43:# include <boost/type_traits/remove_cv.hpp>
+        -:   44:# include <boost/type_traits/remove_pointer.hpp>
+        -:   45:# include <boost/type_traits/remove_reference.hpp>
+        -:   46:# include <boost/utility/declval.hpp>
+        -:   47:# include <boost/utility/enable_if.hpp>
+        -:   48:# include <boost/utility/result_of.hpp>
+        -:   49:#endif // defined(BOOST_ASIO_HAS_STD_TYPE_TRAITS)
+        -:   50:
+        -:   51:namespace boost {
+        -:   52:namespace asio {
+        -:   53:
+        -:   54:#if defined(BOOST_ASIO_HAS_STD_TYPE_TRAITS)
+        -:   55:using std::add_const;
+        -:   56:using std::add_lvalue_reference;
+        -:   57:#if defined(BOOST_ASIO_MSVC) && (_MSC_VER < 1900)
+        -:   58:using std::aligned_storage;
+        -:   59:#else // defined(BOOST_ASIO_MSVC) && (_MSC_VER < 1900)
+        -:   60:template <std::size_t N, std::size_t A>
+        -:   61:struct aligned_storage { struct type { alignas(A) unsigned char data[N]; }; };
+        -:   62:#endif // defined(BOOST_ASIO_MSVC) && (_MSC_VER < 1900)
+        -:   63:using std::alignment_of;
+        -:   64:using std::conditional;
+        -:   65:using std::decay;
+        -:   66:using std::declval;
+        -:   67:using std::enable_if;
+        -:   68:using std::false_type;
+        -:   69:using std::integral_constant;
+        -:   70:using std::is_base_of;
+        -:   71:using std::is_class;
+        -:   72:using std::is_const;
+        -:   73:using std::is_constructible;
+        -:   74:using std::is_convertible;
+        -:   75:using std::is_copy_constructible;
+        -:   76:using std::is_destructible;
+        -:   77:using std::is_function;
+        -:   78:using std::is_move_constructible;
+        -:   79:using std::is_nothrow_copy_constructible;
+        -:   80:using std::is_nothrow_destructible;
+        -:   81:using std::is_object;
+        -:   82:using std::is_pointer;
+        -:   83:using std::is_reference;
+        -:   84:using std::is_same;
+        -:   85:using std::is_scalar;
+        -:   86:using std::remove_cv;
+        -:   87:template <typename T>
+        -:   88:struct remove_cvref : remove_cv<typename std::remove_reference<T>::type> {};
+        -:   89:using std::remove_pointer;
+        -:   90:using std::remove_reference;
+        -:   91:#if defined(BOOST_ASIO_HAS_STD_INVOKE_RESULT)
+        -:   92:template <typename> struct result_of;
+        -:   93:template <typename F, typename... Args>
+        -:   94:struct result_of<F(Args...)> : std::invoke_result<F, Args...> {};
+        -:   95:#else // defined(BOOST_ASIO_HAS_STD_INVOKE_RESULT)
+        -:   96:using std::result_of;
+        -:   97:#endif // defined(BOOST_ASIO_HAS_STD_INVOKE_RESULT)
+        -:   98:using std::true_type;
+        -:   99:#else // defined(BOOST_ASIO_HAS_STD_TYPE_TRAITS)
+        -:  100:using boost::add_const;
+        -:  101:using boost::add_lvalue_reference;
+        -:  102:using boost::aligned_storage;
+        -:  103:using boost::alignment_of;
+        -:  104:template <bool Condition, typename Type = void>
+        -:  105:struct enable_if : boost::enable_if_c<Condition, Type> {};
+        -:  106:using boost::conditional;
+        -:  107:using boost::decay;
+        -:  108:using boost::declval;
+        -:  109:using boost::false_type;
+        -:  110:using boost::integral_constant;
+        -:  111:using boost::is_base_of;
+        -:  112:using boost::is_class;
+        -:  113:using boost::is_const;
+        -:  114:using boost::is_constructible;
+        -:  115:using boost::is_convertible;
+        -:  116:using boost::is_copy_constructible;
+        -:  117:using boost::is_destructible;
+        -:  118:using boost::is_function;
+        -:  119:#if defined(BOOST_ASIO_HAS_MOVE)
+        -:  120:template <typename T>
+        -:  121:struct is_move_constructible : false_type {};
+        -:  122:#else // defined(BOOST_ASIO_HAS_MOVE)
+        -:  123:template <typename T>
+        -:  124:struct is_move_constructible : is_copy_constructible<T> {};
+        -:  125:#endif // defined(BOOST_ASIO_HAS_MOVE)
+        -:  126:template <typename T>
+        -:  127:struct is_nothrow_copy_constructible : boost::has_nothrow_copy<T> {};
+        -:  128:template <typename T>
+        -:  129:struct is_nothrow_destructible : boost::has_nothrow_destructor<T> {};
+        -:  130:using boost::is_object;
+        -:  131:using boost::is_pointer;
+        -:  132:using boost::is_reference;
+        -:  133:using boost::is_same;
+        -:  134:using boost::is_scalar;
+        -:  135:using boost::remove_cv;
+        -:  136:template <typename T>
+        -:  137:struct remove_cvref : remove_cv<typename boost::remove_reference<T>::type> {};
+        -:  138:using boost::remove_pointer;
+        -:  139:using boost::remove_reference;
+        -:  140:using boost::result_of;
+        -:  141:using boost::true_type;
+        -:  142:#endif // defined(BOOST_ASIO_HAS_STD_TYPE_TRAITS)
+        -:  143:
+        -:  144:template <typename> struct void_type { typedef void type; };
+        -:  145:
+        -:  146:#if defined(BOOST_ASIO_HAS_VARIADIC_TEMPLATES)
+        -:  147:
+        -:  148:template <typename...> struct conjunction : true_type {};
+        -:  149:template <typename T> struct conjunction<T> : T {};
+        -:  150:template <typename Head, typename... Tail> struct conjunction<Head, Tail...> :
+        -:  151:  conditional<Head::value, conjunction<Tail...>, Head>::type {};
+        -:  152:
+        -:  153:#endif // defined(BOOST_ASIO_HAS_VARIADIC_TEMPLATES)
+        -:  154:
+        -:  155:struct defaulted_constraint
+        -:  156:{
+function _ZN5boost4asio20defaulted_constraintC2Ev called 28 returned 100% blocks executed 100%
+       28:  157:  BOOST_ASIO_CONSTEXPR defaulted_constraint() {}
+        -:  158:};
+        -:  159:
+        -:  160:template <bool Condition, typename Type = int>
+        -:  161:struct constraint : enable_if<Condition, Type> {};
+        -:  162:
+        -:  163:} // namespace asio
+        -:  164:} // namespace boost
+        -:  165:
+        -:  166:#endif // BOOST_ASIO_DETAIL_TYPE_TRAITS_HPP

@@ -1,0 +1,1024 @@
+        -:    0:Source:/home/runner/work/Hical/Hical/src/core/Router.cpp
+        -:    1:#include "Router.h"
+        -:    2:#include "RouteGroup.h"
+        -:    3:
+        -:    4:namespace hical
+        -:    5:{
+        -:    6:
+        -:    7:	// ============ 路由注册 ============
+        -:    8:
+function _ZN5hical6Router5routeENS_10HttpMethodERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEESt8functionIFN5boost4asio9awaitableINS_12HttpResponseENSC_15any_io_executorEEERKNS_11HttpRequestEEE called 14 returned 100% blocks executed 36%
+       14:    9:	void Router::route(HttpMethod method, const std::string& path, RouteHandler handler)
+        -:   10:	{
+       14:   11:		if (isParamRoute(path))
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+        -:   12:		{
+    #####:   13:			paramRoutesByMethod_[method].push_back({method, path, std::move(handler), nullptr});
+call    0 never executed
+call    1 never executed
+call    2 never executed
+call    3 never executed
+        -:   14:		}
+        -:   15:		else
+        -:   16:		{
+       28:   17:			staticRoutes_[{method, path}] = RouteEntry {std::move(handler), nullptr};
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 returned 100%
+call    8 returned 100%
+call    9 never executed
+call   10 never executed
+branch 11 never executed (fallthrough)
+branch 12 never executed
+call   13 never executed
+       14:   18:			staticPathMethods_[path].push_back(method);
+call    0 returned 100%
+call    1 returned 100%
+        -:   19:		}
+      28*:   20:	}
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+call    4 never executed
+call    5 never executed
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed (throw)
+call    9 returned 100%
+branch 10 taken 100% (fallthrough)
+branch 11 taken 0% (throw)
+branch 12 never executed (fallthrough)
+branch 13 never executed
+call   14 never executed
+branch 15 never executed (fallthrough)
+branch 16 never executed
+call   17 never executed
+        -:   21:
+function _ZN5hical6Router5routeENS_10HttpMethodERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEESt8functionIFNS_12HttpResponseERKNS_11HttpRequestEEE called 205 returned 100% blocks executed 56%
+      205:   22:	void Router::route(HttpMethod method, const std::string& path, SyncRouteHandler handler)
+        -:   23:	{
+        -:   24:		// 只存 syncHandler，不创建 asyncHandler wrapper，零拷贝。
+        -:   25:		// dispatch() 优先检查 syncHandler，asyncHandler 为 nullptr 时不会被调用。
+      205:   26:		if (isParamRoute(path))
+call    0 returned 100%
+branch  1 taken 13% (fallthrough)
+branch  2 taken 87%
+        -:   27:		{
+       54:   28:			paramRoutesByMethod_[method].push_back({method, path, nullptr, std::move(handler)});
+call    0 returned 100%
+call    1 returned 100%
+call    2 never executed
+call    3 never executed
+        -:   29:		}
+        -:   30:		else
+        -:   31:		{
+      356:   32:			staticRoutes_[{method, path}] = RouteEntry {nullptr, std::move(handler)};
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+call    7 returned 100%
+call    8 returned 100%
+call    9 never executed
+call   10 never executed
+branch 11 never executed (fallthrough)
+branch 12 never executed
+call   13 never executed
+      178:   33:			staticPathMethods_[path].push_back(method);
+call    0 returned 100%
+call    1 returned 100%
+        -:   34:		}
+      410:   35:	}
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+call    5 returned 100%
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+call    9 returned 100%
+branch 10 taken 100% (fallthrough)
+branch 11 taken 0% (throw)
+branch 12 never executed (fallthrough)
+branch 13 never executed
+call   14 never executed
+branch 15 never executed (fallthrough)
+branch 16 never executed
+call   17 never executed
+        -:   36:
+        -:   37:	// ============ 便捷方法 ============
+        -:   38:
+function _ZN5hical6Router3getERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEESt8functionIFN5boost4asio9awaitableINS_12HttpResponseENSB_15any_io_executorEEERKNS_11HttpRequestEEE called 9 returned 100% blocks executed 75%
+        9:   39:	void Router::get(const std::string& path, RouteHandler handler)
+        -:   40:	{
+        9:   41:		route(HttpMethod::hGet, path, std::move(handler));
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+call    6 never executed
+        9:   42:	}
+        -:   43:
+function _ZN5hical6Router3getERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEESt8functionIFNS_12HttpResponseERKNS_11HttpRequestEEE called 153 returned 100% blocks executed 75%
+      153:   44:	void Router::get(const std::string& path, SyncRouteHandler handler)
+        -:   45:	{
+      153:   46:		route(HttpMethod::hGet, path, std::move(handler));
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+call    6 never executed
+      153:   47:	}
+        -:   48:
+function _ZN5hical6Router4postERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEESt8functionIFN5boost4asio9awaitableINS_12HttpResponseENSB_15any_io_executorEEERKNS_11HttpRequestEEE called 0 returned 0% blocks executed 0%
+    #####:   49:	void Router::post(const std::string& path, RouteHandler handler)
+        -:   50:	{
+    #####:   51:		route(HttpMethod::hPost, path, std::move(handler));
+call    0 never executed
+call    1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed (throw)
+call    5 never executed
+call    6 never executed
+    #####:   52:	}
+        -:   53:
+function _ZN5hical6Router4postERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEESt8functionIFNS_12HttpResponseERKNS_11HttpRequestEEE called 15 returned 100% blocks executed 75%
+       15:   54:	void Router::post(const std::string& path, SyncRouteHandler handler)
+        -:   55:	{
+       15:   56:		route(HttpMethod::hPost, path, std::move(handler));
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+call    6 never executed
+       15:   57:	}
+        -:   58:
+function _ZN5hical6Router3putERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEESt8functionIFN5boost4asio9awaitableINS_12HttpResponseENSB_15any_io_executorEEERKNS_11HttpRequestEEE called 0 returned 0% blocks executed 0%
+    #####:   59:	void Router::put(const std::string& path, RouteHandler handler)
+        -:   60:	{
+    #####:   61:		route(HttpMethod::hPut, path, std::move(handler));
+call    0 never executed
+call    1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed (throw)
+call    5 never executed
+call    6 never executed
+    #####:   62:	}
+        -:   63:
+function _ZN5hical6Router3putERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEESt8functionIFNS_12HttpResponseERKNS_11HttpRequestEEE called 3 returned 100% blocks executed 75%
+        3:   64:	void Router::put(const std::string& path, SyncRouteHandler handler)
+        -:   65:	{
+        3:   66:		route(HttpMethod::hPut, path, std::move(handler));
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+call    6 never executed
+        3:   67:	}
+        -:   68:
+function _ZN5hical6Router3delERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEESt8functionIFN5boost4asio9awaitableINS_12HttpResponseENSB_15any_io_executorEEERKNS_11HttpRequestEEE called 0 returned 0% blocks executed 0%
+    #####:   69:	void Router::del(const std::string& path, RouteHandler handler)
+        -:   70:	{
+    #####:   71:		route(HttpMethod::hDelete, path, std::move(handler));
+call    0 never executed
+call    1 never executed
+call    2 never executed
+branch  3 never executed (fallthrough)
+branch  4 never executed (throw)
+call    5 never executed
+call    6 never executed
+    #####:   72:	}
+        -:   73:
+function _ZN5hical6Router3delERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEESt8functionIFNS_12HttpResponseERKNS_11HttpRequestEEE called 1 returned 100% blocks executed 75%
+        1:   74:	void Router::del(const std::string& path, SyncRouteHandler handler)
+        -:   75:	{
+        1:   76:		route(HttpMethod::hDelete, path, std::move(handler));
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+branch  3 taken 100% (fallthrough)
+branch  4 taken 0% (throw)
+call    5 returned 100%
+call    6 never executed
+        1:   77:	}
+        -:   78:
+        -:   79:	// ============ WebSocket ============
+        -:   80:
+function _ZN5hical6Router2wsERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEESt8functionIFN5boost4asio9awaitableIvNSB_15any_io_executorEEES8_RNS_16WebSocketSessionEEES9_IFSE_SG_EESK_ called 4 returned 100% blocks executed 87%
+        4:   81:	void Router::ws(const std::string& path,
+        -:   82:					WsMessageCallback onMessage,
+        -:   83:					WsConnectCallback onConnect,
+        -:   84:					WsDisconnectCallback onDisconnect)
+        -:   85:	{
+        4:   86:		WsRoute route;
+call    0 returned 100%
+        4:   87:		route.path = path;
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        4:   88:		route.onMessage = std::move(onMessage);
+call    0 returned 100%
+call    1 returned 100%
+        4:   89:		route.onConnect = std::move(onConnect);
+call    0 returned 100%
+call    1 returned 100%
+        4:   90:		route.onDisconnect = std::move(onDisconnect);
+call    0 returned 100%
+call    1 returned 100%
+        4:   91:		wsRoutes_.push_back(std::move(route));
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        4:   92:	}
+call    0 returned 100%
+call    1 never executed
+        -:   93:
+function _ZN5hical6Router2wsERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEENS0_9WsOptionsESt8functionIFN5boost4asio9awaitableIvNSC_15any_io_executorEEES8_RNS_16WebSocketSessionEEESA_IFSF_SH_EESL_ called 0 returned 0% blocks executed 0%
+    #####:   94:	void Router::ws(const std::string& path,
+        -:   95:					WsOptions options,
+        -:   96:					WsMessageCallback onMessage,
+        -:   97:					WsConnectCallback onConnect,
+        -:   98:					WsDisconnectCallback onDisconnect)
+        -:   99:	{
+    #####:  100:		WsRoute route;
+call    0 never executed
+    #####:  101:		route.path = path;
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+    #####:  102:		route.onMessage = std::move(onMessage);
+call    0 never executed
+call    1 never executed
+    #####:  103:		route.onConnect = std::move(onConnect);
+call    0 never executed
+call    1 never executed
+    #####:  104:		route.onDisconnect = std::move(onDisconnect);
+call    0 never executed
+call    1 never executed
+    #####:  105:		route.allowedOrigins = std::move(options.allowedOrigins);
+call    0 never executed
+call    1 never executed
+    #####:  106:		route.enableCompression = options.enableCompression;
+    #####:  107:		route.serverMaxWindowBits = options.serverMaxWindowBits;
+    #####:  108:		route.clientMaxWindowBits = options.clientMaxWindowBits;
+    #####:  109:		route.serverNoContextTakeover = options.serverNoContextTakeover;
+    #####:  110:		wsRoutes_.push_back(std::move(route));
+call    0 never executed
+call    1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed (throw)
+    #####:  111:	}
+call    0 never executed
+call    1 never executed
+        -:  112:
+function _ZNK5hical6Router11findWsRouteESt17basic_string_viewIcSt11char_traitsIcEE called 4 returned 100% blocks executed 83%
+        4:  113:	const Router::WsRoute* Router::findWsRoute(std::string_view path) const
+        -:  114:	{
+       4*:  115:		for (const auto& route : wsRoutes_)
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 never executed
+call    4 returned 100%
+branch  5 taken 100%
+branch  6 taken 0% (fallthrough)
+        -:  116:		{
+        4:  117:			if (route.path == path)
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0%
+        -:  118:			{
+        4:  119:				return &route;
+        -:  120:			}
+        -:  121:		}
+    #####:  122:		return nullptr;
+        -:  123:	}
+        -:  124:
+        -:  125:	// ============ 分发 ============
+        -:  126:
+function _ZN5hical6Router8dispatchERNS_11HttpRequestE called 7661 returned 98% blocks executed 44%
+     7596:  127:	Awaitable<HttpResponse> Router::dispatch(HttpRequest& req)
+call    0 returned 99%
+branch  1 taken 99% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  128:	{
+        -:  129:		auto result = resolveRoute(req);
+        -:  130:
+        -:  131:		if (result.pathTooDeep)
+        -:  132:		{
+        -:  133:			co_return HttpResponse::badRequest("Path too deep");
+        -:  134:		}
+        -:  135:
+        -:  136:		if (result.staticEntry)
+        -:  137:		{
+        -:  138:			if (result.staticEntry->syncHandler)
+        -:  139:			{
+        -:  140:				co_return result.staticEntry->syncHandler(req);
+        -:  141:			}
+        -:  142:			co_return co_await result.staticEntry->asyncHandler(req);
+        -:  143:		}
+        -:  144:
+        -:  145:		if (result.paramEntry)
+        -:  146:		{
+        -:  147:			if (result.paramEntry->syncHandler)
+        -:  148:			{
+        -:  149:				co_return result.paramEntry->syncHandler(req);
+        -:  150:			}
+        -:  151:			co_return co_await result.paramEntry->handler(req);
+        -:  152:		}
+        -:  153:
+        -:  154:		if (!result.allowedMethods.empty())
+        -:  155:		{
+        -:  156:			HttpResponse res;
+        -:  157:			res.setStatus(HttpStatusCode::hMethodNotAllowed);
+        -:  158:			res.setHeader("Allow", result.allowedMethods);
+        -:  159:			res.setBody("Method Not Allowed");
+        -:  160:			co_return res;
+        -:  161:		}
+        -:  162:
+        -:  163:		co_return HttpResponse::notFound();
+    15175:  164:	}
+call    0 returned 102%
+call    1 returned 96%
+call    2 returned 101%
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed
+call    6 never executed
+branch  7 never executed (fallthrough)
+branch  8 never executed
+call    9 never executed
+call   10 never executed
+branch 11 never executed (fallthrough)
+branch 12 never executed (throw)
+call   13 never executed
+call   14 never executed
+        -:  165:
+function _ZN5hical6Router12dispatchSyncERNS_11HttpRequestE called 219 returned 100% blocks executed 51%
+      219:  166:	std::optional<HttpResponse> Router::dispatchSync(HttpRequest& req)
+        -:  167:	{
+      219:  168:		auto result = resolveRoute(req);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  169:
+      219:  170:		if (result.pathTooDeep)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:  171:		{
+    #####:  172:			return HttpResponse::badRequest("Path too deep");
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+call    3 never executed
+branch  4 never executed (fallthrough)
+branch  5 never executed (throw)
+call    6 never executed
+call    7 never executed
+call    8 never executed
+call    9 never executed
+        -:  173:		}
+        -:  174:
+      219:  175:		if (result.staticEntry)
+branch  0 taken 98% (fallthrough)
+branch  1 taken 2%
+        -:  176:		{
+      214:  177:			if (result.staticEntry->syncHandler)
+call    0 returned 100%
+branch  1 taken 98% (fallthrough)
+branch  2 taken 2%
+        -:  178:			{
+      209:  179:				return result.staticEntry->syncHandler(req);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+        -:  180:			}
+        5:  181:			return std::nullopt; // 异步 handler，需要 fallback 到 co_await dispatch()
+call    0 returned 100%
+        -:  182:		}
+        -:  183:
+        5:  184:		if (result.paramEntry)
+branch  0 taken 40% (fallthrough)
+branch  1 taken 60%
+        -:  185:		{
+        2:  186:			if (result.paramEntry->syncHandler)
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0%
+        -:  187:			{
+        2:  188:				return result.paramEntry->syncHandler(req);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+        -:  189:			}
+    #####:  190:			return std::nullopt; // 异步 handler
+call    0 never executed
+        -:  191:		}
+        -:  192:
+        -:  193:		// 404/405 无法同步处理，回退到异步 dispatch
+        3:  194:		return std::nullopt;
+call    0 returned 100%
+      219:  195:	}
+call    0 returned 100%
+call    1 never executed
+        -:  196:
+function _ZNK5hical6Router12resolveRouteERNS_11HttpRequestE called 7757 returned 100% blocks executed 85%
+     7757:  197:	Router::ResolveResult Router::resolveRoute(HttpRequest& req) const
+        -:  198:	{
+     7757:  199:		ResolveResult result;
+call    0 returned 100%
+     7725:  200:		auto reqMethod = req.method();
+call    0 returned 101%
+branch  1 taken 101% (fallthrough)
+branch  2 taken 0% (throw)
+     7783:  201:		auto rawPath = req.path();
+call    0 returned 102%
+branch  1 taken 102% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  202:
+        -:  203:		// 单次遍历：同时检查 urlDecode 需求和路径深度
+     7927:  204:		bool needsDecode = false;
+     7927:  205:		size_t segmentCount = 0;
+    66843:  206:		for (char c : rawPath)
+call    0 returned 99%
+call    1 returned 103%
+branch  2 taken 88%
+branch  3 taken 12% (fallthrough)
+        -:  207:		{
+    58916:  208:			if (c == '%' || c == '+')
+branch  0 taken 100% (fallthrough)
+branch  1 taken 1%
+branch  2 taken -0% (fallthrough)
+branch  3 taken 100%
+        -:  209:			{
+        4:  210:				needsDecode = true;
+        -:  211:			}
+    58916:  212:			if (c == '/')
+branch  0 taken 14% (fallthrough)
+branch  1 taken 86%
+        -:  213:			{
+     8024:  214:				++segmentCount;
+        -:  215:			}
+        -:  216:		}
+        -:  217:
+     8032:  218:		if (segmentCount > hMaxPathSegments)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:  219:		{
+    #####:  220:			result.pathTooDeep = true;
+    #####:  221:			return result;
+        -:  222:		}
+        -:  223:
+     8032:  224:		std::string decodedStorage;
+call    0 returned 97%
+     7822:  225:		std::string_view reqPath;
+     7822:  226:		if (needsDecode)
+branch  0 taken -0% (fallthrough)
+branch  1 taken 100%
+        -:  227:		{
+    #####:  228:			decodedStorage = urlDecode(rawPath);
+call    0 returned -20%
+branch  1 taken -20% (fallthrough)
+branch  2 taken -0% (throw)
+call    3 returned 100%
+call    4 returned 100%
+        2:  229:			reqPath = decodedStorage;
+call    0 returned 100%
+        -:  230:		}
+        -:  231:		else
+        -:  232:		{
+     7832:  233:			reqPath = rawPath;
+        -:  234:		}
+        -:  235:
+        -:  236:		// 1. 优先查找静态路由（O(1) 哈希查找，透明哈希避免构造临时 std::string）
+     7834:  237:		auto it = staticRoutes_.find(RouteKeyView {reqMethod, reqPath});
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+     7818:  238:		if (it != staticRoutes_.end())
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 1%
+        -:  239:		{
+     7819:  240:			result.staticEntry = &it->second;
+call    0 returned 99%
+     7760:  241:			return result;
+        -:  242:		}
+        -:  243:
+        -:  244:		// 2. 回退到参数路由匹配（按 method 分组，仅扫描同 method 的路由）
+       23:  245:		auto groupIt = paramRoutesByMethod_.find(reqMethod);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       23:  246:		if (groupIt != paramRoutesByMethod_.end())
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 52% (fallthrough)
+branch  3 taken 48%
+        -:  247:		{
+       12:  248:			ParamList params;
+       16:  249:			for (const auto& entry : groupIt->second)
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+call    5 returned 100%
+branch  6 taken 75%
+branch  7 taken 25% (fallthrough)
+        -:  250:			{
+       12:  251:				if (matchParamPath(entry.path, reqPath, params))
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+branch  4 taken 67% (fallthrough)
+branch  5 taken 33%
+        -:  252:				{
+       17:  253:					for (const auto& [name, value] : params)
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+call    5 returned 100%
+call    6 returned 100%
+branch  7 taken 53%
+branch  8 taken 47% (fallthrough)
+        -:  254:					{
+        9:  255:						req.setParam(name, value);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  256:					}
+        8:  257:					result.paramEntry = &entry;
+        8:  258:					return result;
+        -:  259:				}
+        -:  260:			}
+       12:  261:		}
+call    0 returned 100%
+branch  1 taken 33% (fallthrough)
+branch  2 taken 67%
+call    3 never executed
+        -:  262:
+        -:  263:		// 3. 405 检测：路径匹配但方法不匹配时收集 Allow 头
+        -:  264:		// 静态路由：O(1) 反向索引查找
+       15:  265:		auto pathIt = staticPathMethods_.find(reqPath);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       15:  266:		if (pathIt != staticPathMethods_.end())
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 20% (fallthrough)
+branch  3 taken 80%
+        -:  267:		{
+        8:  268:			for (auto m : pathIt->second)
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+call    5 returned 100%
+branch  6 taken 62%
+branch  7 taken 38% (fallthrough)
+        -:  269:			{
+        5:  270:				if (m != reqMethod)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+        -:  271:				{
+        5:  272:					if (!result.allowedMethods.empty())
+call    0 returned 100%
+branch  1 taken 40% (fallthrough)
+branch  2 taken 60%
+        -:  273:					{
+        2:  274:						result.allowedMethods += ", ";
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  275:					}
+        5:  276:					result.allowedMethods += httpMethodToString(m);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+        -:  277:				}
+        -:  278:			}
+        -:  279:		}
+        -:  280:
+        -:  281:		// 参数路由：线性扫描其他 method 的路由（路径匹配需要模式匹配）
+       15:  282:		ParamList tempParams;
+       21:  283:		for (const auto& [method, routes] : paramRoutesByMethod_)
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+call    5 returned 100%
+call    6 returned 100%
+branch  7 taken 29%
+branch  8 taken 71% (fallthrough)
+        -:  284:		{
+        6:  285:			if (method == reqMethod)
+branch  0 taken 67% (fallthrough)
+branch  1 taken 33%
+        -:  286:			{
+        4:  287:				continue;
+        -:  288:			}
+        3:  289:			for (const auto& entry : routes)
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+branch  5 taken 67%
+branch  6 taken 33% (fallthrough)
+        -:  290:			{
+        2:  291:				if (matchParamPath(entry.path, reqPath, tempParams))
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+branch  4 taken 50% (fallthrough)
+branch  5 taken 50%
+        -:  292:				{
+        1:  293:					if (!result.allowedMethods.empty())
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+        -:  294:					{
+    #####:  295:						result.allowedMethods += ", ";
+call    0 never executed
+branch  1 never executed (fallthrough)
+branch  2 never executed (throw)
+        -:  296:					}
+        1:  297:					result.allowedMethods += httpMethodToString(method);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+        1:  298:					break;
+        -:  299:				}
+        -:  300:			}
+        -:  301:		}
+        -:  302:
+       15:  303:		return result;
+     7783:  304:	}
+call    0 returned 100%
+call    1 returned 99%
+call    2 never executed
+call    3 never executed
+call    4 never executed
+        -:  305:
+function _ZNK5hical6Router10routeCountEv called 7 returned 100% blocks executed 100%
+        7:  306:	size_t Router::routeCount() const
+        -:  307:	{
+        7:  308:		size_t paramCount = 0;
+        8:  309:		for (const auto& [method, routes] : paramRoutesByMethod_)
+call    0 returned 100%
+call    1 returned 100%
+call    2 returned 100%
+call    3 returned 100%
+call    4 returned 100%
+call    5 returned 100%
+branch  6 taken 12%
+branch  7 taken 88% (fallthrough)
+        -:  310:		{
+        1:  311:			paramCount += routes.size();
+call    0 returned 100%
+call    1 returned 100%
+        -:  312:		}
+        7:  313:		return staticRoutes_.size() + paramCount + wsRoutes_.size();
+call    0 returned 100%
+call    1 returned 100%
+        -:  314:	}
+        -:  315:
+        -:  316:	// ============ 辅助方法 ============
+        -:  317:
+function _ZN5hical6Router12isParamRouteERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEE called 219 returned 100% blocks executed 100%
+      219:  318:	bool Router::isParamRoute(const std::string& path)
+        -:  319:	{
+      219:  320:		return path.find('{') != std::string::npos;
+call    0 returned 100%
+        -:  321:	}
+        -:  322:
+function _ZN5hical6Router14matchParamPathESt17basic_string_viewIcSt11char_traitsIcEES4_RSt6vectorISt4pairINSt7__cxx1112basic_stringIcS3_SaIcEEESA_ESaISB_EE called 14 returned 100% blocks executed 79%
+       14:  323:	bool Router::matchParamPath(std::string_view pattern, std::string_view path, ParamList& params)
+        -:  324:	{
+       14:  325:		params.clear();
+call    0 returned 100%
+        -:  326:
+        -:  327:		// 跳过前导 '/'
+      14*:  328:		if (!pattern.empty() && pattern.front() == '/')
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0%
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0%
+        -:  329:		{
+       14:  330:			pattern.remove_prefix(1);
+call    0 returned 100%
+        -:  331:		}
+      14*:  332:		if (!path.empty() && path.front() == '/')
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0%
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0%
+branch  6 taken 100% (fallthrough)
+branch  7 taken 0%
+        -:  333:		{
+       14:  334:			path.remove_prefix(1);
+call    0 returned 100%
+        -:  335:		}
+        -:  336:
+        -:  337:		// 按 '/' 逐段匹配（零分配：使用 string_view 原地切分）
+       14:  338:		size_t segmentCount = 0;
+       44:  339:		while (!pattern.empty() && !path.empty())
+call    0 returned 100%
+branch  1 taken 77% (fallthrough)
+branch  2 taken 23%
+call    3 returned 100%
+branch  4 taken 97% (fallthrough)
+branch  5 taken 3%
+branch  6 taken 75%
+branch  7 taken 25% (fallthrough)
+        -:  340:		{
+        -:  341:			// 段数限制，防止超深路径 DoS
+       33:  342:			if (++segmentCount > Router::hMaxPathSegments)
+branch  0 taken 0% (fallthrough)
+branch  1 taken 100%
+        -:  343:			{
+    #####:  344:				params.clear();
+call    0 never executed
+       3*:  345:				return false;
+        -:  346:			}
+        -:  347:
+        -:  348:			// 提取当前段
+       33:  349:			auto pSlash = pattern.find('/');
+call    0 returned 100%
+       33:  350:			auto rSlash = path.find('/');
+call    0 returned 100%
+        -:  351:
+       33:  352:			auto patSeg = pattern.substr(0, pSlash);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+       33:  353:			auto reqSeg = path.substr(0, rSlash);
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  354:
+        -:  355:			// 推进到下一段
+       33:  356:			pattern = (pSlash == std::string_view::npos) ? std::string_view {} : pattern.substr(pSlash + 1);
+branch  0 taken 30% (fallthrough)
+branch  1 taken 70%
+call    2 returned 100%
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+       33:  357:			path = (rSlash == std::string_view::npos) ? std::string_view {} : path.substr(rSlash + 1);
+branch  0 taken 39% (fallthrough)
+branch  1 taken 61%
+call    2 returned 100%
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+        -:  358:
+       33:  359:			if (patSeg.size() >= 3 && patSeg.front() == '{' && patSeg.back() == '}')
+call    0 returned 100%
+branch  1 taken 97% (fallthrough)
+branch  2 taken 3%
+call    3 returned 100%
+branch  4 taken 34% (fallthrough)
+branch  5 taken 66%
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0%
+branch  9 taken 33% (fallthrough)
+branch 10 taken 67%
+        -:  360:			{
+        -:  361:				// 参数值长度限制
+       11:  362:				if (reqSeg.size() > Router::hMaxParamValueLength)
+call    0 returned 100%
+branch  1 taken 0% (fallthrough)
+branch  2 taken 100%
+        -:  363:				{
+    #####:  364:					params.clear();
+call    0 never executed
+    #####:  365:					return false;
+        -:  366:				}
+        -:  367:				// 参数段：提取参数名和值
+       11:  368:				auto paramName = patSeg.substr(1, patSeg.size() - 2);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+       44:  369:				params.emplace_back(std::string(paramName), std::string(reqSeg));
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0% (throw)
+call    6 returned 100%
+branch  7 taken 100% (fallthrough)
+branch  8 taken 0% (throw)
+call    9 returned 100%
+call   10 returned 100%
+call   11 never executed
+call   12 never executed
+        -:  370:			}
+       22:  371:			else if (patSeg != reqSeg)
+call    0 returned 100%
+branch  1 taken 14% (fallthrough)
+branch  2 taken 86%
+        -:  372:			{
+        3:  373:				params.clear();
+call    0 returned 100%
+        3:  374:				return false;
+        -:  375:			}
+        -:  376:		}
+        -:  377:
+        -:  378:		// 两边必须同时用完
+       11:  379:		if (!pattern.empty() || !path.empty())
+call    0 returned 100%
+branch  1 taken 91% (fallthrough)
+branch  2 taken 9%
+call    3 returned 100%
+branch  4 taken 10% (fallthrough)
+branch  5 taken 90%
+branch  6 taken 18% (fallthrough)
+branch  7 taken 82%
+        -:  380:		{
+        2:  381:			params.clear();
+call    0 returned 100%
+        2:  382:			return false;
+        -:  383:		}
+        -:  384:
+        9:  385:		return true;
+        -:  386:	}
+        -:  387:
+function _ZN5hical6Router9urlDecodeB5cxx11ESt17basic_string_viewIcSt11char_traitsIcEE called 46 returned 100% blocks executed 92%
+       46:  388:	std::string Router::urlDecode(std::string_view encoded)
+        -:  389:	{
+       46:  390:		std::string result;
+call    0 returned 100%
+       46:  391:		result.reserve(encoded.size());
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:  392:
+      217:  393:		for (size_t i = 0; i < encoded.size(); ++i)
+call    0 returned 100%
+branch  1 taken 79%
+branch  2 taken 21% (fallthrough)
+        -:  394:		{
+      171:  395:			if (encoded[i] == '%' && i + 2 < encoded.size())
+call    0 returned 100%
+branch  1 taken 7% (fallthrough)
+branch  2 taken 93%
+call    3 returned 100%
+branch  4 taken 100% (fallthrough)
+branch  5 taken 0%
+branch  6 taken 7% (fallthrough)
+branch  7 taken 93%
+        -:  396:			{
+       12:  397:				auto hi = encoded[i + 1];
+call    0 returned 100%
+       12:  398:				auto lo = encoded[i + 2];
+call    0 returned 100%
+        -:  399:
+function _ZZN5hical6Router9urlDecodeB5cxx11ESt17basic_string_viewIcSt11char_traitsIcEEENKUlcE_clEc called 24 returned 100% blocks executed 64%
+       24:  400:				auto hexVal = [](char c) -> int
+        -:  401:				{
+       24:  402:					if (c >= '0' && c <= '9')
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+branch  2 taken 75% (fallthrough)
+branch  3 taken 25%
+        -:  403:					{
+       18:  404:						return c - '0';
+        -:  405:					}
+        6:  406:					if (c >= 'A' && c <= 'F')
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0%
+        -:  407:					{
+        6:  408:						return c - 'A' + 10;
+        -:  409:					}
+    #####:  410:					if (c >= 'a' && c <= 'f')
+branch  0 never executed (fallthrough)
+branch  1 never executed
+branch  2 never executed (fallthrough)
+branch  3 never executed
+        -:  411:					{
+    #####:  412:						return c - 'a' + 10;
+        -:  413:					}
+    #####:  414:					return -1;
+        -:  415:				};
+        -:  416:
+       12:  417:				int hiVal = hexVal(hi);
+call    0 returned 100%
+       12:  418:				int loVal = hexVal(lo);
+call    0 returned 100%
+       12:  419:				if (hiVal >= 0 && loVal >= 0)
+branch  0 taken 100% (fallthrough)
+branch  1 taken 0%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0%
+        -:  420:				{
+       12:  421:					char decoded = static_cast<char>((hiVal << 4) | loVal);
+        -:  422:					// 防御纵深：跳过 %00 NULL 字节，防止 C API 路径截断攻击
+       12:  423:					if (decoded != '\0')
+branch  0 taken 67% (fallthrough)
+branch  1 taken 33%
+        -:  424:					{
+        8:  425:						result += decoded;
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        -:  426:					}
+       12:  427:					i += 2;
+       12:  428:					continue;
+       12:  429:				}
+        -:  430:			}
+      159:  431:			else if (encoded[i] == '+')
+call    0 returned 100%
+branch  1 taken 1% (fallthrough)
+branch  2 taken 99%
+        -:  432:			{
+        2:  433:				result += ' ';
+call    0 returned 100%
+branch  1 taken 100% (fallthrough)
+branch  2 taken 0% (throw)
+        2:  434:				continue;
+        -:  435:			}
+      157:  436:			result += encoded[i];
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+        -:  437:		}
+       46:  438:		return result;
+    =====:  439:	}
+call    0 never executed
+        -:  440:
+function _ZN5hical6Router5groupERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEE called 7 returned 100% blocks executed 62%
+        7:  441:	RouteGroup Router::group(const std::string& prefix)
+        -:  442:	{
+        7:  443:		return RouteGroup(*this, prefix);
+call    0 returned 100%
+call    1 returned 100%
+branch  2 taken 100% (fallthrough)
+branch  3 taken 0% (throw)
+call    4 returned 100%
+branch  5 taken 100% (fallthrough)
+branch  6 taken 0% (throw)
+call    7 returned 100%
+call    8 returned 100%
+call    9 never executed
+call   10 never executed
+        -:  444:	}
+        -:  445:
+        -:  446:} // namespace hical
