@@ -16,7 +16,7 @@
   - [二、进程管理：别让服务裸奔](#二进程管理别让服务裸奔)
     - [2.1 systemd 服务配置](#21-systemd-服务配置)
     - [2.2 信号处理与 Graceful Shutdown](#22-信号处理与-graceful-shutdown)
-    - [2.3 多进程部署（SO\_REUSEPORT）](#23-多进程部署so_reuseport)
+    - [2.3 多线程与多 acceptor（SO\_REUSEPORT）](#23-多线程与多-acceptorso_reuseport)
   - [三、反向代理：Nginx 挡在前面](#三反向代理nginx-挡在前面)
     - [3.1 HTTP 反向代理](#31-http-反向代理)
     - [3.2 WebSocket 代理](#32-websocket-代理)
@@ -90,13 +90,13 @@ cmake -B build -DCMAKE_BUILD_TYPE=Release \
       -DCMAKE_EXE_LINKER_FLAGS="/LTCG"
 ```
 
-**实测效果**（Hical bench_server，wrk 10s / 4 线程 / 100 连接）：
+**实测效果**（Hical v2.6.0 bench_server，wrk 10s / 4 线程 / 100 连接）：
 
 | 配置            | QPS   | 相对提升 |
 | --------------- | ----- | -------- |
-| `-O2` 无 LTO    | ~142k | 基线     |
-| `-O2` + ThinLTO | ~156k | +10%     |
-| `-O3` + Fat LTO | ~163k | +15%     |
+| `-O2` 无 LTO    | ~159k | 基线     |
+| `-O2` + ThinLTO | ~175k | +10%     |
+| `-O3` + Fat LTO | ~183k | +15%     |
 
 > **注意**：LTO 会显著增加链接时间（2-5x），CI 中建议只在 Release 标签构建时开启。
 
@@ -246,17 +246,31 @@ server.setShutdownTimeout(45.0);  // 45 秒后强制关闭
 server.start();
 ```
 
-### 2.3 多进程部署（SO_REUSEPORT）
+### 2.3 多线程与多 acceptor（SO_REUSEPORT）
 
-Hical 的 `HttpServer` 支持多线程（`ioThreads` 参数），但在超高并发场景下，也可以用多进程模式。Linux 3.9+ 的 `SO_REUSEPORT` 允许多个进程绑定同一端口，内核自动负载均衡：
+**v2.6.0 起，Hical 内置了 SO_REUSEPORT 多 acceptor 架构**：每个 worker loop 拥有独立的 acceptor，accept 与 I/O 在同一线程完成，零跨线程调度。这意味着只要设置好 `ioThreads`，框架会自动利用多核优势，不需要额外的多进程部署：
+
+```cpp
+// 推荐：直接设置 ioThreads = CPU 核数
+// 框架自动在 Linux/macOS 上启用 SO_REUSEPORT 多 acceptor
+// Windows 自动回退为单 acceptor（多 worker loop 仍然有效）
+HttpServer server(8080, std::thread::hardware_concurrency());
+server.start();
+```
+
+> **v2.6.0 之前 vs 之后**：
+>
+> | 版本     | accept 模型                       | 跨线程调度       |
+> | -------- | --------------------------------- | ---------------- |
+> | < v2.6.0 | 单 acceptor + round-robin 分发    | 每次 accept 一次 |
+> | v2.6.0+  | 每个 worker loop 独立 acceptor    | 零               |
+>
+> 这是 QPS 从 27K 提升到 159K 的主要贡献因素之一。
+
+对于极端场景（需要进程级故障隔离），仍可用多进程模式：
 
 ```bash
-# 方案一：Hical 多线程（推荐，简单）
-# 直接设置 ioThreads = CPU 核数
-HttpServer server(8080, std::thread::hardware_concurrency());
-
-# 方案二：多进程 + SO_REUSEPORT（极端场景）
-# 启动 N 个独立进程，各自绑定 8080 端口
+# 多进程 + SO_REUSEPORT（极端场景，通常不需要）
 for i in $(seq 1 $(nproc)); do
     /opt/hical/server 8080 &
 done
@@ -271,7 +285,7 @@ done
 > | 故障隔离 | 一个线程崩全进程挂 | 单进程崩不影响其他 |
 > | 适用场景 | 大多数 Web API 服务 | 需要进程级隔离（如插件系统） |
 >
-> **结论**：90% 的场景用多线程就够了。只有在需要进程级故障隔离或单进程 fd 上限受限时才考虑多进程。
+> **结论**：v2.6.0 的多 acceptor 架构下，99% 的场景用多线程就够了。
 
 ---
 
@@ -664,7 +678,7 @@ server.router().get("/health/ready",
 
 ### 5.1 多阶段 Dockerfile
 
-Hical 项目已经有一个用于压测的 [Dockerfile](../../benchmark/hical/Dockerfile)，这里给出生产级的完整版本：
+Hical 项目已经有一个用于压测的 [Dockerfile](../benchmark/hical/Dockerfile)，这里给出生产级的完整版本：
 
 ```dockerfile
 # ============ 构建阶段 ============
@@ -870,7 +884,7 @@ spec:
     spec:
       containers:
         - name: hical
-          image: registry.example.com/hical-app:v2.5.1
+          image: registry.example.com/hical-app:v2.6.0
           ports:
             - containerPort: 8080
           env:
@@ -954,7 +968,7 @@ spec:
 | 参数           | 默认值 | 调整建议                        | API                    |
 | -------------- | ------ | ------------------------------- | ---------------------- |
 | IO 线程数      | 1      | CPU 核数（不超过 8）            | `HttpServer(port, N)`  |
-| 最大连接数     | 10000  | 根据内存预算：每连接约 50-100KB | `setMaxConnections()`  |
+| 最大连接数     | 10000  | 根据内存预算：每连接约 25KB（v2.6.0 atomic 超时） | `setMaxConnections()`  |
 | 空闲连接超时   | 60s    | 反向代理后面可设短些（30s）     | `setIdleTimeout()`     |
 | 最大请求体     | 1MB    | 文件上传场景调大（如 50MB）     | `setMaxBodySize()`     |
 | 最大请求头     | 8KB    | 含大 Cookie 时调大（如 16KB）   | `setMaxHeaderSize()`   |
@@ -967,7 +981,7 @@ spec:
 | ----------------------------- | ------ | ---------------------------------------------- |
 | `globalLargestPoolBlock`      | 1MB    | 有大 JSON 响应时调大                           |
 | `threadLocalLargestPoolBlock` | 512KB  | 跟随单请求最大分配调整                         |
-| `requestPoolInitialSize`      | 8KB    | 小请求多的 API 可降到 4KB，大请求多可调到 16KB |
+| `requestPoolInitialSize`      | 4KB    | 小请求多的 API 可降到 2KB，大请求多可调到 16KB |
 
 ### 数据库连接池
 
@@ -1006,5 +1020,5 @@ spec:
 
 ---
 
-> **系列导航**：本文为生产部署指南。更多 Hical 文章见 [docs/blog/](.) 目录。
-> 推荐阅读：[设计哲学](01-design-philosophy.md) | [协程与内存池](02-coroutine-and-memory.md) | [数据库 CRUD](08-hical-mysql-crud.md) | [日志系统指南](09-hical-logging-guide.md) | [开发心得](14-development-insights.md)
+> **系列导航**：本文为生产部署指南。
+> 推荐阅读：[日志系统指南](logging-guide.md) | [协程入门](coroutine-guide.md) | [OpenAPI 指南](openapi-guide.md)

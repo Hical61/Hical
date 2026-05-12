@@ -143,7 +143,12 @@ hical/
 │   ├── quickstart.md           # Hical 快速上手指南（5 分钟入门）
 │   ├── examples_guide.md       # 使用示例（8 个由浅入深的完整示例）
 │   ├── architecture.md         # 架构设计文档（PMR 内存池/反射层/Concepts 等）
-│   └── performance_report.md   # 性能测试报告（基准测试方法与调优指南）
+│   ├── performance_report.md   # 性能测试报告（基准测试方法与调优指南）
+│   ├── integration_guide.md    # 集成指南（vcpkg overlay / FetchContent / cmake install）
+│   ├── logging-guide.md        # 日志系统完全指南
+│   ├── openapi-guide.md        # OpenAPI/Swagger 集成指南
+│   ├── coroutine-guide.md      # 协程入门教程
+│   └── production-deployment.md # 生产部署实践（编译优化/容器化/监控）
 
 ```
 
