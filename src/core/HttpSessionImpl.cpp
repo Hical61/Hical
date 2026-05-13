@@ -180,12 +180,13 @@ namespace hical
 
 	/// 连接级空闲超时协程：替代 shared_ptr<function> 自引用回调链
 	/// 仅启动一次，循环检查 atomic 时间戳判断是否真正超时
-	static Awaitable<void> idleTimerLoop(boost::asio::steady_timer& timer,
+	static Awaitable<void> idleTimerLoop(std::shared_ptr<boost::asio::steady_timer> pTimer,
 										 tcp::socket& socket,
 										 std::shared_ptr<std::atomic<bool>> alive,
 										 std::shared_ptr<std::atomic<int64_t>> lastActive,
 										 int64_t timeoutMs)
 	{
+		auto& timer = *pTimer;
 		while (alive->load())
 		{
 			timer.expires_after(std::chrono::milliseconds(timeoutMs));
@@ -259,10 +260,10 @@ namespace hical
 		} guard {socket};
 
 		// 空闲超时 timer 在 try 外声明，catch 块需要访问以取消 timer 防竞态
-		std::optional<boost::asio::steady_timer> deadline;
+		std::shared_ptr<boost::asio::steady_timer> deadline;
 		if (idleTimeout_ > 0)
 		{
-			deadline.emplace(socket.get_executor());
+			deadline = std::make_shared<boost::asio::steady_timer>(socket.get_executor());
 		}
 
 		try
@@ -294,7 +295,7 @@ namespace hical
 			if (deadline)
 			{
 				boost::asio::co_spawn(socket.get_executor(),
-									  idleTimerLoop(*deadline, socket, socketAlive, lastActiveMs, timeoutMs),
+									  idleTimerLoop(deadline, socket, socketAlive, lastActiveMs, timeoutMs),
 									  boost::asio::detached);
 			}
 
