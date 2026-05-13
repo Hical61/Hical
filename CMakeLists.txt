@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(hical VERSION 2.6.0 LANGUAGES C CXX)
+project(hical VERSION 2.6.1 LANGUAGES C CXX)
 
 # C++26 反射可选支持
 option(HICAL_ENABLE_REFLECTION "Enable C++26 reflection (requires compatible compiler)" OFF)
@@ -11,8 +11,14 @@ option(HICAL_BUILD_EXAMPLES "Build example programs" ON)
 # 中间件性能剖析（启用后对每个命名中间件记录调用次数和耗时统计）
 option(HICAL_ENABLE_MIDDLEWARE_PROFILING "Enable per-middleware timing statistics" OFF)
 
+# 使用系统安装的 picohttpparser 替代 bundled 版本（vcpkg 场景下启用）
+option(HICAL_USE_SYSTEM_PICOHTTPPARSER "Use system-installed picohttpparser instead of bundled" OFF)
+
 # 数据库中间件（启用后编译 DB 连接池和 MySQL 后端，需要 boost-mysql）
 option(HICAL_WITH_DATABASE "Enable database middleware (requires Boost.MySQL)" OFF)
+
+# OpenAPI 自动生成（无额外依赖，复用 Boost.JSON）
+option(HICAL_WITH_OPENAPI "Enable OpenAPI 3.0 auto-generation module" ON)
 
 if(HICAL_ENABLE_REFLECTION)
     set(CMAKE_CXX_STANDARD 26)

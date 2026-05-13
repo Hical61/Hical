@@ -319,6 +319,9 @@ namespace hical::db
 		}
 	}
 
+	// 注意：后台协程按值捕获 shared_from_this()，会延长 DbConnectionPool 的生命周期
+	// 直到协程退出。若外部 drop 所有 shared_ptr 而未调用 shutdown()，池对象将延迟到
+	// io_context 停止时才释放。调用方必须在销毁前显式调用 shutdown() 以终止后台协程。
 	void DbConnectionPool::startIdleChecker()
 	{
 		auto self = shared_from_this();
@@ -368,6 +371,8 @@ namespace hical::db
 		}
 	}
 
+	// 注意：同 startIdleChecker()，后台协程持有 self 延长对象生命周期，
+	// 必须通过 shutdown() 终止，否则池对象延迟到 io_context 停止才释放。
 	void DbConnectionPool::startHealthChecker()
 	{
 		auto self = shared_from_this();

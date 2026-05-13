@@ -21,11 +21,13 @@ class HicalConan(ConanFile):
         "fPIC": [True, False],
         "with_reflection": [True, False],
         "with_database": [True, False],
+        "with_openapi": [True, False],
     }
     default_options = {
         "fPIC": True,
         "with_reflection": False,
         "with_database": False,
+        "with_openapi": True,
     }
 
     exports_sources = (
@@ -67,6 +69,7 @@ class HicalConan(ConanFile):
         tc.variables["HICAL_BUILD_EXAMPLES"] = False
         tc.variables["HICAL_ENABLE_REFLECTION"] = bool(self.options.with_reflection)
         tc.variables["HICAL_WITH_DATABASE"] = bool(self.options.with_database)
+        tc.variables["HICAL_WITH_OPENAPI"] = bool(self.options.with_openapi)
         tc.generate()
 
     def build(self):
@@ -91,3 +94,10 @@ class HicalConan(ConanFile):
 
         if self.settings.os in ["Linux", "FreeBSD"]:
             self.cpp_info.system_libs.append("pthread")
+
+        # OpenAPI（默认开启，可通过 with_openapi=False 关闭）
+        if self.options.with_openapi:
+            self.cpp_info.defines.append("HICAL_HAS_OPENAPI=1")
+
+        if self.options.with_database:
+            self.cpp_info.defines.append("HICAL_HAS_DATABASE=1")

@@ -183,6 +183,10 @@ namespace hical
 		virtual void sendFile(const std::filesystem::path& path, int64_t offset = 0, int64_t length = -1) = 0;
 
 		// ============ 回调设置（hical 风格命名）============
+		//
+		// 注意：回调 lambda 中禁止按值捕获当前连接的 shared_ptr，
+		// 否则会形成 "对象→callback→shared_ptr→对象" 循环引用导致内存泄漏。
+		// 应使用回调参数 c，或改用 weak_from_this() 捕获。
 
 		/**
 		 * @brief 设置消息接收回调

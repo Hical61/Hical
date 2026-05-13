@@ -8,11 +8,18 @@ configure_file(
 )
 
 # picohttpparser（H2O 出品的轻量 HTTP/1.1 解析器）
-set(PICOHTTPPARSER_DIR ${CMAKE_CURRENT_SOURCE_DIR}/third_party/picohttpparser)
+if(HICAL_USE_SYSTEM_PICOHTTPPARSER)
+    find_path(PICOHTTPPARSER_INCLUDE_DIR picohttpparser.h REQUIRED)
+    find_library(PICOHTTPPARSER_LIBRARY picohttpparser REQUIRED)
+else()
+    set(PICOHTTPPARSER_DIR ${CMAKE_CURRENT_SOURCE_DIR}/third_party/picohttpparser)
+    if(NOT EXISTS "${PICOHTTPPARSER_DIR}/picohttpparser.c")
+        message(FATAL_ERROR "bundled picohttpparser not found at ${PICOHTTPPARSER_DIR}")
+    endif()
+endif()
 
-# 核心库实现
-add_library(hical_core
-    ${PICOHTTPPARSER_DIR}/picohttpparser.c
+# 核心库实现（仅支持静态库，vcpkg/Conan 均强制 ONLY_STATIC_LIBRARY）
+add_library(hical_core STATIC
     core/InetAddress.cpp
     core/Error.cpp
     core/MetaJsonError.cpp
@@ -44,6 +51,17 @@ add_library(hical_core
     asio/TcpServer.cpp
 )
 
+# picohttpparser 条件集成
+if(HICAL_USE_SYSTEM_PICOHTTPPARSER)
+    target_include_directories(hical_core PRIVATE ${PICOHTTPPARSER_INCLUDE_DIR})
+    target_link_libraries(hical_core PRIVATE ${PICOHTTPPARSER_LIBRARY})
+    set(HICAL_PICOHTTPPARSER_INCLUDE_DIR "${PICOHTTPPARSER_INCLUDE_DIR}" CACHE INTERNAL "")
+else()
+    target_sources(hical_core PRIVATE ${PICOHTTPPARSER_DIR}/picohttpparser.c)
+    target_include_directories(hical_core PRIVATE ${PICOHTTPPARSER_DIR})
+    set(HICAL_PICOHTTPPARSER_INCLUDE_DIR "${PICOHTTPPARSER_DIR}" CACHE INTERNAL "")
+endif()
+
 # GCC: Boost.Asio awaitable_frame_base 使用 aligned_alloc/operator delete 导致误报
 if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     set_source_files_properties(core/HttpSessionImpl.cpp PROPERTIES
@@ -51,18 +69,11 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     )
 endif()
 
-# Windows shared 库自动导出所有符号（生成 .lib 导入库）
-set_target_properties(hical_core PROPERTIES
-    WINDOWS_EXPORT_ALL_SYMBOLS ON
-)
-
 target_include_directories(hical_core
     PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
-    $<BUILD_INTERFACE:${PICOHTTPPARSER_DIR}>
-    $<INSTALL_INTERFACE:include/hical/core>
-    $<INSTALL_INTERFACE:include/hical/asio>
+    $<INSTALL_INTERFACE:include/hical>
 )
 
 target_link_libraries(hical_core
@@ -122,8 +133,7 @@ if(HICAL_WITH_DATABASE)
     target_link_libraries(hical_core PUBLIC Boost::charconv)
 endif()
 
-# OpenAPI 自动生成（可选，默认开启）
-option(HICAL_WITH_OPENAPI "Enable OpenAPI 3.0 auto-generation module" ON)
+# OpenAPI 自动生成（可选，默认开启，选项在根 CMakeLists.txt 中定义）
 if(HICAL_WITH_OPENAPI)
     target_sources(hical_core PRIVATE
         core/OpenApiRegistry.cpp

@@ -13,6 +13,7 @@
 #include "WsHandshake.h"
 #include <charconv>
 #include <chrono>
+#include <ctime>
 #include <optional>
 
 // picohttpparser（C 库）
@@ -78,6 +79,38 @@ namespace hical
 					break;
 			}
 			return HttpMethod::hUnknown;
+		}
+
+		/// thread_local RFC 7231 Date 头缓存（每秒更新一次）
+		/// 格式: "Thu, 13 May 2026 08:00:00 GMT"
+		struct DateCache
+		{
+			time_t cachedSec {0};
+			char buf[30] {};  // 29 chars + NUL
+			size_t len {0};
+		};
+
+		// NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
+		thread_local DateCache dateTlsCache;
+		// NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
+
+		std::string_view cachedHttpDate() noexcept
+		{
+			auto& cache = dateTlsCache;
+			auto now = std::time(nullptr);
+			if (now != cache.cachedSec)
+			{
+				cache.cachedSec = now;
+				struct tm gmt {};
+#if defined(_WIN32)
+				gmtime_s(&gmt, &now);
+#else
+				gmtime_r(&now, &gmt);
+#endif
+				cache.len = std::strftime(cache.buf, sizeof(cache.buf),
+										  "%a, %d %b %Y %H:%M:%S GMT", &gmt);
+			}
+			return {cache.buf, cache.len};
 		}
 
 		/// 快速发送错误响应（栈缓冲区，零堆分配）
@@ -649,6 +682,7 @@ namespace hical
 				bool shouldKeepAlive = req.native().keepAlive && !draining_.load();
 				nativeRes.keepAlive = shouldKeepAlive;
 				nativeRes.headers.insert("Connection", shouldKeepAlive ? "keep-alive" : "close");
+				nativeRes.headers.insert("Date", cachedHttpDate());
 
 				// 发送响应（scatter-gather I/O：状态行+头部在栈，body 零拷贝）
 				// HEAD 方法：仅发送头部，不发送 body（RFC 7231 §4.3.2）
