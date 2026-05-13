@@ -320,6 +320,38 @@ namespace hical
 				size_t prevBufLen = 0;
 				for (;;)
 				{
+					// Pipelining 快速路径：缓冲区已有未解析数据时先尝试解析，跳过 async_read_some
+					// 守卫条件 bufUsed > prevBufLen：
+					//   首个请求：bufUsed=0, prevBufLen=0 → false → 走正常 read 路径
+					//   Pipeline 后续：bufUsed=残留数据, prevBufLen=0 → true → 先尝试解析
+					//   Chunked 后 bufUsed=0 → false → 走正常 read 路径
+					if (bufUsed > prevBufLen)
+					{
+						numHeaders = 64;
+						parseResult = phr_parse_request(readBuf.data(),
+														bufUsed,
+														&method,
+														&methodLen,
+														&path,
+														&pathLen,
+														&minorVersion,
+														headers,
+														&numHeaders,
+														prevBufLen);
+						prevBufLen = bufUsed;
+
+						if (parseResult > 0)
+						{
+							break; // 完整请求已在缓冲区，零 syscall
+						}
+						if (parseResult == -1)
+						{
+							co_await sendRawResponse(socket, 400, "Bad Request", "Malformed HTTP request");
+							co_return;
+						}
+						// parseResult == -2：数据不完整，fall through 到 async_read_some
+					}
+
 					// 确保缓冲区有空间
 					if (bufUsed >= readBuf.size())
 					{
@@ -463,6 +495,12 @@ namespace hical
 				size_t headerBytes = static_cast<size_t>(parseResult);
 				size_t remainingInBuf = bufUsed - headerBytes;
 
+				// pendingMemmove：记录阶段 C 中需要延迟执行的 memmove 参数
+				// memmove 必须延迟到阶段 D 之后，因为 nativeReq.target/headers 是 string_view
+				// 引用 readBuf，memmove 会覆盖其内容导致悬空引用
+				size_t memmoveSrc = 0; // memmove 源偏移
+				size_t memmoveLen = 0; // memmove 长度（0 表示无需 memmove）
+
 				if (hasContentLength && contentLength > 0)
 				{
 					// Content-Length body 读取
@@ -479,11 +517,12 @@ namespace hical
 						std::memcpy(nativeReq.body.data(), readBuf.data() + headerBytes, bodyCopied);
 					}
 
-					// 保留 readBuf 中超出当前 body 的残留数据（TCP 粘包：下一请求已到达）
+					// 记录延迟 memmove 参数（保留 readBuf 中超出当前 body 的残留数据）
 					size_t tailLen = remainingInBuf - bodyCopied;
 					if (tailLen > 0)
 					{
-						std::memmove(readBuf.data(), readBuf.data() + headerBytes + bodyCopied, tailLen);
+						memmoveSrc = headerBytes + bodyCopied;
+						memmoveLen = tailLen;
 					}
 					bufUsed = tailLen;
 
@@ -567,10 +606,11 @@ namespace hical
 				}
 				else
 				{
-					// 无 body（GET/HEAD 等）：保留 readBuf 中头部之后的残留数据
+					// 无 body（GET/HEAD 等）：记录延迟 memmove 参数
 					if (remainingInBuf > 0)
 					{
-						std::memmove(readBuf.data(), readBuf.data() + headerBytes, remainingInBuf);
+						memmoveSrc = headerBytes;
+						memmoveLen = remainingInBuf;
 					}
 					bufUsed = remainingInBuf;
 				}
@@ -694,6 +734,13 @@ namespace hical
 										std::chrono::steady_clock::now().time_since_epoch())
 										.count(),
 									std::memory_order_relaxed);
+
+				// 延迟 memmove：响应已发送或已暂存，nativeReq.target/headers 不再被引用，
+				// 安全地将残留数据移到缓冲区开头（为下一个 pipelined 请求做准备）
+				if (memmoveLen > 0)
+				{
+					std::memmove(readBuf.data(), readBuf.data() + memmoveSrc, memmoveLen);
+				}
 
 				if (!shouldKeepAlive)
 				{

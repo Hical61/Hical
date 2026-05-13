@@ -519,3 +519,59 @@ TEST_F(IntegrationTest, MultiThreadPoolNoLeak)
 	// 实际 pool 会复用，当前字节应远小于总量
 	EXPECT_LT(stats.currentBytesAllocated, 10 * 1024 * 1024); // < 10MB
 }
+
+// ============ F. HTTP Pipelining ============
+
+// 基本 pipelining：4 个请求一次性发送，验证响应顺序和内容
+TEST_F(IntegrationTest, HttpPipelining)
+{
+	startServer();
+
+	auto responses = hical::test::httpPipelinedRequests("127.0.0.1", port_, {"/", "/users/42", "/", "/users/99"});
+
+	ASSERT_EQ(responses.size(), 4u);
+	EXPECT_EQ(responses[0].status, 200u);
+	EXPECT_EQ(responses[0].body, "hello");
+	EXPECT_EQ(responses[1].status, 200u);
+	EXPECT_TRUE(responses[1].body.find("42") != std::string::npos);
+	EXPECT_EQ(responses[2].status, 200u);
+	EXPECT_EQ(responses[2].body, "hello");
+	EXPECT_EQ(responses[3].status, 200u);
+	EXPECT_TRUE(responses[3].body.find("99") != std::string::npos);
+}
+
+// 16 深度 pipelining（匹配 TFB wrk 的 pipeline 行为）
+TEST_F(IntegrationTest, HttpPipelineDepth16)
+{
+	startServer();
+
+	std::vector<std::string> targets;
+	for (int i = 0; i < 16; ++i)
+	{
+		targets.push_back("/");
+	}
+
+	auto responses = hical::test::httpPipelinedRequests("127.0.0.1", port_, targets);
+
+	ASSERT_EQ(responses.size(), 16u);
+	for (auto& r : responses)
+	{
+		EXPECT_EQ(r.status, 200u);
+		EXPECT_EQ(r.body, "hello");
+	}
+}
+
+// Pipelining 含 404（混合成功/失败，验证错误响应不破坏管道）
+TEST_F(IntegrationTest, HttpPipelineMixed)
+{
+	startServer();
+
+	auto responses = hical::test::httpPipelinedRequests("127.0.0.1", port_, {"/", "/nonexistent", "/"});
+
+	ASSERT_EQ(responses.size(), 3u);
+	EXPECT_EQ(responses[0].status, 200u);
+	EXPECT_EQ(responses[0].body, "hello");
+	EXPECT_EQ(responses[1].status, 404u);
+	EXPECT_EQ(responses[2].status, 200u);
+	EXPECT_EQ(responses[2].body, "hello");
+}

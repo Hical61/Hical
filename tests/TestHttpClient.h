@@ -302,6 +302,49 @@ namespace hical::test
 	}
 
 	/**
+	 * @brief HTTP Pipelining 测试：一次 TCP write 发送 N 个请求，然后顺序读取 N 个响应
+	 * 与 httpKeepAliveRequests 不同，这里所有请求在一次 write 中发送（不等待中间响应）。
+	 */
+	inline std::vector<detail::ParsedResponse> httpPipelinedRequests(const std::string& host,
+																	 uint16_t port,
+																	 const std::vector<std::string>& targets)
+	{
+		boost::asio::io_context ioCtx;
+		tcp::socket sock(ioCtx);
+		sock.connect(tcp::endpoint(boost::asio::ip::make_address(host), port));
+
+		// 将所有请求拼接到一个缓冲区，一次性发送
+		std::string allRequests;
+		for (size_t i = 0; i < targets.size(); ++i)
+		{
+			bool isLast = (i == targets.size() - 1);
+			allRequests += "GET " + targets[i]
+						   + " HTTP/1.1\r\n"
+							 "Host: "
+						   + host
+						   + "\r\n"
+							 "Connection: "
+						   + (isLast ? "close" : "keep-alive")
+						   + "\r\n"
+							 "\r\n";
+		}
+
+		boost::asio::write(sock, boost::asio::buffer(allRequests));
+
+		// 顺序读取所有响应
+		std::vector<detail::ParsedResponse> results;
+		std::string buf;
+		for (size_t i = 0; i < targets.size(); ++i)
+		{
+			results.push_back(detail::readHttpResponse(sock, buf));
+		}
+
+		boost::system::error_code ec;
+		sock.shutdown(tcp::socket::shutdown_both, ec);
+		return results;
+	}
+
+	/**
 	 * @brief 在同一连接上发送多个 GET 请求（Keep-Alive）
 	 */
 	inline std::vector<detail::ParsedResponse> httpKeepAliveRequests(
