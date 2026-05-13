@@ -86,12 +86,13 @@ namespace hical
 		struct DateCache
 		{
 			time_t cachedSec {0};
-			char buf[30] {};  // 29 chars + NUL
+			char buf[30] {}; // 29 chars + NUL
 			size_t len {0};
 		};
 
 		// NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
-		thread_local DateCache dateTlsCache;
+		thread_local DateCache dateTlsCache; // NOLINT
+
 		// NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 
 		std::string_view cachedHttpDate() noexcept
@@ -107,8 +108,7 @@ namespace hical
 #else
 				gmtime_r(&now, &gmt);
 #endif
-				cache.len = std::strftime(cache.buf, sizeof(cache.buf),
-										  "%a, %d %b %Y %H:%M:%S GMT", &gmt);
+				cache.len = std::strftime(cache.buf, sizeof(cache.buf), "%a, %d %b %Y %H:%M:%S GMT", &gmt);
 			}
 			return {cache.buf, cache.len};
 		}
