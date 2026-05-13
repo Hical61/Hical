@@ -200,6 +200,12 @@ namespace hical
 		// 关闭所有 acceptor（stop/gracefulStop 共用）
 		void closeAllAcceptors();
 
+		// === 协程生命周期依赖的成员（必须在 baseLoop_/ioPool_ 之后析构）===
+		// io_context 析构时会销毁悬挂的协程帧，协程帧中的 ConnectionCounter
+		// 析构函数会访问以下 atomic 成员，因此它们必须比 io_context 活得更久。
+		std::atomic<size_t> activeConnections_ {0};
+		std::atomic<bool> draining_ {false};
+
 		std::atomic<uint16_t> port_;
 		size_t ioThreads_;
 		AsioEventLoop baseLoop_;                // 主 loop（accept + signal + GC）
@@ -232,7 +238,6 @@ namespace hical
 
 		// 连接数限制（0 表示不限制，默认 10000）
 		size_t maxConnections_ {10000};
-		std::atomic<size_t> activeConnections_ {0};
 
 		// 空闲连接超时（秒，0 表示不超时）
 		double idleTimeout_ {60.0};
@@ -244,7 +249,6 @@ namespace hical
 
 		// 优雅关机
 		double shutdownTimeout_ {30.0};
-		std::atomic<bool> draining_ {false};
 
 		// 全局错误处理器
 		ErrorHandler errorHandler_;

@@ -10,6 +10,7 @@ WORKDIR /src
 # 编译 mimalloc（参考 drogon TFB 做法：替换系统 malloc，减少碎片和锁竞争）
 RUN git clone --depth 1 --branch v2.1.9 https://github.com/microsoft/mimalloc.git /tmp/mimalloc \
     && cmake -B /tmp/mimalloc/build -S /tmp/mimalloc -G Ninja \
+        -DCMAKE_C_COMPILER=gcc-14 -DCMAKE_CXX_COMPILER=g++-14 \
         -DCMAKE_BUILD_TYPE=Release -DMI_BUILD_TESTS=OFF \
     && cmake --build /tmp/mimalloc/build \
     && cmake --install /tmp/mimalloc/build \
