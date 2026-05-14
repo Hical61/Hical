@@ -759,7 +759,6 @@ namespace hical
 		}
 
 		// 取消 idleTimerLoop 协程：cancel timer 使其 co_await 收到 operation_aborted 并退出
-		// 必须在 AliveGuard 析构前执行（timer cancel 后协程 resume 时检查 alive 标志退出）
 		if (deadline)
 		{
 			deadline->cancel();
