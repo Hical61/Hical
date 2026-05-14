@@ -9,7 +9,7 @@
 [![GitHub stars](https://img.shields.io/github/stars/Hical61/Hical?style=flat)](https://github.com/Hical61/Hical/stargazers)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
-**Hical** is a modern C++20 high-performance web framework built on Boost.Asio with a native HTTP/WebSocket stack, leveraging C++26 reflection and PMR memory pooling for maximum throughput.
+**Hical** is a modern C++20/26 high-performance web framework built on Boost.Asio with a native HTTP/WebSocket stack, leveraging C++26 reflection and PMR memory pooling for maximum throughput.
 
 English | [简体中文](README_CN.md)
 
@@ -75,14 +75,14 @@ docker compose -f docker-compose.bench.yml up
 
 ## Requirements
 
-| Dependency     | Notes                                        |
-| -------------- | -------------------------------------------- |
-| C++20/26       | C++26 optional (reflection)                  |
-| Boost >= 1.82  | Asio, System, JSON; DB middleware needs >= 1.85 |
-| OpenSSL        | Required                                     |
-| zlib           | Required (WebSocket compression)             |
-| CMake >= 3.20  | Build system                                 |
-| GCC 14+ / Clang 20+ / MSVC 2022+ | Compiler                  |
+| Dependency                       | Notes                                           |
+| -------------------------------- | ----------------------------------------------- |
+| C++20/26                         | C++26 optional (reflection)                     |
+| Boost >= 1.82                    | Asio, System, JSON; DB middleware needs >= 1.85 |
+| OpenSSL                          | Required                                        |
+| zlib                             | Required (WebSocket compression)                |
+| CMake >= 3.20                    | Build system                                    |
+| GCC 14+ / Clang 20+ / MSVC 2022+ | Compiler                                        |
 
 ## Build
 

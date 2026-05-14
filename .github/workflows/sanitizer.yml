@@ -1,0 +1,140 @@
+name: Sanitizer (Manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_asan:
+        description: 'ASan + UBSan (address/undefined behavior)'
+        type: boolean
+        default: true
+      run_tsan:
+        description: 'TSan (thread data race)'
+        type: boolean
+        default: false
+      run_valgrind:
+        description: 'Valgrind Memcheck (memory leak/access)'
+        type: boolean
+        default: false
+
+jobs:
+  asan:
+    if: ${{ inputs.run_asan }}
+    runs-on: ubuntu-24.04
+    name: ASan + UBSan (Clang-20)
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/llvm.asc
+          echo "deb http://apt.llvm.org/noble/ llvm-toolchain-noble-20 main" | sudo tee /etc/apt/sources.list.d/llvm-20.list
+          sudo apt-get update
+          sudo apt-get install -y libboost-all-dev libssl-dev libgtest-dev zlib1g-dev cmake clang-20
+
+      - name: Setup ccache
+        uses: hendrikmuhs/ccache-action@v1
+        with:
+          key: sanitizer-asan
+
+      - name: Configure
+        run: |
+          cmake -B build -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_C_COMPILER=clang-20 \
+            -DCMAKE_CXX_COMPILER=clang++-20 \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
+            -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined" \
+            -DHICAL_DISABLE_IO_URING=ON
+
+      - name: Build
+        run: cmake --build build -j$(nproc)
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure --timeout 120 -j4 -E RouterPerfTest
+        env:
+          ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
+          UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
+
+  tsan:
+    if: ${{ inputs.run_tsan }}
+    runs-on: ubuntu-24.04
+    name: TSan (Clang-20)
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/llvm.asc
+          echo "deb http://apt.llvm.org/noble/ llvm-toolchain-noble-20 main" | sudo tee /etc/apt/sources.list.d/llvm-20.list
+          sudo apt-get update
+          sudo apt-get install -y libboost-all-dev libssl-dev libgtest-dev zlib1g-dev cmake clang-20
+
+      - name: Setup ccache
+        uses: hendrikmuhs/ccache-action@v1
+        with:
+          key: sanitizer-tsan
+
+      - name: Configure
+        run: |
+          cmake -B build -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_C_COMPILER=clang-20 \
+            -DCMAKE_CXX_COMPILER=clang++-20 \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_FLAGS="-fsanitize=thread -fno-omit-frame-pointer" \
+            -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=thread" \
+            -DHICAL_DISABLE_IO_URING=ON
+
+      - name: Build
+        run: cmake --build build -j$(nproc)
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure --timeout 300 -j4 -E RouterPerfTest
+        env:
+          TSAN_OPTIONS: halt_on_error=1:second_deadlock_stack=1
+
+  valgrind:
+    if: ${{ inputs.run_valgrind }}
+    runs-on: ubuntu-24.04
+    name: Valgrind Memcheck (Clang-20)
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/llvm.asc
+          echo "deb http://apt.llvm.org/noble/ llvm-toolchain-noble-20 main" | sudo tee /etc/apt/sources.list.d/llvm-20.list
+          sudo apt-get update
+          sudo apt-get install -y libboost-all-dev libssl-dev libgtest-dev zlib1g-dev cmake clang-20 valgrind
+
+      - name: Setup ccache
+        uses: hendrikmuhs/ccache-action@v1
+        with:
+          key: sanitizer-valgrind
+
+      - name: Configure
+        run: |
+          cmake -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DCMAKE_C_COMPILER=clang-20 \
+            -DCMAKE_CXX_COMPILER=clang++-20 \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            -DHICAL_DISABLE_IO_URING=ON
+
+      - name: Build
+        run: cmake --build build -j$(nproc)
+
+      - name: Test under Valgrind
+        run: |
+          ctest --test-dir build \
+            --output-on-failure \
+            --timeout 600 \
+            -j2 \
+            -E RouterPerfTest \
+            --overwrite MemoryCheckCommand=/usr/bin/valgrind \
+            --overwrite "MemoryCheckCommandOptions=--leak-check=full --show-leak-kinds=all --error-exitcode=1 --track-origins=yes" \
+            -T memcheck
