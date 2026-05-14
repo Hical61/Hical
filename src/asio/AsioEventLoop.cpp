@@ -44,7 +44,11 @@ namespace hical
 
 	void AsioEventLoop::stop()
 	{
-		quit_.store(true);
+		// 确保只有第一个调用者执行实际停止操作，防止并发 reset 竞争
+		if (quit_.exchange(true))
+		{
+			return;
+		}
 		workGuard_.reset();
 		ioContext_.stop();
 	}
