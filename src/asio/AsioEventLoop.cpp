@@ -22,7 +22,7 @@ namespace hical
 
 	void AsioEventLoop::run()
 	{
-		threadId_ = std::this_thread::get_id();
+		threadId_.store(std::this_thread::get_id(), std::memory_order_release);
 		running_.store(true);
 		quit_.store(false);
 
@@ -128,7 +128,7 @@ namespace hical
 
 	bool AsioEventLoop::isInLoopThread() const
 	{
-		return threadId_ == std::this_thread::get_id();
+		return threadId_.load(std::memory_order_acquire) == std::this_thread::get_id();
 	}
 
 	size_t AsioEventLoop::index() const

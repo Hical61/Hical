@@ -20,14 +20,21 @@ namespace hical
 
 	AsioTimer::~AsioTimer()
 	{
-		cancel();
+		// 析构时直接取消：此时无 shared_ptr 引用，不可能有并发 async_wait
+		cancelled_.store(true);
+		timer_.cancel();
 	}
 
 	void AsioTimer::cancel()
 	{
 		if (!cancelled_.exchange(true))
 		{
-			timer_.cancel();
+			// timer_ 必须在其所属 io_context 线程操作，跨线程直接调用不安全
+			boost::asio::post(timer_.get_executor(),
+							  [self = shared_from_this()]()
+							  {
+								  self->timer_.cancel();
+							  });
 		}
 	}
 

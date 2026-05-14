@@ -71,7 +71,7 @@ namespace hical
 	private:
 		boost::asio::io_context ioContext_;
 		std::unique_ptr<boost::asio::executor_work_guard<boost::asio::io_context::executor_type>> workGuard_;
-		std::thread::id threadId_;
+		std::atomic<std::thread::id> threadId_;
 		std::atomic<bool> running_ {false};
 		std::atomic<bool> quit_ {false};
 		size_t index_ {0};

@@ -2,6 +2,7 @@
 #include "GenericConnection.h"
 #include "SslConnection.h"
 #include <algorithm>
+#include <future>
 #include <vector>
 
 namespace hical
@@ -84,9 +85,29 @@ namespace hical
 			return;
 		}
 
-		// 关闭 acceptor
-		boost::system::error_code ec;
-		acceptor_.close(ec);
+		// acceptor 必须在其所属 io_context 线程关闭，跨线程操作不安全
+		auto closeAcceptor = [this]()
+		{
+			boost::system::error_code ec;
+			acceptor_.close(ec);
+		};
+
+		if (baseLoop_->isInLoopThread())
+		{
+			closeAcceptor();
+		}
+		else
+		{
+			std::promise<void> done;
+			auto future = done.get_future();
+			boost::asio::post(baseLoop_->getIoContext(),
+							  [&closeAcceptor, &done]()
+							  {
+								  closeAcceptor();
+								  done.set_value();
+							  });
+			future.get();
+		}
 
 		// 关闭所有连接
 		{
