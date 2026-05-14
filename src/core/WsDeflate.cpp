@@ -1,6 +1,7 @@
 #include "WsDeflate.h"
 #include <cstring>
 #include <stdexcept>
+#include <cstdint>
 #include <zlib.h>
 
 namespace hical
