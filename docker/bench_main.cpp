@@ -128,7 +128,7 @@ int main()
 				});
 	}
 
-	// /sync-middleware/10 — 10 层同步中间件（仅 1 个协程帧）
+	// /sync-middleware/10 — 10 层同步中间件
 	{
 		auto gs10 = server.router().group("");
 		for (int i = 0; i < 10; ++i)
