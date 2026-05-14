@@ -77,9 +77,14 @@ find src -name '*.cpp' | xargs clang-tidy -p build
 - `HttpRequest.h/cpp` — Zero-copy HTTP request wrapper. `NativeRequest` stores `string_view` target + `RequestHeaders` (stack-allocated `array<Entry,64>`, zero heap allocation) referencing connection-level read buffer. `HttpRequest::fromParsed()` factory for parser output. Public API: `method()`, `path()`, `target()`, `header()`, `body()`, `cookie()`, `queryParam()`, `formParam()`, `setAttribute()`
 - `HttpResponse.h/cpp` — HTTP response wrapper. `NativeResponse` stores owned `HeaderMap` + `string body`. `serialize()` produces full HTTP wire bytes. `serializeHeadTo(FixedBuffer<4096>&)` for zero-heap-alloc scatter-gather I/O. `preparePayload()` sets Content-Length via `std::to_chars`
 - `HttpSessionImpl.cpp` — Compilation firewall isolating picohttpparser + self-developed WebSocket implementation. Connection-level `std::string readBuf` (reused across keep-alive requests, no per-request allocation). Single-buffer serialization: head+body into one `FixedBuffer<4096>`, one `async_write` call. WebSocket bridge: reconstructs native request at upgrade time (rare path)
-- `Router.h` — Static routes (hash map O(1) with transparent hashing via `RouteKeyView`/`is_transparent` for zero-alloc `string_view` lookup) + parameter routes (`{id}` pattern, per-method grouping via `unordered_map<HttpMethod, vector>`) + WebSocket routes with `WsOptions` (Origin whitelist)
-- `Middleware.h` — Onion-model middleware pipeline with `MiddlewareNext` chaining; supports pre-built chain (`build()`), dynamic chain (`buildChain()`), and `buildFor()` for external pre-build, with separate `execute()` overloads for cached vs dynamic paths
-- `Coroutine.h` — `Awaitable<T>` alias for `boost::asio::awaitable<T>`, plus `sleep()` / `coSpawn()` helpers
+- `Router.h` — Static routes (hash map O(1) with transparent hashing via `RouteKeyView`/`is_transparent` for zero-alloc `string_view` lookup) + parameter routes (`{id}` pattern, per-method grouping via `unordered_map<HttpMethod, vector>`) + WebSocket routes with `WsOptions` (Origin whitelist). `dispatchSync()` synchronous fast path: sync-registered handlers skip coroutine frame allocation (~40-130ns/req). `resolveRoute()` unifies URL decode + path depth check + static/param lookup for both `dispatch()` and `dispatchSync()`
+- `Middleware.h` — Onion-model middleware pipeline with `MiddlewareNext` chaining; supports pre-built chain (`build()`), dynamic chain (`buildChain()`), and `buildFor()` for external pre-build, with separate `execute()` overloads for cached vs dynamic paths. `SyncBeforeHandler` / `SyncAfterHandler` / `SyncMiddlewareResult` types for zero-coroutine-frame middleware. `MiddlewareEntry` tagged union (Async/Sync). `buildOptimizedChain()`: consecutive sync entries merged into single coroutine frame, N sync middleware = 1 heap allocation
+- `Error.h/cpp` — Unified error code mapping: 36 `ErrorCode` enum values + `NetworkError` struct, isolating upper layers from direct Asio error code dependency
+- `Coroutine.h` — `Awaitable<T>` alias for `boost::asio::awaitable<T>`, plus `sleep()` / `coSpawn()` helpers. `coSpawn()` overload with arbitrary executor + `logOnException` (replaces `detached`, unhandled exceptions logged to stderr)
+- `WsFrame.h` — WebSocket RFC 6455 frame parser/constructor: data/control frame unification, client masking enforcement, RSV bit validation, control frame size limit (≤125B)
+- `WsHandshake.h` — WebSocket handshake protocol: `Sec-WebSocket-Key`/`Accept` computation, extension negotiation (permessage-deflate)
+- `WsDeflate.h/cpp` — WebSocket permessage-deflate compression extension (RFC 7692), pimpl-encapsulated zlib, configurable `serverMaxWindowBits`/`clientMaxWindowBits`/`serverNoContextTakeover`, zip bomb protection
+- `MetaJsonError.h/cpp` — `[[noreturn]]` non-template error functions (`throwTypeMismatch` / `throwMissingField` / `throwParseError`), extracted from template code to reduce per-type `HICAL_JSON` instantiation code size and improve icache utilization
 - `Reflection.h` / `MetaJson.h` / `MetaRoutes.h` — C++26 reflection layer (see below)
 - `StaticFiles.h` — Async static file serving (`Awaitable<HttpResponse>`) with `BOOST_ASIO_HAS_FILE` async I/O + ifstream fallback, PathCache (4096/60s TTL), ETag/304, MIME detection, path traversal protection, 64MB file size limit
 - `Multipart.h/cpp` — RFC 7578 multipart/form-data parser (256 part DoS limit), dual API: `getFile(req, field)` (re-parses) and `getFile(parts, field)` (searches pre-parsed vector, recommended)
@@ -104,10 +109,10 @@ find src -name '*.cpp' | xargs clang-tidy -p build
 
 **`src/asio/`** — Boost.Asio concrete implementations:
 - `AsioEventLoop` — Wraps `boost::asio::io_context`, implements `EventLoop`
-- `GenericConnection<SocketType>` — Template supporting both `tcp::socket` (plain) and `ssl::stream<tcp::socket>` (SSL). Write queue uses `deque<shared_ptr<WriteNode>>` supporting both memory and file nodes. `sendFile()` + `sendFileNode()` for async file I/O with `BOOST_ASIO_HAS_FILE` guard + ifstream fallback. `lastActiveTimeMs_` atomic for idle detection. `reading_` is `atomic<bool>` for thread-safe `stopRead()`
+- `GenericConnection<SocketType>` — Template supporting both `tcp::socket` (plain) and `ssl::stream<tcp::socket>` (SSL). Write queue uses `deque<shared_ptr<WriteNode>>` supporting both memory and file nodes. `sendFile()` + `sendFileNode()` for async file I/O with `BOOST_ASIO_HAS_FILE` guard + ifstream fallback. `lastActiveTimeMs_` atomic for idle detection. `reading_` is `atomic<bool>` for thread-safe `stopRead()`. Template implementation extracted to `GenericConnection.hci` compilation firewall (`extern template` + explicit instantiation in `.cpp`, `#ifndef HICAL_BUILDING_GENERIC_CONNECTION` guard)
 - `SslConnection.h` — Lightweight SSL connection type alias (`SslConnection = GenericConnection<ssl::stream<tcp::socket>>`), lazy OpenSSL include
 - `EventLoopPool` — Multi-threaded pool (1 thread : 1 io_context), round-robin connection distribution
-- `TcpServer` — Accept loop managing connection lifecycle, `alive_` flag guards coroutine against use-after-this, `setIdleTimeout()` + `idleCheckLoop()` for idle connection cleanup, `unordered_set` connection storage (O(1)), `IdleFd` for EMFILE protection
+- `TcpServer` — Accept loop managing connection lifecycle, `alive_` flag guards coroutine against use-after-this, `setIdleTimeout()` + `idleCheckLoop()` for idle connection cleanup, `unordered_set` connection storage (O(1)), `IdleFd` for EMFILE protection. SO_REUSEPORT multi-acceptor model: each worker loop runs its own acceptor, accept and I/O on same thread (zero cross-thread dispatch); Windows auto-fallback to single acceptor
 
 **`src/db/`** — Optional coroutine-based database middleware (enabled via `HICAL_WITH_DATABASE=ON`, guarded by `HICAL_HAS_DATABASE` macro). Namespace: `hical::db`. Four-layer architecture:
 - `DbConfig.h` — `struct DbConfig` with pool sizing (`minConnections`/`maxConnections`), timeouts (`idleTimeout`/`acquireTimeout`/`queryTimeout`), health check intervals (`healthCheckInterval`/`pingGracePeriod`/`idleCheckInterval`), `stmtCacheSize` (per-connection LRU capacity), `autoReconnect`, `charset`
@@ -129,6 +134,8 @@ find src -name '*.cpp' | xargs clang-tidy -p build
 - **Namespaces**: Public API in `hical::`, reflection layer in `hical::meta::`, database middleware in `hical::db::`.
 - **Optional OpenAPI module**: `src/core/OpenApi*.h/cpp` is opt-in via `HICAL_WITH_OPENAPI=ON` (default ON). `HICAL_HAS_OPENAPI` macro guards all OpenAPI code. Four-layer design: Schema generation → Registry → Document assembly → Endpoint exposure. Zero-invasive: does not modify MetaJson.h / MetaRoutes.h / Router.h.
 - **Optional DB module**: Entire `src/db/` is opt-in via `HICAL_WITH_DATABASE=ON`. `HICAL_HAS_DATABASE` macro guards all DB code at compile boundaries. DB core layer (pool/middleware/query log) is backend-agnostic; MySQL backend is a separate layer. Adding PostgreSQL requires only a new `if(HICAL_WITH_PGSQL)` CMake block.
+- **Synchronous fast path**: `Router::dispatchSync()` returns result directly for sync-registered handlers, skipping coroutine frame allocation (~40-130ns savings). `SyncBeforeHandler`/`SyncAfterHandler` allow middleware to run without coroutine overhead. `buildOptimizedChain()` merges N consecutive sync middleware into a single coroutine frame. `HttpSessionImpl` no-middleware path calls `dispatchSync()` first, falls back to `co_await dispatch()` on `nullopt`.
+- **Compilation firewalls**: `GenericConnection.hci` extracts ~780-line template implementation from header; `extern template` declarations + explicit instantiation in `.cpp` prevent re-compilation on user code changes. `HttpSessionImpl.cpp` isolates picohttpparser + WebSocket heavy-template code from `HttpServer.h`.
 
 ### C++26 Reflection Layer (Dual-Track)
 
@@ -175,20 +182,22 @@ Core design principle: when `HICAL_HAS_REFLECTION == 1` (compiler supports P2996
 
 ## Dependencies
 
-| Dependency   | Version                               |
-| ------------ | ------------------------------------- |
-| C++ Standard | C++20 (C++26 optional for reflection) |
-| Boost        | >= 1.82 (Asio, System, JSON); DB middleware >= 1.85 (MySQL, charconv) |
-| OpenSSL      | Required                              |
-| Google Test  | Required                              |
-| CMake        | >= 3.20                               |
-| Compiler     | GCC 14+ / Clang 20+ / MSVC 2022+      |
+| Dependency      | Version                               |
+| --------------- | ------------------------------------- |
+| C++ Standard    | C++20 (C++26 optional for reflection) |
+| Boost           | >= 1.82 (Asio, System, JSON); DB middleware >= 1.85 (MySQL, charconv) |
+| OpenSSL         | Required                              |
+| zlib            | Required (WebSocket permessage-deflate) |
+| picohttpparser  | Bundled (system install optional via `HICAL_USE_SYSTEM_PICOHTTPPARSER`) |
+| Google Test     | Required                              |
+| CMake           | >= 3.20                               |
+| Compiler        | GCC 14+ / Clang 20+ / MSVC 2022+      |
 
 > **Note:** The OpenAPI module (`HICAL_WITH_OPENAPI=ON`) introduces no new dependencies; it reuses the existing Boost.JSON.
 
 ## Test Structure
 
-30 test executables in `tests/` (+ 5 optional DB tests), each linked against `hical_core` + `GTest::gtest_main`. Tests are registered via `gtest_discover_tests()` for CTest integration. On Windows, tests also link `ws2_32` and `mswsock`. Key test files:
+39 test executables in `tests/` (+ 5 optional DB tests), each linked against `hical_core` + `GTest::gtest_main`. Tests are registered via `gtest_discover_tests()` for CTest integration. On Windows, tests also link `ws2_32` and `mswsock`. Key test files:
 - `test_router.cpp` / `test_router_perf.cpp` — Route dispatch and performance
 - `test_memory_pool.cpp` — Three-tier PMR allocation
 - `test_http_server.cpp` / `test_integration.cpp` — Full HTTP request/response cycle
@@ -211,6 +220,11 @@ Core design principle: when `HICAL_HAS_REFLECTION == 1` (compiler supports P2996
 - `test_log_channel.cpp` — LogChannel + Registry (12 tests: emit, level filter, custom formatter, multi-sink, registry CRUD, HICAL_LOG_TO/HICAL_LOG_TO_F macros)
 - `test_log_middleware.cpp` — LogMiddleware (3 tests: trace-id generation length/hex/uniqueness)
 - `test_log_admin.cpp` — LogAdmin endpoints (4 tests: registration, custom prefix, level round-trip, dynamic channel level)
+- `test_error.cpp` — Unified error code mapping and NetworkError
+- `test_http_types.cpp` — HTTP types and status codes
+- `test_asio_event_loop.cpp` / `test_asio_timer.cpp` / `test_coroutine.cpp` — Asio backend and coroutine primitives
+- `test_asio_tcp_connection.cpp` / `test_tcp_server.cpp` — TCP connection and server lifecycle
+- `test_basic.cpp` — Basic framework smoke tests
 
 ### Database Tests (requires `HICAL_WITH_DATABASE=ON`)
 

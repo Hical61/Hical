@@ -14,6 +14,7 @@
 | Ninja       | 1.10+                            | 构建工具（比 Make 更快）    |
 | Boost       | 1.82+（DB 中间件 1.85+）         | Asio / JSON / MySQL         |
 | OpenSSL     | 3.0+                             | SSL/TLS 支持                |
+| zlib        | —                                | WebSocket permessage-deflate 压缩 |
 | liburing    | —（Linux 可选）                  | Boost.Asio 异步文件 I/O     |
 | Google Test | 1.10+                            | 单元测试框架                |
 
@@ -34,6 +35,7 @@ pacman -S mingw-w64-x86_64-cmake
 pacman -S mingw-w64-x86_64-ninja
 pacman -S mingw-w64-x86_64-boost
 pacman -S mingw-w64-x86_64-openssl
+pacman -S mingw-w64-x86_64-zlib
 pacman -S mingw-w64-x86_64-gtest
 ```
 
@@ -100,7 +102,7 @@ openssl version    # 需要 3.0+
 ### 2.4 Arch Linux
 
 ```bash
-sudo pacman -S gcc cmake ninja boost openssl gtest
+sudo pacman -S gcc cmake ninja boost openssl zlib gtest
 ```
 
 > Arch 滚动更新，软件包版本始终满足要求。

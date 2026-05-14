@@ -1,19 +1,21 @@
 # Hical 性能测试报告
 
-> PMR 内存池基准测试、HTTP 吞吐量测试与框架性能分析
+> 自研 HTTP/WebSocket 栈性能分析、PMR 内存池基准测试、Docker 容器化压测与框架对比
 
 ---
 
 ## 目录
 
 - [1. 测试环境](#1-测试环境)
-- [2. PMR 内存池性能](#2-pmr-内存池性能)
-- [3. HTTP 服务器吞吐量](#3-http-服务器吞吐量)
-- [4. 路由分发性能](#4-路由分发性能)
-- [5. 零拷贝与 Scatter-Gather 优化](#5-零拷贝与-scatter-gather-优化)
-- [6. 性能调优指南](#6-性能调优指南)
-- [7. 与主流框架对比分析](#7-与主流框架对比分析)
-- [8. 测试工具与复现方法](#8-测试工具与复现方法)
+- [2. 核心性能架构 (v2.6)](#2-核心性能架构v26)
+- [3. PMR 内存池性能](#3-pmr-内存池性能)
+- [4. HTTP 服务器吞吐量](#4-http-服务器吞吐量)
+- [5. 路由分发性能](#5-路由分发性能)
+- [6. 零拷贝与 Scatter-Gather 优化](#6-零拷贝与-scatter-gather-优化)
+- [7. Docker 容器化压测](#7-docker-容器化压测)
+- [8. 性能调优指南](#8-性能调优指南)
+- [9. 与主流框架对比分析](#9-与主流框架对比分析)
+- [10. 测试工具与复现方法](#10-测试工具与复现方法)
 
 ---
 
@@ -43,16 +45,79 @@
 
 ---
 
-## 2. PMR 内存池性能
+## 2. 核心性能架构（v2.6）
 
-### 2.1 测试场景
+v2.6.0 将 HTTP 解析/序列化和 WebSocket 全面替换为自研实现，性能大幅提升。以下是关键优化点：
+
+### 2.1 自研 HTTP 栈
+
+| 组件        | 优化前 (Beast)          | 优化后 (自研)                              | 收益                 |
+| ----------- | ----------------------- | ------------------------------------------ | -------------------- |
+| HTTP 解析器 | Boost.Beast HTTP parser | picohttpparser                             | CPU 热点占比大幅下降 |
+| 请求表示    | 拥有式 string 拷贝      | `string_view` 引用连接级 `readBuf`         | 零堆分配             |
+| 头部存储    | Beast 内部容器          | 栈上 `array<Entry,64>` (`RequestHeaders`)  | 零堆分配             |
+| 响应序列化  | Beast serializer        | `FixedBuffer<512>` 栈缓冲 + scatter-gather | 单次 `async_write`   |
+
+### 2.2 多 Acceptor 架构 (SO_REUSEPORT)
+
+```
+┌─────────────────────────────────────────────────┐
+│                   内核 TCP 栈                     │
+│       SO_REUSEPORT 内核级负载均衡                 │
+└──────┬──────────┬──────────┬──────────┬─────────┘
+       │          │          │          │
+  ┌────▼────┐┌───▼────┐┌───▼────┐┌───▼────┐
+  │Worker 0 ││Worker 1││Worker 2││Worker 3│
+  │acceptor ││acceptor││acceptor││acceptor│
+  │  + I/O  ││  + I/O ││  + I/O ││  + I/O │
+  └─────────┘└────────┘└────────┘└────────┘
+```
+
+- 每个 worker loop 独立 acceptor，accept 和 I/O 在同一线程
+- **零跨线程调度**：新连接无需 `post()` 到其他线程
+- Windows 自动回退为单 acceptor + round-robin 分发
+- Linux/macOS 下消除了 accept 锁竞争
+
+### 2.3 同步快速路径
+
+同步注册的路由 handler 和中间件可跳过协程帧分配：
+
+| 路径                                     | 机制                                           | 开销           |
+| ---------------------------------------- | ---------------------------------------------- | -------------- |
+| `Router::dispatchSync()`                 | 同步 handler 直接返回结果                      | 零协程帧       |
+| `SyncBeforeHandler` / `SyncAfterHandler` | 前置/后置同步中间件                            | 零协程帧       |
+| `buildOptimizedChain()`                  | N 层连续同步中间件合并                         | 仅 1 次堆分配  |
+| `HttpSessionImpl` 无中间件路径           | 先尝试 `dispatchSync()`，`nullopt` 时 fallback | 热路径零协程帧 |
+
+### 2.4 编译防火墙
+
+| 文件                    | 隔离内容                          | 收益                                    |
+| ----------------------- | --------------------------------- | --------------------------------------- |
+| `GenericConnection.hci` | ~780 行模板实现                   | 修改用户代码不重编译                    |
+| `HttpSessionImpl.cpp`   | picohttpparser + WebSocket 重模板 | `HttpServer.h` 修改不触发 parser 重编译 |
+| `MetaJsonError.h/cpp`   | `throw` 非模板化                  | 减少 `HICAL_JSON` 实例化代码体积        |
+
+### 2.5 热路径微优化
+
+- HTTP header 查找：按长度 + 首字符快速过滤
+- 响应头 `insert()` O(1) 替代 `set()` O(N)
+- `attributes_` 延迟构造（绝大多数请求不使用属性）
+- 200 OK 状态行预计算字面量
+- HTTP Date 头 `thread_local` 每秒缓存更新
+- 连接级 `readBuf` 跨 keep-alive 请求复用
+
+---
+
+## 3. PMR 内存池性能
+
+### 3.1 测试场景
 
 Hical 提供了两个 PMR 基准测试程序：
 
 - **`pmr_poc`** — PMR 概念验证，涵盖缓冲区复用、批量分配、PmrBuffer 功能和多线程并发
 - **`pmr_benchmark`** — 系统化性能对比，覆盖不同分配器策略和不同块大小
 
-### 2.2 测试维度
+### 3.2 测试维度
 
 #### 测试 1：单线程分配/释放性能
 
@@ -107,7 +172,7 @@ monotonic > unsynchronized_pool ≈ hical threadLocal > synchronized_pool > new/
 
 **预期结果**：PmrBuffer(pool) 在频繁追加/清空循环中优于 std::string，因为池化分配器避免了反复向系统申请/归还内存。
 
-### 2.3 运行方式
+### 3.3 运行方式
 
 ```bash
 # 编译
@@ -121,7 +186,7 @@ cmake --build build
 ./build/examples/pmr_benchmark
 ```
 
-### 2.4 内存池监控
+### 3.4 内存池监控
 
 运行时可通过 `MemoryPool::getStats()` 监控内存使用：
 
@@ -140,9 +205,9 @@ auto stats = MemoryPool::instance().getStats();
 
 ---
 
-## 3. HTTP 服务器吞吐量
+## 4. HTTP 服务器吞吐量
 
-### 3.1 测试工具
+### 4.1 测试工具
 
 Hical 内置 HTTP 基准测试客户端 `http_benchmark`，支持：
 
@@ -152,7 +217,7 @@ Hical 内置 HTTP 基准测试客户端 `http_benchmark`，支持：
 - 延迟分布统计（P50/P90/P95/P99）
 - Keep-Alive 连接复用
 
-### 3.2 测试场景
+### 4.2 测试场景
 
 #### 场景 A：静态路由 GET 请求
 
@@ -187,7 +252,7 @@ Hical 内置 HTTP 基准测试客户端 `http_benchmark`，支持：
 - **路由类型**：参数路由（线性匹配）
 - **关注指标**：参数路由 vs 静态路由的性能差距
 
-### 3.3 输出指标
+### 4.3 输出指标
 
 `http_benchmark` 输出以下指标：
 
@@ -210,7 +275,7 @@ Hical 内置 HTTP 基准测试客户端 `http_benchmark`，支持：
 ==============================
 ```
 
-### 3.4 多线程 IO 测试
+### 4.4 多线程 IO 测试
 
 ```cpp
 // 单线程
@@ -225,7 +290,7 @@ HttpServer server(8080, std::thread::hardware_concurrency());
 
 对比不同 IO 线程数下的 QPS 变化，观察线性扩展能力。
 
-### 3.5 性能影响因素
+### 4.5 性能影响因素
 
 | 因素       | 影响                         | 优化建议                 |
 | ---------- | ---------------------------- | ------------------------ |
@@ -237,9 +302,9 @@ HttpServer server(8080, std::thread::hardware_concurrency());
 
 ---
 
-## 4. 路由分发性能
+## 5. 路由分发性能
 
-### 4.1 测试用例
+### 5.1 测试用例
 
 项目内置路由性能测试 `test_router_perf`，覆盖：
 
@@ -249,7 +314,7 @@ HttpServer server(8080, std::thread::hardware_concurrency());
 | 1000 路由查找 | 注册 1000 条静态路由，随机查找 |
 | 参数路由匹配  | `string_view` 零分配路径段解析 |
 
-### 4.2 静态路由性能
+### 5.2 静态路由性能
 
 静态路由使用 `unordered_map<RouteKey, RouteHandler>`：
 
@@ -257,7 +322,7 @@ HttpServer server(8080, std::thread::hardware_concurrency());
 - **哈希函数**：`hash(method) ^ (hash(path) << 1)`
 - **预期性能**：路由数量增长不影响查找时间
 
-### 4.3 参数路由性能
+### 5.3 参数路由性能
 
 参数路由使用 `vector<ParamRouteEntry>` 线性匹配：
 
@@ -265,7 +330,7 @@ HttpServer server(8080, std::thread::hardware_concurrency());
 - **零分配优化**：使用 `string_view` 分割路径段，避免字符串拷贝
 - **适用范围**：参数路由数量通常较少（< 50），线性扫描可接受
 
-### 4.4 运行方式
+### 5.4 运行方式
 
 ```bash
 # 运行路由性能测试
@@ -274,9 +339,9 @@ ctest --test-dir build -R test_router_perf --output-on-failure
 
 ---
 
-## 5. 零拷贝与 Scatter-Gather 优化
+## 6. 零拷贝与 Scatter-Gather 优化
 
-### 5.1 零拷贝策略
+### 6.1 零拷贝策略
 
 Hical 在以下环节减少内存拷贝：
 
@@ -287,7 +352,7 @@ Hical 在以下环节减少内存拷贝：
 | 路径解析 | `string_view` 零分配段分割          |
 | 路由查找 | 哈希表直接定位，无遍历拷贝          |
 
-### 5.2 Scatter-Gather I/O
+### 6.2 Scatter-Gather I/O
 
 当写队列中有多条待发送消息时，GenericConnection 使用 Scatter-Gather 合并为一次系统调用：
 
@@ -309,9 +374,61 @@ co_await async_write(socket, buffers);  // 1 次系统调用
 
 ---
 
-## 6. 性能调优指南
+## 7. Docker 容器化压测
 
-### 6.1 编译优化
+Hical 提供两套 Docker 压测方案，确保环境一致性和可复现性。
+
+### 7.1 快速压测（单机）
+
+使用 `docker/docker-compose.bench.yml`，在同一台机器上启动 server 和 wrk 容器：
+
+```bash
+# 在项目根目录执行
+docker compose -f docker/docker-compose.bench.yml up --build --abort-on-container-exit
+```
+
+- server 和 wrk 各限制 4 CPU / 512MB 内存
+- 默认压测 30 秒，4 线程
+- 自定义参数：`DURATION=60s THREADS=4 docker compose -f docker/docker-compose.bench.yml up --build`
+
+### 7.2 跨 VM 压测
+
+分离 server 和 wrk 到不同机器，消除本地回环干扰：
+
+```bash
+# VM-A (server):
+docker compose -f docker/docker-compose.bench.yml up --build bench-server
+
+# VM-B (wrk):
+docker run --rm -e SERVER_HOST=<VM-A-IP>:8080 hical-bench-wrk
+```
+
+### 7.3 多框架横向对比
+
+使用 `benchmark/docker-compose.yml` 对比多个 C++ 框架和跨语言框架：
+
+```bash
+# C++ 框架对比（Hical / Drogon / Crow / Oat++ / cpp-httplib / Cinatra）
+docker compose -f benchmark/docker-compose.yml --profile cpp up --build
+
+# 跨语言对比（Hical / Gin / Actix / Fiber）
+docker compose -f benchmark/docker-compose.yml --profile cross-lang up --build
+
+# 性能剖析模式（附带 perf/FlameGraph）
+docker compose -f benchmark/docker-compose.yml --profile profiling up --build
+```
+
+所有框架统一限制 4 CPU / 512MB 内存，wrk 容器自动逐个压测并输出 `results.md`。
+
+### 7.4 TFB 模式
+
+`docker/TFB/bench_main.cpp` 是 TechEmpower Framework Benchmarks 专用入口，仅暴露 `/json` + `/plaintext` 路由，集成 mimalloc 分配器，适合与 TFB 排行榜数据对比。
+
+---
+
+## 8. 性能调优指南
+
+### 8.1 编译优化
 
 ```bash
 # Release 模式编译（启用 -O2 优化）
@@ -321,7 +438,7 @@ cmake --build build
 
 **Debug vs Release 性能差距**：Release 模式下 STL 容器和 Boost 库会移除断言和边界检查，性能可能提升 3-10 倍。
 
-### 6.2 IO 线程数配置
+### 8.2 IO 线程数配置
 
 ```cpp
 // 根据 CPU 核数设置
@@ -332,7 +449,7 @@ HttpServer server(8080, std::thread::hardware_concurrency());
 - **IO 密集型（大量等待）**：IO 线程数 = CPU 核数 * 2
 - **单核环境**：IO 线程数 = 1（避免上下文切换开销）
 
-### 6.3 PMR 内存池调优
+### 8.3 PMR 内存池调优
 
 ```cpp
 PoolConfig config;
@@ -348,7 +465,7 @@ config.threadLocalLargestPoolBlock = 1024 * 1024; // 1MB 最大块
 MemoryPool::instance().configure(config);
 ```
 
-### 6.4 性能监控
+### 8.4 性能监控
 
 运行时通过内存池统计接口监控：
 
@@ -367,9 +484,9 @@ if (stats.totalAllocations - stats.totalDeallocations > 10000) {
 
 ---
 
-## 7. 与主流框架对比分析
+## 9. 与主流框架对比分析
 
-### 7.1 对比维度
+### 9.1 对比维度
 
 | 维度       | 说明                 |
 | ---------- | -------------------- |
@@ -380,19 +497,22 @@ if (stats.totalAllocations - stats.totalDeallocations > 10000) {
 | CPU 利用率 | 多核利用效率         |
 | 连接容量   | 最大并发连接数       |
 
-### 7.2 架构层面对比
+### 9.2 架构层面对比
 
-| 特性      | Hical                    | Drogon                 | Nginx                   |
-| --------- | ------------------------ | ---------------------- | ----------------------- |
-| 语言      | C++20                    | C++17                  | C                       |
-| 异步模型  | 协程 (co_await)          | 回调 + 协程            | 事件驱动 (epoll/kqueue) |
-| HTTP 解析 | picohttpparser（自研栈） | 自研 (Trantor)         | 自研                    |
-| 内存管理  | PMR 三层池               | 传统分配器             | slab 分配器             |
-| 线程模型  | 1:1 (thread:io_context)  | 1:1 (thread:EventLoop) | 多进程 worker           |
-| SSL       | 模板化编译期分支         | 运行时分支             | OpenSSL                 |
-| 路由      | 哈希表 + 线性            | 基数树                 | 前缀匹配                |
+| 特性        | Hical                      | Drogon                 | Cinatra                 | Crow                 |
+| ----------- | -------------------------- | ---------------------- | ----------------------- | -------------------- |
+| 语言        | C++20/26                   | C++17                  | C++20                   | C++11/14             |
+| 异步模型    | 协程 (co_await)            | 回调 + 协程            | 协程 (co_await)         | 多线程 + 回调        |
+| HTTP 解析   | picohttpparser（零拷贝栈） | 自研 (Trantor)         | picohttpparser          | 自研 (http_parser)   |
+| WebSocket   | 自研 RFC 6455 + deflate    | Beast WebSocket        | —                       | 内置 WebSocket       |
+| 内存管理    | PMR 三层池                 | 传统分配器             | 传统分配器              | 传统分配器           |
+| 线程模型    | SO_REUSEPORT 多 acceptor   | 1:1 (thread:EventLoop) | 1:1 (thread:io_context) | 线程池               |
+| SSL         | 模板化编译期分支           | 运行时分支             | 运行时分支              | Boost.Asio SSL       |
+| 路由        | 哈希表 O(1) + 同步快速路径 | 基数树                 | 基数树                  | Trie 树              |
+| 中间件      | 洋葱模型 + SyncMiddleware  | AOP 过滤器             | —                       | before/after handler |
+| 反射/序列化 | C++26 反射 + 宏回退        | 宏 + JSON 自动         | 自动序列化              | —                    |
 
-### 7.3 测试方法
+### 9.3 测试方法
 
 使用外部工具 `wrk` 进行跨框架对比：
 
@@ -413,9 +533,9 @@ wrk -t4 -c100 -d30s http://localhost:8080/api/status
 
 ---
 
-## 8. 测试工具与复现方法
+## 10. 测试工具与复现方法
 
-### 8.1 内置测试工具
+### 10.1 内置测试工具
 
 | 工具               | 路径                          | 用途                       |
 | ------------------ | ----------------------------- | -------------------------- |
@@ -425,7 +545,7 @@ wrk -t4 -c100 -d30s http://localhost:8080/api/status
 | `http_benchmark`   | `examples/http_benchmark.cpp` | HTTP 服务器 QPS 和延迟测试 |
 | `test_router_perf` | `tests/test_router_perf.cpp`  | 路由分发性能测试           |
 
-### 8.2 完整测试流程
+### 10.2 完整测试流程
 
 ```bash
 # 1. Release 模式编译
@@ -459,7 +579,7 @@ ctest --test-dir build -R test_router_perf --output-on-failure
 ./build/examples/benchmark localhost 8888 100 1000
 ```
 
-### 8.3 外部压测工具
+### 10.3 外部压测工具
 
 ```bash
 # wrk — 高性能 HTTP 压测
@@ -473,7 +593,7 @@ curl http://localhost:8080/api/status
 curl -X POST -d '{"hello":"world"}' http://localhost:8080/api/echo
 ```
 
-### 8.4 注意事项
+### 10.4 注意事项
 
 1. **编译模式**：务必使用 Release 模式（`-DCMAKE_BUILD_TYPE=Release`），Debug 模式的性能数据无参考价值
 2. **预热**：首次请求可能包含初始化开销，建议先发送少量预热请求

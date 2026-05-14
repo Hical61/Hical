@@ -4,7 +4,7 @@
 
 ## 项目概述
 
-Hical 是一个基于 Boost.Asio，利用 C++26 反射和 pmr 内存池构建高性能的现代 C++ Web 框架
+Hical 是一个基于 Boost.Asio，采用自研 HTTP/WebSocket 原生栈，利用 C++26 反射和 PMR 内存池构建高性能的现代 C++20/26 Web 框架
 
 ## 目录结构
 
@@ -34,7 +34,12 @@ hical/
 │   │   ├── Router.h/.cpp       # 路由器（哈希表静态路由 + 按方法分桶参数路由 + WebSocket + WsOptions）
 │   │   ├── Middleware.h/.cpp   # 中间件系统（洋葱模型管道 + buildFor 预构建）
 │   │   ├── HttpServer.h/.cpp   # HTTP 服务器（Router + Middleware + WS 中间件预构建 + fd 耗尽防护）
+│   │   ├── HeaderMap.h         # HTTP 头部容器（vector<pair> 实现，大小写不敏感）
+│   │   ├── HttpSessionImpl.cpp # HTTP/WS 会话编译防火墙（隔离 picohttpparser + WebSocket）
 │   │   ├── WebSocket.h/.cpp    # WebSocket 会话封装（自研实现）
+│   │   ├── WsFrame.h           # WebSocket 帧解析/构造（RFC 6455，掩码/RSV/控制帧）
+│   │   ├── WsHandshake.h      # WebSocket 握手协议（Sec-WebSocket-Key/Accept）
+│   │   ├── WsDeflate.h/.cpp   # WebSocket permessage-deflate 压缩（pimpl + zlib）
 │   │   ├── StaticFiles.h       # 静态文件服务（异步 I/O + PathCache + ETag/304）
 │   │   ├── Multipart.h/.cpp    # multipart/form-data 解析（dual API: req 版 + parts 版）
 │   │   ├── Session.h/.cpp      # Session 会话管理（shared_mutex + regenerate + migrateFrom）
@@ -58,12 +63,13 @@ hical/
 │   │   ├── WriteNode.h         # 多态写队列节点（MemoryWriteNode / FileWriteNode）
 │   │   ├── Reflection.h        # C++26 反射特性检测 + RouteInfo + 类型萃取
 │   │   ├── MetaJson.h          # 自动 JSON 序列化（ALIAS/REQUIRED/IGNORE 装饰器）
+│   │   ├── MetaJsonError.h/.cpp # MetaJson 错误辅助（[[noreturn]] 非模板函数，编译防火墙）
 │   │   ├── MetaRoutes.h        # 自动路由注册（HICAL_HANDLER/HICAL_ROUTES 宏）
 │   │   └── Version.h.in        # CMake 配置版本头（唯一版本号来源）
 │   │
 │   ├── asio/                   # Boost.Asio 适配实现
 │   │   ├── AsioEventLoop.h/.cpp      # 基于 io_context 的事件循环
-│   │   ├── GenericConnection.h/.cpp  # 模板化连接（TCP/SSL 统一，WriteNode 写队列，sendFile 异步文件发送）
+│   │   ├── GenericConnection.h/.cpp/.hci  # 模板化连接（TCP/SSL 统一，WriteNode 写队列，sendFile，.hci 编译防火墙）
 │   │   ├── SslConnection.h           # SSL 连接类型别名（懒包含 OpenSSL）
 │   │   ├── AsioTimer.h/.cpp          # 基于 steady_timer 的定时器
 │   │   ├── EventLoopPool.h/.cpp      # 多线程事件循环池（1 Thread : 1 io_context）
@@ -79,7 +85,7 @@ hical/
 │       ├── MysqlConnection.h/.cpp  # MySQL 后端（Boost.MySQL any_connection）
 │       └── StmtCache.h/.cpp   # PreparedStatement LRU 缓存（透明哈希）
 │
-├── tests/                      # 单元测试（Google Test）— 38 个测试套件 + 5 个可选 DB 测试
+├── tests/                      # 单元测试（Google Test）— 39 个测试套件 + 5 个可选 DB 测试
 │   ├── CMakeLists.txt          # 测试构建配置
 │   ├── test_basic.cpp          # 基础测试
 │   ├── test_error.cpp          # 错误码转换测试
