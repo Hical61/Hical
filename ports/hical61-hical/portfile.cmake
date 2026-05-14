@@ -18,6 +18,7 @@ vcpkg_cmake_configure(
     OPTIONS
         -DHICAL_BUILD_TESTS=OFF
         -DHICAL_BUILD_EXAMPLES=OFF
+        -DHICAL_USE_SYSTEM_PICOHTTPPARSER=ON
         ${FEATURE_OPTIONS}
 )
 
