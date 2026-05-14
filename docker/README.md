@@ -19,6 +19,10 @@ docker/
 │   ├── prod_server.cpp
 │   ├── .env.example
 │   └── README.md
+├── TFB/                        # TechEmpower Framework Benchmarks
+│   ├── hical.dockerfile        # TFB 专用 Dockerfile（遵循 TFB 命名规范）
+│   ├── benchmark_config.json   # TFB 配置文件
+│   └── bench_main.cpp          # TFB 极简服务器（仅 /json + /plaintext）
 ├── bench.Dockerfile            # 一体化 benchmark（编译 + wrk 全场景测试）
 ├── bench_main.cpp              # 压测服务器入口
 ├── flamegraph-analysis-cn.md   # 火焰图分析（中文）
@@ -282,3 +286,71 @@ Transfer/sec:     19.31MB
 - **Latency Max**：最大延迟，反映尾部延迟
 - **Socket errors**：如出现说明并发过高或系统参数需调优
 - **Non-2xx responses**：如出现说明路由配置有误
+
+### 8. 关闭容器与清理
+
+#### 一体化模式
+
+`docker run --rm` 的 `--rm` 参数会在容器退出后自动销毁，无需手动操作。
+
+```bash
+# 仅需清理镜像（可选）
+docker image rm hical-bench
+```
+
+#### 分离模式 — 同 VM 双容器（Docker Compose）
+
+`--abort-on-container-exit` 会在 wrk 跑完后让两个容器同时退出，但容器实例和网络仍然残留，需要手动清理：
+
+```bash
+# 停止并移除容器 + 网络
+docker compose -f docker/docker-compose.bench.yml down
+
+# 如果还想删除构建的镜像
+docker compose -f docker/docker-compose.bench.yml down --rmi all
+```
+
+#### 分离模式 — 跨 VM
+
+两端都使用了 `--rm`，容器退出后自动销毁。仅需清理镜像：
+
+```bash
+# VM-A（server 端）
+docker image rm hical-bench-server
+
+# VM-B（wrk 端）
+docker image rm hical-bench-wrk
+```
+
+#### 通用清理（可选）
+
+```bash
+# 只清理已停止的容器
+docker container prune -f
+
+# 只清理悬空镜像（无 tag 的中间层）
+docker image prune -f
+
+# 激进清理：已停止容器 + 悬空镜像 + 未使用网络 + 全部构建缓存
+# ⚠️ 会删除构建缓存，下次 docker build 将从头开始（无缓存加速）
+docker system prune -f
+```
+
+---
+
+## TechEmpower Framework Benchmarks (TFB)
+
+Hical 参与 [TechEmpower Framework Benchmarks](https://www.techempower.com/benchmarks/) 跑分，当前实现了 `json` 和 `plaintext` 两个测试类型。
+
+```bash
+# 快速开始：构建并验证
+cd ~/Hical
+docker build -f docker/TFB/hical.dockerfile -t hical-tfb .
+docker run --rm -p 8080:8080 hical-tfb
+
+# 另一个终端验证
+curl -i http://localhost:8080/json
+curl -i http://localhost:8080/plaintext
+```
+
+详见 [TFB/README.md](TFB/README.md)。
