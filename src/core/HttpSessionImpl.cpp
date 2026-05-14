@@ -759,10 +759,16 @@ namespace hical
 		}
 
 		// 取消 idleTimerLoop 协程：cancel timer 使其 co_await 收到 operation_aborted 并退出
-		// 必须在 AliveGuard 析构前执行（timer cancel 后协程 resume 时检查 alive 标志退出）
 		if (deadline)
 		{
 			deadline->cancel();
+			// 让出一个调度轮次，确保 idleTimerLoop 在 socket 还存活时被 resume 并退出。
+			// 单线程 io_context 保证：cancel completion 在下一次 dispatch 时被处理，
+			// idleTimerLoop 检查 ec(operation_aborted) → break → 协程帧销毁。
+			// 此后 handleSession co_return → socket 析构，无悬空引用。
+			boost::system::error_code yieldEc;
+			co_await boost::asio::post(co_await boost::asio::this_coro::executor,
+									   boost::asio::redirect_error(boost::asio::use_awaitable, yieldEc));
 		}
 		// AliveGuard 析构设 alive=false → SocketGuard 析构关闭 socket
 	}
