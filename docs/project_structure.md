@@ -154,7 +154,8 @@ hical/
 │   ├── logging-guide.md        # 日志系统完全指南
 │   ├── openapi-guide.md        # OpenAPI/Swagger 集成指南
 │   ├── coroutine-guide.md      # 协程入门教程
-│   └── production-deployment.md # 生产部署实践（编译优化/容器化/监控）
+│   ├── production-deployment.md # 生产部署实践（编译优化/容器化/监控）
+│   └── perf-analysis-guide.md  # Linux 性能分析与优化实战指南（perf/火焰图/heaptrack）
 
 ```
 

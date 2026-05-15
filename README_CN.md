@@ -127,7 +127,7 @@ target_link_libraries(my_app PRIVATE hical::hical_core)
 从 [GitHub Releases](https://github.com/Hical61/Hical/releases) 下载 Conan 源码包并导入本地缓存：
 
 ```bash
-# 下载并解压（将 VERSION 替换为实际版本号，如 2.6.1）
+# 下载并解压（将 VERSION 替换为实际版本号）
 curl -LO https://github.com/Hical61/Hical/releases/download/vVERSION/hical-VERSION-conan-src.tar.gz
 tar xzf hical-VERSION-conan-src.tar.gz
 
@@ -153,6 +153,7 @@ target_link_libraries(my_app PRIVATE hical::hical_core)
 - [架构设计](docs/architecture.md)
 - [集成指南](docs/integration_guide.md)
 - [性能报告](docs/performance_report.md)
+- [性能分析实战指南](docs/perf-analysis-guide.md)
 - [贡献指南](CONTRIBUTING.md)
 
 ## 许可证

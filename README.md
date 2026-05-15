@@ -127,7 +127,7 @@ target_link_libraries(my_app PRIVATE hical::hical_core)
 Download the Conan source package from [GitHub Releases](https://github.com/Hical61/Hical/releases) and export to local cache:
 
 ```bash
-# Download & extract (replace VERSION with actual version, e.g. 2.6.1)
+# Download & extract (replace VERSION with actual version)
 curl -LO https://github.com/Hical61/Hical/releases/download/vVERSION/hical-VERSION-conan-src.tar.gz
 tar xzf hical-VERSION-conan-src.tar.gz
 
@@ -153,6 +153,7 @@ target_link_libraries(my_app PRIVATE hical::hical_core)
 - [Architecture](docs/architecture.md)
 - [Integration Guide](docs/integration_guide.md)
 - [Performance Report](docs/performance_report.md)
+- [Performance Analysis Guide](docs/perf-analysis-guide.md)
 - [Contributing](CONTRIBUTING.md)
 
 ## License
