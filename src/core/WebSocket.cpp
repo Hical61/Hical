@@ -16,6 +16,10 @@ namespace hical
 		// 初始 8KB 读缓冲区
 		m_readBuf.resize(8192);
 
+		// 写互斥 timer（初始为"就绪"状态，过期时间在过去 = 不会阻塞）
+		m_writeReady = std::make_unique<boost::asio::steady_timer>(m_socket.get_executor());
+		m_writeReady->expires_at(std::chrono::steady_clock::time_point::min());
+
 		// 构造 permessage-deflate 上下文（仅在协商成功时）
 		if (compression.enabled && deflateNeg != nullptr && deflateNeg->accepted)
 		{
@@ -41,6 +45,29 @@ namespace hical
 		{
 			co_await sendFrame(WsOpcode::hText, msg);
 		}
+	}
+
+	Awaitable<void> WebSocketSession::sendBinary(std::string_view data)
+	{
+		if (m_deflateCtx)
+		{
+			auto compressed = m_deflateCtx->compress(data);
+			co_await sendFrame(WsOpcode::hBinary, compressed, true, true);
+		}
+		else
+		{
+			co_await sendFrame(WsOpcode::hBinary, data);
+		}
+	}
+
+	Awaitable<void> WebSocketSession::sendPing(std::string_view payload)
+	{
+		// RFC 6455 §5.5: 控制帧载荷不得超过 125 字节
+		if (payload.size() > 125)
+		{
+			payload = payload.substr(0, 125);
+		}
+		co_await sendFrame(WsOpcode::hPing, payload);
 	}
 
 	Awaitable<std::optional<std::string>> WebSocketSession::receive()
@@ -142,7 +169,8 @@ namespace hical
 
 				if (hdr->opcode == WsOpcode::hPong)
 				{
-					// 忽略未主动发送的 Pong
+					// 记录 Pong 接收时间（心跳检测用）
+					recordPongReceived();
 					consumeBytes(frameSize);
 					continue;
 				}
@@ -224,6 +252,26 @@ namespace hical
 		}
 	}
 
+	Awaitable<void> WebSocketSession::closeAsync(WsCloseCode code, std::string_view reason)
+	{
+		bool expected = true;
+		if (m_open.compare_exchange_strong(expected, false))
+		{
+			try
+			{
+				co_await sendCloseFrame(code, reason);
+			}
+			catch (...)
+			{
+				// 忽略发送 close 帧的错误（对端可能已关闭）
+			}
+
+			boost::system::error_code ec;
+			m_socket.shutdown(boost::asio::ip::tcp::socket::shutdown_both, ec);
+			m_socket.close(ec);
+		}
+	}
+
 	void WebSocketSession::close()
 	{
 		bool expected = true;
@@ -280,16 +328,215 @@ namespace hical
 		}
 	}
 
+	Awaitable<void> WebSocketSession::acquireWrite()
+	{
+		while (m_writePending)
+		{
+			// 等待前一个写完成（timer 过期 = 就绪信号）
+			boost::system::error_code ec;
+			co_await m_writeReady->async_wait(boost::asio::redirect_error(boost::asio::use_awaitable, ec));
+			// ec 可能是 operation_aborted（被 releaseWrite cancel），这正是我们要的唤醒信号
+		}
+		m_writePending = true;
+	}
+
+	void WebSocketSession::releaseWrite()
+	{
+		m_writePending = false;
+		// 唤醒等待的协程：cancel 使 async_wait 返回 operation_aborted
+		m_writeReady->cancel_one();
+	}
+
 	Awaitable<void> WebSocketSession::sendFrame(WsOpcode opcode, std::string_view payload, bool fin, bool rsv1)
 	{
+		co_await acquireWrite();
 		auto frame = buildWsFrame(opcode, payload, fin, rsv1);
 		co_await boost::asio::async_write(m_socket, boost::asio::buffer(frame), boost::asio::use_awaitable);
+		releaseWrite();
 	}
 
 	Awaitable<void> WebSocketSession::sendCloseFrame(WsCloseCode code, std::string_view reason)
 	{
 		auto closePayload = buildClosePayload(code, reason);
 		co_await sendFrame(WsOpcode::hClose, closePayload);
+	}
+
+	Awaitable<std::optional<WsMessage>> WebSocketSession::receiveMessage()
+	{
+		try
+		{
+			for (;;)
+			{
+				co_await ensureBytes(2);
+
+				auto hdr = parseWsFrameHeader(m_readBuf.data(), m_readBufUsed);
+				if (!hdr)
+				{
+					co_await ensureBytes(m_readBufUsed + 1);
+					continue;
+				}
+
+				// 协议校验（与 receive() 相同）
+				if (hdr->rsv2 || hdr->rsv3)
+				{
+					co_await sendCloseFrame(WsCloseCode::hProtocolError, "Unexpected RSV2/RSV3");
+					m_open = false;
+					co_return std::nullopt;
+				}
+				if (hdr->rsv1 && !m_deflateCtx)
+				{
+					co_await sendCloseFrame(WsCloseCode::hProtocolError, "Unexpected RSV1 without deflate");
+					m_open = false;
+					co_return std::nullopt;
+				}
+				if (!hdr->masked)
+				{
+					co_await sendCloseFrame(WsCloseCode::hProtocolError, "Client frames must be masked");
+					m_open = false;
+					co_return std::nullopt;
+				}
+				bool isControl = (static_cast<uint8_t>(hdr->opcode) >= 0x08);
+				if (isControl && hdr->payloadLength > 125)
+				{
+					co_await sendCloseFrame(WsCloseCode::hProtocolError, "Control frame payload too large");
+					m_open = false;
+					co_return std::nullopt;
+				}
+				if (hdr->payloadLength > m_maxMessageSize)
+				{
+					co_await sendCloseFrame(WsCloseCode::hMessageTooBig);
+					m_open = false;
+					co_return std::nullopt;
+				}
+
+				size_t frameSize = hdr->headerSize + static_cast<size_t>(hdr->payloadLength);
+				co_await ensureBytes(frameSize);
+
+				uint8_t* payloadPtr = m_readBuf.data() + hdr->headerSize;
+				size_t payloadLen = static_cast<size_t>(hdr->payloadLength);
+				unmaskPayload(payloadPtr, payloadLen, hdr->maskKey);
+
+				// 控制帧处理
+				if (hdr->opcode == WsOpcode::hClose)
+				{
+					if (payloadLen >= 2)
+					{
+						std::string closePayload(reinterpret_cast<const char*>(payloadPtr), payloadLen);
+						co_await sendFrame(WsOpcode::hClose, closePayload);
+					}
+					else
+					{
+						co_await sendFrame(WsOpcode::hClose, {});
+					}
+					consumeBytes(frameSize);
+					m_open = false;
+					co_return std::nullopt;
+				}
+				if (hdr->opcode == WsOpcode::hPing)
+				{
+					std::string_view pongPayload(reinterpret_cast<const char*>(payloadPtr), payloadLen);
+					co_await sendFrame(WsOpcode::hPong, pongPayload);
+					consumeBytes(frameSize);
+					continue;
+				}
+				if (hdr->opcode == WsOpcode::hPong)
+				{
+					recordPongReceived();
+					consumeBytes(frameSize);
+					continue;
+				}
+
+				// 数据帧处理
+				if (hdr->opcode == WsOpcode::hText || hdr->opcode == WsOpcode::hBinary)
+				{
+					m_fragmentBuf.clear();
+					m_fragmentOpcode = hdr->opcode;
+					m_fragmentCompressed = hdr->rsv1;
+				}
+				else if (hdr->opcode != WsOpcode::hContinuation)
+				{
+					co_await sendCloseFrame(WsCloseCode::hProtocolError, "Unknown opcode");
+					m_open = false;
+					co_return std::nullopt;
+				}
+
+				m_fragmentBuf.append(reinterpret_cast<const char*>(payloadPtr), payloadLen);
+				if (m_fragmentBuf.size() > m_maxMessageSize)
+				{
+					co_await sendCloseFrame(WsCloseCode::hMessageTooBig);
+					m_open = false;
+					co_return std::nullopt;
+				}
+
+				consumeBytes(frameSize);
+
+				if (hdr->fin)
+				{
+					WsMessage msg;
+					msg.type = m_fragmentOpcode;
+					if (m_fragmentCompressed && m_deflateCtx)
+					{
+						msg.data = m_deflateCtx->decompress(m_fragmentBuf, m_maxMessageSize);
+					}
+					else
+					{
+						msg.data = std::move(m_fragmentBuf);
+					}
+					co_return msg;
+				}
+			}
+		}
+		catch (const boost::system::system_error& e)
+		{
+			m_open = false;
+			if (e.code() == boost::asio::error::eof || e.code() == boost::asio::error::connection_reset
+				|| e.code() == boost::asio::error::operation_aborted)
+			{
+				co_return std::nullopt;
+			}
+			throw;
+		}
+	}
+
+	// ============ Context ============
+
+	void WebSocketSession::setContext(std::shared_ptr<void> ctx)
+	{
+		m_context = std::move(ctx);
+	}
+
+	bool WebSocketSession::hasContext() const
+	{
+		return m_context != nullptr;
+	}
+
+	void WebSocketSession::clearContext()
+	{
+		m_context.reset();
+	}
+
+	// ============ Heartbeat ============
+
+	void WebSocketSession::recordPongReceived()
+	{
+		m_lastPongTime = std::chrono::steady_clock::now();
+	}
+
+	std::chrono::steady_clock::time_point WebSocketSession::lastPongTime() const
+	{
+		return m_lastPongTime;
+	}
+
+	// ============ Subprotocol ============
+
+	std::string_view WebSocketSession::subprotocol() const
+	{
+		return m_subprotocol;
+	}
+
+	void WebSocketSession::setSubprotocol(std::string proto)
+	{
+		m_subprotocol = std::move(proto);
 	}
 
 } // namespace hical

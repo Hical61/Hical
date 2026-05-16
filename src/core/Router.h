@@ -4,6 +4,7 @@
 #include "HttpRequest.h"
 #include "HttpResponse.h"
 #include "Coroutine.h"
+#include <chrono>
 #include <concepts>
 #include <functional>
 #include <optional>
@@ -32,11 +33,17 @@ namespace hical
 	using SyncRouteHandler = std::function<HttpResponse(const HttpRequest&)>;
 
 	class WebSocketSession; // 前向声明
+	struct WsMessage;       // 前向声明
 
 	/**
-	 * @brief WebSocket 消息回调类型
+	 * @brief WebSocket 消息回调类型（文本，向后兼容）
 	 */
 	using WsMessageCallback = std::function<Awaitable<void>(const std::string&, WebSocketSession&)>;
+
+	/**
+	 * @brief WebSocket 类型消息回调（区分 Text/Binary）
+	 */
+	using WsTypedMessageCallback = std::function<Awaitable<void>(const WsMessage&, WebSocketSession&)>;
 
 	/**
 	 * @brief WebSocket 连接回调类型
@@ -115,12 +122,26 @@ namespace hical
 
 			/// 每消息独立压缩（省内存但降低压缩率）
 			bool serverNoContextTakeover = false;
+
+			/// 心跳 Ping 间隔（0 = 禁用，默认 0 向后兼容）
+			std::chrono::seconds pingInterval {0};
+
+			/// 最大连续未收到 Pong 次数，超过则关闭（默认 3）
+			uint32_t maxMissedPongs = 3;
+
+			/// 自定义 Ping 载荷（空 = 零长度 Ping，最大 125 字节）
+			std::string pingPayload;
+
+			/// 支持的子协议列表（从客户端 offer 中选择第一个匹配）
+			/// 空 = 忽略 Sec-WebSocket-Protocol 头
+			std::vector<std::string> subprotocols;
 		};
 
 		struct WsRoute
 		{
 			std::string path;
 			WsMessageCallback onMessage;
+			WsTypedMessageCallback onTypedMessage; ///< 可选，优先于 onMessage（区分 Text/Binary）
 			WsConnectCallback onConnect;
 			WsDisconnectCallback onDisconnect;
 			std::unordered_set<std::string> allowedOrigins; ///< 允许的 Origin 列表（空 = 不校验）
@@ -130,6 +151,14 @@ namespace hical
 			int serverMaxWindowBits = 15;
 			int clientMaxWindowBits = 15;
 			bool serverNoContextTakeover = false;
+
+			/// 心跳配置
+			std::chrono::seconds pingInterval {0};
+			uint32_t maxMissedPongs = 3;
+			std::string pingPayload;
+
+			/// 子协议
+			std::vector<std::string> subprotocols;
 		};
 
 		/**
@@ -175,12 +204,22 @@ namespace hical
 		std::optional<HttpResponse> dispatchSync(HttpRequest& req);
 
 		/**
+		 * @brief WebSocket 路由匹配结果
+		 */
+		struct WsRouteMatch
+		{
+			const WsRoute* route = nullptr;
+			ParamList params; ///< 捕获的路径参数（仅参数路由时非空）
+		};
+
+		/**
 		 * @brief 检查路径是否为 WebSocket 路由
+		 * 支持精确匹配和参数路由 `{param}` 模式。
 		 * @param path 请求路径
-		 * @return 如果是 ws 路由返回对应的 WsRoute 指针，否则 nullptr
+		 * @return WsRouteMatch（route 为 nullptr 表示无匹配）
 		 */
 
-		const WsRoute* findWsRoute(std::string_view path) const;
+		WsRouteMatch findWsRoute(std::string_view path) const;
 
 		/**
 		 * @brief 获取已注册路由数量（HTTP + WebSocket）

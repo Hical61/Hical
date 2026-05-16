@@ -107,19 +107,40 @@ namespace hical
 		route.serverMaxWindowBits = options.serverMaxWindowBits;
 		route.clientMaxWindowBits = options.clientMaxWindowBits;
 		route.serverNoContextTakeover = options.serverNoContextTakeover;
+		route.pingInterval = options.pingInterval;
+		route.maxMissedPongs = options.maxMissedPongs;
+		route.pingPayload = std::move(options.pingPayload);
+		route.subprotocols = std::move(options.subprotocols);
 		wsRoutes_.push_back(std::move(route));
 	}
 
-	const Router::WsRoute* Router::findWsRoute(std::string_view path) const
+	Router::WsRouteMatch Router::findWsRoute(std::string_view path) const
 	{
+		WsRouteMatch result;
+
+		// 1. 精确匹配（快速路径）
 		for (const auto& route : wsRoutes_)
 		{
-			if (route.path == path)
+			if (!isParamRoute(route.path) && route.path == path)
 			{
-				return &route;
+				result.route = &route;
+				return result;
 			}
 		}
-		return nullptr;
+
+		// 2. 参数路由匹配
+		for (const auto& route : wsRoutes_)
+		{
+			ParamList params;
+			if (isParamRoute(route.path) && matchParamPath(route.path, path, params))
+			{
+				result.route = &route;
+				result.params = std::move(params);
+				return result;
+			}
+		}
+
+		return result;
 	}
 
 	// ============ 分发 ============

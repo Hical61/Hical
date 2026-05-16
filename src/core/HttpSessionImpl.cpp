@@ -624,14 +624,22 @@ namespace hical
 				{
 					auto reqPath = req.path();
 
-					auto* wsRoute = router_.findWsRoute(reqPath);
-					if (wsRoute)
+					auto wsMatch = router_.findWsRoute(reqPath);
+					if (wsMatch.route)
 					{
+						const auto& wsRoute = *wsMatch.route;
+
+						// 注入 WebSocket 参数路由捕获的参数
+						for (const auto& [name, value] : wsMatch.params)
+						{
+							req.setParam(name, value);
+						}
+
 						// Origin 白名单校验（CSWSH 防护）
-						if (!wsRoute->allowedOrigins.empty())
+						if (!wsRoute.allowedOrigins.empty())
 						{
 							auto origin = std::string(req.header("Origin"));
-							if (wsRoute->allowedOrigins.count(origin) == 0)
+							if (wsRoute.allowedOrigins.count(origin) == 0)
 							{
 								HttpResponse forbiddenRes;
 								forbiddenRes.setStatus(HttpStatusCode::hForbidden);
@@ -663,7 +671,7 @@ namespace hical
 
 						// socket 所有权转移给 WebSocket 会话，标记 guard 跳过析构
 						guard.transferred = true;
-						co_await handleWebSocket(std::move(socket), req.native(), *wsRoute);
+						co_await handleWebSocket(std::move(socket), req.native(), wsRoute);
 						co_return;
 					}
 				}
@@ -770,7 +778,7 @@ namespace hical
 												const NativeRequest& req,
 												const Router::WsRoute& wsRoute)
 	{
-		std::unique_ptr<WebSocketSession> session;
+		std::shared_ptr<WebSocketSession> session;
 
 		// WebSocket 空闲超时 timer 在 try 外声明，catch 块需要访问以取消 timer 防竞态
 		std::optional<boost::asio::steady_timer> wsDeadline;
@@ -786,10 +794,10 @@ namespace hical
 			// 虽然此路径下 readBuf 生命周期足够，但防御性拷贝更安全）
 			std::string clientKeyStr(req.headers.find("Sec-WebSocket-Key"));
 			std::string extHeaderStr(req.headers.find("Sec-WebSocket-Extensions"));
+			std::string protoHeaderStr(req.headers.find("Sec-WebSocket-Protocol"));
 
 			// 1. 验证 WS 握手头部
-			auto clientKey = validateWsUpgrade(req);
-			if (clientKey.empty())
+			if (validateWsUpgrade(req).empty())
 			{
 				co_return;
 			}
@@ -810,23 +818,39 @@ namespace hical
 				deflateNeg = negotiateDeflate(extHeaderStr, compressionCfg);
 			}
 
-			// 4. 发送 101 Switching Protocols（FixedBuffer<512> 栈上零堆分配）
+			// 4. 协商子协议（Feature 5）
+			std::string negotiatedProtocol;
+			if (!wsRoute.subprotocols.empty() && !protoHeaderStr.empty())
+			{
+				negotiatedProtocol = negotiateSubprotocol(protoHeaderStr, wsRoute.subprotocols);
+			}
+
+			// 5. 发送 101 Switching Protocols（FixedBuffer<512> 栈上零堆分配）
 			FixedBuffer<512> responseBuf;
-			buildWsAcceptResponse(responseBuf, acceptKey, deflateNeg.accepted ? &deflateNeg : nullptr);
+			buildWsAcceptResponse(responseBuf,
+								  acceptKey,
+								  deflateNeg.accepted ? &deflateNeg : nullptr,
+								  negotiatedProtocol);
 			co_await boost::asio::async_write(socket,
 											  boost::asio::buffer(responseBuf.data(), responseBuf.size()),
 											  boost::asio::use_awaitable);
 
-			// 5. 创建 WebSocketSession
-			session = std::make_unique<WebSocketSession>(std::move(socket),
+			// 6. 创建 WebSocketSession（shared_ptr 以支持 WsHub）
+			session = std::make_shared<WebSocketSession>(std::move(socket),
 														 WebSocketSession::hDefaultMaxMessageSize,
 														 compressionCfg,
 														 deflateNeg.accepted ? &deflateNeg : nullptr);
 
-			// 使用 alive 标志防止 timer 回调在 session 销毁后访问悬空引用
+			// 设置协商的子协议
+			if (!negotiatedProtocol.empty())
+			{
+				session->setSubprotocol(std::move(negotiatedProtocol));
+			}
+
+			// 使用 alive 标志防止 timer/ping 回调在 session 销毁后访问悬空引用
 			auto wsAlive = std::make_shared<std::atomic<bool>>(true);
 
-			// RAII：确保协程退出时标记 session 已失效，timer 回调不再操作 session
+			// RAII：确保协程退出时标记 session 已失效
 			struct WsAliveGuard
 			{
 				std::shared_ptr<std::atomic<bool>> alive;
@@ -837,47 +861,136 @@ namespace hical
 				}
 			} wsAliveGuard {wsAlive};
 
+			// 7. 启动心跳 Ping 协程（Feature 1）
+			if (wsRoute.pingInterval.count() > 0)
+			{
+				auto pingInterval = wsRoute.pingInterval;
+				auto maxMissed = wsRoute.maxMissedPongs;
+				auto pingPayload = wsRoute.pingPayload;
+
+				coSpawn(session->socket().get_executor(),
+						[session, wsAlive, pingInterval, maxMissed, pingPayload = std::move(pingPayload)]()
+							-> Awaitable<void>
+						{
+							auto executor = co_await boost::asio::this_coro::executor;
+							boost::asio::steady_timer timer(executor);
+
+							while (wsAlive->load(std::memory_order_acquire) && session->isOpen())
+							{
+								timer.expires_after(pingInterval);
+								boost::system::error_code ec;
+								co_await timer.async_wait(boost::asio::redirect_error(boost::asio::use_awaitable, ec));
+								if (ec || !wsAlive->load(std::memory_order_acquire))
+								{
+									break;
+								}
+
+								// 检查是否超过最大未响应次数
+								auto elapsed = std::chrono::steady_clock::now() - session->lastPongTime();
+								if (elapsed > pingInterval * maxMissed)
+								{
+									// 死连接，关闭 socket
+									boost::system::error_code closeEc;
+									session->socket().close(closeEc);
+									break;
+								}
+
+								try
+								{
+									co_await session->sendPing(pingPayload);
+								}
+								catch (...)
+								{
+									break;
+								}
+							}
+						});
+			}
+
 			// 调用连接回调
 			if (wsRoute.onConnect)
 			{
 				co_await wsRoute.onConnect(*session);
 			}
 
-			// 消息循环
-			while (session->isOpen())
+			// 消息循环（根据是否有 onTypedMessage 选择接收方式）
+			if (wsRoute.onTypedMessage)
 			{
-				// 设置空闲超时（每次读取前重置）
-				if (wsDeadline)
+				// 类型感知消息循环（区分 Text/Binary）
+				while (session->isOpen())
 				{
-					wsDeadline->expires_after(wsTimeoutDuration);
-					wsDeadline->async_wait(
-						[&session, aliveFlag = wsAlive](const boost::system::error_code& ec)
-						{
-							if (!ec && aliveFlag->load() && session && session->isOpen())
+					if (wsDeadline)
+					{
+						wsDeadline->expires_after(wsTimeoutDuration);
+						wsDeadline->async_wait(
+							[sessionWeak = std::weak_ptr(session),
+							 aliveFlag = wsAlive](const boost::system::error_code& ec)
 							{
-								// 超时：关闭底层 socket 以中断 async_read
-								boost::system::error_code closeEc;
-								session->socket().close(closeEc);
-							}
-						});
+								if (!ec && aliveFlag->load())
+								{
+									if (auto sp = sessionWeak.lock(); sp && sp->isOpen())
+									{
+										boost::system::error_code closeEc;
+										sp->socket().close(closeEc);
+									}
+								}
+							});
+					}
+
+					auto msg = co_await session->receiveMessage();
+
+					if (wsDeadline)
+					{
+						wsDeadline->cancel();
+					}
+
+					if (!msg.has_value())
+					{
+						break;
+					}
+
+					co_await wsRoute.onTypedMessage(*msg, *session);
 				}
-
-				auto msg = co_await session->receive();
-
-				// 收到消息后取消超时
-				if (wsDeadline)
+			}
+			else
+			{
+				// 原有文本消息循环（向后兼容）
+				while (session->isOpen())
 				{
-					wsDeadline->cancel();
-				}
+					if (wsDeadline)
+					{
+						wsDeadline->expires_after(wsTimeoutDuration);
+						wsDeadline->async_wait(
+							[sessionWeak = std::weak_ptr(session),
+							 aliveFlag = wsAlive](const boost::system::error_code& ec)
+							{
+								if (!ec && aliveFlag->load())
+								{
+									if (auto sp = sessionWeak.lock(); sp && sp->isOpen())
+									{
+										boost::system::error_code closeEc;
+										sp->socket().close(closeEc);
+									}
+								}
+							});
+					}
 
-				if (!msg.has_value())
-				{
-					break;
-				}
+					auto msg = co_await session->receive();
 
-				if (wsRoute.onMessage)
-				{
-					co_await wsRoute.onMessage(*msg, *session);
+					if (wsDeadline)
+					{
+						wsDeadline->cancel();
+					}
+
+					if (!msg.has_value())
+					{
+						break;
+					}
+
+					if (wsRoute.onMessage)
+					{
+						co_await wsRoute.onMessage(*msg, *session);
+					}
 				}
 			}
 		}

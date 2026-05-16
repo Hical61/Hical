@@ -9,6 +9,7 @@
 #include <openssl/evp.h>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace hical
 {
@@ -249,15 +250,62 @@ namespace hical
 	}
 
 	/**
+	 * @brief 协商 WebSocket 子协议（RFC 6455 §1.9）
+	 * 服务端优先：遍历服务端列表，选第一个也在客户端 offer 中的协议。
+	 * 这样服务端可以通过列表顺序控制协议优先级。
+	 * @param clientOffer      客户端逗号分隔的协议列表
+	 * @param serverSupported  服务端支持的协议列表（按优先级排序）
+	 * @return 协商结果（空 = 无匹配）
+	 */
+	inline std::string negotiateSubprotocol(std::string_view clientOffer,
+											const std::vector<std::string>& serverSupported)
+	{
+		if (clientOffer.empty() || serverSupported.empty())
+		{
+			return {};
+		}
+
+		// 解析客户端 offer 为 token 列表
+		std::vector<std::string_view> clientTokens;
+		std::string_view remaining = clientOffer;
+		while (!remaining.empty())
+		{
+			auto comma = remaining.find(',');
+			auto token = detail::trimWs((comma != std::string_view::npos) ? remaining.substr(0, comma) : remaining);
+			remaining = (comma != std::string_view::npos) ? remaining.substr(comma + 1) : std::string_view {};
+			if (!token.empty())
+			{
+				clientTokens.push_back(token);
+			}
+		}
+
+		// 服务端优先：遍历服务端列表，找第一个客户端也支持的
+		for (const auto& supported : serverSupported)
+		{
+			for (auto token : clientTokens)
+			{
+				if (token == supported)
+				{
+					return supported;
+				}
+			}
+		}
+
+		return {};
+	}
+
+	/**
 	 * @brief 构建 WebSocket 101 Switching Protocols 响应
 	 * 输出到 FixedBuffer<512>（栈上零堆分配），格式完全符合 RFC 6455 §4.2.2。
-	 * @param buf        输出缓冲区
-	 * @param acceptKey  Sec-WebSocket-Accept 值
-	 * @param deflateNeg permessage-deflate 协商结果（nullptr 或 accepted=false 时跳过扩展头）
+	 * @param buf            输出缓冲区
+	 * @param acceptKey      Sec-WebSocket-Accept 值
+	 * @param deflateNeg     permessage-deflate 协商结果（nullptr 或 accepted=false 时跳过扩展头）
+	 * @param subprotocol    协商的子协议（空则不输出 Sec-WebSocket-Protocol 头）
 	 */
 	inline void buildWsAcceptResponse(FixedBuffer<512>& buf,
 									  std::string_view acceptKey,
-									  const WsDeflateNegotiation* deflateNeg = nullptr)
+									  const WsDeflateNegotiation* deflateNeg = nullptr,
+									  std::string_view subprotocol = {})
 	{
 		buf << "HTTP/1.1 101 Switching Protocols\r\n"
 			<< "Upgrade: websocket\r\n"
@@ -279,6 +327,11 @@ namespace hical
 				buf << "; client_no_context_takeover";
 			}
 			buf << "\r\n";
+		}
+
+		if (!subprotocol.empty())
+		{
+			buf << "Sec-WebSocket-Protocol: " << subprotocol << "\r\n";
 		}
 
 		buf << "\r\n";
