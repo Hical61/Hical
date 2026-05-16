@@ -8,6 +8,9 @@ option(HICAL_ENABLE_REFLECTION "Enable C++26 reflection (requires compatible com
 option(HICAL_BUILD_TESTS    "Build unit tests"       ON)
 option(HICAL_BUILD_EXAMPLES "Build example programs" ON)
 
+# 内存池追踪统计（关闭后 TrackedResource 零开销透传，不记录分配/释放计数）
+option(HICAL_ENABLE_MEMORY_TRACKING "Enable memory pool allocation/deallocation tracking statistics" ON)
+
 # 中间件性能剖析（启用后对每个命名中间件记录调用次数和耗时统计）
 option(HICAL_ENABLE_MIDDLEWARE_PROFILING "Enable per-middleware timing statistics" OFF)
 

@@ -106,6 +106,11 @@ if(UNIX AND NOT APPLE)
     endif()
 endif()
 
+# 内存池追踪统计编译定义（PUBLIC：头文件 TrackedResource 条件编译需全局一致，避免 ODR 违规）
+if(HICAL_ENABLE_MEMORY_TRACKING)
+    target_compile_definitions(hical_core PUBLIC HICAL_ENABLE_MEMORY_TRACKING)
+endif()
+
 # 中间件性能剖析编译定义
 if(HICAL_ENABLE_MIDDLEWARE_PROFILING)
     target_compile_definitions(hical_core PUBLIC HICAL_ENABLE_MIDDLEWARE_PROFILING)
