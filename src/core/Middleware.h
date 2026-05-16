@@ -90,14 +90,20 @@ namespace hical
 	 * @brief 单个中间件的计时统计（线程安全）
 	 * 使用 int64_t 微秒存储，保证所有平台上 atomic<int64_t> 都是 lock-free。
 	 * 仅在 HICAL_ENABLE_MIDDLEWARE_PROFILING 编译选项开启时可用。
+	 * 缓存行优化：每个 atomic 计数器 alignas(64) 独占 cache line，
+	 * 消除多 IO 线程并发 record() 时的 false sharing。
+	 * name 移至末尾（冷数据，仅查询统计时读取）。
 	 */
 	struct MiddlewareTimingStats
 	{
+		// 热数据：每次请求经过中间件都写入，各自独占 cache line
+		alignas(64) std::atomic<size_t> callCount {0};
+		alignas(64) std::atomic<int64_t> totalTimeUs {0};                                 // 微秒
+		alignas(64) std::atomic<int64_t> maxTimeUs {0};                                   // 微秒
+		alignas(64) std::atomic<int64_t> minTimeUs {std::numeric_limits<int64_t>::max()}; // 微秒
+
+		// 冷数据：仅查询统计时读取
 		std::string name;
-		std::atomic<size_t> callCount {0};
-		std::atomic<int64_t> totalTimeUs {0};                                 // 微秒
-		std::atomic<int64_t> maxTimeUs {0};                                   // 微秒
-		std::atomic<int64_t> minTimeUs {std::numeric_limits<int64_t>::max()}; // 微秒
 
 		double avgTimeMs() const
 		{

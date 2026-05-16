@@ -196,39 +196,101 @@ namespace hical
 									std::memory_order_relaxed);
 		}
 
-		void enqueueNode(std::shared_ptr<WriteNode> node);
+		/**
+		 * @brief 发送队列条目（缓存行优化）
+		 * 消除原 shared_ptr<WriteNode> 的三层间接（shared_ptr → control block → object → 虚函数）。
+		 * 内存数据快速路径：直接持有 shared_ptr<string>，仅 1 次间接解引用。
+		 * 文件发送慢路径：保留 shared_ptr<WriteNode> 多态。
+		 */
+		struct WriteEntry
+		{
+			enum class Type : uint8_t
+			{
+				hMemory, // 内存数据（快速路径，零虚函数开销）
+				hNode    // 多态节点（PmrBuffer/File，走虚函数慢路径）
+			};
+
+			Type type;
+			std::shared_ptr<std::string> memData; // hMemory 时有效
+			std::shared_ptr<WriteNode> node;      // hNode 时有效
+
+			static WriteEntry fromMemory(std::shared_ptr<std::string> data)
+			{
+				return WriteEntry {Type::hMemory, std::move(data), nullptr};
+			}
+
+			static WriteEntry fromNode(std::shared_ptr<WriteNode> n)
+			{
+				return WriteEntry {Type::hNode, nullptr, std::move(n)};
+			}
+
+			size_t size() const
+			{
+				if (type == Type::hMemory)
+				{
+					return memData ? memData->size() : 0;
+				}
+				return node ? node->size() : 0;
+			}
+
+			bool isFile() const
+			{
+				return type == Type::hNode && node && node->isFile();
+			}
+
+			boost::asio::const_buffer asBuffer() const
+			{
+				if (type == Type::hMemory)
+				{
+					return boost::asio::buffer(*memData);
+				}
+				return node ? node->asBuffer() : boost::asio::const_buffer {};
+			}
+		};
+
+		void enqueueEntry(WriteEntry entry);
 		void tryStartWrite();
 
 		// 协程式文件发送（writeLoop 内部调用）
 		boost::asio::awaitable<size_t> sendFileNode(const FileWriteNode& node);
 
+		// ===================================================================
+		// 热路径字段（每次 I/O 操作都访问）
+		// 缓存行优化：socket_ + state_ + reading_ + writing_ 集中在前部，
+		// 避免被 localAddr_/peerAddr_（各 ~32B）推远导致多占 cache line
+		// ===================================================================
 		AsioEventLoop* loop_;
 		SocketType socket_;
 		std::atomic<State> state_ {State::hConnecting};
 		std::atomic<bool> reading_ {false};
-
-		InetAddress localAddr_;
-		InetAddress peerAddr_;
-
-		// 接收缓冲区（pmr 分配）
-		PmrBuffer inputBuffer_;
-
-		// 发送队列（多态写节点：内存数据 / 文件）
-		std::deque<std::shared_ptr<WriteNode>> writeQueue_;
-		size_t queuedBytes_ {0}; // 发送队列累计字节数（O(1) 高水位线检查）
-		std::mutex writeMutex_;
 		std::atomic<bool> writing_ {false};
 
-		// 统计
+		// 接收缓冲区（readLoop 每次迭代都访问）
+		PmrBuffer inputBuffer_;
+
+		// 发送队列
+		std::deque<WriteEntry> writeQueue_;
+		size_t queuedBytes_ {0}; // 发送队列累计字节数（O(1) 高水位线检查）
+		std::mutex writeMutex_;
+
+		// ===================================================================
+		// 统计字段（低频跨线程读取）
+		// lastActiveTimeMs_ 被 idle check 定时器从另一线程读取，
+		// alignas(64) 隔离避免与热路径字段 false sharing
+		// ===================================================================
+		alignas(64) std::atomic<int64_t> lastActiveTimeMs_ {
+			std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch())
+				.count()};
 		std::atomic<size_t> bytesSent_ {0};
 		std::atomic<size_t> bytesReceived_ {0};
 
-		// 最后活跃时间（用于空闲连接超时检测）
-		std::atomic<int64_t> lastActiveTimeMs_ {
-			std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch())
-				.count()};
+		// ===================================================================
+		// 冷路径字段（连接建立/销毁/查询时才访问）
+		// ===================================================================
+		InetAddress localAddr_;
+		InetAddress peerAddr_;
 
-		// 回调（hical 风格）
+		// 回调（hical 风格，连接建立前设置，运行期不修改）
 		MessageCallback messageCallback_;
 		ConnectionCallback connectionCallback_;
 		CloseCallback closeCallback_;

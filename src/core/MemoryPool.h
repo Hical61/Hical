@@ -29,8 +29,11 @@ namespace hical
 
 	/**
 	 * @brief 追踪型内存资源包装器
-	 * 包装一个上游 memory_resource，在 allocate/deallocate 时
-	 * 做原子计数统计，零额外开销（仅原子操作）。
+	 * 包装一个上游 memory_resource，在 allocate/deallocate 时做原子计数统计。
+	 * 缓存行优化：
+	 * - HICAL_ENABLE_MEMORY_TRACKING=OFF（默认）：do_allocate/do_deallocate 直接透传，零额外开销
+	 * - HICAL_ENABLE_MEMORY_TRACKING=ON：每个计数器 alignas(64) 独占 cache line，
+	 *   消除多核并发分配时的 false sharing（4 个 atomic 共处 32B 同一 cache line 的问题）
 	 */
 	class TrackedResource : public std::pmr::memory_resource
 	{
@@ -43,24 +46,25 @@ namespace hical
 		{
 		}
 
+#ifdef HICAL_ENABLE_MEMORY_TRACKING
 		size_t totalAllocations() const
 		{
-			return totalAllocations_.load(std::memory_order_relaxed);
+			return totalAllocations_.value.load(std::memory_order_relaxed);
 		}
 
 		size_t totalDeallocations() const
 		{
-			return totalDeallocations_.load(std::memory_order_relaxed);
+			return totalDeallocations_.value.load(std::memory_order_relaxed);
 		}
 
 		size_t currentBytes() const
 		{
-			return currentBytes_.load(std::memory_order_relaxed);
+			return currentBytes_.value.load(std::memory_order_relaxed);
 		}
 
 		size_t peakBytes() const
 		{
-			return peakBytes_.load(std::memory_order_relaxed);
+			return peakBytes_.value.load(std::memory_order_relaxed);
 		}
 
 		/**
@@ -68,31 +72,60 @@ namespace hical
 		 */
 		void resetStats()
 		{
-			totalAllocations_.store(0, std::memory_order_relaxed);
-			totalDeallocations_.store(0, std::memory_order_relaxed);
-			currentBytes_.store(0, std::memory_order_relaxed);
-			peakBytes_.store(0, std::memory_order_relaxed);
+			totalAllocations_.value.store(0, std::memory_order_relaxed);
+			totalDeallocations_.value.store(0, std::memory_order_relaxed);
+			currentBytes_.value.store(0, std::memory_order_relaxed);
+			peakBytes_.value.store(0, std::memory_order_relaxed);
 		}
+#else
+		size_t totalAllocations() const
+		{
+			return 0;
+		}
+
+		size_t totalDeallocations() const
+		{
+			return 0;
+		}
+
+		size_t currentBytes() const
+		{
+			return 0;
+		}
+
+		size_t peakBytes() const
+		{
+			return 0;
+		}
+
+		void resetStats()
+		{
+		}
+#endif
 
 	protected:
 		void* do_allocate(size_t bytes, size_t alignment) override
 		{
 			void* p = upstream_->allocate(bytes, alignment);
-			totalAllocations_.fetch_add(1, std::memory_order_relaxed);
-			auto current = currentBytes_.fetch_add(bytes, std::memory_order_relaxed) + bytes;
+#ifdef HICAL_ENABLE_MEMORY_TRACKING
+			totalAllocations_.value.fetch_add(1, std::memory_order_relaxed);
+			auto current = currentBytes_.value.fetch_add(bytes, std::memory_order_relaxed) + bytes;
 			// 更新峰值（无锁 CAS）
-			auto peak = peakBytes_.load(std::memory_order_relaxed);
-			while (current > peak && !peakBytes_.compare_exchange_weak(peak, current, std::memory_order_relaxed))
+			auto peak = peakBytes_.value.load(std::memory_order_relaxed);
+			while (current > peak && !peakBytes_.value.compare_exchange_weak(peak, current, std::memory_order_relaxed))
 			{
 			}
+#endif
 			return p;
 		}
 
 		void do_deallocate(void* p, size_t bytes, size_t alignment) override
 		{
 			upstream_->deallocate(p, bytes, alignment);
-			totalDeallocations_.fetch_add(1, std::memory_order_relaxed);
-			currentBytes_.fetch_sub(bytes, std::memory_order_relaxed);
+#ifdef HICAL_ENABLE_MEMORY_TRACKING
+			totalDeallocations_.value.fetch_add(1, std::memory_order_relaxed);
+			currentBytes_.value.fetch_sub(bytes, std::memory_order_relaxed);
+#endif
 		}
 
 		bool do_is_equal(const memory_resource& other) const noexcept override
@@ -102,10 +135,19 @@ namespace hical
 
 	private:
 		std::pmr::memory_resource* upstream_;
-		std::atomic<size_t> totalAllocations_ {0};
-		std::atomic<size_t> totalDeallocations_ {0};
-		std::atomic<size_t> currentBytes_ {0};
-		std::atomic<size_t> peakBytes_ {0};
+
+#ifdef HICAL_ENABLE_MEMORY_TRACKING
+		// 每个计数器独占一条 cache line（64B），消除多核并发分配时的 false sharing
+		struct alignas(64) AlignedCounter
+		{
+			std::atomic<size_t> value {0};
+		};
+
+		AlignedCounter totalAllocations_;
+		AlignedCounter totalDeallocations_;
+		AlignedCounter currentBytes_;
+		AlignedCounter peakBytes_;
+#endif
 	};
 
 	/**
