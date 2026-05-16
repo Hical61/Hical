@@ -9,6 +9,7 @@ set(HICAL_TEST_DISCOVERY_TIMEOUT 30)
 set(TESTS_NEEDING_PICOHTTPPARSER
     test_http_server
     test_websocket
+    test_ws_advanced
     test_integration
     test_graceful_shutdown
     test_error_handler
@@ -39,6 +40,7 @@ hical_add_test(test_route_group)          # 路由组
 hical_add_test(test_middleware)           # 中间件
 hical_add_test(test_http_server)          # HttpServer 集成
 hical_add_test(test_websocket)            # WebSocket
+hical_add_test(test_ws_advanced)          # WebSocket 高级功能（Binary/Close/Subprotocol/Context/Param/Hub/Heartbeat）
 hical_add_test(test_router_perf)          # 路由性能
 hical_add_test(test_concepts)             # Concepts 编译期验证
 hical_add_test(test_reflection)           # 反射层（MetaJson + MetaRoutes）

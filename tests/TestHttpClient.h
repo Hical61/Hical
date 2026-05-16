@@ -388,6 +388,15 @@ namespace hical::test
 	class TestWsClient
 	{
 	public:
+		/**
+		 * @brief 读取到的单帧（含操作码）
+		 */
+		struct WsFrame
+		{
+			hical::WsOpcode opcode;
+			std::string payload;
+		};
+
 		explicit TestWsClient(boost::asio::io_context& ioc) : m_socket(ioc)
 		{
 		}
@@ -427,8 +436,58 @@ namespace hical::test
 				throw std::runtime_error("WebSocket handshake failed: " + buf.substr(0, 80));
 			}
 
+			// 保存握手响应（含末尾的 \r\n\r\n）
+			auto headerEndPos = buf.find("\r\n\r\n");
+			m_handshakeResponse = buf.substr(0, headerEndPos + 4);
+
 			// 保存 101 响应后的残余数据
-			auto headerEnd = buf.find("\r\n\r\n") + 4;
+			auto headerEnd = headerEndPos + 4;
+			if (headerEnd < buf.size())
+			{
+				m_readBuf.assign(buf.begin() + static_cast<std::string::difference_type>(headerEnd), buf.end());
+			}
+		}
+
+		/**
+		 * @brief TCP 连接 + HTTP 升级握手（携带 Sec-WebSocket-Protocol）
+		 * @param subprotocol 请求的子协议，如 "graphql, mqtt"
+		 */
+		void connect(const std::string& host, uint16_t port, const std::string& path, const std::string& subprotocol)
+		{
+			m_socket.connect(tcp::endpoint(boost::asio::ip::make_address(host), port));
+
+			static constexpr const char* kTestKey = "dGVzdC13ZWJzb2NrZXQta2V5";
+
+			std::string req = "GET " + path
+							  + " HTTP/1.1\r\n"
+								"Host: "
+							  + host + ":" + std::to_string(port)
+							  + "\r\n"
+								"Upgrade: websocket\r\n"
+								"Connection: Upgrade\r\n"
+								"Sec-WebSocket-Version: 13\r\n"
+								"Sec-WebSocket-Key: "
+							  + kTestKey
+							  + "\r\n"
+								"Sec-WebSocket-Protocol: "
+							  + subprotocol
+							  + "\r\n"
+								"\r\n";
+
+			boost::asio::write(m_socket, boost::asio::buffer(req));
+
+			std::string buf;
+			detail::readUntilHeaderEnd(m_socket, buf);
+
+			if (buf.find("101") == std::string::npos)
+			{
+				throw std::runtime_error("WebSocket handshake failed: " + buf.substr(0, 80));
+			}
+
+			auto headerEndPos = buf.find("\r\n\r\n");
+			m_handshakeResponse = buf.substr(0, headerEndPos + 4);
+
+			auto headerEnd = headerEndPos + 4;
 			if (headerEnd < buf.size())
 			{
 				m_readBuf.assign(buf.begin() + static_cast<std::string::difference_type>(headerEnd), buf.end());
@@ -447,33 +506,31 @@ namespace hical::test
 		}
 
 		/**
-		 * @brief 同步读取一条完整消息
+		 * @brief 发送二进制帧（opcode=0x2）
+		 */
+		void writeBinary(const std::string& data)
+		{
+			static constexpr uint8_t kMaskKey[4] = {0x12, 0x34, 0x56, 0x78};
+			auto frame = hical::buildMaskedWsFrame(hical::WsOpcode::hBinary, data, kMaskKey);
+			boost::asio::write(m_socket, boost::asio::buffer(frame));
+		}
+
+		/**
+		 * @brief 发送 Pong 帧（用于响应服务端 Ping）
+		 */
+		void writePong(const std::string& payload = {})
+		{
+			static constexpr uint8_t kMaskKey[4] = {0x12, 0x34, 0x56, 0x78};
+			auto frame = hical::buildMaskedWsFrame(hical::WsOpcode::hPong, payload, kMaskKey);
+			boost::asio::write(m_socket, boost::asio::buffer(frame));
+		}
+
+		/**
+		 * @brief 同步读取一条完整消息（仅返回 payload，忽略 opcode）
 		 */
 		std::string read()
 		{
-			for (;;)
-			{
-				auto hdr = tryParseFrame();
-				if (hdr)
-				{
-					size_t frameSize = hdr->headerSize + static_cast<size_t>(hdr->payloadLength);
-					if (m_readBuf.size() >= frameSize)
-					{
-						// 提取载荷（服务端发送不 mask，无需 unmask）
-						std::string payload(m_readBuf.data() + hdr->headerSize,
-											m_readBuf.data() + hdr->headerSize
-												+ static_cast<size_t>(hdr->payloadLength));
-
-						m_readBuf.erase(m_readBuf.begin(), m_readBuf.begin() + static_cast<long>(frameSize));
-						return payload;
-					}
-				}
-
-				// 需要更多数据
-				char tmp[4096];
-				auto n = m_socket.read_some(boost::asio::buffer(tmp));
-				m_readBuf.append(tmp, n);
-			}
+			return readFrame().payload;
 		}
 
 		/**
@@ -493,6 +550,34 @@ namespace hical::test
 		}
 
 		/**
+		 * @brief 读取一帧并返回 {opcode, payload}（区分 Text/Binary/Ping/Pong/Close）
+		 */
+		WsFrame readFrame()
+		{
+			for (;;)
+			{
+				auto hdr = tryParseFrame();
+				if (hdr)
+				{
+					size_t frameSize = hdr->headerSize + static_cast<size_t>(hdr->payloadLength);
+					if (m_readBuf.size() >= frameSize)
+					{
+						std::string payload(m_readBuf.data() + hdr->headerSize,
+											m_readBuf.data() + hdr->headerSize
+												+ static_cast<size_t>(hdr->payloadLength));
+
+						m_readBuf.erase(m_readBuf.begin(), m_readBuf.begin() + static_cast<long>(frameSize));
+						return {hdr->opcode, std::move(payload)};
+					}
+				}
+
+				char tmp[4096];
+				auto n = m_socket.read_some(boost::asio::buffer(tmp));
+				m_readBuf.append(tmp, n);
+			}
+		}
+
+		/**
 		 * @brief 发送 close 帧
 		 */
 		void close(hical::WsCloseCode code = hical::WsCloseCode::hNormal)
@@ -503,6 +588,14 @@ namespace hical::test
 
 			boost::system::error_code ec;
 			boost::asio::write(m_socket, boost::asio::buffer(frame), ec);
+		}
+
+		/**
+		 * @brief 返回最后一次握手的完整 101 响应头部（含末尾 \r\n\r\n）
+		 */
+		const std::string& lastHandshakeResponse() const
+		{
+			return m_handshakeResponse;
 		}
 
 		tcp::socket& socket()
@@ -522,6 +615,7 @@ namespace hical::test
 
 		tcp::socket m_socket;
 		std::string m_readBuf;
+		std::string m_handshakeResponse;
 	};
 
 } // namespace hical::test
