@@ -204,7 +204,7 @@ HICAL_ROUTE(server.router(), Get, "/api/hello", myHandler);
 
 ```cpp
 // 日志中间件
-server.use([](const HttpRequest& req, MiddlewareNext next)
+server.use([](HttpRequest& req, MiddlewareNext next)
                -> Awaitable<HttpResponse> {
     std::cout << httpMethodToString(req.method()) << " " << req.path() << std::endl;
     auto res = co_await next(req);  // 调用下一层
@@ -213,7 +213,7 @@ server.use([](const HttpRequest& req, MiddlewareNext next)
 });
 
 // 认证中间件（拦截未授权请求）
-server.use([](const HttpRequest& req, MiddlewareNext next)
+server.use([](HttpRequest& req, MiddlewareNext next)
                -> Awaitable<HttpResponse> {
     if (req.header("Authorization").empty())
     {

@@ -638,8 +638,9 @@ namespace hical
 						// Origin 白名单校验（CSWSH 防护）
 						if (!wsRoute.allowedOrigins.empty())
 						{
-							auto origin = std::string(req.header("Origin"));
-							if (wsRoute.allowedOrigins.count(origin) == 0)
+							// 透明哈希：string_view 直接查找，零临时 string 堆分配
+							auto origin = req.header("Origin");
+							if (wsRoute.allowedOrigins.find(origin) == wsRoute.allowedOrigins.end())
 							{
 								HttpResponse forbiddenRes;
 								forbiddenRes.setStatus(HttpStatusCode::hForbidden);

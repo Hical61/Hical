@@ -20,6 +20,8 @@
 - [CORS 中间件](#cors-中间件) — 跨域资源共享
 - [RouteGroup](#routegroup) — 路由分组
 - [WebSocketSession](#websocketsession) — WebSocket 会话
+- [WsHub](#wshub) — WebSocket 广播管理器
+- [WsOptions](#wsoptions) — WebSocket 路由选项
 
 **基础设施 API（进阶用户）**
 - [Coroutine](#coroutine) — 协程工具
@@ -119,7 +121,7 @@ int main()
     });
     
     // 添加日志中间件
-    server.use([](const HttpRequest& req, MiddlewareNext next)
+    server.use([](HttpRequest& req, MiddlewareNext next)
                    -> Awaitable<HttpResponse> {
         std::cout << req.path() << std::endl;
         co_return co_await next(req);
@@ -153,7 +155,7 @@ int main()
 | `put(path, handler)`                                    | path: 路由路径<br>handler: 处理器                                                | `void`                    | 注册 PUT 路由                  |
 | `del(path, handler)`                                    | path: 路由路径<br>handler: 处理器                                                | `void`                    | 注册 DELETE 路由               |
 | `ws(path, onMessage, onConnect)`                        | path: 路由路径<br>onMessage: 消息回调<br>onConnect: 连接回调（可选）             | `void`                    | 注册 WebSocket 路由            |
-| `ws(path, onMessage, onConnect, onDisconnect, options)` | path: 路由路径<br>onMessage/onConnect/onDisconnect: 回调<br>options: `WsOptions` | `void`                    | 注册带选项的 WebSocket 路由    |
+| `ws(path, options, onMessage, onConnect, onDisconnect)` | path: 路由路径<br>options: `WsOptions`<br>onMessage/onConnect/onDisconnect: 回调 | `void`                    | 注册带选项的 WebSocket 路由    |
 | `dispatch(req)`                                         | req: HTTP 请求                                                                   | `Awaitable<HttpResponse>` | 分发请求到匹配的路由           |
 | `routeCount()`                                          | 无                                                                               | `size_t`                  | 获取已注册路由数量             |
 | `group(prefix)`                                         | prefix: 路由前缀                                                                 | `RouteGroup`              | 创建路由组（前缀分组）         |
@@ -202,11 +204,10 @@ router.ws("/ws/chat",
 // WebSocket 路由（带 Origin 白名单）
 WsOptions wsOpts;
 wsOpts.allowedOrigins = {"https://example.com", "https://app.example.com"};
-router.ws("/ws/chat",
+router.ws("/ws/chat", wsOpts,
     [](const std::string& msg, WebSocketSession& ws) -> Awaitable<void> {
         co_await ws.send("Echo: " + msg);
-    },
-    nullptr, nullptr, wsOpts
+    }
 );
 
 // 使用宏
@@ -432,10 +433,10 @@ auto codeStr = httpStatusCodeToString(code);  // "OK"
 
 ```cpp
 // 中间件 next 回调类型
-using MiddlewareNext = std::function<Awaitable<HttpResponse>(const HttpRequest&)>;
+using MiddlewareNext = std::function<Awaitable<HttpResponse>(HttpRequest&)>;
 
 // 中间件处理器类型
-using MiddlewareHandler = std::function<Awaitable<HttpResponse>(const HttpRequest&, MiddlewareNext)>;
+using MiddlewareHandler = std::function<Awaitable<HttpResponse>(HttpRequest&, MiddlewareNext)>;
 ```
 
 #### MiddlewarePipeline 类
@@ -457,7 +458,7 @@ using MiddlewareHandler = std::function<Awaitable<HttpResponse>(const HttpReques
 using namespace hical;
 
 // 日志中间件
-auto logger = [](const HttpRequest& req, MiddlewareNext next)
+auto logger = [](HttpRequest& req, MiddlewareNext next)
                   -> Awaitable<HttpResponse> {
     std::cout << "[" << httpMethodToString(req.method()) << "] " 
               << req.path() << std::endl;
@@ -469,7 +470,7 @@ auto logger = [](const HttpRequest& req, MiddlewareNext next)
 };
 
 // 认证中间件（拦截未授权请求）
-auto auth = [](const HttpRequest& req, MiddlewareNext next)
+auto auth = [](HttpRequest& req, MiddlewareNext next)
                 -> Awaitable<HttpResponse> {
     auto token = req.header("Authorization");
     if (token.empty()) {
@@ -482,7 +483,7 @@ auto auth = [](const HttpRequest& req, MiddlewareNext next)
 };
 
 // CORS 中间件
-auto cors = [](const HttpRequest& req, MiddlewareNext next)
+auto cors = [](HttpRequest& req, MiddlewareNext next)
                 -> Awaitable<HttpResponse> {
     auto res = co_await next(req);
     res.setHeader("Access-Control-Allow-Origin", "*");
@@ -500,28 +501,54 @@ server.use(cors);
 
 ### WebSocketSession
 
-WebSocket 会话封装，对自研 WebSocket 实现的 hical 风格封装。
+WebSocket 会话封装，对自研 WebSocket 实现（RFC 6455）的 hical 风格封装。支持文本/二进制消息、心跳保活、子协议协商和 per-connection 上下文存储。
 
 **头文件：** `src/core/WebSocket.h`
 
 #### 公共方法
 
-| 方法        | 参数          | 返回值                   | 说明                      |
-| ----------- | ------------- | ------------------------ | ------------------------- |
-| `send(msg)` | msg: 消息内容 | `Awaitable<void>`        | 发送文本消息              |
-| `receive()` | 无            | `Awaitable<std::string>` | 接收消息                  |
-| `close()`   | 无            | `void`                   | 关闭连接                  |
-| `isOpen()`  | 无            | `bool`                   | 连接是否打开              |
-| `native()`  | 无            | `WsStream&`              | 获取底层 WebSocket 流引用 |
+| 方法                         | 参数                                    | 返回值                                 | 说明                               |
+| ---------------------------- | --------------------------------------- | -------------------------------------- | ---------------------------------- |
+| `send(msg)`                  | msg: 文本消息                           | `Awaitable<void>`                      | 发送文本帧                         |
+| `sendBinary(data)`           | data: `string_view`                     | `Awaitable<void>`                      | 发送二进制帧                       |
+| `receive()`                  | 无                                      | `Awaitable<std::string>`               | 接收文本消息（向后兼容）           |
+| `receiveMessage()`           | 无                                      | `Awaitable<optional<WsMessage>>`       | 接收 typed 消息（区分 Text/Binary）|
+| `sendPing(payload)`          | payload: Ping 载荷（≤125B）             | `Awaitable<void>`                      | 手动发送 Ping 帧                   |
+| `closeAsync(code, reason)`   | code: `WsCloseCode`<br>reason: 关闭原因 | `Awaitable<void>`                      | 优雅关闭（发送 Close 帧）         |
+| `close()`                    | 无                                      | `void`                                 | 同步关闭连接                       |
+| `isOpen()`                   | 无                                      | `bool`                                 | 连接是否打开                       |
+| `subprotocol()`              | 无                                      | `const std::string&`                   | 协商后的子协议                     |
+| `setSubprotocol(proto)`      | proto: 协议名                           | `void`                                 | 设置子协议（握手阶段使用）         |
+| `lastPongTime()`             | 无                                      | `steady_clock::time_point`             | 最后收到 Pong 的时间               |
+| `setContext(ptr)`            | ptr: `shared_ptr<void>`                 | `void`                                 | 设置 per-connection 上下文         |
+| `getContext<T>()`            | 无                                      | `shared_ptr<T>`                        | 获取类型化上下文                   |
+| `hasContext()`               | 无                                      | `bool`                                 | 是否已设置上下文                   |
+| `clearContext()`             | 无                                      | `void`                                 | 清除上下文                         |
+
+#### WsMessage 结构体
+
+```cpp
+struct WsMessage
+{
+    WsOpcode type = WsOpcode::hText;  // hText 或 hBinary
+    std::string data;
+};
+```
 
 #### 回调类型
 
 ```cpp
-// 消息回调
+// 文本消息回调（向后兼容）
 using WsMessageCallback = std::function<Awaitable<void>(const std::string&, WebSocketSession&)>;
+
+// 类型化消息回调（区分 Text/Binary，优先于 onMessage）
+using WsTypedMessageCallback = std::function<Awaitable<void>(const WsMessage&, WebSocketSession&)>;
 
 // 连接建立回调
 using WsConnectCallback = std::function<Awaitable<void>(WebSocketSession&)>;
+
+// 连接断开回调
+using WsDisconnectCallback = std::function<void(WebSocketSession&)>;
 ```
 
 #### 示例
@@ -531,37 +558,138 @@ using WsConnectCallback = std::function<Awaitable<void>(WebSocketSession&)>;
 
 using namespace hical;
 
-// 注册 WebSocket 路由
-server.router().ws("/ws/chat",
-    // 消息回调
+// 基础文本回调
+server.router().ws("/ws/echo",
     [](const std::string& msg, WebSocketSession& ws) -> Awaitable<void> {
-        std::cout << "收到消息: " << msg << std::endl;
         co_await ws.send("Echo: " + msg);
-    },
-    // 连接建立回调（可选）
-    [](WebSocketSession& ws) -> Awaitable<void> {
-        std::cout << "新连接建立" << std::endl;
-        co_await ws.send("欢迎!");
     }
 );
 
-// 手动使用 WebSocketSession
-Awaitable<void> chatHandler(WebSocketSession& ws)
-{
-    co_await ws.send("连接成功");
-    
-    while (ws.isOpen()) {
-        try {
-            auto msg = co_await ws.receive();
-            co_await ws.send("收到: " + msg);
-        } catch (...) {
-            break;
-        }
+// 带心跳 + 压缩 + 子协议 + Origin 白名单
+WsOptions wsOpts;
+wsOpts.pingInterval = std::chrono::seconds(30);
+wsOpts.maxMissedPongs = 3;
+wsOpts.enableCompression = true;
+wsOpts.subprotocols = {"chat.v1", "chat.v2"};
+wsOpts.allowedOrigins = {"https://example.com"};
+
+server.router().ws("/ws/chat", wsOpts,
+    [](const std::string& msg, WebSocketSession& ws) -> Awaitable<void> {
+        co_await ws.send("收到: " + msg);
+    },
+    // onConnect（可选）
+    [](WebSocketSession& ws) -> Awaitable<void> {
+        co_await ws.send("欢迎! 协议: " + ws.subprotocol());
     }
-    
-    ws.close();
+);
+
+// 手动使用 receiveMessage() 区分 Text/Binary
+Awaitable<void> binaryHandler(WebSocketSession& ws)
+{
+    while (ws.isOpen())
+    {
+        auto msg = co_await ws.receiveMessage();
+        if (!msg) break;  // 连接关闭
+
+        if (msg->type == WsOpcode::hBinary)
+            co_await ws.sendBinary(msg->data);  // 二进制回显
+        else
+            co_await ws.send(msg->data);        // 文本回显
+    }
 }
 ```
+
+---
+
+### WsHub
+
+WebSocket 连接管理器 / 广播中心，线程安全。适用于聊天室、实时推送等多连接广播场景。
+
+**头文件：** `src/core/WsHub.h`
+
+#### 类型定义
+
+```cpp
+using WsConnectionId = uint64_t;
+```
+
+#### 公共方法
+
+| 方法                                       | 参数                                                           | 返回值             | 说明                         |
+| ------------------------------------------ | -------------------------------------------------------------- | ------------------ | ---------------------------- |
+| `add(session)`                             | session: `shared_ptr<WebSocketSession>`                        | `WsConnectionId`   | 注册连接，返回唯一 ID       |
+| `remove(id)`                               | id: 连接 ID                                                    | `void`             | 移除连接（自动离开所有房间） |
+| `join(id, room)`                           | id: 连接 ID<br>room: 房间名                                    | `void`             | 加入房间                     |
+| `leave(id, room)`                          | id: 连接 ID<br>room: 房间名                                    | `void`             | 离开房间                     |
+| `broadcast(room, message, exclude)`        | room: 房间名<br>message: 消息<br>exclude: 排除 ID（默认 0）    | `void`             | 文本广播到房间               |
+| `broadcastBinary(room, data, exclude)`     | room: 房间名<br>data: 二进制数据<br>exclude: 排除 ID（默认 0） | `void`             | 二进制广播到房间             |
+| `broadcastAll(message, exclude)`           | message: 消息<br>exclude: 排除 ID（默认 0）                    | `void`             | 文本广播到所有连接           |
+| `sendTo(id, message)`                      | id: 连接 ID<br>message: 消息                                   | `void`             | 单播到指定连接               |
+| `roomSize(room)`                           | room: 房间名                                                   | `size_t`           | 房间内连接数                 |
+| `connectionCount()`                        | 无                                                             | `size_t`           | 总注册连接数                 |
+
+#### 注意事项
+
+- Hub 存储 `weak_ptr<WebSocketSession>`，不延长连接生命周期
+- **必须在 `onDisconnect` 回调中调用 `remove(id)`**，Hub 不自动清理断开的连接
+- 广播通过 `coSpawn` 投递到各连接所属 executor，跨线程安全
+
+#### 示例
+
+```cpp
+#include "core/WsHub.h"
+
+using namespace hical;
+
+WsHub hub;
+
+server.router().ws("/ws/room", wsOpts,
+    // onMessage
+    [&hub](const std::string& msg, WebSocketSession& ws) -> Awaitable<void> {
+        auto id = ws.getContext<WsConnectionId>();
+        hub.broadcast("lobby", msg, id ? *id : 0);  // 广播给同房间其他人
+        co_return;
+    },
+    // onConnect
+    [&hub](WebSocketSession& ws) -> Awaitable<void> {
+        auto id = hub.add(ws.shared_from_this());
+        ws.setContext(std::make_shared<WsConnectionId>(id));
+        hub.join(id, "lobby");
+        hub.broadcast("lobby", "新用户加入", id);
+        co_return;
+    },
+    // onDisconnect
+    [&hub](WebSocketSession& ws) {
+        if (auto ctx = ws.getContext<WsConnectionId>())
+        {
+            hub.broadcast("lobby", "用户离开", *ctx);
+            hub.remove(*ctx);
+        }
+    }
+);
+```
+
+---
+
+### WsOptions
+
+WebSocket 路由选项，配置安全策略、压缩、心跳和子协议。
+
+**头文件：** `src/core/Router.h`（`Router::WsOptions` 嵌套结构体）
+
+#### 字段
+
+| 字段                      | 类型                              | 默认值 | 说明                                      |
+| ------------------------- | --------------------------------- | ------ | ----------------------------------------- |
+| `allowedOrigins`          | `unordered_set<string>`           | 空     | Origin 白名单（空=不校验，防 CSWSH）      |
+| `enableCompression`       | `bool`                            | false  | 启用 permessage-deflate 压缩              |
+| `serverMaxWindowBits`     | `int`                             | 15     | 服务端 zlib 窗口位数（9-15）              |
+| `clientMaxWindowBits`     | `int`                             | 15     | 客户端 zlib 窗口位数（9-15）              |
+| `serverNoContextTakeover` | `bool`                            | false  | 每消息独立压缩（省内存降压缩率）          |
+| `pingInterval`            | `std::chrono::seconds`            | 0      | 心跳 Ping 间隔（0=禁用）                 |
+| `maxMissedPongs`          | `uint32_t`                        | 3      | 最大连续未收到 Pong 次数，超过则关闭      |
+| `pingPayload`             | `std::string`                     | 空     | 自定义 Ping 载荷（最大 125 字节）         |
+| `subprotocols`            | `vector<string>`                  | 空     | 支持的子协议列表（空=忽略协商）           |
 
 ---
 
@@ -1012,12 +1140,12 @@ Boost.Asio 适配层，将 Boost.Asio 的原始 API 封装为 hical 风格的接
 
 | 枚举值   | 说明                        |
 | -------- | --------------------------- |
-| `ETrace` | 跟踪（NDEBUG 下编译期消除） |
-| `EDebug` | 调试                        |
-| `EInfo`  | 信息                        |
-| `EWarn`  | 警告                        |
-| `EError` | 错误                        |
-| `EFatal` | 致命（触发 abort）          |
+| `hTrace` | 跟踪（NDEBUG 下编译期消除） |
+| `hDebug` | 调试                        |
+| `hInfo`  | 信息                        |
+| `hWarn`  | 警告                        |
+| `hError` | 错误                        |
+| `hFatal` | 致命（触发 abort）          |
 
 #### Logger 类（单例）
 
@@ -1067,8 +1195,8 @@ HICAL_LOG_INFO_F("用户登录", {{"userId", 42}, {"ip", "1.2.3.4"}});
 
 // 配置
 auto& logger = Logger::instance();
-logger.setLevel(LogLevel::EInfo);
-logger.setFlushLevel(LogLevel::EWarn);
+logger.setLevel(LogLevel::hInfo);
+logger.setFlushLevel(LogLevel::hWarn);
 logger.addSink(std::make_shared<StderrSink>());
 ```
 
@@ -1154,8 +1282,13 @@ logger.addSink(std::make_shared<StderrSink>());
 ```cpp
 #include "core/AsyncFileSink.h"
 
-auto sink = std::make_shared<AsyncFileSink>("logs/app", 100 * 1024 * 1024, 10);
-Logger::instance().addSink(sink);
+AsyncFileSink::Options opts;
+opts.file.basePath = "logs/app.log";
+opts.file.maxFileSize = 100 * 1024 * 1024;  // 100MB 轮转
+opts.file.maxFiles = 10;                     // 保留 10 个归档
+opts.bufferSize = 4 * 1024 * 1024;           // 4MB 双缓冲
+
+Logger::instance().addSink(std::make_shared<AsyncFileSink>(opts));
 ```
 
 ---
@@ -1279,10 +1412,13 @@ registerLogAdmin(server.router(), "/internal");  // → GET/PUT /internal/log-le
 | `Awaitable<T>`      | `boost::asio::awaitable<T>`                                             | `Coroutine.h`  |
 | `RouteHandler`      | `function<Awaitable<HttpResponse>(const HttpRequest&)>`                 | `Router.h`     |
 | `SyncRouteHandler`  | `function<HttpResponse(const HttpRequest&)>`                            | `Router.h`     |
-| `MiddlewareNext`    | `function<Awaitable<HttpResponse>(const HttpRequest&)>`                 | `Middleware.h` |
-| `MiddlewareHandler` | `function<Awaitable<HttpResponse>(const HttpRequest&, MiddlewareNext)>` | `Middleware.h` |
-| `WsMessageCallback` | `function<Awaitable<void>(const string&, WebSocketSession&)>`           | `Router.h`     |
-| `WsConnectCallback` | `function<Awaitable<void>(WebSocketSession&)>`                          | `Router.h`     |
+| `MiddlewareNext`    | `function<Awaitable<HttpResponse>(HttpRequest&)>`                 | `Middleware.h` |
+| `MiddlewareHandler` | `function<Awaitable<HttpResponse>(HttpRequest&, MiddlewareNext)>` | `Middleware.h` |
+| `WsMessageCallback`      | `function<Awaitable<void>(const string&, WebSocketSession&)>`           | `Router.h`     |
+| `WsTypedMessageCallback` | `function<Awaitable<void>(const WsMessage&, WebSocketSession&)>`        | `Router.h`     |
+| `WsConnectCallback`      | `function<Awaitable<void>(WebSocketSession&)>`                          | `Router.h`     |
+| `WsDisconnectCallback`   | `function<void(WebSocketSession&)>`                                     | `Router.h`     |
+| `WsConnectionId`         | `uint64_t`                                                              | `WsHub.h`      |
 | `Func`              | `function<void()>`                                                      | `EventLoop.h`  |
 | `TimerId`           | `uint64_t`                                                              | `EventLoop.h`  |
 | `ErrorHandler`      | `function<HttpResponse(const exception&, const HttpRequest&)>`          | `HttpServer.h` |
@@ -1293,9 +1429,11 @@ registerLogAdmin(server.router(), "/internal");  // → GET/PUT /internal/log-le
 | -------- | ------------------------------------------------------------- | ------------------ |
 | 同步路由 | `HttpResponse(const HttpRequest&)`                            | 直接返回响应       |
 | 协程路由 | `Awaitable<HttpResponse>(const HttpRequest&)`                 | 协程返回响应       |
-| 中间件   | `Awaitable<HttpResponse>(const HttpRequest&, MiddlewareNext)` | 洋葱模型           |
-| WS 消息  | `Awaitable<void>(const string&, WebSocketSession&)`           | WebSocket 消息回调 |
+| 中间件   | `Awaitable<HttpResponse>(HttpRequest&, MiddlewareNext)` | 洋葱模型           |
+| WS 消息  | `Awaitable<void>(const string&, WebSocketSession&)`           | WebSocket 文本消息回调 |
+| WS typed | `Awaitable<void>(const WsMessage&, WebSocketSession&)`        | WebSocket typed 回调（区分 Text/Binary） |
 | WS 连接  | `Awaitable<void>(WebSocketSession&)`                          | WebSocket 连接回调 |
+| WS 断开  | `void(WebSocketSession&)`                                     | WebSocket 断开回调 |
 | 定时器   | `void()`                                                      | 无参回调           |
 
 ---

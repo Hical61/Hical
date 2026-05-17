@@ -79,16 +79,23 @@ namespace hical
 	{
 		static constexpr std::string_view kGuid = "258EAFA5-E914-47DA-95CA-5AB5DC65C174";
 
-		// 拼接 clientKey + GUID
-		std::string concat;
-		concat.reserve(clientKey.size() + kGuid.size());
-		concat.append(clientKey);
-		concat.append(kGuid);
+		// 防御性截断：RFC 6455 规定 Key 为 24 字符（16 字节随机值的 Base64），
+		// concat[64] 最多容纳 64-36(GUID)=28 字节的 clientKey
+		if (clientKey.size() > 24)
+		{
+			clientKey = clientKey.substr(0, 24);
+		}
+
+		// 栈上拼接 clientKey + GUID（24+36=60 字节，避免 string 堆分配）
+		char concat[64];
+		std::memcpy(concat, clientKey.data(), clientKey.size());
+		std::memcpy(concat + clientKey.size(), kGuid.data(), kGuid.size());
+		size_t concatLen = clientKey.size() + kGuid.size();
 
 		// SHA1
 		uint8_t hash[EVP_MAX_MD_SIZE];
 		unsigned int hashLen = 0;
-		EVP_Digest(concat.data(), concat.size(), hash, &hashLen, EVP_sha1(), nullptr);
+		EVP_Digest(concat, concatLen, hash, &hashLen, EVP_sha1(), nullptr);
 
 		return base64Encode(hash, hashLen);
 	}
@@ -265,25 +272,16 @@ namespace hical
 			return {};
 		}
 
-		// 解析客户端 offer 为 token 列表
-		std::vector<std::string_view> clientTokens;
-		std::string_view remaining = clientOffer;
-		while (!remaining.empty())
-		{
-			auto comma = remaining.find(',');
-			auto token = detail::trimWs((comma != std::string_view::npos) ? remaining.substr(0, comma) : remaining);
-			remaining = (comma != std::string_view::npos) ? remaining.substr(comma + 1) : std::string_view {};
-			if (!token.empty())
-			{
-				clientTokens.push_back(token);
-			}
-		}
-
-		// 服务端优先：遍历服务端列表，找第一个客户端也支持的
+		// 服务端优先：对每个服务端支持的协议，直接扫描 clientOffer token 流匹配
+		// 避免预解析到 vector 的堆分配（典型 serverSupported 1-3 个，clientOffer 1-5 个 token）
 		for (const auto& supported : serverSupported)
 		{
-			for (auto token : clientTokens)
+			std::string_view remaining = clientOffer;
+			while (!remaining.empty())
 			{
+				auto comma = remaining.find(',');
+				auto token = detail::trimWs((comma != std::string_view::npos) ? remaining.substr(0, comma) : remaining);
+				remaining = (comma != std::string_view::npos) ? remaining.substr(comma + 1) : std::string_view {};
 				if (token == supported)
 				{
 					return supported;

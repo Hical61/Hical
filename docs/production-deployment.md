@@ -666,7 +666,7 @@ server.router().get("/health/ready",
                                 {"status", "degraded"},
                                 {"db", "disconnected"}
                             });
-                            res.setStatusCode(HttpStatus::EServiceUnavailable);
+                            res.setStatus(HttpStatusCode::hServiceUnavailable);
                             co_return res;
                         }
                     });

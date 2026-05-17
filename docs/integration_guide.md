@@ -181,7 +181,7 @@ The log system is part of the core module and requires no extra compile flags.
 int main()
 {
     auto& logger = hical::Logger::instance();
-    logger.setLevel(hical::LogLevel::EInfo);
+    logger.setLevel(hical::LogLevel::hInfo);
     logger.addSink(std::make_shared<hical::StderrSink>());
 
     HICAL_LOG_INFO("Application started, port={}", 8080);
@@ -200,10 +200,11 @@ int main()
 auto& logger = hical::Logger::instance();
 
 // Async file sink (recommended for production)
-// 100MB per file, keep 10 rotated files
-auto asyncSink = std::make_shared<hical::AsyncFileSink>(
-    "./logs/app.log", 100 * 1024 * 1024, 10);
-logger.addSink(asyncSink);
+hical::AsyncFileSink::Options asyncOpts;
+asyncOpts.file.basePath = "./logs/app.log";
+asyncOpts.file.maxFileSize = 100 * 1024 * 1024;  // 100MB per file
+asyncOpts.file.maxFiles = 10;                      // keep 10 rotated files
+logger.addSink(std::make_shared<hical::AsyncFileSink>(asyncOpts));
 ```
 
 ### HTTP Middleware Integration

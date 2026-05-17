@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Coroutine.h"
+#include "HttpTypes.h"
 #include "WebSocket.h"
 #include <atomic>
 #include <cstdint>
@@ -52,14 +53,14 @@ namespace hical
 		 * @param id   连接 ID
 		 * @param room 房间名
 		 */
-		void join(WsConnectionId id, const std::string& room);
+		void join(WsConnectionId id, std::string_view room);
 
 		/**
 		 * @brief 将连接离开房间
 		 * @param id   连接 ID
 		 * @param room 房间名
 		 */
-		void leave(WsConnectionId id, const std::string& room);
+		void leave(WsConnectionId id, std::string_view room);
 
 		/**
 		 * @brief 广播文本消息到房间
@@ -67,7 +68,7 @@ namespace hical
 		 * @param message 消息内容
 		 * @param exclude 排除的连接 ID（0 = 不排除）
 		 */
-		void broadcast(const std::string& room, std::string_view message, WsConnectionId exclude = 0);
+		void broadcast(std::string_view room, std::string_view message, WsConnectionId exclude = 0);
 
 		/**
 		 * @brief 广播二进制消息到房间
@@ -75,7 +76,7 @@ namespace hical
 		 * @param data    二进制数据
 		 * @param exclude 排除的连接 ID（0 = 不排除）
 		 */
-		void broadcastBinary(const std::string& room, std::string_view data, WsConnectionId exclude = 0);
+		void broadcastBinary(std::string_view room, std::string_view data, WsConnectionId exclude = 0);
 
 		/**
 		 * @brief 广播文本消息到所有已注册连接
@@ -96,7 +97,7 @@ namespace hical
 		 * @param room 房间名
 		 * @return 当前房间内的连接数量
 		 */
-		size_t roomSize(const std::string& room) const;
+		size_t roomSize(std::string_view room) const;
 
 		/**
 		 * @brief 获取总连接数
@@ -108,7 +109,7 @@ namespace hical
 		struct ConnectionEntry
 		{
 			std::weak_ptr<WebSocketSession> session;
-			std::unordered_set<std::string> rooms;
+			std::unordered_set<std::string, StringHash, StringEqual> rooms; ///< 透明哈希，string_view 查找零临时构造
 		};
 
 		/**
@@ -122,9 +123,13 @@ namespace hical
 			std::weak_ptr<WebSocketSession> session;
 		};
 
+		/// 广播实现内核（broadcast/broadcastBinary 共用）
+		/// @param isBinary true=sendBinary, false=send
+		void broadcastImpl(std::string_view room, std::string_view payload, WsConnectionId exclude, bool isBinary);
+
 		mutable std::shared_mutex m_mutex;
 		std::unordered_map<WsConnectionId, ConnectionEntry> m_connections;
-		std::unordered_map<std::string, std::vector<RoomMember>> m_rooms;
+		std::unordered_map<std::string, std::vector<RoomMember>, StringHash, StringEqual> m_rooms; ///< 透明哈希
 		std::atomic<WsConnectionId> m_nextId {1};
 	};
 

@@ -109,7 +109,8 @@ namespace hical
 		struct WsOptions
 		{
 			/// 允许的 Origin 列表（防 CSWSH）。为空时不校验 Origin。
-			std::unordered_set<std::string> allowedOrigins;
+			/// 透明哈希：string_view 查找零临时 string 构造。
+			std::unordered_set<std::string, StringHash, StringEqual> allowedOrigins;
 
 			/// 是否启用 permessage-deflate 压缩（默认关闭，向后兼容）
 			bool enableCompression = false;
@@ -144,7 +145,8 @@ namespace hical
 			WsTypedMessageCallback onTypedMessage; ///< 可选，优先于 onMessage（区分 Text/Binary）
 			WsConnectCallback onConnect;
 			WsDisconnectCallback onDisconnect;
-			std::unordered_set<std::string> allowedOrigins; ///< 允许的 Origin 列表（空 = 不校验）
+			std::unordered_set<std::string, StringHash, StringEqual>
+				allowedOrigins; ///< 允许的 Origin 列表（空 = 不校验，透明哈希）
 
 			/// 压缩配置（从 WsOptions 复制）
 			bool enableCompression = false;

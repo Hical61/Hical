@@ -169,7 +169,10 @@ namespace hical
 		void setSubprotocol(std::string proto);
 
 	private:
-		/// 记录收到 Pong（由 receive()/receiveMessage() 内部调用）
+		/// 接收消息的内核实现（receive/receiveMessage 共用）
+		Awaitable<std::optional<WsMessage>> receiveInternal();
+
+		/// 记录收到 Pong（由 receiveInternal() 内部调用）
 		void recordPongReceived();
 
 		/// 确保读缓冲区中至少有 n 字节可用数据

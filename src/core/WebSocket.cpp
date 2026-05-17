@@ -72,164 +72,12 @@ namespace hical
 
 	Awaitable<std::optional<std::string>> WebSocketSession::receive()
 	{
-		try
+		auto msg = co_await receiveInternal();
+		if (!msg)
 		{
-			for (;;)
-			{
-				// 1. 确保至少 2 字节（帧头最小长度）
-				co_await ensureBytes(2);
-
-				// 2. 尝试解析帧头
-				auto hdr = parseWsFrameHeader(m_readBuf.data(), m_readBufUsed);
-				if (!hdr)
-				{
-					// 帧头不完整，多读一些
-					co_await ensureBytes(m_readBufUsed + 1);
-					continue;
-				}
-
-				// 3. 协议校验
-				if (hdr->rsv2 || hdr->rsv3)
-				{
-					// RSV2/RSV3 非零且无已协商扩展 → 协议错误
-					co_await sendCloseFrame(WsCloseCode::hProtocolError, "Unexpected RSV2/RSV3");
-					m_open = false;
-					co_return std::nullopt;
-				}
-
-				// RSV1 仅在 permessage-deflate 启用时允许
-				if (hdr->rsv1 && !m_deflateCtx)
-				{
-					co_await sendCloseFrame(WsCloseCode::hProtocolError, "Unexpected RSV1 without deflate");
-					m_open = false;
-					co_return std::nullopt;
-				}
-
-				// 客户端→服务器必须有 mask
-				if (!hdr->masked)
-				{
-					co_await sendCloseFrame(WsCloseCode::hProtocolError, "Client frames must be masked");
-					m_open = false;
-					co_return std::nullopt;
-				}
-
-				// 控制帧载荷不超过 125 字节（RFC 6455 §5.5）
-				bool isControl = (static_cast<uint8_t>(hdr->opcode) >= 0x08);
-				if (isControl && hdr->payloadLength > 125)
-				{
-					co_await sendCloseFrame(WsCloseCode::hProtocolError, "Control frame payload too large");
-					m_open = false;
-					co_return std::nullopt;
-				}
-
-				// 载荷大小检查
-				if (hdr->payloadLength > m_maxMessageSize)
-				{
-					co_await sendCloseFrame(WsCloseCode::hMessageTooBig);
-					m_open = false;
-					co_return std::nullopt;
-				}
-
-				// 4. 确保完整帧数据可用
-				size_t frameSize = hdr->headerSize + static_cast<size_t>(hdr->payloadLength);
-				co_await ensureBytes(frameSize);
-
-				// 5. 解除 mask
-				uint8_t* payloadPtr = m_readBuf.data() + hdr->headerSize;
-				size_t payloadLen = static_cast<size_t>(hdr->payloadLength);
-				unmaskPayload(payloadPtr, payloadLen, hdr->maskKey);
-
-				// 6. 控制帧处理（RFC 6455 §5.5：控制帧可穿插在数据帧分片之间）
-				if (hdr->opcode == WsOpcode::hClose)
-				{
-					// 回复 close 帧
-					if (payloadLen >= 2)
-					{
-						// 回复相同的 close payload
-						std::string closePayload(reinterpret_cast<const char*>(payloadPtr), payloadLen);
-						co_await sendFrame(WsOpcode::hClose, closePayload);
-					}
-					else
-					{
-						co_await sendFrame(WsOpcode::hClose, {});
-					}
-					consumeBytes(frameSize);
-					m_open = false;
-					co_return std::nullopt;
-				}
-
-				if (hdr->opcode == WsOpcode::hPing)
-				{
-					// 回复 Pong，载荷与 Ping 相同
-					std::string_view pongPayload(reinterpret_cast<const char*>(payloadPtr), payloadLen);
-					co_await sendFrame(WsOpcode::hPong, pongPayload);
-					consumeBytes(frameSize);
-					continue;
-				}
-
-				if (hdr->opcode == WsOpcode::hPong)
-				{
-					// 记录 Pong 接收时间（心跳检测用）
-					recordPongReceived();
-					consumeBytes(frameSize);
-					continue;
-				}
-
-				// 7. 数据帧处理（Text/Binary/Continuation）
-				if (hdr->opcode == WsOpcode::hText || hdr->opcode == WsOpcode::hBinary)
-				{
-					// 新消息的首帧
-					m_fragmentBuf.clear();
-					m_fragmentOpcode = hdr->opcode;
-					m_fragmentCompressed = hdr->rsv1;
-				}
-				else if (hdr->opcode == WsOpcode::hContinuation)
-				{
-					// 分片消息的后续帧（首帧已设置 opcode/compressed）
-				}
-				else
-				{
-					// 未知 opcode
-					co_await sendCloseFrame(WsCloseCode::hProtocolError, "Unknown opcode");
-					m_open = false;
-					co_return std::nullopt;
-				}
-
-				// 追加载荷到分片缓冲
-				m_fragmentBuf.append(reinterpret_cast<const char*>(payloadPtr), payloadLen);
-
-				// 总大小检查
-				if (m_fragmentBuf.size() > m_maxMessageSize)
-				{
-					co_await sendCloseFrame(WsCloseCode::hMessageTooBig);
-					m_open = false;
-					co_return std::nullopt;
-				}
-
-				consumeBytes(frameSize);
-
-				if (hdr->fin)
-				{
-					// 消息完成
-					if (m_fragmentCompressed && m_deflateCtx)
-					{
-						co_return m_deflateCtx->decompress(m_fragmentBuf, m_maxMessageSize);
-					}
-					co_return std::move(m_fragmentBuf);
-				}
-				// FIN=0: 继续等待后续分片
-			}
+			co_return std::nullopt;
 		}
-		catch (const boost::system::system_error& e)
-		{
-			m_open = false;
-			if (e.code() == boost::asio::error::eof || e.code() == boost::asio::error::connection_reset
-				|| e.code() == boost::asio::error::operation_aborted)
-			{
-				co_return std::nullopt;
-			}
-			throw;
-		}
+		co_return std::move(msg->data);
 	}
 
 	Awaitable<void> WebSocketSession::closeAsync()
@@ -350,9 +198,20 @@ namespace hical
 	Awaitable<void> WebSocketSession::sendFrame(WsOpcode opcode, std::string_view payload, bool fin, bool rsv1)
 	{
 		co_await acquireWrite();
+
+		// RAII 写锁守卫：async_write 抛异常时也能释放写权限，防止写锁永久卡死
+		struct WriteGuard
+		{
+			WebSocketSession& self;
+
+			~WriteGuard()
+			{
+				self.releaseWrite();
+			}
+		} guard {*this};
+
 		auto frame = buildWsFrame(opcode, payload, fin, rsv1);
 		co_await boost::asio::async_write(m_socket, boost::asio::buffer(frame), boost::asio::use_awaitable);
-		releaseWrite();
 	}
 
 	Awaitable<void> WebSocketSession::sendCloseFrame(WsCloseCode code, std::string_view reason)
@@ -361,22 +220,25 @@ namespace hical
 		co_await sendFrame(WsOpcode::hClose, closePayload);
 	}
 
-	Awaitable<std::optional<WsMessage>> WebSocketSession::receiveMessage()
+	Awaitable<std::optional<WsMessage>> WebSocketSession::receiveInternal()
 	{
 		try
 		{
 			for (;;)
 			{
+				// 1. 确保至少 2 字节（帧头最小长度）
 				co_await ensureBytes(2);
 
+				// 2. 尝试解析帧头
 				auto hdr = parseWsFrameHeader(m_readBuf.data(), m_readBufUsed);
 				if (!hdr)
 				{
+					// 帧头不完整，多读一些
 					co_await ensureBytes(m_readBufUsed + 1);
 					continue;
 				}
 
-				// 协议校验（与 receive() 相同）
+				// 3. 协议校验
 				if (hdr->rsv2 || hdr->rsv3)
 				{
 					co_await sendCloseFrame(WsCloseCode::hProtocolError, "Unexpected RSV2/RSV3");
@@ -409,31 +271,28 @@ namespace hical
 					co_return std::nullopt;
 				}
 
+				// 4. 确保完整帧数据可用
 				size_t frameSize = hdr->headerSize + static_cast<size_t>(hdr->payloadLength);
 				co_await ensureBytes(frameSize);
 
+				// 5. 解除 mask
 				uint8_t* payloadPtr = m_readBuf.data() + hdr->headerSize;
 				size_t payloadLen = static_cast<size_t>(hdr->payloadLength);
 				unmaskPayload(payloadPtr, payloadLen, hdr->maskKey);
 
-				// 控制帧处理
+				// 6. 控制帧处理（RFC 6455 §5.5：控制帧可穿插在数据帧分片之间）
 				if (hdr->opcode == WsOpcode::hClose)
 				{
-					if (payloadLen >= 2)
-					{
-						std::string closePayload(reinterpret_cast<const char*>(payloadPtr), payloadLen);
-						co_await sendFrame(WsOpcode::hClose, closePayload);
-					}
-					else
-					{
-						co_await sendFrame(WsOpcode::hClose, {});
-					}
+					// 回复 close 帧（直接引用 readBuf 中的载荷，零拷贝）
+					std::string_view closeSv(reinterpret_cast<const char*>(payloadPtr), payloadLen);
+					co_await sendFrame(WsOpcode::hClose, (payloadLen >= 2) ? closeSv : std::string_view {});
 					consumeBytes(frameSize);
 					m_open = false;
 					co_return std::nullopt;
 				}
 				if (hdr->opcode == WsOpcode::hPing)
 				{
+					// 回复 Pong，载荷与 Ping 相同
 					std::string_view pongPayload(reinterpret_cast<const char*>(payloadPtr), payloadLen);
 					co_await sendFrame(WsOpcode::hPong, pongPayload);
 					consumeBytes(frameSize);
@@ -441,26 +300,32 @@ namespace hical
 				}
 				if (hdr->opcode == WsOpcode::hPong)
 				{
+					// 记录 Pong 接收时间（心跳检测用）
 					recordPongReceived();
 					consumeBytes(frameSize);
 					continue;
 				}
 
-				// 数据帧处理
+				// 7. 数据帧处理（Text/Binary/Continuation）
 				if (hdr->opcode == WsOpcode::hText || hdr->opcode == WsOpcode::hBinary)
 				{
+					// 新消息的首帧
 					m_fragmentBuf.clear();
 					m_fragmentOpcode = hdr->opcode;
 					m_fragmentCompressed = hdr->rsv1;
 				}
 				else if (hdr->opcode != WsOpcode::hContinuation)
 				{
+					// 未知 opcode
 					co_await sendCloseFrame(WsCloseCode::hProtocolError, "Unknown opcode");
 					m_open = false;
 					co_return std::nullopt;
 				}
 
+				// 追加载荷到分片缓冲
 				m_fragmentBuf.append(reinterpret_cast<const char*>(payloadPtr), payloadLen);
+
+				// 总大小检查
 				if (m_fragmentBuf.size() > m_maxMessageSize)
 				{
 					co_await sendCloseFrame(WsCloseCode::hMessageTooBig);
@@ -472,6 +337,7 @@ namespace hical
 
 				if (hdr->fin)
 				{
+					// 消息完成：构造 WsMessage 返回
 					WsMessage msg;
 					msg.type = m_fragmentOpcode;
 					if (m_fragmentCompressed && m_deflateCtx)
@@ -484,6 +350,7 @@ namespace hical
 					}
 					co_return msg;
 				}
+				// FIN=0: 继续等待后续分片
 			}
 		}
 		catch (const boost::system::system_error& e)
@@ -496,6 +363,11 @@ namespace hical
 			}
 			throw;
 		}
+	}
+
+	Awaitable<std::optional<WsMessage>> WebSocketSession::receiveMessage()
+	{
+		co_return co_await receiveInternal();
 	}
 
 	// ============ Context ============

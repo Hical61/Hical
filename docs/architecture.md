@@ -23,6 +23,8 @@
 - [15. OpenAPI 元数据层设计](#15-openapi-元数据层设计)  
 - [16. 日志系统设计](#16-日志系统设计)
 - [17. HTTP 核心增强](#17-http-核心增强)
+- [18. WebSocket 增强设计](#18-websocket-增强设计)
+- [19. HTTP 热路径优化](#19-http-热路径优化)
 
 ---
 
@@ -404,19 +406,19 @@ Hical 统一采用 `boost::asio::awaitable<T>` + `co_spawn` 作为协程模型�
 RouteHandler = std::function<Awaitable<HttpResponse>(const HttpRequest&)>;
 
 // 中间件 — 洋葱模型链式调用
-MiddlewareHandler = std::function<Awaitable<HttpResponse>(const HttpRequest&, MiddlewareNext)>;
+MiddlewareHandler = std::function<Awaitable<HttpResponse>(HttpRequest&, MiddlewareNext)>;
 
 // WebSocket 消息回调
 WsMessageCallback = std::function<Awaitable<void>(const std::string&, WebSocketSession&)>;
 
-// 内部 — 连接接受循环
-Awaitable<void> HttpServer::acceptLoop();
+// 内部 — 连接接受循环（每个 worker loop 各一个）
+Awaitable<void> HttpServer::acceptLoop(AsioEventLoop& loop);
 
-// 内部 — HTTP 会话处理
-Awaitable<void> HttpServer::handleSession(tcp::socket socket);
+// 内部 — HTTP 会话处理（HttpSessionImpl.cpp 编译防火墙）
+Awaitable<void> handleSession(shared_ptr<GenericConnection<SocketType>> conn, ...);
 
 // 内部 — WebSocket 会话处理
-Awaitable<void> HttpServer::handleWebSocket(tcp::socket socket, ...);
+Awaitable<void> handleWebSocket(shared_ptr<GenericConnection<SocketType>> conn, ...);
 ```
 
 ### 5.3 协程执行流程
@@ -424,20 +426,23 @@ Awaitable<void> HttpServer::handleWebSocket(tcp::socket socket, ...);
 ```
 io_context.run()
     │
-    ├── co_spawn(acceptLoop)
+    ├── co_spawn(acceptLoop)          ← 每个 worker loop 各一个（SO_REUSEPORT）
     │       │
     │       ├── co_await acceptor.async_accept()  ──→ 新连接
     │       │       │
     │       │       └── co_spawn(handleSession)
     │       │               │
-    │       │               ├── co_await http::async_read()   ──→ 读取请求
-    │       │               ├── middlewarePipeline.execute()   ──→ 中间件链
-    │       │               │       ├── co_await next(req)    ──→ 洋葱模型
-    │       │               │       └── router.dispatch(req)  ──→ 路由分发
+    │       │               ├── co_await socket.async_read_some()  ──→ 读取原始数据
+    │       │               ├── picohttpparser 解析请求（零拷贝 string_view）
+    │       │               ├── dispatchSync(req)                  ──→ 同步快速路径
+    │       │               │   └── 有值？直接返回（零协程帧）
+    │       │               ├── middlewarePipeline.execute()        ──→ 中间件链
+    │       │               │       ├── co_await next(req)         ──→ 洋葱模型
+    │       │               │       └── router.dispatch(req)       ──→ 路由分发
     │       │               │               └── co_await handler(req)
-    │       │               └── co_await http::async_write()  ──→ 发送响应
+    │       │               └── co_await async_write(FixedBuffer)  ──→ 单次系统调用发送
     │       │
-    │       └── 循环接受下一个连接
+    │       └── 循环接受下一个连接（keep-alive 复用 readBuf）
     │
     └── io_context 调度所有协程
 ```
@@ -546,7 +551,7 @@ static bool matchParamPath(
 2. 逐段比较：普通段要求完全相等，`{name}` 段提取参数值
 3. 使用 `string_view` 避免中间字符串分配
 
-### 6.4 同步路由自动包装
+### 6.4 同步路由快速路径（零协程帧）
 
 ```cpp
 // 用户写同步处理器
@@ -554,15 +559,30 @@ router.get("/api/status", [](const HttpRequest&) -> HttpResponse {
     return HttpResponse::ok("ok");
 });
 
-// 框架内部自动包装为协程
-void Router::route(HttpMethod method, const std::string& path, SyncRouteHandler handler)
+// 框架内部：同步 handler 只存 syncHandler，不创建 asyncHandler wrapper
+struct RouteEntry
 {
-    route(method, path, [handler = std::move(handler)](const HttpRequest& req)
-                            -> Awaitable<HttpResponse> {
-        co_return handler(req);
-    });
+    RouteHandler asyncHandler;              // 协程处理器（可选）
+    std::optional<SyncRouteHandler> syncHandler;  // 同步处理器（可选）
+};
+
+// dispatch 时优先走同步快速路径
+std::optional<HttpResponse> Router::dispatchSync(HttpRequest& req)
+{
+    auto* entry = resolveRoute(req);
+    if (entry && entry->syncHandler)
+    {
+        return (*entry->syncHandler)(req);  // 零协程帧，直接调用返回
+    }
+    return std::nullopt;  // 需要 fallback 到 co_await dispatch()
 }
+
+// HttpSessionImpl 主路径：
+// 1. 先尝试 dispatchSync()，有值直接发送（零协程帧开销）
+// 2. nullopt 时 fallback 到 co_await dispatch()（经中间件链）
 ```
+
+同步快速路径节省约 40-130ns/req 的协程帧分配开销。`dispatch()` 内部也优先检查 `syncHandler`，有值时 `co_return syncHandler(req)` 跳过 `co_await asyncHandler(req)`。
 
 ### 6.5 HICAL_ROUTE 宏
 
@@ -605,11 +625,11 @@ class MiddlewarePipeline
 {
     std::vector<MiddlewareHandler> middlewares_;
 
-    Awaitable<HttpResponse> execute(const HttpRequest& req,
+    Awaitable<HttpResponse> execute(HttpRequest& req,
                                     RouteHandler finalHandler)
     {
         // 从最内层（finalHandler）开始，向外逐层包裹中间件
-        MiddlewareNext current = [&finalHandler](const HttpRequest& r)
+        MiddlewareNext current = [&finalHandler](HttpRequest& r)
                                      -> Awaitable<HttpResponse> {
             co_return co_await finalHandler(r);
         };
@@ -618,7 +638,7 @@ class MiddlewarePipeline
         for (auto it = middlewares_.rbegin(); it != middlewares_.rend(); ++it)
         {
             auto& mw = *it;
-            current = [&mw, next = std::move(current)](const HttpRequest& r)
+            current = [&mw, next = std::move(current)](HttpRequest& r)
                           -> Awaitable<HttpResponse> {
                 co_return co_await mw(r, next);
             };
@@ -917,75 +937,88 @@ class GenericConnection : public TcpConnection,
 ### 11.3 写队列与 Scatter-Gather
 
 ```cpp
-// 写队列使用多态节点，支持内存数据和文件数据
-std::deque<std::shared_ptr<WriteNode>> writeQueue_;
+// 写队列使用标签分发的 WriteEntry（去虚函数化快速路径）
+struct WriteEntry
+{
+    enum class Type : uint8_t { hMemory, hNode };
 
-// 发送内存数据 → 加入写队列
+    Type type;
+    std::shared_ptr<std::string> memData; // hMemory 时有效（零虚函数开销）
+    std::shared_ptr<WriteNode> node;      // hNode 时有效（PmrBuffer/File 慢路径）
+
+    static WriteEntry fromMemory(std::shared_ptr<std::string> data);
+    static WriteEntry fromNode(std::shared_ptr<WriteNode> n);
+};
+
+std::deque<WriteEntry> writeQueue_;  // alignas(64) 消除 false sharing
+
+// 发送内存数据 → 快速路径，直接存 shared_ptr<string>
 void send(const char* data, size_t len)
 {
-    enqueueNode(std::make_shared<MemoryWriteNode>(
+    enqueueEntry(WriteEntry::fromMemory(
         std::make_shared<std::string>(data, len)));
 }
 
-// 发送文件数据 → 加入写队列
+// 发送文件数据 → 慢路径，走 WriteNode 多态
 void sendFile(const std::filesystem::path& path, int64_t offset, int64_t length)
 {
-    enqueueNode(std::make_shared<FileWriteNode>(path, offset, length));
+    enqueueEntry(WriteEntry::fromNode(
+        std::make_shared<FileWriteNode>(path, offset, length)));
 }
 
-// 写循环：按节点类型分批处理
+// 写循环：按类型批量处理
 Awaitable<void> writeLoop()
 {
-    // MemoryWriteNode: Scatter-Gather I/O 批量发送
+    // Memory 快速路径: Scatter-Gather I/O 批量发送
     std::vector<boost::asio::const_buffer> buffers;
-    for (auto& node : memoryBatch)
+    for (auto& entry : memoryBatch)
     {
-        buffers.emplace_back(static_cast<MemoryWriteNode&>(*node).buffer());
+        buffers.emplace_back(entry.memData->data(), entry.memData->size());
     }
     co_await boost::asio::async_write(socket_, buffers, use_awaitable);
 
-    // FileWriteNode: 异步分块读取 + 发送（64KB 每块）
-    co_await sendFileNode(fileNode);
+    // File 慢路径: 异步分块读取 + 发送（64KB 每块）
+    co_await sendFileNode(fileEntry.node);
 }
 ```
 
+- **标签分发去虚函数化**：`WriteEntry::hMemory` 快速路径直接存 `shared_ptr<string>`，消除热路径上的虚函数调用开销；`hNode` 保留多态仅用于低频的文件/PmrBuffer 场景
 - **队列化写入**：避免并发写入冲突
-- **多态节点**：`MemoryWriteNode`（内存缓冲区）和 `FileWriteNode`（文件路径+偏移+长度）
-- **Scatter-Gather**：连续的内存节点合并为一次 `async_write` 系统调用
+- **Scatter-Gather**：连续的内存条目合并为一次 `async_write` 系统调用
 - **异步文件发送**：`sendFileNode()` 使用 `boost::asio::random_access_file`（`BOOST_ASIO_HAS_FILE`）异步读取，无此特性时回退到 `std::ifstream`
-- **高水位标记**：队列超过 64MB 时触发回调，防止内存无限增长
+- **`alignas(64)` 缓存行隔离**：写队列和相关原子变量做缓存行对齐，消除多线程 false sharing
 
 ---
 
 ## 12. 线程模型
 
-### 12.1 1 Thread : 1 io_context
+### 12.1 SO_REUSEPORT 多 Acceptor（1 Thread : 1 io_context）
+
+每个 worker loop 拥有独立的 acceptor，accept 与 I/O 在同一线程完成，零跨线程调度：
 
 ```
-┌─────────────────────────────────────────────┐
-│                 主线程                        │
-│  ┌──────────────────────┐                    │
-│  │  Main io_context      │                    │
-│  │  - acceptLoop()       │ ← 接受新连接       │
-│  │  - 分发到 IO 线程      │                    │
-│  └──────────────────────┘                    │
-├─────────────────────────────────────────────┤
-│                IO 线程池                      │
-│                                              │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐   │
-│  │ Thread 1 │  │ Thread 2 │  │ Thread N │   │
-│  │io_ctx #1 │  │io_ctx #2 │  │io_ctx #N │   │
-│  │          │  │          │  │          │   │
-│  │ conn A   │  │ conn C   │  │ conn E   │   │
-│  │ conn B   │  │ conn D   │  │ conn F   │   │
-│  └──────────┘  └──────────┘  └──────────┘   │
-│                                              │
-│  每个线程独立运行自己的 io_context              │
-│  线程间无共享状态，无锁竞争                     │
-└─────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────┐
+│          SO_REUSEPORT 多 Acceptor 架构            │
+│                                                  │
+│  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐
+│  │  Worker #1   │ │  Worker #2   │ │  Worker #N   │
+│  │  io_ctx #1   │ │  io_ctx #2   │ │  io_ctx #N   │
+│  │              │ │              │ │              │
+│  │  acceptor #1 │ │  acceptor #2 │ │  acceptor #N │
+│  │  ↓ accept    │ │  ↓ accept    │ │  ↓ accept    │
+│  │  conn A      │ │  conn C      │ │  conn E      │
+│  │  conn B      │ │  conn D      │ │  conn F      │
+│  └──────────────┘ └──────────────┘ └──────────────┘
+│                                                  │
+│  内核通过 SO_REUSEPORT 在多 acceptor 间负载均衡    │
+│  每个连接从 accept 到 I/O 全生命周期在同一线程      │
+│  线程间无共享状态，无跨线程 dispatch               │
+│                                                  │
+│  Windows 自动回退为单 acceptor + Round-Robin 分发  │
+└─────────────────────────────────────────────────┘
 ```
 
-### 12.2 Round-Robin 连接分发
+### 12.2 EventLoopPool 与连接分发
 
 ```cpp
 class EventLoopPool
@@ -1000,7 +1033,8 @@ class EventLoopPool
 };
 ```
 
-新连接通过 Round-Robin 分配到 IO 线程，确保负载均衡。
+- **Linux / macOS**：SO_REUSEPORT 模式下，每个 worker loop 运行独立 `acceptLoop()`，内核自动在多个 acceptor 间做负载均衡，`EventLoopPool::getNextLoop()` 不参与 accept 分发。
+- **Windows**：无 SO_REUSEPORT，回退为单 acceptor + Round-Robin 分发到 worker loop。
 
 ### 12.3 线程安全策略
 
@@ -1247,6 +1281,163 @@ cmake -B build -DHICAL_WITH_OPENAPI=OFF
 server.setErrorHandler([](const std::exception& e, const HttpRequest& req) {
     return HttpResponse::json({{"error", e.what()}, {"path", std::string(req.path())}});
 });
+```
+
+---
+
+## 18. WebSocket 增强设计
+
+### 18.1 自研 WebSocket 栈（RFC 6455 完整实现）
+
+Hical 使用完全自研的 WebSocket 实现（不依赖 Beast），核心模块：
+
+| 组件                  | 文件              | 职责                                                             |
+| --------------------- | ----------------- | ---------------------------------------------------------------- |
+| `WsFrame`             | `WsFrame.h`       | 帧解析/构造：data/control 帧统一、客户端掩码强制、RSV 位验证     |
+| `WsHandshake`         | `WsHandshake.h`   | 握手协议：`Sec-WebSocket-Key`/`Accept` 计算、扩展/子协议协商     |
+| `WsDeflate`           | `WsDeflate.h/cpp` | permessage-deflate 压缩（RFC 7692）、pimpl 封装 zlib、zip bomb 防护 |
+| `WebSocketSession`    | `WebSocket.h/cpp` | 会话管理：发送/接收/心跳/子协议/上下文存储                       |
+| `WsHub`               | `WsHub.h/cpp`     | 连接管理器：房间/广播/单播，线程安全                             |
+
+### 18.2 WsOptions 配置
+
+```cpp
+struct WsOptions
+{
+    // CSWSH 防护
+    std::unordered_set<std::string> allowedOrigins;
+
+    // permessage-deflate 压缩
+    bool enableCompression = false;
+    int serverMaxWindowBits = 15;
+    int clientMaxWindowBits = 15;
+    bool serverNoContextTakeover = false;
+
+    // 心跳保活
+    std::chrono::seconds pingInterval {0};   // 0 = 禁用
+    uint32_t maxMissedPongs = 3;
+    std::string pingPayload;                  // 最大 125 字节
+
+    // 子协议协商
+    std::vector<std::string> subprotocols;
+};
+```
+
+### 18.3 WebSocketSession 关键 API
+
+| 方法                     | 返回值                               | 说明                                   |
+| ------------------------ | ------------------------------------ | -------------------------------------- |
+| `send(msg)`              | `Awaitable<void>`                    | 发送文本帧                             |
+| `sendBinary(data)`       | `Awaitable<void>`                    | 发送二进制帧                           |
+| `receive()`              | `Awaitable<std::string>`             | 接收文本消息（向后兼容）               |
+| `receiveMessage()`       | `Awaitable<optional<WsMessage>>`     | 接收 typed 消息（区分 Text/Binary）    |
+| `sendPing(payload)`      | `Awaitable<void>`                    | 手动发送 Ping                          |
+| `closeAsync(code, reason)` | `Awaitable<void>`                  | 优雅关闭（RFC 6455 Close 帧）          |
+| `setContext<T>(ptr)`     | `void`                               | 设置 per-connection 类型化上下文       |
+| `getContext<T>()`        | `shared_ptr<T>`                      | 获取上下文                             |
+| `subprotocol()`          | `const std::string&`                 | 协商后的子协议                         |
+| `lastPongTime()`         | `chrono::steady_clock::time_point`   | 最后一次收到 Pong 的时间               |
+
+### 18.4 WsHub 广播管理器
+
+线程安全的连接注册与广播中心，适用于聊天室、实时推送等多连接场景：
+
+```
+┌────────────────────────────────────────────────────┐
+│                     WsHub                           │
+│                                                    │
+│  m_connections: map<WsConnectionId, weak_ptr>      │
+│  m_rooms: map<string, vector<RoomMember>>          │
+│                                                    │
+│  add(session) → id        remove(id)               │
+│  join(id, room)           leave(id, room)          │
+│  broadcast(room, msg)     broadcastBinary(room, d) │
+│  broadcastAll(msg)        sendTo(id, msg)          │
+│  roomSize(room)           connectionCount()        │
+│                                                    │
+│  内部使用 shared_mutex，广播通过 coSpawn 到各连接   │
+│  所属 executor 实现跨线程安全写入                    │
+│  存储 weak_ptr 不延长 session 生命周期              │
+└────────────────────────────────────────────────────┘
+```
+
+**设计要点**：
+- **weak_ptr 存储**：Hub 不延长 WebSocketSession 生命周期，连接断开后自然失效
+- **coSpawn 跨线程广播**：每条广播消息通过 `coSpawn` 投递到目标连接所属的 executor，保证写入线程安全
+- **RoomMember 缓存行优化**：冗余存储 `weak_ptr` 消除广播时的 `m_connections.find(id)` 指针追踪
+- **用户需在 onDisconnect 中调用 `remove(id)`**：Hub 不自动清理，dead entries 在广播时通过 `weak_ptr::lock()` 跳过
+
+### 18.5 消息类型回调
+
+```cpp
+// 传统文本回调（向后兼容）
+using WsMessageCallback = std::function<Awaitable<void>(const std::string&, WebSocketSession&)>;
+
+// 类型化回调（区分 Text/Binary），优先于 onMessage
+using WsTypedMessageCallback = std::function<Awaitable<void>(const WsMessage&, WebSocketSession&)>;
+
+struct WsMessage
+{
+    WsOpcode type = WsOpcode::hText;  // hText 或 hBinary
+    std::string data;
+};
+```
+
+`WsTypedMessageCallback` 存储在 `WsRoute::onTypedMessage` 字段中，运行时优先于传统 `onMessage` 调用。当前通过内部设置（非公开 `ws()` 重载），用户如需区分二进制消息可使用 `receiveMessage()` 循环。
+
+---
+
+## 19. HTTP 热路径优化
+
+### 19.1 零拷贝请求解析
+
+```
+TCP 读取 → readBuf (连接级复用，keep-alive 不重新分配)
+              │
+              ▼
+        picohttpparser (栈上 phr_header[64]，零堆分配)
+              │
+              ▼
+        NativeRequest (string_view 引用 readBuf，零拷贝)
+              │
+              ▼
+        HttpRequest 封装 (惰性解析：jsonBody/queryParam/cookie 首次访问才解析)
+```
+
+### 19.2 单缓冲区响应序列化
+
+```
+HttpResponse
+    │
+    ▼
+NativeResponse::serializeHeadTo(FixedBuffer<512>)   ← 栈上缓冲区
+    │  状态行 + headers（200 OK 预计算）
+    ▼
+head + body 合并为单次 async_write                    ← 一次系统调用
+```
+
+### 19.3 HTTP Date 头 `thread_local` 缓存
+
+RFC 7231 要求有 Date 响应头。Hical 使用 `thread_local` 每秒更新一次格式化后的 Date 字符串，热路径零格式化开销：
+
+```cpp
+thread_local std::string cachedDate;
+thread_local time_t cachedSecond = 0;
+// 每次响应序列化时：秒数未变 → 直接复用 cachedDate
+```
+
+### 19.4 HTTP Pipelining 优化
+
+- **parse-before-read 快速路径**：keep-alive 连接的 readBuf 中可能已有下一个完整请求（TCP 粘包），先尝试解析再决定是否 `async_read_some`
+- **延迟 memmove**：只在 readBuf 前半空间耗尽时才 memmove 紧凑数据，而非每次请求后立即移动
+
+### 19.5 同步中间件零协程帧
+
+`buildOptimizedChain()` 算法将连续的 `SyncBeforeHandler` / `SyncAfterHandler` 合并为单个协程帧：
+
+```
+10 层同步中间件 = 1 次协程帧堆分配（而非 10 次）
+性能：仅比无中间件低 2.1%
 ```
 
 ---

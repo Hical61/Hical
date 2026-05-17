@@ -241,7 +241,7 @@ curl "http://localhost:8080/api/search?keyword=hello&page=1"
 ### 日志中间件
 
 ```cpp
-auto logger = [](const HttpRequest& req, MiddlewareNext next)
+auto logger = [](HttpRequest& req, MiddlewareNext next)
                   -> Awaitable<HttpResponse> {
     auto start = std::chrono::steady_clock::now();
 
@@ -265,7 +265,7 @@ server.use(logger);
 ### 认证中间件
 
 ```cpp
-auto auth = [](const HttpRequest& req, MiddlewareNext next)
+auto auth = [](HttpRequest& req, MiddlewareNext next)
                 -> Awaitable<HttpResponse> {
     // 放行公开路径
     if (req.path() == "/" || req.path() == "/api/status")
@@ -298,7 +298,7 @@ server.use(auth);
 ### CORS 中间件
 
 ```cpp
-auto cors = [](const HttpRequest& req, MiddlewareNext next)
+auto cors = [](HttpRequest& req, MiddlewareNext next)
                 -> Awaitable<HttpResponse> {
     // OPTIONS 预检请求
     if (req.method() == HttpMethod::hOptions)
@@ -322,7 +322,7 @@ server.use(cors);
 ### 异常处理中间件
 
 ```cpp
-auto errorHandler = [](const HttpRequest& req, MiddlewareNext next)
+auto errorHandler = [](HttpRequest& req, MiddlewareNext next)
                         -> Awaitable<HttpResponse> {
     try
     {
@@ -638,7 +638,7 @@ int main(int argc, char* argv[])
         // ========== 中间件 ==========
 
         // 异常处理（最外层）
-        server.use([](const HttpRequest& req, MiddlewareNext next)
+        server.use([](HttpRequest& req, MiddlewareNext next)
                        -> Awaitable<HttpResponse> {
             try
             {
@@ -652,7 +652,7 @@ int main(int argc, char* argv[])
         });
 
         // 日志
-        server.use([](const HttpRequest& req, MiddlewareNext next)
+        server.use([](HttpRequest& req, MiddlewareNext next)
                        -> Awaitable<HttpResponse> {
             std::cout << httpMethodToString(req.method())
                       << " " << req.path() << std::endl;
@@ -662,7 +662,7 @@ int main(int argc, char* argv[])
         });
 
         // CORS
-        server.use([](const HttpRequest& req, MiddlewareNext next)
+        server.use([](HttpRequest& req, MiddlewareNext next)
                        -> Awaitable<HttpResponse> {
             auto res = co_await next(req);
             res.setHeader("Access-Control-Allow-Origin", "*");
@@ -1089,7 +1089,7 @@ int main()
     auto api = router.group("/api/v1");
 
     // 组级中间件（仅对组内路由生效）
-    api.use([](const HttpRequest& req, MiddlewareNext next) -> Awaitable<HttpResponse> {
+    api.use([](HttpRequest& req, MiddlewareNext next) -> Awaitable<HttpResponse> {
         auto token = req.header("Authorization");
         if (token.empty())
         {
@@ -1248,8 +1248,8 @@ int main()
 {
     // 配置日志
     auto& logger = Logger::instance();
-    logger.setLevel(LogLevel::EInfo);          // 最低输出级别
-    logger.setFlushLevel(LogLevel::EWarn);      // Warn 及以上自动刷盘
+    logger.setLevel(LogLevel::hInfo);          // 最低输出级别
+    logger.setFlushLevel(LogLevel::hWarn);      // Warn 及以上自动刷盘
     logger.addSink(std::make_shared<StderrSink>());
 
     // std::format 风格
@@ -1288,8 +1288,11 @@ int main()
     logger.addSink(fileSink);
 
     // 异步文件日志（推荐高吞吐场景）
-    auto asyncSink = std::make_shared<AsyncFileSink>("./logs/async.log", 100 * 1024 * 1024, 10);
-    logger.addSink(asyncSink);
+    AsyncFileSink::Options asyncOpts;
+    asyncOpts.file.basePath = "./logs/async.log";
+    asyncOpts.file.maxFileSize = 100 * 1024 * 1024;
+    asyncOpts.file.maxFiles = 10;
+    logger.addSink(std::make_shared<AsyncFileSink>(asyncOpts));
 
     HICAL_LOG_INFO("日志写入文件");
     return 0;
@@ -1309,7 +1312,7 @@ int main()
     // 创建专用通道
     auto& registry = LogChannelRegistry::instance();
     auto accessChannel = std::make_shared<LogChannel>("access");
-    accessChannel->setLevel(LogLevel::EInfo);
+    accessChannel->setLevel(LogLevel::hInfo);
     accessChannel->setFormatter(std::make_shared<JsonFormatter>());
     accessChannel->addSink(std::make_shared<FileSink>("./logs/access.log"));
     registry.add("access", accessChannel);
@@ -1526,10 +1529,13 @@ server.enableSsl("server.crt", "server.key");
 #include "core/Log.h"
 
 auto& logger = hical::Logger::instance();
-logger.setLevel(hical::LogLevel::EInfo);
+logger.setLevel(hical::LogLevel::hInfo);
 logger.addSink(std::make_shared<hical::StderrSink>());       // 控制台
-logger.addSink(std::make_shared<hical::AsyncFileSink>(       // 异步文件
-    "./logs/app.log", 100 * 1024 * 1024, 10));
+hical::AsyncFileSink::Options asyncOpts;
+asyncOpts.file.basePath = "./logs/app.log";
+asyncOpts.file.maxFileSize = 100 * 1024 * 1024;
+asyncOpts.file.maxFiles = 10;
+logger.addSink(std::make_shared<hical::AsyncFileSink>(asyncOpts));  // 异步文件
 ```
 
 推荐高吞吐场景使用 `AsyncFileSink`，开发环境使用 `StderrSink`。

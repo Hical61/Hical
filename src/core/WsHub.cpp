@@ -48,7 +48,7 @@ namespace hical
 		m_connections.erase(it);
 	}
 
-	void WsHub::join(WsConnectionId id, const std::string& room)
+	void WsHub::join(WsConnectionId id, std::string_view room)
 	{
 		std::unique_lock lock(m_mutex);
 
@@ -58,18 +58,23 @@ namespace hical
 			return;
 		}
 
-		it->second.rooms.insert(room);
-		m_rooms[room].push_back(RoomMember {id, it->second.session});
+		it->second.rooms.emplace(room);
+		m_rooms[std::string(room)].push_back(RoomMember {id, it->second.session});
 	}
 
-	void WsHub::leave(WsConnectionId id, const std::string& room)
+	void WsHub::leave(WsConnectionId id, std::string_view room)
 	{
 		std::unique_lock lock(m_mutex);
 
 		auto connIt = m_connections.find(id);
 		if (connIt != m_connections.end())
 		{
-			connIt->second.rooms.erase(room);
+			// C++20 异构查找仅支持 find/count/contains，erase 需 C++23 (P2077R3)
+			auto roomIt2 = connIt->second.rooms.find(room);
+			if (roomIt2 != connIt->second.rooms.end())
+			{
+				connIt->second.rooms.erase(roomIt2);
+			}
 		}
 
 		auto roomIt = m_rooms.find(room);
@@ -88,9 +93,9 @@ namespace hical
 		}
 	}
 
-	void WsHub::broadcast(const std::string& room, std::string_view message, WsConnectionId exclude)
+	void WsHub::broadcastImpl(std::string_view room, std::string_view payload, WsConnectionId exclude, bool isBinary)
 	{
-		auto msgPtr = std::make_shared<std::string>(message);
+		auto msgPtr = std::make_shared<std::string>(payload);
 
 		std::shared_lock lock(m_mutex);
 
@@ -113,49 +118,32 @@ namespace hical
 			if (sp && sp->isOpen())
 			{
 				coSpawn(sp->socket().get_executor(),
-						[sp, msgPtr]() -> Awaitable<void>
+						[sp, msgPtr, isBinary]() -> Awaitable<void>
 						{
 							if (sp->isOpen())
 							{
-								co_await sp->send(*msgPtr);
+								if (isBinary)
+								{
+									co_await sp->sendBinary(*msgPtr);
+								}
+								else
+								{
+									co_await sp->send(*msgPtr);
+								}
 							}
 						});
 			}
 		}
 	}
 
-	void WsHub::broadcastBinary(const std::string& room, std::string_view data, WsConnectionId exclude)
+	void WsHub::broadcast(std::string_view room, std::string_view message, WsConnectionId exclude)
 	{
-		auto dataPtr = std::make_shared<std::string>(data);
+		broadcastImpl(room, message, exclude, false);
+	}
 
-		std::shared_lock lock(m_mutex);
-
-		auto roomIt = m_rooms.find(room);
-		if (roomIt == m_rooms.end())
-		{
-			return;
-		}
-
-		for (const auto& member : roomIt->second)
-		{
-			if (member.id == exclude)
-			{
-				continue;
-			}
-
-			auto sp = member.session.lock();
-			if (sp && sp->isOpen())
-			{
-				coSpawn(sp->socket().get_executor(),
-						[sp, dataPtr]() -> Awaitable<void>
-						{
-							if (sp->isOpen())
-							{
-								co_await sp->sendBinary(*dataPtr);
-							}
-						});
-			}
-		}
+	void WsHub::broadcastBinary(std::string_view room, std::string_view data, WsConnectionId exclude)
+	{
+		broadcastImpl(room, data, exclude, true);
 	}
 
 	void WsHub::broadcastAll(std::string_view message, WsConnectionId exclude)
@@ -188,7 +176,8 @@ namespace hical
 
 	void WsHub::sendTo(WsConnectionId id, std::string_view message)
 	{
-		auto msgPtr = std::make_shared<std::string>(message);
+		// 单目标发送：直接 move string 进 lambda，省去 shared_ptr 控制块分配
+		auto msg = std::string(message);
 
 		std::shared_lock lock(m_mutex);
 
@@ -202,17 +191,17 @@ namespace hical
 		if (sp && sp->isOpen())
 		{
 			coSpawn(sp->socket().get_executor(),
-					[sp, msgPtr]() -> Awaitable<void>
+					[sp, msg = std::move(msg)]() -> Awaitable<void>
 					{
 						if (sp->isOpen())
 						{
-							co_await sp->send(*msgPtr);
+							co_await sp->send(msg);
 						}
 					});
 		}
 	}
 
-	size_t WsHub::roomSize(const std::string& room) const
+	size_t WsHub::roomSize(std::string_view room) const
 	{
 		std::shared_lock lock(m_mutex);
 
