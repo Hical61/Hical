@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.6.2] - 2026-05-18
+
+### Added
+- **WsHub 广播管理器**（`WsHub.h/cpp`）：连接注册/移除、房间分组、广播（`shared_mutex` + `weak_ptr`，跨线程 `coSpawn` 安全写入）
+- **WebSocket Binary 消息**：`sendBinary()` / `receiveMessage()` 支持 Text/Binary 类型区分
+- **WebSocket 写串行化**：`acquireWrite()` / `releaseWrite()` 防止 Ping 与消息并发 `async_write`
+- **WebSocket 自定义关闭码**：`closeAsync(code, reason)` + 连接上下文 `setContext()` / `getContext<T>()`
+- **WebSocket 心跳**：`WsOptions` 增加心跳间隔配置，集成 Ping 协程
+- **WebSocket 子协议协商**：`negotiateSubprotocol()` 服务端优先匹配 + `Sec-WebSocket-Protocol` 响应头
+- **WebSocket 参数路由**：`findWsRoute()` 返回 `WsRouteMatch` 支持 `{param}` 路径参数
+
+### Changed
+- **WebSocket 代码消重 + 零分配优化**：`receive()` / `receiveMessage()` 合并为 `receiveInternal()`，消除 ~150 行重复；`WsHub` broadcast 合并为 `broadcastImpl`，接口统一改 `string_view`；透明哈希应用于 `allowedOrigins` / `rooms`；握手 key 拼接改栈上 `char[64]`；`sendTo()` 单目标用 `string move` 替代 `shared_ptr` 控制块分配
+- **vcpkg ports 完善**：picohttpparser 声明为正式依赖（对应 vcpkg#51743），新增 `ports/picohttpparser/` overlay port，移除 bundled 构建
+
+### Performance
+- **GenericConnection WriteEntry 去虚函数化**：内联 `shared_ptr<string>` 消除三层间接（shared_ptr→control block→WriteNode→虚函数），字段按访问频率重排 + `alignas(64)` 隔离 `lastActiveTimeMs_`
+- **MemoryPool TrackedResource**：四个 atomic 计数器各自 `alignas(64)` 消除 false sharing，新增 `HICAL_ENABLE_MEMORY_TRACKING` 条件编译（关闭时零开销）
+- **Middleware MiddlewareTimingStats**：热计数器 `alignas(64)` + 冷数据移至末尾
+
+### Fixed
+- **AsioEventLoop::stop() 数据竞争**：`quit_.exchange(true)` 一次性门卫，确保 `workGuard_.reset()` / `stop()` 只执行一次
+- **TSan 检出的 3 处数据竞争**：`threadId_` 改 `std::atomic`；`AsioTimer::cancel()` post 到 executor 线程执行；`TcpServer::stop()` acceptor 关闭 post 到 `baseLoop_` 线程
+- **`HICAL_ENABLE_MEMORY_TRACKING` CMake 选项缺失**：补充 `option(默认 ON)` + PUBLIC compile definition，修复 4 个依赖 stats 的测试断言失败
+- **`WsDeflate.cpp` 缺少 `#include <cstdint>`**（PR #7）
+
 ## [2.6.1] - 2026-05-13
 
 ### Added
@@ -311,7 +337,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Multipart Part 数量上限（DoS 防护）
 - Session ID 使用密码学安全的随机数生成
 
-[Unreleased]: https://github.com/Hical61/Hical/compare/v2.6.1...HEAD
+[Unreleased]: https://github.com/Hical61/Hical/compare/v2.6.2...HEAD
+[2.6.2]: https://github.com/Hical61/Hical/compare/v2.6.1...v2.6.2
 [2.6.1]: https://github.com/Hical61/Hical/compare/v2.6.0...v2.6.1
 [2.6.0]: https://github.com/Hical61/Hical/compare/v2.5.2...v2.6.0
 [2.5.2]: https://github.com/Hical61/Hical/compare/v2.5.1...v2.5.2
