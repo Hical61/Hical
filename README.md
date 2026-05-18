@@ -156,6 +156,11 @@ target_link_libraries(my_app PRIVATE hical::hical_core)
 - [Performance Analysis Guide](docs/perf-analysis-guide.md)
 - [Contributing](CONTRIBUTING.md)
 
+## Contact
+
+- Email: hical0601@gmail.com
+- GitHub Issues: [Report a problem](https://github.com/Hical61/Hical/issues)
+
 ## License
 
 [MIT](LICENSE)

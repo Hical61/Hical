@@ -156,6 +156,11 @@ target_link_libraries(my_app PRIVATE hical::hical_core)
 - [性能分析实战指南](docs/perf-analysis-guide.md)
 - [贡献指南](CONTRIBUTING.md)
 
+## 联系方式
+
+- 邮箱：hical0601@gmail.com
+- GitHub Issues：[提交问题](https://github.com/Hical61/Hical/issues)
+
 ## 许可证
 
 [MIT](LICENSE)
