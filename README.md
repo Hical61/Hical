@@ -9,29 +9,35 @@
 [![GitHub stars](https://img.shields.io/github/stars/Hical61/Hical?style=flat)](https://github.com/Hical61/Hical/stargazers)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
-**Hical** is a modern C++20/26 high-performance web framework built on Boost.Asio with a native HTTP/WebSocket stack, leveraging C++26 reflection and PMR memory pooling for maximum throughput.
+**Hical** is a modern C++20/26 high-performance web framework built on Boost.Asio with a native HTTP/WebSocket stack (picohttpparser + self-developed WebSocket), leveraging C++26 reflection and PMR memory pooling for maximum throughput.
+
+> **Status**: Stable — production-ready, follows [Semantic Versioning](https://semver.org/).
 
 English | [简体中文](README_CN.md)
 
-## Features
+## Why Hical?
 
-- **Native stack** — picohttpparser HTTP parsing + self-developed WebSocket (RFC 6455), performance on par with Drogon/Cinatra
-- **C++26 Reflection** — Automatic route registration + JSON serialization; C++20 macro fallback
-- **Coroutine async I/O** — `asio::awaitable<T>` + `co_await`, clean and efficient
+| Dimension | Hical | Drogon | Cinatra | Crow / oatpp |
+|-----------|-------|--------|---------|--------------|
+| C++ Standard | C++20/26 | C++17 | C++20 | C++11/14 |
+| Reflection / Auto-routing | Native C++26 reflection + C++20 macro dual-track | Macro registration | Macro registration | Manual registration |
+| Memory Model | PMR three-tier pool (zero heap alloc per request) | Traditional allocator | Traditional allocator | Traditional allocator |
+| HTTP Parsing | picohttpparser zero-copy (stack-based 64 headers) | Custom parser | picohttpparser | Custom / http-parser |
+| WebSocket | Self-developed + permessage-deflate + Hub broadcast | Built-in | Built-in | Third-party |
+| Coroutine Model | `asio::awaitable<T>` native coroutines | Custom coroutines | `asio::awaitable` | None / thread pool |
+
+## Core Features
+
+- **Native network stack** — picohttpparser zero-copy HTTP parsing + self-developed WebSocket (RFC 6455), zero heap allocation
+- **C++26 Reflection** — Automatic route registration + JSON serialization; seamless C++20 macro fallback
+- **Coroutine async I/O** — `asio::awaitable<T>` + `co_await`, sync fast path with zero coroutine frame overhead
 - **PMR three-tier pool** — Global synchronized / thread-local lock-free / request-level monotonic buffer
-- **High-performance routing** — Static route O(1) hash lookup, sync fast path with zero coroutine frame overhead
-- **Onion middleware** — Async + sync dual-mode middleware, `SyncMiddleware` with zero coroutine frame
-- **WebSocket** — permessage-deflate compression, Origin whitelist, fragment reassembly
-- **SSL/TLS** — Template-based `GenericConnection`, compile-time branching
-- **SO_REUSEPORT** — Multi-acceptor, accept and I/O on same thread
-- **RouteGroup** — Prefix grouping + group-level middleware + nesting
-- **CORS** — Built-in cross-origin middleware with automatic preflight
-- **Cookie / Session** — RFC 6265 + session fixation prevention + atomic migration
-- **Static files** — ETag/304 + async I/O + PathCache
-- **Multipart** — RFC 7578 file upload with DoS protection
-- **Logging** — 6-level, async double-buffered, named channels, dynamic level management
-- **OpenAPI 3.0** — Auto-generate docs from macros, one-call Swagger UI setup
-- **Database middleware** — Optional, coroutine connection pool + auto-transaction + slow query detection (Boost.MySQL)
+- **Full-featured middleware** — Onion model, CORS, Session, Logging, OpenAPI 3.0 doc generation
+- **WebSocket** — permessage-deflate compression, Hub broadcast, subprotocol negotiation, heartbeat
+- **Database middleware** — Coroutine connection pool + auto-transaction + slow query detection (Boost.MySQL)
+- **Production-ready** — SSL/TLS, SO_REUSEPORT multi-acceptor, static file ETag/304, Docker deployment
+
+> Full feature list in [Architecture](docs/architecture.md).
 
 ## Quick Start
 
@@ -66,12 +72,14 @@ curl http://localhost:8080/
 
 ## Performance
 
-Native HTTP/WebSocket stack with performance on par with Drogon, Cinatra, and other leading C++ frameworks. See [Performance Report](docs/performance_report.md).
+Native HTTP/WebSocket stack with zero heap allocation on critical paths, sync fast path route dispatch ~40-130 ns/req.
 
 ```bash
-# Docker one-click benchmark
-docker compose -f docker-compose.bench.yml up
+# Docker one-click comparative benchmark (Hical vs Drogon / Cinatra / Crow / Gin / Actix etc.)
+cd benchmark && docker compose up
 ```
+
+> Actual QPS varies by hardware — run the benchmark on your target environment for real numbers. See [Performance Report](docs/performance_report.md).
 
 ## Requirements
 
@@ -107,6 +115,13 @@ Optional modules:
 cmake -B build -DHICAL_WITH_DATABASE=ON ...    # Database middleware
 cmake -B build -DHICAL_WITH_OPENAPI=OFF ...    # Disable OpenAPI
 cmake -B build -DHICAL_ENABLE_REFLECTION=ON ...# C++26 Reflection
+```
+
+### Docker
+
+```bash
+# Production deployment
+docker compose -f docker/prod/docker-compose.yml up -d
 ```
 
 ## Installation
@@ -154,7 +169,19 @@ target_link_libraries(my_app PRIVATE hical::hical_core)
 - [Integration Guide](docs/integration_guide.md)
 - [Performance Report](docs/performance_report.md)
 - [Performance Analysis Guide](docs/perf-analysis-guide.md)
+- [Changelog](CHANGELOG.md)
 - [Contributing](CONTRIBUTING.md)
+
+## Contributing
+
+Contributions are welcome! Basic workflow:
+
+1. Fork this repository
+2. Create a feature branch (`git checkout -b feat/my-feature`)
+3. Ensure `clang-format` checks and tests pass
+4. Submit a Pull Request
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 
 ## Contact
 

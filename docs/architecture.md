@@ -190,7 +190,7 @@ HttpServer
 │   └── RouteGroup (路由前缀分组)
 ├── MiddlewarePipeline (中间件管道)
 │   └── Cors (makeCorsMiddleware)
-├── HttpRequest / HttpResponse (自研 HTTP 栈封装)
+├── HttpRequest / HttpResponse (原生 HTTP 栈封装)
 ├── WebSocketSession (WebSocket)
 ├── SslContext (SSL/TLS 配置)
 └── Coroutine (协程工具)
@@ -1089,7 +1089,7 @@ struct NetworkError
 | 决策                   | 选择                                   | 理由                                                           |
 | ---------------------- | -------------------------------------- | -------------------------------------------------------------- |
 | 协程模型               | `asio::awaitable<T>`                   | 与 Boost.Asio 原生集成，零额外开销，代码线性化                 |
-| HTTP 解析器            | picohttpparser（自研栈）               | 轻量零拷贝，性能优于 Beast                                     |
+| HTTP 解析器            | picohttpparser（原生栈集成）           | 轻量零拷贝，性能优于 Beast                                     |
 | 内存管理               | C++17 PMR 三层池                       | 标准化接口，高并发低碎片，与 Boost.JSON 天然兼容               |
 | SSL 实现               | 模板化 `GenericConnection<SocketType>` | 编译期分支消除，零运行时开销                                   |
 | 后端抽象               | C++20 Concepts                         | 编译期约束，不引入虚函数开销，面向未来可扩展                   |
@@ -1442,4 +1442,4 @@ thread_local time_t cachedSecond = 0;
 
 ---
 
-> 更多信息：[API 文档](api_reference.md) | [快速上手](quickstart.md) | [性能报告](performance_report.md)
+> 更多信息：[API 文档](api_reference.md) | [快速上手](quickstart_cn.md) | [性能报告](performance_report.md)

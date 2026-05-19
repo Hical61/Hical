@@ -1,6 +1,6 @@
 # Hical 性能测试报告
 
-> 自研 HTTP/WebSocket 栈性能分析、PMR 内存池基准测试、Docker 容器化压测与框架对比
+> 原生 HTTP/WebSocket 网络栈性能分析、PMR 内存池基准测试、Docker 容器化压测与框架对比
 
 ---
 
@@ -47,9 +47,9 @@
 
 ## 2. 核心性能架构（v2.6）
 
-v2.6.0 将 HTTP 解析/序列化和 WebSocket 全面替换为自研实现，性能大幅提升。以下是关键优化点：
+v2.6.0 将 HTTP 解析/序列化和 WebSocket 全面替换为原生实现（picohttpparser + 自研 WebSocket），性能大幅提升。以下是关键优化点：
 
-### 2.1 自研 HTTP 栈
+### 2.1 原生 HTTP 栈
 
 | 组件        | 优化前 (Beast)          | 优化后 (自研)                              | 收益                 |
 | ----------- | ----------------------- | ------------------------------------------ | -------------------- |
@@ -603,4 +603,4 @@ curl -X POST -d '{"hello":"world"}' http://localhost:8080/api/echo
 
 ---
 
-> 更多信息：[架构设计](architecture.md) | [API 文档](api_reference.md) | [快速上手](quickstart.md)
+> 更多信息：[架构设计](architecture.md) | [API 文档](api_reference.md) | [快速上手](quickstart_cn.md)

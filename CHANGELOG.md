@@ -52,7 +52,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **新增 zlib 依赖**：WebSocket permessage-deflate 压缩需要 zlib
 
 ### Added
-- **自研 HTTP 解析栈**：集成 picohttpparser 替代 Beast HTTP parser（CPU 占比 10% → 0.08%），零拷贝 `NativeRequest`（`string_view` 引用连接级 `readBuf`，栈上 `RequestHeaders` 零堆分配），自研 `NativeResponse` 序列化（`FixedBuffer<512>` 栈缓冲 + scatter-gather I/O）
+- **原生 HTTP 栈**：集成 picohttpparser 替代 Beast HTTP parser（CPU 占比 10% → 0.08%），零拷贝 `NativeRequest`（`string_view` 引用连接级 `readBuf`，栈上 `RequestHeaders` 零堆分配），自研 `NativeResponse` 序列化（`FixedBuffer<512>` 栈缓冲 + scatter-gather I/O）
 - **自研 WebSocket 栈**（RFC 6455 完整实现）：手写帧解析/构造（`WsFrame.h`）、握手协议（`WsHandshake.h`）、permessage-deflate 压缩（`WsDeflate.h/cpp`，pimpl 封装 zlib），`WebSocketSession` 完全重写为 raw socket 实现，支持消息分片重组 + 控制帧穿插
 - **`HeaderMap` 头部容器**：`vector<pair>` 实现，大小写不敏感查找，延迟 reserve（默认构造零堆分配）
 - **SO_REUSEPORT 多 acceptor**：每个 worker loop 独立 acceptor，accept 与 I/O 同线程零跨线程调度（Windows 自动回退单 acceptor）
