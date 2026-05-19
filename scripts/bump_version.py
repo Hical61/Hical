@@ -40,6 +40,8 @@ FILES = {
         PROJECT_ROOT, "ports", "hical61-hical", "versions_template.json"
     ),
     "changelog": os.path.join(PROJECT_ROOT, "CHANGELOG.md"),
+    "quickstart": os.path.join(PROJECT_ROOT, "docs", "quickstart.md"),
+    "quickstart_cn": os.path.join(PROJECT_ROOT, "docs", "quickstart_cn.md"),
 }
 
 VERSION_RE = re.compile(r"^\d+\.\d+\.\d+$")
@@ -126,6 +128,26 @@ def update_versions_template(content, new_ver):
     return json.dumps(data, ensure_ascii=False, indent=2) + "\n"
 
 
+def update_quickstart(content, new_ver):
+    """替换 quickstart 文档中硬编码的 hical 版本号（Conan URL 和命令）。
+
+    匹配模式：
+      - /download/vX.Y.Z/    (GitHub release URL)
+      - hical-X.Y.Z-         (tarball 文件名)
+      - --version=X.Y.Z      (conan export 命令)
+    """
+    content = re.sub(
+        r"(/download/v)\d+\.\d+\.\d+(/)", rf"\g<1>{new_ver}\2", content
+    )
+    content = re.sub(
+        r"(hical-)\d+\.\d+\.\d+(-)", rf"\g<1>{new_ver}\2", content
+    )
+    content = re.sub(
+        r"(--version=)\d+\.\d+\.\d+", rf"\g<1>{new_ver}", content
+    )
+    return content
+
+
 def update_changelog(content, old_ver, new_ver):
     # 1. 更新 [Unreleased] 对比链接
     content = re.sub(
@@ -159,6 +181,8 @@ UPDATERS = {
     "ports_vcpkg": lambda c, _o, n: update_vcpkg_json(c, n),
     "versions_template": lambda c, _o, n: update_versions_template(c, n),
     "changelog": lambda c, o, n: update_changelog(c, o, n),
+    "quickstart": lambda c, _o, n: update_quickstart(c, n),
+    "quickstart_cn": lambda c, _o, n: update_quickstart(c, n),
 }
 
 
