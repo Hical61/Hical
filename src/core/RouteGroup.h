@@ -90,9 +90,9 @@ namespace hical
 		 */
 		RouteHandler wrapHandler(RouteHandler handler) const;
 
-		Router& m_router;
-		std::string m_prefix;
-		std::vector<MiddlewareEntry> m_entries;
+		Router& router_;
+		std::string prefix_;
+		std::vector<MiddlewareEntry> entries_;
 	};
 
 } // namespace hical

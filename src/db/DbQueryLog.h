@@ -54,6 +54,6 @@ namespace hical::db
 	 * @param opts 配置选项
 	 * @return MiddlewareHandler
 	 */
-	MiddlewareHandler makeQueryLogMiddleware(QueryLogOptions opts = {});
+	[[nodiscard]] MiddlewareHandler makeQueryLogMiddleware(QueryLogOptions opts = {});
 
 } // namespace hical::db

@@ -7,43 +7,43 @@ namespace hical::db
 {
 
 	DbConnectionPool::DbConnectionPool(boost::asio::io_context& ioCtx, DbConfig config, DbConnectionFactory factory)
-		: m_ioCtx(ioCtx), m_config(std::move(config)), m_factory(std::move(factory))
+		: ioCtx_(ioCtx), config_(std::move(config)), factory_(std::move(factory))
 	{
 	}
 
 	DbConnectionPool::~DbConnectionPool()
 	{
-		m_shutdown.store(true, std::memory_order_relaxed);
+		shutdown_.store(true, std::memory_order_relaxed);
 	}
 
 	Awaitable<void> DbConnectionPool::init()
 	{
-		if (m_initialized)
+		if (initialized_)
 		{
 			throw std::logic_error("DbConnectionPool::init() called more than once");
 		}
-		m_initialized = true;
+		initialized_ = true;
 
 		// 预创建 minConnections 个连接
-		for (size_t i = 0; i < m_config.minConnections; ++i)
+		for (size_t i = 0; i < config_.minConnections; ++i)
 		{
-			auto conn = co_await m_factory(m_ioCtx, m_config);
+			auto conn = co_await factory_(ioCtx_, config_);
 			if (conn)
 			{
 				conn->touch();
-				std::lock_guard lock(m_mutex);
-				m_idle.push_back(std::move(conn));
+				std::lock_guard lock(mutex_);
+				idle_.push_back(std::move(conn));
 			}
 		}
 
 		// 启动空闲回收定时器（仅当 idleCheckInterval > 0 时）
-		if (m_config.idleCheckInterval.count() > 0)
+		if (config_.idleCheckInterval.count() > 0)
 		{
 			startIdleChecker();
 		}
 
 		// 启动后台健康检查（仅当 healthCheckInterval > 0 时）
-		if (m_config.healthCheckInterval.count() > 0)
+		if (config_.healthCheckInterval.count() > 0)
 		{
 			startHealthChecker();
 		}
@@ -51,28 +51,28 @@ namespace hical::db
 
 	Awaitable<std::shared_ptr<DbConnection>> DbConnectionPool::acquire()
 	{
-		if (m_shutdown.load(std::memory_order_relaxed))
+		if (shutdown_.load(std::memory_order_relaxed))
 		{
 			throw std::runtime_error("DbConnectionPool: pool is shut down");
 		}
 
-		std::unique_lock lock(m_mutex);
+		std::unique_lock lock(mutex_);
 
 		// 1. 有空闲连接 → 直接返回
-		while (!m_idle.empty())
+		while (!idle_.empty())
 		{
-			auto conn = std::move(m_idle.back());
-			m_idle.pop_back();
-			++m_activeCount;
+			auto conn = std::move(idle_.back());
+			idle_.pop_back();
+			++activeCount_;
 			lock.unlock();
 
 			// 若健康检查已启用且连接最近被 ping 过，跳过 ping
-			bool skipPing = m_config.healthCheckInterval.count() > 0 && m_config.pingGracePeriod.count() > 0;
+			bool skipPing = config_.healthCheckInterval.count() > 0 && config_.pingGracePeriod.count() > 0;
 			if (skipPing)
 			{
 				auto sinceLastPing = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now()
 																					  - conn->lastPingTime());
-				if (sinceLastPing < m_config.pingGracePeriod)
+				if (sinceLastPing < config_.pingGracePeriod)
 				{
 					conn->touch();
 					co_return conn;
@@ -98,33 +98,33 @@ namespace hical::db
 
 			// 连接已死，减计数，重新尝试
 			lock.lock();
-			--m_activeCount;
+			--activeCount_;
 		}
 
 		// 2. 未达上限 → 创建新连接
-		if (m_activeCount + m_idle.size() < m_config.maxConnections)
+		if (activeCount_ + idle_.size() < config_.maxConnections)
 		{
-			++m_activeCount;
+			++activeCount_;
 			lock.unlock();
 
 			try
 			{
-				auto conn = co_await m_factory(m_ioCtx, m_config);
+				auto conn = co_await factory_(ioCtx_, config_);
 				conn->touch();
 				co_return conn;
 			}
 			catch (...)
 			{
-				std::lock_guard rollback(m_mutex);
-				--m_activeCount;
+				std::lock_guard rollback(mutex_);
+				--activeCount_;
 				throw;
 			}
 		}
 
 		// 3. 池满 → 协程挂起等待归还
-		auto timer = std::make_shared<boost::asio::steady_timer>(m_ioCtx, m_config.acquireTimeout);
+		auto timer = std::make_shared<boost::asio::steady_timer>(ioCtx_, config_.acquireTimeout);
 		auto result = std::make_shared<std::shared_ptr<DbConnection>>();
-		m_waiters.push_back({timer, result});
+		waiters_.push_back({timer, result});
 		lock.unlock();
 
 		boost::system::error_code ec;
@@ -133,8 +133,8 @@ namespace hical::db
 		if (*result)
 		{
 			// release() 已将连接转交
-			std::lock_guard countLock(m_mutex);
-			++m_activeCount;
+			std::lock_guard countLock(mutex_);
+			++activeCount_;
 			(*result)->touch();
 			co_return std::move(*result);
 		}
@@ -142,22 +142,22 @@ namespace hical::db
 		// 超时：尝试从等待队列移除自己（按 timer 匹配）
 		bool removed = false;
 		{
-			std::lock_guard cleanLock(m_mutex);
-			auto before = m_waiters.size();
-			std::erase_if(m_waiters,
+			std::lock_guard cleanLock(mutex_);
+			auto before = waiters_.size();
+			std::erase_if(waiters_,
 						  [&timer](const Waiter& w)
 						  {
 							  return w.timer == timer;
 						  });
-			removed = (m_waiters.size() < before);
+			removed = (waiters_.size() < before);
 		}
 
 		// 如果未从队列移除，说明 release() 已 pop 了我们——检查是否已转交连接
 		if (!removed && *result)
 		{
 			// 连接在我们检查之前的瞬间被转交，正常使用
-			std::lock_guard countLock(m_mutex);
-			++m_activeCount;
+			std::lock_guard countLock(mutex_);
+			++activeCount_;
 			(*result)->touch();
 			co_return std::move(*result);
 		}
@@ -181,12 +181,12 @@ namespace hical::db
 		// 如果连接残留事务，异步回滚后再减 activeCount（保持计数一致性）
 		if (conn->inTransaction())
 		{
-			// 不在此处减 m_activeCount！连接仍计为"活跃"直到回滚完成，
+			// 不在此处减 activeCount_！连接仍计为"活跃"直到回滚完成，
 			// 避免 totalCount() 低估导致创建超出 maxConnections 的连接。
 			auto connPtr = std::move(conn);
 			auto self = shared_from_this();
 			coSpawn(
-				m_ioCtx,
+				ioCtx_,
 				[self, connPtr]() mutable -> Awaitable<void>
 				{
 					try
@@ -196,31 +196,31 @@ namespace hical::db
 					catch (...)
 					{
 						// 回滚失败，连接不可复用，直接丢弃并减计数
-						std::lock_guard lock(self->m_mutex);
-						if (self->m_activeCount > 0)
+						std::lock_guard lock(self->mutex_);
+						if (self->activeCount_ > 0)
 						{
-							--self->m_activeCount;
+							--self->activeCount_;
 						}
 						co_return;
 					}
 					// 回滚成功，减计数并归入空闲池或转交等待者
 					connPtr->touch();
-					std::lock_guard lock(self->m_mutex);
-					if (self->m_activeCount > 0)
+					std::lock_guard lock(self->mutex_);
+					if (self->activeCount_ > 0)
 					{
-						--self->m_activeCount;
+						--self->activeCount_;
 					}
-					if (self->m_shutdown.load(std::memory_order_relaxed))
+					if (self->shutdown_.load(std::memory_order_relaxed))
 					{
 						co_return;
 					}
-					if (!self->m_waiters.empty())
+					if (!self->waiters_.empty())
 					{
 						self->wakeOneWaiter(std::move(connPtr));
 					}
 					else
 					{
-						self->m_idle.push_back(std::move(connPtr));
+						self->idle_.push_back(std::move(connPtr));
 					}
 				},
 				[](std::exception_ptr)
@@ -229,91 +229,91 @@ namespace hical::db
 			return;
 		}
 
-		std::lock_guard lock(m_mutex);
+		std::lock_guard lock(mutex_);
 
-		if (m_activeCount > 0)
+		if (activeCount_ > 0)
 		{
-			--m_activeCount;
+			--activeCount_;
 		}
 
 		// 如果有等待者，直接转交连接
-		if (!m_waiters.empty())
+		if (!waiters_.empty())
 		{
-			auto waiter = std::move(m_waiters.front());
-			m_waiters.pop_front();
+			auto waiter = std::move(waiters_.front());
+			waiters_.pop_front();
 			*(waiter.result) = std::move(conn);
 			waiter.timer->cancel();
 			return;
 		}
 
 		// 无等待者 → 归入空闲池
-		if (!m_shutdown.load(std::memory_order_relaxed))
+		if (!shutdown_.load(std::memory_order_relaxed))
 		{
 			conn->touch();
-			m_idle.push_back(std::move(conn));
+			idle_.push_back(std::move(conn));
 		}
 	}
 
 	Awaitable<void> DbConnectionPool::shutdown()
 	{
-		m_shutdown.store(true, std::memory_order_relaxed);
+		shutdown_.store(true, std::memory_order_relaxed);
 
 		// 取消后台循环 timer，使其立即退出
-		if (m_idleCheckTimer)
+		if (idleCheckTimer_)
 		{
-			m_idleCheckTimer->cancel();
+			idleCheckTimer_->cancel();
 		}
-		if (m_healthCheckTimer)
+		if (healthCheckTimer_)
 		{
-			m_healthCheckTimer->cancel();
+			healthCheckTimer_->cancel();
 		}
 
-		std::lock_guard lock(m_mutex);
+		std::lock_guard lock(mutex_);
 
 		// 唤醒所有等待者（result 为空，acquire 侧会抛异常）
-		for (auto& waiter : m_waiters)
+		for (auto& waiter : waiters_)
 		{
 			waiter.timer->cancel();
 		}
-		m_waiters.clear();
+		waiters_.clear();
 
 		// 清理空闲连接
-		m_idle.clear();
+		idle_.clear();
 
 		co_return;
 	}
 
 	size_t DbConnectionPool::activeCount() const
 	{
-		std::lock_guard lock(m_mutex);
-		return m_activeCount;
+		std::lock_guard lock(mutex_);
+		return activeCount_;
 	}
 
 	size_t DbConnectionPool::idleCount() const
 	{
-		std::lock_guard lock(m_mutex);
-		return m_idle.size();
+		std::lock_guard lock(mutex_);
+		return idle_.size();
 	}
 
 	size_t DbConnectionPool::waitingCount() const
 	{
-		std::lock_guard lock(m_mutex);
-		return m_waiters.size();
+		std::lock_guard lock(mutex_);
+		return waiters_.size();
 	}
 
 	size_t DbConnectionPool::totalCount() const
 	{
-		std::lock_guard lock(m_mutex);
-		return m_activeCount + m_idle.size();
+		std::lock_guard lock(mutex_);
+		return activeCount_ + idle_.size();
 	}
 
 	void DbConnectionPool::wakeOneWaiter(std::shared_ptr<DbConnection> conn)
 	{
 		// 已在锁内调用
-		if (!m_waiters.empty())
+		if (!waiters_.empty())
 		{
-			auto waiter = std::move(m_waiters.front());
-			m_waiters.pop_front();
+			auto waiter = std::move(waiters_.front());
+			waiters_.pop_front();
 			*(waiter.result) = std::move(conn);
 			waiter.timer->cancel();
 		}
@@ -325,7 +325,7 @@ namespace hical::db
 	void DbConnectionPool::startIdleChecker()
 	{
 		auto self = shared_from_this();
-		hical::coSpawn(m_ioCtx,
+		hical::coSpawn(ioCtx_,
 					   [self]() -> Awaitable<void>
 					   {
 						   co_await self->idleCheckLoop();
@@ -334,33 +334,33 @@ namespace hical::db
 
 	Awaitable<void> DbConnectionPool::idleCheckLoop()
 	{
-		m_idleCheckTimer = std::make_shared<boost::asio::steady_timer>(m_ioCtx);
-		while (!m_shutdown.load(std::memory_order_relaxed))
+		idleCheckTimer_ = std::make_shared<boost::asio::steady_timer>(ioCtx_);
+		while (!shutdown_.load(std::memory_order_relaxed))
 		{
-			m_idleCheckTimer->expires_after(m_config.idleCheckInterval);
+			idleCheckTimer_->expires_after(config_.idleCheckInterval);
 			boost::system::error_code ec;
-			co_await m_idleCheckTimer->async_wait(boost::asio::redirect_error(boost::asio::use_awaitable, ec));
+			co_await idleCheckTimer_->async_wait(boost::asio::redirect_error(boost::asio::use_awaitable, ec));
 
-			if (m_shutdown.load(std::memory_order_relaxed))
+			if (shutdown_.load(std::memory_order_relaxed))
 			{
 				break;
 			}
 
 			auto now = std::chrono::steady_clock::now();
-			std::lock_guard lock(m_mutex);
+			std::lock_guard lock(mutex_);
 
 			// 移除超时连接，保留至少 minConnections 个
-			size_t remaining = m_idle.size();
-			for (auto it = m_idle.begin(); it != m_idle.end();)
+			size_t remaining = idle_.size();
+			for (auto it = idle_.begin(); it != idle_.end();)
 			{
-				if (remaining <= m_config.minConnections)
+				if (remaining <= config_.minConnections)
 				{
 					break;
 				}
 				auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - (*it)->lastActiveTime());
-				if (elapsed >= m_config.idleTimeout)
+				if (elapsed >= config_.idleTimeout)
 				{
-					it = m_idle.erase(it);
+					it = idle_.erase(it);
 					--remaining;
 				}
 				else
@@ -376,7 +376,7 @@ namespace hical::db
 	void DbConnectionPool::startHealthChecker()
 	{
 		auto self = shared_from_this();
-		hical::coSpawn(m_ioCtx,
+		hical::coSpawn(ioCtx_,
 					   [self]() -> Awaitable<void>
 					   {
 						   co_await self->healthCheckLoop();
@@ -385,14 +385,14 @@ namespace hical::db
 
 	Awaitable<void> DbConnectionPool::healthCheckLoop()
 	{
-		m_healthCheckTimer = std::make_shared<boost::asio::steady_timer>(m_ioCtx);
-		while (!m_shutdown.load(std::memory_order_relaxed))
+		healthCheckTimer_ = std::make_shared<boost::asio::steady_timer>(ioCtx_);
+		while (!shutdown_.load(std::memory_order_relaxed))
 		{
-			m_healthCheckTimer->expires_after(m_config.healthCheckInterval);
+			healthCheckTimer_->expires_after(config_.healthCheckInterval);
 			boost::system::error_code ec;
-			co_await m_healthCheckTimer->async_wait(boost::asio::redirect_error(boost::asio::use_awaitable, ec));
+			co_await healthCheckTimer_->async_wait(boost::asio::redirect_error(boost::asio::use_awaitable, ec));
 
-			if (m_shutdown.load(std::memory_order_relaxed))
+			if (shutdown_.load(std::memory_order_relaxed))
 			{
 				break;
 			}
@@ -400,10 +400,10 @@ namespace hical::db
 			// 将空闲连接移出（非拷贝），防止 acquire() 在 ping 期间取到同一连接
 			std::vector<std::shared_ptr<DbConnection>> checking;
 			{
-				std::lock_guard lock(m_mutex);
-				checking = std::move(m_idle);
-				m_idle.clear();
-				m_activeCount += checking.size();
+				std::lock_guard lock(mutex_);
+				checking = std::move(idle_);
+				idle_.clear();
+				activeCount_ += checking.size();
 			}
 
 			// 逐个 ping（不持锁，连接已从池中移出，不会被 acquire 取到）
@@ -411,21 +411,21 @@ namespace hical::db
 			alive.reserve(checking.size());
 			for (auto& conn : checking)
 			{
-				if (m_shutdown.load(std::memory_order_relaxed))
+				if (shutdown_.load(std::memory_order_relaxed))
 				{
 					// shutdown 时将存活连接放回（由 shutdown 清理），同时归还检查期间占用的计数
-					std::lock_guard lock(m_mutex);
+					std::lock_guard lock(mutex_);
 					for (auto& c : alive)
 					{
-						m_idle.push_back(std::move(c));
+						idle_.push_back(std::move(c));
 					}
-					if (m_activeCount >= checking.size())
+					if (activeCount_ >= checking.size())
 					{
-						m_activeCount -= checking.size();
+						activeCount_ -= checking.size();
 					}
 					else
 					{
-						m_activeCount = 0;
+						activeCount_ = 0;
 					}
 					co_return;
 				}
@@ -448,42 +448,42 @@ namespace hical::db
 			// 将存活连接放回空闲池，计算补充数量
 			size_t deficit = 0;
 			{
-				std::lock_guard lock(m_mutex);
+				std::lock_guard lock(mutex_);
 				// 先减去检查期间占用的计数
-				if (m_activeCount >= checking.size())
+				if (activeCount_ >= checking.size())
 				{
-					m_activeCount -= checking.size();
+					activeCount_ -= checking.size();
 				}
 				else
 				{
-					m_activeCount = 0;
+					activeCount_ = 0;
 				}
 				for (auto& conn : alive)
 				{
-					m_idle.push_back(std::move(conn));
+					idle_.push_back(std::move(conn));
 				}
-				size_t total = m_idle.size() + m_activeCount;
-				if (total < m_config.minConnections)
+				size_t total = idle_.size() + activeCount_;
+				if (total < config_.minConnections)
 				{
-					deficit = m_config.minConnections - total;
+					deficit = config_.minConnections - total;
 				}
 			}
 
 			// 补充连接到 minConnections
 			for (size_t i = 0; i < deficit; ++i)
 			{
-				if (m_shutdown.load(std::memory_order_relaxed))
+				if (shutdown_.load(std::memory_order_relaxed))
 				{
 					co_return;
 				}
 				try
 				{
-					auto newConn = co_await m_factory(m_ioCtx, m_config);
+					auto newConn = co_await factory_(ioCtx_, config_);
 					if (newConn)
 					{
 						newConn->touch();
-						std::lock_guard lock(m_mutex);
-						m_idle.push_back(std::move(newConn));
+						std::lock_guard lock(mutex_);
+						idle_.push_back(std::move(newConn));
 					}
 				}
 				catch (...)

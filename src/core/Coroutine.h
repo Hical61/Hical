@@ -29,7 +29,7 @@ namespace hical
 	 * @param seconds 等待秒数
 	 * 用法：co_await hical::sleepFor(ioCtx, 1.0);
 	 */
-	inline Awaitable<void> sleepFor(boost::asio::io_context& ioCtx, double seconds)
+	[[nodiscard]] inline Awaitable<void> sleepFor(boost::asio::io_context& ioCtx, double seconds)
 	{
 		boost::asio::steady_timer timer(ioCtx, std::chrono::milliseconds(static_cast<int64_t>(seconds * 1000)));
 		co_await timer.async_wait(boost::asio::use_awaitable);
@@ -40,7 +40,8 @@ namespace hical
 	 * @param ioCtx io_context 引用
 	 * @param duration 等待时长
 	 */
-	inline Awaitable<void> sleepFor(boost::asio::io_context& ioCtx, std::chrono::steady_clock::duration duration)
+	[[nodiscard]] inline Awaitable<void> sleepFor(boost::asio::io_context& ioCtx,
+												  std::chrono::steady_clock::duration duration)
 	{
 		boost::asio::steady_timer timer(ioCtx, duration);
 		co_await timer.async_wait(boost::asio::use_awaitable);
@@ -52,7 +53,7 @@ namespace hical
 	 * 用法：co_await hical::sleep(1.0);
 	 * 注意：必须在协程内调用
 	 */
-	inline Awaitable<void> sleep(double seconds)
+	[[nodiscard]] inline Awaitable<void> sleep(double seconds)
 	{
 		auto executor = co_await boost::asio::this_coro::executor;
 		boost::asio::steady_timer timer(executor, std::chrono::milliseconds(static_cast<int64_t>(seconds * 1000)));
@@ -63,7 +64,7 @@ namespace hical
 	 * @brief 在当前协程上下文中等待指定时长
 	 * @param duration 等待时长
 	 */
-	inline Awaitable<void> sleep(std::chrono::steady_clock::duration duration)
+	[[nodiscard]] inline Awaitable<void> sleep(std::chrono::steady_clock::duration duration)
 	{
 		auto executor = co_await boost::asio::this_coro::executor;
 		boost::asio::steady_timer timer(executor, duration);

@@ -43,7 +43,7 @@ namespace hical
 		 * @param ext 文件扩展名（含 "."，如 ".html"）
 		 * @return MIME 类型字符串
 		 */
-		inline std::string mimeType(const std::string& ext)
+		[[nodiscard]] inline std::string mimeType(const std::string& ext)
 		{
 			static const std::unordered_map<std::string, std::string> table = {
 				{".html", "text/html; charset=utf-8"},
@@ -85,7 +85,7 @@ namespace hical
 		 * @param target 目标文件规范路径
 		 * @return true 表示安全
 		 */
-		inline bool isSafePath(const std::filesystem::path& root, const std::filesystem::path& target)
+		[[nodiscard]] inline bool isSafePath(const std::filesystem::path& root, const std::filesystem::path& target)
 		{
 			// 逐段迭代器比较：root 的每个路径分量必须是 target 的前缀
 			// 比字符串前缀比对更可靠，不受 /pub vs /public 等 edge case 影响
@@ -107,7 +107,7 @@ namespace hical
 		 * @param lastWrite 最后修改时间
 		 * @return ETag 字符串（带引号，符合 RFC 7232）
 		 */
-		inline std::string makeEtag(std::uintmax_t fileSize, std::filesystem::file_time_type lastWrite)
+		[[nodiscard]] inline std::string makeEtag(std::uintmax_t fileSize, std::filesystem::file_time_type lastWrite)
 		{
 			auto ns = lastWrite.time_since_epoch().count();
 			return "\"" + std::to_string(fileSize) + "-" + std::to_string(ns) + "\"";
@@ -133,11 +133,10 @@ namespace hical
 	 * - 路径遍历攻击防护
 	 * - 大文件限制（防止 bad_alloc 崩溃）
 	 */
-	inline std::function<Awaitable<HttpResponse>(const HttpRequest&)> serveStatic(const std::string& rootDir,
-																				  const std::string& urlPrefix,
-																				  std::uintmax_t maxFileSize = 64ULL
-																											   * 1024
-																											   * 1024)
+	[[nodiscard]] inline std::function<Awaitable<HttpResponse>(const HttpRequest&)> serveStatic(
+		const std::string& rootDir,
+		const std::string& urlPrefix,
+		std::uintmax_t maxFileSize = 64ULL * 1024 * 1024)
 	{
 		namespace fs = std::filesystem;
 

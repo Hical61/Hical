@@ -115,7 +115,7 @@ namespace hical
 		/**
 		 * @brief 房间成员条目（缓存行优化）
 		 * 广播时直接遍历 vector<RoomMember>（连续内存，cache prefetch 友好），
-		 * 通过冗余存储 weak_ptr 消除原来的 m_connections.find(id) 指针追踪。
+		 * 通过冗余存储 weak_ptr 消除原来的 connections_.find(id) 指针追踪。
 		 */
 		struct RoomMember
 		{
@@ -127,10 +127,10 @@ namespace hical
 		/// @param isBinary true=sendBinary, false=send
 		void broadcastImpl(std::string_view room, std::string_view payload, WsConnectionId exclude, bool isBinary);
 
-		mutable std::shared_mutex m_mutex;
-		std::unordered_map<WsConnectionId, ConnectionEntry> m_connections;
-		std::unordered_map<std::string, std::vector<RoomMember>, StringHash, StringEqual> m_rooms; ///< 透明哈希
-		std::atomic<WsConnectionId> m_nextId {1};
+		mutable std::shared_mutex mutex_;
+		std::unordered_map<WsConnectionId, ConnectionEntry> connections_;
+		std::unordered_map<std::string, std::vector<RoomMember>, StringHash, StringEqual> rooms_; ///< 透明哈希
+		std::atomic<WsConnectionId> nextId_ {1};
 	};
 
 } // namespace hical

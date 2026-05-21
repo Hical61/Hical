@@ -236,7 +236,7 @@ namespace hical
 			}
 		}
 
-		if (segmentCount > hMaxPathSegments)
+		if (segmentCount > kMaxPathSegments)
 		{
 			result.pathTooDeep = true;
 			return result;
@@ -360,7 +360,7 @@ namespace hical
 		while (!pattern.empty() && !path.empty())
 		{
 			// 段数限制，防止超深路径 DoS
-			if (++segmentCount > Router::hMaxPathSegments)
+			if (++segmentCount > Router::kMaxPathSegments)
 			{
 				params.clear();
 				return false;
@@ -380,7 +380,7 @@ namespace hical
 			if (patSeg.size() >= 3 && patSeg.front() == '{' && patSeg.back() == '}')
 			{
 				// 参数值长度限制
-				if (reqSeg.size() > Router::hMaxParamValueLength)
+				if (reqSeg.size() > Router::kMaxParamValueLength)
 				{
 					params.clear();
 					return false;

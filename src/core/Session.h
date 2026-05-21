@@ -35,7 +35,7 @@ namespace hical
 		 * @brief 获取 Session ID（只读，构造后不变，无需加锁）
 		 * @return Session ID 字符串
 		 */
-		const std::string& id() const
+		[[nodiscard]] const std::string& id() const
 		{
 			return id_;
 		}
@@ -59,7 +59,7 @@ namespace hical
 		 * @return 找到且类型匹配返回值，否则 nullopt
 		 */
 		template <typename T>
-		std::optional<T> get(const std::string& key) const
+		[[nodiscard]] std::optional<T> get(const std::string& key) const
 		{
 			std::shared_lock lk(mutex_);
 			auto it = data_.find(key);
@@ -79,7 +79,7 @@ namespace hical
 		 * @param key 属性键
 		 * @return true 如果存在
 		 */
-		bool has(const std::string& key) const
+		[[nodiscard]] bool has(const std::string& key) const
 		{
 			std::shared_lock lk(mutex_);
 			return data_.count(key) > 0;
@@ -142,7 +142,7 @@ namespace hical
 		 * @brief 是否已修改
 		 * @return true 如果需要写回 Cookie
 		 */
-		bool isDirty() const
+		[[nodiscard]] bool isDirty() const
 		{
 			std::shared_lock lk(mutex_);
 			return dirty_;
@@ -160,7 +160,7 @@ namespace hical
 		/**
 		 * @brief 获取最后访问时间（无锁，原子操作）
 		 */
-		std::chrono::steady_clock::time_point lastAccess() const
+		[[nodiscard]] std::chrono::steady_clock::time_point lastAccess() const
 		{
 			auto ns = lastAccessNs_.load(std::memory_order_acquire);
 			return std::chrono::steady_clock::time_point(std::chrono::steady_clock::duration(ns));
@@ -212,13 +212,13 @@ namespace hical
 		 * @param id Session ID
 		 * @return 找到返回 Session 指针，否则 nullptr
 		 */
-		std::shared_ptr<Session> find(const std::string& id);
+		[[nodiscard]] std::shared_ptr<Session> find(const std::string& id);
 
 		/**
 		 * @brief 创建新 Session
 		 * @return 新创建的 Session（已写入存储）
 		 */
-		std::shared_ptr<Session> create();
+		[[nodiscard]] std::shared_ptr<Session> create();
 
 		/**
 		 * @brief 销毁指定 Session（登出场景）
@@ -233,7 +233,7 @@ namespace hical
 		 * @param oldId 当前 Session ID
 		 * @return 拥有相同数据但新 ID 的 Session，旧 ID 不存在时返回 nullptr
 		 */
-		std::shared_ptr<Session> regenerate(const std::string& oldId);
+		[[nodiscard]] std::shared_ptr<Session> regenerate(const std::string& oldId);
 
 		/**
 		 * @brief 清理过期的 Session（应定期调用）
@@ -245,13 +245,13 @@ namespace hical
 		 * @brief 获取当前活跃 Session 数量
 		 * @return Session 数量
 		 */
-		size_t count();
+		[[nodiscard]] size_t count();
 
 		/**
 		 * @brief 获取配置选项
 		 * @return SessionOptions 常量引用
 		 */
-		const SessionOptions& options() const
+		[[nodiscard]] const SessionOptions& options() const
 		{
 			return opts_;
 		}

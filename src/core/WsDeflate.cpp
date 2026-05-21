@@ -56,7 +56,7 @@ namespace hical
 		Impl& operator=(const Impl&) = delete;
 	};
 
-	WsDeflateContext::WsDeflateContext(const Config& config) : m_impl(std::make_unique<Impl>(config))
+	WsDeflateContext::WsDeflateContext(const Config& config) : impl_(std::make_unique<Impl>(config))
 	{
 	}
 
@@ -68,10 +68,10 @@ namespace hical
 
 	std::string WsDeflateContext::compress(std::string_view input)
 	{
-		auto& s = m_impl->deflateStream;
+		auto& s = impl_->deflateStream;
 
 		// server_no_context_takeover: 每条消息重置压缩状态
-		if (m_impl->config.serverNoContextTakeover)
+		if (impl_->config.serverNoContextTakeover)
 		{
 			deflateReset(&s);
 		}
@@ -107,10 +107,10 @@ namespace hical
 
 	std::string WsDeflateContext::decompress(std::string_view input, size_t maxOutputSize)
 	{
-		auto& s = m_impl->inflateStream;
+		auto& s = impl_->inflateStream;
 
 		// client_no_context_takeover: 每条消息重置解压状态
-		if (m_impl->config.clientNoContextTakeover)
+		if (impl_->config.clientNoContextTakeover)
 		{
 			inflateReset(&s);
 		}

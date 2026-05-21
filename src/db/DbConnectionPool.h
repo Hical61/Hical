@@ -62,7 +62,7 @@ namespace hical::db
 		 * @return 可用的数据库连接
 		 * @throws std::runtime_error 获取超时或连接池已关闭
 		 */
-		Awaitable<std::shared_ptr<DbConnection>> acquire();
+		[[nodiscard]] Awaitable<std::shared_ptr<DbConnection>> acquire();
 
 		/**
 		 * @brief 归还连接到池
@@ -81,16 +81,16 @@ namespace hical::db
 		// ============ 统计 ============
 
 		/// 正在被业务使用的连接数
-		size_t activeCount() const;
+		[[nodiscard]] size_t activeCount() const;
 
 		/// 空闲连接数
-		size_t idleCount() const;
+		[[nodiscard]] size_t idleCount() const;
 
 		/// 等待获取连接的协程数
-		size_t waitingCount() const;
+		[[nodiscard]] size_t waitingCount() const;
 
 		/// 总连接数（活跃 + 空闲）
-		size_t totalCount() const;
+		[[nodiscard]] size_t totalCount() const;
 
 		// ============ 常量键 ============
 
@@ -116,17 +116,17 @@ namespace hical::db
 		/// 后台健康检查协程：定期 ping 空闲连接，剔除死连接并补充
 		Awaitable<void> healthCheckLoop();
 
-		boost::asio::io_context& m_ioCtx;
-		DbConfig m_config;
-		DbConnectionFactory m_factory;
+		boost::asio::io_context& ioCtx_;
+		DbConfig config_;
+		DbConnectionFactory factory_;
 
-		mutable std::mutex m_mutex;
+		mutable std::mutex mutex_;
 
 		/// 空闲连接栈（LIFO）
-		std::vector<std::shared_ptr<DbConnection>> m_idle;
+		std::vector<std::shared_ptr<DbConnection>> idle_;
 
 		/// 当前被分发出去的连接数
-		size_t m_activeCount = 0;
+		size_t activeCount_ = 0;
 
 		/// 等待获取连接的协程队列
 		struct Waiter
@@ -136,17 +136,17 @@ namespace hical::db
 			std::shared_ptr<std::shared_ptr<DbConnection>> result;
 		};
 
-		std::deque<Waiter> m_waiters;
+		std::deque<Waiter> waiters_;
 
 		/// 连接池是否已关闭
-		std::atomic<bool> m_shutdown {false};
+		std::atomic<bool> shutdown_ {false};
 
 		/// 是否已初始化
-		bool m_initialized = false;
+		bool initialized_ = false;
 
 		/// 后台循环使用的 timer（shutdown 时 cancel 以立即唤醒退出）
-		std::shared_ptr<boost::asio::steady_timer> m_idleCheckTimer;
-		std::shared_ptr<boost::asio::steady_timer> m_healthCheckTimer;
+		std::shared_ptr<boost::asio::steady_timer> idleCheckTimer_;
+		std::shared_ptr<boost::asio::steady_timer> healthCheckTimer_;
 	};
 
 } // namespace hical::db

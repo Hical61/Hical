@@ -27,19 +27,19 @@ namespace hical
 
 		void append(const char* data, size_t len)
 		{
-			if (!m_overflowed)
+			if (!overflowed_)
 			{
-				if (m_used + len <= N)
+				if (used_ + len <= N)
 				{
-					std::memcpy(m_stackBuf + m_used, data, len);
-					m_used += len;
+					std::memcpy(stackBuf_ + used_, data, len);
+					used_ += len;
 					return;
 				}
 				// 溢出：拷贝已有数据到 heap
-				m_heapBuf.assign(m_stackBuf, m_used);
-				m_overflowed = true;
+				heapBuf_.assign(stackBuf_, used_);
+				overflowed_ = true;
 			}
-			m_heapBuf.append(data, len);
+			heapBuf_.append(data, len);
 		}
 
 		void append(std::string_view sv)
@@ -115,26 +115,26 @@ namespace hical
 
 		[[nodiscard]] std::string_view view() const
 		{
-			if (m_overflowed)
+			if (overflowed_)
 			{
-				return m_heapBuf;
+				return heapBuf_;
 			}
-			return {m_stackBuf, m_used};
+			return {stackBuf_, used_};
 		}
 
 		[[nodiscard]] const char* data() const
 		{
-			return m_overflowed ? m_heapBuf.data() : m_stackBuf;
+			return overflowed_ ? heapBuf_.data() : stackBuf_;
 		}
 
 		[[nodiscard]] size_t size() const
 		{
-			return m_overflowed ? m_heapBuf.size() : m_used;
+			return overflowed_ ? heapBuf_.size() : used_;
 		}
 
 		[[nodiscard]] bool overflowed() const
 		{
-			return m_overflowed;
+			return overflowed_;
 		}
 
 		[[nodiscard]] size_t capacity() const
@@ -144,9 +144,9 @@ namespace hical
 
 		void clear()
 		{
-			m_used = 0;
-			m_overflowed = false;
-			m_heapBuf.clear();
+			used_ = 0;
+			overflowed_ = false;
+			heapBuf_.clear();
 		}
 
 	private:
@@ -175,10 +175,10 @@ namespace hical
 			return *this;
 		}
 
-		char m_stackBuf[N] {};
-		size_t m_used {0};
-		bool m_overflowed {false};
-		std::string m_heapBuf;
+		char stackBuf_[N] {};
+		size_t used_ {0};
+		bool overflowed_ {false};
+		std::string heapBuf_;
 	};
 
 } // namespace hical

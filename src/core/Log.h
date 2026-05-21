@@ -232,12 +232,12 @@ namespace hical
 		Logger(const Logger&) = delete;
 		Logger& operator=(const Logger&) = delete;
 
-		std::atomic<LogLevel> m_level {LogLevel::hInfo};
-		std::atomic<LogLevel> m_flushLevel {LogLevel::hError};
-		std::mutex m_mutex;
-		std::shared_ptr<const std::vector<std::shared_ptr<LogSink>>> m_sinks;
-		std::shared_ptr<LogFormatter> m_formatter;
-		std::unique_ptr<LogChannelRegistry> m_channels;
+		std::atomic<LogLevel> level_ {LogLevel::hInfo};
+		std::atomic<LogLevel> flushLevel_ {LogLevel::hError};
+		std::mutex mutex_;
+		std::shared_ptr<const std::vector<std::shared_ptr<LogSink>>> sinks_;
+		std::shared_ptr<LogFormatter> formatter_;
+		std::unique_ptr<LogChannelRegistry> channels_;
 	};
 
 	// ============ 流式日志辅助类 ============
@@ -249,15 +249,15 @@ namespace hical
 	class LogStream
 	{
 	public:
-		LogStream(LogLevel lvl, const char* file, int line) : m_lvl(lvl), m_file(file), m_line(line)
+		LogStream(LogLevel lvl, const char* file, int line) : lvl_(lvl), file_(file), line_(line)
 		{
 		}
 
 		~LogStream()
 		{
-			if (m_buf.size() > 0)
+			if (buf_.size() > 0)
 			{
-				Logger::instance().output(m_lvl, m_file, m_line, m_buf.view());
+				Logger::instance().output(lvl_, file_, line_, buf_.view());
 			}
 		}
 
@@ -269,15 +269,15 @@ namespace hical
 		template <typename T>
 		LogStream& operator<<(const T& val)
 		{
-			m_buf << val;
+			buf_ << val;
 			return *this;
 		}
 
 	private:
-		LogLevel m_lvl;
-		const char* m_file;
-		int m_line;
-		FixedBuffer<4096> m_buf;
+		LogLevel lvl_;
+		const char* file_;
+		int line_;
+		FixedBuffer<4096> buf_;
 	};
 
 	/**

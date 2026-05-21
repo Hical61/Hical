@@ -20,7 +20,7 @@ protected:
 		// 重置为默认状态：级别 hInfo，输出到 devNull，flush 阈值 hError
 		Logger::instance().setLevel(LogLevel::hInfo);
 		Logger::instance().setFlushLevel(LogLevel::hError);
-		Logger::instance().setOutput(m_devNull);
+		Logger::instance().setOutput(devNull_);
 	}
 
 	void TearDown() override
@@ -31,9 +31,9 @@ protected:
 		Logger::instance().setFlushLevel(LogLevel::hError);
 	}
 
-	std::ostringstream m_ss;
+	std::ostringstream ss_;
 	// 用 /dev/null 等效替代 stderr，避免测试输出噪音
-	std::ofstream m_devNull;
+	std::ofstream devNull_;
 };
 
 // ============ 基础属性测试 ============
@@ -86,14 +86,14 @@ TEST_F(LogTest, SetFlushLevel)
 TEST_F(LogTest, LevelFilterDebug)
 {
 	Logger::instance().setLevel(LogLevel::hWarn);
-	Logger::instance().setOutput(m_ss);
+	Logger::instance().setOutput(ss_);
 
 	// hWarn 级别下，DEBUG 和 INFO 不应输出
 	HICAL_LOG_DEBUG("should be filtered");
 	HICAL_LOG_INFO("should also be filtered");
 	HICAL_LOG_WARN("should appear");
 
-	std::string out = m_ss.str();
+	std::string out = ss_.str();
 	EXPECT_EQ(out.find("should be filtered"), std::string::npos);
 	EXPECT_EQ(out.find("should also be filtered"), std::string::npos);
 	EXPECT_NE(out.find("should appear"), std::string::npos);
@@ -102,13 +102,13 @@ TEST_F(LogTest, LevelFilterDebug)
 TEST_F(LogTest, TraceLevelFilter)
 {
 	Logger::instance().setLevel(LogLevel::hDebug);
-	Logger::instance().setOutput(m_ss);
+	Logger::instance().setOutput(ss_);
 
 	// hDebug 级别下，TRACE 不应输出
 	HICAL_LOG_TRACE("trace should be filtered");
 	HICAL_LOG_DEBUG("debug should appear");
 
-	std::string out = m_ss.str();
+	std::string out = ss_.str();
 #ifndef NDEBUG
 	// Debug 构建：TRACE 宏有效但被级别过滤
 	EXPECT_EQ(out.find("trace should be filtered"), std::string::npos);
@@ -119,11 +119,11 @@ TEST_F(LogTest, TraceLevelFilter)
 TEST_F(LogTest, TraceAppearsAtTraceLevel)
 {
 	Logger::instance().setLevel(LogLevel::hTrace);
-	Logger::instance().setOutput(m_ss);
+	Logger::instance().setOutput(ss_);
 
 	HICAL_LOG_TRACE("trace visible");
 
-	std::string out = m_ss.str();
+	std::string out = ss_.str();
 #ifndef NDEBUG
 	EXPECT_NE(out.find("trace visible"), std::string::npos);
 	EXPECT_NE(out.find("[TRACE]"), std::string::npos);
@@ -138,11 +138,11 @@ TEST_F(LogTest, TraceAppearsAtTraceLevel)
 TEST_F(LogTest, OutputToStream)
 {
 	Logger::instance().setLevel(LogLevel::hDebug);
-	Logger::instance().setOutput(m_ss);
+	Logger::instance().setOutput(ss_);
 
 	HICAL_LOG_INFO("hello world");
 
-	std::string out = m_ss.str();
+	std::string out = ss_.str();
 	EXPECT_NE(out.find("[INFO]"), std::string::npos);
 	// 文件名部分（宏展开后文件名为 test_log.cpp）
 	EXPECT_NE(out.find("test_log.cpp:"), std::string::npos);
@@ -152,11 +152,11 @@ TEST_F(LogTest, OutputToStream)
 TEST_F(LogTest, OutputContainsTimestamp)
 {
 	Logger::instance().setLevel(LogLevel::hDebug);
-	Logger::instance().setOutput(m_ss);
+	Logger::instance().setOutput(ss_);
 
 	HICAL_LOG_INFO("ts check");
 
-	std::string out = m_ss.str();
+	std::string out = ss_.str();
 	// 时间戳以 [20 开头（21 世纪年份）
 	EXPECT_NE(out.find("[20"), std::string::npos);
 }
@@ -164,11 +164,11 @@ TEST_F(LogTest, OutputContainsTimestamp)
 TEST_F(LogTest, OutputContainsThreadId)
 {
 	Logger::instance().setLevel(LogLevel::hDebug);
-	Logger::instance().setOutput(m_ss);
+	Logger::instance().setOutput(ss_);
 
 	HICAL_LOG_INFO("tid check");
 
-	std::string out = m_ss.str();
+	std::string out = ss_.str();
 	// 格式：[timestamp] [LEVEL] [threadID] [file:line] message
 	// 应该有 3 个 ] [ 分隔块在 LEVEL 和 file 之间
 	// 验证线程ID字段存在：在 [INFO] 之后、[test_log.cpp 之前应有一个 [...] 块
@@ -188,7 +188,7 @@ TEST_F(LogTest, OutputContainsThreadId)
 TEST_F(LogTest, AllLevels)
 {
 	Logger::instance().setLevel(LogLevel::hTrace);
-	Logger::instance().setOutput(m_ss);
+	Logger::instance().setOutput(ss_);
 
 	HICAL_LOG_TRACE("msg trace");
 	HICAL_LOG_DEBUG("msg debug");
@@ -196,7 +196,7 @@ TEST_F(LogTest, AllLevels)
 	HICAL_LOG_WARN("msg warn");
 	HICAL_LOG_ERROR("msg error");
 
-	std::string out = m_ss.str();
+	std::string out = ss_.str();
 #ifndef NDEBUG
 	EXPECT_NE(out.find("TRACE"), std::string::npos);
 #endif
@@ -211,45 +211,45 @@ TEST_F(LogTest, AllLevels)
 TEST_F(LogTest, FormatStyleBasic)
 {
 	Logger::instance().setLevel(LogLevel::hDebug);
-	Logger::instance().setOutput(m_ss);
+	Logger::instance().setOutput(ss_);
 
 	HICAL_LOG_INFO("port={}", 8080);
 
-	std::string out = m_ss.str();
+	std::string out = ss_.str();
 	EXPECT_NE(out.find("port=8080"), std::string::npos);
 }
 
 TEST_F(LogTest, FormatStyleMultipleArgs)
 {
 	Logger::instance().setLevel(LogLevel::hDebug);
-	Logger::instance().setOutput(m_ss);
+	Logger::instance().setOutput(ss_);
 
 	HICAL_LOG_INFO("host={} port={}", "localhost", 8080);
 
-	std::string out = m_ss.str();
+	std::string out = ss_.str();
 	EXPECT_NE(out.find("host=localhost port=8080"), std::string::npos);
 }
 
 TEST_F(LogTest, FormatStyleNoArgs)
 {
 	Logger::instance().setLevel(LogLevel::hDebug);
-	Logger::instance().setOutput(m_ss);
+	Logger::instance().setOutput(ss_);
 
 	// 无额外参数：std::format("hello") 直接返回 "hello"
 	HICAL_LOG_INFO("hello");
 
-	std::string out = m_ss.str();
+	std::string out = ss_.str();
 	EXPECT_NE(out.find("hello"), std::string::npos);
 }
 
 TEST_F(LogTest, FormatStyleWithTypes)
 {
 	Logger::instance().setLevel(LogLevel::hDebug);
-	Logger::instance().setOutput(m_ss);
+	Logger::instance().setOutput(ss_);
 
 	HICAL_LOG_DEBUG("int={} double={:.2f} bool={}", 42, 3.14, true);
 
-	std::string out = m_ss.str();
+	std::string out = ss_.str();
 	EXPECT_NE(out.find("int=42"), std::string::npos);
 	EXPECT_NE(out.find("double=3.14"), std::string::npos);
 	EXPECT_NE(out.find("bool=true"), std::string::npos);
@@ -260,34 +260,34 @@ TEST_F(LogTest, FormatStyleWithTypes)
 TEST_F(LogTest, ConditionalMacroTrue)
 {
 	Logger::instance().setLevel(LogLevel::hDebug);
-	Logger::instance().setOutput(m_ss);
+	Logger::instance().setOutput(ss_);
 
 	HICAL_LOG_INFO_IF(true, "condition met");
 
-	std::string out = m_ss.str();
+	std::string out = ss_.str();
 	EXPECT_NE(out.find("condition met"), std::string::npos);
 }
 
 TEST_F(LogTest, ConditionalMacroFalse)
 {
 	Logger::instance().setLevel(LogLevel::hDebug);
-	Logger::instance().setOutput(m_ss);
+	Logger::instance().setOutput(ss_);
 
 	HICAL_LOG_INFO_IF(false, "should not appear");
 
-	std::string out = m_ss.str();
+	std::string out = ss_.str();
 	EXPECT_EQ(out.find("should not appear"), std::string::npos);
 }
 
 TEST_F(LogTest, ConditionalMacroWithFormat)
 {
 	Logger::instance().setLevel(LogLevel::hDebug);
-	Logger::instance().setOutput(m_ss);
+	Logger::instance().setOutput(ss_);
 
 	int x = 100;
 	HICAL_LOG_WARN_IF(x > 50, "x={} exceeded threshold", x);
 
-	std::string out = m_ss.str();
+	std::string out = ss_.str();
 	EXPECT_NE(out.find("x=100 exceeded threshold"), std::string::npos);
 }
 
@@ -296,11 +296,11 @@ TEST_F(LogTest, ConditionalMacroWithFormat)
 TEST_F(LogTest, StreamMacroBasic)
 {
 	Logger::instance().setLevel(LogLevel::hDebug);
-	Logger::instance().setOutput(m_ss);
+	Logger::instance().setOutput(ss_);
 
 	HICAL_LOG_INFO_STREAM << "port=" << 8080;
 
-	std::string out = m_ss.str();
+	std::string out = ss_.str();
 	EXPECT_NE(out.find("port=8080"), std::string::npos);
 	EXPECT_NE(out.find("[INFO]"), std::string::npos);
 }
@@ -308,22 +308,22 @@ TEST_F(LogTest, StreamMacroBasic)
 TEST_F(LogTest, StreamMacroFiltered)
 {
 	Logger::instance().setLevel(LogLevel::hWarn);
-	Logger::instance().setOutput(m_ss);
+	Logger::instance().setOutput(ss_);
 
 	HICAL_LOG_DEBUG_STREAM << "filtered out";
 
-	std::string out = m_ss.str();
+	std::string out = ss_.str();
 	EXPECT_TRUE(out.empty());
 }
 
 TEST_F(LogTest, StreamMacroMultipleValues)
 {
 	Logger::instance().setLevel(LogLevel::hDebug);
-	Logger::instance().setOutput(m_ss);
+	Logger::instance().setOutput(ss_);
 
 	HICAL_LOG_ERROR_STREAM << "code=" << 500 << " msg=" << "server error";
 
-	std::string out = m_ss.str();
+	std::string out = ss_.str();
 	EXPECT_NE(out.find("code=500 msg=server error"), std::string::npos);
 	EXPECT_NE(out.find("[ERROR]"), std::string::npos);
 }
@@ -335,13 +335,13 @@ TEST_F(LogTest, NoFlushBelowThreshold)
 	// 默认 flushLevel = hError
 	// Info/Warn 不应触发 flush（通过 stringstream 的 rdbuf 间接验证）
 	Logger::instance().setLevel(LogLevel::hDebug);
-	Logger::instance().setOutput(m_ss);
+	Logger::instance().setOutput(ss_);
 
 	HICAL_LOG_INFO("no flush");
 	HICAL_LOG_WARN("no flush either");
 
 	// 无法直接验证 flush 行为，但至少消息应该在缓冲区
-	std::string out = m_ss.str();
+	std::string out = ss_.str();
 	EXPECT_NE(out.find("no flush"), std::string::npos);
 }
 
@@ -417,7 +417,7 @@ TEST_F(LogTest, FileOutput)
 	ifs.close();
 
 	// 恢复 Logger 输出以释放文件句柄（Windows 要求关闭后才能删除）
-	Logger::instance().setOutput(m_devNull);
+	Logger::instance().setOutput(devNull_);
 	std::filesystem::remove(tmpPath);
 }
 
@@ -426,7 +426,7 @@ TEST_F(LogTest, FileOutput)
 TEST_F(LogTest, MultiThreadSafety)
 {
 	Logger::instance().setLevel(LogLevel::hDebug);
-	Logger::instance().setOutput(m_ss);
+	Logger::instance().setOutput(ss_);
 
 	constexpr int kThreads = 4;
 	constexpr int kLogsPerThread = 100;
@@ -451,7 +451,7 @@ TEST_F(LogTest, MultiThreadSafety)
 		th.join();
 	}
 
-	std::string out = m_ss.str();
+	std::string out = ss_.str();
 	// 验证所有线程的日志都有输出（至少找到每个线程的第一条）
 	for (int t = 0; t < kThreads; ++t)
 	{
@@ -468,8 +468,8 @@ class MemorySink : public LogSink
 public:
 	void write(std::string_view formattedLine) override
 	{
-		std::lock_guard<std::mutex> lock(m_mutex);
-		m_data.append(formattedLine.data(), formattedLine.size());
+		std::lock_guard<std::mutex> lock(mutex_);
+		data_.append(formattedLine.data(), formattedLine.size());
 	}
 
 	void flush() override
@@ -478,13 +478,13 @@ public:
 
 	std::string data()
 	{
-		std::lock_guard<std::mutex> lock(m_mutex);
-		return m_data;
+		std::lock_guard<std::mutex> lock(mutex_);
+		return data_;
 	}
 
 private:
-	std::mutex m_mutex;
-	std::string m_data;
+	std::mutex mutex_;
+	std::string data_;
 };
 
 TEST_F(LogTest, AddSinkReceivesLogs)
@@ -570,10 +570,10 @@ TEST_F(LogTest, SetOutputOstreamCompatibility)
 {
 	// setOutput(ostream&) 应该通过内部 OStreamSink 桥接正常工作
 	Logger::instance().setLevel(LogLevel::hDebug);
-	Logger::instance().setOutput(m_ss);
+	Logger::instance().setOutput(ss_);
 
 	HICAL_LOG_INFO("ostream compat");
 
-	std::string out = m_ss.str();
+	std::string out = ss_.str();
 	EXPECT_NE(out.find("ostream compat"), std::string::npos);
 }

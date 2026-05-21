@@ -17,7 +17,7 @@ namespace hical
 
 	/**
 	 * @brief 异步文件日志 Sink（双缓冲 + 后台线程）
-	 * 前端线程 append 到 m_curBuf（mutex 保护），后台线程 swap 后批量写盘。
+	 * 前端线程 append 到 curBuf_（mutex 保护），后台线程 swap 后批量写盘。
 	 * 使用 std::jthread + stop_token 实现优雅关闭。
 	 * 背压保护：积压超限时丢弃日志并记录丢弃数量。
 	 */
@@ -51,16 +51,16 @@ namespace hical
 	private:
 		void backgroundLoop(std::stop_token stopToken);
 
-		Options m_opts;
-		LogFile m_logFile;
+		Options opts_;
+		LogFile logFile_;
 
-		std::mutex m_bufMutex;
-		std::string m_curBuf;
-		std::string m_flushBuf;
-		std::condition_variable_any m_cond;
-		std::jthread m_bgThread;
-		std::atomic<uint64_t> m_dropped {0};
-		std::deque<std::promise<void>> m_flushRequests; // flush() 同步握手队列
+		std::mutex bufMutex_;
+		std::string curBuf_;
+		std::string flushBuf_;
+		std::condition_variable_any cond_;
+		std::jthread bgThread_;
+		std::atomic<uint64_t> dropped_ {0};
+		std::deque<std::promise<void>> flushRequests_; // flush() 同步握手队列
 	};
 
 } // namespace hical

@@ -85,25 +85,25 @@ namespace hical
 		 * @brief 获取服务器名称
 		 * @return 名称
 		 */
-		const std::string& name() const;
+		[[nodiscard]] const std::string& name() const;
 
 		/**
 		 * @brief 获取监听地址
 		 * @return 地址
 		 */
-		const InetAddress& listenAddr() const;
+		[[nodiscard]] const InetAddress& listenAddr() const;
 
 		/**
 		 * @brief 获取当前连接数
 		 * @return 连接数
 		 */
-		size_t connectionCount() const;
+		[[nodiscard]] size_t connectionCount() const;
 
 		/**
 		 * @brief 服务器是否已启动
 		 * @return true 如果已启动
 		 */
-		bool isRunning() const;
+		[[nodiscard]] bool isRunning() const;
 
 		/**
 		 * @brief 设置空闲连接超时时间

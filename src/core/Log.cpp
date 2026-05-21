@@ -66,8 +66,8 @@ namespace hical
 	// ============ Logger 实现 ============
 
 	Logger::Logger()
-		: m_sinks(std::make_shared<const std::vector<std::shared_ptr<LogSink>>>())
-		, m_channels(std::make_unique<LogChannelRegistry>())
+		: sinks_(std::make_shared<const std::vector<std::shared_ptr<LogSink>>>())
+		, channels_(std::make_unique<LogChannelRegistry>())
 	{
 	}
 
@@ -79,30 +79,30 @@ namespace hical
 
 	void Logger::setLevel(LogLevel level)
 	{
-		m_level.store(level, std::memory_order_relaxed);
+		level_.store(level, std::memory_order_relaxed);
 	}
 
 	LogLevel Logger::level() const
 	{
-		return m_level.load(std::memory_order_relaxed);
+		return level_.load(std::memory_order_relaxed);
 	}
 
 	void Logger::setFlushLevel(LogLevel level)
 	{
-		m_flushLevel.store(level, std::memory_order_relaxed);
+		flushLevel_.store(level, std::memory_order_relaxed);
 	}
 
 	LogLevel Logger::flushLevel() const
 	{
-		return m_flushLevel.load(std::memory_order_relaxed);
+		return flushLevel_.load(std::memory_order_relaxed);
 	}
 
 	void Logger::setOutput(std::ostream& os)
 	{
 		auto newSinks = std::make_shared<std::vector<std::shared_ptr<LogSink>>>();
 		newSinks->push_back(std::make_shared<OStreamSink>(os));
-		std::lock_guard<std::mutex> lock(m_mutex);
-		m_sinks = std::move(newSinks);
+		std::lock_guard<std::mutex> lock(mutex_);
+		sinks_ = std::move(newSinks);
 	}
 
 	void Logger::setOutput(const std::string& filePath)
@@ -110,8 +110,8 @@ namespace hical
 		auto fileSink = std::make_shared<FileSink>(LogFile::Options {.basePath = filePath});
 		auto newSinks = std::make_shared<std::vector<std::shared_ptr<LogSink>>>();
 		newSinks->push_back(std::move(fileSink));
-		std::lock_guard<std::mutex> lock(m_mutex);
-		m_sinks = std::move(newSinks);
+		std::lock_guard<std::mutex> lock(mutex_);
+		sinks_ = std::move(newSinks);
 	}
 
 	void Logger::log(LogLevel lvl, const char* file, int line, std::string_view msg)
@@ -121,35 +121,35 @@ namespace hical
 
 	void Logger::addSink(std::shared_ptr<LogSink> sink)
 	{
-		std::lock_guard<std::mutex> lock(m_mutex);
-		auto newSinks = std::make_shared<std::vector<std::shared_ptr<LogSink>>>(*m_sinks);
+		std::lock_guard<std::mutex> lock(mutex_);
+		auto newSinks = std::make_shared<std::vector<std::shared_ptr<LogSink>>>(*sinks_);
 		newSinks->push_back(std::move(sink));
-		m_sinks = std::move(newSinks);
+		sinks_ = std::move(newSinks);
 	}
 
 	void Logger::setSink(std::shared_ptr<LogSink> sink)
 	{
 		auto newSinks = std::make_shared<std::vector<std::shared_ptr<LogSink>>>();
 		newSinks->push_back(std::move(sink));
-		std::lock_guard<std::mutex> lock(m_mutex);
-		m_sinks = std::move(newSinks);
+		std::lock_guard<std::mutex> lock(mutex_);
+		sinks_ = std::move(newSinks);
 	}
 
 	void Logger::clearSinks()
 	{
-		std::lock_guard<std::mutex> lock(m_mutex);
-		m_sinks = std::make_shared<const std::vector<std::shared_ptr<LogSink>>>();
+		std::lock_guard<std::mutex> lock(mutex_);
+		sinks_ = std::make_shared<const std::vector<std::shared_ptr<LogSink>>>();
 	}
 
 	void Logger::setFormatter(std::shared_ptr<LogFormatter> formatter)
 	{
-		std::lock_guard<std::mutex> lock(m_mutex);
-		m_formatter = std::move(formatter);
+		std::lock_guard<std::mutex> lock(mutex_);
+		formatter_ = std::move(formatter);
 	}
 
 	LogChannelRegistry& Logger::channels()
 	{
-		return *m_channels;
+		return *channels_;
 	}
 
 	void Logger::output(LogLevel lvl, const char* file, int line, std::string_view msg)
@@ -189,9 +189,9 @@ namespace hical
 		std::shared_ptr<LogFormatter> fmtSnap;
 		std::shared_ptr<const std::vector<std::shared_ptr<LogSink>>> sinksSnap;
 		{
-			std::lock_guard<std::mutex> lock(m_mutex);
-			fmtSnap = m_formatter;
-			sinksSnap = m_sinks;
+			std::lock_guard<std::mutex> lock(mutex_);
+			fmtSnap = formatter_;
+			sinksSnap = sinks_;
 		}
 
 		// 锁外格式化（纯函数，不访问 Logger 共享状态）
@@ -199,7 +199,7 @@ namespace hical
 		auto formattedLine = formatter->format(record);
 
 		bool needFlush =
-			record.level >= m_flushLevel.load(std::memory_order_relaxed) || record.level == LogLevel::hFatal;
+			record.level >= flushLevel_.load(std::memory_order_relaxed) || record.level == LogLevel::hFatal;
 
 		// 锁外分发到各 Sink（Sink 接口要求实现线程安全）
 		if (sinksSnap->empty())
@@ -238,7 +238,7 @@ namespace hical
 
 	void Logger::emitTo(const std::string& channelName, const LogRecord& record)
 	{
-		auto ch = m_channels->get(channelName);
+		auto ch = channels_->get(channelName);
 		if (ch)
 		{
 			ch->emit(record);

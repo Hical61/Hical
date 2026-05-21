@@ -68,11 +68,11 @@ namespace hical::meta::openapi
 		static std::string methodToLower(HttpMethod method);
 		static std::vector<std::string> extractPathParams(std::string_view path);
 
-		std::shared_ptr<const OpenApiRegistry> m_registry;
-		OpenApiConfig m_config;
-		std::mutex m_mutex;
-		bool m_generated = false;
-		std::string m_cached;
+		std::shared_ptr<const OpenApiRegistry> registry_;
+		OpenApiConfig config_;
+		std::mutex mutex_;
+		bool generated_ = false;
+		std::string cached_;
 	};
 
 } // namespace hical::meta::openapi

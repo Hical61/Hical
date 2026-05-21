@@ -65,8 +65,8 @@ namespace hical
 	{
 	public:
 		// 路径参数安全限制
-		static constexpr size_t hMaxPathSegments = 32;
-		static constexpr size_t hMaxParamValueLength = 1024;
+		static constexpr size_t kMaxPathSegments = 32;
+		static constexpr size_t kMaxParamValueLength = 1024;
 
 		// 参数列表类型：用 vector<pair> 替代 unordered_map，减少堆分配
 		using ParamList = std::vector<std::pair<std::string, std::string>>;
@@ -195,7 +195,7 @@ namespace hical
 		 * @return 协程化的 HTTP 响应
 		 * 如果没有匹配的路由，返回 404 Not Found。
 		 */
-		Awaitable<HttpResponse> dispatch(HttpRequest& req);
+		[[nodiscard]] Awaitable<HttpResponse> dispatch(HttpRequest& req);
 
 		/**
 		 * @brief 同步快速路径分发（零协程帧开销）
@@ -203,7 +203,7 @@ namespace hical
 		 * @param req HTTP 请求
 		 * @return 有值 = 同步处理完成；nullopt = 需要 fallback 到 co_await dispatch()
 		 */
-		std::optional<HttpResponse> dispatchSync(HttpRequest& req);
+		[[nodiscard]] std::optional<HttpResponse> dispatchSync(HttpRequest& req);
 
 		/**
 		 * @brief WebSocket 路由匹配结果
@@ -221,27 +221,27 @@ namespace hical
 		 * @return WsRouteMatch（route 为 nullptr 表示无匹配）
 		 */
 
-		WsRouteMatch findWsRoute(std::string_view path) const;
+		[[nodiscard]] WsRouteMatch findWsRoute(std::string_view path) const;
 
 		/**
 		 * @brief 获取已注册路由数量（HTTP + WebSocket）
 		 * @return 路由数量
 		 */
-		size_t routeCount() const;
+		[[nodiscard]] size_t routeCount() const;
 
 		/**
 		 * @brief 创建路由组（前缀分组）
 		 * @param prefix 路由前缀（如 "/api/v1"）
 		 * @return 路由组对象
 		 */
-		RouteGroup group(const std::string& prefix);
+		[[nodiscard]] RouteGroup group(const std::string& prefix);
 
 		/**
 		 * @brief URL 解码（百分号编码 -> 原始字符，'+' -> 空格）
 		 * @param encoded 编码后的字符串
 		 * @return 解码后的字符串
 		 */
-		static std::string urlDecode(std::string_view encoded);
+		[[nodiscard]] static std::string urlDecode(std::string_view encoded);
 
 	private:
 		// ============ 静态路由（哈希表 O(1) 查找） ============

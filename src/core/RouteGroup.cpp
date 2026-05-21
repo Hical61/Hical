@@ -5,81 +5,81 @@ namespace hical
 {
 
 	RouteGroup::RouteGroup(Router& router, std::string prefix, std::vector<MiddlewareHandler> middlewares)
-		: m_router(router), m_prefix(std::move(prefix))
+		: router_(router), prefix_(std::move(prefix))
 	{
-		m_entries.reserve(middlewares.size());
+		entries_.reserve(middlewares.size());
 		for (auto& mw : middlewares)
 		{
 			MiddlewareEntry entry;
-			entry.type = MiddlewareEntry::Type::Async;
+			entry.type = MiddlewareEntry::Type::hAsync;
 			entry.asyncHandler = std::move(mw);
-			m_entries.push_back(std::move(entry));
+			entries_.push_back(std::move(entry));
 		}
 	}
 
 	RouteGroup::RouteGroup(Router& router, std::string prefix, std::vector<MiddlewareEntry> entries)
-		: m_router(router), m_prefix(std::move(prefix)), m_entries(std::move(entries))
+		: router_(router), prefix_(std::move(prefix)), entries_(std::move(entries))
 	{
 	}
 
 	void RouteGroup::use(MiddlewareHandler middleware)
 	{
 		MiddlewareEntry entry;
-		entry.type = MiddlewareEntry::Type::Async;
+		entry.type = MiddlewareEntry::Type::hAsync;
 		entry.asyncHandler = std::move(middleware);
-		m_entries.push_back(std::move(entry));
+		entries_.push_back(std::move(entry));
 	}
 
 	void RouteGroup::use(SyncBeforeHandler before)
 	{
 		MiddlewareEntry entry;
-		entry.type = MiddlewareEntry::Type::Sync;
+		entry.type = MiddlewareEntry::Type::hSync;
 		entry.before = std::move(before);
-		m_entries.push_back(std::move(entry));
+		entries_.push_back(std::move(entry));
 	}
 
 	void RouteGroup::use(SyncBeforeHandler before, SyncAfterHandler after)
 	{
 		MiddlewareEntry entry;
-		entry.type = MiddlewareEntry::Type::Sync;
+		entry.type = MiddlewareEntry::Type::hSync;
 		entry.before = std::move(before);
 		entry.after = std::move(after);
-		m_entries.push_back(std::move(entry));
+		entries_.push_back(std::move(entry));
 	}
 
 	RouteGroup RouteGroup::group(const std::string& subPrefix)
 	{
-		return RouteGroup(m_router, joinPath(subPrefix), m_entries);
+		return RouteGroup(router_, joinPath(subPrefix), entries_);
 	}
 
 	std::string RouteGroup::joinPath(const std::string& path) const
 	{
-		if (m_prefix.empty())
+		if (prefix_.empty())
 		{
 			return path;
 		}
 		if (path.empty())
 		{
-			return m_prefix;
+			return prefix_;
 		}
 
-		bool prefixEndsSlash = m_prefix.back() == '/';
+		bool prefixEndsSlash = prefix_.back() == '/';
 		bool pathStartsSlash = path.front() == '/';
 
 		if (prefixEndsSlash && pathStartsSlash)
 		{
-			return m_prefix + path.substr(1);
+			return prefix_ + path.substr(1);
 		}
 		if (!prefixEndsSlash && !pathStartsSlash)
 		{
-			return m_prefix + "/" + path;
+			return prefix_ + "/" + path;
 		}
-		return m_prefix + path;
+		return prefix_ + path;
 	}
 
 	RouteHandler RouteGroup::wrapHandler(RouteHandler handler) const
 	{
-		if (m_entries.empty())
+		if (entries_.empty())
 		{
 			return handler;
 		}
@@ -90,7 +90,7 @@ namespace hical
 			co_return co_await h(req);
 		};
 
-		auto chain = MiddlewarePipeline::buildOptimizedChain(m_entries, std::move(finalNext));
+		auto chain = MiddlewarePipeline::buildOptimizedChain(entries_, std::move(finalNext));
 
 		// SAFETY: const_cast 是安全的，因为 RouteHandler 被调用时，req 对象
 		// 始终是 HttpServer::handleSession 中的非 const 局部变量。
@@ -104,30 +104,30 @@ namespace hical
 
 	void RouteGroup::route(HttpMethod method, const std::string& path, RouteHandler handler)
 	{
-		m_router.route(method, joinPath(path), wrapHandler(std::move(handler)));
+		router_.route(method, joinPath(path), wrapHandler(std::move(handler)));
 	}
 
 	void RouteGroup::route(HttpMethod method, const std::string& path, SyncRouteHandler handler)
 	{
 		// 检查是否所有中间件都是 Sync 类型
-		bool allSync = std::all_of(m_entries.begin(),
-								   m_entries.end(),
+		bool allSync = std::all_of(entries_.begin(),
+								   entries_.end(),
 								   [](const MiddlewareEntry& e)
 								   {
-									   return e.type == MiddlewareEntry::Type::Sync;
+									   return e.type == MiddlewareEntry::Type::hSync;
 								   });
 
-		if (m_entries.empty())
+		if (entries_.empty())
 		{
 			// 无中间件：直接注册同步 handler
-			m_router.route(method, joinPath(path), std::move(handler));
+			router_.route(method, joinPath(path), std::move(handler));
 			return;
 		}
 
 		if (allSync)
 		{
 			// 纯同步快速路径：所有中间件 + handler 都同步执行，零协程帧
-			auto syncEntries = m_entries; // 复制一份给 lambda 捕获
+			auto syncEntries = entries_; // 复制一份给 lambda 捕获
 			SyncRouteHandler syncWrapped = [syncEntries = std::move(syncEntries),
 											h = handler](const HttpRequest& req) -> HttpResponse
 			{
@@ -161,7 +161,7 @@ namespace hical
 			};
 
 			// 同时注册 async 和 sync 版本
-			m_router.route(method, joinPath(path), std::move(syncWrapped));
+			router_.route(method, joinPath(path), std::move(syncWrapped));
 		}
 		else
 		{

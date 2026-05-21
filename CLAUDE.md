@@ -94,7 +94,7 @@ find src -name '*.cpp' | xargs clang-tidy -p build
 - `LogFormatter.h/cpp` — Log formatter interface + `TextFormatter` (Phase 1/2 compatible text output with `thread_local` timestamp cache) + `JsonFormatter` (JSON Lines via `boost::json::serialize`, UTC timestamps)
 - `LogSink.h/cpp` — Pluggable log output backend interface (`LogSink` abstract) + `StderrSink` (fprintf) + `FileSink` (sync fwrite + `LogFile` rotation) + `OStreamSink` (thread-safe ostream wrapper for `setOutput()` compat)
 - `LogFile.h/cpp` — Log file rotation engine: size-based rotation (default 100MB), max file count limit, timestamp-sequenced archive naming (`app.YYMMDD-HHMMSS.NNNNNN.log`), strict filename matching for cleanup, `FILE*`-based I/O
-- `AsyncFileSink.h/cpp` — Async double-buffered file Sink: `std::jthread` + `stop_token` background thread, 4MB front/back buffer swap, `condition_variable_any` wakeup, backpressure protection (drop + count), 1s timeout flush, graceful shutdown with final `m_curBuf` drain
+- `AsyncFileSink.h/cpp` — Async double-buffered file Sink: `std::jthread` + `stop_token` background thread, 4MB front/back buffer swap, `condition_variable_any` wakeup, backpressure protection (drop + count), 1s timeout flush, graceful shutdown with final `curBuf_` drain
 - `FixedBuffer.h` — Stack-allocated fixed buffer template (default 4KB), `std::to_chars` integer/float formatting, heap fallback on overflow, replaces `std::ostringstream` in `LogStream`
 - `LogChannel.h/cpp` — Named log channel with independent level/formatter/sinks, `LogChannelRegistry` with `shared_mutex` (read-many-write-rarely), `HICAL_LOG_TO("channel", Info, fmt, ...)` macro
 - `LogMiddleware.h/cpp` — Onion-model logging middleware: auto trace-id generation (OpenSSL RAND_bytes 128-bit hex), `req.setAttribute("hical.trace_id", ...)`, structured access log to named channel (method/path/status/latency_ms)
@@ -160,17 +160,16 @@ Core design principle: when `HICAL_HAS_REFLECTION == 1` (compiler supports P2996
 | Class / Struct     | CamelCase (no prefix)   | `HttpServer`, `PoolConfig`     |
 | Enum               | CamelCase (no prefix)   | `HttpMethod`                   |
 | Abstract/Interface | CamelCase (no prefix)   | `EventLoop`, `TcpConnection`   |
-| Enum constant      | `E` prefix + CamelCase  | `EGet`, `EPost`                |
-| Member variable    | `m_` prefix + camelBack | `m_ioContext`                  |
+| Enum constant      | `h` prefix + CamelCase  | `hGet`, `hPost`, `hOk`         |
+| Member variable    | camelBack + `_` suffix  | `router_`, `maxBodySize_`, `ioCtx_`  |
+| Static constexpr   | `k` prefix + CamelCase  | `kMaxPathSegments`, `kPoolKey` |
 | Global variable    | `g_` prefix + camelBack | `g_instance`                   |
-| Static variable    | `s` prefix + camelBack  | `sThreadPool`                  |
 | Function/Method    | camelBack               | `runAfter()`, `dispatch()`     |
 | Local variable     | camelBack               | `bytesRead`                    |
-| Pointer param      | `p` prefix + CamelCase  | `pSocket`                      |
 | Macro              | UPPER_CASE              | `HICAL_ROUTE`                  |
 | Template param     | CamelCase               | `SocketType`                   |
 
-**Note**: Class/Struct/Enum/Interface types do not use C/S/E/I prefixes — plain CamelCase only (e.g. `HttpServer`, `RouteInfo`, `HttpMethod`, `EventLoop`). Enum constants retain the `E` prefix to distinguish them from type names.
+**Note**: Class/Struct/Enum/Interface types do not use C/S/E/I prefixes — plain CamelCase only (e.g. `HttpServer`, `RouteInfo`, `HttpMethod`, `EventLoop`). Enum constants use `h` prefix (for hical namespace identity) with scoped `enum class`. Static constexpr constants use `k` prefix (Google style, e.g. `kMaxPathSegments`, `kPoolKey`). All member variables use trailing underscore — no `m_` prefix anywhere in the codebase.
 
 ## Code Style
 

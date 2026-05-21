@@ -59,7 +59,7 @@ namespace hical::db
 		 * @param sql SQL 模板
 		 * @return 命中时返回 statement 指针，未命中返回 nullptr
 		 */
-		boost::mysql::statement* find(std::string_view sql);
+		[[nodiscard]] boost::mysql::statement* find(std::string_view sql);
 
 		/**
 		 * @brief 插入 statement 到缓存
@@ -69,32 +69,33 @@ namespace hical::db
 		 * @param stmt 要缓存的 statement
 		 * @return 被淘汰的 statement（调用方需关闭）；无淘汰时为 nullopt
 		 */
-		std::optional<boost::mysql::statement> insert(const std::string& sql, boost::mysql::statement stmt);
+		[[nodiscard]] std::optional<boost::mysql::statement> insert(const std::string& sql,
+																	boost::mysql::statement stmt);
 
 		/**
 		 * @brief 移除指定 SQL 的缓存条目
 		 * @param sql SQL 模板
 		 * @return 被移除的 statement；不存在时为 nullopt
 		 */
-		std::optional<boost::mysql::statement> erase(std::string_view sql);
+		[[nodiscard]] std::optional<boost::mysql::statement> erase(std::string_view sql);
 
 		/**
 		 * @brief 清空缓存，返回所有 statement（调用方需关闭）
 		 */
-		std::vector<boost::mysql::statement> clear();
+		[[nodiscard]] std::vector<boost::mysql::statement> clear();
 
-		size_t size() const;
-		size_t maxSize() const;
+		[[nodiscard]] size_t size() const;
+		[[nodiscard]] size_t maxSize() const;
 
 	private:
-		size_t m_maxSize;
+		size_t maxSize_;
 
 		// LRU 双向链表：front = MRU, back = LRU
 		using LruEntry = std::pair<std::string, boost::mysql::statement>;
-		std::list<LruEntry> m_lruList;
+		std::list<LruEntry> lruList_;
 
 		// SQL -> LRU 链表迭代器的哈希表
-		std::unordered_map<std::string, std::list<LruEntry>::iterator, StringHash, StringEqual> m_map;
+		std::unordered_map<std::string, std::list<LruEntry>::iterator, StringHash, StringEqual> map_;
 	};
 
 } // namespace hical::db

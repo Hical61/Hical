@@ -47,22 +47,22 @@ namespace hical
 		}
 
 #ifdef HICAL_ENABLE_MEMORY_TRACKING
-		size_t totalAllocations() const
+		[[nodiscard]] size_t totalAllocations() const
 		{
 			return totalAllocations_.value.load(std::memory_order_relaxed);
 		}
 
-		size_t totalDeallocations() const
+		[[nodiscard]] size_t totalDeallocations() const
 		{
 			return totalDeallocations_.value.load(std::memory_order_relaxed);
 		}
 
-		size_t currentBytes() const
+		[[nodiscard]] size_t currentBytes() const
 		{
 			return currentBytes_.value.load(std::memory_order_relaxed);
 		}
 
-		size_t peakBytes() const
+		[[nodiscard]] size_t peakBytes() const
 		{
 			return peakBytes_.value.load(std::memory_order_relaxed);
 		}
@@ -78,22 +78,22 @@ namespace hical
 			peakBytes_.value.store(0, std::memory_order_relaxed);
 		}
 #else
-		size_t totalAllocations() const
+		[[nodiscard]] size_t totalAllocations() const
 		{
 			return 0;
 		}
 
-		size_t totalDeallocations() const
+		[[nodiscard]] size_t totalDeallocations() const
 		{
 			return 0;
 		}
 
-		size_t currentBytes() const
+		[[nodiscard]] size_t currentBytes() const
 		{
 			return 0;
 		}
 
-		size_t peakBytes() const
+		[[nodiscard]] size_t peakBytes() const
 		{
 			return 0;
 		}
@@ -170,7 +170,7 @@ namespace hical
 		 * @brief 获取全局单例
 		 * @return 内存池管理器引用
 		 */
-		static MemoryPool& instance();
+		[[nodiscard]] static MemoryPool& instance();
 
 		/**
 		 * @brief 使用指定配置初始化（必须在首次使用前调用，否则使用默认配置）
@@ -186,27 +186,27 @@ namespace hical
 		 * @brief 获取全局同步池（线程安全，跨线程共享）
 		 * @return pmr 分配器
 		 */
-		std::pmr::polymorphic_allocator<std::byte> globalAllocator();
+		[[nodiscard]] std::pmr::polymorphic_allocator<std::byte> globalAllocator();
 
 		/**
 		 * @brief 获取当前线程的本地池（thread_local 无锁高性能）
 		 * @return pmr 分配器
 		 */
-		std::pmr::polymorphic_allocator<std::byte> threadLocalAllocator();
+		[[nodiscard]] std::pmr::polymorphic_allocator<std::byte> threadLocalAllocator();
 
 		/**
 		 * @brief 获取当前线程的本地池资源指针
 		 * 适合作为 monotonic_buffer_resource 的 upstream（无锁，单线程环境下使用）。
 		 * @return 本地池资源指针
 		 */
-		std::pmr::unsynchronized_pool_resource* threadLocalPool();
+		[[nodiscard]] std::pmr::unsynchronized_pool_resource* threadLocalPool();
 
 		/**
 		 * @brief 创建请求级单调池（用于 HTTP 请求生命周期）
 		 * @param initialSize 初始缓冲区大小（字节，0 则使用配置默认值）
 		 * @return 单调池资源（需手动管理生命周期）
 		 */
-		std::unique_ptr<std::pmr::monotonic_buffer_resource> createRequestPool(size_t initialSize = 0);
+		[[nodiscard]] std::unique_ptr<std::pmr::monotonic_buffer_resource> createRequestPool(size_t initialSize = 0);
 
 		/**
 		 * @brief 内存池统计信息
@@ -226,7 +226,7 @@ namespace hical
 		 * @brief 获取全局池统计信息
 		 * @return Stats 结构
 		 */
-		Stats getStats() const;
+		[[nodiscard]] Stats getStats() const;
 
 		/**
 		 * @brief 重置统计数据
@@ -247,7 +247,7 @@ namespace hical
 		 * @brief 获取追踪资源的直接引用（用于高级诊断）
 		 * @return TrackedResource 引用
 		 */
-		TrackedResource& trackedResource()
+		[[nodiscard]] TrackedResource& trackedResource()
 		{
 			return trackedResource_;
 		}
@@ -256,7 +256,7 @@ namespace hical
 		 * @brief 获取当前配置
 		 * @return 配置引用
 		 */
-		const PoolConfig& config() const
+		[[nodiscard]] const PoolConfig& config() const
 		{
 			return config_;
 		}

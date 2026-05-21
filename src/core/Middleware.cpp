@@ -13,7 +13,7 @@ namespace hical
 		auto name = "middleware_" + std::to_string(entries_.size());
 
 		MiddlewareEntry entry;
-		entry.type = MiddlewareEntry::Type::Async;
+		entry.type = MiddlewareEntry::Type::hAsync;
 		entry.name = std::move(name);
 		entry.asyncHandler = std::move(middleware);
 		entries_.push_back(std::move(entry));
@@ -27,7 +27,7 @@ namespace hical
 		}
 
 		MiddlewareEntry entry;
-		entry.type = MiddlewareEntry::Type::Async;
+		entry.type = MiddlewareEntry::Type::hAsync;
 		entry.name = name;
 		entry.asyncHandler = std::move(middleware);
 		entries_.push_back(std::move(entry));
@@ -42,7 +42,7 @@ namespace hical
 		auto name = "sync_middleware_" + std::to_string(entries_.size());
 
 		MiddlewareEntry entry;
-		entry.type = MiddlewareEntry::Type::Sync;
+		entry.type = MiddlewareEntry::Type::hSync;
 		entry.name = std::move(name);
 		entry.before = std::move(before);
 		entries_.push_back(std::move(entry));
@@ -57,7 +57,7 @@ namespace hical
 		auto name = "sync_middleware_" + std::to_string(entries_.size());
 
 		MiddlewareEntry entry;
-		entry.type = MiddlewareEntry::Type::Sync;
+		entry.type = MiddlewareEntry::Type::hSync;
 		entry.name = std::move(name);
 		entry.before = std::move(before);
 		entry.after = std::move(after);
@@ -72,7 +72,7 @@ namespace hical
 		}
 
 		MiddlewareEntry entry;
-		entry.type = MiddlewareEntry::Type::Sync;
+		entry.type = MiddlewareEntry::Type::hSync;
 		entry.name = name;
 		entry.before = std::move(before);
 		entry.after = std::move(after);
@@ -93,7 +93,7 @@ namespace hical
 		asyncHandlers.reserve(entries_.size());
 		for (const auto& e : entries_)
 		{
-			if (e.type == MiddlewareEntry::Type::Async)
+			if (e.type == MiddlewareEntry::Type::hAsync)
 			{
 				asyncHandlers.push_back(e.asyncHandler);
 			}
@@ -112,7 +112,7 @@ namespace hical
 		asyncHandlers.reserve(entries_.size());
 		for (const auto& e : entries_)
 		{
-			if (e.type == MiddlewareEntry::Type::Async)
+			if (e.type == MiddlewareEntry::Type::hAsync)
 			{
 				asyncHandlers.push_back(e.asyncHandler);
 			}
@@ -154,7 +154,7 @@ namespace hical
 		bool hasSync = false;
 		for (const auto& e : entries)
 		{
-			if (e.type == MiddlewareEntry::Type::Sync)
+			if (e.type == MiddlewareEntry::Type::hSync)
 			{
 				hasSync = true;
 				break;
@@ -178,7 +178,7 @@ namespace hical
 		int i = static_cast<int>(entries.size()) - 1;
 		while (i >= 0)
 		{
-			if (entries[i].type == MiddlewareEntry::Type::Async)
+			if (entries[i].type == MiddlewareEntry::Type::hAsync)
 			{
 				// Async 条目：独立协程 lambda（不变）
 				auto mw = entries[i].asyncHandler;
@@ -192,7 +192,7 @@ namespace hical
 			{
 				// 收集连续 Sync 条目
 				int syncEnd = i; // inclusive
-				while (i >= 0 && entries[i].type == MiddlewareEntry::Type::Sync)
+				while (i >= 0 && entries[i].type == MiddlewareEntry::Type::hSync)
 				{
 					--i;
 				}
@@ -281,7 +281,7 @@ namespace hical
 		// 仅为 Async 条目创建 profiling 统计（Sync 中间件不独立计时）
 		for (const auto& e : entries_)
 		{
-			if (e.type == MiddlewareEntry::Type::Async)
+			if (e.type == MiddlewareEntry::Type::hAsync)
 			{
 				auto stats = std::make_shared<MiddlewareTimingStats>();
 				stats->name = e.name;
@@ -315,7 +315,7 @@ namespace hical
 			asyncHandlers.reserve(entries_.size());
 			for (const auto& e : entries_)
 			{
-				if (e.type == MiddlewareEntry::Type::Async)
+				if (e.type == MiddlewareEntry::Type::hAsync)
 				{
 					asyncHandlers.push_back(e.asyncHandler);
 				}

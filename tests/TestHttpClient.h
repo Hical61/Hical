@@ -397,7 +397,7 @@ namespace hical::test
 			std::string payload;
 		};
 
-		explicit TestWsClient(boost::asio::io_context& ioc) : m_socket(ioc)
+		explicit TestWsClient(boost::asio::io_context& ioc) : socket_(ioc)
 		{
 		}
 
@@ -406,7 +406,7 @@ namespace hical::test
 		 */
 		void connect(const std::string& host, uint16_t port, const std::string& path)
 		{
-			m_socket.connect(tcp::endpoint(boost::asio::ip::make_address(host), port));
+			socket_.connect(tcp::endpoint(boost::asio::ip::make_address(host), port));
 
 			// 固定的 Sec-WebSocket-Key（测试用，不需要随机）
 			static constexpr const char* kTestKey = "dGVzdC13ZWJzb2NrZXQta2V5";
@@ -424,11 +424,11 @@ namespace hical::test
 							  + "\r\n"
 								"\r\n";
 
-			boost::asio::write(m_socket, boost::asio::buffer(req));
+			boost::asio::write(socket_, boost::asio::buffer(req));
 
 			// 读取 101 响应
 			std::string buf;
-			detail::readUntilHeaderEnd(m_socket, buf);
+			detail::readUntilHeaderEnd(socket_, buf);
 
 			// 简单验证包含 "101"
 			if (buf.find("101") == std::string::npos)
@@ -438,13 +438,13 @@ namespace hical::test
 
 			// 保存握手响应（含末尾的 \r\n\r\n）
 			auto headerEndPos = buf.find("\r\n\r\n");
-			m_handshakeResponse = buf.substr(0, headerEndPos + 4);
+			handshakeResponse_ = buf.substr(0, headerEndPos + 4);
 
 			// 保存 101 响应后的残余数据
 			auto headerEnd = headerEndPos + 4;
 			if (headerEnd < buf.size())
 			{
-				m_readBuf.assign(buf.begin() + static_cast<std::string::difference_type>(headerEnd), buf.end());
+				readBuf_.assign(buf.begin() + static_cast<std::string::difference_type>(headerEnd), buf.end());
 			}
 		}
 
@@ -454,7 +454,7 @@ namespace hical::test
 		 */
 		void connect(const std::string& host, uint16_t port, const std::string& path, const std::string& subprotocol)
 		{
-			m_socket.connect(tcp::endpoint(boost::asio::ip::make_address(host), port));
+			socket_.connect(tcp::endpoint(boost::asio::ip::make_address(host), port));
 
 			static constexpr const char* kTestKey = "dGVzdC13ZWJzb2NrZXQta2V5";
 
@@ -474,10 +474,10 @@ namespace hical::test
 							  + "\r\n"
 								"\r\n";
 
-			boost::asio::write(m_socket, boost::asio::buffer(req));
+			boost::asio::write(socket_, boost::asio::buffer(req));
 
 			std::string buf;
-			detail::readUntilHeaderEnd(m_socket, buf);
+			detail::readUntilHeaderEnd(socket_, buf);
 
 			if (buf.find("101") == std::string::npos)
 			{
@@ -485,12 +485,12 @@ namespace hical::test
 			}
 
 			auto headerEndPos = buf.find("\r\n\r\n");
-			m_handshakeResponse = buf.substr(0, headerEndPos + 4);
+			handshakeResponse_ = buf.substr(0, headerEndPos + 4);
 
 			auto headerEnd = headerEndPos + 4;
 			if (headerEnd < buf.size())
 			{
-				m_readBuf.assign(buf.begin() + static_cast<std::string::difference_type>(headerEnd), buf.end());
+				readBuf_.assign(buf.begin() + static_cast<std::string::difference_type>(headerEnd), buf.end());
 			}
 		}
 
@@ -502,7 +502,7 @@ namespace hical::test
 			// 测试用固定 mask key
 			static constexpr uint8_t kMaskKey[4] = {0x12, 0x34, 0x56, 0x78};
 			auto frame = hical::buildMaskedWsFrame(hical::WsOpcode::hText, msg, kMaskKey);
-			boost::asio::write(m_socket, boost::asio::buffer(frame));
+			boost::asio::write(socket_, boost::asio::buffer(frame));
 		}
 
 		/**
@@ -512,7 +512,7 @@ namespace hical::test
 		{
 			static constexpr uint8_t kMaskKey[4] = {0x12, 0x34, 0x56, 0x78};
 			auto frame = hical::buildMaskedWsFrame(hical::WsOpcode::hBinary, data, kMaskKey);
-			boost::asio::write(m_socket, boost::asio::buffer(frame));
+			boost::asio::write(socket_, boost::asio::buffer(frame));
 		}
 
 		/**
@@ -522,7 +522,7 @@ namespace hical::test
 		{
 			static constexpr uint8_t kMaskKey[4] = {0x12, 0x34, 0x56, 0x78};
 			auto frame = hical::buildMaskedWsFrame(hical::WsOpcode::hPong, payload, kMaskKey);
-			boost::asio::write(m_socket, boost::asio::buffer(frame));
+			boost::asio::write(socket_, boost::asio::buffer(frame));
 		}
 
 		/**
@@ -560,20 +560,20 @@ namespace hical::test
 				if (hdr)
 				{
 					size_t frameSize = hdr->headerSize + static_cast<size_t>(hdr->payloadLength);
-					if (m_readBuf.size() >= frameSize)
+					if (readBuf_.size() >= frameSize)
 					{
-						std::string payload(m_readBuf.data() + hdr->headerSize,
-											m_readBuf.data() + hdr->headerSize
+						std::string payload(readBuf_.data() + hdr->headerSize,
+											readBuf_.data() + hdr->headerSize
 												+ static_cast<size_t>(hdr->payloadLength));
 
-						m_readBuf.erase(m_readBuf.begin(), m_readBuf.begin() + static_cast<long>(frameSize));
+						readBuf_.erase(readBuf_.begin(), readBuf_.begin() + static_cast<long>(frameSize));
 						return {hdr->opcode, std::move(payload)};
 					}
 				}
 
 				char tmp[4096];
-				auto n = m_socket.read_some(boost::asio::buffer(tmp));
-				m_readBuf.append(tmp, n);
+				auto n = socket_.read_some(boost::asio::buffer(tmp));
+				readBuf_.append(tmp, n);
 			}
 		}
 
@@ -587,7 +587,7 @@ namespace hical::test
 			auto frame = hical::buildMaskedWsFrame(hical::WsOpcode::hClose, closePayload, kMaskKey);
 
 			boost::system::error_code ec;
-			boost::asio::write(m_socket, boost::asio::buffer(frame), ec);
+			boost::asio::write(socket_, boost::asio::buffer(frame), ec);
 		}
 
 		/**
@@ -595,27 +595,27 @@ namespace hical::test
 		 */
 		const std::string& lastHandshakeResponse() const
 		{
-			return m_handshakeResponse;
+			return handshakeResponse_;
 		}
 
 		tcp::socket& socket()
 		{
-			return m_socket;
+			return socket_;
 		}
 
 	private:
 		std::optional<hical::WsFrameHeader> tryParseFrame()
 		{
-			if (m_readBuf.size() < 2)
+			if (readBuf_.size() < 2)
 			{
 				return std::nullopt;
 			}
-			return hical::parseWsFrameHeader(reinterpret_cast<const uint8_t*>(m_readBuf.data()), m_readBuf.size());
+			return hical::parseWsFrameHeader(reinterpret_cast<const uint8_t*>(readBuf_.data()), readBuf_.size());
 		}
 
-		tcp::socket m_socket;
-		std::string m_readBuf;
-		std::string m_handshakeResponse;
+		tcp::socket socket_;
+		std::string readBuf_;
+		std::string handshakeResponse_;
 	};
 
 } // namespace hical::test

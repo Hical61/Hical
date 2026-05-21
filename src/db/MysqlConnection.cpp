@@ -13,17 +13,17 @@ namespace hical::db
 {
 
 	MysqlConnection::MysqlConnection(boost::asio::io_context& ioCtx, size_t stmtCacheSize)
-		: m_ioCtx(ioCtx)
-		, m_conn(ioCtx.get_executor())
-		, m_stmtCache(stmtCacheSize)
-		, m_lastActive(std::chrono::steady_clock::now())
+		: ioCtx_(ioCtx)
+		, conn_(ioCtx.get_executor())
+		, stmtCache_(stmtCacheSize)
+		, lastActive_(std::chrono::steady_clock::now())
 	{
 	}
 
 	MysqlConnection::~MysqlConnection()
 	{
 		// 清理 statement 缓存（连接即将关闭，服务端会自动回收，无需异步 close）
-		m_stmtCache.clear();
+		stmtCache_.clear();
 	}
 
 	void MysqlConnection::validateCharset(const std::string& charset)
@@ -53,11 +53,11 @@ namespace hical::db
 		params.database = config.database;
 
 		// 连接
-		co_await conn->m_conn.async_connect(params, boost::asio::use_awaitable);
-		conn->m_alive = true;
+		co_await conn->conn_.async_connect(params, boost::asio::use_awaitable);
+		conn->alive_ = true;
 
 		// 设置元数据模式为 full(获取列名等完整信息)
-		conn->m_conn.set_meta_mode(boost::mysql::metadata_mode::full);
+		conn->conn_.set_meta_mode(boost::mysql::metadata_mode::full);
 
 		// 设置字符集(通过执行 SET NAMES)
 		if (!config.charset.empty())
@@ -65,7 +65,7 @@ namespace hical::db
 			validateCharset(config.charset);
 			boost::mysql::results charsetResult;
 			std::string setNamesSQL = "SET NAMES '" + config.charset + "'";
-			co_await conn->m_conn.async_execute(setNamesSQL, charsetResult, boost::asio::use_awaitable);
+			co_await conn->conn_.async_execute(setNamesSQL, charsetResult, boost::asio::use_awaitable);
 		}
 
 		conn->touch();
@@ -92,7 +92,7 @@ namespace hical::db
 	Awaitable<DbResult> MysqlConnection::query(std::string_view sql)
 	{
 		boost::mysql::results boostResults;
-		co_await m_conn.async_execute(std::string(sql), boostResults, boost::asio::use_awaitable);
+		co_await conn_.async_execute(std::string(sql), boostResults, boost::asio::use_awaitable);
 		touch();
 		co_return convertResults(boostResults);
 	}
@@ -118,33 +118,33 @@ namespace hical::db
 		bool needRetry = false;
 		try
 		{
-			co_await m_conn.async_execute(stmt.bind(fields.begin(), fields.end()),
-										  boostResults,
-										  boost::asio::use_awaitable);
+			co_await conn_.async_execute(stmt.bind(fields.begin(), fields.end()),
+										 boostResults,
+										 boost::asio::use_awaitable);
 		}
 		catch (...)
 		{
 			// statement 可能已失效（服务器重启等），标记重试
-			m_stmtCache.erase(sql);
+			stmtCache_.erase(sql);
 			needRetry = true;
 		}
 
 		if (needRetry)
 		{
 			// 重新 prepare 并执行（在 catch 外，允许 co_await）
-			auto freshStmt = co_await m_conn.async_prepare_statement(std::string(sql), boost::asio::use_awaitable);
+			auto freshStmt = co_await conn_.async_prepare_statement(std::string(sql), boost::asio::use_awaitable);
 
-			co_await m_conn.async_execute(freshStmt.bind(fields.begin(), fields.end()),
-										  boostResults,
-										  boost::asio::use_awaitable);
+			co_await conn_.async_execute(freshStmt.bind(fields.begin(), fields.end()),
+										 boostResults,
+										 boost::asio::use_awaitable);
 
 			// 重试成功，将新 statement 放回缓存
-			auto evicted = m_stmtCache.insert(std::string(sql), std::move(freshStmt));
+			auto evicted = stmtCache_.insert(std::string(sql), std::move(freshStmt));
 			if (evicted)
 			{
 				try
 				{
-					co_await m_conn.async_close_statement(*evicted, boost::asio::use_awaitable);
+					co_await conn_.async_close_statement(*evicted, boost::asio::use_awaitable);
 				}
 				catch (...)
 				{
@@ -159,7 +159,7 @@ namespace hical::db
 	Awaitable<boost::mysql::statement> MysqlConnection::getOrPrepare(std::string_view sql)
 	{
 		// 查找缓存（透明哈希，无堆分配）
-		auto* cached = m_stmtCache.find(sql);
+		auto* cached = stmtCache_.find(sql);
 		if (cached)
 		{
 			co_return *cached;
@@ -167,16 +167,16 @@ namespace hical::db
 
 		// 缓存未命中：prepare 新 statement
 		std::string sqlStr(sql);
-		auto stmt = co_await m_conn.async_prepare_statement(sqlStr, boost::asio::use_awaitable);
+		auto stmt = co_await conn_.async_prepare_statement(sqlStr, boost::asio::use_awaitable);
 
 		// 放入缓存（可能淘汰旧条目）
-		auto evicted = m_stmtCache.insert(sqlStr, stmt);
+		auto evicted = stmtCache_.insert(sqlStr, stmt);
 		if (evicted)
 		{
 			// 异步关闭被淘汰的 statement
 			try
 			{
-				co_await m_conn.async_close_statement(*evicted, boost::asio::use_awaitable);
+				co_await conn_.async_close_statement(*evicted, boost::asio::use_awaitable);
 			}
 			catch (...)
 			{
@@ -205,50 +205,50 @@ namespace hical::db
 	Awaitable<void> MysqlConnection::beginTransaction()
 	{
 		boost::mysql::results r;
-		co_await m_conn.async_execute("START TRANSACTION", r, boost::asio::use_awaitable);
-		m_inTransaction = true;
+		co_await conn_.async_execute("START TRANSACTION", r, boost::asio::use_awaitable);
+		inTransaction_ = true;
 		touch();
 	}
 
 	Awaitable<void> MysqlConnection::commit()
 	{
 		boost::mysql::results r;
-		co_await m_conn.async_execute("COMMIT", r, boost::asio::use_awaitable);
-		m_inTransaction = false;
+		co_await conn_.async_execute("COMMIT", r, boost::asio::use_awaitable);
+		inTransaction_ = false;
 		touch();
 	}
 
 	Awaitable<void> MysqlConnection::rollback()
 	{
 		boost::mysql::results r;
-		co_await m_conn.async_execute("ROLLBACK", r, boost::asio::use_awaitable);
-		m_inTransaction = false;
+		co_await conn_.async_execute("ROLLBACK", r, boost::asio::use_awaitable);
+		inTransaction_ = false;
 		touch();
 	}
 
 	bool MysqlConnection::inTransaction() const
 	{
-		return m_inTransaction;
+		return inTransaction_;
 	}
 
 	bool MysqlConnection::isAlive() const
 	{
-		return m_alive;
+		return alive_;
 	}
 
 	Awaitable<bool> MysqlConnection::ping()
 	{
 		try
 		{
-			co_await m_conn.async_ping(boost::asio::use_awaitable);
-			m_alive = true;
-			m_lastPing = std::chrono::steady_clock::now();
+			co_await conn_.async_ping(boost::asio::use_awaitable);
+			alive_ = true;
+			lastPing_ = std::chrono::steady_clock::now();
 			touch();
 			co_return true;
 		}
 		catch (...)
 		{
-			m_alive = false;
+			alive_ = false;
 			co_return false;
 		}
 	}
@@ -260,17 +260,17 @@ namespace hical::db
 
 	std::chrono::steady_clock::time_point MysqlConnection::lastActiveTime() const
 	{
-		return m_lastActive;
+		return lastActive_;
 	}
 
 	std::chrono::steady_clock::time_point MysqlConnection::lastPingTime() const
 	{
-		return m_lastPing;
+		return lastPing_;
 	}
 
 	void MysqlConnection::touch()
 	{
-		m_lastActive = std::chrono::steady_clock::now();
+		lastActive_ = std::chrono::steady_clock::now();
 	}
 
 	DbResult MysqlConnection::convertResults(const boost::mysql::results& boostResults)

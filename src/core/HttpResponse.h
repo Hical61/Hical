@@ -245,7 +245,7 @@ namespace hical
 		static HttpResponse redirect(const std::string& location, HttpStatusCode code = HttpStatusCode::hFound);
 
 	private:
-		NativeResponse m_res;
+		NativeResponse res_;
 	};
 
 } // namespace hical

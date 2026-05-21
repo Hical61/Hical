@@ -23,17 +23,14 @@ namespace hical::db
 							std::shared_ptr<std::vector<QueryLogEntry>> log,
 							std::chrono::microseconds slowThreshold,
 							QueryLogOptions::SlowQueryCallback slowCb)
-			: m_real(std::move(real))
-			, m_log(std::move(log))
-			, m_slowThreshold(slowThreshold)
-			, m_slowCb(std::move(slowCb))
+			: real_(std::move(real)), log_(std::move(log)), slowThreshold_(slowThreshold), slowCb_(std::move(slowCb))
 		{
 		}
 
 		Awaitable<DbResult> query(std::string_view sql) override
 		{
 			auto start = std::chrono::steady_clock::now();
-			auto result = co_await m_real->query(sql);
+			auto result = co_await real_->query(sql);
 			recordEntry(std::string(sql), start, result, false);
 			co_return result;
 		}
@@ -41,7 +38,7 @@ namespace hical::db
 		Awaitable<DbResult> query(std::string_view sql, std::span<const std::string> params) override
 		{
 			auto start = std::chrono::steady_clock::now();
-			auto result = co_await m_real->query(sql, params);
+			auto result = co_await real_->query(sql, params);
 			recordEntry(std::string(sql), start, result, true);
 			co_return result;
 		}
@@ -49,7 +46,7 @@ namespace hical::db
 		Awaitable<DbResult> execute(std::string_view sql) override
 		{
 			auto start = std::chrono::steady_clock::now();
-			auto result = co_await m_real->execute(sql);
+			auto result = co_await real_->execute(sql);
 			recordEntry(std::string(sql), start, result, false);
 			co_return result;
 		}
@@ -57,7 +54,7 @@ namespace hical::db
 		Awaitable<DbResult> execute(std::string_view sql, std::span<const std::string> params) override
 		{
 			auto start = std::chrono::steady_clock::now();
-			auto result = co_await m_real->execute(sql, params);
+			auto result = co_await real_->execute(sql, params);
 			recordEntry(std::string(sql), start, result, true);
 			co_return result;
 		}
@@ -66,52 +63,52 @@ namespace hical::db
 
 		Awaitable<void> beginTransaction() override
 		{
-			return m_real->beginTransaction();
+			return real_->beginTransaction();
 		}
 
 		Awaitable<void> commit() override
 		{
-			return m_real->commit();
+			return real_->commit();
 		}
 
 		Awaitable<void> rollback() override
 		{
-			return m_real->rollback();
+			return real_->rollback();
 		}
 
 		bool inTransaction() const override
 		{
-			return m_real->inTransaction();
+			return real_->inTransaction();
 		}
 
 		bool isAlive() const override
 		{
-			return m_real->isAlive();
+			return real_->isAlive();
 		}
 
 		Awaitable<bool> ping() override
 		{
-			return m_real->ping();
+			return real_->ping();
 		}
 
 		std::string_view backend() const override
 		{
-			return m_real->backend();
+			return real_->backend();
 		}
 
 		std::chrono::steady_clock::time_point lastActiveTime() const override
 		{
-			return m_real->lastActiveTime();
+			return real_->lastActiveTime();
 		}
 
 		std::chrono::steady_clock::time_point lastPingTime() const override
 		{
-			return m_real->lastPingTime();
+			return real_->lastPingTime();
 		}
 
 		void touch() override
 		{
-			m_real->touch();
+			real_->touch();
 		}
 
 	private:
@@ -130,18 +127,18 @@ namespace hical::db
 								 .isParameterized = parameterized};
 
 			// 慢查询回调
-			if (m_slowThreshold.count() > 0 && elapsed >= m_slowThreshold && m_slowCb)
+			if (slowThreshold_.count() > 0 && elapsed >= slowThreshold_ && slowCb_)
 			{
-				m_slowCb(entry);
+				slowCb_(entry);
 			}
 
-			m_log->push_back(std::move(entry));
+			log_->push_back(std::move(entry));
 		}
 
-		std::shared_ptr<DbConnection> m_real;
-		std::shared_ptr<std::vector<QueryLogEntry>> m_log;
-		std::chrono::microseconds m_slowThreshold;
-		QueryLogOptions::SlowQueryCallback m_slowCb;
+		std::shared_ptr<DbConnection> real_;
+		std::shared_ptr<std::vector<QueryLogEntry>> log_;
+		std::chrono::microseconds slowThreshold_;
+		QueryLogOptions::SlowQueryCallback slowCb_;
 	};
 #if defined(__GNUC__) || defined(__clang__)
 	#pragma GCC diagnostic pop

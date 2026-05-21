@@ -11,14 +11,14 @@ namespace hical
 									   size_t maxMessageSize,
 									   WsCompressionConfig compression,
 									   const WsDeflateNegotiation* deflateNeg)
-		: m_socket(std::move(socket)), m_compression(compression), m_maxMessageSize(maxMessageSize)
+		: socket_(std::move(socket)), compression_(compression), maxMessageSize_(maxMessageSize)
 	{
 		// 初始 8KB 读缓冲区
-		m_readBuf.resize(8192);
+		readBuf_.resize(8192);
 
 		// 写互斥 timer（初始为"就绪"状态，过期时间在过去 = 不会阻塞）
-		m_writeReady = std::make_unique<boost::asio::steady_timer>(m_socket.get_executor());
-		m_writeReady->expires_at(std::chrono::steady_clock::time_point::min());
+		writeReady_ = std::make_unique<boost::asio::steady_timer>(socket_.get_executor());
+		writeReady_->expires_at(std::chrono::steady_clock::time_point::min());
 
 		// 构造 permessage-deflate 上下文（仅在协商成功时）
 		if (compression.enabled && deflateNeg != nullptr && deflateNeg->accepted)
@@ -30,15 +30,15 @@ namespace hical
 			cfg.clientNoContextTakeover = deflateNeg->clientNoContextTakeover;
 			cfg.compLevel = 6;
 			cfg.memLevel = 4;
-			m_deflateCtx = std::make_unique<WsDeflateContext>(cfg);
+			deflateCtx_ = std::make_unique<WsDeflateContext>(cfg);
 		}
 	}
 
 	Awaitable<void> WebSocketSession::send(const std::string& msg)
 	{
-		if (m_deflateCtx)
+		if (deflateCtx_)
 		{
-			auto compressed = m_deflateCtx->compress(msg);
+			auto compressed = deflateCtx_->compress(msg);
 			co_await sendFrame(WsOpcode::hText, compressed, true, true);
 		}
 		else
@@ -49,9 +49,9 @@ namespace hical
 
 	Awaitable<void> WebSocketSession::sendBinary(std::string_view data)
 	{
-		if (m_deflateCtx)
+		if (deflateCtx_)
 		{
-			auto compressed = m_deflateCtx->compress(data);
+			auto compressed = deflateCtx_->compress(data);
 			co_await sendFrame(WsOpcode::hBinary, compressed, true, true);
 		}
 		else
@@ -83,7 +83,7 @@ namespace hical
 	Awaitable<void> WebSocketSession::closeAsync()
 	{
 		bool expected = true;
-		if (m_open.compare_exchange_strong(expected, false))
+		if (open_.compare_exchange_strong(expected, false))
 		{
 			try
 			{
@@ -95,15 +95,15 @@ namespace hical
 			}
 
 			boost::system::error_code ec;
-			m_socket.shutdown(boost::asio::ip::tcp::socket::shutdown_both, ec);
-			m_socket.close(ec);
+			socket_.shutdown(boost::asio::ip::tcp::socket::shutdown_both, ec);
+			socket_.close(ec);
 		}
 	}
 
 	Awaitable<void> WebSocketSession::closeAsync(WsCloseCode code, std::string_view reason)
 	{
 		bool expected = true;
-		if (m_open.compare_exchange_strong(expected, false))
+		if (open_.compare_exchange_strong(expected, false))
 		{
 			try
 			{
@@ -115,84 +115,84 @@ namespace hical
 			}
 
 			boost::system::error_code ec;
-			m_socket.shutdown(boost::asio::ip::tcp::socket::shutdown_both, ec);
-			m_socket.close(ec);
+			socket_.shutdown(boost::asio::ip::tcp::socket::shutdown_both, ec);
+			socket_.close(ec);
 		}
 	}
 
 	void WebSocketSession::close()
 	{
 		bool expected = true;
-		if (m_open.compare_exchange_strong(expected, false))
+		if (open_.compare_exchange_strong(expected, false))
 		{
 			boost::system::error_code ec;
-			m_socket.shutdown(boost::asio::ip::tcp::socket::shutdown_both, ec);
-			m_socket.close(ec);
+			socket_.shutdown(boost::asio::ip::tcp::socket::shutdown_both, ec);
+			socket_.close(ec);
 		}
 	}
 
 	bool WebSocketSession::isOpen() const
 	{
-		return m_open.load() && m_socket.is_open();
+		return open_.load() && socket_.is_open();
 	}
 
 	boost::asio::ip::tcp::socket& WebSocketSession::socket()
 	{
-		return m_socket;
+		return socket_;
 	}
 
 	const WsCompressionConfig& WebSocketSession::compressionConfig() const
 	{
-		return m_compression;
+		return compression_;
 	}
 
 	Awaitable<void> WebSocketSession::ensureBytes(size_t n)
 	{
-		while (m_readBufUsed < n)
+		while (readBufUsed_ < n)
 		{
 			// 按需扩容
-			if (m_readBuf.size() < n)
+			if (readBuf_.size() < n)
 			{
-				m_readBuf.resize(std::max(n, m_readBuf.size() * 2));
+				readBuf_.resize(std::max(n, readBuf_.size() * 2));
 			}
 
-			auto bytesRead = co_await m_socket.async_read_some(
-				boost::asio::buffer(m_readBuf.data() + m_readBufUsed, m_readBuf.size() - m_readBufUsed),
+			auto bytesRead = co_await socket_.async_read_some(
+				boost::asio::buffer(readBuf_.data() + readBufUsed_, readBuf_.size() - readBufUsed_),
 				boost::asio::use_awaitable);
-			m_readBufUsed += bytesRead;
+			readBufUsed_ += bytesRead;
 		}
 	}
 
 	void WebSocketSession::consumeBytes(size_t n)
 	{
-		if (n >= m_readBufUsed)
+		if (n >= readBufUsed_)
 		{
-			m_readBufUsed = 0;
+			readBufUsed_ = 0;
 		}
 		else
 		{
-			std::memmove(m_readBuf.data(), m_readBuf.data() + n, m_readBufUsed - n);
-			m_readBufUsed -= n;
+			std::memmove(readBuf_.data(), readBuf_.data() + n, readBufUsed_ - n);
+			readBufUsed_ -= n;
 		}
 	}
 
 	Awaitable<void> WebSocketSession::acquireWrite()
 	{
-		while (m_writePending)
+		while (writePending_)
 		{
 			// 等待前一个写完成（timer 过期 = 就绪信号）
 			boost::system::error_code ec;
-			co_await m_writeReady->async_wait(boost::asio::redirect_error(boost::asio::use_awaitable, ec));
+			co_await writeReady_->async_wait(boost::asio::redirect_error(boost::asio::use_awaitable, ec));
 			// ec 可能是 operation_aborted（被 releaseWrite cancel），这正是我们要的唤醒信号
 		}
-		m_writePending = true;
+		writePending_ = true;
 	}
 
 	void WebSocketSession::releaseWrite()
 	{
-		m_writePending = false;
+		writePending_ = false;
 		// 唤醒等待的协程：cancel 使 async_wait 返回 operation_aborted
-		m_writeReady->cancel_one();
+		writeReady_->cancel_one();
 	}
 
 	Awaitable<void> WebSocketSession::sendFrame(WsOpcode opcode, std::string_view payload, bool fin, bool rsv1)
@@ -211,7 +211,7 @@ namespace hical
 		} guard {*this};
 
 		auto frame = buildWsFrame(opcode, payload, fin, rsv1);
-		co_await boost::asio::async_write(m_socket, boost::asio::buffer(frame), boost::asio::use_awaitable);
+		co_await boost::asio::async_write(socket_, boost::asio::buffer(frame), boost::asio::use_awaitable);
 	}
 
 	Awaitable<void> WebSocketSession::sendCloseFrame(WsCloseCode code, std::string_view reason)
@@ -230,11 +230,11 @@ namespace hical
 				co_await ensureBytes(2);
 
 				// 2. 尝试解析帧头
-				auto hdr = parseWsFrameHeader(m_readBuf.data(), m_readBufUsed);
+				auto hdr = parseWsFrameHeader(readBuf_.data(), readBufUsed_);
 				if (!hdr)
 				{
 					// 帧头不完整，多读一些
-					co_await ensureBytes(m_readBufUsed + 1);
+					co_await ensureBytes(readBufUsed_ + 1);
 					continue;
 				}
 
@@ -242,32 +242,32 @@ namespace hical
 				if (hdr->rsv2 || hdr->rsv3)
 				{
 					co_await sendCloseFrame(WsCloseCode::hProtocolError, "Unexpected RSV2/RSV3");
-					m_open = false;
+					open_ = false;
 					co_return std::nullopt;
 				}
-				if (hdr->rsv1 && !m_deflateCtx)
+				if (hdr->rsv1 && !deflateCtx_)
 				{
 					co_await sendCloseFrame(WsCloseCode::hProtocolError, "Unexpected RSV1 without deflate");
-					m_open = false;
+					open_ = false;
 					co_return std::nullopt;
 				}
 				if (!hdr->masked)
 				{
 					co_await sendCloseFrame(WsCloseCode::hProtocolError, "Client frames must be masked");
-					m_open = false;
+					open_ = false;
 					co_return std::nullopt;
 				}
 				bool isControl = (static_cast<uint8_t>(hdr->opcode) >= 0x08);
 				if (isControl && hdr->payloadLength > 125)
 				{
 					co_await sendCloseFrame(WsCloseCode::hProtocolError, "Control frame payload too large");
-					m_open = false;
+					open_ = false;
 					co_return std::nullopt;
 				}
-				if (hdr->payloadLength > m_maxMessageSize)
+				if (hdr->payloadLength > maxMessageSize_)
 				{
 					co_await sendCloseFrame(WsCloseCode::hMessageTooBig);
-					m_open = false;
+					open_ = false;
 					co_return std::nullopt;
 				}
 
@@ -276,7 +276,7 @@ namespace hical
 				co_await ensureBytes(frameSize);
 
 				// 5. 解除 mask
-				uint8_t* payloadPtr = m_readBuf.data() + hdr->headerSize;
+				uint8_t* payloadPtr = readBuf_.data() + hdr->headerSize;
 				size_t payloadLen = static_cast<size_t>(hdr->payloadLength);
 				unmaskPayload(payloadPtr, payloadLen, hdr->maskKey);
 
@@ -287,7 +287,7 @@ namespace hical
 					std::string_view closeSv(reinterpret_cast<const char*>(payloadPtr), payloadLen);
 					co_await sendFrame(WsOpcode::hClose, (payloadLen >= 2) ? closeSv : std::string_view {});
 					consumeBytes(frameSize);
-					m_open = false;
+					open_ = false;
 					co_return std::nullopt;
 				}
 				if (hdr->opcode == WsOpcode::hPing)
@@ -310,26 +310,26 @@ namespace hical
 				if (hdr->opcode == WsOpcode::hText || hdr->opcode == WsOpcode::hBinary)
 				{
 					// 新消息的首帧
-					m_fragmentBuf.clear();
-					m_fragmentOpcode = hdr->opcode;
-					m_fragmentCompressed = hdr->rsv1;
+					fragmentBuf_.clear();
+					fragmentOpcode_ = hdr->opcode;
+					fragmentCompressed_ = hdr->rsv1;
 				}
 				else if (hdr->opcode != WsOpcode::hContinuation)
 				{
 					// 未知 opcode
 					co_await sendCloseFrame(WsCloseCode::hProtocolError, "Unknown opcode");
-					m_open = false;
+					open_ = false;
 					co_return std::nullopt;
 				}
 
 				// 追加载荷到分片缓冲
-				m_fragmentBuf.append(reinterpret_cast<const char*>(payloadPtr), payloadLen);
+				fragmentBuf_.append(reinterpret_cast<const char*>(payloadPtr), payloadLen);
 
 				// 总大小检查
-				if (m_fragmentBuf.size() > m_maxMessageSize)
+				if (fragmentBuf_.size() > maxMessageSize_)
 				{
 					co_await sendCloseFrame(WsCloseCode::hMessageTooBig);
-					m_open = false;
+					open_ = false;
 					co_return std::nullopt;
 				}
 
@@ -339,14 +339,14 @@ namespace hical
 				{
 					// 消息完成：构造 WsMessage 返回
 					WsMessage msg;
-					msg.type = m_fragmentOpcode;
-					if (m_fragmentCompressed && m_deflateCtx)
+					msg.type = fragmentOpcode_;
+					if (fragmentCompressed_ && deflateCtx_)
 					{
-						msg.data = m_deflateCtx->decompress(m_fragmentBuf, m_maxMessageSize);
+						msg.data = deflateCtx_->decompress(fragmentBuf_, maxMessageSize_);
 					}
 					else
 					{
-						msg.data = std::move(m_fragmentBuf);
+						msg.data = std::move(fragmentBuf_);
 					}
 					co_return msg;
 				}
@@ -355,7 +355,7 @@ namespace hical
 		}
 		catch (const boost::system::system_error& e)
 		{
-			m_open = false;
+			open_ = false;
 			if (e.code() == boost::asio::error::eof || e.code() == boost::asio::error::connection_reset
 				|| e.code() == boost::asio::error::operation_aborted)
 			{
@@ -374,41 +374,41 @@ namespace hical
 
 	void WebSocketSession::setContext(std::shared_ptr<void> ctx)
 	{
-		m_context = std::move(ctx);
+		context_ = std::move(ctx);
 	}
 
 	bool WebSocketSession::hasContext() const
 	{
-		return m_context != nullptr;
+		return context_ != nullptr;
 	}
 
 	void WebSocketSession::clearContext()
 	{
-		m_context.reset();
+		context_.reset();
 	}
 
 	// ============ Heartbeat ============
 
 	void WebSocketSession::recordPongReceived()
 	{
-		m_lastPongTime = std::chrono::steady_clock::now();
+		lastPongTime_ = std::chrono::steady_clock::now();
 	}
 
 	std::chrono::steady_clock::time_point WebSocketSession::lastPongTime() const
 	{
-		return m_lastPongTime;
+		return lastPongTime_;
 	}
 
 	// ============ Subprotocol ============
 
 	std::string_view WebSocketSession::subprotocol() const
 	{
-		return m_subprotocol;
+		return subprotocol_;
 	}
 
 	void WebSocketSession::setSubprotocol(std::string proto)
 	{
-		m_subprotocol = std::move(proto);
+		subprotocol_ = std::move(proto);
 	}
 
 } // namespace hical

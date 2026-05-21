@@ -36,16 +36,16 @@ namespace hical
 
 		void setLevel(LogLevel lvl)
 		{
-			m_sinkLevel.store(lvl, std::memory_order_relaxed);
+			sinkLevel_.store(lvl, std::memory_order_relaxed);
 		}
 
 		[[nodiscard]] LogLevel sinkLevel() const
 		{
-			return m_sinkLevel.load(std::memory_order_relaxed);
+			return sinkLevel_.load(std::memory_order_relaxed);
 		}
 
 	private:
-		std::atomic<LogLevel> m_sinkLevel {LogLevel::hTrace};
+		std::atomic<LogLevel> sinkLevel_ {LogLevel::hTrace};
 	};
 
 	/**
@@ -72,8 +72,8 @@ namespace hical
 		void flush() override;
 
 	private:
-		std::mutex m_mutex;
-		LogFile m_logFile;
+		std::mutex mutex_;
+		LogFile logFile_;
 	};
 
 	/**
@@ -82,7 +82,7 @@ namespace hical
 	class OStreamSink : public LogSink
 	{
 	public:
-		explicit OStreamSink(std::ostream& os) : m_os(os)
+		explicit OStreamSink(std::ostream& os) : os_(os)
 		{
 		}
 
@@ -90,8 +90,8 @@ namespace hical
 		void flush() override;
 
 	private:
-		std::ostream& m_os;
-		std::mutex m_mutex;
+		std::ostream& os_;
+		std::mutex mutex_;
 	};
 
 } // namespace hical

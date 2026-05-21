@@ -46,23 +46,23 @@ namespace hical
 
 	HttpResponse::HttpResponse()
 	{
-		m_res.httpVersionMinor = 1;
-		m_res.status = HttpStatusCode::hOk;
+		res_.httpVersionMinor = 1;
+		res_.status = HttpStatusCode::hOk;
 	}
 
 	HttpStatusCode HttpResponse::statusCode() const
 	{
-		return m_res.status;
+		return res_.status;
 	}
 
 	void HttpResponse::setStatus(HttpStatusCode code)
 	{
-		m_res.status = code;
+		res_.status = code;
 	}
 
 	std::string_view HttpResponse::header(std::string_view name) const
 	{
-		return m_res.headers.find(name);
+		return res_.headers.find(name);
 	}
 
 	void HttpResponse::setHeader(const std::string& name, const std::string& value)
@@ -72,12 +72,12 @@ namespace hical
 		{
 			return;
 		}
-		m_res.headers.set(name, value);
+		res_.headers.set(name, value);
 	}
 
 	const std::string& HttpResponse::body() const
 	{
-		return m_res.body;
+		return res_.body;
 	}
 
 	void HttpResponse::setBody(const std::string& body, const std::string& contentType)
@@ -87,16 +87,16 @@ namespace hical
 		{
 			return;
 		}
-		m_res.body = body;
-		m_res.headers.set("Content-Type", contentType);
-		m_res.preparePayload();
+		res_.body = body;
+		res_.headers.set("Content-Type", contentType);
+		res_.preparePayload();
 	}
 
 	void HttpResponse::setJsonBody(const boost::json::value& json)
 	{
-		m_res.body = boost::json::serialize(json);
-		m_res.headers.set("Content-Type", "application/json");
-		m_res.preparePayload();
+		res_.body = boost::json::serialize(json);
+		res_.headers.set("Content-Type", "application/json");
+		res_.preparePayload();
 	}
 
 	void HttpResponse::setCookie(const std::string& name, const std::string& value, const CookieOptions& options)
@@ -180,17 +180,17 @@ namespace hical
 		}
 
 		// insert 追加多个 Set-Cookie（不覆写）
-		m_res.headers.insert("Set-Cookie", cookie);
+		res_.headers.insert("Set-Cookie", cookie);
 	}
 
 	NativeResponse& HttpResponse::native()
 	{
-		return m_res;
+		return res_;
 	}
 
 	const NativeResponse& HttpResponse::native() const
 	{
-		return m_res;
+		return res_;
 	}
 
 	// ============ 快捷工厂方法 ============

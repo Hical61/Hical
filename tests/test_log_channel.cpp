@@ -16,8 +16,8 @@ class TestSink : public LogSink
 public:
 	void write(std::string_view formattedLine) override
 	{
-		std::lock_guard<std::mutex> lock(m_mutex);
-		m_data.append(formattedLine.data(), formattedLine.size());
+		std::lock_guard<std::mutex> lock(mutex_);
+		data_.append(formattedLine.data(), formattedLine.size());
 	}
 
 	void flush() override
@@ -26,19 +26,19 @@ public:
 
 	std::string data()
 	{
-		std::lock_guard<std::mutex> lock(m_mutex);
-		return m_data;
+		std::lock_guard<std::mutex> lock(mutex_);
+		return data_;
 	}
 
 	void clear()
 	{
-		std::lock_guard<std::mutex> lock(m_mutex);
-		m_data.clear();
+		std::lock_guard<std::mutex> lock(mutex_);
+		data_.clear();
 	}
 
 private:
-	std::mutex m_mutex;
-	std::string m_data;
+	std::mutex mutex_;
+	std::string data_;
 };
 
 static LogRecord makeRecord(LogLevel lvl = LogLevel::hInfo, const char* msg = "channel test")

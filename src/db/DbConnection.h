@@ -29,8 +29,9 @@ namespace hical::db
 		 * @warning 此重载不做参数转义，仅用于静态 SQL（DDL/SET 等）。
 		 * 传入用户输入会导致 SQL 注入！请使用 query(sql, params) 版本。
 		 */
-		[[deprecated("Unsafe: use query(sql, params) to prevent SQL injection")]]
-		virtual Awaitable<DbResult> query(std::string_view sql) = 0;
+		[[deprecated(
+			"Unsafe: use query(sql, params) to prevent SQL injection")]] [[nodiscard]] virtual Awaitable<DbResult>
+		query(std::string_view sql) = 0;
 
 		/**
 		 * @brief 异步参数化查询（防 SQL 注入）
@@ -38,7 +39,7 @@ namespace hical::db
 		 * @param params 参数值列表
 		 * @return 查询结果集
 		 */
-		virtual Awaitable<DbResult> query(std::string_view sql, std::span<const std::string> params) = 0;
+		[[nodiscard]] virtual Awaitable<DbResult> query(std::string_view sql, std::span<const std::string> params) = 0;
 
 		/**
 		 * @brief 异步执行 SQL（INSERT/UPDATE/DELETE）— 无参数化，仅限静态 SQL
@@ -47,8 +48,9 @@ namespace hical::db
 		 * @warning 此重载不做参数转义，仅用于静态 SQL（DDL/SET 等）。
 		 * 传入用户输入会导致 SQL 注入！请使用 execute(sql, params) 版本。
 		 */
-		[[deprecated("Unsafe: use execute(sql, params) to prevent SQL injection")]]
-		virtual Awaitable<DbResult> execute(std::string_view sql) = 0;
+		[[deprecated(
+			"Unsafe: use execute(sql, params) to prevent SQL injection")]] [[nodiscard]] virtual Awaitable<DbResult>
+		execute(std::string_view sql) = 0;
 
 		/**
 		 * @brief 异步参数化执行（防 SQL 注入）
@@ -56,7 +58,8 @@ namespace hical::db
 		 * @param params 参数值列表
 		 * @return 执行结果（affectedRows, insertId）
 		 */
-		virtual Awaitable<DbResult> execute(std::string_view sql, std::span<const std::string> params) = 0;
+		[[nodiscard]] virtual Awaitable<DbResult> execute(std::string_view sql,
+														  std::span<const std::string> params) = 0;
 
 		// ============ 事务控制 ============
 
@@ -91,23 +94,23 @@ namespace hical::db
 		 * @brief 异步 ping 检测连接活性（发网络包验证）
 		 * @return true 表示连接正常
 		 */
-		virtual Awaitable<bool> ping() = 0;
+		[[nodiscard]] virtual Awaitable<bool> ping() = 0;
 
 		/**
 		 * @brief 后端名称
 		 * @return "mysql", "pgsql", "sqlite" 等
 		 */
-		virtual std::string_view backend() const = 0;
+		[[nodiscard]] virtual std::string_view backend() const = 0;
 
 		/**
 		 * @brief 最后活跃时间（用于空闲超时回收）
 		 */
-		virtual std::chrono::steady_clock::time_point lastActiveTime() const = 0;
+		[[nodiscard]] virtual std::chrono::steady_clock::time_point lastActiveTime() const = 0;
 
 		/**
 		 * @brief 最后一次 ping 成功的时间（用于健康检查宽限期判断）
 		 */
-		virtual std::chrono::steady_clock::time_point lastPingTime() const = 0;
+		[[nodiscard]] virtual std::chrono::steady_clock::time_point lastPingTime() const = 0;
 
 		/**
 		 * @brief 更新最后活跃时间为当前时刻

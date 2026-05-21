@@ -70,8 +70,8 @@ namespace hical
 	{
 		enum class Type
 		{
-			Async,
-			Sync
+			hAsync,
+			hSync
 		};
 
 		Type type;
@@ -195,7 +195,7 @@ namespace hical
 		 * @return 协程化的 HTTP 响应
 		 * @throw std::logic_error 当未调用 build() 时抛出
 		 */
-		Awaitable<HttpResponse> execute(HttpRequest& req);
+		[[nodiscard]] Awaitable<HttpResponse> execute(HttpRequest& req);
 
 		/**
 		 * @brief 执行中间件管道（始终按传入的 finalHandler 动态构建调用链）
@@ -204,7 +204,7 @@ namespace hical
 		 * @return 协程化的 HTTP 响应
 		 * @note 此重载始终动态构建链，profiling 开启时不记录统计数据。
 		 */
-		Awaitable<HttpResponse> execute(HttpRequest& req, MiddlewareNext finalHandler);
+		[[nodiscard]] Awaitable<HttpResponse> execute(HttpRequest& req, MiddlewareNext finalHandler);
 
 		/**
 		 * @brief 预构建自定义终端处理器的调用链
@@ -212,13 +212,13 @@ namespace hical
 		 * @return 预构建好的调用链（可缓存后多次调用）
 		 * @note profiling 开启时，返回的链共享 build() 时创建的统计对象。
 		 */
-		MiddlewareNext buildFor(MiddlewareNext finalHandler) const;
+		[[nodiscard]] MiddlewareNext buildFor(MiddlewareNext finalHandler) const;
 
 		/**
 		 * @brief 获取中间件数量
 		 * @return 数量
 		 */
-		size_t size() const;
+		[[nodiscard]] size_t size() const;
 
 		/**
 		 * @brief 从指定中间件列表构建洋葱调用链（供 RouteGroup 等外部使用）
@@ -226,8 +226,8 @@ namespace hical
 		 * @param finalHandler 最终处理器
 		 * @return 构建好的调用链
 		 */
-		static MiddlewareNext buildChainFrom(const std::vector<MiddlewareHandler>& middlewares,
-											 MiddlewareNext finalHandler);
+		[[nodiscard]] static MiddlewareNext buildChainFrom(const std::vector<MiddlewareHandler>& middlewares,
+														   MiddlewareNext finalHandler);
 
 		/**
 		 * @brief 从 MiddlewareEntry 列表构建优化链
@@ -236,8 +236,8 @@ namespace hical
 		 * @param finalHandler 最终处理器
 		 * @return 构建好的调用链
 		 */
-		static MiddlewareNext buildOptimizedChain(const std::vector<MiddlewareEntry>& entries,
-												  MiddlewareNext finalHandler);
+		[[nodiscard]] static MiddlewareNext buildOptimizedChain(const std::vector<MiddlewareEntry>& entries,
+																MiddlewareNext finalHandler);
 
 #ifdef HICAL_ENABLE_MIDDLEWARE_PROFILING
 		/**
@@ -254,7 +254,7 @@ namespace hical
 			double minTimeMs;
 		};
 
-		std::vector<TimingSnapshot> getTimingStats() const;
+		[[nodiscard]] std::vector<TimingSnapshot> getTimingStats() const;
 
 		/**
 		 * @brief 重置所有计时统计

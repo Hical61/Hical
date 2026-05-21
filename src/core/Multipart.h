@@ -64,7 +64,7 @@ namespace hical
 		 * @return 解析成功返回 Part 列表，失败返回 nullopt
 		 * 失败情况：Content-Type 不是 multipart/form-data、boundary 缺失、格式错误。
 		 */
-		static std::optional<std::vector<MultipartPart>> parse(const HttpRequest& req);
+		[[nodiscard]] static std::optional<std::vector<MultipartPart>> parse(const HttpRequest& req);
 
 		/**
 		 * @brief 获取指定名称的文件上传 Part
@@ -73,7 +73,7 @@ namespace hical
 		 * @return 找到返回 MultipartPart（isFile() == true），否则 nullopt
 		 * @note 多次调用 getFile/getField 建议先调用 parse() 再用下方重载，避免重复解析
 		 */
-		static std::optional<MultipartPart> getFile(const HttpRequest& req, const std::string& fieldName);
+		[[nodiscard]] static std::optional<MultipartPart> getFile(const HttpRequest& req, const std::string& fieldName);
 
 		/**
 		 * @brief 从已解析的 parts 中查找文件 Part（避免重复解析）
@@ -81,8 +81,8 @@ namespace hical
 		 * @param fieldName 表单字段名
 		 * @return 找到返回 MultipartPart，否则 nullopt
 		 */
-		static std::optional<MultipartPart> getFile(const std::vector<MultipartPart>& parts,
-													const std::string& fieldName);
+		[[nodiscard]] static std::optional<MultipartPart> getFile(const std::vector<MultipartPart>& parts,
+																  const std::string& fieldName);
 
 		/**
 		 * @brief 获取指定名称的表单文本字段值
@@ -91,7 +91,7 @@ namespace hical
 		 * @return 找到返回字段值，否则 nullopt
 		 * @note 多次调用 getFile/getField 建议先调用 parse() 再用下方重载，避免重复解析
 		 */
-		static std::optional<std::string> getField(const HttpRequest& req, const std::string& fieldName);
+		[[nodiscard]] static std::optional<std::string> getField(const HttpRequest& req, const std::string& fieldName);
 
 		/**
 		 * @brief 从已解析的 parts 中查找文本字段（避免重复解析）
@@ -99,8 +99,8 @@ namespace hical
 		 * @param fieldName 表单字段名
 		 * @return 找到返回字段值，否则 nullopt
 		 */
-		static std::optional<std::string> getField(const std::vector<MultipartPart>& parts,
-												   const std::string& fieldName);
+		[[nodiscard]] static std::optional<std::string> getField(const std::vector<MultipartPart>& parts,
+																 const std::string& fieldName);
 
 	private:
 		/**

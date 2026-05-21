@@ -16,23 +16,23 @@ protected:
 	void SetUp() override
 	{
 		// 每个测试用独立的子目录，避免并行测试互相干扰
-		m_testDir = fs::temp_directory_path()
-					/ ("hical_logfile_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
-		fs::create_directories(m_testDir);
+		testDir_ = fs::temp_directory_path()
+				   / ("hical_logfile_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+		fs::create_directories(testDir_);
 	}
 
 	void TearDown() override
 	{
 		std::error_code ec;
-		fs::remove_all(m_testDir, ec);
+		fs::remove_all(testDir_, ec);
 	}
 
-	fs::path m_testDir;
+	fs::path testDir_;
 };
 
 TEST_F(LogFileTest, BasicWrite)
 {
-	auto logPath = (m_testDir / "test.log").string();
+	auto logPath = (testDir_ / "test.log").string();
 	LogFile lf(LogFile::Options {.basePath = logPath});
 
 	std::string msg = "hello world\n";
@@ -46,7 +46,7 @@ TEST_F(LogFileTest, BasicWrite)
 
 TEST_F(LogFileTest, WrittenBytesTracking)
 {
-	auto logPath = (m_testDir / "test.log").string();
+	auto logPath = (testDir_ / "test.log").string();
 	LogFile lf(LogFile::Options {.basePath = logPath});
 
 	EXPECT_EQ(lf.writtenBytes(), 0u);
@@ -61,7 +61,7 @@ TEST_F(LogFileTest, WrittenBytesTracking)
 
 TEST_F(LogFileTest, RotationOnSize)
 {
-	auto logPath = (m_testDir / "test.log").string();
+	auto logPath = (testDir_ / "test.log").string();
 	// 很小的 maxFileSize 触发频繁轮转
 	LogFile lf(LogFile::Options {.basePath = logPath, .maxFileSize = 20, .maxFiles = 10});
 
@@ -73,7 +73,7 @@ TEST_F(LogFileTest, RotationOnSize)
 
 	// 应该有轮转文件
 	int logFileCount = 0;
-	for (const auto& entry : fs::directory_iterator(m_testDir))
+	for (const auto& entry : fs::directory_iterator(testDir_))
 	{
 		if (entry.path().extension() == ".log")
 		{
@@ -86,7 +86,7 @@ TEST_F(LogFileTest, RotationOnSize)
 
 TEST_F(LogFileTest, MaxFilesLimit)
 {
-	auto logPath = (m_testDir / "test.log").string();
+	auto logPath = (testDir_ / "test.log").string();
 	LogFile lf(LogFile::Options {.basePath = logPath, .maxFileSize = 10, .maxFiles = 3});
 
 	// 写入很多次触发多次轮转
@@ -99,7 +99,7 @@ TEST_F(LogFileTest, MaxFilesLimit)
 
 	// 统计总 .log 文件数
 	int logFileCount = 0;
-	for (const auto& entry : fs::directory_iterator(m_testDir))
+	for (const auto& entry : fs::directory_iterator(testDir_))
 	{
 		if (entry.path().extension() == ".log")
 		{
@@ -112,7 +112,7 @@ TEST_F(LogFileTest, MaxFilesLimit)
 
 TEST_F(LogFileTest, RotatedFileNaming)
 {
-	auto logPath = (m_testDir / "app.log").string();
+	auto logPath = (testDir_ / "app.log").string();
 	LogFile lf(LogFile::Options {.basePath = logPath, .maxFileSize = 10, .maxFiles = 10});
 
 	std::string msg = "trigger rotation!\n";
@@ -121,7 +121,7 @@ TEST_F(LogFileTest, RotatedFileNaming)
 	lf.flush();
 
 	// 检查轮转文件命名格式
-	for (const auto& entry : fs::directory_iterator(m_testDir))
+	for (const auto& entry : fs::directory_iterator(testDir_))
 	{
 		auto name = entry.path().filename().string();
 		if (name == "app.log")
@@ -138,7 +138,7 @@ TEST_F(LogFileTest, RotatedFileNaming)
 
 TEST_F(LogFileTest, AppendAfterRotation)
 {
-	auto logPath = (m_testDir / "test.log").string();
+	auto logPath = (testDir_ / "test.log").string();
 	LogFile lf(LogFile::Options {.basePath = logPath, .maxFileSize = 20, .maxFiles = 5});
 
 	// 多次写入，跨越多次轮转
@@ -155,7 +155,7 @@ TEST_F(LogFileTest, AppendAfterRotation)
 
 TEST_F(LogFileTest, CreateDirectoryIfNeeded)
 {
-	auto nestedDir = m_testDir / "sub" / "dir";
+	auto nestedDir = testDir_ / "sub" / "dir";
 	auto logPath = (nestedDir / "test.log").string();
 
 	LogFile lf(LogFile::Options {.basePath = logPath});

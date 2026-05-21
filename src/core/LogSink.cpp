@@ -17,34 +17,34 @@ namespace hical
 
 	// ============ FileSink ============
 
-	FileSink::FileSink(LogFile::Options opts) : m_logFile(std::move(opts))
+	FileSink::FileSink(LogFile::Options opts) : logFile_(std::move(opts))
 	{
 	}
 
 	void FileSink::write(std::string_view formattedLine)
 	{
-		std::lock_guard<std::mutex> lock(m_mutex);
-		m_logFile.append(formattedLine.data(), formattedLine.size());
+		std::lock_guard<std::mutex> lock(mutex_);
+		logFile_.append(formattedLine.data(), formattedLine.size());
 	}
 
 	void FileSink::flush()
 	{
-		std::lock_guard<std::mutex> lock(m_mutex);
-		m_logFile.flush();
+		std::lock_guard<std::mutex> lock(mutex_);
+		logFile_.flush();
 	}
 
 	// ============ OStreamSink ============
 
 	void OStreamSink::write(std::string_view formattedLine)
 	{
-		std::lock_guard<std::mutex> lock(m_mutex);
-		m_os.write(formattedLine.data(), static_cast<std::streamsize>(formattedLine.size()));
+		std::lock_guard<std::mutex> lock(mutex_);
+		os_.write(formattedLine.data(), static_cast<std::streamsize>(formattedLine.size()));
 	}
 
 	void OStreamSink::flush()
 	{
-		std::lock_guard<std::mutex> lock(m_mutex);
-		m_os.flush();
+		std::lock_guard<std::mutex> lock(mutex_);
+		os_.flush();
 	}
 
 } // namespace hical

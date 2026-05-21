@@ -22,7 +22,7 @@ public:
 
 	Awaitable<DbResult> query(std::string_view /*sql*/) override
 	{
-		++m_queryCount;
+		++queryCount_;
 		co_return DbResult {.columns = {"id", "name"}, .rows = {{"1", "test"}}, .affectedRows = 0};
 	}
 
@@ -33,7 +33,7 @@ public:
 
 	Awaitable<DbResult> execute(std::string_view /*sql*/) override
 	{
-		++m_executeCount;
+		++executeCount_;
 		co_return DbResult {.affectedRows = 1, .insertId = 42};
 	}
 
@@ -44,41 +44,41 @@ public:
 
 	Awaitable<void> beginTransaction() override
 	{
-		m_inTransaction = true;
+		inTransaction_ = true;
 		co_return;
 	}
 
 	Awaitable<void> commit() override
 	{
-		m_inTransaction = false;
-		++m_commitCount;
+		inTransaction_ = false;
+		++commitCount_;
 		co_return;
 	}
 
 	Awaitable<void> rollback() override
 	{
-		m_inTransaction = false;
-		++m_rollbackCount;
+		inTransaction_ = false;
+		++rollbackCount_;
 		co_return;
 	}
 
 	bool inTransaction() const override
 	{
-		return m_inTransaction;
+		return inTransaction_;
 	}
 
 	bool isAlive() const override
 	{
-		return m_alive;
+		return alive_;
 	}
 
 	Awaitable<bool> ping() override
 	{
-		if (m_alive)
+		if (alive_)
 		{
-			m_lastPing = std::chrono::steady_clock::now();
+			lastPing_ = std::chrono::steady_clock::now();
 		}
-		co_return m_alive;
+		co_return alive_;
 	}
 
 	std::string_view backend() const override
@@ -88,28 +88,28 @@ public:
 
 	std::chrono::steady_clock::time_point lastActiveTime() const override
 	{
-		return m_lastActive;
+		return lastActive_;
 	}
 
 	std::chrono::steady_clock::time_point lastPingTime() const override
 	{
-		return m_lastPing;
+		return lastPing_;
 	}
 
 	void touch() override
 	{
-		m_lastActive = std::chrono::steady_clock::now();
+		lastActive_ = std::chrono::steady_clock::now();
 	}
 
 	// 测试用控制和观察
-	bool m_alive = true;
-	bool m_inTransaction = false;
-	int m_queryCount = 0;
-	int m_executeCount = 0;
-	int m_commitCount = 0;
-	int m_rollbackCount = 0;
-	std::chrono::steady_clock::time_point m_lastActive = std::chrono::steady_clock::now();
-	std::chrono::steady_clock::time_point m_lastPing;
+	bool alive_ = true;
+	bool inTransaction_ = false;
+	int queryCount_ = 0;
+	int executeCount_ = 0;
+	int commitCount_ = 0;
+	int rollbackCount_ = 0;
+	std::chrono::steady_clock::time_point lastActive_ = std::chrono::steady_clock::now();
+	std::chrono::steady_clock::time_point lastPing_;
 };
 
 // Mock 连接工厂
@@ -318,7 +318,7 @@ TEST(DbConnectionPoolTest, DeadConnectionIsRecreated)
 		// 第一个连接标记为死亡，后续的活着
 		if (count == 1)
 		{
-			conn->m_alive = false;
+			conn->alive_ = false;
 		}
 		co_return conn;
 	};
@@ -451,7 +451,7 @@ TEST(DbConnectionPoolTest, ReleaseRollsBackTransaction)
 	ioCtx.run();
 
 	// 回滚应该被调用了
-	EXPECT_EQ(mockConn->m_rollbackCount, 1);
+	EXPECT_EQ(mockConn->rollbackCount_, 1);
 }
 
 // ============ 统计测试 ============
@@ -520,7 +520,7 @@ TEST(DbConnectionPoolTest, HealthCheckRemovesDeadConnections)
 				EXPECT_EQ(createdConns.size(), 1);
 
 				// 标记第一个连接为死亡
-				createdConns[0]->m_alive = false;
+				createdConns[0]->alive_ = false;
 
 				// 等待健康检查运行
 				co_await hical::sleep(1.5);
@@ -566,8 +566,8 @@ TEST(DbConnectionPoolTest, HealthCheckReplenishesToMinConnections)
 				// 杀掉 2 个空闲连接
 				{
 					std::lock_guard lock(connsMutex);
-					createdConns[0]->m_alive = false;
-					createdConns[1]->m_alive = false;
+					createdConns[0]->alive_ = false;
+					createdConns[1]->alive_ = false;
 				}
 
 				// 等待健康检查
@@ -598,7 +598,7 @@ TEST(DbConnectionPoolTest, AcquireSkipsPingWithinGracePeriod)
 	{
 		auto conn = std::make_shared<MockDbConnection>();
 		// 模拟刚被 ping 过
-		conn->m_lastPing = std::chrono::steady_clock::now();
+		conn->lastPing_ = std::chrono::steady_clock::now();
 		co_return conn;
 	};
 
@@ -651,7 +651,7 @@ TEST(DbConnectionPoolTest, AcquirePingsWhenGracePeriodExpired)
 				// 连接应该被 ping 过了（因为宽限期为 0）
 				auto mock = std::dynamic_pointer_cast<MockDbConnection>(conn);
 				// lastPingTime 应已更新（由 acquire 中的 ping 触发）
-				EXPECT_NE(mock->m_lastPing, std::chrono::steady_clock::time_point {});
+				EXPECT_NE(mock->lastPing_, std::chrono::steady_clock::time_point {});
 
 				pool->release(std::move(conn));
 				co_await pool->shutdown();

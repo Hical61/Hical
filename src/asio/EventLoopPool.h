@@ -40,25 +40,25 @@ namespace hical
 		 * @brief 获取下一个事件循环（round-robin）
 		 * @return 事件循环指针
 		 */
-		AsioEventLoop* getNextLoop();
+		[[nodiscard]] AsioEventLoop* getNextLoop();
 
 		/**
 		 * @brief 获取所有事件循环
 		 * @return 事件循环指针列表
 		 */
-		std::vector<AsioEventLoop*> getAllLoops();
+		[[nodiscard]] std::vector<AsioEventLoop*> getAllLoops();
 
 		/**
 		 * @brief 获取池中事件循环数量
 		 * @return 数量
 		 */
-		size_t size() const;
+		[[nodiscard]] size_t size() const;
 
 		/**
 		 * @brief 池是否已启动
 		 * @return true 如果已启动
 		 */
-		bool isRunning() const;
+		[[nodiscard]] bool isRunning() const;
 
 		// 禁止拷贝和移动
 		EventLoopPool(const EventLoopPool&) = delete;

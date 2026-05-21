@@ -8,25 +8,25 @@ namespace hical
 	// ============ LogChannel ============
 
 	LogChannel::LogChannel(std::string name)
-		: m_name(std::move(name))
-		, m_formatter(std::make_shared<TextFormatter>())
-		, m_sinks(std::make_shared<const std::vector<std::shared_ptr<LogSink>>>())
+		: name_(std::move(name))
+		, formatter_(std::make_shared<TextFormatter>())
+		, sinks_(std::make_shared<const std::vector<std::shared_ptr<LogSink>>>())
 	{
 	}
 
 	const std::string& LogChannel::name() const
 	{
-		return m_name;
+		return name_;
 	}
 
 	void LogChannel::setLevel(LogLevel lvl)
 	{
-		m_level.store(lvl, std::memory_order_relaxed);
+		level_.store(lvl, std::memory_order_relaxed);
 	}
 
 	LogLevel LogChannel::level() const
 	{
-		return m_level.load(std::memory_order_relaxed);
+		return level_.load(std::memory_order_relaxed);
 	}
 
 	void LogChannel::setFormatter(std::shared_ptr<LogFormatter> formatter)
@@ -35,27 +35,27 @@ namespace hical
 		{
 			return; // 拒绝 nullptr，保持当前 formatter
 		}
-		std::lock_guard<std::mutex> lock(m_mutex);
-		m_formatter = std::move(formatter);
+		std::lock_guard<std::mutex> lock(mutex_);
+		formatter_ = std::move(formatter);
 	}
 
 	void LogChannel::addSink(std::shared_ptr<LogSink> sink)
 	{
-		std::lock_guard<std::mutex> lock(m_mutex);
-		auto newSinks = std::make_shared<std::vector<std::shared_ptr<LogSink>>>(*m_sinks);
+		std::lock_guard<std::mutex> lock(mutex_);
+		auto newSinks = std::make_shared<std::vector<std::shared_ptr<LogSink>>>(*sinks_);
 		newSinks->push_back(std::move(sink));
-		m_sinks = std::move(newSinks);
+		sinks_ = std::move(newSinks);
 	}
 
 	void LogChannel::clearSinks()
 	{
-		std::lock_guard<std::mutex> lock(m_mutex);
-		m_sinks = std::make_shared<const std::vector<std::shared_ptr<LogSink>>>();
+		std::lock_guard<std::mutex> lock(mutex_);
+		sinks_ = std::make_shared<const std::vector<std::shared_ptr<LogSink>>>();
 	}
 
 	void LogChannel::emit(const LogRecord& record)
 	{
-		if (record.level < m_level.load(std::memory_order_relaxed))
+		if (record.level < level_.load(std::memory_order_relaxed))
 		{
 			return;
 		}
@@ -64,9 +64,9 @@ namespace hical
 		std::shared_ptr<LogFormatter> fmtSnap;
 		std::shared_ptr<const std::vector<std::shared_ptr<LogSink>>> sinksSnap;
 		{
-			std::lock_guard<std::mutex> lock(m_mutex);
-			fmtSnap = m_formatter;
-			sinksSnap = m_sinks;
+			std::lock_guard<std::mutex> lock(mutex_);
+			fmtSnap = formatter_;
+			sinksSnap = sinks_;
 		}
 
 		// 锁外格式化 + 分发（Sink 接口要求实现线程安全）
@@ -85,30 +85,30 @@ namespace hical
 	std::shared_ptr<LogChannel> LogChannelRegistry::getOrCreate(const std::string& name)
 	{
 		{
-			std::shared_lock<std::shared_mutex> rlock(m_mutex);
-			auto it = m_channels.find(name);
-			if (it != m_channels.end())
+			std::shared_lock<std::shared_mutex> rlock(mutex_);
+			auto it = channels_.find(name);
+			if (it != channels_.end())
 			{
 				return it->second;
 			}
 		}
-		std::unique_lock<std::shared_mutex> wlock(m_mutex);
+		std::unique_lock<std::shared_mutex> wlock(mutex_);
 		// 双重检查
-		auto it = m_channels.find(name);
-		if (it != m_channels.end())
+		auto it = channels_.find(name);
+		if (it != channels_.end())
 		{
 			return it->second;
 		}
 		auto ch = std::make_shared<LogChannel>(name);
-		m_channels[name] = ch;
+		channels_[name] = ch;
 		return ch;
 	}
 
 	std::shared_ptr<LogChannel> LogChannelRegistry::get(const std::string& name) const
 	{
-		std::shared_lock<std::shared_mutex> rlock(m_mutex);
-		auto it = m_channels.find(name);
-		if (it != m_channels.end())
+		std::shared_lock<std::shared_mutex> rlock(mutex_);
+		auto it = channels_.find(name);
+		if (it != channels_.end())
 		{
 			return it->second;
 		}
@@ -117,10 +117,10 @@ namespace hical
 
 	std::vector<std::pair<std::string, LogLevel>> LogChannelRegistry::listChannels() const
 	{
-		std::shared_lock<std::shared_mutex> rlock(m_mutex);
+		std::shared_lock<std::shared_mutex> rlock(mutex_);
 		std::vector<std::pair<std::string, LogLevel>> result;
-		result.reserve(m_channels.size());
-		for (const auto& [name, ch] : m_channels)
+		result.reserve(channels_.size());
+		for (const auto& [name, ch] : channels_)
 		{
 			result.emplace_back(name, ch->level());
 		}

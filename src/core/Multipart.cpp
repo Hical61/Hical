@@ -272,7 +272,7 @@ namespace hical
 
 	const std::vector<MultipartPart>* MultipartParser::cachedParse(const HttpRequest& req)
 	{
-		auto& cache = req.m_cachedMultipartParts;
+		auto& cache = req.cachedMultipartParts_;
 		if (!cache.has_value())
 		{
 			auto parsed = parse(req);

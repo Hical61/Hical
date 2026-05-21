@@ -28,53 +28,53 @@ class MockDbConnection : public DbConnection
 public:
 	Awaitable<DbResult> query(std::string_view sql) override
 	{
-		++m_queryCount;
-		m_lastSql = std::string(sql);
+		++queryCount_;
+		lastSql_ = std::string(sql);
 		co_return DbResult {.columns = {"id", "name"}, .rows = {{"1", "test"}}, .affectedRows = 0};
 	}
 
 	Awaitable<DbResult> query(std::string_view sql, std::span<const std::string> /*params*/) override
 	{
-		++m_queryCount;
-		m_lastSql = std::string(sql);
+		++queryCount_;
+		lastSql_ = std::string(sql);
 		co_return DbResult {.columns = {"id"}, .rows = {{"1"}}, .affectedRows = 0};
 	}
 
 	Awaitable<DbResult> execute(std::string_view sql) override
 	{
-		++m_executeCount;
-		m_lastSql = std::string(sql);
+		++executeCount_;
+		lastSql_ = std::string(sql);
 		co_return DbResult {.affectedRows = 1, .insertId = 42};
 	}
 
 	Awaitable<DbResult> execute(std::string_view sql, std::span<const std::string> /*params*/) override
 	{
-		++m_executeCount;
-		m_lastSql = std::string(sql);
+		++executeCount_;
+		lastSql_ = std::string(sql);
 		co_return DbResult {.affectedRows = 3, .insertId = 100};
 	}
 
 	Awaitable<void> beginTransaction() override
 	{
-		m_inTransaction = true;
+		inTransaction_ = true;
 		co_return;
 	}
 
 	Awaitable<void> commit() override
 	{
-		m_inTransaction = false;
+		inTransaction_ = false;
 		co_return;
 	}
 
 	Awaitable<void> rollback() override
 	{
-		m_inTransaction = false;
+		inTransaction_ = false;
 		co_return;
 	}
 
 	bool inTransaction() const override
 	{
-		return m_inTransaction;
+		return inTransaction_;
 	}
 
 	bool isAlive() const override
@@ -84,7 +84,7 @@ public:
 
 	Awaitable<bool> ping() override
 	{
-		m_lastPing = std::chrono::steady_clock::now();
+		lastPing_ = std::chrono::steady_clock::now();
 		co_return true;
 	}
 
@@ -95,25 +95,25 @@ public:
 
 	std::chrono::steady_clock::time_point lastActiveTime() const override
 	{
-		return m_lastActive;
+		return lastActive_;
 	}
 
 	std::chrono::steady_clock::time_point lastPingTime() const override
 	{
-		return m_lastPing;
+		return lastPing_;
 	}
 
 	void touch() override
 	{
-		m_lastActive = std::chrono::steady_clock::now();
+		lastActive_ = std::chrono::steady_clock::now();
 	}
 
-	bool m_inTransaction = false;
-	int m_queryCount = 0;
-	int m_executeCount = 0;
-	std::string m_lastSql;
-	std::chrono::steady_clock::time_point m_lastActive = std::chrono::steady_clock::now();
-	std::chrono::steady_clock::time_point m_lastPing;
+	bool inTransaction_ = false;
+	int queryCount_ = 0;
+	int executeCount_ = 0;
+	std::string lastSql_;
+	std::chrono::steady_clock::time_point lastActive_ = std::chrono::steady_clock::now();
+	std::chrono::steady_clock::time_point lastPing_;
 };
 
 DbConnectionFactory makeMockFactory()

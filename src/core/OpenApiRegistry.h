@@ -87,22 +87,22 @@ namespace hical::meta::openapi
 
 		void addSchema(const std::string& name, boost::json::object schema);
 
-		bool hasSchema(const std::string& name) const;
+		[[nodiscard]] bool hasSchema(const std::string& name) const;
 
 		/**
 		 * @brief 获取所有已注册路由的快照（线程安全，返回副本）
 		 */
-		std::vector<RegisteredRoute> routes() const;
+		[[nodiscard]] std::vector<RegisteredRoute> routes() const;
 
 		/**
 		 * @brief 获取所有已注册 schema 的快照（线程安全，返回副本）
 		 */
-		std::unordered_map<std::string, boost::json::object> schemas() const;
+		[[nodiscard]] std::unordered_map<std::string, boost::json::object> schemas() const;
 
 	private:
-		mutable std::mutex m_mutex;
-		std::vector<RegisteredRoute> m_routes;
-		std::unordered_map<std::string, boost::json::object> m_schemas;
+		mutable std::mutex mutex_;
+		std::vector<RegisteredRoute> routes_;
+		std::unordered_map<std::string, boost::json::object> schemas_;
 	};
 
 	// ============ builder 辅助函数 ============

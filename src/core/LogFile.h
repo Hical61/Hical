@@ -55,14 +55,14 @@ namespace hical
 		void cleanOldFiles();
 		[[nodiscard]] std::string makeRotatedName() const;
 
-		Options m_opts;
-		FILE* m_fp {nullptr};
-		size_t m_writtenBytes {0};
-		uint64_t m_rotationSeq {0};
+		Options opts_;
+		FILE* fp_ {nullptr};
+		size_t writtenBytes_ {0};
+		uint64_t rotationSeq_ {0};
 		// 预解析的路径组件
-		std::string m_dir;
-		std::string m_stem;
-		std::string m_ext;
+		std::string dir_;
+		std::string stem_;
+		std::string ext_;
 	};
 
 } // namespace hical

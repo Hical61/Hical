@@ -116,19 +116,19 @@ namespace hical
 		 * @brief 连接是否仍然打开
 		 * @return true 如果连接打开
 		 */
-		bool isOpen() const;
+		[[nodiscard]] bool isOpen() const;
 
 		/**
 		 * @brief 获取底层 TCP socket 引用
 		 * 用于超时场景关闭底层 socket 以中断 async_read。
 		 * @return TCP socket 引用
 		 */
-		boost::asio::ip::tcp::socket& socket();
+		[[nodiscard]] boost::asio::ip::tcp::socket& socket();
 
 		/**
 		 * @brief 获取压缩配置
 		 */
-		const WsCompressionConfig& compressionConfig() const;
+		[[nodiscard]] const WsCompressionConfig& compressionConfig() const;
 
 		// ============ 连接上下文 ============
 
@@ -144,13 +144,13 @@ namespace hical
 		 * @return static_pointer_cast 后的 shared_ptr
 		 */
 		template <typename T>
-		std::shared_ptr<T> getContext() const
+		[[nodiscard]] std::shared_ptr<T> getContext() const
 		{
-			return std::static_pointer_cast<T>(m_context);
+			return std::static_pointer_cast<T>(context_);
 		}
 
 		/// 检查是否已设置上下文
-		bool hasContext() const;
+		[[nodiscard]] bool hasContext() const;
 
 		/// 清除上下文
 		void clearContext();
@@ -158,12 +158,12 @@ namespace hical
 		// ============ 心跳支持 ============
 
 		/// 获取最后收到 Pong 的时间点
-		std::chrono::steady_clock::time_point lastPongTime() const;
+		[[nodiscard]] std::chrono::steady_clock::time_point lastPongTime() const;
 
 		// ============ 子协议 ============
 
 		/// 获取协商的子协议（空 = 未协商）
-		std::string_view subprotocol() const;
+		[[nodiscard]] std::string_view subprotocol() const;
 
 		/// 设置子协议（框架内部使用）
 		void setSubprotocol(std::string proto);
@@ -187,26 +187,26 @@ namespace hical
 		/// 发送 close 帧的便捷方法
 		Awaitable<void> sendCloseFrame(WsCloseCode code, std::string_view reason = {});
 
-		boost::asio::ip::tcp::socket m_socket;
-		std::atomic<bool> m_open {true};
-		WsCompressionConfig m_compression;
-		size_t m_maxMessageSize;
+		boost::asio::ip::tcp::socket socket_;
+		std::atomic<bool> open_ {true};
+		WsCompressionConfig compression_;
+		size_t maxMessageSize_;
 
 		// 连接级读缓冲区（跨 receive() 调用复用）
-		std::vector<uint8_t> m_readBuf;
-		size_t m_readBufUsed = 0;
+		std::vector<uint8_t> readBuf_;
+		size_t readBufUsed_ = 0;
 
 		// 分片消息重组
-		std::string m_fragmentBuf;
-		WsOpcode m_fragmentOpcode = WsOpcode::hText;
-		bool m_fragmentCompressed = false; ///< 当前分片消息的首帧是否带 RSV1（压缩）
+		std::string fragmentBuf_;
+		WsOpcode fragmentOpcode_ = WsOpcode::hText;
+		bool fragmentCompressed_ = false; ///< 当前分片消息的首帧是否带 RSV1（压缩）
 
 		// permessage-deflate 上下文（仅压缩启用时构造）
-		std::unique_ptr<WsDeflateContext> m_deflateCtx;
+		std::unique_ptr<WsDeflateContext> deflateCtx_;
 
 		// 写串行化：防止心跳 Ping 与消息发送并发 async_write
-		bool m_writePending = false;
-		std::unique_ptr<boost::asio::steady_timer> m_writeReady;
+		bool writePending_ = false;
+		std::unique_ptr<boost::asio::steady_timer> writeReady_;
 
 		/// 获取写权限（等待前一个 async_write 完成）
 		Awaitable<void> acquireWrite();
@@ -215,13 +215,13 @@ namespace hical
 		void releaseWrite();
 
 		// 连接上下文（Feature 6）
-		std::shared_ptr<void> m_context;
+		std::shared_ptr<void> context_;
 
 		// 心跳 Pong 时间戳（Feature 1）
-		std::chrono::steady_clock::time_point m_lastPongTime {std::chrono::steady_clock::now()};
+		std::chrono::steady_clock::time_point lastPongTime_ {std::chrono::steady_clock::now()};
 
 		// 协商的子协议（Feature 5）
-		std::string m_subprotocol;
+		std::string subprotocol_;
 	};
 
 } // namespace hical

@@ -9,19 +9,19 @@ namespace hical
 
 	WsConnectionId WsHub::add(std::shared_ptr<WebSocketSession> session)
 	{
-		WsConnectionId id = m_nextId.fetch_add(1, std::memory_order_relaxed);
+		WsConnectionId id = nextId_.fetch_add(1, std::memory_order_relaxed);
 
-		std::unique_lock lock(m_mutex);
-		m_connections.emplace(id, ConnectionEntry {std::move(session), {}});
+		std::unique_lock lock(mutex_);
+		connections_.emplace(id, ConnectionEntry {std::move(session), {}});
 		return id;
 	}
 
 	void WsHub::remove(WsConnectionId id)
 	{
-		std::unique_lock lock(m_mutex);
+		std::unique_lock lock(mutex_);
 
-		auto it = m_connections.find(id);
-		if (it == m_connections.end())
+		auto it = connections_.find(id);
+		if (it == connections_.end())
 		{
 			return;
 		}
@@ -29,8 +29,8 @@ namespace hical
 		// 从所有所属房间中移除该连接
 		for (const auto& room : it->second.rooms)
 		{
-			auto roomIt = m_rooms.find(room);
-			if (roomIt != m_rooms.end())
+			auto roomIt = rooms_.find(room);
+			if (roomIt != rooms_.end())
 			{
 				auto& members = roomIt->second;
 				std::erase_if(members,
@@ -40,34 +40,34 @@ namespace hical
 							  });
 				if (members.empty())
 				{
-					m_rooms.erase(roomIt);
+					rooms_.erase(roomIt);
 				}
 			}
 		}
 
-		m_connections.erase(it);
+		connections_.erase(it);
 	}
 
 	void WsHub::join(WsConnectionId id, std::string_view room)
 	{
-		std::unique_lock lock(m_mutex);
+		std::unique_lock lock(mutex_);
 
-		auto it = m_connections.find(id);
-		if (it == m_connections.end())
+		auto it = connections_.find(id);
+		if (it == connections_.end())
 		{
 			return;
 		}
 
 		it->second.rooms.emplace(room);
-		m_rooms[std::string(room)].push_back(RoomMember {id, it->second.session});
+		rooms_[std::string(room)].push_back(RoomMember {id, it->second.session});
 	}
 
 	void WsHub::leave(WsConnectionId id, std::string_view room)
 	{
-		std::unique_lock lock(m_mutex);
+		std::unique_lock lock(mutex_);
 
-		auto connIt = m_connections.find(id);
-		if (connIt != m_connections.end())
+		auto connIt = connections_.find(id);
+		if (connIt != connections_.end())
 		{
 			// C++20 异构查找仅支持 find/count/contains，erase 需 C++23 (P2077R3)
 			auto roomIt2 = connIt->second.rooms.find(room);
@@ -77,8 +77,8 @@ namespace hical
 			}
 		}
 
-		auto roomIt = m_rooms.find(room);
-		if (roomIt != m_rooms.end())
+		auto roomIt = rooms_.find(room);
+		if (roomIt != rooms_.end())
 		{
 			auto& members = roomIt->second;
 			std::erase_if(members,
@@ -88,7 +88,7 @@ namespace hical
 						  });
 			if (members.empty())
 			{
-				m_rooms.erase(roomIt);
+				rooms_.erase(roomIt);
 			}
 		}
 	}
@@ -97,16 +97,16 @@ namespace hical
 	{
 		auto msgPtr = std::make_shared<std::string>(payload);
 
-		std::shared_lock lock(m_mutex);
+		std::shared_lock lock(mutex_);
 
-		auto roomIt = m_rooms.find(room);
-		if (roomIt == m_rooms.end())
+		auto roomIt = rooms_.find(room);
+		if (roomIt == rooms_.end())
 		{
 			return;
 		}
 
 		// 直接遍历 vector<RoomMember>：连续内存顺序访问（cache prefetch 友好），
-		// 无需 m_connections.find() 二次查找，减少一层指针追踪
+		// 无需 connections_.find() 二次查找，减少一层指针追踪
 		for (const auto& member : roomIt->second)
 		{
 			if (member.id == exclude)
@@ -150,9 +150,9 @@ namespace hical
 	{
 		auto msgPtr = std::make_shared<std::string>(message);
 
-		std::shared_lock lock(m_mutex);
+		std::shared_lock lock(mutex_);
 
-		for (const auto& [id, entry] : m_connections)
+		for (const auto& [id, entry] : connections_)
 		{
 			if (id == exclude)
 			{
@@ -179,10 +179,10 @@ namespace hical
 		// 单目标发送：直接 move string 进 lambda，省去 shared_ptr 控制块分配
 		auto msg = std::string(message);
 
-		std::shared_lock lock(m_mutex);
+		std::shared_lock lock(mutex_);
 
-		auto it = m_connections.find(id);
-		if (it == m_connections.end())
+		auto it = connections_.find(id);
+		if (it == connections_.end())
 		{
 			return;
 		}
@@ -203,10 +203,10 @@ namespace hical
 
 	size_t WsHub::roomSize(std::string_view room) const
 	{
-		std::shared_lock lock(m_mutex);
+		std::shared_lock lock(mutex_);
 
-		auto it = m_rooms.find(room);
-		if (it == m_rooms.end())
+		auto it = rooms_.find(room);
+		if (it == rooms_.end())
 		{
 			return 0;
 		}
@@ -215,8 +215,8 @@ namespace hical
 
 	size_t WsHub::connectionCount() const
 	{
-		std::shared_lock lock(m_mutex);
-		return m_connections.size();
+		std::shared_lock lock(mutex_);
+		return connections_.size();
 	}
 
 } // namespace hical

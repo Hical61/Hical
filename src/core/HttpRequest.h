@@ -33,11 +33,11 @@ namespace hical
 			std::string_view value;
 		};
 
-		static constexpr size_t hMaxHeaders = 64;
+		static constexpr size_t kMaxHeaders = 64;
 
 		void add(std::string_view name, std::string_view value) noexcept
 		{
-			if (size_ < hMaxHeaders)
+			if (size_ < kMaxHeaders)
 			{
 				entries_[size_++] = {name, value};
 			}
@@ -93,7 +93,7 @@ namespace hical
 		}
 
 	private:
-		std::array<Entry, hMaxHeaders> entries_;
+		std::array<Entry, kMaxHeaders> entries_;
 		size_t size_ = 0;
 	};
 
@@ -170,23 +170,23 @@ namespace hical
 		 * @param req 已解析的原生请求
 		 * @return HttpRequest
 		 */
-		static HttpRequest fromParsed(NativeRequest&& req);
+		[[nodiscard]] static HttpRequest fromParsed(NativeRequest&& req);
 
-		HttpMethod method() const;
-		std::string_view path() const;
-		std::string_view target() const;
-		std::string_view query() const;
-		std::string_view header(std::string_view name) const;
-		const std::string& body() const;
-		const boost::json::value& jsonBody() const;
+		[[nodiscard]] HttpMethod method() const;
+		[[nodiscard]] std::string_view path() const;
+		[[nodiscard]] std::string_view target() const;
+		[[nodiscard]] std::string_view query() const;
+		[[nodiscard]] std::string_view header(std::string_view name) const;
+		[[nodiscard]] const std::string& body() const;
+		[[nodiscard]] const boost::json::value& jsonBody() const;
 
 		template <typename T>
-		T readJson() const;
+		[[nodiscard]] T readJson() const;
 
-		std::string_view contentType() const;
+		[[nodiscard]] std::string_view contentType() const;
 
-		NativeRequest& native();
-		const NativeRequest& native() const;
+		[[nodiscard]] NativeRequest& native();
+		[[nodiscard]] const NativeRequest& native() const;
 
 		void setMethod(HttpMethod method);
 		void setTarget(const std::string& target);
@@ -194,31 +194,33 @@ namespace hical
 		void setBody(const std::string& body);
 
 		// ============ 路径参数 ============
-		const std::string& param(std::string_view name) const;
+		[[nodiscard]] const std::string& param(std::string_view name) const;
 		void setParam(const std::string& name, const std::string& value);
-		bool hasParam(std::string_view name) const;
+		[[nodiscard]] bool hasParam(std::string_view name) const;
 
 		// ============ Cookie ============
-		const std::string& cookie(std::string_view name) const;
-		const std::unordered_map<std::string, std::string, StringHash, StringEqual>& cookies() const;
-		bool hasCookie(std::string_view name) const;
+		[[nodiscard]] const std::string& cookie(std::string_view name) const;
+		[[nodiscard]] const std::unordered_map<std::string, std::string, StringHash, StringEqual>& cookies() const;
+		[[nodiscard]] bool hasCookie(std::string_view name) const;
 
 		// ============ 查询参数 ============
-		std::optional<std::string> queryParam(std::string_view name) const;
-		const std::unordered_multimap<std::string, std::string, StringHash, StringEqual>& queryParams() const;
-		bool hasQueryParam(std::string_view name) const;
+		[[nodiscard]] std::optional<std::string> queryParam(std::string_view name) const;
+		[[nodiscard]] const std::unordered_multimap<std::string, std::string, StringHash, StringEqual>& queryParams()
+			const;
+		[[nodiscard]] bool hasQueryParam(std::string_view name) const;
 
 		// ============ 表单参数 ============
-		std::optional<std::string> formParam(std::string_view name) const;
-		const std::unordered_multimap<std::string, std::string, StringHash, StringEqual>& formParams() const;
-		bool hasFormParam(std::string_view name) const;
+		[[nodiscard]] std::optional<std::string> formParam(std::string_view name) const;
+		[[nodiscard]] const std::unordered_multimap<std::string, std::string, StringHash, StringEqual>& formParams()
+			const;
+		[[nodiscard]] bool hasFormParam(std::string_view name) const;
 
 		// ============ 请求级属性 ============
 		void setAttribute(const std::string& key, std::any value);
-		std::optional<std::any> getAttribute(const std::string& key) const;
+		[[nodiscard]] std::optional<std::any> getAttribute(const std::string& key) const;
 
 		template <typename T>
-		std::optional<T> getAttribute(const std::string& key) const
+		[[nodiscard]] std::optional<T> getAttribute(const std::string& key) const
 		{
 			if (!attributes_)
 			{
@@ -243,16 +245,16 @@ namespace hical
 		void parseQueryParams() const;
 		void parseFormParams() const;
 
-		NativeRequest m_req;
+		NativeRequest req_;
 		// setter 专用拥有存储（测试/构建请求场景，不在热路径）
-		std::string m_ownedTarget;
-		HeaderMap m_ownedHeaders;
+		std::string ownedTarget_;
+		HeaderMap ownedHeaders_;
 		std::vector<std::pair<std::string, std::string>> pathParams_;
 		mutable std::optional<std::unordered_map<std::string, std::string, StringHash, StringEqual>> cookies_;
 		mutable std::optional<boost::json::value> cachedJsonBody_;
-		mutable std::optional<std::unordered_multimap<std::string, std::string, StringHash, StringEqual>> m_queryParams;
-		mutable std::optional<std::unordered_multimap<std::string, std::string, StringHash, StringEqual>> m_formParams;
-		mutable std::any m_cachedMultipartParts;
+		mutable std::optional<std::unordered_multimap<std::string, std::string, StringHash, StringEqual>> queryParams_;
+		mutable std::optional<std::unordered_multimap<std::string, std::string, StringHash, StringEqual>> formParams_;
+		mutable std::any cachedMultipartParts_;
 		std::unique_ptr<std::unordered_map<std::string, std::any>> attributes_;
 	};
 

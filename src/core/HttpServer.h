@@ -50,7 +50,7 @@ namespace hical
 		 * @brief 获取路由器引用（用于注册路由）
 		 * @return 路由器引用
 		 */
-		Router& router();
+		[[nodiscard]] Router& router();
 
 		/**
 		 * @brief 添加中间件
@@ -70,7 +70,7 @@ namespace hical
 		 * @brief 获取中间件计时统计快照
 		 * @return 各层中间件的统计数据
 		 */
-		std::vector<MiddlewarePipeline::TimingSnapshot> middlewareStats() const;
+		[[nodiscard]] std::vector<MiddlewarePipeline::TimingSnapshot> middlewareStats() const;
 #endif
 
 		/**
@@ -107,7 +107,7 @@ namespace hical
 		 * @param availableMemoryMB 可用内存（MB）
 		 * @return 推荐的最大连接数（上限 65535）
 		 */
-		static size_t recommendedMaxConnections(size_t availableMemoryMB);
+		[[nodiscard]] static size_t recommendedMaxConnections(size_t availableMemoryMB);
 
 		/**
 		 * @brief 设置空闲连接超时时间
@@ -160,13 +160,13 @@ namespace hical
 		 * @brief 服务器是否正在运行
 		 * @return true 如果正在运行
 		 */
-		bool isRunning() const;
+		[[nodiscard]] bool isRunning() const;
 
 		/**
 		 * @brief 获取监听端口
 		 * @return 端口号
 		 */
-		uint16_t port() const;
+		[[nodiscard]] uint16_t port() const;
 
 		/**
 		 * @brief 获取底层 io_context 引用
@@ -174,7 +174,7 @@ namespace hical
 		 * @warning 不要在 start() 之后手动调用 ioCtx.run()
 		 * @return io_context 引用
 		 */
-		boost::asio::io_context& ioContext();
+		[[nodiscard]] boost::asio::io_context& ioContext();
 
 	private:
 		// 协程式连接监听（每个 acceptor 独立运行）

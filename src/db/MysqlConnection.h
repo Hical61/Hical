@@ -32,24 +32,24 @@ namespace hical::db
 		 * @param config 数据库配置
 		 * @return 已连接的 MysqlConnection
 		 */
-		static Awaitable<std::shared_ptr<MysqlConnection>> create(boost::asio::io_context& ioCtx,
-																  const DbConfig& config);
+		[[nodiscard]] static Awaitable<std::shared_ptr<MysqlConnection>> create(boost::asio::io_context& ioCtx,
+																				const DbConfig& config);
 
 		/**
 		 * @brief 创建 MysqlConnection 工厂函数(可传入 DbConnectionPool)
 		 * @return DbConnectionFactory
 		 */
-		static DbConnectionFactory makeFactory();
+		[[nodiscard]] static DbConnectionFactory makeFactory();
 
 		// ============ DbConnection 接口实现 ============
 
-		[[deprecated("Unsafe: use query(sql, params) to prevent SQL injection")]]
-		Awaitable<DbResult> query(std::string_view sql) override;
-		Awaitable<DbResult> query(std::string_view sql, std::span<const std::string> params) override;
+		[[deprecated("Unsafe: use query(sql, params) to prevent SQL injection")]] [[nodiscard]] Awaitable<DbResult>
+		query(std::string_view sql) override;
+		[[nodiscard]] Awaitable<DbResult> query(std::string_view sql, std::span<const std::string> params) override;
 
-		[[deprecated("Unsafe: use execute(sql, params) to prevent SQL injection")]]
-		Awaitable<DbResult> execute(std::string_view sql) override;
-		Awaitable<DbResult> execute(std::string_view sql, std::span<const std::string> params) override;
+		[[deprecated("Unsafe: use execute(sql, params) to prevent SQL injection")]] [[nodiscard]] Awaitable<DbResult>
+		execute(std::string_view sql) override;
+		[[nodiscard]] Awaitable<DbResult> execute(std::string_view sql, std::span<const std::string> params) override;
 
 		Awaitable<void> beginTransaction() override;
 		Awaitable<void> commit() override;
@@ -57,12 +57,12 @@ namespace hical::db
 		bool inTransaction() const override;
 
 		bool isAlive() const override;
-		Awaitable<bool> ping() override;
+		[[nodiscard]] Awaitable<bool> ping() override;
 
-		std::string_view backend() const override;
+		[[nodiscard]] std::string_view backend() const override;
 
-		std::chrono::steady_clock::time_point lastActiveTime() const override;
-		std::chrono::steady_clock::time_point lastPingTime() const override;
+		[[nodiscard]] std::chrono::steady_clock::time_point lastActiveTime() const override;
+		[[nodiscard]] std::chrono::steady_clock::time_point lastPingTime() const override;
 		void touch() override;
 
 	private:
@@ -84,13 +84,13 @@ namespace hical::db
 		 */
 		static void validateCharset(const std::string& charset);
 
-		boost::asio::io_context& m_ioCtx;
-		boost::mysql::any_connection m_conn;
-		StmtCache m_stmtCache;
-		bool m_alive = false;
-		bool m_inTransaction = false;
-		std::chrono::steady_clock::time_point m_lastActive;
-		std::chrono::steady_clock::time_point m_lastPing;
+		boost::asio::io_context& ioCtx_;
+		boost::mysql::any_connection conn_;
+		StmtCache stmtCache_;
+		bool alive_ = false;
+		bool inTransaction_ = false;
+		std::chrono::steady_clock::time_point lastActive_;
+		std::chrono::steady_clock::time_point lastPing_;
 	};
 
 } // namespace hical::db

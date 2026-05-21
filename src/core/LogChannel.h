@@ -40,11 +40,11 @@ namespace hical
 		void emit(const LogRecord& record);
 
 	private:
-		std::string m_name;
-		std::atomic<LogLevel> m_level {LogLevel::hTrace};
-		std::shared_ptr<LogFormatter> m_formatter;
-		std::shared_ptr<const std::vector<std::shared_ptr<LogSink>>> m_sinks;
-		std::mutex m_mutex;
+		std::string name_;
+		std::atomic<LogLevel> level_ {LogLevel::hTrace};
+		std::shared_ptr<LogFormatter> formatter_;
+		std::shared_ptr<const std::vector<std::shared_ptr<LogSink>>> sinks_;
+		std::mutex mutex_;
 	};
 
 	/**
@@ -76,8 +76,8 @@ namespace hical
 		[[nodiscard]] std::vector<std::pair<std::string, LogLevel>> listChannels() const;
 
 	private:
-		mutable std::shared_mutex m_mutex;
-		std::unordered_map<std::string, std::shared_ptr<LogChannel>> m_channels;
+		mutable std::shared_mutex mutex_;
+		std::unordered_map<std::string, std::shared_ptr<LogChannel>> channels_;
 	};
 
 } // namespace hical

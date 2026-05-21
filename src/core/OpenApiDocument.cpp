@@ -5,27 +5,27 @@ namespace hical::meta::openapi
 {
 
 	OpenApiDocument::OpenApiDocument(std::shared_ptr<const OpenApiRegistry> registry, OpenApiConfig config)
-		: m_registry(std::move(registry)), m_config(std::move(config))
+		: registry_(std::move(registry)), config_(std::move(config))
 	{
 	}
 
 	const std::string& OpenApiDocument::generateString()
 	{
-		std::lock_guard lock(m_mutex);
-		if (!m_generated)
+		std::lock_guard lock(mutex_);
+		if (!generated_)
 		{
 			auto doc = buildDocument();
-			m_cached = boost::json::serialize(doc);
-			m_generated = true;
+			cached_ = boost::json::serialize(doc);
+			generated_ = true;
 		}
-		return m_cached;
+		return cached_;
 	}
 
 	void OpenApiDocument::invalidate()
 	{
-		std::lock_guard lock(m_mutex);
-		m_generated = false;
-		m_cached.clear();
+		std::lock_guard lock(mutex_);
+		generated_ = false;
+		cached_.clear();
 	}
 
 	boost::json::object OpenApiDocument::buildDocument()
@@ -54,11 +54,11 @@ namespace hical::meta::openapi
 	boost::json::object OpenApiDocument::buildInfo() const
 	{
 		boost::json::object info;
-		info["title"] = m_config.title;
-		info["version"] = m_config.version;
-		if (!m_config.description.empty())
+		info["title"] = config_.title;
+		info["version"] = config_.version;
+		if (!config_.description.empty())
 		{
-			info["description"] = m_config.description;
+			info["description"] = config_.description;
 		}
 		return info;
 	}
@@ -66,7 +66,7 @@ namespace hical::meta::openapi
 	boost::json::array OpenApiDocument::buildServers() const
 	{
 		boost::json::array servers;
-		for (const auto& s : m_config.servers)
+		for (const auto& s : config_.servers)
 		{
 			boost::json::object server;
 			server["url"] = s.url;
@@ -82,7 +82,7 @@ namespace hical::meta::openapi
 	boost::json::object OpenApiDocument::buildPaths() const
 	{
 		// 获取路由快照
-		auto allRoutes = m_registry->routes();
+		auto allRoutes = registry_->routes();
 
 		// 按 path 分组，同路径不同 method 合并到一个 Path Item Object
 		std::unordered_map<std::string, std::vector<const RegisteredRoute*>> pathGroups;
@@ -232,7 +232,7 @@ namespace hical::meta::openapi
 
 	boost::json::object OpenApiDocument::buildComponents() const
 	{
-		const auto& schemas = m_registry->schemas();
+		const auto& schemas = registry_->schemas();
 		if (schemas.empty())
 		{
 			return {};

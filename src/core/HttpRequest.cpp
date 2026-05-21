@@ -24,25 +24,25 @@ namespace hical
 
 	HttpRequest::HttpRequest()
 	{
-		m_req.httpVersionMajor = 1;
-		m_req.httpVersionMinor = 1;
+		req_.httpVersionMajor = 1;
+		req_.httpVersionMinor = 1;
 	}
 
 	HttpRequest HttpRequest::fromParsed(NativeRequest&& req)
 	{
 		HttpRequest result;
-		result.m_req = std::move(req);
+		result.req_ = std::move(req);
 		return result;
 	}
 
 	HttpMethod HttpRequest::method() const
 	{
-		return m_req.method;
+		return req_.method;
 	}
 
 	std::string_view HttpRequest::path() const
 	{
-		std::string_view t = m_req.target;
+		std::string_view t = req_.target;
 		auto pos = t.find('?');
 		if (pos != std::string_view::npos)
 		{
@@ -53,12 +53,12 @@ namespace hical
 
 	std::string_view HttpRequest::target() const
 	{
-		return m_req.target;
+		return req_.target;
 	}
 
 	std::string_view HttpRequest::query() const
 	{
-		std::string_view t = m_req.target;
+		std::string_view t = req_.target;
 		auto pos = t.find('?');
 		if (pos != std::string_view::npos)
 		{
@@ -69,12 +69,12 @@ namespace hical
 
 	std::string_view HttpRequest::header(std::string_view name) const
 	{
-		return m_req.headers.find(name);
+		return req_.headers.find(name);
 	}
 
 	const std::string& HttpRequest::body() const
 	{
-		return m_req.body;
+		return req_.body;
 	}
 
 	const boost::json::value& HttpRequest::jsonBody() const
@@ -82,7 +82,7 @@ namespace hical
 		if (!cachedJsonBody_)
 		{
 			boost::system::error_code ec;
-			auto val = boost::json::parse(m_req.body, ec);
+			auto val = boost::json::parse(req_.body, ec);
 			cachedJsonBody_.emplace(ec ? boost::json::value(nullptr) : std::move(val));
 		}
 		return *cachedJsonBody_;
@@ -95,23 +95,23 @@ namespace hical
 
 	NativeRequest& HttpRequest::native()
 	{
-		return m_req;
+		return req_;
 	}
 
 	const NativeRequest& HttpRequest::native() const
 	{
-		return m_req;
+		return req_;
 	}
 
 	void HttpRequest::setMethod(HttpMethod method)
 	{
-		m_req.method = method;
+		req_.method = method;
 	}
 
 	void HttpRequest::setTarget(const std::string& target)
 	{
-		m_ownedTarget = target;
-		m_req.target = m_ownedTarget;
+		ownedTarget_ = target;
+		req_.target = ownedTarget_;
 	}
 
 	void HttpRequest::setHeader(const std::string& name, const std::string& value)
@@ -122,24 +122,24 @@ namespace hical
 			return;
 		}
 		// setter 路径使用 owned HeaderMap（测试/构建场景）
-		m_ownedHeaders.set(name, value);
+		ownedHeaders_.set(name, value);
 		// 同步到 NativeRequest 的零拷贝 headers（通过 owned 的 string_view）
-		m_req.headers.clear();
-		for (const auto& [k, v] : m_ownedHeaders)
+		req_.headers.clear();
+		for (const auto& [k, v] : ownedHeaders_)
 		{
-			m_req.headers.add(k, v);
+			req_.headers.add(k, v);
 		}
 	}
 
 	void HttpRequest::setBody(const std::string& body)
 	{
-		m_req.body = body;
+		req_.body = body;
 		// Content-Length 通过 owned headers 设置
-		m_ownedHeaders.set("Content-Length", std::to_string(body.size()));
-		m_req.headers.clear();
-		for (const auto& [k, v] : m_ownedHeaders)
+		ownedHeaders_.set("Content-Length", std::to_string(body.size()));
+		req_.headers.clear();
+		for (const auto& [k, v] : ownedHeaders_)
 		{
-			m_req.headers.add(k, v);
+			req_.headers.add(k, v);
 		}
 	}
 
@@ -309,22 +309,22 @@ namespace hical
 
 	void HttpRequest::parseQueryParams() const
 	{
-		m_queryParams.emplace();
+		queryParams_.emplace();
 		auto q = query();
 		if (!q.empty())
 		{
-			parseUrlEncoded(q, *m_queryParams);
+			parseUrlEncoded(q, *queryParams_);
 		}
 	}
 
 	std::optional<std::string> HttpRequest::queryParam(std::string_view name) const
 	{
-		if (!m_queryParams)
+		if (!queryParams_)
 		{
 			parseQueryParams();
 		}
-		auto it = m_queryParams->find(name);
-		if (it != m_queryParams->end())
+		auto it = queryParams_->find(name);
+		if (it != queryParams_->end())
 		{
 			return it->second;
 		}
@@ -333,46 +333,46 @@ namespace hical
 
 	const std::unordered_multimap<std::string, std::string, StringHash, StringEqual>& HttpRequest::queryParams() const
 	{
-		if (!m_queryParams)
+		if (!queryParams_)
 		{
 			parseQueryParams();
 		}
-		return *m_queryParams;
+		return *queryParams_;
 	}
 
 	bool HttpRequest::hasQueryParam(std::string_view name) const
 	{
-		if (!m_queryParams)
+		if (!queryParams_)
 		{
 			parseQueryParams();
 		}
-		return m_queryParams->count(name) > 0;
+		return queryParams_->count(name) > 0;
 	}
 
 	// ============ 表单参数 ============
 
 	void HttpRequest::parseFormParams() const
 	{
-		m_formParams.emplace();
+		formParams_.emplace();
 		auto ct = contentType();
 		if (ct.find("application/x-www-form-urlencoded") != std::string_view::npos)
 		{
 			auto b = body();
 			if (!b.empty())
 			{
-				parseUrlEncoded(b, *m_formParams);
+				parseUrlEncoded(b, *formParams_);
 			}
 		}
 	}
 
 	std::optional<std::string> HttpRequest::formParam(std::string_view name) const
 	{
-		if (!m_formParams)
+		if (!formParams_)
 		{
 			parseFormParams();
 		}
-		auto it = m_formParams->find(name);
-		if (it != m_formParams->end())
+		auto it = formParams_->find(name);
+		if (it != formParams_->end())
 		{
 			return it->second;
 		}
@@ -381,20 +381,20 @@ namespace hical
 
 	const std::unordered_multimap<std::string, std::string, StringHash, StringEqual>& HttpRequest::formParams() const
 	{
-		if (!m_formParams)
+		if (!formParams_)
 		{
 			parseFormParams();
 		}
-		return *m_formParams;
+		return *formParams_;
 	}
 
 	bool HttpRequest::hasFormParam(std::string_view name) const
 	{
-		if (!m_formParams)
+		if (!formParams_)
 		{
 			parseFormParams();
 		}
-		return m_formParams->count(name) > 0;
+		return formParams_->count(name) > 0;
 	}
 
 	// ============ 请求级属性 ============

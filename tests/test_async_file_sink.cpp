@@ -16,15 +16,15 @@ class AsyncFileSinkTest : public ::testing::Test
 protected:
 	void SetUp() override
 	{
-		m_testDir = fs::temp_directory_path()
-					/ ("hical_async_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
-		fs::create_directories(m_testDir);
+		testDir_ = fs::temp_directory_path()
+				   / ("hical_async_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+		fs::create_directories(testDir_);
 	}
 
 	void TearDown() override
 	{
 		std::error_code ec;
-		fs::remove_all(m_testDir, ec);
+		fs::remove_all(testDir_, ec);
 	}
 
 	std::string readFile(const fs::path& path)
@@ -33,12 +33,12 @@ protected:
 		return {std::istreambuf_iterator<char>(ifs), std::istreambuf_iterator<char>()};
 	}
 
-	fs::path m_testDir;
+	fs::path testDir_;
 };
 
 TEST_F(AsyncFileSinkTest, BasicWrite)
 {
-	auto logPath = (m_testDir / "async.log").string();
+	auto logPath = (testDir_ / "async.log").string();
 	{
 		AsyncFileSink sink(
 			AsyncFileSink::Options {.file = {.basePath = logPath}, .flushInterval = std::chrono::milliseconds(100)});
@@ -55,7 +55,7 @@ TEST_F(AsyncFileSinkTest, BasicWrite)
 
 TEST_F(AsyncFileSinkTest, MultipleWrites)
 {
-	auto logPath = (m_testDir / "multi.log").string();
+	auto logPath = (testDir_ / "multi.log").string();
 	{
 		AsyncFileSink sink(
 			AsyncFileSink::Options {.file = {.basePath = logPath}, .flushInterval = std::chrono::milliseconds(100)});
@@ -77,7 +77,7 @@ TEST_F(AsyncFileSinkTest, MultipleWrites)
 
 TEST_F(AsyncFileSinkTest, MultiThreadWrite)
 {
-	auto logPath = (m_testDir / "mt.log").string();
+	auto logPath = (testDir_ / "mt.log").string();
 	{
 		AsyncFileSink sink(
 			AsyncFileSink::Options {.file = {.basePath = logPath}, .flushInterval = std::chrono::milliseconds(100)});
@@ -118,7 +118,7 @@ TEST_F(AsyncFileSinkTest, MultiThreadWrite)
 
 TEST_F(AsyncFileSinkTest, GracefulShutdown)
 {
-	auto logPath = (m_testDir / "shutdown.log").string();
+	auto logPath = (testDir_ / "shutdown.log").string();
 	{
 		AsyncFileSink sink(AsyncFileSink::Options {
 			.file = {.basePath = logPath},
@@ -136,7 +136,7 @@ TEST_F(AsyncFileSinkTest, GracefulShutdown)
 
 TEST_F(AsyncFileSinkTest, DroppedCountInitiallyZero)
 {
-	auto logPath = (m_testDir / "drop.log").string();
+	auto logPath = (testDir_ / "drop.log").string();
 	AsyncFileSink sink(
 		AsyncFileSink::Options {.file = {.basePath = logPath}, .flushInterval = std::chrono::milliseconds(100)});
 	EXPECT_EQ(sink.droppedCount(), 0u);
@@ -144,7 +144,7 @@ TEST_F(AsyncFileSinkTest, DroppedCountInitiallyZero)
 
 TEST_F(AsyncFileSinkTest, FileRotationWithAsync)
 {
-	auto logPath = (m_testDir / "rotate.log").string();
+	auto logPath = (testDir_ / "rotate.log").string();
 	{
 		AsyncFileSink sink(AsyncFileSink::Options {.file = {.basePath = logPath, .maxFileSize = 100, .maxFiles = 3},
 												   .flushInterval = std::chrono::milliseconds(50)});
@@ -160,7 +160,7 @@ TEST_F(AsyncFileSinkTest, FileRotationWithAsync)
 
 	// 检查有轮转文件
 	int logFileCount = 0;
-	for (const auto& entry : fs::directory_iterator(m_testDir))
+	for (const auto& entry : fs::directory_iterator(testDir_))
 	{
 		if (entry.path().extension() == ".log")
 		{
@@ -172,7 +172,7 @@ TEST_F(AsyncFileSinkTest, FileRotationWithAsync)
 
 TEST_F(AsyncFileSinkTest, SinkLevelFilter)
 {
-	auto logPath = (m_testDir / "level.log").string();
+	auto logPath = (testDir_ / "level.log").string();
 	{
 		AsyncFileSink sink(
 			AsyncFileSink::Options {.file = {.basePath = logPath}, .flushInterval = std::chrono::milliseconds(100)});

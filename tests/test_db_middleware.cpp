@@ -27,7 +27,7 @@ class MockDbConnection : public DbConnection
 public:
 	Awaitable<DbResult> query(std::string_view /*sql*/) override
 	{
-		++m_queryCount;
+		++queryCount_;
 		co_return DbResult {.columns = {"id"}, .rows = {{"1"}}, .affectedRows = 0};
 	}
 
@@ -48,27 +48,27 @@ public:
 
 	Awaitable<void> beginTransaction() override
 	{
-		m_inTransaction = true;
+		inTransaction_ = true;
 		co_return;
 	}
 
 	Awaitable<void> commit() override
 	{
-		m_inTransaction = false;
-		++m_commitCount;
+		inTransaction_ = false;
+		++commitCount_;
 		co_return;
 	}
 
 	Awaitable<void> rollback() override
 	{
-		m_inTransaction = false;
-		++m_rollbackCount;
+		inTransaction_ = false;
+		++rollbackCount_;
 		co_return;
 	}
 
 	bool inTransaction() const override
 	{
-		return m_inTransaction;
+		return inTransaction_;
 	}
 
 	bool isAlive() const override
@@ -88,25 +88,25 @@ public:
 
 	std::chrono::steady_clock::time_point lastActiveTime() const override
 	{
-		return m_lastActive;
+		return lastActive_;
 	}
 
 	std::chrono::steady_clock::time_point lastPingTime() const override
 	{
-		return m_lastPing;
+		return lastPing_;
 	}
 
 	void touch() override
 	{
-		m_lastActive = std::chrono::steady_clock::now();
+		lastActive_ = std::chrono::steady_clock::now();
 	}
 
-	bool m_inTransaction = false;
-	int m_queryCount = 0;
-	int m_commitCount = 0;
-	int m_rollbackCount = 0;
-	std::chrono::steady_clock::time_point m_lastActive = std::chrono::steady_clock::now();
-	std::chrono::steady_clock::time_point m_lastPing;
+	bool inTransaction_ = false;
+	int queryCount_ = 0;
+	int commitCount_ = 0;
+	int rollbackCount_ = 0;
+	std::chrono::steady_clock::time_point lastActive_ = std::chrono::steady_clock::now();
+	std::chrono::steady_clock::time_point lastPing_;
 };
 
 DbConnectionFactory makeMockFactory()
@@ -324,8 +324,8 @@ TEST(DbMiddlewareTest, AutoTransactionCommitsOnSuccess)
 	ioCtx.run();
 
 	ASSERT_NE(mockConn, nullptr);
-	EXPECT_EQ(mockConn->m_commitCount, 1);
-	EXPECT_EQ(mockConn->m_rollbackCount, 0);
+	EXPECT_EQ(mockConn->commitCount_, 1);
+	EXPECT_EQ(mockConn->rollbackCount_, 0);
 }
 
 TEST(DbMiddlewareTest, AutoTransactionRollsBackOnException)
@@ -374,8 +374,8 @@ TEST(DbMiddlewareTest, AutoTransactionRollsBackOnException)
 	ioCtx.run();
 
 	ASSERT_NE(mockConn, nullptr);
-	EXPECT_EQ(mockConn->m_commitCount, 0);
-	EXPECT_EQ(mockConn->m_rollbackCount, 1);
+	EXPECT_EQ(mockConn->commitCount_, 0);
+	EXPECT_EQ(mockConn->rollbackCount_, 1);
 }
 
 // ============ 连接归还测试 ============
