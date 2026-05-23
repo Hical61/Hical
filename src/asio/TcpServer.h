@@ -8,15 +8,26 @@
 #include "AsioEventLoop.h"
 #include "EventLoopPool.h"
 #include <boost/asio.hpp>
+#include <atomic>
 #include <functional>
 #include <memory>
-#include <mutex>
-#include <set>
 #include <unordered_set>
 #include <string>
+#include <vector>
 
 namespace hical
 {
+
+	/**
+	 * @brief per-loop 连接分片
+	 * 每个 EventLoop 维护自己的连接集合，所有操作在 loop 线程内完成，无需互斥锁。
+	 */
+	struct LoopShard
+	{
+		AsioEventLoop* loop = nullptr;
+		// 仅由本 loop 线程访问，无需锁
+		std::unordered_set<TcpConnection::Ptr> connections;
+	};
 
 	/**
 	 * @brief TCP 服务器
@@ -24,6 +35,7 @@ namespace hical
 	 * 支持多线程 IO（通过 EventLoopPool）。
 	 * 支持 SSL/TLS 加密连接。
 	 * 采用协程式 accept 循环。
+	 * 连接表 per-loop 分片：每个 EventLoop 维护独立的连接集合，idle 扫描无需全局锁。
 	 */
 	class TcpServer
 	{
@@ -120,15 +132,19 @@ namespace hical
 		// 协程式 accept 循环
 		Awaitable<void> acceptLoop();
 
-		// 空闲连接超时扫描协程
-		Awaitable<void> idleCheckLoop();
+		// 空闲连接超时扫描协程（per-shard，运行在对应 loop 线程上）
+		// 使用指针而非引用：协程帧存储参数副本，引用参数会被 clang-tidy 标记
+		Awaitable<void> idleCheckLoop(LoopShard* shard);
 
 		// 获取下一个 IO 事件循环
 		AsioEventLoop* getNextIoLoop();
 
-		// 连接管理
-		void addConnection(const TcpConnection::Ptr& conn);
-		void removeConnection(const TcpConnection::Ptr& conn);
+		// 连接管理（per-shard，无锁，必须在 loop 线程内调用）
+		void addConnection(LoopShard& shard, const TcpConnection::Ptr& conn);
+		void removeConnection(LoopShard& shard, const TcpConnection::Ptr& conn);
+
+		// 查找 loop 对应的 shard
+		LoopShard& findShard(AsioEventLoop* loop);
 
 		AsioEventLoop* baseLoop_;
 		InetAddress listenAddr_;
@@ -141,9 +157,9 @@ namespace hical
 		size_t ioLoopNum_ {0};
 		std::unique_ptr<EventLoopPool> ioPool_;
 
-		// 连接集合（unordered_set: O(1) 插入/删除，替代 set 的 O(log N)）
-		std::unordered_set<TcpConnection::Ptr> connections_;
-		mutable std::mutex connectionsMutex_;
+		// per-loop 连接分片（start() 时初始化，之后结构只读）
+		std::vector<LoopShard> shards_;
+		std::atomic<size_t> totalConnections_ {0}; // 全局连接计数（原子操作）
 
 		// 回调
 		NewConnectionCallback newConnectionCallback_;

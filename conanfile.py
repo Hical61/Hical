@@ -22,12 +22,14 @@ class HicalConan(ConanFile):
         "with_reflection": [True, False],
         "with_database": [True, False],
         "with_openapi": [True, False],
+        "with_mimalloc": [True, False],
     }
     default_options = {
         "fPIC": True,
         "with_reflection": False,
         "with_database": False,
         "with_openapi": True,
+        "with_mimalloc": False,
     }
 
     exports_sources = (
@@ -56,6 +58,8 @@ class HicalConan(ConanFile):
         self.requires("boost/1.90.0", transitive_headers=True, transitive_libs=True)
         self.requires("openssl/[>=1.1.0]", transitive_headers=True, transitive_libs=True)
         self.requires("zlib/[>=1.2.11]", transitive_headers=True, transitive_libs=True)
+        if self.options.with_mimalloc:
+            self.requires("mimalloc/[>=2.0]")
 
     def layout(self):
         cmake_layout(self, src_folder=".")
@@ -70,6 +74,7 @@ class HicalConan(ConanFile):
         tc.variables["HICAL_ENABLE_REFLECTION"] = bool(self.options.with_reflection)
         tc.variables["HICAL_WITH_DATABASE"] = bool(self.options.with_database)
         tc.variables["HICAL_WITH_OPENAPI"] = bool(self.options.with_openapi)
+        tc.variables["HICAL_WITH_MIMALLOC"] = bool(self.options.with_mimalloc)
         tc.generate()
 
     def build(self):

@@ -45,6 +45,18 @@ namespace hical
 			ioPool_->start();
 		}
 
+		// 初始化 per-loop 连接分片
+		// baseLoop 始终作为第一个 shard（即使有 ioPool，accept 也在 baseLoop）
+		shards_.clear();
+		shards_.push_back(LoopShard {baseLoop_, {}});
+		if (ioPool_)
+		{
+			for (auto* loop : ioPool_->getAllLoops())
+			{
+				shards_.push_back(LoopShard {loop, {}});
+			}
+		}
+
 		// 打开 acceptor
 		using boost::asio::ip::tcp;
 		auto endpoint = tcp::endpoint(listenAddr_.isIpV6() ? tcp::v6() : tcp::v4(), listenAddr_.port());
@@ -67,14 +79,17 @@ namespace hical
 					co_await acceptLoop();
 				});
 
-		// 启动空闲连接超时扫描协程
+		// 在每个 shard 上启动独立的 idle check 协程
 		if (idleTimeout_ > 0)
 		{
-			coSpawn(baseLoop_->getIoContext(),
-					[this, aliveFlag]() -> Awaitable<void>
-					{
-						co_await idleCheckLoop();
-					});
+			for (auto& shard : shards_)
+			{
+				coSpawn(shard.loop->getIoContext(),
+						[this, &shard, aliveFlag]() -> Awaitable<void>
+						{
+							co_await idleCheckLoop(&shard);
+						});
+			}
 		}
 	}
 
@@ -109,21 +124,44 @@ namespace hical
 			future.get();
 		}
 
-		// 关闭所有连接
+		// 向每个 shard 所在的 loop 线程 post 关闭任务
+		// 注意：必须在 ioPool_->stop() 之前完成，否则 post 的任务无法执行
+		for (auto& shard : shards_)
 		{
-			std::lock_guard<std::mutex> lock(connectionsMutex_);
-			for (auto& conn : connections_)
+			if (shard.loop->isInLoopThread())
 			{
-				conn->close();
+				for (auto& conn : shard.connections)
+				{
+					conn->close();
+				}
+				shard.connections.clear();
 			}
-			connections_.clear();
+			else
+			{
+				std::promise<void> shardDone;
+				auto shardFuture = shardDone.get_future();
+				boost::asio::post(shard.loop->getIoContext(),
+								  [&shard, &shardDone]()
+								  {
+									  for (auto& conn : shard.connections)
+									  {
+										  conn->close();
+									  }
+									  shard.connections.clear();
+									  shardDone.set_value();
+								  });
+				shardFuture.get();
+			}
 		}
+		totalConnections_.store(0, std::memory_order_relaxed);
 
 		// 停止 IO 线程池
 		if (ioPool_)
 		{
 			ioPool_->stop();
 		}
+
+		shards_.clear();
 	}
 
 	void TcpServer::onNewConnection(NewConnectionCallback cb)
@@ -158,8 +196,7 @@ namespace hical
 
 	size_t TcpServer::connectionCount() const
 	{
-		std::lock_guard<std::mutex> lock(connectionsMutex_);
-		return connections_.size();
+		return totalConnections_.load(std::memory_order_relaxed);
 	}
 
 	bool TcpServer::isRunning() const
@@ -181,16 +218,29 @@ namespace hical
 		return baseLoop_;
 	}
 
-	void TcpServer::addConnection(const TcpConnection::Ptr& conn)
+	LoopShard& TcpServer::findShard(AsioEventLoop* loop)
 	{
-		std::lock_guard<std::mutex> lock(connectionsMutex_);
-		connections_.insert(conn);
+		for (auto& shard : shards_)
+		{
+			if (shard.loop == loop)
+			{
+				return shard;
+			}
+		}
+		// 不应到达此处：所有 loop 都在 start() 时注册了 shard
+		return shards_[0];
 	}
 
-	void TcpServer::removeConnection(const TcpConnection::Ptr& conn)
+	void TcpServer::addConnection(LoopShard& shard, const TcpConnection::Ptr& conn)
 	{
-		std::lock_guard<std::mutex> lock(connectionsMutex_);
-		connections_.erase(conn);
+		shard.connections.insert(conn);
+		totalConnections_.fetch_add(1, std::memory_order_relaxed);
+	}
+
+	void TcpServer::removeConnection(LoopShard& shard, const TcpConnection::Ptr& conn)
+	{
+		shard.connections.erase(conn);
+		totalConnections_.fetch_sub(1, std::memory_order_relaxed);
 	}
 
 	Awaitable<void> TcpServer::acceptLoop()
@@ -242,10 +292,12 @@ namespace hical
 
 				// 设置关闭回调（在原始回调之上添加连接移除逻辑）
 				// 使用 alive_ 标志防止 TcpServer 析构后回调中的 use-after-free
+				// closeCallback 在连接所在 loop 线程内触发（Asio 保证），与 shard 操作线程一致
 				auto aliveFlag = alive_;
 				auto* self = this;
+				auto* targetLoop = ioLoop;
 				conn->onClose(
-					[aliveFlag, self, userCb = closeCallback_](const TcpConnection::Ptr& c)
+					[aliveFlag, self, targetLoop, userCb = closeCallback_](const TcpConnection::Ptr& c)
 					{
 						if (userCb)
 						{
@@ -253,20 +305,44 @@ namespace hical
 						}
 						if (aliveFlag->load())
 						{
-							self->removeConnection(c);
+							auto& shard = self->findShard(targetLoop);
+							self->removeConnection(shard, c);
 						}
 					});
 
-				addConnection(conn);
-
-				// 通知新连接
-				if (newConnectionCallback_)
+				// 将连接注册和建立调度到目标 loop 线程
+				// 确保 addConnection 在 shard 所属线程内执行（无锁安全）
+				if (ioLoop == baseLoop_)
 				{
-					newConnectionCallback_(conn);
-				}
+					// 目标就是当前 acceptLoop 所在的 baseLoop，直接操作
+					auto& shard = findShard(ioLoop);
+					addConnection(shard, conn);
 
-				// 建立连接（SSL 会触发握手）
-				conn->connectEstablished();
+					if (newConnectionCallback_)
+					{
+						newConnectionCallback_(conn);
+					}
+
+					conn->connectEstablished();
+				}
+				else
+				{
+					// 跨线程：post 到目标 loop
+					auto newConnCb = newConnectionCallback_;
+					boost::asio::post(ioLoop->getIoContext(),
+									  [self, ioLoop, conn, newConnCb]()
+									  {
+										  auto& shard = self->findShard(ioLoop);
+										  self->addConnection(shard, conn);
+
+										  if (newConnCb)
+										  {
+											  newConnCb(conn);
+										  }
+
+										  conn->connectEstablished();
+									  });
+				}
 			}
 			catch (const boost::system::system_error& e)
 			{
@@ -282,7 +358,7 @@ namespace hical
 					{
 						boost::system::error_code acceptEc;
 						tcp::socket tmpSocket(baseLoop_->getIoContext());
-						acceptor_.accept(tmpSocket, acceptEc);
+						(void)acceptor_.accept(tmpSocket, acceptEc);
 					}
 					idleFd_.reacquire();
 				}
@@ -298,7 +374,7 @@ namespace hical
 		}
 	}
 
-	Awaitable<void> TcpServer::idleCheckLoop()
+	Awaitable<void> TcpServer::idleCheckLoop(LoopShard* shard)
 	{
 		// 扫描间隔：超时时间的 1/4，至少 1 秒
 		auto intervalSec = (std::max)(1.0, idleTimeout_ / 4.0);
@@ -315,15 +391,13 @@ namespace hical
 			auto now = std::chrono::steady_clock::now();
 			auto timeout = std::chrono::milliseconds(static_cast<int64_t>(idleTimeout_ * 1000));
 
+			// 无锁遍历：本协程运行在 shard->loop 线程上，与 add/remove 串行
 			std::vector<TcpConnection::Ptr> toClose;
+			for (const auto& conn : shard->connections)
 			{
-				std::lock_guard<std::mutex> lock(connectionsMutex_);
-				for (const auto& conn : connections_)
+				if (now - conn->lastActiveTime() > timeout)
 				{
-					if (now - conn->lastActiveTime() > timeout)
-					{
-						toClose.push_back(conn);
-					}
+					toClose.push_back(conn);
 				}
 			}
 
