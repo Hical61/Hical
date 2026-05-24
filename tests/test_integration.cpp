@@ -452,7 +452,9 @@ TEST_F(IntegrationTest, RequestPoolNoLeak)
 	EXPECT_GT(stats.totalAllocations, 0);
 	// 当前已分配字节应稳定，不应随迭代次数线性增长
 	// 10000 次请求如果泄漏，每次 ~4KB，应超过 40MB
-	EXPECT_LT(stats.currentBytesAllocated, 1024 * 1024); // < 1MB 说明无泄漏
+	// threadLocal 池会缓存从 monotonic buffer 回收的块（非泄漏），
+	// 缓存量与池内部 chunk 大小相关，通常 < 4MB
+	EXPECT_LT(stats.currentBytesAllocated, 4 * 1024 * 1024); // < 4MB 说明无泄漏
 }
 
 // PmrBuffer 反复扩容/回收

@@ -1,4 +1,7 @@
 #include "MemoryPool.h"
+#ifdef HICAL_USE_MIMALLOC
+	#include "MimallocResource.h"
+#endif
 #include <cassert>
 #include <stdexcept>
 
@@ -6,7 +9,13 @@ namespace hical
 {
 
 	MemoryPool::MemoryPool()
-		: trackedResource_(std::pmr::new_delete_resource())
+		: trackedResource_(
+#ifdef HICAL_USE_MIMALLOC
+			  &mimallocResource()
+#else
+			  std::pmr::new_delete_resource()
+#endif
+				  )
 		, globalPool_(std::pmr::pool_options {.max_blocks_per_chunk = config_.globalMaxBlocksPerChunk,
 											  .largest_required_pool_block = config_.globalLargestPoolBlock},
 					  &trackedResource_)
@@ -73,7 +82,9 @@ namespace hical
 		{
 			initialSize = config_.requestPoolInitialSize;
 		}
-		return std::make_unique<std::pmr::monotonic_buffer_resource>(initialSize, &globalPool_);
+		// upstream 使用调用线程的 thread-local 无锁池，避免扩容时走全局有锁池
+		// 安全前提：monotonic buffer 必须在同一线程上创建和销毁（协程保证）
+		return std::make_unique<std::pmr::monotonic_buffer_resource>(initialSize, threadLocalPool());
 	}
 
 	std::pmr::unsynchronized_pool_resource* MemoryPool::getOrCreateThreadPool()

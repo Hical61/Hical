@@ -23,6 +23,9 @@ option(HICAL_WITH_DATABASE "Enable database middleware (requires Boost.MySQL)" O
 # OpenAPI 自动生成（无额外依赖，复用 Boost.JSON）
 option(HICAL_WITH_OPENAPI "Enable OpenAPI 3.0 auto-generation module" ON)
 
+# mimalloc 替代系统 malloc 作为 PMR 最底层分配器
+option(HICAL_WITH_MIMALLOC "Use mimalloc as PMR upstream allocator" OFF)
+
 if(HICAL_ENABLE_REFLECTION)
     set(CMAKE_CXX_STANDARD 26)
 else()
@@ -54,6 +57,11 @@ find_package(ZLIB REQUIRED)
 # DB 依赖：boost::mysql any_connection(1.84+) + boost::charconv(1.85+)
 if(HICAL_WITH_DATABASE)
     find_package(Boost 1.85 REQUIRED COMPONENTS charconv)
+endif()
+
+# mimalloc（可选，替代系统 malloc 作为 PMR upstream）
+if(HICAL_WITH_MIMALLOC)
+    find_package(mimalloc REQUIRED)
 endif()
 
 # GTest 仅在构建测试时需要

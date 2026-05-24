@@ -155,6 +155,12 @@ if(HICAL_WITH_OPENAPI)
     target_compile_definitions(hical_core PUBLIC HICAL_HAS_OPENAPI=1)
 endif()
 
+# mimalloc（可选，替代系统 malloc 作为 PMR upstream 分配器）
+if(HICAL_WITH_MIMALLOC)
+    target_link_libraries(hical_core PRIVATE mimalloc-static)
+    target_compile_definitions(hical_core PRIVATE HICAL_USE_MIMALLOC=1)
+endif()
+
 # 安装库和头文件
 install(
     TARGETS hical_core
