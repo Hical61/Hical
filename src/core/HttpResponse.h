@@ -6,11 +6,23 @@
 #include "HttpTypes.h"
 #include <boost/json.hpp>
 #include <charconv>
+#include <filesystem>
+#include <optional>
 #include <string>
 #include <string_view>
 
 namespace hical
 {
+
+	/**
+	 * @brief 文件体描述（Range 请求或大文件直传，延迟到 dispatch 层异步发送）
+	 */
+	struct FileBody
+	{
+		std::filesystem::path path;
+		int64_t offset = 0; // 起始偏移
+		int64_t length = 0; // 发送字节数
+	};
 
 	/**
 	 * @brief HTTP 响应的原生内部表示
@@ -26,7 +38,16 @@ namespace hical
 		int httpVersionMinor = 1;
 		HeaderMap headers;
 		std::string body;
+		std::optional<FileBody> fileBody; // Range 请求或大文件直传
 		bool keepAlive = true;
+
+		/**
+		 * @brief 是否包含文件体（dispatch 层据此选择文件发送路径）
+		 */
+		bool hasFileBody() const
+		{
+			return fileBody.has_value();
+		}
 
 		/**
 		 * @brief 设置 Content-Length 头部
@@ -34,6 +55,15 @@ namespace hical
 		 */
 		void preparePayload()
 		{
+			// 文件体路径：Content-Length = fileBody->length
+			if (fileBody.has_value())
+			{
+				char buf[20];
+				auto [ptr, ec] = std::to_chars(buf, buf + 20, static_cast<size_t>(fileBody->length));
+				headers.set("Content-Length", std::string_view(buf, static_cast<size_t>(ptr - buf)));
+				return;
+			}
+
 			if (body.empty())
 			{
 				auto code = static_cast<unsigned>(status);
@@ -87,7 +117,7 @@ namespace hical
 		 */
 		void serializeHeadTo(FixedBuffer<512>& buf) const
 		{
-			// 200 OK + HTTP/1.1 快速路径（覆盖 80%+ 请求，1 次 append vs 7 次）
+			// 200 OK 快速路径
 			if (status == HttpStatusCode::hOk && httpVersionMinor == 1)
 			{
 				buf.append("HTTP/1.1 200 OK\r\n", 17);
@@ -178,6 +208,7 @@ namespace hical
 		 * @param contentType Content-Type（默认 text/plain）
 		 */
 		void setBody(const std::string& body, const std::string& contentType = "text/plain");
+		void setBody(std::string&& body, const std::string& contentType = "text/plain");
 
 		/**
 		 * @brief 设置 JSON 消息体
@@ -243,6 +274,30 @@ namespace hical
 		 * @return HttpResponse
 		 */
 		static HttpResponse redirect(const std::string& location, HttpStatusCode code = HttpStatusCode::hFound);
+
+		/**
+		 * @brief 设置文件体（Range 响应等大文件场景，dispatch 层异步发送，不加载到内存）
+		 * @param path 文件路径
+		 * @param offset 起始偏移
+		 * @param length 发送字节数
+		 * @param contentType Content-Type
+		 */
+		void setFileBody(const std::filesystem::path& path,
+						 int64_t offset,
+						 int64_t length,
+						 const std::string& contentType);
+
+		/**
+		 * @brief 是否包含文件体
+		 */
+		bool hasFileBody() const;
+
+		/**
+		 * @brief 创建 416 Range Not Satisfiable 响应
+		 * @param fileSize 文件总大小（用于 Content-Range: bytes * /total）
+		 * @return HttpResponse
+		 */
+		static HttpResponse rangeNotSatisfiable(std::uintmax_t fileSize);
 
 	private:
 		NativeResponse res_;

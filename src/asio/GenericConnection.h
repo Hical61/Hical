@@ -20,12 +20,11 @@
 #include <array>
 #include <atomic>
 #include <chrono>
-#include <deque>
 #include <fstream>
 #include <memory>
-#include <mutex>
 #include <span>
 #include <type_traits>
+#include <vector>
 
 namespace hical
 {
@@ -107,9 +106,8 @@ namespace hical
 
 		void sendFile(const std::filesystem::path& path, int64_t offset = 0, int64_t length = -1) override;
 
-		// ============ 回调设置（hical 风格命名）============
-		// @warning 线程安全约束：所有回调必须在 connectEstablished() 调用前设置完毕。
-		// 连接运行期间从其他线程修改回调会导致数据竞争。
+		// ============ 回调设置 ============
+		// 回调必须在 connectEstablished() 前设好，运行期改会 race
 
 		void onMessage(MessageCallback cb) override;
 		void onConnection(ConnectionCallback cb) override;
@@ -251,14 +249,93 @@ namespace hical
 		void enqueueEntry(WriteEntry entry);
 		void tryStartWrite();
 
+		/**
+		 * @brief MPSC 队列节点（intrusive linked list）
+		 */
+		struct MpscNode
+		{
+			std::atomic<MpscNode*> next {nullptr};
+			WriteEntry entry;
+
+			explicit MpscNode(WriteEntry e) : entry(std::move(e))
+			{
+			}
+
+			MpscNode() = default; // stub 节点用
+		};
+
+		/**
+		 * @brief Vyukov Intrusive MPSC Queue
+		 * 生产者 wait-free push，消费者 single-thread pop。
+		 * 参考：http://www.1024cores.net/home/lock-free-algorithms/queues/intrusive-mpsc-node-based-queue
+		 */
+		struct MpscQueue
+		{
+			MpscNode stub;                            // 哨兵节点（嵌入，零额外分配）
+			MpscNode* head_;                          // 消费者独占，无竞争
+			alignas(64) std::atomic<MpscNode*> tail_; // 生产者竞争热点，独占缓存行
+
+			MpscQueue() : head_(&stub), tail_(&stub)
+			{
+			}
+
+			// 不可拷贝/移动
+			MpscQueue(const MpscQueue&) = delete;
+			MpscQueue& operator=(const MpscQueue&) = delete;
+
+			/// Wait-free O(1) push
+			void push(MpscNode* node)
+			{
+				node->next.store(nullptr, std::memory_order_relaxed);
+				MpscNode* prev = tail_.exchange(node, std::memory_order_acq_rel);
+				prev->next.store(node, std::memory_order_release);
+			}
+
+			/// Single-consumer pop，返回 nullptr 表示空（或瞬态不一致）
+			MpscNode* pop()
+			{
+				MpscNode* h = head_;
+				MpscNode* next = h->next.load(std::memory_order_acquire);
+
+				if (h == &stub)
+				{
+					if (!next)
+					{
+						return nullptr;
+					}
+					head_ = next;
+					h = next;
+					next = h->next.load(std::memory_order_acquire);
+				}
+
+				if (next)
+				{
+					head_ = next;
+					return h;
+				}
+
+				MpscNode* t = tail_.load(std::memory_order_acquire);
+				if (h != t)
+				{
+					return nullptr; // 生产者正在 push，next 尚未链接
+				}
+
+				push(&stub); // 重新插入哨兵
+				next = h->next.load(std::memory_order_acquire);
+				if (next)
+				{
+					head_ = next;
+					return h;
+				}
+				return nullptr;
+			}
+		};
+
 		// 协程式文件发送（writeLoop 内部调用）
 		boost::asio::awaitable<size_t> sendFileNode(const FileWriteNode& node);
 
-		// ===================================================================
-		// 热路径字段（每次 I/O 操作都访问）
-		// 缓存行优化：socket_ + state_ + reading_ + writing_ 集中在前部，
-		// 避免被 localAddr_/peerAddr_（各 ~32B）推远导致多占 cache line
-		// ===================================================================
+		// --- 热路径字段 ---
+		// socket/state/flags 紧挨着放，尽量一条 cache line 搞定
 		AsioEventLoop* loop_;
 		SocketType socket_;
 		std::atomic<State> state_ {State::hConnecting};
@@ -268,29 +345,22 @@ namespace hical
 		// 接收缓冲区（readLoop 每次迭代都访问）
 		PmrBuffer inputBuffer_;
 
-		// 发送队列
-		std::deque<WriteEntry> writeQueue_;
-		size_t queuedBytes_ {0}; // 发送队列累计字节数（O(1) 高水位线检查）
-		std::mutex writeMutex_;
+		// 发送队列（MPSC 无锁队列）
+		MpscQueue writeQueue_;
+		std::atomic<size_t> queuedBytes_ {0}; // 队列总字节数，高水位线用
 
-		// ===================================================================
-		// 统计字段（低频跨线程读取）
-		// lastActiveTimeMs_ 被 idle check 定时器从另一线程读取，
-		// alignas(64) 隔离避免与热路径字段 false sharing
-		// ===================================================================
+		// --- 统计字段（跨线程读，alignas 防 false sharing）---
 		alignas(64) std::atomic<int64_t> lastActiveTimeMs_ {
 			std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch())
 				.count()};
 		std::atomic<size_t> bytesSent_ {0};
 		std::atomic<size_t> bytesReceived_ {0};
 
-		// ===================================================================
-		// 冷路径字段（连接建立/销毁/查询时才访问）
-		// ===================================================================
+		// --- 冷路径字段 ---
 		InetAddress localAddr_;
 		InetAddress peerAddr_;
 
-		// 回调（hical 风格，连接建立前设置，运行期不修改）
+		// 回调（建连前设好就不动了）
 		MessageCallback messageCallback_;
 		ConnectionCallback connectionCallback_;
 		CloseCallback closeCallback_;

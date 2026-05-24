@@ -7,7 +7,7 @@ namespace hical
 	namespace
 	{
 
-		/// HTTP Header Injection 防护：检测字符串是否包含 CR/LF（单次遍历）
+		/// 检测 CR/LF（防 Header Injection）
 		bool containsCRLF(const std::string& s)
 		{
 			for (char c : s)
@@ -116,14 +116,14 @@ namespace hical
 
 	void HttpRequest::setHeader(const std::string& name, const std::string& value)
 	{
-		// HTTP Header Injection 防护：拒绝含 CR/LF 的头部
+		// 防 Header Injection
 		if (containsCRLF(name) || containsCRLF(value))
 		{
 			return;
 		}
-		// setter 路径使用 owned HeaderMap（测试/构建场景）
+		// setter 走 owned HeaderMap（测试用）
 		ownedHeaders_.set(name, value);
-		// 同步到 NativeRequest 的零拷贝 headers（通过 owned 的 string_view）
+		// 同步到 NativeRequest.headers
 		req_.headers.clear();
 		for (const auto& [k, v] : ownedHeaders_)
 		{
@@ -134,7 +134,7 @@ namespace hical
 	void HttpRequest::setBody(const std::string& body)
 	{
 		req_.body = body;
-		// Content-Length 通过 owned headers 设置
+		// 更新 Content-Length
 		ownedHeaders_.set("Content-Length", std::to_string(body.size()));
 		req_.headers.clear();
 		for (const auto& [k, v] : ownedHeaders_)
@@ -493,6 +493,8 @@ namespace hical
 				return "Accepted";
 			case HttpStatusCode::hNoContent:
 				return "No Content";
+			case HttpStatusCode::hPartialContent:
+				return "Partial Content";
 			case HttpStatusCode::hMovedPermanently:
 				return "Moved Permanently";
 			case HttpStatusCode::hFound:
@@ -519,6 +521,8 @@ namespace hical
 				return "Too Many Requests";
 			case HttpStatusCode::hPayloadTooLarge:
 				return "Payload Too Large";
+			case HttpStatusCode::hRequestedRangeNotSatisfiable:
+				return "Range Not Satisfiable";
 			case HttpStatusCode::hInternalServerError:
 				return "Internal Server Error";
 			case HttpStatusCode::hNotImplemented:

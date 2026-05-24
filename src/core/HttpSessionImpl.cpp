@@ -14,6 +14,7 @@
 #include <charconv>
 #include <chrono>
 #include <ctime>
+#include <fstream>
 #include <optional>
 
 // picohttpparser（C 库）
@@ -176,10 +177,93 @@ namespace hical
 			}
 		}
 
+		/// 发送文件体响应（先发头部，再异步分块读文件发送）
+		/// 用于 Range 请求等大文件场景，避免全量加载到内存
+		Awaitable<void> writeFileResponse(tcp::socket& socket, NativeResponse& nativeRes)
+		{
+			nativeRes.preparePayload();
+
+			auto& fb = *nativeRes.fileBody;
+			static constexpr size_t kChunkSize = 65536; // 64KB
+
+#ifdef BOOST_ASIO_HAS_FILE
+			// 先打开文件确认可访问，失败时尚未发送头部，可安全抛异常
+			auto executor = co_await boost::asio::this_coro::executor;
+			boost::asio::random_access_file file(executor,
+												 fb.path.string(),
+												 boost::asio::random_access_file::read_only);
+
+			// 文件打开成功，发送头部
+			FixedBuffer<512> headBuf;
+			nativeRes.serializeHeadTo(headBuf);
+			co_await boost::asio::async_write(socket,
+											  boost::asio::buffer(headBuf.data(), headBuf.size()),
+											  boost::asio::use_awaitable);
+
+			// 异步分块发送文件内容
+			int64_t remaining = fb.length;
+			uint64_t offset = static_cast<uint64_t>(fb.offset);
+			std::string chunk((std::min)(static_cast<int64_t>(kChunkSize), remaining), '\0');
+
+			while (remaining > 0)
+			{
+				auto toRead = (std::min)(static_cast<int64_t>(kChunkSize), remaining);
+				auto bytesRead =
+					co_await file.async_read_some_at(offset,
+													 boost::asio::buffer(chunk.data(), static_cast<size_t>(toRead)),
+													 boost::asio::use_awaitable);
+				if (bytesRead == 0)
+				{
+					break;
+				}
+
+				co_await boost::asio::async_write(socket,
+												  boost::asio::buffer(chunk.data(), bytesRead),
+												  boost::asio::use_awaitable);
+				offset += bytesRead;
+				remaining -= static_cast<int64_t>(bytesRead);
+			}
+#else
+			// ifstream 回退（macOS 等不支持 BOOST_ASIO_HAS_FILE 的平台）
+			// 先打开文件确认可访问
+			std::ifstream ifs(fb.path, std::ios::binary);
+			if (!ifs)
+			{
+				throw boost::system::system_error(
+					boost::system::errc::make_error_code(boost::system::errc::no_such_file_or_directory));
+			}
+
+			// 文件打开成功，发送头部
+			FixedBuffer<512> headBuf;
+			nativeRes.serializeHeadTo(headBuf);
+			co_await boost::asio::async_write(socket,
+											  boost::asio::buffer(headBuf.data(), headBuf.size()),
+											  boost::asio::use_awaitable);
+
+			ifs.seekg(fb.offset);
+			int64_t remaining = fb.length;
+			std::string chunk((std::min)(static_cast<int64_t>(kChunkSize), remaining), '\0');
+			while (remaining > 0 && ifs)
+			{
+				auto toRead = (std::min)(static_cast<int64_t>(kChunkSize), remaining);
+				ifs.read(chunk.data(), toRead);
+				auto bytesRead = static_cast<size_t>(ifs.gcount());
+				if (bytesRead == 0)
+				{
+					break;
+				}
+
+				co_await boost::asio::async_write(socket,
+												  boost::asio::buffer(chunk.data(), bytesRead),
+												  boost::asio::use_awaitable);
+				remaining -= static_cast<int64_t>(bytesRead);
+			}
+#endif
+		}
+
 	} // namespace
 
-	/// 连接级空闲超时协程：替代 shared_ptr<function> 自引用回调链
-	/// 仅启动一次，循环检查 atomic 时间戳判断是否真正超时
+	/// 空闲超时协程：循环检查时间戳，超时就关 socket
 	static Awaitable<void> idleTimerLoop(std::shared_ptr<boost::asio::steady_timer> pTimer,
 										 tcp::socket& socket,
 										 std::shared_ptr<std::atomic<bool>> alive,
@@ -216,7 +300,7 @@ namespace hical
 									  });
 				break;
 			}
-			// 有活动：继续循环（协程自然续期，无 shared_ptr<function> 开销）
+			// 还没超时，继续等
 		}
 	}
 
@@ -241,8 +325,7 @@ namespace hical
 			}
 		} connCounter {activeConnections_, draining_, *this};
 
-		// RAII 守卫：确保 socket 在任何退出路径（含异常）都被正确关闭
-		// transferred 标志：当 socket 被 move 给 WebSocket 会话后，跳过析构
+		// socket 析构守卫，WS 升级时 transferred=true 就跳过
 		struct SocketGuard
 		{
 			tcp::socket& sock;
@@ -259,7 +342,7 @@ namespace hical
 			}
 		} guard {socket};
 
-		// 空闲超时 timer 在 try 外声明，catch 块需要访问以取消 timer 防竞态
+		// timer 放 try 外面，catch 里也要能 cancel 它
 		std::shared_ptr<boost::asio::steady_timer> deadline;
 		if (idleTimeout_ > 0)
 		{
@@ -268,10 +351,10 @@ namespace hical
 
 		try
 		{
-			// 使用 alive 标志防止 timer 回调在 socket 销毁后访问悬空引用
+			// alive 标志，socket 没了之后 timer 回调别再碰
 			auto socketAlive = std::make_shared<std::atomic<bool>>(true);
 
-			// RAII：确保协程退出时标记 socket 已失效，timer 回调不再操作 socket
+			// 协程退出时 alive=false
 			struct AliveGuard
 			{
 				std::shared_ptr<std::atomic<bool>> alive;
@@ -282,16 +365,14 @@ namespace hical
 				}
 			} aliveGuard {socketAlive};
 
-			// 连接级 atomic 活跃时间戳（毫秒精度）
-			// 替代 per-request 的 expires_after + cancel，消除 keep-alive 场景的 timer epoll_ctl
+			// 连接级活跃时间戳，不用每请求 reset timer 了
 			auto lastActiveMs =
 				std::make_shared<std::atomic<int64_t>>(std::chrono::duration_cast<std::chrono::milliseconds>(
 														   std::chrono::steady_clock::now().time_since_epoch())
 														   .count());
 			auto timeoutMs = static_cast<int64_t>(idleTimeout_ * 1000);
 
-			// 连接级 timer 超时协程：替代 shared_ptr<function> 自引用回调链
-			// 协程自然循环续期，消除每连接 2 次堆分配 + shared_ptr 环形引用
+			// 超时协程，一个 loop 搞定，不用回调链
 			if (deadline)
 			{
 				boost::asio::co_spawn(socket.get_executor(),
@@ -299,8 +380,7 @@ namespace hical
 									  boost::asio::detached);
 			}
 
-			// 连接级读取缓冲区（跨 keep-alive 请求复用，零初始化开销）
-			// picohttpparser 不要求 buffer 初始化为零，只读 [0, bufUsed) 范围
+			// 读缓冲区，keep-alive 复用
 			std::string readBuf;
 			readBuf.resize(8192);
 			size_t bufUsed = 0; // 跨请求保留：TCP 粘包时残留下一请求的数据
@@ -321,11 +401,7 @@ namespace hical
 				size_t prevBufLen = 0;
 				for (;;)
 				{
-					// Pipelining 快速路径：缓冲区已有未解析数据时先尝试解析，跳过 async_read_some
-					// 守卫条件 bufUsed > prevBufLen：
-					//   首个请求：bufUsed=0, prevBufLen=0 → false → 走正常 read 路径
-					//   Pipeline 后续：bufUsed=残留数据, prevBufLen=0 → true → 先尝试解析
-					//   Chunked 后 bufUsed=0 → false → 走正常 read 路径
+					// Pipeline：buf 里有残留数据就先试着解析，不用再 read
 					if (bufUsed > prevBufLen)
 					{
 						numHeaders = 64;
@@ -496,9 +572,7 @@ namespace hical
 				size_t headerBytes = static_cast<size_t>(parseResult);
 				size_t remainingInBuf = bufUsed - headerBytes;
 
-				// pendingMemmove：记录阶段 C 中需要延迟执行的 memmove 参数
-				// memmove 必须延迟到阶段 D 之后，因为 nativeReq.target/headers 是 string_view
-				// 引用 readBuf，memmove 会覆盖其内容导致悬空引用
+				// memmove 要等阶段 D 用完 string_view 后再做，否则覆盖了 readBuf 的头部数据
 				size_t memmoveSrc = 0; // memmove 源偏移
 				size_t memmoveLen = 0; // memmove 长度（0 表示无需 memmove）
 
@@ -518,7 +592,7 @@ namespace hical
 						std::memcpy(nativeReq.body.data(), readBuf.data() + headerBytes, bodyCopied);
 					}
 
-					// 记录延迟 memmove 参数（保留 readBuf 中超出当前 body 的残留数据）
+					// 把 body 后面的残留数据位置记下来，后面再 memmove
 					size_t tailLen = remainingInBuf - bodyCopied;
 					if (tailLen > 0)
 					{
@@ -661,7 +735,7 @@ namespace hical
 							auto wsAuthCode = wsAuthRes.statusCode();
 							if (wsAuthCode != HttpStatusCode::hOk)
 							{
-								// 中间件拦截（如 401/403），返回 HTTP 响应拒绝升级
+								// 中间件拦截了（401/403 之类），拒绝升级
 								auto& nativeRes = wsAuthRes.native();
 								nativeRes.httpVersionMinor = 1;
 								nativeRes.headers.set("Connection", "close");
@@ -683,12 +757,12 @@ namespace hical
 				{
 					if (middlewarePipeline_.size() > 0)
 					{
-						// build() 已在 start() 中调用，使用无参版本避免每请求构造 std::function
+						// 中间件链已经在 start() 里 build 好了
 						res = co_await middlewarePipeline_.execute(req);
 					}
 					else
 					{
-						// 同步快速路径：handler 是同步注册时直接调用，跳过协程帧分配
+						// 同步路由直接调就完了，不走协程
 						auto syncResult = router_.dispatchSync(req);
 						if (syncResult)
 						{
@@ -737,7 +811,14 @@ namespace hical
 				// 发送响应（scatter-gather I/O：状态行+头部在栈，body 零拷贝）
 				// HEAD 方法：仅发送头部，不发送 body（RFC 7231 §4.3.2）
 				bool isHead = (req.method() == HttpMethod::hHead);
-				co_await writeResponse(socket, nativeRes, isHead);
+				if (nativeRes.hasFileBody() && !isHead)
+				{
+					co_await writeFileResponse(socket, nativeRes);
+				}
+				else
+				{
+					co_await writeResponse(socket, nativeRes, isHead);
+				}
 
 				// 写完后更新活跃时间戳
 				lastActiveMs->store(std::chrono::duration_cast<std::chrono::milliseconds>(

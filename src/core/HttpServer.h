@@ -200,9 +200,7 @@ namespace hical
 		// 关闭所有 acceptor（stop/gracefulStop 共用）
 		void closeAllAcceptors();
 
-		// === 协程生命周期依赖的成员（必须在 baseLoop_/ioPool_ 之后析构）===
-		// io_context 析构时会销毁悬挂的协程帧，协程帧中的 ConnectionCounter
-		// 析构函数会访问以下 atomic 成员，因此它们必须比 io_context 活得更久。
+		// 这俩 atomic 必须在 io_context 之前声明（析构顺序），协程帧里会引用它们
 		std::atomic<size_t> activeConnections_ {0};
 		std::atomic<bool> draining_ {false};
 
@@ -211,9 +209,7 @@ namespace hical
 		AsioEventLoop baseLoop_;                // 主 loop（accept + signal + GC）
 		std::unique_ptr<EventLoopPool> ioPool_; // IO 线程池（ioThreads-1 个 worker loop）
 
-		// SO_REUSEPORT 多 acceptor 模型：每个 worker loop 持有独立 acceptor，
-		// accept 和 I/O 在同一线程完成，消除跨线程调度开销。
-		// 不支持 SO_REUSEPORT 时（Windows / 低版本内核）回退为单 acceptor。
+		// SO_REUSEPORT 多 acceptor，不支持时回退单 acceptor
 		std::vector<std::unique_ptr<boost::asio::ip::tcp::acceptor>> acceptors_;
 		std::vector<std::unique_ptr<IdleFd>> idleFds_;
 		bool reusePortEnabled_ {false};
@@ -225,8 +221,7 @@ namespace hical
 
 		std::shared_ptr<SslContext> sslCtx_;
 
-		// 启动后锁定配置，防止运行期修改路由/中间件导致数据竞争
-		// 使用 atomic 确保多线程环境下可见性（start() 后 IO 线程需读取此标志）
+		// start() 后配置不可改
 		std::atomic<bool> started_ {false};
 
 		// WebSocket 升级专用的预构建中间件链（finalHandler 返回 200 占位）

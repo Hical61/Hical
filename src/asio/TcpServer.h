@@ -141,7 +141,7 @@ namespace hical
 		size_t ioLoopNum_ {0};
 		std::unique_ptr<EventLoopPool> ioPool_;
 
-		// 连接集合（unordered_set: O(1) 插入/删除，替代 set 的 O(log N)）
+		// 连接集合
 		std::unordered_set<TcpConnection::Ptr> connections_;
 		mutable std::mutex connectionsMutex_;
 
@@ -156,10 +156,10 @@ namespace hical
 		// 空闲连接超时（秒，0 表示不检查）
 		double idleTimeout_ {0.0};
 
-		// fd 耗尽处理：预留一个 fd 防止 accept 循环空转
+		// 预留 fd，EMFILE 时有的用
 		IdleFd idleFd_;
 
-		// 生命周期标志：析构时置 false，防止回调中 use-after-free
+		// 析构后置 false，回调里靠它判断 this 还在不在
 		std::shared_ptr<std::atomic<bool>> alive_;
 	};
 

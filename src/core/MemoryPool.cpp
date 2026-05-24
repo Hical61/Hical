@@ -28,9 +28,7 @@ namespace hical
 
 	void MemoryPool::configure(const PoolConfig& config)
 	{
-		// 安全检查：configure() 必须在服务器启动前、单线程环境中调用。
-		// 如果有通过 createRequestPool() 创建的 monotonic_buffer_resource 仍在使用中，
-		// 析构旧 globalPool_ 会导致 use-after-free。
+		// configure() 得在启动前、单线程时调，不然 globalPool_ 重建会炸
 		assert(generation_.load(std::memory_order_relaxed) == 0
 			   || !"configure() should only be called before server starts");
 
@@ -42,9 +40,7 @@ namespace hical
 			threadPools_.clear();
 		}
 
-		// 重建全局池（placement new 原地重建）
-		// 安全前提：此时无其他线程通过 globalAllocator()/threadLocalAllocator() 分配内存，
-		// 且无通过 createRequestPool() 创建的存活 monotonic_buffer_resource。
+		// placement new 重建全局池
 		globalPool_.~synchronized_pool_resource();
 		new (&globalPool_) std::pmr::synchronized_pool_resource(
 			std::pmr::pool_options {.max_blocks_per_chunk = config_.globalMaxBlocksPerChunk,
@@ -82,7 +78,7 @@ namespace hical
 
 	std::pmr::unsynchronized_pool_resource* MemoryPool::getOrCreateThreadPool()
 	{
-		// 代际感知的 thread_local 缓存：configure() 后自动失效重建
+		// thread_local 缓存，generation 变了就重建
 		struct ThreadCache
 		{
 			std::pmr::unsynchronized_pool_resource* pool = nullptr;
@@ -95,8 +91,7 @@ namespace hical
 		auto currentGen = generation_.load(std::memory_order_acquire);
 		if (cache.pool != nullptr && cache.generation == currentGen)
 		{
-			// 检查 GC 是否标记了此池需要释放（延迟释放策略：由拥有线程自行执行 release，
-			// 避免跨线程操作 unsynchronized_pool_resource 导致 UB）
+			// GC 标记了就 release（只能由拥有线程做，跨线程 UB）
 			if (cache.entry->needsRelease.exchange(false, std::memory_order_acquire))
 			{
 				cache.pool->release();
@@ -164,8 +159,7 @@ namespace hical
 				auto lastActive = entry->lastAllocTime.load(std::memory_order_relaxed);
 				if (now - lastActive > maxIdleSeconds)
 				{
-					// 标记需要释放，由拥有线程在下次分配时安全执行 release()。
-					// 不直接调用 release()，因为 unsynchronized_pool_resource 不是线程安全的。
+					// 标记一下，让拥有线程自己 release
 					entry->needsRelease.store(true, std::memory_order_release);
 					++reclaimed;
 				}

@@ -44,7 +44,7 @@ namespace hical
 
 	void AsioEventLoop::stop()
 	{
-		// 确保只有第一个调用者执行实际停止操作，防止并发 reset 竞争
+		// 多线程只让第一个进来的做 stop
 		if (quit_.exchange(true))
 		{
 			return;
@@ -85,7 +85,7 @@ namespace hical
 
 		auto timer = std::make_shared<AsioTimer>(this, delay, std::move(cb));
 
-		// 设置自动清理回调：单次定时器触发后自动从 map 中移除，防止内存泄漏
+		// 单次定时器触发后从 map 中移除自己
 		timer->setCleanup(id,
 						  [this](uint64_t timerId)
 						  {

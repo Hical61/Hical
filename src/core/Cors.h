@@ -69,8 +69,7 @@ namespace hical
 	 */
 	inline MiddlewareHandler makeCorsMiddleware(CorsOptions opts = {})
 	{
-		// 安全校验：allowCredentials=true 时禁止通配符 origin
-		// 此组合等于对任意 origin 放行带凭证的跨域请求，是 CSRF 攻击向量
+		// credentials + wildcard origin 是经典 CSRF 坑，直接拒绝
 		if (opts.allowCredentials)
 		{
 			for (const auto& o : opts.allowedOrigins)
@@ -83,7 +82,7 @@ namespace hical
 			}
 		}
 
-		// 预计算不变量，避免每次 preflight 请求重复拼接
+		// 预拼接好，preflight 时直接用
 		auto methodsStr = detail::joinStrings(opts.allowedMethods);
 		auto headersStr = detail::joinStrings(opts.allowedHeaders);
 		auto maxAgeStr = std::to_string(opts.maxAge);
@@ -125,7 +124,7 @@ namespace hical
 				co_return co_await next(req);
 			}
 
-			// allowCredentials=true 时规范禁止用 "*"，必须回显具体 origin
+			// credentials 时不能用 "*"，得回显具体 origin
 			std::string allowOriginValue = (opts.allowCredentials || !isWildcard) ? origin : "*";
 
 			auto applyCommonHeaders = [&](HttpResponse& res)
@@ -141,8 +140,8 @@ namespace hical
 				}
 			};
 
-			// CORS preflight 必须同时满足：OPTIONS 方法 + Access-Control-Request-Method 头
-			// 不带 ACRM 的 OPTIONS 是普通业务请求，应正常路由到 handler
+			// preflight = OPTIONS + 带 Access-Control-Request-Method 头
+			// 纯 OPTIONS 不算 preflight，正常路由
 			bool isPreflight =
 				req.method() == HttpMethod::hOptions && !req.header("Access-Control-Request-Method").empty();
 

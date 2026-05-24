@@ -8,11 +8,13 @@
 	#include <boost/asio/random_access_file.hpp>
 #endif
 #include <boost/asio/use_awaitable.hpp>
+#include <charconv>
 #include <fstream>
 #include <filesystem>
 #include <functional>
 #include <list>
 #include <mutex>
+#include <optional>
 #include <shared_mutex>
 #include <string>
 #include <string_view>
@@ -87,8 +89,7 @@ namespace hical
 		 */
 		[[nodiscard]] inline bool isSafePath(const std::filesystem::path& root, const std::filesystem::path& target)
 		{
-			// 逐段迭代器比较：root 的每个路径分量必须是 target 的前缀
-			// 比字符串前缀比对更可靠，不受 /pub vs /public 等 edge case 影响
+			// 按路径分量逐段比，比字符串前缀靠谱（/pub vs /public）
 			auto rootIt = root.begin();
 			auto targetIt = target.begin();
 			for (; rootIt != root.end(); ++rootIt, ++targetIt)
@@ -111,6 +112,115 @@ namespace hical
 		{
 			auto ns = lastWrite.time_since_epoch().count();
 			return "\"" + std::to_string(fileSize) + "-" + std::to_string(ns) + "\"";
+		}
+
+		/**
+		 * @brief Range 请求解析结果
+		 */
+		struct ByteRange
+		{
+			int64_t start;
+			int64_t end; // inclusive
+		};
+
+		/**
+		 * @brief 解析 Range 请求头
+		 * 支持格式："bytes=0-499" / "bytes=500-" / "bytes=-500"
+		 * @param header Range 头部值
+		 * @param fileSize 文件总大小
+		 * @param isMultiRange 输出参数，true 表示检测到 multi-range（含逗号）
+		 * @return 解析后的字节范围，nullopt 表示无效
+		 */
+		[[nodiscard]] inline std::optional<ByteRange> parseByteRange(std::string_view header,
+																	 int64_t fileSize,
+																	 bool& isMultiRange)
+		{
+			isMultiRange = false;
+
+			// 必须以 "bytes=" 开头
+			if (header.size() < 7 || header.substr(0, 6) != "bytes=")
+			{
+				return std::nullopt;
+			}
+
+			auto rangeSpec = header.substr(6);
+
+			// Multi-range 检测（含逗号）
+			if (rangeSpec.find(',') != std::string_view::npos)
+			{
+				isMultiRange = true;
+				return std::nullopt;
+			}
+
+			// 找 '-' 分隔符
+			auto dashPos = rangeSpec.find('-');
+			if (dashPos == std::string_view::npos)
+			{
+				return std::nullopt;
+			}
+
+			auto startStr = rangeSpec.substr(0, dashPos);
+			auto endStr = rangeSpec.substr(dashPos + 1);
+
+			int64_t start = 0;
+			int64_t end = fileSize - 1;
+
+			if (startStr.empty())
+			{
+				// "bytes=-500" 后缀格式：最后 N 个字节
+				if (endStr.empty())
+				{
+					return std::nullopt;
+				}
+				int64_t suffixLen = 0;
+				auto [ptr, ec] = std::from_chars(endStr.data(), endStr.data() + endStr.size(), suffixLen);
+				if (ec != std::errc {} || suffixLen <= 0)
+				{
+					return std::nullopt;
+				}
+				if (suffixLen >= fileSize)
+				{
+					start = 0;
+				}
+				else
+				{
+					start = fileSize - suffixLen;
+				}
+				end = fileSize - 1;
+			}
+			else
+			{
+				// "bytes=500-" 或 "bytes=0-499"
+				auto [ptr1, ec1] = std::from_chars(startStr.data(), startStr.data() + startStr.size(), start);
+				if (ec1 != std::errc {})
+				{
+					return std::nullopt;
+				}
+
+				if (!endStr.empty())
+				{
+					auto [ptr2, ec2] = std::from_chars(endStr.data(), endStr.data() + endStr.size(), end);
+					if (ec2 != std::errc {})
+					{
+						return std::nullopt;
+					}
+				}
+				// else: open-end "bytes=500-", end 保持 fileSize - 1
+			}
+
+			// Clamp end
+			if (end >= fileSize)
+			{
+				end = fileSize - 1;
+			}
+
+			// 校验
+			if (start < 0 || start > end || start >= fileSize)
+			{
+				return std::nullopt;
+			}
+
+			return ByteRange {start, end};
 		}
 
 	} // namespace detail
@@ -152,8 +262,7 @@ namespace hical
 			};
 		}
 
-		// canonical 路径缓存：避免每次请求都执行 canonical() 系统调用
-		// 使用 LRU 链表 + 哈希表实现 O(1) 查找、O(1) 驱逐
+		// canonical 缓存（LRU），省掉每次请求的 syscall
 		struct CacheEntry
 		{
 			std::string key;
@@ -322,7 +431,104 @@ namespace hical
 				co_return res;
 			}
 
-			// 读取文件内容
+			// Range 请求处理
+			std::string ext = target.extension().string();
+			std::string mime = detail::mimeType(ext);
+			auto rangeHeader = req.header("Range");
+			if (!rangeHeader.empty())
+			{
+				// If-Range 条件检查：ETag 不匹配时忽略 Range，返回 200 全量
+				auto ifRange = req.header("If-Range");
+				bool rangeValid = ifRange.empty() || ifRange == etag;
+
+				if (rangeValid)
+				{
+					bool isMultiRange = false;
+					auto range = detail::parseByteRange(rangeHeader, static_cast<int64_t>(fileSize), isMultiRange);
+
+					if (!range.has_value() && !isMultiRange)
+					{
+						// 无效 Range → 416
+						co_return HttpResponse::rangeNotSatisfiable(fileSize);
+					}
+
+					if (range.has_value())
+					{
+						int64_t rangeLen = range->end - range->start + 1;
+
+						// Content-Range 头
+						std::string contentRange = "bytes " + std::to_string(range->start) + "-"
+												   + std::to_string(range->end) + "/" + std::to_string(fileSize);
+
+						// 小范围（≤ 4MB）：内联读入内存
+						static constexpr int64_t kInlineThreshold = 4 * 1024 * 1024;
+						if (rangeLen <= kInlineThreshold)
+						{
+							std::string content(static_cast<size_t>(rangeLen), '\0');
+							size_t totalRead = 0;
+
+#ifdef BOOST_ASIO_HAS_FILE
+							auto executor = co_await boost::asio::this_coro::executor;
+							boost::asio::random_access_file file(executor,
+																 target.string(),
+																 boost::asio::random_access_file::read_only);
+							while (totalRead < static_cast<size_t>(rangeLen))
+							{
+								auto bytesRead = co_await file.async_read_some_at(
+									static_cast<uint64_t>(range->start) + totalRead,
+									boost::asio::buffer(content.data() + totalRead,
+														static_cast<size_t>(rangeLen) - totalRead),
+									boost::asio::use_awaitable);
+								if (bytesRead == 0)
+								{
+									break;
+								}
+								totalRead += bytesRead;
+							}
+#else
+							{
+								std::ifstream ifs(target, std::ios::binary);
+								if (ifs)
+								{
+									ifs.seekg(range->start);
+									ifs.read(content.data(), rangeLen);
+									totalRead = static_cast<size_t>(ifs.gcount());
+								}
+							}
+#endif
+							if (totalRead < static_cast<size_t>(rangeLen))
+							{
+								content.resize(totalRead);
+							}
+
+							HttpResponse res;
+							res.setStatus(HttpStatusCode::hPartialContent);
+							res.setBody(std::move(content), mime);
+							res.setHeader("Content-Range", contentRange);
+							res.setHeader("Accept-Ranges", "bytes");
+							res.setHeader("ETag", etag);
+							res.setHeader("X-Content-Type-Options", "nosniff");
+							co_return res;
+						}
+						else
+						{
+							// 大范围：FileBody 延迟发送
+							HttpResponse res;
+							res.setStatus(HttpStatusCode::hPartialContent);
+							res.setFileBody(target, range->start, rangeLen, mime);
+							res.setHeader("Content-Range", contentRange);
+							res.setHeader("Accept-Ranges", "bytes");
+							res.setHeader("ETag", etag);
+							res.setHeader("X-Content-Type-Options", "nosniff");
+							co_return res;
+						}
+					}
+					// isMultiRange && !range → fall through 到 200 全量
+				}
+				// If-Range 不匹配 → fall through 到 200 全量
+			}
+
+			// 读取文件内容（200 全量响应）
 			std::string content(fileSize, '\0');
 			size_t totalRead = 0;
 
@@ -366,10 +572,10 @@ namespace hical
 			}
 
 			// 构建响应
-			std::string ext = target.extension().string();
 			HttpResponse res;
 			res.setStatus(HttpStatusCode::hOk);
-			res.setBody(content, detail::mimeType(ext));
+			res.setBody(std::move(content), mime);
+			res.setHeader("Accept-Ranges", "bytes");
 			res.setHeader("ETag", etag);
 			res.setHeader("X-Content-Type-Options", "nosniff");
 			co_return res;

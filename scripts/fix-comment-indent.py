@@ -5,7 +5,7 @@
 2. 空 * 行：删除注释中只有 * 没有内容的行（如 @brief 后的空行）
 
 用法:
-    python fix-comment-indent.py file1.h file2.cpp ...
+    python fix-comment-indent.py file1.h file2.cpp file3.hci ...
     python fix-comment-indent.py --check file1.h   # 仅检查，不修改
 """
 

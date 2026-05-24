@@ -59,6 +59,7 @@ namespace hical
 		hCreated = 201,
 		hAccepted = 202,
 		hNoContent = 204,
+		hPartialContent = 206,
 
 		// 3xx 重定向
 		hMovedPermanently = 301,
@@ -75,6 +76,7 @@ namespace hical
 		hMethodNotAllowed = 405,
 		hConflict = 409,
 		hPayloadTooLarge = 413,
+		hRequestedRangeNotSatisfiable = 416,
 		hTooManyRequests = 429,
 
 		// 5xx 服务端错误

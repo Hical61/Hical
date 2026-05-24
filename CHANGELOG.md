@@ -42,7 +42,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`hical_core` 强制静态库**：移除 `WINDOWS_EXPORT_ALL_SYMBOLS`，`add_library` 显式 STATIC
 - **picohttpparser 条件集成**：新增 `HICAL_USE_SYSTEM_PICOHTTPPARSER` 开关，include 从 PUBLIC 改为 PRIVATE
 - **tests/CMakeLists.txt 重构**：提取 `hical_add_test()` 函数消除重复样板
-- **bench_main.cpp 精简为 TFB 专用**：仅 `/json` + `/plaintext`，集成 mimalloc
+- **bench_main.cpp 精简为 TFB 专用**：仅 `/json` + `/plaintext`
 - **Conan/vcpkg 构建完善**：Conan 新增 `with_openapi` 选项和宏透传，vcpkg port 新增 picohttpparser 系统依赖
 
 ## [2.6.0] - 2026-05-12

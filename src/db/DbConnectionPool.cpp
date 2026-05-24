@@ -178,11 +178,10 @@ namespace hical::db
 			return;
 		}
 
-		// 如果连接残留事务，异步回滚后再减 activeCount（保持计数一致性）
+		// 还在事务里的连接，先 rollback 再归还
 		if (conn->inTransaction())
 		{
-			// 不在此处减 activeCount_！连接仍计为"活跃"直到回滚完成，
-			// 避免 totalCount() 低估导致创建超出 maxConnections 的连接。
+			// 先不减 activeCount_，回滚完才算真正归还
 			auto connPtr = std::move(conn);
 			auto self = shared_from_this();
 			coSpawn(
@@ -319,9 +318,7 @@ namespace hical::db
 		}
 	}
 
-	// 注意：后台协程按值捕获 shared_from_this()，会延长 DbConnectionPool 的生命周期
-	// 直到协程退出。若外部 drop 所有 shared_ptr 而未调用 shutdown()，池对象将延迟到
-	// io_context 停止时才释放。调用方必须在销毁前显式调用 shutdown() 以终止后台协程。
+	// 后台协程持有 self，不调 shutdown() 池对象不会析构
 	void DbConnectionPool::startIdleChecker()
 	{
 		auto self = shared_from_this();
@@ -371,8 +368,7 @@ namespace hical::db
 		}
 	}
 
-	// 注意：同 startIdleChecker()，后台协程持有 self 延长对象生命周期，
-	// 必须通过 shutdown() 终止，否则池对象延迟到 io_context 停止才释放。
+	// 同上，协程持有 self
 	void DbConnectionPool::startHealthChecker()
 	{
 		auto self = shared_from_this();
@@ -397,7 +393,7 @@ namespace hical::db
 				break;
 			}
 
-			// 将空闲连接移出（非拷贝），防止 acquire() 在 ping 期间取到同一连接
+			// 先把空闲连接全拿出来，ping 期间 acquire 就碰不到它们了
 			std::vector<std::shared_ptr<DbConnection>> checking;
 			{
 				std::lock_guard lock(mutex_);
@@ -406,14 +402,14 @@ namespace hical::db
 				activeCount_ += checking.size();
 			}
 
-			// 逐个 ping（不持锁，连接已从池中移出，不会被 acquire 取到）
+			// 逐个 ping，这时候不持锁
 			std::vector<std::shared_ptr<DbConnection>> alive;
 			alive.reserve(checking.size());
 			for (auto& conn : checking)
 			{
 				if (shutdown_.load(std::memory_order_relaxed))
 				{
-					// shutdown 时将存活连接放回（由 shutdown 清理），同时归还检查期间占用的计数
+					// shutdown 了，把存活的放回去让 shutdown 清
 					std::lock_guard lock(mutex_);
 					for (auto& c : alive)
 					{
@@ -445,11 +441,11 @@ namespace hical::db
 				// 死连接直接丢弃（shared_ptr 析构释放）
 			}
 
-			// 将存活连接放回空闲池，计算补充数量
+			// 活着的放回去，看看要不要补
 			size_t deficit = 0;
 			{
 				std::lock_guard lock(mutex_);
-				// 先减去检查期间占用的计数
+				// 还回检查期间临时占的计数
 				if (activeCount_ >= checking.size())
 				{
 					activeCount_ -= checking.size();

@@ -75,8 +75,7 @@ namespace hical
 
 	size_t HttpServer::recommendedMaxConnections(size_t availableMemoryMB)
 	{
-		// 每连接约 25KB（PMR 缓冲 4KB + HTTP parser ~8KB + socket 缓冲 ~8KB + 开销 ~5KB）
-		// 预留 30% 内存给业务逻辑和系统开销
+		// 粗估每连接 ~25KB，留 30% 给业务和系统
 		constexpr size_t hBytesPerConnection = 25 * 1024;
 		size_t usableBytes = availableMemoryMB * 1024 * 1024 * 7 / 10;
 		size_t recommended = usableBytes / hBytesPerConnection;
@@ -119,7 +118,7 @@ namespace hical
 		running_.store(true);
 		started_ = true;
 
-		// 预构建中间件调用链，避免每请求重建
+		// 中间件链预构建
 		if (middlewarePipeline_.size() > 0)
 		{
 			middlewarePipeline_.build(
@@ -128,8 +127,7 @@ namespace hical
 					co_return co_await router_.dispatch(req);
 				});
 
-			// 预构建 WebSocket 升级专用中间件链（finalHandler 返回 200 占位）
-			// 避免每次 WS 升级都动态 buildChain 导致 N 次 std::function 堆分配
+			// WS 升级也走中间件，这里预构建好链避免每次动态分配
 			wsMiddlewareChain_ = middlewarePipeline_.buildFor(
 				[](HttpRequest&) -> Awaitable<HttpResponse>
 				{
@@ -137,7 +135,7 @@ namespace hical
 				});
 		}
 
-		// 创建 IO 线程池（提前到 acceptor 创建前，SO_REUSEPORT 需要所有 loop 就绪）
+		// 创建 IO 线程池（SO_REUSEPORT 需要所有 loop 先跑起来）
 		if (ioThreads_ > 1)
 		{
 			ioPool_ = std::make_unique<EventLoopPool>(ioThreads_ - 1);
@@ -157,10 +155,8 @@ namespace hical
 
 		auto endpoint = tcp::endpoint(tcp::v4(), port_.load());
 
-		// 尝试 SO_REUSEPORT 多 acceptor 模式（Linux / macOS / BSD）：
-		// 每个 worker loop 持有独立 acceptor，内核自动均衡分发连接，
-		// accept 和 I/O 在同一线程完成，消除跨线程调度开销（火焰图 14.5%）。
-		// Windows 不支持 SO_REUSEPORT，回退为单 acceptor + 跨线程分发。
+		// SO_REUSEPORT：每个 loop 各有 acceptor，内核负载均衡，省掉跨线程分发。
+		// Windows 不支持，走下面的 fallback。
 #if defined(__linux__) || defined(__APPLE__) || defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__)
 		{
 			bool allOk = true;

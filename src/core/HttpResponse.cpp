@@ -6,7 +6,7 @@ namespace hical
 	namespace
 	{
 
-		/// HTTP Response Splitting 防护：检测字符串是否包含 CR/LF（单次遍历）
+		/// 检测 CR/LF（防 Response Splitting）
 		bool containsCRLF(const std::string& s)
 		{
 			for (char c : s)
@@ -19,10 +19,7 @@ namespace hical
 			return false;
 		}
 
-		/// RFC 6265 cookie-name 合法性校验：必须是 RFC 2616 token 字符
-		/// token = 1*<any CHAR except CTLs or separators>
-		/// separators = "(" | ")" | "<" | ">" | "@" | "," | ";" | ":" | "\" | <"> | "/" | "[" | "]" | "?" | "="
-		///              | "{" | "}" | SP | HT
+		/// cookie-name 只能包含 token 字符 (RFC 2616)
 		bool isValidCookieName(const std::string& name)
 		{
 			if (name.empty())
@@ -67,7 +64,7 @@ namespace hical
 
 	void HttpResponse::setHeader(const std::string& name, const std::string& value)
 	{
-		// HTTP Response Splitting 防护：拒绝含 CR/LF 的头部
+		// 防 Response Splitting
 		if (containsCRLF(name) || containsCRLF(value))
 		{
 			return;
@@ -82,12 +79,23 @@ namespace hical
 
 	void HttpResponse::setBody(const std::string& body, const std::string& contentType)
 	{
-		// HTTP Response Splitting 防护：contentType 也需检查 CR/LF
+		// contentType 也查 CR/LF
 		if (containsCRLF(contentType))
 		{
 			return;
 		}
 		res_.body = body;
+		res_.headers.set("Content-Type", contentType);
+		res_.preparePayload();
+	}
+
+	void HttpResponse::setBody(std::string&& body, const std::string& contentType)
+	{
+		if (containsCRLF(contentType))
+		{
+			return;
+		}
+		res_.body = std::move(body);
 		res_.headers.set("Content-Type", contentType);
 		res_.preparePayload();
 	}
@@ -101,26 +109,25 @@ namespace hical
 
 	void HttpResponse::setCookie(const std::string& name, const std::string& value, const CookieOptions& options)
 	{
-		// RFC 6265 cookie-name 合法性校验：必须是 token 字符（含 CRLF 检测）
+		// cookie name 必须是 token 字符
 		if (!isValidCookieName(name))
 		{
 			return;
 		}
 
-		// HTTP Response Splitting 防护：value 不允许包含 CR/LF
+		// value 不能有 CR/LF
 		if (containsCRLF(value))
 		{
 			return;
 		}
 
-		// HTTP Response Splitting 防护：path/domain/sameSite 不允许包含 CR/LF
+		// path/domain/sameSite 也查
 		if (containsCRLF(options.path) || containsCRLF(options.domain) || containsCRLF(options.sameSite))
 		{
 			return;
 		}
 
-		// RFC 6265 cookie-value 合法字符百分号编码
-		// 合法: %x21 / %x23-2B / %x2D-3A / %x3C-5B / %x5D-7E
+		// cookie value 中非法字符做百分号编码
 		static constexpr char kHexDigits[] = "0123456789ABCDEF";
 		auto encodeCookieValue = [](const std::string& raw) -> std::string
 		{
@@ -248,6 +255,34 @@ namespace hical
 		// Location 头经过 CRLF 注入检查（setHeader 内部处理）
 		res.setHeader("Location", location);
 		res.setBody("");
+		return res;
+	}
+
+	void HttpResponse::setFileBody(const std::filesystem::path& path,
+								   int64_t offset,
+								   int64_t length,
+								   const std::string& contentType)
+	{
+		if (containsCRLF(contentType))
+		{
+			return;
+		}
+		res_.fileBody = FileBody {path, offset, length};
+		res_.body.clear();
+		res_.headers.set("Content-Type", contentType);
+	}
+
+	bool HttpResponse::hasFileBody() const
+	{
+		return res_.hasFileBody();
+	}
+
+	HttpResponse HttpResponse::rangeNotSatisfiable(std::uintmax_t fileSize)
+	{
+		HttpResponse res;
+		res.setStatus(HttpStatusCode::hRequestedRangeNotSatisfiable);
+		res.setHeader("Content-Range", "bytes */" + std::to_string(fileSize));
+		res.setBody("416 Range Not Satisfiable");
 		return res;
 	}
 

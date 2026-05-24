@@ -32,8 +32,7 @@ namespace hical
 			return fileName;
 		}
 
-		/// 日志注入防护：将控制字符转义为可见形式
-		/// 防止 \n 伪造日志行、\r\n 注入、ANSI 转义序列攻击终端
+		/// 转义控制字符，防止日志注入
 		std::string sanitizeForText(std::string_view sv)
 		{
 			std::string out;

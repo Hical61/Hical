@@ -17,14 +17,12 @@ namespace hical
 			return nullptr;
 		}
 
-		// 检查是否已过期（使用毫秒精度，避免秒级截断的边界问题）
+		// 过期检查
 		auto now = std::chrono::steady_clock::now();
 		auto elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(now - it->second->lastAccess()).count();
 		if (opts_.maxAge > 0 && elapsedMs >= static_cast<long long>(opts_.maxAge) * kMsPerSecond)
 		{
-			// 过期 Session：直接返回 nullptr，不在读锁路径上做删除。
-			// 过期条目由 gc() 懒清理（create() 定期触发 + maxSessions 满时强制触发），
-			// 避免 shared_lock→unlock→unique_lock 锁升级的 TOCTOU 窗口。
+			// 过期了，返回 nullptr，交给 gc() 去清
 			return nullptr;
 		}
 
@@ -33,7 +31,7 @@ namespace hical
 
 	std::shared_ptr<Session> SessionManager::create()
 	{
-		// 懒 GC：先检查是否需要清理（读锁检查时间，写锁执行清理）
+		// 该 GC 了就先清一波
 		if (opts_.gcInterval > 0)
 		{
 			bool needGc = false;
@@ -45,17 +43,16 @@ namespace hical
 			}
 			if (needGc)
 			{
-				gc(false); // 懒 GC：内部有双重检查，避免多线程重复空跑
+				gc(false); // 内部有双重检查
 			}
 		}
 
 		std::unique_lock<std::shared_mutex> lock(mutex_);
 
-		// Session 数量上限检查：防止攻击者创建无限 Session 导致 OOM
+		// Session 数量上限
 		if (opts_.maxSessions > 0 && store_.size() >= opts_.maxSessions)
 		{
-			// find() 不再即时删除过期条目（由 gc() 懒清理），可能存在大量过期幽灵条目
-			// 占据 store_ 槽位导致提前触达上限。在拒绝前先强制清理一轮过期条目再重新检查。
+			// 可能有过期幽灵条目占位，先强制 gc 再判断
 			lock.unlock();
 			gc(true);
 			lock.lock();
@@ -113,8 +110,7 @@ namespace hical
 		auto now = std::chrono::steady_clock::now();
 		if (!force)
 		{
-			// 双重检查：获取写锁后再次确认是否需要 GC，
-			// 避免多线程同时判定 needGc=true 后串行执行多次空跑 GC
+			// 双重检查，锁里再确认一次
 			if (opts_.gcInterval > 0)
 			{
 				auto sinceGcMs = std::chrono::duration_cast<std::chrono::milliseconds>(now - lastGc_).count();
@@ -149,7 +145,7 @@ namespace hical
 
 	std::string SessionManager::generateId()
 	{
-		// 使用 OpenSSL 密码学安全随机数生成 128 位 Session ID
+		// CSPRNG 生成 128-bit ID
 		unsigned char buf[16];
 		if (RAND_bytes(buf, sizeof(buf)) != 1)
 		{

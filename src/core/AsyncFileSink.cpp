@@ -19,14 +19,11 @@ namespace hical
 
 	AsyncFileSink::~AsyncFileSink()
 	{
-		// jthread 析构自动 request_stop() + join()
-		// 析构前先 flush 残余数据
+		// 唤醒后台线程把剩余数据写完，jthread 析构自动 stop + join
 		{
 			std::lock_guard<std::mutex> lock(bufMutex_);
-			// 用条件变量唤醒后台线程处理剩余数据
 			cond_.notify_one();
 		}
-		// jthread 析构时自动 request_stop + join，后台线程会处理最后一批数据
 	}
 
 	void AsyncFileSink::write(std::string_view formattedLine)
@@ -35,7 +32,7 @@ namespace hical
 		{
 			std::lock_guard<std::mutex> lock(bufMutex_);
 
-			// 背压保护：缓冲区过大时丢弃
+			// 背压，缓冲区太大就丢
 			if (curBuf_.size() > opts_.backpressureLimit)
 			{
 				dropped_.fetch_add(1, std::memory_order_relaxed);
@@ -45,7 +42,7 @@ namespace hical
 			auto wasBufEmpty = curBuf_.empty();
 			curBuf_.append(formattedLine.data(), formattedLine.size());
 
-			// 从空到非空，或缓冲区接近满时通知后台线程
+			// 有数据了或快满了就通知后台
 			shouldNotify = wasBufEmpty || curBuf_.size() >= opts_.bufferSize;
 		}
 
@@ -57,7 +54,7 @@ namespace hical
 
 	void AsyncFileSink::flush()
 	{
-		// 同步 flush：通过 promise/future 握手，确保后台线程完成写盘
+		// 同步等后台写完盘再返回
 		std::promise<void> p;
 		auto f = p.get_future();
 		{
@@ -80,7 +77,7 @@ namespace hical
 			{
 				std::unique_lock<std::mutex> lock(bufMutex_);
 
-				// 等待数据到达、超时、或停止请求
+				// 等数据、超时、或被要求停
 				cond_.wait_for(lock,
 							   stopToken,
 							   opts_.flushInterval,
@@ -126,7 +123,7 @@ namespace hical
 				flushBuf_.clear();
 			}
 
-			// 通知所有等待同步 flush 的调用方
+			// 通知 flush() 的等待者
 			{
 				std::lock_guard<std::mutex> lock(bufMutex_);
 				for (auto& req : flushRequests_)
@@ -137,7 +134,7 @@ namespace hical
 			}
 		}
 
-		// 停止前确保 curBuf_ 残余数据也被写入
+		// 停之前把 curBuf_ 里剩的也写掉
 		{
 			std::lock_guard<std::mutex> lock(bufMutex_);
 			if (!curBuf_.empty())
@@ -152,7 +149,7 @@ namespace hical
 			logFile_.flush();
 		}
 
-		// 关闭前通知所有残留的 flush 等待者
+		// 通知残留的 flush 等待者
 		{
 			std::lock_guard<std::mutex> lock(bufMutex_);
 			for (auto& req : flushRequests_)

@@ -58,8 +58,7 @@ namespace hical
 		auto actualEndpoint = acceptor_.local_endpoint();
 		listenAddr_ = InetAddress(actualEndpoint.address().to_string(), actualEndpoint.port());
 
-		// 启动协程式 accept 循环
-		// 捕获 alive_ 标志防止 TcpServer 析构后协程访问悬空 this
+		// 启动 accept 循环，alive_ 防析构后协程还在跑
 		auto aliveFlag = alive_;
 		coSpawn(baseLoop_->getIoContext(),
 				[this, aliveFlag]() -> Awaitable<void>
@@ -85,7 +84,7 @@ namespace hical
 			return;
 		}
 
-		// acceptor 必须在其所属 io_context 线程关闭，跨线程操作不安全
+		// acceptor 只能在它所在的 io_context 线程上关闭
 		auto closeAcceptor = [this]()
 		{
 			boost::system::error_code ec;
@@ -205,7 +204,7 @@ namespace hical
 			{
 				tcp::socket socket = co_await acceptor_.async_accept(boost::asio::use_awaitable);
 
-				// co_await 恢复后再次检查 TcpServer 是否仍存活
+				// accept 返回后再查一次还活着没
 				if (!alive_->load())
 				{
 					break;
@@ -240,8 +239,7 @@ namespace hical
 					conn->onMessage(messageCallback_);
 				}
 
-				// 设置关闭回调（在原始回调之上添加连接移除逻辑）
-				// 使用 alive_ 标志防止 TcpServer 析构后回调中的 use-after-free
+				// 关闭时先跑用户回调再从集合里移除，alive_ 防 TcpServer 已析构
 				auto aliveFlag = alive_;
 				auto* self = this;
 				conn->onClose(
@@ -275,7 +273,7 @@ namespace hical
 					break; // acceptor 被关闭
 				}
 
-				// fd 耗尽处理：释放预留 fd → accept 并关闭 → 重新预留
+				// fd 用光了：放掉预留 fd → accept 进来立即关 → 再占住预留 fd
 				if (e.code() == boost::asio::error::no_descriptors)
 				{
 					idleFd_.temporaryRelease();
@@ -290,7 +288,7 @@ namespace hical
 				needSleep = true;
 			}
 
-			// MSVC 不允许在 catch 块内 co_await，延迟到块外
+			// MSVC 的 catch 里不能 co_await，挪到外面来
 			if (needSleep)
 			{
 				co_await hical::sleep(0.05);

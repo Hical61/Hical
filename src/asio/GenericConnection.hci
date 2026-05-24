@@ -8,8 +8,7 @@
 #ifndef HICAL_GENERIC_CONNECTION_HCI_INCLUDED
 #define HICAL_GENERIC_CONNECTION_HCI_INCLUDED
 
-// 强制约束：此文件仅允许由 GenericConnection.cpp 通过 #include 引入。
-// 禁止在其他翻译单元中直接包含，否则将破坏 extern template 的实例化控制。
+// 只能被 GenericConnection.cpp include，别的地方别引
 #ifndef HICAL_BUILDING_GENERIC_CONNECTION
 	#error "GenericConnection.hci is an internal implementation file. " \
            "Do not include it directly. Include GenericConnection.h instead."
@@ -38,8 +37,14 @@ namespace hical
 	template <typename SocketType>
 	GenericConnection<SocketType>::~GenericConnection()
 	{
-		// 不调用 close()，因为析构时 shared_from_this() 无效（引用计数已为 0）
-		// 直接操作底层 socket 关闭
+		// drain MPSC 队列残留节点防泄漏
+		MpscNode* node;
+		while ((node = writeQueue_.pop()) != nullptr)
+		{
+			delete node;
+		}
+
+		// 析构时 refcount=0，shared_from_this() 已不能用，直接关 socket
 		auto& sock = lowestLayerSocket();
 		if (sock.is_open())
 		{
@@ -147,49 +152,42 @@ namespace hical
 
 	/**
 	 * @brief 将写条目入队并触发写操作（统一的入队路径）
-	 * 缓存行优化：WriteEntry 内联存储 shared_ptr<string>，消除原 shared_ptr<WriteNode> 的
-	 * 三层间接（shared_ptr → control block → WriteNode → 虚函数），快速路径仅 1 次间接。
-	 * 线程安全：可从任意线程调用，内部通过 loop_->post 保证线程安全。
+	 * MPSC 无锁队列：push 为 wait-free O(1)，消除 mutex 开销。
+	 * 可从任意线程安全调用。
 	 */
 	template <typename SocketType>
 	void GenericConnection<SocketType>::enqueueEntry(WriteEntry entry)
 	{
-		auto enqueue = [this, entry = std::move(entry)]() mutable
+		if (state_.load() != State::hConnected)
 		{
+			return;
+		}
+
+		size_t entrySize = entry.size();
+		auto* node = new MpscNode(std::move(entry));
+
+		// 原子累加（生产者可能并发）
+		queuedBytes_.fetch_add(entrySize, std::memory_order_relaxed);
+
+		// Lock-free push
+		writeQueue_.push(node);
+
+		// O(1) 高水位检查（level-triggered，每次超水位都触发，callback 内应幂等）
+		if (highWaterMarkCallback_)
+		{
+			size_t current = queuedBytes_.load(std::memory_order_relaxed);
+			if (current >= highWaterMark_)
 			{
-				std::lock_guard<std::mutex> lock(writeMutex_);
-				queuedBytes_ += entry.size();
-				writeQueue_.push_back(std::move(entry));
-
-				// O(1) 高水位检查
-				if (highWaterMarkCallback_ && queuedBytes_ >= highWaterMark_)
-				{
-					size_t currentQueuedBytes = queuedBytes_;
-					auto self = sharedThis();
-					loop_->post(
-						[this, currentQueuedBytes, self]()
-						{
-							highWaterMarkCallback_(std::static_pointer_cast<TcpConnection>(self), currentQueuedBytes);
-						});
-				}
+				auto self = sharedThis();
+				loop_->post(
+					[this, current, self]()
+					{
+						highWaterMarkCallback_(std::static_pointer_cast<TcpConnection>(self), current);
+					});
 			}
-
-			tryStartWrite();
-		};
-
-		if (loop_->isInLoopThread())
-		{
-			enqueue();
 		}
-		else
-		{
-			auto self = sharedThis();
-			loop_->post(
-				[self, enqueue = std::move(enqueue)]() mutable
-				{
-					enqueue();
-				});
-		}
+
+		tryStartWrite();
 	}
 
 	template <typename SocketType>
@@ -573,72 +571,81 @@ namespace hical
 	template <typename SocketType>
 	boost::asio::awaitable<void> GenericConnection<SocketType>::writeLoop()
 	{
+		// batch 在 try 外部声明，catch 中可访问以释放残留节点
+		std::vector<MpscNode*> batch;
+
 		try
 		{
 			while (true)
 			{
-				// 批量取出所有待发送条目
-				std::deque<WriteEntry> batch;
-
+				// 批量 drain：循环 pop 直到队列为空
+				batch.clear();
+				MpscNode* node = nullptr;
+				while ((node = writeQueue_.pop()) != nullptr)
 				{
-					std::lock_guard<std::mutex> lock(writeMutex_);
-					if (writeQueue_.empty())
+					batch.push_back(node);
+				}
+
+				if (batch.empty())
+				{
+					// 反饥饿：先标记 writing_=false，再 re-check
+					writing_.store(false, std::memory_order_seq_cst);
+
+					// Re-check：防止 push 发生在 pop 返回 null 之后、writing_=false 之前
+					node = writeQueue_.pop();
+					if (node)
 					{
-						writing_.store(false);
-
-						// 在锁内重检队列，防止 set false 与 enqueue 之间的竞态丢消息
-						if (!writeQueue_.empty())
-						{
-							writing_.store(true);
-							batch.swap(writeQueue_);
-							for (const auto& entry : batch)
-							{
-								queuedBytes_ -= entry.size();
-							}
-						}
-						else
-						{
-							if (writeCompleteCallback_)
-							{
-								auto self = std::static_pointer_cast<TcpConnection>(sharedThis());
-								loop_->post(
-									[this, self]()
-									{
-										writeCompleteCallback_(self);
-									});
-							}
-
-							co_return;
-						}
+						// 有节点但 writing_ 已发布为 false，tryStartWrite() 可能已 CAS 成功
+						// 将节点 push 回队列，让 tryStartWrite() spawn 的新协程处理，避免双协程竞态
+						writeQueue_.push(node);
+						tryStartWrite();
+						co_return;
 					}
 					else
 					{
-						batch.swap(writeQueue_);
-						for (const auto& entry : batch)
+						// 真正为空
+						if (writeCompleteCallback_)
 						{
-							queuedBytes_ -= entry.size();
+							auto self = std::static_pointer_cast<TcpConnection>(sharedThis());
+							loop_->post(
+								[this, self]()
+								{
+									writeCompleteCallback_(self);
+								});
 						}
+
+						co_return;
 					}
 				}
+
+				// 更新 queuedBytes
+				size_t batchBytes = 0;
+				for (auto* n : batch)
+				{
+					batchBytes += n->entry.size();
+				}
+				queuedBytes_.fetch_sub(batchBytes, std::memory_order_relaxed);
 
 				// 发送逻辑：收集连续内存条目做 scatter-gather，遇到文件条目单独发送
 				size_t idx = 0;
 				while (idx < batch.size())
 				{
 					// 文件节点：单独发送
-					if (batch[idx].isFile())
+					if (batch[idx]->entry.isFile())
 					{
-						auto& fileNode = static_cast<FileWriteNode&>(*batch[idx].node);
+						auto& fileNode = static_cast<FileWriteNode&>(*batch[idx]->entry.node);
 						auto sent = co_await sendFileNode(fileNode);
 						bytesSent_ += sent;
 						updateLastActiveTime();
+						delete batch[idx];
+						batch[idx] = nullptr;
 						++idx;
 						continue;
 					}
 
 					// 收集连续的内存条目（快速路径：asBuffer() 内联访问，无虚函数）
 					size_t memStart = idx;
-					while (idx < batch.size() && !batch[idx].isFile())
+					while (idx < batch.size() && !batch[idx]->entry.isFile())
 					{
 						++idx;
 					}
@@ -647,7 +654,7 @@ namespace hical
 					if (memCount == 1)
 					{
 						auto bytesWritten = co_await boost::asio::async_write(socket_,
-																			  batch[memStart].asBuffer(),
+																			  batch[memStart]->entry.asBuffer(),
 																			  boost::asio::use_awaitable);
 						bytesSent_ += bytesWritten;
 						updateLastActiveTime();
@@ -661,7 +668,7 @@ namespace hical
 							std::array<boost::asio::const_buffer, hSmallBatchSize> stackBufs;
 							for (size_t i = 0; i < memCount; ++i)
 							{
-								stackBufs[i] = batch[memStart + i].asBuffer();
+								stackBufs[i] = batch[memStart + i]->entry.asBuffer();
 							}
 							auto bytesWritten = co_await boost::asio::async_write(
 								socket_,
@@ -676,7 +683,7 @@ namespace hical
 							buffers.reserve(memCount);
 							for (size_t i = 0; i < memCount; ++i)
 							{
-								buffers.emplace_back(batch[memStart + i].asBuffer());
+								buffers.emplace_back(batch[memStart + i]->entry.asBuffer());
 							}
 							auto bytesWritten =
 								co_await boost::asio::async_write(socket_, buffers, boost::asio::use_awaitable);
@@ -684,13 +691,40 @@ namespace hical
 							updateLastActiveTime();
 						}
 					}
+
+					// 释放已发送的内存条目节点
+					for (size_t i = memStart; i < idx; ++i)
+					{
+						delete batch[i];
+						batch[i] = nullptr;
+					}
 				}
 			}
 		}
 		catch (const boost::system::system_error&)
 		{
-			writing_.store(false);
+			// 先标记断开状态，防止新生产者 enqueueEntry 通过 state 检查
+			// 再重置 writing_，避免 tryStartWrite spawn 新协程在半关闭 socket 上写入
 			handleClose();
+			writing_.store(false);
+
+			// 释放 batch 中尚未发送的节点
+			for (auto* n : batch)
+			{
+				if (n)
+				{
+					delete n;
+				}
+			}
+			batch.clear();
+
+			// 泄漏防护：drain 队列中剩余节点
+			MpscNode* node = nullptr;
+			while ((node = writeQueue_.pop()) != nullptr)
+			{
+				queuedBytes_.fetch_sub(node->entry.size(), std::memory_order_relaxed);
+				delete node;
+			}
 		}
 	}
 

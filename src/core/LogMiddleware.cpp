@@ -36,8 +36,7 @@ namespace hical
 
 	std::string generateTraceId()
 	{
-		// thread_local PRNG：trace-id 只需全局唯一，不需要密码学安全
-		// 避免 OpenSSL RAND_bytes 的跨平台全局锁竞争
+		// thread_local PRNG，trace-id 不需要密码学安全，够唯一就行
 		thread_local std::mt19937_64 sRng(std::random_device {}());
 
 		uint64_t hi = sRng();
