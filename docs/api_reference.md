@@ -403,6 +403,7 @@ HTTP 响应封装，对原生 HTTP 响应的 hical 风格封装。
 | `badRequest(message)`      | message: 错误信息（默认 "Bad Request"）                | `HttpResponse` | 创建 400 Bad Request 响应                 |
 | `serverError()`            | 无                                                     | `HttpResponse` | 创建 500 Internal Server Error 响应       |
 | `redirect(location, code)` | location: 重定向 URL<br>code: 状态码（默认 302 Found） | `HttpResponse` | 创建重定向响应（Location 头经 CRLF 防护） |
+| `rangeNotSatisfiable(fileSize)` | fileSize: 资源总大小 | `HttpResponse` | 创建 416 Range Not Satisfiable 响应（含 `Content-Range: bytes */fileSize`） |
 
 #### 示例
 
@@ -923,7 +924,7 @@ std::function<Awaitable<HttpResponse>(const HttpRequest&)> serveStatic(
     std::uintmax_t maxFileSize = 64ULL * 1024 * 1024);
 ```
 
-**功能特性：** 异步文件 I/O、PathCache（4096 条目/60s TTL）、MIME 自动推断（27 种扩展名）、ETag/304、路径遍历防护（403）、大文件保护（413）。
+**功能特性：** 异步文件 I/O、PathCache（4096 条目/60s TTL）、MIME 自动推断（27 种扩展名）、ETag/304、路径遍历防护（403）、大文件保护（413）、HTTP 206 Range 请求（单范围 `Range` / `If-Range` ETag 条件请求，200 响应自动添加 `Accept-Ranges: bytes`）。
 
 #### 示例
 
@@ -1197,6 +1198,12 @@ std::pmr::vector<int> vec(alloc);
 auto pool = MemoryPool::instance().createRequestPool();
 // pool 析构时整体释放
 ```
+
+#### mimalloc 可选 upstream
+
+通过 CMake 选项 `HICAL_WITH_MIMALLOC=ON` 启用，使用 mimalloc 替代默认 `new_delete_resource` 作为 PMR 最底层分配器（`MimallocResource`），在高并发场景下减少分配器锁竞争。
+
+> **注意：** `createRequestPool()` 的 upstream 为 `threadLocalPool`，扩容路径零锁竞争。
 
 ---
 

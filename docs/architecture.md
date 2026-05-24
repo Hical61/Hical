@@ -950,40 +950,65 @@ struct WriteEntry
     static WriteEntry fromNode(std::shared_ptr<WriteNode> n);
 };
 
-std::deque<WriteEntry> writeQueue_;  // alignas(64) 消除 false sharing
+// Vyukov Intrusive MPSC Queue（无锁写队列）
+// wait-free O(1) push，摊销 O(1) pop
+struct MpscNode
+{
+    std::atomic<MpscNode*> next{nullptr};
+};
+
+struct MpscQueue
+{
+    std::atomic<MpscNode*> head_;  // producers push here (wait-free)
+    MpscNode* tail_;               // consumer pops here (single-thread)
+    MpscNode stub_;                // sentinel node
+
+    void push(MpscNode* node);     // wait-free O(1)
+    MpscNode* pop();               // amortized O(1), single consumer
+};
+
+// WriteEntry 继承 MpscNode，直接入队零额外分配
+struct WriteEntry : MpscNode
+{
+    enum class Type : uint8_t { hMemory, hNode };
+    Type type;
+    std::shared_ptr<std::string> memData; // hMemory 时有效
+    std::shared_ptr<WriteNode> node;      // hNode 时有效
+};
+
+MpscQueue writeQueue_;  // alignas(64) 消除 false sharing
 
 // 发送内存数据 → 快速路径，直接存 shared_ptr<string>
 void send(const char* data, size_t len)
 {
-    enqueueEntry(WriteEntry::fromMemory(
-        std::make_shared<std::string>(data, len)));
+    auto* entry = new WriteEntry{...};
+    writeQueue_.push(entry);  // wait-free, 任意线程可调用
 }
 
-// 发送文件数据 → 慢路径，走 WriteNode 多态
-void sendFile(const std::filesystem::path& path, int64_t offset, int64_t length)
-{
-    enqueueEntry(WriteEntry::fromNode(
-        std::make_shared<FileWriteNode>(path, offset, length)));
-}
-
-// 写循环：按类型批量处理
+// 写循环：批量 drain + seq_cst 反饥饿 re-check
 Awaitable<void> writeLoop()
 {
+    // 批量 drain MPSC 队列
+    std::vector<WriteEntry*> batch;
+    while (auto* node = writeQueue_.pop())
+        batch.push_back(static_cast<WriteEntry*>(node));
+
     // Memory 快速路径: Scatter-Gather I/O 批量发送
     std::vector<boost::asio::const_buffer> buffers;
-    for (auto& entry : memoryBatch)
+    for (auto* entry : batch)
     {
-        buffers.emplace_back(entry.memData->data(), entry.memData->size());
+        if (entry->type == WriteEntry::Type::hMemory)
+            buffers.emplace_back(entry->memData->data(), entry->memData->size());
     }
     co_await boost::asio::async_write(socket_, buffers, use_awaitable);
 
-    // File 慢路径: 异步分块读取 + 发送（64KB 每块）
-    co_await sendFileNode(fileEntry.node);
+    // seq_cst 反饥饿 re-check：防止 drain 后遗漏并发 push
 }
 ```
 
+- **MPSC 无锁队列**：写队列从 `mutex` + `deque` 升级为 Vyukov Intrusive MPSC Queue，`enqueueEntry` 移除 `isInLoopThread` 分支和 `lock_guard`，任意线程 wait-free push
 - **标签分发去虚函数化**：`WriteEntry::hMemory` 快速路径直接存 `shared_ptr<string>`，消除热路径上的虚函数调用开销；`hNode` 保留多态仅用于低频的文件/PmrBuffer 场景
-- **队列化写入**：避免并发写入冲突
+- **批量 drain + 反饥饿**：`writeLoop` 一次性 drain 所有就绪节点，drain 后 `seq_cst` re-check 防止遗漏并发 push
 - **Scatter-Gather**：连续的内存条目合并为一次 `async_write` 系统调用
 - **异步文件发送**：`sendFileNode()` 使用 `boost::asio::random_access_file`（`BOOST_ASIO_HAS_FILE`）异步读取，无此特性时回退到 `std::ifstream`
 - **`alignas(64)` 缓存行隔离**：写队列和相关原子变量做缓存行对齐，消除多线程 false sharing
@@ -1042,7 +1067,7 @@ class EventLoopPool
 | ----------- | ----------------------------------- |
 | 连接读写    | 绑定到单个 IO 线程，无并发          |
 | Timer 管理  | AsioEventLoop 内 mutex 保护         |
-| 连接集合    | TcpServer 内 mutex 保护             |
+| 连接集合    | TcpServer per-loop `LoopShard` 分片，无全局锁 |
 | 内存池-全局 | `synchronized_pool_resource` 内部锁 |
 | 内存池-线程 | `thread_local`，无需锁              |
 | 统计计数    | `atomic` 操作                       |
@@ -1105,6 +1130,9 @@ struct NetworkError
 | CORS 中间件            | 工厂函数 `makeCorsMiddleware`          | 一行启用，凭证模式安全校验，预检自动应答                       |
 | 路由分组               | `RouteGroup` 值对象                    | 组级中间件局部生效，不影响全局中间件链                         |
 | 日志异步写盘           | `AsyncFileSink` jthread 双缓冲         | 背压保护（丢弃 + 计数），不阻塞业务线程                        |
+| 写队列                 | Vyukov Intrusive MPSC Queue            | wait-free push，消除写路径 mutex 竞争，摊销 O(1) pop           |
+| 连接表分片             | per-loop `LoopShard`                   | idle 扫描/增删全程无锁，消除 TcpServer 全局 mutex              |
+| PMR requestPool        | `threadLocalPool` 作为 upstream        | 扩容零锁竞争，避免 globalPool 同步开销                         |
 
 ---
 

@@ -267,7 +267,6 @@ namespace hical
 		/**
 		 * @brief Vyukov Intrusive MPSC Queue
 		 * 生产者 wait-free push，消费者 single-thread pop。
-		 * 参考：http://www.1024cores.net/home/lock-free-algorithms/queues/intrusive-mpsc-node-based-queue
 		 */
 		struct MpscQueue
 		{

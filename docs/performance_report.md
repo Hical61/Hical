@@ -97,7 +97,15 @@ v2.6.0 将 HTTP 解析/序列化和 WebSocket 全面替换为原生实现（pico
 | `HttpSessionImpl.cpp`   | picohttpparser + WebSocket 重模板 | `HttpServer.h` 修改不触发 parser 重编译 |
 | `MetaJsonError.h/cpp`   | `throw` 非模板化                  | 减少 `HICAL_JSON` 实例化代码体积        |
 
-### 2.5 热路径微优化
+### 2.5 无锁化优化
+
+| 组件 | 优化前 | 优化后 | 收益 |
+| --- | --- | --- | --- |
+| GenericConnection 写队列 | `mutex` + `deque` | Vyukov Intrusive MPSC Queue | wait-free O(1) push，消除写路径锁竞争 |
+| TcpServer 连接表 | 全局 `mutex` + `unordered_set` | per-loop `LoopShard` 分片 | idle 扫描/增删全程无锁 |
+| requestPool upstream | `globalPool`（同步池） | `threadLocalPool` | 扩容零锁竞争 |
+
+### 2.6 热路径微优化
 
 - HTTP header 查找：按长度 + 首字符快速过滤
 - 响应头 `insert()` O(1) 替代 `set()` O(N)
@@ -422,7 +430,7 @@ docker compose -f benchmark/docker-compose.yml --profile profiling up --build
 
 ### 7.4 TFB 模式
 
-`docker/TFB/bench_main.cpp` 是 TechEmpower Framework Benchmarks 专用入口，仅暴露 `/json` + `/plaintext` 路由，集成 mimalloc 分配器，适合与 TFB 排行榜数据对比。
+`docker/TFB/bench_main.cpp` 是 TechEmpower Framework Benchmarks 专用入口，仅暴露 `/json` + `/plaintext` 路由，集成 mimalloc 分配器（正式场景可通过 `HICAL_WITH_MIMALLOC=ON` 启用），适合与 TFB 排行榜数据对比。
 
 ---
 

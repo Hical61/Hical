@@ -1,6 +1,6 @@
 # Hical 项目代码结构
 
-> 最后更新：2026-05-20 · 对应版本：v2.6.2
+> 最后更新：2026-05-25
 
 ## 项目概述
 
@@ -10,7 +10,7 @@ Hical 是基于 Boost.Asio、采用原生 HTTP/WebSocket 网络栈（picohttppar
 
 ```
 hical/
-├── CMakeLists.txt              # 顶层 CMake（C++20，project(VERSION 2.6.2)，Boost/OpenSSL/GTest）
+├── CMakeLists.txt              # 顶层 CMake（C++20，project(VERSION 2.6.3)，Boost/OpenSSL/GTest）
 ├── README.md / README_CN.md    # 项目主页（英文 / 中文双语，含 CI/License/平台徽章）
 ├── LICENSE                     # MIT 协议
 ├── CHANGELOG.md                # 版本变更日志（按版本倒序）
@@ -212,6 +212,7 @@ hical/
 | `HICAL_WITH_OPENAPI` | ON | 启用 OpenAPI 3.0 元数据层（`OpenApi*.h/cpp`），无额外依赖 |
 | `HICAL_ENABLE_REFLECTION` | OFF | 启用 C++26 原生反射（P2996），需兼容编译器；OFF 时回退到 C++20 宏 |
 | `HICAL_USE_SYSTEM_PICOHTTPPARSER` | OFF | 使用系统安装的 picohttpparser 替代内嵌副本 |
+| `HICAL_WITH_MIMALLOC` | OFF | 使用 mimalloc 作为 PMR 最底层 upstream 分配器，替代默认 `new_delete_resource` |
 | `BUILD_TESTING` | ON | 构建 [tests/](../tests/) 单元测试 |
 | `CMAKE_BUILD_TYPE` | — | `Debug` / `Release` / `RelWithDebInfo` |
 
@@ -332,8 +333,9 @@ hical/
 - **类 / 结构体 / 枚举**：大驼峰，无前缀（`HttpServer`, `RouteInfo`, `HttpMethod`）
 - **抽象接口**：大驼峰，无 `I` 前缀（`EventLoop`, `TcpConnection`）
 - **枚举常量**：`h` 前缀 + 大驼峰（`hGet`, `hOk`, `hInvalidTimerId`）
-- **成员变量**：`m_` 前缀 + 小驼峰（`m_ioContext`）
+- **成员变量**：尾下划线 + 小驼峰（`ioContext_`）
 - **全局 / 静态变量**：`g_` / `s` 前缀 + 小驼峰
+- **`static constexpr` 常量**：`k` 前缀 + 大驼峰（`kMaxHeaderSize`）
 - **方法 / 函数 / 局部变量**：小驼峰（`runAfter`, `isInLoopThread`, `bytesRead`）
 - **指针参数**：`p` 前缀 + 大驼峰（`pSocket`）
 - **宏**：大写下划线（`HICAL_ROUTE`, `HICAL_LOG_INFO`）

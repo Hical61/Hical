@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.6.3] - 2026-05-25
+
+### Added
+- **HTTP 206 Range 请求**：`StaticFiles` 支持单范围 `Range` / `If-Range` ETag 条件请求，`parseByteRange()` 解析器，`HttpResponse` 新增 `FileBody`（path/offset/length）延迟异步分块发送，200 响应自动添加 `Accept-Ranges: bytes`
+- **`MimallocResource`**：可选 mimalloc 作为 PMR 最底层 upstream 分配器（`HICAL_WITH_MIMALLOC` CMake 选项，Conan/vcpkg 同步）
+
+### Changed
+- **统一命名风格**：`m_` 前缀全部迁移为尾下划线，`static constexpr` 常量改用 `k` 前缀，枚举值补 `h` 前缀
+
+### Performance
+- **GenericConnection MPSC 无锁写队列**：写队列从 `mutex` + `deque` 升级为 Vyukov Intrusive MPSC Queue（wait-free O(1) push，摊销 O(1) pop），移除 `isInLoopThread` 分支和 `lock_guard`，`writeLoop` 批量 drain + `seq_cst` 反饥饿 re-check
+- **TcpServer 连接表 per-loop 分片**：全局 `mutex` + `unordered_set` 改为 per-loop `LoopShard`，idle 扫描/增删全程无锁
+- **requestPool 无锁扩容**：`createRequestPool()` upstream 从 `globalPool` 改为 `threadLocalPool`，扩容零锁竞争
+
 ## [2.6.2] - 2026-05-18
 
 ### Added
@@ -337,7 +351,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Multipart Part 数量上限（DoS 防护）
 - Session ID 使用密码学安全的随机数生成
 
-[Unreleased]: https://github.com/Hical61/Hical/compare/v2.6.2...HEAD
+[Unreleased]: https://github.com/Hical61/Hical/compare/v2.6.3...HEAD
+[2.6.3]: https://github.com/Hical61/Hical/compare/v2.6.2...v2.6.3
 [2.6.2]: https://github.com/Hical61/Hical/compare/v2.6.1...v2.6.2
 [2.6.1]: https://github.com/Hical61/Hical/compare/v2.6.0...v2.6.1
 [2.6.0]: https://github.com/Hical61/Hical/compare/v2.5.2...v2.6.0

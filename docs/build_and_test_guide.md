@@ -176,6 +176,7 @@ cmake -B build -G "Ninja" \
 | `HICAL_ENABLE_REFLECTION` | `OFF`  | 启用 C++26 原生反射（需兼容编译器）                        |
 | `HICAL_BUILD_TESTS`       | `ON`   | 是否编译测试套件                                           |
 | `HICAL_BUILD_EXAMPLES`    | `ON`   | 是否编译示例程序                                           |
+| `HICAL_WITH_MIMALLOC`     | `OFF`  | 使用 mimalloc 作为 PMR 最底层 upstream 分配器              |
 
 ```bash
 # 示例：启用数据库 + 关闭 OpenAPI（体积敏感场景）
