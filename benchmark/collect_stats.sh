@@ -281,13 +281,25 @@ EOF
             "${LOC[$suffix]}"
     done
 
-    cat << 'EOF'
+# 从第一个框架容器中读取实际内存限制
+_first_suffix="${SUFFIXES[0]}"
+_first_container="${CONTAINER[$_first_suffix]}"
+MEM_LIMIT_BYTES=$(docker inspect --format='{{.HostConfig.Memory}}' "$_first_container" 2>/dev/null || echo "0")
+if [ "$MEM_LIMIT_BYTES" -gt 0 ] 2>/dev/null; then
+    MEM_LIMIT_MB=$(( MEM_LIMIT_BYTES / 1024 / 1024 ))
+else
+    MEM_LIMIT_MB="unknown"
+fi
+# 读取 nofile 限制
+NOFILE_LIMIT=$(docker inspect --format='{{(index .HostConfig.Ulimits 0).Hard}}' "$_first_container" 2>/dev/null || echo "unknown")
+
+    cat << EOF
 
 ---
 
-> 数据采集于 Docker 容器环境（每容器 4 CPU / 512MB 限制）。
-> 内存数据来自 `docker stats --no-stream`，为容器级 RSS。
-> 二进制大小为容器内 `/server` 文件，镜像大小来自 `docker images`。
+> 数据采集于 Docker 容器环境（每容器 4 CPU / ${MEM_LIMIT_MB}MB 限制，nofile=${NOFILE_LIMIT}）。
+> 内存数据来自 \`docker stats --no-stream\`，为容器级 RSS。
+> 二进制大小为容器内 \`/server\` 文件，镜像大小来自 \`docker images\`。
 EOF
 } > "$OUTPUT"
 
