@@ -2,8 +2,10 @@
 
 #include <boost/asio.hpp>
 #include <boost/asio/awaitable.hpp>
+#include <boost/asio/bind_allocator.hpp>
 #include <boost/asio/co_spawn.hpp>
 #include <boost/asio/detached.hpp>
+#include <boost/asio/recycling_allocator.hpp>
 #include <boost/asio/steady_timer.hpp>
 #include <boost/asio/use_awaitable.hpp>
 #include <chrono>
@@ -96,16 +98,19 @@ namespace hical
 	};
 
 	/**
-	 * @brief co_spawn 便捷封装（默认带异常日志）
+	 * @brief co_spawn 便捷封装（默认带异常日志 + recycling_allocator 复用 completion handler 内存）
 	 * @param ioCtx io_context 引用
 	 * @param coroutine 协程函数
 	 * 在指定 io_context 上启动一个协程。
 	 * 协程内未捕获的异常会输出到 stderr，而非静默丢弃。
+	 * recycling_allocator 维护 thread_local 缓存，高并发时避免重复 malloc/free。
 	 */
 	template <typename F>
 	void coSpawn(boost::asio::io_context& ioCtx, F&& coroutine)
 	{
-		boost::asio::co_spawn(ioCtx, std::forward<F>(coroutine), logOnException);
+		boost::asio::co_spawn(ioCtx,
+							  std::forward<F>(coroutine),
+							  boost::asio::bind_allocator(boost::asio::recycling_allocator<void>(), logOnException));
 	}
 
 	/**
@@ -121,7 +126,7 @@ namespace hical
 	}
 
 	/**
-	 * @brief co_spawn 便捷封装（接受任意 executor，默认带异常日志）
+	 * @brief co_spawn 便捷封装（接受任意 executor，默认带异常日志 + recycling_allocator）
 	 * @param executor 执行器（如 socket.get_executor()、co_await this_coro::executor）
 	 * @param coroutine 协程函数
 	 * 在指定 executor 上启动一个协程。
@@ -131,7 +136,9 @@ namespace hical
 		requires(!std::is_same_v<std::decay_t<Executor>, boost::asio::io_context>)
 	void coSpawn(Executor&& executor, F&& coroutine)
 	{
-		boost::asio::co_spawn(std::forward<Executor>(executor), std::forward<F>(coroutine), logOnException);
+		boost::asio::co_spawn(std::forward<Executor>(executor),
+							  std::forward<F>(coroutine),
+							  boost::asio::bind_allocator(boost::asio::recycling_allocator<void>(), logOnException));
 	}
 
 	/**

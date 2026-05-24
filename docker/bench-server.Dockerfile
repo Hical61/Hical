@@ -8,7 +8,7 @@ RUN sed -i 's|http://archive.ubuntu.com|http://mirrors.tuna.tsinghua.edu.cn|g' /
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         gcc-14 g++-14 cmake ninja-build \
-        libboost-all-dev libssl-dev libgtest-dev zlib1g-dev \
+        libboost-all-dev libssl-dev libgtest-dev zlib1g-dev libmimalloc-dev \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /src
@@ -20,6 +20,7 @@ RUN cmake -B build -G Ninja \
         -DCMAKE_CXX_COMPILER=g++-14 \
         -DHICAL_BUILD_BENCH=ON \
         -DHICAL_DISABLE_IO_URING=ON \
+        -DHICAL_WITH_MIMALLOC=ON \
     && cmake --build build -j$(nproc) \
     && strip build/bench_server
 
@@ -31,7 +32,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /src/build/bench_server /bench_server
+COPY docker/bench-entrypoint.sh /bench-entrypoint.sh
+RUN chmod +x /bench-entrypoint.sh
 
 EXPOSE 8080
 
-CMD ["/bench_server"]
+CMD ["/bench-entrypoint.sh"]

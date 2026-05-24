@@ -1,5 +1,10 @@
 #include "EventLoopPool.h"
 
+#ifdef __linux__
+	#include <pthread.h>
+	#include <sched.h>
+#endif
+
 namespace hical
 {
 
@@ -28,12 +33,21 @@ namespace hical
 			return; // 已经启动
 		}
 
-		for (auto& loop : loops_)
+		for (size_t i = 0; i < loops_.size(); ++i)
 		{
-			auto* ptr = loop.get();
+			auto* ptr = loops_[i].get();
 			threads_.emplace_back(
-				[ptr]()
+				[ptr, i]()
 				{
+#ifdef __linux__
+					// CPU 亲和性绑定：减少线程迁移导致的 TLB flush 和跨核 IPI
+					cpu_set_t cpuset;
+					CPU_ZERO(&cpuset);
+					CPU_SET(i % std::thread::hardware_concurrency(), &cpuset);
+					pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset);
+#else
+					(void)i;
+#endif
 					ptr->run();
 				});
 		}

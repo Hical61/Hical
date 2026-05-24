@@ -330,13 +330,17 @@ namespace hical
 		{
 			tcp::socket& sock;
 			bool transferred {false};
+			bool cleanExit {false}; // 仅正常结束时才 shutdown，避免对已断开连接的无效系统调用
 
 			~SocketGuard()
 			{
 				if (!transferred && sock.is_open())
 				{
 					boost::system::error_code ec;
-					sock.shutdown(tcp::socket::shutdown_send, ec);
+					if (cleanExit)
+					{
+						sock.shutdown(tcp::socket::shutdown_send, ec);
+					}
 					sock.close(ec);
 				}
 			}
@@ -351,34 +355,37 @@ namespace hical
 
 		try
 		{
-			// alive 标志，socket 没了之后 timer 回调别再碰
-			auto socketAlive = std::make_shared<std::atomic<bool>>(true);
+			// idle timeout 相关变量：仅在 idleTimeout_ > 0 时分配
+			std::shared_ptr<std::atomic<bool>> socketAlive;
+			std::shared_ptr<std::atomic<int64_t>> lastActiveMs;
 
-			// 协程退出时 alive=false
+			if (deadline)
+			{
+				socketAlive = std::make_shared<std::atomic<bool>>(true);
+				lastActiveMs =
+					std::make_shared<std::atomic<int64_t>>(std::chrono::duration_cast<std::chrono::milliseconds>(
+															   std::chrono::steady_clock::now().time_since_epoch())
+															   .count());
+				auto timeoutMs = static_cast<int64_t>(idleTimeout_ * 1000);
+
+				boost::asio::co_spawn(socket.get_executor(),
+									  idleTimerLoop(deadline, socket, socketAlive, lastActiveMs, timeoutMs),
+									  boost::asio::detached);
+			}
+
+			// 协程退出时标记 alive=false，防止 timer 回调访问已关闭 socket
 			struct AliveGuard
 			{
 				std::shared_ptr<std::atomic<bool>> alive;
 
 				~AliveGuard()
 				{
-					alive->store(false);
+					if (alive)
+					{
+						alive->store(false);
+					}
 				}
 			} aliveGuard {socketAlive};
-
-			// 连接级活跃时间戳，不用每请求 reset timer 了
-			auto lastActiveMs =
-				std::make_shared<std::atomic<int64_t>>(std::chrono::duration_cast<std::chrono::milliseconds>(
-														   std::chrono::steady_clock::now().time_since_epoch())
-														   .count());
-			auto timeoutMs = static_cast<int64_t>(idleTimeout_ * 1000);
-
-			// 超时协程，一个 loop 搞定，不用回调链
-			if (deadline)
-			{
-				boost::asio::co_spawn(socket.get_executor(),
-									  idleTimerLoop(deadline, socket, socketAlive, lastActiveMs, timeoutMs),
-									  boost::asio::detached);
-			}
 
 			// 读缓冲区，keep-alive 复用
 			std::string readBuf;
@@ -485,11 +492,14 @@ namespace hical
 					// parseResult == -2：数据不完整，继续读取
 				}
 
-				// 读完头部后更新活跃时间戳
-				lastActiveMs->store(std::chrono::duration_cast<std::chrono::milliseconds>(
-										std::chrono::steady_clock::now().time_since_epoch())
-										.count(),
-									std::memory_order_relaxed);
+				// 读完头部后更新活跃时间戳（仅启用 idle timeout 时）
+				if (lastActiveMs)
+				{
+					lastActiveMs->store(std::chrono::duration_cast<std::chrono::milliseconds>(
+											std::chrono::steady_clock::now().time_since_epoch())
+											.count(),
+										std::memory_order_relaxed);
+				}
 
 				// ====== 阶段 B：构建 NativeRequest ======
 				NativeRequest nativeReq;
@@ -820,11 +830,14 @@ namespace hical
 					co_await writeResponse(socket, nativeRes, isHead);
 				}
 
-				// 写完后更新活跃时间戳
-				lastActiveMs->store(std::chrono::duration_cast<std::chrono::milliseconds>(
-										std::chrono::steady_clock::now().time_since_epoch())
-										.count(),
-									std::memory_order_relaxed);
+				// 写完后更新活跃时间戳（仅启用 idle timeout 时）
+				if (lastActiveMs)
+				{
+					lastActiveMs->store(std::chrono::duration_cast<std::chrono::milliseconds>(
+											std::chrono::steady_clock::now().time_since_epoch())
+											.count(),
+										std::memory_order_relaxed);
+				}
 
 				// 延迟 memmove：响应已发送或已暂存，nativeReq.target/headers 不再被引用，
 				// 安全地将残留数据移到缓冲区开头（为下一个 pipelined 请求做准备）
@@ -835,6 +848,7 @@ namespace hical
 
 				if (!shouldKeepAlive)
 				{
+					guard.cleanExit = true;
 					break;
 				}
 			}

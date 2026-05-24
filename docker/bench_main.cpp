@@ -19,6 +19,7 @@ struct UserDTO
 int main()
 {
 	HttpServer server(8080, 4);
+	server.setIdleTimeout(0); // benchmark 无需超时检测，省掉 per-connection timer 协程 + 3 次堆分配
 
 	// Hello World
 	server.router().get("/",
