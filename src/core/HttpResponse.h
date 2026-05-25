@@ -127,9 +127,7 @@ namespace hical
 		 * @param prefix 预拼好的通用头部 wire bytes
 		 * @param prefixLen 前缀字节数
 		 */
-		void serializeHeadTo(FixedBuffer<512>& buf,
-							 const char* prefix,
-							 size_t prefixLen) const
+		void serializeHeadTo(FixedBuffer<512>& buf, const char* prefix, size_t prefixLen) const
 		{
 			serializeStatusAndHeaders(buf);
 			buf.append(prefix, prefixLen);

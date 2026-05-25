@@ -20,9 +20,9 @@
 
 // TCP_CORK / TCP_NOPUSH（writeFileResponse 合并小包用）
 #if defined(__linux__)
-#include <netinet/tcp.h>
+	#include <netinet/tcp.h>
 #elif defined(__APPLE__)
-#include <netinet/tcp.h>
+	#include <netinet/tcp.h>
 #endif
 
 // picohttpparser（C 库）
@@ -126,36 +126,36 @@ namespace hical
 		/// Linux 用 TCP_CORK，macOS 用 TCP_NOPUSH，Windows 下啥也不干（应用层已经 scatter-gather 了）
 		struct TcpCorkGuard
 		{
-			tcp::socket& sock;
-			bool corked {false};
+			tcp::socket& sock_;
+			bool corked_ {false};
 
-			explicit TcpCorkGuard(tcp::socket& s) : sock(s)
+			explicit TcpCorkGuard(tcp::socket& s) : sock_(s)
 			{
 #if defined(__linux__)
 				int flag = 1;
-				if (::setsockopt(sock.native_handle(), IPPROTO_TCP, TCP_CORK, &flag, sizeof(flag)) == 0)
+				if (::setsockopt(sock_.native_handle(), IPPROTO_TCP, TCP_CORK, &flag, sizeof(flag)) == 0)
 				{
-					corked = true;
+					corked_ = true;
 				}
 #elif defined(__APPLE__)
 				int flag = 1;
-				if (::setsockopt(sock.native_handle(), IPPROTO_TCP, TCP_NOPUSH, &flag, sizeof(flag)) == 0)
+				if (::setsockopt(sock_.native_handle(), IPPROTO_TCP, TCP_NOPUSH, &flag, sizeof(flag)) == 0)
 				{
-					corked = true;
+					corked_ = true;
 				}
 #endif
 			}
 
 			~TcpCorkGuard()
 			{
-				if (corked)
+				if (corked_)
 				{
 #if defined(__linux__)
 					int flag = 0;
-					::setsockopt(sock.native_handle(), IPPROTO_TCP, TCP_CORK, &flag, sizeof(flag));
+					::setsockopt(sock_.native_handle(), IPPROTO_TCP, TCP_CORK, &flag, sizeof(flag));
 #elif defined(__APPLE__)
 					int flag = 0;
-					::setsockopt(sock.native_handle(), IPPROTO_TCP, TCP_NOPUSH, &flag, sizeof(flag));
+					::setsockopt(sock_.native_handle(), IPPROTO_TCP, TCP_NOPUSH, &flag, sizeof(flag));
 #endif
 				}
 			}
