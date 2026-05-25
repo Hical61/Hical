@@ -1,10 +1,10 @@
 #!/bin/bash
 # 框架压测脚本（数组驱动，支持多框架、多场景）
 # 用法:
-#   BENCH_MODE=cpp        docker compose --profile cpp exec wrk bash /bench/run_bench.sh
-#   BENCH_MODE=cross-lang docker compose --profile cross-lang exec wrk bash /bench/run_bench.sh
-#   BENCH_MODE=all        bash benchmark/run_bench.sh
-#   CONNECTIONS=500 DURATION=60s BENCH_MODE=cpp bash benchmark/run_bench.sh
+#   BENCH_MODE=cpp        docker compose --profile cpp exec wrk bash -c "BENCH_MODE=cpp bash /bench/run_bench.sh"
+#   BENCH_MODE=cross-lang docker compose --profile cross-lang exec wrk bash -c "BENCH_MODE=cross-lang bash /bench/run_bench.sh"
+#   BENCH_MODE=all HICAL_HOST=localhost:8080 ... RESULT_FILE=results.md bash benchmark/run_bench.sh
+#   CONNECTIONS=500 DURATION=60s BENCH_MODE=cpp docker compose --profile cpp exec wrk bash -c "BENCH_MODE=cpp CONNECTIONS=500 DURATION=60s bash /bench/run_bench.sh"
 
 set -euo pipefail
 
@@ -13,12 +13,12 @@ DURATION="${DURATION:-30s}"
 THREADS="${THREADS:-4}"
 CONNECTIONS="${CONNECTIONS:-100}"
 JSON_BODY='{"name":"Alice","age":30,"email":"alice@example.com"}'
-RESULT_FILE="${RESULT_FILE:-/bench/results.md}"
+RESULT_FILE="${RESULT_FILE:-/bench/output/results.md}"
 
 # ==================== 运行模式 ====================
-# cpp:        Hical / Drogon / Crow / Oat++（默认，10 场景含中间件和高并发）
-# cross-lang: Hical / Gin / Actix-web（4 基础场景，与旧脚本兼容）
-# all:        全部 6 个框架，10 场景
+# cpp:        Hical / Drogon / Crow / Oat++ / cpp-httplib / Cinatra（默认，12 场景含中间件和高并发）
+# cross-lang: Hical / Gin / Fiber / Actix-web（4 基础场景）
+# all:        全部 9 个框架，12 场景
 BENCH_MODE="${BENCH_MODE:-cpp}"
 
 # ==================== 框架 Host 定义 ====================

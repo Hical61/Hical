@@ -36,6 +36,7 @@ CPP_FRAMEWORKS=(
 CROSS_LANG_FRAMEWORKS=(
     "Hical (C++)|hical|hical/main.cpp|8080"
     "Gin (Go)|gin|gin/main.go|8081"
+    "Fiber (Go)|fiber|fiber/main.go|8089"
     "Actix-web (Rust)|actix|actix/src/main.rs|8082"
 )
 
@@ -47,6 +48,7 @@ ALL_FRAMEWORKS=(
     "cpp-httplib (C++)|cpphttplib|cpphttplib/main.cpp|8086"
     "Cinatra (C++)|cinatra|cinatra/main.cpp|8087"
     "Gin (Go)|gin|gin/main.go|8081"
+    "Fiber (Go)|fiber|fiber/main.go|8089"
     "Actix-web (Rust)|actix|actix/src/main.rs|8082"
 )
 
