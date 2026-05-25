@@ -1061,16 +1061,33 @@ class EventLoopPool
 - **Linux / macOS**：SO_REUSEPORT 模式下，每个 worker loop 运行独立 `acceptLoop()`，内核自动在多个 acceptor 间做负载均衡，`EventLoopPool::getNextLoop()` 不参与 accept 分发。
 - **Windows**：无 SO_REUSEPORT，回退为单 acceptor + Round-Robin 分发到 worker loop。
 
+### 12.2.1 Worker 线程 CPU 亲和性（Linux）
+
+`EventLoopPool::start()` 启动 worker 线程时，使用 `pthread_setaffinity_np` 将第 i 个线程绑定到第 `i % hardware_concurrency()` 个 CPU 核心：
+
+```cpp
+// Linux only — Windows 侧 (void)i 静默忽略
+cpu_set_t cpuset;
+CPU_ZERO(&cpuset);
+CPU_SET(i % std::thread::hardware_concurrency(), &cpuset);
+pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset);
+```
+
+**绑核的收益**：
+- 消除内核随机迁移线程导致的 TLB flush（10K 连接场景下每次迁移约 2-5μs 惩罚）
+- 减少跨核 IPI（Inter-Processor Interrupt），配合 RPS/RFS 让收包 softirq 和处理线程在同一核心
+- L1/L2 cache 命中率提升，worker 线程的热数据不会被其他核心的线程替换掉
+
 ### 12.3 线程安全策略
 
-| 操作        | 线程安全保证                        |
-| ----------- | ----------------------------------- |
-| 连接读写    | 绑定到单个 IO 线程，无并发          |
-| Timer 管理  | AsioEventLoop 内 mutex 保护         |
+| 操作        | 线程安全保证                                  |
+| ----------- | --------------------------------------------- |
+| 连接读写    | 绑定到单个 IO 线程，无并发                    |
+| Timer 管理  | AsioEventLoop 内 mutex 保护                   |
 | 连接集合    | TcpServer per-loop `LoopShard` 分片，无全局锁 |
-| 内存池-全局 | `synchronized_pool_resource` 内部锁 |
-| 内存池-线程 | `thread_local`，无需锁              |
-| 统计计数    | `atomic` 操作                       |
+| 内存池-全局 | `synchronized_pool_resource` 内部锁           |
+| 内存池-线程 | `thread_local`，无需锁                        |
+| 统计计数    | `atomic` 操作                                 |
 
 ---
 
@@ -1319,13 +1336,13 @@ server.setErrorHandler([](const std::exception& e, const HttpRequest& req) {
 
 Hical 使用完全自研的 WebSocket 实现（不依赖 Beast），核心模块：
 
-| 组件                  | 文件              | 职责                                                             |
-| --------------------- | ----------------- | ---------------------------------------------------------------- |
-| `WsFrame`             | `WsFrame.h`       | 帧解析/构造：data/control 帧统一、客户端掩码强制、RSV 位验证     |
-| `WsHandshake`         | `WsHandshake.h`   | 握手协议：`Sec-WebSocket-Key`/`Accept` 计算、扩展/子协议协商     |
-| `WsDeflate`           | `WsDeflate.h/cpp` | permessage-deflate 压缩（RFC 7692）、pimpl 封装 zlib、zip bomb 防护 |
-| `WebSocketSession`    | `WebSocket.h/cpp` | 会话管理：发送/接收/心跳/子协议/上下文存储                       |
-| `WsHub`               | `WsHub.h/cpp`     | 连接管理器：房间/广播/单播，线程安全                             |
+| 组件               | 文件              | 职责                                                                |
+| ------------------ | ----------------- | ------------------------------------------------------------------- |
+| `WsFrame`          | `WsFrame.h`       | 帧解析/构造：data/control 帧统一、客户端掩码强制、RSV 位验证        |
+| `WsHandshake`      | `WsHandshake.h`   | 握手协议：`Sec-WebSocket-Key`/`Accept` 计算、扩展/子协议协商        |
+| `WsDeflate`        | `WsDeflate.h/cpp` | permessage-deflate 压缩（RFC 7692）、pimpl 封装 zlib、zip bomb 防护 |
+| `WebSocketSession` | `WebSocket.h/cpp` | 会话管理：发送/接收/心跳/子协议/上下文存储                          |
+| `WsHub`            | `WsHub.h/cpp`     | 连接管理器：房间/广播/单播，线程安全                                |
 
 ### 18.2 WsOptions 配置
 
@@ -1353,18 +1370,18 @@ struct WsOptions
 
 ### 18.3 WebSocketSession 关键 API
 
-| 方法                     | 返回值                               | 说明                                   |
-| ------------------------ | ------------------------------------ | -------------------------------------- |
-| `send(msg)`              | `Awaitable<void>`                    | 发送文本帧                             |
-| `sendBinary(data)`       | `Awaitable<void>`                    | 发送二进制帧                           |
-| `receive()`              | `Awaitable<std::string>`             | 接收文本消息（向后兼容）               |
-| `receiveMessage()`       | `Awaitable<optional<WsMessage>>`     | 接收 typed 消息（区分 Text/Binary）    |
-| `sendPing(payload)`      | `Awaitable<void>`                    | 手动发送 Ping                          |
-| `closeAsync(code, reason)` | `Awaitable<void>`                  | 优雅关闭（RFC 6455 Close 帧）          |
-| `setContext<T>(ptr)`     | `void`                               | 设置 per-connection 类型化上下文       |
-| `getContext<T>()`        | `shared_ptr<T>`                      | 获取上下文                             |
-| `subprotocol()`          | `const std::string&`                 | 协商后的子协议                         |
-| `lastPongTime()`         | `chrono::steady_clock::time_point`   | 最后一次收到 Pong 的时间               |
+| 方法                       | 返回值                             | 说明                                |
+| -------------------------- | ---------------------------------- | ----------------------------------- |
+| `send(msg)`                | `Awaitable<void>`                  | 发送文本帧                          |
+| `sendBinary(data)`         | `Awaitable<void>`                  | 发送二进制帧                        |
+| `receive()`                | `Awaitable<std::string>`           | 接收文本消息（向后兼容）            |
+| `receiveMessage()`         | `Awaitable<optional<WsMessage>>`   | 接收 typed 消息（区分 Text/Binary） |
+| `sendPing(payload)`        | `Awaitable<void>`                  | 手动发送 Ping                       |
+| `closeAsync(code, reason)` | `Awaitable<void>`                  | 优雅关闭（RFC 6455 Close 帧）       |
+| `setContext<T>(ptr)`       | `void`                             | 设置 per-connection 类型化上下文    |
+| `getContext<T>()`          | `shared_ptr<T>`                    | 获取上下文                          |
+| `subprotocol()`            | `const std::string&`               | 协商后的子协议                      |
+| `lastPongTime()`           | `chrono::steady_clock::time_point` | 最后一次收到 Pong 的时间            |
 
 ### 18.4 WsHub 广播管理器
 
@@ -1432,26 +1449,33 @@ TCP 读取 → readBuf (连接级复用，keep-alive 不重新分配)
         HttpRequest 封装 (惰性解析：jsonBody/queryParam/cookie 首次访问才解析)
 ```
 
-### 19.2 单缓冲区响应序列化
+### 19.2 单缓冲区响应序列化 + 前缀模板
 
 ```
-HttpResponse
+HttpResponse (handler 设置 Content-Type / body)
     │
     ▼
-NativeResponse::serializeHeadTo(FixedBuffer<512>)   ← 栈上缓冲区
-    │  状态行 + headers（200 OK 预计算）
+NativeResponse::serializeHeadTo(FixedBuffer<512>, prefix, prefixLen)
+    │  状态行 + 用户头部 + 预构建通用头部（一次 memcpy ~90B）
     ▼
 head + body 合并为单次 async_write                    ← 一次系统调用
 ```
+
+**连接级响应前缀模板**：`handleSession` 在 `for(;;)` 循环外预拼 `Server` / `Connection` / `Date` 三个通用头部的 wire bytes 到 `responsePrefix[128]`。keep-alive 连接中每个请求只需：
+
+1. 检查 `time_t` 是否变化（vDSO 快速路径）
+2. 过期时 `memcpy(29B)` 更新 Date 值
+3. 序列化时追加整段前缀到 FixedBuffer（替代 3 次 `HeaderMap::insert` + for 循环逐条格式化）
+
+`Connection: close` 路径（连接最后一个请求）回退到原始 insert 路径，不影响通用头部正确性。
 
 ### 19.3 HTTP Date 头 `thread_local` 缓存
 
 RFC 7231 要求有 Date 响应头。Hical 使用 `thread_local` 每秒更新一次格式化后的 Date 字符串，热路径零格式化开销：
 
 ```cpp
-thread_local std::string cachedDate;
-thread_local time_t cachedSecond = 0;
-// 每次响应序列化时：秒数未变 → 直接复用 cachedDate
+thread_local DateCache dateTlsCache; // {cachedSec, buf[30], len}
+// 每次响应：秒数未变 → 直接返回 string_view{buf, len}
 ```
 
 ### 19.4 HTTP Pipelining 优化
@@ -1467,6 +1491,21 @@ thread_local time_t cachedSecond = 0;
 10 层同步中间件 = 1 次协程帧堆分配（而非 10 次）
 性能：仅比无中间件低 2.1%
 ```
+
+### 19.6 TcpCorkGuard 文件响应合并小包
+
+`writeFileResponse()` 先发头部（~200B）再分块发文件（64KB/块），TCP_NODELAY 下头部会立即作为独立小 TCP 段发出。`TcpCorkGuard` RAII 守卫在函数入口 cork socket，让内核缓存数据直到 uncork：
+
+```
+TcpCorkGuard 构造 → setsockopt(TCP_CORK, 1)
+    │
+    ├── async_write(头部 ~200B)     ← 内核暂不发
+    ├── async_write(chunk 64KB)    ← 合并为 ~64.2KB TCP 段
+    │
+TcpCorkGuard 析构 → setsockopt(TCP_CORK, 0) → flush
+```
+
+跨平台适配：Linux `TCP_CORK`，macOS `TCP_NOPUSH`，Windows no-op（已有应用层 scatter-gather）。
 
 ---
 

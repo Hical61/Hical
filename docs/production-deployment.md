@@ -962,18 +962,36 @@ spec:
 | `net.ipv4.tcp_tw_reuse`       | 0    | 1        | 减少 TIME_WAIT 占用         |
 | `net.core.netdev_max_backlog` | 1000 | 5000     | 高包率场景                  |
 | `vm.swappiness`               | 60   | 10       | 尽量不用 swap               |
+| RPS/RFS（收包亲和）           | 关闭 | 开启     | 配合绑核减少跨核 IPI        |
+
+**RPS/RFS 配置**（v2.6.3 bench-entrypoint.sh 已自动处理，裸机部署需手动）：
+
+```bash
+# 启用 RPS：将收包 softirq 分散到所有 CPU
+for rxq in /sys/class/net/eth0/queues/rx-*/rps_cpus; do
+    echo "f" > "$rxq"
+done
+
+# 启用 RFS：收包处理对齐到消费该 flow 的 CPU
+echo 32768 > /proc/sys/net/core/rps_sock_flow_entries
+for rxq in /sys/class/net/eth0/queues/rx-*/rps_flow_cnt; do
+    echo 32768 > "$rxq"
+done
+```
+
+> **为什么要配 RPS/RFS？** Hical v2.6.3 的 worker 线程已经绑核了，如果收包 softirq 跑在别的核上，数据还得搬一趟。RFS 让内核把收包 softirq 调度到处理该连接的 CPU，配合绑核就是"从网卡到用户态全在一个核上跑"。
 
 ### Hical 应用级
 
-| 参数           | 默认值 | 调整建议                        | API                    |
-| -------------- | ------ | ------------------------------- | ---------------------- |
-| IO 线程数      | 1      | CPU 核数（不超过 8）            | `HttpServer(port, N)`  |
-| 最大连接数     | 10000  | 根据内存预算：每连接约 25KB（v2.6.0 atomic 超时） | `setMaxConnections()`  |
-| 空闲连接超时   | 60s    | 反向代理后面可设短些（30s）     | `setIdleTimeout()`     |
-| 最大请求体     | 1MB    | 文件上传场景调大（如 50MB）     | `setMaxBodySize()`     |
-| 最大请求头     | 8KB    | 含大 Cookie 时调大（如 16KB）   | `setMaxHeaderSize()`   |
-| 关机超时       | 30s    | 长请求场景调大（如 60s）        | `setShutdownTimeout()` |
-| 内存池 GC 间隔 | 60s    | 高频请求可缩短（30s）           | `setGcInterval()`      |
+| 参数           | 默认值 | 调整建议                                                  | API                    |
+| -------------- | ------ | --------------------------------------------------------- | ---------------------- |
+| IO 线程数      | 1      | CPU 核数（不超过 8）                                      | `HttpServer(port, N)`  |
+| 最大连接数     | 10000  | 根据内存预算：每连接约 25KB（v2.6.0 atomic 超时）         | `setMaxConnections()`  |
+| 空闲连接超时   | 60s    | 反向代理后面可设短些（30s）；纯压测可设 0 省掉 timer 协程 | `setIdleTimeout()`     |
+| 最大请求体     | 1MB    | 文件上传场景调大（如 50MB）                               | `setMaxBodySize()`     |
+| 最大请求头     | 8KB    | 含大 Cookie 时调大（如 16KB）                             | `setMaxHeaderSize()`   |
+| 关机超时       | 30s    | 长请求场景调大（如 60s）                                  | `setShutdownTimeout()` |
+| 内存池 GC 间隔 | 60s    | 高频请求可缩短（30s）                                     | `setGcInterval()`      |
 
 ### PMR 内存池
 

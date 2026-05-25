@@ -99,11 +99,11 @@ v2.6.0 将 HTTP 解析/序列化和 WebSocket 全面替换为原生实现（pico
 
 ### 2.5 无锁化优化
 
-| 组件 | 优化前 | 优化后 | 收益 |
-| --- | --- | --- | --- |
-| GenericConnection 写队列 | `mutex` + `deque` | Vyukov Intrusive MPSC Queue | wait-free O(1) push，消除写路径锁竞争 |
-| TcpServer 连接表 | 全局 `mutex` + `unordered_set` | per-loop `LoopShard` 分片 | idle 扫描/增删全程无锁 |
-| requestPool upstream | `globalPool`（同步池） | `threadLocalPool` | 扩容零锁竞争 |
+| 组件                     | 优化前                         | 优化后                      | 收益                                  |
+| ------------------------ | ------------------------------ | --------------------------- | ------------------------------------- |
+| GenericConnection 写队列 | `mutex` + `deque`              | Vyukov Intrusive MPSC Queue | wait-free O(1) push，消除写路径锁竞争 |
+| TcpServer 连接表         | 全局 `mutex` + `unordered_set` | per-loop `LoopShard` 分片   | idle 扫描/增删全程无锁                |
+| requestPool upstream     | `globalPool`（同步池）         | `threadLocalPool`           | 扩容零锁竞争                          |
 
 ### 2.6 热路径微优化
 
@@ -113,6 +113,19 @@ v2.6.0 将 HTTP 解析/序列化和 WebSocket 全面替换为原生实现（pico
 - 200 OK 状态行预计算字面量
 - HTTP Date 头 `thread_local` 每秒缓存更新
 - 连接级 `readBuf` 跨 keep-alive 请求复用
+
+### 2.7 高并发场景优化（v2.6.3）
+
+strace + perf 火焰图实测 10K 并发下发现的浪费点，逐一消除：
+
+| 优化项                     | 优化前                                                       | 优化后                                            | 收益                                              |
+| -------------------------- | ------------------------------------------------------------ | ------------------------------------------------- | ------------------------------------------------- |
+| Idle timeout 条件初始化    | 每连接无条件分配 `socketAlive` + `lastActiveMs` + timer 协程 | 仅 `idleTimeout_ > 0` 时分配                      | benchmark 场景省 3× `make_shared` + 1 个协程/连接 |
+| SocketGuard shutdown       | 析构时无条件 `shutdown()`（99.99% 失败）                     | 仅 `cleanExit`（正常 keep-alive 结束）才 shutdown | 省一次无效系统调用/连接                           |
+| coSpawn completion handler | 每次 co_spawn 都 malloc/free handler                         | `recycling_allocator` + `thread_local` 缓存复用   | 高并发下消除大量小对象分配                        |
+| Worker 线程 CPU 亲和性     | 内核随意迁移线程                                             | `pthread_setaffinity_np` 绑核                     | 消除 TLB flush + 跨核 IPI                         |
+| mimalloc 替代 glibc malloc | glibc 的 `mprotect` arena 扩展                               | mimalloc（benchmark 构建）                        | 减少内核态 syscall                                |
+| RPS/RFS 网络亲和           | 收包 softirq 随机分配                                        | 容器启动时配置 RPS/RFS 对齐处理线程 CPU           | 减少跨核数据搬运                                  |
 
 ---
 
@@ -380,6 +393,25 @@ co_await async_write(socket, buffers);  // 1 次系统调用
 
 **收益**：减少系统调用次数，降低内核态切换开销。在高吞吐量场景（如推送多条消息给客户端）效果显著。
 
+### 6.3 响应前缀模板化
+
+keep-alive 连接上，`Server` / `Connection` / `Date` 三个通用响应头在连接生命周期内几乎不变。Hical 在连接级别预构建这段 wire bytes（~90B），每个请求只需一次 `memcpy` 追加到 `FixedBuffer`，替代 3 次 `HeaderMap::insert`（6 个 `std::string` 构造）+ 序列化循环中多遍历 3 个 entry。
+
+| 指标               | 传统方式                  | 前缀模板                      |
+| ------------------ | ------------------------- | ----------------------------- |
+| 每请求 string 构造 | 6 次                      | 0 次                          |
+| 每请求 vector 操作 | 3 次 emplace_back         | 0 次                          |
+| 头部序列化循环     | 遍历 N+3 个 entry         | 遍历 N 个 entry + 1 次 memcpy |
+| Date 更新频率      | 每请求调用 cachedHttpDate | 每秒 1 次 memcpy(29B)         |
+
+### 6.4 TcpCorkGuard（文件响应路径）
+
+`writeFileResponse()` 需要先发头部、再分块发文件。TCP_NODELAY 启用时头部会独立成一个小 TCP 段。`TcpCorkGuard` RAII 在函数入口 cork socket（Linux `TCP_CORK` / macOS `TCP_NOPUSH`），析构时 uncork flush：
+
+- 头部 ~200B + 首个 64KB chunk 合并为一个 TCP 段
+- 消除接收方 delayed ACK 等待
+- Windows 下 no-op（依赖已有的应用层 scatter-gather）
+
 ---
 
 ## 7. Docker 容器化压测
@@ -395,9 +427,10 @@ Hical 提供两套 Docker 压测方案，确保环境一致性和可复现性。
 docker compose -f docker/docker-compose.bench.yml up --build --abort-on-container-exit
 ```
 
-- server 和 wrk 各限制 4 CPU / 512MB 内存
+- server 和 wrk 各限制 4 CPU / 1GB 内存，fd 上限 65536
 - 默认压测 30 秒，4 线程
 - 自定义参数：`DURATION=60s THREADS=4 docker compose -f docker/docker-compose.bench.yml up --build`
+- **v2.6.3 新增**：bench-server 启用 mimalloc（`HICAL_WITH_MIMALLOC=ON`），入口脚本自动配置 RPS/RFS 网络亲和（需 `CAP_NET_ADMIN`），`setIdleTimeout(0)` 关闭空闲检测省掉 per-connection timer 开销
 
 ### 7.2 跨 VM 压测
 

@@ -40,7 +40,7 @@ namespace hical
 				[ptr, i]()
 				{
 #ifdef __linux__
-					// CPU 亲和性绑定：减少线程迁移导致的 TLB flush 和跨核 IPI
+					// 绑核，别让内核随便迁移线程搞 TLB flush
 					cpu_set_t cpuset;
 					CPU_ZERO(&cpuset);
 					CPU_SET(i % std::thread::hardware_concurrency(), &cpuset);

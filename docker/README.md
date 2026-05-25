@@ -170,7 +170,7 @@ sudo sysctl -w net.ipv4.ip_local_port_range="1024 65535"
 
 ### 方式一：同一 VM、两个容器（Docker Compose）
 
-server 和 wrk 各自独立容器（各 4 CPU / 512MB），通过 Docker bridge 网络通信。
+server 和 wrk 各自独立容器（各 4 CPU / 1024MB 限制，nofile=65536），通过 Docker bridge 网络通信。
 
 **首次运行（构建 + 测试）**：
 
@@ -219,7 +219,7 @@ DURATION=60s THREADS=4 docker compose -f docker/docker-compose.bench.yml up --ab
 ```bash
 # 构建并启动 server（前台运行，观察日志）
 docker build -f docker/bench-server.Dockerfile -t hical-bench-server .
-docker run --rm -p 8080:8080 --cpus=4 --memory=512m hical-bench-server
+docker run --rm -p 8080:8080 --cpus=4 --memory=1024m hical-bench-server
 ```
 
 **VM-B（wrk 端）**：

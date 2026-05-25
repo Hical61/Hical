@@ -13,9 +13,17 @@
 #include "WsHandshake.h"
 #include <charconv>
 #include <chrono>
+#include <cstring>
 #include <ctime>
 #include <fstream>
 #include <optional>
+
+// TCP_CORK / TCP_NOPUSH（writeFileResponse 合并小包用）
+#if defined(__linux__)
+#include <netinet/tcp.h>
+#elif defined(__APPLE__)
+#include <netinet/tcp.h>
+#endif
 
 // picohttpparser（C 库）
 extern "C"
@@ -114,6 +122,48 @@ namespace hical
 			return {cache.buf, cache.len};
 		}
 
+		/// RAII TCP_CORK 守卫，让 writeFileResponse 的 head+首块合并成一个 TCP 段
+		/// Linux 用 TCP_CORK，macOS 用 TCP_NOPUSH，Windows 下啥也不干（应用层已经 scatter-gather 了）
+		struct TcpCorkGuard
+		{
+			tcp::socket& sock;
+			bool corked {false};
+
+			explicit TcpCorkGuard(tcp::socket& s) : sock(s)
+			{
+#if defined(__linux__)
+				int flag = 1;
+				if (::setsockopt(sock.native_handle(), IPPROTO_TCP, TCP_CORK, &flag, sizeof(flag)) == 0)
+				{
+					corked = true;
+				}
+#elif defined(__APPLE__)
+				int flag = 1;
+				if (::setsockopt(sock.native_handle(), IPPROTO_TCP, TCP_NOPUSH, &flag, sizeof(flag)) == 0)
+				{
+					corked = true;
+				}
+#endif
+			}
+
+			~TcpCorkGuard()
+			{
+				if (corked)
+				{
+#if defined(__linux__)
+					int flag = 0;
+					::setsockopt(sock.native_handle(), IPPROTO_TCP, TCP_CORK, &flag, sizeof(flag));
+#elif defined(__APPLE__)
+					int flag = 0;
+					::setsockopt(sock.native_handle(), IPPROTO_TCP, TCP_NOPUSH, &flag, sizeof(flag));
+#endif
+				}
+			}
+
+			TcpCorkGuard(const TcpCorkGuard&) = delete;
+			TcpCorkGuard& operator=(const TcpCorkGuard&) = delete;
+		};
+
 		/// 快速发送错误响应（栈缓冲区，零堆分配）
 		Awaitable<void> sendRawResponse(tcp::socket& socket,
 										unsigned statusCode,
@@ -177,14 +227,55 @@ namespace hical
 			}
 		}
 
+		/// writeResponse 带前缀版本——通用头部（Server/Connection/Date）已预拼好，
+		/// 直接 memcpy 进去，省掉 3 次 HeaderMap::insert + 序列化循环
+		Awaitable<void> writeResponse(tcp::socket& socket,
+									  NativeResponse& nativeRes,
+									  const char* prefix,
+									  size_t prefixLen,
+									  bool skipBody = false)
+		{
+			nativeRes.preparePayload();
+
+			FixedBuffer<512> headBuf;
+			nativeRes.serializeHeadTo(headBuf, prefix, prefixLen);
+
+			if (skipBody || nativeRes.body.empty())
+			{
+				co_await boost::asio::async_write(socket,
+												  boost::asio::buffer(headBuf.data(), headBuf.size()),
+												  boost::asio::use_awaitable);
+			}
+			else if (headBuf.size() + nativeRes.body.size() <= 512 && !headBuf.overflowed())
+			{
+				headBuf.append(nativeRes.body.data(), nativeRes.body.size());
+				co_await boost::asio::async_write(socket,
+												  boost::asio::buffer(headBuf.data(), headBuf.size()),
+												  boost::asio::use_awaitable);
+			}
+			else
+			{
+				std::array<boost::asio::const_buffer, 2> bufs = {boost::asio::buffer(headBuf.data(), headBuf.size()),
+																 boost::asio::buffer(nativeRes.body)};
+				co_await boost::asio::async_write(socket, bufs, boost::asio::use_awaitable);
+			}
+		}
+
 		/// 发送文件体响应（先发头部，再异步分块读文件发送）
-		/// 用于 Range 请求等大文件场景，避免全量加载到内存
-		Awaitable<void> writeFileResponse(tcp::socket& socket, NativeResponse& nativeRes)
+		/// 用于 Range 请求等大文件场景，避免全量加载到内存。
+		/// prefix 非空时用预构建前缀序列化头部，nullptr 走原始路径。
+		Awaitable<void> writeFileResponse(tcp::socket& socket,
+										  NativeResponse& nativeRes,
+										  const char* prefix = nullptr,
+										  size_t prefixLen = 0)
 		{
 			nativeRes.preparePayload();
 
 			auto& fb = *nativeRes.fileBody;
 			static constexpr size_t kChunkSize = 65536; // 64KB
+
+			// cork 住 socket，让 head + 首个 chunk 合并成一个大 TCP 段再发出去
+			TcpCorkGuard cork(socket);
 
 #ifdef BOOST_ASIO_HAS_FILE
 			// 先打开文件确认可访问，失败时尚未发送头部，可安全抛异常
@@ -195,7 +286,14 @@ namespace hical
 
 			// 文件打开成功，发送头部
 			FixedBuffer<512> headBuf;
-			nativeRes.serializeHeadTo(headBuf);
+			if (prefix)
+			{
+				nativeRes.serializeHeadTo(headBuf, prefix, prefixLen);
+			}
+			else
+			{
+				nativeRes.serializeHeadTo(headBuf);
+			}
 			co_await boost::asio::async_write(socket,
 											  boost::asio::buffer(headBuf.data(), headBuf.size()),
 											  boost::asio::use_awaitable);
@@ -225,7 +323,6 @@ namespace hical
 			}
 #else
 			// ifstream 回退（macOS 等不支持 BOOST_ASIO_HAS_FILE 的平台）
-			// 先打开文件确认可访问
 			std::ifstream ifs(fb.path, std::ios::binary);
 			if (!ifs)
 			{
@@ -233,9 +330,15 @@ namespace hical
 					boost::system::errc::make_error_code(boost::system::errc::no_such_file_or_directory));
 			}
 
-			// 文件打开成功，发送头部
 			FixedBuffer<512> headBuf;
-			nativeRes.serializeHeadTo(headBuf);
+			if (prefix)
+			{
+				nativeRes.serializeHeadTo(headBuf, prefix, prefixLen);
+			}
+			else
+			{
+				nativeRes.serializeHeadTo(headBuf);
+			}
 			co_await boost::asio::async_write(socket,
 											  boost::asio::buffer(headBuf.data(), headBuf.size()),
 											  boost::asio::use_awaitable);
@@ -259,6 +362,7 @@ namespace hical
 				remaining -= static_cast<int64_t>(bytesRead);
 			}
 #endif
+			// TcpCorkGuard 析构时 uncork，内核把剩余积压数据一口气发出去
 		}
 
 	} // namespace
@@ -330,7 +434,7 @@ namespace hical
 		{
 			tcp::socket& sock;
 			bool transferred {false};
-			bool cleanExit {false}; // 仅正常结束时才 shutdown，避免对已断开连接的无效系统调用
+			bool cleanExit {false}; // 正常结束才 shutdown，对端早断了就别白调了
 
 			~SocketGuard()
 			{
@@ -391,6 +495,51 @@ namespace hical
 			std::string readBuf;
 			readBuf.resize(8192);
 			size_t bufUsed = 0; // 跨请求保留：TCP 粘包时残留下一请求的数据
+
+			// ── 连接级响应前缀模板 ──
+			// 把 Server / Connection / Date 三个通用头部预拼成 wire bytes，
+			// 每个请求只做一次 memcpy（~90B），不再走 HeaderMap::insert + 逐字段序列化。
+			// Date 每秒最多更新一次（29B memcpy），Connection 在连接断开前不变。
+			static constexpr auto kServerHeader = "Server: " HICAL_VERSION_STRING "\r\n";
+			static constexpr size_t kServerHeaderLen = std::char_traits<char>::length(kServerHeader);
+			static constexpr std::string_view kConnKeepAlive = "Connection: keep-alive\r\n";
+			static constexpr std::string_view kConnClose = "Connection: close\r\n";
+			static constexpr std::string_view kDatePrefix = "Date: ";
+			static constexpr std::string_view kCRLF = "\r\n";
+			static constexpr size_t kMaxDateValueLen = 29;
+
+			// 编译期确保版本号再长也不会炸栈
+			static constexpr size_t kMaxPrefixLen =
+				kServerHeaderLen + kConnKeepAlive.size() + kDatePrefix.size() + kMaxDateValueLen + kCRLF.size();
+			static_assert(kMaxPrefixLen <= 128, "responsePrefix buffer too small, bump the array size");
+
+			char responsePrefix[128];
+			size_t prefixLen = 0;
+			size_t dateValueOffset = 0; // Date 值在 responsePrefix 中的字节偏移
+			time_t lastPrefixDateSec = 0;
+
+			// 构建（或重建）前缀的 lambda
+			auto rebuildPrefix = [&](bool keepAlive)
+			{
+				prefixLen = 0;
+				auto appendBytes = [&](const char* s, size_t n)
+				{
+					std::memcpy(responsePrefix + prefixLen, s, n);
+					prefixLen += n;
+				};
+
+				appendBytes(kServerHeader, kServerHeaderLen);
+				auto conn = keepAlive ? kConnKeepAlive : kConnClose;
+				appendBytes(conn.data(), conn.size());
+				appendBytes(kDatePrefix.data(), kDatePrefix.size());
+				dateValueOffset = prefixLen;
+				auto date = cachedHttpDate();
+				appendBytes(date.data(), date.size());
+				appendBytes(kCRLF.data(), kCRLF.size());
+				lastPrefixDateSec = std::time(nullptr);
+			};
+
+			rebuildPrefix(true); // 默认 keep-alive
 
 			for (;;)
 			{
@@ -808,26 +957,50 @@ namespace hical
 					res = HttpResponse::serverError();
 				}
 
-				// 设置通用头部（insert 替代 set：用户 handler 不会预设 Server/Connection，
-				// 直接 push_back O(1)，省去线性扫描）
+				// 通用头部走预构建前缀，不再 insert 到 HeaderMap
 				auto& nativeRes = res.native();
 				nativeRes.httpVersionMinor = 1;
-				nativeRes.headers.insert("Server", HICAL_VERSION_STRING);
 				bool shouldKeepAlive = req.native().keepAlive && !draining_.load();
 				nativeRes.keepAlive = shouldKeepAlive;
-				nativeRes.headers.insert("Connection", shouldKeepAlive ? "keep-alive" : "close");
-				nativeRes.headers.insert("Date", cachedHttpDate());
 
 				// 发送响应（scatter-gather I/O：状态行+头部在栈，body 零拷贝）
 				// HEAD 方法：仅发送头部，不发送 body（RFC 7231 §4.3.2）
 				bool isHead = (req.method() == HttpMethod::hHead);
-				if (nativeRes.hasFileBody() && !isHead)
+
+				if (!shouldKeepAlive)
 				{
-					co_await writeFileResponse(socket, nativeRes);
+					// 连接即将关闭——频率极低，走原始路径就好
+					nativeRes.headers.insert("Server", HICAL_VERSION_STRING);
+					nativeRes.headers.insert("Connection", "close");
+					nativeRes.headers.insert("Date", cachedHttpDate());
+					if (nativeRes.hasFileBody() && !isHead)
+					{
+						co_await writeFileResponse(socket, nativeRes);
+					}
+					else
+					{
+						co_await writeResponse(socket, nativeRes, isHead);
+					}
 				}
 				else
 				{
-					co_await writeResponse(socket, nativeRes, isHead);
+					// 快速路径：Date 过期才更新（每秒最多一次 29B memcpy）
+					auto now = std::time(nullptr);
+					if (now != lastPrefixDateSec)
+					{
+						lastPrefixDateSec = now;
+						auto date = cachedHttpDate();
+						std::memcpy(responsePrefix + dateValueOffset, date.data(), date.size());
+					}
+
+					if (nativeRes.hasFileBody() && !isHead)
+					{
+						co_await writeFileResponse(socket, nativeRes, responsePrefix, prefixLen);
+					}
+					else
+					{
+						co_await writeResponse(socket, nativeRes, responsePrefix, prefixLen, isHead);
+					}
 				}
 
 				// 写完后更新活跃时间戳（仅启用 idle timeout 时）

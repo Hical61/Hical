@@ -103,7 +103,7 @@ namespace hical
 	 * @param coroutine 协程函数
 	 * 在指定 io_context 上启动一个协程。
 	 * 协程内未捕获的异常会输出到 stderr，而非静默丢弃。
-	 * recycling_allocator 维护 thread_local 缓存，高并发时避免重复 malloc/free。
+	 * recycling_allocator 用 thread_local 缓存兜着，高并发不用反复 malloc/free。
 	 */
 	template <typename F>
 	void coSpawn(boost::asio::io_context& ioCtx, F&& coroutine)

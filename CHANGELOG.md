@@ -20,6 +20,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **GenericConnection MPSC 无锁写队列**：写队列从 `mutex` + `deque` 升级为 Vyukov Intrusive MPSC Queue（wait-free O(1) push，摊销 O(1) pop），移除 `isInLoopThread` 分支和 `lock_guard`，`writeLoop` 批量 drain + `seq_cst` 反饥饿 re-check
 - **TcpServer 连接表 per-loop 分片**：全局 `mutex` + `unordered_set` 改为 per-loop `LoopShard`，idle 扫描/增删全程无锁
 - **requestPool 无锁扩容**：`createRequestPool()` upstream 从 `globalPool` 改为 `threadLocalPool`，扩容零锁竞争
+- **Worker 线程 CPU 亲和性绑核**（Linux）：`EventLoopPool::start()` 使用 `pthread_setaffinity_np` 将 worker 线程绑定到对应 CPU 核心，减少线程迁移导致的 TLB flush 和跨核 IPI
+- **coSpawn recycling_allocator**：所有 `coSpawn()` 重载改用 `boost::asio::bind_allocator(recycling_allocator<void>(), ...)` 包装 completion handler，`thread_local` 缓存避免高并发下重复 malloc/free
+- **Idle timeout 条件初始化**：`HttpSessionImpl` 会话协程中 `socketAlive` / `lastActiveMs` 仅在 `idleTimeout_ > 0` 时分配，benchmark 场景设 `setIdleTimeout(0)` 后每连接省 3 次 `make_shared` + 1 个 timer 协程
+- **SocketGuard 条件 shutdown**：析构时仅在 `cleanExit`（正常 keep-alive 结束）才执行 `shutdown()`，避免对已断开连接的无效系统调用
+- **HTTP 响应前缀模板化**：连接级预构建 `Server` / `Connection` / `Date` 三个通用头部的 wire bytes（~90B），keep-alive 请求直接 `memcpy` 替代 3 次 `HeaderMap::insert` + 逐字段序列化循环；`Date` 值每秒最多一次 29B 覆写。新增 `NativeResponse::serializeHeadTo(buf, prefix, prefixLen)` 带前缀重载
+- **TcpCorkGuard 文件响应合并小包**：`writeFileResponse` 路径新增 RAII `TcpCorkGuard`（Linux `TCP_CORK` / macOS `TCP_NOPUSH` / Windows no-op），将头部（~200B）与首个 64KB 文件 chunk 合并为一个 TCP 段发送，消除 TCP_NODELAY 下的小包问题
+- **Docker 压测环境升级**：启用 mimalloc 分配器（`HICAL_WITH_MIMALLOC=ON`）、RPS/RFS 网络亲和配置（`bench-entrypoint.sh`）、容器内存提升至 1GB + fd 上限 65536
 
 ## [2.6.2] - 2026-05-18
 

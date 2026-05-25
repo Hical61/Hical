@@ -117,6 +117,29 @@ namespace hical
 		 */
 		void serializeHeadTo(FixedBuffer<512>& buf) const
 		{
+			serializeStatusAndHeaders(buf);
+			buf << "\r\n";
+		}
+
+		/**
+		 * @brief 带预构建前缀的头部序列化，省掉通用头部（Server/Connection/Date）的逐字段格式化
+		 * @param buf 输出缓冲区
+		 * @param prefix 预拼好的通用头部 wire bytes
+		 * @param prefixLen 前缀字节数
+		 */
+		void serializeHeadTo(FixedBuffer<512>& buf,
+							 const char* prefix,
+							 size_t prefixLen) const
+		{
+			serializeStatusAndHeaders(buf);
+			buf.append(prefix, prefixLen);
+			buf << "\r\n";
+		}
+
+	private:
+		/// 状态行 + 用户头部的公共序列化逻辑（不含尾部空行）
+		void serializeStatusAndHeaders(FixedBuffer<512>& buf) const
+		{
 			// 200 OK 快速路径
 			if (status == HttpStatusCode::hOk && httpVersionMinor == 1)
 			{
@@ -136,7 +159,7 @@ namespace hical
 				buf << "\r\n";
 			}
 
-			// 头部
+			// 用户 handler 设置的头部（Content-Type、Content-Length 等）
 			for (const auto& [name, value] : headers)
 			{
 				buf << name;
@@ -144,12 +167,8 @@ namespace hical
 				buf << value;
 				buf << "\r\n";
 			}
-
-			// 空行
-			buf << "\r\n";
 		}
 
-	private:
 		void appendStatusCode(std::string& out) const
 		{
 			char buf[4];

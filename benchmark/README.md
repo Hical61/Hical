@@ -95,7 +95,7 @@ docker compose --profile cpp exec wrk bash -c "BENCH_MODE=cpp CONNECTIONS=500 DU
 | actix      | 8082 | Actix-web 4       | Rust latest stable                    |
 | wrk        | —    | wrk 4.1.0         | Alpine 3.20                           |
 
-每个服务容器限制 **4 CPU + 512MB 内存**，确保公平对比。
+每个服务容器限制 **4 CPU + 1024MB 内存**，fd 上限 65536，确保公平对比。
 
 ## 压测场景
 
@@ -180,6 +180,28 @@ benchmark/
     └── post_echo.lua          # POST 测试 Lua 脚本
 ```
 
+## VM 宿主机内核调优
+
+在 VM 上跑高并发压测时，宿主机（或 VM 自身）的默认内核参数可能成为瓶颈。容器内的 `ulimits.nofile: 65536` 只管 fd 上限，网络栈参数需要在宿主机层面设置：
+
+```bash
+# 扩大临时端口范围（默认 32768-60999，wrk 高并发时可能耗尽）
+sudo sysctl -w net.ipv4.ip_local_port_range="1024 65535"
+
+# 加大 listen backlog（默认 4096，10K 并发时不够）
+sudo sysctl -w net.core.somaxconn=65535
+
+# 加大 SYN backlog（配合 somaxconn）
+sudo sysctl -w net.ipv4.tcp_max_syn_backlog=65535
+
+# 允许 TIME_WAIT 端口复用（短连接压测必开，否则端口耗尽）
+sudo sysctl -w net.ipv4.tcp_tw_reuse=1
+```
+
+> **持久化**：以上 `sysctl -w` 重启后失效。如需永久生效，写入 `/etc/sysctl.d/99-bench.conf` 后执行 `sudo sysctl --system`。
+>
+> **Docker Desktop (macOS/Windows)**：这些参数需要在 Docker VM 内设置，而非宿主机。可以通过 `docker run --privileged` 临时容器执行，或修改 Docker Desktop 的 `sysctl` 配置。Linux 上直接在宿主机设置即可。
+
 ## 常见问题
 
 ### VirtualBox 环境下 Go 框架 QPS 异常低
@@ -206,7 +228,7 @@ PowerShell 不支持 `<` 输入重定向。本文档已改为 volume 挂载方�
 
 ### 高并发 10K 测试报 Socket errors
 
-这是预期行为。10,000 并发连接会挑战容器的 fd 限制和内存上限（512MB），部分框架可能出现连接失败。这本身是有价值的对比数据——错误率和恢复能力也是框架质量的指标。
+这是预期行为。10,000 并发连接会挑战容器的 fd 限制和内存上限（1024MB），部分框架可能出现连接失败。这本身是有价值的对比数据——错误率和恢复能力也是框架质量的指标。
 
 ## 结果输出
 
