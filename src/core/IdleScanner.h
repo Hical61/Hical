@@ -5,6 +5,7 @@
 #include <atomic>
 #include <chrono>
 #include <cstdint>
+#include <optional>
 
 namespace hical
 {
@@ -26,10 +27,7 @@ namespace hical
 	class IdleScanner
 	{
 	public:
-		/**
-		 * @brief 连接条目（直接嵌在协程栈上，不额外分配堆内存）
-		 * 双向链表节点 + 活跃时间戳 + socket 指针
-		 */
+		/// @brief 连接条目，直接嵌在协程栈上，不额外分配堆内存
 		struct Entry
 		{
 			std::atomic<int64_t> lastActiveMs {0};
@@ -37,7 +35,6 @@ namespace hical
 			Entry* prev = nullptr;
 			Entry* next = nullptr;
 
-			/// 刷新活跃时间戳
 			void touch()
 			{
 				lastActiveMs.store(std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -81,31 +78,39 @@ namespace hical
 			Entry& entry_;
 		};
 
-		/**
-		 * @brief 构造 IdleScanner
-		 * @param executor 所属 io_context 的 executor
-		 * @param timeoutMs 空闲超时毫秒数
-		 */
 		explicit IdleScanner(boost::asio::any_io_executor executor, int64_t timeoutMs);
 
-		/// 跑扫描协程（设 thread_local 指针，定时扫过期连接）
+		/**
+		 * @brief 启动扫描协程（设置 thread_local 指针 + 周期性遍历链表关闭超时连接）
+		 */
 		Awaitable<void> run();
 
-		/// 停掉扫描（任意线程都能调，内部 post cancel timer 让协程退出）
+		/**
+		 * @brief 停掉扫描协程（任意线程都能调，post cancel timer 让协程退出）
+		 */
 		void stop();
 
-		/// 挂到扫描链表（同线程调，不加锁）
-		void registerEntry(Entry& entry);
+		/**
+		 * @brief 在 io_context 析构前调——先 cancel timer 再销毁它，切断对 timer_service 的依赖
+		 */
+		void shutdown();
 
-		/// 从扫描链表摘掉（同线程调，不加锁）
+		/**
+		 * @brief 将连接条目注册到扫描链表（单线程调用，无需加锁）
+		 */
+		void registerEntry(Entry& entry);
+		/**
+		 * @brief 从扫描链表中移除连接条目
+		 */
 		void unregisterEntry(Entry& entry);
 
 	private:
-		boost::asio::steady_timer timer_;
+		// optional 是为了 shutdown() 时能提前销毁 timer，
+		// 不然 io_context 析构后 timer 析构会访问已经没了的 timer_service
+		std::optional<boost::asio::steady_timer> timer_;
 		int64_t timeoutMs_;
 		std::atomic<bool> running_ {true};
 
-		// 双向链表哨兵（prev/next 自指 = 空链表）
 		Entry sentinel_;
 		size_t count_ = 0;
 	};

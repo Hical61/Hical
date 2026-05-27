@@ -180,12 +180,24 @@ namespace hical
 		[[nodiscard]] const std::string& body() const;
 		[[nodiscard]] const boost::json::value& jsonBody() const;
 
+		/**
+		 * @brief 反序列化请求体 JSON 为指定类型（需要 HICAL_JSON 标注）
+		 */
 		template <typename T>
 		[[nodiscard]] T readJson() const;
 
+		/**
+		 * @brief 获取 Content-Type 头部值
+		 */
 		[[nodiscard]] std::string_view contentType() const;
 
+		/**
+		 * @brief 获取底层 NativeRequest 引用（可修改）
+		 */
 		[[nodiscard]] NativeRequest& native();
+		/**
+		 * @brief 获取底层 NativeRequest 常量引用
+		 */
 		[[nodiscard]] const NativeRequest& native() const;
 
 		void setMethod(HttpMethod method);
@@ -194,29 +206,61 @@ namespace hical
 		void setBody(const std::string& body);
 
 		// ============ 路径参数 ============
+
+		/**
+		 * @brief 获取路径参数值（如 /users/{id} 中的 id），不存在则返回空字符串引用
+		 */
 		[[nodiscard]] const std::string& param(std::string_view name) const;
 		void setParam(const std::string& name, const std::string& value);
 		[[nodiscard]] bool hasParam(std::string_view name) const;
 
 		// ============ Cookie ============
+
+		/**
+		 * @brief 获取指定名称的 Cookie 值，不存在则返回空字符串引用
+		 */
 		[[nodiscard]] const std::string& cookie(std::string_view name) const;
+		/**
+		 * @brief 获取所有 Cookie（惰性解析，首次调用时解析 Cookie 头）
+		 */
 		[[nodiscard]] const std::unordered_map<std::string, std::string, StringHash, StringEqual>& cookies() const;
 		[[nodiscard]] bool hasCookie(std::string_view name) const;
 
 		// ============ 查询参数 ============
+
+		/**
+		 * @brief 获取指定名称的查询参数值，不存在则返回 nullopt
+		 */
 		[[nodiscard]] std::optional<std::string> queryParam(std::string_view name) const;
+		/**
+		 * @brief 获取所有查询参数（惰性解析，支持同名多值）
+		 */
 		[[nodiscard]] const std::unordered_multimap<std::string, std::string, StringHash, StringEqual>& queryParams()
 			const;
 		[[nodiscard]] bool hasQueryParam(std::string_view name) const;
 
 		// ============ 表单参数 ============
+
+		/**
+		 * @brief 获取指定名称的表单参数值（application/x-www-form-urlencoded），不存在则返回 nullopt
+		 */
 		[[nodiscard]] std::optional<std::string> formParam(std::string_view name) const;
+		/**
+		 * @brief 获取所有表单参数（惰性解析，支持同名多值）
+		 */
 		[[nodiscard]] const std::unordered_multimap<std::string, std::string, StringHash, StringEqual>& formParams()
 			const;
 		[[nodiscard]] bool hasFormParam(std::string_view name) const;
 
 		// ============ 请求级属性 ============
+
+		/**
+		 * @brief 设置请求级属性（中间件间数据传递，如 trace_id、db connection 等）
+		 */
 		void setAttribute(const std::string& key, std::any value);
+		/**
+		 * @brief 获取请求级属性，不存在则返回 nullopt
+		 */
 		[[nodiscard]] std::optional<std::any> getAttribute(const std::string& key) const;
 
 		template <typename T>

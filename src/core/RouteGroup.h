@@ -63,19 +63,49 @@ namespace hical
 
 		// ============ 路由注册（镜像 Router API） ============
 
+		/**
+		 * @brief 注册协程路由处理器（路径自动拼接组前缀）
+		 */
 		void route(HttpMethod method, const std::string& path, RouteHandler handler);
+		/**
+		 * @brief 注册同步路由处理器（路径自动拼接组前缀）
+		 */
 		void route(HttpMethod method, const std::string& path, SyncRouteHandler handler);
 
+		/**
+		 * @brief 注册 GET 路由（协程处理器）
+		 */
 		void get(const std::string& path, RouteHandler handler);
+		/**
+		 * @brief 注册 GET 路由（同步处理器）
+		 */
 		void get(const std::string& path, SyncRouteHandler handler);
 
+		/**
+		 * @brief 注册 POST 路由（协程处理器）
+		 */
 		void post(const std::string& path, RouteHandler handler);
+		/**
+		 * @brief 注册 POST 路由（同步处理器）
+		 */
 		void post(const std::string& path, SyncRouteHandler handler);
 
+		/**
+		 * @brief 注册 PUT 路由（协程处理器）
+		 */
 		void put(const std::string& path, RouteHandler handler);
+		/**
+		 * @brief 注册 PUT 路由（同步处理器）
+		 */
 		void put(const std::string& path, SyncRouteHandler handler);
 
+		/**
+		 * @brief 注册 DELETE 路由（协程处理器）
+		 */
 		void del(const std::string& path, RouteHandler handler);
+		/**
+		 * @brief 注册 DELETE 路由（同步处理器）
+		 */
 		void del(const std::string& path, SyncRouteHandler handler);
 
 	private:

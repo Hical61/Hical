@@ -206,9 +206,6 @@ namespace hical
 		std::atomic<size_t> activeConnections_ {0};
 		std::atomic<bool> draining_ {false};
 
-		// 放这里是因为析构顺序：io_context 得先销毁（协程帧里 Guard 还要用 scanner），scanner 最后死
-		std::vector<std::unique_ptr<IdleScanner>> idleScanners_;
-
 		std::atomic<uint16_t> port_;
 		size_t ioThreads_;
 		AsioEventLoop baseLoop_;                // 主 loop（accept + signal + GC）
@@ -241,6 +238,9 @@ namespace hical
 
 		// 空闲连接超时（秒，0 表示不超时）
 		double idleTimeout_ {60.0};
+
+		// 每个 io_context 一个空闲扫描器（干掉 per-connection timer 协程）
+		std::vector<std::unique_ptr<IdleScanner>> idleScanners_;
 
 		// fd 耗尽处理：已移至 idleFds_（每个 acceptor 配独立 IdleFd）
 

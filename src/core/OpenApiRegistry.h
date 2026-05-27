@@ -83,10 +83,19 @@ namespace hical::meta::openapi
 	class OpenApiRegistry
 	{
 	public:
+		/**
+		 * @brief 注册一条路由的 OpenAPI 元数据
+		 */
 		void addRoute(HttpMethod method, std::string path, std::string handlerName, RouteApiInfo apiInfo = {});
 
+		/**
+		 * @brief 注册一个 JSON Schema（用于 $ref 引用）
+		 */
 		void addSchema(const std::string& name, boost::json::object schema);
 
+		/**
+		 * @brief 检查指定名称的 Schema 是否已注册
+		 */
 		[[nodiscard]] bool hasSchema(const std::string& name) const;
 
 		/**

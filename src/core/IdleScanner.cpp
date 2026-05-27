@@ -12,7 +12,7 @@ namespace hical
 	}
 
 	IdleScanner::IdleScanner(boost::asio::any_io_executor executor, int64_t timeoutMs)
-		: timer_(std::move(executor)), timeoutMs_(timeoutMs)
+		: timer_(std::in_place, std::move(executor)), timeoutMs_(timeoutMs)
 	{
 		// 哨兵自指 = 空链表
 		sentinel_.prev = &sentinel_;
@@ -41,24 +41,21 @@ namespace hical
 
 	Awaitable<void> IdleScanner::run()
 	{
-		// 设 thread_local，让同线程的 handleSession 能找到这个 scanner
 		tls_scanner = this;
 
-		// 扫描间隔：max(1s, timeout/4)，跟 TcpServer::idleCheckLoop 同策略
 		auto intervalMs = (std::max)(int64_t {1000}, timeoutMs_ / 4);
 
-		while (running_.load(std::memory_order_relaxed))
+		while (running_.load(std::memory_order_relaxed) && timer_.has_value())
 		{
-			timer_.expires_after(std::chrono::milliseconds(intervalMs));
+			timer_->expires_after(std::chrono::milliseconds(intervalMs));
 			boost::system::error_code ec;
-			co_await timer_.async_wait(boost::asio::redirect_error(boost::asio::use_awaitable, ec));
+			co_await timer_->async_wait(boost::asio::redirect_error(boost::asio::use_awaitable, ec));
 
 			if (ec || !running_.load(std::memory_order_relaxed))
 			{
 				break;
 			}
 
-			// 遍历链表，关掉超时的连接
 			auto now = std::chrono::duration_cast<std::chrono::milliseconds>(
 						   std::chrono::steady_clock::now().time_since_epoch())
 						   .count();
@@ -66,7 +63,7 @@ namespace hical
 			Entry* curr = sentinel_.next;
 			while (curr != &sentinel_)
 			{
-				Entry* next = curr->next; // 先存好，close 后 entry 可能被 unregister 摘掉
+				Entry* next = curr->next;
 				auto elapsed = now - curr->lastActiveMs.load(std::memory_order_relaxed);
 
 				if (elapsed >= timeoutMs_ && curr->socket)
@@ -79,19 +76,35 @@ namespace hical
 			}
 		}
 
-		// 清掉 thread_local 指针
 		tls_scanner = nullptr;
 	}
 
 	void IdleScanner::stop()
 	{
 		running_.store(false, std::memory_order_relaxed);
-		// cancel timer 让 async_wait 收到 operation_aborted 退出协程
-		boost::asio::post(timer_.get_executor(),
-						  [this]()
-						  {
-							  timer_.cancel();
-						  });
+		if (timer_.has_value())
+		{
+			boost::asio::post(timer_->get_executor(),
+							  [this]()
+							  {
+								  if (timer_.has_value())
+								  {
+									  timer_->cancel();
+								  }
+							  });
+		}
+	}
+
+	void IdleScanner::shutdown()
+	{
+		running_.store(false, std::memory_order_relaxed);
+		// 趁 io_context 还活着，把 timer 干掉，切断对 timer_service 的引用。
+		// 不然等 io_context 析构把 service 删了，timer 析构时就踩野内存了
+		if (timer_.has_value())
+		{
+			timer_->cancel();
+			timer_.reset();
+		}
 	}
 
 } // namespace hical

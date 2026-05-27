@@ -8,6 +8,9 @@
 namespace hical::db
 {
 
+	/**
+	 * @brief 数据库查询结果集（SELECT 返回行列数据，DML 返回 affectedRows/insertId）
+	 */
 	struct DbResult
 	{
 		/// 列名（仅 SELECT 有效），索引对应 rows 内层下标
@@ -19,12 +22,12 @@ namespace hical::db
 		uint64_t affectedRows = 0;
 		uint64_t insertId = 0;
 
-		bool empty() const
+		[[nodiscard]] bool empty() const
 		{
 			return rows.empty();
 		}
 
-		size_t size() const
+		[[nodiscard]] size_t size() const
 		{
 			return rows.size();
 		}
@@ -39,10 +42,12 @@ namespace hical::db
 			return rows[index];
 		}
 
-		/// 查找列索引，未找到返回 npos
 		static constexpr size_t npos = static_cast<size_t>(-1);
 
-		size_t columnIndex(std::string_view name) const
+		/**
+		 * @brief 按列名查找列索引，未找到返回 npos
+		 */
+		[[nodiscard]] size_t columnIndex(std::string_view name) const
 		{
 			for (size_t i = 0; i < columns.size(); ++i)
 			{

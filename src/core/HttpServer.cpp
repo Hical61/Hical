@@ -263,7 +263,12 @@ namespace hical
 			ioPool_->stop();
 		}
 
-		// scanner 不能在这清，io_context 析构时协程帧里的 Guard 还要用它，靠成员声明顺序兜底
+		// 趁 io_context 还活着，把 scanner 里的 timer 先干掉。
+		// 不然等 io_context 析构完 timer_service 没了，scanner 析构时 timer 就踩野内存
+		for (auto& scanner : idleScanners_)
+		{
+			scanner->shutdown();
+		}
 
 		running_.store(false);
 	}
