@@ -263,8 +263,7 @@ namespace hical
 			ioPool_->stop();
 		}
 
-		// loop 都停了，可以安全释放 scanner
-		idleScanners_.clear();
+		// scanner 不能在这清，io_context 析构时协程帧里的 Guard 还要用它，靠成员声明顺序兜底
 
 		running_.store(false);
 	}
