@@ -16,15 +16,16 @@ namespace hical::db
 			return nullptr;
 		}
 
-		auto it = map_.find(sql);
-		if (it == map_.end())
+		if (auto it = map_.find(sql); it == map_.end())
 		{
 			return nullptr;
 		}
-
-		// 提升到 MRU（链表头部）
-		lruList_.splice(lruList_.begin(), lruList_, it->second);
-		return &(it->second->second);
+		else
+		{
+			// 提升到 MRU（链表头部）
+			lruList_.splice(lruList_.begin(), lruList_, it->second);
+			return &(it->second->second);
+		}
 	}
 
 	std::optional<boost::mysql::statement> StmtCache::insert(const std::string& sql, boost::mysql::statement stmt)
@@ -38,8 +39,7 @@ namespace hical::db
 		std::optional<boost::mysql::statement> evicted;
 
 		// 已存在 → 更新并提升
-		auto it = map_.find(sql);
-		if (it != map_.end())
+		if (auto it = map_.find(sql); it != map_.end())
 		{
 			it->second->second = std::move(stmt);
 			lruList_.splice(lruList_.begin(), lruList_, it->second);
@@ -64,16 +64,17 @@ namespace hical::db
 
 	std::optional<boost::mysql::statement> StmtCache::erase(std::string_view sql)
 	{
-		auto it = map_.find(sql);
-		if (it == map_.end())
+		if (auto it = map_.find(sql); it == map_.end())
 		{
 			return std::nullopt;
 		}
-
-		auto stmt = std::move(it->second->second);
-		lruList_.erase(it->second);
-		map_.erase(it);
-		return stmt;
+		else
+		{
+			auto stmt = std::move(it->second->second);
+			lruList_.erase(it->second);
+			map_.erase(it);
+			return stmt;
+		}
 	}
 
 	std::vector<boost::mysql::statement> StmtCache::clear()

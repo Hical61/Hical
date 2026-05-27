@@ -20,65 +20,63 @@ namespace hical
 	{
 		std::unique_lock lock(mutex_);
 
-		auto it = connections_.find(id);
-		if (it == connections_.end())
+		if (auto it = connections_.find(id); it == connections_.end())
 		{
 			return;
 		}
-
-		// 从所有所属房间中移除该连接
-		for (const auto& room : it->second.rooms)
+		else
 		{
-			auto roomIt = rooms_.find(room);
-			if (roomIt != rooms_.end())
+			// 从所有所属房间中移除该连接
+			for (const auto& room : it->second.rooms)
 			{
-				auto& members = roomIt->second;
-				std::erase_if(members,
-							  [id](const RoomMember& m)
-							  {
-								  return m.id == id;
-							  });
-				if (members.empty())
+				if (auto roomIt = rooms_.find(room); roomIt != rooms_.end())
 				{
-					rooms_.erase(roomIt);
+					auto& members = roomIt->second;
+					std::erase_if(members,
+								  [id](const RoomMember& m)
+								  {
+									  return m.id == id;
+								  });
+					if (members.empty())
+					{
+						rooms_.erase(roomIt);
+					}
 				}
 			}
-		}
 
-		connections_.erase(it);
+			connections_.erase(it);
+		}
 	}
 
 	void WsHub::join(WsConnectionId id, std::string_view room)
 	{
 		std::unique_lock lock(mutex_);
 
-		auto it = connections_.find(id);
-		if (it == connections_.end())
+		if (auto it = connections_.find(id); it == connections_.end())
 		{
 			return;
 		}
-
-		it->second.rooms.emplace(room);
-		rooms_[std::string(room)].push_back(RoomMember {id, it->second.session});
+		else
+		{
+			it->second.rooms.emplace(room);
+			rooms_[std::string(room)].push_back(RoomMember {id, it->second.session});
+		}
 	}
 
 	void WsHub::leave(WsConnectionId id, std::string_view room)
 	{
 		std::unique_lock lock(mutex_);
 
-		auto connIt = connections_.find(id);
-		if (connIt != connections_.end())
+		if (auto connIt = connections_.find(id); connIt != connections_.end())
 		{
 			// C++20 异构查找仅支持 find/count/contains，erase 需 C++23 (P2077R3)
-			auto roomIt2 = connIt->second.rooms.find(room);
-			if (roomIt2 != connIt->second.rooms.end())
+			if (auto roomIt2 = connIt->second.rooms.find(room); roomIt2 != connIt->second.rooms.end())
 			{
 				connIt->second.rooms.erase(roomIt2);
 			}
 		}
 
-		auto roomIt = rooms_.find(room);
-		if (roomIt != rooms_.end())
+		if (auto roomIt = rooms_.find(room); roomIt != rooms_.end())
 		{
 			auto& members = roomIt->second;
 			std::erase_if(members,
@@ -99,39 +97,40 @@ namespace hical
 
 		std::shared_lock lock(mutex_);
 
-		auto roomIt = rooms_.find(room);
-		if (roomIt == rooms_.end())
+		if (auto roomIt = rooms_.find(room); roomIt == rooms_.end())
 		{
 			return;
 		}
-
-		// 直接遍历 vector<RoomMember>：连续内存顺序访问（cache prefetch 友好），
-		// 无需 connections_.find() 二次查找，减少一层指针追踪
-		for (const auto& member : roomIt->second)
+		else
 		{
-			if (member.id == exclude)
+			// 直接遍历 vector<RoomMember>：连续内存顺序访问（cache prefetch 友好），
+			// 无需 connections_.find() 二次查找，减少一层指针追踪
+			for (const auto& member : roomIt->second)
 			{
-				continue;
-			}
+				if (member.id == exclude)
+				{
+					continue;
+				}
 
-			auto sp = member.session.lock();
-			if (sp && sp->isOpen())
-			{
-				coSpawn(sp->socket().get_executor(),
-						[sp, msgPtr, isBinary]() -> Awaitable<void>
-						{
-							if (sp->isOpen())
+				auto sp = member.session.lock();
+				if (sp && sp->isOpen())
+				{
+					coSpawn(sp->socket().get_executor(),
+							[sp, msgPtr, isBinary]() -> Awaitable<void>
 							{
-								if (isBinary)
+								if (sp->isOpen())
 								{
-									co_await sp->sendBinary(*msgPtr);
+									if (isBinary)
+									{
+										co_await sp->sendBinary(*msgPtr);
+									}
+									else
+									{
+										co_await sp->send(*msgPtr);
+									}
 								}
-								else
-								{
-									co_await sp->send(*msgPtr);
-								}
-							}
-						});
+							});
+				}
 			}
 		}
 	}
@@ -181,23 +180,24 @@ namespace hical
 
 		std::shared_lock lock(mutex_);
 
-		auto it = connections_.find(id);
-		if (it == connections_.end())
+		if (auto it = connections_.find(id); it == connections_.end())
 		{
 			return;
 		}
-
-		auto sp = it->second.session.lock();
-		if (sp && sp->isOpen())
+		else
 		{
-			coSpawn(sp->socket().get_executor(),
-					[sp, msg = std::move(msg)]() -> Awaitable<void>
-					{
-						if (sp->isOpen())
+			auto sp = it->second.session.lock();
+			if (sp && sp->isOpen())
+			{
+				coSpawn(sp->socket().get_executor(),
+						[sp, msg = std::move(msg)]() -> Awaitable<void>
 						{
-							co_await sp->send(msg);
-						}
-					});
+							if (sp->isOpen())
+							{
+								co_await sp->send(msg);
+							}
+						});
+			}
 		}
 	}
 
@@ -205,12 +205,11 @@ namespace hical
 	{
 		std::shared_lock lock(mutex_);
 
-		auto it = rooms_.find(room);
-		if (it == rooms_.end())
+		if (auto it = rooms_.find(room); it != rooms_.end())
 		{
-			return 0;
+			return it->second.size();
 		}
-		return it->second.size();
+		return 0;
 	}
 
 	size_t WsHub::connectionCount() const

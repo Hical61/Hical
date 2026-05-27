@@ -101,6 +101,7 @@ hical/
 │   │   ├── OpenApiDocument.h/.cpp  # OpenAPI 3.0 文档组装（惰性缓存/路径合并/参数提取）
 │   │   ├── OpenApiEndpoint.h   # 端点暴露（serveOpenApi，/openapi.json + /docs）
 │   │   ├── IdleFd.h            # 空闲 fd 预留（POSIX /dev/null，Windows no-op）
+│   │   ├── IdleScanner.h/.cpp  # 集中式空闲连接扫描器（per-io_context，侵入式链表 + 单 timer）
 │   │   └── Version.h.in        # CMake 配置版本头（唯一版本号来源）
 │   │
 │   ├── asio/                   # Boost.Asio 适配实现

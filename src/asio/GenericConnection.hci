@@ -41,7 +41,7 @@ namespace hical
 		MpscNode* node;
 		while ((node = writeQueue_.pop()) != nullptr)
 		{
-			delete node;
+			deallocateNode(node);
 		}
 
 		// 析构时 refcount=0，shared_from_this() 已不能用，直接关 socket
@@ -164,7 +164,7 @@ namespace hical
 		}
 
 		size_t entrySize = entry.size();
-		auto* node = new MpscNode(std::move(entry));
+		auto* node = allocateNode(std::move(entry));
 
 		// 原子累加（生产者可能并发）
 		queuedBytes_.fetch_add(entrySize, std::memory_order_relaxed);
@@ -637,7 +637,7 @@ namespace hical
 						auto sent = co_await sendFileNode(fileNode);
 						bytesSent_ += sent;
 						updateLastActiveTime();
-						delete batch[idx];
+						deallocateNode(batch[idx]);
 						batch[idx] = nullptr;
 						++idx;
 						continue;
@@ -695,7 +695,7 @@ namespace hical
 					// 释放已发送的内存条目节点
 					for (size_t i = memStart; i < idx; ++i)
 					{
-						delete batch[i];
+						deallocateNode(batch[i]);
 						batch[i] = nullptr;
 					}
 				}
@@ -713,7 +713,7 @@ namespace hical
 			{
 				if (n)
 				{
-					delete n;
+					deallocateNode(n);
 				}
 			}
 			batch.clear();
@@ -723,7 +723,7 @@ namespace hical
 			while ((node = writeQueue_.pop()) != nullptr)
 			{
 				queuedBytes_.fetch_sub(node->entry.size(), std::memory_order_relaxed);
-				delete node;
+				deallocateNode(node);
 			}
 		}
 	}

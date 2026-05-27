@@ -95,8 +95,7 @@ namespace hical
 			auto latencyMs = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
 
 			// 发射结构化访问日志到 access 通道
-			auto ch = Logger::instance().channels().get(opts.accessLogChannel);
-			if (ch)
+			if (auto ch = Logger::instance().channels().get(opts.accessLogChannel))
 			{
 				LogRecord record;
 				record.level = LogLevel::hInfo;

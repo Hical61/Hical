@@ -62,16 +62,18 @@ namespace hical
 		[[nodiscard]] std::optional<T> get(const std::string& key) const
 		{
 			std::shared_lock lk(mutex_);
-			auto it = data_.find(key);
-			if (it == data_.end())
+			if (auto it = data_.find(key); it == data_.end())
 			{
 				return std::nullopt;
 			}
-			if (it->second.type() != typeid(T))
+			else if (it->second.type() != typeid(T))
 			{
 				return std::nullopt;
 			}
-			return std::any_cast<T>(it->second);
+			else
+			{
+				return std::any_cast<T>(it->second);
+			}
 		}
 
 		/**

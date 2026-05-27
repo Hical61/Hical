@@ -11,22 +11,24 @@ namespace hical
 	std::shared_ptr<Session> SessionManager::find(const std::string& id)
 	{
 		std::shared_lock<std::shared_mutex> lock(mutex_);
-		auto it = store_.find(id);
-		if (it == store_.end())
+		if (auto it = store_.find(id); it == store_.end())
 		{
 			return nullptr;
 		}
-
-		// 过期检查
-		auto now = std::chrono::steady_clock::now();
-		auto elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(now - it->second->lastAccess()).count();
-		if (opts_.maxAge > 0 && elapsedMs >= static_cast<long long>(opts_.maxAge) * kMsPerSecond)
+		else
 		{
-			// 过期了，返回 nullptr，交给 gc() 去清
-			return nullptr;
-		}
+			// 过期检查
+			auto now = std::chrono::steady_clock::now();
+			auto elapsedMs =
+				std::chrono::duration_cast<std::chrono::milliseconds>(now - it->second->lastAccess()).count();
+			if (opts_.maxAge > 0 && elapsedMs >= static_cast<long long>(opts_.maxAge) * kMsPerSecond)
+			{
+				// 过期了，返回 nullptr，交给 gc() 去清
+				return nullptr;
+			}
 
-		return it->second;
+			return it->second;
+		}
 	}
 
 	std::shared_ptr<Session> SessionManager::create()
@@ -76,25 +78,26 @@ namespace hical
 	std::shared_ptr<Session> SessionManager::regenerate(const std::string& oldId)
 	{
 		std::unique_lock<std::shared_mutex> lock(mutex_);
-		auto it = store_.find(oldId);
-		if (it == store_.end())
+		if (auto it = store_.find(oldId); it == store_.end())
 		{
 			return nullptr;
 		}
-
-		auto oldSession = it->second;
-		store_.erase(it);
-
-		auto newId = generateId();
-		while (store_.count(newId))
+		else
 		{
-			newId = generateId();
-		}
+			auto oldSession = it->second;
+			store_.erase(it);
 
-		auto newSession = std::make_shared<Session>(newId);
-		newSession->migrateFrom(*oldSession);
-		store_[newId] = newSession;
-		return newSession;
+			auto newId = generateId();
+			while (store_.count(newId))
+			{
+				newId = generateId();
+			}
+
+			auto newSession = std::make_shared<Session>(newId);
+			newSession->migrateFrom(*oldSession);
+			store_[newId] = newSession;
+			return newSession;
+		}
 	}
 
 	void SessionManager::destroy(const std::string& id)

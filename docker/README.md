@@ -338,6 +338,50 @@ docker system prune -f
 
 ---
 
+## PGO 压测（Profile-Guided Optimization）
+
+PGO 两阶段编译：先插桩跑压测让编译器知道热路径，再基于 profile 数据重新编译优化。仅用于验证 PGO 对 Hical 自身的提升幅度，不混入多框架对比。
+
+Dockerfile 见 [`docker/bench-pgo.Dockerfile`](bench-pgo.Dockerfile)，构建时自动完成：插桩编译 → 自压测采集 profile → PGO 优化编译 → strip。
+
+### 用法
+
+```bash
+# 在项目根目录执行
+
+# 1. 先跑普通 Release 基线
+docker build -f docker/bench-server.Dockerfile -t hical-bench-server .
+docker run --rm -d -p 8080:8080 --cpus=4 --memory=1024m hical-bench-server
+wrk -t4 -c100 -d30s http://localhost:8080/           # 记录基线 QPS
+wrk -t4 -c100 -d30s http://localhost:8080/api/status  # 记录基线 QPS
+docker stop $(docker ps -q --filter ancestor=hical-bench-server)
+
+# 2. 构建 PGO 优化版镜像（首次约 10-15 分钟，含两次编译 + 自压测）
+docker build -f docker/bench-pgo.Dockerfile -t hical-bench-pgo .
+
+# 3. 启动 PGO 版 server
+docker run --rm -d -p 8080:8080 --cpus=4 --memory=1024m hical-bench-pgo
+
+# 4. 跑压测，对比基线 QPS
+wrk -t4 -c100 -d30s http://localhost:8080/
+wrk -t4 -c100 -d30s http://localhost:8080/api/status
+docker stop $(docker ps -q --filter ancestor=hical-bench-pgo)
+```
+
+每组跑 3 轮取平均消除波动。
+
+### 原理说明
+
+| 编译器参数                 | 作用                                                    |
+| -------------------------- | ------------------------------------------------------- |
+| `-fprofile-generate=<dir>` | 第一阶段插桩，运行时把分支计数写到指定目录              |
+| `-fprofile-use=<dir>`      | 第二阶段读取 profile 数据，优化分支预测/内联/代码布局   |
+| `-fprofile-correction`     | 修正多线程下 profile 计数器的竞争偏差（多线程服务必加） |
+
+> 构建阶段自压测用的 wrk 参数（2线程50连接15秒）比正式压测小很多，足够让编译器看到热路径就行。
+
+---
+
 ## TechEmpower Framework Benchmarks (TFB)
 
 Hical 参与 [TechEmpower Framework Benchmarks](https://www.techempower.com/benchmarks/) 跑分，当前实现了 `json` 和 `plaintext` 两个测试类型。

@@ -77,8 +77,11 @@ namespace hical
 				{".wav", "audio/wav"},
 			};
 
-			auto it = table.find(ext);
-			return (it != table.end()) ? it->second : "application/octet-stream";
+			if (auto it = table.find(ext); it != table.end())
+			{
+				return it->second;
+			}
+			return "application/octet-stream";
 		}
 
 		/**

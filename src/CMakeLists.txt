@@ -40,6 +40,7 @@ add_library(hical_core STATIC
     core/Middleware.cpp
     core/HttpServer.cpp
     core/HttpSessionImpl.cpp
+    core/IdleScanner.cpp
     core/WsDeflate.cpp
     core/WebSocket.cpp
     core/WsHub.cpp
@@ -157,7 +158,16 @@ endif()
 
 # mimalloc（可选，替代系统 malloc 作为 PMR upstream 分配器）
 if(HICAL_WITH_MIMALLOC)
-    target_link_libraries(hical_core PRIVATE mimalloc-static)
+    find_package(mimalloc CONFIG QUIET)
+    if(TARGET mimalloc-static)
+        target_link_libraries(hical_core PRIVATE mimalloc-static)
+    else()
+        find_library(MIMALLOC_LIB NAMES mimalloc mimalloc-static)
+        if(NOT MIMALLOC_LIB)
+            message(FATAL_ERROR "mimalloc not found, install libmimalloc-dev or set HICAL_WITH_MIMALLOC=OFF")
+        endif()
+        target_link_libraries(hical_core PRIVATE ${MIMALLOC_LIB})
+    endif()
     target_compile_definitions(hical_core PRIVATE HICAL_USE_MIMALLOC=1)
 endif()
 

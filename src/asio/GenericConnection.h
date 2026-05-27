@@ -265,6 +265,75 @@ namespace hical
 		};
 
 		/**
+		 * @brief thread_local MpscNode 对象池
+		 * 每个线程维护一个定额 free list，热路径上省掉 malloc/free。
+		 * 同线程 send + writeLoop 的场景下，分配/释放都是 O(1) 纯用户态操作。
+		 */
+		struct MpscNodePool
+		{
+			static constexpr size_t kMaxFreeNodes = 128;
+
+			struct FreeNode
+			{
+				FreeNode* next;
+			};
+
+			FreeNode* head = nullptr;
+			size_t count = 0;
+
+			~MpscNodePool()
+			{
+				while (head)
+				{
+					auto* n = head->next;
+					::operator delete(head);
+					head = n;
+				}
+			}
+		};
+
+		static MpscNodePool& nodePool()
+		{
+			thread_local MpscNodePool pool;
+			return pool;
+		}
+
+		/// 从对象池拿一个 MpscNode（free list 命中时零 malloc）
+		static MpscNode* allocateNode(WriteEntry entry)
+		{
+			static_assert(sizeof(MpscNode) >= sizeof(void*), "MpscNode must be large enough to overlay FreeNode");
+			auto& pool = nodePool();
+			void* mem = nullptr;
+			if (pool.head)
+			{
+				mem = pool.head;
+				pool.head = pool.head->next;
+				--pool.count;
+			}
+			else
+			{
+				mem = ::operator new(sizeof(MpscNode));
+			}
+			return ::new (mem) MpscNode(std::move(entry));
+		}
+
+		/// 还回对象池（池没满就不 free）
+		static void deallocateNode(MpscNode* node)
+		{
+			node->~MpscNode();
+			auto& pool = nodePool();
+			if (pool.count >= MpscNodePool::kMaxFreeNodes)
+			{
+				::operator delete(node);
+				return;
+			}
+			auto* fn = reinterpret_cast<typename MpscNodePool::FreeNode*>(node);
+			fn->next = pool.head;
+			pool.head = fn;
+			++pool.count;
+		}
+
+		/**
 		 * @brief Vyukov Intrusive MPSC Queue
 		 * 生产者 wait-free push，消费者 single-thread pop。
 		 */

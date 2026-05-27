@@ -367,47 +367,6 @@ namespace hical
 
 	} // namespace
 
-	/// 空闲超时协程：循环检查时间戳，超时就关 socket
-	static Awaitable<void> idleTimerLoop(std::shared_ptr<boost::asio::steady_timer> pTimer,
-										 tcp::socket& socket,
-										 std::shared_ptr<std::atomic<bool>> alive,
-										 std::shared_ptr<std::atomic<int64_t>> lastActive,
-										 int64_t timeoutMs)
-	{
-		auto& timer = *pTimer;
-		while (alive->load())
-		{
-			timer.expires_after(std::chrono::milliseconds(timeoutMs));
-			boost::system::error_code ec;
-			co_await timer.async_wait(boost::asio::redirect_error(boost::asio::use_awaitable, ec));
-			if (ec || !alive->load())
-			{
-				break;
-			}
-
-			auto now = std::chrono::duration_cast<std::chrono::milliseconds>(
-						   std::chrono::steady_clock::now().time_since_epoch())
-						   .count();
-			auto elapsed = now - lastActive->load(std::memory_order_relaxed);
-
-			if (elapsed >= timeoutMs)
-			{
-				// 真正超时：关闭 socket 中断 async_read
-				boost::asio::dispatch(socket.get_executor(),
-									  [&socket, alive]()
-									  {
-										  if (alive->load())
-										  {
-											  boost::system::error_code closeEc;
-											  socket.close(closeEc);
-										  }
-									  });
-				break;
-			}
-			// 还没超时，继续等
-		}
-	}
-
 	Awaitable<void> HttpServer::handleSession(tcp::socket socket)
 	{
 		// 连接计数 RAII 守卫
@@ -450,47 +409,16 @@ namespace hical
 			}
 		} guard {socket};
 
-		// timer 放 try 外面，catch 里也要能 cancel 它
-		std::shared_ptr<boost::asio::steady_timer> deadline;
-		if (idleTimeout_ > 0)
-		{
-			deadline = std::make_shared<boost::asio::steady_timer>(socket.get_executor());
-		}
+		// entry 在协程栈上，Guard 析构时自动注销
+		// 声明在 SocketGuard 后面 → 先析构（先 unregister 再关 socket）
+		IdleScanner::Entry idleEntry;
+		idleEntry.socket = &socket;
+		idleEntry.touch();
+
+		IdleScanner::Guard idleGuard(currentThreadIdleScanner(), idleEntry);
 
 		try
 		{
-			// idle timeout 相关变量：仅在 idleTimeout_ > 0 时分配
-			std::shared_ptr<std::atomic<bool>> socketAlive;
-			std::shared_ptr<std::atomic<int64_t>> lastActiveMs;
-
-			if (deadline)
-			{
-				socketAlive = std::make_shared<std::atomic<bool>>(true);
-				lastActiveMs =
-					std::make_shared<std::atomic<int64_t>>(std::chrono::duration_cast<std::chrono::milliseconds>(
-															   std::chrono::steady_clock::now().time_since_epoch())
-															   .count());
-				auto timeoutMs = static_cast<int64_t>(idleTimeout_ * 1000);
-
-				boost::asio::co_spawn(socket.get_executor(),
-									  idleTimerLoop(deadline, socket, socketAlive, lastActiveMs, timeoutMs),
-									  boost::asio::detached);
-			}
-
-			// 协程退出时标记 alive=false，防止 timer 回调访问已关闭 socket
-			struct AliveGuard
-			{
-				std::shared_ptr<std::atomic<bool>> alive;
-
-				~AliveGuard()
-				{
-					if (alive)
-					{
-						alive->store(false);
-					}
-				}
-			} aliveGuard {socketAlive};
-
 			// 读缓冲区，keep-alive 复用
 			std::string readBuf;
 			readBuf.resize(8192);
@@ -641,14 +569,8 @@ namespace hical
 					// parseResult == -2：数据不完整，继续读取
 				}
 
-				// 读完头部后更新活跃时间戳（仅启用 idle timeout 时）
-				if (lastActiveMs)
-				{
-					lastActiveMs->store(std::chrono::duration_cast<std::chrono::milliseconds>(
-											std::chrono::steady_clock::now().time_since_epoch())
-											.count(),
-										std::memory_order_relaxed);
-				}
+				// 读完头部，刷新活跃时间
+				idleEntry.touch();
 
 				// ====== 阶段 B：构建 NativeRequest ======
 				NativeRequest nativeReq;
@@ -1003,14 +925,8 @@ namespace hical
 					}
 				}
 
-				// 写完后更新活跃时间戳（仅启用 idle timeout 时）
-				if (lastActiveMs)
-				{
-					lastActiveMs->store(std::chrono::duration_cast<std::chrono::milliseconds>(
-											std::chrono::steady_clock::now().time_since_epoch())
-											.count(),
-										std::memory_order_relaxed);
-				}
+				// 写完，刷新活跃时间
+				idleEntry.touch();
 
 				// 延迟 memmove：响应已发送或已暂存，nativeReq.target/headers 不再被引用，
 				// 安全地将残留数据移到缓冲区开头（为下一个 pipelined 请求做准备）
@@ -1035,12 +951,7 @@ namespace hical
 			}
 		}
 
-		// 取消 idleTimerLoop 协程：cancel timer 使其 co_await 收到 operation_aborted 并退出
-		if (deadline)
-		{
-			deadline->cancel();
-		}
-		// AliveGuard 析构设 alive=false → SocketGuard 析构关闭 socket
+		// idleGuard 先析构注销 entry，然后 SocketGuard 关 socket
 	}
 
 	Awaitable<void> HttpServer::handleWebSocket(tcp::socket socket,

@@ -120,8 +120,7 @@ namespace hical
 	void AsioEventLoop::cancelTimer(TimerId id)
 	{
 		std::lock_guard<std::mutex> lock(timersMutex_);
-		auto it = timers_.find(id);
-		if (it != timers_.end())
+		if (auto it = timers_.find(id); it != timers_.end())
 		{
 			it->second->cancel();
 			timers_.erase(it);

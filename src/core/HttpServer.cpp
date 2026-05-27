@@ -223,6 +223,18 @@ namespace hical
 				}
 			});
 
+		// 给每个 io_context 跑一个空闲扫描器（干掉 per-connection timer 协程）
+		if (idleTimeout_ > 0)
+		{
+			auto timeoutMs = static_cast<int64_t>(idleTimeout_ * 1000);
+			for (auto* loop : allLoops)
+			{
+				auto scanner = std::make_unique<IdleScanner>(loop->getIoContext().get_executor(), timeoutMs);
+				coSpawn(loop->getIoContext(), scanner->run());
+				idleScanners_.push_back(std::move(scanner));
+			}
+		}
+
 		// 在每个 loop 上启动独立 acceptLoop
 		if (reusePortEnabled_)
 		{
@@ -251,6 +263,9 @@ namespace hical
 			ioPool_->stop();
 		}
 
+		// loop 都停了，可以安全释放 scanner
+		idleScanners_.clear();
+
 		running_.store(false);
 	}
 
@@ -263,6 +278,12 @@ namespace hical
 
 		draining_.store(true);
 		closeAllAcceptors();
+
+		for (auto& scanner : idleScanners_)
+		{
+			scanner->stop();
+		}
+
 		stopAllLoops();
 	}
 

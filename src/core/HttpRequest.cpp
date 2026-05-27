@@ -43,8 +43,7 @@ namespace hical
 	std::string_view HttpRequest::path() const
 	{
 		std::string_view t = req_.target;
-		auto pos = t.find('?');
-		if (pos != std::string_view::npos)
+		if (auto pos = t.find('?'); pos != std::string_view::npos)
 		{
 			return t.substr(0, pos);
 		}
@@ -59,8 +58,7 @@ namespace hical
 	std::string_view HttpRequest::query() const
 	{
 		std::string_view t = req_.target;
-		auto pos = t.find('?');
-		if (pos != std::string_view::npos)
+		if (auto pos = t.find('?'); pos != std::string_view::npos)
 		{
 			return t.substr(pos + 1);
 		}
@@ -243,8 +241,7 @@ namespace hical
 		{
 			parseCookies();
 		}
-		auto it = cookies_->find(name);
-		if (it != cookies_->end())
+		if (auto it = cookies_->find(name); it != cookies_->end())
 		{
 			return it->second;
 		}
@@ -323,8 +320,7 @@ namespace hical
 		{
 			parseQueryParams();
 		}
-		auto it = queryParams_->find(name);
-		if (it != queryParams_->end())
+		if (auto it = queryParams_->find(name); it != queryParams_->end())
 		{
 			return it->second;
 		}
@@ -371,8 +367,7 @@ namespace hical
 		{
 			parseFormParams();
 		}
-		auto it = formParams_->find(name);
-		if (it != formParams_->end())
+		if (auto it = formParams_->find(name); it != formParams_->end())
 		{
 			return it->second;
 		}
@@ -414,12 +409,11 @@ namespace hical
 		{
 			return std::nullopt;
 		}
-		auto it = attributes_->find(key);
-		if (it == attributes_->end())
+		if (auto it = attributes_->find(key); it != attributes_->end())
 		{
-			return std::nullopt;
+			return it->second;
 		}
-		return it->second;
+		return std::nullopt;
 	}
 
 	// ============ HttpTypes 实用函数 ============

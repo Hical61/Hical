@@ -255,16 +255,14 @@ namespace hical
 		}
 
 		// 1. 优先查找静态路由（O(1) 哈希查找，透明哈希避免构造临时 std::string）
-		auto it = staticRoutes_.find(RouteKeyView {reqMethod, reqPath});
-		if (it != staticRoutes_.end())
+		if (auto it = staticRoutes_.find(RouteKeyView {reqMethod, reqPath}); it != staticRoutes_.end())
 		{
 			result.staticEntry = &it->second;
 			return result;
 		}
 
 		// 2. 回退到参数路由匹配（按 method 分组，仅扫描同 method 的路由）
-		auto groupIt = paramRoutesByMethod_.find(reqMethod);
-		if (groupIt != paramRoutesByMethod_.end())
+		if (auto groupIt = paramRoutesByMethod_.find(reqMethod); groupIt != paramRoutesByMethod_.end())
 		{
 			ParamList params;
 			for (const auto& entry : groupIt->second)
@@ -283,8 +281,7 @@ namespace hical
 
 		// 3. 405 检测：路径匹配但方法不匹配时收集 Allow 头
 		// 静态路由：O(1) 反向索引查找
-		auto pathIt = staticPathMethods_.find(reqPath);
-		if (pathIt != staticPathMethods_.end())
+		if (auto pathIt = staticPathMethods_.find(reqPath); pathIt != staticPathMethods_.end())
 		{
 			for (auto m : pathIt->second)
 			{

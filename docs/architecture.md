@@ -981,7 +981,7 @@ MpscQueue writeQueue_;  // alignas(64) 消除 false sharing
 // 发送内存数据 → 快速路径，直接存 shared_ptr<string>
 void send(const char* data, size_t len)
 {
-    auto* entry = new WriteEntry{...};
+    auto* entry = allocateNode(WriteEntry{...});  // thread_local 对象池，热路径零 malloc
     writeQueue_.push(entry);  // wait-free, 任意线程可调用
 }
 
@@ -1007,11 +1007,33 @@ Awaitable<void> writeLoop()
 ```
 
 - **MPSC 无锁队列**：写队列从 `mutex` + `deque` 升级为 Vyukov Intrusive MPSC Queue，`enqueueEntry` 移除 `isInLoopThread` 分支和 `lock_guard`，任意线程 wait-free push
+- **MpscNode 对象池**：thread_local free list（上限 128 节点），`allocateNode()` 从池中取内存做 placement new，`deallocateNode()` 析构后归还到池中。同线程 send + writeLoop 场景下分配/释放均为 O(1) 纯用户态操作，消除热路径 malloc/free
 - **标签分发去虚函数化**：`WriteEntry::hMemory` 快速路径直接存 `shared_ptr<string>`，消除热路径上的虚函数调用开销；`hNode` 保留多态仅用于低频的文件/PmrBuffer 场景
 - **批量 drain + 反饥饿**：`writeLoop` 一次性 drain 所有就绪节点，drain 后 `seq_cst` re-check 防止遗漏并发 push
 - **Scatter-Gather**：连续的内存条目合并为一次 `async_write` 系统调用
 - **异步文件发送**：`sendFileNode()` 使用 `boost::asio::random_access_file`（`BOOST_ASIO_HAS_FILE`）异步读取，无此特性时回退到 `std::ifstream`
 - **`alignas(64)` 缓存行隔离**：写队列和相关原子变量做缓存行对齐，消除多线程 false sharing
+
+### 11.4 空闲连接扫描（IdleScanner）
+
+每个 io_context 一个 `IdleScanner` 实例，用侵入式双向链表 + 单一 `steady_timer` 替代 per-connection 的 timer 协程：
+
+```
+HttpServer::start()
+  └─ 每个 io_context 创建 IdleScanner，coSpawn run()
+
+handleSession()                          IdleScanner::run()
+  ├─ Entry 在协程栈上（零堆分配）        ├─ 设 thread_local 指针
+  ├─ Guard 构造 → registerEntry()        ├─ 循环: timer sleep → 遍历链表
+  ├─ 请求处理中 Entry::touch()           │   超时的 → socket.close()
+  └─ Guard 析构 → unregisterEntry()      └─ stop() 时 cancel timer 退出
+```
+
+- **零额外堆分配**：`Entry` 嵌在协程栈帧上，包含 `atomic<int64_t> lastActiveMs` + `socket*` + prev/next 链表指针
+- **Guard 接受 nullptr**：`idleTimeout_ == 0` 时 `currentThreadIdleScanner()` 返回 nullptr，Guard 构造/析构均为 no-op
+- **单线程无锁**：registerEntry/unregisterEntry 都在同一 io_context 线程内调用，双向链表操作无需任何锁
+- **扫描间隔**：`max(1s, timeout/4)`，与 TcpServer::idleCheckLoop 策略一致
+- **socket.close() 安全性**：scanner 和 handleSession 在同一 io_context 线程，close() 取消 pending 的 async_read，completion handler 在下一次 dispatch 时才执行，扫描循环提前保存的 `next` 指针在整个循环内有效
 
 ---
 

@@ -86,16 +86,14 @@ namespace hical
 	{
 		{
 			std::shared_lock<std::shared_mutex> rlock(mutex_);
-			auto it = channels_.find(name);
-			if (it != channels_.end())
+			if (auto it = channels_.find(name); it != channels_.end())
 			{
 				return it->second;
 			}
 		}
 		std::unique_lock<std::shared_mutex> wlock(mutex_);
 		// 双重检查
-		auto it = channels_.find(name);
-		if (it != channels_.end())
+		if (auto it = channels_.find(name); it != channels_.end())
 		{
 			return it->second;
 		}
@@ -107,8 +105,7 @@ namespace hical
 	std::shared_ptr<LogChannel> LogChannelRegistry::get(const std::string& name) const
 	{
 		std::shared_lock<std::shared_mutex> rlock(mutex_);
-		auto it = channels_.find(name);
-		if (it != channels_.end())
+		if (auto it = channels_.find(name); it != channels_.end())
 		{
 			return it->second;
 		}

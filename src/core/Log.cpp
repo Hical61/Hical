@@ -238,8 +238,7 @@ namespace hical
 
 	void Logger::emitTo(const std::string& channelName, const LogRecord& record)
 	{
-		auto ch = channels_->get(channelName);
-		if (ch)
+		if (auto ch = channels_->get(channelName))
 		{
 			ch->emit(record);
 		}
