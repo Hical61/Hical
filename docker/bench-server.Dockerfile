@@ -32,6 +32,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /src/build/bench_server /bench_server
+COPY --from=builder /usr/lib/x86_64-linux-gnu/libmimalloc.so* /usr/lib/x86_64-linux-gnu/
 COPY docker/bench-entrypoint.sh /bench-entrypoint.sh
 RUN chmod +x /bench-entrypoint.sh
 
