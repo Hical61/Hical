@@ -265,10 +265,43 @@ namespace hical
 		// 主线程运行 baseLoop（阻塞）
 		baseLoop_.run();
 
+		// ── drain 阶段：让 IOCP 的 abort completions 走正常的 error 路径恢复协程 ──
+		//
+		// stop() 关 acceptors/timers 产生的 abort completions 入了 IOCP queue，
+		// 但 io_context.stop() 让 run() 立即返回，这些 completions 还没被 dispatch。
+		// 如果留到 ~io_context() 才 destroy 协程帧，Windows GCC 上偶发 SegFault
+		// （~awaitable_thread 的两阶段 post 销毁 + MinGW coroutine edge case）。
+		//
+		// restart+poll 让 abort completions 正常 dispatch → 协程 catch operation_aborted
+		// → 正常退出 → 帧自然释放。poll() 可能被 ConnectionCounter::stopAllLoops() 打断
+		// （它会 re-stop io_context），所以循环几次。
+		// Linux epoll reactor 下 poll() 无事可做，开销为零。
+		for (int i = 0; i < 16; ++i)
+		{
+			baseLoop_.getIoContext().restart();
+			if (baseLoop_.getIoContext().poll() == 0)
+			{
+				break;
+			}
+		}
+
 		// baseLoop 退出后，停止并等待 ioPool 中的 worker 线程
 		if (ioPool_)
 		{
 			ioPool_->stop();
+
+			// worker 的 io_context 也 drain（同理）
+			for (auto* loop : ioPool_->getAllLoops())
+			{
+				for (int i = 0; i < 16; ++i)
+				{
+					loop->getIoContext().restart();
+					if (loop->getIoContext().poll() == 0)
+					{
+						break;
+					}
+				}
+			}
 		}
 
 		// 趁 io_context 还活着，把 scanner 里的 timer 先干掉。
