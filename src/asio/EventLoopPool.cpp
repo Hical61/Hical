@@ -65,9 +65,10 @@ namespace hical
 			return; // 已经停止
 		}
 
+		// 不用 io_context::stop() 强杀了——放掉 work_guard 让 worker 干完手头活自己退
 		for (auto& loop : loops_)
 		{
-			loop->stop();
+			loop->releaseWork();
 		}
 
 		for (auto& thread : threads_)
@@ -79,6 +80,14 @@ namespace hical
 		}
 
 		threads_.clear();
+	}
+
+	void EventLoopPool::releaseWork()
+	{
+		for (auto& loop : loops_)
+		{
+			loop->releaseWork();
+		}
 	}
 
 	AsioEventLoop* EventLoopPool::getNextLoop()

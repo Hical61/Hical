@@ -37,6 +37,13 @@ namespace hical
 		void stop() override;
 		bool isRunning() const override;
 
+		/**
+		 * @brief 只放掉 work_guard，不强制 stop
+		 * 跟 stop() 的区别：stop() 是核弹（立刻中断 run），这个是温柔退出——
+		 * 先把 pending op 都 cancel 掉，再调这个，协程自然退出后 run() 就返回了。
+		 */
+		void releaseWork();
+
 		// ============ 任务调度 ============
 
 		void dispatch(Func cb) override;

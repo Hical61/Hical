@@ -118,10 +118,16 @@ namespace hical
 		 */
 		void closeAll();
 
+		/**
+		 * @brief 拿 scanner 绑的 executor，stop() 需要 post 操作到正确线程上
+		 */
+		[[nodiscard]] boost::asio::any_io_executor getExecutor() const;
+
 	private:
 		// optional 是为了 shutdown() 时能提前销毁 timer，
 		// 不然 io_context 析构后 timer 析构会访问已经没了的 timer_service
 		std::optional<boost::asio::steady_timer> timer_;
+		boost::asio::any_io_executor executor_;
 		int64_t timeoutMs_;
 		std::atomic<bool> running_ {true};
 

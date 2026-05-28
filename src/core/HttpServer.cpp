@@ -225,9 +225,11 @@ namespace hical
 
 		auto& baseIoCtx = baseLoop_.getIoContext();
 
-		// 注册信号处理（SIGINT/SIGTERM → 优雅关机）
-		boost::asio::signal_set signals(baseIoCtx, SIGINT, SIGTERM);
-		signals.async_wait(
+		// 信号处理（Ctrl+C / kill → 优雅关机）
+		// Windows 下 signal_set 有个 static mutex 的坑，同一进程反复创建销毁会炸，
+		// 但生产环境进程只起一次所以没事
+		signals_.emplace(baseIoCtx, SIGINT, SIGTERM);
+		signals_->async_wait(
 			[this](const boost::system::error_code& ec, int)
 			{
 				if (!ec)
@@ -267,92 +269,19 @@ namespace hical
 			coSpawn(baseIoCtx, gcLoop());
 		}
 
-		// 主线程运行 baseLoop（阻塞）
+		// 主线程阻塞在这。work_guard 保证不会因为"暂时没活"就提前返回。
+		// stop() 把所有 pending op cancel 掉再 releaseWork()，协程走完 run() 就退了。
+		// 这样退出时 IOCP queue 是空的，不会触发两阶段 destroy 那个 SegFault。
 		baseLoop_.run();
 
-		// ── drain 阶段：确保所有协程正常退出，帧自然释放 ──
-		//
-		// stop() 关 acceptors/timers → abort completions 入 IOCP queue，
-		// 但 io_context.stop() 让 run() 立即返回，completions 还没被 dispatch。
-		// 如果留到 ~io_context() 才 destroy 协程帧，Windows MinGW GCC 上偶发 SegFault
-		// （~awaitable_thread 两阶段 post 销毁 + coroutine edge case）。
-		//
-		// 解法：先 cancel 所有 pending operations（signal_set / gcTimer / socket），
-		// 让它们产生 abort completions，再循环 poll 处理。
-		// "double-confirm" 策略：首次 poll()=0 后 sleep 1ms 再 poll 确认 IOCP 无延迟入队。
-		// Linux 下 abort completions 同步入队，额外开销仅 1ms sleep。
+		// 趁 io_context 还活着把 signal_set 干掉——Windows 下这玩意有 static mutex，
+		// 不提前清理的话同一进程里下次创建可能踩到脏状态
+		signals_.reset();
 
-		// 1. cancel 所有 pending async operations，让它们产生 abort completions
-		signals.cancel();
-		if (gcTimer_.has_value())
-		{
-			gcTimer_->cancel();
-		}
-		for (auto& scanner : idleScanners_)
-		{
-			scanner->closeAll();
-		}
-
-		// 2. drain：循环 poll 处理 abort completions。
-		//    多轮是因为：close socket/cancel timer → abort completion 入 IOCP queue → poll 取出 →
-		//    协程 resume → 可能产生新的 completions（如 ConnectionCounter 析构触发 stopAllLoops）。
-		//    最后一轮 poll()=0 后，针对 Windows IOCP completion 入队的微秒级延迟，
-		//    sleep 1ms 再 poll 一次确认确实没有遗漏的 completions。
-		{
-			bool drained = false;
-			for (int i = 0; i < 32; ++i)
-			{
-				baseLoop_.getIoContext().restart();
-				if (baseLoop_.getIoContext().poll() == 0)
-				{
-					if (drained)
-					{
-						break; // 连续两次 poll()=0，确认干净了
-					}
-					// 首次 poll()=0：IOCP completions 可能有微秒级入队延迟，等一下再确认
-					std::this_thread::sleep_for(std::chrono::milliseconds(1));
-					drained = true;
-				}
-				else
-				{
-					drained = false;
-				}
-			}
-		}
-
-		// baseLoop 退出后，停止并等待 ioPool 中的 worker 线程
+		// worker loop 同理——socket 已经被 closeAll 关了，放掉 work_guard 等它们退
 		if (ioPool_)
 		{
 			ioPool_->stop();
-
-			// worker 的 io_context 也需要 drain（同理）
-			auto workerLoops = ioPool_->getAllLoops();
-			for (size_t w = 0; w < workerLoops.size(); ++w)
-			{
-				if (w + 1 < idleScanners_.size())
-				{
-					idleScanners_[w + 1]->closeAll();
-				}
-
-				bool drained = false;
-				for (int i = 0; i < 32; ++i)
-				{
-					workerLoops[w]->getIoContext().restart();
-					if (workerLoops[w]->getIoContext().poll() == 0)
-					{
-						if (drained)
-						{
-							break;
-						}
-						std::this_thread::sleep_for(std::chrono::milliseconds(1));
-						drained = true;
-					}
-					else
-					{
-						drained = false;
-					}
-				}
-			}
 		}
 
 		// 趁 io_context 还活着，把 scanner 里的 timer 先干掉。
@@ -373,14 +302,64 @@ namespace hical
 		}
 
 		draining_.store(true);
-		closeAllAcceptors();
 
-		for (auto& scanner : idleScanners_)
+		// timer/socket 操作不是线程安全的，stop() 可能从外面调进来，
+		// 所以把真正的 shutdown 动作 post 到 io_context 线程里做
+		boost::asio::post(baseLoop_.getIoContext(),
+						  [this]()
+						  {
+							  // 关 acceptor → acceptLoop 自然退出
+							  for (auto& acc : acceptors_)
+							  {
+								  boost::system::error_code ec;
+								  acc->close(ec);
+							  }
+
+							  if (signals_.has_value())
+							  {
+								  signals_->cancel();
+							  }
+
+							  if (gcTimer_.has_value())
+							  {
+								  gcTimer_->cancel();
+							  }
+
+							  // 把所有还活着的连接 socket 关掉，协程自然收到错误退出
+							  for (auto& scanner : idleScanners_)
+							  {
+								  scanner->closeAll();
+							  }
+
+							  // scanner 的 scan timer 也 cancel 掉
+							  for (auto& scanner : idleScanners_)
+							  {
+								  if (scanner->getExecutor() == baseLoop_.getIoContext().get_executor())
+								  {
+									  scanner->stop();
+								  }
+							  }
+						  });
+
+		// worker loop 上的 scanner 同理
+		if (ioPool_)
 		{
-			scanner->stop();
+			for (size_t i = 1; i < idleScanners_.size(); ++i)
+			{
+				auto& scanner = idleScanners_[i];
+				boost::asio::post(scanner->getExecutor(),
+								  [&scanner]()
+								  {
+									  scanner->closeAll();
+									  scanner->stop();
+								  });
+			}
 		}
 
-		stopAllLoops();
+		// 放掉 work_guard，等协程全走完 run() 就自然退出了。
+		// 不调 io_context::stop()——那玩意会留一堆没 dispatch 的 completion 在 IOCP queue 里，
+		// 然后 ~io_context 暴力 destroy 协程帧，GCC MinGW 就炸了。
+		baseLoop_.releaseWork();
 	}
 
 	bool HttpServer::isRunning() const
@@ -523,8 +502,7 @@ namespace hical
 			{
 				if (!ec)
 				{
-					running_.store(false);
-					stopAllLoops();
+					stop();
 				}
 			});
 	}

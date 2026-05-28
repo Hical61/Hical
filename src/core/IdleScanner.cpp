@@ -17,7 +17,7 @@ namespace hical
 	}
 
 	IdleScanner::IdleScanner(boost::asio::any_io_executor executor, int64_t timeoutMs)
-		: timer_(std::in_place, std::move(executor)), timeoutMs_(timeoutMs)
+		: timer_(std::in_place, executor), executor_(std::move(executor)), timeoutMs_(timeoutMs)
 	{
 		// 哨兵自指 = 空链表
 		sentinel_.prev = &sentinel_;
@@ -125,6 +125,11 @@ namespace hical
 			}
 			curr = next;
 		}
+	}
+
+	boost::asio::any_io_executor IdleScanner::getExecutor() const
+	{
+		return executor_;
 	}
 
 } // namespace hical

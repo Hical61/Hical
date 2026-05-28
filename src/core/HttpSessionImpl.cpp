@@ -383,7 +383,7 @@ namespace hical
 				// fetch_sub 返回旧值；旧值为 1 表示减到 0（最后一个连接）
 				if (count.fetch_sub(1) == 1 && draining.load())
 				{
-					server.stopAllLoops();
+					server.stop();
 				}
 			}
 		} connCounter {activeConnections_, draining_, *this};
@@ -1026,6 +1026,14 @@ namespace hical
 			{
 				session->setSubprotocol(std::move(negotiatedProtocol));
 			}
+
+			// WS 升级后 handleSession 的 Entry 已经注销了，得重新注册一个，
+			// 不然 stop() 的 closeAll() 管不到这条连接，run() 就退不了
+			IdleScanner::Entry wsIdleEntry;
+			wsIdleEntry.socket = &session->socket();
+			wsIdleEntry.touch();
+			auto* wsScanner = currentThreadIdleScanner();
+			IdleScanner::Guard wsIdleGuard(wsScanner, wsIdleEntry);
 
 			// 使用 alive 标志防止 timer/ping 回调在 session 销毁后访问悬空引用
 			auto wsAlive = std::make_shared<std::atomic<bool>>(true);

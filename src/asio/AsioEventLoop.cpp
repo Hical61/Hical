@@ -58,6 +58,11 @@ namespace hical
 		ioContext_.stop();
 	}
 
+	void AsioEventLoop::releaseWork()
+	{
+		workGuard_.reset();
+	}
+
 	bool AsioEventLoop::isRunning() const
 	{
 		return running_.load() && !quit_.load();

@@ -262,6 +262,9 @@ namespace hical
 
 		// gcLoop 的 timer，放成员上是为了 stop 时能从外面 cancel 掉
 		std::optional<boost::asio::steady_timer> gcTimer_;
+
+		// signal_set 放成员上——stop() 得能 cancel 它，不然 async_wait 会卡住 run() 不退
+		std::optional<boost::asio::signal_set> signals_;
 	};
 
 } // namespace hical

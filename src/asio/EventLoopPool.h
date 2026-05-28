@@ -42,6 +42,11 @@ namespace hical
 		void stop();
 
 		/**
+		 * @brief 放掉所有 worker 的 work_guard，让它们干完手头活自己退出
+		 */
+		void releaseWork();
+
+		/**
 		 * @brief 获取下一个事件循环（round-robin）
 		 * @return 事件循环指针
 		 */
