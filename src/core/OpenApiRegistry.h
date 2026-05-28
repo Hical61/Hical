@@ -1,7 +1,6 @@
-#pragma once
-
 /**
- * @brief OpenAPI 路由元数据注册表 + 用户标注宏
+ * @file OpenApiRegistry.h
+ * @brief 路由元数据注册表与注解宏
  * 提供：
  *   1. RouteApiInfo 数据结构 — 存储单个路由的 OpenAPI 标注（summary/tags/requestBody/responses）
  *   2. OpenApiRegistry 类 — 线程安全的路由和 schema 注册表
@@ -10,6 +9,8 @@
  *   5. HICAL_ROUTES_WITH_API() 宏 — 增强版路由收集，自动收集 OpenAPI 标注
  *   6. registerRoutesWithOpenApi() — 注册路由同时收集 OpenAPI 元数据
  */
+
+#pragma once
 
 #include "Reflection.h"
 #include "MetaRoutes.h"

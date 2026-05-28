@@ -1,3 +1,8 @@
+/**
+ * @file TcpConnection.h
+ * @brief TCP 连接抽象接口
+ */
+
 #pragma once
 
 #include "PmrBuffer.h"

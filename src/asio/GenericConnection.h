@@ -1,3 +1,8 @@
+/**
+ * @file GenericConnection.h
+ * @brief 泛型 TCP/SSL 连接模板
+ */
+
 #pragma once
 
 #include "../core/TcpConnection.h"

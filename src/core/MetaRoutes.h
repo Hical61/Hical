@@ -1,6 +1,5 @@
-#pragma once
-
 /**
+ * @file MetaRoutes.h
  * @brief 反射驱动的自动路由注册
  * 双路线：
  * - C++26 反射：用户用 [[hical::route(...)]] 标注，框架自动发现并注册
@@ -21,6 +20,8 @@
  * hical::meta::registerRoutes(router, handler);
  * ```
  */
+
+#pragma once
 
 #include "Reflection.h"
 #include "Router.h"

@@ -1,3 +1,8 @@
+/**
+ * @file DbMiddleware.h
+ * @brief HTTP 数据库中间件（自动事务）
+ */
+
 #pragma once
 
 #include "DbConnection.h"

@@ -1,3 +1,8 @@
+/**
+ * @file LogMiddleware.cpp
+ * @brief 访问日志中间件实现
+ */
+
 #include "LogMiddleware.h"
 
 #include "HttpRequest.h"

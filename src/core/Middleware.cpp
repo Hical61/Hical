@@ -1,3 +1,8 @@
+/**
+ * @file Middleware.cpp
+ * @brief 中间件管线构建与执行实现
+ */
+
 #include "Middleware.h"
 #include <stdexcept>
 

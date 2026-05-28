@@ -1,3 +1,8 @@
+/**
+ * @file MetaJsonError.cpp
+ * @brief JSON 非模板错误函数实现
+ */
+
 #include "MetaJsonError.h"
 #include <stdexcept>
 #include <string>

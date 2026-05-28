@@ -1,3 +1,8 @@
+/**
+ * @file OpenApiDocument.cpp
+ * @brief OpenAPI 文档生成与缓存实现
+ */
+
 #include "core/OpenApiDocument.h"
 #include <algorithm>
 

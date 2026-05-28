@@ -1,3 +1,8 @@
+/**
+ * @file OpenApiRegistry.cpp
+ * @brief 路由元数据注册实现
+ */
+
 #include "core/OpenApiRegistry.h"
 
 namespace hical::meta::openapi

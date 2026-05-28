@@ -1,3 +1,8 @@
+/**
+ * @file HttpServer.cpp
+ * @brief HTTP 服务器启动与生命周期实现
+ */
+
 #include "HttpServer.h"
 #include "MemoryPool.h"
 #include "core/Version.h"
@@ -265,23 +270,53 @@ namespace hical
 		// 主线程运行 baseLoop（阻塞）
 		baseLoop_.run();
 
-		// ── drain 阶段：让 IOCP 的 abort completions 走正常的 error 路径恢复协程 ──
+		// ── drain 阶段：确保所有协程正常退出，帧自然释放 ──
 		//
-		// stop() 关 acceptors/timers 产生的 abort completions 入了 IOCP queue，
-		// 但 io_context.stop() 让 run() 立即返回，这些 completions 还没被 dispatch。
-		// 如果留到 ~io_context() 才 destroy 协程帧，Windows GCC 上偶发 SegFault
-		// （~awaitable_thread 的两阶段 post 销毁 + MinGW coroutine edge case）。
+		// stop() 关 acceptors/timers → abort completions 入 IOCP queue，
+		// 但 io_context.stop() 让 run() 立即返回，completions 还没被 dispatch。
+		// 如果留到 ~io_context() 才 destroy 协程帧，Windows MinGW GCC 上偶发 SegFault
+		// （~awaitable_thread 两阶段 post 销毁 + coroutine edge case）。
 		//
-		// restart+poll 让 abort completions 正常 dispatch → 协程 catch operation_aborted
-		// → 正常退出 → 帧自然释放。poll() 可能被 ConnectionCounter::stopAllLoops() 打断
-		// （它会 re-stop io_context），所以循环几次。
-		// Linux epoll reactor 下 poll() 无事可做，开销为零。
-		for (int i = 0; i < 16; ++i)
+		// 解法：先 cancel 所有 pending operations（signal_set / gcTimer / socket），
+		// 让它们产生 abort completions，再循环 poll 处理。
+		// "double-confirm" 策略：首次 poll()=0 后 sleep 1ms 再 poll 确认 IOCP 无延迟入队。
+		// Linux 下 abort completions 同步入队，额外开销仅 1ms sleep。
+
+		// 1. cancel 所有 pending async operations，让它们产生 abort completions
+		signals.cancel();
+		if (gcTimer_.has_value())
 		{
-			baseLoop_.getIoContext().restart();
-			if (baseLoop_.getIoContext().poll() == 0)
+			gcTimer_->cancel();
+		}
+		for (auto& scanner : idleScanners_)
+		{
+			scanner->closeAll();
+		}
+
+		// 2. drain：循环 poll 处理 abort completions。
+		//    多轮是因为：close socket/cancel timer → abort completion 入 IOCP queue → poll 取出 →
+		//    协程 resume → 可能产生新的 completions（如 ConnectionCounter 析构触发 stopAllLoops）。
+		//    最后一轮 poll()=0 后，针对 Windows IOCP completion 入队的微秒级延迟，
+		//    sleep 1ms 再 poll 一次确认确实没有遗漏的 completions。
+		{
+			bool drained = false;
+			for (int i = 0; i < 32; ++i)
 			{
-				break;
+				baseLoop_.getIoContext().restart();
+				if (baseLoop_.getIoContext().poll() == 0)
+				{
+					if (drained)
+					{
+						break; // 连续两次 poll()=0，确认干净了
+					}
+					// 首次 poll()=0：IOCP completions 可能有微秒级入队延迟，等一下再确认
+					std::this_thread::sleep_for(std::chrono::milliseconds(1));
+					drained = true;
+				}
+				else
+				{
+					drained = false;
+				}
 			}
 		}
 
@@ -290,15 +325,31 @@ namespace hical
 		{
 			ioPool_->stop();
 
-			// worker 的 io_context 也 drain（同理）
-			for (auto* loop : ioPool_->getAllLoops())
+			// worker 的 io_context 也需要 drain（同理）
+			auto workerLoops = ioPool_->getAllLoops();
+			for (size_t w = 0; w < workerLoops.size(); ++w)
 			{
-				for (int i = 0; i < 16; ++i)
+				if (w + 1 < idleScanners_.size())
 				{
-					loop->getIoContext().restart();
-					if (loop->getIoContext().poll() == 0)
+					idleScanners_[w + 1]->closeAll();
+				}
+
+				bool drained = false;
+				for (int i = 0; i < 32; ++i)
+				{
+					workerLoops[w]->getIoContext().restart();
+					if (workerLoops[w]->getIoContext().poll() == 0)
 					{
-						break;
+						if (drained)
+						{
+							break;
+						}
+						std::this_thread::sleep_for(std::chrono::milliseconds(1));
+						drained = true;
+					}
+					else
+					{
+						drained = false;
 					}
 				}
 			}
@@ -435,15 +486,23 @@ namespace hical
 
 	Awaitable<void> HttpServer::gcLoop()
 	{
+		auto executor = co_await boost::asio::this_coro::executor;
+		gcTimer_.emplace(executor);
+
 		while (running_.load())
 		{
-			co_await hical::sleep(gcInterval_);
-			if (!running_.load())
+			gcTimer_->expires_after(std::chrono::milliseconds(static_cast<int64_t>(gcInterval_ * 1000)));
+			boost::system::error_code ec;
+			co_await gcTimer_->async_wait(boost::asio::redirect_error(boost::asio::use_awaitable, ec));
+
+			if (ec || !running_.load())
 			{
 				break;
 			}
 			MemoryPool::instance().gc();
 		}
+
+		gcTimer_.reset();
 	}
 
 	void HttpServer::gracefulStop()

@@ -1,3 +1,8 @@
+/**
+ * @file SslContext.h
+ * @brief SSL/TLS 上下文配置与证书加载
+ */
+
 #pragma once
 
 #include <boost/asio/ssl.hpp>

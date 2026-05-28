@@ -1,3 +1,8 @@
+/**
+ * @file Log.h
+ * @brief 生产级日志系统（Logger 单例 + 宏族）
+ */
+
 #pragma once
 
 #include "FixedBuffer.h"

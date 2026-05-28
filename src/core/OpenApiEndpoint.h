@@ -1,6 +1,5 @@
-#pragma once
-
 /**
+ * @file OpenApiEndpoint.h
  * @brief OpenAPI 端点暴露 + Swagger UI
  * 提供 serveOpenApi() 一键注册函数，
  * 在 Router 上注册 /openapi.json 和 /docs 两个端点。
@@ -10,6 +9,8 @@
  *   // GET /openapi.json → 返回 OpenAPI 3.0 JSON
  *   // GET /docs → 返回 Swagger UI HTML
  */
+
+#pragma once
 
 #include "OpenApiDocument.h"
 #include "Router.h"

@@ -1,3 +1,8 @@
+/**
+ * @file DbConnectionPool.cpp
+ * @brief 连接池实现
+ */
+
 #include "DbConnectionPool.h"
 #include <boost/asio/redirect_error.hpp>
 #include <boost/asio/use_awaitable.hpp>

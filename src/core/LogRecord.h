@@ -1,3 +1,8 @@
+/**
+ * @file LogRecord.h
+ * @brief 结构化日志条目
+ */
+
 #pragma once
 
 #include <boost/json/object.hpp>

@@ -1,3 +1,8 @@
+/**
+ * @file DbConnectionPool.h
+ * @brief 协程连接池（稳态定时器信号量）
+ */
+
 #pragma once
 
 #include "DbConfig.h"

@@ -1,3 +1,8 @@
+/**
+ * @file GenericConnection.cpp
+ * @brief GenericConnection 显式模板实例化
+ */
+
 #include "GenericConnection.h"
 #include "SslConnection.h"
 #include "AsioEventLoop.h"

@@ -1,3 +1,8 @@
+/**
+ * @file WsDeflate.h
+ * @brief WebSocket permessage-deflate 压缩扩展
+ */
+
 #pragma once
 
 #include <memory>

@@ -1,3 +1,8 @@
+/**
+ * @file Timer.h
+ * @brief 定时器抽象接口
+ */
+
 #pragma once
 
 #include <chrono>

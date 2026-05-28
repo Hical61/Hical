@@ -1,3 +1,8 @@
+/**
+ * @file Session.cpp
+ * @brief 内存 Session 管理实现
+ */
+
 #include "Session.h"
 #include <openssl/rand.h>
 #include <stdexcept>

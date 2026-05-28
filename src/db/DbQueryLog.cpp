@@ -1,3 +1,8 @@
+/**
+ * @file DbQueryLog.cpp
+ * @brief 查询日志装饰器中间件实现
+ */
+
 #include "DbQueryLog.h"
 #include "DbMiddleware.h"
 #include <utility>

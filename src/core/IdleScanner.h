@@ -1,3 +1,8 @@
+/**
+ * @file IdleScanner.h
+ * @brief 集中式空闲连接扫描器
+ */
+
 #pragma once
 
 #include "Coroutine.h"
@@ -27,7 +32,9 @@ namespace hical
 	class IdleScanner
 	{
 	public:
-		/// @brief 连接条目，直接嵌在协程栈上，不额外分配堆内存
+		/**
+		 * @brief 连接条目，直接嵌在协程栈上，不额外分配堆内存
+		 */
 		struct Entry
 		{
 			std::atomic<int64_t> lastActiveMs {0};
@@ -103,6 +110,13 @@ namespace hical
 		 * @brief 从扫描链表中移除连接条目
 		 */
 		void unregisterEntry(Entry& entry);
+
+		/**
+		 * @brief 关闭链表中所有注册的 socket
+		 * stop 时调——把还挂着的 read/write 全 abort 掉，好让协程走正常退出路径。
+		 * 要求在 scanner 所属 io_context 的线程上调，或者 run() 已经退出了。
+		 */
+		void closeAll();
 
 	private:
 		// optional 是为了 shutdown() 时能提前销毁 timer，

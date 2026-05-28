@@ -1,3 +1,8 @@
+/**
+ * @file LogAdmin.h
+ * @brief 运行时动态日志级别管理端点
+ */
+
 #pragma once
 
 #include "HttpRequest.h"

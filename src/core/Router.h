@@ -1,3 +1,8 @@
+/**
+ * @file Router.h
+ * @brief 路由分发（静态 O(1) + 参数路由）
+ */
+
 #pragma once
 
 #include "HttpTypes.h"

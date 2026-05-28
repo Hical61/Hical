@@ -1,3 +1,8 @@
+/**
+ * @file Cors.h
+ * @brief CORS 跨域中间件
+ */
+
 #pragma once
 
 #include "Coroutine.h"

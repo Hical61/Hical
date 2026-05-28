@@ -1,3 +1,8 @@
+/**
+ * @file Multipart.h
+ * @brief RFC 7578 multipart/form-data 解析
+ */
+
 #pragma once
 
 #include "HttpRequest.h"

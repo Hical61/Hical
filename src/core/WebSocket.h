@@ -1,3 +1,8 @@
+/**
+ * @file WebSocket.h
+ * @brief WebSocket 会话管理与消息收发
+ */
+
 #pragma once
 
 #include "Coroutine.h"

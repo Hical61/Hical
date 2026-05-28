@@ -1,3 +1,8 @@
+/**
+ * @file WsHub.cpp
+ * @brief WebSocket 频道广播实现
+ */
+
 #include "WsHub.h"
 #include <algorithm>
 #include <memory>

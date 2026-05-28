@@ -1,3 +1,8 @@
+/**
+ * @file LogChannel.cpp
+ * @brief 日志通道实现
+ */
+
 #include "LogChannel.h"
 
 #include <utility>

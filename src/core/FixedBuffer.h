@@ -1,3 +1,8 @@
+/**
+ * @file FixedBuffer.h
+ * @brief 栈分配定长缓冲区（堆回退）
+ */
+
 #pragma once
 
 #include <charconv>

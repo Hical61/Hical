@@ -1,3 +1,8 @@
+/**
+ * @file WsDeflate.cpp
+ * @brief permessage-deflate 压缩实现
+ */
+
 #include "WsDeflate.h"
 #include <cstring>
 #include <stdexcept>

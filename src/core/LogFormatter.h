@@ -1,3 +1,8 @@
+/**
+ * @file LogFormatter.h
+ * @brief 日志格式化器接口与实现（Text/JSON）
+ */
+
 #pragma once
 
 #include "LogRecord.h"

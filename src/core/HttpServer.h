@@ -1,3 +1,8 @@
+/**
+ * @file HttpServer.h
+ * @brief HTTP 服务器顶层门面
+ */
+
 #pragma once
 
 #include "Router.h"
@@ -254,6 +259,9 @@ namespace hical
 
 		// 全局错误处理器
 		ErrorHandler errorHandler_;
+
+		// gcLoop 的 timer，放成员上是为了 stop 时能从外面 cancel 掉
+		std::optional<boost::asio::steady_timer> gcTimer_;
 	};
 
 } // namespace hical

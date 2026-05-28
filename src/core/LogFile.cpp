@@ -1,3 +1,8 @@
+/**
+ * @file LogFile.cpp
+ * @brief 日志文件轮转引擎实现
+ */
+
 #include "LogFile.h"
 
 #include <algorithm>

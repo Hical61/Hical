@@ -1,3 +1,8 @@
+/**
+ * @file RouteGroup.h
+ * @brief 路由分组与前缀中间件
+ */
+
 #pragma once
 
 #include "Router.h"

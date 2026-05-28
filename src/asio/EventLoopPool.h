@@ -1,3 +1,8 @@
+/**
+ * @file EventLoopPool.h
+ * @brief 多线程事件循环池（1线程:1 io_context）
+ */
+
 #pragma once
 
 #include "AsioEventLoop.h"

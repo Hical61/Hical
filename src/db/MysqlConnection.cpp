@@ -1,3 +1,8 @@
+/**
+ * @file MysqlConnection.cpp
+ * @brief MySQL 连接实现
+ */
+
 #ifdef HICAL_HAS_DATABASE
 
 	#include "MysqlConnection.h"

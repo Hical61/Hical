@@ -1,3 +1,8 @@
+/**
+ * @file EventLoopPool.cpp
+ * @brief 事件循环池实现
+ */
+
 #include "EventLoopPool.h"
 
 #ifdef __linux__

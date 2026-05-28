@@ -1,3 +1,8 @@
+/**
+ * @file DbResult.h
+ * @brief 数据库查询结果封装
+ */
+
 #pragma once
 
 #include <cstdint>

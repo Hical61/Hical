@@ -1,3 +1,8 @@
+/**
+ * @file StaticFiles.h
+ * @brief 异步静态文件服务（ETag/Range/缓存）
+ */
+
 #pragma once
 
 #include "HttpRequest.h"

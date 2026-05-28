@@ -1,3 +1,8 @@
+/**
+ * @file WsHandshake.h
+ * @brief WebSocket 握手协议处理
+ */
+
 #pragma once
 
 #include "FixedBuffer.h"

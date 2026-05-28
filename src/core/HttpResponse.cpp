@@ -1,3 +1,8 @@
+/**
+ * @file HttpResponse.cpp
+ * @brief HTTP 响应序列化实现
+ */
+
 #include "HttpResponse.h"
 
 namespace hical

@@ -1,3 +1,8 @@
+/**
+ * @file DbConnection.h
+ * @brief 数据库连接抽象接口
+ */
+
 #pragma once
 
 #include "DbResult.h"

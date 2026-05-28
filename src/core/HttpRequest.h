@@ -1,3 +1,8 @@
+/**
+ * @file HttpRequest.h
+ * @brief 零拷贝 HTTP 请求解析与访问
+ */
+
 #pragma once
 
 #include "HeaderMap.h"

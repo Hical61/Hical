@@ -1,3 +1,8 @@
+/**
+ * @file MemoryPool.cpp
+ * @brief 三级 PMR 内存池实现
+ */
+
 #include "MemoryPool.h"
 #ifdef HICAL_USE_MIMALLOC
 	#include "MimallocResource.h"

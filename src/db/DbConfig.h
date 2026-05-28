@@ -1,3 +1,8 @@
+/**
+ * @file DbConfig.h
+ * @brief 数据库连接池配置
+ */
+
 #pragma once
 
 #include <chrono>

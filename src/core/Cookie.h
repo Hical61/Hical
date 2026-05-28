@@ -1,3 +1,8 @@
+/**
+ * @file Cookie.h
+ * @brief HTTP Cookie 解析与 Set-Cookie 构建
+ */
+
 #pragma once
 
 #include <string>

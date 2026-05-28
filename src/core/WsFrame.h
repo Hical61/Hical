@@ -1,3 +1,8 @@
+/**
+ * @file WsFrame.h
+ * @brief WebSocket RFC 6455 帧解析与构建
+ */
+
 #pragma once
 
 #include <cstdint>

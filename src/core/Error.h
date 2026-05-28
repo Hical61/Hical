@@ -1,3 +1,8 @@
+/**
+ * @file Error.h
+ * @brief 统一错误码映射与 NetworkError
+ */
+
 #pragma once
 
 #include <boost/system/error_code.hpp>

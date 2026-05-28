@@ -1,10 +1,11 @@
-#pragma once
-
 /**
+ * @file MetaJsonError.h
  * @brief MetaJson 非模板错误抛出辅助函数
  * 将 throw std::runtime_error(...) 从模板代码中提取为非模板调用，
  * 减少每个用户类型实例化中的代码体积。
  */
+
+#pragma once
 
 #include <string_view>
 

@@ -1,13 +1,14 @@
-#pragma once
-
 /**
- * @brief OpenAPI 3.0 文档组装器
+ * @file OpenApiDocument.h
+ * @brief OpenAPI 3.0 文档懒生成与缓存
  * 从 OpenApiRegistry 中收集路由和 schema 信息，
  * 组装为符合 OpenAPI 3.0.3 规范的完整 JSON 文档。
  * 用法：
  *   OpenApiDocument doc(registry, {.title="My API", .version="1.0.0"});
  *   const std::string& json = doc.generateString();
  */
+
+#pragma once
 
 #include "OpenApiRegistry.h"
 #include <boost/json.hpp>

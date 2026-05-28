@@ -1,6 +1,5 @@
-#pragma once
-
 /**
+ * @file Reflection.h
  * @brief C++26 反射特性检测与基础设施
  * 双路线策略：
  * - 当编译器支持 P2996 反射时（HICAL_HAS_REFLECTION == 1），使用原生反射语法
@@ -9,6 +8,8 @@
  * - __cpp_reflection >= 202306L（P2996 标准特性测试宏）
  * - 或 CMake 手动定义 HICAL_FORCE_REFLECTION
  */
+
+#pragma once
 
 // C++26 反射特性检测
 #if defined(__cpp_reflection) && __cpp_reflection >= 202306L

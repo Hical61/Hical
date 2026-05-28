@@ -1,3 +1,8 @@
+/**
+ * @file SslContext.cpp
+ * @brief SSL/TLS 上下文实现
+ */
+
 #include "SslContext.h"
 #include <stdexcept>
 

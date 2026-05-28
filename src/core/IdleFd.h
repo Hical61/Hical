@@ -1,5 +1,3 @@
-#pragma once
-
 /**
  * @file IdleFd.h
  * @brief 空闲文件描述符预留机制（防止 fd 耗尽时 accept 循环空转）
@@ -14,6 +12,8 @@
  * - POSIX（Linux/macOS）：预留 /dev/null 的 fd
  * - Windows：IOCP 模型下不需要此机制（空实现）
  */
+
+#pragma once
 
 #if defined(_WIN32)
 

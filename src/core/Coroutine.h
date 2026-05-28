@@ -1,3 +1,8 @@
+/**
+ * @file Coroutine.h
+ * @brief 协程工具（Awaitable 别名 + coSpawn）
+ */
+
 #pragma once
 
 #include <boost/asio.hpp>

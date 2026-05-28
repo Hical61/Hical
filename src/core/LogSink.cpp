@@ -1,3 +1,8 @@
+/**
+ * @file LogSink.cpp
+ * @brief 日志输出后端实现
+ */
+
 #include "LogSink.h"
 
 namespace hical

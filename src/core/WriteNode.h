@@ -1,5 +1,3 @@
-#pragma once
-
 /**
  * @file WriteNode.h
  * @brief 多态写缓冲节点（支持内存数据和文件发送）
@@ -11,6 +9,8 @@
  * - 连续内存节点 → scatter-gather I/O 批量发送
  * - 文件节点 → 分块读取并发送（后续可优化为 sendfile/TransmitFile）
  */
+
+#pragma once
 
 #include "PmrBuffer.h"
 #include <boost/asio/buffer.hpp>

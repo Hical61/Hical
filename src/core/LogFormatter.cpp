@@ -1,3 +1,8 @@
+/**
+ * @file LogFormatter.cpp
+ * @brief 日志格式化器实现
+ */
+
 #include "LogFormatter.h"
 
 #include "Log.h"

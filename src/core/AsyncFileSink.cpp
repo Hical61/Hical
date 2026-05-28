@@ -1,3 +1,8 @@
+/**
+ * @file AsyncFileSink.cpp
+ * @brief 异步双缓冲文件 Sink 实现
+ */
+
 #include "AsyncFileSink.h"
 
 #include <utility>

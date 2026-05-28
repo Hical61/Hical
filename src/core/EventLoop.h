@@ -1,3 +1,8 @@
+/**
+ * @file EventLoop.h
+ * @brief 事件循环抽象接口
+ */
+
 #pragma once
 
 #include <chrono>

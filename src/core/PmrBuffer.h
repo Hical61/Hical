@@ -1,3 +1,8 @@
+/**
+ * @file PmrBuffer.h
+ * @brief PMR 内存池缓冲区类型别名
+ */
+
 #pragma once
 
 #include <algorithm>

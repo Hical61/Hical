@@ -1,3 +1,8 @@
+/**
+ * @file TcpServer.cpp
+ * @brief TCP 服务器 accept 循环实现
+ */
+
 #include "TcpServer.h"
 #include "GenericConnection.h"
 #include "SslConnection.h"

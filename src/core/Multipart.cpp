@@ -1,3 +1,8 @@
+/**
+ * @file Multipart.cpp
+ * @brief multipart/form-data 解析实现
+ */
+
 #include "Multipart.h"
 #include <algorithm>
 #include <cctype>

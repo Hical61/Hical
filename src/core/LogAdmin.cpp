@@ -1,3 +1,8 @@
+/**
+ * @file LogAdmin.cpp
+ * @brief 动态日志级别管理端点实现
+ */
+
 #include "LogAdmin.h"
 
 #include "Log.h"

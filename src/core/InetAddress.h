@@ -1,3 +1,8 @@
+/**
+ * @file InetAddress.h
+ * @brief 网络地址封装
+ */
+
 #pragma once
 
 #include <cstdint>

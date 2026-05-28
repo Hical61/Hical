@@ -1,3 +1,8 @@
+/**
+ * @file DbQueryLog.h
+ * @brief 查询日志装饰器中间件
+ */
+
 #pragma once
 
 #include "DbConnection.h"

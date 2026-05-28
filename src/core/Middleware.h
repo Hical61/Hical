@@ -1,3 +1,8 @@
+/**
+ * @file Middleware.h
+ * @brief 洋葱模型中间件管线与同步快速路径
+ */
+
 #pragma once
 
 #include "HttpRequest.h"

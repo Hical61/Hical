@@ -1,11 +1,11 @@
-#pragma once
-
 /**
  * @file MimallocResource.h
  * @brief mimalloc 的 std::pmr::memory_resource 包装
  * 仅在 HICAL_USE_MIMALLOC=1 时编译，作为 PMR 树最底层 upstream 替代 new_delete_resource()。
  * mimalloc 在高并发小对象频繁分配/释放场景下相比系统 malloc 有显著性能优势。
  */
+
+#pragma once
 
 #ifdef HICAL_USE_MIMALLOC
 

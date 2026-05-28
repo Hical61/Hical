@@ -1,3 +1,8 @@
+/**
+ * @file HttpRequest.cpp
+ * @brief HTTP 请求解析实现
+ */
+
 #include "HttpRequest.h"
 #include "Router.h"
 

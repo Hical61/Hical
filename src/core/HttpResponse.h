@@ -1,3 +1,8 @@
+/**
+ * @file HttpResponse.h
+ * @brief HTTP 响应构建与序列化
+ */
+
 #pragma once
 
 #include "Cookie.h"

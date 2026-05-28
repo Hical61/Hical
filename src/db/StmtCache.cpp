@@ -1,3 +1,8 @@
+/**
+ * @file StmtCache.cpp
+ * @brief 语句缓存实现
+ */
+
 #ifdef HICAL_HAS_DATABASE
 
 	#include "StmtCache.h"

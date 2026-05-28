@@ -1,3 +1,8 @@
+/**
+ * @file AsyncFileSink.h
+ * @brief 异步双缓冲文件日志 Sink
+ */
+
 #pragma once
 
 #include "LogFile.h"

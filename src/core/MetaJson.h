@@ -1,6 +1,5 @@
-#pragma once
-
 /**
+ * @file MetaJson.h
  * @brief 反射驱动的 JSON 自动序列化/反序列化
  * 双路线：
  * - C++26 反射：通过 ^^T 自动枚举数据成员，无需用户标注
@@ -10,6 +9,8 @@
  *   auto obj = hical::meta::fromJson<MyStruct>(jsonValue);
  * 支持类型：int, int64_t, double, bool, std::string, std::vector<T>, 嵌套结构体
  */
+
+#pragma once
 
 #include "Reflection.h"
 #include "MetaJsonError.h"

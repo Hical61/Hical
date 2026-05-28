@@ -1,3 +1,8 @@
+/**
+ * @file Error.cpp
+ * @brief 统一错误码映射实现
+ */
+
 #include "Error.h"
 #include <boost/asio/error.hpp>
 #include <cerrno>

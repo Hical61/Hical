@@ -1,3 +1,8 @@
+/**
+ * @file Log.cpp
+ * @brief Logger 单例与宏族实现
+ */
+
 #include "Log.h"
 
 #include "LogChannel.h"

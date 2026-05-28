@@ -1,3 +1,8 @@
+/**
+ * @file InetAddress.cpp
+ * @brief 网络地址封装实现
+ */
+
 #include "InetAddress.h"
 #include <cstring>
 

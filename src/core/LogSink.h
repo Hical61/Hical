@@ -1,3 +1,8 @@
+/**
+ * @file LogSink.h
+ * @brief 可插拔日志输出后端接口
+ */
+
 #pragma once
 
 #include "Log.h"

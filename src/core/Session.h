@@ -1,3 +1,8 @@
+/**
+ * @file Session.h
+ * @brief 内存 Session 管理（读写锁 + 懒 GC）
+ */
+
 #pragma once
 
 #include "Cookie.h"

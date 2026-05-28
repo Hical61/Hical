@@ -1,3 +1,8 @@
+/**
+ * @file LogMiddleware.h
+ * @brief 洋葱模型访问日志中间件
+ */
+
 #pragma once
 
 #include "Middleware.h"

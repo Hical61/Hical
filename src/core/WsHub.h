@@ -1,3 +1,8 @@
+/**
+ * @file WsHub.h
+ * @brief WebSocket 频道订阅与广播中心
+ */
+
 #pragma once
 
 #include "Coroutine.h"

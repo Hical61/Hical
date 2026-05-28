@@ -1,3 +1,8 @@
+/**
+ * @file IdleScanner.cpp
+ * @brief 空闲连接扫描器实现
+ */
+
 #include "core/IdleScanner.h"
 
 namespace hical
@@ -104,6 +109,21 @@ namespace hical
 		{
 			timer_->cancel();
 			timer_.reset();
+		}
+	}
+
+	void IdleScanner::closeAll()
+	{
+		Entry* curr = sentinel_.next;
+		while (curr != &sentinel_)
+		{
+			Entry* next = curr->next;
+			if (curr->socket && curr->socket->is_open())
+			{
+				boost::system::error_code ec;
+				curr->socket->close(ec);
+			}
+			curr = next;
 		}
 	}
 

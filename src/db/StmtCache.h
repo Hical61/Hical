@@ -1,3 +1,8 @@
+/**
+ * @file StmtCache.h
+ * @brief PreparedStatement LRU 缓存
+ */
+
 #pragma once
 
 #ifdef HICAL_HAS_DATABASE

@@ -1,6 +1,5 @@
-#pragma once
-
 /**
+ * @file OpenApiSchema.h
  * @brief OpenAPI 3.0 JSON Schema 自动生成（C++20 回退实现）
  * 从 HICAL_JSON() 宏生成的 FieldDescriptor tuple 中提取类型信息，
  * 自动生成符合 OpenAPI 3.0 / JSON Schema 规范的 schema 对象。
@@ -10,6 +9,8 @@
  * 类型名注册（用于 $ref）：
  *   HICAL_SCHEMA_NAME(MyDTO, "MyDTO")
  */
+
+#pragma once
 
 #include "Reflection.h"
 #include "MetaJson.h"

@@ -1,3 +1,8 @@
+/**
+ * @file MemoryPool.h
+ * @brief 三级 PMR 内存池策略
+ */
+
 #pragma once
 
 #include <atomic>

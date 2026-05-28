@@ -1,3 +1,8 @@
+/**
+ * @file LogChannel.h
+ * @brief 命名日志通道与通道注册表
+ */
+
 #pragma once
 
 #include "LogFormatter.h"

@@ -1,3 +1,8 @@
+/**
+ * @file HeaderMap.h
+ * @brief HTTP 头部容器（大小写不敏感查找）
+ */
+
 #pragma once
 
 #include <algorithm>

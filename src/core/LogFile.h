@@ -1,3 +1,8 @@
+/**
+ * @file LogFile.h
+ * @brief 日志文件轮转引擎
+ */
+
 #pragma once
 
 #include <chrono>

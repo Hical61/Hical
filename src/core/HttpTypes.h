@@ -1,3 +1,8 @@
+/**
+ * @file HttpTypes.h
+ * @brief HTTP 方法/状态码枚举与工具函数
+ */
+
 #pragma once
 
 #include <cstdint>

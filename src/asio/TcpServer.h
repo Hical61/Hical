@@ -1,3 +1,8 @@
+/**
+ * @file TcpServer.h
+ * @brief TCP 接受器与连接生命周期管理
+ */
+
 #pragma once
 
 #include "../core/TcpConnection.h"

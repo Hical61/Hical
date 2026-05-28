@@ -1,3 +1,8 @@
+/**
+ * @file WebSocket.cpp
+ * @brief WebSocket 会话实现
+ */
+
 #include "WebSocket.h"
 #include "WsHandshake.h"
 #include <cstring>

@@ -1,3 +1,8 @@
+/**
+ * @file MysqlConnection.h
+ * @brief Boost.MySQL 后端实现
+ */
+
 #pragma once
 
 #ifdef HICAL_HAS_DATABASE
