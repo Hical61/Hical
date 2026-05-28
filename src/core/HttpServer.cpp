@@ -22,6 +22,14 @@ namespace hical
 		{
 			stop();
 		}
+
+		// 趁 baseLoop_/ioPool_ 的 io_context 还活着，把 scanner 里的 timer 先干掉。
+		// idleScanners_ 比 io_context 后析构（声明在前），如果不提前 reset timer，
+		// io_context 析构后 timer 析构访问已销毁的 timer_service 就是 UB。
+		for (auto& scanner : idleScanners_)
+		{
+			scanner->shutdown();
+		}
 	}
 
 	Router& HttpServer::router()
