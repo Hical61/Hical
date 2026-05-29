@@ -69,6 +69,24 @@ namespace hical
 
 		std::pmr::polymorphic_allocator<std::byte> allocator() const override;
 
+		// ============ 连接负载统计 ============
+
+		/// 当前 loop 上挂了多少连接，getNextLoop() 靠这个做负载均衡
+		void incrementConnections()
+		{
+			connectionCount_.fetch_add(1, std::memory_order_relaxed);
+		}
+
+		void decrementConnections()
+		{
+			connectionCount_.fetch_sub(1, std::memory_order_relaxed);
+		}
+
+		[[nodiscard]] size_t connectionCount() const
+		{
+			return connectionCount_.load(std::memory_order_relaxed);
+		}
+
 		// ============ Asio 特有接口 ============
 
 		/**
@@ -87,6 +105,7 @@ namespace hical
 		std::atomic<bool> running_ {false};
 		std::atomic<bool> quit_ {false};
 		size_t index_ {0};
+		std::atomic<size_t> connectionCount_ {0};
 
 		// 定时器管理（使用独立 AsioTimer 类）
 		std::atomic<TimerId> nextTimerId_ {1};

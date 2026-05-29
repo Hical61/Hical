@@ -150,7 +150,7 @@ Hical 采用**两层分离**架构：核心抽象层（`src/core/`）与网络�
 | `AsioEventLoop`                 | `EventLoop`     | 1 Thread : 1 `io_context`           |
 | `AsioTimer`                     | `Timer`         | `boost::asio::steady_timer`         |
 | `GenericConnection<SocketType>` | `TcpConnection` | 模板化，`if constexpr` 区分 TCP/SSL |
-| `EventLoopPool`                 | —               | 多线程池，Round-Robin 分发          |
+| `EventLoopPool`                 | —               | 多线程池，Least-Connections 分发    |
 | `TcpServer`                     | —               | Accept 循环 + 连接生命周期管理      |
 
 ### 3.3 数据库中间件层 (`src/db/`)
@@ -1070,18 +1070,28 @@ handleSession()                          IdleScanner::run()
 ```cpp
 class EventLoopPool
 {
-    std::atomic<size_t> nextIndex_{0};
-
     AsioEventLoop* getNextLoop()
     {
-        auto idx = nextIndex_.fetch_add(1, std::memory_order_relaxed);
-        return loops_[idx % loops_.size()].get();
+        // Least-Connections：选当前连接数最少的 loop
+        AsioEventLoop* best = loops_[0].get();
+        size_t minCount = best->connectionCount();
+        for (size_t i = 1; i < loops_.size(); ++i)
+        {
+            size_t count = loops_[i]->connectionCount();
+            if (count < minCount)
+            {
+                minCount = count;
+                best = loops_[i].get();
+            }
+        }
+        return best;
     }
 };
 ```
 
+- `AsioEventLoop` 维护 `atomic<size_t> connectionCount_`（relaxed 序），`TcpServer::addConnection()`/`removeConnection()` 负责增减
 - **Linux / macOS**：SO_REUSEPORT 模式下，每个 worker loop 运行独立 `acceptLoop()`，内核自动在多个 acceptor 间做负载均衡，`EventLoopPool::getNextLoop()` 不参与 accept 分发。
-- **Windows**：无 SO_REUSEPORT，回退为单 acceptor + Round-Robin 分发到 worker loop。
+- **Windows**：无 SO_REUSEPORT，回退为单 acceptor + Least-Connections 分发到 worker loop。
 
 ### 12.2.1 Worker 线程 CPU 亲和性（Linux）
 

@@ -91,7 +91,9 @@ namespace hical
 			return;
 		}
 
-		enqueueEntry(WriteEntry::fromMemory(std::make_shared<std::string>(data, len)));
+		auto str = StringPool::acquire(len);
+		str->assign(data, len);
+		enqueueEntry(WriteEntry::fromMemory(std::move(str)));
 	}
 
 	template <typename SocketType>
@@ -147,7 +149,10 @@ namespace hical
 			return;
 		}
 
-		enqueueEntry(WriteEntry::fromMemory(std::make_shared<std::string>(msgPtr->readAll())));
+		auto readAll = msgPtr->readAll();
+		auto str = StringPool::acquire(readAll.size());
+		str->assign(std::move(readAll));
+		enqueueEntry(WriteEntry::fromMemory(std::move(str)));
 	}
 
 	/**
@@ -578,12 +583,16 @@ namespace hical
 		{
 			while (true)
 			{
-				// 批量 drain：循环 pop 直到队列为空
+				// 批量 drain：pop 到空或到上限就停，剩下的下一轮再来
 				batch.clear();
 				MpscNode* node = nullptr;
 				while ((node = writeQueue_.pop()) != nullptr)
 				{
 					batch.push_back(node);
+					if (batch.size() >= kMaxDrainBatch)
+					{
+						break;
+					}
 				}
 
 				if (batch.empty())

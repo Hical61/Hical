@@ -30,200 +30,114 @@ Checks: '-*,
       performance-*'
 
 CheckOptions:
-  # 结构体使用大驼峰，无前缀
-  # struct HttpServer {};
+  # ============ 类型命名 ============
+
+  # 类/结构体/接口：CamelCase，无前缀
+  # class HttpServer {}; struct PoolConfig {};
+  - key:             readability-identifier-naming.ClassCase
+    value:           CamelCase
   - key:             readability-identifier-naming.StructCase
     value:           CamelCase
+  - key:             readability-identifier-naming.AbstractClassCase
+    value:           CamelCase
 
-  # 枚举使用大驼峰，无前缀；枚举常量保留 E 前缀
-  # enum HttpMethod { EGet, EPost };
+  # 枚举类型：CamelCase；枚举常量：h 前缀 + CamelCase
+  # enum class HttpMethod { hGet, hPost };
   - key:             readability-identifier-naming.EnumCase
     value:           CamelCase
   - key:             readability-identifier-naming.EnumConstantCase
     value:           CamelCase
   - key:             readability-identifier-naming.EnumConstantPrefix
-    value:           E
+    value:           h
 
-  # 抽象接口类使用大驼峰，无前缀
-  # class EventLoop { virtual ... };
-  - key:             readability-identifier-naming.AbstractClassCase
+  # 模板参数：CamelCase
+  - key:             readability-identifier-naming.TemplateParameterCase
     value:           CamelCase
 
-  # 类名使用大驼峰，无前缀
-  # class HttpServer {};
-  - key:             readability-identifier-naming.ClassCase
+  # typedef/using：CamelCase
+  - key:             readability-identifier-naming.TypedefCase
+    value:           CamelCase
+  - key:             readability-identifier-naming.TypeAliasCase
     value:           CamelCase
 
-  # 类静态常量：小驼峰 + m_ 前缀
-  # class Foo { public: static const int m_classConstant; };
-  - key:             readability-identifier-naming.ClassConstantCase
-    value:           camelBack
-  - key:             readability-identifier-naming.ClassConstantPrefix
-    value:           m_
+  # ============ 成员变量 ============
 
-  # const 成员变量：小驼峰 + m_ 前缀
-  # class Foo { const char m_constMember; };
-  - key:             readability-identifier-naming.ConstantMemberCase
+  # 成员变量：camelBack + _ 后缀（无 m_ 前缀）
+  # class Foo { int router_; size_t maxBodySize_; };
+  - key:             readability-identifier-naming.MemberCase
     value:           camelBack
-  - key:             readability-identifier-naming.ConstantMemberPrefix
-    value:           m_
-
-  # 类成员（static）：小驼峰 + m_ 前缀
-  # class Foo { public: static int m_classMember; };
-  - key:             readability-identifier-naming.ClassMemberCase
-    value:           camelBack
-  - key:             readability-identifier-naming.ClassMemberPrefix
-    value:           m_
-
-  # private 成员变量：小驼峰 + m_ 前缀
-  # class Foo { private: int m_value; };
+  - key:             readability-identifier-naming.MemberSuffix
+    value:           _
   - key:             readability-identifier-naming.PrivateMemberCase
     value:           camelBack
-  - key:             readability-identifier-naming.PrivateMemberPrefix
-    value:           m_
-
-  # protected 成员变量：小驼峰 + m_ 前缀
-  # class Foo { protected: int m_value; };
+  - key:             readability-identifier-naming.PrivateMemberSuffix
+    value:           _
   - key:             readability-identifier-naming.ProtectedMemberCase
     value:           camelBack
-  - key:             readability-identifier-naming.ProtectedMemberPrefix
-    value:           m_
+  - key:             readability-identifier-naming.ProtectedMemberSuffix
+    value:           _
 
-  # 局部常量：小驼峰 + c 前缀
-  # void func() { int const cMyConst = 0; }
-  - key:             readability-identifier-naming.ConstantCase
-    value:           camelBack
-  - key:             readability-identifier-naming.ConstantPrefix
-    value:           c
+  # static constexpr 类常量：k 前缀 + CamelCase
+  # static constexpr size_t kMaxPathSegments = 32;
+  - key:             readability-identifier-naming.ClassConstantCase
+    value:           CamelCase
+  - key:             readability-identifier-naming.ClassConstantPrefix
+    value:           k
+  - key:             readability-identifier-naming.StaticConstantCase
+    value:           CamelCase
+  - key:             readability-identifier-naming.StaticConstantPrefix
+    value:           k
 
-  - key:             readability-identifier-naming.LocalConstantCase
+  # const 成员变量：camelBack + _ 后缀
+  - key:             readability-identifier-naming.ConstantMemberCase
     value:           camelBack
-  - key:             readability-identifier-naming.LocalConstantPrefix
-    value:           c
+  - key:             readability-identifier-naming.ConstantMemberSuffix
+    value:           _
 
-  # 全局常量：小驼峰 + g_c 前缀
-  # unsigned const g_cMyConstGlobal[] = {1, 2, 3};
-  - key:             readability-identifier-naming.GlobalConstantCase
-    value:           camelBack
-  - key:             readability-identifier-naming.GlobalConstantPrefix
-    value:           g_c
+  # ============ 函数/方法 ============
 
-  # 函数使用小驼峰命名
-  - key:             readability-identifier-naming.GlobalFunctionCase
-    value:           camelBack
+  # 函数/方法：camelBack
+  # void runAfter(); void dispatch();
   - key:             readability-identifier-naming.FunctionCase
     value:           camelBack
   - key:             readability-identifier-naming.MethodCase
     value:           camelBack
-
-  # 变量统一使用小驼峰
-  - key:             readability-identifier-naming.VariableCase
+  - key:             readability-identifier-naming.GlobalFunctionCase
     value:           camelBack
 
-  # 全局变量：小驼峰 + g_ 前缀
-  # int g_globalVar;
+  # ============ 变量 ============
+
+  # 局部变量/参数：camelBack
+  - key:             readability-identifier-naming.VariableCase
+    value:           camelBack
+  - key:             readability-identifier-naming.LocalVariableCase
+    value:           camelBack
+  - key:             readability-identifier-naming.ParameterCase
+    value:           camelBack
+  - key:             readability-identifier-naming.ConstantParameterCase
+    value:           camelBack
+  - key:             readability-identifier-naming.LocalConstantCase
+    value:           camelBack
+
+  # 全局变量：g_ 前缀 + camelBack
+  # int g_instance;
   - key:             readability-identifier-naming.GlobalVariableCase
     value:           camelBack
   - key:             readability-identifier-naming.GlobalVariablePrefix
     value:           g_
 
-  # 局部变量：小驼峰
-  # void foo() { int localVar = 3; }
-  - key:             readability-identifier-naming.LocalVariableCase
-    value:           camelBack
+  # 全局常量：k 前缀 + CamelCase
+  - key:             readability-identifier-naming.GlobalConstantCase
+    value:           CamelCase
+  - key:             readability-identifier-naming.GlobalConstantPrefix
+    value:           k
 
-  # 宏定义使用全大写
-  # #define MY_MACRO_DEFINITION
+  # 宏定义：UPPER_CASE
+  # #define HICAL_ROUTE
   - key:             readability-identifier-naming.MacroDefinitionCase
     value:           UPPER_CASE
 
-  # 参数：小驼峰
-  # void func(int param);
-  - key:             readability-identifier-naming.ParameterCase
-    value:           camelBack
-
-  # const 参数：小驼峰
-  # void func(const int param);
-  - key:             readability-identifier-naming.ConstantParameterCase
-    value:           camelBack
-
-
-  # 静态变量：小驼峰 + s 前缀
-  # static unsigned sMyStaticVar;
-  - key:             readability-identifier-naming.StaticVariableCase
-    value:           camelBack
-  - key:             readability-identifier-naming.StaticVariablePrefix
-    value:           s
-
-  # 静态常量：小驼峰 + c 前缀
-  # static unsigned const cMyStaticConst = 0;
-  - key:             readability-identifier-naming.StaticConstantCase
-    value:           camelBack
-  - key:             readability-identifier-naming.StaticConstantPrefix
-    value:           c
-
-  # 指针参数：大驼峰 + p 前缀
-  # void func(int* pParam);
-  - key:             readability-identifier-naming.PointerParameterCase
-    value:           CamelCase
-  - key:             readability-identifier-naming.PointerParameterIgnoredRegexp
-    value:           "psz.*|pscw.*"
-  - key:             readability-identifier-naming.PointerParameterPrefix
-    value:           p
-
-  # const 指针参数：大驼峰 + p 前缀
-  # void func(const int* pParam);
-  - key:             readability-identifier-naming.ConstantPointerParameterCase
-    value:           CamelCase
-  - key:             readability-identifier-naming.ConstantPointerParameterIgnoredRegexp
-    value:           "psz.*"
-  - key:             readability-identifier-naming.ConstantPointerParameterPrefix
-    value:           p
-
-  # 全局指针：大驼峰 + g_p 前缀
-  # int* g_pGlobal;
-  - key:             readability-identifier-naming.GlobalPointerCase
-    value:           CamelCase
-  - key:             readability-identifier-naming.GlobalPointerIgnoredRegexp
-    value:           "psz.*"
-  - key:             readability-identifier-naming.GlobalPointerPrefix
-    value:           g_p
-
-  # 局部指针：大驼峰 + p 前缀
-  # void foo() { int* pLocal; }
-  - key:             readability-identifier-naming.LocalPointerCase
-    value:           CamelCase
-  - key:             readability-identifier-naming.LocalPointerIgnoredRegexp
-    value:           "psz.*"
-  - key:             readability-identifier-naming.LocalPointerPrefix
-    value:           p
-
-  # 局部 const 指针：大驼峰 + p 前缀
-  # void foo() { const int* pLocalConst; }
-  - key:             readability-identifier-naming.LocalConstantPointerCase
-    value:           CamelCase
-  - key:             readability-identifier-naming.LocalConstantPointerIgnoredRegexp
-    value:           "psz.*"
-  - key:             readability-identifier-naming.LocalConstantPointerPrefix
-    value:           p
-
-  # 全局 const 指针：大驼峰 + g_p 前缀
-  - key:             readability-identifier-naming.GlobalConstantPointerCase
-    value:           CamelCase
-  - key:             readability-identifier-naming.GlobalConstantPointerIgnoredRegexp
-    value:           "psz.*"
-  - key:             readability-identifier-naming.GlobalConstantPointerPrefix
-    value:           g_p
-
-  # 模板参数名称使用大驼峰
-  - key:             readability-identifier-naming.TemplateParameterCase
-    value:           CamelCase
-
-  # 使用typedef和using重命名类型时，使用大驼峰
-  - key:             readability-identifier-naming.TypedefCase
-    value:           CamelCase
-  - key:             readability-identifier-naming.TypeAliasCase
-    value:           CamelCase
+  # ============ 函数大小限制 ============
 
   # 超过 150 行的函数警告
   - key:             readability-function-size.LineThreshold
@@ -234,6 +148,9 @@ CheckOptions:
   # 函数嵌套超过4个的警报
   - key:             readability-function-size.NestingThreshold
     value:           4
+
+  # ============ 其他 ============
+
   # 全部都是 public 成员的时候不警告成员私有化
   - key:             misc-non-private-member-variables-in-classes.IgnoreClassesWithAllMemberVariablesBeingPublic
     value:           true

@@ -239,12 +239,14 @@ namespace hical
 	{
 		shard.connections.insert(conn);
 		totalConnections_.fetch_add(1, std::memory_order_relaxed);
+		shard.loop->incrementConnections();
 	}
 
 	void TcpServer::removeConnection(LoopShard& shard, const TcpConnection::Ptr& conn)
 	{
 		shard.connections.erase(conn);
 		totalConnections_.fetch_sub(1, std::memory_order_relaxed);
+		shard.loop->decrementConnections();
 	}
 
 	Awaitable<void> TcpServer::acceptLoop()

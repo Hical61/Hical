@@ -75,7 +75,7 @@ v2.6.0 将 HTTP 解析/序列化和 WebSocket 全面替换为原生实现（pico
 
 - 每个 worker loop 独立 acceptor，accept 和 I/O 在同一线程
 - **零跨线程调度**：新连接无需 `post()` 到其他线程
-- Windows 自动回退为单 acceptor + round-robin 分发
+- Windows 自动回退为单 acceptor + least-connections 分发
 - Linux/macOS 下消除了 accept 锁竞争
 
 ### 2.3 同步快速路径

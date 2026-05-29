@@ -97,8 +97,19 @@ namespace hical
 			return nullptr;
 		}
 
-		size_t index = nextIndex_.fetch_add(1) % loops_.size();
-		return loops_[index].get();
+		// 最少连接数策略：选当前活跃连接最少的 loop
+		AsioEventLoop* best = loops_[0].get();
+		size_t minCount = best->connectionCount();
+		for (size_t i = 1; i < loops_.size(); ++i)
+		{
+			size_t count = loops_[i]->connectionCount();
+			if (count < minCount)
+			{
+				minCount = count;
+				best = loops_[i].get();
+			}
+		}
+		return best;
 	}
 
 	std::vector<AsioEventLoop*> EventLoopPool::getAllLoops()

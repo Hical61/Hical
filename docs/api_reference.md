@@ -9,7 +9,7 @@
 > 阅读各模块 API 前，请先了解这些贯穿全框架的契约。
 
 ### 线程模型
-- `HttpServer` 启动后会派生 `ioThreads` 个独立 `io_context`（Linux/macOS 走 SO_REUSEPORT 多 acceptor，Windows 走单 acceptor + round-robin）。每个连接固定绑定到其所属的 `io_context` 线程，**所有 I/O 与回调均在该线程内串行执行**，连接级状态无需加锁。
+- `HttpServer` 启动后会派生 `ioThreads` 个独立 `io_context`（Linux/macOS 走 SO_REUSEPORT 多 acceptor，Windows 走单 acceptor + least-connections 分发）。每个连接固定绑定到其所属的 `io_context` 线程，**所有 I/O 与回调均在该线程内串行执行**，连接级状态无需加锁。
 - 跨连接共享的数据结构（`SessionManager`、`WsHub`、`LogChannelRegistry`、`DbConnectionPool`、`OpenApiRegistry`）由框架内部以 `shared_mutex` / 原子操作保护，用户调用安全。
 - 用户自定义的"广播/批处理"逻辑若跨连接读写自有数据，需自行加锁。
 
@@ -26,11 +26,11 @@
 ### 错误模型
 不同 API 采用不同错误传递方式，按"调用者直接动作"分三类：
 
-| 方式 | 适用 API | 示例 |
-|---|---|---|
-| 抛 C++ 异常 | `meta::fromJson<T>` / `req.readJson<T>()` / `DbConnection::query` / `DbConnectionPool::acquire`（超时） | JSON 解析失败、SQL 错误、池超时 |
-| 返回 `std::optional<T>` | `req.queryParam` / `req.formParam` / `MultipartParser::parse`（256 part 限制） / `Session::get<T>` / `WebSocketSession::receive`（连接关闭） | 缺失字段/数据 |
-| 返回 `NetworkError` 结构体 | `Error.h` 内 `toNetworkError(ec)` 等转换函数 | Asio 错误码统一映射 |
+| 方式                       | 适用 API                                                                                                                                     | 示例                            |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- |
+| 抛 C++ 异常                | `meta::fromJson<T>` / `req.readJson<T>()` / `DbConnection::query` / `DbConnectionPool::acquire`（超时）                                      | JSON 解析失败、SQL 错误、池超时 |
+| 返回 `std::optional<T>`    | `req.queryParam` / `req.formParam` / `MultipartParser::parse`（256 part 限制） / `Session::get<T>` / `WebSocketSession::receive`（连接关闭） | 缺失字段/数据                   |
+| 返回 `NetworkError` 结构体 | `Error.h` 内 `toNetworkError(ec)` 等转换函数                                                                                                 | Asio 错误码统一映射             |
 
 未由路由处理器捕获的异常会冒泡到 `HttpServer::setErrorHandler()` 指定的全局 handler（默认返回 500）。
 
@@ -381,29 +381,29 @@ HTTP 响应封装，对原生 HTTP 响应的 hical 风格封装。
 
 #### 公共方法
 
-| 方法                         | 参数                                                         | 返回值               | 说明                    |
-| ---------------------------- | ------------------------------------------------------------ | -------------------- | ----------------------- |
-| `statusCode()`               | 无                                                           | `HttpStatusCode`     | 获取状态码              |
-| `setStatus(code)`            | code: 状态码                                                 | `void`               | 设置状态码              |
-| `header(name)`               | name: 字段名                                                 | `std::string`        | 获取指定头部字段值      |
-| `setHeader(name, value)`     | name: 字段名<br>value: 字段值                                | `void`               | 设置头部字段            |
-| `body()`                     | 无                                                           | `const std::string&` | 获取消息体              |
-| `setBody(body, contentType)` | body: 消息体<br>contentType: Content-Type（默认 text/plain） | `void`               | 设置消息体              |
-| `setJsonBody(json)`          | json: JSON 值                                                | `void`               | 设置 JSON 消息体        |
-| `setCookie(name, value, opts)` | name: Cookie 名<br>value: Cookie 值<br>opts: CookieOptions    | `void`               | 追加 Set-Cookie 响应头  |
-| `native()`                   | 无                                                           | `NativeResponse&`    | 获取底层原生响应引用    |
+| 方法                           | 参数                                                         | 返回值               | 说明                   |
+| ------------------------------ | ------------------------------------------------------------ | -------------------- | ---------------------- |
+| `statusCode()`                 | 无                                                           | `HttpStatusCode`     | 获取状态码             |
+| `setStatus(code)`              | code: 状态码                                                 | `void`               | 设置状态码             |
+| `header(name)`                 | name: 字段名                                                 | `std::string`        | 获取指定头部字段值     |
+| `setHeader(name, value)`       | name: 字段名<br>value: 字段值                                | `void`               | 设置头部字段           |
+| `body()`                       | 无                                                           | `const std::string&` | 获取消息体             |
+| `setBody(body, contentType)`   | body: 消息体<br>contentType: Content-Type（默认 text/plain） | `void`               | 设置消息体             |
+| `setJsonBody(json)`            | json: JSON 值                                                | `void`               | 设置 JSON 消息体       |
+| `setCookie(name, value, opts)` | name: Cookie 名<br>value: Cookie 值<br>opts: CookieOptions   | `void`               | 追加 Set-Cookie 响应头 |
+| `native()`                     | 无                                                           | `NativeResponse&`    | 获取底层原生响应引用   |
 
 #### 工厂方法
 
-| 方法                       | 参数                                                   | 返回值         | 说明                                      |
-| -------------------------- | ------------------------------------------------------ | -------------- | ----------------------------------------- |
-| `ok(body)`                 | body: 消息体（默认空）                                 | `HttpResponse` | 创建 200 OK 响应                          |
-| `json(json)`               | json: JSON 值                                          | `HttpResponse` | 创建 JSON 200 OK 响应                     |
-| `notFound()`               | 无                                                     | `HttpResponse` | 创建 404 Not Found 响应                   |
-| `badRequest(message)`      | message: 错误信息（默认 "Bad Request"）                | `HttpResponse` | 创建 400 Bad Request 响应                 |
-| `serverError()`            | 无                                                     | `HttpResponse` | 创建 500 Internal Server Error 响应       |
-| `redirect(location, code)` | location: 重定向 URL<br>code: 状态码（默认 302 Found） | `HttpResponse` | 创建重定向响应（Location 头经 CRLF 防护） |
-| `rangeNotSatisfiable(fileSize)` | fileSize: 资源总大小 | `HttpResponse` | 创建 416 Range Not Satisfiable 响应（含 `Content-Range: bytes */fileSize`） |
+| 方法                            | 参数                                                   | 返回值         | 说明                                                                        |
+| ------------------------------- | ------------------------------------------------------ | -------------- | --------------------------------------------------------------------------- |
+| `ok(body)`                      | body: 消息体（默认空）                                 | `HttpResponse` | 创建 200 OK 响应                                                            |
+| `json(json)`                    | json: JSON 值                                          | `HttpResponse` | 创建 JSON 200 OK 响应                                                       |
+| `notFound()`                    | 无                                                     | `HttpResponse` | 创建 404 Not Found 响应                                                     |
+| `badRequest(message)`           | message: 错误信息（默认 "Bad Request"）                | `HttpResponse` | 创建 400 Bad Request 响应                                                   |
+| `serverError()`                 | 无                                                     | `HttpResponse` | 创建 500 Internal Server Error 响应                                         |
+| `redirect(location, code)`      | location: 重定向 URL<br>code: 状态码（默认 302 Found） | `HttpResponse` | 创建重定向响应（Location 头经 CRLF 防护）                                   |
+| `rangeNotSatisfiable(fileSize)` | fileSize: 资源总大小                                   | `HttpResponse` | 创建 416 Range Not Satisfiable 响应（含 `Content-Range: bytes */fileSize`） |
 
 #### 示例
 
@@ -449,26 +449,26 @@ using const_iterator = Container::const_iterator;
 
 #### 公共方法
 
-| 方法                          | 参数                                   | 返回值                           | 说明                                     |
-| ----------------------------- | -------------------------------------- | -------------------------------- | ---------------------------------------- |
-| `find(name)`                  | name: 头部名称                         | `std::string_view`               | 查找首个匹配值（大小写不敏感），未找到返回空 |
-| `findAll(name)`               | name: 头部名称                         | `std::vector<std::string_view>`  | 查找所有匹配值                           |
-| `set(name, value)`            | name: 头部名称<br>value: 头部值        | `void`                           | 覆写首个匹配，不存在则追加               |
-| `insert(name, value)`         | name: 头部名称<br>value: 头部值        | `void`                           | 始终追加（用于 Set-Cookie 等多值字段）   |
-| `erase(name)`                 | name: 头部名称                         | `void`                           | 删除所有匹配的头部                       |
-| `contains(name)`              | name: 头部名称                         | `bool`                           | 是否包含指定头部                         |
-| `count(name)`                 | name: 头部名称                         | `size_t`                         | 统计指定名称的头部数量                   |
-| `size()`                      | 无                                     | `size_t`                         | 头部总数                                 |
-| `empty()`                     | 无                                     | `bool`                           | 是否为空                                 |
-| `reserve(n)`                  | n: 预留容量                            | `void`                           | 预分配空间                               |
-| `clear()`                     | 无                                     | `void`                           | 清空所有头部                             |
-| `begin()` / `end()`           | 无                                     | `iterator` / `const_iterator`    | 迭代器                                   |
+| 方法                  | 参数                            | 返回值                          | 说明                                         |
+| --------------------- | ------------------------------- | ------------------------------- | -------------------------------------------- |
+| `find(name)`          | name: 头部名称                  | `std::string_view`              | 查找首个匹配值（大小写不敏感），未找到返回空 |
+| `findAll(name)`       | name: 头部名称                  | `std::vector<std::string_view>` | 查找所有匹配值                               |
+| `set(name, value)`    | name: 头部名称<br>value: 头部值 | `void`                          | 覆写首个匹配，不存在则追加                   |
+| `insert(name, value)` | name: 头部名称<br>value: 头部值 | `void`                          | 始终追加（用于 Set-Cookie 等多值字段）       |
+| `erase(name)`         | name: 头部名称                  | `void`                          | 删除所有匹配的头部                           |
+| `contains(name)`      | name: 头部名称                  | `bool`                          | 是否包含指定头部                             |
+| `count(name)`         | name: 头部名称                  | `size_t`                        | 统计指定名称的头部数量                       |
+| `size()`              | 无                              | `size_t`                        | 头部总数                                     |
+| `empty()`             | 无                              | `bool`                          | 是否为空                                     |
+| `reserve(n)`          | n: 预留容量                     | `void`                          | 预分配空间                                   |
+| `clear()`             | 无                              | `void`                          | 清空所有头部                                 |
+| `begin()` / `end()`   | 无                              | `iterator` / `const_iterator`   | 迭代器                                       |
 
 #### 静态方法
 
-| 方法                    | 参数            | 返回值 | 说明                     |
-| ----------------------- | --------------- | ------ | ------------------------ |
-| `iequals(a, b)`         | 两个 string_view | `bool` | 大小写不敏感字符串比较   |
+| 方法            | 参数             | 返回值 | 说明                   |
+| --------------- | ---------------- | ------ | ---------------------- |
+| `iequals(a, b)` | 两个 string_view | `bool` | 大小写不敏感字符串比较 |
 
 ---
 
@@ -547,30 +547,30 @@ using SyncAfterHandler     = std::function<void(HttpRequest&, HttpResponse&)>;
 
 同步与异步中间件的统一容器，由 `buildOptimizedChain()` 合并连续同步条目。
 
-| 字段           | 类型                | 说明                       |
-| -------------- | ------------------- | -------------------------- |
-| `type`         | `Type` (Async/Sync) | 中间件类型                 |
-| `name`         | `std::string`       | 中间件名称（调试用）       |
-| `asyncHandler` | `MiddlewareHandler` | 异步处理器（仅 Async 有值）|
-| `before`       | `SyncBeforeHandler` | 同步前置处理器（仅 Sync）  |
-| `after`        | `SyncAfterHandler`  | 同步后置处理器（仅 Sync）  |
+| 字段           | 类型                | 说明                        |
+| -------------- | ------------------- | --------------------------- |
+| `type`         | `Type` (Async/Sync) | 中间件类型                  |
+| `name`         | `std::string`       | 中间件名称（调试用）        |
+| `asyncHandler` | `MiddlewareHandler` | 异步处理器（仅 Async 有值） |
+| `before`       | `SyncBeforeHandler` | 同步前置处理器（仅 Sync）   |
+| `after`        | `SyncAfterHandler`  | 同步后置处理器（仅 Sync）   |
 
 #### MiddlewarePipeline 类
 
-| 方法                                     | 参数                                              | 返回值                    | 说明                                          |
-| ---------------------------------------- | ------------------------------------------------- | ------------------------- | --------------------------------------------- |
-| `use(middleware)`                        | middleware: 异步中间件                            | `void`                    | 添加异步中间件（`build()` 后禁止调用）        |
-| `use(name, middleware)`                  | name: 名称<br>middleware: 异步中间件              | `void`                    | 添加命名异步中间件                            |
-| `use(before)`                            | before: 同步前置处理器                            | `void`                    | 添加同步前置中间件                            |
-| `use(before, after)`                     | before/after: 同步前后处理器                      | `void`                    | 添加同步前后处理器对                          |
-| `use(name, before, after)`               | name/before/after                                 | `void`                    | 添加命名同步前后处理器对                      |
-| `build(finalHandler)`                    | finalHandler: 最终处理器                          | `void`                    | 预构建调用链（仅调用一次）                    |
-| `buildFor(finalHandler)`                 | finalHandler: 最终处理器                          | `MiddlewareNext`          | 预构建并返回可缓存的调用链                    |
-| `execute(req)`                           | req: HTTP 请求                                    | `Awaitable<HttpResponse>` | 执行预构建缓存链（需先 `build()`）            |
-| `execute(req, finalHandler)`             | req: HTTP 请求<br>finalHandler: 最终处理器        | `Awaitable<HttpResponse>` | 动态构建并执行                                |
-| `size()`                                 | 无                                                | `size_t`                  | 获取中间件数量                                |
-| `buildChainFrom(handlers, final)` | handlers: 中间件列表<br>final: 最终处理器 | `MiddlewareNext` | 静态方法：从异步 handler 列表构建链 |
-| `buildOptimizedChain(entries, final)` | entries: MiddlewareEntry 列表<br>final: 最终处理器 | `MiddlewareNext` | 静态方法：合并连续同步中间件为单协程帧 |
+| 方法                                  | 参数                                               | 返回值                    | 说明                                   |
+| ------------------------------------- | -------------------------------------------------- | ------------------------- | -------------------------------------- |
+| `use(middleware)`                     | middleware: 异步中间件                             | `void`                    | 添加异步中间件（`build()` 后禁止调用） |
+| `use(name, middleware)`               | name: 名称<br>middleware: 异步中间件               | `void`                    | 添加命名异步中间件                     |
+| `use(before)`                         | before: 同步前置处理器                             | `void`                    | 添加同步前置中间件                     |
+| `use(before, after)`                  | before/after: 同步前后处理器                       | `void`                    | 添加同步前后处理器对                   |
+| `use(name, before, after)`            | name/before/after                                  | `void`                    | 添加命名同步前后处理器对               |
+| `build(finalHandler)`                 | finalHandler: 最终处理器                           | `void`                    | 预构建调用链（仅调用一次）             |
+| `buildFor(finalHandler)`              | finalHandler: 最终处理器                           | `MiddlewareNext`          | 预构建并返回可缓存的调用链             |
+| `execute(req)`                        | req: HTTP 请求                                     | `Awaitable<HttpResponse>` | 执行预构建缓存链（需先 `build()`）     |
+| `execute(req, finalHandler)`          | req: HTTP 请求<br>finalHandler: 最终处理器         | `Awaitable<HttpResponse>` | 动态构建并执行                         |
+| `size()`                              | 无                                                 | `size_t`                  | 获取中间件数量                         |
+| `buildChainFrom(handlers, final)`     | handlers: 中间件列表<br>final: 最终处理器          | `MiddlewareNext`          | 静态方法：从异步 handler 列表构建链    |
+| `buildOptimizedChain(entries, final)` | entries: MiddlewareEntry 列表<br>final: 最终处理器 | `MiddlewareNext`          | 静态方法：合并连续同步中间件为单协程帧 |
 
 #### 示例
 
@@ -610,24 +610,24 @@ C++26 反射 / C++20 宏双轨的 JSON 自动序列化/反序列化系统。
 
 #### 函数（`namespace hical::meta`）
 
-| 函数                         | 参数                        | 返回值                | 说明                                    |
-| ---------------------------- | --------------------------- | --------------------- | --------------------------------------- |
-| `toJson(obj)`                | obj: 带 `HICAL_JSON` 的对象 | `boost::json::object` | 序列化结构体为 JSON                     |
-| `fromJson<T>(json)`          | json: `boost::json::value`  | `T`                   | 反序列化 JSON 为结构体（类型不匹配抛异常） |
-| `readJson<T>(req)`           | req: `HttpRequest&`         | `T`                   | 从请求体反序列化（JSON 无效时抛异常）   |
-| `toJsonSnakeCase<T>(obj)`    | obj: 结构体对象             | `boost::json::object` | 序列化时 key 自动转 snake_case（仅 C++26） |
+| 函数                      | 参数                        | 返回值                | 说明                                       |
+| ------------------------- | --------------------------- | --------------------- | ------------------------------------------ |
+| `toJson(obj)`             | obj: 带 `HICAL_JSON` 的对象 | `boost::json::object` | 序列化结构体为 JSON                        |
+| `fromJson<T>(json)`       | json: `boost::json::value`  | `T`                   | 反序列化 JSON 为结构体（类型不匹配抛异常） |
+| `readJson<T>(req)`        | req: `HttpRequest&`         | `T`                   | 从请求体反序列化（JSON 无效时抛异常）      |
+| `toJsonSnakeCase<T>(obj)` | obj: 结构体对象             | `boost::json::object` | 序列化时 key 自动转 snake_case（仅 C++26） |
 
 > `HttpRequest::readJson<T>()` 是 `meta::readJson<T>(req)` 的便捷成员函数包装。
 
 #### 宏（C++20 回退模式）
 
-| 宏                                | 用途                                     |
-| --------------------------------- | ---------------------------------------- |
-| `HICAL_JSON(Type, field1, ...)`   | 声明参与 JSON 序列化的字段（支持装饰器） |
-| `ALIAS(field, "json_key")`        | 自定义 JSON key                          |
-| `REQUIRED(field)`                 | 反序列化时必须存在，否则抛异常           |
-| `REQUIRED_ALIAS(field, "key")`    | 必需 + 自定义 key 的组合                 |
-| `HICAL_IGNORE(field)`             | 序列化/反序列化均跳过                    |
+| 宏                              | 用途                                     |
+| ------------------------------- | ---------------------------------------- |
+| `HICAL_JSON(Type, field1, ...)` | 声明参与 JSON 序列化的字段（支持装饰器） |
+| `ALIAS(field, "json_key")`      | 自定义 JSON key                          |
+| `REQUIRED(field)`               | 反序列化时必须存在，否则抛异常           |
+| `REQUIRED_ALIAS(field, "key")`  | 必需 + 自定义 key 的组合                 |
+| `HICAL_IGNORE(field)`           | 序列化/反序列化均跳过                    |
 
 #### C++26 反射属性（`HICAL_HAS_REFLECTION == 1` 时）
 
@@ -680,10 +680,10 @@ C++26 反射 / C++20 宏双轨的自动路由注册系统。
 
 #### 函数（`namespace hical::meta`）
 
-| 函数                                  | 参数                                         | 说明                                   |
-| ------------------------------------- | -------------------------------------------- | -------------------------------------- |
-| `registerRoutes(router, pHandler)`    | router: Router&<br>pHandler: shared_ptr 版本 | 注册所有标注的路由（生命周期安全）     |
-| `registerRoutes(router, handler)`     | router: Router&<br>handler: 引用版本         | 注册所有标注的路由（调用者管理生命周期） |
+| 函数                               | 参数                                         | 说明                                     |
+| ---------------------------------- | -------------------------------------------- | ---------------------------------------- |
+| `registerRoutes(router, pHandler)` | router: Router&<br>pHandler: shared_ptr 版本 | 注册所有标注的路由（生命周期安全）       |
+| `registerRoutes(router, handler)`  | router: Router&<br>handler: 引用版本         | 注册所有标注的路由（调用者管理生命周期） |
 
 #### 宏（C++20 回退模式）
 
@@ -710,18 +710,18 @@ struct Handler
 
 > 定义位于 `<hical/core/Reflection.h>`，由 `MetaRoutes.h` 重新导出。
 
-| 字段          | 类型               | 说明                         |
-| ------------- | ------------------ | ---------------------------- |
-| `method`      | `HttpMethod`       | HTTP 方法                    |
-| `path`        | `std::string_view` | 路由路径                     |
-| `handlerName` | `std::string_view` | 成员函数名（调试用）         |
+| 字段          | 类型               | 说明                 |
+| ------------- | ------------------ | -------------------- |
+| `method`      | `HttpMethod`       | HTTP 方法            |
+| `path`        | `std::string_view` | 路由路径             |
+| `handlerName` | `std::string_view` | 成员函数名（调试用） |
 
 #### 类型萃取
 
-| 萃取                   | 说明                         |
-| ---------------------- | ---------------------------- |
-| `HasRouteTable<T>`     | T 是否使用了 `HICAL_ROUTES`  |
-| `HasJsonFields<T>`     | T 是否使用了 `HICAL_JSON`    |
+| 萃取               | 说明                        |
+| ------------------ | --------------------------- |
+| `HasRouteTable<T>` | T 是否使用了 `HICAL_ROUTES` |
+| `HasJsonFields<T>` | T 是否使用了 `HICAL_JSON`   |
 
 #### 示例
 
@@ -768,14 +768,14 @@ Cookie 解析（请求侧）与设置（响应侧）支持，符合 RFC 6265。
 
 #### CookieOptions 结构体
 
-| 字段       | 类型          | 默认值  | 说明                                          |
-| ---------- | ------------- | ------- | --------------------------------------------- |
-| `path`     | `std::string` | `"/"`   | Cookie 作用路径                               |
-| `domain`   | `std::string` | `""`    | Cookie 作用域（空=当前域）                    |
-| `maxAge`   | `int`         | `-1`    | 有效期（秒），-1 表示会话 Cookie              |
-| `httpOnly` | `bool`        | `true`  | 防 XSS：禁止 JS 访问                         |
-| `secure`   | `bool`        | `true`  | 仅 HTTPS 传输（开发环境需显式关闭）          |
-| `sameSite` | `std::string` | `"Lax"` | SameSite 策略（`Lax`/`Strict`/`None`）        |
+| 字段       | 类型          | 默认值  | 说明                                   |
+| ---------- | ------------- | ------- | -------------------------------------- |
+| `path`     | `std::string` | `"/"`   | Cookie 作用路径                        |
+| `domain`   | `std::string` | `""`    | Cookie 作用域（空=当前域）             |
+| `maxAge`   | `int`         | `-1`    | 有效期（秒），-1 表示会话 Cookie       |
+| `httpOnly` | `bool`        | `true`  | 防 XSS：禁止 JS 访问                   |
+| `secure`   | `bool`        | `true`  | 仅 HTTPS 传输（开发环境需显式关闭）    |
+| `sameSite` | `std::string` | `"Lax"` | SameSite 策略（`Lax`/`Strict`/`None`） |
 
 #### 示例
 
@@ -803,47 +803,47 @@ res.setCookie("token", "user_jwt_here", opts);
 
 #### SessionOptions 结构体
 
-| 字段          | 类型          | 默认值            | 说明                                           |
-| ------------- | ------------- | ----------------- | ---------------------------------------------- |
-| `cookieName`  | `std::string` | `"HICAL_SESSION"` | Session Cookie 名称                            |
-| `maxAge`      | `int`         | `3600`            | Session 有效期（秒）                           |
-| `httpOnly`    | `bool`        | `true`            | Cookie HttpOnly                                |
-| `secure`      | `bool`        | `true`            | Cookie Secure（仅 HTTPS）                      |
-| `sameSite`    | `std::string` | `"Lax"`           | Cookie SameSite 策略                           |
-| `path`        | `std::string` | `"/"`             | Cookie 作用路径                                |
-| `gcInterval`  | `int`         | `300`             | 懒 GC 触发间隔（秒）                          |
-| `maxSessions` | `size_t`      | `100000`          | 最大 Session 数量（防 DoS）                    |
+| 字段          | 类型          | 默认值            | 说明                        |
+| ------------- | ------------- | ----------------- | --------------------------- |
+| `cookieName`  | `std::string` | `"HICAL_SESSION"` | Session Cookie 名称         |
+| `maxAge`      | `int`         | `3600`            | Session 有效期（秒）        |
+| `httpOnly`    | `bool`        | `true`            | Cookie HttpOnly             |
+| `secure`      | `bool`        | `true`            | Cookie Secure（仅 HTTPS）   |
+| `sameSite`    | `std::string` | `"Lax"`           | Cookie SameSite 策略        |
+| `path`        | `std::string` | `"/"`             | Cookie 作用路径             |
+| `gcInterval`  | `int`         | `300`             | 懒 GC 触发间隔（秒）        |
+| `maxSessions` | `size_t`      | `100000`          | 最大 Session 数量（防 DoS） |
 
 #### SessionManager 类（线程安全）
 
-| 方法                  | 参数                       | 返回值                     | 说明                                  |
-| --------------------- | -------------------------- | -------------------------- | ------------------------------------- |
-| `SessionManager(opts)` | opts: SessionOptions（可选） | —                          | 构造（默认选项）                      |
-| `find(id)`            | id: Session ID             | `shared_ptr<Session>`      | 查找，不存在返回 nullptr              |
-| `create()`            | 无                         | `shared_ptr<Session>`      | 创建新 Session（128-bit 随机 ID）     |
-| `destroy(id)`         | id: Session ID             | `void`                     | 销毁指定 Session                      |
-| `regenerate(oldId)`   | oldId: 旧 Session ID      | `shared_ptr<Session>`      | 重新生成 ID（防 Session 固定攻击）    |
-| `gc(force)`           | force: 是否强制（默认 true） | `void`                    | 回收过期 Session                      |
-| `count()`             | 无                         | `size_t`                   | 当前 Session 总数                     |
-| `options()`           | 无                         | `const SessionOptions&`    | 获取配置                              |
+| 方法                   | 参数                         | 返回值                  | 说明                               |
+| ---------------------- | ---------------------------- | ----------------------- | ---------------------------------- |
+| `SessionManager(opts)` | opts: SessionOptions（可选） | —                       | 构造（默认选项）                   |
+| `find(id)`             | id: Session ID               | `shared_ptr<Session>`   | 查找，不存在返回 nullptr           |
+| `create()`             | 无                           | `shared_ptr<Session>`   | 创建新 Session（128-bit 随机 ID）  |
+| `destroy(id)`          | id: Session ID               | `void`                  | 销毁指定 Session                   |
+| `regenerate(oldId)`    | oldId: 旧 Session ID         | `shared_ptr<Session>`   | 重新生成 ID（防 Session 固定攻击） |
+| `gc(force)`            | force: 是否强制（默认 true） | `void`                  | 回收过期 Session                   |
+| `count()`              | 无                           | `size_t`                | 当前 Session 总数                  |
+| `options()`            | 无                           | `const SessionOptions&` | 获取配置                           |
 
 常量：`static constexpr const char* hSessionKey = "hical.session"` — 请求属性 key。
 
 #### Session 类（线程安全）
 
-| 方法             | 参数                     | 返回值                     | 说明                           |
-| ---------------- | ------------------------ | -------------------------- | ------------------------------ |
-| `id()`           | 无                       | `const std::string&`       | 获取 Session ID                |
-| `set(key, v)`    | key: 键<br>v: 任意类型值 | `void`                     | 设置属性                       |
-| `get<T>(key)`    | key: 键                  | `std::optional<T>`         | 获取属性（类型安全）           |
-| `has(key)`       | key: 键                  | `bool`                     | 检查属性是否存在               |
-| `remove(key)`    | key: 键                  | `void`                     | 删除指定属性                   |
-| `clear()`        | 无                       | `void`                     | 清空所有属性                   |
-| `migrateFrom(o)` | o: 另一个 Session 引用   | `void`                     | 原子迁移数据（地址序双锁）     |
-| `markDirty()`    | 无                       | `void`                     | 标记脏位                       |
-| `isDirty()`      | 无                       | `bool`                     | 是否有未持久化变更             |
-| `touch()`        | 无                       | `void`                     | 更新 lastAccess 时间           |
-| `lastAccess()`   | 无                       | `steady_clock::time_point` | 最后访问时间                   |
+| 方法             | 参数                     | 返回值                     | 说明                       |
+| ---------------- | ------------------------ | -------------------------- | -------------------------- |
+| `id()`           | 无                       | `const std::string&`       | 获取 Session ID            |
+| `set(key, v)`    | key: 键<br>v: 任意类型值 | `void`                     | 设置属性                   |
+| `get<T>(key)`    | key: 键                  | `std::optional<T>`         | 获取属性（类型安全）       |
+| `has(key)`       | key: 键                  | `bool`                     | 检查属性是否存在           |
+| `remove(key)`    | key: 键                  | `void`                     | 删除指定属性               |
+| `clear()`        | 无                       | `void`                     | 清空所有属性               |
+| `migrateFrom(o)` | o: 另一个 Session 引用   | `void`                     | 原子迁移数据（地址序双锁） |
+| `markDirty()`    | 无                       | `void`                     | 标记脏位                   |
+| `isDirty()`      | 无                       | `bool`                     | 是否有未持久化变更         |
+| `touch()`        | 无                       | `void`                     | 更新 lastAccess 时间       |
+| `lastAccess()`   | 无                       | `steady_clock::time_point` | 最后访问时间               |
 
 #### makeSessionMiddleware 函数
 
@@ -987,52 +987,52 @@ WebSocket 会话封装（RFC 6455），支持文本/二进制消息、心跳保�
 
 #### WsOpcode 枚举（`enum class : uint8_t`）
 
-| 枚举值          | 值     | 说明     |
-| --------------- | ------ | -------- |
-| `hContinuation` | `0x0`  | 延续帧   |
-| `hText`         | `0x1`  | 文本帧   |
-| `hBinary`       | `0x2`  | 二进制帧 |
-| `hClose`        | `0x8`  | 关闭帧   |
-| `hPing`         | `0x9`  | Ping 帧  |
-| `hPong`         | `0xA`  | Pong 帧  |
+| 枚举值          | 值    | 说明     |
+| --------------- | ----- | -------- |
+| `hContinuation` | `0x0` | 延续帧   |
+| `hText`         | `0x1` | 文本帧   |
+| `hBinary`       | `0x2` | 二进制帧 |
+| `hClose`        | `0x8` | 关闭帧   |
+| `hPing`         | `0x9` | Ping 帧  |
+| `hPong`         | `0xA` | Pong 帧  |
 
 #### WsCloseCode 枚举（`enum class : uint16_t`）
 
-| 枚举值               | 值     | 说明               |
-| -------------------- | ------ | ------------------ |
-| `hNormal`            | `1000` | 正常关闭           |
-| `hGoingAway`         | `1001` | 端点关闭           |
-| `hProtocolError`     | `1002` | 协议错误           |
-| `hUnsupportedData`   | `1003` | 不支持的数据类型   |
-| `hNoStatusReceived`  | `1005` | 无状态码（保留）   |
-| `hAbnormalClosure`   | `1006` | 异常关闭（保留）   |
-| `hInvalidPayload`    | `1007` | 无效载荷数据       |
-| `hPolicyViolation`   | `1008` | 策略违规           |
-| `hMessageTooBig`     | `1009` | 消息过大           |
-| `hMandatoryExtension`| `1010` | 必需扩展未协商     |
-| `hInternalError`     | `1011` | 服务端内部错误     |
+| 枚举值                | 值     | 说明             |
+| --------------------- | ------ | ---------------- |
+| `hNormal`             | `1000` | 正常关闭         |
+| `hGoingAway`          | `1001` | 端点关闭         |
+| `hProtocolError`      | `1002` | 协议错误         |
+| `hUnsupportedData`    | `1003` | 不支持的数据类型 |
+| `hNoStatusReceived`   | `1005` | 无状态码（保留） |
+| `hAbnormalClosure`    | `1006` | 异常关闭（保留） |
+| `hInvalidPayload`     | `1007` | 无效载荷数据     |
+| `hPolicyViolation`    | `1008` | 策略违规         |
+| `hMessageTooBig`      | `1009` | 消息过大         |
+| `hMandatoryExtension` | `1010` | 必需扩展未协商   |
+| `hInternalError`      | `1011` | 服务端内部错误   |
 
 #### 公共方法
 
-| 方法                         | 参数                                    | 返回值                                   | 说明                               |
-| ---------------------------- | --------------------------------------- | ---------------------------------------- | ---------------------------------- |
-| `send(msg)`                  | msg: 文本消息                           | `Awaitable<void>`                        | 发送文本帧                         |
-| `sendBinary(data)`           | data: `string_view`                     | `Awaitable<void>`                        | 发送二进制帧                       |
-| `receive()`                  | 无                                      | `Awaitable<optional<std::string>>`       | 接收文本消息（关闭返回 nullopt）   |
-| `receiveMessage()`           | 无                                      | `Awaitable<optional<WsMessage>>`         | 接收 typed 消息（区分 Text/Binary）|
-| `sendPing(payload)`          | payload: Ping 载荷（≤125B）             | `Awaitable<void>`                        | 发送 Ping 帧                       |
-| `closeAsync()`               | 无                                      | `Awaitable<void>`                        | 优雅关闭（Normal Closure）         |
-| `closeAsync(code, reason)`   | code: `WsCloseCode`<br>reason: 关闭原因 | `Awaitable<void>`                       | 优雅关闭（自定义关闭码）           |
-| `close()`                    | 无                                      | `void`                                   | 同步关闭（不发 close 帧）          |
-| `isOpen()`                   | 无                                      | `bool`                                   | 连接是否打开                       |
-| `socket()`                   | 无                                      | `tcp::socket&`                           | 获取底层 socket 引用               |
-| `compressionConfig()`        | 无                                      | `const WsCompressionConfig&`             | 获取压缩配置                       |
-| `subprotocol()`              | 无                                      | `std::string_view`                       | 协商后的子协议                     |
-| `setContext(ptr)`            | ptr: `shared_ptr<void>`                 | `void`                                   | 设置 per-connection 上下文         |
-| `getContext<T>()`            | 无                                      | `shared_ptr<T>`                          | 获取类型化上下文                   |
-| `hasContext()`               | 无                                      | `bool`                                   | 是否已设置上下文                   |
-| `clearContext()`             | 无                                      | `void`                                   | 清除上下文                         |
-| `lastPongTime()`             | 无                                      | `steady_clock::time_point`               | 最后收到 Pong 的时间               |
+| 方法                       | 参数                                    | 返回值                             | 说明                                |
+| -------------------------- | --------------------------------------- | ---------------------------------- | ----------------------------------- |
+| `send(msg)`                | msg: 文本消息                           | `Awaitable<void>`                  | 发送文本帧                          |
+| `sendBinary(data)`         | data: `string_view`                     | `Awaitable<void>`                  | 发送二进制帧                        |
+| `receive()`                | 无                                      | `Awaitable<optional<std::string>>` | 接收文本消息（关闭返回 nullopt）    |
+| `receiveMessage()`         | 无                                      | `Awaitable<optional<WsMessage>>`   | 接收 typed 消息（区分 Text/Binary） |
+| `sendPing(payload)`        | payload: Ping 载荷（≤125B）             | `Awaitable<void>`                  | 发送 Ping 帧                        |
+| `closeAsync()`             | 无                                      | `Awaitable<void>`                  | 优雅关闭（Normal Closure）          |
+| `closeAsync(code, reason)` | code: `WsCloseCode`<br>reason: 关闭原因 | `Awaitable<void>`                  | 优雅关闭（自定义关闭码）            |
+| `close()`                  | 无                                      | `void`                             | 同步关闭（不发 close 帧）           |
+| `isOpen()`                 | 无                                      | `bool`                             | 连接是否打开                        |
+| `socket()`                 | 无                                      | `tcp::socket&`                     | 获取底层 socket 引用                |
+| `compressionConfig()`      | 无                                      | `const WsCompressionConfig&`       | 获取压缩配置                        |
+| `subprotocol()`            | 无                                      | `std::string_view`                 | 协商后的子协议                      |
+| `setContext(ptr)`          | ptr: `shared_ptr<void>`                 | `void`                             | 设置 per-connection 上下文          |
+| `getContext<T>()`          | 无                                      | `shared_ptr<T>`                    | 获取类型化上下文                    |
+| `hasContext()`             | 无                                      | `bool`                             | 是否已设置上下文                    |
+| `clearContext()`           | 无                                      | `void`                             | 清除上下文                          |
+| `lastPongTime()`           | 无                                      | `steady_clock::time_point`         | 最后收到 Pong 的时间                |
 
 #### WsMessage 结构体
 
@@ -1084,18 +1084,18 @@ WebSocket 连接管理器 / 广播中心，线程安全。
 
 #### 公共方法
 
-| 方法                                       | 参数                                                           | 返回值             | 说明                     |
-| ------------------------------------------ | -------------------------------------------------------------- | ------------------ | ------------------------ |
-| `add(session)`                             | session: `shared_ptr<WebSocketSession>`                        | `WsConnectionId`   | 注册连接，返回唯一 ID   |
-| `remove(id)`                               | id: 连接 ID                                                    | `void`             | 移除连接                 |
-| `join(id, room)`                           | id: 连接 ID<br>room: 房间名                                    | `void`             | 加入房间                 |
-| `leave(id, room)`                          | id: 连接 ID<br>room: 房间名                                    | `void`             | 离开房间                 |
-| `broadcast(room, message, exclude)`        | room/message/exclude                                           | `void`             | 文本广播到房间           |
-| `broadcastBinary(room, data, exclude)`     | room/data/exclude                                              | `void`             | 二进制广播到房间         |
-| `broadcastAll(message, exclude)`           | message/exclude                                                | `void`             | 广播到所有连接           |
-| `sendTo(id, message)`                      | id/message                                                     | `void`             | 单播到指定连接           |
-| `roomSize(room)`                           | room: 房间名                                                   | `size_t`           | 房间内连接数             |
-| `connectionCount()`                        | 无                                                             | `size_t`           | 总连接数                 |
+| 方法                                   | 参数                                    | 返回值           | 说明                  |
+| -------------------------------------- | --------------------------------------- | ---------------- | --------------------- |
+| `add(session)`                         | session: `shared_ptr<WebSocketSession>` | `WsConnectionId` | 注册连接，返回唯一 ID |
+| `remove(id)`                           | id: 连接 ID                             | `void`           | 移除连接              |
+| `join(id, room)`                       | id: 连接 ID<br>room: 房间名             | `void`           | 加入房间              |
+| `leave(id, room)`                      | id: 连接 ID<br>room: 房间名             | `void`           | 离开房间              |
+| `broadcast(room, message, exclude)`    | room/message/exclude                    | `void`           | 文本广播到房间        |
+| `broadcastBinary(room, data, exclude)` | room/data/exclude                       | `void`           | 二进制广播到房间      |
+| `broadcastAll(message, exclude)`       | message/exclude                         | `void`           | 广播到所有连接        |
+| `sendTo(id, message)`                  | id/message                              | `void`           | 单播到指定连接        |
+| `roomSize(room)`                       | room: 房间名                            | `size_t`         | 房间内连接数          |
+| `connectionCount()`                    | 无                                      | `size_t`         | 总连接数              |
 
 > Hub 存储 `weak_ptr`，不延长连接生命周期。**必须在 `onDisconnect` 回调中调用 `remove(id)`**。
 
@@ -1107,16 +1107,16 @@ WebSocket 路由选项，配置安全策略、压缩、心跳和子协议。
 
 **头文件：** `<hical/core/Router.h>`
 
-| 字段                      | 类型                              | 默认值 | 说明                                 |
-| ------------------------- | --------------------------------- | ------ | ------------------------------------ |
-| `allowedOrigins`          | `unordered_set<string>`           | 空     | Origin 白名单（空=不校验）           |
-| `enableCompression`       | `bool`                            | false  | 启用 permessage-deflate              |
-| `serverMaxWindowBits`     | `int`                             | 15     | 服务端 zlib 窗口位数                 |
-| `clientMaxWindowBits`     | `int`                             | 15     | 客户端 zlib 窗口位数                 |
-| `serverNoContextTakeover` | `bool`                            | false  | 每消息独立压缩                       |
-| `pingInterval`            | `std::chrono::seconds`            | 0      | 心跳间隔（0=禁用）                   |
-| `maxMissedPongs`          | `uint32_t`                        | 3      | 最大连续未收到 Pong 次数             |
-| `subprotocols`            | `vector<string>`                  | 空     | 支持的子协议列表                     |
+| 字段                      | 类型                    | 默认值 | 说明                       |
+| ------------------------- | ----------------------- | ------ | -------------------------- |
+| `allowedOrigins`          | `unordered_set<string>` | 空     | Origin 白名单（空=不校验） |
+| `enableCompression`       | `bool`                  | false  | 启用 permessage-deflate    |
+| `serverMaxWindowBits`     | `int`                   | 15     | 服务端 zlib 窗口位数       |
+| `clientMaxWindowBits`     | `int`                   | 15     | 客户端 zlib 窗口位数       |
+| `serverNoContextTakeover` | `bool`                  | false  | 每消息独立压缩             |
+| `pingInterval`            | `std::chrono::seconds`  | 0      | 心跳间隔（0=禁用）         |
+| `maxMissedPongs`          | `uint32_t`              | 3      | 最大连续未收到 Pong 次数   |
+| `subprotocols`            | `vector<string>`        | 空     | 支持的子协议列表           |
 
 ---
 
@@ -1137,12 +1137,12 @@ using Awaitable = boost::asio::awaitable<T>;
 
 #### 函数
 
-| 函数                                 | 参数                                           | 返回值            | 说明                     |
-| ------------------------------------ | ---------------------------------------------- | ----------------- | ------------------------ |
-| `sleep(seconds)`                     | seconds: 等待秒数                              | `Awaitable<void>` | 协程内等待               |
-| `sleep(duration)`                    | duration: chrono 时长                          | `Awaitable<void>` | 协程内等待               |
-| `coSpawn(ioCtx, coroutine)`          | ioCtx: io_context<br>coroutine: 协程           | `void`            | 启动协程                 |
-| `coSpawn(ioCtx, coroutine, handler)` | ioCtx/coroutine/handler                        | `void`            | 启动协程并设置完成回调   |
+| 函数                                 | 参数                                 | 返回值            | 说明                   |
+| ------------------------------------ | ------------------------------------ | ----------------- | ---------------------- |
+| `sleep(seconds)`                     | seconds: 等待秒数                    | `Awaitable<void>` | 协程内等待             |
+| `sleep(duration)`                    | duration: chrono 时长                | `Awaitable<void>` | 协程内等待             |
+| `coSpawn(ioCtx, coroutine)`          | ioCtx: io_context<br>coroutine: 协程 | `void`            | 启动协程               |
+| `coSpawn(ioCtx, coroutine, handler)` | ioCtx/coroutine/handler              | `void`            | 启动协程并设置完成回调 |
 
 #### 示例
 
@@ -1176,14 +1176,14 @@ Awaitable<void> asyncTask()
 
 #### MemoryPool 类
 
-| 方法                             | 参数                    | 返回值                                       | 说明                     |
-| -------------------------------- | ----------------------- | -------------------------------------------- | ------------------------ |
-| `instance()`                     | 无                      | `MemoryPool&`                                | 获取全局单例             |
-| `configure(config)`              | config: 池配置          | `void`                                       | 配置（须在首次使用前）   |
-| `globalAllocator()`              | 无                      | `pmr::polymorphic_allocator<byte>`           | 全局同步池分配器         |
-| `threadLocalAllocator()`         | 无                      | `pmr::polymorphic_allocator<byte>`           | 线程本地池分配器         |
-| `createRequestPool(initialSize)` | initialSize（可选）     | `unique_ptr<pmr::monotonic_buffer_resource>` | 创建请求级单调池         |
-| `getStats()`                     | 无                      | `Stats`                                      | 获取统计信息             |
+| 方法                             | 参数                | 返回值                                       | 说明                   |
+| -------------------------------- | ------------------- | -------------------------------------------- | ---------------------- |
+| `instance()`                     | 无                  | `MemoryPool&`                                | 获取全局单例           |
+| `configure(config)`              | config: 池配置      | `void`                                       | 配置（须在首次使用前） |
+| `globalAllocator()`              | 无                  | `pmr::polymorphic_allocator<byte>`           | 全局同步池分配器       |
+| `threadLocalAllocator()`         | 无                  | `pmr::polymorphic_allocator<byte>`           | 线程本地池分配器       |
+| `createRequestPool(initialSize)` | initialSize（可选） | `unique_ptr<pmr::monotonic_buffer_resource>` | 创建请求级单调池       |
+| `getStats()`                     | 无                  | `Stats`                                      | 获取统计信息           |
 
 #### 示例
 
@@ -1215,13 +1215,13 @@ SSL/TLS 上下文配置封装。
 
 #### 公共方法
 
-| 方法                        | 参数                     | 返回值          | 说明                       |
-| --------------------------- | ------------------------ | --------------- | -------------------------- |
-| `loadCertificate(certFile)` | certFile: 证书文件路径   | `void`          | 加载服务端证书（PEM）      |
-| `loadPrivateKey(keyFile)`   | keyFile: 私钥文件路径    | `void`          | 加载服务端私钥（PEM）      |
-| `loadCaCertificate(caFile)` | caFile: CA 证书路径      | `void`          | 加载 CA 证书               |
-| `setVerifyPeer(verify)`     | verify: 是否验证对端     | `void`          | 设置对端验证               |
-| `native()`                  | 无                       | `ssl::context&` | 获取底层 Asio SSL 上下文   |
+| 方法                        | 参数                   | 返回值          | 说明                     |
+| --------------------------- | ---------------------- | --------------- | ------------------------ |
+| `loadCertificate(certFile)` | certFile: 证书文件路径 | `void`          | 加载服务端证书（PEM）    |
+| `loadPrivateKey(keyFile)`   | keyFile: 私钥文件路径  | `void`          | 加载服务端私钥（PEM）    |
+| `loadCaCertificate(caFile)` | caFile: CA 证书路径    | `void`          | 加载 CA 证书             |
+| `setVerifyPeer(verify)`     | verify: 是否验证对端   | `void`          | 设置对端验证             |
+| `native()`                  | 无                     | `ssl::context&` | 获取底层 Asio SSL 上下文 |
 
 ---
 
@@ -1266,18 +1266,18 @@ IP 地址 + 端口封装（支持 IPv4/IPv6）。
 
 #### 公共方法
 
-| 方法                      | 参数                                   | 返回值                  | 说明                |
-| ------------------------- | -------------------------------------- | ----------------------- | ------------------- |
-| `InetAddress()`           | 无                                     | —                       | 默认构造（0.0.0.0:0）|
-| `InetAddress(ip, port)`   | ip: IP 字符串<br>port: 端口号          | —                       | 指定 IP + 端口      |
-| `InetAddress(addr)`       | addr: `sockaddr_in` 或 `sockaddr_in6` | —                       | 从原生地址构造      |
-| `toIp()`                  | 无                                     | `std::string`           | IP 字符串           |
-| `toIpPort()`              | 无                                     | `std::string`           | IP:Port 字符串      |
-| `port()`                  | 无                                     | `uint16_t`              | 端口号              |
-| `isIpV6()`                | 无                                     | `bool`                  | 是否 IPv6           |
-| `getSockAddr()`           | 无                                     | `const struct sockaddr*`| 原生地址指针        |
-| `setSockAddrInet4(addr)`  | addr: `sockaddr_in`                    | `void`                  | 设置 IPv4 地址      |
-| `setSockAddrInet6(addr)`  | addr: `sockaddr_in6`                   | `void`                  | 设置 IPv6 地址      |
+| 方法                     | 参数                                  | 返回值                   | 说明                  |
+| ------------------------ | ------------------------------------- | ------------------------ | --------------------- |
+| `InetAddress()`          | 无                                    | —                        | 默认构造（0.0.0.0:0） |
+| `InetAddress(ip, port)`  | ip: IP 字符串<br>port: 端口号         | —                        | 指定 IP + 端口        |
+| `InetAddress(addr)`      | addr: `sockaddr_in` 或 `sockaddr_in6` | —                        | 从原生地址构造        |
+| `toIp()`                 | 无                                    | `std::string`            | IP 字符串             |
+| `toIpPort()`             | 无                                    | `std::string`            | IP:Port 字符串        |
+| `port()`                 | 无                                    | `uint16_t`               | 端口号                |
+| `isIpV6()`               | 无                                    | `bool`                   | 是否 IPv6             |
+| `getSockAddr()`          | 无                                    | `const struct sockaddr*` | 原生地址指针          |
+| `setSockAddrInet4(addr)` | addr: `sockaddr_in`                   | `void`                   | 设置 IPv4 地址        |
+| `setSockAddrInet6(addr)` | addr: `sockaddr_in6`                  | `void`                   | 设置 IPv6 地址        |
 
 ---
 
@@ -1322,21 +1322,21 @@ using HighWaterMarkCallback = std::function<void(const Ptr&, size_t)>;
 
 #### 关键方法
 
-| 方法                                                          | 说明                                  |
-| ------------------------------------------------------------- | ------------------------------------- |
-| `send(...)` 多种重载                                          | 发送 `const char*` / `std::string` / `PmrBuffer` / `shared_ptr<string>` |
-| `sendFile(path, offset=0, length=-1)`                         | 异步发送文件                          |
-| `shutdown()` / `close()`                                      | 关闭连接                              |
-| `setTcpNoDelay(bool)`                                         | 启用/禁用 Nagle 算法                  |
-| `startRead()` / `stopRead()`                                  | 启停读循环                            |
-| `connectEstablished()` / `connectDestroyed()`                 | 框架内部生命周期回调                  |
-| `connected()` / `disconnected()`                              | 状态查询                              |
-| `localAddr()` / `peerAddr()`                                  | 获取本端/对端 `InetAddress`           |
-| `getLoop()`                                                   | 获取所属 `EventLoop*`                 |
-| `bytesSent()` / `bytesReceived()`                             | 字节数统计                            |
-| `lastActiveTime()`                                            | 最后活跃时间（用于空闲检测）          |
-| `onMessage` / `onConnection` / `onClose` / `onWriteComplete` / `onHighWaterMark` | 回调注册       |
-| `setContext(ptr)` / `getContext<T>()` / `hasContext()` / `clearContext()` | per-connection 上下文     |
+| 方法                                                                             | 说明                                                                    |
+| -------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `send(...)` 多种重载                                                             | 发送 `const char*` / `std::string` / `PmrBuffer` / `shared_ptr<string>` |
+| `sendFile(path, offset=0, length=-1)`                                            | 异步发送文件                                                            |
+| `shutdown()` / `close()`                                                         | 关闭连接                                                                |
+| `setTcpNoDelay(bool)`                                                            | 启用/禁用 Nagle 算法                                                    |
+| `startRead()` / `stopRead()`                                                     | 启停读循环                                                              |
+| `connectEstablished()` / `connectDestroyed()`                                    | 框架内部生命周期回调                                                    |
+| `connected()` / `disconnected()`                                                 | 状态查询                                                                |
+| `localAddr()` / `peerAddr()`                                                     | 获取本端/对端 `InetAddress`                                             |
+| `getLoop()`                                                                      | 获取所属 `EventLoop*`                                                   |
+| `bytesSent()` / `bytesReceived()`                                                | 字节数统计                                                              |
+| `lastActiveTime()`                                                               | 最后活跃时间（用于空闲检测）                                            |
+| `onMessage` / `onConnection` / `onClose` / `onWriteComplete` / `onHighWaterMark` | 回调注册                                                                |
+| `setContext(ptr)` / `getContext<T>()` / `hasContext()` / `clearContext()`        | per-connection 上下文                                                   |
 
 ---
 
@@ -1346,13 +1346,13 @@ using HighWaterMarkCallback = std::function<void(const Ptr&, size_t)>;
 
 **头文件：** `<hical/core/Timer.h>`
 
-| 方法              | 返回值        | 说明                |
-| ----------------- | ------------- | ------------------- |
-| `cancel()`        | `void`        | 取消定时器          |
-| `isActive()`      | `bool`        | 是否活跃            |
-| `getLoop()`       | `EventLoop*`  | 所属事件循环        |
-| `isRepeating()`   | `bool`        | 是否周期触发        |
-| `interval()`      | `double`      | 触发间隔（秒）      |
+| 方法            | 返回值       | 说明           |
+| --------------- | ------------ | -------------- |
+| `cancel()`      | `void`       | 取消定时器     |
+| `isActive()`    | `bool`       | 是否活跃       |
+| `getLoop()`     | `EventLoop*` | 所属事件循环   |
+| `isRepeating()` | `bool`       | 是否周期触发   |
+| `interval()`    | `double`     | 触发间隔（秒） |
 
 ---
 
@@ -1362,12 +1362,12 @@ using HighWaterMarkCallback = std::function<void(const Ptr&, size_t)>;
 
 **头文件：** `<hical/core/WriteNode.h>`
 
-| 类                    | 关键方法                                                                                  | 说明              |
-| --------------------- | ----------------------------------------------------------------------------------------- | ----------------- |
-| `WriteNode`（基类）   | `size() const` / `isFile() const` / `asBuffer() const`                                    | 写节点抽象        |
-| `MemoryWriteNode`     | `MemoryWriteNode(shared_ptr<string>)` / `(string&&)`<br>`buffer()` / `data()`             | 内存节点          |
-| `PmrBufferWriteNode`  | `PmrBufferWriteNode(PmrBuffer&&)` / `buffer()`                                            | PMR 缓冲节点      |
-| `FileWriteNode`       | `FileWriteNode(path, offset=0, length=-1)` / `path()` / `offset()` / `length()`           | 文件节点（zero-copy 候选） |
+| 类                   | 关键方法                                                                        | 说明                       |
+| -------------------- | ------------------------------------------------------------------------------- | -------------------------- |
+| `WriteNode`（基类）  | `size() const` / `isFile() const` / `asBuffer() const`                          | 写节点抽象                 |
+| `MemoryWriteNode`    | `MemoryWriteNode(shared_ptr<string>)` / `(string&&)`<br>`buffer()` / `data()`   | 内存节点                   |
+| `PmrBufferWriteNode` | `PmrBufferWriteNode(PmrBuffer&&)` / `buffer()`                                  | PMR 缓冲节点               |
+| `FileWriteNode`      | `FileWriteNode(path, offset=0, length=-1)` / `path()` / `offset()` / `length()` | 文件节点（zero-copy 候选） |
 
 ---
 
@@ -1377,28 +1377,28 @@ using HighWaterMarkCallback = std::function<void(const Ptr&, size_t)>;
 
 #### WsFrame.h
 
-| 类型 / 函数                                                                    | 说明                                  |
-| ------------------------------------------------------------------------------ | ------------------------------------- |
-| `WsOpcode` 枚举                                                                | 见 [WebSocketSession](#websocketsession) |
-| `WsCloseCode` 枚举                                                             | 见 [WebSocketSession](#websocketsession) |
-| `struct WsFrameHeader { fin, rsv1/2/3, masked, opcode, payloadLength, maskKey[4], headerSize }` | 帧头部解析结果         |
-| `optional<WsFrameHeader> parseWsFrameHeader(const uint8_t*, size_t)`           | 解析帧头                              |
-| `void unmaskPayload(uint8_t*, size_t, const uint8_t[4])`                       | 解掩码                                |
-| `string buildWsFrame(opcode, payload, fin=true, rsv1=false)`                   | 构造服务端帧（无掩码）                |
-| `string buildMaskedWsFrame(opcode, payload, mask[4], fin, rsv1)`               | 构造客户端帧（带掩码）                |
-| `string buildClosePayload(WsCloseCode, reason={})`                             | 构造 close 帧载荷                     |
+| 类型 / 函数                                                                                     | 说明                                     |
+| ----------------------------------------------------------------------------------------------- | ---------------------------------------- |
+| `WsOpcode` 枚举                                                                                 | 见 [WebSocketSession](#websocketsession) |
+| `WsCloseCode` 枚举                                                                              | 见 [WebSocketSession](#websocketsession) |
+| `struct WsFrameHeader { fin, rsv1/2/3, masked, opcode, payloadLength, maskKey[4], headerSize }` | 帧头部解析结果                           |
+| `optional<WsFrameHeader> parseWsFrameHeader(const uint8_t*, size_t)`                            | 解析帧头                                 |
+| `void unmaskPayload(uint8_t*, size_t, const uint8_t[4])`                                        | 解掩码                                   |
+| `string buildWsFrame(opcode, payload, fin=true, rsv1=false)`                                    | 构造服务端帧（无掩码）                   |
+| `string buildMaskedWsFrame(opcode, payload, mask[4], fin, rsv1)`                                | 构造客户端帧（带掩码）                   |
+| `string buildClosePayload(WsCloseCode, reason={})`                                              | 构造 close 帧载荷                        |
 
 #### WsHandshake.h
 
-| 类型 / 函数                                                                       | 说明                              |
-| --------------------------------------------------------------------------------- | --------------------------------- |
-| `struct WsDeflateNegotiation { accepted, serverMaxWindowBits, clientMaxWindowBits, serverNoContextTakeover, clientNoContextTakeover }` | 协商结果 |
-| `string computeWsAcceptKey(string_view clientKey)`                                | 计算 `Sec-WebSocket-Accept`       |
-| `string_view validateWsUpgrade(const NativeRequest&)`                             | 校验升级请求合法性                |
-| `WsDeflateNegotiation negotiateDeflate(extHeader, WsCompressionConfig)`           | 协商 permessage-deflate           |
-| `string negotiateSubprotocol(clientOffer, serverSupported)`                       | 协商子协议                        |
-| `void buildWsAcceptResponse(FixedBuffer<512>&, acceptKey, deflateNeg=nullptr, subprotocol={})` | 写握手响应到栈缓冲      |
-| `string base64Encode(const uint8_t*, size_t)`                                     | Base64 工具                       |
+| 类型 / 函数                                                                                                                            | 说明                        |
+| -------------------------------------------------------------------------------------------------------------------------------------- | --------------------------- |
+| `struct WsDeflateNegotiation { accepted, serverMaxWindowBits, clientMaxWindowBits, serverNoContextTakeover, clientNoContextTakeover }` | 协商结果                    |
+| `string computeWsAcceptKey(string_view clientKey)`                                                                                     | 计算 `Sec-WebSocket-Accept` |
+| `string_view validateWsUpgrade(const NativeRequest&)`                                                                                  | 校验升级请求合法性          |
+| `WsDeflateNegotiation negotiateDeflate(extHeader, WsCompressionConfig)`                                                                | 协商 permessage-deflate     |
+| `string negotiateSubprotocol(clientOffer, serverSupported)`                                                                            | 协商子协议                  |
+| `void buildWsAcceptResponse(FixedBuffer<512>&, acceptKey, deflateNeg=nullptr, subprotocol={})`                                         | 写握手响应到栈缓冲          |
+| `string base64Encode(const uint8_t*, size_t)`                                                                                          | Base64 工具                 |
 
 #### WsDeflate.h
 
@@ -1426,12 +1426,12 @@ C++20 Concept 约束，定义网络后端必须满足的接口。
 
 **头文件：** `<hical/core/Concepts.h>`
 
-| Concept                | 说明                     |
-| ---------------------- | ------------------------ |
-| `EventLoopLike<T>`     | 事件循环接口约束         |
-| `TcpConnectionLike<T>` | TCP 连接接口约束         |
-| `TimerLike<T>`         | 定时器接口约束           |
-| `NetworkBackend<T>`    | 网络后端统一约束         |
+| Concept                | 说明             |
+| ---------------------- | ---------------- |
+| `EventLoopLike<T>`     | 事件循环接口约束 |
+| `TcpConnectionLike<T>` | TCP 连接接口约束 |
+| `TimerLike<T>`         | 定时器接口约束   |
+| `NetworkBackend<T>`    | 网络后端统一约束 |
 
 默认后端：`AsioBackend`（`AsioEventLoop` + `PlainConnection` + `AsioTimer`）。
 
@@ -1443,14 +1443,14 @@ Boost.Asio 具体实现层。
 
 **头文件：** `<hical/asio/>`
 
-| 文件                  | 说明                                               |
-| --------------------- | -------------------------------------------------- |
-| `AsioEventLoop.h`     | EventLoop 的 Asio 实现                             |
-| `AsioTimer.h`         | 定时器的 Asio 实现                                 |
-| `GenericConnection.h` | 模板化连接（TCP/SSL），sendFile 异步文件发送       |
-| `SslConnection.h`     | SSL 连接类型别名                                   |
-| `TcpServer.h`         | TCP 服务器，空闲超时 + IdleFd fd 耗尽防护         |
-| `EventLoopPool.h`     | 事件循环线程池                                     |
+| 文件                  | 说明                                         |
+| --------------------- | -------------------------------------------- |
+| `AsioEventLoop.h`     | EventLoop 的 Asio 实现                       |
+| `AsioTimer.h`         | 定时器的 Asio 实现                           |
+| `GenericConnection.h` | 模板化连接（TCP/SSL），sendFile 异步文件发送 |
+| `SslConnection.h`     | SSL 连接类型别名                             |
+| `TcpServer.h`         | TCP 服务器，空闲超时 + IdleFd fd 耗尽防护    |
+| `EventLoopPool.h`     | 事件循环线程池                               |
 
 通常用户不需要直接使用适配层，`HttpServer` 已封装了全部网络操作。
 
@@ -1492,21 +1492,21 @@ Boost.Asio 具体实现层。
 
 完整宏家族（每个级别均提供 5 种变体）：
 
-| 级别 / 变体     | 格式化（fmt）                  | 条件（_IF）                          | 流式（_STREAM）           | 结构化字段（_F）                       |
-| --------------- | ------------------------------ | ------------------------------------ | ------------------------- | -------------------------------------- |
-| Trace（仅 Debug 构建保留） | `HICAL_LOG_TRACE(fmt,...)`     | `HICAL_LOG_TRACE_IF(cond,fmt,...)`   | `HICAL_LOG_TRACE_STREAM`  | `HICAL_LOG_TRACE_F(fields,fmt,...)`    |
-| Debug           | `HICAL_LOG_DEBUG(fmt,...)`     | `HICAL_LOG_DEBUG_IF(cond,fmt,...)`   | `HICAL_LOG_DEBUG_STREAM`  | `HICAL_LOG_DEBUG_F(fields,fmt,...)`    |
-| Info            | `HICAL_LOG_INFO(fmt,...)`      | `HICAL_LOG_INFO_IF(cond,fmt,...)`    | `HICAL_LOG_INFO_STREAM`   | `HICAL_LOG_INFO_F(fields,fmt,...)`     |
-| Warn            | `HICAL_LOG_WARN(fmt,...)`      | `HICAL_LOG_WARN_IF(cond,fmt,...)`    | `HICAL_LOG_WARN_STREAM`   | `HICAL_LOG_WARN_F(fields,fmt,...)`     |
-| Error           | `HICAL_LOG_ERROR(fmt,...)`     | `HICAL_LOG_ERROR_IF(cond,fmt,...)`   | `HICAL_LOG_ERROR_STREAM`  | `HICAL_LOG_ERROR_F(fields,fmt,...)`    |
-| Fatal（触发 abort） | `HICAL_LOG_FATAL(fmt,...)`     | `HICAL_LOG_FATAL_IF(cond,fmt,...)`   | `HICAL_LOG_FATAL_STREAM`  | `HICAL_LOG_FATAL_F(fields,fmt,...)`    |
+| 级别 / 变体                | 格式化（fmt）              | 条件（_IF）                        | 流式（_STREAM）          | 结构化字段（_F）                    |
+| -------------------------- | -------------------------- | ---------------------------------- | ------------------------ | ----------------------------------- |
+| Trace（仅 Debug 构建保留） | `HICAL_LOG_TRACE(fmt,...)` | `HICAL_LOG_TRACE_IF(cond,fmt,...)` | `HICAL_LOG_TRACE_STREAM` | `HICAL_LOG_TRACE_F(fields,fmt,...)` |
+| Debug                      | `HICAL_LOG_DEBUG(fmt,...)` | `HICAL_LOG_DEBUG_IF(cond,fmt,...)` | `HICAL_LOG_DEBUG_STREAM` | `HICAL_LOG_DEBUG_F(fields,fmt,...)` |
+| Info                       | `HICAL_LOG_INFO(fmt,...)`  | `HICAL_LOG_INFO_IF(cond,fmt,...)`  | `HICAL_LOG_INFO_STREAM`  | `HICAL_LOG_INFO_F(fields,fmt,...)`  |
+| Warn                       | `HICAL_LOG_WARN(fmt,...)`  | `HICAL_LOG_WARN_IF(cond,fmt,...)`  | `HICAL_LOG_WARN_STREAM`  | `HICAL_LOG_WARN_F(fields,fmt,...)`  |
+| Error                      | `HICAL_LOG_ERROR(fmt,...)` | `HICAL_LOG_ERROR_IF(cond,fmt,...)` | `HICAL_LOG_ERROR_STREAM` | `HICAL_LOG_ERROR_F(fields,fmt,...)` |
+| Fatal（触发 abort）        | `HICAL_LOG_FATAL(fmt,...)` | `HICAL_LOG_FATAL_IF(cond,fmt,...)` | `HICAL_LOG_FATAL_STREAM` | `HICAL_LOG_FATAL_F(fields,fmt,...)` |
 
 通道路由宏：
 
-| 宏 | 说明 |
-| --- | --- |
-| `HICAL_LOG_TO(channel, Level, fmt, ...)` | 向指定命名通道写日志（Level 取 `Trace/Debug/Info/Warn/Error/Fatal`） |
-| `HICAL_LOG_TO_F(channel, Level, fields, fmt, ...)` | 通道路由 + 结构化字段 |
+| 宏                                                 | 说明                                                                 |
+| -------------------------------------------------- | -------------------------------------------------------------------- |
+| `HICAL_LOG_TO(channel, Level, fmt, ...)`           | 向指定命名通道写日志（Level 取 `Trace/Debug/Info/Warn/Error/Fatal`） |
+| `HICAL_LOG_TO_F(channel, Level, fields, fmt, ...)` | 通道路由 + 结构化字段                                                |
 
 #### 示例
 
@@ -1545,9 +1545,9 @@ HICAL_LOG_INFO_F("login", {{"userId", 42}, {"ip", "1.2.3.4"}});
 
 **头文件：** `<hical/core/LogFormatter.h>`
 
-| 实现类          | 说明                         |
-| --------------- | ---------------------------- |
-| `TextFormatter` | 人类可读文本格式             |
+| 实现类          | 说明                          |
+| --------------- | ----------------------------- |
+| `TextFormatter` | 人类可读文本格式              |
 | `JsonFormatter` | JSON Lines 格式（UTC 时间戳） |
 
 接口：`format(const LogRecord&) -> std::string`。
@@ -1560,11 +1560,11 @@ HICAL_LOG_INFO_F("login", {{"userId", 42}, {"ip", "1.2.3.4"}});
 
 **头文件：** `<hical/core/LogSink.h>`
 
-| 实现类        | 说明                       |
-| ------------- | -------------------------- |
-| `StderrSink`  | 输出到 stderr              |
-| `FileSink`    | 同步写文件 + LogFile 轮转  |
-| `OStreamSink` | 线程安全 ostream 包装      |
+| 实现类        | 说明                      |
+| ------------- | ------------------------- |
+| `StderrSink`  | 输出到 stderr             |
+| `FileSink`    | 同步写文件 + LogFile 轮转 |
+| `OStreamSink` | 线程安全 ostream 包装     |
 
 接口：`write(const LogRecord&)` / `flush()`。
 
@@ -1576,11 +1576,11 @@ HICAL_LOG_INFO_F("login", {{"userId", 42}, {"ip", "1.2.3.4"}});
 
 **头文件：** `<hical/core/LogFile.h>`
 
-| 参数          | 默认值 | 说明                 |
-| ------------- | ------ | -------------------- |
-| `baseName`    | —      | 基础文件名           |
-| `maxFileSize` | 100MB  | 单文件阈值           |
-| `maxFiles`    | 10     | 保留归档数           |
+| 参数          | 默认值 | 说明       |
+| ------------- | ------ | ---------- |
+| `baseName`    | —      | 基础文件名 |
+| `maxFileSize` | 100MB  | 单文件阈值 |
+| `maxFiles`    | 10     | 保留归档数 |
 
 归档命名：`app.YYMMDD-HHMMSS.NNNNNN.log`。
 
@@ -1673,20 +1673,20 @@ void registerLogAdmin(Router& router, const std::string& prefix = "/admin");
 
 **头文件：** `<hical/db/DbConfig.h>`
 
-| 字段                  | 类型                   | 默认值      | 说明                       |
-| --------------------- | ---------------------- | ----------- | -------------------------- |
-| `host`                | `std::string`          | `127.0.0.1` | 主机地址                   |
-| `port`                | `uint16_t`             | `3306`      | 端口                       |
-| `user`                | `std::string`          | `""`        | 用户名                     |
-| `password`            | `std::string`          | `""`        | 密码                       |
-| `database`            | `std::string`          | `""`        | 数据库名                   |
-| `charset`             | `std::string`          | `"utf8mb4"` | 字符集                     |
-| `minConnections`      | `size_t`               | `2`         | 最小连接数                 |
-| `maxConnections`      | `size_t`               | `16`        | 最大连接数                 |
-| `idleTimeout`         | `std::chrono::seconds` | `300s`      | 空闲回收超时               |
-| `acquireTimeout`      | `std::chrono::seconds` | `5s`        | 获取连接超时               |
-| `queryTimeout`        | `std::chrono::seconds` | `30s`       | 查询执行超时               |
-| `stmtCacheSize`       | `size_t`               | `64`        | PreparedStatement 缓存上限 |
+| 字段             | 类型                   | 默认值      | 说明                       |
+| ---------------- | ---------------------- | ----------- | -------------------------- |
+| `host`           | `std::string`          | `127.0.0.1` | 主机地址                   |
+| `port`           | `uint16_t`             | `3306`      | 端口                       |
+| `user`           | `std::string`          | `""`        | 用户名                     |
+| `password`       | `std::string`          | `""`        | 密码                       |
+| `database`       | `std::string`          | `""`        | 数据库名                   |
+| `charset`        | `std::string`          | `"utf8mb4"` | 字符集                     |
+| `minConnections` | `size_t`               | `2`         | 最小连接数                 |
+| `maxConnections` | `size_t`               | `16`        | 最大连接数                 |
+| `idleTimeout`    | `std::chrono::seconds` | `300s`      | 空闲回收超时               |
+| `acquireTimeout` | `std::chrono::seconds` | `5s`        | 获取连接超时               |
+| `queryTimeout`   | `std::chrono::seconds` | `30s`       | 查询执行超时               |
+| `stmtCacheSize`  | `size_t`               | `64`        | PreparedStatement 缓存上限 |
 
 ---
 
@@ -1711,22 +1711,22 @@ void registerLogAdmin(Router& router, const std::string& prefix = "/admin");
 
 **头文件：** `<hical/db/DbConnection.h>`
 
-| 方法                   | 返回值                | 说明                            |
-| ---------------------- | --------------------- | ------------------------------- |
-| `query(sql, params)`   | `Awaitable<DbResult>` | 参数化查询（防 SQL 注入）       |
-| `query(sql)`           | `Awaitable<DbResult>` | **[[deprecated]]** 非参数化查询 |
-| `execute(sql, params)` | `Awaitable<DbResult>` | 参数化执行                      |
-| `execute(sql)`         | `Awaitable<DbResult>` | **[[deprecated]]** 非参数化执行 |
-| `beginTransaction()`   | `Awaitable<void>`     | 开启事务                        |
-| `commit()`             | `Awaitable<void>`     | 提交事务                        |
-| `rollback()`           | `Awaitable<void>`     | 回滚事务                        |
-| `inTransaction()`      | `bool`                | 是否处于事务中                  |
-| `ping()`               | `Awaitable<bool>`     | 检查连通性                      |
-| `isAlive()`            | `bool`                | 连接是否存活                    |
-| `backend()`            | `std::string_view`    | 后端名称（如 `"mysql"`）        |
-| `lastActiveTime()`     | `steady_clock::time_point` | 最后活跃时间（用于空闲回收）|
-| `lastPingTime()`       | `steady_clock::time_point` | 最后 ping 时间（用于宽限期优化）|
-| `touch()`              | `void`                | 手动更新 lastActiveTime         |
+| 方法                   | 返回值                     | 说明                             |
+| ---------------------- | -------------------------- | -------------------------------- |
+| `query(sql, params)`   | `Awaitable<DbResult>`      | 参数化查询（防 SQL 注入）        |
+| `query(sql)`           | `Awaitable<DbResult>`      | **[[deprecated]]** 非参数化查询  |
+| `execute(sql, params)` | `Awaitable<DbResult>`      | 参数化执行                       |
+| `execute(sql)`         | `Awaitable<DbResult>`      | **[[deprecated]]** 非参数化执行  |
+| `beginTransaction()`   | `Awaitable<void>`          | 开启事务                         |
+| `commit()`             | `Awaitable<void>`          | 提交事务                         |
+| `rollback()`           | `Awaitable<void>`          | 回滚事务                         |
+| `inTransaction()`      | `bool`                     | 是否处于事务中                   |
+| `ping()`               | `Awaitable<bool>`          | 检查连通性                       |
+| `isAlive()`            | `bool`                     | 连接是否存活                     |
+| `backend()`            | `std::string_view`         | 后端名称（如 `"mysql"`）         |
+| `lastActiveTime()`     | `steady_clock::time_point` | 最后活跃时间（用于空闲回收）     |
+| `lastPingTime()`       | `steady_clock::time_point` | 最后 ping 时间（用于宽限期优化） |
+| `touch()`              | `void`                     | 手动更新 lastActiveTime          |
 
 ---
 
@@ -1760,10 +1760,10 @@ std::shared_ptr<DbConnection> getDbConnection(const HttpRequest& req);
 std::shared_ptr<DbConnectionPool> getDbPool(const HttpRequest& req);
 ```
 
-| DbMiddlewareOptions 字段 | 默认值  | 说明               |
-| ------------------------ | ------- | ------------------ |
-| `autoTransaction`        | `false` | 自动事务           |
-| `injectPool`             | `true`  | 注入连接池到请求   |
+| DbMiddlewareOptions 字段 | 默认值  | 说明             |
+| ------------------------ | ------- | ---------------- |
+| `autoTransaction`        | `false` | 自动事务         |
+| `injectPool`             | `true`  | 注入连接池到请求 |
 
 ---
 
@@ -1775,21 +1775,21 @@ std::shared_ptr<DbConnectionPool> getDbPool(const HttpRequest& req);
 
 #### QueryLogEntry 结构体
 
-| 字段              | 类型                       | 默认值  | 说明             |
-| ----------------- | -------------------------- | ------- | ---------------- |
-| `sql`             | `std::string`              | —       | SQL 语句         |
-| `duration`        | `std::chrono::microseconds`| `0`     | 执行耗时         |
-| `rowCount`        | `size_t`                   | `0`     | 结果行数         |
-| `affectedRows`    | `uint64_t`                 | `0`     | DML 影响行数     |
-| `isParameterized` | `bool`                     | `false` | 是否参数化查询   |
+| 字段              | 类型                        | 默认值  | 说明           |
+| ----------------- | --------------------------- | ------- | -------------- |
+| `sql`             | `std::string`               | —       | SQL 语句       |
+| `duration`        | `std::chrono::microseconds` | `0`     | 执行耗时       |
+| `rowCount`        | `size_t`                    | `0`     | 结果行数       |
+| `affectedRows`    | `uint64_t`                  | `0`     | DML 影响行数   |
+| `isParameterized` | `bool`                      | `false` | 是否参数化查询 |
 
 #### QueryLogOptions 结构体
 
-| 字段                 | 类型                                                        | 说明                     |
-| -------------------- | ----------------------------------------------------------- | ------------------------ |
-| `onRequestComplete`  | `function<void(const HttpRequest&, const vector<QueryLogEntry>&)>` | 请求完成回调       |
-| `slowQueryThreshold` | `std::chrono::microseconds`                                  | 慢查询阈值（0=禁用）    |
-| `onSlowQuery`        | `function<void(const QueryLogEntry&)>`                       | 慢查询回调               |
+| 字段                 | 类型                                                               | 说明                 |
+| -------------------- | ------------------------------------------------------------------ | -------------------- |
+| `onRequestComplete`  | `function<void(const HttpRequest&, const vector<QueryLogEntry>&)>` | 请求完成回调         |
+| `slowQueryThreshold` | `std::chrono::microseconds`                                        | 慢查询阈值（0=禁用） |
+| `onSlowQuery`        | `function<void(const QueryLogEntry&)>`                             | 慢查询回调           |
 
 常量：`static constexpr const char* hQueryLogKey = "hical.db.queryLog"` — 请求属性 key。
 
@@ -1805,10 +1805,10 @@ MySQL 后端（Boost.MySQL）。
 
 **头文件：** `<hical/db/MysqlConnection.h>`
 
-| 方法                     | 返回值                                        | 说明       |
-| ------------------------ | --------------------------------------------- | ---------- |
-| `create(ioCtx, config)`  | `Awaitable<std::shared_ptr<MysqlConnection>>` | 异步建连   |
-| `makeFactory()`          | `DbConnectionFactory`                         | 池工厂函数 |
+| 方法                    | 返回值                                        | 说明       |
+| ----------------------- | --------------------------------------------- | ---------- |
+| `create(ioCtx, config)` | `Awaitable<std::shared_ptr<MysqlConnection>>` | 异步建连   |
+| `makeFactory()`         | `DbConnectionFactory`                         | 池工厂函数 |
 
 ---
 
@@ -1895,14 +1895,14 @@ int main()
 
 **头文件：** `<hical/core/OpenApiSchema.h>`
 
-| 函数                         | 返回值                | 说明                               |
-| ---------------------------- | --------------------- | ---------------------------------- |
-| `jsonSchema<T>()`            | `boost::json::object` | 生成 Schema Object                 |
-| `collectSchemas<T>(schemas)` | `void`                | 递归收集 T 及嵌套类型的 schema     |
+| 函数                         | 返回值                | 说明                           |
+| ---------------------------- | --------------------- | ------------------------------ |
+| `jsonSchema<T>()`            | `boost::json::object` | 生成 Schema Object             |
+| `collectSchemas<T>(schemas)` | `void`                | 递归收集 T 及嵌套类型的 schema |
 
-| 宏                                | 说明                            |
-| --------------------------------- | ------------------------------- |
-| `HICAL_SCHEMA_NAME(Type, "name")` | 注册类型的 `$ref` 引用名       |
+| 宏                                | 说明                     |
+| --------------------------------- | ------------------------ |
+| `HICAL_SCHEMA_NAME(Type, "name")` | 注册类型的 `$ref` 引用名 |
 
 **类型映射：** `bool`→boolean, `int`→integer/int32, `int64_t`→integer/int64, `float`→number/float, `double`→number/double, `string`→string, `vector<T>`→array, 带 `HICAL_JSON` 的结构体→object/$ref。
 
@@ -1918,10 +1918,10 @@ int main()
 
 **宏：**
 
-| 宏                                        | 说明                                       |
-| ----------------------------------------- | ------------------------------------------ |
-| `HICAL_API(builder_exprs...)`             | 综合标注宏                                 |
-| `HICAL_ROUTES_WITH_API(Type, ...)`        | 同时注册路由和收集元数据                   |
+| 宏                                 | 说明                     |
+| ---------------------------------- | ------------------------ |
+| `HICAL_API(builder_exprs...)`      | 综合标注宏               |
+| `HICAL_ROUTES_WITH_API(Type, ...)` | 同时注册路由和收集元数据 |
 
 **builder 命名空间：** `summary(text)` / `description(text)` / `tag(name)` / `requestBody<T>()` / `response<T>(code)` / `response(code, desc)`。
 
@@ -1933,12 +1933,12 @@ int main()
 
 **头文件：** `<hical/core/OpenApiDocument.h>`
 
-| 方法                   | 说明                               |
-| ---------------------- | ---------------------------------- |
-| `addSchema(name, obj)` | 添加 schema                        |
-| `addSchemas(map)`      | 批量添加                           |
-| `generate()`           | 惰性生成并缓存完整文档             |
-| `invalidate()`         | 使缓存失效                         |
+| 方法                   | 说明                   |
+| ---------------------- | ---------------------- |
+| `addSchema(name, obj)` | 添加 schema            |
+| `addSchemas(map)`      | 批量添加               |
+| `generate()`           | 惰性生成并缓存完整文档 |
+| `invalidate()`         | 使缓存失效             |
 
 ---
 
@@ -1962,42 +1962,42 @@ void serveOpenApi(
 
 ### 类型别名速查
 
-| 别名                        | 定义                                                              | 头文件              |
-| --------------------------- | ----------------------------------------------------------------- | ------------------- |
-| `Awaitable<T>`              | `boost::asio::awaitable<T>`                                       | `Coroutine.h`       |
-| `RouteHandler`              | `function<Awaitable<HttpResponse>(const HttpRequest&)>`           | `Router.h`          |
-| `SyncRouteHandler`          | `function<HttpResponse(const HttpRequest&)>`                      | `Router.h`          |
-| `MiddlewareNext`            | `function<Awaitable<HttpResponse>(HttpRequest&)>`                 | `Middleware.h`      |
-| `MiddlewareHandler`         | `function<Awaitable<HttpResponse>(HttpRequest&, MiddlewareNext)>` | `Middleware.h`      |
-| `SyncMiddlewareResult`      | `std::optional<HttpResponse>`                                     | `Middleware.h`      |
-| `SyncBeforeHandler`         | `function<SyncMiddlewareResult(HttpRequest&)>`                    | `Middleware.h`      |
-| `SyncAfterHandler`          | `function<void(HttpRequest&, HttpResponse&)>`                     | `Middleware.h`      |
-| `WsMessageCallback`         | `function<Awaitable<void>(const string&, WebSocketSession&)>`     | `Router.h`          |
-| `WsTypedMessageCallback`    | `function<Awaitable<void>(const WsMessage&, WebSocketSession&)>`  | `Router.h`          |
-| `WsConnectCallback`         | `function<Awaitable<void>(WebSocketSession&)>`                    | `Router.h`          |
-| `WsDisconnectCallback`      | `function<void(WebSocketSession&)>`                               | `Router.h`          |
-| `WsConnectionId`            | `uint64_t`                                                        | `WsHub.h`           |
-| `ErrorHandler`              | `function<HttpResponse(const exception&, const HttpRequest&)>`    | `HttpServer.h`      |
-| `DbConnectionFactory`       | `function<Awaitable<shared_ptr<DbConnection>>(io_context&, ...)>` | `DbConnectionPool.h`|
+| 别名                     | 定义                                                              | 头文件               |
+| ------------------------ | ----------------------------------------------------------------- | -------------------- |
+| `Awaitable<T>`           | `boost::asio::awaitable<T>`                                       | `Coroutine.h`        |
+| `RouteHandler`           | `function<Awaitable<HttpResponse>(const HttpRequest&)>`           | `Router.h`           |
+| `SyncRouteHandler`       | `function<HttpResponse(const HttpRequest&)>`                      | `Router.h`           |
+| `MiddlewareNext`         | `function<Awaitable<HttpResponse>(HttpRequest&)>`                 | `Middleware.h`       |
+| `MiddlewareHandler`      | `function<Awaitable<HttpResponse>(HttpRequest&, MiddlewareNext)>` | `Middleware.h`       |
+| `SyncMiddlewareResult`   | `std::optional<HttpResponse>`                                     | `Middleware.h`       |
+| `SyncBeforeHandler`      | `function<SyncMiddlewareResult(HttpRequest&)>`                    | `Middleware.h`       |
+| `SyncAfterHandler`       | `function<void(HttpRequest&, HttpResponse&)>`                     | `Middleware.h`       |
+| `WsMessageCallback`      | `function<Awaitable<void>(const string&, WebSocketSession&)>`     | `Router.h`           |
+| `WsTypedMessageCallback` | `function<Awaitable<void>(const WsMessage&, WebSocketSession&)>`  | `Router.h`           |
+| `WsConnectCallback`      | `function<Awaitable<void>(WebSocketSession&)>`                    | `Router.h`           |
+| `WsDisconnectCallback`   | `function<void(WebSocketSession&)>`                               | `Router.h`           |
+| `WsConnectionId`         | `uint64_t`                                                        | `WsHub.h`            |
+| `ErrorHandler`           | `function<HttpResponse(const exception&, const HttpRequest&)>`    | `HttpServer.h`       |
+| `DbConnectionFactory`    | `function<Awaitable<shared_ptr<DbConnection>>(io_context&, ...)>` | `DbConnectionPool.h` |
 
 ### 回调类型速查
 
-| 场景            | 类型签名                                                                | 别名 / 头文件                      |
-| --------------- | ----------------------------------------------------------------------- | ---------------------------------- |
-| 同步路由        | `HttpResponse(const HttpRequest&)`                                      | `SyncRouteHandler` / `Router.h`    |
-| 协程路由        | `Awaitable<HttpResponse>(const HttpRequest&)`                           | `RouteHandler` / `Router.h`        |
-| 异步中间件      | `Awaitable<HttpResponse>(HttpRequest&, MiddlewareNext)`                 | `MiddlewareHandler` / `Middleware.h`|
-| 同步前置中间件  | `std::optional<HttpResponse>(HttpRequest&)`                             | `SyncBeforeHandler` / `Middleware.h`|
-| 同步后置中间件  | `void(HttpRequest&, HttpResponse&)`                                     | `SyncAfterHandler` / `Middleware.h`|
-| 全局错误处理    | `HttpResponse(const std::exception&, const HttpRequest&)`               | `ErrorHandler` / `HttpServer.h`    |
-| WS 消息（文本）| `Awaitable<void>(const std::string&, WebSocketSession&)`                | `WsMessageCallback` / `Router.h`   |
-| WS 消息（typed）| `Awaitable<void>(const WsMessage&, WebSocketSession&)`                  | `WsTypedMessageCallback` / `Router.h`|
-| WS 连接         | `Awaitable<void>(WebSocketSession&)`                                    | `WsConnectCallback` / `Router.h`   |
-| WS 断开         | `void(WebSocketSession&)`                                               | `WsDisconnectCallback` / `Router.h`|
-| DB 连接工厂     | `Awaitable<shared_ptr<DbConnection>>(io_context&, const DbConfig&)`     | `DbConnectionFactory` / `DbConnectionPool.h`|
-| 慢查询回调      | `void(const QueryLogEntry&)`                                            | `QueryLogOptions::SlowQueryCallback` / `DbQueryLog.h` |
-| 请求查询日志    | `void(const HttpRequest&, const vector<QueryLogEntry>&)`                | `QueryLogOptions::LogCallback` / `DbQueryLog.h` |
-| 定时器          | `void()`                                                                | `EventLoop::TimerCallback`         |
+| 场景             | 类型签名                                                            | 别名 / 头文件                                         |
+| ---------------- | ------------------------------------------------------------------- | ----------------------------------------------------- |
+| 同步路由         | `HttpResponse(const HttpRequest&)`                                  | `SyncRouteHandler` / `Router.h`                       |
+| 协程路由         | `Awaitable<HttpResponse>(const HttpRequest&)`                       | `RouteHandler` / `Router.h`                           |
+| 异步中间件       | `Awaitable<HttpResponse>(HttpRequest&, MiddlewareNext)`             | `MiddlewareHandler` / `Middleware.h`                  |
+| 同步前置中间件   | `std::optional<HttpResponse>(HttpRequest&)`                         | `SyncBeforeHandler` / `Middleware.h`                  |
+| 同步后置中间件   | `void(HttpRequest&, HttpResponse&)`                                 | `SyncAfterHandler` / `Middleware.h`                   |
+| 全局错误处理     | `HttpResponse(const std::exception&, const HttpRequest&)`           | `ErrorHandler` / `HttpServer.h`                       |
+| WS 消息（文本）  | `Awaitable<void>(const std::string&, WebSocketSession&)`            | `WsMessageCallback` / `Router.h`                      |
+| WS 消息（typed） | `Awaitable<void>(const WsMessage&, WebSocketSession&)`              | `WsTypedMessageCallback` / `Router.h`                 |
+| WS 连接          | `Awaitable<void>(WebSocketSession&)`                                | `WsConnectCallback` / `Router.h`                      |
+| WS 断开          | `void(WebSocketSession&)`                                           | `WsDisconnectCallback` / `Router.h`                   |
+| DB 连接工厂      | `Awaitable<shared_ptr<DbConnection>>(io_context&, const DbConfig&)` | `DbConnectionFactory` / `DbConnectionPool.h`          |
+| 慢查询回调       | `void(const QueryLogEntry&)`                                        | `QueryLogOptions::SlowQueryCallback` / `DbQueryLog.h` |
+| 请求查询日志     | `void(const HttpRequest&, const vector<QueryLogEntry>&)`            | `QueryLogOptions::LogCallback` / `DbQueryLog.h`       |
+| 定时器           | `void()`                                                            | `EventLoop::TimerCallback`                            |
 
 ---
 

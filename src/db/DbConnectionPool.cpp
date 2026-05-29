@@ -62,14 +62,25 @@ namespace hical::db
 		}
 
 		std::unique_lock lock(mutex_);
+		// 死连接先攒着，出了锁再析构，免得持锁时卡在 socket 关闭上
+		std::vector<std::shared_ptr<DbConnection>> deadConns;
 
 		// 1. 有空闲连接 → 直接返回
 		while (!idle_.empty())
 		{
 			auto conn = std::move(idle_.back());
 			idle_.pop_back();
+
+			// 先看一眼本地状态，死了就扔掉，省得白 ping
+			if (!conn->isAlive())
+			{
+				deadConns.push_back(std::move(conn));
+				continue;
+			}
+
 			++activeCount_;
 			lock.unlock();
+			deadConns.clear(); // 锁外析构已收集的死连接
 
 			// 若健康检查已启用且连接最近被 ping 过，跳过 ping
 			bool skipPing = config_.healthCheckInterval.count() > 0 && config_.pingGracePeriod.count() > 0;
@@ -339,7 +350,36 @@ namespace hical::db
 		idleCheckTimer_ = std::make_shared<boost::asio::steady_timer>(ioCtx_);
 		while (!shutdown_.load(std::memory_order_relaxed))
 		{
-			idleCheckTimer_->expires_after(config_.idleCheckInterval);
+			// 算出最近哪个连接要过期，timer 直接设到那个时间点，别傻等固定间隔
+			std::chrono::steady_clock::time_point nextExpire;
+			{
+				std::lock_guard lock(mutex_);
+				if (idle_.empty())
+				{
+					// 池空了就按默认间隔睡一觉
+					nextExpire = std::chrono::steady_clock::now() + config_.idleCheckInterval;
+				}
+				else
+				{
+					// 找最老的连接（最早过期）
+					auto oldest = std::min_element(idle_.begin(),
+												   idle_.end(),
+												   [](const auto& a, const auto& b)
+												   {
+													   return a->lastActiveTime() < b->lastActiveTime();
+												   });
+					nextExpire = (*oldest)->lastActiveTime() + config_.idleTimeout;
+
+					// 但也别等太久，最多就 idleCheckInterval，不然新还回来的连接没人管
+					auto maxWait = std::chrono::steady_clock::now() + config_.idleCheckInterval;
+					if (nextExpire > maxWait)
+					{
+						nextExpire = maxWait;
+					}
+				}
+			}
+
+			idleCheckTimer_->expires_at(nextExpire);
 			boost::system::error_code ec;
 			co_await idleCheckTimer_->async_wait(boost::asio::redirect_error(boost::asio::use_awaitable, ec));
 

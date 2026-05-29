@@ -11,6 +11,7 @@
 #include "../core/InetAddress.h"
 #include "../core/MemoryPool.h"
 #include "../core/WriteNode.h"
+#include "../core/StringPool.h"
 #include "../core/Coroutine.h"
 #include "AsioEventLoop.h"
 #include <boost/asio.hpp>
@@ -406,6 +407,9 @@ namespace hical
 
 		// 协程式文件发送（writeLoop 内部调用）
 		boost::asio::awaitable<size_t> sendFileNode(const FileWriteNode& node);
+
+		/// writeLoop 单轮最多 drain 这么多节点，别让一个连接把 CPU 全占了
+		static constexpr size_t kMaxDrainBatch = 256;
 
 		// --- 热路径字段 ---
 		// socket/state/flags 紧挨着放，尽量一条 cache line 搞定
