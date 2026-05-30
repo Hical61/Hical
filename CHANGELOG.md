@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.6.4] - 2026-05-30
+
+### Added
+- **`IdleScanner` 集中式空闲连接扫描**（`IdleScanner.h/cpp`）：per-io_context 单定时器 + 侵入式双链表替代 per-connection `steady_timer` 协程。`Entry` 嵌入协程栈（零堆分配），`atomic<int64_t> lastActiveMs` 无锁时间戳，`Guard` RAII 管理注册/注销生命周期。扫描间隔 `max(1s, timeout/4)`，`shutdown()` 幂等取消 timer 切断与 `timer_service` 的依赖
+- **`StringPool` 线程本地字符串对象池**（`StringPool.h`）：5 级大小类（256/512/1K/2K/4K，各 32 槽），`acquire(size)` 返回池化 `shared_ptr<string>`，自定义 deleter 归还池中。`send()` 热路径池化避免 per-send malloc/free
+
+### Performance
+- **IdleScanner 替代 per-connection timer**：每连接独立 `steady_timer` 协程改为每 io_context 一个 `IdleScanner` 集中扫描，消除每连接的 timer 协程帧分配和 `epoll_ctl` 调用
+- **EventLoopPool 最少连接分发**：`nextLoop()` 从 round-robin 改为挑选 `connectionCount_` 最小的 loop，负载均衡更优
+- **GenericConnection writeLoop drain 上限**：`kMaxDrainBatch = 256` 限制单轮 drain 节点数，防止突发队列饥饿 io_context 其他任务
+- **DbConnectionPool acquire 快速淘汰**：`acquire()` 在持锁期间 `isAlive()` 预检，死连接收集后在锁外析构，避免无效 ping
+- **idleCheckLoop 精确唤醒**：`min_element` 找到最早过期的空闲连接，timer 精确到期唤醒，`idleCheckInterval` 作为最大等待兜底，减少无效扫描
+- **响应前缀模板化**：连接级 `responsePrefix[128]` 预构建 `Server`/`Connection`/`Date` 通用头部 wire bytes（~90B），keep-alive 请求 `memcpy` 替代 3 次 `HeaderMap::insert` + 序列化循环
+
+### Fixed
+- **IdleScanner UAF**：`idleScanners_` 声明顺序调整到 `baseLoop_`/`ioPool_` 之前（scanner 比 io_context 后析构），`timer_` 改 `optional<steady_timer>` + `shutdown()` 在 `~HttpServer()` 中提前 cancel+reset timer，双向切断 scanner ↔ io_context 环形依赖
+- **Windows IOCP 关服 SegFault**：根因为 `io_context::stop()` 后 IOCP queue 中 abort completions 未 dispatch，`~io_context()` 强杀协程帧导致崩溃。最终方案：移除 `io_context::stop()` 调用，改为 cancel 所有 pending op + `releaseWork()` 释放 work_guard，协程自然退出后 `run()` 返回，queue 为空无两阶段销毁问题。同时修复 `stop()` 跨线程直接操作 timer/socket 的 UB（改为 `post` 到对应线程）、WS 升级后连接未注册到 scanner、`gcLoop` timer 提升为成员变量 `gcTimer_` 确保可 cancel、`IdleScanner` 新增 `closeAll()` 关闭残留 socket
+
 ## [2.6.3] - 2026-05-25
 
 ### Added
@@ -358,7 +376,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Multipart Part 数量上限（DoS 防护）
 - Session ID 使用密码学安全的随机数生成
 
-[Unreleased]: https://github.com/Hical61/Hical/compare/v2.6.3...HEAD
+[Unreleased]: https://github.com/Hical61/Hical/compare/v2.6.4...HEAD
+[2.6.4]: https://github.com/Hical61/Hical/compare/v2.6.3...v2.6.4
 [2.6.3]: https://github.com/Hical61/Hical/compare/v2.6.2...v2.6.3
 [2.6.2]: https://github.com/Hical61/Hical/compare/v2.6.1...v2.6.2
 [2.6.1]: https://github.com/Hical61/Hical/compare/v2.6.0...v2.6.1
