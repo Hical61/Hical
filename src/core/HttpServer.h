@@ -16,6 +16,7 @@
 #include "../asio/AsioEventLoop.h"
 #include "../asio/EventLoopPool.h"
 #include <boost/asio.hpp>
+#include <atomic>
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -112,7 +113,7 @@ namespace hical
 		 * 按每连接约 25KB 估算（PMR 缓冲 + HTTP parser + socket 缓冲），
 		 * 预留 30% 内存给业务逻辑和系统开销。
 		 * @param availableMemoryMB 可用内存（MB）
-		 * @return 推荐的最大连接数（上限 65535）
+		 * @return 推荐的最大连接数（最多 100 万；只管推荐值，setMaxConnections 不受此限）
 		 */
 		[[nodiscard]] static size_t recommendedMaxConnections(size_t availableMemoryMB);
 
@@ -244,7 +245,8 @@ namespace hical
 		size_t maxHeaderSize_ {8192};      // 8KB
 
 		// 连接数限制（0 表示不限制，默认 10000）
-		size_t maxConnections_ {10000};
+		// atomic：accept 协程在多个 acceptor 线程并发读它，运行时也允许动态调整
+		std::atomic<size_t> maxConnections_ {10000};
 
 		// 空闲连接超时（秒，0 表示不超时）
 		double idleTimeout_ {60.0};

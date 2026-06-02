@@ -369,9 +369,9 @@ namespace hical
 
 	Awaitable<void> HttpServer::handleSession(tcp::socket socket)
 	{
-		// 连接计数 RAII 守卫
-		activeConnections_.fetch_add(1);
-
+		// 连接计数：+1 已在 acceptLoop accept 处占位完成（先占位再校验才能做硬上限，
+		// 不能在这里 fetch_add——本协程是 coSpawn 异步投递的，burst 建连时会严重滞后）。
+		// 这里只接管计数所有权，由 ConnectionCounter 析构时唯一负责 -1。
 		struct ConnectionCounter
 		{
 			std::atomic<size_t>& count;

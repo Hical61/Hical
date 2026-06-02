@@ -83,16 +83,21 @@ namespace hical
 
 	void HttpServer::setMaxConnections(size_t maxConns)
 	{
-		maxConnections_ = maxConns;
+		// relaxed 足够：这只是个阈值，不需要和别的内存操作建立 happens-before
+		maxConnections_.store(maxConns, std::memory_order_relaxed);
 	}
 
 	size_t HttpServer::recommendedMaxConnections(size_t availableMemoryMB)
 	{
-		// 粗估每连接 ~25KB，留 30% 给业务和系统
-		constexpr size_t hBytesPerConnection = 25 * 1024;
+		// 每连接内存粗估：PMR 缓冲 + HTTP parser + socket 缓冲，约 25KB
+		constexpr size_t kBytesPerConnection = 25 * 1024;
+		// 给推荐值封个顶，免得有人传进来个离谱的 availableMemoryMB 算出天文数字。
+		// 封顶 100 万够用了。注意这只管「自动推荐值」，setMaxConnections() 不受这限制，想设更高自己传。
+		constexpr size_t kMaxRecommendedConnections = 1'000'000;
+
 		size_t usableBytes = availableMemoryMB * 1024 * 1024 * 7 / 10;
-		size_t recommended = usableBytes / hBytesPerConnection;
-		return std::min(recommended, size_t(65535));
+		size_t recommended = usableBytes / kBytesPerConnection;
+		return std::min(recommended, kMaxRecommendedConnections);
 	}
 
 	void HttpServer::setIdleTimeout(double seconds)
@@ -395,16 +400,41 @@ namespace hical
 						break;
 					}
 
-					if (maxConnections_ > 0 && activeConnections_.load() >= maxConnections_)
+					// 先占位再校验：原子地把计数 +1。绝不能像以前那样「先 load 判断、再到
+					// handleSession 里 fetch_add」——handleSession 是 coSpawn 异步投递的，
+					// 高速 burst 建连时大批连接已 accept 但协程还没被调度执行 fetch_add，
+					// load() 读到的计数严重滞后，限流直接形同虚设。占位即计数才是硬上限。
+					size_t maxConns = maxConnections_.load(std::memory_order_relaxed);
+					size_t prev = activeConnections_.fetch_add(1, std::memory_order_acq_rel);
+					if (maxConns > 0 && prev >= maxConns)
 					{
+						activeConnections_.fetch_sub(1, std::memory_order_acq_rel);
 						boost::system::error_code ec;
 						socket.close(ec);
 						continue;
 					}
 
-					socket.set_option(boost::asio::ip::tcp::no_delay(true));
+					// 占位成功，计数所有权移交 handleSession（由它析构时 fetch_sub）。
+					// committed 之前任何提前返回/抛出都要回退占位，否则计数泄漏。
+					bool committed = false;
+					struct AcceptGuard
+					{
+						std::atomic<size_t>& count;
+						bool& committed;
+						~AcceptGuard()
+						{
+							if (!committed)
+							{
+								count.fetch_sub(1, std::memory_order_acq_rel);
+							}
+						}
+					} acceptGuard {activeConnections_, committed};
+
+					boost::system::error_code optEc;
+					socket.set_option(boost::asio::ip::tcp::no_delay(true), optEc); // 失败不致命，忽略
 
 					coSpawn(co_await boost::asio::this_coro::executor, handleSession(std::move(socket)));
+					committed = true; // 移交成功
 				}
 				else
 				{
@@ -421,16 +451,36 @@ namespace hical
 						break;
 					}
 
-					if (maxConnections_ > 0 && activeConnections_.load() >= maxConnections_)
+					// 同 SO_REUSEPORT 路径：先占位再校验，占位即计数（硬上限）
+					size_t maxConns = maxConnections_.load(std::memory_order_relaxed);
+					size_t prev = activeConnections_.fetch_add(1, std::memory_order_acq_rel);
+					if (maxConns > 0 && prev >= maxConns)
 					{
+						activeConnections_.fetch_sub(1, std::memory_order_acq_rel);
 						boost::system::error_code ec;
 						socket.close(ec);
 						continue;
 					}
 
-					socket.set_option(boost::asio::ip::tcp::no_delay(true));
+					bool committed = false;
+					struct AcceptGuard
+					{
+						std::atomic<size_t>& count;
+						bool& committed;
+						~AcceptGuard()
+						{
+							if (!committed)
+							{
+								count.fetch_sub(1, std::memory_order_acq_rel);
+							}
+						}
+					} acceptGuard {activeConnections_, committed};
+
+					boost::system::error_code optEc;
+					socket.set_option(boost::asio::ip::tcp::no_delay(true), optEc); // 失败不致命，忽略
 
 					coSpawn(targetIoCtx.get_executor(), handleSession(std::move(socket)));
+					committed = true; // 移交成功
 				}
 			}
 			catch (const boost::system::system_error& e)
