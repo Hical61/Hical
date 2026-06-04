@@ -605,6 +605,13 @@ namespace hical
 							hasContentLength = (ec == std::errc {});
 						}
 					}
+					else if (hname.size() == 6 && (hname[0] == 'E' || hname[0] == 'e'))
+					{
+						if (HeaderMap::iequals(hname, "Expect"))
+						{
+							nativeReq.expectContinue = HeaderMap::iequals(hvalue, "100-continue");
+						}
+					}
 					else if (hname.size() == 17 && (hname[0] == 'T' || hname[0] == 't'))
 					{
 						if (HeaderMap::iequals(hname, "Transfer-Encoding"))
@@ -652,6 +659,40 @@ namespace hical
 				// ====== 阶段 C：读取 Body ======
 				size_t headerBytes = static_cast<size_t>(parseResult);
 				size_t remainingInBuf = bufUsed - headerBytes;
+
+				// Expect: 100-continue 处理（仅 HTTP/1.1+，有 body 时才生效）
+				// 只查路由存在性，404/413 提前拒绝；通过后发 100 Continue 再读 body。
+				// 方法不匹配（405 语义）在此一律以 404 快速拒绝——预检目的是省带宽，
+				// 不值得为收集 Allow 头做完整 resolveRoute；真正的 405 在客户端不发 Expect
+				// 时由正常分发路径给出。
+				if (nativeReq.expectContinue && (hasContentLength || isChunked) && minorVersion >= 1)
+				{
+					auto reqPath = nativeReq.target;
+					auto qmark = reqPath.find('?');
+					if (qmark != std::string_view::npos)
+					{
+						reqPath = reqPath.substr(0, qmark);
+					}
+
+					if (!router_.exists(nativeReq.method, reqPath))
+					{
+						co_await sendRawResponse(socket, 404, "Not Found", "Not Found");
+						co_return;
+					}
+
+					// Content-Length 已知时，超限在发 100 前就拒——这才是 Expect 省带宽的意义所在。
+					// chunked 长度未知，只能边读边查（维持现状）。
+					if (hasContentLength && contentLength > maxBodySize_)
+					{
+						co_await sendRawResponse(socket, 413, "Payload Too Large", "Request body too large");
+						co_return;
+					}
+
+					constexpr std::string_view k100 = "HTTP/1.1 100 Continue\r\n\r\n";
+					co_await boost::asio::async_write(socket,
+													  boost::asio::buffer(k100.data(), k100.size()),
+													  boost::asio::use_awaitable);
+				}
 
 				// memmove 要等阶段 D 用完 string_view 后再做，否则覆盖了 readBuf 的头部数据
 				size_t memmoveSrc = 0; // memmove 源偏移

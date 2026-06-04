@@ -417,10 +417,12 @@ namespace hical
 					// 占位成功，计数所有权移交 handleSession（由它析构时 fetch_sub）。
 					// committed 之前任何提前返回/抛出都要回退占位，否则计数泄漏。
 					bool committed = false;
+
 					struct AcceptGuard
 					{
 						std::atomic<size_t>& count;
 						bool& committed;
+
 						~AcceptGuard()
 						{
 							if (!committed)
@@ -463,10 +465,12 @@ namespace hical
 					}
 
 					bool committed = false;
+
 					struct AcceptGuard
 					{
 						std::atomic<size_t>& count;
 						bool& committed;
+
 						~AcceptGuard()
 						{
 							if (!committed)

@@ -117,6 +117,7 @@ namespace hical
 		RequestHeaders headers; // 零拷贝，引用 readBuf
 		std::string body;       // 拥有所有权（从 socket 读取）
 		bool keepAlive = true;
+		bool expectContinue = false; // 请求携带了 Expect: 100-continue
 
 		/**
 		 * @brief 是否为 WebSocket 升级请求

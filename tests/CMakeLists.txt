@@ -13,6 +13,7 @@ set(TESTS_NEEDING_PICOHTTPPARSER
     test_integration
     test_graceful_shutdown
     test_error_handler
+    test_expect_continue
 )
 
 # helper：封装三行样板（add_executable + target_link_libraries + gtest_discover_tests）
@@ -55,6 +56,7 @@ hical_add_test(test_redirect)             # 重定向便捷方法
 hical_add_test(test_cors)                 # CORS 中间件
 hical_add_test(test_graceful_shutdown)    # 优雅关机与信号处理
 hical_add_test(test_error_handler)        # 全局错误处理器
+hical_add_test(test_expect_continue)      # Expect: 100-continue
 
 # --- 日志系统 ---
 hical_add_test(test_log)                  # 日志系统主测试

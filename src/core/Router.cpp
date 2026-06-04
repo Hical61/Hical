@@ -326,6 +326,52 @@ namespace hical
 		return result;
 	}
 
+	bool Router::exists(HttpMethod method, std::string_view path) const
+	{
+		// URL decode（与 resolveRoute 保持一致）
+		std::string decodedStorage;
+		std::string_view reqPath;
+		bool needsDecode = false;
+		for (char c : path)
+		{
+			if (c == '%' || c == '+')
+			{
+				needsDecode = true;
+				break;
+			}
+		}
+		if (needsDecode)
+		{
+			decodedStorage = urlDecode(path);
+			reqPath = decodedStorage;
+		}
+		else
+		{
+			reqPath = path;
+		}
+
+		// 1. 静态路由 O(1) 查找
+		if (staticRoutes_.find(RouteKeyView {method, reqPath}) != staticRoutes_.end())
+		{
+			return true;
+		}
+
+		// 2. 参数路由匹配（仅同 method）
+		if (auto groupIt = paramRoutesByMethod_.find(method); groupIt != paramRoutesByMethod_.end())
+		{
+			ParamList dummy;
+			for (const auto& entry : groupIt->second)
+			{
+				if (matchParamPath(entry.path, reqPath, dummy))
+				{
+					return true;
+				}
+			}
+		}
+
+		return false;
+	}
+
 	size_t Router::routeCount() const
 	{
 		size_t paramCount = 0;

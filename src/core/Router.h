@@ -253,6 +253,15 @@ namespace hical
 		[[nodiscard]] WsRouteMatch findWsRoute(std::string_view path) const;
 
 		/**
+		 * @brief 检查指定方法+路径的路由是否存在（Expect: 100-continue 准入预检用）
+		 * 只做存在性判断，不捕获路径参数，不触发 405 检测。
+		 * @param method HTTP 方法
+		 * @param path 已去除查询串的请求路径（未 URL decode）
+		 * @return true 表示路由存在
+		 */
+		[[nodiscard]] bool exists(HttpMethod method, std::string_view path) const;
+
+		/**
 		 * @brief 获取已注册路由数量（HTTP + WebSocket）
 		 * @return 路由数量
 		 */
