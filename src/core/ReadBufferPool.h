@@ -85,7 +85,7 @@ namespace hical
 			}
 
 		private:
-			void doRelease() // NOLINT(readability-make-member-function-const)
+			void doRelease()
 			{
 				if (buf_ != nullptr)
 				{
@@ -111,14 +111,19 @@ namespace hical
 
 			~PoolSlots()
 			{
+#ifndef __MINGW32__
+				// MinGW 下的 thread_local 析构是在 DLL TLS 回调里跑的，那个时机
+				// 不确定 CRT 堆还在不在，delete 下去就是 0xc0000374。
+				// 进程退出 OS 会帮我们收，再说一个线程撑死也就 2MB，无所谓了。
 				for (std::string* p : std::span<std::string*>(static_cast<std::string**>(slots_), count_))
 				{
-					delete p; // NOLINT(cppcoreguidelines-owning-memory)
+					delete p;
 				}
+#endif
 			}
 		};
 
-		static thread_local PoolSlots tlsPool; // NOLINT(readability-identifier-naming)
+		static thread_local PoolSlots tlsPool;
 	};
 
 } // namespace hical

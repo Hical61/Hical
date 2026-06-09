@@ -8,7 +8,7 @@
 namespace hical
 {
 
-	thread_local ReadBufferPool::PoolSlots ReadBufferPool::tlsPool; // NOLINT(readability-identifier-naming)
+	thread_local ReadBufferPool::PoolSlots ReadBufferPool::tlsPool;
 
 	ReadBufferPool::BufferHandle ReadBufferPool::acquire()
 	{
@@ -30,7 +30,7 @@ namespace hical
 		// 超大 buffer 直接丢弃，避免异常大请求撑大池子
 		if (buf->capacity() > kMaxReturnSize)
 		{
-			delete buf; // NOLINT(cppcoreguidelines-owning-memory)
+			delete buf;
 			return;
 		}
 
@@ -41,7 +41,7 @@ namespace hical
 		}
 		else
 		{
-			delete buf; // NOLINT(cppcoreguidelines-owning-memory)
+			delete buf;
 		}
 	}
 
