@@ -191,9 +191,11 @@ namespace hical
 		// 协程式 HTTP 会话处理
 		Awaitable<void> handleSession(boost::asio::ip::tcp::socket socket);
 
-		// 协程式 WebSocket 会话处理
+		// 协程式 WebSocket 会话处理（headers 已从 readBuf 拷贝为 owned，调用前已 release readBuf）
 		Awaitable<void> handleWebSocket(boost::asio::ip::tcp::socket socket,
-										const NativeRequest& req,
+										std::string wsKey,
+										std::string wsExtensions,
+										std::string wsProtocol,
 										const Router::WsRoute& wsRoute);
 
 		// 内存池定期 GC 协程

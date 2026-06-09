@@ -6,6 +6,7 @@
 #pragma once
 
 #include <cstddef>
+#include <span>
 #include <string>
 
 namespace hical
@@ -107,6 +108,14 @@ namespace hical
 		{
 			std::string* slots_[kMaxPooled] = {};
 			size_t count_ = 0;
+
+			~PoolSlots()
+			{
+				for (std::string* p : std::span<std::string*>(static_cast<std::string**>(slots_), count_))
+				{
+					delete p; // NOLINT(cppcoreguidelines-owning-memory)
+				}
+			}
 		};
 
 		static thread_local PoolSlots tlsPool; // NOLINT(readability-identifier-naming)

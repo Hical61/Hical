@@ -893,9 +893,37 @@ namespace hical
 							}
 						}
 
+						// 提前拷贝 WS 握手头部（string_view 引用 readBuf，release 后悬挂）
+						std::string wsKey(req.native().headers.find("Sec-WebSocket-Key"));
+						std::string wsExtensions(req.native().headers.find("Sec-WebSocket-Extensions"));
+						std::string wsProtocol(req.native().headers.find("Sec-WebSocket-Protocol"));
+
+						// 验证必须在 readBuf 归还前完成（validateWsUpgrade 读 headers 的 string_view）
+						if (validateWsUpgrade(req.native()).empty())
+						{
+							HttpResponse badRes;
+							badRes.setStatus(HttpStatusCode::hBadRequest);
+							badRes.setBody("400 Bad Request: invalid WebSocket upgrade");
+							auto& nativeRes = badRes.native();
+							nativeRes.httpVersionMinor = 1;
+							nativeRes.headers.set("Connection", "close");
+							co_await writeResponse(socket, nativeRes);
+							co_return;
+						}
+
 						// socket 所有权转移给 WebSocket 会话，标记 guard 跳过析构
 						guard.transferred = true;
-						co_await handleWebSocket(std::move(socket), req.native(), wsRoute);
+						// readBuf 已不再需要（握手字段已拷贝），提前归还，
+						// 避免 WS 长连接期间占用 + 解耦 tlsPool 的析构顺序
+						readBufHandle.release();
+						// socket 即将 move 走，handleSession 的 idleEntry 指针立刻失效，
+						// 必须在 move 前注销，防止悬空指针残留在 scanner 链表
+						idleGuard.release();
+						co_await handleWebSocket(std::move(socket),
+												 std::move(wsKey),
+												 std::move(wsExtensions),
+												 std::move(wsProtocol),
+												 wsRoute);
 						co_return;
 					}
 				}
@@ -1030,7 +1058,9 @@ namespace hical
 	}
 
 	Awaitable<void> HttpServer::handleWebSocket(tcp::socket socket,
-												const NativeRequest& req,
+												std::string wsKey,
+												std::string wsExtensions,
+												std::string wsProtocol,
 												const Router::WsRoute& wsRoute)
 	{
 		std::shared_ptr<WebSocketSession> session;
@@ -1045,20 +1075,10 @@ namespace hical
 
 		try
 		{
-			// 防御性复制关键头部值（NativeRequest 的 string_view 引用 handleSession 的 readBuf，
-			// 虽然此路径下 readBuf 生命周期足够，但防御性拷贝更安全）
-			std::string clientKeyStr(req.headers.find("Sec-WebSocket-Key"));
-			std::string extHeaderStr(req.headers.find("Sec-WebSocket-Extensions"));
-			std::string protoHeaderStr(req.headers.find("Sec-WebSocket-Protocol"));
+			// 入参 wsKey/wsExtensions/wsProtocol 已是 owned string，readBuf 已归还
 
-			// 1. 验证 WS 握手头部
-			if (validateWsUpgrade(req).empty())
-			{
-				co_return;
-			}
-
-			// 2. 计算 Sec-WebSocket-Accept
-			auto acceptKey = computeWsAcceptKey(clientKeyStr);
+			// 1. 计算 Sec-WebSocket-Accept（validateWsUpgrade 已在调用方完成）
+			auto acceptKey = computeWsAcceptKey(wsKey);
 
 			// 3. 协商 permessage-deflate
 			WsDeflateNegotiation deflateNeg;
@@ -1068,16 +1088,16 @@ namespace hical
 			compressionCfg.clientMaxWindowBits = wsRoute.clientMaxWindowBits;
 			compressionCfg.serverNoContextTakeover = wsRoute.serverNoContextTakeover;
 
-			if (wsRoute.enableCompression && !extHeaderStr.empty())
+			if (wsRoute.enableCompression && !wsExtensions.empty())
 			{
-				deflateNeg = negotiateDeflate(extHeaderStr, compressionCfg);
+				deflateNeg = negotiateDeflate(wsExtensions, compressionCfg);
 			}
 
 			// 4. 协商子协议（Feature 5）
 			std::string negotiatedProtocol;
-			if (!wsRoute.subprotocols.empty() && !protoHeaderStr.empty())
+			if (!wsRoute.subprotocols.empty() && !wsProtocol.empty())
 			{
-				negotiatedProtocol = negotiateSubprotocol(protoHeaderStr, wsRoute.subprotocols);
+				negotiatedProtocol = negotiateSubprotocol(wsProtocol, wsRoute.subprotocols);
 			}
 
 			// 5. 发送 101 Switching Protocols（FixedBuffer<512> 栈上零堆分配）

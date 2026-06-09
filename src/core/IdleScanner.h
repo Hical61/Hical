@@ -80,6 +80,19 @@ namespace hical
 			Guard(Guard&&) = delete;
 			Guard& operator=(Guard&&) = delete;
 
+			/**
+			 * @brief 提前注销（幂等）。socket 所有权转移给其他协程时调用，
+			 * 避免悬空指针残留在扫描链表上。
+			 */
+			void release()
+			{
+				if (scanner_ != nullptr)
+				{
+					scanner_->unregisterEntry(entry_);
+					scanner_ = nullptr;
+				}
+			}
+
 		private:
 			IdleScanner* scanner_;
 			Entry& entry_;

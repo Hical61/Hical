@@ -63,17 +63,27 @@ TEST(ReadBufferPoolTest, ExplicitRelease)
 }
 
 // 超大 buffer 归还时不放回池（容量 > kMaxReturnSize）
+// 验证方法：先排空池，归还一个超大 buffer（应被 delete 不入池），
+// 再借出时容量应 <= kMaxReturnSize（来自新 new，不是那个超大的）。
 TEST(ReadBufferPoolTest, OversizedBufferNotPooled)
 {
-	std::string* rawPtr = nullptr;
+	// 借出 kMaxPooled 个 handle 让池完全排空，用固定数组持有
+	static constexpr size_t kDrainCount = ReadBufferPool::kMaxPooled;
+	ReadBufferPool::BufferHandle drain[kDrainCount]; // NOLINT(cppcoreguidelines-pro-bounds-constant-array-index)
+	for (auto& slot : drain)
 	{
-		auto h = ReadBufferPool::acquire();
-		h.get().reserve(ReadBufferPool::kMaxReturnSize + 1);
-		rawPtr = h.buf_;
+		slot = ReadBufferPool::acquire();
 	}
-	// 超大 buffer 被 delete，再借应该是新对象
-	auto h2 = ReadBufferPool::acquire();
-	EXPECT_NE(h2.buf_, rawPtr);
+	// 池此时为空；归还超大 buffer，它应被直接 delete 而不入池
+	{
+		auto big = ReadBufferPool::acquire(); // 池空 → new 一个新的
+		big.get().reserve(ReadBufferPool::kMaxReturnSize + 1);
+		// big 析构 → 超大 → delete，池 count 仍为 0
+	}
+	// 如果超大 buffer 错误入池，下次 acquire 会复用它（容量 > kMaxReturnSize）
+	auto next = ReadBufferPool::acquire(); // 池空 → 必须 new
+	EXPECT_LE(next.get().capacity(), ReadBufferPool::kMaxReturnSize);
+	// drain[] 析构，kDrainCount 个正常 buffer 归还到池
 }
 
 // 连续借还多个，pool 不超过 kMaxPooled
