@@ -26,12 +26,9 @@ namespace hical
 													 SocketType socket,
 													 const InetAddress& localAddr,
 													 const InetAddress& peerAddr)
-		: loop_(loop)
-		, socket_(std::move(socket))
-		, inputBuffer_(MemoryPool::instance().threadLocalAllocator())
-		, localAddr_(localAddr)
-		, peerAddr_(peerAddr)
+		: loop_(loop), socket_(std::move(socket)), localAddr_(localAddr), peerAddr_(peerAddr)
 	{
+		// inputBuffer_ 在 readLoop 第一次读时才创建，空闲连接不占这块内存
 	}
 
 	template <typename SocketType>
@@ -156,9 +153,8 @@ namespace hical
 	}
 
 	/**
-	 * @brief 将写条目入队并触发写操作（统一的入队路径）
-	 * MPSC 无锁队列：push 为 wait-free O(1)，消除 mutex 开销。
-	 * 可从任意线程安全调用。
+	 * @brief 将写条目入队并触发写操作
+	 * MPSC 无锁队列，push wait-free O(1)，可从任意线程调用。
 	 */
 	template <typename SocketType>
 	void GenericConnection<SocketType>::enqueueEntry(WriteEntry entry)
@@ -543,22 +539,29 @@ namespace hical
 	{
 		try
 		{
+			// 连接刚建立时还没分配，第一次进来才创建
+			if (!inputBuffer_.has_value())
+			{
+				inputBuffer_.emplace(MemoryPool::instance().threadLocalAllocator());
+			}
+			PmrBuffer& buf = *inputBuffer_;
+
 			static constexpr size_t hMinReadSize = 4096;
 			while (reading_ && state_.load() == State::hConnected)
 			{
 				// 零拷贝：直接读入 inputBuffer_ 的可写区域
-				inputBuffer_.ensureWritableBytes(hMinReadSize);
-				auto bytesRead = co_await socket_.async_read_some(
-					boost::asio::buffer(inputBuffer_.beginWrite(), inputBuffer_.writableBytes()),
-					boost::asio::use_awaitable);
+				buf.ensureWritableBytes(hMinReadSize);
+				auto bytesRead =
+					co_await socket_.async_read_some(boost::asio::buffer(buf.beginWrite(), buf.writableBytes()),
+													 boost::asio::use_awaitable);
 
 				bytesReceived_ += bytesRead;
 				updateLastActiveTime();
-				inputBuffer_.hasWritten(bytesRead);
+				buf.hasWritten(bytesRead);
 
 				if (messageCallback_)
 				{
-					messageCallback_(std::static_pointer_cast<TcpConnection>(sharedThis()), &inputBuffer_);
+					messageCallback_(std::static_pointer_cast<TcpConnection>(sharedThis()), &buf);
 				}
 			}
 		}
@@ -739,7 +742,7 @@ namespace hical
 
 	/**
 	 * @brief 协程式文件异步分块发送
-	 * 使用 boost::asio::random_access_file 异步读取，不阻塞 io_context 线程。
+	 * 用 boost::asio::random_access_file 异步读，不卡 io_context 线程。
 	 * @return 发送的总字节数
 	 */
 	template <typename SocketType>

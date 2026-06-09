@@ -350,8 +350,8 @@ def report_extrapolation(datapoints, target):
         log(f"  {n:>12,} | {human_bytes(delta):>16} | {human_bytes(total):>16}")
     log("")
 
-    target_delta = k * target + b
-    log(f"  >>> {target:,} 连接预计需要约 {human_bytes(target_delta)} 服务端 RSS")
+    target_total = k * target + b
+    log(f"  >>> {target:,} 连接预计需要约 {human_bytes(target_total)} 服务端 RSS（含固定开销）")
     log("")
     log("  [重要] 这是【空闲连接】的内存下限，真实生产会更高：")
     log("    1) 测的是建连后不发数据的空闲长连接。Hical 的 PMR 缓冲、HttpSession")

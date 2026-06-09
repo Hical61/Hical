@@ -28,6 +28,7 @@
 #include <chrono>
 #include <fstream>
 #include <memory>
+#include <optional>
 #include <span>
 #include <type_traits>
 #include <vector>
@@ -201,10 +202,9 @@ namespace hical
 		}
 
 		/**
-		 * @brief 发送队列条目（缓存行优化）
-		 * 消除原 shared_ptr<WriteNode> 的三层间接（shared_ptr → control block → object → 虚函数）。
-		 * 内存数据快速路径：直接持有 shared_ptr<string>，仅 1 次间接解引用。
-		 * 文件发送慢路径：保留 shared_ptr<WriteNode> 多态。
+		 * @brief 写队列里的一个发送条目
+		 * 内存数据直接持有 shared_ptr<string>，比原来的 WriteNode 少两层间接。
+		 * 文件发送还是走 WriteNode 多态，不常见所以无所谓。
 		 */
 		struct WriteEntry
 		{
@@ -272,8 +272,8 @@ namespace hical
 
 		/**
 		 * @brief thread_local MpscNode 对象池
-		 * 每个线程维护一个定额 free list，热路径上省掉 malloc/free。
-		 * 同线程 send + writeLoop 的场景下，分配/释放都是 O(1) 纯用户态操作。
+		 * 每个线程维护一个 free list（上限 128），send + writeLoop 同线程时
+		 * 分配/回收都是纯用户态 O(1)，不走 malloc/free。
 		 */
 		struct MpscNodePool
 		{
@@ -419,8 +419,8 @@ namespace hical
 		std::atomic<bool> reading_ {false};
 		std::atomic<bool> writing_ {false};
 
-		// 接收缓冲区（readLoop 每次迭代都访问）
-		PmrBuffer inputBuffer_;
+		// 接收缓冲区（readLoop 第一次读时才分配，空闲连接不占这块内存）
+		std::optional<PmrBuffer> inputBuffer_;
 
 		// 发送队列（MPSC 无锁队列）
 		MpscQueue writeQueue_;

@@ -442,7 +442,7 @@ io_context.run()
     │       │               │               └── co_await handler(req)
     │       │               └── co_await async_write(FixedBuffer)  ──→ 单次系统调用发送
     │       │
-    │       └── 循环接受下一个连接（keep-alive 复用 readBuf）
+    │       └── 循环接受下一个连接（keep-alive 借还 readBuf，空闲不持有）
     │
     └── io_context 调度所有协程
 ```
@@ -1469,7 +1469,10 @@ struct WsMessage
 ### 19.1 零拷贝请求解析
 
 ```
-TCP 读取 → readBuf (连接级复用，keep-alive 不重新分配)
+ReadBufferPool::acquire() 借一块 8KB std::string（thread_local 池，零分配）
+              │ 若有 pipelineSpill 残留则先拷贝
+              ▼
+        async_read_some → readBuf（借来的缓冲区）
               │
               ▼
         picohttpparser (栈上 phr_header[64]，零堆分配)
@@ -1479,6 +1482,9 @@ TCP 读取 → readBuf (连接级复用，keep-alive 不重新分配)
               │
               ▼
         HttpRequest 封装 (惰性解析：jsonBody/queryParam/cookie 首次访问才解析)
+              │
+              ▼ 响应写完毕
+        readBuf 归还回池；空闲连接不持有读缓冲区
 ```
 
 ### 19.2 单缓冲区响应序列化 + 前缀模板
@@ -1512,8 +1518,9 @@ thread_local DateCache dateTlsCache; // {cachedSec, buf[30], len}
 
 ### 19.4 HTTP Pipelining 优化
 
-- **parse-before-read 快速路径**：keep-alive 连接的 readBuf 中可能已有下一个完整请求（TCP 粘包），先尝试解析再决定是否 `async_read_some`
+- **parse-before-read 快速路径**：若 `pipelineSpill` 中有上一请求的粘包残留，先把数据拷入新借的 readBuf 并尝试解析，解析成功则跳过本轮 `async_read_some`
 - **延迟 memmove**：只在 readBuf 前半空间耗尽时才 memmove 紧凑数据，而非每次请求后立即移动
+- **ReadBufferPool 借还**：每请求借一块缓冲区，响应写完后归还；粘包残留暂存在 `pipelineSpill`（`for(;;)` 外的 `std::string`，大多数连接为空，SSO 不分配堆内存）
 
 ### 19.5 同步中间件零协程帧
 

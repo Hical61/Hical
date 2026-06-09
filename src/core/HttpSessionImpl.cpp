@@ -1,13 +1,14 @@
 /**
  * @file HttpSessionImpl.cpp
- * @brief HttpServer 的会话处理实现（编译防火墙）
- * 将 picohttpparser HTTP 解析器和 WebSocket 帧处理代码隔离在此翻译单元，
- * 修改 HttpServer 配置逻辑时不会触发重模板编译。
+ * @brief HTTP 会话处理（编译防火墙）
+ * picohttpparser 和 WebSocket 帧处理代码集中在这里，
+ * 改 HttpServer 的配置逻辑不会触发这些重模板代码的重编。
  */
 
 #include "HttpServer.h"
 #include "FixedBuffer.h"
 #include "MemoryPool.h"
+#include "ReadBufferPool.h"
 #include "core/Version.h"
 #include "WebSocket.h"
 #include "WsHandshake.h"
@@ -419,10 +420,8 @@ namespace hical
 
 		try
 		{
-			// 读缓冲区，keep-alive 复用
-			std::string readBuf;
-			readBuf.resize(8192);
-			size_t bufUsed = 0; // 跨请求保留：TCP 粘包时残留下一请求的数据
+			// 跨请求的粘包残留；大多数连接空着不额外占内存
+			std::string pipelineSpill;
 
 			// ── 连接级响应前缀模板 ──
 			// 把 Server / Connection / Date 三个通用头部预拼成 wire bytes，
@@ -471,6 +470,34 @@ namespace hical
 
 			for (;;)
 			{
+				// pipeline 有残留时数据已在用户态，直接借缓冲区处理；
+				// 无残留时先等 socket 可读再借，空闲连接挂在 async_wait 上不持有 readBuf
+				size_t bufUsed = pipelineSpill.size();
+				if (bufUsed == 0)
+				{
+					co_await socket.async_wait(tcp::socket::wait_read, boost::asio::use_awaitable);
+				}
+
+				auto readBufHandle = ReadBufferPool::acquire();
+				std::string& readBuf = readBufHandle.get();
+
+				// 把上轮的 pipeline 残留数据拷进新缓冲区
+				if (bufUsed > 0)
+				{
+					size_t initSize = std::max(bufUsed, ReadBufferPool::kBufferSize);
+					if (initSize > readBuf.capacity())
+					{
+						readBuf.reserve(initSize);
+					}
+					readBuf.resize(initSize);
+					std::memcpy(readBuf.data(), pipelineSpill.data(), bufUsed);
+					pipelineSpill.clear();
+				}
+				else
+				{
+					readBuf.resize(ReadBufferPool::kBufferSize);
+				}
+
 				// picohttpparser 输出
 				const char* method = nullptr;
 				size_t methodLen = 0;
@@ -975,6 +1002,13 @@ namespace hical
 				{
 					std::memmove(readBuf.data(), readBuf.data() + memmoveSrc, memmoveLen);
 				}
+
+				// 把粘包残留存起来，把读缓冲区还回池里
+				if (bufUsed > 0)
+				{
+					pipelineSpill.assign(readBuf.data(), bufUsed);
+				}
+				// readBufHandle 析构时自动还回池
 
 				if (!shouldKeepAlive)
 				{

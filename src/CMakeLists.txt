@@ -40,6 +40,7 @@ add_library(hical_core STATIC
     core/Middleware.cpp
     core/HttpServer.cpp
     core/HttpSessionImpl.cpp
+    core/ReadBufferPool.cpp
     core/IdleScanner.cpp
     core/WsDeflate.cpp
     core/WebSocket.cpp

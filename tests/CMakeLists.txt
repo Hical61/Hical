@@ -63,6 +63,7 @@ hical_add_test(test_log)                  # 日志系统主测试
 hical_add_test(test_log_ndebug)           # 验证 TRACE 在 NDEBUG 下编译期消除
 target_compile_definitions(test_log_ndebug PRIVATE NDEBUG)
 hical_add_test(test_fixed_buffer)         # FixedBuffer 栈缓冲
+hical_add_test(test_read_buffer_pool)     # ReadBufferPool 借还语义
 hical_add_test(test_log_file)             # LogFile 文件轮转
 hical_add_test(test_async_file_sink)      # AsyncFileSink 异步双缓冲
 hical_add_test(test_log_formatter)        # TextFormatter + JsonFormatter

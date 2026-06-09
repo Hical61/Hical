@@ -945,7 +945,7 @@ total memory leaked: 1.06K
     hical::HttpServer::handleSession             ← 请求处理协程帧
 ```
 
-**解读**：峰值总共 2.14M，其中 Asio handler 池 1.14M，连接级缓冲区 698K + 663K。每个连接的 readBuf（`HttpSessionImpl.cpp:305`）约 8KB（663K / 81 连接），是 keep-alive 复用的连接级缓冲区，分配次数极少（81 次 = 连接数），属于正常开销。
+**解读**：峰值总共 2.14M，其中 Asio handler 池 1.14M，连接级缓冲区 698K + 663K。每个连接的 readBuf（`HttpSessionImpl.cpp:305`）约 8KB（663K / 81 连接），**这是测试时 81 条连接都处于活跃读写期的快照**；后引入 `ReadBufferPool` 借还后，空闲连接不持有 readBuf，百万空闲长连接场景下每连接节省约 7.5KB。
 
 #### MOST TEMPORARY ALLOCATIONS（临时分配排名，优化重点）
 
@@ -967,7 +967,7 @@ total memory leaked: 1.06K
 **解读**：总共只有 3,110 次临时分配（41 次/秒），在 136K QPS 下占比 < 1%。说明：
 - Hical 的零拷贝 HTTP 解析（`string_view` 引用 `readBuf`）有效避免了请求级临时分配
 - `FixedBuffer<4096>` 栈缓冲区避免了响应序列化的堆分配
-- 连接级 `readBuf` 跨 keep-alive 请求复用，不需要每请求重新分配
+- `ReadBufferPool` 借还 `readBuf`：每请求借一块，响应写完归还，同一缓冲区在连接间复用
 
 ### 3.6 与 Hical PMR 内存池配合分析
 

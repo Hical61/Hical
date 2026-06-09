@@ -51,12 +51,12 @@ v2.6.0 将 HTTP 解析/序列化和 WebSocket 全面替换为原生实现（pico
 
 ### 2.1 原生 HTTP 栈
 
-| 组件        | 优化前 (Beast)          | 优化后 (自研)                              | 收益                 |
-| ----------- | ----------------------- | ------------------------------------------ | -------------------- |
-| HTTP 解析器 | Boost.Beast HTTP parser | picohttpparser                             | CPU 热点占比大幅下降 |
-| 请求表示    | 拥有式 string 拷贝      | `string_view` 引用连接级 `readBuf`         | 零堆分配             |
-| 头部存储    | Beast 内部容器          | 栈上 `array<Entry,64>` (`RequestHeaders`)  | 零堆分配             |
-| 响应序列化  | Beast serializer        | `FixedBuffer<512>` 栈缓冲 + scatter-gather | 单次 `async_write`   |
+| 组件        | 优化前 (Beast)          | 优化后 (自研)                                        | 收益                           |
+| ----------- | ----------------------- | ---------------------------------------------------- | ------------------------------ |
+| HTTP 解析器 | Boost.Beast HTTP parser | picohttpparser                                       | CPU 热点占比大幅下降           |
+| 请求表示    | 拥有式 string 拷贝      | `string_view` 引用 `ReadBufferPool` 借来的 `readBuf` | 零堆分配，空闲连接不持有缓冲区 |
+| 头部存储    | Beast 内部容器          | 栈上 `array<Entry,64>` (`RequestHeaders`)            | 零堆分配                       |
+| 响应序列化  | Beast serializer        | `FixedBuffer<512>` 栈缓冲 + scatter-gather           | 单次 `async_write`             |
 
 ### 2.2 多 Acceptor 架构 (SO_REUSEPORT)
 
@@ -112,7 +112,7 @@ v2.6.0 将 HTTP 解析/序列化和 WebSocket 全面替换为原生实现（pico
 - `attributes_` 延迟构造（绝大多数请求不使用属性）
 - 200 OK 状态行预计算字面量
 - HTTP Date 头 `thread_local` 每秒缓存更新
-- 连接级 `readBuf` 跨 keep-alive 请求复用
+- `ReadBufferPool` 借还 `readBuf`：请求期间借用，响应写完归还，空闲连接零缓冲区驻留
 
 ### 2.7 高并发场景优化（v2.6.3）
 
@@ -126,6 +126,17 @@ strace + perf 火焰图实测 10K 并发下发现的浪费点，逐一消除：
 | Worker 线程 CPU 亲和性     | 内核随意迁移线程                                             | `pthread_setaffinity_np` 绑核                     | 消除 TLB flush + 跨核 IPI                         |
 | mimalloc 替代 glibc malloc | glibc 的 `mprotect` arena 扩展                               | mimalloc（benchmark 构建）                        | 减少内核态 syscall                                |
 | RPS/RFS 网络亲和           | 收包 softirq 随机分配                                        | 容器启动时配置 RPS/RFS 对齐处理线程 CPU           | 减少跨核数据搬运                                  |
+
+### 2.8 空闲长连接内存优化（v2.6.5）
+
+面向百万级空闲长连接场景的内存压降优化：
+
+| 优化项                | 优化前                             | 优化后                                                | 每连接节省  |
+| --------------------- | ---------------------------------- | ----------------------------------------------------- | ----------- |
+| readBuf 借还          | 连接常驻 8KB `std::string`         | `ReadBufferPool` 按需借还，空闲时不持有               | **~7.5 KB** |
+| `inputBuffer_` 懒分配 | 连接建立即分配 `PmrBuffer`（~2KB） | `std::optional<PmrBuffer>`，`readLoop` 第一次进才创建 | **~2 KB**   |
+
+**合计**：空闲连接从 ~17.44 KB 降至 ~8 KB（节省约 55%），百万连接内存占用从 ~16.6 GB 降至 ~7–8 GB（内核侧 TCP 缓冲 ~4 KB/连接不可优化）。
 
 ---
 
