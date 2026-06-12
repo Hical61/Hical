@@ -8,12 +8,12 @@
 
 ## 1. 环境准备
 
-| 组件       | 最低版本                                                  |
-| ---------- | --------------------------------------------------------- |
-| C++ 编译器 | GCC 14+ / Clang 20+ / MSVC 2022+（需支持 C++20 协程）    |
-| CMake      | 3.20+                                                     |
-| Boost      | 1.82+（Asio / JSON）；DB 中间件 >= 1.85                  |
-| OpenSSL    | 3.0+                                                      |
+| 组件       | 最低版本                                              |
+| ---------- | ----------------------------------------------------- |
+| C++ 编译器 | GCC 14+ / Clang 20+ / MSVC 2022+（需支持 C++20 协程） |
+| CMake      | 3.20+                                                 |
+| Boost      | 1.82+（Asio / JSON）；DB 中间件 >= 1.85               |
+| OpenSSL    | 3.0+                                                  |
 
 详细环境搭建步骤请参考 [编译与测试指南](build_and_test_guide.md)。
 
@@ -98,9 +98,9 @@ target_link_libraries(my_app PRIVATE hical::hical_core)
 
 ```bash
 # 从 GitHub Releases 下载源码包
-curl -LO https://github.com/Hical61/Hical/releases/download/v2.6.4/hical-2.6.4-conan-src.tar.gz
-tar xzf hical-2.6.4-conan-src.tar.gz && cd hical
-conan export . --version=2.6.4
+curl -LO https://github.com/Hical61/Hical/releases/download/v2.6.5/hical-2.6.5-conan-src.tar.gz
+tar xzf hical-2.6.5-conan-src.tar.gz && cd hical
+conan export . --version=2.6.5
 ```
 
 在消费者项目中：
@@ -235,17 +235,17 @@ server.use([](HttpRequest& req, MiddlewareNext next) -> Awaitable<HttpResponse> 
 
 ## 5. 下一步
 
-| 主题 | 文档 |
-|------|------|
-| WebSocket | [使用示例](examples_guide.md) |
-| SSL/TLS | [集成指南](integration_guide.md) |
-| 协程处理器 | [协程指南](coroutine-guide.md) |
-| 性能调优 | [性能报告](performance_report.md) |
-| OpenAPI 生成 | [OpenAPI 指南](openapi-guide.md) |
-| 数据库中间件 | [集成指南](integration_guide.md) |
-| 完整示例 | [examples/](../examples/) — 8 个可运行的 demo |
-| API 文档 | [API 参考](api_reference.md) |
-| 架构设计 | [架构文档](architecture.md) |
+| 主题         | 文档                                          |
+| ------------ | --------------------------------------------- |
+| WebSocket    | [使用示例](examples_guide.md)                 |
+| SSL/TLS      | [集成指南](integration_guide.md)              |
+| 协程处理器   | [协程指南](coroutine-guide.md)                |
+| 性能调优     | [性能报告](performance_report.md)             |
+| OpenAPI 生成 | [OpenAPI 指南](openapi-guide.md)              |
+| 数据库中间件 | [集成指南](integration_guide.md)              |
+| 完整示例     | [examples/](../examples/) — 8 个可运行的 demo |
+| API 文档     | [API 参考](api_reference.md)                  |
+| 架构设计     | [架构文档](architecture.md)                   |
 
 ---
 

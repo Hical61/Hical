@@ -8,12 +8,12 @@ English | [简体中文](quickstart_cn.md)
 
 ## 1. Prerequisites
 
-| Component  | Minimum Version                                               |
-| ---------- | ------------------------------------------------------------- |
+| Component    | Minimum Version                                            |
+| ------------ | ---------------------------------------------------------- |
 | C++ Compiler | GCC 14+ / Clang 20+ / MSVC 2022+ (C++20 coroutine support) |
-| CMake      | 3.20+                                                         |
-| Boost      | 1.82+ (Asio / JSON); DB middleware requires ≥ 1.85           |
-| OpenSSL    | 3.0+                                                          |
+| CMake        | 3.20+                                                      |
+| Boost        | 1.82+ (Asio / JSON); DB middleware requires ≥ 1.85         |
+| OpenSSL      | 3.0+                                                       |
 
 For detailed setup instructions, see [Build & Test Guide](build_and_test_guide.md).
 
@@ -98,9 +98,9 @@ target_link_libraries(my_app PRIVATE hical::hical_core)
 
 ```bash
 # Download source package from GitHub Releases
-curl -LO https://github.com/Hical61/Hical/releases/download/v2.6.4/hical-2.6.4-conan-src.tar.gz
-tar xzf hical-2.6.4-conan-src.tar.gz && cd hical
-conan export . --version=2.6.4
+curl -LO https://github.com/Hical61/Hical/releases/download/v2.6.5/hical-2.6.5-conan-src.tar.gz
+tar xzf hical-2.6.5-conan-src.tar.gz && cd hical
+conan export . --version=2.6.5
 ```
 
 In your consumer project:
@@ -235,17 +235,17 @@ server.use([](HttpRequest& req, MiddlewareNext next) -> Awaitable<HttpResponse> 
 
 ## 5. What's Next
 
-| Topic | Guide |
-|-------|-------|
-| WebSocket | [Examples Guide](examples_guide.md) |
-| SSL/TLS | [Integration Guide](integration_guide.md) |
-| Coroutine handlers | [Coroutine Guide](coroutine-guide.md) |
-| Performance tuning | [Performance Report](performance_report.md) |
-| OpenAPI generation | [OpenAPI Guide](openapi-guide.md) |
-| Database middleware | [Integration Guide](integration_guide.md) |
-| Full examples | [examples/](../examples/) — 8 runnable demos |
-| API reference | [API Reference](api_reference.md) |
-| Architecture | [Architecture](architecture.md) |
+| Topic               | Guide                                        |
+| ------------------- | -------------------------------------------- |
+| WebSocket           | [Examples Guide](examples_guide.md)          |
+| SSL/TLS             | [Integration Guide](integration_guide.md)    |
+| Coroutine handlers  | [Coroutine Guide](coroutine-guide.md)        |
+| Performance tuning  | [Performance Report](performance_report.md)  |
+| OpenAPI generation  | [OpenAPI Guide](openapi-guide.md)            |
+| Database middleware | [Integration Guide](integration_guide.md)    |
+| Full examples       | [examples/](../examples/) — 8 runnable demos |
+| API reference       | [API Reference](api_reference.md)            |
+| Architecture        | [Architecture](architecture.md)              |
 
 ---
 

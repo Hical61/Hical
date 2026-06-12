@@ -110,7 +110,8 @@ namespace hical
 
 		/**
 		 * @brief 根据可用内存计算推荐的最大连接数
-		 * 按每连接约 25KB 估算（PMR 缓冲 + HTTP parser + socket 缓冲），
+		 * 按每连接约 16KB 估算（readBuf 借还 + PmrBuffer 懒分配后空闲约 8KB，
+		 * 再加活跃连接临时缓冲和 socket 开销），
 		 * 预留 30% 内存给业务逻辑和系统开销。
 		 * @param availableMemoryMB 可用内存（MB）
 		 * @return 推荐的最大连接数（最多 100 万；只管推荐值，setMaxConnections 不受此限）

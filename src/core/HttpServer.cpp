@@ -89,8 +89,9 @@ namespace hical
 
 	size_t HttpServer::recommendedMaxConnections(size_t availableMemoryMB)
 	{
-		// 每连接内存粗估：PMR 缓冲 + HTTP parser + socket 缓冲，约 25KB
-		constexpr size_t kBytesPerConnection = 25 * 1024;
+		// 每连接内存粗估：readBuf 借还 + PmrBuffer 懒分配后空闲连接约 8KB，
+		// 再加上活跃时的临时缓冲和 socket 开销，按 16KB 估。
+		constexpr size_t kBytesPerConnection = 16 * 1024;
 		// 给推荐值封个顶，免得有人传进来个离谱的 availableMemoryMB 算出天文数字。
 		// 封顶 100 万够用了。注意这只管「自动推荐值」，setMaxConnections() 不受这限制，想设更高自己传。
 		constexpr size_t kMaxRecommendedConnections = 1'000'000;

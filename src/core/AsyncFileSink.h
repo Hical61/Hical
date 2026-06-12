@@ -63,9 +63,9 @@ namespace hical
 		std::string curBuf_;
 		std::string flushBuf_;
 		std::condition_variable_any cond_;
-		std::jthread bgThread_;
 		std::atomic<uint64_t> dropped_ {0};
-		std::deque<std::promise<void>> flushRequests_; // flush() 同步握手队列
+		std::deque<std::promise<void>> flushRequests_;
+		std::jthread bgThread_; // 必须最后声明：确保先 join 再析构 flushRequests_
 	};
 
 } // namespace hical

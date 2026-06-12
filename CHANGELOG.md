@@ -5,7 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.6.5] - 2026-06-12
+
+### Added
+- **Expect: 100-continue 支持**（[#8](https://github.com/Hical61/Hical/issues/8)）：Router 新增 `exists()` 路由预检方法，HttpSessionImpl 解析 `Expect` 头；路由不存在返回 404，body 大小超限返回 413，均通过时发送 `100 Continue` 让客户端传输 body。配套集成测试
+
+### Changed
+- **`setBody` API 变更**（[#9](https://github.com/Hical61/Hical/issues/9)）：`setBody(body)` 单参版本不再自动覆写 `Content-Type`，得用双参 `setBody(body, contentType)` 手动传。框架内部所有内置错误响应（`notFound`/`badRequest`/`serverError`/`rangeNotSatisfiable`）和调用点都改成显式传参了
+- **`OpenApiDocument::generateString()` 线程安全**：改成按值返回，之前 `invalidate()` 跨线程调的时候跟 `generateString()` 并发读会有 data race
+- **`/docs` 页面缓存**：加了 `Cache-Control: public, max-age=3600`
+- **`recommendedMaxConnections` 上限放开**：从 65535 提到 100 万
+
+### Performance
+- **空闲长连接内存砍半**：搞了个 `ReadBufferPool`（thread_local 无锁池，`BufferHandle` RAII 接管借还），空闲时不占 readBuf，来了请求借一块、写完了还回去。空闲连接从 17.44 KB 降到 ~8 KB。顺带把 `GenericConnection::inputBuffer_` 改成 `optional<PmrBuffer>` 懒分配，readLoop 第一次进来才创建，每个空闲连接再省 ~2 KB。按百万长连接算总共省了大概 9.5 GB
+- **`HeaderMap::toLower()` 编译期 256 查表**：`constexpr array` 替代挨个 `tolower()`，头部大小写归一化热路径加速
+- **`Router::urlDecode()` 编译期 hex 查表**：256 条 `constexpr` 查表替代运行时分支判断，URL 解码加速
+- **`HttpSessionImpl` Connection 头预扫描**：解析 header 时顺手把 `Connection` 值抓出来，省了后面单独 O(n) 扫一遍
+
+### Fixed
+- **burst 建连时连接数限制失效**：原来逻辑是先 load 判断再 fetch_add，但 `handleSession` 走 `coSpawn` 异步投递，高速建连时计数跟不上，限流失效。改成 accept 处先 fetch_add 占位，超限就 fetch_sub 退回来 close socket，`AcceptGuard` RAII 保底不回漏；`maxConnections_` 改成 `atomic` 让多 acceptor 并发没问题
+- **WS 升级路径堆损坏**：一串三个生命周期 bug——PoolSlots 线程退出时裸指针没释放（LeakSanitizer 能抓到）、IOCP 两阶段析构后 readBuf 还到已销毁的 tlsPool、socket move 后 idleEntry 还挂在 IdleScanner 链表上。修法：move socket 前把 readBuf 和 Guard 都先 release 掉，handleWebSocket 签名改成接 string 参数，从根上断了对 readBuf 的引用
+- **MinGW thread_local 析构时序炸堆**：CI 上 msys2-gcc 测试跑完了退进程时爆 0xC0000374 或 SEGFAULT。原因是 PoolSlots 的析构在 DLL TLS 回调里跑，那时候 CRT 堆已经没了。修法：`#ifndef __MINGW32__` 跳过 MinGW 下的 TLS 清理，进程退出 OS 自己收
+- **AsyncFileSink 析构 data race**：bgThread_ 成员声明在 flushRequests_ 前面，C++ 反向析构时 flushRequests_ 先被销毁，后台线程还在写它，TSan（Clang-20）抓到。把 bgThread_ 移到 flushRequests_ 后面，保证先 join 线程再销毁队列
 
 ## [2.6.4] - 2026-05-30
 
@@ -376,7 +397,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Multipart Part 数量上限（DoS 防护）
 - Session ID 使用密码学安全的随机数生成
 
-[Unreleased]: https://github.com/Hical61/Hical/compare/v2.6.4...HEAD
+[Unreleased]: https://github.com/Hical61/Hical/compare/v2.6.5...HEAD
+[2.6.5]: https://github.com/Hical61/Hical/compare/v2.6.4...v2.6.5
 [2.6.4]: https://github.com/Hical61/Hical/compare/v2.6.3...v2.6.4
 [2.6.3]: https://github.com/Hical61/Hical/compare/v2.6.2...v2.6.3
 [2.6.2]: https://github.com/Hical61/Hical/compare/v2.6.1...v2.6.2
