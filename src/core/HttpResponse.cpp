@@ -82,6 +82,18 @@ namespace hical
 		return res_.body;
 	}
 
+	void HttpResponse::setBody(const std::string& body)
+	{
+		res_.body = body;
+		res_.preparePayload();
+	}
+
+	void HttpResponse::setBody(std::string&& body)
+	{
+		res_.body = std::move(body);
+		res_.preparePayload();
+	}
+
 	void HttpResponse::setBody(const std::string& body, const std::string& contentType)
 	{
 		// contentType 也查 CR/LF
@@ -213,7 +225,7 @@ namespace hical
 		res.setStatus(HttpStatusCode::hOk);
 		if (!body.empty())
 		{
-			res.setBody(body);
+			res.setBody(body, "text/plain");
 		}
 		return res;
 	}
@@ -230,7 +242,7 @@ namespace hical
 	{
 		HttpResponse res;
 		res.setStatus(HttpStatusCode::hNotFound);
-		res.setBody("Not Found");
+		res.setBody("Not Found", "text/plain");
 		res.setHeader("X-Content-Type-Options", "nosniff");
 		return res;
 	}
@@ -239,7 +251,7 @@ namespace hical
 	{
 		HttpResponse res;
 		res.setStatus(HttpStatusCode::hBadRequest);
-		res.setBody(message);
+		res.setBody(message, "text/plain");
 		res.setHeader("X-Content-Type-Options", "nosniff");
 		return res;
 	}
@@ -248,7 +260,7 @@ namespace hical
 	{
 		HttpResponse res;
 		res.setStatus(HttpStatusCode::hInternalServerError);
-		res.setBody("Internal Server Error");
+		res.setBody("Internal Server Error", "text/plain");
 		res.setHeader("X-Content-Type-Options", "nosniff");
 		return res;
 	}
@@ -287,7 +299,7 @@ namespace hical
 		HttpResponse res;
 		res.setStatus(HttpStatusCode::hRequestedRangeNotSatisfiable);
 		res.setHeader("Content-Range", "bytes */" + std::to_string(fileSize));
-		res.setBody("416 Range Not Satisfiable");
+		res.setBody("416 Range Not Satisfiable", "text/plain");
 		return res;
 	}
 

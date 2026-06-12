@@ -331,7 +331,7 @@ namespace hical
 				{
 					HttpResponse errRes;
 					errRes.setStatus(HttpStatusCode::hServiceUnavailable);
-					errRes.setBody("Service Unavailable: session store full");
+					errRes.setBody("Service Unavailable: session store full", "text/plain");
 					co_return errRes;
 				}
 			}

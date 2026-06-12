@@ -39,9 +39,8 @@ namespace hical::meta::openapi
 				   {
 					   HttpResponse res;
 					   res.setStatus(HttpStatusCode::hOk);
-					   res.setHeader("Content-Type", "application/json; charset=utf-8");
 					   // 不硬编码 CORS 头，遵循用户配置的 CORS 中间件策略
-					   res.setBody(document->generateString());
+					   res.setBody(document->generateString(), "application/json; charset=utf-8");
 					   return res;
 				   });
 
@@ -91,8 +90,8 @@ namespace hical::meta::openapi
 				   {
 					   HttpResponse res;
 					   res.setStatus(HttpStatusCode::hOk);
-					   res.setHeader("Content-Type", "text/html; charset=utf-8");
-					   res.setBody(html);
+					   res.setHeader("Cache-Control", "public, max-age=3600");
+					   res.setBody(html, "text/html; charset=utf-8");
 					   return res;
 				   });
 	}

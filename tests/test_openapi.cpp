@@ -553,10 +553,10 @@ TEST(OpenApiDocumentTest, CachingBehavior)
 	registry->addRoute(HttpMethod::hGet, "/test", "test");
 
 	OpenApiDocument doc(registry);
-	const auto& first = doc.generateString();
-	const auto& second = doc.generateString();
-	// 缓存：两次调用返回同一引用
-	EXPECT_EQ(&first, &second);
+	auto first = doc.generateString();
+	auto second = doc.generateString();
+	// 缓存命中，内容一致
+	EXPECT_EQ(first, second);
 }
 
 TEST(OpenApiDocumentTest, InvalidateCache)
@@ -569,9 +569,9 @@ TEST(OpenApiDocumentTest, InvalidateCache)
 	EXPECT_FALSE(first.empty());
 
 	doc.invalidate();
-	const auto& second = doc.generateString();
+	auto second = doc.generateString();
 	EXPECT_FALSE(second.empty());
-	EXPECT_EQ(first, second); // 内容相同但可能是新字符串
+	EXPECT_EQ(first, second); // 内容一样，但已经是新字符串了
 }
 
 TEST(OpenApiDocumentTest, DefaultResponse)

@@ -6,6 +6,7 @@
 #pragma once
 
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <string>
 #include <string_view>
@@ -208,9 +209,26 @@ namespace hical
 		}
 
 	private:
+		/// 256 条转小写查表，编译期就搭好
+		static constexpr std::array<char, 256> buildToLowerTable() noexcept
+		{
+			std::array<char, 256> tbl {};
+			for (int i = 0; i < 256; ++i)
+			{
+				tbl[static_cast<size_t>(i)] = static_cast<char>(i);
+			}
+			for (int i = 'A'; i <= 'Z'; ++i)
+			{
+				tbl[static_cast<size_t>(i)] = static_cast<char>(i + ('a' - 'A'));
+			}
+			return tbl;
+		}
+
+		inline static const std::array<char, 256> kToLowerTable_ = buildToLowerTable();
+
 		static char toLower(char c) noexcept
 		{
-			return (c >= 'A' && c <= 'Z') ? static_cast<char>(c + ('a' - 'A')) : c;
+			return kToLowerTable_[static_cast<unsigned char>(c)];
 		}
 
 		Container entries_;

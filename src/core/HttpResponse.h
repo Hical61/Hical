@@ -225,12 +225,19 @@ namespace hical
 		const std::string& body() const;
 
 		/**
-		 * @brief 设置消息体（纯文本）
+		 * @brief 设置消息体（不动 Content-Type 头）
 		 * @param body 消息体
-		 * @param contentType Content-Type（默认 text/plain）
 		 */
-		void setBody(const std::string& body, const std::string& contentType = "text/plain");
-		void setBody(std::string&& body, const std::string& contentType = "text/plain");
+		void setBody(const std::string& body);
+		void setBody(std::string&& body);
+
+		/**
+		 * @brief 设置消息体并指定 Content-Type
+		 * @param body 消息体
+		 * @param contentType Content-Type 值（如 "application/json"）
+		 */
+		void setBody(const std::string& body, const std::string& contentType);
+		void setBody(std::string&& body, const std::string& contentType);
 
 		/**
 		 * @brief 设置 JSON 消息体

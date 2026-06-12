@@ -1240,7 +1240,7 @@ struct NetworkError
 ### 15.4 线程安全说明
 
 - **OpenApiRegistry**：内部使用 `std::mutex`，`getAll()` 以快照方式返回 `vector<RouteApiInfo>` 副本，避免长时间持锁。
-- **OpenApiDocument**：使用 `std::mutex` + `bool generated_` 标志实现惰性缓存，首次调用 `generate()` 时锁内生成，后续调用直接返回缓存，无锁开销。
+- **OpenApiDocument**：使用 `std::mutex` + `bool generated_` 标志实现惰性缓存，首次调用 `generateString()` 时锁内生成并缓存，后续调用按值返回缓存副本。
 
 ### 15.5 CMake 编译开关
 

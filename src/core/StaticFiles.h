@@ -382,7 +382,7 @@ namespace hical
 			{
 				HttpResponse res;
 				res.setStatus(HttpStatusCode::hForbidden);
-				res.setBody("403 Forbidden");
+				res.setBody("403 Forbidden", "text/plain");
 				co_return res;
 			}
 
@@ -417,7 +417,7 @@ namespace hical
 			{
 				HttpResponse res;
 				res.setStatus(HttpStatusCode::hPayloadTooLarge);
-				res.setBody("413 File Too Large");
+				res.setBody("413 File Too Large", "text/plain");
 				co_return res;
 			}
 

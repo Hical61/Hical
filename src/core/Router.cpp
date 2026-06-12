@@ -182,7 +182,7 @@ namespace hical
 			HttpResponse res;
 			res.setStatus(HttpStatusCode::hMethodNotAllowed);
 			res.setHeader("Allow", result.allowedMethods);
-			res.setBody("Method Not Allowed");
+			res.setBody("Method Not Allowed", "text/plain");
 			co_return res;
 		}
 
@@ -454,40 +454,53 @@ namespace hical
 		return true;
 	}
 
+	namespace
+	{
+		/// 256 条查表，hex 字符转数值，0xFF 就是非法。
+		/// 编译期搭好，运行时查一下就行，不用走分支。
+		inline const unsigned char* hexLookup() noexcept
+		{
+			static constexpr auto build = []() constexpr
+			{
+				std::array<unsigned char, 256> arr {};
+				for (unsigned i = 0; i < 256; ++i)
+				{
+					arr[i] = 0xFF;
+				}
+				for (unsigned i = '0'; i <= '9'; ++i)
+				{
+					arr[i] = static_cast<unsigned char>(i - '0');
+				}
+				for (unsigned i = 'A'; i <= 'F'; ++i)
+				{
+					arr[i] = static_cast<unsigned char>(i - 'A' + 10);
+				}
+				for (unsigned i = 'a'; i <= 'f'; ++i)
+				{
+					arr[i] = static_cast<unsigned char>(i - 'a' + 10);
+				}
+				return arr;
+			};
+			static constexpr auto kTable = build();
+			return kTable.data();
+		}
+	} // namespace
+
 	std::string Router::urlDecode(std::string_view encoded)
 	{
 		std::string result;
 		result.reserve(encoded.size());
+		const auto* hexTbl = hexLookup();
 
 		for (size_t i = 0; i < encoded.size(); ++i)
 		{
 			if (encoded[i] == '%' && i + 2 < encoded.size())
 			{
-				auto hi = encoded[i + 1];
-				auto lo = encoded[i + 2];
-
-				auto hexVal = [](char c) -> int
+				auto hi = hexTbl[static_cast<unsigned char>(encoded[i + 1])];
+				auto lo = hexTbl[static_cast<unsigned char>(encoded[i + 2])];
+				if (hi != 0xFF && lo != 0xFF)
 				{
-					if (c >= '0' && c <= '9')
-					{
-						return c - '0';
-					}
-					if (c >= 'A' && c <= 'F')
-					{
-						return c - 'A' + 10;
-					}
-					if (c >= 'a' && c <= 'f')
-					{
-						return c - 'a' + 10;
-					}
-					return -1;
-				};
-
-				int hiVal = hexVal(hi);
-				int loVal = hexVal(lo);
-				if (hiVal >= 0 && loVal >= 0)
-				{
-					char decoded = static_cast<char>((hiVal << 4) | loVal);
+					char decoded = static_cast<char>((hi << 4) | lo);
 					// 防御纵深：跳过 %00 NULL 字节，防止 C API 路径截断攻击
 					if (decoded != '\0')
 					{

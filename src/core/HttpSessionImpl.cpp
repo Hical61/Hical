@@ -611,6 +611,8 @@ namespace hical
 				bool hasContentLength = false;
 				bool isChunked = false;
 				bool hasTransferEncoding = false;
+				bool connectionClose = false;     // 逮到 Connection: close 就记下来
+				bool hasConnectionHeader = false; // 有 Connection 头就把这位置 1
 
 				nativeReq.headers.clear();
 				for (size_t i = 0; i < numHeaders; ++i)
@@ -623,6 +625,8 @@ namespace hical
 					// 按长度+首字符快速过滤，将 20 次 iequals 降到 ~2 次
 					// Content-Length: 长度 14，首字符 C/c
 					// Transfer-Encoding: 长度 17，首字符 T/t
+					// Connection: 长度 10，首字符 C/c
+					// Expect: 长度 6，首字符 E/e
 					if (hname.size() == 14 && (hname[0] == 'C' || hname[0] == 'c'))
 					{
 						if (HeaderMap::iequals(hname, "Content-Length"))
@@ -630,6 +634,14 @@ namespace hical
 							auto [ptr, ec] =
 								std::from_chars(hvalue.data(), hvalue.data() + hvalue.size(), contentLength);
 							hasContentLength = (ec == std::errc {});
+						}
+					}
+					else if (hname.size() == 10 && (hname[0] == 'C' || hname[0] == 'c'))
+					{
+						if (HeaderMap::iequals(hname, "Connection"))
+						{
+							hasConnectionHeader = true;
+							connectionClose = HeaderMap::iequals(hvalue, "close");
 						}
 					}
 					else if (hname.size() == 6 && (hname[0] == 'E' || hname[0] == 'e'))
@@ -671,11 +683,12 @@ namespace hical
 					co_return;
 				}
 
-				// 计算 keep-alive
-				auto connHeader = nativeReq.headers.find("Connection");
-				if (!connHeader.empty())
+				// 算 keep-alive：header 解析时已经顺手抓了 Connection 头的值，
+				// 不用再跑一遍 O(N) find。
+				// 有 Connection 头就用预扫结果；没有就按 HTTP 版本走默认。
+				if (hasConnectionHeader)
 				{
-					nativeReq.keepAlive = !HeaderMap::iequals(connHeader, "close");
+					nativeReq.keepAlive = !connectionClose;
 				}
 				else
 				{
@@ -867,7 +880,7 @@ namespace hical
 							{
 								HttpResponse forbiddenRes;
 								forbiddenRes.setStatus(HttpStatusCode::hForbidden);
-								forbiddenRes.setBody("403 Forbidden: Origin not allowed");
+								forbiddenRes.setBody("403 Forbidden: Origin not allowed", "text/plain");
 								auto& nativeRes = forbiddenRes.native();
 								nativeRes.httpVersionMinor = 1;
 								nativeRes.headers.set("Connection", "close");
@@ -903,7 +916,7 @@ namespace hical
 						{
 							HttpResponse badRes;
 							badRes.setStatus(HttpStatusCode::hBadRequest);
-							badRes.setBody("400 Bad Request: invalid WebSocket upgrade");
+							badRes.setBody("400 Bad Request: invalid WebSocket upgrade", "text/plain");
 							auto& nativeRes = badRes.native();
 							nativeRes.httpVersionMinor = 1;
 							nativeRes.headers.set("Connection", "close");

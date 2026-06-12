@@ -141,7 +141,7 @@ TEST(MiddlewareTest, Intercept)
 		{
 			HttpResponse res;
 			res.setStatus(HttpStatusCode::hForbidden);
-			res.setBody("Forbidden");
+			res.setBody("Forbidden", "text/plain");
 			co_return res;
 		});
 

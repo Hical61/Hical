@@ -14,7 +14,7 @@ namespace hical::meta::openapi
 	{
 	}
 
-	const std::string& OpenApiDocument::generateString()
+	std::string OpenApiDocument::generateString()
 	{
 		std::lock_guard lock(mutex_);
 		if (!generated_)
@@ -90,20 +90,22 @@ namespace hical::meta::openapi
 		auto allRoutes = registry_->routes();
 
 		// 按 path 分组，同路径不同 method 合并到一个 Path Item Object
-		std::unordered_map<std::string, std::vector<const RegisteredRoute*>> pathGroups;
-		for (const auto& route : allRoutes)
+		// 用索引不用指针，省得 vector 重新分配后指针变野
+		std::unordered_map<std::string, std::vector<size_t>> pathGroups;
+		for (size_t i = 0; i < allRoutes.size(); ++i)
 		{
-			pathGroups[route.path].push_back(&route);
+			pathGroups[allRoutes[i].path].push_back(i);
 		}
 
 		boost::json::object paths;
-		for (const auto& [path, routes] : pathGroups)
+		for (const auto& [path, indices] : pathGroups)
 		{
 			boost::json::object pathItem;
-			for (const auto* route : routes)
+			for (size_t idx : indices)
 			{
-				std::string method = methodToLower(route->method);
-				pathItem[method] = buildOperation(*route);
+				const auto& route = allRoutes[idx];
+				std::string method = methodToLower(route.method);
+				pathItem[method] = buildOperation(route);
 			}
 			paths[path] = std::move(pathItem);
 		}

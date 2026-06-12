@@ -147,7 +147,18 @@ TEST(HttpResponseTest, SetBody)
 	HttpResponse res;
 	res.setBody("Hello, World!");
 	EXPECT_EQ(res.body(), "Hello, World!");
-	EXPECT_EQ(res.header("Content-Type"), "text/plain");
+	// 单参数 setBody 不该冲掉 Content-Type
+	EXPECT_EQ(res.header("Content-Type"), "");
+}
+
+TEST(HttpResponseTest, SetBodyPreservesContentType)
+{
+	HttpResponse res;
+	res.setHeader("Content-Type", "application/xml");
+	res.setBody("<root/>");
+	// 先设了 Content-Type，再 setBody 应该保持原值
+	EXPECT_EQ(res.header("Content-Type"), "application/xml");
+	EXPECT_EQ(res.body(), "<root/>");
 }
 
 TEST(HttpResponseTest, SetBodyWithContentType)

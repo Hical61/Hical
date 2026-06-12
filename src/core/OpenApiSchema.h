@@ -58,6 +58,7 @@ namespace hical::meta::openapi
 			{
 				prop["type"] = "string";
 			}
+			// bool 得放 is_integral_v 前面，否则 C++ 拿 bool 也当整形处理了
 			else if constexpr (std::is_same_v<T, bool>)
 			{
 				prop["type"] = "boolean";

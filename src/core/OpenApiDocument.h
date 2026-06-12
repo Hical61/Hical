@@ -5,7 +5,7 @@
  * 组装为符合 OpenAPI 3.0.3 规范的完整 JSON 文档。
  * 用法：
  *   OpenApiDocument doc(registry, {.title="My API", .version="1.0.0"});
- *   const std::string& json = doc.generateString();
+ *   std::string json = doc.generateString();
  */
 
 #pragma once
@@ -51,7 +51,7 @@ namespace hical::meta::openapi
 		 * @brief 惰性生成并返回序列化后的 JSON 字符串
 		 * 首次调用时生成文档并缓存，后续调用直接返回缓存
 		 */
-		const std::string& generateString();
+		std::string generateString();
 
 		/**
 		 * @brief 清除缓存（路由变化后需调用）

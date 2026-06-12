@@ -185,7 +185,7 @@ int main()
     UserHandler handler;
     registerRoutesWithOpenApi(server.router(), handler, *registry);
 
-    // 组装 OpenAPI 文档（惰性生成 + 缓存，首次请求时才序列化）
+    // 组装 OpenAPI 文档（惰性生成 + 缓存，按值返回线程安全）
     auto doc = std::make_shared<OpenApiDocument>(
         registry,
         OpenApiConfig{
