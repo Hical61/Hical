@@ -98,6 +98,13 @@ if(HICAL_BUILD_TFB)
     target_link_libraries(tfb_server PRIVATE hical_core)
 endif()
 
+# HttpArena 压测服务器
+option(HICAL_BUILD_HTTPARENA "Build HttpArena benchmark server" OFF)
+if(HICAL_BUILD_HTTPARENA)
+    add_executable(httparena_server docker/HttpArena/src/main.cpp)
+    target_link_libraries(httparena_server PRIVATE hical_core)
+endif()
+
 # 生产部署服务器（docker/prod/ 目录）
 option(HICAL_BUILD_DEPLOY "Build production deployment server" OFF)
 if(HICAL_BUILD_DEPLOY)
