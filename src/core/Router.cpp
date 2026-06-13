@@ -119,6 +119,42 @@ namespace hical
 		wsRoutes_.push_back(std::move(route));
 	}
 
+	void Router::ws(const std::string& path,
+					WsTypedMessageCallback onTypedMessage,
+					WsConnectCallback onConnect,
+					WsDisconnectCallback onDisconnect)
+	{
+		WsRoute route;
+		route.path = path;
+		route.onTypedMessage = std::move(onTypedMessage);
+		route.onConnect = std::move(onConnect);
+		route.onDisconnect = std::move(onDisconnect);
+		wsRoutes_.push_back(std::move(route));
+	}
+
+	void Router::ws(const std::string& path,
+					WsOptions options,
+					WsTypedMessageCallback onTypedMessage,
+					WsConnectCallback onConnect,
+					WsDisconnectCallback onDisconnect)
+	{
+		WsRoute route;
+		route.path = path;
+		route.onTypedMessage = std::move(onTypedMessage);
+		route.onConnect = std::move(onConnect);
+		route.onDisconnect = std::move(onDisconnect);
+		route.allowedOrigins = std::move(options.allowedOrigins);
+		route.enableCompression = options.enableCompression;
+		route.serverMaxWindowBits = options.serverMaxWindowBits;
+		route.clientMaxWindowBits = options.clientMaxWindowBits;
+		route.serverNoContextTakeover = options.serverNoContextTakeover;
+		route.pingInterval = options.pingInterval;
+		route.maxMissedPongs = options.maxMissedPongs;
+		route.pingPayload = std::move(options.pingPayload);
+		route.subprotocols = std::move(options.subprotocols);
+		wsRoutes_.push_back(std::move(route));
+	}
+
 	Router::WsRouteMatch Router::findWsRoute(std::string_view path) const
 	{
 		WsRouteMatch result;

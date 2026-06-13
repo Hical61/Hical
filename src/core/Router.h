@@ -219,6 +219,32 @@ namespace hical
 				WsDisconnectCallback onDisconnect = nullptr);
 
 		/**
+		 * @brief 注册 WebSocket 路由（类型感知回调，区分 Text/Binary）
+		 * @param path 路由路径
+		 * @param onTypedMessage 类型感知消息回调（WsMessage 含 type 和 data）
+		 * @param onConnect 连接建立回调（可选）
+		 * @param onDisconnect 连接断开回调（可选）
+		 */
+		void ws(const std::string& path,
+				WsTypedMessageCallback onTypedMessage,
+				WsConnectCallback onConnect = nullptr,
+				WsDisconnectCallback onDisconnect = nullptr);
+
+		/**
+		 * @brief 注册 WebSocket 路由（类型感知回调，带安全选项）
+		 * @param path 路由路径
+		 * @param options WebSocket 选项（Origin 白名单等）
+		 * @param onTypedMessage 类型感知消息回调（WsMessage 含 type 和 data）
+		 * @param onConnect 连接建立回调（可选）
+		 * @param onDisconnect 连接断开回调（可选）
+		 */
+		void ws(const std::string& path,
+				WsOptions options,
+				WsTypedMessageCallback onTypedMessage,
+				WsConnectCallback onConnect = nullptr,
+				WsDisconnectCallback onDisconnect = nullptr);
+
+		/**
 		 * @brief 分发请求到匹配的路由处理器
 		 * @param req HTTP 请求（路径参数会被写入 req 中）
 		 * @return 协程化的 HTTP 响应

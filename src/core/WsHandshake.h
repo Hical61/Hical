@@ -75,14 +75,14 @@ namespace hical
 
 	/**
 	 * @brief 计算 Sec-WebSocket-Accept（RFC 6455 §4.2.2）
-	 * Accept = Base64( SHA1( clientKey + "258EAFA5-E914-47DA-95CA-5AB5DC65C174" ) )
+	 * Accept = Base64( SHA1( clientKey + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11" ) )
 	 * 测试向量：computeWsAcceptKey("dGhlIHNhbXBsZSBub25jZQ==") == "s3pPLMBiTxaQ9kYGzzhZRbK+xOo="
 	 * @param clientKey 客户端提供的 Sec-WebSocket-Key 值
 	 * @return Sec-WebSocket-Accept 值
 	 */
 	inline std::string computeWsAcceptKey(std::string_view clientKey)
 	{
-		static constexpr std::string_view kGuid = "258EAFA5-E914-47DA-95CA-5AB5DC65C174";
+		static constexpr std::string_view kGuid = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 
 		// 防御性截断：RFC 6455 规定 Key 为 24 字符（16 字节随机值的 Base64），
 		// concat[64] 最多容纳 64-36(GUID)=28 字节的 clientKey

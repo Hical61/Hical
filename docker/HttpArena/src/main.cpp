@@ -265,17 +265,25 @@ int main()
 	// ── GET /static/{file} → 静态文件服务 ────────────────────────────────
 	server.router().get("/static/{file}", serveStatic("/data/static", "/static/"));
 
-	// ── WS /ws → WebSocket 回显 ──────────────────────────────────────────
+	// ── WS /ws → WebSocket 回显（类型感知回调，区分 Text/Binary）─────────
 	server.router().ws("/ws",
-					   [](const std::string& msg, WebSocketSession& ws) -> Awaitable<void>
+					   [](const WsMessage& msg, WebSocketSession& ws) -> Awaitable<void>
 					   {
-						   co_await ws.send(msg);
+						   if (msg.type == WsOpcode::hBinary)
+						   {
+							   co_await ws.sendBinary(msg.data);
+						   }
+						   else
+						   {
+							   co_await ws.send(msg.data);
+						   }
 					   });
 
 	// ── benchmark 极致配置 ────────────────────────────────────────────────
 	server.setMaxConnections(65535);
 	server.setIdleTimeout(0);
 	server.setGcInterval(0);
+	server.setMaxBodySize(32ULL * 1024 * 1024); // 32MB 大文件上传
 
 	server.start();
 	return 0;
