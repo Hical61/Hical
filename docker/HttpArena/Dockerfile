@@ -30,7 +30,7 @@ RUN cmake -B build -G Ninja \
         -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_C_COMPILER=gcc-14 \
         -DCMAKE_CXX_COMPILER=g++-14 \
-        -DCMAKE_CXX_FLAGS="-march=native -mtune=native -flto=auto" \
+        -DCMAKE_CXX_FLAGS="-march=native -mtune=native" \
         -DHICAL_BUILD_HTTPARENA=ON \
         -DHICAL_BUILD_TESTS=OFF \
         -DHICAL_BUILD_EXAMPLES=OFF \
