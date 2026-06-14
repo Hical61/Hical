@@ -18,14 +18,15 @@ See [docs/build_and_test_guide.md](docs/build_and_test_guide.md) for full detail
 
 **Requirements:**
 
-| Dependency   | Version                             |
-| ------------ | ----------------------------------- |
-| C++ Standard | C++20                               |
+| Dependency   | Version                                             |
+| ------------ | --------------------------------------------------- |
+| C++ Standard | C++20                                               |
 | Boost        | >= 1.82 (Asio, System, JSON); DB middleware >= 1.85 |
-| CMake        | >= 3.20                             |
-| OpenSSL      | Required                            |
-| Google Test  | Required                            |
-| Compiler     | GCC 14+ / Clang 20+ / MSVC 2022+    |
+| CMake        | >= 3.20                                             |
+| OpenSSL      | Required                                            |
+| zlib         | Required (WebSocket permessage-deflate)             |
+| Google Test  | Required                                            |
+| Compiler     | GCC 14+ / Clang 20+ / MSVC 2022+                    |
 
 **Quick build:**
 
@@ -43,25 +44,26 @@ This project enforces style via `.clang-format` and `.clang-tidy`. Run before co
 clang-format -i <files>
 ```
 
-> **Note:** CI will automatically fix formatting issues (including multi-line comment indentation via `scripts/fix-comment-indent.py`) and commit the fix to your PR branch. You don't need to run this script locally.
+> **Note:** For forks from the same repository (`Hical61/Hical`), CI automatically fixes formatting issues (including multi-line comment indentation via `scripts/fix-comment-indent.py`) and commits the fix to your PR branch. For external forks, you need to run these scripts locally before pushing.
 
-**Naming conventions** (from `.clang-tidy`):
+**Naming conventions** (enforced by `.clang-tidy`):
 
-| Element              | Convention              | Example              |
-| -------------------- | ----------------------- | -------------------- |
-| Class / Struct       | CamelCase (no prefix)   | `HttpServer`         |
-| Enum                 | CamelCase (no prefix)   | `HttpMethod`         |
-| Enum constant        | `E` + CamelCase         | `EGet`, `EPost`      |
-| Interface (abstract) | CamelCase (no prefix)   | `EventLoop`          |
-| Function / Method    | camelBack               | `handleRequest`      |
-| Member variable      | `m_` + camelBack        | `m_bufferSize`       |
-| Global variable      | `g_` + camelBack        | `g_instanceCount`    |
-| Static variable      | `s` + camelBack         | `sThreadPool`        |
-| Pointer parameter    | `p` + CamelCase         | `pSocket`            |
-| Macro                | UPPER_CASE              | `HICAL_LOG_INFO`     |
-| Template parameter   | CamelCase               | `SocketType`         |
+| Element              | Convention              | Example                   |
+| -------------------- | ----------------------- | ------------------------- |
+| Class / Struct       | CamelCase (no prefix)   | `HttpServer`              |
+| Enum                 | CamelCase (no prefix)   | `HttpMethod`              |
+| Enum constant        | `h` prefix + CamelCase  | `hGet`, `hPost`           |
+| Interface (abstract) | CamelCase (no prefix)   | `EventLoop`               |
+| Function / Method    | camelBack               | `dispatch`, `runAfter`    |
+| Member variable      | camelBack + `_` suffix  | `router_`, `maxBodySize_` |
+| Global variable      | `g_` prefix + camelBack | `g_instanceCount`         |
+| Static constant      | `k` prefix + CamelCase  | `kMaxPathSegments`        |
+| Macro                | UPPER_CASE              | `HICAL_LOG_INFO`          |
+| Template parameter   | CamelCase               | `SocketType`              |
 
 **Style:** 4-space indentation, 120-column limit, Allman brace style.
+
+**Comment style:** Use Doxygen-compatible multi-line `/** */` blocks for public APIs.
 
 ### PR Process
 
@@ -94,7 +96,10 @@ Hical uses a tag-based release workflow. Pushing a tag triggers CI to build, tes
 
 **Steps:**
 
-1. Update the version in `CMakeLists.txt`: `project(hical VERSION x.y.z ...)`
+1. Run the version bump script (updates `CMakeLists.txt` and `CHANGELOG.md`):
+   ```bash
+   python scripts/bump_version.py x.y.z
+   ```
 2. Commit: `[chore] bump version to vx.y.z`
 3. Tag and push:
    ```bash
@@ -126,14 +131,15 @@ Use the [issue templates](https://github.com/Hical61/Hical/issues/new/choose). P
 
 **依赖项：**
 
-| 依赖项      | 版本要求                             |
-| ----------- | ------------------------------------ |
-| C++ 标准    | C++20                                |
+| 依赖项      | 版本要求                                         |
+| ----------- | ------------------------------------------------ |
+| C++ 标准    | C++20                                            |
 | Boost       | >= 1.82（Asio、System、JSON）；DB 中间件 >= 1.85 |
-| CMake       | >= 3.20                              |
-| OpenSSL     | 必需                                 |
-| Google Test | 必需                                 |
-| 编译器      | GCC 14+ / Clang 20+ / MSVC 2022+     |
+| CMake       | >= 3.20                                          |
+| OpenSSL     | 必需                                             |
+| zlib        | 必需（WebSocket permessage-deflate）             |
+| Google Test | 必需                                             |
+| 编译器      | GCC 14+ / Clang 20+ / MSVC 2022+                 |
 
 **快速构建：**
 
@@ -151,25 +157,26 @@ ctest --test-dir build --output-on-failure
 clang-format -i <files>
 ```
 
-> **提示：** CI 会自动修复格式问题（包括通过 `scripts/fix-comment-indent.py` 修复多行注释缩进），并将修复 commit 推送到你的 PR 分支。你无需在本地运行此脚本。
+> **提示：** 同仓库（`Hical61/Hical`）的 PR，CI 会自动修复格式问题（包括通过 `scripts/fix-comment-indent.py` 修复多行注释缩进），并将修复 commit 推送到你的 PR 分支。外部 fork 的 PR 需要你在本地提前运行这些脚本。
 
-**命名约定**（来自 `.clang-tidy`）：
+**命名约定**（`.clang-tidy` 强制检查）：
 
-| 元素           | 约定                    | 示例                   |
-| -------------- | ----------------------- | ---------------------- |
-| 类 / 结构体    | CamelCase（无前缀）     | `HttpServer`           |
-| 枚举           | CamelCase（无前缀）     | `HttpMethod`           |
-| 枚举常量       | `E` + CamelCase         | `EGet`、`EPost`        |
-| 接口（抽象类） | CamelCase（无前缀）     | `EventLoop`            |
-| 函数 / 方法    | camelBack               | `handleRequest`        |
-| 成员变量       | `m_` + camelBack        | `m_bufferSize`         |
-| 全局变量       | `g_` + camelBack        | `g_instanceCount`      |
-| 静态变量       | `s` + camelBack         | `sThreadPool`          |
-| 指针参数       | `p` + CamelCase         | `pSocket`              |
-| 宏             | UPPER_CASE              | `HICAL_LOG_INFO`       |
-| 模板参数       | CamelCase               | `SocketType`           |
+| 元素           | 约定                  | 示例                      |
+| -------------- | --------------------- | ------------------------- |
+| 类 / 结构体    | CamelCase（无前缀）   | `HttpServer`              |
+| 枚举           | CamelCase（无前缀）   | `HttpMethod`              |
+| 枚举常量       | `h` 前缀 + CamelCase  | `hGet`、`hPost`           |
+| 接口（抽象类） | CamelCase（无前缀）   | `EventLoop`               |
+| 函数 / 方法    | camelBack             | `dispatch`、`runAfter`    |
+| 成员变量       | camelBack + `_` 后缀  | `router_`、`maxBodySize_` |
+| 全局变量       | `g_` 前缀 + camelBack | `g_instanceCount`         |
+| 静态常量       | `k` 前缀 + CamelCase  | `kMaxPathSegments`        |
+| 宏             | UPPER_CASE            | `HICAL_LOG_INFO`          |
+| 模板参数       | CamelCase             | `SocketType`              |
 
 **风格：** 4 空格缩进，120 列限制，Allman 大括号风格。
+
+**注释风格：** 公共 API 使用 Doxygen 多行 `/** */` 块格式。
 
 ### PR 流程
 
@@ -202,7 +209,10 @@ Hical 使用基于 tag 的发布流程。推送 tag 后，CI 会自动构建、�
 
 **步骤：**
 
-1. 更新 `CMakeLists.txt` 中的版本号：`project(hical VERSION x.y.z ...)`
+1. 运行版本号升级脚本（自动更新 `CMakeLists.txt` 和 `CHANGELOG.md`）：
+   ```bash
+   python scripts/bump_version.py x.y.z
+   ```
 2. 提交：`[chore] bump version to vx.y.z`
 3. 打标签并推送：
    ```bash
