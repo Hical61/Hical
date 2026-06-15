@@ -225,8 +225,16 @@ namespace hical
 		res.setStatus(HttpStatusCode::hOk);
 		if (!body.empty())
 		{
-			res.setBody(body, "text/plain");
+			res.setBody(body, "text/plain; charset=utf-8");
 		}
+		return res;
+	}
+
+	HttpResponse HttpResponse::ok(const std::string& body, const std::string& contentType)
+	{
+		HttpResponse res;
+		res.setStatus(HttpStatusCode::hOk);
+		res.setBody(body, contentType);
 		return res;
 	}
 

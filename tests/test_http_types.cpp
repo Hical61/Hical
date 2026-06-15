@@ -190,6 +190,15 @@ TEST(HttpResponseTest, FactoryOk)
 	auto res = HttpResponse::ok("Hello");
 	EXPECT_EQ(res.statusCode(), HttpStatusCode::hOk);
 	EXPECT_EQ(res.body(), "Hello");
+	EXPECT_EQ(res.header("Content-Type"), "text/plain; charset=utf-8");
+}
+
+TEST(HttpResponseTest, FactoryOkWithCustomContentType)
+{
+	auto res = HttpResponse::ok("{}", "application/json");
+	EXPECT_EQ(res.statusCode(), HttpStatusCode::hOk);
+	EXPECT_EQ(res.body(), "{}");
+	EXPECT_EQ(res.header("Content-Type"), "application/json");
 }
 
 TEST(HttpResponseTest, FactoryJson)

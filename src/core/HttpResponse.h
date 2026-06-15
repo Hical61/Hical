@@ -264,11 +264,19 @@ namespace hical
 		// ============ 快捷工厂方法 ============
 
 		/**
-		 * @brief 创建 200 OK 响应
-		 * @param body 消息体
+		 * @brief 返回 200 OK，默认 Content-Type 带 utf-8 编码
+		 * @param body 响应体
 		 * @return HttpResponse
 		 */
 		static HttpResponse ok(const std::string& body = "");
+
+		/**
+		 * @brief 返回 200 OK，自定 Content-Type（比如 text/html）
+		 * @param body 响应体
+		 * @param contentType Content-Type 值
+		 * @return HttpResponse
+		 */
+		static HttpResponse ok(const std::string& body, const std::string& contentType);
 
 		/**
 		 * @brief 创建 JSON 200 OK 响应
