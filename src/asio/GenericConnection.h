@@ -289,12 +289,16 @@ namespace hical
 
 			~MpscNodePool()
 			{
+#ifndef __MINGW32__
+				// MinGW 下 thread_local 析构在 DLL TLS 回调里跑，那时 CRT 堆
+				// 可能已销毁，delete 下去就崩。进程退出 OS 会帮我们收。
 				while (head)
 				{
 					auto* n = head->next;
 					::operator delete(head);
 					head = n;
 				}
+#endif
 			}
 		};
 
