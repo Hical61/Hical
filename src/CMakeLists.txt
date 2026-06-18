@@ -49,6 +49,7 @@ add_library(hical_core STATIC
     core/Multipart.cpp
     core/Session.cpp
     core/SseSession.cpp
+    core/GzipCompression.cpp
     asio/AsioEventLoop.cpp
     asio/AsioTimer.cpp
     asio/GenericConnection.cpp

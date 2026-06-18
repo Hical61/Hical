@@ -1,13 +1,28 @@
+/**
+ * @file test_chunked_sse.cpp
+ * @brief Chunked Transfer-Encoding + SSE 测试
+ */
+
+#include "TestHttpClient.h"
 #include "core/ChunkedBody.h"
 #include "core/HttpResponse.h"
+#include "core/HttpServer.h"
 #include "core/HttpTypes.h"
 #include "core/Router.h"
 #include "core/SseSession.h"
+#include <boost/asio.hpp>
 #include <gtest/gtest.h>
+#include <atomic>
+#include <chrono>
 #include <string>
 #include <string_view>
+#include <thread>
 
 using namespace hical;
+using hical::test::httpGet;
+using hical::test::detail::ParsedResponse;
+
+using boost::asio::ip::tcp;
 
 // ============ ChunkedBody 编码测试 ============
 
@@ -209,4 +224,200 @@ TEST(SseRouterTest, RouteCount)
 				   co_return HttpResponse::ok();
 			   });
 	EXPECT_EQ(router.routeCount(), 2u);
+}
+
+// ============ HttpServer 集成测试 ============
+
+/// 启动服务器并等待就绪，返回实际端口
+static uint16_t startSseServerAndWait(HttpServer& server, std::thread& serverThread)
+{
+	serverThread = std::thread(
+		[&server]()
+		{
+			server.start();
+		});
+
+	uint16_t port = 0;
+	for (int i = 0; i < 50; ++i)
+	{
+		port = server.port();
+		if (port != 0)
+		{
+			break;
+		}
+		std::this_thread::sleep_for(std::chrono::milliseconds(10));
+	}
+	EXPECT_NE(port, 0u) << "Server failed to start";
+	return port;
+}
+
+TEST(ChunkedIntegrationTest, ChunkedResponseFromServer)
+{
+	HttpServer server(0);
+	server.setIdleTimeout(0);
+
+	server.router().get("/chunked",
+						[](const HttpRequest&) -> Awaitable<HttpResponse>
+						{
+							auto res = HttpResponse::chunked();
+							auto& body = res.chunkedBody();
+							body.write("Hello");
+							body.write(" World");
+							body.end();
+							co_return res;
+						});
+
+	std::thread serverThread;
+	uint16_t port = startSseServerAndWait(server, serverThread);
+
+	// 用 raw socket 读取，手动验证 chunked 编码
+	boost::asio::io_context ioc;
+	tcp::socket sock(ioc);
+	sock.connect(tcp::endpoint(boost::asio::ip::make_address("127.0.0.1"), port));
+
+	std::string req = "GET /chunked HTTP/1.1\r\n"
+					  "Host: 127.0.0.1\r\n"
+					  "Connection: close\r\n"
+					  "\r\n";
+	boost::asio::write(sock, boost::asio::buffer(req));
+
+	std::string raw;
+	char buf[4096];
+	boost::system::error_code ec;
+	while (true)
+	{
+		auto n = sock.read_some(boost::asio::buffer(buf), ec);
+		if (ec)
+		{
+			break;
+		}
+		raw.append(buf, n);
+	}
+	sock.close();
+
+	EXPECT_NE(raw.find("200 OK"), std::string::npos);
+	EXPECT_NE(raw.find("Transfer-Encoding: chunked"), std::string::npos);
+	EXPECT_NE(raw.find("5\r\nHello\r\n6\r\n World\r\n0\r\n\r\n"), std::string::npos);
+
+	server.stop();
+	serverThread.join();
+}
+
+TEST(ChunkedIntegrationTest, ChunkedResponseHasChunkedEncoding)
+{
+	HttpServer server(0);
+	server.setIdleTimeout(0);
+
+	server.router().get("/multi",
+						[](const HttpRequest&) -> Awaitable<HttpResponse>
+						{
+							auto res = HttpResponse::chunked();
+							auto& body = res.chunkedBody();
+							body.write("Hello");
+							body.write(" ");
+							body.write("World");
+							body.end();
+							co_return res;
+						});
+
+	std::thread serverThread;
+	uint16_t port = startSseServerAndWait(server, serverThread);
+
+	// 用 raw socket 确认 Transfer-Encoding 头
+	boost::asio::io_context ioc;
+	tcp::socket sock(ioc);
+	sock.connect(tcp::endpoint(boost::asio::ip::make_address("127.0.0.1"), port));
+
+	std::string req = "GET /multi HTTP/1.1\r\n"
+					  "Host: 127.0.0.1\r\n"
+					  "Connection: close\r\n"
+					  "\r\n";
+	boost::asio::write(sock, boost::asio::buffer(req));
+
+	std::string raw;
+	char buf[4096];
+	boost::system::error_code ec;
+	while (true)
+	{
+		auto n = sock.read_some(boost::asio::buffer(buf), ec);
+		if (ec)
+		{
+			break;
+		}
+		raw.append(buf, n);
+	}
+	sock.close();
+
+	EXPECT_NE(raw.find("Transfer-Encoding: chunked"), std::string::npos);
+
+	// 验证 chunked body wire 格式
+	auto headerEnd = raw.find("\r\n\r\n");
+	ASSERT_NE(headerEnd, std::string::npos);
+	auto bodyPart = raw.substr(headerEnd + 4);
+
+	EXPECT_EQ(bodyPart, "5\r\nHello\r\n1\r\n \r\n5\r\nWorld\r\n0\r\n\r\n");
+
+	server.stop();
+	serverThread.join();
+}
+
+TEST(SseIntegrationTest, SseConnectionAndEvents)
+{
+	// 起服务器
+	HttpServer server(0);
+	server.setIdleTimeout(0);
+
+	std::atomic<int> eventCount {0};
+	server.router().sse("/events",
+						[&eventCount](std::shared_ptr<SseSession> session) -> Awaitable<void>
+						{
+							co_await session->sendData("hello from SSE");
+							eventCount.fetch_add(1);
+							co_await session->close();
+						});
+
+	std::thread serverThread;
+	uint16_t port = startSseServerAndWait(server, serverThread);
+
+	// 连接并发送请求
+	boost::asio::io_context ioc;
+	tcp::socket sock(ioc);
+	sock.connect(tcp::endpoint(boost::asio::ip::make_address("127.0.0.1"), port));
+
+	std::string req = "GET /events HTTP/1.1\r\n"
+					  "Host: 127.0.0.1\r\n"
+					  "Connection: close\r\n"
+					  "\r\n";
+	boost::asio::write(sock, boost::asio::buffer(req));
+
+	// 非阻塞读取头部（服务端 close 后连接关闭）
+	std::string raw;
+	char buf[4096];
+	sock.non_blocking(true);
+	for (int i = 0; i < 500; ++i)
+	{
+		boost::system::error_code ec;
+		auto n = sock.read_some(boost::asio::buffer(buf), ec);
+		if (!ec && n > 0)
+		{
+			raw.append(buf, n);
+			if (raw.find("\r\n\r\n") != std::string::npos)
+			{
+				break;
+			}
+		}
+		std::this_thread::sleep_for(std::chrono::milliseconds(2));
+	}
+	sock.close();
+
+	// 验证响应头
+	EXPECT_NE(raw.find("200 OK"), std::string::npos) << "raw: " << raw;
+	EXPECT_NE(raw.find("Content-Type: text/event-stream"), std::string::npos);
+	EXPECT_NE(raw.find("Transfer-Encoding: chunked"), std::string::npos);
+
+	// 验证回调被执行了
+	EXPECT_EQ(eventCount.load(), 1);
+
+	server.stop();
+	serverThread.join();
 }

@@ -71,7 +71,7 @@ namespace hical
 				Entry* next = curr->next;
 				auto elapsed = now - curr->lastActiveMs.load(std::memory_order_relaxed);
 
-				if (elapsed >= timeoutMs_ && curr->socket)
+				if (elapsed >= (curr->customTimeoutMs > 0 ? curr->customTimeoutMs : timeoutMs_) && curr->socket)
 				{
 					boost::system::error_code closeEc;
 					curr->socket->close(closeEc);

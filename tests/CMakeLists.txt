@@ -14,6 +14,7 @@ set(TESTS_NEEDING_PICOHTTPPARSER
     test_graceful_shutdown
     test_error_handler
     test_expect_continue
+    test_chunked_sse
 )
 
 # helper：封装三行样板（add_executable + target_link_libraries + gtest_discover_tests）
@@ -54,6 +55,7 @@ hical_add_test(test_query_params)         # 查询参数解析
 hical_add_test(test_form_params)          # 表单参数解析
 hical_add_test(test_redirect)             # 重定向便捷方法
 hical_add_test(test_cors)                 # CORS 中间件
+hical_add_test(test_compression)          # 响应压缩（gzip）
 hical_add_test(test_chunked_sse)          # Chunked Transfer-Encoding + SSE
 hical_add_test(test_graceful_shutdown)    # 优雅关机与信号处理
 hical_add_test(test_error_handler)        # 全局错误处理器

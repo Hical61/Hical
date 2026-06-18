@@ -194,11 +194,45 @@ namespace hical
 											  boost::asio::redirect_error(boost::asio::use_awaitable, writeEc));
 		}
 
+		/// 序列化 ChunkedBody 的所有 chunk 到 wire 格式（收集模式）
+		std::string serializeChunkedBodyWire(const ChunkedBody& body)
+		{
+			std::string result;
+			for (const auto& chunk : body.chunks())
+			{
+				result += serializeChunkFrame(chunk);
+			}
+			result += serializeTrailerFrame(body.trailers());
+			return result;
+		}
+
 		/// 发送 HttpResponse 对象（内部辅助）
 		/// @param skipBody 为 true 时仅发送头部（HEAD 方法响应）
 		Awaitable<void> writeResponse(tcp::socket& socket, NativeResponse& nativeRes, bool skipBody = false)
 		{
 			nativeRes.preparePayload();
+
+			// ChunkedBody 路径：先发头，再把所有 chunk 帧拼起来批量发
+			if (nativeRes.hasChunkedBody())
+			{
+				FixedBuffer<512> headBuf;
+				nativeRes.serializeHeadTo(headBuf);
+				co_await boost::asio::async_write(socket,
+												  boost::asio::buffer(headBuf.data(), headBuf.size()),
+												  boost::asio::use_awaitable);
+
+				if (nativeRes.chunkedBody && !skipBody)
+				{
+					auto wire = serializeChunkedBodyWire(*nativeRes.chunkedBody);
+					if (!wire.empty())
+					{
+						co_await boost::asio::async_write(socket,
+														  boost::asio::buffer(wire),
+														  boost::asio::use_awaitable);
+					}
+				}
+				co_return;
+			}
 
 			// 序列化头部到栈缓冲区（响应头通常 150-300 字节，512 足够）
 			FixedBuffer<512> headBuf;
@@ -238,6 +272,28 @@ namespace hical
 									  bool skipBody = false)
 		{
 			nativeRes.preparePayload();
+
+			// ChunkedBody 路径
+			if (nativeRes.hasChunkedBody())
+			{
+				FixedBuffer<512> headBuf;
+				nativeRes.serializeHeadTo(headBuf, prefix, prefixLen);
+				co_await boost::asio::async_write(socket,
+												  boost::asio::buffer(headBuf.data(), headBuf.size()),
+												  boost::asio::use_awaitable);
+
+				if (nativeRes.chunkedBody && !skipBody)
+				{
+					auto wire = serializeChunkedBodyWire(*nativeRes.chunkedBody);
+					if (!wire.empty())
+					{
+						co_await boost::asio::async_write(socket,
+														  boost::asio::buffer(wire),
+														  boost::asio::use_awaitable);
+					}
+				}
+				co_return;
+			}
 
 			FixedBuffer<512> headBuf;
 			nativeRes.serializeHeadTo(headBuf, prefix, prefixLen);
@@ -964,7 +1020,6 @@ namespace hical
 							auto sseAuthCode = sseAuthRes.statusCode();
 							if (sseAuthCode != HttpStatusCode::hOk)
 							{
-								// 中间件拦截了，写回响应
 								auto& nativeRes = sseAuthRes.native();
 								nativeRes.httpVersionMinor = 1;
 								nativeRes.headers.set("Connection", "close");
@@ -981,10 +1036,7 @@ namespace hical
 						// handleSession 的 idleEntry 指针失效，在 move 前注销
 						idleGuard.release();
 
-						// 创建 SSE 会话，发送响应头后调用 onConnect 回调
-						auto sseSession = std::make_shared<SseSession>(std::move(socket));
-						co_await sseSession->sendResponseHead();
-						co_await sseRoute.onConnect(std::move(sseSession));
+						co_await handleSseSession(std::move(socket), sseRoute);
 						co_return;
 					}
 				}
@@ -1367,4 +1419,92 @@ namespace hical
 		}
 	}
 
+	Awaitable<void> HttpServer::handleSseSession(boost::asio::ip::tcp::socket socket, const Router::SseRoute& sseRoute)
+	{
+		// SSE 使用自定义超时（30 分钟）
+		static constexpr int64_t kSseTimeoutMs = 30 * 60 * 1000;
+
+		// 注册 IdleScanner entry，30 分钟超时
+		IdleScanner::Entry sseIdleEntry;
+		sseIdleEntry.customTimeoutMs = kSseTimeoutMs;
+		sseIdleEntry.touch();
+		auto* scanner = currentThreadIdleScanner();
+		IdleScanner::Guard idleGuard(scanner, sseIdleEntry);
+
+		// SSE 会话（将 socket move 进去）
+		auto sseSession = std::make_shared<SseSession>(std::move(socket));
+		// idle entry 引用 SseSession 内部的 socket
+		sseIdleEntry.socket = &sseSession->socket();
+		// 保活引用：onConnect 结束后回调的 shared_ptr 释放会销毁 SseSession，
+		// sessionRef 在 guard 之后析构，保证 guard 析构时 socket 仍然存活
+		auto sessionRef = sseSession;
+
+		// socket 析构守卫，引用 SseSession 内部的 socket
+		struct SseSocketGuard
+		{
+			boost::asio::ip::tcp::socket& sock;
+
+			~SseSocketGuard()
+			{
+				if (sock.is_open())
+				{
+					boost::system::error_code ec;
+					sock.shutdown(boost::asio::ip::tcp::socket::shutdown_send, ec);
+					sock.close(ec);
+				}
+			}
+		} guard {sseSession->socket()};
+
+		try
+		{
+			// 发送响应头
+			co_await sseSession->sendResponseHead();
+			sseIdleEntry.touch();
+
+			// 心跳保活，每 30 秒一条注释
+			auto alive = std::make_shared<bool>(true);
+
+			struct AliveGuard
+			{
+				std::shared_ptr<bool> a;
+
+				~AliveGuard()
+				{
+					*a = false;
+				}
+			} aliveGuard {alive};
+
+			coSpawn(sseSession->socket().get_executor(),
+					[alive, sessionWeak = std::weak_ptr<SseSession>(sseSession)]() -> Awaitable<void>
+					{
+						auto executor = co_await boost::asio::this_coro::executor;
+						boost::asio::steady_timer timer(executor);
+						while (*alive)
+						{
+							timer.expires_after(std::chrono::seconds(30));
+							boost::system::error_code ec;
+							co_await timer.async_wait(boost::asio::redirect_error(boost::asio::use_awaitable, ec));
+							if (ec || !*alive)
+							{
+								break;
+							}
+							if (auto sp = sessionWeak.lock(); sp && sp->isOpen())
+							{
+								co_await sp->sendComment("heartbeat");
+							}
+						}
+					});
+
+			// 调用 onConnect 回调
+			co_await sseRoute.onConnect(std::move(sseSession));
+		}
+		catch (const boost::system::system_error& e)
+		{
+			if (e.code() != boost::asio::error::eof && e.code() != boost::asio::error::connection_reset
+				&& e.code() != boost::asio::error::operation_aborted)
+			{
+				// 忽略正常关闭
+			}
+		}
+	}
 } // namespace hical

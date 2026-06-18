@@ -42,6 +42,12 @@ namespace hical
 			Entry* prev = nullptr;
 			Entry* next = nullptr;
 
+			/**
+			 * @brief 自定义超时（毫秒），0 表示使用 scanner 的默认 timeoutMs
+			 * SSE 长连接设 30 分钟超时，普通 keep-alive 用全局默认 60 秒。
+			 */
+			int64_t customTimeoutMs = 0;
+
 			void touch()
 			{
 				lastActiveMs.store(std::chrono::duration_cast<std::chrono::milliseconds>(

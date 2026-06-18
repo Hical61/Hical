@@ -199,6 +199,9 @@ namespace hical
 										std::string wsProtocol,
 										const Router::WsRoute& wsRoute);
 
+		// 协程式 SSE 会话处理（接管 socket，发送响应头后持续推送）
+		Awaitable<void> handleSseSession(boost::asio::ip::tcp::socket socket, const Router::SseRoute& sseRoute);
+
 		// 内存池定期 GC 协程
 		Awaitable<void> gcLoop();
 
