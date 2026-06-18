@@ -311,4 +311,18 @@ namespace hical
 		return res;
 	}
 
+	HttpResponse HttpResponse::chunked()
+	{
+		HttpResponse res;
+		res.setStatus(HttpStatusCode::hOk);
+		res.res_.chunkedBody.emplace();
+		res.res_.headers.set("Content-Type", "text/plain; charset=utf-8");
+		return res;
+	}
+
+	ChunkedBody& HttpResponse::chunkedBody()
+	{
+		return res_.chunkedBody.value();
+	}
+
 } // namespace hical

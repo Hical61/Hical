@@ -33,6 +33,7 @@ add_library(hical_core STATIC
     core/LogAdmin.cpp
     core/MemoryPool.cpp
     core/SslContext.cpp
+    core/ChunkedBody.cpp
     core/HttpRequest.cpp
     core/HttpResponse.cpp
     core/Router.cpp
@@ -47,6 +48,7 @@ add_library(hical_core STATIC
     core/WsHub.cpp
     core/Multipart.cpp
     core/Session.cpp
+    core/SseSession.cpp
     asio/AsioEventLoop.cpp
     asio/AsioTimer.cpp
     asio/GenericConnection.cpp

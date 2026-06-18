@@ -155,6 +155,42 @@ namespace hical
 		wsRoutes_.push_back(std::move(route));
 	}
 
+	// ============ SSE 路由 ============
+
+	void Router::sse(const std::string& path, SseConnectCallback onConnect)
+	{
+		sseRoutes_.push_back({path, std::move(onConnect)});
+	}
+
+	Router::SseRouteMatch Router::findSseRoute(std::string_view path) const
+	{
+		SseRouteMatch result;
+
+		// 1. 精确匹配（快速路径）
+		for (const auto& route : sseRoutes_)
+		{
+			if (!isParamRoute(route.path) && route.path == path)
+			{
+				result.route = &route;
+				return result;
+			}
+		}
+
+		// 2. 参数路由匹配
+		for (const auto& route : sseRoutes_)
+		{
+			ParamList params;
+			if (isParamRoute(route.path) && matchParamPath(route.path, path, params))
+			{
+				result.route = &route;
+				result.params = std::move(params);
+				return result;
+			}
+		}
+
+		return result;
+	}
+
 	Router::WsRouteMatch Router::findWsRoute(std::string_view path) const
 	{
 		WsRouteMatch result;
@@ -415,7 +451,7 @@ namespace hical
 		{
 			paramCount += routes.size();
 		}
-		return staticRoutes_.size() + paramCount + wsRoutes_.size();
+		return staticRoutes_.size() + paramCount + wsRoutes_.size() + sseRoutes_.size();
 	}
 
 	// ============ 辅助方法 ============

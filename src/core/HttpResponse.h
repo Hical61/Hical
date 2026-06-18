@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include "ChunkedBody.h"
 #include "Cookie.h"
 #include "FixedBuffer.h"
 #include "HeaderMap.h"
@@ -46,6 +47,9 @@ namespace hical
 		std::optional<FileBody> fileBody; // Range 请求或大文件直传
 		bool keepAlive = true;
 
+		/// Chunked Transfer-Encoding 响应体（可选）
+		std::optional<ChunkedBody> chunkedBody;
+
 		/**
 		 * @brief 是否包含文件体（dispatch 层据此选择文件发送路径）
 		 */
@@ -55,11 +59,28 @@ namespace hical
 		}
 
 		/**
+		 * @brief 是否使用 Chunked Transfer-Encoding
+		 */
+		[[nodiscard]] bool hasChunkedBody() const
+		{
+			return chunkedBody.has_value();
+		}
+
+		/**
 		 * @brief 设置 Content-Length 头部
 		 * 空 body 且状态码非 204/304 时设置 Content-Length: 0
 		 */
 		void preparePayload()
 		{
+			// Chunked body 路径：不设 Content-Length，改设 Transfer-Encoding
+			if (chunkedBody.has_value())
+			{
+				headers.set("Transfer-Encoding", "chunked");
+				// 删除可能残留的 Content-Length
+				headers.erase("Content-Length");
+				return;
+			}
+
 			// 文件体路径：Content-Length = fileBody->length
 			if (fileBody.has_value())
 			{
@@ -335,6 +356,19 @@ namespace hical
 		 * @return HttpResponse
 		 */
 		static HttpResponse rangeNotSatisfiable(std::uintmax_t fileSize);
+
+		/**
+		 * @brief 创建分块传输响应（Chunked Transfer-Encoding）
+		 * handler 通过 chunkedBody() 获取 ChunkedBody 引用，多次写入数据后 end()
+		 * @return HttpResponse
+		 */
+		static HttpResponse chunked();
+
+		/**
+		 * @brief 获取 ChunkedBody 引用
+		 * @return ChunkedBody 引用
+		 */
+		[[nodiscard]] ChunkedBody& chunkedBody();
 
 	private:
 		NativeResponse res_;

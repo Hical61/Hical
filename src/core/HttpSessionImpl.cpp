@@ -9,6 +9,7 @@
 #include "FixedBuffer.h"
 #include "MemoryPool.h"
 #include "ReadBufferPool.h"
+#include "SseSession.h"
 #include "core/Version.h"
 #include "WebSocket.h"
 #include "WsHandshake.h"
@@ -937,6 +938,53 @@ namespace hical
 												 std::move(wsExtensions),
 												 std::move(wsProtocol),
 												 wsRoute);
+						co_return;
+					}
+				}
+
+				// 检查 SSE 路由（GET 请求匹配 SSE 路由时转换为 SSE 长连接）
+				if (req.method() == HttpMethod::hGet)
+				{
+					auto reqPath = req.path();
+					auto sseMatch = router_.findSseRoute(reqPath);
+					if (sseMatch.route)
+					{
+						const auto& sseRoute = *sseMatch.route;
+
+						// 注入 SSE 参数路由捕获的参数
+						for (const auto& [name, value] : sseMatch.params)
+						{
+							req.setParam(name, value);
+						}
+
+						// SSE 路由也走中间件管道（认证/限流/日志等）
+						if (wsMiddlewareChain_)
+						{
+							auto sseAuthRes = co_await wsMiddlewareChain_(req);
+							auto sseAuthCode = sseAuthRes.statusCode();
+							if (sseAuthCode != HttpStatusCode::hOk)
+							{
+								// 中间件拦截了，写回响应
+								auto& nativeRes = sseAuthRes.native();
+								nativeRes.httpVersionMinor = 1;
+								nativeRes.headers.set("Connection", "close");
+								co_await writeResponse(socket, nativeRes);
+								co_return;
+							}
+						}
+
+						// readBuf 归还（SseSession 不依赖它）
+						readBufHandle.release();
+
+						// socket 所有权转移给 SSE 会话，标记 guard 跳过析构
+						guard.transferred = true;
+						// handleSession 的 idleEntry 指针失效，在 move 前注销
+						idleGuard.release();
+
+						// 创建 SSE 会话，发送响应头后调用 onConnect 回调
+						auto sseSession = std::make_shared<SseSession>(std::move(socket));
+						co_await sseSession->sendResponseHead();
+						co_await sseRoute.onConnect(std::move(sseSession));
 						co_return;
 					}
 				}

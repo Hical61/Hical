@@ -9,6 +9,7 @@
 #include "HttpRequest.h"
 #include "HttpResponse.h"
 #include "Coroutine.h"
+
 #include <chrono>
 #include <concepts>
 #include <functional>
@@ -24,6 +25,7 @@ namespace hical
 {
 
 	class RouteGroup; // 前向声明
+	class SseSession; // 前向声明
 
 	/**
 	 * @brief 路由处理器类型（协程版）
@@ -59,6 +61,13 @@ namespace hical
 	 * @brief WebSocket 断开回调类型
 	 */
 	using WsDisconnectCallback = std::function<Awaitable<void>(WebSocketSession&)>;
+
+	// ============ SSE 回调类型 ============
+
+	/**
+	 * @brief SSE 连接建立回调类型
+	 */
+	using SseConnectCallback = std::function<Awaitable<void>(std::shared_ptr<SseSession>)>;
 
 	/**
 	 * @brief HTTP 路由器
@@ -244,6 +253,41 @@ namespace hical
 				WsConnectCallback onConnect = nullptr,
 				WsDisconnectCallback onDisconnect = nullptr);
 
+		// ============ SSE 路由 ============
+
+		/**
+		 * @brief SSE 路由条目
+		 */
+		struct SseRoute
+		{
+			std::string path;
+			SseConnectCallback onConnect; ///< 连接建立回调（接收 SseSession 智能指针）
+		};
+
+		/**
+		 * @brief 注册 SSE 路由
+		 * @param path 路由路径
+		 * @param onConnect 连接建立回调，SSE 帧通过回调中的 SseSession 对象发送
+		 */
+		void sse(const std::string& path, SseConnectCallback onConnect);
+
+		/**
+		 * @brief SSE 路由匹配结果
+		 */
+		struct SseRouteMatch
+		{
+			const SseRoute* route = nullptr;
+			ParamList params; ///< 捕获的路径参数（仅参数路由时非空）
+		};
+
+		/**
+		 * @brief 检查路径是否为 SSE 路由
+		 * 支持精确匹配和参数路由 `{param}` 模式。
+		 * @param path 请求路径
+		 * @return SseRouteMatch（route 为 nullptr 表示无匹配）
+		 */
+		[[nodiscard]] SseRouteMatch findSseRoute(std::string_view path) const;
+
 		/**
 		 * @brief 分发请求到匹配的路由处理器
 		 * @param req HTTP 请求（路径参数会被写入 req 中）
@@ -417,6 +461,10 @@ namespace hical
 		// ============ WebSocket 路由 ============
 
 		std::vector<WsRoute> wsRoutes_;
+
+		// ============ SSE 路由 ============
+
+		std::vector<SseRoute> sseRoutes_;
 
 		/**
 		 * @brief 判断路径模式是否包含参数（如 {id}）
