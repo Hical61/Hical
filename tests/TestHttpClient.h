@@ -618,4 +618,340 @@ namespace hical::test
 		std::string handshakeResponse_;
 	};
 
+	// ============================================================
+	// TestResponse -- chainable assertion response object
+	// ============================================================
+
+	class TestResponse
+	{
+	public:
+		TestResponse() = default;
+
+		TestResponse(unsigned status, std::string body, std::vector<std::pair<std::string, std::string>> headers)
+			: status_(status), body_(std::move(body)), headers_(std::move(headers))
+		{
+		}
+
+		TestResponse& expectStatus(unsigned expected)
+		{
+			if (status_ != expected)
+			{
+				throw std::runtime_error("expectStatus(" + std::to_string(expected) + ") failed, got "
+										 + std::to_string(status_));
+			}
+			return *this;
+		}
+
+		TestResponse& expectHeader(const std::string& name, const std::string& value)
+		{
+			auto v = headerValue(name);
+			if (v != value)
+			{
+				throw std::runtime_error("expectHeader(" + name + ", " + value + ") failed, got " + v);
+			}
+			return *this;
+		}
+
+		TestResponse& expectBodyContains(const std::string& fragment)
+		{
+			if (body_.find(fragment) == std::string::npos)
+			{
+				throw std::runtime_error("expectBodyContains(" + fragment + ") failed");
+			}
+			return *this;
+		}
+
+		TestResponse& expectBody(const std::string& expected)
+		{
+			if (body_ != expected)
+			{
+				throw std::runtime_error("expectBody(" + expected + ") failed, got " + body_);
+			}
+			return *this;
+		}
+
+		unsigned status() const
+		{
+			return status_;
+		}
+
+		const std::string& body() const
+		{
+			return body_;
+		}
+
+		std::string headerValue(const std::string& name) const
+		{
+			for (const auto& [k, v] : headers_)
+			{
+				if (ciEqual(k, name))
+				{
+					return v;
+				}
+			}
+			return {};
+		}
+
+		const std::vector<std::pair<std::string, std::string>>& allHeaders() const
+		{
+			return headers_;
+		}
+
+	private:
+		static bool ciEqual(std::string_view a, std::string_view b)
+		{
+			if (a.size() != b.size())
+			{
+				return false;
+			}
+			for (size_t i = 0; i < a.size(); ++i)
+			{
+				if (std::tolower((unsigned char)a[i]) != std::tolower((unsigned char)b[i]))
+				{
+					return false;
+				}
+			}
+			return true;
+		}
+
+		unsigned status_ = 0;
+		std::string body_;
+		std::vector<std::pair<std::string, std::string>> headers_;
+	};
+
+	// ============================================================
+	// HttpTestClient -- lightweight HTTP test client with chaining
+	// ============================================================
+
+	class HttpTestClient
+	{
+	public:
+		static constexpr std::chrono::milliseconds kDefaultTimeout {3000};
+
+		explicit HttpTestClient(const std::string& baseUrl)
+		{
+			auto [h, p] = parseBaseUrl(baseUrl);
+			host_ = h;
+			port_ = p;
+		}
+
+		explicit HttpTestClient(uint16_t port) : host_("127.0.0.1"), port_(port)
+		{
+		}
+
+		HttpTestClient& setTimeout(std::chrono::milliseconds ms)
+		{
+			timeout_ = ms;
+			return *this;
+		}
+
+		void clearCookies()
+		{
+			cookies_.clear();
+		}
+
+		TestResponse get(const std::string& path)
+		{
+			return doRequest("GET", path, "", "");
+		}
+
+		TestResponse post(const std::string& path, const std::string& body, const std::string& ct = "text/plain")
+		{
+			return doRequest("POST", path, body, ct);
+		}
+
+		TestResponse put(const std::string& path, const std::string& body, const std::string& ct = "text/plain")
+		{
+			return doRequest("PUT", path, body, ct);
+		}
+
+		TestResponse del(const std::string& path)
+		{
+			return doRequest("DELETE", path, "", "");
+		}
+
+		TestResponse request(const std::string& method,
+							 const std::string& path,
+							 const std::string& body = "",
+							 const std::string& ct = "")
+		{
+			return doRequest(method, path, body, ct);
+		}
+
+	private:
+		static std::pair<std::string, uint16_t> parseBaseUrl(const std::string& url)
+		{
+			auto colon = url.rfind(':');
+			auto hs = url.find("://") + 3;
+			return {url.substr(hs, colon - hs), (uint16_t)std::stoul(url.substr(colon + 1))};
+		}
+
+		TestResponse doRequest(const std::string& method,
+							   const std::string& path,
+							   const std::string& body,
+							   const std::string& ct)
+		{
+			using tcp = boost::asio::ip::tcp;
+			boost::asio::io_context io;
+			tcp::socket sock(io);
+			sock.connect(tcp::endpoint(boost::asio::ip::make_address(host_), port_));
+
+			// Build request
+			std::string req = method + " " + path + " HTTP/1.1\r\n";
+			req += "Host: " + host_ + "\r\n";
+			if (!cookies_.empty())
+			{
+				req += "Cookie: " + cookies_ + "\r\n";
+			}
+			if (!body.empty())
+			{
+				req += "Content-Length: " + std::to_string(body.size()) + "\r\n";
+				if (!ct.empty())
+				{
+					req += "Content-Type: " + ct + "\r\n";
+				}
+			}
+			req += "Connection: close\r\n\r\n";
+			if (!body.empty())
+			{
+				req += body;
+			}
+
+			boost::asio::write(sock, boost::asio::buffer(req));
+
+			// Read response
+			std::string raw;
+			boost::system::error_code ec;
+			char buf[16384];
+			while (true)
+			{
+				auto n = sock.read_some(boost::asio::buffer(buf), ec);
+				if (ec)
+				{
+					break;
+				}
+				raw.append(buf, n);
+			}
+			sock.close();
+
+			if (raw.empty())
+			{
+				return TestResponse(0, "", {});
+			}
+
+			// Parse headers
+			auto he = raw.find("\r\n\r\n");
+			if (he == std::string::npos)
+			{
+				throw std::runtime_error("HTTP test client: incomplete response (no header end)");
+			}
+			he += 4;
+
+			int mv = 0, st = 0;
+			const char* msg = nullptr;
+			size_t ml = 0;
+			struct phr_header ph[64];
+			size_t nh = 64;
+
+			if (phr_parse_response(raw.data(), he, &mv, &st, &msg, &ml, ph, &nh, 0) < 0)
+			{
+				throw std::runtime_error("HTTP test client: failed to parse response headers");
+			}
+
+			std::vector<std::pair<std::string, std::string>> rh;
+			rh.reserve(nh);
+			bool isChunked = false;
+			size_t cl = 0;
+
+			for (size_t i = 0; i < nh; ++i)
+			{
+				std::string hn(ph[i].name, ph[i].name_len);
+				std::string hv(ph[i].value, ph[i].value_len);
+				rh.emplace_back(hn, hv);
+
+				auto ciEq = [](std::string_view a, std::string_view b) -> bool
+				{
+					if (a.size() != b.size())
+					{
+						return false;
+					}
+					for (size_t j = 0; j < a.size(); ++j)
+					{
+						if (std::tolower((unsigned char)a[j]) != std::tolower((unsigned char)b[j]))
+						{
+							return false;
+						}
+					}
+					return true;
+				};
+
+				if (ciEq(hn, "transfer-encoding") && hv.find("chunked") != std::string::npos)
+				{
+					isChunked = true;
+				}
+				if (ciEq(hn, "content-length"))
+				{
+					std::from_chars(hv.data(), hv.data() + hv.size(), cl);
+				}
+			}
+
+			// Extract body
+			std::string rawBody = raw.substr(he);
+			std::string respBody;
+
+			if (isChunked)
+			{
+				struct phr_chunked_decoder dc = {};
+				std::string db = std::move(rawBody);
+				size_t ds = db.size();
+				ssize_t r = phr_decode_chunked(&dc, db.data(), &ds);
+				if (r < 0)
+				{
+					throw std::runtime_error("HTTP test client: chunked decode failed");
+				}
+				respBody = db.substr(0, ds);
+			}
+			else if (cl > 0)
+			{
+				respBody = rawBody.substr(0, cl);
+			}
+			else
+			{
+				respBody = std::move(rawBody);
+			}
+
+			// Cookie tracking
+			auto ciEq = [](std::string_view a, std::string_view b) -> bool
+			{
+				if (a.size() != b.size())
+				{
+					return false;
+				}
+				for (size_t j = 0; j < a.size(); ++j)
+				{
+					if (std::tolower((unsigned char)a[j]) != std::tolower((unsigned char)b[j]))
+					{
+						return false;
+					}
+				}
+				return true;
+			};
+			for (const auto& [n, v] : rh)
+			{
+				if (ciEq(n, "set-cookie"))
+				{
+					auto semi = v.find(';');
+					cookies_ = (semi != std::string::npos) ? v.substr(0, semi) : v;
+				}
+			}
+
+			return TestResponse((unsigned)st, std::move(respBody), std::move(rh));
+		}
+
+		std::string host_;
+		uint16_t port_;
+		std::chrono::milliseconds timeout_ {kDefaultTimeout};
+		std::string cookies_;
+	};
+
 } // namespace hical::test

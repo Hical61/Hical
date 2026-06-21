@@ -13,7 +13,18 @@ namespace hical
 
 	void Router::route(HttpMethod method, const std::string& path, RouteHandler handler)
 	{
-		if (isParamRoute(path))
+		if (isWildcardRoute(path))
+		{
+			WildcardRouteEntry we;
+			we.method = method;
+			we.pattern = path;
+			auto starPos = path.find('*');
+			we.prefix = path.substr(0, starPos);
+			we.paramName = path.substr(starPos + 1);
+			we.handler = std::move(handler);
+			wildcardRoutesByMethod_[method].push_back(std::move(we));
+		}
+		else if (isParamRoute(path))
 		{
 			paramRoutesByMethod_[method].push_back({method, path, std::move(handler), nullptr});
 		}
@@ -26,9 +37,18 @@ namespace hical
 
 	void Router::route(HttpMethod method, const std::string& path, SyncRouteHandler handler)
 	{
-		// 只存 syncHandler，不创建 asyncHandler wrapper，零拷贝。
-		// dispatch() 优先检查 syncHandler，asyncHandler 为 nullptr 时不会被调用。
-		if (isParamRoute(path))
+		if (isWildcardRoute(path))
+		{
+			WildcardRouteEntry we;
+			we.method = method;
+			we.pattern = path;
+			auto starPos = path.find('*');
+			we.prefix = path.substr(0, starPos);
+			we.paramName = path.substr(starPos + 1);
+			we.syncHandler = std::move(handler);
+			wildcardRoutesByMethod_[method].push_back(std::move(we));
+		}
+		else if (isParamRoute(path))
 		{
 			paramRoutesByMethod_[method].push_back({method, path, nullptr, std::move(handler)});
 		}
@@ -249,6 +269,15 @@ namespace hical
 			co_return co_await result.paramEntry->handler(req);
 		}
 
+		if (result.wildcardEntry)
+		{
+			if (result.wildcardEntry->syncHandler)
+			{
+				co_return result.wildcardEntry->syncHandler(req);
+			}
+			co_return co_await result.wildcardEntry->handler(req);
+		}
+
 		if (!result.allowedMethods.empty())
 		{
 			HttpResponse res;
@@ -284,6 +313,15 @@ namespace hical
 			if (result.paramEntry->syncHandler)
 			{
 				return result.paramEntry->syncHandler(req);
+			}
+			return std::nullopt; // 异步 handler
+		}
+
+		if (result.wildcardEntry)
+		{
+			if (result.wildcardEntry->syncHandler)
+			{
+				return result.wildcardEntry->syncHandler(req);
 			}
 			return std::nullopt; // 异步 handler
 		}
@@ -356,7 +394,26 @@ namespace hical
 			}
 		}
 
-		// 3. 405 检测：路径匹配但方法不匹配时收集 Allow 头
+		// 3. wildcard route matching
+		if (auto wGroupIt = wildcardRoutesByMethod_.find(reqMethod); wGroupIt != wildcardRoutesByMethod_.end())
+		{
+			for (const auto& entry : wGroupIt->second)
+			{
+				if (reqPath.size() >= entry.prefix.size() && reqPath.substr(0, entry.prefix.size()) == entry.prefix)
+				{
+					ParamList params;
+					matchWildcardPath(entry.prefix, entry.paramName, reqPath, params);
+					for (const auto& [name, value] : params)
+					{
+						req.setParam(name, value);
+					}
+					result.wildcardEntry = &entry;
+					return result;
+				}
+			}
+		}
+
+		// 4. 405 检测：路径匹配但方法不匹配时收集 Allow 头
 		// 静态路由：O(1) 反向索引查找
 		if (auto pathIt = staticPathMethods_.find(reqPath); pathIt != staticPathMethods_.end())
 		{
@@ -451,7 +508,12 @@ namespace hical
 		{
 			paramCount += routes.size();
 		}
-		return staticRoutes_.size() + paramCount + wsRoutes_.size() + sseRoutes_.size();
+		size_t wildcardCount = 0;
+		for (const auto& [method, routes] : wildcardRoutesByMethod_)
+		{
+			wildcardCount += routes.size();
+		}
+		return staticRoutes_.size() + paramCount + wildcardCount + wsRoutes_.size() + sseRoutes_.size();
 	}
 
 	// ============ 辅助方法 ============
@@ -523,6 +585,30 @@ namespace hical
 			return false;
 		}
 
+		return true;
+	}
+
+	bool Router::isWildcardRoute(const std::string& path)
+	{
+		auto starPos = path.find('*');
+		return starPos != std::string::npos && starPos + 1 < path.size();
+	}
+
+	bool Router::matchWildcardPath(std::string_view prefix,
+								   std::string_view paramName,
+								   std::string_view path,
+								   ParamList& params)
+	{
+		params.clear();
+		auto captured = path.substr(prefix.size());
+		if (captured.size() > Router::kMaxParamValueLength)
+		{
+			return false;
+		}
+		if (!paramName.empty())
+		{
+			params.emplace_back(std::string(paramName), std::string(captured));
+		}
 		return true;
 	}
 

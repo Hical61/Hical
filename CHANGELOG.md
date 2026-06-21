@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - 待定
+
+### Added
+- **Chunked Transfer-Encoding**（RFC 7230 section 4.1）：`ChunkedBody` 类（收集模式 + 编码工具函数），`HttpResponse::chunked()` 工厂方法创建 chunked 响应，`HttpSessionImpl` 中的 chunked 发送路径。配套测试 `test_chunked_sse`
+- **Server-Sent Events (SSE)**（RFC 8895）：`SseSession` 类提供协程化 `sendEvent()` / `sendData()` / `sendComment()` / `close()` 接口，基于 chunked transfer-encoding 流式推送。`Router::sse()` 注册 SSE 连接回调，内置 30 秒心跳保活、30 分钟 idle 超时。配套集成测试
+- **Gzip 压缩中间件**：`makeGzipCompressionMiddleware()` 返回 `SyncAfterHandler`，自动协商 `Accept-Encoding: gzip`。小 body（< 64KB）整体压缩更新 Content-Length，大 body（>= 64KB）走 chunked 流式压缩。可配置压缩级别（1-9）和最小压缩阈值（默认 1KB）。配套测试 `test_compression`
+- **Rate Limiter 中间件**（Token Bucket 算法）：按 IP/自定义 key 独立限流，`makeRateLimiterMiddleware()` 返回 `SyncBeforeHandler`（零协程帧开销），支持 burst 瞬时爆发、429 + Retry-After / X-RateLimit-* 响应头、maxEntries 防 DoS 内存耗尽、惰性 GC 定期清理过期桶。配套测试 `test_rate_limiter`
+- **通配路由 `*path`**：支持 `/api/*path` 模式，`*path` 捕获剩余路径段为参数。优先级：静态 > 参数 > 通配。dispatch/dispatchSync/routeCount/exists/405 检测全覆盖。配套测试 `test_wildcard_route`
+- **`HttpResponse::ok()` contentType 重载**：新增 `ok(body, contentType)` 双参重载，允许指定 Content-Type；`ok(body)` 单参版本默认带上 `charset=utf-8`（close #10）
+- **WebSocket typed 回调**：`Router::ws()` 新增 `WsTypedMessageCallback` 重载，区分 Text/Binary 帧类型，带 `WsOptions` 的重载版本同样支持
+- **HttpArena benchmark 服务器**：`docker/HttpArena/` 目录下完整 benchmark 服务器，支持 baseline / pipelined / json / upload / static / echo-ws 七个测试类型，可选 `HICAL_BUILD_HTTPARENA` CMake 编译选项
+- **`TestHttpClient.h` 测试工具**：282 行 HTTP 客户端测试辅助类，配套 `tests/test_http_client.cpp`
+
+### Changed
+- **Router 路由统计**：`routeCount()` 方法计入通配路由和 SSE 路由
+- **HttpResponse::preparePayload()**：优先处理 chunked body 路径（不设 Content-Length）
+- **HttpSessionImpl 发送路径**：`writeResponse()` / `writeResponseWithPrefix()` 新增 chunked body 发送分支
+- **IdleScanner**：新增 `customTimeoutMs` 成员，支持 SSE 会话使用独立超时（30 分钟）
+
+### Fixed
+- **WebSocket 握手 GUID 错误**：RFC 6455 magic GUID 最后一段误写为 `5AB5DC65C174`，应为 `C5AB0DC85B11`，导致所有标准 WS 客户端握手失败
+- **`ok()` 中文内容乱码**（close #10）：`ok(body)` 默认 Content-Type 缺少 `charset=utf-8`，中文内容直接返回时浏览器无法正确解码。修法：`ok()` 单参重载默认设为 `text/plain; charset=utf-8`
+- **MinGW 进程退出崩溃**：`StringPool` 和 `MpscNodePool` 的 `thread_local` 析构缺少 MinGW guard（上次只修了 `ReadBufferPool`），msys2-gcc 进程退出时偶发堆损坏
+- **SseSocketGuard 悬空引用**：第一次实现的 `SseSocketGuard` 中 socket 引用在析构前失效，修复为引用 `SseSession` 内部的 socket 成员
+- **HttpArena LTO 链接失败**：Dockerfile 中 `-flto` 导致 `ar` 不支持 LTO 链接失败，移除 flto 标志
+- **boost::json 编译错误**：`boost::json::array::push_back()` 不接受裸 `std::string`，需要显式构造 `boost::json::value`，全部改为 `emplace_back()`
+
 ## [2.6.5] - 2026-06-12
 
 ### Added

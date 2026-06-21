@@ -437,14 +437,29 @@ namespace hical
 
 		std::unordered_map<HttpMethod, std::vector<ParamRouteEntry>> paramRoutesByMethod_;
 
+		// ============ 通配路由（`*path` 模式，线性扫描） ============
+
+		struct WildcardRouteEntry
+		{
+			HttpMethod method;
+			std::string pattern;
+			std::string prefix;
+			std::string paramName;
+			RouteHandler handler;
+			SyncRouteHandler syncHandler;
+		};
+
+		std::unordered_map<HttpMethod, std::vector<WildcardRouteEntry>> wildcardRoutesByMethod_;
+
 		// ============ 路由查找结果（dispatch/dispatchSync 共用） ============
 
 		struct ResolveResult
 		{
-			const RouteEntry* staticEntry = nullptr;     ///< 静态路由命中
-			const ParamRouteEntry* paramEntry = nullptr; ///< 参数路由命中
-			std::string allowedMethods;                  ///< 405 时的 Allow 头值
-			bool pathTooDeep = false;                    ///< 路径深度超限
+			const RouteEntry* staticEntry = nullptr;           ///< 静态路由命中
+			const ParamRouteEntry* paramEntry = nullptr;       ///< 参数路由命中
+			const WildcardRouteEntry* wildcardEntry = nullptr; ///< 通配路由命中
+			std::string allowedMethods;                        ///< 405 时的 Allow 头值
+			bool pathTooDeep = false;                          ///< 路径深度超限
 		};
 
 		/**
@@ -481,6 +496,19 @@ namespace hical
 		 * @return true 如果匹配
 		 */
 		static bool matchParamPath(std::string_view pattern, std::string_view path, ParamList& params);
+
+		/**
+		 * @brief check if path is a wildcard route (contains *path)
+		 */
+		static bool isWildcardRoute(const std::string& path);
+
+		/**
+		 * @brief match wildcard path and extract param
+		 */
+		static bool matchWildcardPath(std::string_view prefix,
+									  std::string_view paramName,
+									  std::string_view path,
+									  ParamList& params);
 	};
 
 /**

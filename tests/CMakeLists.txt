@@ -15,6 +15,7 @@ set(TESTS_NEEDING_PICOHTTPPARSER
     test_error_handler
     test_expect_continue
     test_chunked_sse
+    test_http_client
 )
 
 # helper：封装三行样板（add_executable + target_link_libraries + gtest_discover_tests）
@@ -55,11 +56,14 @@ hical_add_test(test_query_params)         # 查询参数解析
 hical_add_test(test_form_params)          # 表单参数解析
 hical_add_test(test_redirect)             # 重定向便捷方法
 hical_add_test(test_cors)                 # CORS 中间件
+hical_add_test(test_rate_limiter)         # 速率限制（Token Bucket）
+hical_add_test(test_wildcard_route)       # 通配路由 `*path`
 hical_add_test(test_compression)          # 响应压缩（gzip）
 hical_add_test(test_chunked_sse)          # Chunked Transfer-Encoding + SSE
 hical_add_test(test_graceful_shutdown)    # 优雅关机与信号处理
 hical_add_test(test_error_handler)        # 全局错误处理器
 hical_add_test(test_expect_continue)      # Expect: 100-continue
+hical_add_test(test_http_client)          # 测试客户端（链式调用）
 
 # --- 日志系统 ---
 hical_add_test(test_log)                  # 日志系统主测试
