@@ -194,42 +194,45 @@ namespace hical
 											  boost::asio::redirect_error(boost::asio::use_awaitable, writeEc));
 		}
 
-		/// 序列化 ChunkedBody 的所有 chunk 到 wire 格式（收集模式）
-		std::string serializeChunkedBodyWire(const ChunkedBody& body)
-		{
-			std::string result;
-			for (const auto& chunk : body.chunks())
-			{
-				result += serializeChunkFrame(chunk);
-			}
-			result += serializeTrailerFrame(body.trailers());
-			return result;
-		}
-
 		/// 发送 HttpResponse 对象（内部辅助）
 		/// @param skipBody 为 true 时仅发送头部（HEAD 方法响应）
 		Awaitable<void> writeResponse(tcp::socket& socket, NativeResponse& nativeRes, bool skipBody = false)
 		{
 			nativeRes.preparePayload();
 
-			// ChunkedBody 路径：先发头，再把所有 chunk 帧拼起来批量发
+			// ChunkedBody 路径：scatter-gather 头部 + 全部 chunk 帧，一次 async_write
 			if (nativeRes.hasChunkedBody())
 			{
 				FixedBuffer<512> headBuf;
 				nativeRes.serializeHeadTo(headBuf);
-				co_await boost::asio::async_write(socket,
-												  boost::asio::buffer(headBuf.data(), headBuf.size()),
-												  boost::asio::use_awaitable);
 
 				if (nativeRes.chunkedBody && !skipBody)
 				{
-					auto wire = serializeChunkedBodyWire(*nativeRes.chunkedBody);
-					if (!wire.empty())
+					auto wire = std::make_shared<std::string>();
+					auto totalSize = chunkedBodyWireSize(*nativeRes.chunkedBody);
+					wire->reserve(totalSize);
+					serializeChunkedBodyTo(*wire, *nativeRes.chunkedBody);
+
+					if (!wire->empty())
+					{
+						// scatter-gather: head + body 一次 async_write
+						std::array<boost::asio::const_buffer, 2> bufs = {
+							boost::asio::buffer(headBuf.data(), headBuf.size()),
+							boost::asio::buffer(*wire)};
+						co_await boost::asio::async_write(socket, bufs, boost::asio::use_awaitable);
+					}
+					else
 					{
 						co_await boost::asio::async_write(socket,
-														  boost::asio::buffer(wire),
+														  boost::asio::buffer(headBuf.data(), headBuf.size()),
 														  boost::asio::use_awaitable);
 					}
+				}
+				else
+				{
+					co_await boost::asio::async_write(socket,
+													  boost::asio::buffer(headBuf.data(), headBuf.size()),
+													  boost::asio::use_awaitable);
 				}
 				co_return;
 			}
@@ -278,19 +281,33 @@ namespace hical
 			{
 				FixedBuffer<512> headBuf;
 				nativeRes.serializeHeadTo(headBuf, prefix, prefixLen);
-				co_await boost::asio::async_write(socket,
-												  boost::asio::buffer(headBuf.data(), headBuf.size()),
-												  boost::asio::use_awaitable);
 
 				if (nativeRes.chunkedBody && !skipBody)
 				{
-					auto wire = serializeChunkedBodyWire(*nativeRes.chunkedBody);
-					if (!wire.empty())
+					auto wire = std::make_shared<std::string>();
+					auto totalSize = chunkedBodyWireSize(*nativeRes.chunkedBody);
+					wire->reserve(totalSize);
+					serializeChunkedBodyTo(*wire, *nativeRes.chunkedBody);
+
+					if (!wire->empty())
+					{
+						std::array<boost::asio::const_buffer, 2> bufs = {
+							boost::asio::buffer(headBuf.data(), headBuf.size()),
+							boost::asio::buffer(*wire)};
+						co_await boost::asio::async_write(socket, bufs, boost::asio::use_awaitable);
+					}
+					else
 					{
 						co_await boost::asio::async_write(socket,
-														  boost::asio::buffer(wire),
+														  boost::asio::buffer(headBuf.data(), headBuf.size()),
 														  boost::asio::use_awaitable);
 					}
+				}
+				else
+				{
+					co_await boost::asio::async_write(socket,
+													  boost::asio::buffer(headBuf.data(), headBuf.size()),
+													  boost::asio::use_awaitable);
 				}
 				co_return;
 			}

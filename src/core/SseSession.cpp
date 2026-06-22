@@ -46,23 +46,17 @@ namespace hical
 			co_return;
 		}
 
-		// 直接在 frame 中构建 SSE wire + chunked 帧，避免中间 string 拷贝
-		std::string frame;
+		// 复用 sendBuf_ 避免每次堆分配
+		sendBuf_.clear();
 		size_t estimate = event.data.size() + 64;
-		frame.reserve(estimate + 24); // 多留 24 字节放 chunk-size+CRLF
+		sendBuf_.reserve(estimate);
 
-		// 预留 chunk-size 位置（最大 16 字节十六进制 + 2 字节 \r\n）
-		// 先把 SSE body 和尾部 \r\n 拼好，size 字段最后回填
-		auto sizeFieldPos = frame.size();
-		frame.append(18, '\0');
-		// 记录 body 起始位置，用于后续计算正文长度
-		auto bodyStart = frame.size();
-
+		// 构建 SSE wire body（不含 chunked 帧头，最后用 scatter-gather 发送）
 		if (!event.event.empty())
 		{
-			frame.append("event: ");
-			frame.append(event.event);
-			frame += '\n';
+			sendBuf_ += "event: ";
+			sendBuf_.append(event.event.data(), event.event.size());
+			sendBuf_ += '\n';
 		}
 
 		if (!event.data.empty())
@@ -71,60 +65,56 @@ namespace hical
 			while (pos < event.data.size())
 			{
 				auto newline = event.data.find('\n', pos);
-				frame.append("data: ");
+				sendBuf_ += "data: ";
 				if (newline == std::string_view::npos)
 				{
-					frame.append(event.data.substr(pos));
+					sendBuf_.append(event.data.data() + pos, event.data.size() - pos);
 					pos = event.data.size();
 				}
 				else
 				{
-					frame.append(event.data.substr(pos, newline - pos));
+					sendBuf_.append(event.data.data() + pos, newline - pos);
 					pos = newline + 1;
 				}
-				frame += '\n';
+				sendBuf_ += '\n';
 			}
 		}
 		else
 		{
-			frame.append("data:\n");
+			sendBuf_ += "data:\n";
 		}
 
 		if (!event.id.empty())
 		{
-			frame.append("id: ");
-			frame.append(event.id);
-			frame += '\n';
+			sendBuf_ += "id: ";
+			sendBuf_.append(event.id.data(), event.id.size());
+			sendBuf_ += '\n';
 		}
 
 		if (!event.retry.empty())
 		{
-			frame.append("retry: ");
-			frame.append(event.retry);
-			frame += '\n';
+			sendBuf_ += "retry: ";
+			sendBuf_.append(event.retry.data(), event.retry.size());
+			sendBuf_ += '\n';
 		}
 
-		frame += '\n'; // 事件终结空行
+		sendBuf_ += '\n'; // SSE 事件终结空行
 
-		// 尾部 \r\n（chunked frame trailing CRLF）
-		frame.append("\r\n");
-
-		// SSE 正文 = bodyStart 到 \r\n 之前
-		size_t sseLen = frame.size() - bodyStart - 2;
-
+		// chunk-size 在栈上计算
 		char chunkSizeBuf[20];
-		auto [ptr, ec] = std::to_chars(chunkSizeBuf, chunkSizeBuf + sizeof(chunkSizeBuf), sseLen, 16);
+		auto [ptr, ec] = std::to_chars(chunkSizeBuf, chunkSizeBuf + sizeof(chunkSizeBuf), sendBuf_.size(), 16);
 		auto sizeLen = static_cast<size_t>(ptr - chunkSizeBuf);
 
-		// 用 chunk-size + \r\n 覆盖占位
-		frame.replace(sizeFieldPos, 18, chunkSizeBuf, sizeLen);
-		frame[sizeFieldPos + sizeLen] = '\r';
-		frame[sizeFieldPos + sizeLen + 1] = '\n';
-
-		// 移除占位中未使用的部分（sizeLen+2 之后到 18 的字节）
-		frame.erase(sizeFieldPos + sizeLen + 2, 18 - sizeLen - 2);
-
-		co_await boost::asio::async_write(socket_, boost::asio::buffer(frame), boost::asio::use_awaitable);
+		// scatter-gather 零拷贝发送：chunk-size\r\n + body + \r\n
+		static constexpr std::string_view kCrLf = "\r\n";
+		static constexpr std::string_view kTermCrLf = "\r\n";
+		std::array<boost::asio::const_buffer, 4> bufs = {{
+			boost::asio::buffer(chunkSizeBuf, sizeLen),
+			boost::asio::buffer(kCrLf.data(), kCrLf.size()),
+			boost::asio::buffer(sendBuf_.data(), sendBuf_.size()),
+			boost::asio::buffer(kTermCrLf.data(), kTermCrLf.size()),
+		}};
+		co_await boost::asio::async_write(socket_, bufs, boost::asio::use_awaitable);
 	}
 
 	Awaitable<void> SseSession::sendData(std::string_view data)
@@ -141,24 +131,26 @@ namespace hical
 			co_return;
 		}
 
-		// : comment\n\n → chunked frame
-		// 用 FixedBuffer 栈上构建（注释通常很短）
-		FixedBuffer<1024> commentBuf;
-		commentBuf << ": " << comment << "\n\n";
+		// 复用 sendBuf_ 构建 : comment\n\n → chunked frame
+		sendBuf_.clear();
+		sendBuf_ += ": ";
+		sendBuf_.append(comment.data(), comment.size());
+		sendBuf_ += "\n\n";
 
 		char chunkSizeBuf[20];
-		auto [ptr, ec] = std::to_chars(chunkSizeBuf, chunkSizeBuf + sizeof(chunkSizeBuf), commentBuf.size(), 16);
+		auto [ptr, ec] = std::to_chars(chunkSizeBuf, chunkSizeBuf + sizeof(chunkSizeBuf), sendBuf_.size(), 16);
 		auto sizeLen = static_cast<size_t>(ptr - chunkSizeBuf);
 
-		// 拼完整帧
-		std::string frame;
-		frame.reserve(sizeLen + 2 + commentBuf.size() + 2);
-		frame.append(chunkSizeBuf, sizeLen);
-		frame.append("\r\n");
-		frame.append(commentBuf.data(), commentBuf.size());
-		frame.append("\r\n");
-
-		co_await boost::asio::async_write(socket_, boost::asio::buffer(frame), boost::asio::use_awaitable);
+		// scatter-gather 零拷贝发送
+		static constexpr std::string_view kCrLf = "\r\n";
+		static constexpr std::string_view kTermCrLf = "\r\n";
+		std::array<boost::asio::const_buffer, 4> bufs = {{
+			boost::asio::buffer(chunkSizeBuf, sizeLen),
+			boost::asio::buffer(kCrLf.data(), kCrLf.size()),
+			boost::asio::buffer(sendBuf_.data(), sendBuf_.size()),
+			boost::asio::buffer(kTermCrLf.data(), kTermCrLf.size()),
+		}};
+		co_await boost::asio::async_write(socket_, bufs, boost::asio::use_awaitable);
 	}
 
 	Awaitable<void> SseSession::close()

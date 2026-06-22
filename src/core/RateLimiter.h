@@ -27,7 +27,7 @@ namespace hical
 	struct RateLimitConfig
 	{
 		double rate = 10.0;  ///< 每秒恢复的 token 数（平均速率）
-		double burst = 20.0; ///< 桶容量（允许的瞬时突发量）
+		double burst = 20.0; ///< 桶容量（允许的瞬时爆发量）
 	};
 
 	/**
@@ -73,8 +73,9 @@ namespace hical
 			/// 上次 check() 的时间点（steady_clock::time_point 的 time_since_epoch().count()）
 			double lastCheckNs;
 
-			/// 最近一次访问时间（用于 GC 判断）
-			std::chrono::steady_clock::time_point lastAccess;
+			/// 最近一次访问时间（epoch 纳秒，用于 GC 判断）
+			/// atomic 允许 GC（写锁持有 map）无锁读取，消除 TSAN race
+			std::atomic<int64_t> lastAccessNs {0};
 		};
 
 		/**
@@ -96,7 +97,7 @@ namespace hical
 	 * 按 key 维护 Token Bucket，支持：
 
 	 * - 按 key 独立限流
-	 * - 突发出力（burst）
+	 * - 瞬时爆发（burst）
 	 * - 线程安全（per-bucket mutex + shared_mutex for map）
 	 * - 过期条目惰性清理（定期 GC）
 	 */

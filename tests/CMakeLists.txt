@@ -57,6 +57,8 @@ hical_add_test(test_form_params)          # 表单参数解析
 hical_add_test(test_redirect)             # 重定向便捷方法
 hical_add_test(test_cors)                 # CORS 中间件
 hical_add_test(test_rate_limiter)         # 速率限制（Token Bucket）
+hical_add_test(test_helmet)              # 安全头中间件
+hical_add_test(test_health)              # 健康检查端点
 hical_add_test(test_wildcard_route)       # 通配路由 `*path`
 hical_add_test(test_compression)          # 响应压缩（gzip）
 hical_add_test(test_chunked_sse)          # Chunked Transfer-Encoding + SSE

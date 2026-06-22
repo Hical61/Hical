@@ -345,7 +345,7 @@ HTTP 请求封装，对原生 HTTP 解析结果的 hical 风格封装。
 | ------------------------ | ----------------------------- | ------ | ---------------------------------- |
 | `setMethod(method)`      | method: HTTP 方法             | `void` | 设置 HTTP 方法                     |
 | `setTarget(target)`      | target: 目标 URI              | `void` | 设置请求路径                       |
-| `setHeader(name, value)` | name: 字段名<br>value: 字段值 | `void` | 设置头部字段（拒绝含 CR/LF 的值）  |
+| `setHeader(name, value)` | name: 字段名<br>value: 字段值 (`std::string_view`) | `void` | 设置头部字段（拒绝含 CR/LF 的值）  |
 | `setBody(body)`          | body: 消息体                  | `void` | 设置消息体（不动 Content-Type 头） |
 | `setParam(name, value)`  | name: 参数名<br>value: 参数值 | `void` | 设置路径参数（由 Router 内部调用） |
 
@@ -386,7 +386,7 @@ HTTP 响应封装，对原生 HTTP 响应的 hical 风格封装。
 | `statusCode()`                 | 无                                                         | `HttpStatusCode`     | 获取状态码                    |
 | `setStatus(code)`              | code: 状态码                                               | `void`               | 设置状态码                    |
 | `header(name)`                 | name: 字段名                                               | `std::string`        | 获取指定头部字段值            |
-| `setHeader(name, value)`       | name: 字段名<br>value: 字段值                              | `void`               | 设置头部字段                  |
+| `setHeader(name, value)`       | name: 字段名<br>value: 字段值 (`std::string_view`)                              | `void`               | 设置头部字段                  |
 | `body()`                       | 无                                                         | `const std::string&` | 获取消息体                    |
 | `setBody(body, contentType)`   | body: 消息体<br>contentType: Content-Type                  | `void`               | 设置消息体并指定 Content-Type |
 | `setJsonBody(json)`            | json: JSON 值                                              | `void`               | 设置 JSON 消息体              |

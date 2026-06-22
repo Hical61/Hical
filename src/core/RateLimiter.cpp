@@ -45,6 +45,8 @@ namespace hical
 
 	bool RateLimiter::check(const std::string& key, std::chrono::steady_clock::time_point now)
 	{
+		auto nowNs = now.time_since_epoch().count();
+
 		// 惰性 GC：每 1024 次触发一次过期桶清理
 		// gc() 内部有 gcIntervalMs 双重检查，不会每次都扫全表
 		{
@@ -64,13 +66,13 @@ namespace hical
 				auto& bucket = *it->second;
 				std::lock_guard bkLock(bucket.mutex);
 
-				auto elapsed = std::chrono::duration<double>(now - bucket.lastAccess).count();
+				auto elapsed = (nowNs - bucket.lastAccessNs.load(std::memory_order_relaxed)) / 1e9;
 				double rate = opts_.config.rate;
 				double burst = opts_.config.burst;
 
 				// 按时间间隔 refill token
 				bucket.tokens = std::min(bucket.tokens + elapsed * rate, burst);
-				bucket.lastAccess = now;
+				bucket.lastAccessNs.store(nowNs, std::memory_order_relaxed);
 
 				if (bucket.tokens >= 1.0)
 				{
@@ -93,9 +95,9 @@ namespace hical
 				auto& bucket = *it->second;
 				std::lock_guard bkLock(bucket.mutex);
 
-				auto elapsed = std::chrono::duration<double>(now - bucket.lastAccess).count();
+				auto elapsed = (nowNs - bucket.lastAccessNs.load(std::memory_order_relaxed)) / 1e9;
 				bucket.tokens = std::min(bucket.tokens + elapsed * opts_.config.rate, opts_.config.burst);
-				bucket.lastAccess = now;
+				bucket.lastAccessNs.store(nowNs, std::memory_order_relaxed);
 
 				if (bucket.tokens >= 1.0)
 				{
@@ -112,8 +114,8 @@ namespace hical
 			}
 
 			auto newBucket = std::make_unique<detail::RateLimitBucket>();
-			newBucket->tokens = opts_.config.burst - 1.0; // 新桶初始满，消费当前这一个
-			newBucket->lastAccess = now;
+			newBucket->tokens = std::max(opts_.config.burst - 1.0, 0.0); // 新桶初始满，消费当前这一个
+			newBucket->lastAccessNs.store(nowNs, std::memory_order_relaxed);
 			store_.buckets.emplace(key, std::move(newBucket));
 		}
 
@@ -144,10 +146,11 @@ namespace hical
 		// 遍历删除过期桶
 		for (auto it = store_.buckets.begin(); it != store_.buckets.end();)
 		{
-			// 桶的 lastAccess 在其自己的 mutex 保护下读取，但 GC 只在写锁下进行，
-			// 此时不会有其他线程同时创建/删除桶。桶内的 lastAccess 是 steady_clock::time_point，
-			// 原子性由它所在的 struct 的 mutex 保证——但 GC 只做读判断，差几微秒无影响。
-			if ((now - it->second->lastAccess) > kIdleThreshold)
+			// lastAccessNs 是 atomic，GC 在 map 写锁下无锁读取，
+			// check() 用 relaxed store 更新，差几微秒不影响 GC 过期判定
+			auto lastAccess = std::chrono::steady_clock::time_point {
+				std::chrono::steady_clock::duration(it->second->lastAccessNs.load(std::memory_order_relaxed))};
+			if ((now - lastAccess) > kIdleThreshold)
 			{
 				it = store_.buckets.erase(it);
 			}

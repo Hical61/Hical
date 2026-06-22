@@ -399,7 +399,7 @@ namespace hical
 		{
 			for (const auto& entry : wGroupIt->second)
 			{
-				if (reqPath.size() >= entry.prefix.size() && reqPath.substr(0, entry.prefix.size()) == entry.prefix)
+				if (reqPath.size() >= entry.prefix.size() && reqPath.starts_with(entry.prefix))
 				{
 					ParamList params;
 					matchWildcardPath(entry.prefix, entry.paramName, reqPath, params);

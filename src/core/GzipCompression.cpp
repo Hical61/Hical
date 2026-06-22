@@ -9,6 +9,10 @@
 #include <array>
 #include <string>
 
+#include <boost/asio/post.hpp>
+#include <boost/asio/thread_pool.hpp>
+#include <boost/asio/use_awaitable.hpp>
+
 namespace hical
 {
 
@@ -23,7 +27,6 @@ namespace hical
 			{
 				return false;
 			}
-			// 逗号分隔扫描
 			std::string_view sv(ae);
 			while (!sv.empty())
 			{
@@ -31,7 +34,6 @@ namespace hical
 				auto token = (comma != std::string_view::npos) ? sv.substr(0, comma) : sv;
 				sv = (comma != std::string_view::npos) ? sv.substr(comma + 1) : std::string_view {};
 
-				// 去掉首尾空格
 				while (!token.empty() && token.front() == ' ')
 				{
 					token.remove_prefix(1);
@@ -41,12 +43,10 @@ namespace hical
 					token.remove_suffix(1);
 				}
 
-				// Content negotiation 格式：gzip;q=1.0 — 去掉分号后的参数
 				auto semi = token.find(';');
 				if (semi != std::string_view::npos)
 				{
 					token = token.substr(0, semi);
-					// 去掉尾部空格
 					while (!token.empty() && token.back() == ' ')
 					{
 						token.remove_suffix(1);
@@ -62,11 +62,61 @@ namespace hical
 		}
 
 		/**
-		 * @brief 用 zlib deflate 压缩数据（gzip 格式）
-		 * @param input 原始数据
+		 * @brief 获取 thread_local 缓存的 z_stream
+		 * 首次调用时用指定 level 初始化，后续通过 deflateReset 复用。
+		 * 避免高频压缩场景下频繁 deflateInit2/deflateEnd。
 		 * @param level 压缩级别（1-9）
-		 * @return 压缩后的 gzip 数据
-		 * @throws std::runtime_error deflateInit/deflate 失败时抛出
+		 * @return 初始化好的 z_stream 引用
+		 */
+		z_stream& cachedZStream(int level)
+		{
+			struct CachedStream
+			{
+				z_stream strm = {};
+				int cachedLevel = -1;
+				bool initialized = false;
+
+				~CachedStream()
+				{
+					if (initialized)
+					{
+						deflateEnd(&strm);
+					}
+				}
+			};
+
+			static thread_local CachedStream cs;
+
+			if (cs.initialized && cs.cachedLevel == level)
+			{
+				deflateReset(&cs.strm);
+				return cs.strm;
+			}
+
+			if (cs.initialized)
+			{
+				deflateEnd(&cs.strm);
+				cs.initialized = false;
+			}
+
+			cs.strm = {};
+			cs.strm.zalloc = Z_NULL;
+			cs.strm.zfree = Z_NULL;
+			cs.strm.opaque = Z_NULL;
+
+			auto ret = deflateInit2(&cs.strm, level, Z_DEFLATED, 15 + 16, 8, Z_DEFAULT_STRATEGY);
+			if (ret != Z_OK)
+			{
+				throw std::runtime_error("gzip deflateInit2 failed: " + std::to_string(ret));
+			}
+
+			cs.cachedLevel = level;
+			cs.initialized = true;
+			return cs.strm;
+		}
+
+		/**
+		 * @brief 用 zlib deflate 压缩数据（gzip 格式）
 		 */
 		std::string gzipCompress(std::string_view input, int level)
 		{
@@ -75,28 +125,15 @@ namespace hical
 				return {};
 			}
 
-			z_stream strm = {};
-			strm.zalloc = Z_NULL;
-			strm.zfree = Z_NULL;
-			strm.opaque = Z_NULL;
-
-			// 15 + 16 = MAX_WBITS + GZIP 格式
-			auto ret = deflateInit2(&strm, level, Z_DEFLATED, 15 + 16, 8, Z_DEFAULT_STRATEGY);
-			if (ret != Z_OK)
-			{
-				throw std::runtime_error("gzip deflateInit2 failed: " + std::to_string(ret));
-			}
-
-			// z_stream::next_in 在旧版 zlib 中是非 const 指针，需要 const_cast
+			auto& strm = cachedZStream(level);
 			strm.next_in = const_cast<Bytef*>(reinterpret_cast<const Bytef*>(input.data()));
 			strm.avail_in = static_cast<uInt>(input.size());
 
-			// 初始输出缓冲区：input size + 1KB 余量（gzip 最小头尾）
 			std::string output;
 			output.reserve(input.size() + 1024);
-
 			std::array<char, 16384> outBuf {};
 
+			int ret;
 			do
 			{
 				strm.next_out = reinterpret_cast<Bytef*>(outBuf.data());
@@ -105,57 +142,37 @@ namespace hical
 				ret = deflate(&strm, Z_FINISH);
 				if (ret == Z_STREAM_ERROR)
 				{
-					deflateEnd(&strm);
+					deflateReset(&strm);
 					throw std::runtime_error("gzip deflate failed: Z_STREAM_ERROR");
 				}
 
-				auto have = sizeof(outBuf) - strm.avail_out;
-				output.append(outBuf.data(), have);
+				output.append(outBuf.data(), sizeof(outBuf) - strm.avail_out);
 			}
 			while (ret != Z_STREAM_END);
 
-			deflateEnd(&strm);
-
-			if (ret != Z_STREAM_END)
-			{
-				throw std::runtime_error("gzip deflate unexpected end: " + std::to_string(ret));
-			}
-
+			deflateReset(&strm);
 			return output;
 		}
 
 		/**
-		 * @brief 用 zlib deflate 进行流式压缩，每次压缩一个 chunk 并编码为 chunked frame
-		 * @param input 原始数据
-		 * @param level 压缩级别
-		 * @return 完整的 chunked + gzip 编码 wire 字节流
+		 * @brief 流式压缩，每次输出编码为 chunked frame
 		 */
 		std::string gzipCompressChunked(std::string_view input, int level)
 		{
 			if (input.empty())
 			{
-				// 空 body：只发终止帧
 				return "0\r\n\r\n";
 			}
 
-			z_stream strm = {};
-			strm.zalloc = Z_NULL;
-			strm.zfree = Z_NULL;
-			strm.opaque = Z_NULL;
-
-			auto ret = deflateInit2(&strm, level, Z_DEFLATED, 15 + 16, 8, Z_DEFAULT_STRATEGY);
-			if (ret != Z_OK)
-			{
-				throw std::runtime_error("gzip deflateInit2 failed: " + std::to_string(ret));
-			}
-
+			auto& strm = cachedZStream(level);
 			strm.next_in = const_cast<Bytef*>(reinterpret_cast<const Bytef*>(input.data()));
 			strm.avail_in = static_cast<uInt>(input.size());
 
 			std::string result;
-			result.reserve(input.size() / 2); // 压缩后预期减半
-
+			result.reserve(input.size() / 2);
 			std::array<char, 16384> outBuf {};
+
+			int ret;
 
 			do
 			{
@@ -165,23 +182,19 @@ namespace hical
 				ret = deflate(&strm, Z_SYNC_FLUSH);
 				if (ret == Z_STREAM_ERROR)
 				{
-					deflateEnd(&strm);
+					deflateReset(&strm);
 					throw std::runtime_error("gzip deflate streaming failed: Z_STREAM_ERROR");
 				}
 
 				auto have = sizeof(outBuf) - strm.avail_out;
 				if (have > 0)
 				{
-					// 编码为 chunked frame
-					std::string_view compressed(outBuf.data(), have);
-					result += serializeChunkFrame(compressed);
+					result += serializeChunkFrame(std::string_view(outBuf.data(), have));
 				}
 			}
-			// 循环直到所有输入都被消费（Z_SYNC_FLUSH 下大部分输入一次输出完，
-			// 但大 body 可能在多次循环中逐步输出）
 			while (strm.avail_in > 0);
 
-			// 清理残留在输出缓冲区中的数据
+			// flush 残留
 			for (;;)
 			{
 				strm.next_out = reinterpret_cast<Bytef*>(outBuf.data());
@@ -190,8 +203,8 @@ namespace hical
 				ret = deflate(&strm, Z_SYNC_FLUSH);
 				if (ret == Z_STREAM_ERROR)
 				{
-					deflateEnd(&strm);
-					throw std::runtime_error("gzip deflate final flush failed: Z_STREAM_ERROR");
+					deflateReset(&strm);
+					throw std::runtime_error("gzip deflate flush failed: Z_STREAM_ERROR");
 				}
 
 				auto have = sizeof(outBuf) - strm.avail_out;
@@ -199,11 +212,10 @@ namespace hical
 				{
 					break;
 				}
-				std::string_view compressed(outBuf.data(), have);
-				result += serializeChunkFrame(compressed);
+				result += serializeChunkFrame(std::string_view(outBuf.data(), have));
 			}
 
-			// 结束压缩流
+			// finish
 			for (;;)
 			{
 				strm.next_out = reinterpret_cast<Bytef*>(outBuf.data());
@@ -212,15 +224,14 @@ namespace hical
 				ret = deflate(&strm, Z_FINISH);
 				if (ret == Z_STREAM_ERROR)
 				{
-					deflateEnd(&strm);
+					deflateReset(&strm);
 					throw std::runtime_error("gzip deflate finish failed: Z_STREAM_ERROR");
 				}
 
 				auto have = sizeof(outBuf) - strm.avail_out;
 				if (have > 0)
 				{
-					std::string_view compressed(outBuf.data(), have);
-					result += serializeChunkFrame(compressed);
+					result += serializeChunkFrame(std::string_view(outBuf.data(), have));
 				}
 
 				if (ret == Z_STREAM_END)
@@ -229,9 +240,7 @@ namespace hical
 				}
 			}
 
-			deflateEnd(&strm);
-
-			// 终止 chunked 帧
+			deflateReset(&strm);
 			result += "0\r\n\r\n";
 			return result;
 		}
@@ -242,7 +251,6 @@ namespace hical
 	{
 		return [opts](HttpRequest& req, HttpResponse& res) -> void
 		{
-			// 只压缩 200 OK 且有 body 的响应
 			if (!acceptsGzip(req))
 			{
 				return;
@@ -250,18 +258,16 @@ namespace hical
 
 			auto& native = res.native();
 
-			// 跳过：已压缩的、chunked body 路径（内容由 SSE/流式生成）、文件体路径
 			if (!native.body.empty() && !native.hasChunkedBody() && !native.hasFileBody())
 			{
 				auto bodySize = native.body.size();
 				if (bodySize < opts.minSize)
 				{
-					return; // 小 body 跳过，小于阈值没意义
+					return;
 				}
 
 				if (bodySize >= opts.streamingThreshold)
 				{
-					// 大 body：走 chunked + gzip 流式压缩
 					auto compressedWire = gzipCompressChunked(native.body, opts.compressionLevel);
 					native.body = std::move(compressedWire);
 					native.headers.set("Content-Encoding", "gzip");
@@ -270,13 +276,80 @@ namespace hical
 				}
 				else
 				{
-					// 小 body：整体压缩
 					auto compressed = gzipCompress(native.body, opts.compressionLevel);
 					native.body = std::move(compressed);
 					native.headers.set("Content-Encoding", "gzip");
 					native.preparePayload();
 				}
 			}
+		};
+	}
+
+	MiddlewareHandler makeGzipCompressionMiddlewareAsync(GzipCompressionOptions opts)
+	{
+		auto pool =
+			std::make_shared<boost::asio::thread_pool>(opts.asyncThreads > 0 ? static_cast<int>(opts.asyncThreads) : 1);
+
+		auto guard = std::make_shared<std::shared_ptr<boost::asio::thread_pool>>(pool);
+
+		return [opts, pool, guard](HttpRequest& req, MiddlewareNext next) -> Awaitable<HttpResponse>
+		{
+			(void)guard;
+
+			auto res = co_await next(req);
+
+			if (!acceptsGzip(req))
+			{
+				co_return res;
+			}
+
+			auto& native = res.native();
+			if (native.body.empty() || native.hasChunkedBody() || native.hasFileBody())
+			{
+				co_return res;
+			}
+
+			auto bodySize = native.body.size();
+			if (bodySize < opts.minSize)
+			{
+				co_return res;
+			}
+
+			if (bodySize < opts.streamingThreshold)
+			{
+				auto compressed = gzipCompress(native.body, opts.compressionLevel);
+				native.body = std::move(compressed);
+				native.headers.set("Content-Encoding", "gzip");
+				native.preparePayload();
+				co_return res;
+			}
+
+			auto body = std::make_shared<std::string>(std::move(native.body));
+			auto compressedWire = std::make_shared<std::string>();
+			auto ioExecutor = co_await boost::asio::this_coro::executor;
+
+			co_await boost::asio::post(*pool, boost::asio::use_awaitable);
+
+			try
+			{
+				*compressedWire = gzipCompressChunked(*body, opts.compressionLevel);
+			}
+			catch (const std::exception&)
+			{
+				HttpResponse errorRes;
+				errorRes.setStatus(HttpStatusCode::hInternalServerError);
+				errorRes.setBody("gzip compression failed", "text/plain");
+				co_return errorRes;
+			}
+
+			co_await boost::asio::post(boost::asio::bind_executor(ioExecutor, boost::asio::use_awaitable));
+
+			native.body = std::move(*compressedWire);
+			native.headers.set("Content-Encoding", "gzip");
+			native.headers.set("Transfer-Encoding", "chunked");
+			native.headers.erase("Content-Length");
+
+			co_return res;
 		};
 	}
 

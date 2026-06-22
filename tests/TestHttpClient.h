@@ -2,8 +2,7 @@
 
 /**
  * @file TestHttpClient.h
- * @brief 自研轻量级测试客户端（HTTP + WebSocket）
- * 轻量级测试客户端（HTTP + WebSocket），使用 raw socket + picohttpparser 解析响应。
+ * @brief 测试用 HTTP + WebSocket 客户端（raw socket + picohttpparser）
  * 仅用于测试，不追求工业级健壮性。
  */
 

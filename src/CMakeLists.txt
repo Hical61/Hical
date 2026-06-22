@@ -51,6 +51,8 @@ add_library(hical_core STATIC
     core/SseSession.cpp
     core/GzipCompression.cpp
     core/RateLimiter.cpp
+    core/Helmet.cpp
+    core/HealthEndpoint.cpp
     asio/AsioEventLoop.cpp
     asio/AsioTimer.cpp
     asio/GenericConnection.cpp

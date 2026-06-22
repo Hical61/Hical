@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 待定
+## [2.6.6] - 待定
 
 ### Added
 - **Chunked Transfer-Encoding**（RFC 7230 section 4.1）：`ChunkedBody` 类（收集模式 + 编码工具函数），`HttpResponse::chunked()` 工厂方法创建 chunked 响应，`HttpSessionImpl` 中的 chunked 发送路径。配套测试 `test_chunked_sse`
@@ -17,11 +17,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **WebSocket typed 回调**：`Router::ws()` 新增 `WsTypedMessageCallback` 重载，区分 Text/Binary 帧类型，带 `WsOptions` 的重载版本同样支持
 - **HttpArena benchmark 服务器**：`docker/HttpArena/` 目录下完整 benchmark 服务器，支持 baseline / pipelined / json / upload / static / echo-ws 七个测试类型，可选 `HICAL_BUILD_HTTPARENA` CMake 编译选项
 - **`TestHttpClient.h` 测试工具**：282 行 HTTP 客户端测试辅助类，配套 `tests/test_http_client.cpp`
+- **Helmet 安全头中间件**：`makeHelmetMiddleware()` 返回 `SyncAfterHandler`，自动注入 7 个安全响应头（X-Content-Type-Options/X-Frame-Options/HSTS/X-XSS-Protection/CSP/Referrer-Policy/Permissions-Policy），每个选项可单独关闭，支持自定义扩展头。配套测试 `test_helmet`
+- **健康检查端点**：`registerHealthEndpoints()` 注册 K8s 存活探针 `GET /admin/health` 和就绪探针 `GET /admin/ready`，支持自定义 `readyCheck` 回调。配套测试 `test_health`
 
 ### Changed
 - **Router 路由统计**：`routeCount()` 方法计入通配路由和 SSE 路由
 - **HttpResponse::preparePayload()**：优先处理 chunked body 路径（不设 Content-Length）
 - **HttpSessionImpl 发送路径**：`writeResponse()` / `writeResponseWithPrefix()` 新增 chunked body 发送分支
+- **setHeader 参数改为 string_view**：消除字符串字面量传参时隐式构造 `std::string` 导致的 per-request 堆分配
 - **IdleScanner**：新增 `customTimeoutMs` 成员，支持 SSE 会话使用独立超时（30 分钟）
 
 ### Fixed
@@ -424,7 +427,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Multipart Part 数量上限（DoS 防护）
 - Session ID 使用密码学安全的随机数生成
 
-[Unreleased]: https://github.com/Hical61/Hical/compare/v2.6.5...HEAD
+[Unreleased]: https://github.com/Hical61/Hical/compare/v2.6.6...HEAD
+[2.6.6]: https://github.com/Hical61/Hical/compare/v2.6.5...v2.6.6
 [2.6.5]: https://github.com/Hical61/Hical/compare/v2.6.4...v2.6.5
 [2.6.4]: https://github.com/Hical61/Hical/compare/v2.6.3...v2.6.4
 [2.6.3]: https://github.com/Hical61/Hical/compare/v2.6.2...v2.6.3

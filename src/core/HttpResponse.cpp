@@ -24,6 +24,18 @@ namespace hical
 			return false;
 		}
 
+		bool containsCRLF(std::string_view s)
+		{
+			for (char c : s)
+			{
+				if (c == '\r' || c == '\n')
+				{
+					return true;
+				}
+			}
+			return false;
+		}
+
 		/// cookie-name 只能包含 token 字符 (RFC 2616)
 		bool isValidCookieName(const std::string& name)
 		{
@@ -67,7 +79,7 @@ namespace hical
 		return res_.headers.find(name);
 	}
 
-	void HttpResponse::setHeader(const std::string& name, const std::string& value)
+	void HttpResponse::setHeader(std::string_view name, std::string_view value)
 	{
 		// 防 Response Splitting
 		if (containsCRLF(name) || containsCRLF(value))

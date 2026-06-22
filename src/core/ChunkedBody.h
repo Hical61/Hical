@@ -107,4 +107,18 @@ namespace hical
 	 */
 	std::string serializeChunkedBody(const ChunkedBody& body);
 
+	/**
+	 * @brief 将 ChunkedBody 序列化到已预留空间的 string 中（单次分配优化版）
+	 * @param out 输出 string（调用方应预分配足够容量，见 wireSize()）
+	 * @param body ChunkedBody
+	 */
+	void serializeChunkedBodyTo(std::string& out, const ChunkedBody& body);
+
+	/**
+	 * @brief 预计算 ChunkedBody 序列化后的 wire 字节数
+	 * @param body ChunkedBody
+	 * @return wire 大小（字节）
+	 */
+	size_t chunkedBodyWireSize(const ChunkedBody& body) noexcept;
+
 } // namespace hical

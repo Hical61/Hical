@@ -236,8 +236,10 @@ namespace hical
 		 * @brief 设置头部字段
 		 * @param name 字段名
 		 * @param value 字段值
+		 * @note string_view 可同时接受字面量、char*、std::string 作为实参，
+		 *       避免 const std::string& 重载中字面量传参的临时 string 构造。
 		 */
-		void setHeader(const std::string& name, const std::string& value);
+		void setHeader(std::string_view name, std::string_view value);
 
 		/**
 		 * @brief 获取消息体

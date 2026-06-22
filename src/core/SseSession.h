@@ -76,7 +76,7 @@ namespace hical
 		 * @brief 发送纯文本 SSE 事件（无 event/id/retry 字段）
 		 * @param data 事件数据
 		 * 等价于 sendEvent({.data = data})
-		 * 专为最常见的场景提供的便捷接口，
+		 * 常见场景的快捷接口（不需要 event/id/retry 时直接用这个），
 		 * 但不处理 data 中含 \n 需拆行的情况（由 sendEvent 处理）。
 		 */
 		Awaitable<void> sendData(std::string_view data);
@@ -116,6 +116,13 @@ namespace hical
 		boost::asio::ip::tcp::socket socket_;
 		std::atomic<bool> alive_ {true};
 		bool headSent_ {false}; ///< sendResponseHead 是否已调用
+
+		/**
+		 * @brief 跨 sendEvent/sendComment 复用的序列化缓冲区
+		 * 避免每次事件推送时重复堆分配，热路径下提升性能。
+		 * 在 sendEvent 中 clear() 后重用，保留已分配的容量。
+		 */
+		mutable std::string sendBuf_;
 	};
 
 } // namespace hical
