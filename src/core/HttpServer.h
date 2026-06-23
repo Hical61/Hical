@@ -218,15 +218,17 @@ namespace hical
 		std::atomic<size_t> activeConnections_ {0};
 		std::atomic<bool> draining_ {false};
 
-		// idleScanners_ 必须在 baseLoop_/ioPool_ 之前声明 → 最后析构。
-		// 因为 io_context 析构时销毁协程帧，Guard::~Guard() 会回调 scanner->unregisterEntry()，
-		// 如果 scanner 已经析构就是 UAF。timer 的注销在 ~HttpServer body 的 shutdown() 中已完成。
-		std::vector<std::unique_ptr<IdleScanner>> idleScanners_;
-
 		std::atomic<uint16_t> port_;
 		size_t ioThreads_;
 		AsioEventLoop baseLoop_;                // 主 loop（accept + signal + GC）
 		std::unique_ptr<EventLoopPool> ioPool_; // IO 线程池（ioThreads-1 个 worker loop）
+
+		// idleScanners_ 在 baseLoop_/ioPool_ 之后声明 → 先析构。
+		// 让 ~IdleScanner 的 timer 在 io_context 还活着时自然销毁。
+		// 原注释担心 Guard::~Guard 回调 scanner->unregisterEntry() 时 scanner 已死
+		// 的问题，在当前 releaseWork 路径下不成立——stop() 的 closeAll 关闭所有 socket，
+		// 协程在 baseLoop_.run() 返回前已退出，Guard 析构在 scanner 析构前已完成。
+		std::vector<std::unique_ptr<IdleScanner>> idleScanners_;
 
 		// SO_REUSEPORT 多 acceptor，不支持时回退单 acceptor
 		std::vector<std::unique_ptr<boost::asio::ip::tcp::acceptor>> acceptors_;

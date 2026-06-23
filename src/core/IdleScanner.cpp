@@ -103,12 +103,14 @@ namespace hical
 	void IdleScanner::shutdown()
 	{
 		running_.store(false, std::memory_order_relaxed);
-		// 趁 io_context 还活着，把 timer 干掉，切断对 timer_service 的引用。
-		// 不然等 io_context 析构把 service 删了，timer 析构时就踩野内存了
+		// cancel timer，但不 reset 销毁它——timer 的析构由 ~IdleScanner 在成员
+		// 析构阶段负责。由于 idleScanners_ 在 baseLoop_ 之后声明（HttpServer.h），
+		// ~IdleScanner 执行时 baseLoop_ 的 io_context 还活着，timer 可以安全析构。
+		// 只 cancel 确保 run() 协程不再在 timeout 上挂起即可。
 		if (timer_.has_value())
 		{
-			timer_->cancel();
-			timer_.reset();
+			boost::system::error_code ec;
+			timer_->cancel(ec);
 		}
 	}
 
