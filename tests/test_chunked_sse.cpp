@@ -390,23 +390,19 @@ TEST(SseIntegrationTest, SseConnectionAndEvents)
 					  "\r\n";
 	boost::asio::write(sock, boost::asio::buffer(req));
 
-	// 非阻塞读取头部（服务端 close 后连接关闭）
+	// 阻塞式读取直到服务器 close（服务器 close 表示 onConnect 已完成）
 	std::string raw;
 	char buf[4096];
-	sock.non_blocking(true);
-	for (int i = 0; i < 500; ++i)
+	sock.non_blocking(false);
+	boost::system::error_code ec;
+	while (true)
 	{
-		boost::system::error_code ec;
 		auto n = sock.read_some(boost::asio::buffer(buf), ec);
-		if (!ec && n > 0)
+		if (ec)
 		{
-			raw.append(buf, n);
-			if (raw.find("\r\n\r\n") != std::string::npos)
-			{
-				break;
-			}
+			break; // EOF/connection_reset — 服务器已完成回调
 		}
-		std::this_thread::sleep_for(std::chrono::milliseconds(2));
+		raw.append(buf, n);
 	}
 	sock.close();
 
