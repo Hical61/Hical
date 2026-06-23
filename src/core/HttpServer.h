@@ -220,7 +220,7 @@ namespace hical
 
 		// idleScanners_ 必须在 baseLoop_/ioPool_ 之前声明 → 最后析构。
 		// 因为 io_context 析构时销毁协程帧，Guard::~Guard() 会回调 scanner->unregisterEntry()，
-		// 如果 scanner 已经析构就是 UAF。
+		// 如果 scanner 已经析构就是 UAF。timer 的注销在 ~HttpServer body 的 shutdown() 中已完成。
 		std::vector<std::unique_ptr<IdleScanner>> idleScanners_;
 
 		std::atomic<uint16_t> port_;
