@@ -31,10 +31,21 @@ namespace hical
 		// 趁 baseLoop_/ioPool_ 的 io_context 还活着，把 scanner 里的 timer 先干掉。
 		// idleScanners_ 比 io_context 后析构（声明在前），如果不提前 reset timer，
 		// io_context 析构后 timer 析构访问已销毁的 timer_service 就是 UB。
+		//
+		// 正常路径：stop() 已经在各自 io_context 线程上 closeAll + stop + shutdown，
+		// 所以这里大部分情况下 timer_ 已经是空 optional 了（stop 里调了 shutdown），
+		// 下面的循环主要是兜底——如果有人析构前没调 stop()，或者 stop 里的 post 没
+		// 来得及执行完（理论上不会，因为 baseLoop 线程已经 join 了）。
+		//
+		// MinGW 下成员析构可能跑在 DLL TLS 回调里，那时 CRT 堆和 io_context 的
+		// service 可能已经拆了，不再可靠。好在 stop() 里的 shutdown 已经把 timer
+		// 在正确线程上销毁了。MinGW 下 skip，OS 会帮我们收。
+#ifndef __MINGW32__
 		for (auto& scanner : idleScanners_)
 		{
 			scanner->shutdown();
 		}
+#endif
 	}
 
 	Router& HttpServer::router()
@@ -343,6 +354,7 @@ namespace hical
 								  if (scanner->getExecutor() == baseLoop_.getIoContext().get_executor())
 								  {
 									  scanner->stop();
+									  scanner->shutdown();
 								  }
 							  }
 						  });
@@ -354,10 +366,11 @@ namespace hical
 			{
 				auto& scanner = idleScanners_[i];
 				boost::asio::post(scanner->getExecutor(),
-								  [&scanner]()
+								  [s = scanner.get()]()
 								  {
-									  scanner->closeAll();
-									  scanner->stop();
+									  s->closeAll();
+									  s->stop();
+									  s->shutdown();
 								  });
 			}
 		}

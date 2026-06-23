@@ -24,7 +24,7 @@ TEST(HealthEndpointTest, RegisterEndpoints_NoThrow)
 TEST(HealthEndpointTest, RegisterWithCustomPrefix_NoThrow)
 {
 	Router router;
-	EXPECT_NO_THROW(registerHealthEndpoints(router, {.prefix = "/api/v1"}));
+	EXPECT_NO_THROW(registerHealthEndpoints(router, {.prefix = "/api/v1", .readyCheck = nullptr}));
 }
 
 // ──────────────────────────────────────────────

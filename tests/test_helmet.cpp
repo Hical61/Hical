@@ -43,6 +43,7 @@ TEST(HelmetTest, DisableContentTypeNosniff_HeaderAbsent)
 {
 	auto middleware = makeHelmetMiddleware(HelmetOptions {
 		.contentTypeNosniff = false,
+		.customHeaders = {},
 	});
 
 	HttpRequest req;
@@ -61,6 +62,7 @@ TEST(HelmetTest, DisableFrameDeny_HeaderAbsent)
 {
 	auto middleware = makeHelmetMiddleware(HelmetOptions {
 		.frameDeny = false,
+		.customHeaders = {},
 	});
 
 	HttpRequest req;
@@ -77,6 +79,7 @@ TEST(HelmetTest, DisableHsts_HeaderAbsent)
 {
 	auto middleware = makeHelmetMiddleware(HelmetOptions {
 		.hsts = false,
+		.customHeaders = {},
 	});
 
 	HttpRequest req;
@@ -93,6 +96,7 @@ TEST(HelmetTest, DisableXssProtection_HeaderAbsent)
 {
 	auto middleware = makeHelmetMiddleware(HelmetOptions {
 		.xssProtection = false,
+		.customHeaders = {},
 	});
 
 	HttpRequest req;
@@ -111,6 +115,7 @@ TEST(HelmetTest, EmptyCsp_HeaderAbsent)
 {
 	auto middleware = makeHelmetMiddleware(HelmetOptions {
 		.csp = "",
+		.customHeaders = {},
 	});
 
 	HttpRequest req;
@@ -126,6 +131,7 @@ TEST(HelmetTest, EmptyPermissionsPolicy_HeaderAbsent)
 {
 	auto middleware = makeHelmetMiddleware(HelmetOptions {
 		.permissionsPolicy = "",
+		.customHeaders = {},
 	});
 
 	HttpRequest req;
@@ -169,6 +175,7 @@ TEST(HelmetTest, CustomCsp_OverridesDefault)
 {
 	auto middleware = makeHelmetMiddleware(HelmetOptions {
 		.csp = "default-src 'self'; img-src https://trusted.cdn.com",
+		.customHeaders = {},
 	});
 
 	HttpRequest req;
