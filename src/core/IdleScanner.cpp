@@ -109,8 +109,7 @@ namespace hical
 		// 只 cancel 确保 run() 协程不再在 timeout 上挂起即可。
 		if (timer_.has_value())
 		{
-			boost::system::error_code ec;
-			timer_->cancel(ec);
+			timer_->cancel();
 		}
 	}
 
