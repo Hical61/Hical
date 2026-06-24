@@ -35,6 +35,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **HttpArena LTO 链接失败**：Dockerfile 中 `-flto` 导致 `ar` 不支持 LTO 链接失败，移除 flto 标志
 - **boost::json 编译错误**：`boost::json::array::push_back()` 不接受裸 `std::string`，需要显式构造 `boost::json::value`，全部改为 `emplace_back()`
 
+### Performance
+- **AsioEventLoop concurrency_hint 参数化**：把 epoll_reactor 的并发提示参数暴露出来可配了，默认设成 1 跟 Hical 一线程一 io_context 的模型正好匹配，能让 epoll 走单线程优化路径少调几次 epoll_ctl。零行为影响，后面想试不同 hint 值的性能差异也方便
+
+### Test
+- **dispatchSync benchmark**：`test_router_perf` 补了 sync、async、两者对比三个 benchmark，实测 sync 路径比走 co_await dispatch 快了一个数量级
+- **HTTP Server 吞吐量基线**：`test_http_server_perf` 补了全链路吞吐量基线，单连接和并发场景都有覆盖
+
 ## [2.6.5] - 2026-06-12
 
 ### Added

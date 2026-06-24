@@ -26,8 +26,9 @@ namespace hical
 		/**
 		 * @brief 构造事件循环池
 		 * @param numThreads 线程数（即事件循环数量）
+		 * @param concurrencyHint Asio io_context 并发提示，透传给每个 AsioEventLoop
 		 */
-		explicit EventLoopPool(size_t numThreads);
+		explicit EventLoopPool(size_t numThreads, int concurrencyHint = 1);
 
 		~EventLoopPool();
 

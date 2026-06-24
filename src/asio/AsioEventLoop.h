@@ -28,7 +28,14 @@ namespace hical
 	class AsioEventLoop : public EventLoop
 	{
 	public:
-		AsioEventLoop();
+		/**
+		 * @brief 构造 Asio 事件循环
+		 * @param concurrencyHint Asio io_context 并发提示
+		 *   - 1（默认）: 单线程模式，reactor 可聚合事件注册减少 epoll_ctl
+		 *   - 0: 无限并发（完全线程安全，epoll_ctl 次数更多）
+		 *   Hical 的 1:1 线程模型下，传 1 是最优选择
+		 */
+		explicit AsioEventLoop(int concurrencyHint = 1);
 		~AsioEventLoop() override;
 
 		// ============ 生命周期 ============

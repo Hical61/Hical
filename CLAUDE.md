@@ -204,8 +204,9 @@ Core design principle: when `HICAL_HAS_REFLECTION == 1` (compiler supports P2996
 
 ## Test Structure
 
-46 base test executables in `tests/` (+ 1 optional OpenAPI + 5 optional DB tests), each linked against `hical_core` + `GTest::gtest_main`. Tests are registered via `gtest_discover_tests()` for CTest integration. On Windows, tests also link `ws2_32` and `mswsock`. Key test files:
-- `test_router.cpp` / `test_router_perf.cpp` — Route dispatch and performance
+47 base test executables in `tests/` (+ 1 optional OpenAPI + 5 optional DB tests), each linked against `hical_core` + `GTest::gtest_main`. Tests are registered via `gtest_discover_tests()` for CTest integration. On Windows, tests also link `ws2_32` and `mswsock`. Key test files:
+- `test_router.cpp` / `test_router_perf.cpp` — Route dispatch and performance (incl. dispatchSync benchmark)
+- `test_http_server_perf.cpp` — HTTP Server full-stack throughput benchmark
 - `test_route_group.cpp` — Route group with middleware inheritance and nesting
 - `test_memory_pool.cpp` / `test_read_buffer_pool.cpp` — Three-tier PMR + ReadBufferPool borrow/return
 - `test_http_server.cpp` / `test_integration.cpp` — Full HTTP request/response cycle

@@ -16,6 +16,7 @@ set(TESTS_NEEDING_PICOHTTPPARSER
     test_expect_continue
     test_chunked_sse
     test_http_client
+    test_http_server_perf
 )
 
 # helper：封装三行样板（add_executable + target_link_libraries + gtest_discover_tests）
@@ -65,6 +66,7 @@ hical_add_test(test_chunked_sse)          # Chunked Transfer-Encoding + SSE
 hical_add_test(test_graceful_shutdown)    # 优雅关机与信号处理
 hical_add_test(test_error_handler)        # 全局错误处理器
 hical_add_test(test_expect_continue)      # Expect: 100-continue
+hical_add_test(test_http_server_perf)     # HttpServer 吞量基准测试
 hical_add_test(test_http_client)          # 测试客户端（链式调用）
 
 # --- 日志系统 ---

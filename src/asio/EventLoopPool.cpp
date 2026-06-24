@@ -13,11 +13,11 @@
 namespace hical
 {
 
-	EventLoopPool::EventLoopPool(size_t numThreads)
+	EventLoopPool::EventLoopPool(size_t numThreads, int concurrencyHint)
 	{
 		for (size_t i = 0; i < numThreads; ++i)
 		{
-			auto loop = std::make_unique<AsioEventLoop>();
+			auto loop = std::make_unique<AsioEventLoop>(concurrencyHint);
 			loop->setIndex(i);
 			loops_.push_back(std::move(loop));
 		}

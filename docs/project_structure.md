@@ -140,7 +140,8 @@ hical/
 │   │ # —— HTTP 核心 ——
 │   ├── test_http_types.cpp           # HTTP 类型
 │   ├── test_router.cpp               # 路由器（含路径参数）
-│   ├── test_router_perf.cpp          # 路由性能基准（100/1000 路由）
+│   ├── test_router_perf.cpp          # 路由性能基准（dispatchSync 对比 + 100/1000 路由）
+│   ├── test_http_server_perf.cpp     # HTTP 全链路吞吐量基准（单连接/并发）
 │   ├── test_middleware.cpp           # 中间件（洋葱模型/拦截）
 │   ├── test_http_server.cpp          # HttpServer 集成
 │   ├── test_integration.cpp          # 完整请求/响应周期集成

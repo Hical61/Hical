@@ -370,6 +370,14 @@ ctest --test-dir build --output-on-failure -j4
 
 > 哈希表优化后，100 路由和 1000 路由查找性能几乎一致。
 
+### 4.3.1 HTTP Server 吞吐量基准
+
+```bash
+./build-release/tests/test_http_server_perf.exe
+```
+
+> 覆盖单连接和并发场景的全链路吞吐量基线，含 sync 快速路径对比。
+
 ### 4.4 运行指定测试用例
 
 ```bash
