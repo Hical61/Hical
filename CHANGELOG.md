@@ -37,6 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Performance
 - **AsioEventLoop concurrency_hint 参数化**：把 epoll_reactor 的并发提示参数暴露出来可配了，默认设成 1 跟 Hical 一线程一 io_context 的模型正好匹配，能让 epoll 走单线程优化路径少调几次 epoll_ctl。零行为影响，后面想试不同 hint 值的性能差异也方便
+- **HttpSessionImpl 空闲等待改栈缓冲 speculative read**：keep-alive 循环顶部用 256B 栈缓冲 `async_read_some` 替代 `async_wait(wait_read)`，利用 Asio 投机路径消除 ~20,000 次/10s 多余 `epoll_ctl(MOD)` 调用。strace 验证 epoll_ctl 从 32,563 降到 9,173（降幅 71.8%），时间占比从 26.51% 降到 5.57%。空闲连接只多占 256B coroutine frame（百万连接 +256MB），不持堆缓冲区
 
 ### Test
 - **dispatchSync benchmark**：`test_router_perf` 补了 sync、async、两者对比三个 benchmark，实测 sync 路径比走 co_await dispatch 快了一个数量级

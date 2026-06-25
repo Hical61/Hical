@@ -1469,10 +1469,14 @@ struct WsMessage
 ### 19.1 零拷贝请求解析
 
 ```
-ReadBufferPool::acquire() 借一块 8KB std::string（thread_local 池，零分配）
-              │ 若有 pipelineSpill 残留则先拷贝
-              ▼
-        async_read_some → readBuf（借来的缓冲区）
+for(;;) 循环顶部
+     ├── 有 pipeline 残留 → 直接借 8KB readBuf（ReadBufferPool）
+     └── 空闲等待请求   → 256B 栈缓冲做 speculative read
+                            async_read_some 走 Asio 投机路径，零 epoll_ctl(MOD)
+                            │ 有数据 → acquire(8KB) + memcpy 栈→堆
+                            └ 无数据 → 挂起等 epoll 通知（EPOLLIN 已注册，无 MOD）
+
+        readBuf（借来的 8KB 缓冲区，idle 时不持有）
               │
               ▼
         picohttpparser (栈上 phr_header[64]，零堆分配)
@@ -1484,7 +1488,7 @@ ReadBufferPool::acquire() 借一块 8KB std::string（thread_local 池，零分�
         HttpRequest 封装 (惰性解析：jsonBody/queryParam/cookie 首次访问才解析)
               │
               ▼ 响应写完毕
-        readBuf 归还回池；空闲连接不持有读缓冲区
+        readBuf 归还回池；空闲连接仅 +256B 栈缓冲（coroutine frame 内，非堆内存）
 ```
 
 ### 19.2 单缓冲区响应序列化 + 前缀模板
@@ -1521,6 +1525,7 @@ thread_local DateCache dateTlsCache; // {cachedSec, buf[30], len}
 - **parse-before-read 快速路径**：若 `pipelineSpill` 中有上一请求的粘包残留，先把数据拷入新借的 readBuf 并尝试解析，解析成功则跳过本轮 `async_read_some`
 - **延迟 memmove**：只在 readBuf 前半空间耗尽时才 memmove 紧凑数据，而非每次请求后立即移动
 - **ReadBufferPool 借还**：每请求借一块缓冲区，响应写完后归还；粘包残留暂存在 `pipelineSpill`（`for(;;)` 外的 `std::string`，大多数连接为空，SSO 不分配堆内存）
+- **栈缓冲 speculative read**：空闲连接不用 `async_wait(wait_read)` 等着（有 MOD 开销），改用 256B 栈数组 `async_read_some`。Asio 投机路径下有数据直返、无数据挂起，都不产生 `epoll_ctl(MOD)`。实测 10K 并发下 epoll_ctl 调用从 32,563 降到 9,173（降 71.8%），总 CPU 降 ~16-20%
 
 ### 19.5 同步中间件零协程帧
 

@@ -545,32 +545,47 @@ namespace hical
 			for (;;)
 			{
 				// pipeline 有残留时数据已在用户态，直接借缓冲区处理；
-				// 无残留时先等 socket 可读再借，空闲连接挂在 async_wait 上不持有 readBuf
+				// 无残留时用 256B 栈缓冲做 speculative read（不走 async_wait），
+				// async_read_some 走 Asio 投机路径，不触发 epoll_ctl(MOD)，
+				// 空闲连接不持有堆缓冲区，保持之前百万连接的内存优化
 				size_t bufUsed = pipelineSpill.size();
+				ReadBufferPool::BufferHandle readBufHandle;
+
 				if (bufUsed == 0)
 				{
-					co_await socket.async_wait(tcp::socket::wait_read, boost::asio::use_awaitable);
-				}
+					// 路径 A：空闲连接 → 栈缓冲 speculative read，零 epoll_ctl(MOD)
+					char smallBuf[256];
+					size_t bytesRead = co_await socket.async_read_some(
+						boost::asio::buffer(smallBuf, sizeof(smallBuf)),
+						boost::asio::use_awaitable);
+					if (bytesRead == 0)
+						break;
 
-				auto readBufHandle = ReadBufferPool::acquire();
-				std::string& readBuf = readBufHandle.get();
-
-				// 把上轮的 pipeline 残留数据拷进新缓冲区
-				if (bufUsed > 0)
-				{
-					size_t initSize = std::max(bufUsed, ReadBufferPool::kBufferSize);
-					if (initSize > readBuf.capacity())
+					readBufHandle = ReadBufferPool::acquire();
 					{
-						readBuf.reserve(initSize);
+						auto& buf = readBufHandle.get();
+						size_t initSize = std::max(bytesRead, ReadBufferPool::kBufferSize);
+						buf.resize(initSize);
+						std::memcpy(buf.data(), smallBuf, bytesRead);
 					}
-					readBuf.resize(initSize);
-					std::memcpy(readBuf.data(), pipelineSpill.data(), bufUsed);
-					pipelineSpill.clear();
+					bufUsed = bytesRead;
 				}
 				else
 				{
-					readBuf.resize(ReadBufferPool::kBufferSize);
+					// 路径 B：有 pipeline 残留 → 直接借 8KB readBuf
+					readBufHandle = ReadBufferPool::acquire();
+					{
+						auto& buf = readBufHandle.get();
+						size_t initSize = std::max(bufUsed, ReadBufferPool::kBufferSize);
+						if (initSize > buf.capacity())
+							buf.reserve(initSize);
+						buf.resize(initSize);
+						std::memcpy(buf.data(), pipelineSpill.data(), bufUsed);
+					}
+					pipelineSpill.clear();
 				}
+
+				std::string& readBuf = readBufHandle.get();
 
 				// picohttpparser 输出
 				const char* method = nullptr;
