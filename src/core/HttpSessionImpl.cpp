@@ -555,11 +555,12 @@ namespace hical
 				{
 					// 路径 A：空闲连接 → 栈缓冲 speculative read，零 epoll_ctl(MOD)
 					char smallBuf[256];
-					size_t bytesRead = co_await socket.async_read_some(
-						boost::asio::buffer(smallBuf, sizeof(smallBuf)),
-						boost::asio::use_awaitable);
+					size_t bytesRead = co_await socket.async_read_some(boost::asio::buffer(smallBuf, sizeof(smallBuf)),
+																	   boost::asio::use_awaitable);
 					if (bytesRead == 0)
+					{
 						break;
+					}
 
 					readBufHandle = ReadBufferPool::acquire();
 					{
@@ -578,7 +579,9 @@ namespace hical
 						auto& buf = readBufHandle.get();
 						size_t initSize = std::max(bufUsed, ReadBufferPool::kBufferSize);
 						if (initSize > buf.capacity())
+						{
 							buf.reserve(initSize);
+						}
 						buf.resize(initSize);
 						std::memcpy(buf.data(), pipelineSpill.data(), bufUsed);
 					}
