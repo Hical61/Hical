@@ -104,8 +104,7 @@ namespace
 
 	/// 并发连接测试：多个线程各自建立一条连接，各自发送 N 个请求
 	/// 返回总吞吐量（所有连接 req/s 之和）
-	double runMultiConnectionBench(uint16_t port, const std::string& target,
-								   int numConnections, int requestsPerConn)
+	double runMultiConnectionBench(uint16_t port, const std::string& target, int numConnections, int requestsPerConn)
 	{
 		std::atomic<int> completedRequests {0};
 		std::atomic<bool> failed {false};
@@ -167,8 +166,7 @@ namespace
 		double totalSec = std::chrono::duration<double>(end - start).count();
 		int totalReqs = completedRequests.load(std::memory_order_relaxed);
 
-		EXPECT_FALSE(failed.load())
-			<< "有连接发生异常";
+		EXPECT_FALSE(failed.load()) << "有连接发生异常";
 		return totalReqs / totalSec;
 	}
 
@@ -185,18 +183,17 @@ TEST(HttpServerPerfTest, SyncHandler_SingleConn_5kReq)
 {
 	HttpServer server(0);
 	server.router().get("/hello",
-				   [](const HttpRequest&) -> HttpResponse
-				   {
-					   return HttpResponse::ok("ok");
-				   });
+						[](const HttpRequest&) -> HttpResponse
+						{
+							return HttpResponse::ok("ok");
+						});
 
 	std::thread serverThread;
 	uint16_t port = startServerAndWait(server, serverThread);
 
 	double rps = runSingleConnectionBench(port, "/hello", kPerfBench);
 
-	std::cout << "[SyncHandler-SingleConn] " << kPerfBench << " req, 吞吐量: "
-			  << static_cast<int>(rps) << " req/s\n";
+	std::cout << "[SyncHandler-SingleConn] " << kPerfBench << " req, 吞吐量: " << static_cast<int>(rps) << " req/s\n";
 
 	// 性能断言（宽松）：CI 环境（MSYS2/MinGW）可能较慢
 	EXPECT_GT(rps, 500.0);
@@ -213,18 +210,17 @@ TEST(HttpServerPerfTest, SyncHandler_10Conn_1kEach)
 {
 	HttpServer server(0);
 	server.router().get("/hello",
-				   [](const HttpRequest&) -> HttpResponse
-				   {
-					   return HttpResponse::ok("ok");
-				   });
+						[](const HttpRequest&) -> HttpResponse
+						{
+							return HttpResponse::ok("ok");
+						});
 
 	std::thread serverThread;
 	uint16_t port = startServerAndWait(server, serverThread);
 
 	double rps = runMultiConnectionBench(port, "/hello", 10, 1000);
 
-	std::cout << "[SyncHandler-10Conn] 10 连接 x 1000 req, 吞吐量: "
-			  << static_cast<int>(rps) << " req/s\n";
+	std::cout << "[SyncHandler-10Conn] 10 连接 x 1000 req, 吞吐量: " << static_cast<int>(rps) << " req/s\n";
 
 	// 多连接吞吐应 > 单连接
 	EXPECT_GT(rps, 1000.0);

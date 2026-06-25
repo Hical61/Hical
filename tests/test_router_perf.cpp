@@ -251,153 +251,155 @@ TEST_F(RouterPerfTest, LargeRouteSet)
 	EXPECT_LT(nsPerOp, 10000.0);
 }
 
-	// ============ dispatchSync benchmark（P3） ============
+// ============ dispatchSync benchmark（P3） ============
 
-	/**
-	 * @brief dispatchSync 同步快速路径：sync handler -> 零协程帧分配
-	 * 报谷 P3 建议：补充 benchmark 覆盖 dispatchSync 路径
-	 */
-	TEST_F(RouterPerfTest, DispatchSync_SyncHandler)
+/**
+ * @brief dispatchSync 同步快速路径：sync handler -> 零协程帧分配
+ * 报谷 P3 建议：补充 benchmark 覆盖 dispatchSync 路径
+ */
+TEST_F(RouterPerfTest, DispatchSync_SyncHandler)
+{
+	Router router;
+	router.get("/bench",
+			   [](const HttpRequest&) -> HttpResponse
+			   {
+				   return HttpResponse::ok("ok");
+			   });
+
+	HttpRequest req;
+	req.setMethod(HttpMethod::hGet);
+	req.setTarget("/bench");
+
+	// dispatchSync 是纯同步调用，无需 io_context
+	for (int i = 0; i < hWarmupIterations; ++i)
 	{
-		Router router;
-		router.get("/bench",
-				   [](const HttpRequest&) -> HttpResponse
-				   {
-					   return HttpResponse::ok("ok");
-				   });
-
-		HttpRequest req;
-		req.setMethod(HttpMethod::hGet);
-		req.setTarget("/bench");
-
-		// dispatchSync 是纯同步调用，无需 io_context
-		for (int i = 0; i < hWarmupIterations; ++i)
-		{
-			(void)router.dispatchSync(req);
-		}
-
-		auto start = std::chrono::high_resolution_clock::now();
-		for (int i = 0; i < hBenchIterations; ++i)
-		{
-			(void)router.dispatchSync(req);
-		}
-		auto end = std::chrono::high_resolution_clock::now();
-
-		double totalMs = std::chrono::duration<double, std::milli>(end - start).count();
-		double nsPerOp = (totalMs * 1000000.0) / hBenchIterations;
-
-		std::cout << "[dispatchSync-sync]  " << hBenchIterations << " \xE6\xAC\xA1\xE5\x88\x86\xE5\x8F\x91, \xE6\x80\xBB\xE8\x80\x97\xE6\x97\xB6: " << totalMs
-				  << " ms, \xE6\xAF\x8F\xE6\xAC\xA1: " << nsPerOp << " ns\n";
-
-		// dispatchSync 无协程帧分配，应在 < 500ns
-		EXPECT_LT(nsPerOp, 500.0);
+		(void)router.dispatchSync(req);
 	}
 
-	/**
-	 * @brief dispatchSync fallback：async handler -> 返回 nullopt
-	 * 验证 dispatchSync 在 async handler 场景下快速失败不受影响
-	 */
-	TEST_F(RouterPerfTest, DispatchSync_FallbackToAsync)
+	auto start = std::chrono::high_resolution_clock::now();
+	for (int i = 0; i < hBenchIterations; ++i)
 	{
-		Router router;
-		router.get("/bench",
-				   [](const HttpRequest&) -> Awaitable<HttpResponse>
-				   {
-					   co_return HttpResponse::ok("ok");
-				   });
+		(void)router.dispatchSync(req);
+	}
+	auto end = std::chrono::high_resolution_clock::now();
 
-		HttpRequest req;
-		req.setMethod(HttpMethod::hGet);
-		req.setTarget("/bench");
+	double totalMs = std::chrono::duration<double, std::milli>(end - start).count();
+	double nsPerOp = (totalMs * 1000000.0) / hBenchIterations;
 
-		for (int i = 0; i < hWarmupIterations; ++i)
-		{
-			(void)router.dispatchSync(req);
-		}
+	std::cout << "[dispatchSync-sync]  " << hBenchIterations
+			  << " \xE6\xAC\xA1\xE5\x88\x86\xE5\x8F\x91, \xE6\x80\xBB\xE8\x80\x97\xE6\x97\xB6: " << totalMs
+			  << " ms, \xE6\xAF\x8F\xE6\xAC\xA1: " << nsPerOp << " ns\n";
 
-		auto start = std::chrono::high_resolution_clock::now();
-		for (int i = 0; i < hBenchIterations; ++i)
-		{
-			auto result = router.dispatchSync(req);
-			// async handler -> dispatchSync 应返回 nullopt
-			EXPECT_FALSE(result.has_value());
-		}
-		auto end = std::chrono::high_resolution_clock::now();
+	// dispatchSync 无协程帧分配，应在 < 500ns
+	EXPECT_LT(nsPerOp, 500.0);
+}
 
-		double totalMs = std::chrono::duration<double, std::milli>(end - start).count();
-		double nsPerOp = (totalMs * 1000000.0) / hBenchIterations;
+/**
+ * @brief dispatchSync fallback：async handler -> 返回 nullopt
+ * 验证 dispatchSync 在 async handler 场景下快速失败不受影响
+ */
+TEST_F(RouterPerfTest, DispatchSync_FallbackToAsync)
+{
+	Router router;
+	router.get("/bench",
+			   [](const HttpRequest&) -> Awaitable<HttpResponse>
+			   {
+				   co_return HttpResponse::ok("ok");
+			   });
 
-		std::cout << "[dispatchSync-fb-async] " << hBenchIterations << " \xE6\xAC\xA1\xE5\x88\x86\xE5\x8F\x91, \xE6\x80\xBB\xE8\x80\x97\xE6\x97\xB6: " << totalMs
-				  << " ms, \xE6\xAF\x8F\xE6\xAC\xA1: " << nsPerOp << " ns\n";
+	HttpRequest req;
+	req.setMethod(HttpMethod::hGet);
+	req.setTarget("/bench");
 
-		// fallback 仅做 resolveRoute + 检查 type，无 handler 调用，应与 sync 相当
-		EXPECT_LT(nsPerOp, 500.0);
+	for (int i = 0; i < hWarmupIterations; ++i)
+	{
+		(void)router.dispatchSync(req);
 	}
 
-	/**
-	 * @brief dispatchSync 与 co_await dispatch 对比
-	 * dispatchSync(sync handler) vs dispatch(async handler, 走协程)
-	 * 预期差 200-400ns（协程帧分配开销）
-	 */
-	TEST_F(RouterPerfTest, DispatchSync_Vs_Dispatch)
+	auto start = std::chrono::high_resolution_clock::now();
+	for (int i = 0; i < hBenchIterations; ++i)
 	{
-		Router router;
-		// 同一条路径分别注册 sync 和 async 两个 handler
-		std::string path = "/bench-compare";
-		router.get(path,
-				   [](const HttpRequest&) -> HttpResponse
-				   {
-					   return HttpResponse::ok("ok");
-				   });
-
-		HttpRequest req;
-		req.setMethod(HttpMethod::hGet);
-		req.setTarget(path);
-
-		// === dispatchSync（同步快速路径）===
-		for (int i = 0; i < hWarmupIterations; ++i)
-		{
-			(void)router.dispatchSync(req);
-		}
-
-		auto syncStart = std::chrono::high_resolution_clock::now();
-		for (int i = 0; i < hBenchIterations; ++i)
-		{
-			(void)router.dispatchSync(req);
-		}
-		auto syncEnd = std::chrono::high_resolution_clock::now();
-
-		double syncMs = std::chrono::duration<double, std::milli>(syncEnd - syncStart).count();
-		double syncNs = (syncMs * 1000000.0) / hBenchIterations;
-
-		// === dispatch（协程路径，需 io_context）===
-		boost::asio::io_context io;
-		auto asyncStart = std::chrono::high_resolution_clock::now();
-		for (int i = 0; i < hBenchIterations; ++i)
-		{
-			boost::asio::co_spawn(
-				io,
-				[&]() -> Awaitable<void>
-				{
-					(void)co_await router.dispatch(req);
-				},
-				boost::asio::detached);
-		}
-		io.run();
-		auto asyncEnd = std::chrono::high_resolution_clock::now();
-
-		double asyncMs = std::chrono::duration<double, std::milli>(asyncEnd - asyncStart).count();
-		double asyncNs = (asyncMs * 1000000.0) / hBenchIterations;
-
-		double diffNs = asyncNs - syncNs;
-
-		std::cout << "[dispatchSync-vs-dispatch]\n";
-		std::cout << "  dispatchSync: " << syncNs << " ns/op\n";
-		std::cout << "  co_await dispatch: " << asyncNs << " ns/op\n";
-		std::cout << "  \xE5\xB7\xAE\xE5\xBC\x82 (async - sync): " << diffNs << " ns/op\n";
-
-		EXPECT_LT(syncNs, 500.0);
-		EXPECT_LT(asyncNs, 10000.0);
-		// dispatchSync 应快于 co_await dispatch（协程帧分配）
-		EXPECT_LT(syncNs, asyncNs);
+		auto result = router.dispatchSync(req);
+		// async handler -> dispatchSync 应返回 nullopt
+		EXPECT_FALSE(result.has_value());
 	}
+	auto end = std::chrono::high_resolution_clock::now();
+
+	double totalMs = std::chrono::duration<double, std::milli>(end - start).count();
+	double nsPerOp = (totalMs * 1000000.0) / hBenchIterations;
+
+	std::cout << "[dispatchSync-fb-async] " << hBenchIterations
+			  << " \xE6\xAC\xA1\xE5\x88\x86\xE5\x8F\x91, \xE6\x80\xBB\xE8\x80\x97\xE6\x97\xB6: " << totalMs
+			  << " ms, \xE6\xAF\x8F\xE6\xAC\xA1: " << nsPerOp << " ns\n";
+
+	// fallback 仅做 resolveRoute + 检查 type，无 handler 调用，应与 sync 相当
+	EXPECT_LT(nsPerOp, 500.0);
+}
+
+/**
+ * @brief dispatchSync 与 co_await dispatch 对比
+ * dispatchSync(sync handler) vs dispatch(async handler, 走协程)
+ * 预期差 200-400ns（协程帧分配开销）
+ */
+TEST_F(RouterPerfTest, DispatchSync_Vs_Dispatch)
+{
+	Router router;
+	// 同一条路径分别注册 sync 和 async 两个 handler
+	std::string path = "/bench-compare";
+	router.get(path,
+			   [](const HttpRequest&) -> HttpResponse
+			   {
+				   return HttpResponse::ok("ok");
+			   });
+
+	HttpRequest req;
+	req.setMethod(HttpMethod::hGet);
+	req.setTarget(path);
+
+	// === dispatchSync（同步快速路径）===
+	for (int i = 0; i < hWarmupIterations; ++i)
+	{
+		(void)router.dispatchSync(req);
+	}
+
+	auto syncStart = std::chrono::high_resolution_clock::now();
+	for (int i = 0; i < hBenchIterations; ++i)
+	{
+		(void)router.dispatchSync(req);
+	}
+	auto syncEnd = std::chrono::high_resolution_clock::now();
+
+	double syncMs = std::chrono::duration<double, std::milli>(syncEnd - syncStart).count();
+	double syncNs = (syncMs * 1000000.0) / hBenchIterations;
+
+	// === dispatch（协程路径，需 io_context）===
+	boost::asio::io_context io;
+	auto asyncStart = std::chrono::high_resolution_clock::now();
+	for (int i = 0; i < hBenchIterations; ++i)
+	{
+		boost::asio::co_spawn(
+			io,
+			[&]() -> Awaitable<void>
+			{
+				(void)co_await router.dispatch(req);
+			},
+			boost::asio::detached);
+	}
+	io.run();
+	auto asyncEnd = std::chrono::high_resolution_clock::now();
+
+	double asyncMs = std::chrono::duration<double, std::milli>(asyncEnd - asyncStart).count();
+	double asyncNs = (asyncMs * 1000000.0) / hBenchIterations;
+
+	double diffNs = asyncNs - syncNs;
+
+	std::cout << "[dispatchSync-vs-dispatch]\n";
+	std::cout << "  dispatchSync: " << syncNs << " ns/op\n";
+	std::cout << "  co_await dispatch: " << asyncNs << " ns/op\n";
+	std::cout << "  \xE5\xB7\xAE\xE5\xBC\x82 (async - sync): " << diffNs << " ns/op\n";
+
+	EXPECT_LT(syncNs, 500.0);
+	EXPECT_LT(asyncNs, 10000.0);
+	// dispatchSync 应快于 co_await dispatch（协程帧分配）
+	EXPECT_LT(syncNs, asyncNs);
+}

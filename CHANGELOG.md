@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.6.6] - 待定
+## [2.6.6] - 2026-06-25
 
 ### Added
 - **Chunked Transfer-Encoding**（RFC 7230 section 4.1）：`ChunkedBody` 类（收集模式 + 编码工具函数），`HttpResponse::chunked()` 工厂方法创建 chunked 响应，`HttpSessionImpl` 中的 chunked 发送路径。配套测试 `test_chunked_sse`
