@@ -16,6 +16,7 @@
 #include "MetaJsonError.h"
 #include "HttpRequest.h"
 #include <boost/json.hpp>
+#include <optional>
 #include <string>
 #include <tuple>
 #include <type_traits>
@@ -183,7 +184,7 @@ namespace hical::meta
 	{
 
 		/**
-		 * @brief 字段描述器：绑定字段名 + 成员指针 + 必需/忽略标记
+		 * @brief 字段描述器：绑定字段名 + 成员指针 + 必需/忽略标记 + 校验约束
 		 */
 		template <typename Class, typename FieldType>
 		struct FieldDescriptor
@@ -192,6 +193,13 @@ namespace hical::meta
 			FieldType Class::* pointer;
 			bool required = false;
 			bool ignored = false;
+			// 校验约束
+			std::optional<double> minVal;
+			std::optional<double> maxVal;
+			std::optional<std::string> pattern;
+			bool notEmpty = false;
+			std::optional<size_t> lengthMin;
+			std::optional<size_t> lengthMax;
 		};
 
 		/**
@@ -200,7 +208,7 @@ namespace hical::meta
 		template <typename Class, typename FieldType>
 		constexpr FieldDescriptor<Class, FieldType> makeField(std::string_view name, FieldType Class::* ptr)
 		{
-			return {name, ptr, false, false};
+			return {name, ptr, false, false, {}, {}, {}, false, {}, {}};
 		}
 
 		/**
@@ -212,7 +220,25 @@ namespace hical::meta
 															  bool isRequired,
 															  bool isIgnored)
 		{
-			return {name, ptr, isRequired, isIgnored};
+			return {name, ptr, isRequired, isIgnored, {}, {}, {}, false, {}, {}};
+		}
+
+		/**
+		 * @brief 创建字段描述器的辅助函数（满参数，支持校验约束）
+		 */
+		template <typename Class, typename FieldType>
+		constexpr FieldDescriptor<Class, FieldType> makeField(std::string_view name,
+															  FieldType Class::* ptr,
+															  bool isRequired,
+															  bool isIgnored,
+															  std::optional<double> minVal,
+															  std::optional<double> maxVal,
+															  std::optional<std::string> pattern,
+															  bool notEmpty,
+															  std::optional<size_t> lengthMin,
+															  std::optional<size_t> lengthMax)
+		{
+			return {name, ptr, isRequired, isIgnored, minVal, maxVal, pattern, notEmpty, lengthMin, lengthMax};
 		}
 
 		/**
@@ -229,6 +255,80 @@ namespace hical::meta
 				}
 			};
 			(serializeOne(std::get<I>(fields)), ...);
+		}
+
+		/**
+		 * @brief 校验单字段约束
+		 * 根据 FieldDescriptor 中的约束规则校验已反序列化的值。
+		 * 支持：最小值/最大值/正则/非空/长度范围。
+		 */
+		template <typename FieldDesc, typename FieldType>
+		void validateField(const FieldDesc& field, const FieldType& value)
+		{
+			if (field.minVal)
+			{
+				if constexpr (std::is_arithmetic_v<FieldType>)
+				{
+					if (static_cast<double>(value) < *field.minVal)
+					{
+						detail::throwValidationErrorNum(field.name, "minimum", *field.minVal);
+					}
+				}
+			}
+			if (field.maxVal)
+			{
+				if constexpr (std::is_arithmetic_v<FieldType>)
+				{
+					if (static_cast<double>(value) > *field.maxVal)
+					{
+						detail::throwValidationErrorNum(field.name, "maximum", *field.maxVal);
+					}
+				}
+			}
+			if (field.notEmpty)
+			{
+				if constexpr (std::is_same_v<FieldType, std::string>)
+				{
+					if (value.empty())
+					{
+						detail::throwValidationErrorStr(field.name, "not-empty");
+					}
+				}
+			}
+			if (field.pattern)
+			{
+				if constexpr (std::is_same_v<FieldType, std::string>)
+				{
+					if (!detail::validatePattern(value, *field.pattern))
+					{
+						detail::throwValidationErrorStr(field.name, "pattern");
+					}
+				}
+			}
+			if (field.lengthMin)
+			{
+				if constexpr (std::is_same_v<FieldType, std::string>)
+				{
+					if (value.size() < *field.lengthMin)
+					{
+						detail::throwValidationErrorNum(field.name,
+														"min-length",
+														static_cast<double>(*field.lengthMin));
+					}
+				}
+			}
+			if (field.lengthMax)
+			{
+				if constexpr (std::is_same_v<FieldType, std::string>)
+				{
+					if (value.size() > *field.lengthMax)
+					{
+						detail::throwValidationErrorNum(field.name,
+														"max-length",
+														static_cast<double>(*field.lengthMax));
+					}
+				}
+			}
 		}
 
 		/**
@@ -251,6 +351,9 @@ namespace hical::meta
 				{
 					using FieldType = std::remove_reference_t<decltype(obj.*field.pointer)>;
 					obj.*field.pointer = valueFromJson<FieldType>(it->value());
+
+					// 校验约束
+					validateField(field, obj.*field.pointer);
 				}
 				else if (field.required)
 				{
@@ -600,6 +703,24 @@ namespace hical
  *   REQUIRED(field)                   - 反序列化时必需
  *   REQUIRED_ALIAS(field, "json_key") - 必需 + 自定义 key
  *   HICAL_IGNORE(field)               - 序列化/反序列化均跳过
+ *   MIN(field, val)                   - 数值最小值校验
+ *   MAX(field, val)                   - 数值最大值校验
+ *   NOT_EMPTY(field)                  - 字符串非空校验
+ *   PATTERN(field, "re")              - 正则匹配校验
+ *   LENGTH(field, min, max)           - 字符串长度范围校验
+ * 当 C++26 反射可用时，此宏及所有装饰器为空操作          - 自定义 JSON key
+ *   REQUIRED(field)                   - 反序列化时必需
+ *   REQUIRED_ALIAS(field, "json_key")          - 自定义 JSON key
+ *   REQUIRED(field)                   - 反序列化时必需
+ *   REQUIRED_ALIAS(field, "json_key") - 必需 + 自定义 key
+ *   HICAL_IGNORE(field)               - 序列化/反序列化均跳过
+ *   MIN(field, val)                   - 数值最小值校验
+ *   MAX(field, val)                   - 数值最大值校验
+ *   NOT_EMPTY(field)                  - 字符串非空校验
+ *   PATTERN(field, "re")              - 正则匹配校验
+ *   LENGTH(field, min, max)           - 字符串长度范围校验
+ * 当 C++26 反射可用时，此宏及所有装饰器为空操作 - 必需 + 自定义 key
+ *   HICAL_IGNORE(field)               - 序列化/反序列化均跳过
  * 当 C++26 反射可用时，此宏及所有装饰器为空操作。
  */
 #if !HICAL_HAS_REFLECTION
@@ -612,6 +733,13 @@ namespace hical
 	#define REQUIRED_ALIAS(field, alias) (hical_required_alias_, field, alias)
 
 	#define HICAL_IGNORE(field) (hical_ignore_, field)
+
+	// 校验约束装饰器
+	#define MIN(field, val) (hical_min_, field, val)
+	#define MAX(field, val) (hical_max_, field, val)
+	#define NOT_EMPTY(field) (hical_not_empty_, field)
+	#define PATTERN(field, re) (hical_pattern_, field, re)
+	#define LENGTH(field, minLen, maxLen) (hical_length_, field, minLen, maxLen)
 
 // ---- IS_PAREN 检测（区分裸字段名 vs 括号装饰器）----
 
@@ -657,6 +785,18 @@ namespace hical
 	#define HICAL_JSON_TAG_hical_required_alias_(T, field, alias) \
 		HICAL_JSON_MAKE_FIELD_(T, field, alias, &T::field, true, false)
 	#define HICAL_JSON_TAG_hical_ignore_(T, field) HICAL_JSON_MAKE_FIELD_(T, field, #field, &T::field, false, true)
+
+	// 校验约束 Tag 处理器
+	#define HICAL_JSON_TAG_hical_min_(T, field, val) \
+		HICAL_JSON_MAKE_FIELD_(T, field, #field, &T::field, false, false, val, {}, {}, false, {}, {})
+	#define HICAL_JSON_TAG_hical_max_(T, field, val) \
+		HICAL_JSON_MAKE_FIELD_(T, field, #field, &T::field, false, false, {}, val, {}, false, {}, {})
+	#define HICAL_JSON_TAG_hical_not_empty_(T, field) \
+		HICAL_JSON_MAKE_FIELD_(T, field, #field, &T::field, false, false, {}, {}, {}, true, {}, {})
+	#define HICAL_JSON_TAG_hical_pattern_(T, field, re) \
+		HICAL_JSON_MAKE_FIELD_(T, field, #field, &T::field, false, false, {}, {}, re, false, {}, {})
+	#define HICAL_JSON_TAG_hical_length_(T, field, minLen, maxLen) \
+		HICAL_JSON_MAKE_FIELD_(T, field, #field, &T::field, false, false, {}, {}, {}, false, minLen, maxLen)
 
 // ---- __VA_OPT__ 递归展开（无字段数量限制）----
 

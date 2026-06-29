@@ -30,4 +30,27 @@ namespace hical::meta::detail
 	 */
 	[[noreturn]] void throwParseError(std::string_view detail);
 
+	/**
+	 * @brief 校验失败时抛出异常（数值约束）
+	 * @param fieldName 字段名
+	 * @param rule 校验规则名（"minimum"/"maximum"/"min length"/"max length"）
+	 * @param limit 约束值
+	 */
+	[[noreturn]] void throwValidationErrorNum(std::string_view fieldName, std::string_view rule, double limit);
+
+	/**
+	 * @brief 校验失败时抛出异常（字符串约束）
+	 * @param fieldName 字段名
+	 * @param rule 校验规则名（"not empty"/"pattern"）
+	 */
+	[[noreturn]] void throwValidationErrorStr(std::string_view fieldName, std::string_view rule);
+
+	/**
+	 * @brief 校验正则表达式是否匹配
+	 * @param value 待校验的字符串值
+	 * @param pattern 正则表达式字符串
+	 * @return true 匹配，false 不匹配
+	 */
+	bool validatePattern(std::string_view value, std::string_view pattern);
+
 } // namespace hical::meta::detail

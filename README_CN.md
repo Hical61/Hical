@@ -9,6 +9,9 @@
 [![GitHub stars](https://img.shields.io/github/stars/Hical61/Hical?style=flat)](https://github.com/Hical61/Hical/stargazers)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
+> 📖 升级迁移指南请查阅 [CHANGELOG](./CHANGELOG.md)  
+> 💬 问题或建议请开 [Discussion](https://github.com/Hical61/Hical/discussions)
+
 **Hical** 是一个基于 Boost.Asio 的现代 C++20/26 高性能 Web 框架，采用原生 HTTP/WebSocket 网络栈（picohttpparser + 自研 WebSocket），利用 C++26 反射和 PMR 内存池实现极致性能。
 
 > **项目状态**：Stable — 生产可用，遵循 [语义化版本](https://semver.org/lang/zh-CN/)。

@@ -9,6 +9,9 @@
 [![GitHub stars](https://img.shields.io/github/stars/Hical61/Hical?style=flat)](https://github.com/Hical61/Hical/stargazers)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
+> 📖 Upgrade/migration guide → [CHANGELOG](./CHANGELOG.md)  
+> 💬 Questions or ideas → [Discussion](https://github.com/Hical61/Hical/discussions)
+
 **Hical** is a modern C++20/26 high-performance web framework built on Boost.Asio with a native HTTP/WebSocket stack (picohttpparser + self-developed WebSocket), leveraging C++26 reflection and PMR memory pooling for maximum throughput.
 
 > **Status**: Stable — production-ready, follows [Semantic Versioning](https://semver.org/).

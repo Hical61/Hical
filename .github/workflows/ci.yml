@@ -221,7 +221,13 @@ jobs:
       # ── Windows MSVC ──
       - name: Install ninja (MSVC)
         if: matrix.compiler == 'msvc'
-        run: choco install ninja -y
+        run: choco install ninja ccache -y
+
+      - name: Setup ccache (MSVC)
+        if: matrix.compiler == 'msvc'
+        uses: hendrikmuhs/ccache-action@v1
+        with:
+          key: ${{ matrix.os }}-${{ matrix.compiler }}
 
       - name: Setup vcpkg cache (MSVC)
         if: matrix.compiler == 'msvc'
@@ -236,11 +242,17 @@ jobs:
         run: >
           cmake -B build
           -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_C_COMPILER_LAUNCHER=ccache
+          -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
           -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake
+        env:
+          CCACHE_COMPILERTYPE: msvc
 
       - name: Build (MSVC)
         if: matrix.compiler == 'msvc'
         run: cmake --build build --config Release
+        env:
+          CCACHE_COMPILERTYPE: msvc
 
       - name: Test (MSVC)
         if: matrix.compiler == 'msvc'

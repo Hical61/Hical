@@ -695,3 +695,251 @@ TEST(MetaJsonTest, Uint64RoundTrip)
 	EXPECT_EQ(restored.timestamp, original.timestamp);
 	EXPECT_EQ(restored.status, original.status);
 }
+
+// ============ DTO 校验测试 ============
+
+struct MinMaxDTO
+{
+	int age;
+	double score;
+	int16_t level;
+
+	HICAL_JSON(MinMaxDTO, MIN(age, 0), MAX(age, 200), MIN(score, 0.0), MAX(score, 100.0), MIN(level, 1), MAX(level, 99))
+};
+
+struct NotEmptyDTO
+{
+	std::string name;
+	std::string email;
+
+	HICAL_JSON(NotEmptyDTO, NOT_EMPTY(name), NOT_EMPTY(email))
+};
+
+struct PatternDTO
+{
+	std::string email;
+	std::string phone;
+
+	HICAL_JSON(PatternDTO,
+			   PATTERN(email, R"(^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$)"),
+			   PATTERN(phone, R"(^\d{11}$)"))
+};
+
+struct LengthDTO
+{
+	std::string username;
+	std::string bio;
+
+	HICAL_JSON(LengthDTO, LENGTH(username, 3, 20), LENGTH(bio, 0, 500))
+};
+
+struct AllValidationsDTO
+{
+	std::string username;
+	std::string email;
+	int age;
+	std::string bio;
+
+	HICAL_JSON(AllValidationsDTO,
+			   NOT_EMPTY(username),
+			   PATTERN(email, R"(^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$)"),
+			   MIN(age, 0),
+			   MAX(age, 200),
+			   LENGTH(bio, 0, 500))
+};
+
+// ---- MIN / MAX 校验测试 ----
+
+TEST(MetaJsonValidationTest, MinOk)
+{
+	boost::json::value json = boost::json::object {{"age", 25}, {"score", 50.0}, {"level", 50}};
+	auto dto = meta::fromJson<MinMaxDTO>(json);
+	EXPECT_EQ(dto.age, 25);
+	EXPECT_DOUBLE_EQ(dto.score, 50.0);
+	EXPECT_EQ(dto.level, 50);
+}
+
+TEST(MetaJsonValidationTest, MinUnderThrows)
+{
+	boost::json::value json = boost::json::object {{"age", -1}, {"score", 50.0}, {"level", 50}};
+	EXPECT_THROW(meta::fromJson<MinMaxDTO>(json), std::runtime_error);
+}
+
+TEST(MetaJsonValidationTest, MaxOverThrows)
+{
+	boost::json::value json = boost::json::object {{"age", 201}, {"score", 50.0}, {"level", 50}};
+	EXPECT_THROW(meta::fromJson<MinMaxDTO>(json), std::runtime_error);
+}
+
+TEST(MetaJsonValidationTest, MinMaxAtBoundary)
+{
+	// 边界值应通过
+	boost::json::value json = boost::json::object {{"age", 0}, {"score", 100.0}, {"level", 1}};
+	auto dto = meta::fromJson<MinMaxDTO>(json);
+	EXPECT_EQ(dto.age, 0);
+	EXPECT_DOUBLE_EQ(dto.score, 100.0);
+	EXPECT_EQ(dto.level, 1);
+}
+
+TEST(MetaJsonValidationTest, MinMaxScoreUnderThrows)
+{
+	boost::json::value json = boost::json::object {{"age", 25}, {"score", -0.1}, {"level", 50}};
+	EXPECT_THROW(meta::fromJson<MinMaxDTO>(json), std::runtime_error);
+}
+
+TEST(MetaJsonValidationTest, MinMaxLevelUnderThrows)
+{
+	boost::json::value json = boost::json::object {{"age", 25}, {"score", 50.0}, {"level", 0}};
+	EXPECT_THROW(meta::fromJson<MinMaxDTO>(json), std::runtime_error);
+}
+
+// ---- NOT_EMPTY 校验测试 ----
+
+TEST(MetaJsonValidationTest, NotEmptyOk)
+{
+	boost::json::value json = boost::json::object {{"name", "Alice"}, {"email", "a@b.com"}};
+	auto dto = meta::fromJson<NotEmptyDTO>(json);
+	EXPECT_EQ(dto.name, "Alice");
+	EXPECT_EQ(dto.email, "a@b.com");
+}
+
+TEST(MetaJsonValidationTest, NotEmptyNameEmptyThrows)
+{
+	boost::json::value json = boost::json::object {{"name", ""}, {"email", "a@b.com"}};
+	EXPECT_THROW(meta::fromJson<NotEmptyDTO>(json), std::runtime_error);
+}
+
+TEST(MetaJsonValidationTest, NotEmptyEmailEmptyThrows)
+{
+	boost::json::value json = boost::json::object {{"name", "Bob"}, {"email", ""}};
+	EXPECT_THROW(meta::fromJson<NotEmptyDTO>(json), std::runtime_error);
+}
+
+// ---- PATTERN 校验测试 ----
+
+TEST(MetaJsonValidationTest, PatternOk)
+{
+	boost::json::value json = boost::json::object {{"email", "test@example.com"}, {"phone", "13800138000"}};
+	auto dto = meta::fromJson<PatternDTO>(json);
+	EXPECT_EQ(dto.email, "test@example.com");
+	EXPECT_EQ(dto.phone, "13800138000");
+}
+
+TEST(MetaJsonValidationTest, PatternEmailInvalidThrows)
+{
+	boost::json::value json = boost::json::object {{"email", "not-an-email"}, {"phone", "13800138000"}};
+	EXPECT_THROW(meta::fromJson<PatternDTO>(json), std::runtime_error);
+}
+
+TEST(MetaJsonValidationTest, PatternPhoneInvalidThrows)
+{
+	boost::json::value json = boost::json::object {{"email", "valid@test.com"}, {"phone", "12345"}};
+	EXPECT_THROW(meta::fromJson<PatternDTO>(json), std::runtime_error);
+}
+
+// ---- LENGTH 校验测试 ----
+
+TEST(MetaJsonValidationTest, LengthOk)
+{
+	boost::json::value json = boost::json::object {{"username", "alice"}, {"bio", "hello"}};
+	auto dto = meta::fromJson<LengthDTO>(json);
+	EXPECT_EQ(dto.username, "alice");
+	EXPECT_EQ(dto.bio, "hello");
+}
+
+TEST(MetaJsonValidationTest, LengthTooShortThrows)
+{
+	boost::json::value json = boost::json::object {{"username", "ab"}, {"bio", "hello"}};
+	EXPECT_THROW(meta::fromJson<LengthDTO>(json), std::runtime_error);
+}
+
+TEST(MetaJsonValidationTest, LengthTooLongThrows)
+{
+	boost::json::value json = boost::json::object {{"username", "a-very-long-username-xxx"}, {"bio", "hello"}};
+	EXPECT_THROW(meta::fromJson<LengthDTO>(json), std::runtime_error);
+}
+
+TEST(MetaJsonValidationTest, LengthAtBoundary)
+{
+	boost::json::value json = boost::json::object {{"username", "abc"}, {"bio", ""}};
+	auto dto = meta::fromJson<LengthDTO>(json);
+	EXPECT_EQ(dto.username, "abc");
+	EXPECT_EQ(dto.bio, "");
+}
+
+// ---- 全约束组合测试 ----
+
+TEST(MetaJsonValidationTest, AllValidationsOk)
+{
+	boost::json::value json = boost::json::object {{"username", "alice"},
+												   {"email", "alice@example.com"},
+												   {"age", 30},
+												   {"bio", "hello world"}};
+	auto dto = meta::fromJson<AllValidationsDTO>(json);
+	EXPECT_EQ(dto.username, "alice");
+	EXPECT_EQ(dto.email, "alice@example.com");
+	EXPECT_EQ(dto.age, 30);
+	EXPECT_EQ(dto.bio, "hello world");
+}
+
+TEST(MetaJsonValidationTest, AllValidationsMinUnderThrows)
+{
+	boost::json::value json =
+		boost::json::object {{"username", "alice"}, {"email", "alice@example.com"}, {"age", -1}, {"bio", "hello"}};
+	EXPECT_THROW(meta::fromJson<AllValidationsDTO>(json), std::runtime_error);
+}
+
+// ---- 校验与现有装饰器组合测试 ----
+
+struct ValidatedAliasDTO
+{
+	std::string userName;
+	int userAge;
+
+	HICAL_JSON(ValidatedAliasDTO, ALIAS(userName, "user_name"), MIN(userAge, 0), MAX(userAge, 150))
+};
+
+TEST(MetaJsonValidationTest, ValidatedAliasOk)
+{
+	boost::json::value json = boost::json::object {{"user_name", "Alice"}, {"userAge", 30}};
+	auto dto = meta::fromJson<ValidatedAliasDTO>(json);
+	EXPECT_EQ(dto.userName, "Alice");
+	EXPECT_EQ(dto.userAge, 30);
+}
+
+TEST(MetaJsonValidationTest, ValidatedAliasMinUnderThrows)
+{
+	boost::json::value json = boost::json::object {{"user_name", "Bob"}, {"userAge", -5}};
+	EXPECT_THROW(meta::fromJson<ValidatedAliasDTO>(json), std::runtime_error);
+}
+
+// ---- 校验不改变 toJson 行为 ----
+
+TEST(MetaJsonValidationTest, ValidationDoesNotAffectSerialize)
+{
+	MinMaxDTO dto {30, 75.5, 50};
+	auto json = meta::toJson(dto);
+	EXPECT_EQ(json["age"].as_int64(), 30);
+	EXPECT_DOUBLE_EQ(json["score"].as_double(), 75.5);
+	EXPECT_EQ(json["level"].as_int64(), 50);
+}
+
+// ---- 现有装饰器依然正常工作 ----
+
+TEST(MetaJsonValidationTest, ExistingDecoratorsStillWork)
+{
+	// 验证 REQUIRED 仍正常工作
+	boost::json::value json = boost::json::object {{"id", "user-001"}, {"name", "Eve"}, {"age", 28}};
+	auto dto = meta::fromJson<RequiredDTO>(json);
+	EXPECT_EQ(dto.id, "user-001");
+	EXPECT_EQ(dto.name, "Eve");
+
+	// 验证缺失 required 字段仍抛异常
+	boost::json::value noId = boost::json::object {{"name", "Eve"}};
+	EXPECT_THROW(meta::fromJson<RequiredDTO>(noId), std::runtime_error);
+
+	// 验证 IGNORE 仍正常工作
+	IgnoreDTO ignoreDto {"Jack", "j@test.com", "hash", "token"};
+	auto ignoreJson = meta::toJson(ignoreDto);
+	EXPECT_FALSE(ignoreJson.contains("passwordHash"));
+}
