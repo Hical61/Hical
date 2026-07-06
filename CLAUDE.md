@@ -93,6 +93,7 @@ find src -name '*.cpp' | xargs clang-tidy -p build
 - `RateLimiter.h/cpp` — Token Bucket rate limiting middleware: per-key (default IP) independent limiting, per-bucket mutex + shared_mutex map double-check, burst support, 429 + Retry-After/X-RateLimit-* response headers, maxEntries DoS protection, lazy GC for expired buckets. `makeRateLimiterMiddleware()` returns `SyncBeforeHandler` (zero coroutine frame overhead). `lastAccessNs` uses `atomic<int64_t>` to eliminate TSAN race; new buckets with `burst < 1.0` initialize `tokens = max(burst-1, 0)` to prevent negative values
 - `Helmet.h/cpp` — Security headers middleware: `makeHelmetMiddleware()` returns `SyncAfterHandler` (zero coroutine frame overhead), injects 7 security headers (X-Content-Type-Options/X-Frame-Options/HSTS/X-XSS-Protection/CSP/Referrer-Policy/Permissions-Policy), each toggleable individually, supports custom headers via `HelmetOptions::customHeaders`
 - `HealthEndpoint.h/cpp` — Kubernetes health check endpoints: `registerHealthEndpoints()` registers `GET {prefix}/health` (liveness, always 200) and `GET {prefix}/ready` (readiness, 200 or 503), supports custom `readyCheck` callback
+- `JwtAuth.h/cpp` — JWT authentication middleware using HMAC-SHA256 (HS256), zero third-party dependencies (OpenSSL EVP + self-implemented Base64URL). `jwtSign()` / `jwtVerify()` standalone functions + `makeJwtAuthMiddleware()` factory returning `SyncBeforeHandler` (zero coroutine frame overhead). Features: automatic iat/exp/iss/aud claim injection, Bearer token extraction (case-insensitive scheme per RFC 7235), path whitelist (`skipPaths`), verified payload injection via `req.setAttribute("jwt.payload", payload)`
 - `ChunkedBody.h/cpp` — Chunked Transfer-Encoding response body wrapper (RFC 7230 section 4.1), providing collection mode (multiple writes then end) and streaming chunk encoding utilities (`serializeChunkFrame` / `serializeTrailerFrame` / `serializeChunkedBody`). Includes `serializeChunkedBodyTo(out, body)` single-pass pre-allocated write + `chunkedBodyWireSize(body)` pre-calculation. `HttpResponse::chunked()` factory method creates chunked responses
 - `SseSession.h/cpp` — Server-Sent Events session wrapper (RFC 8895), coroutine-based `sendEvent()` / `sendData()` / `sendComment()` / `close()` interface, streamed via chunked transfer-encoding, with 30s heartbeat keep-alive + 30 min idle timeout. `sendBuf_` member reuse replaces per-call heap allocation, 4-buffer scatter-gather async_write (zero-copy send)
 - `GzipCompression.h/cpp` — Gzip response compression middleware, auto-checks `Accept-Encoding: gzip`, compresses small bodies (< 64KB) in full and replaces Content-Length, uses chunked streaming compression for large bodies (>= 64KB). Configurable compression level (1-9) and minimum compression threshold (default 1KB). `makeGzipCompressionMiddleware()` returns `SyncAfterHandler`. `makeGzipCompressionMiddlewareAsync()` returns `MiddlewareHandler` with large body deflate offloaded to background `thread_pool` to avoid blocking IO threads; `cachedZStream()` thread_local z_stream cache reused via deflateReset
@@ -204,7 +205,7 @@ Core design principle: when `HICAL_HAS_REFLECTION == 1` (compiler supports P2996
 
 ## Test Structure
 
-47 base test executables in `tests/` (+ 1 optional OpenAPI + 5 optional DB tests), each linked against `hical_core` + `GTest::gtest_main`. Tests are registered via `gtest_discover_tests()` for CTest integration. On Windows, tests also link `ws2_32` and `mswsock`. Key test files:
+48 base test executables in `tests/` (+ 1 optional OpenAPI + 5 optional DB tests), each linked against `hical_core` + `GTest::gtest_main`. Tests are registered via `gtest_discover_tests()` for CTest integration. On Windows, tests also link `ws2_32` and `mswsock`. Key test files:
 - `test_router.cpp` / `test_router_perf.cpp` — Route dispatch and performance (incl. dispatchSync benchmark)
 - `test_http_server_perf.cpp` — HTTP Server full-stack throughput benchmark
 - `test_route_group.cpp` — Route group with middleware inheritance and nesting
@@ -223,6 +224,7 @@ Core design principle: when `HICAL_HAS_REFLECTION == 1` (compiler supports P2996
 - `test_cors.cpp` — CORS middleware (Origin whitelist, Preflight, credentials)
 - `test_redirect.cpp` — Redirect convenience method
 - `test_rate_limiter.cpp` — Rate Limiter Token Bucket (11 tests: burst/refill/per-key/429/maxEntries/concurrent stability)
+- `test_jwt_auth.cpp` — JWT Auth middleware (10 tests: HS256 sign/verify round-trip, expiry, tamper detection, wrong secret, path whitelist, middleware 401/200 behavior, custom claims)
 - `test_chunked_sse.cpp` — Chunked Transfer-Encoding + SSE streaming push
 - `test_compression.cpp` — Gzip compression middleware (Accept-Encoding negotiation, small body inline compression, large body streaming chunked)
 - `test_wildcard_route.cpp` — Wildcard routes (match priority, parameter extraction, method isolation)

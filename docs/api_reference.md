@@ -59,6 +59,7 @@
 - [CORS 中间件](#cors-中间件) — 跨域资源共享
 - [StaticFiles](#staticfiles) — 静态文件服务
 - [Multipart](#multipart) — 文件上传解析
+- [JWT Auth](#jwt-auth) — JWT 认证中间件
 - [WebSocketSession](#websocketsession) — WebSocket 会话
 - [WsHub](#wshub) — WebSocket 广播管理器
 - [WsOptions](#wsoptions) — WebSocket 路由选项
@@ -341,13 +342,13 @@ HTTP 请求封装，对原生 HTTP 解析结果的 hical 风格封装。
 
 #### 构建请求的方法
 
-| 方法                     | 参数                          | 返回值 | 说明                               |
-| ------------------------ | ----------------------------- | ------ | ---------------------------------- |
-| `setMethod(method)`      | method: HTTP 方法             | `void` | 设置 HTTP 方法                     |
-| `setTarget(target)`      | target: 目标 URI              | `void` | 设置请求路径                       |
+| 方法                     | 参数                                               | 返回值 | 说明                               |
+| ------------------------ | -------------------------------------------------- | ------ | ---------------------------------- |
+| `setMethod(method)`      | method: HTTP 方法                                  | `void` | 设置 HTTP 方法                     |
+| `setTarget(target)`      | target: 目标 URI                                   | `void` | 设置请求路径                       |
 | `setHeader(name, value)` | name: 字段名<br>value: 字段值 (`std::string_view`) | `void` | 设置头部字段（拒绝含 CR/LF 的值）  |
-| `setBody(body)`          | body: 消息体                  | `void` | 设置消息体（不动 Content-Type 头） |
-| `setParam(name, value)`  | name: 参数名<br>value: 参数值 | `void` | 设置路径参数（由 Router 内部调用） |
+| `setBody(body)`          | body: 消息体                                       | `void` | 设置消息体（不动 Content-Type 头） |
+| `setParam(name, value)`  | name: 参数名<br>value: 参数值                      | `void` | 设置路径参数（由 Router 内部调用） |
 
 #### 示例
 
@@ -386,7 +387,7 @@ HTTP 响应封装，对原生 HTTP 响应的 hical 风格封装。
 | `statusCode()`                 | 无                                                         | `HttpStatusCode`     | 获取状态码                    |
 | `setStatus(code)`              | code: 状态码                                               | `void`               | 设置状态码                    |
 | `header(name)`                 | name: 字段名                                               | `std::string`        | 获取指定头部字段值            |
-| `setHeader(name, value)`       | name: 字段名<br>value: 字段值 (`std::string_view`)                              | `void`               | 设置头部字段                  |
+| `setHeader(name, value)`       | name: 字段名<br>value: 字段值 (`std::string_view`)         | `void`               | 设置头部字段                  |
 | `body()`                       | 无                                                         | `const std::string&` | 获取消息体                    |
 | `setBody(body, contentType)`   | body: 消息体<br>contentType: Content-Type                  | `void`               | 设置消息体并指定 Content-Type |
 | `setJsonBody(json)`            | json: JSON 值                                              | `void`               | 设置 JSON 消息体              |
@@ -975,6 +976,92 @@ server.router().post("/upload", [](const HttpRequest& req) -> HttpResponse {
     // file->filename / file->contentType / file->data
     return HttpResponse::ok("上传成功: " + file->filename);
 });
+```
+
+---
+
+### JWT Auth
+
+JWT 认证中间件，基于 OpenSSL EVP 自实现 HMAC-SHA256（HS256）签发和验证，零第三方依赖。
+
+**头文件：** `<hical/core/JwtAuth.h>`
+
+#### JwtAuthOptions 结构体
+
+| 字段          | 类型                       | 默认值 | 说明                                       |
+| ------------- | -------------------------- | ------ | ------------------------------------------ |
+| `secret`      | `std::string`              | `""`   | HMAC-SHA256 共享密钥                       |
+| `issuer`      | `std::string`              | `""`   | Token 签发者（iss claim），为空不写入      |
+| `audience`    | `std::string`              | `""`   | Token 受众（aud claim），为空不写入        |
+| `tokenExpiry` | `std::chrono::seconds`     | `24h`  | Token 有效时长（仅 payload 无 exp 时生效） |
+| `skipPaths`   | `std::vector<std::string>` | `{}`   | 白名单路径，跳过认证直接放行               |
+
+#### 自由函数
+
+| 函数                       | 参数                                                       | 返回值                | 说明                                                                        |
+| -------------------------- | ---------------------------------------------------------- | --------------------- | --------------------------------------------------------------------------- |
+| `jwtSign(payload, opts)`   | payload: `boost::json::object&`<br>opts: `JwtAuthOptions&` | `std::string`         | 签发 JWT Token（自动补 iat/exp/iss/aud）                                    |
+| `jwtSign(payload, secret)` | payload: `boost::json::object&`<br>secret: `string_view`   | `std::string`         | 便捷重载，仅需 secret，exp 默认 24h                                         |
+| `jwtVerify(token, secret)` | token: `string_view`<br>secret: `string_view`              | `boost::json::object` | 验证 Token，返回 payload（签名不匹配/过期/格式错误抛 `std::runtime_error`） |
+
+#### 中间件工厂
+
+```cpp
+SyncBeforeHandler makeJwtAuthMiddleware(JwtAuthOptions opts);
+```
+
+返回 `SyncBeforeHandler`（零协程帧开销），行为：
+1. 白名单路径（`skipPaths`）直接放行
+2. 提取 `Authorization: Bearer <token>` 头（scheme 大小写不敏感，符合 RFC 7235）
+3. 验证通过 → `req.setAttribute("jwt.payload", payload)` + 放行
+4. 验证失败 → 返回 401
+
+#### 示例
+
+```cpp
+#include <hical/core/JwtAuth.h>
+#include <hical/core/HttpServer.h>
+
+using namespace hical;
+
+int main()
+{
+    HttpServer server(8080);
+
+    // 1. 注册 JWT 中间件
+    JwtAuthOptions jwtOpts;
+    jwtOpts.secret = "my-secret-key";
+    jwtOpts.issuer = "hical-api";
+    jwtOpts.tokenExpiry = std::chrono::hours(4);
+    jwtOpts.skipPaths = {"/public/health", "/api/login"};
+    server.use(makeJwtAuthMiddleware(jwtOpts));
+
+    // 2. 登录接口：签发 Token
+    server.router().post("/api/login",
+        [&jwtOpts](const HttpRequest& req) -> HttpResponse {
+            auto body = req.jsonBody();
+            boost::json::object payload;
+            payload["sub"] = body.as_object()["username"];
+            payload["role"] = "user";
+
+            auto token = jwtSign(payload, jwtOpts);
+            return HttpResponse::json({{"token", token}});
+        });
+
+    // 3. 受保护接口：从请求属性读取 payload
+    server.router().get("/api/me",
+        [](const HttpRequest& req) -> HttpResponse {
+            auto jwt = req.getAttribute<boost::json::object>("jwt.payload");
+            if (!jwt) return HttpResponse::badRequest();
+
+            return HttpResponse::json({
+                {"user", (*jwt)["sub"].as_string()},
+                {"role", (*jwt)["role"].as_string()},
+            });
+        });
+
+    server.start();
+}
 ```
 
 ---

@@ -81,6 +81,7 @@ hical/
 │   │   ├── Multipart.h/.cpp    # multipart/form-data 解析（dual API: req 版 + parts 版）
 │   │   ├── Session.h/.cpp      # Session 会话管理（shared_mutex + regenerate + migrateFrom）
 │   │   ├── Cors.h              # CORS 中间件（makeCorsMiddleware + CorsOptions）
+│   │   ├── JwtAuth.h/.cpp      # JWT 认证中间件（HMAC-SHA256 签发/验证 + SyncBeforeHandler）
 │   │   ├── RouteGroup.h/.cpp   # 路由组（前缀分组 + 组级中间件 + 嵌套子组）
 │   │   ├── Reflection.h        # C++26 反射特性检测 + RouteInfo + 类型萃取
 │   │   ├── MetaJson.h          # 自动 JSON 序列化（ALIAS/REQUIRED/IGNORE 装饰器）
@@ -122,7 +123,7 @@ hical/
 │       ├── MysqlConnection.h/.cpp  # MySQL 后端（Boost.MySQL any_connection + charset 白名单校验）
 │       └── StmtCache.h/.cpp    # PreparedStatement LRU 缓存（透明哈希 string_view 查找）
 │
-├── tests/                      # 单元测试（Google Test）— 45 个测试套件（含 5 个可选 DB 测试）
+├── tests/                      # 单元测试（Google Test）— 46 个测试套件（含 5 个可选 DB 测试）
 │   ├── CMakeLists.txt          # gtest_discover_tests 自动注册 + Windows ws2_32/mswsock 链接
 │   │
 │   │ # —— 基础设施 ——
@@ -153,6 +154,7 @@ hical/
 │   ├── test_form_params.cpp          # 表单参数解析
 │   ├── test_redirect.cpp             # 重定向
 │   ├── test_cors.cpp                 # CORS 中间件
+│   ├── test_jwt_auth.cpp             # JWT Auth 中间件（签发/验证 + 中间件行为）
 │   ├── test_route_group.cpp          # 路由组
 │   ├── test_error_handler.cpp        # 全局错误处理器
 │   ├── test_graceful_shutdown.cpp    # 优雅关闭
@@ -208,23 +210,23 @@ hical/
 
 ## CMake 构建选项
 
-| 选项 | 默认 | 说明 |
-|---|---|---|
-| `HICAL_WITH_DATABASE` | OFF | 启用 [src/db/](../src/db/) 数据库中间件，需 Boost.MySQL >= 1.85 |
-| `HICAL_WITH_OPENAPI` | ON | 启用 OpenAPI 3.0 元数据层（`OpenApi*.h/cpp`），无额外依赖 |
-| `HICAL_ENABLE_REFLECTION` | OFF | 启用 C++26 原生反射（P2996），需兼容编译器；OFF 时回退到 C++20 宏 |
-| `HICAL_USE_SYSTEM_PICOHTTPPARSER` | OFF | 使用系统安装的 picohttpparser 替代内嵌副本 |
-| `HICAL_WITH_MIMALLOC` | OFF | 使用 mimalloc 作为 PMR 最底层 upstream 分配器，替代默认 `new_delete_resource` |
-| `BUILD_TESTING` | ON | 构建 [tests/](../tests/) 单元测试 |
-| `CMAKE_BUILD_TYPE` | — | `Debug` / `Release` / `RelWithDebInfo` |
+| 选项                              | 默认 | 说明                                                                          |
+| --------------------------------- | ---- | ----------------------------------------------------------------------------- |
+| `HICAL_WITH_DATABASE`             | OFF  | 启用 [src/db/](../src/db/) 数据库中间件，需 Boost.MySQL >= 1.85               |
+| `HICAL_WITH_OPENAPI`              | ON   | 启用 OpenAPI 3.0 元数据层（`OpenApi*.h/cpp`），无额外依赖                     |
+| `HICAL_ENABLE_REFLECTION`         | OFF  | 启用 C++26 原生反射（P2996），需兼容编译器；OFF 时回退到 C++20 宏             |
+| `HICAL_USE_SYSTEM_PICOHTTPPARSER` | OFF  | 使用系统安装的 picohttpparser 替代内嵌副本                                    |
+| `HICAL_WITH_MIMALLOC`             | OFF  | 使用 mimalloc 作为 PMR 最底层 upstream 分配器，替代默认 `new_delete_resource` |
+| `BUILD_TESTING`                   | ON   | 构建 [tests/](../tests/) 单元测试                                             |
+| `CMAKE_BUILD_TYPE`                | —    | `Debug` / `Release` / `RelWithDebInfo`                                        |
 
 ## 命名空间布局
 
-| 命名空间 | 范围 | 头文件位置 |
-|---|---|---|
-| `hical::` | 框架核心（HTTP/WebSocket/中间件/Session/日志/OpenAPI） | `<hical/core/>` |
+| 命名空间        | 范围                                                                    | 头文件位置                                              |
+| --------------- | ----------------------------------------------------------------------- | ------------------------------------------------------- |
+| `hical::`       | 框架核心（HTTP/WebSocket/中间件/Session/日志/OpenAPI）                  | `<hical/core/>`                                         |
 | `hical::meta::` | 反射层（MetaJson / MetaRoutes 的 `toJson`/`fromJson`/`registerRoutes`） | `<hical/core/MetaJson.h>` / `<hical/core/MetaRoutes.h>` |
-| `hical::db::` | 数据库中间件（可选） | `<hical/db/>` |
+| `hical::db::`   | 数据库中间件（可选）                                                    | `<hical/db/>`                                           |
 
 **公共 vs 内部 API 边界**：
 
@@ -307,7 +309,7 @@ hical/
   - Windows 额外：`ws2_32`、`mswsock`
 - **构建产物**：
   - `hical_core` — 框架核心静态库（仅静态库，DLL/ABI 不兼容）
-  - `test_*` — 45 个测试套件（含 5 个可选 DB 测试）
+  - `test_*` — 46 个测试套件（含 5 个可选 DB 测试）
   - 9 个示例可执行文件
 - **CI 工作流**：见 [.github/workflows/](../.github/workflows/) — `ci.yml`（多平台矩阵）、`sanitizer.yml`（ASan/UBSan/TSan）、`release.yml` / `conan-publish.yml`
 
@@ -317,17 +319,17 @@ hical/
 
 > 完整版本历史与逐次变更见 [CHANGELOG.md](../CHANGELOG.md)。本节仅给出主要里程碑，便于理解仓库当前状态来源。
 
-| 阶段 | 关键模块 | 说明 |
-|---|---|---|
-| 基础设施 | `MemoryPool` / `PmrBuffer` / `EventLoop` / `Concepts` | 三层 PMR 池 + Asio 抽象 + C++20 概念约束 |
-| 网络层 | `TcpServer` / `GenericConnection` / `SslContext` | SO_REUSEPORT 多 acceptor、TCP/SSL 模板统一、零分配写队列 |
-| HTTP 框架 | `HttpServer` / `Router` / `Middleware` / `HttpRequest` / `HttpResponse` | 协程化处理、洋葱中间件、参数路由、`dispatchSync` 同步快路径 |
-| 协议增强 | `Session` / `Cookie` / `Cors` / `StaticFiles` / `Multipart` / `RouteGroup` | 完整 HTTP 周边能力 |
-| WebSocket | `WebSocket` / `WsFrame` / `WsHandshake` / `WsDeflate` / `WsHub` | 自研 RFC 6455 栈，子协议/心跳/压缩/广播 |
-| 反射层 | `Reflection` / `MetaJson` / `MetaRoutes` | 双轨设计：C++26 原生 P2996 + C++20 宏回退 |
-| 日志系统 | `Log` / `LogChannel` / `LogFormatter` / `LogSink` / `LogFile` / `AsyncFileSink` / `LogMiddleware` / `LogAdmin` | 6 级日志、命名通道、异步双缓冲、动态级别管理 |
-| OpenAPI | `OpenApiSchema` / `OpenApiRegistry` / `OpenApiDocument` / `OpenApiEndpoint` | 从 `HICAL_JSON` 自动派生 OpenAPI 3.0 文档 |
-| 数据库 | `DbConfig` / `DbConnectionPool` / `DbMiddleware` / `DbQueryLog` / `MysqlConnection` / `StmtCache` | 协程化连接池 + 装饰器查询日志 + PreparedStatement LRU |
+| 阶段      | 关键模块                                                                                                       | 说明                                                        |
+| --------- | -------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| 基础设施  | `MemoryPool` / `PmrBuffer` / `EventLoop` / `Concepts`                                                          | 三层 PMR 池 + Asio 抽象 + C++20 概念约束                    |
+| 网络层    | `TcpServer` / `GenericConnection` / `SslContext`                                                               | SO_REUSEPORT 多 acceptor、TCP/SSL 模板统一、零分配写队列    |
+| HTTP 框架 | `HttpServer` / `Router` / `Middleware` / `HttpRequest` / `HttpResponse`                                        | 协程化处理、洋葱中间件、参数路由、`dispatchSync` 同步快路径 |
+| 协议增强  | `Session` / `Cookie` / `Cors` / `StaticFiles` / `Multipart` / `RouteGroup`                                     | 完整 HTTP 周边能力                                          |
+| WebSocket | `WebSocket` / `WsFrame` / `WsHandshake` / `WsDeflate` / `WsHub`                                                | 自研 RFC 6455 栈，子协议/心跳/压缩/广播                     |
+| 反射层    | `Reflection` / `MetaJson` / `MetaRoutes`                                                                       | 双轨设计：C++26 原生 P2996 + C++20 宏回退                   |
+| 日志系统  | `Log` / `LogChannel` / `LogFormatter` / `LogSink` / `LogFile` / `AsyncFileSink` / `LogMiddleware` / `LogAdmin` | 6 级日志、命名通道、异步双缓冲、动态级别管理                |
+| OpenAPI   | `OpenApiSchema` / `OpenApiRegistry` / `OpenApiDocument` / `OpenApiEndpoint`                                    | 从 `HICAL_JSON` 自动派生 OpenAPI 3.0 文档                   |
+| 数据库    | `DbConfig` / `DbConnectionPool` / `DbMiddleware` / `DbQueryLog` / `MysqlConnection` / `StmtCache`              | 协程化连接池 + 装饰器查询日志 + PreparedStatement LRU       |
 
 ## 命名风格
 

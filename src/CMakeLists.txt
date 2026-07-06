@@ -53,6 +53,7 @@ add_library(hical_core STATIC
     core/RateLimiter.cpp
     core/Helmet.cpp
     core/HealthEndpoint.cpp
+    core/JwtAuth.cpp
     asio/AsioEventLoop.cpp
     asio/AsioTimer.cpp
     asio/GenericConnection.cpp
