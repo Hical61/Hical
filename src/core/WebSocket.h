@@ -206,6 +206,9 @@ namespace hical
 		WsOpcode fragmentOpcode_ = WsOpcode::hText;
 		bool fragmentCompressed_ = false; ///< 当前分片消息的首帧是否带 RSV1（压缩）
 
+		// 帧发送复用缓冲，省掉每帧一次的 std::string 堆分配
+		std::string frameBuf_;
+
 		// permessage-deflate 上下文（仅压缩启用时构造）
 		std::unique_ptr<WsDeflateContext> deflateCtx_;
 

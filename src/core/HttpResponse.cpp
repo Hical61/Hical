@@ -71,6 +71,7 @@ namespace hical
 
 	void HttpResponse::setStatus(HttpStatusCode code)
 	{
+		res_.invalidatePayload();
 		res_.status = code;
 	}
 
@@ -96,12 +97,14 @@ namespace hical
 
 	void HttpResponse::setBody(const std::string& body)
 	{
+		res_.invalidatePayload();
 		res_.body = body;
 		res_.preparePayload();
 	}
 
 	void HttpResponse::setBody(std::string&& body)
 	{
+		res_.invalidatePayload();
 		res_.body = std::move(body);
 		res_.preparePayload();
 	}
@@ -113,6 +116,7 @@ namespace hical
 		{
 			return;
 		}
+		res_.invalidatePayload();
 		res_.body = body;
 		res_.headers.set("Content-Type", contentType);
 		res_.preparePayload();
@@ -124,6 +128,7 @@ namespace hical
 		{
 			return;
 		}
+		res_.invalidatePayload();
 		res_.body = std::move(body);
 		res_.headers.set("Content-Type", contentType);
 		res_.preparePayload();
@@ -131,6 +136,7 @@ namespace hical
 
 	void HttpResponse::setJsonBody(const boost::json::value& json)
 	{
+		res_.invalidatePayload();
 		res_.body = boost::json::serialize(json);
 		res_.headers.set("Content-Type", "application/json");
 		res_.preparePayload();
@@ -304,6 +310,7 @@ namespace hical
 		{
 			return;
 		}
+		res_.invalidatePayload();
 		res_.fileBody = FileBody {path, offset, length};
 		res_.body.clear();
 		res_.headers.set("Content-Type", contentType);

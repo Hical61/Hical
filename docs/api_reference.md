@@ -340,6 +340,25 @@ HTTP 请求封装，对原生 HTTP 解析结果的 hical 风格封装。
 | `cookies()`       | 无              | `const std::unordered_map<std::string,std::string>&` | 获取所有 Cookie（同名取第一个值） |
 | `hasCookie(name)` | name: Cookie 名 | `bool`                                               | 是否存在指定 Cookie               |
 
+#### 请求级属性 API（中间件间传递数据）
+
+| 方法                   | 参数                                | 返回值                    | 说明                                                         |
+| ---------------------- | ----------------------------------- | ------------------------- | ------------------------------------------------------------ |
+| `setAttribute(key, v)` | key: `string_view`<br>v: 任意类型值 | `void`                    | 设置请求级属性（中间件间数据传递，如 trace_id、db 连接等）   |
+| `getAttribute<T>(key)` | key: `string_view`                  | `std::optional<T>`        | 获取类型安全的请求属性（类型不匹配返回 `nullopt`，不走异常） |
+| `getAttribute(key)`    | key: `string_view`                  | `std::optional<std::any>` | 获取原始 `std::any` 请求属性                                 |
+
+**框架预留的属性键：**
+
+| 键                    | 类型                                          | 设置者                   |
+| --------------------- | --------------------------------------------- | ------------------------ |
+| `"hical.session"`     | `std::shared_ptr<Session>`                    | `makeSessionMiddleware`  |
+| `"hical.trace_id"`    | `std::string`                                 | `makeLogMiddleware`      |
+| `"hical.db.conn"`     | `std::shared_ptr<DbConnection>`               | `makeDbMiddleware`       |
+| `"hical.db.pool"`     | `std::shared_ptr<DbConnectionPool>`           | `makeDbMiddleware`       |
+| `"hical.db.queryLog"` | `std::shared_ptr<std::vector<QueryLogEntry>>` | `makeQueryLogMiddleware` |
+| `"jwt.payload"`       | `boost::json::object`                         | `makeJwtAuthMiddleware`  |
+
 #### 构建请求的方法
 
 | 方法                     | 参数                                               | 返回值 | 说明                               |
@@ -386,7 +405,7 @@ HTTP 响应封装，对原生 HTTP 响应的 hical 风格封装。
 | ------------------------------ | ---------------------------------------------------------- | -------------------- | ----------------------------- |
 | `statusCode()`                 | 无                                                         | `HttpStatusCode`     | 获取状态码                    |
 | `setStatus(code)`              | code: 状态码                                               | `void`               | 设置状态码                    |
-| `header(name)`                 | name: 字段名                                               | `std::string`        | 获取指定头部字段值            |
+| `header(name)`                 | name: 字段名                                               | `std::string_view`   | 获取指定头部字段值            |
 | `setHeader(name, value)`       | name: 字段名<br>value: 字段值 (`std::string_view`)         | `void`               | 设置头部字段                  |
 | `body()`                       | 无                                                         | `const std::string&` | 获取消息体                    |
 | `setBody(body, contentType)`   | body: 消息体<br>contentType: Content-Type                  | `void`               | 设置消息体并指定 Content-Type |
@@ -1464,16 +1483,16 @@ using HighWaterMarkCallback = std::function<void(const Ptr&, size_t)>;
 
 #### WsFrame.h
 
-| 类型 / 函数                                                                                     | 说明                                     |
-| ----------------------------------------------------------------------------------------------- | ---------------------------------------- |
-| `WsOpcode` 枚举                                                                                 | 见 [WebSocketSession](#websocketsession) |
-| `WsCloseCode` 枚举                                                                              | 见 [WebSocketSession](#websocketsession) |
-| `struct WsFrameHeader { fin, rsv1/2/3, masked, opcode, payloadLength, maskKey[4], headerSize }` | 帧头部解析结果                           |
-| `optional<WsFrameHeader> parseWsFrameHeader(const uint8_t*, size_t)`                            | 解析帧头                                 |
-| `void unmaskPayload(uint8_t*, size_t, const uint8_t[4])`                                        | 解掩码                                   |
-| `string buildWsFrame(opcode, payload, fin=true, rsv1=false)`                                    | 构造服务端帧（无掩码）                   |
-| `string buildMaskedWsFrame(opcode, payload, mask[4], fin, rsv1)`                                | 构造客户端帧（带掩码）                   |
-| `string buildClosePayload(WsCloseCode, reason={})`                                              | 构造 close 帧载荷                        |
+| 类型 / 函数                                                                                     | 说明                                                                                  |
+| ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `WsOpcode` 枚举                                                                                 | 见 [WebSocketSession](#websocketsession)                                              |
+| `WsCloseCode` 枚举                                                                              | 见 [WebSocketSession](#websocketsession)                                              |
+| `struct WsFrameHeader { fin, rsv1/2/3, masked, opcode, payloadLength, maskKey[4], headerSize }` | 帧头部解析结果                                                                        |
+| `optional<WsFrameHeader> parseWsFrameHeader(const uint8_t*, size_t)`                            | 解析帧头                                                                              |
+| `void unmaskPayload(uint8_t*, size_t, const uint8_t[4])`                                        | 解掩码                                                                                |
+| `string buildWsFrame(opcode, payload, fin=true, rsv1=false)`                                    | 构造服务端帧（无掩码）。sendFrame() 已改用 frameBuf_ 内联构造，此函数留给其他调用点用 |
+| `string buildMaskedWsFrame(opcode, payload, mask[4], fin, rsv1)`                                | 构造客户端帧（带掩码）                                                                |
+| `string buildClosePayload(WsCloseCode, reason={})`                                              | 构造 close 帧载荷                                                                     |
 
 #### WsHandshake.h
 

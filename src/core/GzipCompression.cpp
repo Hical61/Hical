@@ -268,6 +268,7 @@ namespace hical
 
 				if (bodySize >= opts.streamingThreshold)
 				{
+					native.invalidatePayload();
 					auto compressedWire = gzipCompressChunked(native.body, opts.compressionLevel);
 					native.body = std::move(compressedWire);
 					native.headers.set("Content-Encoding", "gzip");
@@ -276,6 +277,7 @@ namespace hical
 				}
 				else
 				{
+					native.invalidatePayload();
 					auto compressed = gzipCompress(native.body, opts.compressionLevel);
 					native.body = std::move(compressed);
 					native.headers.set("Content-Encoding", "gzip");
@@ -317,6 +319,7 @@ namespace hical
 
 			if (bodySize < opts.streamingThreshold)
 			{
+				native.invalidatePayload();
 				auto compressed = gzipCompress(native.body, opts.compressionLevel);
 				native.body = std::move(compressed);
 				native.headers.set("Content-Encoding", "gzip");
@@ -344,6 +347,7 @@ namespace hical
 
 			co_await boost::asio::post(boost::asio::bind_executor(ioExecutor, boost::asio::use_awaitable));
 
+			native.invalidatePayload();
 			native.body = std::move(*compressedWire);
 			native.headers.set("Content-Encoding", "gzip");
 			native.headers.set("Transfer-Encoding", "chunked");

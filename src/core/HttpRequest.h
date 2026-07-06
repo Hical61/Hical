@@ -263,11 +263,11 @@ namespace hical
 		/**
 		 * @brief 设置请求级属性（中间件间数据传递，如 trace_id、db connection 等）
 		 */
-		void setAttribute(const std::string& key, std::any value);
+		void setAttribute(std::string_view key, std::any value);
 		/**
 		 * @brief 获取请求级属性，不存在则返回 nullopt
 		 */
-		[[nodiscard]] std::optional<std::any> getAttribute(const std::string& key) const;
+		[[nodiscard]] std::optional<std::any> getAttribute(std::string_view key) const;
 
 		template <typename T>
 		[[nodiscard]] std::optional<T> getAttribute(const std::string& key) const
@@ -305,7 +305,7 @@ namespace hical
 		mutable std::optional<std::unordered_multimap<std::string, std::string, StringHash, StringEqual>> queryParams_;
 		mutable std::optional<std::unordered_multimap<std::string, std::string, StringHash, StringEqual>> formParams_;
 		mutable std::any cachedMultipartParts_;
-		std::unique_ptr<std::unordered_map<std::string, std::any>> attributes_;
+		std::unique_ptr<std::unordered_map<std::string, std::any, StringHash, StringEqual>> attributes_;
 	};
 
 } // namespace hical

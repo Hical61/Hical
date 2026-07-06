@@ -2,9 +2,10 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"runtime"
 
-	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v3"
 )
 
 type UserDTO struct {
@@ -22,12 +23,12 @@ func main() {
 	})
 
 	// Hello World
-	app.Get("/", func(c *fiber.Ctx) error {
+	app.Get("/", func(c fiber.Ctx) error {
 		return c.SendString("Hello, World!")
 	})
 
 	// JSON 响应
-	app.Get("/api/status", func(c *fiber.Ctx) error {
+	app.Get("/api/status", func(c fiber.Ctx) error {
 		return c.JSON(fiber.Map{
 			"status":    "running",
 			"framework": "fiber",
@@ -35,16 +36,16 @@ func main() {
 	})
 
 	// JSON 反序列化 + 序列化
-	app.Post("/api/echo", func(c *fiber.Ctx) error {
+	app.Post("/api/echo", func(c fiber.Ctx) error {
 		var user UserDTO
-		if err := c.BodyParser(&user); err != nil {
+		if err := c.Bind().Body(&user); err != nil {
 			return c.Status(400).JSON(fiber.Map{"error": err.Error()})
 		}
 		return c.JSON(user)
 	})
 
 	// 路径参数
-	app.Get("/users/:id", func(c *fiber.Ctx) error {
+	app.Get("/users/:id", func(c fiber.Ctx) error {
 		id := c.Params("id")
 		return c.JSON(fiber.Map{
 			"userId": id,
@@ -52,5 +53,7 @@ func main() {
 		})
 	})
 
-	app.Listen(":8089")
+	if err := app.Listen(":8089"); err != nil {
+		log.Fatal(err)
+	}
 }

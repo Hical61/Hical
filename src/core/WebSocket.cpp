@@ -215,8 +215,56 @@ namespace hical
 			}
 		} guard {*this};
 
-		auto frame = buildWsFrame(opcode, payload, fin, rsv1);
-		co_await boost::asio::async_write(socket_, boost::asio::buffer(frame), boost::asio::use_awaitable);
+		// 直接写到复用缓冲 frameBuf_，省掉 buildWsFrame() 的每次 std::string 堆分配
+		const size_t payloadLen = payload.size();
+		size_t headerSize = 2;
+		if (payloadLen > 65535)
+		{
+			headerSize += 8;
+		}
+		else if (payloadLen > 125)
+		{
+			headerSize += 2;
+		}
+
+		frameBuf_.resize(headerSize + payloadLen);
+		auto* out = reinterpret_cast<uint8_t*>(frameBuf_.data());
+
+		// Byte 0: FIN + RSV1 + opcode
+		out[0] = static_cast<uint8_t>((fin ? 0x80U : 0x00U) | (rsv1 ? 0x40U : 0x00U)
+									  | (static_cast<uint8_t>(opcode) & 0x0FU));
+
+		// Byte 1 + extended payload length（big-endian，MASK=0）
+		if (payloadLen <= 125)
+		{
+			out[1] = static_cast<uint8_t>(payloadLen);
+		}
+		else if (payloadLen <= 65535)
+		{
+			out[1] = 126;
+			const auto len16 = static_cast<uint16_t>(payloadLen);
+			out[2] = static_cast<uint8_t>(len16 >> 8);
+			out[3] = static_cast<uint8_t>(len16 & 0xFF);
+		}
+		else
+		{
+			out[1] = 127;
+			out[2] = static_cast<uint8_t>(payloadLen >> 56);
+			out[3] = static_cast<uint8_t>((payloadLen >> 48) & 0xFF);
+			out[4] = static_cast<uint8_t>((payloadLen >> 40) & 0xFF);
+			out[5] = static_cast<uint8_t>((payloadLen >> 32) & 0xFF);
+			out[6] = static_cast<uint8_t>((payloadLen >> 24) & 0xFF);
+			out[7] = static_cast<uint8_t>((payloadLen >> 16) & 0xFF);
+			out[8] = static_cast<uint8_t>((payloadLen >> 8) & 0xFF);
+			out[9] = static_cast<uint8_t>(payloadLen & 0xFF);
+		}
+
+		if (payloadLen > 0)
+		{
+			std::memcpy(out + headerSize, payload.data(), payloadLen);
+		}
+
+		co_await boost::asio::async_write(socket_, boost::asio::buffer(frameBuf_), boost::asio::use_awaitable);
 	}
 
 	Awaitable<void> WebSocketSession::sendCloseFrame(WsCloseCode code, std::string_view reason)

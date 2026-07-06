@@ -399,16 +399,23 @@ namespace hical
 
 	// ============ 请求级属性 ============
 
-	void HttpRequest::setAttribute(const std::string& key, std::any value)
+	void HttpRequest::setAttribute(std::string_view key, std::any value)
 	{
 		if (!attributes_)
 		{
-			attributes_ = std::make_unique<std::unordered_map<std::string, std::any>>();
+			attributes_ = std::make_unique<std::unordered_map<std::string, std::any, StringHash, StringEqual>>();
 		}
-		(*attributes_)[key] = std::move(value);
+		if (auto it = attributes_->find(key); it != attributes_->end())
+		{
+			it->second = std::move(value);
+		}
+		else
+		{
+			attributes_->emplace(std::string(key), std::move(value));
+		}
 	}
 
-	std::optional<std::any> HttpRequest::getAttribute(const std::string& key) const
+	std::optional<std::any> HttpRequest::getAttribute(std::string_view key) const
 	{
 		if (!attributes_)
 		{

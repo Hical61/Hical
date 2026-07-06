@@ -67,11 +67,26 @@ namespace hical
 		}
 
 		/**
-		 * @brief 设置 Content-Length 头部
+		 * @brief 标记 payload 需要重新计算（body/状态码/正文类型变化时调用）
+		 * 下次 preparePayload() 会重新执行完整逻辑。
+		 */
+		void invalidatePayload() noexcept
+		{
+			payloadPrepared_ = false;
+		}
+
+		/**
+		 * @brief 设置 Content-Length / Transfer-Encoding 头部
 		 * 空 body 且状态码非 204/304 时设置 Content-Length: 0
+		 * 幂等：频繁调用不会重复计算。
 		 */
 		void preparePayload()
 		{
+			if (payloadPrepared_)
+			{
+				return;
+			}
+			payloadPrepared_ = true;
 			// Chunked body 路径：不设 Content-Length，改设 Transfer-Encoding
 			if (chunkedBody.has_value())
 			{
@@ -201,6 +216,8 @@ namespace hical
 			out += ' ';
 			out.append(httpStatusCodeToString(status));
 		}
+
+		bool payloadPrepared_ = false;
 	};
 
 	/**
