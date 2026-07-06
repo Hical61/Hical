@@ -6,6 +6,7 @@
 #include "core/JwtAuth.h"
 #include "core/Log.h"
 
+#include <openssl/crypto.h>
 #include <openssl/evp.h>
 #include <openssl/hmac.h>
 #include <algorithm>
@@ -104,24 +105,24 @@ namespace hical
 
 			// 标准 Base64 解码表（反向查找）
 			// clang-format off
-            static constexpr int8_t kDecodeTable[256] = {
-                -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-                -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-                -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 62, -1, -1, -1, 63,
-                52, 53, 54, 55, 56, 57, 58, 59, 60, 61, -1, -1, -1, -1, -1, -1,
-                -1,  0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14,
-                15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, -1, -1, -1, -1, -1,
-                -1, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40,
-                41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, -1, -1, -1, -1, -1,
-                -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-                -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-                -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-                -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-                -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-                -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-                -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-                -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-            };
+	static constexpr int8_t kDecodeTable[256] = {
+		-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+		-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+		-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 62, -1, -1, -1, 63,
+		52, 53, 54, 55, 56, 57, 58, 59, 60, 61, -1, -1, -1, -1, -1, -1,
+		-1,  0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14,
+		15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, -1, -1, -1, -1, -1,
+		-1, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40,
+		41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, -1, -1, -1, -1, -1,
+		-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+		-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+		-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+		-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+		-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+		-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+		-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+		-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+	};
 			// clang-format on
 
 			for (size_t i = 0; i < normalized.size(); i += 4)
@@ -263,13 +264,17 @@ namespace hical
 		auto payloadB64 = token.substr(firstDot + 1, secondDot - firstDot - 1);
 		auto sigB64 = token.substr(secondDot + 1);
 
-		// 2. 验证签名
+		// 2. 解码原始签名做常数时间比较，消除时序侧信道
+		auto sigRaw = base64UrlDecode(sigB64);
+		if (sigRaw.size() != kSha256OutputLen)
+		{
+			throw std::runtime_error("JWT: invalid signature length");
+		}
+
 		auto signInput = std::string(headerB64) + "." + std::string(payloadB64);
 		auto expectedSig = hmacSha256(signInput, secret);
-		auto expectedSigB64 =
-			base64UrlEncode(std::string_view(reinterpret_cast<const char*>(expectedSig.data()), expectedSig.size()));
 
-		if (expectedSigB64 != sigB64)
+		if (CRYPTO_memcmp(sigRaw.data(), expectedSig.data(), kSha256OutputLen) != 0)
 		{
 			throw std::runtime_error("JWT: signature verification failed");
 		}
@@ -306,6 +311,71 @@ namespace hical
 		return payload;
 	}
 
+	boost::json::object jwtVerify(std::string_view token, const JwtAuthOptions& opts)
+	{
+		auto payload = jwtVerify(token, opts.secret);
+
+		// 校验 iss（RFC 7519 §4.1.1）
+		if (!opts.issuer.empty())
+		{
+			auto issIt = payload.find("iss");
+			if (issIt == payload.end() || issIt->value().as_string() != opts.issuer)
+			{
+				throw std::runtime_error("JWT: issuer mismatch");
+			}
+		}
+
+		// 校验 aud（RFC 7519 §4.1.3）—— 支持单字符串或字符串数组
+		if (!opts.audience.empty())
+		{
+			auto audIt = payload.find("aud");
+			if (audIt == payload.end())
+			{
+				throw std::runtime_error("JWT: audience missing");
+			}
+
+			auto& audVal = audIt->value();
+			bool matched = false;
+			if (audVal.is_string())
+			{
+				matched = (audVal.as_string() == opts.audience);
+			}
+			else if (audVal.is_array())
+			{
+				for (const auto& v : audVal.as_array())
+				{
+					if (v.is_string() && v.as_string() == opts.audience)
+					{
+						matched = true;
+						break;
+					}
+				}
+			}
+
+			if (!matched)
+			{
+				throw std::runtime_error("JWT: audience mismatch");
+			}
+		}
+
+		// 校验 nbf（RFC 7519 §4.1.5）
+		auto nbfIt = payload.find("nbf");
+		if (nbfIt != payload.end())
+		{
+			auto nbfVal = nbfIt->value().as_int64();
+			auto now =
+				std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch())
+					.count();
+
+			if (now < nbfVal)
+			{
+				throw std::runtime_error("JWT: token not yet valid (nbf)");
+			}
+		}
+
+		return payload;
+	}
+
 	// ============== 中间件工厂 ==============
 
 	namespace
@@ -326,10 +396,19 @@ namespace hical
 								 });
 		}
 
+		/// HS256 最小密钥长度（字节），RFC 7518 §3.2
+		constexpr size_t kMinSecretLength = 32;
+
 	} // namespace
 
 	SyncBeforeHandler makeJwtAuthMiddleware(JwtAuthOptions opts)
 	{
+		// 拒绝空密钥和过短密钥，避免生产环境因配置遗漏而 fail-open
+		if (opts.secret.size() < kMinSecretLength)
+		{
+			throw std::invalid_argument("JWT: secret is required and must be at least 32 bytes for HS256");
+		}
+
 		auto options = std::make_shared<JwtAuthOptions>(std::move(opts));
 
 		return [options](HttpRequest& req) -> SyncMiddlewareResult
@@ -354,10 +433,11 @@ namespace hical
 				return res;
 			}
 
-			// 必须是 Bearer <token> 格式（scheme 大小写不敏感，符合 RFC 7235）
-			constexpr std::string_view kBearerPrefix = "Bearer ";
-			if (authHeader.size() <= kBearerPrefix.size()
-				|| !iequals(authHeader.substr(0, kBearerPrefix.size() - 1), "Bearer"))
+			// 必须是 "Bearer" + 空格/TAB + <token>（RFC 7235 §2.1）
+			constexpr std::string_view kScheme = "Bearer";
+			constexpr size_t kSchemeLen = 6;
+			if (authHeader.size() <= kSchemeLen || !iequals(authHeader.substr(0, kSchemeLen), kScheme)
+				|| (authHeader[kSchemeLen] != ' ' && authHeader[kSchemeLen] != '\t'))
 			{
 				HttpResponse res;
 				res.setStatus(HttpStatusCode::hUnauthorized);
@@ -366,12 +446,18 @@ namespace hical
 				return res;
 			}
 
-			auto token = authHeader.substr(kBearerPrefix.size());
+			// 跳过 scheme 后的空格/TAB 得到 token
+			auto tokenPos = kSchemeLen;
+			while (tokenPos < authHeader.size() && (authHeader[tokenPos] == ' ' || authHeader[tokenPos] == '\t'))
+			{
+				++tokenPos;
+			}
+			auto token = authHeader.substr(tokenPos);
 
-			// 验证 Token
+			// 验证 Token（含 iss/aud/nbf 校验）
 			try
 			{
-				auto payload = jwtVerify(token, options->secret);
+				auto payload = jwtVerify(token, *options);
 				req.setAttribute("jwt.payload", std::move(payload));
 				return std::nullopt;
 			}

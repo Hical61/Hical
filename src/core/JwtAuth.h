@@ -36,7 +36,7 @@ namespace hical
 	 */
 	struct JwtAuthOptions
 	{
-		/// HMAC-SHA256 共享密钥，为空时中间件直接放行（仅开发环境使用）
+		/// HMAC-SHA256 共享密钥，中间件要求长度 >= 32 字节（HS256 最小安全长度，RFC 7518 §3.2）
 		std::string secret;
 
 		/// Token 签发者（iss claim），为空则不写入
@@ -82,6 +82,19 @@ namespace hical
 	 * @throws std::runtime_error 签名不匹配、Token 过期、格式错误
 	 */
 	boost::json::object jwtVerify(std::string_view token, std::string_view secret);
+
+	/**
+	 * @brief 验证 JWT Token（HS256）并返回 payload，同时校验 iss/aud/nbf
+	 * 在基本验证（签名、算法、exp）基础上，额外校验：
+	 * - iss：若 opts.issuer 非空，要求 payload["iss"] 精确匹配
+	 * - aud：若 opts.audience 非空，要求 payload["aud"] 等于或包含（支持字符串数组）opts.audience
+	 * - nbf：若 payload["nbf"] 存在，要求当前时间 >= nbf
+	 * @param token JWT 字符串
+	 * @param opts 签发配置（secret 用于验签，issuer/audience 用于校验 claims）
+	 * @return 解码后的 payload
+	 * @throws std::runtime_error 签名不匹配、Token 过期、iss/aud 不匹配、格式错误
+	 */
+	boost::json::object jwtVerify(std::string_view token, const JwtAuthOptions& opts);
 
 	/**
 	 * @brief 创建 JWT 认证中间件（SyncBeforeHandler）
