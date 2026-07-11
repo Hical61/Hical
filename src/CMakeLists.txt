@@ -51,6 +51,7 @@ add_library(hical_core STATIC
     core/SseSession.cpp
     core/GzipCompression.cpp
     core/RateLimiter.cpp
+    core/ConfigLoader.cpp
     core/Helmet.cpp
     core/HealthEndpoint.cpp
     core/JwtAuth.cpp

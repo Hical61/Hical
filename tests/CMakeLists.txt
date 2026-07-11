@@ -60,6 +60,7 @@ hical_add_test(test_cors)                 # CORS 中间件
 hical_add_test(test_rate_limiter)         # 速率限制（Token Bucket）
 hical_add_test(test_helmet)              # 安全头中间件
 hical_add_test(test_health)              # 健康检查端点
+hical_add_test(test_config_loader)       # 配置加载器
 hical_add_test(test_jwt_auth)           # JWT Auth 中间件
 hical_add_test(test_wildcard_route)       # 通配路由 `*path`
 hical_add_test(test_compression)          # 响应压缩（gzip）
