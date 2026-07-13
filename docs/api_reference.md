@@ -60,6 +60,7 @@
 - [StaticFiles](#staticfiles) — 静态文件服务
 - [Multipart](#multipart) — 文件上传解析
 - [JWT Auth](#jwt-auth) — JWT 认证中间件
+- [ConfigLoader](#configloader) — JSON 配置加载器
 - [WebSocketSession](#websocketsession) — WebSocket 会话
 - [WsHub](#wshub) — WebSocket 广播管理器
 - [WsOptions](#wsoptions) — WebSocket 路由选项
@@ -648,6 +649,11 @@ C++26 反射 / C++20 宏双轨的 JSON 自动序列化/反序列化系统。
 | `REQUIRED(field)`               | 反序列化时必须存在，否则抛异常           |
 | `REQUIRED_ALIAS(field, "key")`  | 必需 + 自定义 key 的组合                 |
 | `HICAL_IGNORE(field)`           | 序列化/反序列化均跳过                    |
+| `MIN(field, val)`               | 数值最小值校验（反序列化时）             |
+| `MAX(field, val)`               | 数值最大值校验（反序列化时）             |
+| `NOT_EMPTY(field)`              | 字符串非空校验                           |
+| `PATTERN(field, "re")`          | 正则匹配校验                             |
+| `LENGTH(field, min, max)`       | 字符串长度范围校验                       |
 
 #### C++26 反射属性（`HICAL_HAS_REFLECTION == 1` 时）
 
@@ -1081,6 +1087,67 @@ int main()
 
     server.start();
 }
+```
+
+---
+
+### ConfigLoader
+
+JSON 配置加载器，支持层级 key 访问（点分隔）、环境变量覆盖（`HICAL_` 前缀 + 大写 + 下划线）和环境变量缓存。
+
+**头文件：** `<hical/core/ConfigLoader.h>`
+
+#### 构造函数
+
+```cpp
+ConfigLoader loader;
+```
+
+#### 方法
+
+| 方法                      | 参数                         | 返回值                  | 说明                              |
+| ------------------------- | ---------------------------- | ----------------------- | --------------------------------- |
+| `loadFile(path)`          | path: `const std::string&`   | `bool`                  | 从文件加载 JSON 配置              |
+| `loadString(json)`        | json: `std::string_view`     | `bool`                  | 从字符串加载 JSON 配置            |
+| `get<T>(key, defaultVal)` | key + defaultVal: `const T&` | `T`                     | 获取配置值（优先 env，次 JSON）   |
+| `setEnvPrefix(prefix)`    | prefix: `const std::string&` | —                       | 设置环境变量前缀，默认 `"HICAL_"` |
+| `resolveEnv(key)`         | key: `const std::string&`    | `std::optional<string>` | 解析环境变量（带缓存，线程安全）  |
+
+#### 支持的类型
+
+`get<T>()` 模板支持以下类型：
+- `int64_t` — 整数
+- `std::string` — 字符串
+- `bool` — 布尔值
+- `double` — 浮点数
+- `std::vector<std::string>` — 字符串数组
+
+环境变量覆盖仅对标量类型（`int64_t`/`std::string`/`bool`/`double`）生效。
+
+#### 环境变量转换规则
+
+- 前缀：默认 `HICAL_`（可通过 `setEnvPrefix()` 修改）
+- key 中的 `.` 转为 `_`，字母转大写
+- 例：`"db.host"` → `HICAL_DB_HOST`
+
+#### 示例
+
+```cpp
+#include <hical/core/ConfigLoader.h>
+
+ConfigLoader loader;
+loader.loadFile("config.json");
+
+auto host = loader.get<std::string>("db.host", "127.0.0.1");
+auto port = loader.get<int64_t>("db.port", 3306);
+auto debug = loader.get<bool>("debug", false);
+
+// 数组类型
+auto allowlist = loader.get<std::vector<std::string>>("security.allowlist");
+
+// 环境变量覆盖（优先级高于 JSON 文件）
+// export HICAL_DB_HOST=10.0.0.1
+// → loader.get<std::string>("db.host") 返回 "10.0.0.1"
 ```
 
 ---

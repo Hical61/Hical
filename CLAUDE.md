@@ -81,6 +81,7 @@ find src -name '*.cpp' | xargs clang-tidy -p build
 - `Middleware.h` — Onion-model middleware pipeline with `MiddlewareNext` chaining; supports pre-built chain (`build()`), dynamic chain (`buildChain()`), and `buildFor()` for external pre-build, with separate `execute()` overloads for cached vs dynamic paths. `SyncBeforeHandler` / `SyncAfterHandler` / `SyncMiddlewareResult` types for zero-coroutine-frame middleware. `MiddlewareEntry` tagged union (Async/Sync). `buildOptimizedChain()`: consecutive sync entries merged into single coroutine frame, N sync middleware = 1 heap allocation
 - `Error.h/cpp` — Unified error code mapping: 21 `ErrorCode` enum values (connection/address/operation/SSL categories) + `NetworkError` struct, isolating upper layers from direct Asio error code dependency
 - `Coroutine.h` — `Awaitable<T>` alias for `boost::asio::awaitable<T>`, plus `sleep()` / `coSpawn()` helpers. `coSpawn()` overload with arbitrary executor + `logOnException` (replaces `detached`, unhandled exceptions logged to stderr). All `coSpawn()` overloads use `boost::asio::bind_allocator(recycling_allocator<void>(), ...)` to reuse completion handler memory via `thread_local` cache, avoiding per-spawn malloc/free under high concurrency
+- `ConfigLoader.h/cpp` — JSON configuration loader with hierarchical key access (dot-separated paths, e.g. `"db.host"`), environment variable override (prefix `HICAL_`, key dots→underscores + uppercase: `HICAL_DB_HOST`), `loadFile()`/`loadString()` for configuration sources, `get<T>(key, defaultVal)` template with support for `int64_t`/`std::string`/`bool`/`double`/`vector<string>`, thread-safe env cache for repeated lookups. Designed for single-threaded startup phase usage
 - `WsFrame.h` — WebSocket RFC 6455 frame parser/constructor: data/control frame unification, client masking enforcement, RSV bit validation, control frame size limit (≤125B)
 - `WsHandshake.h` — WebSocket handshake protocol: `Sec-WebSocket-Key`/`Accept` computation, extension negotiation (permessage-deflate)
 - `WsDeflate.h/cpp` — WebSocket permessage-deflate compression extension (RFC 7692), pimpl-encapsulated zlib, configurable `serverMaxWindowBits`/`clientMaxWindowBits`/`serverNoContextTakeover`, zip bomb protection
@@ -154,7 +155,7 @@ Core design principle: when `HICAL_HAS_REFLECTION == 1` (compiler supports P2996
 
 **`MetaJson.h`** — Automatic JSON serialization/deserialization:
 - C++26 path: `^^T` + `std::meta::nonstatic_data_members_of` enumerates fields automatically, supports `[[hical::json_name("alias")]]`, `[[hical::json_required]]`, `[[hical::json_ignore]]` attributes, plus `jsonSchema<T>()` and `toJsonSnakeCase<T>()`
-- C++20 fallback: `HICAL_JSON(Type, ...)` macro with `__VA_OPT__` recursive expansion (no field count limit), IS_PAREN + Tag dispatch for decorator syntax: `ALIAS(field, "key")`, `REQUIRED(field)`, `REQUIRED_ALIAS(field, "key")`, `HICAL_IGNORE(field)`. Compile-time field validation via `static_assert + requires`
+- C++20 fallback: `HICAL_JSON(Type, ...)` macro with `__VA_OPT__` recursive expansion (no field count limit), IS_PAREN + Tag dispatch for decorator syntax: `ALIAS(field, "key")`, `REQUIRED(field)`, `REQUIRED_ALIAS(field, "key")`, `HICAL_IGNORE(field)`. Compile-time field validation via `static_assert + requires`. DTO validation decorators: `MIN(field, val)`, `MAX(field, val)`, `NOT_EMPTY(field)`, `PATTERN(field, "re")`, `LENGTH(field, min, max)` — validated at deserialization time with descriptive error messages
 - API: `hical::meta::toJson(obj)`, `hical::meta::fromJson<T>(json)`, `req.readJson<T>()`
 
 **`MetaRoutes.h`** — Automatic route registration:
@@ -205,7 +206,7 @@ Core design principle: when `HICAL_HAS_REFLECTION == 1` (compiler supports P2996
 
 ## Test Structure
 
-48 base test executables in `tests/` (+ 1 optional OpenAPI + 5 optional DB tests), each linked against `hical_core` + `GTest::gtest_main`. Tests are registered via `gtest_discover_tests()` for CTest integration. On Windows, tests also link `ws2_32` and `mswsock`. Key test files:
+51 base test executables in `tests/` (+ 1 optional OpenAPI + 5 optional DB tests), each linked against `hical_core` + `GTest::gtest_main`. Tests are registered via `gtest_discover_tests()` for CTest integration. On Windows, tests also link `ws2_32` and `mswsock`. Key test files:
 - `test_router.cpp` / `test_router_perf.cpp` — Route dispatch and performance (incl. dispatchSync benchmark)
 - `test_http_server_perf.cpp` — HTTP Server full-stack throughput benchmark
 - `test_route_group.cpp` — Route group with middleware inheritance and nesting
@@ -215,7 +216,7 @@ Core design principle: when `HICAL_HAS_REFLECTION == 1` (compiler supports P2996
 - `test_ssl_connection.cpp` — SSL/TLS handshake
 - `test_websocket.cpp` / `test_ws_advanced.cpp` — WebSocket messaging + advanced features (Binary/Close/Subprotocol/Hub/Heartbeat)
 - `test_concepts.cpp` — Compile-time concept verification
-- `test_reflection.cpp` — MetaJson + MetaRoutes reflection layer (39 tests: alias, required, ignore, mixed decorators, large field count, backward compat)
+- `test_reflection.cpp` — MetaJson + MetaRoutes reflection layer (61 tests: alias, required, ignore, mixed decorators, large field count, backward compat, MIN/MAX/NOT_EMPTY/PATTERN/LENGTH DTO validation)
 - `test_cookie.cpp` — Cookie parsing and Set-Cookie header
 - `test_static_files.cpp` — Static file serving, ETag, path traversal
 - `test_multipart.cpp` — multipart/form-data parsing
@@ -224,7 +225,7 @@ Core design principle: when `HICAL_HAS_REFLECTION == 1` (compiler supports P2996
 - `test_cors.cpp` — CORS middleware (Origin whitelist, Preflight, credentials)
 - `test_redirect.cpp` — Redirect convenience method
 - `test_rate_limiter.cpp` — Rate Limiter Token Bucket (11 tests: burst/refill/per-key/429/maxEntries/concurrent stability)
-- `test_jwt_auth.cpp` — JWT Auth middleware (10 tests: HS256 sign/verify round-trip, expiry, tamper detection, wrong secret, path whitelist, middleware 401/200 behavior, custom claims)
+- `test_jwt_auth.cpp` — JWT Auth middleware (15 tests: HS256 sign/verify round-trip, expiry, tamper detection, wrong secret, path whitelist, middleware 401/200 behavior, custom claims, iss/aud/nbf validation)
 - `test_chunked_sse.cpp` — Chunked Transfer-Encoding + SSE streaming push
 - `test_compression.cpp` — Gzip compression middleware (Accept-Encoding negotiation, small body inline compression, large body streaming chunked)
 - `test_wildcard_route.cpp` — Wildcard routes (match priority, parameter extraction, method isolation)
@@ -247,6 +248,7 @@ Core design principle: when `HICAL_HAS_REFLECTION == 1` (compiler supports P2996
 - `test_asio_event_loop.cpp` / `test_asio_timer.cpp` / `test_coroutine.cpp` — Asio backend and coroutine primitives
 - `test_asio_tcp_connection.cpp` / `test_tcp_server.cpp` — TCP connection and server lifecycle
 - `test_basic.cpp` — Basic framework smoke tests
+- `test_config_loader.cpp` — ConfigLoader (17 tests: loadFile/loadString, hierarchical get, env override, type mismatch, vector<string>, missing key default, env cache)
 
 ### Database Tests (requires `HICAL_WITH_DATABASE=ON`)
 

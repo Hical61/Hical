@@ -98,9 +98,9 @@ target_link_libraries(my_app PRIVATE hical::hical_core)
 
 ```bash
 # 从 GitHub Releases 下载源码包
-curl -LO https://github.com/Hical61/Hical/releases/download/v2.6.6/hical-2.6.6-conan-src.tar.gz
-tar xzf hical-2.6.6-conan-src.tar.gz && cd hical
-conan export . --version=2.6.6
+curl -LO https://github.com/Hical61/Hical/releases/download/v2.6.7/hical-2.6.7-conan-src.tar.gz
+tar xzf hical-2.6.7-conan-src.tar.gz && cd hical
+conan export . --version=2.6.7
 ```
 
 在消费者项目中：

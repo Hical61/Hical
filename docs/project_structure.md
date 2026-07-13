@@ -83,8 +83,9 @@ hical/
 │   │   ├── Cors.h              # CORS 中间件（makeCorsMiddleware + CorsOptions）
 │   │   ├── JwtAuth.h/.cpp      # JWT 认证中间件（HMAC-SHA256 签发/验证 + SyncBeforeHandler）
 │   │   ├── RouteGroup.h/.cpp   # 路由组（前缀分组 + 组级中间件 + 嵌套子组）
+│   │   ├── ConfigLoader.h/.cpp # JSON 配置加载器（层级 key + 环境变量覆盖 + env 缓存）
 │   │   ├── Reflection.h        # C++26 反射特性检测 + RouteInfo + 类型萃取
-│   │   ├── MetaJson.h          # 自动 JSON 序列化（ALIAS/REQUIRED/IGNORE 装饰器）
+│   │   ├── MetaJson.h          # 自动 JSON 序列化（ALIAS/REQUIRED/IGNORE 装饰器 + MIN/MAX/PATTERN/NOT_EMPTY/LENGTH DTO 校验）
 │   │   ├── MetaJsonError.h/.cpp # MetaJson 错误辅助（[[noreturn]] 非模板函数，编译防火墙）
 │   │   ├── MetaRoutes.h        # 自动路由注册（HICAL_HANDLER/HICAL_ROUTES 宏）
 │   │   ├── Log.h/.cpp          # 日志系统（6 级 LogLevel + format/流式/条件/字段四种 API）
@@ -123,7 +124,7 @@ hical/
 │       ├── MysqlConnection.h/.cpp  # MySQL 后端（Boost.MySQL any_connection + charset 白名单校验）
 │       └── StmtCache.h/.cpp    # PreparedStatement LRU 缓存（透明哈希 string_view 查找）
 │
-├── tests/                      # 单元测试（Google Test）— 46 个测试套件（含 5 个可选 DB 测试）
+├── tests/                      # 单元测试（Google Test）— 51 个基础测试套件（+ 1 个可选 OpenAPI + 5 个可选 DB 测试）
 │   ├── CMakeLists.txt          # gtest_discover_tests 自动注册 + Windows ws2_32/mswsock 链接
 │   │
 │   │ # —— 基础设施 ——
@@ -154,7 +155,8 @@ hical/
 │   ├── test_form_params.cpp          # 表单参数解析
 │   ├── test_redirect.cpp             # 重定向
 │   ├── test_cors.cpp                 # CORS 中间件
-│   ├── test_jwt_auth.cpp             # JWT Auth 中间件（签发/验证 + 中间件行为）
+│   ├── test_jwt_auth.cpp             # JWT Auth 中间件（15 个）
+│   ├── test_config_loader.cpp        # ConfigLoader 配置加载（17 个）
 │   ├── test_route_group.cpp          # 路由组
 │   ├── test_error_handler.cpp        # 全局错误处理器
 │   ├── test_graceful_shutdown.cpp    # 优雅关闭
@@ -162,7 +164,7 @@ hical/
 │   ├── test_websocket.cpp            # WebSocket 基础
 │   ├── test_ws_advanced.cpp          # WebSocket 进阶（子协议/心跳/压缩/Hub 广播）
 │   │ # —— 反射 / OpenAPI ——
-│   ├── test_reflection.cpp           # MetaJson + MetaRoutes（39 个）
+│   ├── test_reflection.cpp           # MetaJson + MetaRoutes（61 个，含 DTO 校验）
 │   ├── test_openapi.cpp              # OpenAPI 自动生成（35 个）
 │   │ # —— 日志系统 ——
 │   ├── test_log.cpp                  # Log 核心（36 个）
@@ -309,7 +311,7 @@ hical/
   - Windows 额外：`ws2_32`、`mswsock`
 - **构建产物**：
   - `hical_core` — 框架核心静态库（仅静态库，DLL/ABI 不兼容）
-  - `test_*` — 46 个测试套件（含 5 个可选 DB 测试）
+  - `test_*` — 51 个基础测试套件（+ 1 个可选 OpenAPI + 5 个可选 DB 测试）
   - 9 个示例可执行文件
 - **CI 工作流**：见 [.github/workflows/](../.github/workflows/) — `ci.yml`（多平台矩阵）、`sanitizer.yml`（ASan/UBSan/TSan）、`release.yml` / `conan-publish.yml`
 
