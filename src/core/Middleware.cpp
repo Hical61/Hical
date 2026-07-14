@@ -140,7 +140,7 @@ namespace hical
 			auto mw = middlewares[i];
 			current = [mw = std::move(mw), next = std::move(current)](HttpRequest& r) -> Awaitable<HttpResponse>
 			{
-				co_return co_await mw(r, next);
+				return mw(r, next);
 			};
 		}
 
@@ -189,7 +189,7 @@ namespace hical
 				auto mw = entries[i].asyncHandler;
 				current = [mw = std::move(mw), next = std::move(current)](HttpRequest& r) -> Awaitable<HttpResponse>
 				{
-					co_return co_await mw(r, next);
+					return mw(r, next);
 				};
 				--i;
 			}

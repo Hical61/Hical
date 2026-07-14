@@ -24,7 +24,7 @@
 |----------|-------|--------|---------|--------------|
 | C++ 标准 | C++20/26 | C++17 | C++20 | C++11/14 |
 | 反射/自动路由 | 原生 C++26 反射 + C++20 宏双轨 | 宏注册 | 宏注册 | 手动注册 |
-| 内存模型 | PMR 三层池（请求级零堆分配） | 传统 allocator | 传统 allocator | 传统 allocator |
+| 内存模型 | ReadBufferPool + 栈缓冲 → 请求级零堆分配 | 传统 allocator | 传统 allocator | 传统 allocator |
 | HTTP 解析 | picohttpparser 零拷贝（栈上 64 header） | 自研解析器 | picohttpparser | 自研 / http-parser |
 | WebSocket | 自研 + permessage-deflate + Hub 广播 | 内置 | 内置 | 第三方库 |
 | 协程模型 | `asio::awaitable<T>` 原生协程 | 自研协程 | `asio::awaitable` | 无 / 线程池 |
@@ -34,7 +34,7 @@
 - **原生网络栈** — picohttpparser 零拷贝 HTTP 解析 + 自研 WebSocket (RFC 6455)，零堆分配
 - **C++26 反射** — 自动路由注册 + JSON 序列化；C++20 宏无缝回退
 - **协程异步 I/O** — `asio::awaitable<T>` + `co_await`，同步快速路径零协程帧开销
-- **PMR 三层内存池** — 全局同步池 / 线程本地无锁池 / 请求级单调缓冲
+- **PMR 三层内存池** — 全局同步池 / 线程本地无锁池（连接级分配）；请求路径用 ReadBufferPool + 栈数组 + FixedBuffer 实现零堆分配
 - **全功能中间件** — 洋葱模型、CORS、Session、日志、OpenAPI 3.0 文档生成
 - **WebSocket** — permessage-deflate 压缩、Hub 广播、子协议协商、心跳
 - **数据库中间件** — 协程连接池 + 自动事务 + 慢查询检测（Boost.MySQL）

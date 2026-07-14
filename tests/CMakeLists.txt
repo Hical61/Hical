@@ -17,6 +17,7 @@ set(TESTS_NEEDING_PICOHTTPPARSER
     test_chunked_sse
     test_http_client
     test_http_server_perf
+    test_optimistic_write
 )
 
 # helper：封装三行样板（add_executable + target_link_libraries + gtest_discover_tests）
@@ -70,6 +71,7 @@ hical_add_test(test_error_handler)        # 全局错误处理器
 hical_add_test(test_expect_continue)      # Expect: 100-continue
 hical_add_test(test_http_server_perf)     # HttpServer 吞量基准测试
 hical_add_test(test_http_client)          # 测试客户端（链式调用）
+hical_add_test(test_optimistic_write)     # 乐观同步写 + readBuf 提前归还
 
 # --- 日志系统 ---
 hical_add_test(test_log)                  # 日志系统主测试

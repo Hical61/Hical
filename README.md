@@ -24,7 +24,7 @@ English | [简体中文](README_CN.md)
 |-----------|-------|--------|---------|--------------|
 | C++ Standard | C++20/26 | C++17 | C++20 | C++11/14 |
 | Reflection / Auto-routing | Native C++26 reflection + C++20 macro dual-track | Macro registration | Macro registration | Manual registration |
-| Memory Model | PMR three-tier pool (zero heap alloc per request) | Traditional allocator | Traditional allocator | Traditional allocator |
+| Memory Model | ReadBufferPool + stack buffers → zero heap alloc per request | Traditional allocator | Traditional allocator | Traditional allocator |
 | HTTP Parsing | picohttpparser zero-copy (stack-based 64 headers) | Custom parser | picohttpparser | Custom / http-parser |
 | WebSocket | Self-developed + permessage-deflate + Hub broadcast | Built-in | Built-in | Third-party |
 | Coroutine Model | `asio::awaitable<T>` native coroutines | Custom coroutines | `asio::awaitable` | None / thread pool |
@@ -34,7 +34,7 @@ English | [简体中文](README_CN.md)
 - **Native network stack** — picohttpparser zero-copy HTTP parsing + self-developed WebSocket (RFC 6455), zero heap allocation
 - **C++26 Reflection** — Automatic route registration + JSON serialization; seamless C++20 macro fallback
 - **Coroutine async I/O** — `asio::awaitable<T>` + `co_await`, sync fast path with zero coroutine frame overhead
-- **PMR three-tier pool** — Global synchronized / thread-local lock-free / request-level monotonic buffer
+- **PMR three-tier pool** — Global synchronized / thread-local lock-free pool for connection-level allocations; request path uses ReadBufferPool + stack arrays + FixedBuffer for actual zero heap allocation
 - **Full-featured middleware** — Onion model, CORS, Session, Logging, OpenAPI 3.0 doc generation
 - **WebSocket** — permessage-deflate compression, Hub broadcast, subprotocol negotiation, heartbeat
 - **Database middleware** — Coroutine connection pool + auto-transaction + slow query detection (Boost.MySQL)

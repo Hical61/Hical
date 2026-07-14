@@ -166,6 +166,25 @@ namespace hical
 			TcpCorkGuard& operator=(const TcpCorkGuard&) = delete;
 		};
 
+		/// 乐观同步写辅助：socket 在非阻塞模式下先试一把 write_some，
+		/// 写完了直接返回 true（不挂协程、不进 reactor 完成队列），
+		/// would_block / partial / 异常都返回 false，调用方回退 async_write。
+		bool tryOptimisticWrite(tcp::socket& socket, const boost::asio::const_buffer& buf)
+		{
+			boost::system::error_code ec;
+			size_t written = socket.write_some(buf, ec);
+			// 完整写完且没出错——最佳情况，零完成队列开销
+			if (!ec && written == buf.size())
+			{
+				return true;
+			}
+			// ec 为 would_block 说明内核发送缓冲区满了，或者只写了部分数据，
+			// 都交回 async_write 处理。
+			// 等 async_write 继续——虽然 async_write 会重写整个 buffer，但
+			// write_some 已写入的数据不会在线上重复，TCP 流式语义兜底。
+			return false;
+		}
+
 		/// 快速发送错误响应（栈缓冲区，零堆分配）
 		Awaitable<void> sendRawResponse(tcp::socket& socket,
 										unsigned statusCode,
@@ -187,6 +206,12 @@ namespace hical
 			buf.append(lenBuf, static_cast<size_t>(ptr2 - lenBuf));
 			buf << "\r\nConnection: close\r\n\r\n";
 			buf << body;
+
+			// 错误响应通常很小（几十到几百字节），乐观同步写几乎必中
+			if (tryOptimisticWrite(socket, boost::asio::buffer(buf.data(), buf.size())))
+			{
+				co_return;
+			}
 
 			boost::system::error_code writeEc;
 			co_await boost::asio::async_write(socket,
@@ -223,6 +248,11 @@ namespace hical
 					}
 					else
 					{
+						if (tryOptimisticWrite(socket, boost::asio::buffer(headBuf.data(), headBuf.size())))
+						{
+							co_return;
+						}
+
 						co_await boost::asio::async_write(socket,
 														  boost::asio::buffer(headBuf.data(), headBuf.size()),
 														  boost::asio::use_awaitable);
@@ -230,6 +260,11 @@ namespace hical
 				}
 				else
 				{
+					if (tryOptimisticWrite(socket, boost::asio::buffer(headBuf.data(), headBuf.size())))
+					{
+						co_return;
+					}
+
 					co_await boost::asio::async_write(socket,
 													  boost::asio::buffer(headBuf.data(), headBuf.size()),
 													  boost::asio::use_awaitable);
@@ -244,6 +279,11 @@ namespace hical
 			if (skipBody || nativeRes.body.empty())
 			{
 				// HEAD 方法或空 body：仅发送头部
+				if (tryOptimisticWrite(socket, boost::asio::buffer(headBuf.data(), headBuf.size())))
+				{
+					co_return;
+				}
+
 				co_await boost::asio::async_write(socket,
 												  boost::asio::buffer(headBuf.data(), headBuf.size()),
 												  boost::asio::use_awaitable);
@@ -252,6 +292,11 @@ namespace hical
 			{
 				// 小响应（head + body <= 512）：合并到栈缓冲区，单次 write，零堆分配
 				headBuf.append(nativeRes.body.data(), nativeRes.body.size());
+				if (tryOptimisticWrite(socket, boost::asio::buffer(headBuf.data(), headBuf.size())))
+				{
+					co_return;
+				}
+
 				co_await boost::asio::async_write(socket,
 												  boost::asio::buffer(headBuf.data(), headBuf.size()),
 												  boost::asio::use_awaitable);
@@ -298,6 +343,11 @@ namespace hical
 					}
 					else
 					{
+						if (tryOptimisticWrite(socket, boost::asio::buffer(headBuf.data(), headBuf.size())))
+						{
+							co_return;
+						}
+
 						co_await boost::asio::async_write(socket,
 														  boost::asio::buffer(headBuf.data(), headBuf.size()),
 														  boost::asio::use_awaitable);
@@ -305,6 +355,11 @@ namespace hical
 				}
 				else
 				{
+					if (tryOptimisticWrite(socket, boost::asio::buffer(headBuf.data(), headBuf.size())))
+					{
+						co_return;
+					}
+
 					co_await boost::asio::async_write(socket,
 													  boost::asio::buffer(headBuf.data(), headBuf.size()),
 													  boost::asio::use_awaitable);
@@ -317,6 +372,11 @@ namespace hical
 
 			if (skipBody || nativeRes.body.empty())
 			{
+				if (tryOptimisticWrite(socket, boost::asio::buffer(headBuf.data(), headBuf.size())))
+				{
+					co_return;
+				}
+
 				co_await boost::asio::async_write(socket,
 												  boost::asio::buffer(headBuf.data(), headBuf.size()),
 												  boost::asio::use_awaitable);
@@ -324,6 +384,11 @@ namespace hical
 			else if (headBuf.size() + nativeRes.body.size() <= 512 && !headBuf.overflowed())
 			{
 				headBuf.append(nativeRes.body.data(), nativeRes.body.size());
+				if (tryOptimisticWrite(socket, boost::asio::buffer(headBuf.data(), headBuf.size())))
+				{
+					co_return;
+				}
+
 				co_await boost::asio::async_write(socket,
 												  boost::asio::buffer(headBuf.data(), headBuf.size()),
 												  boost::asio::use_awaitable);
@@ -483,6 +548,11 @@ namespace hical
 				}
 			}
 		} guard {socket};
+
+		// 显式设为非阻塞——tryOptimisticWrite 中的 write_some 在阻塞 fd
+		// 上遇到 EAGAIN 会进 poll() 忙等、卡死 io 线程。Asio 异步操作
+		// 期间设置的 O_NONBLOCK 是实现细节，不能依赖它保持生效。
+		socket.non_blocking(true);
 
 		// entry 在协程栈上，Guard 析构时自动注销
 		// 声明在 SocketGuard 后面 → 先析构（先 unregister 再关 socket）
@@ -1179,12 +1249,14 @@ namespace hical
 					std::memmove(readBuf.data(), readBuf.data() + memmoveSrc, memmoveLen);
 				}
 
-				// 把粘包残留存起来，把读缓冲区还回池里
+				// pipeline 残留已暂存，响应已发送，nativeReq.target/headers
+				// 的 string_view 不再被引用，提前把缓冲区还回去。
+				// 别等到协程末尾析构——万连接下能省几十 MB 在途内存。
 				if (bufUsed > 0)
 				{
 					pipelineSpill.assign(readBuf.data(), bufUsed);
 				}
-				// readBufHandle 析构时自动还回池
+				readBufHandle.release();
 
 				if (!shouldKeepAlive)
 				{
