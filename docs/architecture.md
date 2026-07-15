@@ -1494,10 +1494,11 @@ for(;;) 循环顶部
         HttpRequest 封装 (惰性解析：jsonBody/queryParam/cookie 首次访问才解析)
               │
               ▼ 响应写完毕
-        readBuf 归还回池；空闲连接仅 +256B 栈缓冲（coroutine frame 内，非堆内存）
+        readBuf 归还回池（响应写完 + pipeline 残留暂存后立即 release，不等协程析构）；
+        空闲连接仅 +256B 栈缓冲（coroutine frame 内，非堆内存）
 ```
 
-### 19.2 单缓冲区响应序列化 + 前缀模板
+### 19.2 单缓冲区响应序列化 + 前缀模板 + 乐观同步写
 
 ```
 HttpResponse (handler 设置 Content-Type / body)
@@ -1506,8 +1507,18 @@ HttpResponse (handler 设置 Content-Type / body)
 NativeResponse::serializeHeadTo(FixedBuffer<512>, prefix, prefixLen)
     │  状态行 + 用户头部 + 预构建通用头部（一次 memcpy ~90B）
     ▼
-head + body 合并为单次 async_write                    ← 一次系统调用
+head + body 合并为单次 buffer（≤512 时）
+    │
+    ├── tryOptimisticWrite(socket, buffer)  ← 同步写，写完直接返回
+    │       │  成功 → co_return（零协程挂起、零完成队列）
+    │       └  失败 → async_write            ← would_block/partial 回退
+    ▼
+一次 writev 系统调用
 ```
+
+**乐观同步写**：socket 已经 `non_blocking(true)`，小响应（head+body ≤ 512）的 `write_some` 在 localhost/内网下近乎必中。写完直接 `co_return`——不挂协程、不进 reactor 完成队列，高并发下大幅降低完成队列排队延迟。`would_block` / partial / 硬错误时回退 `async_write`，只多了几十纳秒检查开销。
+
+**`socket.non_blocking(true)` 是硬前提**：Asio 的 `sync_send` 只检查 `user_set_non_blocking` 标志位（不认 `internal_non_blocking`）。如果 fd 被恢复为阻塞模式，`write_some` 在 EAGAIN 时掉进 `poll_write(s, 0, -1)` 无限等 POLLOUT，直接卡死 io 线程。`handleSession` 入口调一次 `socket.non_blocking(true)` 设上 `user_set` 标志后，后续异步操作怎么折腾也清不掉它。 
 
 **连接级响应前缀模板**：`handleSession` 在 `for(;;)` 循环外预拼 `Server` / `Connection` / `Date` 三个通用头部的 wire bytes 到 `responsePrefix[128]`。keep-alive 连接中每个请求只需：
 
@@ -1533,7 +1544,7 @@ thread_local DateCache dateTlsCache; // {cachedSec, buf[30], len}
 - **ReadBufferPool 借还**：每请求借一块缓冲区，响应写完后归还；粘包残留暂存在 `pipelineSpill`（`for(;;)` 外的 `std::string`，大多数连接为空，SSO 不分配堆内存）
 - **栈缓冲 speculative read**：空闲连接不用 `async_wait(wait_read)` 等着（有 MOD 开销），改用 256B 栈数组 `async_read_some`。Asio 投机路径下有数据直返、无数据挂起，都不产生 `epoll_ctl(MOD)`。实测 10K 并发下 epoll_ctl 调用从 32,563 降到 9,173（降 71.8%），总 CPU 降 ~16-20%
 
-### 19.5 同步中间件零协程帧
+### 19.5 同步中间件零协程帧 + 异步转发帧消除
 
 `buildOptimizedChain()` 算法将连续的 `SyncBeforeHandler` / `SyncAfterHandler` 合并为单个协程帧：
 
@@ -1541,6 +1552,8 @@ thread_local DateCache dateTlsCache; // {cachedSec, buf[30], len}
 10 层同步中间件 = 1 次协程帧堆分配（而非 10 次）
 性能：仅比无中间件低 2.1%
 ```
+
+异步中间件包装 lambda 原来用 `co_return co_await mw(r, next)`——lambda 自己是协程，每层多一个独立堆帧。改为 `return mw(r, next)` 后 lambda 退化为普通函数，mw10 场景从 20 帧/请求（10 用户帧 + 10 包装帧）降到 10 帧。
 
 ### 19.6 TcpCorkGuard 文件响应合并小包
 

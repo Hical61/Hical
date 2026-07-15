@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.7] - 2026-07-15
+
+### Added
+- **ConfigLoader 配置加载器**：`ConfigLoader` 类，从 JSON 文件或字符串加载配置，拿配置用 `get<T>("db.host", "localhost")` 这种点分隔的层级 key 就行。环境变量优先于文件配置——`HICAL_` 前缀、点转下划线、全大写（比如 `db.host` 对应 `HICAL_DB_HOST`），查过一次的环境变量放 `map` 缓存里不用反复 `getenv`。支持 `int64_t`、`std::string`、`bool`、`double`，还有 `vector<string>` 数组。配套测试 `test_config_loader`（17 个）
+- **JWT Auth 中间件**：HMAC-SHA256 签发和验证，不引第三方 JWT 库，直接拿 OpenSSL EVP 算 HMAC，Base64URL 自己手写的。`jwtSign()` 俩重载：传 `JwtAuthOptions` 的完整版、只传 secret 的便捷版。`jwtVerify()` 也俩：基础验证（签名+过期）、扩展验证（连带 iss/aud/nbf 一起查）。`makeJwtAuthMiddleware()` 返回 `SyncBeforeHandler`（零协程帧），认证通过后把 payload 塞进 `req.setAttribute("jwt.payload", ...)`，不通过就回 401 不泄漏内部细节。白名单路径 `skipPaths` 配了就跳过检查。配套测试 `test_jwt_auth`（15 个）
+- **MetaJson DTO 校验装饰器**：加了 5 个装饰器——`MIN(field, val)` / `MAX(field, val)` 卡数值范围，`NOT_EMPTY(field)` 拦空字符串，`PATTERN(field, "re")` 正则匹配，`LENGTH(field, min, max)` 限字符串长度。`fromJson` 的时候自动跑校验，不通过就 `throw runtime_error`，错误信息里带了字段名、规则名、限制值，看一眼就知道哪个字段没过去。编译期有类型检查：`MIN`/`MAX` 只能标数值字段，`NOT_EMPTY`/`PATTERN`/`LENGTH` 只能标字符串字段，标错了编译就报。`test_reflection` 从 39 个测例涨到 61 个
+
+### Fixed
+- **JWT 安全加固**：签名比对换成了 `CRYPTO_memcmp` 常数时间比较，侧信道风险堵上了。secret 太短（不够 32 字节）中间件构造期直接 `throw invalid_argument`，不让你拿弱密钥上线。Bearer 头解析按 RFC 7235 规整了一遍，scheme 大小写不敏感。补上了 `iss`/`aud`/`nbf` 这些标准 claim 的校验
+
+### Performance
+- **乐观同步写**：响应小的时候先拿 `write_some` 试一把同步写，写完直接 `co_return`，不挂协程、不进 reactor 完成队列。只在 `would_block` / partial write / 硬错误时回退 `async_write`。hello-world 这种小响应单 buffer 几乎必中，高并发下省掉大量完成队列排队。同时在 `handleSession` 入口显式 `socket.non_blocking(true)`——防止 Asio 把 fd 改回阻塞模式后 `write_some` 在 EAGAIN 时掉进 `poll()` 卡死 io 线程。配套测试 `test_optimistic_write`（7 个） (#11)
+- **readBuf 提前归还**：响应写完、pipeline 残留暂存之后立即 `readBufHandle.release()`，别等到协程末尾析构。万连接下能砍掉几十 MB 在途缓冲——10K 连接 × 8KB = 80MB 峰值降到 ~40MB（只剩正在读请求的那些还持有着） (#11)
+- **消除转发协程帧**：`buildChainFrom` / `buildOptimizedChain` 里包装异步中间件的 lambda 原来用了 `co_return co_await mw(r, next)`，lambda 自己就占一个协程帧。改成 `return mw(r, next)`（类型推导一致，语义等价），lambda 退化成普通函数。mw10 场景从 20 帧/请求（10 用户帧 + 10 包装帧）降到 10 帧 (#11)
+- **preparePayload 幂等化**：`HttpResponse::preparePayload()` 先瞅一眼 `Content-Length` 设过了没有，设过了直接跳过，不用重复搞 HeaderMap 操作
+- **HttpRequest attributes 透明哈希**：`attributes_` 从 `map<string,any>` 换成了 `map<string,any,less<>>`（C++14 透明比较），中间件拿 `string_view` 做 `getAttribute()` 零分配查找，不用每次构造临时 `std::string`
+- **WebSocket 帧缓冲复用**：`WebSocketSession::sendFrame()` 里帧构造直接写到成员 `frameBuf_` 里复用缓冲区，省了 `buildWsFrame()` 每次返回 `std::string` 的堆分配。echo 场景帧大小稳定的时候完全零分配
+
 ## [2.6.6] - 2026-06-25
 
 ### Added
@@ -435,7 +453,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Multipart Part 数量上限（DoS 防护）
 - Session ID 使用密码学安全的随机数生成
 
-[Unreleased]: https://github.com/Hical61/Hical/compare/v2.6.6...HEAD
+[Unreleased]: https://github.com/Hical61/Hical/compare/v2.6.7...HEAD
+[2.6.7]: https://github.com/Hical61/Hical/compare/v2.6.6...v2.6.7
 [2.6.6]: https://github.com/Hical61/Hical/compare/v2.6.5...v2.6.6
 [2.6.5]: https://github.com/Hical61/Hical/compare/v2.6.4...v2.6.5
 [2.6.4]: https://github.com/Hical61/Hical/compare/v2.6.3...v2.6.4

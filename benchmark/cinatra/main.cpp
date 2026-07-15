@@ -146,8 +146,8 @@ int main()
 									 res.set_status_and_content(status_type::ok, std::move(result));
 								 });
 
-	// /sync-middleware — 复用同样的调用链（Cinatra 无异步/同步中间件区分）
-	server.set_http_handler<GET>("/sync-middleware/3",
+	// /sync-filter — 模拟同步函数调用链
+	server.set_http_handler<GET>("/sync-filter/3",
 								 [](coro_http_request& req, coro_http_response& res)
 								 {
 									 auto result = runWithMiddleware(3,
@@ -162,7 +162,7 @@ int main()
 									 res.set_status_and_content(status_type::ok, std::move(result));
 								 });
 
-	server.set_http_handler<GET>("/sync-middleware/10",
+	server.set_http_handler<GET>("/sync-filter/10",
 								 [](coro_http_request& req, coro_http_response& res)
 								 {
 									 auto result = runWithMiddleware(10,

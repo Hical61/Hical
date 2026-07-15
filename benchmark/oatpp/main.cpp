@@ -133,8 +133,8 @@ public:
 		return createDtoResponse(Status::CODE_200, result);
 	}
 
-	// /sync-middleware — 复用同样的调用链（Oat++ 无异步/同步中间件区分）
-	ENDPOINT("GET", "/sync-middleware/3", syncMw3)
+	// /sync-filter — 模拟同步函数调用链
+	ENDPOINT("GET", "/sync-filter/3", syncMw3)
 	{
 		auto result = runWithMiddleware(3,
 										[]() -> oatpp::Object<MiddlewareDTO>
@@ -146,7 +146,7 @@ public:
 		return createDtoResponse(Status::CODE_200, result);
 	}
 
-	ENDPOINT("GET", "/sync-middleware/10", syncMw10)
+	ENDPOINT("GET", "/sync-filter/10", syncMw10)
 	{
 		auto result = runWithMiddleware(10,
 										[]() -> oatpp::Object<MiddlewareDTO>

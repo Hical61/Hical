@@ -105,21 +105,21 @@ int main()
 				});
 	}
 
-	// ============ 同步中间件链测试端点（SyncMiddleware 快速路径） ============
+	// ============ 同步过滤链测试端点（SyncMiddleware 快速路径） ============
 
 	SyncBeforeHandler passthroughSync = [](HttpRequest&) -> SyncMiddlewareResult
 	{
 		return std::nullopt; // 继续执行
 	};
 
-	// /sync-middleware/3 — 3 层同步中间件
+	// /sync-filter/3 — 3 层同步过滤
 	{
 		auto gs3 = server.router().group("");
 		for (int i = 0; i < 3; ++i)
 		{
 			gs3.use(passthroughSync);
 		}
-		gs3.get("/sync-middleware/3",
+		gs3.get("/sync-filter/3",
 				[](const HttpRequest&) -> HttpResponse
 				{
 					json::object obj;
@@ -129,14 +129,14 @@ int main()
 				});
 	}
 
-	// /sync-middleware/10 — 10 层同步中间件（仅 1 个协程帧）
+	// /sync-filter/10 — 10 层同步过滤（仅 1 个协程帧）
 	{
 		auto gs10 = server.router().group("");
 		for (int i = 0; i < 10; ++i)
 		{
 			gs10.use(passthroughSync);
 		}
-		gs10.get("/sync-middleware/10",
+		gs10.get("/sync-filter/10",
 				 [](const HttpRequest&) -> HttpResponse
 				 {
 					 json::object obj;

@@ -16,9 +16,9 @@ JSON_BODY='{"name":"Alice","age":30,"email":"alice@example.com"}'
 RESULT_FILE="${RESULT_FILE:-/bench/output/results.md}"
 
 # ==================== 运行模式 ====================
-# cpp:        Hical / Drogon / Crow / Oat++ / cpp-httplib / Cinatra（默认，12 场景含中间件和高并发）
+# cpp:        Hical / Drogon / Crow / Oat++ / cpp-httplib / Cinatra（默认，11 场景含中间件和高并发）
 # cross-lang: Hical / Gin / Fiber / Actix-web（4 基础场景）
-# all:        全部 9 个框架，12 场景
+# all:        全部 9 个框架，11 场景
 BENCH_MODE="${BENCH_MODE:-cpp}"
 
 # ==================== 框架 Host 定义 ====================
@@ -84,14 +84,13 @@ BASE_SCENES=(
 
 # 中间件 + 高并发场景（仅 cpp / all 模式）
 EXTRA_SCENES=(
-    "mw0|测试 5: 中间件 0 层|/middleware/0|GET|"
-    "mw3|测试 6: 中间件 3 层（原生机制）|/middleware/3|GET|"
-    "mw10|测试 7: 中间件 10 层（原生机制）|/middleware/10|GET|"
-    "smw3|测试 8: 中间件 3 层（Hical SyncMW）|/sync-middleware/3|GET|"
-    "smw10|测试 9: 中间件 10 层（Hical SyncMW）|/sync-middleware/10|GET|"
-    "c100|测试 10: 高并发 100|/|GET|100"
-    "c1000|测试 11: 高并发 1000|/|GET|1000"
-    "c10000|测试 12: 高并发 10000|/|GET|10000"
+    "mw0|测试 5: 协程洋葱 0 层（基线）|/middleware/0|GET|"
+    "mw3|测试 6: 协程洋葱 3 层|/middleware/3|GET|"
+    "mw10|测试 7: 协程洋葱 10 层|/middleware/10|GET|"
+    "sf3|测试 8: 同步过滤 3 层|/sync-filter/3|GET|"
+    "sf10|测试 9: 同步过滤 10 层|/sync-filter/10|GET|"
+    "c1000|测试 10: 高并发 1000|/|GET|1000"
+    "c10000|测试 11: 高并发 10000|/|GET|10000"
 )
 
 SCENES=("${BASE_SCENES[@]}")

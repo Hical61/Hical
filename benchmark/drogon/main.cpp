@@ -4,8 +4,9 @@
 
 using namespace drogon;
 
-// 空操作 Filter，用于中间件层数测试
-class Filter1 : public HttpFilter<Filter1>
+// ============ HttpFilter 空操作（同步过滤链） ============
+// HttpFilter 在同 EventLoop 线程上做纯同步递归调用，不创建协程帧
+class SyncFilter1 : public HttpFilter<SyncFilter1>
 {
 public:
 	void doFilter(const HttpRequestPtr&, FilterCallback&&, FilterChainCallback&& nextCb) override
@@ -14,7 +15,7 @@ public:
 	}
 };
 
-class Filter2 : public HttpFilter<Filter2>
+class SyncFilter2 : public HttpFilter<SyncFilter2>
 {
 public:
 	void doFilter(const HttpRequestPtr&, FilterCallback&&, FilterChainCallback&& nextCb) override
@@ -23,7 +24,7 @@ public:
 	}
 };
 
-class Filter3 : public HttpFilter<Filter3>
+class SyncFilter3 : public HttpFilter<SyncFilter3>
 {
 public:
 	void doFilter(const HttpRequestPtr&, FilterCallback&&, FilterChainCallback&& nextCb) override
@@ -32,7 +33,7 @@ public:
 	}
 };
 
-class Filter4 : public HttpFilter<Filter4>
+class SyncFilter4 : public HttpFilter<SyncFilter4>
 {
 public:
 	void doFilter(const HttpRequestPtr&, FilterCallback&&, FilterChainCallback&& nextCb) override
@@ -41,7 +42,7 @@ public:
 	}
 };
 
-class Filter5 : public HttpFilter<Filter5>
+class SyncFilter5 : public HttpFilter<SyncFilter5>
 {
 public:
 	void doFilter(const HttpRequestPtr&, FilterCallback&&, FilterChainCallback&& nextCb) override
@@ -50,7 +51,7 @@ public:
 	}
 };
 
-class Filter6 : public HttpFilter<Filter6>
+class SyncFilter6 : public HttpFilter<SyncFilter6>
 {
 public:
 	void doFilter(const HttpRequestPtr&, FilterCallback&&, FilterChainCallback&& nextCb) override
@@ -59,7 +60,7 @@ public:
 	}
 };
 
-class Filter7 : public HttpFilter<Filter7>
+class SyncFilter7 : public HttpFilter<SyncFilter7>
 {
 public:
 	void doFilter(const HttpRequestPtr&, FilterCallback&&, FilterChainCallback&& nextCb) override
@@ -68,7 +69,7 @@ public:
 	}
 };
 
-class Filter8 : public HttpFilter<Filter8>
+class SyncFilter8 : public HttpFilter<SyncFilter8>
 {
 public:
 	void doFilter(const HttpRequestPtr&, FilterCallback&&, FilterChainCallback&& nextCb) override
@@ -77,7 +78,7 @@ public:
 	}
 };
 
-class Filter9 : public HttpFilter<Filter9>
+class SyncFilter9 : public HttpFilter<SyncFilter9>
 {
 public:
 	void doFilter(const HttpRequestPtr&, FilterCallback&&, FilterChainCallback&& nextCb) override
@@ -86,12 +87,104 @@ public:
 	}
 };
 
-class Filter10 : public HttpFilter<Filter10>
+class SyncFilter10 : public HttpFilter<SyncFilter10>
 {
 public:
 	void doFilter(const HttpRequestPtr&, FilterCallback&&, FilterChainCallback&& nextCb) override
 	{
 		nextCb();
+	}
+};
+
+// ============ HttpCoroMiddleware 空操作（协程洋葱链） ============
+// 每层 co_await next 创建协程帧 + 挂起/恢复，与 Hical AsyncMiddleware 语义对齐
+class CoroMw1 : public HttpCoroMiddleware<CoroMw1>
+{
+public:
+	Task<HttpResponsePtr> invoke(const HttpRequestPtr&, MiddlewareNextAwaiter&& next) override
+	{
+		co_return co_await std::move(next);
+	}
+};
+
+class CoroMw2 : public HttpCoroMiddleware<CoroMw2>
+{
+public:
+	Task<HttpResponsePtr> invoke(const HttpRequestPtr&, MiddlewareNextAwaiter&& next) override
+	{
+		co_return co_await std::move(next);
+	}
+};
+
+class CoroMw3 : public HttpCoroMiddleware<CoroMw3>
+{
+public:
+	Task<HttpResponsePtr> invoke(const HttpRequestPtr&, MiddlewareNextAwaiter&& next) override
+	{
+		co_return co_await std::move(next);
+	}
+};
+
+class CoroMw4 : public HttpCoroMiddleware<CoroMw4>
+{
+public:
+	Task<HttpResponsePtr> invoke(const HttpRequestPtr&, MiddlewareNextAwaiter&& next) override
+	{
+		co_return co_await std::move(next);
+	}
+};
+
+class CoroMw5 : public HttpCoroMiddleware<CoroMw5>
+{
+public:
+	Task<HttpResponsePtr> invoke(const HttpRequestPtr&, MiddlewareNextAwaiter&& next) override
+	{
+		co_return co_await std::move(next);
+	}
+};
+
+class CoroMw6 : public HttpCoroMiddleware<CoroMw6>
+{
+public:
+	Task<HttpResponsePtr> invoke(const HttpRequestPtr&, MiddlewareNextAwaiter&& next) override
+	{
+		co_return co_await std::move(next);
+	}
+};
+
+class CoroMw7 : public HttpCoroMiddleware<CoroMw7>
+{
+public:
+	Task<HttpResponsePtr> invoke(const HttpRequestPtr&, MiddlewareNextAwaiter&& next) override
+	{
+		co_return co_await std::move(next);
+	}
+};
+
+class CoroMw8 : public HttpCoroMiddleware<CoroMw8>
+{
+public:
+	Task<HttpResponsePtr> invoke(const HttpRequestPtr&, MiddlewareNextAwaiter&& next) override
+	{
+		co_return co_await std::move(next);
+	}
+};
+
+class CoroMw9 : public HttpCoroMiddleware<CoroMw9>
+{
+public:
+	Task<HttpResponsePtr> invoke(const HttpRequestPtr&, MiddlewareNextAwaiter&& next) override
+	{
+		co_return co_await std::move(next);
+	}
+};
+
+class CoroMw10 : public HttpCoroMiddleware<CoroMw10>
+{
+public:
+	Task<HttpResponsePtr> invoke(const HttpRequestPtr&, MiddlewareNextAwaiter&& next) override
+	{
+		co_return co_await std::move(next);
 	}
 };
 
@@ -154,7 +247,9 @@ int main()
 		},
 		{Get});
 
-	// 无中间件
+	// ============ 协程洋葱中间件链（与 Hical AsyncMiddleware 同能力层级） ============
+
+	// /middleware/0 — 无中间件基线
 	app().registerHandler("/middleware/0",
 						  [](const HttpRequestPtr&, std::function<void(const HttpResponsePtr&)>&& callback)
 						  {
@@ -165,7 +260,7 @@ int main()
 						  },
 						  {Get});
 
-	// 3 层空操作中间件
+	// /middleware/3 — 3 层协程洋葱中间件
 	app().registerHandler("/middleware/3",
 						  [](const HttpRequestPtr&, std::function<void(const HttpResponsePtr&)>&& callback)
 						  {
@@ -174,9 +269,9 @@ int main()
 							  auto resp = HttpResponse::newHttpJsonResponse(obj);
 							  callback(resp);
 						  },
-						  {Get, "Filter1", "Filter2", "Filter3"});
+						  {Get, "CoroMw1", "CoroMw2", "CoroMw3"});
 
-	// 10 层空操作中间件
+	// /middleware/10 — 10 层协程洋葱中间件
 	app().registerHandler("/middleware/10",
 						  [](const HttpRequestPtr&, std::function<void(const HttpResponsePtr&)>&& callback)
 						  {
@@ -186,19 +281,21 @@ int main()
 							  callback(resp);
 						  },
 						  {Get,
-						   "Filter1",
-						   "Filter2",
-						   "Filter3",
-						   "Filter4",
-						   "Filter5",
-						   "Filter6",
-						   "Filter7",
-						   "Filter8",
-						   "Filter9",
-						   "Filter10"});
+						   "CoroMw1",
+						   "CoroMw2",
+						   "CoroMw3",
+						   "CoroMw4",
+						   "CoroMw5",
+						   "CoroMw6",
+						   "CoroMw7",
+						   "CoroMw8",
+						   "CoroMw9",
+						   "CoroMw10"});
 
-	// /sync-middleware — 复用同样的 Filter 链（Drogon 无异步/同步中间件区分）
-	app().registerHandler("/sync-middleware/3",
+	// ============ 同步过滤链（HttpFilter 纯函数递归，与 Hical SyncMiddleware 同能力层级） ============
+
+	// /sync-filter/3 — 3 层同步 Filter
+	app().registerHandler("/sync-filter/3",
 						  [](const HttpRequestPtr&, std::function<void(const HttpResponsePtr&)>&& callback)
 						  {
 							  Json::Value obj;
@@ -207,9 +304,10 @@ int main()
 							  auto resp = HttpResponse::newHttpJsonResponse(obj);
 							  callback(resp);
 						  },
-						  {Get, "Filter1", "Filter2", "Filter3"});
+						  {Get, "SyncFilter1", "SyncFilter2", "SyncFilter3"});
 
-	app().registerHandler("/sync-middleware/10",
+	// /sync-filter/10 — 10 层同步 Filter
+	app().registerHandler("/sync-filter/10",
 						  [](const HttpRequestPtr&, std::function<void(const HttpResponsePtr&)>&& callback)
 						  {
 							  Json::Value obj;
@@ -219,16 +317,16 @@ int main()
 							  callback(resp);
 						  },
 						  {Get,
-						   "Filter1",
-						   "Filter2",
-						   "Filter3",
-						   "Filter4",
-						   "Filter5",
-						   "Filter6",
-						   "Filter7",
-						   "Filter8",
-						   "Filter9",
-						   "Filter10"});
+						   "SyncFilter1",
+						   "SyncFilter2",
+						   "SyncFilter3",
+						   "SyncFilter4",
+						   "SyncFilter5",
+						   "SyncFilter6",
+						   "SyncFilter7",
+						   "SyncFilter8",
+						   "SyncFilter9",
+						   "SyncFilter10"});
 
 	app().run();
 }

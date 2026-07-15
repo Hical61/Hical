@@ -106,8 +106,8 @@ int main()
 									 });
 		});
 
-	// /sync-middleware — 复用同样的调用链（Crow 无异步/同步中间件区分）
-	CROW_ROUTE(app, "/sync-middleware/3")
+	// /sync-filter — 模拟同步函数调用链
+	CROW_ROUTE(app, "/sync-filter/3")
 	(
 		[]() -> crow::response
 		{
@@ -121,7 +121,7 @@ int main()
 									 });
 		});
 
-	CROW_ROUTE(app, "/sync-middleware/10")
+	CROW_ROUTE(app, "/sync-filter/10")
 	(
 		[]() -> crow::response
 		{

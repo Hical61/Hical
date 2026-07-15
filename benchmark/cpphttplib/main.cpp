@@ -111,8 +111,8 @@ int main()
 				res.set_content(result, "application/json");
 			});
 
-	// /sync-middleware — 复用同样的调用链（cpp-httplib 无异步/同步中间件区分）
-	svr.Get("/sync-middleware/3",
+	// /sync-filter — 模拟同步函数调用链
+	svr.Get("/sync-filter/3",
 			[](const httplib::Request&, httplib::Response& res)
 			{
 				auto result = runWithMiddleware(3,
@@ -126,7 +126,7 @@ int main()
 				res.set_content(result, "application/json");
 			});
 
-	svr.Get("/sync-middleware/10",
+	svr.Get("/sync-filter/10",
 			[](const httplib::Request&, httplib::Response& res)
 			{
 				auto result = runWithMiddleware(10,

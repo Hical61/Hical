@@ -4,7 +4,7 @@
 
 | Profile      | 框架                                                  | 场景数 | 报告文件                  |
 | ------------ | ----------------------------------------------------- | ------ | ------------------------- |
-| `cpp`        | Hical / Drogon / Crow / Oat++ / cpp-httplib / Cinatra | 12     | `CPP_BENCHMARK_REPORT.md` |
+| `cpp`        | Hical / Drogon / Crow / Oat++ / cpp-httplib / Cinatra | 11     | `CPP_BENCHMARK_REPORT.md` |
 | `cross-lang` | Hical / Gin / Fiber / Actix-web                       | 4      | `BENCHMARK_REPORT.md`     |
 
 ## 快速开始：C++ 框架对比
@@ -32,7 +32,7 @@ curl http://localhost:8085/           # Oat++
 curl http://localhost:8086/           # cpp-httplib
 curl http://localhost:8087/           # Cinatra
 
-# 5. 运行压测（12 场景：基础 4 + 中间件 5 + 高并发 3）
+# 5. 运行压测（11 场景：基础 4 + 中间件 5 + 高并发 2）
 docker compose --profile cpp exec wrk bash -c "BENCH_MODE=cpp bash /bench/run_bench.sh"
 
 # 6. 采集补充数据（内存、二进制大小等）
@@ -126,20 +126,21 @@ docker compose --profile cpp exec wrk bash -c "BENCH_MODE=cpp CONNECTIONS=500 DU
 
 | 场景                         | 端点                      | 描述                     |
 | ---------------------------- | ------------------------- | ------------------------ |
-| 中间件 0 层                  | `GET /middleware/0`       | 无中间件基线             |
-| 中间件 3 层（原生机制）      | `GET /middleware/3`       | 3 层空操作中间件         |
-| 中间件 10 层（原生机制）     | `GET /middleware/10`      | 10 层空操作中间件        |
-| 中间件 3 层（Hical SyncMW）  | `GET /sync-middleware/3`  | Hical 同步中间件快速路径 |
-| 中间件 10 层（Hical SyncMW） | `GET /sync-middleware/10` | Hical 同步中间件快速路径 |
+| 协程洋葱 0 层（基线）        | `GET /middleware/0`       | 无中间件基线             |
+| 协程洋葱 3 层                | `GET /middleware/3`       | 3 层异步洋葱中间件       |
+| 协程洋葱 10 层               | `GET /middleware/10`      | 10 层异步洋葱中间件      |
+| 同步过滤 3 层                | `GET /sync-filter/3`      | 3 层同步前置过滤         |
+| 同步过滤 10 层               | `GET /sync-filter/10`     | 10 层同步前置过滤        |
 
-> **中间件实现差异**：Hical（RouteGroup 洋葱链）和 Drogon（HttpFilter）使用真实框架中间件机制；
-> Crow 和 Oat++ 因编译时/全局中间件限制，使用 handler 内 `std::function` 调用链模拟等价开销。
+> **中间件实现差异**：
+> - `/middleware/*`（协程洋葱）：Hical 使用 `co_await next(req)` 协程链，Drogon 使用 `HttpCoroMiddleware + co_await next` 协程链，双方语义对齐——每层创建一个协程帧，支持 before/after 完整洋葱语义。
+> - `/sync-filter/*`（同步过滤）：Hical 使用 `SyncBeforeHandler` 零协程帧快速路径，Drogon 使用 `HttpFilter` 同线程同步递归，双方语义对齐——纯函数调用，无协程帧。
+> - Crow 和 Oat++ 因编译时/全局中间件限制，使用 handler 内 `std::function` 调用链模拟等价开销。
 
-### 高并发场景（3 个）
+### 高并发场景（2 个）
 
 | 场景          | 端点    | 并发连接 | 描述                       |
 | ------------- | ------- | -------- | -------------------------- |
-| 高并发 100    | `GET /` | 100      | 默认并发（基线）           |
 | 高并发 1,000  | `GET /` | 1,000    | 中等并发                   |
 | 高并发 10,000 | `GET /` | 10,000   | 极限并发，观察错误率和 OOM |
 
