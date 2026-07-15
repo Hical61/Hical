@@ -23,6 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **HttpRequest attributes 透明哈希**：`attributes_` 从 `map<string,any>` 换成了 `map<string,any,less<>>`（C++14 透明比较），中间件拿 `string_view` 做 `getAttribute()` 零分配查找，不用每次构造临时 `std::string`
 - **WebSocket 帧缓冲复用**：`WebSocketSession::sendFrame()` 里帧构造直接写到成员 `frameBuf_` 里复用缓冲区，省了 `buildWsFrame()` 每次返回 `std::string` 的堆分配。echo 场景帧大小稳定的时候完全零分配
 
+  感谢 @hyird 在 Issue #11 中提出的乐观同步写方向，以及 `non_blocking(true)` 安全红线、转发协程帧消除、scatter-gather 约束纠正三处关键 review——这波优化改了几十行代码，万连接吞吐 +58%、内存 −30%、中间件链 +7.6%。
+
 ## [2.6.6] - 2026-06-25
 
 ### Added
