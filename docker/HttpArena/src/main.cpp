@@ -1,13 +1,14 @@
 /**
  * @file main.cpp
  * @brief HttpArena benchmark 专用服务器
- * 实现 baseline, pipelined, json, upload, static, echo-ws 端点。
- * 零中间件，同步快速路径，针对 HttpArena 64 核硬件优化。
+ * 实现 baseline, pipelined, json, json-comp, upload, static, echo-ws 端点。
+ * 仅 Gzip 压缩中间件，其余走同步快速路径，针对 HttpArena 64 核硬件优化。
  * 卷挂载约定：
  *   /data/dataset.json  — JSON 数据集（50 个商品条目）
  *   /data/static/       — 静态文件目录（20 个文件）
  */
 
+#include "core/GzipCompression.h"
 #include "core/HttpServer.h"
 #include "core/StaticFiles.h"
 #include "core/WebSocket.h"
@@ -278,6 +279,10 @@ int main()
 							   co_await ws.send(msg.data);
 						   }
 					   });
+
+	// ── 中间件 ─────────────────────────────────────────────────────────────
+	// Gzip 压缩，用于 json-comp 测试
+	server.use(makeGzipCompressionMiddleware());
 
 	// ── benchmark 极致配置 ────────────────────────────────────────────────
 	server.setMaxConnections(65535);
