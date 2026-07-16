@@ -280,9 +280,13 @@ int main()
 						   }
 					   });
 
-	// ── 中间件 ─────────────────────────────────────────────────────────────
-	// Gzip 压缩，用于 json-comp 测试
-	server.use(makeGzipCompressionMiddleware());
+	// ── Gzip 压缩，用于 json-comp 测试（SyncAfterHandler 包装为协程）───────
+	auto gzip = makeGzipCompressionMiddleware();
+	server.use([gzip](HttpRequest& req, MiddlewareNext next) -> Awaitable<HttpResponse> {
+		auto resp = co_await next(req);
+		gzip(req, resp);
+		co_return resp;
+	});
 
 	// ── benchmark 极致配置 ────────────────────────────────────────────────
 	server.setMaxConnections(65535);
