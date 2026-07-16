@@ -154,7 +154,7 @@ Core design principle: when `HICAL_HAS_REFLECTION == 1` (compiler supports P2996
 **`Reflection.h`** — Feature detection (`HICAL_HAS_REFLECTION`), `RouteInfo` struct, `HasRouteTable` / `HasJsonFields` type traits.
 
 **`MetaJson.h`** — Automatic JSON serialization/deserialization:
-- C++26 path: `^^T` + `std::meta::nonstatic_data_members_of` enumerates fields automatically, supports `[[hical::json_name("alias")]]`, `[[hical::json_required]]`, `[[hical::json_ignore]]` attributes, plus `jsonSchema<T>()` and `toJsonSnakeCase<T>()`
+- C++26 path: `^^T` + `std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::unprivileged())` enumerates fields automatically, supports `[[hical::json_name("alias")]]`, `[[hical::json_required]]`, `[[hical::json_ignore]]` attributes, plus `jsonSchema<T>()` and `toJsonSnakeCase<T>()`
 - C++20 fallback: `HICAL_JSON(Type, ...)` macro with `__VA_OPT__` recursive expansion (no field count limit), IS_PAREN + Tag dispatch for decorator syntax: `ALIAS(field, "key")`, `REQUIRED(field)`, `REQUIRED_ALIAS(field, "key")`, `HICAL_IGNORE(field)`. Compile-time field validation via `static_assert + requires`. DTO validation decorators: `MIN(field, val)`, `MAX(field, val)`, `NOT_EMPTY(field)`, `PATTERN(field, "re")`, `LENGTH(field, min, max)` — validated at deserialization time with descriptive error messages
 - API: `hical::meta::toJson(obj)`, `hical::meta::fromJson<T>(json)`, `req.readJson<T>()`
 

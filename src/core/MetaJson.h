@@ -491,7 +491,8 @@ namespace hical::meta
 	{
 		boost::json::object jsonObj;
 
-		template for (constexpr auto member : std::meta::nonstatic_data_members_of(^^T))
+		template for (constexpr auto member :
+					  std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::unprivileged()))
 		{
 			if constexpr (!detail::isJsonIgnored<member>())
 			{
@@ -518,7 +519,8 @@ namespace hical::meta
 		T obj {};
 		const auto& jsonObj = json.as_object();
 
-		template for (constexpr auto member : std::meta::nonstatic_data_members_of(^^T))
+		template for (constexpr auto member :
+					  std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::unprivileged()))
 		{
 			if constexpr (!detail::isJsonIgnored<member>())
 			{
@@ -551,7 +553,8 @@ namespace hical::meta
 		boost::json::object properties;
 		boost::json::array requiredFields;
 
-		template for (constexpr auto member : std::meta::nonstatic_data_members_of(^^T))
+		template for (constexpr auto member :
+					  std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::unprivileged()))
 		{
 			if constexpr (!detail::isJsonIgnored<member>())
 			{
@@ -610,7 +613,8 @@ namespace hical::meta
 	{
 		boost::json::object jsonObj;
 
-		template for (constexpr auto member : std::meta::nonstatic_data_members_of(^^T))
+		template for (constexpr auto member :
+					  std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::unprivileged()))
 		{
 			if constexpr (!detail::isJsonIgnored<member>())
 			{

@@ -154,7 +154,8 @@ namespace hical::meta
 	template <typename Handler>
 	void registerRoutes(Router& router, Handler& handler)
 	{
-		template for (constexpr auto fn : std::meta::nonstatic_member_functions_of(^^Handler))
+		template for (constexpr auto fn :
+					  std::meta::nonstatic_member_functions_of(^^Handler, std::meta::access_context::unprivileged()))
 		{
 			constexpr auto attrs = std::meta::attributes_of(fn);
 			template for (constexpr auto attr : attrs)

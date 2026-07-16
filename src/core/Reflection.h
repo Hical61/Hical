@@ -5,14 +5,19 @@
  * - 当编译器支持 P2996 反射时（HICAL_HAS_REFLECTION == 1），使用原生反射语法
  * - 否则回退到 C++20 宏 + 模板方案，提供相同的用户 API
  * 检测方式：
- * - __cpp_reflection >= 202306L（P2996 标准特性测试宏）
+ * - __cpp_impl_reflection >= 202306L 且 __cpp_lib_reflection >= 202306L（P2996 标准特性测试宏）
  * - 或 CMake 手动定义 HICAL_FORCE_REFLECTION
  */
 
 #pragma once
 
 // C++26 反射特性检测
-#if defined(__cpp_reflection) && __cpp_reflection >= 202306L
+// P2996 定义了两个特性测试宏：
+//   __cpp_impl_reflection — 核心语言反射支持（^^ 操作符、std::meta::info 等）
+//   __cpp_lib_reflection  — 反射库支持（<meta> 头文件）
+// 两者都 >= 202306L 才认为完整可用
+#if (defined(__cpp_impl_reflection) && __cpp_impl_reflection >= 202306L) \
+	&& (defined(__cpp_lib_reflection) && __cpp_lib_reflection >= 202306L)
 	#define HICAL_HAS_REFLECTION 1
 #elif defined(HICAL_FORCE_REFLECTION)
 	#define HICAL_HAS_REFLECTION 1
