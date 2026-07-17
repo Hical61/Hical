@@ -1418,7 +1418,7 @@ struct WsOptions
 | `closeAsync(code, reason)` | `Awaitable<void>`                  | 优雅关闭（RFC 6455 Close 帧）       |
 | `setContext<T>(ptr)`       | `void`                             | 设置 per-connection 类型化上下文    |
 | `getContext<T>()`          | `shared_ptr<T>`                    | 获取上下文                          |
-| `subprotocol()`            | `const std::string&`               | 协商后的子协议                      |
+| `subprotocol()`            | `std::string_view`                 | 协商后的子协议                      |
 | `lastPongTime()`           | `chrono::steady_clock::time_point` | 最后一次收到 Pong 的时间            |
 
 ### 18.4 WsHub 广播管理器

@@ -363,4 +363,4 @@ Hical OpenAPI 模块的设计目标就是**让文档变成代码的副产品**�
 
 ---
 
-*本文基于 Hical v2.4.0，CMake 选项 `HICAL_WITH_OPENAPI=ON`（默认值）。*
+*CMake 选项 `HICAL_WITH_OPENAPI=ON`（默认值）。*

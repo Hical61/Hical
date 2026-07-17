@@ -1,22 +1,22 @@
 # Hical 编译与测试指南
 
-**最后更新：** 2026-05-05
+**最后更新：** 2026-07-17
 **支持平台：** Windows / Linux / macOS
 
 ---
 
 ## 1. 环境要求
 
-| 组件        | 最低版本                         | 用途                        |
-| ----------- | -------------------------------- | --------------------------- |
-| C++ 编译器  | GCC 14+ / Clang 20+ / MSVC 2022+ | C++20 编译器（协程支持）    |
-| CMake       | 3.20+                            | 构建系统                    |
-| Ninja       | 1.10+                            | 构建工具（比 Make 更快）    |
-| Boost       | 1.82+（DB 中间件 1.85+）         | Asio / JSON / MySQL         |
-| OpenSSL     | 3.0+                             | SSL/TLS 支持                |
+| 组件        | 最低版本                         | 用途                              |
+| ----------- | -------------------------------- | --------------------------------- |
+| C++ 编译器  | GCC 14+ / Clang 20+ / MSVC 2022+ | C++20 编译器（协程支持）          |
+| CMake       | 3.20+                            | 构建系统                          |
+| Ninja       | 1.10+                            | 构建工具（比 Make 更快）          |
+| Boost       | 1.82+（DB 中间件 1.85+）         | Asio / JSON / MySQL               |
+| OpenSSL     | 3.0+                             | SSL/TLS 支持                      |
 | zlib        | —                                | WebSocket permessage-deflate 压缩 |
-| liburing    | —（Linux 可选）                  | Boost.Asio 异步文件 I/O     |
-| Google Test | 1.10+                            | 单元测试框架                |
+| liburing    | —（Linux 可选）                  | Boost.Asio 异步文件 I/O           |
+| Google Test | 1.10+                            | 单元测试框架                      |
 
 ---
 
@@ -409,7 +409,7 @@ MSYS_NO_PATHCONV=1 openssl req -x509 -newkey rsa:2048 \
     -days 365 -nodes -subj "/CN=localhost"
 ```
 
-### 4.6 测试用例清单（38 + 5 个可选 DB 测试套件）
+### 4.6 测试用例清单（52 + 1 个 OpenAPI + 5 个可选 DB 测试）
 
 | 测试文件                                                | 用例数 | 覆盖范围                                                       |
 | ------------------------------------------------------- | ------ | -------------------------------------------------------------- |
@@ -424,10 +424,12 @@ MSYS_NO_PATHCONV=1 openssl req -x509 -newkey rsa:2048 \
 | test_http_types                                         | 23     | HttpMethod/HttpStatusCode/HttpRequest/HttpResponse/工厂方法    |
 | test_router                                             | 14     | 路由注册/分发/404/协程/JSON/宏/路径参数/{param}                |
 | test_router_perf                                        | 5      | 静态路由首条/末条/未命中/参数路由/1000 路由性能                |
+| test_http_server_perf                                   | —      | HTTP Server 全链路吞吐量基准                                   |
 | test_tcp_server                                         | 8      | EventLoopPool/TcpServer(accept/消息/IO 线程池)                 |
 | test_middleware                                         | 5      | 空管道/单层/洋葱顺序/拦截/响应修改                             |
 | test_http_server                                        | 7      | GET/POST/404/路径参数/中间件/JSON                              |
 | test_websocket                                          | 3      | Echo/连接回调/未注册路径                                       |
+| test_ws_advanced                                        | —      | WebSocket 进阶（Binary/Close/Subprotocol/Hub/Heartbeat）       |
 | test_concepts                                           | —      | C++20 Concepts 编译期约束验证                                  |
 | test_reflection                                         | 35     | MetaJson 装饰器/alias/required/ignore/unsigned/backward compat |
 | test_cookie                                             | —      | Cookie 解析/Set-Cookie 头/CookieOptions                        |
@@ -440,11 +442,23 @@ MSYS_NO_PATHCONV=1 openssl req -x509 -newkey rsa:2048 \
 | test_redirect                                           | —      | 重定向响应（redirect 工厂方法/Location 头/CRLF 防护）          |
 | test_cors                                               | —      | CORS 中间件（通配符/精确匹配/Preflight/凭证模式）              |
 | test_route_group                                        | —      | 路由组（前缀拼接/组级中间件/嵌套子组）                         |
+| test_rate_limiter                                       | —      | 令牌桶限流中间件（burst/refill/per-key/429/并发）              |
+| test_helmet                                             | —      | 安全头中间件（7 个安全响应头）                                 |
+| test_health                                             | —      | 健康检查端点（K8s liveness/readiness）                         |
+| test_config_loader                                      | 17     | ConfigLoader 配置加载（loadFile/loadString/env 覆盖）          |
+| test_jwt_auth                                           | 15     | JWT Auth 中间件（HS256 签发/验证/路径白名单）                  |
+| test_wildcard_route                                     | —      | 通配路由（*path 模式，优先级/参数提取/方法隔离）               |
+| test_compression                                        | —      | Gzip 压缩中间件（Accept-Encoding/流式压缩/级别配置）           |
+| test_chunked_sse                                        | —      | Chunked Transfer-Encoding + SSE 流式推送                       |
+| test_expect_continue                                    | —      | Expect: 100-continue 支持                                      |
+| test_http_client                                        | —      | HTTP 客户端测试工具                                            |
+| test_optimistic_write                                   | —      | 乐观同步写（tryOptimisticWrite 路径覆盖）                      |
 | test_error_handler                                      | —      | 全局错误处理器（异常捕获/自定义响应）                          |
 | test_graceful_shutdown                                  | —      | 优雅关闭（stop()/进行中请求完成）                              |
 | test_log                                                | 36     | 日志核心（format API、Sink API、多线程安全、Fatal abort）      |
 | test_log_ndebug                                         | 3      | NDEBUG 编译消除（TRACE/TRACE_IF/TRACE_STREAM 消除）            |
 | test_fixed_buffer                                       | 19     | FixedBuffer 栈缓冲（append、溢出 fallback、格式化）            |
+| test_read_buffer_pool                                   | —      | ReadBufferPool 借还（thread_local 借出/归还/空闲不持有）       |
 | test_log_file                                           | 7      | LogFile 文件轮转（写入、大小轮转、文件数限制）                 |
 | test_async_file_sink                                    | 7      | AsyncFileSink 异步日志（多线程、优雅关闭、轮转）               |
 | test_log_formatter                                      | 12     | TextFormatter + JsonFormatter（格式、traceId、JSON）           |

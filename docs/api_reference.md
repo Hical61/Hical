@@ -514,26 +514,31 @@ HTTP 类型定义，包含方法枚举、状态码枚举和转换函数。
 
 #### HttpStatusCode 枚举
 
-| 枚举值                 | 数值 | 说明           |
-| ---------------------- | ---- | -------------- |
-| `hOk`                  | 200  | 成功           |
-| `hCreated`             | 201  | 已创建         |
-| `hAccepted`            | 202  | 已接受         |
-| `hNoContent`           | 204  | 无内容         |
-| `hMovedPermanently`    | 301  | 永久重定向     |
-| `hFound`               | 302  | 临时重定向     |
-| `hNotModified`         | 304  | 未修改         |
-| `hBadRequest`          | 400  | 错误请求       |
-| `hUnauthorized`        | 401  | 未授权         |
-| `hForbidden`           | 403  | 禁止访问       |
-| `hNotFound`            | 404  | 未找到         |
-| `hMethodNotAllowed`    | 405  | 方法不允许     |
-| `hConflict`            | 409  | 冲突           |
-| `hTooManyRequests`     | 429  | 请求过多       |
-| `hInternalServerError` | 500  | 服务器内部错误 |
-| `hNotImplemented`      | 501  | 未实现         |
-| `hBadGateway`          | 502  | 网关错误       |
-| `hServiceUnavailable`  | 503  | 服务不可用     |
+| 枚举值                          | 数值 | 说明                   |
+| ------------------------------- | ---- | ---------------------- |
+| `hOk`                           | 200  | 成功                   |
+| `hCreated`                      | 201  | 已创建                 |
+| `hAccepted`                     | 202  | 已接受                 |
+| `hNoContent`                    | 204  | 无内容                 |
+| `hPartialContent`               | 206  | 部分内容（Range）      |
+| `hMovedPermanently`             | 301  | 永久重定向             |
+| `hFound`                        | 302  | 临时重定向             |
+| `hNotModified`                  | 304  | 未修改                 |
+| `hTemporaryRedirect`            | 307  | 临时重定向（保持方法） |
+| `hPermanentRedirect`            | 308  | 永久重定向（保持方法） |
+| `hBadRequest`                   | 400  | 错误请求               |
+| `hUnauthorized`                 | 401  | 未授权                 |
+| `hForbidden`                    | 403  | 禁止访问               |
+| `hNotFound`                     | 404  | 未找到                 |
+| `hMethodNotAllowed`             | 405  | 方法不允许             |
+| `hConflict`                     | 409  | 冲突                   |
+| `hPayloadTooLarge`              | 413  | 请求体过大             |
+| `hRequestedRangeNotSatisfiable` | 416  | Range 无法满足         |
+| `hTooManyRequests`              | 429  | 请求过多               |
+| `hInternalServerError`          | 500  | 服务器内部错误         |
+| `hNotImplemented`               | 501  | 未实现                 |
+| `hBadGateway`                   | 502  | 网关错误               |
+| `hServiceUnavailable`           | 503  | 服务不可用             |
 
 #### 转换函数
 
@@ -1223,7 +1228,7 @@ struct WsMessage
 using WsMessageCallback      = std::function<Awaitable<void>(const std::string&, WebSocketSession&)>;
 using WsTypedMessageCallback = std::function<Awaitable<void>(const WsMessage&, WebSocketSession&)>;
 using WsConnectCallback      = std::function<Awaitable<void>(WebSocketSession&)>;
-using WsDisconnectCallback   = std::function<void(WebSocketSession&)>;
+using WsDisconnectCallback   = std::function<Awaitable<void>(WebSocketSession&)>;
 ```
 
 #### 示例
@@ -1846,20 +1851,24 @@ void registerLogAdmin(Router& router, const std::string& prefix = "/admin");
 
 **头文件：** `<hical/db/DbConfig.h>`
 
-| 字段             | 类型                   | 默认值      | 说明                       |
-| ---------------- | ---------------------- | ----------- | -------------------------- |
-| `host`           | `std::string`          | `127.0.0.1` | 主机地址                   |
-| `port`           | `uint16_t`             | `3306`      | 端口                       |
-| `user`           | `std::string`          | `""`        | 用户名                     |
-| `password`       | `std::string`          | `""`        | 密码                       |
-| `database`       | `std::string`          | `""`        | 数据库名                   |
-| `charset`        | `std::string`          | `"utf8mb4"` | 字符集                     |
-| `minConnections` | `size_t`               | `2`         | 最小连接数                 |
-| `maxConnections` | `size_t`               | `16`        | 最大连接数                 |
-| `idleTimeout`    | `std::chrono::seconds` | `300s`      | 空闲回收超时               |
-| `acquireTimeout` | `std::chrono::seconds` | `5s`        | 获取连接超时               |
-| `queryTimeout`   | `std::chrono::seconds` | `30s`       | 查询执行超时               |
-| `stmtCacheSize`  | `size_t`               | `64`        | PreparedStatement 缓存上限 |
+| 字段                  | 类型                   | 默认值      | 说明                         |
+| --------------------- | ---------------------- | ----------- | ---------------------------- |
+| `host`                | `std::string`          | `127.0.0.1` | 主机地址                     |
+| `port`                | `uint16_t`             | `3306`      | 端口                         |
+| `user`                | `std::string`          | `""`        | 用户名                       |
+| `password`            | `std::string`          | `""`        | 密码                         |
+| `database`            | `std::string`          | `""`        | 数据库名                     |
+| `charset`             | `std::string`          | `"utf8mb4"` | 字符集                       |
+| `minConnections`      | `size_t`               | `2`         | 最小连接数                   |
+| `maxConnections`      | `size_t`               | `16`        | 最大连接数                   |
+| `idleTimeout`         | `std::chrono::seconds` | `300s`      | 空闲回收超时                 |
+| `acquireTimeout`      | `std::chrono::seconds` | `5s`        | 获取连接超时                 |
+| `queryTimeout`        | `std::chrono::seconds` | `30s`       | 查询执行超时                 |
+| `autoReconnect`       | `bool`                 | `true`      | 断线自动重连                 |
+| `idleCheckInterval`   | `std::chrono::seconds` | `60s`       | 空闲连接回收检查间隔         |
+| `healthCheckInterval` | `std::chrono::seconds` | `30s`       | 后台健康检查间隔（0=禁用）   |
+| `pingGracePeriod`     | `std::chrono::seconds` | `15s`       | acquire() 跳过 ping 的宽限期 |
+| `stmtCacheSize`       | `size_t`               | `64`        | PreparedStatement 缓存上限   |
 
 ---
 
@@ -1914,7 +1923,7 @@ void registerLogAdmin(Router& router, const std::string& prefix = "/admin");
 | `init()`        | `Awaitable<void>`                          | 预热连接池             |
 | `acquire()`     | `Awaitable<std::shared_ptr<DbConnection>>` | 获取连接（超时抛异常） |
 | `release(conn)` | `void`                                     | 归还连接               |
-| `shutdown()`    | `void`                                     | 关闭连接池             |
+| `shutdown()`    | `Awaitable<void>`                          | 关闭连接池             |
 
 统计：`activeCount()` / `idleCount()` / `waitingCount()` / `totalCount()`。
 
@@ -2166,7 +2175,7 @@ void serveOpenApi(
 | WS 消息（文本）  | `Awaitable<void>(const std::string&, WebSocketSession&)`            | `WsMessageCallback` / `Router.h`                      |
 | WS 消息（typed） | `Awaitable<void>(const WsMessage&, WebSocketSession&)`              | `WsTypedMessageCallback` / `Router.h`                 |
 | WS 连接          | `Awaitable<void>(WebSocketSession&)`                                | `WsConnectCallback` / `Router.h`                      |
-| WS 断开          | `void(WebSocketSession&)`                                           | `WsDisconnectCallback` / `Router.h`                   |
+| WS 断开          | `Awaitable<void>(WebSocketSession&)`                                | `WsDisconnectCallback` / `Router.h`                   |
 | DB 连接工厂      | `Awaitable<shared_ptr<DbConnection>>(io_context&, const DbConfig&)` | `DbConnectionFactory` / `DbConnectionPool.h`          |
 | 慢查询回调       | `void(const QueryLogEntry&)`                                        | `QueryLogOptions::SlowQueryCallback` / `DbQueryLog.h` |
 | 请求查询日志     | `void(const HttpRequest&, const vector<QueryLogEntry>&)`            | `QueryLogOptions::LogCallback` / `DbQueryLog.h`       |

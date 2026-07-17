@@ -342,7 +342,10 @@ registerLogAdminEndpoints(router, "/admin", [](const HttpRequest& req) -> std::o
     auto token = req.header("Authorization");
     if (token != "Bearer your-secret-token")
     {
-        return HttpResponse::status(401).body("Unauthorized");
+        auto res = HttpResponse();
+        res.setStatus(HttpStatusCode::hUnauthorized);
+        res.setBody("Unauthorized", "text/plain");
+        return res;
     }
     return std::nullopt; // 通过认证
 });

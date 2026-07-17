@@ -1,6 +1,6 @@
 # Hical 项目代码结构
 
-> 最后更新：2026-06-25
+> 最后更新：2026-07-17
 
 ## 项目概述
 
@@ -10,7 +10,7 @@ Hical 是基于 Boost.Asio、采用原生 HTTP/WebSocket 网络栈（picohttppar
 
 ```
 hical/
-├── CMakeLists.txt              # 顶层 CMake（C++20，project(VERSION 2.6.3)，Boost/OpenSSL/GTest）
+├── CMakeLists.txt              # 顶层 CMake（C++20，project(VERSION 2.6.7)，Boost/OpenSSL/GTest）
 ├── README.md / README_CN.md    # 项目主页（英文 / 中文双语，含 CI/License/平台徽章）
 ├── LICENSE                     # MIT 协议
 ├── CHANGELOG.md                # 版本变更日志（按版本倒序）
@@ -124,7 +124,7 @@ hical/
 │       ├── MysqlConnection.h/.cpp  # MySQL 后端（Boost.MySQL any_connection + charset 白名单校验）
 │       └── StmtCache.h/.cpp    # PreparedStatement LRU 缓存（透明哈希 string_view 查找）
 │
-├── tests/                      # 单元测试（Google Test）— 51 个基础测试套件（+ 1 个可选 OpenAPI + 5 个可选 DB 测试）
+├── tests/                      # 单元测试（Google Test）— 52 个基础测试套件（+ 1 个可选 OpenAPI + 5 个可选 DB 测试）
 │   ├── CMakeLists.txt          # gtest_discover_tests 自动注册 + Windows ws2_32/mswsock 链接
 │   │
 │   │ # —— 基础设施 ——
@@ -160,6 +160,15 @@ hical/
 │   ├── test_route_group.cpp          # 路由组
 │   ├── test_error_handler.cpp        # 全局错误处理器
 │   ├── test_graceful_shutdown.cpp    # 优雅关闭
+│   ├── test_rate_limiter.cpp         # 令牌桶限流
+│   ├── test_helmet.cpp               # 安全头中间件
+│   ├── test_health.cpp               # 健康检查端点
+│   ├── test_wildcard_route.cpp       # 通配路由（*path 模式）
+│   ├── test_compression.cpp          # Gzip 压缩中间件
+│   ├── test_chunked_sse.cpp          # Chunked 传输 + SSE 流
+│   ├── test_expect_continue.cpp      # Expect: 100-continue
+│   ├── test_http_client.cpp          # HTTP 客户端测试工具
+│   ├── test_optimistic_write.cpp     # 乐观同步写
 │   │ # —— WebSocket ——
 │   ├── test_websocket.cpp            # WebSocket 基础
 │   ├── test_ws_advanced.cpp          # WebSocket 进阶（子协议/心跳/压缩/Hub 广播）
@@ -170,6 +179,7 @@ hical/
 │   ├── test_log.cpp                  # Log 核心（36 个）
 │   ├── test_log_ndebug.cpp           # NDEBUG TRACE 消除（3 个）
 │   ├── test_fixed_buffer.cpp         # FixedBuffer（19 个）
+│   ├── test_read_buffer_pool.cpp       # ReadBufferPool 借还
 │   ├── test_log_file.cpp             # LogFile 轮转（7 个）
 │   ├── test_async_file_sink.cpp      # AsyncFileSink（7 个）
 │   ├── test_log_formatter.cpp        # TextFormatter + JsonFormatter（12 个）
@@ -183,7 +193,7 @@ hical/
 │   ├── test_stmt_cache.cpp           # PreparedStatement 缓存（9 个）
 │   └── test_mysql_integration.cpp    # MySQL 集成（需真实数据库，7 个）
 │
-├── examples/                   # 示例程序（9 个）
+├── examples/                   # 示例程序（8 个）
 │   ├── CMakeLists.txt
 │   ├── echo_server.cpp         # 协程式 Echo Server
 │   ├── pmr_poc.cpp             # pmr 内存池验证
@@ -219,7 +229,7 @@ hical/
 | `HICAL_ENABLE_REFLECTION`         | OFF  | 启用 C++26 原生反射（P2996），需兼容编译器；OFF 时回退到 C++20 宏             |
 | `HICAL_USE_SYSTEM_PICOHTTPPARSER` | OFF  | 使用系统安装的 picohttpparser 替代内嵌副本                                    |
 | `HICAL_WITH_MIMALLOC`             | OFF  | 使用 mimalloc 作为 PMR 最底层 upstream 分配器，替代默认 `new_delete_resource` |
-| `BUILD_TESTING`                   | ON   | 构建 [tests/](../tests/) 单元测试                                             |
+| `HICAL_BUILD_TESTS`               | ON   | 构建 [tests/](../tests/) 单元测试                                             |
 | `CMAKE_BUILD_TYPE`                | —    | `Debug` / `Release` / `RelWithDebInfo`                                        |
 
 ## 命名空间布局
@@ -311,8 +321,8 @@ hical/
   - Windows 额外：`ws2_32`、`mswsock`
 - **构建产物**：
   - `hical_core` — 框架核心静态库（仅静态库，DLL/ABI 不兼容）
-  - `test_*` — 51 个基础测试套件（+ 1 个可选 OpenAPI + 5 个可选 DB 测试）
-  - 9 个示例可执行文件
+  - `test_*` — 52 个基础测试套件（+ 1 个可选 OpenAPI + 5 个可选 DB 测试）
+  - 8 个示例可执行文件
 - **CI 工作流**：见 [.github/workflows/](../.github/workflows/) — `ci.yml`（多平台矩阵）、`sanitizer.yml`（ASan/UBSan/TSan）、`release.yml` / `conan-publish.yml`
 
 详细构建步骤参见 [build_and_test_guide.md](build_and_test_guide.md)；分发与集成参见 [integration_guide.md](integration_guide.md)。
