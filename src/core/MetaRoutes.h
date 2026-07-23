@@ -25,10 +25,12 @@
 
 #include "Reflection.h"
 #include "Router.h"
+#include "PerfectHashRouter.h"
 #include <functional>
 #include <memory>
 #include <tuple>
 #include <type_traits>
+#include <vector>
 
 namespace hical::meta
 {
@@ -109,10 +111,34 @@ namespace hical::meta
 			(std::get<I>(table).apply(router, pHandler), ...);
 		}
 
+		/**
+		 * @brief 提取所有静态路由的 (method, path) 对，用于构建完美哈希表
+		 * 参数路由和通配路由不参与编译期哈希。
+		 */
+		template <size_t... I, typename Tuple>
+		std::vector<std::pair<HttpMethod, std::string_view>> collectStaticRouteKeys(const Tuple& table,
+																					std::index_sequence<I...>)
+		{
+			std::vector<std::pair<HttpMethod, std::string_view>> keys;
+			// 折叠表达式：逐个检查是否为静态路由
+			auto collect = [&](const auto& reg)
+			{
+				// 不含 '{' 且不含 '*' 的才是静态路由
+				if (reg.info.path.find('{') == std::string_view::npos
+					&& reg.info.path.find('*') == std::string_view::npos)
+				{
+					keys.emplace_back(reg.info.method, reg.info.path);
+				}
+			};
+			(collect(std::get<I>(table)), ...);
+			return keys;
+		}
+
 	} // namespace detail
 
 	/**
 	 * @brief 自动注册 Handler 中所有路由到 Router（shared_ptr 版本，推荐）
+	 * 注册完成后自动构建运行时完美哈希表加速静态路由查找。
 	 * 通过 shared_ptr 管理 handler 生命周期，确保路由回调中的引用始终有效。
 	 * 适用于 handler 需要跨异步边界存活的场景。
 	 */
@@ -125,6 +151,17 @@ namespace hical::meta
 		auto table = Handler::hicalRouteTable();
 		constexpr auto count = std::tuple_size_v<decltype(table)>;
 		detail::registerAll(router, pHandler, table, std::make_index_sequence<count> {});
+
+		// 收集静态路由键并构建完美哈希表
+		auto keys = detail::collectStaticRouteKeys(table, std::make_index_sequence<count> {});
+		if (!keys.empty())
+		{
+			auto lookup = RuntimePerfectHashLookup::buildFromKeys(keys);
+			if (lookup.valid())
+			{
+				router.setPerfectHashLookup(std::move(lookup));
+			}
+		}
 	}
 
 	/**

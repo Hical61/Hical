@@ -369,7 +369,18 @@ namespace hical
 			reqPath = rawPath;
 		}
 
-		// 1. 优先查找静态路由（O(1) 哈希查找，透明哈希避免构造临时 std::string）
+		// 1a. 完美哈希优先查找（如果注入）
+		if (phrLookup_.valid())
+		{
+			size_t idx = phrLookup_.lookup(reqMethod, reqPath);
+			if (idx != SIZE_MAX && idx < phrEntryMap_->size())
+			{
+				result.staticEntry = (*phrEntryMap_)[idx];
+				return result;
+			}
+		}
+
+		// 1b. 回退到运行时哈希表查找（O(1) 哈希查找，透明哈希避免构造临时 std::string）
 		if (auto it = staticRoutes_.find(RouteKeyView {reqMethod, reqPath}); it != staticRoutes_.end())
 		{
 			result.staticEntry = &it->second;
@@ -681,6 +692,26 @@ namespace hical
 	RouteGroup Router::group(const std::string& prefix)
 	{
 		return RouteGroup(*this, prefix);
+	}
+
+	void Router::setPerfectHashLookup(RuntimePerfectHashLookup lookup)
+	{
+		// 构建 index -> RouteEntry* 映射
+		auto entryMap = std::make_shared<std::vector<const RouteEntry*>>();
+		entryMap->resize(lookup.keyCount(), nullptr);
+		phrLookup_ = std::move(lookup);
+
+		// 遍历 staticRoutes_：所有静态路由的 entry 都是稳定的（unordered_map 节点引用稳定）
+		for (auto& [key, entry] : staticRoutes_)
+		{
+			size_t idx = phrLookup_.lookup(key.method, key.path);
+			if (idx != SIZE_MAX && idx < entryMap->size())
+			{
+				(*entryMap)[idx] = &entry;
+			}
+		}
+
+		phrEntryMap_ = std::move(entryMap);
 	}
 
 } // namespace hical
