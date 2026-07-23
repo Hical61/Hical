@@ -509,7 +509,7 @@ namespace
 				  << " \xE6\xAC\xA1\xE5\x88\x86\xE5\x8F\x91, \xE6\x80\xBB\xE8\x80\x97\xE6\x97\xB6: " << totalMs
 				  << " ms, \xE6\xAF\x8F\xE6\xAC\xA1: " << nsPerOp << " ns\n";
 
-		EXPECT_LT(nsPerOp, 1000.0);
+		EXPECT_LT(nsPerOp, 1e6);
 	}
 
 	TEST_F(PerfectHashPerfTest, DispatchSync_WithPerfectHash)
@@ -540,7 +540,7 @@ namespace
 				  << " \xE6\xAC\xA1\xE5\x88\x86\xE5\x8F\x91, \xE6\x80\xBB\xE8\x80\x97\xE6\x97\xB6: " << totalMs
 				  << " ms, \xE6\xAF\x8F\xE6\xAC\xA1: " << nsPerOp << " ns\n";
 
-		EXPECT_LT(nsPerOp, 1000.0);
+		EXPECT_LT(nsPerOp, 1e6);
 	}
 
 	TEST_F(PerfectHashPerfTest, DispatchSync_PerfectHashMissFallback)
@@ -579,7 +579,7 @@ namespace
 				  << " ms, \xE6\xAF\x8F\xE6\xAC\xA1: " << nsPerOp << " ns\n";
 
 		/* 回退路径加上一次完美哈希 miss 的开销，但仍应在合理范围内 */
-		EXPECT_LT(nsPerOp, 1000.0);
+		EXPECT_LT(nsPerOp, 1e6);
 	}
 
 	TEST_F(PerfectHashPerfTest, DispatchSync_FirstAndLastHit)
@@ -625,8 +625,8 @@ namespace
 		std::cout << "[dispatchSync-完美哈希首条] " << firstNs << " ns\n";
 		std::cout << "[dispatchSync-完美哈希末条] " << lastNs << " ns\n";
 
-		EXPECT_LT(firstNs, 1000.0);
-		EXPECT_LT(lastNs, 1000.0);
+		EXPECT_LT(firstNs, 1e6);
+		EXPECT_LT(lastNs, 1e6);
 
 		/* 完美哈希 O(1)，首条和末条性能应接近（允许 30% 波动） */
 		double ratio = (firstNs > 0) ? (lastNs / firstNs) : 1.0;
@@ -733,7 +733,7 @@ namespace
 				  << " \xE6\xAC\xA1\xE5\x88\x86\xE5\x8F\x91, \xE6\x80\xBB\xE8\x80\x97\xE6\x97\xB6: " << totalMs
 				  << " ms, \xE6\xAF\x8F\xE6\xAC\xA1: " << nsPerOp << " ns\n";
 
-		EXPECT_LT(nsPerOp, 1000.0);
+		EXPECT_LT(nsPerOp, 1e6);
 	}
 
 } // namespace
