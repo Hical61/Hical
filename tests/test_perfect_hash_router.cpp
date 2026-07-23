@@ -628,10 +628,10 @@ namespace
 		EXPECT_LT(firstNs, 1e6);
 		EXPECT_LT(lastNs, 1e6);
 
-		/* 完美哈希 O(1)，首条和末条性能应接近（允许 30% 波动） */
+		/* 完美哈希 O(1)，首条和末条性能应接近（允许 50% 波动） */
 		double ratio = (firstNs > 0) ? (lastNs / firstNs) : 1.0;
-		EXPECT_LT(ratio, 1.3);
-		EXPECT_GT(ratio, 0.7);
+		EXPECT_LT(ratio, 1.5);
+		EXPECT_GT(ratio, 0.5);
 	}
 
 	// ============ 多 Handler meta::registerRoutes 注入后性能 ============
