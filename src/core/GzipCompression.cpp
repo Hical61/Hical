@@ -19,6 +19,53 @@ namespace hical
 	namespace
 	{
 
+		/**
+		 * @brief 判断 MIME 类型是否适合 gzip 压缩
+		 * 只对文本和类文本格式压缩（text 类, json, js, xml, svg 等），
+		 * 跳过 image/webp, font/woff2, video/mp4 等已压缩二进制格式，
+		 * 避免无意义的 deflate 计算。
+		 * @param contentType Content-Type 头部值
+		 * @return true 表示适合压缩
+		 */
+		bool isCompressible(std::string_view contentType)
+		{
+			if (contentType.empty())
+			{
+				return false;
+			}
+
+			// 去掉 charset 等参数，只取 media type 部分
+			auto semi = contentType.find(';');
+			auto mediaType = (semi != std::string_view::npos) ? contentType.substr(0, semi) : contentType;
+
+			if (mediaType.starts_with("text/"))
+			{
+				return true;
+			}
+			if (mediaType.starts_with("application/json"))
+			{
+				return true;
+			}
+			if (mediaType.starts_with("application/javascript"))
+			{
+				return true;
+			}
+			if (mediaType.starts_with("application/xml"))
+			{
+				return true;
+			}
+			if (mediaType.starts_with("image/svg+xml"))
+			{
+				return true;
+			}
+			if (mediaType.starts_with("application/xhtml+xml"))
+			{
+				return true;
+			}
+
+			return false;
+		}
+
 		/// 检查 Accept-Encoding 是否包含 gzip
 		bool acceptsGzip(const HttpRequest& req)
 		{
@@ -260,6 +307,11 @@ namespace hical
 
 			if (!native.body.empty() && !native.hasChunkedBody() && !native.hasFileBody())
 			{
+				if (!isCompressible(native.headers.find("Content-Type")))
+				{
+					return;
+				}
+
 				auto bodySize = native.body.size();
 				if (bodySize < opts.minSize)
 				{
@@ -307,6 +359,11 @@ namespace hical
 
 			auto& native = res.native();
 			if (native.body.empty() || native.hasChunkedBody() || native.hasFileBody())
+			{
+				co_return res;
+			}
+
+			if (!isCompressible(native.headers.find("Content-Type")))
 			{
 				co_return res;
 			}

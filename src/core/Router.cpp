@@ -26,11 +26,11 @@ namespace hical
 		}
 		else if (isParamRoute(path))
 		{
-			paramRoutesByMethod_[method].push_back({method, path, std::move(handler), nullptr});
+			paramRoutesByMethod_[method].push_back({method, path, std::move(handler), nullptr, std::nullopt});
 		}
 		else
 		{
-			staticRoutes_[{method, path}] = RouteEntry {std::move(handler), nullptr};
+			staticRoutes_[{method, path}] = RouteEntry {std::move(handler), nullptr, std::nullopt};
 			staticPathMethods_[path].push_back(method);
 		}
 	}
@@ -50,11 +50,11 @@ namespace hical
 		}
 		else if (isParamRoute(path))
 		{
-			paramRoutesByMethod_[method].push_back({method, path, nullptr, std::move(handler)});
+			paramRoutesByMethod_[method].push_back({method, path, nullptr, std::move(handler), std::nullopt});
 		}
 		else
 		{
-			staticRoutes_[{method, path}] = RouteEntry {nullptr, std::move(handler)};
+			staticRoutes_[{method, path}] = RouteEntry {nullptr, std::move(handler), std::nullopt};
 			staticPathMethods_[path].push_back(method);
 		}
 	}
@@ -253,6 +253,10 @@ namespace hical
 
 		if (result.staticEntry)
 		{
+			if (result.staticEntry->compileTimeChain)
+			{
+				co_return co_await (*result.staticEntry->compileTimeChain)(req);
+			}
 			if (result.staticEntry->syncHandler)
 			{
 				co_return result.staticEntry->syncHandler(req);
@@ -262,6 +266,10 @@ namespace hical
 
 		if (result.paramEntry)
 		{
+			if (result.paramEntry->compileTimeChain)
+			{
+				co_return co_await (*result.paramEntry->compileTimeChain)(req);
+			}
 			if (result.paramEntry->syncHandler)
 			{
 				co_return result.paramEntry->syncHandler(req);
@@ -271,6 +279,10 @@ namespace hical
 
 		if (result.wildcardEntry)
 		{
+			if (result.wildcardEntry->compileTimeChain)
+			{
+				co_return co_await (*result.wildcardEntry->compileTimeChain)(req);
+			}
 			if (result.wildcardEntry->syncHandler)
 			{
 				co_return result.wildcardEntry->syncHandler(req);
@@ -301,6 +313,10 @@ namespace hical
 
 		if (result.staticEntry)
 		{
+			if (result.staticEntry->compileTimeChain)
+			{
+				return std::nullopt; // 编译期链走异步路径
+			}
 			if (result.staticEntry->syncHandler)
 			{
 				return result.staticEntry->syncHandler(req);
@@ -310,6 +326,10 @@ namespace hical
 
 		if (result.paramEntry)
 		{
+			if (result.paramEntry->compileTimeChain)
+			{
+				return std::nullopt; // 编译期链走异步路径
+			}
 			if (result.paramEntry->syncHandler)
 			{
 				return result.paramEntry->syncHandler(req);
@@ -319,6 +339,10 @@ namespace hical
 
 		if (result.wildcardEntry)
 		{
+			if (result.wildcardEntry->compileTimeChain)
+			{
+				return std::nullopt; // 编译期链走异步路径
+			}
 			if (result.wildcardEntry->syncHandler)
 			{
 				return result.wildcardEntry->syncHandler(req);

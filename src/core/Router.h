@@ -8,7 +8,9 @@
 #include "HttpTypes.h"
 #include "HttpRequest.h"
 #include "HttpResponse.h"
+#include "CompileTimeChain.h"
 #include "Coroutine.h"
+#include "Middleware.h"
 #include "PerfectHashRouter.h"
 
 #include <chrono>
@@ -105,6 +107,25 @@ namespace hical
 		 * @param handler 同步处理器
 		 */
 		void route(HttpMethod method, const std::string& path, SyncRouteHandler handler);
+
+		/**
+		 * @brief 注册带编译期中间件链的路由（编译期展开调用链）
+		 * @tparam Entries CompileTimeAsyncMw / CompileTimeSyncMw / CompileTimeSyncFullMw 类型列表
+		 * @param method HTTP 方法
+		 * @param path 路由路径
+		 * @param handler 路由处理器（异步）
+		 * @note 编译期链在 dispatch() 中直接调用，跳过 MiddlewarePipeline::execute()。
+		 *       全局中间件仍由 HttpSessionImpl 层包裹在最外层。
+		 */
+		template <typename... Entries>
+		void compileTimeRoute(HttpMethod method, const std::string& path, RouteHandler handler);
+
+		/**
+		 * @brief 注册带编译期中间件链的同步路由
+		 * @tparam Entries 编译期中间件条目类型列表
+		 */
+		template <typename... Entries>
+		void compileTimeRoute(HttpMethod method, const std::string& path, SyncRouteHandler handler);
 
 		// ============ 便捷方法 ============
 
@@ -359,6 +380,12 @@ namespace hical
 		{
 			RouteHandler asyncHandler;
 			SyncRouteHandler syncHandler;
+			/**
+			 * @brief 编译期预构建的中间件调用链
+			 * 若非空，dispatch() 直接调用此链（跳过 MiddlewarePipeline::execute()）。
+			 * 注意：此链不含组级中间件，组级中间件在 RouteGroup::compileTimeRoute() 中外层包裹。
+			 */
+			std::optional<MiddlewareNext> compileTimeChain;
 		};
 
 		/**
@@ -377,6 +404,7 @@ namespace hical
 			std::string path;
 			RouteHandler handler;
 			SyncRouteHandler syncHandler;
+			std::optional<MiddlewareNext> compileTimeChain;
 		};
 
 		std::unordered_map<HttpMethod, std::vector<ParamRouteEntry>> paramRoutesByMethod_;
@@ -389,6 +417,7 @@ namespace hical
 			std::string paramName;
 			RouteHandler handler;
 			SyncRouteHandler syncHandler;
+			std::optional<MiddlewareNext> compileTimeChain;
 		};
 
 		std::unordered_map<HttpMethod, std::vector<WildcardRouteEntry>> wildcardRoutesByMethod_;
@@ -430,5 +459,71 @@ namespace hical
  * @brief 路由注册宏（手动注册的便捷方式）
  */
 #define HICAL_ROUTE(router, method, path, handler) (router).route(::hical::HttpMethod::h##method, path, handler)
+
+	// ============ compileTimeRoute 模板实现 ============
+
+	template <typename... Entries>
+	void Router::compileTimeRoute(HttpMethod method, const std::string& path, RouteHandler handler)
+	{
+		MiddlewareNext finalNext = [h = std::move(handler)](HttpRequest& req) -> Awaitable<HttpResponse>
+		{
+			co_return co_await h(req);
+		};
+
+		auto chain = buildCompileTimeChain<Entries...>(std::move(finalNext));
+
+		if (isWildcardRoute(path))
+		{
+			WildcardRouteEntry we;
+			we.method = method;
+			we.pattern = path;
+			auto starPos = path.find('*');
+			we.prefix = path.substr(0, starPos);
+			we.paramName = path.substr(starPos + 1);
+			we.compileTimeChain = std::move(chain);
+			wildcardRoutesByMethod_[method].push_back(std::move(we));
+		}
+		else if (isParamRoute(path))
+		{
+			paramRoutesByMethod_[method].push_back({method, path, nullptr, nullptr, std::move(chain)});
+		}
+		else
+		{
+			staticRoutes_[{method, path}] = RouteEntry {nullptr, nullptr, std::move(chain)};
+			staticPathMethods_[path].push_back(method);
+		}
+	}
+
+	template <typename... Entries>
+	void Router::compileTimeRoute(HttpMethod method, const std::string& path, SyncRouteHandler handler)
+	{
+		MiddlewareNext finalNext = [h = std::move(handler)](HttpRequest& req) -> Awaitable<HttpResponse>
+		{
+			co_return h(req);
+		};
+
+		auto chain = buildCompileTimeChain<Entries...>(std::move(finalNext));
+
+		if (isWildcardRoute(path))
+		{
+			WildcardRouteEntry we;
+			we.method = method;
+			we.pattern = path;
+			auto starPos = path.find('*');
+			we.prefix = path.substr(0, starPos);
+			we.paramName = path.substr(starPos + 1);
+			we.compileTimeChain = std::move(chain);
+			wildcardRoutesByMethod_[method].push_back(std::move(we));
+		}
+		else if (isParamRoute(path))
+		{
+			paramRoutesByMethod_[method].push_back({method, path, nullptr, nullptr, std::move(chain)});
+		}
+		else
+		{
+			staticRoutes_[{method, path}] = RouteEntry {nullptr, nullptr, std::move(chain)};
+			staticPathMethods_[path].push_back(method);
+		}
+	}
 
 } // namespace hical
