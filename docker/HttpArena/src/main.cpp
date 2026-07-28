@@ -215,42 +215,51 @@ int main()
 							return res;
 						});
 
-	// ── GET /json/{count}?m=X → JSON 序列化 ──────────────────────────────
-	server.router().get("/json/{count}",
-						[](const HttpRequest& req) -> HttpResponse
-						{
-							int count = 0;
-							try
-							{
-								count = std::stoi(req.param("count"));
-							}
-							catch (...)
-							{
-							}
+	// ── GET /json/{count}?m=X → JSON 序列化（路由组挂 Gzip 用于 json-comp）───
+	{
+		auto gzip = makeGzipCompressionMiddleware();
+		auto jsonGroup = server.router().group("/json");
+		jsonGroup.use([gzip](HttpRequest& req, MiddlewareNext next) -> Awaitable<HttpResponse> {
+			auto resp = co_await next(req);
+			gzip(req, resp);
+			co_return resp;
+		});
+		jsonGroup.get("/{count}",
+					  [](const HttpRequest& req) -> HttpResponse
+					  {
+						  int count = 0;
+						  try
+						  {
+							  count = std::stoi(req.param("count"));
+						  }
+						  catch (...)
+						  {
+						  }
 
-							int64_t m = 1;
-							if (auto mOpt = req.queryParam("m"))
-							{
-								try
-								{
-									m = std::stoll(*mOpt);
-								}
-								catch (...)
-								{
-								}
-							}
+						  int64_t m = 1;
+						  if (auto mOpt = req.queryParam("m"))
+						  {
+							  try
+							  {
+								  m = std::stoll(*mOpt);
+							  }
+							  catch (...)
+							  {
+							  }
+						  }
 
-							json::object resp = {
-								{"count", count},
-								{"items", buildItems(count, m)},
-							};
+						  json::object resp = {
+							  {"count", count},
+							  {"items", buildItems(count, m)},
+						  };
 
-							HttpResponse res;
-							res.setStatus(HttpStatusCode::hOk);
-							res.native().headers.set("Content-Type", "application/json");
-							res.native().body = json::serialize(resp);
-							return res;
-						});
+						  HttpResponse res;
+						  res.setStatus(HttpStatusCode::hOk);
+						  res.native().headers.set("Content-Type", "application/json");
+						  res.native().body = json::serialize(resp);
+						  return res;
+					  });
+	}
 
 	// ── POST /upload → body 字节数 ────────────────────────────────────────
 	server.router().post("/upload",
@@ -280,13 +289,6 @@ int main()
 						   }
 					   });
 
-	// ── Gzip 压缩，用于 json-comp 测试（SyncAfterHandler 包装为协程）───────
-	auto gzip = makeGzipCompressionMiddleware();
-	server.use([gzip](HttpRequest& req, MiddlewareNext next) -> Awaitable<HttpResponse> {
-		auto resp = co_await next(req);
-		gzip(req, resp);
-		co_return resp;
-	});
 
 	// ── benchmark 极致配置 ────────────────────────────────────────────────
 	server.setMaxConnections(65535);
