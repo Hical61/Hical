@@ -14,13 +14,12 @@
 #endif
 #include <boost/asio/use_awaitable.hpp>
 #include <charconv>
+#include <chrono>
 #include <fstream>
 #include <filesystem>
 #include <functional>
 #include <list>
-#include <mutex>
 #include <optional>
-#include <shared_mutex>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -87,6 +86,49 @@ namespace hical
 				return it->second;
 			}
 			return "application/octet-stream";
+		}
+
+		/**
+		 * @brief 判断 MIME 是否为可压缩文本类型
+		 * Static handler 据此决定用 setBody（内存读取，两次协程挂起，一次 scatter-gather 写出）
+		 * 还是 setFileBody（异步流式发送，gzip 自然跳过）。
+		 * @param mime 完整的 MIME 字符串（可含 charset）
+		 * @return true 表示适合走内存读取路径
+		 */
+		[[nodiscard]] inline bool isTextMime(std::string_view mime)
+		{
+			if (mime.empty())
+			{
+				return false;
+			}
+			auto semi = mime.find(';');
+			auto mediaType = (semi != std::string_view::npos) ? mime.substr(0, semi) : mime;
+
+			if (mediaType.starts_with("text/"))
+			{
+				return true;
+			}
+			if (mediaType.starts_with("application/json"))
+			{
+				return true;
+			}
+			if (mediaType.starts_with("application/javascript"))
+			{
+				return true;
+			}
+			if (mediaType.starts_with("application/xml"))
+			{
+				return true;
+			}
+			if (mediaType.starts_with("image/svg+xml"))
+			{
+				return true;
+			}
+			if (mediaType.starts_with("application/xhtml+xml"))
+			{
+				return true;
+			}
+			return false;
 		}
 
 		/**
@@ -231,6 +273,36 @@ namespace hical
 			return ByteRange {start, end};
 		}
 
+		/**
+		 * @brief 每线程独立的 PathCache（LRU），无锁访问。
+		 * 单线程 io_context + 协程协作式调度保证同一线程无并发访问。
+		 * 单容量 64 条目，64 核总容量 ~4096，与旧全局缓存规模持平。
+		 * 旧 shared_mutex 方案在高并发下（4096c+）引发跨核缓存行弹跳，
+		 * 导致 static/4096 -38%、static/6800 -48% 退化。
+		 */
+		struct TlPathCache
+		{
+			static constexpr size_t kMaxEntries = 64;
+			static constexpr auto kTtl = std::chrono::seconds(60);
+
+			struct Entry
+			{
+				std::string key;
+				std::filesystem::path canonical;
+				std::chrono::steady_clock::time_point cachedAt;
+			};
+
+			std::list<Entry> lruList;
+			std::unordered_map<std::string, std::list<Entry>::iterator> index;
+		};
+
+		/// @brief 返回当前线程的 PathCache
+		[[nodiscard]] inline TlPathCache& getTlPathCache()
+		{
+			static thread_local TlPathCache cache;
+			return cache;
+		}
+
 	} // namespace detail
 
 	/**
@@ -270,115 +342,66 @@ namespace hical
 			};
 		}
 
-		// canonical 缓存（LRU），省掉每次请求的 syscall
-		struct CacheEntry
-		{
-			std::string key;
-			fs::path canonical;
-			std::chrono::steady_clock::time_point cachedAt;
-		};
-
-		struct PathCache
-		{
-			mutable std::shared_mutex mutex;
-			std::list<CacheEntry> lruList;                                          // 头部 = 最近使用
-			std::unordered_map<std::string, std::list<CacheEntry>::iterator> index; // key → 链表迭代器
-		};
-
-		static constexpr size_t kMaxPathCacheEntries = 4096;
-		static constexpr auto kCacheTtl = std::chrono::seconds(60);
-		auto pathCache = std::make_shared<PathCache>();
-
-		return [root, urlPrefix, maxFileSize, pathCache](const HttpRequest& req) -> Awaitable<HttpResponse>
+		return [root, urlPrefix, maxFileSize](const HttpRequest& req) -> Awaitable<HttpResponse>
 		{
 			namespace fs = std::filesystem;
 
 			// 从请求路径中去除 URL 前缀，得到相对文件路径
 			std::string reqPath(req.path());
-			std::string_view relPath = reqPath;
-			if (relPath.substr(0, urlPrefix.size()) == urlPrefix)
+			std::string_view relPathView = reqPath;
+			if (relPathView.substr(0, urlPrefix.size()) == urlPrefix)
 			{
-				relPath = relPath.substr(urlPrefix.size());
+				relPathView = relPathView.substr(urlPrefix.size());
 			}
-			else if (!urlPrefix.empty() && relPath == urlPrefix.substr(0, urlPrefix.size() - 1))
+			else if (!urlPrefix.empty() && relPathView == urlPrefix.substr(0, urlPrefix.size() - 1))
 			{
-				relPath = "";
+				relPathView = "";
 			}
 
-			// 构建目标路径并规范化（使用 LRU 缓存避免每次请求都调用 canonical 系统调用）
-			std::string relPathStr(relPath);
+			// 构建目标路径并规范化（thread_local LRU 缓存，无锁，省掉每次请求的 canonical 系统调用）
+			// 缓存 key = root.string() + "\x01" + relPath，不同 serveStatic handler 空间隔离
+			std::string relPath(relPathView);
+			std::string cacheKey = root.string();
+			cacheKey += '\x01';
+			cacheKey += relPath;
 			fs::path target;
 			bool cacheHit = false;
 
-			// 读路径：shared_lock
 			{
-				std::shared_lock<std::shared_mutex> readLock(pathCache->mutex);
-				auto indexIt = pathCache->index.find(relPathStr);
-				if (indexIt != pathCache->index.end())
+				auto& cache = detail::getTlPathCache();
+				auto it = cache.index.find(cacheKey);
+				if (it != cache.index.end())
 				{
-					auto age = std::chrono::steady_clock::now() - indexIt->second->cachedAt;
-					if (age < kCacheTtl)
+					auto age = std::chrono::steady_clock::now() - it->second->cachedAt;
+					if (age < detail::TlPathCache::kTtl)
 					{
-						target = indexIt->second->canonical;
+						target = it->second->canonical;
 						cacheHit = true;
+						// LRU 提升：把该条目移到链表头部（无锁，线程独占）
+						cache.lruList.splice(cache.lruList.begin(), cache.lruList, it->second);
 					}
 				}
-			}
 
-			// 缓存命中时 LRU 提升采用抽样策略：平均每 256 次命中才写锁一次
-			// 避免高并发下每个请求都抢 unique_lock 造成全局串行化
-			if (cacheHit)
-			{
-				static thread_local uint64_t tlsHitCount = 0;
-				if ((tlsHitCount++ & 255) == 0)
+				if (!cacheHit)
 				{
-					std::unique_lock<std::shared_mutex> writeLock(pathCache->mutex);
-					auto indexIt = pathCache->index.find(relPathStr);
-					if (indexIt != pathCache->index.end())
+					fs::path rawTarget = root / relPath;
+					std::error_code ec2;
+					target = fs::canonical(rawTarget, ec2);
+					if (ec2)
 					{
-						pathCache->lruList.splice(pathCache->lruList.begin(), pathCache->lruList, indexIt->second);
+						co_return HttpResponse::notFound();
 					}
-				}
-			}
 
-			if (!cacheHit)
-			{
-				fs::path rawTarget = root / relPathStr;
-				std::error_code ec2;
-				target = fs::canonical(rawTarget, ec2);
-				if (ec2)
-				{
-					co_return HttpResponse::notFound();
-				}
-
-				// 插入缓存（写锁）
-				{
-					std::unique_lock<std::shared_mutex> writeLock(pathCache->mutex);
-
-					// Double-check：其他线程可能已在我们等待写锁期间插入了同一 key
-					auto existIt = pathCache->index.find(relPathStr);
-					if (existIt != pathCache->index.end())
+					// 插入缓存（线程独占，无需 double-check—canonical() 之间无 co_await）
+					if (cache.index.size() >= detail::TlPathCache::kMaxEntries)
 					{
-						// 已存在：更新并提升到头部
-						existIt->second->canonical = target;
-						existIt->second->cachedAt = std::chrono::steady_clock::now();
-						pathCache->lruList.splice(pathCache->lruList.begin(), pathCache->lruList, existIt->second);
+						auto& victim = cache.lruList.back();
+						cache.index.erase(victim.key);
+						cache.lruList.pop_back();
 					}
-					else
-					{
-						// 驱逐：缓存已满时弹出尾部（最久未使用），O(1)
-						if (pathCache->index.size() >= kMaxPathCacheEntries)
-						{
-							auto& victim = pathCache->lruList.back();
-							pathCache->index.erase(victim.key);
-							pathCache->lruList.pop_back();
-						}
-
-						// 插入头部
-						pathCache->lruList.push_front(
-							CacheEntry {relPathStr, target, std::chrono::steady_clock::now()});
-						pathCache->index.emplace(relPathStr, pathCache->lruList.begin());
-					}
+					cache.lruList.push_front(
+						detail::TlPathCache::Entry {cacheKey, target, std::chrono::steady_clock::now()});
+					cache.index.emplace(cacheKey, cache.lruList.begin());
 				}
 			}
 
@@ -461,7 +484,6 @@ namespace hical
 
 					if (!range.has_value() && !isMultiRange)
 					{
-						// 无效 Range → 416
 						co_return HttpResponse::rangeNotSatisfiable(fileSize);
 					}
 
@@ -541,8 +563,14 @@ namespace hical
 				// If-Range 不匹配 → fall through 到 200 全量
 			}
 
-			// 200 全量响应：统一走 FileBody 异步流式发送（64KB 分块，零堆分配）
-			// 文本文件不再走 setBody 全量内存读取——无全局 Gzip 时 deflate 路径不存在
+			// 200 全量响应：文本文件走 setBody（两次协程挂起，一次 scatter-gather 写出），
+			// 二进制文件走 setFileBody（异步流式发送，gzip 自然跳过）。
+			//
+			// 文本文件走 setBody 理由：
+			// - 两次挂起（读文件 + async_write）vs FileBody 三次挂起（open + 发头 + 读写循环）
+			// - 小文件 head+body 同在一个 FixedBuffer<512> 栈缓冲，单次 async_write 完成
+			// - random_access_file 构造函数的同步 open() 在高并发 1024c+ 下阻塞 io_context
+			if (!detail::isTextMime(mime))
 			{
 				HttpResponse res;
 				res.setStatus(HttpStatusCode::hOk);
@@ -552,6 +580,56 @@ namespace hical
 				res.setHeader("X-Content-Type-Options", "nosniff");
 				co_return res;
 			}
+
+			// 文本文件：读入内存，setBody 后 scatter-gather 写出
+			std::string content(fileSize, '\0');
+			size_t totalRead = 0;
+
+#ifdef BOOST_ASIO_HAS_FILE
+			auto executor = co_await boost::asio::this_coro::executor;
+			boost::asio::random_access_file file(executor, target.string(), boost::asio::random_access_file::read_only);
+
+			while (totalRead < fileSize)
+			{
+				auto bytesRead = co_await file.async_read_some_at(
+					totalRead,
+					boost::asio::buffer(content.data() + totalRead, fileSize - totalRead),
+					boost::asio::use_awaitable);
+				if (bytesRead == 0)
+				{
+					break;
+				}
+				totalRead += bytesRead;
+			}
+#else
+			// 同步 ifstream 回退（macOS 等不支持 BOOST_ASIO_HAS_FILE 的平台）
+			{
+				std::ifstream ifs(target, std::ios::binary);
+				if (!ifs)
+				{
+					co_return HttpResponse::serverError();
+				}
+				ifs.read(content.data(), static_cast<std::streamsize>(fileSize));
+				totalRead = static_cast<size_t>(ifs.gcount());
+			}
+#endif
+
+			if (totalRead == 0)
+			{
+				co_return HttpResponse::serverError();
+			}
+			if (totalRead < fileSize)
+			{
+				content.resize(totalRead);
+			}
+
+			HttpResponse res;
+			res.setStatus(HttpStatusCode::hOk);
+			res.setBody(std::move(content), mime);
+			res.setHeader("Accept-Ranges", "bytes");
+			res.setHeader("ETag", etag);
+			res.setHeader("X-Content-Type-Options", "nosniff");
+			co_return res;
 		};
 	}
 

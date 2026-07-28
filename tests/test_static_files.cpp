@@ -107,7 +107,9 @@ TEST_F(StaticFilesTest, ServeHtmlFile)
 	auto res = invoke(handler, req);
 
 	EXPECT_EQ(static_cast<int>(res.statusCode()), 200);
-	EXPECT_TRUE(res.hasFileBody());
+	// 文本/JSON/JS/CSS/SVG 走 setBody，非 setFileBody
+	EXPECT_FALSE(res.hasFileBody());
+	EXPECT_FALSE(res.body().empty());
 	EXPECT_NE(res.header("Content-Type").find("text/html"), std::string::npos);
 }
 
@@ -118,7 +120,8 @@ TEST_F(StaticFilesTest, ServeCssFile)
 	auto res = invoke(handler, req);
 
 	EXPECT_EQ(static_cast<int>(res.statusCode()), 200);
-	EXPECT_TRUE(res.hasFileBody());
+	EXPECT_FALSE(res.hasFileBody());
+	EXPECT_FALSE(res.body().empty());
 	EXPECT_NE(res.header("Content-Type").find("text/css"), std::string::npos);
 }
 
@@ -129,6 +132,8 @@ TEST_F(StaticFilesTest, ServeJsFile)
 	auto res = invoke(handler, req);
 
 	EXPECT_EQ(static_cast<int>(res.statusCode()), 200);
+	EXPECT_FALSE(res.hasFileBody());
+	EXPECT_FALSE(res.body().empty());
 	EXPECT_NE(res.header("Content-Type").find("javascript"), std::string::npos);
 }
 
@@ -139,6 +144,8 @@ TEST_F(StaticFilesTest, ServeJsonFile)
 	auto res = invoke(handler, req);
 
 	EXPECT_EQ(static_cast<int>(res.statusCode()), 200);
+	EXPECT_FALSE(res.hasFileBody());
+	EXPECT_FALSE(res.body().empty());
 	EXPECT_NE(res.header("Content-Type").find("application/json"), std::string::npos);
 }
 
@@ -160,7 +167,9 @@ TEST_F(StaticFilesTest, DirectoryServesIndexHtml)
 	auto res = invoke(handler, req);
 
 	EXPECT_EQ(static_cast<int>(res.statusCode()), 200);
-	EXPECT_TRUE(res.hasFileBody());
+	// 文本文件走 setBody
+	EXPECT_FALSE(res.hasFileBody());
+	EXPECT_FALSE(res.body().empty());
 }
 
 TEST_F(StaticFilesTest, SubdirectoryFile)
@@ -170,7 +179,9 @@ TEST_F(StaticFilesTest, SubdirectoryFile)
 	auto res = invoke(handler, req);
 
 	EXPECT_EQ(static_cast<int>(res.statusCode()), 200);
-	EXPECT_TRUE(res.hasFileBody());
+	// 文本文件走 setBody
+	EXPECT_FALSE(res.hasFileBody());
+	EXPECT_FALSE(res.body().empty());
 }
 
 TEST_F(StaticFilesTest, ETagIsPresent)
@@ -245,7 +256,9 @@ TEST_F(StaticFilesTest, FileWithinLimitServedNormally)
 	auto res = invoke(handler, req);
 
 	EXPECT_EQ(static_cast<int>(res.statusCode()), 200);
-	EXPECT_TRUE(res.hasFileBody());
+	// 文本文件走 setBody
+	EXPECT_FALSE(res.hasFileBody());
+	EXPECT_FALSE(res.body().empty());
 }
 
 // ============ 304 响应 prepare_payload 测试 ============
