@@ -107,7 +107,7 @@ TEST_F(StaticFilesTest, ServeHtmlFile)
 	auto res = invoke(handler, req);
 
 	EXPECT_EQ(static_cast<int>(res.statusCode()), 200);
-	EXPECT_NE(res.body().find("Hello"), std::string::npos);
+	EXPECT_TRUE(res.hasFileBody());
 	EXPECT_NE(res.header("Content-Type").find("text/html"), std::string::npos);
 }
 
@@ -118,8 +118,8 @@ TEST_F(StaticFilesTest, ServeCssFile)
 	auto res = invoke(handler, req);
 
 	EXPECT_EQ(static_cast<int>(res.statusCode()), 200);
+	EXPECT_TRUE(res.hasFileBody());
 	EXPECT_NE(res.header("Content-Type").find("text/css"), std::string::npos);
-	EXPECT_EQ(res.body(), "body { color: red; }");
 }
 
 TEST_F(StaticFilesTest, ServeJsFile)
@@ -160,7 +160,7 @@ TEST_F(StaticFilesTest, DirectoryServesIndexHtml)
 	auto res = invoke(handler, req);
 
 	EXPECT_EQ(static_cast<int>(res.statusCode()), 200);
-	EXPECT_NE(res.body().find("sub index"), std::string::npos);
+	EXPECT_TRUE(res.hasFileBody());
 }
 
 TEST_F(StaticFilesTest, SubdirectoryFile)
@@ -170,7 +170,7 @@ TEST_F(StaticFilesTest, SubdirectoryFile)
 	auto res = invoke(handler, req);
 
 	EXPECT_EQ(static_cast<int>(res.statusCode()), 200);
-	EXPECT_NE(res.body().find("subdir"), std::string::npos);
+	EXPECT_TRUE(res.hasFileBody());
 }
 
 TEST_F(StaticFilesTest, ETagIsPresent)
@@ -245,7 +245,7 @@ TEST_F(StaticFilesTest, FileWithinLimitServedNormally)
 	auto res = invoke(handler, req);
 
 	EXPECT_EQ(static_cast<int>(res.statusCode()), 200);
-	EXPECT_EQ(res.body(), "hi");
+	EXPECT_TRUE(res.hasFileBody());
 }
 
 // ============ 304 响应 prepare_payload 测试 ============

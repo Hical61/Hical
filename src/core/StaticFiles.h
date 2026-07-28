@@ -90,49 +90,6 @@ namespace hical
 		}
 
 		/**
-		 * @brief 判断 MIME 是否为可压缩文本类型
-		 * 用于 Static handler 决定用 setBody（内存读取，可被 gzip 压缩）
-		 * 还是 setFileBody（异步文件发送，gzip 自然跳过）。
-		 * @param mime 完整的 MIME 字符串（可含 charset）
-		 * @return true 表示适合走内存读取 + gzip 压缩路径
-		 */
-		[[nodiscard]] inline bool isTextMime(std::string_view mime)
-		{
-			if (mime.empty())
-			{
-				return false;
-			}
-			auto semi = mime.find(';');
-			auto mediaType = (semi != std::string_view::npos) ? mime.substr(0, semi) : mime;
-
-			if (mediaType.starts_with("text/"))
-			{
-				return true;
-			}
-			if (mediaType.starts_with("application/json"))
-			{
-				return true;
-			}
-			if (mediaType.starts_with("application/javascript"))
-			{
-				return true;
-			}
-			if (mediaType.starts_with("application/xml"))
-			{
-				return true;
-			}
-			if (mediaType.starts_with("image/svg+xml"))
-			{
-				return true;
-			}
-			if (mediaType.starts_with("application/xhtml+xml"))
-			{
-				return true;
-			}
-			return false;
-		}
-
-		/**
 		 * @brief 检查路径是否试图跳出根目录（路径遍历攻击防护）
 		 * @param root 根目录规范路径
 		 * @param target 目标文件规范路径
@@ -368,14 +325,19 @@ namespace hical
 				}
 			}
 
-			// 命中但需要提升 LRU 位置（写锁，O(1) splice）
+			// 缓存命中时 LRU 提升采用抽样策略：平均每 256 次命中才写锁一次
+			// 避免高并发下每个请求都抢 unique_lock 造成全局串行化
 			if (cacheHit)
 			{
-				std::unique_lock<std::shared_mutex> writeLock(pathCache->mutex);
-				auto indexIt = pathCache->index.find(relPathStr);
-				if (indexIt != pathCache->index.end())
+				static thread_local uint64_t tlsHitCount = 0;
+				if ((tlsHitCount++ & 255) == 0)
 				{
-					pathCache->lruList.splice(pathCache->lruList.begin(), pathCache->lruList, indexIt->second);
+					std::unique_lock<std::shared_mutex> writeLock(pathCache->mutex);
+					auto indexIt = pathCache->index.find(relPathStr);
+					if (indexIt != pathCache->index.end())
+					{
+						pathCache->lruList.splice(pathCache->lruList.begin(), pathCache->lruList, indexIt->second);
+					}
 				}
 			}
 
@@ -579,12 +541,9 @@ namespace hical
 				// If-Range 不匹配 → fall through 到 200 全量
 			}
 
-			// 200 全量响应：二进制文件走 FileBody 异步发送，文本文件走内存读取
-			// Gzip 中间件通过 isCompressible() MIME 过滤 + !hasFileBody() 双重保护，无需按大小切分
-
-			if (!detail::isTextMime(mime))
+			// 200 全量响应：统一走 FileBody 异步流式发送（64KB 分块，零堆分配）
+			// 文本文件不再走 setBody 全量内存读取——无全局 Gzip 时 deflate 路径不存在
 			{
-				// 二进制文件（webp/woff2/mp4 等）：FileBody 异步发送，gzip 自然跳过
 				HttpResponse res;
 				res.setStatus(HttpStatusCode::hOk);
 				res.setFileBody(target, 0, static_cast<int64_t>(fileSize), mime);
@@ -593,58 +552,6 @@ namespace hical
 				res.setHeader("X-Content-Type-Options", "nosniff");
 				co_return res;
 			}
-
-			// 文本文件：读入内存，Gzip 中间件可以压缩
-			std::string content(fileSize, '\0');
-			size_t totalRead = 0;
-
-#ifdef BOOST_ASIO_HAS_FILE
-			// 异步读取（不阻塞 io_context 线程）
-			auto executor = co_await boost::asio::this_coro::executor;
-			boost::asio::random_access_file file(executor, target.string(), boost::asio::random_access_file::read_only);
-
-			while (totalRead < fileSize)
-			{
-				auto bytesRead = co_await file.async_read_some_at(
-					totalRead,
-					boost::asio::buffer(content.data() + totalRead, fileSize - totalRead),
-					boost::asio::use_awaitable);
-				if (bytesRead == 0)
-				{
-					break;
-				}
-				totalRead += bytesRead;
-			}
-#else
-			// 同步 ifstream 回退（macOS 等不支持 BOOST_ASIO_HAS_FILE 的平台）
-			{
-				std::ifstream ifs(target, std::ios::binary);
-				if (!ifs)
-				{
-					co_return HttpResponse::serverError();
-				}
-				ifs.read(content.data(), static_cast<std::streamsize>(fileSize));
-				totalRead = static_cast<size_t>(ifs.gcount());
-			}
-#endif
-
-			if (totalRead == 0)
-			{
-				co_return HttpResponse::serverError();
-			}
-			if (totalRead < fileSize)
-			{
-				content.resize(totalRead);
-			}
-
-			// 构建响应
-			HttpResponse res;
-			res.setStatus(HttpStatusCode::hOk);
-			res.setBody(std::move(content), mime);
-			res.setHeader("Accept-Ranges", "bytes");
-			res.setHeader("ETag", etag);
-			res.setHeader("X-Content-Type-Options", "nosniff");
-			co_return res;
 		};
 	}
 
