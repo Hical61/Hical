@@ -10,6 +10,7 @@
 
 #include "core/GzipCompression.h"
 #include "core/HttpServer.h"
+#include "core/RouteGroup.h"
 #include "core/StaticFiles.h"
 #include "core/WebSocket.h"
 #include <boost/json.hpp>
