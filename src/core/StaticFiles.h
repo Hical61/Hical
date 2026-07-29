@@ -303,6 +303,38 @@ namespace hical
 			return cache;
 		}
 
+		/**
+		 * @brief 每线程独立的文件内容缓存（LRU），无锁访问。
+		 * 将小文件（≤512KB）的 body 和预计算 ETag 缓存在内存中，
+		 * 热路径命中时跳过 open/read/close syscall，只做 memcpy + async_write。
+		 * 单线程 io_context + 协程协作式调度保证同一线程无并发访问。
+		 */
+		struct TlContentCache
+		{
+			static constexpr size_t kMaxEntries = 32;
+			static constexpr size_t kMaxFileSize = 512 * 1024;
+			static constexpr auto kTtl = std::chrono::seconds(10);
+
+			struct Entry
+			{
+				std::string key;     // canonical path，驱逐时从 index 反查
+				std::string content; // 文件 body 内容（已读入内存）
+				std::string etag;    // 预计算的 ETag
+				int64_t mtimeNs = 0; // 文件修改时间（纳秒），TTL 过期后检测变更
+				std::chrono::steady_clock::time_point cachedAt;
+			};
+
+			std::list<Entry> lruList;
+			std::unordered_map<std::string, std::list<Entry>::iterator> index;
+		};
+
+		/// @brief 返回当前线程的文件内容缓存
+		[[nodiscard]] inline TlContentCache& getTlContentCache()
+		{
+			static thread_local TlContentCache cache;
+			return cache;
+		}
+
 	} // namespace detail
 
 	/**
@@ -433,7 +465,84 @@ namespace hical
 				co_return HttpResponse::notFound();
 			}
 
-			// 获取文件元信息
+			// MIME 类型提前确定——文本/二进制的分支和缓存逻辑都依赖它
+			std::string ext = target.extension().string();
+			std::string mime = detail::mimeType(ext);
+			bool isText = detail::isTextMime(mime);
+
+			// 文本文件 + 非 Range 请求：先查内容缓存（在 fstat 之前），
+			// 命中时跳过 file_size/last_write_time 两个系统调用，直接走 memcpy + async_write。
+			// 二进制文件和 Range 请求跳过缓存——二进制走 setFileBody 流式发送，
+			// Range 是部分内容，缓存全量 body 后用不上。
+			if (isText && req.header("Range").empty())
+			{
+				auto& cc = detail::getTlContentCache();
+				auto it = cc.index.find(target.string());
+
+				if (it != cc.index.end())
+				{
+					bool servedFromCache = false;
+					auto now = std::chrono::steady_clock::now();
+					auto age = now - it->second->cachedAt;
+
+					if (age < detail::TlContentCache::kTtl)
+					{
+						// TTL 未过期——直接信任缓存。
+						// 注：10 秒窗口内如果文件被外部修改，缓存不会感知。
+						// 对生产环境的只读静态文件这不是问题，和 CDN 边缘缓存行为一致。
+						servedFromCache = true;
+					}
+					else
+					{
+						// TTL 过期，fstat 检查 mtime 是否变化
+						std::error_code ec3;
+						auto lw = fs::last_write_time(target, ec3);
+						int64_t currentNs = lw.time_since_epoch().count();
+						if (!ec3 && currentNs == it->second->mtimeNs)
+						{
+							// 文件没变，更新 cachedAt 续期
+							it->second->cachedAt = now;
+							servedFromCache = true;
+						}
+						else
+						{
+							// mtime 变了或 fstat 失败，移除旧条目
+							cc.index.erase(it->second->key);
+							cc.lruList.erase(it->second);
+						}
+					}
+
+					if (servedFromCache)
+					{
+						// LRU 提升到头部
+						cc.lruList.splice(cc.lruList.begin(), cc.lruList, it->second);
+
+						// 用缓存 ETag 做 If-None-Match 比对
+						auto ifnm = req.header("If-None-Match");
+						if (!ifnm.empty() && ifnm == it->second->etag)
+						{
+							HttpResponse res;
+							res.setStatus(HttpStatusCode::hNotModified);
+							res.setHeader("ETag", it->second->etag);
+							res.native().preparePayload();
+							co_return res;
+						}
+
+						HttpResponse res;
+						res.setStatus(HttpStatusCode::hOk);
+						res.setBody(it->second->content, mime);
+						res.setHeader("Accept-Ranges", "bytes");
+						res.setHeader("ETag", it->second->etag);
+						res.setHeader("X-Content-Type-Options", "nosniff");
+						co_return res;
+					}
+				}
+			}
+
+			// 以下路径需要文件元信息：
+			// - 二进制文件（需要 fileSize 给 setFileBody）
+			// - Range 请求（需要 fileSize 做范围校验）
+			// - 文本文件缓存未命中（需要读文件 + 写缓存）
 			auto fileSize = fs::file_size(target, ec2);
 			if (ec2)
 			{
@@ -468,8 +577,6 @@ namespace hical
 			}
 
 			// Range 请求处理
-			std::string ext = target.extension().string();
-			std::string mime = detail::mimeType(ext);
 			auto rangeHeader = req.header("Range");
 			if (!rangeHeader.empty())
 			{
@@ -564,13 +671,12 @@ namespace hical
 			}
 
 			// 200 全量响应：文本文件走 setBody（两次协程挂起，一次 scatter-gather 写出），
-			// 二进制文件走 setFileBody（异步流式发送，gzip 自然跳过）。
+			// 二进制文件走 setFileBody（异步流式发送）。
 			//
 			// 文本文件走 setBody 理由：
 			// - 两次挂起（读文件 + async_write）vs FileBody 三次挂起（open + 发头 + 读写循环）
-			// - 小文件 head+body 同在一个 FixedBuffer<512> 栈缓冲，单次 async_write 完成
-			// - random_access_file 构造函数的同步 open() 在高并发 1024c+ 下阻塞 io_context
-			if (!detail::isTextMime(mime))
+			// - 小文件 head+body 同在 FixedBuffer<512> 栈缓冲，单次 async_write 完成
+			if (!isText)
 			{
 				HttpResponse res;
 				res.setStatus(HttpStatusCode::hOk);
@@ -581,7 +687,7 @@ namespace hical
 				co_return res;
 			}
 
-			// 文本文件：读入内存，setBody 后 scatter-gather 写出
+			// 文本文件 miss 路径：读入内存，setBody 后 scatter-gather 写出
 			std::string content(fileSize, '\0');
 			size_t totalRead = 0;
 
@@ -621,6 +727,26 @@ namespace hical
 			if (totalRead < fileSize)
 			{
 				content.resize(totalRead);
+			}
+
+			// 小文件内容写缓存，下次请求跳过磁盘 I/O
+			if (fileSize <= detail::TlContentCache::kMaxFileSize)
+			{
+				auto& cc = detail::getTlContentCache();
+				if (cc.index.size() >= detail::TlContentCache::kMaxEntries)
+				{
+					auto& victim = cc.lruList.back();
+					cc.index.erase(victim.key);
+					cc.lruList.pop_back();
+				}
+				detail::TlContentCache::Entry entry;
+				entry.key = target.string();
+				entry.content = content;
+				entry.etag = etag;
+				entry.mtimeNs = lastWrite.time_since_epoch().count();
+				entry.cachedAt = std::chrono::steady_clock::now();
+				cc.lruList.push_front(std::move(entry));
+				cc.index.emplace(target.string(), cc.lruList.begin());
 			}
 
 			HttpResponse res;
