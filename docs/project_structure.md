@@ -17,7 +17,7 @@ hical/
 ├── CONTRIBUTING.md             # 贡献指南（双语：开发流程、PR 规范、代码风格）
 ├── CODE_OF_CONDUCT.md          # Contributor Covenant 行为准则
 ├── SECURITY.md                 # 安全策略（漏洞私密上报渠道）
-├── CLAUDE.md                   # Claude Code AI 协作配置（仓库级规范）
+├── AGENTS.md                   # AI 编码助手通用规范（跨工具兼容）
 ├── .clang-format               # clang-format 22+ 规则（Allman/4 空格/120 列）
 ├── .clang-tidy                 # clang-tidy 检查项（readability/bugprone/cppcoreguidelines 等）
 ├── .editorconfig               # 编辑器跨平台编码规范（UTF-8 + LF）
@@ -357,4 +357,4 @@ hical/
 - **宏**：大写下划线（`HICAL_ROUTE`, `HICAL_LOG_INFO`）
 - **模板参数**：大驼峰（`SocketType`）
 
-> 完整约定与 clang-tidy 检查项参见 [CLAUDE.md](../CLAUDE.md) 与 [.clang-tidy](../.clang-tidy)。
+> 完整约定与 clang-tidy 检查项参见 [AGENTS.md](../AGENTS.md) 与 [.clang-tidy](../.clang-tidy)。
