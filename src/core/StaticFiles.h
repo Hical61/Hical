@@ -506,9 +506,12 @@ namespace hical
 						}
 						else
 						{
-							// mtime 变了或 fstat 失败，移除旧条目
-							cc.index.erase(it->second->key);
-							cc.lruList.erase(it->second);
+							// mtime 变了或 fstat 失败，移除旧条目。
+							// 先把 list 迭代器取出来——index 的 key 和 it->first 是同一个，
+							// erase(index) 会把 it 指向的 hash node 干掉，it 立刻失效。
+							auto listIt = it->second;
+							cc.index.erase(it);
+							cc.lruList.erase(listIt);
 						}
 					}
 
