@@ -37,6 +37,7 @@ hical_add_test(test_asio_timer)           # AsioTimer
 hical_add_test(test_ssl_connection)       # SSL 连接
 hical_add_test(test_coroutine)            # 协程工具
 hical_add_test(test_tcp_server)           # TcpServer + EventLoopPool
+hical_add_test(test_numa_topology)        # NUMA 拓扑检测与绑核验证
 
 # --- HTTP 层 ---
 hical_add_test(test_http_types)           # HTTP 类型

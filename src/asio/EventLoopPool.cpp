@@ -4,6 +4,7 @@
  */
 
 #include "EventLoopPool.h"
+#include "core/NumaTopology.h"
 
 #ifdef __linux__
 	#include <pthread.h>
@@ -38,20 +39,44 @@ namespace hical
 			return; // 已经启动
 		}
 
+		// 主线程调一次 detect（幂等），把 isNuma 结果传进 lambda 避免跨线程引用
+		auto& topo = NumaTopology::instance();
+		topo.detect();
+		bool numa = topo.isNuma();
+
 		for (size_t i = 0; i < loops_.size(); ++i)
 		{
 			auto* ptr = loops_[i].get();
 			threads_.emplace_back(
-				[ptr, i]()
+				[ptr, i, numa]()
 				{
 #ifdef __linux__
-					// 绑核，别让内核随便迁移线程搞 TLB flush
 					cpu_set_t cpuset;
 					CPU_ZERO(&cpuset);
-					CPU_SET(i % std::thread::hardware_concurrency(), &cpuset);
+
+					if (numa)
+					{
+						// NUMA 感知绑核：线程均匀分到各 NUMA 节点，节点内轮询绑 CPU
+						// 比如 2 节点各 8 核，8 线程 → 每节点 4 线程，分别绑 node0 CPU 0-3、node1 CPU 0-3
+						const auto& nodes = NumaTopology::instance().nodes();
+						size_t nodeCount = nodes.size();
+						size_t nodeIdx = i % nodeCount;
+						const auto& node = nodes[nodeIdx];
+						if (node.cpuCount_ > 0)
+						{
+							int cpuIdx = static_cast<int>((i / nodeCount) % static_cast<size_t>(node.cpuCount_));
+							CPU_SET(node.cpuList_[cpuIdx], &cpuset);
+						}
+					}
+					else
+					{
+						// 非 NUMA：简单轮询绑核，和以前完全一样
+						CPU_SET(i % std::thread::hardware_concurrency(), &cpuset);
+					}
 					pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset);
 #else
 					(void)i;
+					(void)numa;
 #endif
 					ptr->run();
 				});

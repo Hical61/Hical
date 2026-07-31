@@ -7,6 +7,10 @@
 #ifdef HICAL_USE_MIMALLOC
 	#include "MimallocResource.h"
 #endif
+#ifdef HICAL_HAS_NUMA
+	#include <numa.h>
+	#include <sched.h>
+#endif
 #include <cassert>
 #include <stdexcept>
 
@@ -117,6 +121,15 @@ namespace hical
 			return cache.pool;
 		}
 
+#ifdef HICAL_HAS_NUMA
+		// 设为当前线程所在 NUMA 节点的内存亲和，让后续 PMR 分配优先走本地内存
+		int cpu = sched_getcpu();
+		int node = numa_node_of_cpu(cpu);
+		if (node >= 0)
+		{
+			numa_set_preferred(node);
+		}
+#endif
 		auto pool = std::make_unique<std::pmr::unsynchronized_pool_resource>(
 			std::pmr::pool_options {.max_blocks_per_chunk = config_.threadLocalMaxBlocksPerChunk,
 									.largest_required_pool_block = config_.threadLocalLargestPoolBlock},

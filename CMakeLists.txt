@@ -26,6 +26,9 @@ option(HICAL_WITH_OPENAPI "Enable OpenAPI 3.0 auto-generation module" ON)
 # mimalloc 替代系统 malloc 作为 PMR 最底层分配器
 option(HICAL_WITH_MIMALLOC "Use mimalloc as PMR upstream allocator" OFF)
 
+# NUMA 感知内存分配（Linux 有 libnuma 时自动启用）
+option(HICAL_WITH_NUMA "Enable NUMA-aware memory allocation (requires libnuma, Linux only)" OFF)
+
 if(HICAL_ENABLE_REFLECTION)
     set(CMAKE_CXX_STANDARD 26)
 else()
@@ -57,6 +60,24 @@ find_package(ZLIB REQUIRED)
 # DB 依赖：boost::mysql any_connection(1.84+) + boost::charconv(1.85+)
 if(HICAL_WITH_DATABASE)
     find_package(Boost 1.85 REQUIRED COMPONENTS charconv)
+endif()
+
+# NUMA 感知（可选，Linux + libnuma）
+if(HICAL_WITH_NUMA)
+    find_library(NUMA_LIB NAMES numa libnuma)
+    if(NUMA_LIB)
+        find_path(NUMA_INCLUDE_DIR numa.h)
+        if(NUMA_INCLUDE_DIR)
+            message(STATUS "Found NUMA library: ${NUMA_LIB}")
+            message(STATUS "Found NUMA include: ${NUMA_INCLUDE_DIR}")
+        else()
+            message(STATUS "numa.h not found, NUMA disabled")
+            set(HICAL_WITH_NUMA OFF)
+        endif()
+    else()
+        message(STATUS "libnuma not found, NUMA disabled")
+        set(HICAL_WITH_NUMA OFF)
+    endif()
 endif()
 
 # mimalloc（可选，替代系统 malloc 作为 PMR upstream）

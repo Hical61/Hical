@@ -55,6 +55,7 @@ add_library(hical_core STATIC
     core/Helmet.cpp
     core/HealthEndpoint.cpp
     core/JwtAuth.cpp
+    core/NumaTopology.cpp
     asio/AsioEventLoop.cpp
     asio/AsioTimer.cpp
     asio/GenericConnection.cpp
@@ -163,6 +164,13 @@ if(HICAL_WITH_OPENAPI)
         core/OpenApiDocument.cpp
     )
     target_compile_definitions(hical_core PUBLIC HICAL_HAS_OPENAPI=1)
+endif()
+
+# NUMA 感知（可选，Linux + libnuma）
+if(HICAL_WITH_NUMA)
+    target_include_directories(hical_core PRIVATE ${NUMA_INCLUDE_DIR})
+    target_link_libraries(hical_core PRIVATE ${NUMA_LIB})
+    target_compile_definitions(hical_core PUBLIC HICAL_HAS_NUMA=1)
 endif()
 
 # mimalloc（可选，替代系统 malloc 作为 PMR upstream 分配器）
