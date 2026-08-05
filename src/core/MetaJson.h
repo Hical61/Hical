@@ -376,6 +376,7 @@ namespace hical::meta
 		const auto& fields = T::hicalJsonFields();
 		boost::json::object jsonObj;
 		constexpr auto count = std::tuple_size_v<std::remove_cvref_t<decltype(fields)>>;
+		jsonObj.reserve(count);
 		detail::serializeFields(obj, jsonObj, fields, std::make_index_sequence<count> {});
 		return jsonObj;
 	}

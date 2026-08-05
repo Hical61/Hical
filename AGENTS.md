@@ -82,8 +82,8 @@ find src -name '*.cpp' | xargs clang-tidy -p build
 - `HttpRequest.h/cpp` — Zero-copy request wrapper: `string_view` referencing connection-level read buffer, stack-allocated `array<Entry,64>` headers. Public API: `method()`, `path()`, `header()`, `body()`, `cookie()`, `queryParam()`, `formParam()`, `readJson<T>()`
 - `HttpResponse.h/cpp` — Response wrapper with `FileBody` deferred async file sending, `serializeHeadTo(FixedBuffer<512>&)` zero-heap scatter-gather I/O, `setHeader()` accepts `std::string_view`
 - `HttpSessionImpl.cpp` — Compilation firewall for picohttpparser + WebSocket. ReadBufferPool borrow/return (8KB thread_local pool), optimistic sync write (≤512B single-buffer), response prefix template (~90B pre-built wire bytes), IdleScanner::Guard RAII idle timeout
-- `Router.h` — Static routes (O(1) hash map with transparent hashing for zero-alloc `string_view` lookup) + parameter routes (`{id}`) + wildcard routes (`*path`). Priority: static > param > wildcard. `dispatchSync()` sync fast-path skips coroutine frame (~40-130ns savings)
-- `Middleware.h` — Onion-model pipeline: `SyncBeforeHandler` / `SyncAfterHandler` for zero-coroutine-frame middleware, `buildOptimizedChain()` merges consecutive sync entries into single frame
+- `Router.h` — Static routes (compile-time perfect hash for registered routes, O(1) hash map fallback with transparent hashing for zero-alloc `string_view` lookup) + parameter routes (`{id}`) + wildcard routes (`*path`). Priority: static > param > wildcard. `dispatchSync()` sync fast-path skips coroutine frame (~40-130ns savings). `compileTimeRoute()` for routes with compile-time middleware chains
+- `Middleware.h` — Onion-model pipeline: `SyncBeforeHandler` / `SyncAfterHandler` for zero-coroutine-frame middleware, `buildOptimizedChain()` merges consecutive sync entries into single frame, `CompileTimeChain` template pre-builds chains at compile time
 - `Coroutine.h` — `Awaitable<T>` alias, `sleep()`, `coSpawn()` with `recycling_allocator` and `logOnException`
 - `Error.h/cpp` — `ErrorCode` enum + `NetworkError` struct, isolating from raw Asio error codes. Use these, not `boost::system::error_code`.
 - `ConfigLoader.h/cpp` — JSON config with dot-separated key access, `HICAL_` env var override, `get<T>(key, defaultVal)`
@@ -98,6 +98,9 @@ find src -name '*.cpp' | xargs clang-tidy -p build
 - `GzipCompression.h/cpp` — Response compression, auto-checks `Accept-Encoding`, small body inline, large body streaming
 - `SseSession.h/cpp` — Server-Sent Events (RFC 8895), chunked streaming, 30s heartbeat
 - `OpenApi*.h/cpp` — OpenAPI 3.0 auto-generation: schema → registry → document → endpoints (`/openapi.json` + `/docs`). Opt-in via `HICAL_WITH_OPENAPI=ON`.
+- `PerfectHashRouter.h` — Compile-time perfect hash for static routes: replaces `unordered_map` lookup with djb2 hash + multiply-shift + one string comparison at runtime, computed in `MetaRoutes` and injected into `Router`. Fallback to original hash map on miss.
+- `CompileTimeChain.h` — Compile-time middleware chain pre-build: `CompileTimeChain` template unrolls middleware type lists at compile time, merging consecutive `SyncBeforeHandler`/`SyncAfterHandler` entries into single coroutine frames. `compileTimeRoute()`-registered routes dispatch via pre-built chain, skipping dynamic `buildOptimizedChain()`.
+- `CompileTimeJson.h` — Compile-time JSON serialization: `CompileTimeJson<T>` template flattens DTO struct serialization into a compile-time string concatenation chain, bypassing `boost::json::object` entirely — zero heap allocation, no `serialize()` call. `HttpResponse::jsonFrom<T>()` provides a one-liner convenience API.
 - `IdleScanner.h/cpp` — Per-io_context centralized idle connection scanner (replaces per-connection timer coroutines), single-threaded, intrusive doubly-linked list
 - `IdleFd.h` / `WriteNode.h` / `Version.h.in` / `StringPool.h` / `Multipart.h/cpp` / `ChunkedBody.h/cpp` / `FixedBuffer.h`
 
@@ -121,25 +124,25 @@ find src -name '*.cpp' | xargs clang-tidy -p build
 - **Compilation firewalls**: `.hci` files with `extern template` + explicit instantiation in `.cpp`. Large templates must not live directly in headers.
 - **Optional modules**: compile-time `#ifdef HICAL_HAS_XXX` gating via CMake options. Users not using DB/OpenAPI compile zero bytes of that code.
 - **Template-based SSL**: `if constexpr (hIsSslStream<SocketType>)` for compile-time SSL vs plain branching.
-- **Synchronous fast path**: `dispatchSync()` skips coroutine frame allocation for sync handlers. `SyncBeforeHandler`/`SyncAfterHandler` middleware run without coroutine overhead.
+- **Synchronous fast path**: `dispatchSync()` skips coroutine frame allocation for sync handlers. `SyncBeforeHandler`/`SyncAfterHandler` middleware run without coroutine overhead. `CompileTimeChain` pre-builds middleware chains at compile time. `CompileTimeJson` serializes DTOs at compile time bypassing `boost::json::object`.
 
 ## Coding Style & Naming Conventions
 
 ### Naming Table (enforced by clang-tidy)
 
-| Element            | Convention              | Example                             |
-| ------------------ | ----------------------- | ----------------------------------- |
-| Class / Struct     | CamelCase (no prefix)   | `HttpServer`, `PoolConfig`          |
-| Enum               | CamelCase (no prefix)   | `HttpMethod`                        |
-| Abstract/Interface | CamelCase (no prefix)   | `EventLoop`, `TcpConnection`        |
-| Enum constant      | `h` prefix + CamelCase  | `hGet`, `hPost`, `hOk`              |
-| Member variable    | camelBack + `_` suffix  | `router_`, `maxBodySize_`           |
-| Static constexpr   | `k` prefix + CamelCase  | `kMaxPathSegments`, `kPoolKey`      |
-| Global variable    | `g_` prefix + camelBack | `g_instance`                        |
-| Function/Method    | camelBack               | `runAfter()`, `dispatch()`          |
-| Local variable     | camelBack               | `bytesRead`                         |
-| Macro              | UPPER_CASE              | `HICAL_ROUTE`                       |
-| Template param     | CamelCase               | `SocketType`                        |
+| Element            | Convention              | Example                        |
+| ------------------ | ----------------------- | ------------------------------ |
+| Class / Struct     | CamelCase (no prefix)   | `HttpServer`, `PoolConfig`     |
+| Enum               | CamelCase (no prefix)   | `HttpMethod`                   |
+| Abstract/Interface | CamelCase (no prefix)   | `EventLoop`, `TcpConnection`   |
+| Enum constant      | `h` prefix + CamelCase  | `hGet`, `hPost`, `hOk`         |
+| Member variable    | camelBack + `_` suffix  | `router_`, `maxBodySize_`      |
+| Static constexpr   | `k` prefix + CamelCase  | `kMaxPathSegments`, `kPoolKey` |
+| Global variable    | `g_` prefix + camelBack | `g_instance`                   |
+| Function/Method    | camelBack               | `runAfter()`, `dispatch()`     |
+| Local variable     | camelBack               | `bytesRead`                    |
+| Macro              | UPPER_CASE              | `HICAL_ROUTE`                  |
+| Template param     | CamelCase               | `SocketType`                   |
 
 **Forbidden:** `m_` prefix, `C`/`I`/`E` type prefixes. No AI co-author lines in commits.
 

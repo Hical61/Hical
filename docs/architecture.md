@@ -25,6 +25,7 @@
 - [17. HTTP 核心增强](#17-http-核心增强)
 - [18. WebSocket 增强设计](#18-websocket-增强设计)
 - [19. HTTP 热路径优化](#19-http-热路径优化)
+- [20. 编译期组件设计](#20-编译期组件设计)
 
 ---
 
@@ -513,8 +514,15 @@ Router 采用**静态路由 + 参数路由**双策略，兼顾查找性能和功
 │  (仅在 HTTP 路由未命中时)  │
 └─────────────────────────┘
 ```
-
 ### 6.2 静态路由实现
+
+两层查找策略，编译期优先：
+
+**第一层：PerfectHashRouter（编译期完美哈希）**
+
+`HICAL_HANDLER` + `HICAL_ROUTES` 宏在编译期收集所有静态路由路径，`PerfectHashRouter` 模板用 multiply-shift 方案在编译期暴力搜索无冲突种子，构建 O(1) 无碰撞完美哈希表。运行时对于 `MetaRoutes` 注册的路由，`Router` 优先执行 djb2 哈希 + 乘法 + 位移 + 一次字符串比较，完全跳过 `unordered_map` 查找。miss 时自动回退到第二层。
+
+**第二层：hash map 回退（运行时注册路由）**
 
 ```cpp
 struct RouteKey
@@ -538,6 +546,7 @@ std::unordered_map<RouteKey, RouteHandler, RouteKeyHash> staticRoutes_;
 
 - **O(1) 平均查找** — 哈希表直接定位
 - **组合键** — `{method, path}` 作为一个键，同一路径不同方法可注册不同处理器
+- **透明哈希** — `RouteKeyView` + `is_transparent` 实现 `string_view` 零分配查找
 
 ### 6.3 参数路由匹配
 
@@ -1163,31 +1172,34 @@ struct NetworkError
 
 ## 14. 设计决策记录
 
-| 决策                   | 选择                                             | 理由                                                           |
-| ---------------------- | ------------------------------------------------ | -------------------------------------------------------------- |
-| 协程模型               | `asio::awaitable<T>`                             | 与 Boost.Asio 原生集成，零额外开销，代码线性化                 |
-| HTTP 解析器            | picohttpparser（原生栈集成）                     | 轻量零拷贝，性能优于 Beast                                     |
-| 内存管理               | C++17 PMR 三层池                                 | 标准化接口，高并发低碎片，与 Boost.JSON 天然兼容               |
-| SSL 实现               | 模板化 `GenericConnection<SocketType>`           | 编译期分支消除，零运行时开销                                   |
-| 后端抽象               | C++20 Concepts                                   | 编译期约束，不引入虚函数开销，面向未来可扩展                   |
-| 路由查找               | 哈希表 + 按方法分桶线性匹配                      | 静态路由 O(1)，参数路由按方法子集匹配                          |
-| 中间件模型             | 洋葱模型                                         | 前置/后置/拦截能力完整，Koa/Express 验证过的成熟模式           |
-| 反射降级               | HICAL_ROUTE 宏                                   | C++26 反射尚不成熟，宏方案保持向前兼容                         |
-| 线程模型               | 1 Thread : 1 io_context                          | 线程间无共享状态，天然避免锁竞争                               |
-| 连接池信号量           | `steady_timer` 作协程信号量                      | 协程不能用 `condition_variable`，`timer.cancel()` 唤醒挂起协程 |
-| 查询日志               | 装饰器模式                                       | 透明拦截所有查询，不修改连接池和业务代码                       |
-| PreparedStatement 缓存 | 每连接 LRU                                       | 避免重复 prepare，非线程安全但每连接独占无锁开销               |
-| DB 模块化              | 可选编译 `HICAL_WITH_DATABASE`                   | 不影响核心库，零开销，后端可扩展                               |
-| 日志系统               | `std::format` + 宏 + Sink 插件                   | 零开销编译期消除，可插拔后端，不引入第三方日志库               |
-| CORS 中间件            | 工厂函数 `makeCorsMiddleware`                    | 一行启用，凭证模式安全校验，预检自动应答                       |
-| 路由分组               | `RouteGroup` 值对象                              | 组级中间件局部生效，不影响全局中间件链                         |
-| 日志异步写盘           | `AsyncFileSink` jthread 双缓冲                   | 背压保护（丢弃 + 计数），不阻塞业务线程                        |
-| 写队列                 | Vyukov Intrusive MPSC Queue                      | wait-free push，消除写路径 mutex 竞争，摊销 O(1) pop           |
-| 连接表分片             | per-loop `LoopShard`                             | idle 扫描/增删全程无锁，消除 TcpServer 全局 mutex              |
-| PMR requestPool        | `threadLocalPool` 作为 upstream                  | 扩容零锁竞争，避免 globalPool 同步开销                         |
-| JWT 认证               | HMAC-SHA256 + SyncBeforeHandler                  | OpenSSL EVP 自实现，零第三方 JWT 库依赖                        |
-| JSON 配置              | `ConfigLoader` + 环境变量覆盖                    | 层级 key 访问，env 覆写优先，支持多种 C++ 类型                 |
-| DTO 校验               | 编译期装饰器（MIN/MAX/PATTERN/NOT_EMPTY/LENGTH） | 反序列化时自动校验，描述性错误信息，零运行时开销               |
+| 决策                   | 选择                                             | 理由                                                                              |
+| ---------------------- | ------------------------------------------------ | --------------------------------------------------------------------------------- |
+| 协程模型               | `asio::awaitable<T>`                             | 与 Boost.Asio 原生集成，零额外开销，代码线性化                                    |
+| HTTP 解析器            | picohttpparser（原生栈集成）                     | 轻量零拷贝，性能优于 Beast                                                        |
+| 内存管理               | C++17 PMR 三层池                                 | 标准化接口，高并发低碎片，与 Boost.JSON 天然兼容                                  |
+| SSL 实现               | 模板化 `GenericConnection<SocketType>`           | 编译期分支消除，零运行时开销                                                      |
+| 后端抽象               | C++20 Concepts                                   | 编译期约束，不引入虚函数开销，面向未来可扩展                                      |
+| 路由查找               | 编译期完美哈希 + 哈希表回退                      | 编译期注册的路由 O(1) 无碰撞哈希，未注册的走 `unordered_map` + 按方法分桶线性匹配 |
+| 中间件模型             | 洋葱模型 + 编译期预构建链                        | 前置/后置/拦截能力完整，`CompileTimeChain` 编译期展开类型列表合并连续 Sync 帧     |
+| 反射降级               | HICAL_ROUTE 宏                                   | C++26 反射尚不成熟，宏方案保持向前兼容                                            |
+| 线程模型               | 1 Thread : 1 io_context                          | 线程间无共享状态，天然避免锁竞争                                                  |
+| 连接池信号量           | `steady_timer` 作协程信号量                      | 协程不能用 `condition_variable`，`timer.cancel()` 唤醒挂起协程                    |
+| 查询日志               | 装饰器模式                                       | 透明拦截所有查询，不修改连接池和业务代码                                          |
+| PreparedStatement 缓存 | 每连接 LRU                                       | 避免重复 prepare，非线程安全但每连接独占无锁开销                                  |
+| DB 模块化              | 可选编译 `HICAL_WITH_DATABASE`                   | 不影响核心库，零开销，后端可扩展                                                  |
+| 日志系统               | `std::format` + 宏 + Sink 插件                   | 零开销编译期消除，可插拔后端，不引入第三方日志库                                  |
+| CORS 中间件            | 工厂函数 `makeCorsMiddleware`                    | 一行启用，凭证模式安全校验，预检自动应答                                          |
+| 路由分组               | `RouteGroup` 值对象                              | 组级中间件局部生效，不影响全局中间件链                                            |
+| 日志异步写盘           | `AsyncFileSink` jthread 双缓冲                   | 背压保护（丢弃 + 计数），不阻塞业务线程                                           |
+| 写队列                 | Vyukov Intrusive MPSC Queue                      | wait-free push，消除写路径 mutex 竞争，摊销 O(1) pop                              |
+| 连接表分片             | per-loop `LoopShard`                             | idle 扫描/增删全程无锁，消除 TcpServer 全局 mutex                                 |
+| PMR requestPool        | `threadLocalPool` 作为 upstream                  | 扩容零锁竞争，避免 globalPool 同步开销                                            |
+| JWT 认证               | HMAC-SHA256 + SyncBeforeHandler                  | OpenSSL EVP 自实现，零第三方 JWT 库依赖                                           |
+| JSON 配置              | `ConfigLoader` + 环境变量覆盖                    | 层级 key 访问，env 覆写优先，支持多种 C++ 类型                                    |
+| DTO 校验               | 编译期装饰器（MIN/MAX/PATTERN/NOT_EMPTY/LENGTH） | 反序列化时自动校验，描述性错误信息，零运行时开销                                  |
+| 编译期序列化           | `CompileTimeJson<T>` 编译期字符串拼接链          | 完全绕开 `boost::json::object`，零堆分配，快一个数量级                            |
+| 编译期路由哈希         | `PerfectHashRouter` multiply-shift 编译期搜种子  | 静态路由 O(1) 无碰撞哈希 + `unordered_map` 回退，零除法取模                       |
+| 编译期中间件链         | `CompileTimeChain<Mws...>` 模板展开类型列表      | 跳过运行时 `buildOptimizedChain()` 的动态构建，零 `std::function` 堆分配          |
 
 ---
 
@@ -1544,7 +1556,7 @@ thread_local DateCache dateTlsCache; // {cachedSec, buf[30], len}
 - **ReadBufferPool 借还**：每请求借一块缓冲区，响应写完后归还；粘包残留暂存在 `pipelineSpill`（`for(;;)` 外的 `std::string`，大多数连接为空，SSO 不分配堆内存）
 - **栈缓冲 speculative read**：空闲连接不用 `async_wait(wait_read)` 等着（有 MOD 开销），改用 256B 栈数组 `async_read_some`。Asio 投机路径下有数据直返、无数据挂起，都不产生 `epoll_ctl(MOD)`。实测 10K 并发下 epoll_ctl 调用从 32,563 降到 9,173（降 71.8%），总 CPU 降 ~16-20%
 
-### 19.5 同步中间件零协程帧 + 异步转发帧消除
+### 19.5 同步中间件零协程帧 + 异步转发帧消除 + CompileTimeChain 编译期预构建
 
 `buildOptimizedChain()` 算法将连续的 `SyncBeforeHandler` / `SyncAfterHandler` 合并为单个协程帧：
 
@@ -1552,6 +1564,8 @@ thread_local DateCache dateTlsCache; // {cachedSec, buf[30], len}
 10 层同步中间件 = 1 次协程帧堆分配（而非 10 次）
 性能：仅比无中间件低 2.1%
 ```
+
+**CompileTimeChain 编译期中间件链预构建**：`CompileTimeChain<Mws...>` 模板在编译期把中间件类型列表展开成调用链，连续 Sync 条目合并到一个协程帧。`compileTimeRoute()` 注册的路由 dispatch 时优先走预构建链，完全跳过运行时的 `buildOptimizedChain()`。Router 的 `RouteEntry` 和 `ParamRouteEntry` 都带有 `compileTimeChain` 字段，dispatch/dispatchSync 先查编译期链是否存在；不存在才走运行时 `buildOptimizedChain()` 或动态构建。
 
 异步中间件包装 lambda 原来用 `co_return co_await mw(r, next)`——lambda 自己是协程，每层多一个独立堆帧。改为 `return mw(r, next)` 后 lambda 退化为普通函数，mw10 场景从 20 帧/请求（10 用户帧 + 10 包装帧）降到 10 帧。
 
@@ -1569,6 +1583,42 @@ TcpCorkGuard 析构 → setsockopt(TCP_CORK, 0) → flush
 ```
 
 跨平台适配：Linux `TCP_CORK`，macOS `TCP_NOPUSH`，Windows no-op（已有应用层 scatter-gather）。
+
+---
+
+## 20. 编译期组件设计
+
+### 20.1 PerfectHashRouter — 编译期完美哈希路由表
+
+`MetaRoutes` 在 `registerRoutes()` 时收集所有 `HICAL_HANDLER` + `HICAL_ROUTES` 注册的静态路由路径和 HTTP 方法。`PerfectHashRouter` 模板在编译期用 multiply-shift 方案暴力搜索无冲突哈希种子：
+
+- **编译期暴力搜索**：对给定路径集合，遍历 `seed` 候选值直到找到使 `djb2(path) * seed >> (64-k)` 无冲突的种子
+- **运行时查找**：`djb2(path)` → `hash * seed` → 右移 → 序号 → 一次字符串比较确认。全程零除法、零取模、零分支预测翻车
+- **透明回退**：命中用完美哈希路径，miss 自动回退到 `unordered_map` 查找——`Router` 在 `MetaRoutes` 构建时同时持有完美哈希表和 `unordered_map`
+- **测试覆盖**：`test_perfect_hash_router` 覆盖全命中、miss、方法不匹配、性能基准对比
+
+运行时静态路由查找对比 benchmark：`PerfectHashRouter` 用 djb2 + multiply-shift + 1 次 `memcmp`，`unordered_map` 则需完整哈希计算 + 桶遍历 + 多次字符串比较。
+
+### 20.2 CompileTimeJson — 编译期直序列化
+
+传统 DTO 序列化路径：`toJson()` → `boost::json::object` 构造 → `boost::json::serialize()`，两步都走运行时分配。
+
+`CompileTimeJson<T>` 模板在编译期把 DTO 结构体的字段序列化展开成 flat 字符串拼接链：
+
+- **编译期展开**：{→ `"key":"value"` → , → 下一个字段 → }，全程编译期字符串运算
+- **零分配**：不建 `boost::json::object`，不调 `serialize()`，结果是 `std::string`
+- **便捷 API**：`HttpResponse::jsonFrom<T>()` 一行搞定 `CompileTimeJson<T>::toString(dto)` + `setBody` + `Content-Type: application/json`
+- **适用场景**：小到中等 DTO 的热路径序列化——比 `toJson` + `boost::json::serialize` 快一个数量级，但字符串拼接取代了结构化对象，大数据量时编译时间会膨胀
+
+### 20.3 CompileTimeChain — 编译期中间件链预构建
+
+`CompileTimeChain<Mws...>` 模板接收中间件类型列表，在编译期展开成调用链：
+
+- **编译期展开**：模板递归把中间件类型包装成洋葱模型调用链，连续 `SyncBeforeHandler` + `SyncAfterHandler` 条目合并在单个协程帧里
+- **编译期路由集成**：`Router::compileTimeRoute()` 注册的路由把中间件类型传给 `CompileTimeChain` 模板实例化，dispatch 时优先走预构建链
+- **无运行时开销**：编译期链完全跳过 `buildOptimizedChain()` 的动态构建（vector 遍历 + lambda 层层包装 + `std::function` 堆分配）
+
+语义与 `buildOptimizedChain` 对齐：同优先级的 Sync 连续条目合并到一帧、Async 条目单独成帧。
 
 ---
 

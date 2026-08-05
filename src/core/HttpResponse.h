@@ -6,6 +6,7 @@
 #pragma once
 
 #include "ChunkedBody.h"
+#include "CompileTimeJson.h"
 #include "Cookie.h"
 #include "FixedBuffer.h"
 #include "HeaderMap.h"
@@ -324,6 +325,23 @@ namespace hical
 		 * @return HttpResponse
 		 */
 		static HttpResponse json(const boost::json::value& json);
+
+		/**
+		 * @brief 用编译期直序列化从 DTO 构造 JSON 响应
+		 * @tparam T 有 HICAL_JSON 反射注解的 DTO 类型
+		 * @param dto 要序列化的 DTO 对象
+		 * @return 包含 JSON body 的 HttpResponse（Content-Type: application/json）
+		 * 相比 json(toJson(dto)) 绕开了 boost::json::object，小 DTO（<512B wire）零堆分配。
+		 */
+		template <typename T>
+		static HttpResponse jsonFrom(const T& dto)
+		{
+			HttpResponse resp;
+			resp.setStatus(HttpStatusCode::hOk);
+			resp.setHeader("Content-Type", "application/json");
+			resp.setBody(meta::compileTimeToJson<T>(dto));
+			return resp;
+		}
 
 		/**
 		 * @brief 创建 404 Not Found 响应

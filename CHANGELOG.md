@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **CompileTimeJson 编译期直序列化**：`CompileTimeJson` 模板把 DTO 结构体的 JSON 序列化在编译期展开成 flat 字符串拼接链，完全绕开 `boost::json::object` 的运行时分配——不建 object、不调 `serialize()`、零堆分配。`HttpResponse::jsonFrom<T>()` 便捷 API 一行搞定编译期序列化响应，对简单 DTO 比 `toJson` + `boost::json::serialize` 快一个数量级。配套测试 `test_compile_time_json`（含 `vector<bool>` 代理类不兼容修复）
 - **PerfectHashRouter 编译期完美哈希路由表**：静态路由把 `unordered_map` 查找替换为编译期算好的完美哈希，运行时只需 djb2 哈希 + 乘法 + 位移 + 一次字符串比较，没有除法取模也没分支预测翻车。实现用 multiply-shift 方案编译期暴力搜无冲突种子，`MetaRoutes` 注册路由时自动构建并注入 `Router`，命中跳 `unordered_map`、miss 回退原查表逻辑。配套测试覆盖全命中/miss/方法不匹配/边界条件，静态路由查找延迟对比 benchmark （`test_perfect_hash_router`）
 - **CompileTimeChain 编译期中间件链预构建**：`CompileTimeChain` 模板在编译期把中间件类型列表展开成调用链，连续 Sync 条目合并到一个协程帧，语义跟 `buildOptimizedChain` 对齐。`compileTimeRoute` 注册的路由 dispatch 时优先走预构建链，跳过动态构建。`Router` 的 `RouteEntry` 和 `ParamRouteEntry` 都加了 `compileTimeChain` 字段，dispatch/dispatchSync 先看有没有编译期链，没有才回退到动态路径
 - **HttpArena bench 服务器接入 Gzip 压缩**：bench 服务器接入 Gzip 压缩中间件，新增 `json-comp` 测试类型
@@ -19,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **PerfectHash 性能测试阈值放宽**：`PerfectHashPerfTest` 性能阈值从严格 ratio 改为仅检查 `nsPerOp < 1e6`，移除 `FirstAndLastHit` ratio 断言——CI 共享 CPU 噪声太大（已连踩 1.32 和 1.56），继续放宽阈值没意义
 
 ### Performance
+- **toJson 预分配 reserve(N) 消除 rehash**：`toJson` 在构造 `boost::json::object` 时调用 `reserve(fieldsCount)` 预分配桶，消除字段数超过默认容量时的 rehash 开销
 - **Static 文件内容内存缓存**：新增 thread_local 无锁 LRU 缓存（`detail::TlContentCache`），缓存小文件（≤512KB）的 body 内容和预计算 ETag。热路径命中时零文件 I/O syscall（省掉 open/read/close），只做 memcpy + 一次 async_write。TTL 10 秒 + mtime 变更检测保证缓存一致性
 - **TlContentCache 缓存前置**：内容缓存检查从 fstat 之后移到 fstat 之前——文本文件 + 非 Range 请求直接查缓存，命中时连 `file_size`/`last_write_time` 两个 syscall 也省了。TTL 过期后用 mtime 检测续期或淘汰，保证缓存一致性。缓存命中时 304 也从缓存块内直接发出，不经过外层 etag 计算
 - **PathCache 无锁化**：从全局 `shared_mutex` + LRU 改为每线程独立 `thread_local` LRU（单线程 64 条目，64 核总容量 ~4096），彻底消除跨核缓存行弹跳，解决 static/4096 −38%、static/6800 −48% 的高并发退化。缓存 key 加 root 前缀（`\x01` 分隔）隔离不同 `serveStatic` handler

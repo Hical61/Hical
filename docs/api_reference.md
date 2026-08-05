@@ -54,6 +54,9 @@
 - [Middleware](#middleware) — 中间件
 - [MetaJson](#metajson) — JSON 反射序列化
 - [MetaRoutes](#metaroutes) — 反射路由注册
+- [CompileTimeJson](#compiletimejson) — 编译期直序列化
+- [CompileTimeChain](#compiletimechain) — 编译期中间件链
+- [PerfectHashRouter](#perfecthashrouter) — 编译期完美哈希路由表
 - [Cookie](#cookie) — Cookie 解析与设置
 - [Session](#session) — Session 会话管理
 - [CORS 中间件](#cors-中间件) — 跨域资源共享
@@ -187,25 +190,27 @@ int main()
 
 ### Router
 
-路由管理器，负责路由注册和请求分发。静态路由使用透明哈希表 O(1) 查找（`RouteKeyView` + `is_transparent` 实现零分配 `string_view` 查找），参数路由按 HTTP 方法分桶存储。
+路由管理器，负责路由注册和请求分发。静态路由使用编译期完美哈希（`MetaRoutes` 注册的路由）或透明哈希表 O(1) 查找（`RouteKeyView` + `is_transparent` 实现零分配 `string_view` 查找）作为回退，参数路由按 HTTP 方法分桶存储。
 
 **头文件：** `<hical/core/Router.h>`
 
 #### 公共方法
 
-| 方法                                                    | 参数                                                                             | 返回值                    | 说明                           |
-| ------------------------------------------------------- | -------------------------------------------------------------------------------- | ------------------------- | ------------------------------ |
-| `route(method, path, handler)`                          | method: HTTP 方法<br>path: 路由路径<br>handler: 协程处理器                       | `void`                    | 注册协程路由                   |
-| `route(method, path, handler)`                          | method: HTTP 方法<br>path: 路由路径<br>handler: 同步处理器                       | `void`                    | 注册同步路由（自动包装为协程） |
-| `get(path, handler)`                                    | path: 路由路径<br>handler: 处理器                                                | `void`                    | 注册 GET 路由                  |
-| `post(path, handler)`                                   | path: 路由路径<br>handler: 处理器                                                | `void`                    | 注册 POST 路由                 |
-| `put(path, handler)`                                    | path: 路由路径<br>handler: 处理器                                                | `void`                    | 注册 PUT 路由                  |
-| `del(path, handler)`                                    | path: 路由路径<br>handler: 处理器                                                | `void`                    | 注册 DELETE 路由               |
-| `ws(path, onMessage, onConnect)`                        | path: 路由路径<br>onMessage: 消息回调<br>onConnect: 连接回调（可选）             | `void`                    | 注册 WebSocket 路由            |
-| `ws(path, options, onMessage, onConnect, onDisconnect)` | path: 路由路径<br>options: `WsOptions`<br>onMessage/onConnect/onDisconnect: 回调 | `void`                    | 注册带选项的 WebSocket 路由    |
-| `dispatch(req)`                                         | req: HTTP 请求                                                                   | `Awaitable<HttpResponse>` | 分发请求到匹配的路由           |
-| `routeCount()`                                          | 无                                                                               | `size_t`                  | 获取已注册路由数量             |
-| `group(prefix)`                                         | prefix: 路由前缀                                                                 | `RouteGroup`              | 创建路由组（前缀分组）         |
+| 方法                                                    | 参数                                                                                                                                              | 返回值                    | 说明                                                                            |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------- | ------------------------------------------------------------------------------- |
+| `route(method, path, handler)`                          | method: HTTP 方法<br>path: 路由路径<br>handler: 协程处理器                                                                                        | `void`                    | 注册协程路由                                                                    |
+| `route(method, path, handler)`                          | method: HTTP 方法<br>path: 路由路径<br>handler: 同步处理器                                                                                        | `void`                    | 注册同步路由（自动包装为协程）                                                  |
+| `get(path, handler)`                                    | path: 路由路径<br>handler: 处理器                                                                                                                 | `void`                    | 注册 GET 路由                                                                   |
+| `post(path, handler)`                                   | path: 路由路径<br>handler: 处理器                                                                                                                 | `void`                    | 注册 POST 路由                                                                  |
+| `put(path, handler)`                                    | path: 路由路径<br>handler: 处理器                                                                                                                 | `void`                    | 注册 PUT 路由                                                                   |
+| `del(path, handler)`                                    | path: 路由路径<br>handler: 处理器                                                                                                                 | `void`                    | 注册 DELETE 路由                                                                |
+| `ws(path, onMessage, onConnect)`                        | path: 路由路径<br>onMessage: 消息回调<br>onConnect: 连接回调（可选）                                                                              | `void`                    | 注册 WebSocket 路由                                                             |
+| `ws(path, options, onMessage, onConnect, onDisconnect)` | path: 路由路径<br>options: `WsOptions`<br>onMessage/onConnect/onDisconnect: 回调                                                                  | `void`                    | 注册带选项的 WebSocket 路由                                                     |
+| `compileTimeRoute<Entries...>(method, path, handler)`   | method: HTTP 方法<br>path: 路由路径<br>handler: 协程或同步处理器<br>Entries...: `CompileTimeMwEntry` 模板参数<br>（如 `CompileTimeSyncMw<myMw>`） | `void`                    | 注册带编译期预构建中间件链的路由；dispatch 时跳过运行时 `buildOptimizedChain()` |
+| `dispatch(req)`                                         | req: HTTP 请求                                                                                                                                    | `Awaitable<HttpResponse>` | 分发请求到匹配的路由                                                            |
+| `routeCount()`                                          | 无                                                                                                                                                | `size_t`                  | 获取已注册路由数量                                                              |
+| `group(prefix)`                                         | prefix: 路由前缀                                                                                                                                  | `RouteGroup`              | 创建路由组（前缀分组）                                                          |
+| `setPerfectHashLookup(lookup)`                          | lookup: `RuntimePerfectHashLookup` 函数                                                                                                           | `void`                    | 注入完美哈希加速查找（`MetaRoutes` 自动调用）                                   |
 
 #### 路径参数
 
@@ -420,6 +425,7 @@ HTTP 响应封装，对原生 HTTP 响应的 hical 风格封装。
 | ------------------------------- | ------------------------------------------------------ | -------------- | --------------------------------------------------------------------------- |
 | `ok(body)`                      | body: 消息体（默认空）                                 | `HttpResponse` | 创建 200 OK 响应                                                            |
 | `json(json)`                    | json: JSON 值                                          | `HttpResponse` | 创建 JSON 200 OK 响应                                                       |
+| `jsonFrom<T>(dto)`              | dto: DTO 结构体常量引用（需 `HICAL_JSON` 标注）        | `HttpResponse` | 编译期直序列化 DTO 为 JSON 200 OK 响应（零 `boost::json::object` 分配）     |
 | `notFound()`                    | 无                                                     | `HttpResponse` | 创建 404 Not Found 响应                                                     |
 | `badRequest(message)`           | message: 错误信息（默认 "Bad Request"）                | `HttpResponse` | 创建 400 Bad Request 响应                                                   |
 | `serverError()`                 | 无                                                     | `HttpResponse` | 创建 500 Internal Server Error 响应                                         |
@@ -787,6 +793,147 @@ int main()
     meta::registerRoutes(server.router(), handler);
     server.start();
 }
+```
+
+---
+
+### CompileTimeJson
+
+编译期 DTO 直序列化，绕开 `boost::json::object` 直接在 `FixedBuffer<512>` 栈缓冲上拼接 wire bytes，零堆分配。
+
+**头文件：** `<hical/core/CompileTimeJson.h>`
+
+**命名空间：** `hical::meta`
+
+#### 函数
+
+| 函数                                 | 参数                    | 返回值        | 说明                                                               |
+| ------------------------------------ | ----------------------- | ------------- | ------------------------------------------------------------------ |
+| `compileTimeToJson<T>(dto)`          | dto: DTO 结构体常量引用 | `std::string` | 编译期展开字段序列化为 JSON 字符串，完全绕开 `boost::json::object` |
+| `compileTimeToJsonSnakeCase<T>(dto)` | dto: DTO 结构体常量引用 | `std::string` | 同上，但 key 转 snake_case                                         |
+
+**便捷 API（`HttpResponse`）**：`HttpResponse::jsonFrom<T>(dto)` 一行完成序列化 + 设置 `Content-Type: application/json`。
+
+**适用 DTO**：需要 `HICAL_JSON` 标注（`HICAL_IGNORE` 字段会跳过，`ALIAS` 字段会替换 key）。输出与 `toJson()` 语义等价，区别在于跳过 `boost::json` 中间层。
+
+**注意**：适用于小到中等 DTO（<512B wire 零堆分配，超出会自动溢出到堆），大数据量或复杂嵌套结构编译时间会膨胀。
+
+#### 示例
+
+```cpp
+#include <hical/core/CompileTimeJson.h>
+
+struct UserDTO
+{
+    HICAL_JSON(UserDTO, name, age, email)
+    std::string name;
+    int age = 0;
+    std::string email;
+};
+
+UserDTO user{"张三", 25, "zhangsan@example.com"};
+
+// 编译期直序列化
+std::string json = hical::meta::compileTimeToJson(user);
+// 产出: {"name":"张三","age":25,"email":"zhangsan@example.com"}
+
+// 响应便捷 API
+return HttpResponse::jsonFrom(user);
+```
+
+---
+
+### CompileTimeChain
+
+编译期中间件调用链预构建。`CompileTimeChain<Mws...>` 模板接收中间件类型列表，在编译期展开成洋葱模型调用链，连续 Sync 条目合并到单个协程帧。语义与 `buildOptimizedChain()` 对齐。
+
+**头文件：** `<hical/core/CompileTimeChain.h>`
+
+**命名空间：** `hical`
+
+#### 编译期标签类型
+
+| 标签                         | 说明                                                                                  |
+| ---------------------------- | ------------------------------------------------------------------------------------- |
+| `CompileTimeAsyncMw<F>`      | 异步中间件标签：接受 `(HttpRequest&, MiddlewareNext) -> Awaitable<HttpResponse>` 函数 |
+| `CompileTimeSyncMw<F>`       | 同步前置中间件标签：`SyncBeforeHandler`，零协程帧                                     |
+| `CompileTimeSyncFullMw<B,A>` | 完整同步中间件标签：`SyncBeforeHandler` + `SyncAfterHandler`                          |
+
+#### 函数
+
+| 函数                                              | 参数                           | 返回值           | 说明                                     |
+| ------------------------------------------------- | ------------------------------ | ---------------- | ---------------------------------------- |
+| `buildCompileTimeChain<Entries...>(finalHandler)` | finalHandler: `MiddlewareNext` | `MiddlewareNext` | 编译期展开类型列表生成完整的中间件调用链 |
+
+**与 Router 集成**：通过 `Router::compileTimeRoute<Entries...>()` 注册路由时自动注入预构建链，dispatch 时优先走编译期链，不存在才回退到运行时 `buildOptimizedChain()`。
+
+#### 示例
+
+```cpp
+#include <hical/core/CompileTimeChain.h>
+
+// 定义同步中间件
+inline HttpResponse addCorsHeaders(const HttpRequest& req)
+{
+    HttpResponse resp;
+    resp.setHeader("Access-Control-Allow-Origin", "*");
+    return resp;
+}
+
+// 定义异步中间件
+inline Awaitable<HttpResponse> authMiddleware(HttpRequest& req, MiddlewareNext next)
+{
+    if (req.header("Authorization") != "Bearer secret")
+        co_return HttpResponse::badRequest("Unauthorized");
+    co_return co_await next(req);
+}
+
+// 编译期路由注册（中间件类型列表编译期展开）
+router.compileTimeRoute<
+    CompileTimeSyncMw<addCorsHeaders>,
+    CompileTimeAsyncMw<authMiddleware>
+>(HttpMethod::hGet, "/api/data", handler);
+```
+
+---
+
+### PerfectHashRouter
+
+编译期完美哈希路由表。`MetaRoutes` 注册路由时自动构建 multiply-shift 完美哈希表（在编译期暴力搜索无冲突种子），然后注入 `Router`。运行时命中时走 djb2 + 乘法 + 位移 + 一次字符串比较，零除法零取模；miss 时透明回退到 `unordered_map`。
+
+**头文件：** `<hical/core/PerfectHashRouter.h>`
+
+**命名空间：** `hical`
+
+#### 核心概念
+
+- **编译期暴力搜索**：对给定路径集合，遍历 `seed` 候选值直到 `djb2(path) * seed >> (64-k)` 无冲突
+- **用户透明**：由 `MetaRoutes::registerRoutes()` 自动调用 `setPerfectHashLookup()`，无需手动配置
+- **回退安全**：动态注册的路由（非 `MetaRoutes`）直接走 `unordered_map`，完美哈希只覆盖编译期注册的静态路由
+
+#### 类型
+
+| 类型                       | 说明                                                                                      |
+| -------------------------- | ----------------------------------------------------------------------------------------- |
+| `RuntimePerfectHashLookup` | `std::function<optional<RouteHandler>(HttpMethod, string_view)>` 签名，运行时哈希查找回调 |
+
+#### 示例
+
+无需手动调用。使用 `HICAL_HANDLER` + `HICAL_ROUTES` + `registerRoutes()` 自动集成：
+
+```cpp
+struct MyHandler
+{
+    HICAL_HANDLER(Get, "/api/status", getStatus)
+    HICAL_HANDLER(Get, "/api/users", getUsers)
+    HICAL_ROUTES(MyHandler, getStatus, getUsers)
+
+    HttpResponse getStatus(const HttpRequest&) { return HttpResponse::ok("ok"); }
+    HttpResponse getUsers(const HttpRequest&) { return HttpResponse::json(...); }
+};
+
+// registerRoutes() 自动构建 PerfectHashRouter 并注入 Router
+meta::registerRoutes(server.router(), std::make_shared<MyHandler>());
 ```
 
 ---

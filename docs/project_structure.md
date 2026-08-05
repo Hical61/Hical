@@ -1,6 +1,6 @@
 # Hical 项目代码结构
 
-> 最后更新：2026-07-17
+> 最后更新：2026-08-05
 
 ## 项目概述
 
@@ -102,6 +102,9 @@ hical/
 │   │   ├── OpenApiRegistry.h/.cpp  # 路由元数据注册表（RouteApiInfo/HICAL_API/builder::*）
 │   │   ├── OpenApiDocument.h/.cpp  # OpenAPI 3.0 文档组装（惰性缓存/路径合并/参数提取）
 │   │   ├── OpenApiEndpoint.h   # 端点暴露（serveOpenApi，/openapi.json + /docs）
+│   │   ├── PerfectHashRouter.h # 编译期完美哈希路由表（multiply-shift 方案编译期搜种子）
+│   │   ├── CompileTimeChain.h  # 编译期中间件链预构建（模板展开类型列表合并 Sync 帧）
+│   │   ├── CompileTimeJson.h   # 编译期直序列化（绕开 boost::json::object 零分配）
 │   │   ├── IdleFd.h            # 空闲 fd 预留（POSIX /dev/null，Windows no-op）
 │   │   ├── IdleScanner.h/.cpp  # 集中式空闲连接扫描器（per-io_context，侵入式链表 + 单 timer）
 │   │   └── Version.h.in        # CMake 配置版本头（唯一版本号来源）
@@ -124,7 +127,7 @@ hical/
 │       ├── MysqlConnection.h/.cpp  # MySQL 后端（Boost.MySQL any_connection + charset 白名单校验）
 │       └── StmtCache.h/.cpp    # PreparedStatement LRU 缓存（透明哈希 string_view 查找）
 │
-├── tests/                      # 单元测试（Google Test）— 52 个基础测试套件（+ 1 个可选 OpenAPI + 5 个可选 DB 测试）
+├── tests/                      # 单元测试（Google Test）— 55 个基础测试套件（+ 1 个可选 OpenAPI + 5 个可选 DB 测试）
 │   ├── CMakeLists.txt          # gtest_discover_tests 自动注册 + Windows ws2_32/mswsock 链接
 │   │
 │   │ # —— 基础设施 ——
@@ -169,6 +172,9 @@ hical/
 │   ├── test_expect_continue.cpp      # Expect: 100-continue
 │   ├── test_http_client.cpp          # HTTP 客户端测试工具
 │   ├── test_optimistic_write.cpp     # 乐观同步写
+│   ├── test_perfect_hash_router.cpp  # 编译期完美哈希路由表
+│   ├── test_compile_time_chain.cpp   # 编译期中间件链预构建
+│   ├── test_compile_time_json.cpp    # 编译期直序列化
 │   │ # —— WebSocket ——
 │   ├── test_websocket.cpp            # WebSocket 基础
 │   ├── test_ws_advanced.cpp          # WebSocket 进阶（子协议/心跳/压缩/Hub 广播）
@@ -258,16 +264,19 @@ hical/
 │  ┌──────────┐ ┌────────────┐ ┌─────────────┐ ┌───────────┐  │
 │  │  Router  │ │ Middleware │ │ WsHub /     │ │ OpenApi   │  │
 │  │  (O(1) + │ │  Pipeline  │ │ WsSession   │ │ (可选)    │  │
-│  │  {param})│ │ (Async/Sync│ │ (子协议/    │ │           │  │
-│  └──────────┘ │  双轨)     │ │  压缩/心跳) │ └───────────┘  │
-│  ┌──────────┐ └────────────┘ └─────────────┘ ┌───────────┐  │
-│  │RouteGroup│ ┌────────────┐ ┌─────────────┐ │   CORS    │  │
-│  └──────────┘ │  Session   │ │ StaticFiles │ └───────────┘  │
-│  ┌──────────┐ └────────────┘ └─────────────┘ ┌───────────┐  │
-│  │ MetaJson │ ┌────────────┐ ┌─────────────┐ │ Multipart │  │
-│  │MetaRoutes│ │ LogMiddle- │ │  DbMiddle-  │ └───────────┘  │
-│  │ (反射)   │ │   ware     │ │   ware (可选)│                │
-│  └──────────┘ └────────────┘ └─────────────┘                │
+│  │  Perfect │ │ (Async/Sync│ │ (子协议/    │ │           │  │
+│  │  Hash +  │ │  双轨 +    │ │  压缩/心跳) │ └───────────┘  │
+│  │  {param})│ │ CompileTime│ └─────────────┘ ┌───────────┐  │
+│  └──────────┘ │   Chain)   │ ┌─────────────┐ │   CORS    │  │
+│  ┌──────────┐ └────────────┘ │ StaticFiles │ └───────────┘  │
+│  │RouteGroup│ ┌────────────┐ └─────────────┘ ┌───────────┐  │
+│  └──────────┘ │  Session   │ ┌─────────────┐ │ Multipart │  │
+│  ┌──────────┐ └────────────┘ │  DbMiddle-  │ └───────────┘  │
+│  │ MetaJson │ ┌────────────┐ │   ware (可选)│ ┌───────────┐  │
+│  │MetaRoutes│ │ LogMiddle- │ └─────────────┘ │CompileTime│  │
+│  │CompileTime│ │   ware     │ ┌─────────────┐ │   Json    │  │
+│  │   Json    │ └────────────┘ │ RateLimiter │ └───────────┘  │
+│  │ (反射)    │ ┌────────────┐ └─────────────┘ ┌───────────┐  │
 │  ┌─────────────────────────────────────────────────────────┐│
 │  │       HttpRequest / HttpResponse / HeaderMap            ││
 │  │       (原生 HTTP 栈：picohttpparser + 自研 WebSocket)   ││
@@ -321,7 +330,7 @@ hical/
   - Windows 额外：`ws2_32`、`mswsock`
 - **构建产物**：
   - `hical_core` — 框架核心静态库（仅静态库，DLL/ABI 不兼容）
-  - `test_*` — 52 个基础测试套件（+ 1 个可选 OpenAPI + 5 个可选 DB 测试）
+  - `test_*` — 55 个基础测试套件（+ 1 个可选 OpenAPI + 5 个可选 DB 测试）
   - 8 个示例可执行文件
 - **CI 工作流**：见 [.github/workflows/](../.github/workflows/) — `ci.yml`（多平台矩阵）、`sanitizer.yml`（ASan/UBSan/TSan）、`release.yml` / `conan-publish.yml`
 
@@ -331,17 +340,18 @@ hical/
 
 > 完整版本历史与逐次变更见 [CHANGELOG.md](../CHANGELOG.md)。本节仅给出主要里程碑，便于理解仓库当前状态来源。
 
-| 阶段      | 关键模块                                                                                                       | 说明                                                        |
-| --------- | -------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
-| 基础设施  | `MemoryPool` / `PmrBuffer` / `EventLoop` / `Concepts`                                                          | 三层 PMR 池 + Asio 抽象 + C++20 概念约束                    |
-| 网络层    | `TcpServer` / `GenericConnection` / `SslContext`                                                               | SO_REUSEPORT 多 acceptor、TCP/SSL 模板统一、零分配写队列    |
-| HTTP 框架 | `HttpServer` / `Router` / `Middleware` / `HttpRequest` / `HttpResponse`                                        | 协程化处理、洋葱中间件、参数路由、`dispatchSync` 同步快路径 |
-| 协议增强  | `Session` / `Cookie` / `Cors` / `StaticFiles` / `Multipart` / `RouteGroup`                                     | 完整 HTTP 周边能力                                          |
-| WebSocket | `WebSocket` / `WsFrame` / `WsHandshake` / `WsDeflate` / `WsHub`                                                | 自研 RFC 6455 栈，子协议/心跳/压缩/广播                     |
-| 反射层    | `Reflection` / `MetaJson` / `MetaRoutes`                                                                       | 双轨设计：C++26 原生 P2996 + C++20 宏回退                   |
-| 日志系统  | `Log` / `LogChannel` / `LogFormatter` / `LogSink` / `LogFile` / `AsyncFileSink` / `LogMiddleware` / `LogAdmin` | 6 级日志、命名通道、异步双缓冲、动态级别管理                |
-| OpenAPI   | `OpenApiSchema` / `OpenApiRegistry` / `OpenApiDocument` / `OpenApiEndpoint`                                    | 从 `HICAL_JSON` 自动派生 OpenAPI 3.0 文档                   |
-| 数据库    | `DbConfig` / `DbConnectionPool` / `DbMiddleware` / `DbQueryLog` / `MysqlConnection` / `StmtCache`              | 协程化连接池 + 装饰器查询日志 + PreparedStatement LRU       |
+| 阶段       | 关键模块                                                                                                       | 说明                                                           |
+| ---------- | -------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| 基础设施   | `MemoryPool` / `PmrBuffer` / `EventLoop` / `Concepts`                                                          | 三层 PMR 池 + Asio 抽象 + C++20 概念约束                       |
+| 网络层     | `TcpServer` / `GenericConnection` / `SslContext`                                                               | SO_REUSEPORT 多 acceptor、TCP/SSL 模板统一、零分配写队列       |
+| HTTP 框架  | `HttpServer` / `Router` / `Middleware` / `HttpRequest` / `HttpResponse`                                        | 协程化处理、洋葱中间件、参数路由、`dispatchSync` 同步快路径    |
+| 协议增强   | `Session` / `Cookie` / `Cors` / `StaticFiles` / `Multipart` / `RouteGroup`                                     | 完整 HTTP 周边能力                                             |
+| WebSocket  | `WebSocket` / `WsFrame` / `WsHandshake` / `WsDeflate` / `WsHub`                                                | 自研 RFC 6455 栈，子协议/心跳/压缩/广播                        |
+| 反射层     | `Reflection` / `MetaJson` / `MetaRoutes`                                                                       | 双轨设计：C++26 原生 P2996 + C++20 宏回退                      |
+| 日志系统   | `Log` / `LogChannel` / `LogFormatter` / `LogSink` / `LogFile` / `AsyncFileSink` / `LogMiddleware` / `LogAdmin` | 6 级日志、命名通道、异步双缓冲、动态级别管理                   |
+| OpenAPI    | `OpenApiSchema` / `OpenApiRegistry` / `OpenApiDocument` / `OpenApiEndpoint`                                    | 从 `HICAL_JSON` 自动派生 OpenAPI 3.0 文档                      |
+| 数据库     | `DbConfig` / `DbConnectionPool` / `DbMiddleware` / `DbQueryLog` / `MysqlConnection` / `StmtCache`              | 协程化连接池 + 装饰器查询日志 + PreparedStatement LRU          |
+| 编译期组件 | `PerfectHashRouter` / `CompileTimeChain` / `CompileTimeJson`                                                   | 运行时零开销：完美哈希路由 + 编译期中件链 + 编译期 JSON 序列化 |
 
 ## 命名风格
 
