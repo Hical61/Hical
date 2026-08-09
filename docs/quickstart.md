@@ -98,9 +98,9 @@ target_link_libraries(my_app PRIVATE hical::hical_core)
 
 ```bash
 # Download source package from GitHub Releases
-curl -LO https://github.com/Hical61/Hical/releases/download/v2.6.7/hical-2.6.7-conan-src.tar.gz
-tar xzf hical-2.6.7-conan-src.tar.gz && cd hical
-conan export . --version=2.6.7
+curl -LO https://github.com/Hical61/Hical/releases/download/v2.6.8/hical-2.6.8-conan-src.tar.gz
+tar xzf hical-2.6.8-conan-src.tar.gz && cd hical
+conan export . --version=2.6.8
 ```
 
 In your consumer project:

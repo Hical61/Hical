@@ -5,19 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.6.8] - 2026-08-09
 
 ### Added
 - **CompileTimeJson 编译期直序列化**：`CompileTimeJson` 模板把 DTO 结构体的 JSON 序列化在编译期展开成 flat 字符串拼接链，完全绕开 `boost::json::object` 的运行时分配——不建 object、不调 `serialize()`、零堆分配。`HttpResponse::jsonFrom<T>()` 便捷 API 一行搞定编译期序列化响应，对简单 DTO 比 `toJson` + `boost::json::serialize` 快一个数量级。配套测试 `test_compile_time_json`（含 `vector<bool>` 代理类不兼容修复）
 - **PerfectHashRouter 编译期完美哈希路由表**：静态路由把 `unordered_map` 查找替换为编译期算好的完美哈希，运行时只需 djb2 哈希 + 乘法 + 位移 + 一次字符串比较，没有除法取模也没分支预测翻车。实现用 multiply-shift 方案编译期暴力搜无冲突种子，`MetaRoutes` 注册路由时自动构建并注入 `Router`，命中跳 `unordered_map`、miss 回退原查表逻辑。配套测试覆盖全命中/miss/方法不匹配/边界条件，静态路由查找延迟对比 benchmark （`test_perfect_hash_router`）
 - **CompileTimeChain 编译期中间件链预构建**：`CompileTimeChain` 模板在编译期把中间件类型列表展开成调用链，连续 Sync 条目合并到一个协程帧，语义跟 `buildOptimizedChain` 对齐。`compileTimeRoute` 注册的路由 dispatch 时优先走预构建链，跳过动态构建。`Router` 的 `RouteEntry` 和 `ParamRouteEntry` 都加了 `compileTimeChain` 字段，dispatch/dispatchSync 先看有没有编译期链，没有才回退到动态路径
+- **NUMA 拓扑感知调度**（`HICAL_WITH_NUMA`）：`NumaTopology` 启动时检测 NUMA 拓扑（节点数、CPU 分布、节点间距），`EventLoopPool` 用这个信息把 worker 线程均匀分布到各节点并就近绑核，`MemoryPool` 优先从本地节点分配内存（`numa_set_preferred`）。单路或 WSL 这种不支持 NUMA 的环境自动退化 UMA 模式，行为跟之前一样
 - **HttpArena bench 服务器接入 Gzip 压缩**：bench 服务器接入 Gzip 压缩中间件，新增 `json-comp` 测试类型
 
 ### Fixed
 - **C++26 反射特性检测宏修正**（[#13](https://github.com/Hical61/Hical/issues/13)）：`__cpp_reflection` 是旧版 Reflection TS 的宏名，P2996 最终版拆成了 `__cpp_impl_reflection` 和 `__cpp_lib_reflection`。P2996R13 合并了 P3547R1，`nonstatic_data_members_of` 和 `nonstatic_member_functions_of` 都加了第二个 `access_context` 参数。GCC16 开了 `-freflection` 也能检测到了
+- **TlContentCache 淘汰路径 use-after-free**：`index.erase(it->second->key)` 把当前 hash node 干掉后下一行又读 `it->second`，CI ASan 报 heap-use-after-free。修复是把 list 迭代器先取出来，再用 `it` 删 index，最后删 list 条目
 - **HttpArena bench 修复**：补了缺失的 `RouteGroup.h` 头文件；Gzip 中间件从全局移到 `/json` 路由组，避免拖慢 static 文件服务；`SyncAfterHandler` 包装为协程以匹配 `server.use()` 签名
 - **tests/CMakeLists.txt CI 修复**：合并提交时文件换行丢失被粘成一行，CMake 解析报 `Parse error`，三个平台全挂，从远端还原并补回 `test_perfect_hash_router` 注册行
-- **PerfectHash 性能测试阈值放宽**：`PerfectHashPerfTest` 性能阈值从严格 ratio 改为仅检查 `nsPerOp < 1e6`，移除 `FirstAndLastHit` ratio 断言——CI 共享 CPU 噪声太大（已连踩 1.32 和 1.56），继续放宽阈值没意义
+- **PerfectHash 性能测试阈值放宽**：`PerfectHashPerfTest` 性能阈值从严格 ratio 改为仅检查 `nsPerOp < 1e6`，移除 `FirstAndLastHit` ratio 断言——CI 共享 CPU 噪声太大（已连踩 1.32 和 1.56），继续放宽阈值没意义。MSVC 没 HALO（协程帧全堆分配），sync/async 耗时上限额外放宽
 
 ### Performance
 - **toJson 预分配 reserve(N) 消除 rehash**：`toJson` 在构造 `boost::json::object` 时调用 `reserve(fieldsCount)` 预分配桶，消除字段数超过默认容量时的 rehash 开销
@@ -26,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **PathCache 无锁化**：从全局 `shared_mutex` + LRU 改为每线程独立 `thread_local` LRU（单线程 64 条目，64 核总容量 ~4096），彻底消除跨核缓存行弹跳，解决 static/4096 −38%、static/6800 −48% 的高并发退化。缓存 key 加 root 前缀（`\x01` 分隔）隔离不同 `serveStatic` handler
 - **StaticFiles isTextMime 分流**：文本文件走 `setBody`（2 次协程挂起 + 单次 scatter-gather），二进制走 `setFileBody` 流式发送，避免 `random_access_file` 构造函数的同步 `open()` 在高并发下阻塞 io_context
 - **Gzip isCompressible() 跳过已压缩格式**：碰到 `image/webp`、`font/woff2`、`video/mp4` 这些本来就是压缩过的二进制内容直接跳过，不用白跑 deflate
+- **NUMA 感知内存分配**：`MemoryPool` 通过 `numa_set_preferred` 让 PMR 分配优先走本地内存节点，`EventLoopPool` 线程分布到各 NUMA 节点内轮询绑 CPU，多路服务器上避免跨节点访问延迟
 
 ## [2.6.7] - 2026-07-15
 
@@ -477,7 +480,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Multipart Part 数量上限（DoS 防护）
 - Session ID 使用密码学安全的随机数生成
 
-[Unreleased]: https://github.com/Hical61/Hical/compare/v2.6.7...HEAD
+[Unreleased]: https://github.com/Hical61/Hical/compare/v2.6.8...HEAD
+[2.6.8]: https://github.com/Hical61/Hical/compare/v2.6.7...v2.6.8
 [2.6.7]: https://github.com/Hical61/Hical/compare/v2.6.6...v2.6.7
 [2.6.6]: https://github.com/Hical61/Hical/compare/v2.6.5...v2.6.6
 [2.6.5]: https://github.com/Hical61/Hical/compare/v2.6.4...v2.6.5
