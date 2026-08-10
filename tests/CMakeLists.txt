@@ -22,8 +22,8 @@ set(TESTS_NEEDING_PICOHTTPPARSER
 
 # helper：封装三行样板（add_executable + target_link_libraries + gtest_discover_tests）
 function(hical_add_test name)
-    add_executable(${name} ${name}.cpp)
-    target_link_libraries(${name} PRIVATE hical_core GTest::gtest_main)
+    add_executable(${name} ${name}.cpp ${CMAKE_CURRENT_SOURCE_DIR}/test_main.cpp)
+    target_link_libraries(${name} PRIVATE hical_core GTest::gtest)
     gtest_discover_tests(${name} DISCOVERY_TIMEOUT ${HICAL_TEST_DISCOVERY_TIMEOUT})
 endfunction()
 

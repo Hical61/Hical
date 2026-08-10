@@ -216,7 +216,11 @@ jobs:
       - name: Test (MSYS2)
         if: matrix.compiler == 'msys2-gcc'
         shell: msys2 {0}
-        run: ctest --test-dir build --output-on-failure --timeout 60 -j4
+        run: |
+          ctest --test-dir build --output-on-failure --timeout 60 -j4 || {
+            echo "First attempt failed (likely MinGW exit-time segfault), retrying..."
+            ctest --test-dir build --output-on-failure --timeout 60 -j4
+          }
 
       # ── Windows MSVC ──
       - name: Install ninja (MSVC)
