@@ -143,6 +143,7 @@ jobs:
       - name: Configure
         run: |
           cmake -B build -DCMAKE_BUILD_TYPE=Release \
+            -DHICAL_BUILD_TESTS=OFF \
             -DHICAL_BUILD_HTTPARENA=ON \
             -DHICAL_DISABLE_IO_URING=ON
 
@@ -153,8 +154,20 @@ jobs:
         run: |
           ./build/httparena_server &
           SERVER_PID=$!
-          # 等 httparena 启动
-          sleep 2
+
+          # 轮询等待服务器就绪
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8080/baseline11 > /dev/null 2>&1; then
+              echo "服务器就绪 (尝试 $i 次)"
+              break
+            fi
+            if [ $i -eq 30 ]; then
+              echo "服务器 30 秒未启动"
+              kill $SERVER_PID || true
+              exit 1
+            fi
+            sleep 1
+          done
 
           wrk -t4 -c100 -d10s http://localhost:8080/baseline11 > wrk_result.txt
           kill $SERVER_PID || true
