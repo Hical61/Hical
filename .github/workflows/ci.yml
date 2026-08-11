@@ -92,7 +92,7 @@ jobs:
 
       - name: Test (Linux)
         if: runner.os == 'Linux' && matrix.compiler != 'clang'
-        run: ctest --test-dir build --output-on-failure --timeout 60 -j4
+        run: ctest --test-dir build --output-on-failure --timeout 60 -j4 -E 'RouterPerfTest|PerfectHashPerfTest|HttpServerPerfTest'
 
       # ── Clang: Sanitizer 构建 (ASan + UBSan) ──
       - name: Configure with sanitizers (Clang)
@@ -113,7 +113,7 @@ jobs:
 
       - name: Test with sanitizers (Clang)
         if: matrix.compiler == 'clang'
-        run: ctest --test-dir build --output-on-failure --timeout 120 -j4 -E RouterPerfTest
+        run: ctest --test-dir build --output-on-failure --timeout 120 -j4 -E 'RouterPerfTest|PerfectHashPerfTest|HttpServerPerfTest'
 
       # ── clang-tidy 检查 (仅 Clang job, 警告模式) ──
       - name: Run clang-tidy
@@ -137,7 +137,7 @@ jobs:
 
       - name: Run tests for coverage
         if: matrix.compiler == 'gcc'
-        run: ctest --test-dir build-cov --output-on-failure --timeout 60 -j4 -E RouterPerfTest
+        run: ctest --test-dir build-cov --output-on-failure --timeout 60 -j4 -E 'RouterPerfTest|PerfectHashPerfTest|HttpServerPerfTest'
 
       - name: Generate coverage report
         if: matrix.compiler == 'gcc'
@@ -217,9 +217,9 @@ jobs:
         if: matrix.compiler == 'msys2-gcc'
         shell: msys2 {0}
         run: |
-          ctest --test-dir build --output-on-failure --timeout 60 -j4 || {
+          ctest --test-dir build --output-on-failure --timeout 60 -j4 -E 'RouterPerfTest|PerfectHashPerfTest|HttpServerPerfTest' || {
             echo "First attempt failed (likely MinGW exit-time segfault), retrying..."
-            ctest --test-dir build --output-on-failure --timeout 60 -j4
+            ctest --test-dir build --output-on-failure --timeout 60 -j4 -E 'RouterPerfTest|PerfectHashPerfTest|HttpServerPerfTest'
           }
 
       # ── Windows MSVC ──
@@ -260,7 +260,7 @@ jobs:
 
       - name: Test (MSVC)
         if: matrix.compiler == 'msvc'
-        run: ctest --test-dir build --output-on-failure --timeout 60 -j4 -C Release
+        run: ctest --test-dir build --output-on-failure --timeout 60 -j4 -C Release -E 'RouterPerfTest|PerfectHashPerfTest|HttpServerPerfTest'
 
   # ── PR 自动打标签 ──
   labeler:

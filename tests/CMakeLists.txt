@@ -47,8 +47,7 @@ hical_add_test(test_middleware)           # 中间件
 hical_add_test(test_http_server)          # HttpServer 集成
 hical_add_test(test_websocket)            # WebSocket
 hical_add_test(test_ws_advanced)          # WebSocket 高级功能（Binary/Close/Subprotocol/Context/Param/Hub/Heartbeat）
-hical_add_test(test_router_perf)          # 路由性能
-hical_add_test(test_perfect_hash_router)  # PerfectHashRouter 正确性和性能
+hical_add_test(test_perfect_hash_router)  # PerfectHashRouter 正确性
 hical_add_test(test_concepts)             # Concepts 编译期验证
 hical_add_test(test_reflection)           # 反射层（MetaJson + MetaRoutes）
 hical_add_test(test_integration)          # 端到端集成
@@ -108,3 +107,8 @@ endif()
 foreach(_test IN LISTS TESTS_NEEDING_PICOHTTPPARSER)
     target_include_directories(${_test} PRIVATE ${HICAL_PICOHTTPPARSER_INCLUDE_DIR})
 endforeach()
+
+# Google Benchmark 微基准测试（可选，HICAL_WITH_BENCHMARK=ON 时启用）
+if(HICAL_WITH_BENCHMARK)
+    add_subdirectory(benchmarks)
+endif()

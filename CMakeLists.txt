@@ -90,6 +90,12 @@ if(HICAL_BUILD_TESTS)
     find_package(GTest REQUIRED)
 endif()
 
+# Google Benchmark 微基准测试（可选，默认关闭）
+option(HICAL_WITH_BENCHMARK "Enable Google Benchmark micro-benchmarks" OFF)
+if(HICAL_WITH_BENCHMARK)
+    find_package(benchmark REQUIRED)
+endif()
+
 # Boost.Asio 是 header-only，无需 COMPONENTS
 # 但需要确保 Boost 版本足够新（Asio 在 1.66+ 可用）
 

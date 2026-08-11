@@ -1,0 +1,209 @@
+name: Benchmark
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'LICENSE'
+      - '.gitignore'
+      - '.dockerignore'
+      - 'docker/**'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libboost-all-dev libssl-dev libgtest-dev libbenchmark-dev cmake
+
+      - name: Configure
+        run: |
+          cmake -B build -DCMAKE_BUILD_TYPE=Release \
+            -DHICAL_WITH_BENCHMARK=ON \
+            -DHICAL_DISABLE_IO_URING=ON
+
+      - name: Build benchmarks
+        run: cmake --build build --target bench_router bench_perfect_hash
+
+      - name: Run benchmarks
+        run: |
+          ./build/tests/benchmarks/bench_router \
+            --benchmark_format=json --benchmark_out=router.json
+          ./build/tests/benchmarks/bench_perfect_hash \
+            --benchmark_format=json --benchmark_out=phr.json
+          python3 -c "
+          import json
+          result = {'context': {}, 'benchmarks': []}
+          for fname in ['router.json', 'phr.json']:
+              with open(fname) as f:
+                  data = json.load(f)
+              result['context'].update(data.get('context', {}))
+              result['benchmarks'].extend(data['benchmarks'])
+          with open('results.json', 'w') as f:
+              json.dump(result, f, indent=2)
+          print(f'Merged {len(result[\"benchmarks\"])} benchmark results')
+          "
+
+      - name: Download baseline artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: benchmark-baseline
+          path: baseline
+        continue-on-error: true
+
+      - name: Compare and report
+        run: |
+          if [ -f baseline/results.json ]; then
+            python3 -c "
+          import json
+
+          with open('baseline/results.json') as f:
+              baseline = json.load(f)
+          with open('results.json') as f:
+              current = json.load(f)
+
+          # 用 name 做索引
+          bl = {b['name']: b for b in baseline['benchmarks']}
+
+          regressions = []
+          improvements = []
+          missing = 0
+          for b in current['benchmarks']:
+              name = b['name']
+              if name not in bl:
+                  missing += 1
+                  continue
+              old_time = bl[name]['real_time']
+              new_time = b['real_time']
+              if old_time <= 0 or new_time <= 0:
+                  continue
+              ratio = (new_time - old_time) / old_time
+              if ratio > 0.05:
+                  regressions.append((name, ratio))
+              elif ratio < -0.05:
+                  improvements.append((name, ratio))
+
+          if regressions:
+              print(f'发现 {len(regressions)} 个 benchmark 退化 >5%:')
+              for name, ratio in sorted(regressions, key=lambda x: -x[1]):
+                  print(f'  {name}: +{ratio*100:.1f}%')
+                  print(f'::warning::Benchmark {name} 退化 {ratio*100:.1f}%')
+          else:
+              print('未发现明显退化 (>5%)。')
+
+          if improvements:
+              print(f'\n发现 {len(improvements)} 个 benchmark 改善 >5%:')
+              for name, ratio in sorted(improvements, key=lambda x: x[1]):
+                  print(f'  {name}: {ratio*100:.1f}%')
+
+          print(f'\n新 benchmark（无基线）: {missing}' if missing else '')
+          " 2>&1 | tee compare_result.txt
+
+            {
+              echo "## Benchmark 对比报告"
+              echo '```'
+              cat compare_result.txt
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            {
+              echo "## 基准已建立"
+              echo "首次 benchmark 运行，已生成基线数据。下一次 push 到 main 时将自动对比。"
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload baseline artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-baseline
+          path: results.json
+          retention-days: 90
+
+  wrk-smoke:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libboost-all-dev libssl-dev cmake wrk
+
+      - name: Configure
+        run: |
+          cmake -B build -DCMAKE_BUILD_TYPE=Release \
+            -DHICAL_BUILD_HTTPARENA=ON \
+            -DHICAL_DISABLE_IO_URING=ON
+
+      - name: Build
+        run: cmake --build build --target httparena_server
+
+      - name: Run wrk smoke test
+        run: |
+          ./build/httparena_server &
+          SERVER_PID=$!
+          # 等 httparena 启动
+          sleep 2
+
+          wrk -t4 -c100 -d10s http://localhost:8080/baseline11 > wrk_result.txt
+          kill $SERVER_PID || true
+
+          # 提取吞吐
+          THROUGHPUT=$(grep "Requests/sec" wrk_result.txt | awk '{print $2}')
+          echo "throughput=$THROUGHPUT" >> "$GITHUB_OUTPUT"
+          echo "吞吐: ${THROUGHPUT} req/s"
+          cat wrk_result.txt
+        id: wrk
+
+      - name: Download wrk baseline
+        uses: actions/download-artifact@v4
+        with:
+          name: wrk-baseline
+          path: wrk_baseline
+        continue-on-error: true
+
+      - name: Compare wrk throughput
+        run: |
+          CURRENT="${{ steps.wrk.outputs.throughput }}"
+          if [ -n "$CURRENT" ] && [ -f wrk_baseline/throughput.txt ]; then
+            BASELINE=$(cat wrk_baseline/throughput.txt)
+            RATIO=$(python3 -c "print(($CURRENT - $BASELINE) / $BASELINE)")
+            {
+              echo "## wrk 吞吐对比"
+              echo "| 指标 | 值 |"
+              echo "|------|-----|"
+              echo "| 本次吞吐 | ${CURRENT} req/s |"
+              echo "| 基线吞吐 | ${BASELINE} req/s |"
+              echo "| 变化 | $(python3 -c "print(f'{float($RATIO)*100:.1f}')")% |"
+            } >> "$GITHUB_STEP_SUMMARY"
+            if python3 -c "exit(0 if $RATIO < -0.10 else 1)"; then
+              echo "::warning::wrk 吞吐退化 $(python3 -c "print(f'{abs(float($RATIO))*100:.1f}')")% (>10%)"
+            fi
+          else
+            {
+              echo "## wrk 基线已建立"
+              echo "首次 wrk 冒烟测试，吞吐: ${CURRENT} req/s"
+              echo "下一次 push 到 main 时将自动对比。"
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Save wrk baseline
+        run: echo "${{ steps.wrk.outputs.throughput }}" > throughput.txt
+
+      - name: Upload wrk baseline artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wrk-baseline
+          path: throughput.txt
+          retention-days: 90
