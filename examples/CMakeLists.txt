@@ -28,6 +28,12 @@ target_link_libraries(pmr_benchmark PRIVATE hical_core)
 add_executable(reflection_server reflection_server.cpp)
 target_link_libraries(reflection_server PRIVATE hical_core)
 
+# 静态文件服务示例（集成 translate.js 多语言）
+add_executable(static_server static_server/static_server.cpp)
+target_link_libraries(static_server PRIVATE hical_core)
+target_compile_definitions(static_server PRIVATE
+    STATIC_SERVER_PUBLIC_DIR="${CMAKE_CURRENT_SOURCE_DIR}/static_server/public")
+
 # OpenAPI 自动生成示例（可选，仅当 HICAL_WITH_OPENAPI=ON）
 if (HICAL_WITH_OPENAPI)
     add_executable(openapi_server openapi_server.cpp)
