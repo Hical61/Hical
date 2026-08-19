@@ -158,16 +158,46 @@ TEST(RateLimiterTest, SyncBeforeHandler_Returns429)
 }
 
 // ──────────────────────────────────────────────
-// 7. 默认 keyExtractor：X-Forwarded-For
+// 7. 默认 keyExtractor：对端地址严格优先于 X-Forwarded-For
+//    用两个 peerAddr 相同、XFF 不同的请求锁死优先级：
+//    若错误地按 XFF 分桶，两者落不同桶各自放行；只有按 peerAddr 分桶才同桶被限流。
 // ──────────────────────────────────────────────
-TEST(RateLimiterTest, DefaultKeyExtractor_XForwardedFor)
+TEST(RateLimiterTest, DefaultKeyExtractor_PeerAddrPriority)
 {
-	// 创建一个低速率的限流器，用默认 keyExtractor
+	auto mw = makeRateLimiterMiddleware(RateLimiterOptions {.config = {1.0, 1.0}});
+
+	// 第一个请求：peerAddr=203.0.113.5，XFF=10.0.0.1，首次通过
+	HttpRequest reqA;
+	reqA.setMethod(HttpMethod::hGet);
+	reqA.setTarget("/api/test");
+	reqA.setPeerAddr(InetAddress("203.0.113.5", 12345));
+	reqA.setHeader("X-Forwarded-For", "10.0.0.1");
+	EXPECT_FALSE(mw(reqA).has_value());
+
+	// 第二个请求：相同 peerAddr、不同 XFF。
+	// 若错误地按 XFF 分桶，两者落不同桶、这里会各自放行；只有按 peerAddr 分桶才会同桶被限流。
+	HttpRequest reqB;
+	reqB.setMethod(HttpMethod::hGet);
+	reqB.setTarget("/api/test");
+	reqB.setPeerAddr(InetAddress("203.0.113.5", 12345));
+	reqB.setHeader("X-Forwarded-For", "192.168.0.1");
+
+	auto resultB = mw(reqB);
+	ASSERT_TRUE(resultB.has_value());
+	EXPECT_EQ(resultB->statusCode(), HttpStatusCode::hTooManyRequests);
+}
+
+// ──────────────────────────────────────────────
+// 8. 默认 keyExtractor：对端地址无效时回退 X-Forwarded-For
+// ──────────────────────────────────────────────
+TEST(RateLimiterTest, DefaultKeyExtractor_XForwardedFor_Fallback)
+{
 	auto mw = makeRateLimiterMiddleware(RateLimiterOptions {.config = {1.0, 1.0}});
 
 	HttpRequest req;
 	req.setMethod(HttpMethod::hGet);
 	req.setTarget("/api/test");
+	// 不设对端地址（保持无效），只带 X-Forwarded-For
 	req.setHeader("X-Forwarded-For", "10.0.0.1");
 
 	// 第一次通过
@@ -175,28 +205,6 @@ TEST(RateLimiterTest, DefaultKeyExtractor_XForwardedFor)
 	EXPECT_FALSE(result1.has_value());
 
 	// 第二次被限流
-	auto result2 = mw(req);
-	ASSERT_TRUE(result2.has_value());
-	EXPECT_EQ(result2->statusCode(), HttpStatusCode::hTooManyRequests);
-}
-
-// ──────────────────────────────────────────────
-// 8. 默认 keyExtractor：remote_addr 属性优先
-// ──────────────────────────────────────────────
-TEST(RateLimiterTest, DefaultKeyExtractor_RemoteAddrAttr)
-{
-	auto mw = makeRateLimiterMiddleware(RateLimiterOptions {.config = {1.0, 1.0}});
-
-	HttpRequest req;
-	req.setMethod(HttpMethod::hGet);
-	req.setTarget("/api/test");
-	req.setAttribute(kRemoteAddrKey, std::string("192.168.1.100"));
-
-	// 第一次通过
-	auto result1 = mw(req);
-	EXPECT_FALSE(result1.has_value());
-
-	// 同一 IP 的第二次被限流
 	auto result2 = mw(req);
 	ASSERT_TRUE(result2.has_value());
 	EXPECT_EQ(result2->statusCode(), HttpStatusCode::hTooManyRequests);

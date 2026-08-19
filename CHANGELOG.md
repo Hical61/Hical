@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **HttpRequest 获取对端地址**：`HttpRequest::peerAddr()` 返回客户端对端 `InetAddress`（`toIp()`/`toIpPort()`/`port()` 自取），`InetAddress` 新增 `isValid()` 判断地址有效性。连接层 `handleSession` 在连接建立时取一次 `remote_endpoint()` 注入到本连接所有请求，handler、中间件、WS/SSE 握手链路都能拿到真实对端地址（[#16](https://github.com/Hical61/Hical/issues/16)）
+
+### Fixed
+- **RateLimiter 默认限流 key 失效**：默认 key 提取之前读 `"hical.remote_addr"` 请求属性，但连接层从未注入该属性，导致所有请求共享一个桶（限流形同虚设）。改为优先取 `peerAddr()`、无效时回退 `X-Forwarded-For`、再兜底 `"global"`
+
+### Changed
+- **移除 `kRemoteAddrKey` 常量**：`"hical.remote_addr"` 属性键随上一条修复退场。此前它只被 RateLimiter 默认 key 提取读取，从未有连接层写入，属于半成品接线；现在对端地址走 `peerAddr()` 一等接口，不再用魔法字符串属性传递
+
 ## [2.6.8] - 2026-08-09
 
 ### Added

@@ -7,6 +7,7 @@
 
 #include "HeaderMap.h"
 #include "HttpTypes.h"
+#include "InetAddress.h"
 #include <any>
 #include <array>
 #include <boost/json.hpp>
@@ -211,6 +212,18 @@ namespace hical
 		void setHeader(const std::string& name, const std::string& value);
 		void setBody(const std::string& body);
 
+		/**
+		 * @brief 获取对端网络地址
+		 * @return 对端地址引用（未设置时为默认构造的无效地址）
+		 */
+		[[nodiscard]] const InetAddress& peerAddr() const;
+
+		/**
+		 * @brief 设置对端网络地址
+		 * @param addr 对端地址
+		 */
+		void setPeerAddr(const InetAddress& addr);
+
 		// ============ 路径参数 ============
 
 		/**
@@ -296,6 +309,7 @@ namespace hical
 		void parseFormParams() const;
 
 		NativeRequest req_;
+		InetAddress peerAddr_;
 		// setter 专用拥有存储（测试/构建请求场景，不在热路径）
 		std::string ownedTarget_;
 		HeaderMap ownedHeaders_;

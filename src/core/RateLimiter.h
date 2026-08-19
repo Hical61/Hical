@@ -39,8 +39,8 @@ namespace hical
 
 		/**
 		 * @brief Key 提取函数
-		 * 默认从请求属性 "hical.remote_addr" 获取客户端 IP。
-		 * 可自定义为按路由、按用户 ID、按 API key 等维度限流。
+		 * 默认从对端地址 peerAddr() 获取客户端 IP，地址无效时回退 X-Forwarded-For，
+		 * 再兜底 "global"。可自定义为按路由、按用户 ID、按 API key 等维度限流。
 		 */
 		std::function<std::string(const HttpRequest&)> keyExtractor = nullptr;
 
@@ -48,12 +48,6 @@ namespace hical
 		size_t maxEntries = 100000;   ///< 最大条目数，防 DoS 内存耗尽
 		int gcIntervalMs = 60000;     ///< 懒清理间隔（毫秒）
 	};
-
-	/**
-	 * @brief 默认 remote_addr 属性键名
-	 * 连接层（HttpSessionImpl）应将客户端 IP 以此键存入请求属性。
-	 */
-	inline constexpr const char* kRemoteAddrKey = "hical.remote_addr";
 
 	namespace detail
 	{

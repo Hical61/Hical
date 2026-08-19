@@ -17,16 +17,16 @@ namespace hical
 	{
 		store_.lastGc = std::chrono::steady_clock::now();
 
-		// 默认 key 提取：从请求属性取 remote_addr
+		// 默认 key 提取：对端地址 → X-Forwarded-For → global
 		if (!opts_.keyExtractor)
 		{
 			opts_.keyExtractor = [](const HttpRequest& req) -> std::string
 			{
-				// 优先从请求属性取（连接层注入）
-				auto attr = req.getAttribute<std::string>(kRemoteAddrKey);
-				if (attr && !attr->empty())
+				// 优先取对端地址（连接层已注入），避免所有请求共享一个桶
+				const auto& peer = req.peerAddr();
+				if (peer.isValid())
 				{
-					return *attr;
+					return peer.toIp();
 				}
 				// 代理场景的 X-Forwarded-For
 				auto forwarded = req.header("X-Forwarded-For");
@@ -37,7 +37,7 @@ namespace hical
 					return pos != std::string_view::npos ? std::string(forwarded.substr(0, pos))
 														 : std::string(forwarded);
 				}
-				// 兜底：连接到同一个无 remote_addr 注入的服务器时，所有请求走同一个桶
+				// 兜底：连对端地址都没有时，所有请求走同一个桶
 				return "global";
 			};
 		}

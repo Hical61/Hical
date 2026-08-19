@@ -1,4 +1,5 @@
 #include "core/HttpTypes.h"
+#include "core/InetAddress.h"
 #include "core/HttpRequest.h"
 #include "core/HttpResponse.h"
 #include <gtest/gtest.h>
@@ -39,12 +40,46 @@ TEST(HttpTypesTest, StatusCodeToString)
 	EXPECT_STREQ(httpStatusCodeToString(HttpStatusCode::hBadRequest), "Bad Request");
 }
 
+// ============ InetAddress 测试 ============
+
+TEST(InetAddressTest, IsValid_DefaultConstructed_ReturnsFalse)
+{
+	InetAddress addr;
+	EXPECT_FALSE(addr.isValid());
+}
+
+TEST(InetAddressTest, IsValid_Ipv4_ReturnsTrue)
+{
+	InetAddress addr("127.0.0.1", 8080);
+	EXPECT_TRUE(addr.isValid());
+}
+
+TEST(InetAddressTest, IsValid_Ipv6_ReturnsTrue)
+{
+	InetAddress addr("::1", 8080);
+	EXPECT_TRUE(addr.isValid());
+}
+
 // ============ HttpRequest 测试 ============
 
 TEST(HttpRequestTest, DefaultConstruction)
 {
 	HttpRequest req;
 	EXPECT_EQ(req.body(), "");
+}
+
+TEST(HttpRequestTest, PeerAddr_DefaultConstruction_Invalid)
+{
+	HttpRequest req;
+	EXPECT_FALSE(req.peerAddr().isValid());
+}
+
+TEST(HttpRequestTest, SetPeerAddr)
+{
+	HttpRequest req;
+	req.setPeerAddr(InetAddress("10.0.0.1", 1234));
+	EXPECT_EQ(req.peerAddr().toIp(), "10.0.0.1");
+	EXPECT_EQ(req.peerAddr().port(), 1234);
 }
 
 TEST(HttpRequestTest, SetAndGetMethod)

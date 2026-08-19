@@ -71,6 +71,13 @@ namespace hical
 		bool isIpV6() const;
 
 		/**
+		 * @brief 地址是否有效
+		 * 默认构造或解析失败时地址族为 0，返回 false。
+		 * @return true 如果已解析为有效的 IPv4 或 IPv6 地址
+		 */
+		[[nodiscard]] bool isValid() const;
+
+		/**
 		 * @brief 获取底层 sockaddr 结构
 		 * @return sockaddr 指针
 		 */

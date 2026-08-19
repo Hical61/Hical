@@ -4,6 +4,7 @@
 #include <boost/json.hpp>
 #include <gtest/gtest.h>
 #include <atomic>
+#include <cctype>
 #include <chrono>
 #include <string>
 #include <thread>
@@ -177,6 +178,45 @@ TEST(HttpServerTest, Middleware)
 	auto result = hical::test::httpGetFull("127.0.0.1", port, "/api/test");
 	EXPECT_EQ(result.status, 200u);
 	EXPECT_EQ(result.findHeader("X-Powered-By"), "hical");
+
+	server.stop();
+	serverThread.join();
+}
+
+// 测试 handler 能拿到对端地址（连接层注入到 HttpRequest）
+TEST(HttpServerTest, PeerAddr_InjectedIntoRequest_ReturnsClientAddress)
+{
+	HttpServer server(0);
+
+	server.router().get("/whoami",
+						[](const HttpRequest& req) -> HttpResponse
+						{
+							// 未注入时返回 "invalid"，注入后应返回 "127.0.0.1:<客户端临时端口>"
+							if (!req.peerAddr().isValid())
+							{
+								return HttpResponse::ok("invalid");
+							}
+							return HttpResponse::ok(req.peerAddr().toIpPort());
+						});
+
+	std::thread serverThread;
+	uint16_t port = startServerAndWait(server, serverThread);
+
+	auto [status, body] = httpGet("127.0.0.1", port, "/whoami");
+	EXPECT_EQ(status, 200u);
+	ASSERT_NE(body, "invalid");
+
+	// 客户端走回环地址连接，对端 IP 固定是 127.0.0.1；端口是客户端临时端口，只校验格式
+	const std::string prefix = "127.0.0.1:";
+	ASSERT_EQ(body.compare(0, prefix.size(), prefix), 0);
+
+	auto colon = body.find(':');
+	ASSERT_NE(colon, std::string::npos);
+	ASSERT_GT(body.size(), colon + 1);
+	for (size_t i = colon + 1; i < body.size(); ++i)
+	{
+		EXPECT_TRUE(std::isdigit(static_cast<unsigned char>(body[i])));
+	}
 
 	server.stop();
 	serverThread.join();

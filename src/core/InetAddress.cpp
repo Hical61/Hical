@@ -81,6 +81,13 @@ namespace hical
 		return isIpV6_;
 	}
 
+	bool InetAddress::isValid() const
+	{
+		// 默认构造只 memset 了 addr6_ 且 isIpV6_=false，此时 addr_.sin_family 为 0
+		// 按 isIpV6_ 标志读取对应 union 成员的 sin_family，避免读错成员
+		return isIpV6_ ? (addr6_.sin6_family == AF_INET6) : (addr_.sin_family == AF_INET);
+	}
+
 	const struct sockaddr* InetAddress::getSockAddr() const
 	{
 		return isIpV6_ ? reinterpret_cast<const struct sockaddr*>(&addr6_)

@@ -7,6 +7,7 @@
 
 #include "HttpServer.h"
 #include "FixedBuffer.h"
+#include "InetAddress.h"
 #include "MemoryPool.h"
 #include "ReadBufferPool.h"
 #include "SseSession.h"
@@ -554,6 +555,11 @@ namespace hical
 		// 期间设置的 O_NONBLOCK 是实现细节，不能依赖它保持生效。
 		socket.non_blocking(true);
 
+		// 对端地址是连接级信息，取一次供本连接所有请求复用。
+		// socket 刚 accept 必然已连接，getpeername() 不会失败，与 TcpServer::acceptLoop 同款写法。
+		auto remoteEp = socket.remote_endpoint();
+		InetAddress peerAddr(remoteEp.address().to_string(), remoteEp.port());
+
 		// entry 在协程栈上，Guard 析构时自动注销
 		// 声明在 SocketGuard 后面 → 先析构（先 unregister 再关 socket）
 		IdleScanner::Entry idleEntry;
@@ -1016,6 +1022,7 @@ namespace hical
 
 				// ====== 阶段 D：构建 HttpRequest 并分发 ======
 				HttpRequest req = HttpRequest::fromParsed(std::move(nativeReq));
+				req.setPeerAddr(peerAddr);
 
 				// 检查 WebSocket 升级请求
 				if (req.native().isUpgrade())

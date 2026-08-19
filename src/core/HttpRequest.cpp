@@ -146,6 +146,16 @@ namespace hical
 		}
 	}
 
+	const InetAddress& HttpRequest::peerAddr() const
+	{
+		return peerAddr_;
+	}
+
+	void HttpRequest::setPeerAddr(const InetAddress& addr)
+	{
+		peerAddr_ = addr;
+	}
+
 	// ============ 路径参数 ============
 
 	const std::string& HttpRequest::param(std::string_view name) const

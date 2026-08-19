@@ -318,6 +318,7 @@ HTTP 请求封装，对原生 HTTP 解析结果的 hical 风格封装。
 | `jsonBody()`     | 无               | `const boost::json::value&` | 将消息体解析为 JSON（多次调用返回缓存引用） |
 | `readJson<T>()`  | 无               | `T`                         | 将消息体反序列化为 T（需 `HICAL_JSON`）     |
 | `contentType()`  | 无               | `std::string_view`          | 获取 Content-Type 头                        |
+| `peerAddr()`     | 无               | `const InetAddress&`        | 获取客户端对端地址（未注入时为无效地址）    |
 | `param(name)`    | name: 参数名     | `const std::string&`        | 获取路径参数                                |
 | `hasParam(name)` | name: 参数名     | `bool`                      | 是否有指定路径参数                          |
 | `native()`       | 无               | `NativeRequest&`            | 获取底层原生请求引用                        |
@@ -367,13 +368,14 @@ HTTP 请求封装，对原生 HTTP 解析结果的 hical 风格封装。
 
 #### 构建请求的方法
 
-| 方法                     | 参数                                               | 返回值 | 说明                               |
-| ------------------------ | -------------------------------------------------- | ------ | ---------------------------------- |
-| `setMethod(method)`      | method: HTTP 方法                                  | `void` | 设置 HTTP 方法                     |
-| `setTarget(target)`      | target: 目标 URI                                   | `void` | 设置请求路径                       |
-| `setHeader(name, value)` | name: 字段名<br>value: 字段值 (`std::string_view`) | `void` | 设置头部字段（拒绝含 CR/LF 的值）  |
-| `setBody(body)`          | body: 消息体                                       | `void` | 设置消息体（不动 Content-Type 头） |
-| `setParam(name, value)`  | name: 参数名<br>value: 参数值                      | `void` | 设置路径参数（由 Router 内部调用） |
+| 方法                     | 参数                                               | 返回值 | 说明                                          |
+| ------------------------ | -------------------------------------------------- | ------ | --------------------------------------------- |
+| `setMethod(method)`      | method: HTTP 方法                                  | `void` | 设置 HTTP 方法                                |
+| `setTarget(target)`      | target: 目标 URI                                   | `void` | 设置请求路径                                  |
+| `setHeader(name, value)` | name: 字段名<br>value: 字段值 (`std::string_view`) | `void` | 设置头部字段（拒绝含 CR/LF 的值）             |
+| `setBody(body)`          | body: 消息体                                       | `void` | 设置消息体（不动 Content-Type 头）            |
+| `setParam(name, value)`  | name: 参数名<br>value: 参数值                      | `void` | 设置路径参数（由 Router 内部调用）            |
+| `setPeerAddr(addr)`      | addr: `const InetAddress&`                         | `void` | 设置对端地址（由连接层注入，测试/构建请求用） |
 
 #### 示例
 
