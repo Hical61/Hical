@@ -44,6 +44,8 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 if(MSVC)
     add_compile_options(/W4 /utf-8 /Zc:preprocessor /Zc:__cplusplus)
     add_compile_definitions(_WIN32_WINNT=0x0A00)  # Target Windows 10
+    # 禁用 Windows 头文件里的 min/max 宏，避免污染 std::min/std::max（否则报 C2589）
+    add_compile_definitions(NOMINMAX)
 else()
     add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
