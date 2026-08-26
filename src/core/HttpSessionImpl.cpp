@@ -945,9 +945,14 @@ namespace hical
 				else if (isChunked)
 				{
 					// Chunked transfer-encoding 解码
-					// phr_decode_chunked 是原地解码：将编码帧头剥离，解码数据覆写到同一缓冲区
-					// 返回值：>= 0 表示完成（值为尾部长度），-2 表示需要更多数据，-1 表示错误
-					// decodeBufLen 输入为待解码字节数，输出为本次解码产出的字节数
+					// phr_decode_chunked 是原地解码：将 chunk 帧头剥离，解码数据覆写到同一缓冲区。
+					// 契约：输入 chunkBuf[0..size) 是待解码编码数据，*bufsz 返回产出解码字节数 dst。
+					//   ret == -2：不完整，且此时编码数据已被全部消费（内部 src 推到 bufsz），剩余编码 = 0；
+					//   ret == -1：错误；
+					//   ret >= 0：完成，返回值 = 未解码尾部字节数（chunked 之后的 pipeline 残留），
+					//             位于 chunkBuf[dst .. dst+ret)。
+					// 因此每次循环必须保证 chunkBuf 从头就是「未消费的编码数据」，ret == -2 时
+					// 清空缓冲重新累积，而不是推进一个错误的编码消费偏移。
 					std::string chunkBuf;
 					if (remainingInBuf > 0)
 					{
@@ -957,31 +962,14 @@ namespace hical
 					bufUsed = 0;
 
 					struct phr_chunked_decoder decoder = {};
-					// encodeStart: 下一次 decode 的起始偏移
-					// 解码产出的数据在 chunkBuf[encodeStart .. encodeStart+decodeBufLen)
-					size_t encodeStart = 0;
 
 					for (;;)
 					{
-						size_t available = chunkBuf.size() - encodeStart;
-						if (available == 0)
-						{
-							// 缓冲区无数据，读取更多
-							size_t oldSize = chunkBuf.size();
-							chunkBuf.resize(oldSize + 4096);
-							auto bytesRead =
-								co_await socket.async_read_some(boost::asio::buffer(chunkBuf.data() + oldSize, 4096),
-																boost::asio::use_awaitable);
-							chunkBuf.resize(oldSize + bytesRead);
-							continue;
-						}
+						size_t decodeBufLen = chunkBuf.size();
+						auto decodeRet = phr_decode_chunked(&decoder, chunkBuf.data(), &decodeBufLen);
 
-						size_t decodeBufLen = available;
-						auto decodeRet = phr_decode_chunked(&decoder, chunkBuf.data() + encodeStart, &decodeBufLen);
-
-						// decodeBufLen = 本次解码产出字节数，数据位于 chunkBuf[encodeStart..]
-						nativeReq.body.append(chunkBuf.data() + encodeStart, decodeBufLen);
-						encodeStart += decodeBufLen;
+						// decodeBufLen = 本次产出解码字节数，数据位于 chunkBuf[0..decodeBufLen)
+						nativeReq.body.append(chunkBuf.data(), decodeBufLen);
 
 						if (nativeReq.body.size() > maxBodySize_)
 						{
@@ -991,7 +979,13 @@ namespace hical
 
 						if (decodeRet >= 0)
 						{
-							// 解码完成
+							// 解码完成，把 chunked 之后的残留（keep-alive pipeline）写回 pipelineSpill，
+							// 否则下一个请求会被丢掉
+							size_t tailLen = static_cast<size_t>(decodeRet);
+							if (tailLen > 0)
+							{
+								pipelineSpill.assign(chunkBuf.data() + decodeBufLen, tailLen);
+							}
 							break;
 						}
 						if (decodeRet == -1)
@@ -1000,13 +994,20 @@ namespace hical
 							co_await sendRawResponse(socket, 400, "Bad Request", "Malformed chunked encoding");
 							co_return;
 						}
-						// decodeRet == -2：需要更多数据
-						size_t oldSize = chunkBuf.size();
-						chunkBuf.resize(oldSize + 4096);
-						auto bytesRead =
-							co_await socket.async_read_some(boost::asio::buffer(chunkBuf.data() + oldSize, 4096),
-															boost::asio::use_awaitable);
-						chunkBuf.resize(oldSize + bytesRead);
+
+						// decodeRet == -2：编码数据已全部消费，清空后继续读
+						chunkBuf.clear();
+
+						chunkBuf.resize(4096);
+						auto bytesRead = co_await socket.async_read_some(boost::asio::buffer(chunkBuf.data(), 4096),
+																		 boost::asio::use_awaitable);
+						if (bytesRead == 0)
+						{
+							// 对端在不完整 chunked body 时断开，避免死循环
+							co_await sendRawResponse(socket, 400, "Bad Request", "Incomplete chunked body");
+							co_return;
+						}
+						chunkBuf.resize(bytesRead);
 					}
 				}
 				else
