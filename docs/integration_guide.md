@@ -323,6 +323,7 @@ server.router().get("/users/{id}", [](const hical::HttpRequest& req)
 | `HICAL_BUILD_TESTS`               | ON      | Build unit tests                                    |
 | `HICAL_BUILD_EXAMPLES`            | ON      | Build example programs                              |
 | `HICAL_WITH_DATABASE`             | OFF     | Enable database middleware (requires Boost >= 1.85) |
+| `HICAL_WITH_PGSQL`                | OFF     | Enable PostgreSQL backend (requires libpq)          |
 | `HICAL_WITH_OPENAPI`              | ON      | Enable OpenAPI 3.0 module                           |
 | `HICAL_ENABLE_REFLECTION`         | OFF     | Enable C++26 native reflection                      |
 | `HICAL_USE_SYSTEM_PICOHTTPPARSER` | OFF     | Use system picohttpparser instead of bundled        |

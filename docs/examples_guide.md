@@ -960,6 +960,21 @@ export DB_PASS=secret
 ./build/examples/db_example
 ```
 
+### PostgreSQL 后端示例
+
+MySQL 之外，Hical 还内置了 PostgreSQL 后端（libpq）。用法与上面几乎一样，只有两处不同：换工厂函数 `PgsqlConnection::makeFactory()`，参数化查询用 `$1` 占位符。完整可运行示例见 `examples/pgsql_example.cpp`：
+
+```bash
+# 编译（需要 libpq；-DHICAL_WITH_PGSQL=ON 会一并开启 HICAL_WITH_DATABASE）
+cmake -B build -G Ninja -DHICAL_WITH_PGSQL=ON
+cmake --build build --target pgsql_example
+
+# 运行（第一个参数是 PG 端口，默认 5432）
+./build/examples/pgsql_example 54329
+```
+
+> **切换到 PG 时的三处差异**：占位符 `$1/$2`（不是 `?`）、自增主键要 `INSERT ... RETURNING id` 才拿得到 `insertId`、`DbConfig::charset` 字段对 PG 无意义。详见 [api_reference.md](api_reference.md) 的 `PgsqlConnection` 小节。
+
 ---
 
 ## 示例 10：OpenAPI 文档自动生成

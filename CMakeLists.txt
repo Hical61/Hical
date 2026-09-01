@@ -20,6 +20,9 @@ option(HICAL_USE_SYSTEM_PICOHTTPPARSER "Use system-installed picohttpparser inst
 # 数据库中间件（启用后编译 DB 连接池和 MySQL 后端，需要 boost-mysql）
 option(HICAL_WITH_DATABASE "Enable database middleware (requires Boost.MySQL)" OFF)
 
+# PostgreSQL 后端（基于 libpq，需要 HICAL_WITH_DATABASE 一并开启）
+option(HICAL_WITH_PGSQL "Enable PostgreSQL backend (requires libpq)" OFF)
+
 # OpenAPI 自动生成（无额外依赖，复用 Boost.JSON）
 option(HICAL_WITH_OPENAPI "Enable OpenAPI 3.0 auto-generation module" ON)
 
@@ -62,6 +65,30 @@ find_package(ZLIB REQUIRED)
 # DB 依赖：boost::mysql any_connection(1.84+) + boost::charconv(1.85+)
 if(HICAL_WITH_DATABASE)
     find_package(Boost 1.85 REQUIRED COMPONENTS charconv)
+endif()
+
+# PostgreSQL 后端依赖：libpq（find_package(PostgreSQL) 在 MinGW 下常找不到 pg_config，
+# 回退到手动定位头文件/库，避免依赖 pg_config 在 PATH 中的存在）
+if(HICAL_WITH_PGSQL)
+    if(NOT HICAL_WITH_DATABASE)
+        message(FATAL_ERROR "HICAL_WITH_PGSQL requires HICAL_WITH_DATABASE=ON (PostgreSQL 后端构建在 DB 核心之上)")
+    endif()
+
+    find_package(PostgreSQL QUIET)
+    if(PostgreSQL_FOUND)
+        message(STATUS "Found PostgreSQL via find_package: ${PostgreSQL_VERSION}")
+    else()
+        # MinGW/MSYS2 下 libpq 安装在 ${CMAKE_FIND_ROOT_PATH} 下，
+        # 但该变量仅在交叉编译时加入搜索路径，主机模式下需用 HINTS 显式指定
+        find_path(PGSQL_INCLUDE_DIR libpq-fe.h
+            HINTS "${CMAKE_FIND_ROOT_PATH}/include" "C:/msys64/mingw64/include")
+        find_library(PGSQL_LIBRARY NAMES libpq pq
+            HINTS "${CMAKE_FIND_ROOT_PATH}/lib" "C:/msys64/mingw64/lib")
+        if(NOT PGSQL_INCLUDE_DIR OR NOT PGSQL_LIBRARY)
+            message(FATAL_ERROR "libpq not found; install libpq (e.g. MSYS2 mingw-w64-x86_64-libpq) or clear HICAL_WITH_PGSQL=OFF")
+        endif()
+        message(STATUS "Found libpq manually: include=${PGSQL_INCLUDE_DIR}, lib=${PGSQL_LIBRARY}")
+    endif()
 endif()
 
 # NUMA 感知（可选，Linux + libnuma）

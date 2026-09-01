@@ -155,6 +155,21 @@ if(HICAL_WITH_DATABASE)
     )
     # boost::mysql 的 client-side SQL formatting 依赖 boost::charconv
     target_link_libraries(hical_core PUBLIC Boost::charconv)
+
+    # PostgreSQL 后端（依赖 libpq）
+    if(HICAL_WITH_PGSQL)
+        target_sources(hical_core PRIVATE
+            db/PgStmtCache.cpp
+            db/PgsqlConnection.cpp
+        )
+        target_compile_definitions(hical_core PUBLIC HICAL_HAS_PGSQL=1)
+        if(TARGET PostgreSQL::PostgreSQL)
+            target_link_libraries(hical_core PUBLIC PostgreSQL::PostgreSQL)
+        else()
+            target_include_directories(hical_core PUBLIC ${PGSQL_INCLUDE_DIR})
+            target_link_libraries(hical_core PUBLIC ${PGSQL_LIBRARY})
+        endif()
+    endif()
 endif()
 
 # OpenAPI 自动生成（可选，默认开启，选项在根 CMakeLists.txt 中定义）

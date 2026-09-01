@@ -40,3 +40,9 @@ if (HICAL_WITH_OPENAPI)
     target_link_libraries(openapi_server PRIVATE hical_core)
 endif()
 
+# PostgreSQL 后端示例（可选，仅当 HICAL_WITH_PGSQL=ON）
+if (HICAL_WITH_PGSQL)
+    add_executable(pgsql_example pgsql_example.cpp)
+    target_link_libraries(pgsql_example PRIVATE hical_core)
+endif()
+

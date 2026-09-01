@@ -105,6 +105,7 @@
 - [DbMiddleware](#dbmiddleware) — HTTP 数据库中间件
 - [DbQueryLog](#dbquerylog) — 查询日志中间件
 - [MysqlConnection](#mysqlconnection) — MySQL 后端
+- [PgsqlConnection](#pgsqlconnection) — PostgreSQL 后端（libpq）
 - [StmtCache](#stmtcache) — PreparedStatement LRU 缓存
 
 **OpenAPI 元数据 API（可选，需 `HICAL_WITH_OPENAPI=ON`，默认启用）**
@@ -2140,6 +2141,44 @@ MySQL 后端（Boost.MySQL）。
 | ----------------------- | --------------------------------------------- | ---------- |
 | `create(ioCtx, config)` | `Awaitable<std::shared_ptr<MysqlConnection>>` | 异步建连   |
 | `makeFactory()`         | `DbConnectionFactory`                         | 池工厂函数 |
+
+---
+
+### PgsqlConnection
+
+PostgreSQL 后端（基于 libpq 原生 C API）。
+
+**头文件：** `<hical/db/PgsqlConnection.h>`
+
+**构建要求：** `HICAL_WITH_PGSQL=ON`（会一并开启 `HICAL_WITH_DATABASE`），需系统安装 libpq（`libpq-dev` / MSYS2 `mingw-w64-x86_64-postgresql`）。
+
+| 方法                    | 返回值                                         | 说明                                                                 |
+| ----------------------- | ---------------------------------------------- | -------------------------------------------------------------------- |
+| `create(ioCtx, config)` | `Awaitable<std::shared_ptr<PgsqlConnection>>`  | 非阻塞建连（`PQconnectStart` + poll 状态机）                         |
+| `makeFactory()`         | `DbConnectionFactory`                          | 池工厂函数                                                           |
+| `backend()`             | `std::string_view`                            | 返回 `"pgsql"`                                                        |
+
+**与 MySQL 后端的三处语义差异（切换到 PG 时必读）：**
+
+1. **占位符不同**：PG 用 `$1`、`$2`…，MySQL 用 `?`。`query(sql, params)` 接口未规定占位符风格，切换后端时 SQL 文本不能直接复用。
+   ```cpp
+   // PostgreSQL
+   co_await conn->query("SELECT * FROM users WHERE id = $1", {userId});
+   // MySQL
+   co_await conn->query("SELECT * FROM users WHERE id = ?",  {userId});
+   ```
+2. **insertId 语义不同**：PG 无 `last_insert_id()`，自增主键必须显式 `INSERT ... RETURNING id` 才写进 `DbResult::insertId`；普通 `SELECT` 首列整数不会被误填（实现检测 SQL 是否含 `RETURNING`）。
+3. **charset 无关**：PG 连接层无字符集协商，`DbConfig::charset` 字段对 PG 无意义，留默认即可。
+
+**接入连接池**（与 MySQL 完全相同，只换工厂函数）：
+
+```cpp
+auto pool = std::make_shared<DbConnectionPool>(
+    ioCtx, config, hical::db::PgsqlConnection::makeFactory());
+co_await pool->init();
+```
+
+参数化查询（`$1` 占位）与事务（`BEGIN`/`COMMIT`/`ROLLBACK`）用法和 `DbConnection` 抽象接口一致，`backend()` 返回 `"pgsql"` 供代码区分后端。
 
 ---
 

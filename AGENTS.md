@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-Hical is a modern C++20 high-performance web framework built on Boost.Asio, featuring a native HTTP/WebSocket stack (picohttpparser + self-developed WebSocket implementation), PMR three-tier memory pools, coroutine-based async I/O (`asio::awaitable<T>`), C++20 Concepts for compile-time type safety, a C++26 reflection layer (dual-track: native P2996 or C++20 macro fallback), and an optional coroutine-based database middleware (Boost.MySQL backend).
+Hical is a modern C++20 high-performance web framework built on Boost.Asio, featuring a native HTTP/WebSocket stack (picohttpparser + self-developed WebSocket implementation), PMR three-tier memory pools, coroutine-based async I/O (`asio::awaitable<T>`), C++20 Concepts for compile-time type safety, a C++26 reflection layer (dual-track: native P2996 or C++20 macro fallback), and an optional coroutine-based database middleware (Boost.MySQL and libpq/PostgreSQL backends).
 
 ## Project Structure & Module Organization
 
@@ -41,6 +41,7 @@ cmake --build build --config Release
 ### Optional Modules
 ```bash
 cmake -B build -DHICAL_WITH_DATABASE=ON ...    # Database middleware (requires Boost.MySQL >= 1.85)
+cmake -B build -DHICAL_WITH_PGSQL=ON ...       # PostgreSQL backend (requires libpq, implies HICAL_WITH_DATABASE)
 cmake -B build -DHICAL_WITH_OPENAPI=OFF ...    # Disable OpenAPI (enabled by default)
 cmake -B build -DHICAL_ENABLE_REFLECTION=ON ... # C++26 reflection (requires compatible compiler)
 ```
@@ -113,7 +114,9 @@ find src -name '*.cpp' | xargs clang-tidy -p build
 **`src/db/` (optional) modules:**
 - `DbConnectionPool` — Coroutine-based pool with LIFO reuse, health check + idle eviction background loops, `pingGracePeriod`, auto-rollback on release
 - `MysqlConnection` — Boost.MySQL backend with PreparedStatement retry, `validateCharset()` SQL injection whitelist
-- `StmtCache` — Per-connection LRU PreparedStatement cache, transparent `string_view` lookup
+- `PgsqlConnection` — libpq/PostgreSQL backend with non-blocking connect (`PQconnectStart` polling), `$1` placeholder params, `INSERT ... RETURNING` insertId
+- `PgSocketAdapter` — Bridges libpq `PQsocket()` to asio `co_await` (POSIX `stream_descriptor` / Windows `WSAEventSelect`)
+- `StmtCache` / `PgStmtCache` — Per-connection LRU PreparedStatement cache, transparent `string_view` lookup
 - `DbMiddleware` / `DbQueryLog` — HTTP integration + slow query logging
 
 ### Key Patterns
@@ -195,6 +198,7 @@ Commit prefix convention: `[feat]`, `[fix]`, `[perf]`, `[refactor]`, `[docs]`, `
 | -------------- | ----------------------------------------------------------------------- |
 | C++ Standard   | C++20 (C++26 optional for reflection)                                   |
 | Boost          | >= 1.82 (Asio, System, JSON); DB middleware >= 1.85 (MySQL, charconv)   |
+| libpq          | PostgreSQL backend only (`HICAL_WITH_PGSQL=ON`)                         |
 | OpenSSL        | Required                                                                |
 | zlib           | Required (WebSocket permessage-deflate)                                 |
 | picohttpparser | Bundled (system install optional via `HICAL_USE_SYSTEM_PICOHTTPPARSER`) |

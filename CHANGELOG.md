@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **HttpRequest 获取对端地址**：`HttpRequest::peerAddr()` 返回客户端对端 `InetAddress`（`toIp()`/`toIpPort()`/`port()` 自取），`InetAddress` 新增 `isValid()` 判断地址有效性。连接层 `handleSession` 在连接建立时取一次 `remote_endpoint()` 注入到本连接所有请求，handler、中间件、WS/SSE 握手链路都能拿到真实对端地址（[#16](https://github.com/Hical61/Hical/issues/16)）
+- **PostgreSQL 后端（libpq）**：新增 `PgsqlConnection` + `PgStmtCache` + `PgSocketAdapter`，用 libpq 的 `PQexecPrepared` 做服务端预编译参数化查询，接入 `DbConnectionPool` 走同一套协程连接池/事务/慢查询日志体系。`backend()` 返回 `"pgsql"`，构建用 `-DHICAL_WITH_DATABASE=ON -DHICAL_WITH_PGSQL=ON`。与 MySQL 三处语义差异需注意：占位符用 `$1/$2`（不是 `?`）、自增主键必须 `INSERT ... RETURNING id` 才拿得到 `insertId`（PG 无 `last_insert_id()`）、`DbConfig::charset` 字段对 PG 无意义。配套示例 `examples/pgsql_example.cpp`（[#5](https://github.com/Hical61/Hical/issues/5)）
 
 ### Fixed
 - **RateLimiter 默认限流 key 失效**：默认 key 提取之前读 `"hical.remote_addr"` 请求属性，但连接层从未注入该属性，导致所有请求共享一个桶（限流形同虚设）。改为优先取 `peerAddr()`、无效时回退 `X-Forwarded-For`、再兜底 `"global"`

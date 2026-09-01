@@ -171,6 +171,8 @@ HTTP 中间件层      DbMiddleware / DbQueryLog（洋葱模型集成，属性�
 抽象接口层        DbConnection（纯虚，后端可扩展）
       │
 MySQL 后端层      MysqlConnection（Boost.MySQL async 实现）+ StmtCache（LRU 缓存）
+PostgreSQL 后端层  PgsqlConnection（libpq PQexecPrepared）+ PgStmtCache（LRU 缓存）
+                    └─ PgSocketAdapter（libpq PQsocket → asio co_await，Windows/POSIX socket 桥接）
 ```
 
 #### 核心组件
@@ -185,6 +187,9 @@ MySQL 后端层      MysqlConnection（Boost.MySQL async 实现）+ StmtCache（
 | `DbQueryLog`       | 装饰器模式，透明记录 SQL、耗时、错误                   |
 | `MysqlConnection`  | Boost.MySQL 后端实现 `DbConnection`                    |
 | `StmtCache`        | 每连接 LRU PreparedStatement 缓存，避免重复 prepare    |
+| `PgsqlConnection`  | libpq 后端实现 `DbConnection`（`HICAL_WITH_PGSQL=ON`） |
+| `PgStmtCache`      | PG 服务端预处理语句 LRU 缓存，复用 `PQexecPrepared`    |
+| `PgSocketAdapter`  | libpq `PQsocket()` 的 socket 桥接层（POSIX `stream_descriptor` / Windows `WSAEventSelect`），协程化非阻塞 I/O |
 
 ### 3.4 组件依赖关系
 

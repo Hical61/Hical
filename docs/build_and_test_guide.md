@@ -172,6 +172,7 @@ cmake -B build -G "Ninja" \
 | 选项                      | 默认值 | 说明                                                       |
 | ------------------------- | ------ | ---------------------------------------------------------- |
 | `HICAL_WITH_DATABASE`     | `OFF`  | 启用数据库中间件（需 Boost.MySQL，即 Boost >= 1.85）       |
+| `HICAL_WITH_PGSQL`        | `OFF`  | 启用 PostgreSQL 后端（需 libpq；会一并开启 `HICAL_WITH_DATABASE`） |
 | `HICAL_WITH_OPENAPI`      | `ON`   | 启用 OpenAPI 文档自动生成模块（复用 Boost.JSON，无新依赖） |
 | `HICAL_ENABLE_REFLECTION` | `OFF`  | 启用 C++26 原生反射（需兼容编译器）                        |
 | `HICAL_BUILD_TESTS`       | `ON`   | 是否编译测试套件                                           |
@@ -472,6 +473,10 @@ MSYS_NO_PATHCONV=1 openssl req -x509 -newkey rsa:2048 \
 | test_db_query_log                                       | 6      | 查询日志记录、慢查询检测、回调                                 |
 | test_stmt_cache                                         | 9      | PreparedStatement LRU 缓存淘汰/提升/禁用                       |
 | test_mysql_integration                                  | 7      | 真实 MySQL CRUD、事务、参数化查询（需数据库）                  |
+| **以下为 PostgreSQL 后端测试（需 `-DHICAL_WITH_PGSQL=ON`）** |        |                                                                |
+| test_pgsql_socket                                       | 3      | PgSocketAdapter 异步等待（TCP 回环，不依赖真实 PG）            |
+| test_pgsql_unit                                         | 12     | PgStmtCache LRU 缓存纯单元（不依赖真实 PG）                    |
+| test_pgsql_conn                                         | 15     | PostgreSQL 连接/CRUD/参数化/事务集成（需真实 PG）              |
 
 ---
 

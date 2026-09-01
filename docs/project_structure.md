@@ -125,7 +125,10 @@ hical/
 │       ├── DbMiddleware.h      # HTTP 数据库中间件（连接注入 + 自动事务）
 │       ├── DbQueryLog.h/.cpp   # 查询日志中间件（装饰器模式 + 慢查询检测）
 │       ├── MysqlConnection.h/.cpp  # MySQL 后端（Boost.MySQL any_connection + charset 白名单校验）
-│       └── StmtCache.h/.cpp    # PreparedStatement LRU 缓存（透明哈希 string_view 查找）
+│       ├── StmtCache.h/.cpp    # PreparedStatement LRU 缓存（透明哈希 string_view 查找）
+│       ├── PgsqlConnection.h/.cpp # PostgreSQL 后端（libpq PQexecPrepared，需 HICAL_WITH_PGSQL=ON）
+│       ├── PgStmtCache.h/.cpp  # PG 服务端预处理语句 LRU 缓存
+│       └── PgSocketAdapter.h   # libpq 与 Boost.Asio 的 socket 适配层
 │
 ├── tests/                      # 单元测试（Google Test）— 55 个基础测试套件（+ 1 个可选 OpenAPI + 5 个可选 DB 测试）
 │   ├── CMakeLists.txt          # gtest_discover_tests 自动注册 + Windows ws2_32/mswsock 链接
@@ -197,7 +200,8 @@ hical/
 │   ├── test_db_middleware.cpp        # DB 中间件（Mock，8 个）
 │   ├── test_db_query_log.cpp         # 查询日志（Mock，6 个）
 │   ├── test_stmt_cache.cpp           # PreparedStatement 缓存（9 个）
-│   └── test_mysql_integration.cpp    # MySQL 集成（需真实数据库，7 个）
+│   ├── test_mysql_integration.cpp    # MySQL 集成（需真实数据库，7 个）
+│   └── test_pgsql*.cpp               # PostgreSQL 集成/单元（需真实数据库，HICAL_WITH_PGSQL=ON）
 │
 ├── examples/                   # 示例程序（8 个）
 │   ├── CMakeLists.txt
@@ -301,6 +305,7 @@ hical/
 │  └──────────────┘ └─────────────┘ └──────────────────────┘  │
 │  ┌─────────────────────────────────────────────────────────┐│
 │  │  MysqlConnection (Boost.MySQL) + StmtCache (LRU)        ││
+│  │  PgsqlConnection (libpq) + PgStmtCache (LRU)            ││
 │  └─────────────────────────────────────────────────────────┘│
 └─────────────────────────────────────────────────────────────┘
                               │
@@ -350,7 +355,7 @@ hical/
 | 反射层     | `Reflection` / `MetaJson` / `MetaRoutes`                                                                       | 双轨设计：C++26 原生 P2996 + C++20 宏回退                      |
 | 日志系统   | `Log` / `LogChannel` / `LogFormatter` / `LogSink` / `LogFile` / `AsyncFileSink` / `LogMiddleware` / `LogAdmin` | 6 级日志、命名通道、异步双缓冲、动态级别管理                   |
 | OpenAPI    | `OpenApiSchema` / `OpenApiRegistry` / `OpenApiDocument` / `OpenApiEndpoint`                                    | 从 `HICAL_JSON` 自动派生 OpenAPI 3.0 文档                      |
-| 数据库     | `DbConfig` / `DbConnectionPool` / `DbMiddleware` / `DbQueryLog` / `MysqlConnection` / `StmtCache`              | 协程化连接池 + 装饰器查询日志 + PreparedStatement LRU          |
+| 数据库     | `DbConfig` / `DbConnectionPool` / `DbMiddleware` / `DbQueryLog` / `MysqlConnection` / `StmtCache` / `PgsqlConnection` / `PgStmtCache` | 协程化连接池 + 装饰器查询日志 + PreparedStatement LRU（MySQL + PostgreSQL 双后端） |
 | 编译期组件 | `PerfectHashRouter` / `CompileTimeChain` / `CompileTimeJson`                                                   | 运行时零开销：完美哈希路由 + 编译期中件链 + 编译期 JSON 序列化 |
 
 ## 命名风格
