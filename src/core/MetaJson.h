@@ -13,6 +13,7 @@
 #pragma once
 
 #include "Reflection.h"
+#include "MetaAnno.h"
 #include "MetaJsonError.h"
 #include "HttpRequest.h"
 #include <boost/json.hpp>
@@ -410,51 +411,6 @@ namespace hical::meta
 	{
 
 		/**
-		 * @brief 检测字段是否带指定属性（通用基础函数）
-		 */
-		template <auto Member>
-		consteval bool hasAttribute(std::string_view attrName)
-		{
-			for (auto attr : std::meta::attributes_of(Member))
-			{
-				if (std::meta::identifier_of(attr) == attrName)
-				{
-					return true;
-				}
-			}
-			return false;
-		}
-
-		template <auto Member>
-		consteval bool isJsonIgnored()
-		{
-			return hasAttribute<Member>("hical::json_ignore");
-		}
-
-		template <auto Member>
-		consteval bool isJsonRequired()
-		{
-			return hasAttribute<Member>("hical::json_required");
-		}
-
-		/**
-		 * @brief 获取字段的 JSON key（优先 [[hical::json_name("xxx")]]，否则原名）
-		 */
-		template <auto Member>
-		consteval std::string_view jsonKeyOf()
-		{
-			for (auto attr : std::meta::attributes_of(Member))
-			{
-				if (std::meta::identifier_of(attr) == "hical::json_name")
-				{
-					auto args = std::meta::attribute_arguments_of(attr);
-					return std::meta::extract<const char*>(args[0]);
-				}
-			}
-			return std::meta::identifier_of(Member);
-		}
-
-		/**
 		 * @brief camelCase → snake_case 编译期转换
 		 */
 		consteval bool isUpperAscii(char c) noexcept
@@ -481,6 +437,104 @@ namespace hical::meta
 			return result;
 		}
 
+		namespace M = std::meta;
+		namespace json = boost::json;
+
+		inline constexpr auto kNonstaticDataMembersOf = [](M::info info, M::access_context ctx) consteval {
+			return M::nonstatic_data_members_of(info, ctx);
+		};
+
+		/**
+	     * @brief 基于反射规则将对象实例转换为json::value的执行模板。class -> json
+	     * @tparam ClassType 待序列化的目标对象类型
+	     * @tparam MembersOfFunc 获取成员反射信息的函数
+	     * @tparam Ctx 反射访问权限检查上下文，控制是否可以访问私有/保护成员
+	     * @param classValue 待序列化的对象const引用
+	     * @return json::value 序列化好的值
+	     * @note 本质是 json::value_from() 的分类包装，若 json::value_from() 没有对应的重载函数，则走通用成员遍历函数
+	     * @attention 仅在走通用成员遍历函数会自动处理注解相关
+	     */
+	    template <
+	        typename ClassType,
+	         auto MembersOfFunc = kNonstaticDataMembersOf,
+	        M::access_context Ctx = M::access_context::unprivileged()
+	    >
+	    auto toJsonTemplate(ClassType const& classValue) -> json::value {
+	        // 优先进入 value_from 用户定制 tag_invoke 函数
+	        if constexpr (json::has_value_from<ClassType>::value) {
+		        return json::value_from(classValue);
+	        }
+
+	        // 通用函数部分
+	        else {
+	            // 获取成员反射信息集合
+	            constexpr static auto kMemberInfos = std::define_static_array(MembersOfFunc(^^ClassType, Ctx));
+
+	            // 结果，先预分配
+	            constexpr auto joCapacity = kMemberInfos.size() + 1;
+	            json::object jo{};
+	            jo.reserve(joCapacity);
+
+	            template for (constexpr auto memberInfo : kMemberInfos) {
+	                // 执行编译时注解
+	                constexpr auto [skip_member, member_name] = anno::applyKeyAnnotations<memberInfo>();
+	                if constexpr (skip_member) continue;
+
+	                // 成员值
+	                auto const& member_value = classValue.[:memberInfo:];
+
+	                // 序列化
+	            	jo.emplace(member_name, toJsonTemplate<typename [:M::type_of(memberInfo):], MembersOfFunc, Ctx>(member_value));
+	            }
+	            return jo;
+	        }
+	    }
+
+		/**
+	     * @brief 基于反射规则将json::value转换为对象实例的执行模板。 json -> class
+	     * @tparam ClassType 待序列化的目标对象类型
+	     * @tparam MembersOfFunc 获取成员反射信息的函数
+	     * @tparam Ctx 反射访问权限检查上下文，控制是否可以访问私有/保护成员
+	     * @param jsonValue 待反序列化的 json::value const&
+	     * @return 返回填充好的对象
+	     * @note 本质是 json::value_to() 的分类包装，若 json::value_to() 没有对应的重载函数，则走通用成员遍历函数
+	     * @attention 仅在走通用成员遍历函数会自动处理注解相关
+	     */
+	    template <
+	        std::default_initializable ClassType,
+	        auto MembersOfFunc = kNonstaticDataMembersOf,
+	        M::access_context Ctx = M::access_context::unprivileged()
+	    >
+	    auto fromJsonTemplate(json::value const& jsonValue) -> ClassType {
+	        // 先走 json::value_to() 函数
+	        if constexpr (json::has_value_to<ClassType>::value) {
+		        return json::value_to<ClassType>(jsonValue);
+	        }
+
+	        // 通用函数不分
+	        else {
+	            // 获取成员反射信息集合
+	            constexpr static auto kMemberInfos = std::define_static_array(MembersOfFunc(M::remove_cvref(^^ClassType), Ctx));
+
+	            // 默认构造
+	            ClassType classValue{};
+
+	            template for (constexpr auto memberInfo : kMemberInfos) {
+	                // 执行编译时注解
+	                constexpr auto [ignoreMember, memberName] = anno::applyKeyAnnotations<memberInfo>();
+	                if constexpr (ignoreMember) continue;
+
+	                // 成员值
+	                json::value const& memberJv = jsonValue.at(memberName);
+	                auto &memberValue = classValue.[:memberInfo:];
+
+	                // 反序列化
+            		memberValue = fromJsonTemplate<typename [:M::type_of(memberInfo):], MembersOfFunc, Ctx>(memberJv);
+	            }
+	            return classValue;
+	        }
+	    }
+
 	} // namespace detail
 
 	/**
@@ -490,19 +544,7 @@ namespace hical::meta
 	template <typename T>
 	boost::json::object toJson(const T& obj)
 	{
-		boost::json::object jsonObj;
-
-		template for (constexpr auto member :
-					  std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::unprivileged()))
-		{
-			if constexpr (!detail::isJsonIgnored<member>())
-			{
-				constexpr auto key = detail::jsonKeyOf<member>();
-				jsonObj[key] = valueToJson(obj.[:member:]);
-			}
-		}
-
-		return jsonObj;
+		return detail::toJsonTemplate(obj).as_object();
 	}
 
 	/**
@@ -512,34 +554,7 @@ namespace hical::meta
 	template <typename T>
 	T fromJson(const boost::json::value& json)
 	{
-		if (!json.is_object())
-		{
-			detail::throwParseError("expected JSON object, got " + std::string(to_string(json.kind())));
-		}
-
-		T obj {};
-		const auto& jsonObj = json.as_object();
-
-		template for (constexpr auto member :
-					  std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::unprivileged()))
-		{
-			if constexpr (!detail::isJsonIgnored<member>())
-			{
-				constexpr auto key = detail::jsonKeyOf<member>();
-				auto it = jsonObj.find(key);
-				if (it != jsonObj.end())
-				{
-					using FieldType = typename[:std::meta::type_of(member):];
-					obj.[:member:] = valueFromJson<FieldType>(it->value());
-				}
-				else if constexpr (detail::isJsonRequired<member>())
-				{
-					detail::throwMissingField(key);
-				}
-			}
-		}
-
-		return obj;
+		return detail::fromJsonTemplate<T>(json.as_object());
 	}
 
 	/**
