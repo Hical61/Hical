@@ -28,6 +28,7 @@
 #include "PerfectHashRouter.h"
 #include <functional>
 #include <memory>
+#include <ranges>
 #include <tuple>
 #include <type_traits>
 #include <vector>
@@ -187,44 +188,73 @@ namespace hical::meta
 #else // HICAL_HAS_REFLECTION == 1
 
 	// ============ C++26 反射实现 ============
+	namespace M = std::meta;
+	namespace R = std::ranges;
+	namespace V = std::views;
+
+	struct HandlerAnnotation {
+		const char* path_;
+		const char* methodStr_;
+	};
 
 	template <typename Handler>
 	void registerRoutes(Router& router, Handler& handler)
 	{
-		template for (constexpr auto fn :
-					  std::meta::nonstatic_member_functions_of(^^Handler, std::meta::access_context::unprivileged()))
-		{
-			constexpr auto attrs = std::meta::attributes_of(fn);
-			template for (constexpr auto attr : attrs)
-			{
-				if constexpr (std::meta::identifier_of(attr) == "hical::route")
-				{
-					constexpr auto args = std::meta::attribute_arguments_of(attr);
-					constexpr auto path = std::meta::extract<const char*>(args[0]);
-					constexpr auto methodStr = std::meta::extract<const char*>(args[1]);
-					auto method = stringToHttpMethod(methodStr);
+		// 默认只选取公共成员函数
+		constexpr auto ctx = std::meta::access_context::unprivileged();
+		struct HandlerFunctionInfo {
+			M::info memberFunctionInfo_{};
+			M::info annotationInfo_{};
+		};
 
-					router.route(method,
-								 path,
-								 [&handler](const HttpRequest& req) -> Awaitable<HttpResponse>
-								 {
-									 if constexpr (std::is_same_v<decltype(handler.[:fn:](req)), HttpResponse>)
-									 {
-										 co_return handler.[:fn:](req);
-									 }
-									 else
-									 {
-										 co_return co_await handler.[:fn:](req);
-									 }
-								 });
-				}
-			}
+		// 注解预处理：筛选出有注解的函数
+		constexpr static auto kFunctionInfos = std::define_static_array([] consteval {
+			return M::members_of(^^Handler, ctx)
+				| V::filter(M::is_function)
+				| V::filter([](const M::info info) { return not M::annotations_of_with_type(info, ^^HandlerAnnotation).empty(); })
+				| V::transform([](const M::info info) {
+					return HandlerFunctionInfo{ info, M::annotations_of_with_type(info, ^^HandlerAnnotation).front() };
+				})
+				| R::to<std::vector<HandlerFunctionInfo>>();
+		}());
+
+		// 遍历注解注册路由
+		template for (constexpr HandlerFunctionInfo handlerFunctionInfo : kFunctionInfos)
+		{
+			constexpr M::info fn = handlerFunctionInfo.memberFunctionInfo_;
+			constexpr M::info anno = handlerFunctionInfo.annotationInfo_;
+			constexpr auto [path, methodStr] = M::extract<HandlerAnnotation>(anno);
+			const auto method = stringToHttpMethod(methodStr);
+
+			router.route(method,
+						 path,
+						 [&handler](const HttpRequest& req) -> Awaitable<HttpResponse>
+						 {
+							 if constexpr (std::is_same_v<decltype(handler.[:fn:](req)), HttpResponse>)
+							 {
+								 co_return handler.[:fn:](req);
+							 }
+							 else
+							 {
+								 co_return co_await handler.[:fn:](req);
+							 }
+						 });
+
 		}
 	}
 
 #endif // HICAL_HAS_REFLECTION
 
 } // namespace hical::meta
+
+// ============ C++26 路由注解函数 ==========
+#if HICAL_HAS_REFLECTION
+namespace hical {
+	consteval meta::HandlerAnnotation route(const std::string_view path, const std::string_view methodStr) {
+		return { .path_ = std::define_static_string(path), .methodStr_ = std::define_static_string(methodStr) };
+	}
+}
+#endif
 
 // ============ C++20 回退宏 ============
 
