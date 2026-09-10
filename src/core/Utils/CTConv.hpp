@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <string>
 #include <string_view>
 
@@ -88,5 +89,19 @@ namespace hical::CT
             }
         }
         return result;
+    }
+
+    /// @brief 编译时整形转换字符串
+    template <std::integral IntType>
+    consteval std::string toString(const IntType val) {
+        std::array<char, 32> buf{};
+        const auto [ptr, ec] = std::to_chars(buf.begin(), buf.end(), val);
+
+        if (ec != std::errc{}) {
+            return "null";
+        }
+
+        const std::string_view str(buf.data(), ptr - buf.data());
+        return std::string{ str };
     }
 }
