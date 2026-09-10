@@ -450,14 +450,22 @@ namespace hical::meta
 
 	            template for (constexpr auto memberInfo : kMemberInfos) {
 	                // 执行编译时注解
-	                constexpr auto [skip_member, member_name] = anno::applyKeyAnnotations<memberInfo>();
-	                if constexpr (skip_member) continue;
+	                constexpr auto [ignoreMember, memberName] = anno::applyKeyAnnotations<memberInfo>();
+	                if constexpr (ignoreMember) continue;
 
 	                // 成员值
-	                auto const& member_value = classValue.[:memberInfo:];
+	                auto const& memberValue = classValue.[:memberInfo:];
 
-	                // 序列化
-	            	jo.emplace(member_name, toJsonTemplate<typename [:M::type_of(memberInfo):], MembersOfFunc, Ctx>(member_value));
+	            	// 序列化
+	            	json::object::const_iterator memberJvIt;
+	            	if (auto optValue = anno::applySerializeAnnotations<memberInfo>(memberValue))
+	            		memberJvIt = jo.emplace(memberName, *std::move(optValue)).first;
+	            	else
+	            		memberJvIt = jo.emplace(memberName, toJsonTemplate<typename [:M::type_of(memberInfo):], MembersOfFunc, Ctx>(memberValue)).first;
+
+	            	// 视图注解
+	            	anno::MemberAnnotationView<true, memberInfo, ClassType> view{ .classValue_ = classValue, .memberValue_ = memberValue, .memberJv_ = memberJvIt->value() };
+	            	anno::applyViewAnnotations(view);
 	            }
 	            return jo;
 	        }
@@ -501,8 +509,15 @@ namespace hical::meta
 	                json::value const& memberJv = jsonValue.at(memberName);
 	                auto &memberValue = classValue.[:memberInfo:];
 
-	                // 反序列化
-            		memberValue = fromJsonTemplate<typename [:M::type_of(memberInfo):], MembersOfFunc, Ctx>(memberJv);
+	            	// 反序列化
+	            	if (auto optValue = anno::applyDeserializeAnnotations<memberInfo>(memberJv))
+	            		memberValue = *std::move(optValue);
+	            	else
+	            		memberValue = fromJsonTemplate<typename [:M::type_of(memberInfo):], MembersOfFunc, Ctx>(memberJv);
+
+	            	// 视图注解
+	            	anno::MemberAnnotationView<false, memberInfo, ClassType> view{ .classValue_ = classValue, .memberValue_ = memberValue, .memberJv_ = memberJv };
+	            	anno::applyViewAnnotations(view);
 	            }
 	            return classValue;
 	        }
