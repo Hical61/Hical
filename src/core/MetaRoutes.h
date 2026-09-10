@@ -253,6 +253,11 @@ namespace hical {
 	consteval meta::HandlerAnnotation route(const std::string_view path, const std::string_view methodStr) {
 		return { .path_ = std::define_static_string(path), .methodStr_ = std::define_static_string(methodStr) };
 	}
+	consteval meta::HandlerAnnotation get(const std::string_view path) { return route(path, "GET"); }
+	consteval meta::HandlerAnnotation post(const std::string_view path) { return route(path, "POST"); }
+	consteval meta::HandlerAnnotation put(const std::string_view path) { return route(path, "PUT"); }
+	consteval meta::HandlerAnnotation del(const std::string_view path) { return route(path, "DELETE"); }
+	consteval meta::HandlerAnnotation patch(const std::string_view path) { return route(path, "PATCH"); }
 }
 #endif
 
