@@ -192,38 +192,44 @@ namespace hical::meta
 	namespace R = std::ranges;
 	namespace V = std::views;
 
-	struct HandlerAnnotation {
+	/// @brief 路由注解结构体
+	struct RouteAnnotation {
 		const char* path_;
 		const char* methodStr_;
 	};
 
+	/// @brief 路由成员函数元信息结构体
+	struct RouteFnMeta {
+		M::info memberFunctionInfo_{};
+		M::info annotationInfo_{};
+	};
+
+	/// @brief 发现所有具有 RouteAnnotation 注解值的成员函数
+	consteval auto discoverRoutes(const M::info handlerType, const M::access_context ctx = M::access_context::unprivileged())
+		-> std::vector<RouteFnMeta>
+	{
+		return M::members_of(handlerType, ctx)
+			| V::filter(M::is_function)
+			| V::filter([](const M::info info) { return not M::annotations_of_with_type(info, ^^RouteAnnotation).empty(); })
+			| V::transform([](const M::info info) {
+				return RouteFnMeta{ info, M::annotations_of_with_type(info, ^^RouteAnnotation).front() };
+			})
+			| R::to<std::vector<RouteFnMeta>>();
+	}
+
+	/// @brief 自动注册 Handler 中所有路由到 Router
 	template <typename Handler>
 	void registerRoutes(Router& router, Handler& handler)
 	{
-		// 默认只选取公共成员函数
-		constexpr auto ctx = std::meta::access_context::unprivileged();
-		struct HandlerFunctionInfo {
-			M::info memberFunctionInfo_{};
-			M::info annotationInfo_{};
-		};
-
-		// 注解预处理：筛选出有注解的函数
-		constexpr static auto kFunctionInfos = std::define_static_array([] consteval {
-			return M::members_of(^^Handler, ctx)
-				| V::filter(M::is_function)
-				| V::filter([](const M::info info) { return not M::annotations_of_with_type(info, ^^HandlerAnnotation).empty(); })
-				| V::transform([](const M::info info) {
-					return HandlerFunctionInfo{ info, M::annotations_of_with_type(info, ^^HandlerAnnotation).front() };
-				})
-				| R::to<std::vector<HandlerFunctionInfo>>();
-		}());
+		// 注解预处理：筛选出有注解的成员函数
+		constexpr static auto kFunctionInfos = std::define_static_array(discoverRoutes(^^Handler));
 
 		// 遍历注解注册路由
-		template for (constexpr HandlerFunctionInfo handlerFunctionInfo : kFunctionInfos)
+		template for (constexpr RouteFnMeta handlerFunctionInfo : kFunctionInfos)
 		{
 			constexpr M::info fn = handlerFunctionInfo.memberFunctionInfo_;
 			constexpr M::info anno = handlerFunctionInfo.annotationInfo_;
-			constexpr auto [path, methodStr] = M::extract<HandlerAnnotation>(anno);
+			constexpr auto [path, methodStr] = M::extract<RouteAnnotation>(anno);
 			const auto method = stringToHttpMethod(methodStr);
 
 			router.route(method,
@@ -243,6 +249,64 @@ namespace hical::meta
 		}
 	}
 
+	/// @brief 把 handler 上的每条路由，翻译成一段人类可读的描述文本
+	/// @note method 列和 path 列会自动对齐，剩余属性不做对齐要求
+	consteval auto describeHandlerRoutes(const M::info handlerType) -> std::vector<const char*> {
+		// ---- 第一遍：收集各片段 + 统计 method / path 列的最大宽度 ----
+		struct RouteEntry {
+			std::string method_;
+			std::string path_;
+			std::string rest_;   // 函数名 + 源码位置，不要求对齐
+		};
+
+		std::vector<RouteEntry> entries;
+		std::size_t maxMethodLen = 0;
+		std::size_t maxPathLen  = 0;
+
+		for (const auto [fn, anno] : discoverRoutes(handlerType)) {
+			const auto [path, methodStr] = M::extract<RouteAnnotation>(anno);
+
+			RouteEntry entry;
+			entry.method_ = methodStr;
+			entry.path_ = path;
+
+			// 构造不要求对齐的尾部：函数名 + 源码位置
+			std::string rest;
+			rest.append(M::display_string_of(fn));
+			rest.append(" ");
+			const auto loc = M::source_location_of(fn);
+			rest.append("[");
+			rest.append(loc.file_name());
+			rest.append(":");
+			rest.append(CT::toString(loc.line()));
+			rest.append(":");
+			rest.append(CT::toString(loc.column()));
+			rest.append("]");
+			entry.rest_ = std::move(rest);
+
+			maxMethodLen = std::max(maxMethodLen, entry.method_.size());
+			maxPathLen   = std::max(maxPathLen,   entry.path_.size());
+
+			entries.push_back(std::move(entry));
+		}
+
+		// ---- 第二遍：用空格 padding 对齐 method / path 列，再拼接最终字符串 ----
+		std::vector<const char*> result;
+		for (auto& e : entries) {
+			std::string infoStr;
+			infoStr.append(e.method_);
+			infoStr.append(maxMethodLen - e.method_.size(), ' ');  // method 列右填充对齐
+			infoStr.append("  ");
+			infoStr.append(e.path_);
+			infoStr.append(maxPathLen - e.path_.size(), ' ');      // path 列右填充对齐
+			infoStr.append("  ");
+			infoStr.append(e.rest_);
+
+			result.push_back(std::define_static_string(infoStr));
+		}
+		return result;
+	}
+
 #endif // HICAL_HAS_REFLECTION
 
 } // namespace hical::meta
@@ -250,14 +314,14 @@ namespace hical::meta
 // ============ C++26 路由注解函数 ==========
 #if HICAL_HAS_REFLECTION
 namespace hical {
-	consteval meta::HandlerAnnotation route(const std::string_view path, const std::string_view methodStr) {
+	consteval meta::RouteAnnotation route(const std::string_view path, const std::string_view methodStr) {
 		return { .path_ = std::define_static_string(path), .methodStr_ = std::define_static_string(methodStr) };
 	}
-	consteval meta::HandlerAnnotation get(const std::string_view path) { return route(path, "GET"); }
-	consteval meta::HandlerAnnotation post(const std::string_view path) { return route(path, "POST"); }
-	consteval meta::HandlerAnnotation put(const std::string_view path) { return route(path, "PUT"); }
-	consteval meta::HandlerAnnotation del(const std::string_view path) { return route(path, "DELETE"); }
-	consteval meta::HandlerAnnotation patch(const std::string_view path) { return route(path, "PATCH"); }
+	consteval meta::RouteAnnotation get(const std::string_view path) { return route(path, "GET"); }
+	consteval meta::RouteAnnotation post(const std::string_view path) { return route(path, "POST"); }
+	consteval meta::RouteAnnotation put(const std::string_view path) { return route(path, "PUT"); }
+	consteval meta::RouteAnnotation del(const std::string_view path) { return route(path, "DELETE"); }
+	consteval meta::RouteAnnotation patch(const std::string_view path) { return route(path, "PATCH"); }
 }
 #endif
 
