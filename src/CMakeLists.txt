@@ -20,6 +20,7 @@ endif()
 
 # 核心库实现（仅支持静态库，vcpkg/Conan 均强制 ONLY_STATIC_LIBRARY）
 add_library(hical_core STATIC
+    core/Utils/CTConv.cpp
     core/InetAddress.cpp
     core/Error.cpp
     core/MetaJsonError.cpp

@@ -410,33 +410,6 @@ namespace hical::meta
 	namespace detail
 	{
 
-		/**
-		 * @brief camelCase → snake_case 编译期转换
-		 */
-		consteval bool isUpperAscii(char c) noexcept
-		{
-			return c >= 'A' && c <= 'Z';
-		}
-
-		consteval char toLowerAscii(char c) noexcept
-		{
-			return isUpperAscii(c) ? static_cast<char>(c + ('a' - 'A')) : c;
-		}
-
-		consteval std::string camelToSnake(std::string_view input)
-		{
-			std::string result;
-			for (size_t i = 0; i < input.size(); ++i)
-			{
-				if (i > 0 && isUpperAscii(input[i]))
-				{
-					result += '_';
-				}
-				result += toLowerAscii(input[i]);
-			}
-			return result;
-		}
-
 		namespace M = std::meta;
 		namespace json = boost::json;
 
