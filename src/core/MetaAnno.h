@@ -3,9 +3,6 @@
 //
 
 #pragma once
-#include "Reflection.h"
-
-#if HICAL_HAS_REFLECTION
 #include <boost/json.hpp>
 #include <meta>
 #include "Utils/CTConv.hpp"
@@ -245,5 +242,3 @@ namespace hical {
 		static consteval void impl(anno::MemberAnnotationResult &result) { result.keyName_ = std::define_static_string(CT::caseCamelToSnake(result.keyName_)); }
 	}inline constexpr json_camel_to_snake{};
 }
-
-#endif

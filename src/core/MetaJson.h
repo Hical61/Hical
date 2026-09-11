@@ -13,16 +13,20 @@
 #pragma once
 
 #include "Reflection.h"
-#include "MetaAnno.h"
 #include "MetaJsonError.h"
 #include "HttpRequest.h"
-#include "Utils/CollectMember.hpp"
 #include <boost/json.hpp>
 #include <optional>
 #include <string>
 #include <tuple>
 #include <type_traits>
 #include <vector>
+
+// CPP26 反射路线用到的头文件
+#if HICAL_HAS_REFLECTION
+#include "MetaAnno.h"
+#include "Utils/CollectMember.hpp"
+#endif
 
 namespace hical::meta
 {
