@@ -438,7 +438,7 @@ namespace hical::meta
 	        // 通用函数部分
 	        else {
 	            // 获取成员反射信息集合
-	            constexpr static auto kMemberInfos = std::define_static_array(MembersOfFunc(^^ClassType, Ctx));
+	            constexpr static auto kMemberInfos = std::define_static_array(MembersOfFunc(M::remove_cvref(^^ClassType), Ctx));
 
 	            // 结果，先预分配
 	            constexpr auto joCapacity = kMemberInfos.size() + 1;
