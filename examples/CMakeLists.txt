@@ -46,3 +46,7 @@ if (HICAL_WITH_PGSQL)
     target_link_libraries(pgsql_example PRIVATE hical_core)
 endif()
 
+if (HICAL_ENABLE_REFLECTION)
+    add_executable(reflection_server_26 reflection_server_26.cpp)
+    target_link_libraries(reflection_server_26 PRIVATE hical_core)
+endif ()
