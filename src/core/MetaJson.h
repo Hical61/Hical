@@ -605,30 +605,6 @@ namespace hical::meta
 		return schema;
 	}
 
-	/**
-	 * @brief 序列化策略：camelCase → snake_case 自动转换（C++26 反射）
-	 * 优先使用 [[hical::json_name(...)]] 显式注解，否则自动转换。
-	 */
-	template <typename T>
-	boost::json::object toJsonSnakeCase(const T& obj)
-	{
-		boost::json::object jsonObj;
-
-		template for (constexpr auto member :
-					  std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::unprivileged()))
-		{
-			if constexpr (!detail::isJsonIgnored<member>())
-			{
-				constexpr auto explicitKey = detail::jsonKeyOf<member>();
-				constexpr auto memberName = std::meta::identifier_of(member);
-				constexpr auto key = (explicitKey != memberName) ? explicitKey : detail::camelToSnake(memberName);
-				jsonObj[key] = valueToJson(obj.[:member:]);
-			}
-		}
-
-		return jsonObj;
-	}
-
 #endif // HICAL_HAS_REFLECTION
 
 	/**
