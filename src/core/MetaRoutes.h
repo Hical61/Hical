@@ -251,7 +251,9 @@ namespace hical::meta
 
 	/// @brief 把 handler 上的每条路由，翻译成一段人类可读的描述文本
 	/// @note method 列和 path 列会自动对齐，剩余属性不做对齐要求
-	consteval auto describeHandlerRoutes(const M::info handlerType) -> std::vector<const char*> {
+	consteval auto describeHandlerRoutes(std::vector<M::info> const& handlerTypes,
+						const M::access_context ctx = M::access_context::unprivileged()) -> std::vector<const char*> {
+
 		// ---- 第一遍：收集各片段 + 统计 method / path 列的最大宽度 ----
 		struct RouteEntry {
 			std::string method_;
@@ -263,7 +265,10 @@ namespace hical::meta
 		std::size_t maxMethodLen = 0;
 		std::size_t maxPathLen  = 0;
 
-		for (const auto [fn, anno] : discoverRoutes(handlerType)) {
+		for (const auto [fn, anno] : handlerTypes
+			| V::transform(std::bind_back(discoverRoutes, ctx))
+			| V::join
+		) {
 			const auto [path, methodStr] = M::extract<RouteAnnotation>(anno);
 
 			RouteEntry entry;
