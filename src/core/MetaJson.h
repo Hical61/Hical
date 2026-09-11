@@ -16,6 +16,7 @@
 #include "MetaAnno.h"
 #include "MetaJsonError.h"
 #include "HttpRequest.h"
+#include "Utils/CollectMember.hpp"
 #include <boost/json.hpp>
 #include <optional>
 #include <string>
@@ -413,10 +414,6 @@ namespace hical::meta
 		namespace M = std::meta;
 		namespace json = boost::json;
 
-		inline constexpr auto kNonstaticDataMembersOf = [](M::info info, M::access_context ctx) consteval {
-			return M::nonstatic_data_members_of(info, ctx);
-		};
-
 		/**
 	     * @brief 基于反射规则将对象实例转换为json::value的执行模板。class -> json
 	     * @tparam ClassType 待序列化的目标对象类型
@@ -429,7 +426,7 @@ namespace hical::meta
 	     */
 	    template <
 	        typename ClassType,
-	         auto MembersOfFunc = kNonstaticDataMembersOf,
+			CollectMember::MemberInfoGatherer auto MembersOfFunc = CollectMember::collect_nonstatic_member_infos,
 	        M::access_context Ctx = M::access_context::unprivileged()
 	    >
 	    auto toJsonTemplate(ClassType const& classValue) -> json::value {
@@ -483,7 +480,7 @@ namespace hical::meta
 	     */
 	    template <
 	        std::default_initializable ClassType,
-	        auto MembersOfFunc = kNonstaticDataMembersOf,
+	        CollectMember::MemberInfoGatherer auto MembersOfFunc = CollectMember::collect_nonstatic_member_infos,
 	        M::access_context Ctx = M::access_context::unprivileged()
 	    >
 	    auto fromJsonTemplate(json::value const& jsonValue) -> ClassType {
