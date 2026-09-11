@@ -46,6 +46,9 @@ namespace user_define {
         }
     }constexpr do_log{};
 }
+//-----------------------------------------示例用户自定义注解处理函数结束-----------------------------------------------------
+
+
 
 // 自定义类型通用转换点，而非需要向结构体添加注解才能生效
 // 例如，json 序列化过程中默认将 chrono::system_clock::time_point 类型的值转换为字符串格式
@@ -90,8 +93,34 @@ namespace boost::json {
         return secondTp;
     }
 }
+//-----------------------------------------示例通用转换点结束---------------------------------------------------------------
 
 
+
+// 响应体包装器
+namespace ResponseWrapper {
+    struct Base {
+        [[=hical::json_rename("code")]] int httpStatus_;
+        [[=hical::json_rename("msg")]] std::string message_;
+    };
+    template <typename DataType>
+    struct Data : Base {
+        template <typename... Args>
+        explicit Data(Args&&... args) : data_(std::forward<Args>(args)...){}
+        [[=hical::json_rename("data")]] DataType data_;
+    };
+    template <typename DataType>
+    struct DataRef : Base {
+        explicit DataRef(DataType const& data) : data_(data) {}
+        [[=hical::json_rename("data")]] DataType const& data_;
+    };
+}
+//-----------------------------------------示例通过继承实现响应体包装器结束----------------------------------------------------
+
+
+
+//用户自定义的结构体，用于测试
+//在用户的结构体添加了字段蛇形映射为json小驼峰命名，同时添加了自定义的日志打印注解
 struct [[=hical::json_snake_to_lowerCamel, =user_define::do_log]] Test {
     [[=hical::json_ignore]] bool boolean;
 
@@ -113,16 +142,28 @@ struct [[=hical::json_snake_to_lowerCamel, =user_define::do_log]] Test {
     [[=as_iso8601]] chrono::system_clock::time_point iso_tp = chrono::system_clock::now();
 }
 const test{ .boolean = true, .id = 19, .long_id = 1009, .test_name = "has_str_test", .raw_char = 'r' };
+// 测试数据引用的响应体包装器
+const auto dataRef = [] {
+    // 使用响应包装器
+    ResponseWrapper::DataRef dataRef{ test };
+    dataRef.httpStatus_ = 200;
+    dataRef.message_ = "success";
+    return dataRef;
+}();
+//-----------------------------------------示例在结构体上的应用结束-----------------------------------------------------
 
+
+
+//api接口开始-----------------------------------------------------
 struct ApiHandler {
     // route api
     [[=hical::route("/api/route", "POST")]]
     static hical::HttpResponse postRoute(const hical::HttpRequest& /*unused*/) {
-        return hical::HttpResponse::json(hical::meta::toJson(test));
+        return hical::HttpResponse::json(hical::meta::toJson(dataRef));
     }
     // 不添加 hical::route 注解，不会被注册为路由
     static hical::HttpResponse testRoute(const hical::HttpRequest& /*unused*/) {
-        throw std::logic_error("");
+        throw std::logic_error{ "testRoute" };
     }
 
 };
@@ -130,14 +171,15 @@ struct ApiHandler2 {
     // 简化 get api
     [[=hical::get("/simple/test")]]
     static hical::HttpResponse getTest(const hical::HttpRequest& /*unused*/) {
-        return hical::HttpResponse::json(hical::meta::toJson(test));
+        return hical::HttpResponse::json(hical::meta::toJson(dataRef));
     }
     // 简化 patch api
     [[=hical::patch("/simple/long/name/test")]]
     static hical::HttpResponse patchTest(const hical::HttpRequest& /*unused*/) {
-        return hical::HttpResponse::json(hical::meta::toJson(test));
+        return hical::HttpResponse::json(hical::meta::toJson(dataRef));
     }
 };
+//api接口结束-----------------------------------------------------
 
 int main () {
     // 序列化部分的json输出
