@@ -572,16 +572,36 @@ namespace hical::meta
 		) {
 			constexpr auto [ignoreMember, memberName] = anno::applyKeyAnnotations<memberInfo>();
 			if constexpr (ignoreMember) continue;
-			using MemberType = [:std::meta::type_of(memberInfo):];
+			using MemberType = [:M::remove_cvref(M::type_of(memberInfo)):];
+
+			// 获取成员注解信息集合
+			constexpr static auto kAnnotationInfos = std::define_static_array([] {
+				std::vector<M::info> result;
+				template for (constexpr auto annoInfo : std::define_static_array(anno::annotationsOfMemberWithParent(memberInfo))) {
+					constexpr auto annoValue = [:M::constant_of(annoInfo):];
+					constexpr auto typeValue = std::type_identity<MemberType>{};
+					if constexpr (requires{ { annoValue.applyAnnotationSchema(std::declval<json::object&>(), typeValue) } -> std::same_as<void>; })
+						result.push_back(annoInfo);
+				}
+				return result;
+			}());
 
 			json::object prop;
-			// 如果MetaSchema没有对应的偏特化，就递归调用jsonSchema函数
-			if constexpr (requires{ { schema::Schema<MemberType>{}(prop) } -> std::same_as<void>; }) {
+			// 如果有注解，就直接调用注解的函数
+			if constexpr (not kAnnotationInfos.empty()) {
+				template for (constexpr auto annoInfo : kAnnotationInfos) {
+					[:M::constant_of(annoInfo):].applyAnnotationSchema(prop, std::type_identity<MemberType>{});
+				}
+			}
+			// 否则，如果MetaSchema有对应的偏特化，就调用偏特化函数
+			else if constexpr (requires{ { schema::Schema<MemberType>::operator()(prop) } -> std::same_as<void>; }) {
 				schema::writeSchema<MemberType>(prop);
 			}
+			// 否则，如果是类对象，继续递归调用jsonSchema函数
 			else if constexpr (M::is_class_type(classTypeInfo)) {
 				prop = jsonSchema<MemberType>();
 			}
+			// 否则，直接硬错误
 			else {
 				static_assert(false, std::string{ "No JSON Schema specialization for type: " } + M::display_string_of(classTypeInfo));
 			}
