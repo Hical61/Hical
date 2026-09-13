@@ -28,7 +28,7 @@ public:
 	Awaitable<DbResult> query(std::string_view /*sql*/) override
 	{
 		++queryCount_;
-		co_return DbResult {.columns = {"id"}, .rows = {{"1"}}, .affectedRows = 0};
+		co_return DbResult::fromRows({"id"}, {{"1"}});
 	}
 
 	Awaitable<DbResult> query(std::string_view sql, std::span<const std::string> /*params*/) override
@@ -38,7 +38,7 @@ public:
 
 	Awaitable<DbResult> execute(std::string_view /*sql*/) override
 	{
-		co_return DbResult {.affectedRows = 1, .insertId = 1};
+		co_return DbResult::fromDml(1, 1);
 	}
 
 	Awaitable<DbResult> execute(std::string_view sql, std::span<const std::string> /*params*/) override

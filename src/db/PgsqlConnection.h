@@ -10,11 +10,13 @@
 	#include "DbConfig.h"
 	#include "DbConnection.h"
 	#include "DbConnectionPool.h"
+	#include "PgSocketAdapter.h"
 	#include "PgStmtCache.h"
 	#include "core/Coroutine.h"
 	#include <libpq-fe.h>
 	#include <chrono>
 	#include <memory>
+	#include <optional>
 	#include <span>
 	#include <string>
 	#include <string_view>
@@ -90,6 +92,8 @@ namespace hical::db
 
 		boost::asio::io_context& ioCtx_;
 		PGconn* conn_ = nullptr;
+		/// libpq socket 到 asio 协程的桥接器，连接建立后 emplace，随连接生命周期存在
+		std::optional<PgSocketAdapter> socketAdapter_;
 		PgStmtCache stmtCache_;
 		/// 预处理语句名字计数器（用于生成连接内唯一的 stmt_<n>）
 		uint64_t stmtCounter_ = 0;

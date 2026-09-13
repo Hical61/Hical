@@ -304,54 +304,53 @@ namespace hical::db
 		}
 
 		auto rowsView = boostResults.rows();
-		result.rows.reserve(rowsView.size());
+		size_t rowCount = rowsView.size();
 		size_t colCount = result.columns.size();
+		result.reserveCells(static_cast<size_t>(rowCount) * colCount);
 
 		for (auto row : rowsView)
 		{
-			std::vector<std::string> dbRow;
-			dbRow.reserve(colCount);
 			for (size_t i = 0; i < colCount && i < row.size(); ++i)
 			{
 				const auto& field = row.at(i);
 
 				if (field.is_null())
 				{
-					dbRow.emplace_back();
+					result.appendCell("");
 				}
 				else if (field.is_int64())
 				{
 					char buf[24];
 					auto [ptr, ec] = std::to_chars(buf, buf + sizeof(buf), field.as_int64());
-					dbRow.emplace_back(buf, ptr);
+					result.appendCell(std::string(buf, ptr));
 				}
 				else if (field.is_uint64())
 				{
 					char buf[24];
 					auto [ptr, ec] = std::to_chars(buf, buf + sizeof(buf), field.as_uint64());
-					dbRow.emplace_back(buf, ptr);
+					result.appendCell(std::string(buf, ptr));
 				}
 				else if (field.is_double())
 				{
 					char buf[32];
 					auto [ptr, ec] = std::to_chars(buf, buf + sizeof(buf), field.as_double());
-					dbRow.emplace_back(buf, ptr);
+					result.appendCell(std::string(buf, ptr));
 				}
 				else if (field.is_string())
 				{
-					dbRow.emplace_back(field.as_string());
+					result.appendCell(field.as_string());
 				}
 				else if (field.is_blob())
 				{
 					auto blob = field.as_blob();
-					dbRow.emplace_back(reinterpret_cast<const char*>(blob.data()), blob.size());
+					result.appendCell(std::string(reinterpret_cast<const char*>(blob.data()), blob.size()));
 				}
 				else if (field.is_date())
 				{
 					auto d = field.as_date();
 					char buf[16];
 					std::snprintf(buf, sizeof(buf), "%04u-%02u-%02u", d.year(), d.month(), d.day());
-					dbRow.emplace_back(buf);
+					result.appendCell(buf);
 				}
 				else if (field.is_datetime())
 				{
@@ -366,7 +365,7 @@ namespace hical::db
 								  dt.hour(),
 								  dt.minute(),
 								  dt.second());
-					dbRow.emplace_back(buf);
+					result.appendCell(buf);
 				}
 				else if (field.is_time())
 				{
@@ -389,15 +388,15 @@ namespace hical::db
 					{
 						std::snprintf(buf, sizeof(buf), "%02lld:%02lld:%02lld", hours, minutes, secs);
 					}
-					dbRow.emplace_back(buf);
+					result.appendCell(buf);
 				}
 				else
 				{
-					dbRow.emplace_back();
+					result.appendCell("");
 				}
 			}
-			result.rows.push_back(std::move(dbRow));
 		}
+		result.setShape(colCount, static_cast<size_t>(rowCount));
 
 		return result;
 	}

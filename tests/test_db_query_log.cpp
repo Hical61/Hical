@@ -30,28 +30,28 @@ public:
 	{
 		++queryCount_;
 		lastSql_ = std::string(sql);
-		co_return DbResult {.columns = {"id", "name"}, .rows = {{"1", "test"}}, .affectedRows = 0};
+		co_return DbResult::fromRows({"id", "name"}, {{"1", "test"}});
 	}
 
 	Awaitable<DbResult> query(std::string_view sql, std::span<const std::string> /*params*/) override
 	{
 		++queryCount_;
 		lastSql_ = std::string(sql);
-		co_return DbResult {.columns = {"id"}, .rows = {{"1"}}, .affectedRows = 0};
+		co_return DbResult::fromRows({"id"}, {{"1"}});
 	}
 
 	Awaitable<DbResult> execute(std::string_view sql) override
 	{
 		++executeCount_;
 		lastSql_ = std::string(sql);
-		co_return DbResult {.affectedRows = 1, .insertId = 42};
+		co_return DbResult::fromDml(1, 42);
 	}
 
 	Awaitable<DbResult> execute(std::string_view sql, std::span<const std::string> /*params*/) override
 	{
 		++executeCount_;
 		lastSql_ = std::string(sql);
-		co_return DbResult {.affectedRows = 3, .insertId = 100};
+		co_return DbResult::fromDml(3, 100);
 	}
 
 	Awaitable<void> beginTransaction() override

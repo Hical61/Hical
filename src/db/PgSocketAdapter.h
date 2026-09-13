@@ -10,6 +10,7 @@
 	#include "core/Coroutine.h"
 	#include <boost/asio.hpp>
 	#include <memory>
+	#include <optional>
 
 	#ifdef _WIN32
 		#include <boost/asio/windows/object_handle.hpp>
@@ -99,8 +100,8 @@ namespace hical::db
 			resetEvent();
 	#else
 			boost::system::error_code ec;
-			co_await descriptor_.async_wait(boost::asio::posix::stream_descriptor::wait_read,
-											boost::asio::redirect_error(boost::asio::use_awaitable, ec));
+			co_await descriptor_->async_wait(boost::asio::posix::stream_descriptor::wait_read,
+											 boost::asio::redirect_error(boost::asio::use_awaitable, ec));
 	#endif
 		}
 
@@ -124,8 +125,8 @@ namespace hical::db
 			resetEvent();
 	#else
 			boost::system::error_code ec;
-			co_await descriptor_.async_wait(boost::asio::posix::stream_descriptor::wait_write,
-											boost::asio::redirect_error(boost::asio::use_awaitable, ec));
+			co_await descriptor_->async_wait(boost::asio::posix::stream_descriptor::wait_write,
+											 boost::asio::redirect_error(boost::asio::use_awaitable, ec));
 	#endif
 		}
 
@@ -208,17 +209,21 @@ namespace hical::db
 
 		void platformSetup()
 		{
-			descriptor_ = Descriptor(ioCtx_, sock_);
+			descriptor_.emplace(ioCtx_, sock_);
 		}
 
 		void platformTeardown()
 		{
-			descriptor_.cancel();
+			if (!descriptor_)
+			{
+				return;
+			}
+			descriptor_->cancel();
 			// 归还 fd 所有权：release 后 asio 不再 close fd（fd 归 PGconn）
-			descriptor_.release();
+			descriptor_->release();
 		}
 
-		Descriptor descriptor_;
+		std::optional<Descriptor> descriptor_;
 	#endif
 
 		boost::asio::io_context& ioCtx_;
