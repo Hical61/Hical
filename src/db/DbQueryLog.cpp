@@ -127,7 +127,7 @@ namespace hical::db
 
 			QueryLogEntry entry {.sql = std::move(sql),
 								 .duration = elapsed,
-								 .rowCount = result.rows.size(),
+								 .rowCount = result.size(),
 								 .affectedRows = result.affectedRows,
 								 .isParameterized = parameterized};
 

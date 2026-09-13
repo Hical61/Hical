@@ -6,8 +6,9 @@
 #ifdef HICAL_HAS_PGSQL
 
 	#include "PgsqlConnection.h"
-	#include "PgSocketAdapter.h"
 	#include <boost/asio/use_awaitable.hpp>
+	#include <charconv>
+	#include <cstring>
 	#include <stdexcept>
 	#include <string>
 
@@ -122,14 +123,13 @@ namespace hical::db
 				return 0;
 			}
 
+			// from_chars 天然带溢出检测（result_out_of_range），比手写 *10 累加更稳
 			uint64_t count = 0;
-			for (const char* p = tuples; *p != '\0'; ++p)
+			const char* end = tuples + std::strlen(tuples);
+			auto [ptr, ec] = std::from_chars(tuples, end, count);
+			if (ec != std::errc() || ptr != end)
 			{
-				if (*p < '0' || *p > '9')
-				{
-					return 0;
-				}
-				count = count * 10 + static_cast<uint64_t>(*p - '0');
+				return 0;
 			}
 			return count;
 		}
@@ -193,7 +193,8 @@ namespace hical::db
 		// 正常情况下走 READING/WRITING 分支交替向前，OK 时跳出。
 		try
 		{
-			PgSocketAdapter adapter(ioCtx, raw);
+			// 连接级 socket 桥接只建一次，随连接生命周期存在，之后每次查询复用
+			conn->socketAdapter_.emplace(ioCtx, raw);
 			for (;;)
 			{
 				PostgresPollingStatusType status = PQconnectPoll(raw);
@@ -211,10 +212,10 @@ namespace hical::db
 						co_return conn;
 					}
 					case PGRES_POLLING_READING:
-						co_await adapter.waitReadable();
+						co_await conn->socketAdapter_->waitReadable();
 						break;
 					case PGRES_POLLING_WRITING:
-						co_await adapter.waitWritable();
+						co_await conn->socketAdapter_->waitWritable();
 						break;
 					case PGRES_POLLING_FAILED:
 						throw std::runtime_error(std::string("connection failed: ") + PQerrorMessage(raw));
@@ -259,13 +260,11 @@ namespace hical::db
 			throw std::runtime_error(std::string("PQsendQuery failed: ") + PQerrorMessage(conn_));
 		}
 
-		PgSocketAdapter adapter(ioCtx_, conn_);
-
 		// 把发送缓冲区刷干：PQflush 返回 1 表示还有数据未发完，需等可写
 		int flushStatus;
 		while ((flushStatus = PQflush(conn_)) == 1)
 		{
-			co_await adapter.waitWritable();
+			co_await socketAdapter_->waitWritable();
 		}
 		if (flushStatus == -1)
 		{
@@ -283,7 +282,7 @@ namespace hical::db
 
 			if (PQisBusy(conn_))
 			{
-				co_await adapter.waitReadable();
+				co_await socketAdapter_->waitReadable();
 				continue;
 			}
 
@@ -399,13 +398,11 @@ namespace hical::db
 			throw std::runtime_error(std::string("PQsendPrepare failed: ") + PQerrorMessage(conn_));
 		}
 
-		PgSocketAdapter adapter(ioCtx_, conn_);
-
 		// 刷干发送缓冲区，等待可写直到发送完成
 		int flushStatus;
 		while ((flushStatus = PQflush(conn_)) == 1)
 		{
-			co_await adapter.waitWritable();
+			co_await socketAdapter_->waitWritable();
 		}
 		if (flushStatus == -1)
 		{
@@ -423,7 +420,7 @@ namespace hical::db
 
 			if (PQisBusy(conn_))
 			{
-				co_await adapter.waitReadable();
+				co_await socketAdapter_->waitReadable();
 				continue;
 			}
 
@@ -475,13 +472,11 @@ namespace hical::db
 			throw std::runtime_error(std::string("PQsendQueryPrepared failed: ") + PQerrorMessage(conn_));
 		}
 
-		PgSocketAdapter adapter(ioCtx_, conn_);
-
 		// 刷干发送缓冲区
 		int flushStatus;
 		while ((flushStatus = PQflush(conn_)) == 1)
 		{
-			co_await adapter.waitWritable();
+			co_await socketAdapter_->waitWritable();
 		}
 		if (flushStatus == -1)
 		{
@@ -499,7 +494,7 @@ namespace hical::db
 
 			if (PQisBusy(conn_))
 			{
-				co_await adapter.waitReadable();
+				co_await socketAdapter_->waitReadable();
 				continue;
 			}
 
@@ -658,17 +653,8 @@ namespace hical::db
 		{
 			const char* first = PQgetvalue(result, 0, 0);
 			uint64_t parsed = 0;
-			bool valid = first[0] != '\0';
-			for (const char* p = first; valid && *p != '\0'; ++p)
-			{
-				if (*p < '0' || *p > '9')
-				{
-					valid = false;
-					break;
-				}
-				parsed = parsed * 10 + static_cast<uint64_t>(*p - '0');
-			}
-			if (valid)
+			auto [ptr, ec] = std::from_chars(first, first + std::strlen(first), parsed);
+			if (ec == std::errc() && ptr == first + std::strlen(first))
 			{
 				dbResult.insertId = parsed;
 			}
@@ -683,26 +669,25 @@ namespace hical::db
 		}
 
 		// 行数据（libpq 已格式化为文本），NULL 渲染为空串
-		dbResult.rows.reserve(static_cast<size_t>(nrows));
+		// 扁平铺入 cells_，一次 reserve 消掉逐行 vector 的堆分配
+		dbResult.reserveCells(static_cast<size_t>(nrows) * static_cast<size_t>(nfields));
 		for (int row = 0; row < nrows; ++row)
 		{
-			std::vector<std::string> dbRow;
-			dbRow.reserve(static_cast<size_t>(nfields));
 			for (int col = 0; col < nfields; ++col)
 			{
 				if (PQgetisnull(result, row, col))
 				{
-					dbRow.emplace_back();
+					dbResult.appendCell("");
 				}
 				else
 				{
 					const char* value = PQgetvalue(result, row, col);
 					int length = PQgetlength(result, row, col);
-					dbRow.emplace_back(value, static_cast<size_t>(length));
+					dbResult.appendCell(std::string(value, static_cast<size_t>(length)));
 				}
 			}
-			dbResult.rows.push_back(std::move(dbRow));
 		}
+		dbResult.setShape(static_cast<size_t>(nfields), static_cast<size_t>(nrows));
 
 		return dbResult;
 	}

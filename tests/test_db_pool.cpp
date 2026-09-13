@@ -23,7 +23,7 @@ public:
 	Awaitable<DbResult> query(std::string_view /*sql*/) override
 	{
 		++queryCount_;
-		co_return DbResult {.columns = {"id", "name"}, .rows = {{"1", "test"}}, .affectedRows = 0};
+		co_return DbResult::fromRows({"id", "name"}, {{"1", "test"}});
 	}
 
 	Awaitable<DbResult> query(std::string_view sql, std::span<const std::string> /*params*/) override
@@ -34,7 +34,7 @@ public:
 	Awaitable<DbResult> execute(std::string_view /*sql*/) override
 	{
 		++executeCount_;
-		co_return DbResult {.affectedRows = 1, .insertId = 42};
+		co_return DbResult::fromDml(1, 42);
 	}
 
 	Awaitable<DbResult> execute(std::string_view sql, std::span<const std::string> /*params*/) override
@@ -196,9 +196,7 @@ TEST(DbResultTest, EmptyResult)
 
 TEST(DbResultTest, WithRows)
 {
-	DbResult result;
-	result.columns = {"id", "name"};
-	result.rows = {{"1", "Alice"}, {"2", "Bob"}};
+	DbResult result = DbResult::fromRows({"id", "name"}, {{"1", "Alice"}, {"2", "Bob"}});
 	EXPECT_FALSE(result.empty());
 	EXPECT_EQ(result.size(), 2);
 	auto idxName = result.columnIndex("name");

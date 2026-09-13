@@ -349,8 +349,9 @@ int main()
 								auto conn = db::getDbConnection(req);
 								auto result = co_await conn->query("SELECT id, name, email, created_at FROM users", {});
 								boost::json::array users;
-								for (const auto& row : result.rows)
+								for (size_t i = 0; i < result.size(); ++i)
 								{
+									const auto& row = result[i];
 									users.push_back(boost::json::object {
 										{"id", row[0]},
 										{"name", row[1]},
@@ -370,13 +371,13 @@ int main()
 								auto result =
 									co_await conn->query("SELECT id, name, email, created_at FROM users WHERE id = ?",
 														 params);
-								if (result.rows.empty())
+								if (result.empty())
 								{
 									auto res = HttpResponse::json({{"error", "User not found"}});
 									res.setStatus(HttpStatusCode::hNotFound);
 									co_return res;
 								}
-								const auto& row = result.rows[0];
+								const auto& row = result[0];
 								co_return HttpResponse::json(boost::json::object {
 									{"id", row[0]},
 									{"name", row[1]},
