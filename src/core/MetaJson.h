@@ -25,6 +25,7 @@
 // CPP26 反射路线用到的头文件
 #if HICAL_HAS_REFLECTION
 #include "MetaAnno.h"
+#include "MetaSchema.h"
 #include "Utils/CollectMember.hpp"
 #endif
 
@@ -550,60 +551,54 @@ namespace hical::meta
 	 * @brief 编译期生成 JSON Schema（C++26 反射）
 	 * 根据结构体成员类型和属性注解自动生成符合 JSON Schema 规范的描述。
 	 */
-	template <typename T>
+	template <
+		typename ClassType,
+		CollectMember::MemberInfoGatherer auto MembersOfFunc = CollectMember::collect_nonstatic_member_infos,
+		M::access_context Ctx = M::access_context::unprivileged()
+	>
 	boost::json::object jsonSchema()
 	{
-		boost::json::object schema;
+		namespace json = boost::json;
+		constexpr M::info classTypeInfo = M::remove_cvref(^^ClassType);
+
+		json::object schema;
 		schema["type"] = "object";
-		boost::json::object properties;
-		boost::json::array requiredFields;
+		schema["format"] = M::display_string_of(classTypeInfo);
+		json::object properties;
+		json::array requiredFields;
 
-		template for (constexpr auto member :
-					  std::meta::nonstatic_data_members_of(^^T, std::meta::access_context::unprivileged()))
-		{
-			if constexpr (!detail::isJsonIgnored<member>())
-			{
-				constexpr auto key = detail::jsonKeyOf<member>();
-				using FT = typename[:std::meta::type_of(member):];
+		template for (constexpr auto memberInfo :
+			std::define_static_array(MembersOfFunc(classTypeInfo, Ctx))
+		) {
+			constexpr auto [ignoreMember, memberName] = anno::applyKeyAnnotations<memberInfo>();
+			if constexpr (ignoreMember) continue;
+			using MemberType = [:std::meta::type_of(memberInfo):];
 
-				boost::json::object prop;
-				if constexpr (std::is_same_v<FT, std::string>)
-				{
-					prop["type"] = "string";
-				}
-				else if constexpr (std::is_same_v<FT, bool>)
-				{
-					prop["type"] = "boolean";
-				}
-				else if constexpr (std::is_integral_v<FT>)
-				{
-					prop["type"] = "integer";
-				}
-				else if constexpr (std::is_floating_point_v<FT>)
-				{
-					prop["type"] = "number";
-				}
-				else if constexpr (IsVector<FT>::value)
-				{
-					prop["type"] = "array";
-				}
-				else if constexpr (HasJsonFields<FT>::value)
-				{
-					prop = jsonSchema<FT>();
-				}
-
-				properties[key] = prop;
-
-				if constexpr (detail::isJsonRequired<member>())
-				{
-					requiredFields.push_back(std::string(key));
-				}
+			json::object prop;
+			// 如果MetaSchema没有对应的偏特化，就递归调用jsonSchema函数
+			if constexpr (requires{ { schema::Schema<MemberType>{}(prop) } -> std::same_as<void>; }) {
+				schema::writeSchema<MemberType>(prop);
 			}
+			else if constexpr (M::is_class_type(classTypeInfo)) {
+				prop = jsonSchema<MemberType>();
+			}
+			else {
+				static_assert(false, std::string{ "No JSON Schema specialization for type: " } + M::display_string_of(classTypeInfo));
+			}
+
+			// 检查是否有nullable属性，且为true，则说明是可选的值，不添加到requiredFields
+			if (const json::value *it = prop.if_contains("nullable");
+				it != nullptr && it->is_bool() && it->get_bool() == true
+			) {}
+			else {
+				requiredFields.emplace_back(memberName);
+			}
+
+			properties[memberName] = std::move(prop);
 		}
 
 		schema["properties"] = properties;
-		if (!requiredFields.empty())
-		{
+		if (!requiredFields.empty()) {
 			schema["required"] = requiredFields;
 		}
 		return schema;
