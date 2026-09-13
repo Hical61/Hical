@@ -1,0 +1,87 @@
+//
+// Created by LaoZu on 2026/9/12.
+//
+#pragma once
+#include <boost/json.hpp>
+#include <concepts>
+#include <meta>
+
+namespace hical::schema {
+    namespace json = boost::json;
+
+    // 类模板，用于后面的偏特化处理
+    template <typename T>
+    struct Schema {};
+
+    // 通用函数，用于写入 JSON Schema
+    template<typename T>
+    void writeSchema(json::object& prop) {
+        Schema<T>::operator()(prop);
+    }
+
+    // 布尔类型
+    template <>
+    struct Schema<bool> {
+        static void operator()(json::object &prop) {
+            prop["type"] = "boolean";
+        }
+    };
+
+    // 整数类型
+    template <std::integral TInt>
+    struct Schema<TInt> {
+        static void operator()(json::object &prop) {
+            prop["type"] = "integer";
+            prop["format"] = M::display_string_of(^^TInt);
+        }
+    };
+
+    // 浮点数类型
+    template <std::floating_point TFloat>
+    struct Schema<TFloat> {
+        static void operator()(json::object &prop) {
+            prop["type"] = "number";
+            prop["format"] = M::display_string_of(^^TFloat);
+        }
+    };
+
+    // 可选类型
+    template <typename TOpt>
+    requires json::is_optional_like<TOpt>::value
+    struct Schema<TOpt> {
+        static void operator()(json::object &prop) {
+            using ValueType = TOpt::value_type;
+
+            writeSchema<ValueType>(prop);
+
+            prop["nullable"] = true;
+        }
+    };
+
+    // 字符串类型
+    template <typename TStr>
+    requires json::is_string_like<TStr>::value
+    struct Schema<TStr> {
+        static void operator()(json::object &prop) {
+            prop["type"] = "string";
+            prop["format"] = M::display_string_of(^^TStr);
+        }
+    };
+
+    // 数组类型
+    template <typename TArr>
+    requires json::is_sequence_like<TArr>::value
+        and (not json::is_string_like<TArr>::value)     // 除了 const char* 不是数组类型
+        and (not json::is_optional_like<TArr>::value)   // cpp26 的 std::optional 提供了 begin() 和 end() 方法，所以被认为是数组类型
+    struct Schema<TArr> {
+        static void operator()(json::object &prop) {
+            using ValueType = TArr::value_type;
+
+            json::object items;
+            writeSchema<ValueType>(items);
+
+            prop["type"] = "array";
+            prop["items"] = std::move(items);
+        }
+    };
+}
