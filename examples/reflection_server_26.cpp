@@ -4,6 +4,8 @@
 #include <boost/json.hpp>
 #include <chrono>
 #include <iostream>
+#include <print>
+#include <ranges>
 #include <spanstream>
 #include <sstream>
 
@@ -13,6 +15,31 @@
 namespace chrono = std::chrono;
 namespace json = boost::json;
 namespace M = std::meta;
+namespace R = std::ranges;
+namespace V = std::views;
+
+// 自定义输出格式
+template <typename T>
+std::ostream &operator<<(std::ostream &os, std::vector<T> const& vec) {
+    os << '[';
+    for (auto const& item : vec) {
+        os << item << ',';
+    }
+    os << ']';
+    return os;
+}
+template <typename T>
+std::ostream &operator<<(std::ostream &os, std::optional<T> const& opt) {
+    if (opt.has_value()) {
+        os << opt.value();
+    } else {
+        os << "null";
+    }
+    return os;
+}
+//-----------------------------------------自定义输出格式结束-----------------------------------------------------
+
+
 
 // 示例用户自定义的注解处理函数
 namespace user_define {
@@ -65,14 +92,17 @@ namespace boost::json {
     }
 }
 
-// 现在我希望对 chrono::system_clock::time_point 类型的值进行 ISO 8601 格式化
-// 而不是默认的字符串格式
+// 现在我希望对 chrono::system_clock::time_point 类型的值进行 ISO 8601 格式化处理，而不是默认的字符串格式,以及 JSON Schema 文档生成处理
 struct AsIso8601 {
     static auto applyAnnotationSerialize(const chrono::system_clock::time_point tp, std::optional<json::value> &jv_opt) {
         jv_opt = json::value_from(tp, AsIso8601{});
     }
     static void applyAnnotationDeserialize(json::value const& v, std::optional<chrono::system_clock::time_point> &tp_opt) {
         tp_opt = json::value_to<chrono::system_clock::time_point>(v, AsIso8601{});
+    }
+    static void applyAnnotationSchema(json::object &prop, std::type_identity<chrono::system_clock::time_point> /*unused*/) {
+        prop["format"] = "date-time ISO8601";
+        prop["type"] = "string";
     }
 }constexpr as_iso8601{};
 
@@ -93,6 +123,14 @@ namespace boost::json {
         return secondTp;
     }
 }
+// 针对 chrono::system_clock::time_point 类型的值进行 JSON Schema 文档生成处理
+template <>
+struct hical::schema::Schema<chrono::system_clock::time_point> {
+    static void operator()(json::object &prop) {
+        prop["format"] = "date-time";
+        prop["type"] = "string";
+    }
+};
 //-----------------------------------------示例通用转换点结束---------------------------------------------------------------
 
 
@@ -124,24 +162,30 @@ namespace ResponseWrapper {
 struct [[=hical::json_snake_to_lowerCamel, =user_define::do_log]] Test {
     [[=hical::json_ignore]] bool boolean;
 
+    // 因为定义了 std::integral 概念，所以会进行处理
     [[=hical::json_rename("test"), =user_define::do_change]]
-    int id;                     // 因为定义了 std::integral 概念，所以会进行处理
+    int id;
+    // 因为定义了 std::integral 概念，所以会进行处理
     [[=user_define::do_change]]
-    long long long_id;          // 因为定义了 std::integral 概念，所以会进行处理
+    long long long_id;
+    // 因为 user_define::do_change 未定义 std::string 相关重载函数，不会进行处理
+    [[=user_define::do_change]] std::string test_name;
 
-    [[=user_define::do_change]] std::string test_name;      // 因为 user_define::do_change 未定义 std::string 相关重载函数，不会进行处理
-
+    // 示例 json_reset 重置原始 key 值
     [[=hical::json_ignore]]
     [[=hical::json_rename("do_raw")]]
     [[=hical::json_reset]]
-    char raw_char;              // 示例 json_reset 重置原始 key 值
+    char raw_char;
 
     // 原始输出时间
     chrono::system_clock::time_point raw_tp = chrono::system_clock::now();
     // 格式化 ISO8601 输出时间
     [[=as_iso8601]] chrono::system_clock::time_point iso_tp = chrono::system_clock::now();
+
+    // 示例可选字段和数组字段的嵌套处理
+    std::optional<std::vector<int>> opt_vec_int;
 }
-const test{ .boolean = true, .id = 19, .long_id = 1009, .test_name = "has_str_test", .raw_char = 'r' };
+const test{ .boolean = true, .id = 19, .long_id = 1009, .test_name = "has_str_test", .raw_char = 'r', .opt_vec_int = std::vector{1, 2, 3} };
 // 测试数据引用的响应体包装器
 const auto dataRef = [] {
     // 使用响应包装器
@@ -178,6 +222,10 @@ struct ApiHandler2 {
     static hical::HttpResponse patchTest(const hical::HttpRequest& /*unused*/) {
         return hical::HttpResponse::json(hical::meta::toJson(dataRef));
     }
+    [[=hical::get("/schema")]]
+    static hical::HttpResponse getSchema(const hical::HttpRequest& /*unused*/) {
+        return hical::HttpResponse::json(hical::meta::jsonSchema<Test>());
+    }
 };
 //api接口结束-----------------------------------------------------
 
@@ -191,6 +239,10 @@ int main () {
     template for (const auto& memberValue: testOut) {
         std::cout << memberValue << std::endl;
     }
+
+    // 打印json schema
+    std::cout << std::endl << "Schema:" << std::endl;
+    std::cout << hical::meta::jsonSchema<Test>() << std::endl << std::endl;
 
     // 服务器部分
     hical::HttpServer server(8080);
