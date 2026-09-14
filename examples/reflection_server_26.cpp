@@ -51,7 +51,7 @@ namespace user_define {
         }
         template <std::integral TInt>
         static void applyAnnotationDeserialize(json::value const& v, std::optional<TInt> &i_opt) {
-            i_opt = json::value_to<int>(v) -  10;
+            i_opt = json::value_to<TInt>(v) -  10;
         }
     }constexpr do_change{};
 
