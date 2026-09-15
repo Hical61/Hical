@@ -82,4 +82,23 @@ namespace hical::schema {
             prop["items"] = std::move(items);
         }
     };
+
+    // 枚举类型
+    // https://swagger.org.cn/docs/specification/v3_0/data-models/enums/
+    template <typename TEnum>
+    requires(std::meta::is_enum_type(^^TEnum))
+    struct Schema<TEnum> {
+        static void operator()(json::object &prop) {
+            json::array enumerators;
+            template for (constexpr auto enumerator :
+                std::define_static_array(M::enumerators_of(^^TEnum))
+            ) {
+                constexpr std::string_view name = M::identifier_of(enumerator);
+                enumerators.emplace_back(name);
+            }
+
+            prop["type"] = "string";
+            prop["enum"] = std::move(enumerators);
+        }
+    };
 }

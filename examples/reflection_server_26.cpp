@@ -226,6 +226,15 @@ struct ApiHandler2 {
     static hical::HttpResponse getSchema(const hical::HttpRequest& /*unused*/) {
         return hical::HttpResponse::json(hical::meta::jsonSchema<Test>());
     }
+    [[=hical::anno::route.get("/enum")]]
+    static hical::HttpResponse getEnum(const hical::HttpRequest&  /*unused*/) {
+        struct EnumTest {
+            int id;
+            hical::HttpMethod method;
+            hical::HttpStatusCode status;
+        };
+        return hical::HttpResponse::json(hical::meta::jsonSchema<EnumTest>());
+    }
 };
 //api接口结束-----------------------------------------------------
 
