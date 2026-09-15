@@ -318,15 +318,17 @@ namespace hical::meta
 
 // ============ C++26 路由注解函数 ==========
 #if HICAL_HAS_REFLECTION
-namespace hical {
-	consteval meta::RouteAnnotation route(const std::string_view path, const std::string_view methodStr) {
-		return { .path_ = std::define_static_string(path), .methodStr_ = std::define_static_string(methodStr) };
-	}
-	consteval meta::RouteAnnotation get(const std::string_view path) { return route(path, "GET"); }
-	consteval meta::RouteAnnotation post(const std::string_view path) { return route(path, "POST"); }
-	consteval meta::RouteAnnotation put(const std::string_view path) { return route(path, "PUT"); }
-	consteval meta::RouteAnnotation del(const std::string_view path) { return route(path, "DELETE"); }
-	consteval meta::RouteAnnotation patch(const std::string_view path) { return route(path, "PATCH"); }
+namespace hical::anno {
+	struct FnRoute {
+		static consteval meta::RouteAnnotation operator() (const std::string_view path, const std::string_view methodStr) {
+			return { .path_ = std::define_static_string(path), .methodStr_ = std::define_static_string(methodStr) };
+		}
+		static consteval meta::RouteAnnotation get(const std::string_view path) { return operator()(path, "GET"); }
+		static consteval meta::RouteAnnotation post(const std::string_view path) { return operator()(path, "POST"); }
+		static consteval meta::RouteAnnotation put(const std::string_view path) { return operator()(path, "PUT"); }
+		static consteval meta::RouteAnnotation del(const std::string_view path) { return operator()(path, "DELETE"); }
+		static consteval meta::RouteAnnotation patch(const std::string_view path) { return operator()(path, "PATCH"); }
+	}inline constexpr route;
 }
 #endif
 

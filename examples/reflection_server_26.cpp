@@ -201,7 +201,7 @@ const auto dataRef = [] {
 //api接口开始-----------------------------------------------------
 struct ApiHandler {
     // route api
-    [[=hical::route("/api/route", "POST")]]
+    [[=hical::anno::route("/api/route", "POST")]]
     static hical::HttpResponse postRoute(const hical::HttpRequest& /*unused*/) {
         return hical::HttpResponse::json(hical::meta::toJson(dataRef));
     }
@@ -213,16 +213,16 @@ struct ApiHandler {
 };
 struct ApiHandler2 {
     // 简化 get api
-    [[=hical::get("/simple/test")]]
+    [[=hical::anno::route.get("/simple/test")]]
     static hical::HttpResponse getTest(const hical::HttpRequest& /*unused*/) {
         return hical::HttpResponse::json(hical::meta::toJson(dataRef));
     }
     // 简化 patch api
-    [[=hical::patch("/simple/long/name/test")]]
+    [[=hical::anno::route.patch("/simple/long/name/test")]]
     static hical::HttpResponse patchTest(const hical::HttpRequest& /*unused*/) {
         return hical::HttpResponse::json(hical::meta::toJson(dataRef));
     }
-    [[=hical::get("/schema")]]
+    [[=hical::anno::route.get("/schema")]]
     static hical::HttpResponse getSchema(const hical::HttpRequest& /*unused*/) {
         return hical::HttpResponse::json(hical::meta::jsonSchema<Test>());
     }
