@@ -594,8 +594,8 @@ namespace hical::meta
 				}
 			}
 			// 否则，如果MetaSchema有对应的偏特化，就调用偏特化函数
-			else if constexpr (requires{ { schema::Schema<MemberType>::operator()(prop) } -> std::same_as<void>; }) {
-				schema::writeSchema<MemberType>(prop);
+			else if constexpr (requires{ { schema::kSchema<MemberType>(prop) } -> std::same_as<void>; }) {
+				schema::kSchema<MemberType>(prop);
 			}
 			// 否则，如果是类对象，继续递归调用jsonSchema函数
 			else if constexpr (M::is_class_type(classTypeInfo)) {

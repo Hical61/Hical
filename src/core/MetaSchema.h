@@ -13,11 +13,9 @@ namespace hical::schema {
     template <typename T>
     struct Schema {};
 
-    // 通用函数，用于写入 JSON Schema
-    template<typename T>
-    void writeSchema(json::object& prop) {
-        Schema<T>::operator()(prop);
-    }
+    // 快速模板变量
+    template <typename T>
+    inline constexpr Schema<T> kSchema;
 
     // 布尔类型
     template <>
@@ -52,7 +50,7 @@ namespace hical::schema {
         static void operator()(json::object &prop) {
             using ValueType = TOpt::value_type;
 
-            writeSchema<ValueType>(prop);
+            kSchema<ValueType>(prop);
 
             prop["nullable"] = true;
         }
@@ -78,7 +76,7 @@ namespace hical::schema {
             using ValueType = TArr::value_type;
 
             json::object items;
-            writeSchema<ValueType>(items);
+            kSchema<ValueType>(items);
 
             prop["type"] = "array";
             prop["items"] = std::move(items);
