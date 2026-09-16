@@ -235,6 +235,19 @@ struct ApiHandler2 {
         };
         return hical::HttpResponse::json(hical::meta::jsonSchema<EnumTest>());
     }
+    [[=hical::anno::route.get("/union")]]
+    static hical::HttpResponse getUnion(const hical::HttpRequest&  /*unused*/) {
+        struct UTest {
+            union UnionTest {
+                int id;
+                std::variant<
+                    std::string,
+                    std::vector<std::optional<int>>
+                > var;
+            }union_test;
+        };
+        return hical::HttpResponse::json(hical::meta::jsonSchema<UTest>());
+    }
 };
 //api接口结束-----------------------------------------------------
 

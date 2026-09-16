@@ -5,9 +5,12 @@
 #include <boost/json.hpp>
 #include <concepts>
 #include <meta>
+#include <ranges>
+#include <variant>
 
 namespace hical::schema {
     namespace json = boost::json;
+    namespace V = std::ranges::views;
 
     // 类模板，用于后面的偏特化处理
     template <typename T>
@@ -86,7 +89,7 @@ namespace hical::schema {
     // 枚举类型
     // https://swagger.org.cn/docs/specification/v3_0/data-models/enums/
     template <typename TEnum>
-    requires(std::meta::is_enum_type(^^TEnum))
+    requires (std::meta::is_enum_type(^^TEnum))
     struct Schema<TEnum> {
         static void operator()(json::object &prop) {
             json::array enumerators;
@@ -99,6 +102,41 @@ namespace hical::schema {
 
             prop["type"] = "string";
             prop["enum"] = std::move(enumerators);
+        }
+    };
+
+    // 联合体类型-类型安全的
+    // https://swagger.org.cn/docs/specification/v3_0/data-models/oneof-anyof-allof-not/
+    template <typename... VariantArgs>
+    struct Schema<std::variant<VariantArgs...>> {
+        static void operator()(json::object &prop) {
+            json::array items;
+            template for (constexpr int index : V::iota(std::size_t{}, sizeof...(VariantArgs))) {
+                json::object item;
+                kSchema<VariantArgs...[index]>(item);
+                items.push_back(std::move(item));
+            }
+
+            prop["oneOf"] = std::move(items);
+        }
+    };
+
+    // 联合体类型-类型不安全的，应当禁用
+    template <typename TUnion>
+    requires (M::is_union_type(^^TUnion))
+    struct Schema<TUnion> {
+        static void operator()(json::object &prop) {
+            constexpr auto ctx = M::access_context::unprivileged();
+            json::array items;
+            template for (constexpr M::info memberInfo :
+                std::define_static_array(M::nonstatic_data_members_of(^^TUnion, ctx))
+            ) {
+                json::object item;
+                kSchema<typename [:M::type_of(memberInfo):]>(item);
+                items.push_back(std::move(item));
+            }
+
+            prop["oneOf"] = std::move(items);
         }
     };
 }
