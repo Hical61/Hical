@@ -326,7 +326,7 @@ namespace hical::anno {
 		static consteval meta::RouteAnnotation get(const std::string_view path) { return operator()(path, "GET"); }
 		static consteval meta::RouteAnnotation post(const std::string_view path) { return operator()(path, "POST"); }
 		static consteval meta::RouteAnnotation put(const std::string_view path) { return operator()(path, "PUT"); }
-		static consteval meta::RouteAnnotation del(const std::string_view path) { return operator()(path, "DELETE"); }
+		static consteval meta::RouteAnnotation delete_(const std::string_view path) { return operator()(path, "DELETE"); }
 		static consteval meta::RouteAnnotation patch(const std::string_view path) { return operator()(path, "PATCH"); }
 	}inline constexpr route;
 }
