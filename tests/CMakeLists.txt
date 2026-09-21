@@ -100,9 +100,7 @@ endif()
 if(HICAL_WITH_DATABASE)
     hical_add_test(test_db_pool)          # 连接池（Mock 连接，不依赖真实 DB）
     hical_add_test(test_db_middleware)    # DB 中间件（Mock 连接池）
-    hical_add_test(test_stmt_cache)       # PreparedStatement LRU 缓存
     hical_add_test(test_db_query_log)     # 查询日志中间件
-    hical_add_test(test_mysql_integration) # MySQL 集成（无实例时自动 SKIP）
 
     # PostgreSQL 后端（可选，仅当 HICAL_WITH_PGSQL=ON）
     if(HICAL_WITH_PGSQL)
@@ -110,6 +108,12 @@ if(HICAL_WITH_DATABASE)
         hical_add_test(test_pgsql_socket)   # PgSocketAdapter 异步等待（不依赖真实 PG）
         hical_add_test(test_pgsql_unit)     # PgStmtCache LRU 缓存纯单元测试（不依赖真实 PG）
     endif()
+endif()
+
+# --- MySQL 后端（可选，仅当 HICAL_WITH_MYSQL=ON）---
+if(HICAL_WITH_MYSQL)
+    hical_add_test(test_stmt_cache)       # MySQL PreparedStatement LRU 缓存
+    hical_add_test(test_mysql_integration) # MySQL 集成（无实例时自动 SKIP）
 endif()
 
 # picohttpparser include 路径注入（TestHttpClient.h 直接引用 picohttpparser.h）

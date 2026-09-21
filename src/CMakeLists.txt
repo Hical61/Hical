@@ -148,14 +148,6 @@ if(HICAL_WITH_DATABASE)
     )
     target_compile_definitions(hical_core PUBLIC HICAL_HAS_DATABASE=1)
 
-    # MySQL 后端
-    target_sources(hical_core PRIVATE
-        db/MysqlConnection.cpp
-        db/StmtCache.cpp
-    )
-    # boost::mysql 的 client-side SQL formatting 依赖 boost::charconv
-    target_link_libraries(hical_core PUBLIC Boost::charconv)
-
     # PostgreSQL 后端（依赖 libpq）
     if(HICAL_WITH_PGSQL)
         target_sources(hical_core PRIVATE
@@ -170,6 +162,17 @@ if(HICAL_WITH_DATABASE)
             target_link_libraries(hical_core PUBLIC ${PGSQL_LIBRARY})
         endif()
     endif()
+endif()
+
+# MySQL 后端（独立 option，依赖 boost::mysql + boost::charconv 1.85+）。
+# MySQL 源文件沿用 HICAL_HAS_DATABASE 包裹，开启时根 CMakeLists 已联动 DATABASE=ON。
+if(HICAL_WITH_MYSQL)
+    target_sources(hical_core PRIVATE
+        db/MysqlConnection.cpp
+        db/StmtCache.cpp
+    )
+    # boost::mysql 的 client-side SQL formatting 依赖 boost::charconv
+    target_link_libraries(hical_core PUBLIC Boost::charconv)
 endif()
 
 # OpenAPI 自动生成（可选，默认开启，选项在根 CMakeLists.txt 中定义）
