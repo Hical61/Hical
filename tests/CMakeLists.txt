@@ -10,6 +10,7 @@ set(TESTS_NEEDING_PICOHTTPPARSER
     test_http_server
     test_websocket
     test_ws_advanced
+    test_ws_pipeline
     test_integration
     test_graceful_shutdown
     test_error_handler
@@ -47,6 +48,7 @@ hical_add_test(test_middleware)           # 中间件
 hical_add_test(test_http_server)          # HttpServer 集成
 hical_add_test(test_websocket)            # WebSocket
 hical_add_test(test_ws_advanced)          # WebSocket 高级功能（Binary/Close/Subprotocol/Context/Param/Hub/Heartbeat）
+hical_add_test(test_ws_pipeline)          # WebSocket 单 read 多帧 drain（16 帧一次写、逐条回显）
 hical_add_test(test_perfect_hash_router)  # PerfectHashRouter 正确性
 hical_add_test(test_concepts)             # Concepts 编译期验证
 hical_add_test(test_reflection)           # 反射层（MetaJson + MetaRoutes）

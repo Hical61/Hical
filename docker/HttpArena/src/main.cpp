@@ -10,13 +10,26 @@
 
 #include "core/GzipCompression.h"
 #include "core/HttpServer.h"
+#include "core/Log.h"
 #include "core/RouteGroup.h"
 #include "core/StaticFiles.h"
 #include "core/WebSocket.h"
+
+#ifdef HICAL_HAS_PGSQL
+	#include "db/DbConfig.h"
+	#include "db/DbConnectionPool.h"
+	#include "db/DbMiddleware.h"
+	#include "db/PgsqlConnection.h"
+#endif
+
 #include <boost/json.hpp>
+#include <algorithm>
+#include <chrono>
 #include <cstdlib>
 #include <fstream>
+#include <optional>
 #include <string>
+#include <string_view>
 #include <thread>
 #include <vector>
 
@@ -114,6 +127,148 @@ static int64_t parseBodyInt(const std::string& body)
 		return 0;
 	}
 }
+
+#ifdef HICAL_HAS_PGSQL
+
+// ── DATABASE_URL 五元组解析 ────────────────────────────────────────────────
+
+namespace
+{
+
+	// async-db 端点 query param 的 limit clamp 范围（只有 limit 会被限制，min/max 不 clamp）
+	constexpr int64_t kMinLimit = 1;
+	constexpr int64_t kMaxLimit = 50;
+	constexpr uint16_t kPgsqlDefaultPort = 5432;
+
+	// 连接池缺省上限与最小空闲连接数（DATABASE_MAX_CONN 未设置 / 解析失败时回退）
+	constexpr size_t kDefaultMaxConnections = 256;
+	constexpr int kConnectionFloor = 1;
+
+	/**
+	 * @brief 解析 postgres://user:pass@host:port/dbname 形式的连接串
+	 * 五元组缺省项：port 缺省 5432，user/password 可为空。
+	 * @param url 形如 postgres://[user[:pass]@]host[:port][/dbname] 的连接串
+	 * @param out 解析结果写入的 DbConfig
+	 * @return 解析成功返回 true
+	 */
+	bool parsePostgresUrl(const std::string& url, hical::db::DbConfig& out)
+	{
+		constexpr std::string_view kScheme = "postgres://";
+		if (url.rfind(kScheme, 0) != 0)
+		{
+			return false;
+		}
+
+		std::string_view rest(url.data() + kScheme.size(), url.size() - kScheme.size());
+
+		// 拆出路径部分（dbname），若有
+		std::string_view authority = rest;
+		const size_t slash = rest.find('/');
+		if (slash != std::string_view::npos)
+		{
+			authority = rest.substr(0, slash);
+			out.database = std::string(rest.substr(slash + 1));
+		}
+
+		// 拆 user[:pass]@ 前缀
+		std::string_view hostPort = authority;
+		const size_t at = authority.find('@');
+		if (at != std::string_view::npos)
+		{
+			std::string_view userInfo = authority.substr(0, at);
+			hostPort = authority.substr(at + 1);
+			const size_t colon = userInfo.find(':');
+			if (colon != std::string_view::npos)
+			{
+				out.user = std::string(userInfo.substr(0, colon));
+				out.password = std::string(userInfo.substr(colon + 1));
+			}
+			else
+			{
+				out.user = std::string(userInfo);
+			}
+		}
+
+		// 拆 host[:port]
+		const size_t colon = hostPort.find(':');
+		if (colon != std::string_view::npos)
+		{
+			out.host = std::string(hostPort.substr(0, colon));
+			const std::string portStr(hostPort.substr(colon + 1));
+			if (portStr.empty())
+			{
+				out.port = kPgsqlDefaultPort;
+			}
+			else
+			{
+				try
+				{
+					const long parsed = std::stol(portStr);
+					if (parsed < 0 || parsed > 65535)
+					{
+						return false;
+					}
+					out.port = static_cast<uint16_t>(parsed);
+				}
+				catch (...)
+				{
+					return false;
+				}
+			}
+		}
+		else if (!hostPort.empty())
+		{
+			out.host = std::string(hostPort);
+			out.port = kPgsqlDefaultPort;
+		}
+
+		return !out.host.empty();
+	}
+
+	// 解析 query param 为整数，缺失或解析失败时回退缺省值。不 clamp，min/max 走这里
+	// （官方校验会传 min=9999&max=9999 做空范围反作弊，clamp 会破坏这个语义）
+	int64_t parseIntParamNoClamp(const std::optional<std::string>& val, int64_t fallback)
+	{
+		if (val && !val->empty())
+		{
+			try
+			{
+				return std::stoll(*val);
+			}
+			catch (...)
+			{
+				return fallback;
+			}
+		}
+		return fallback;
+	}
+
+	// 解析 limit 并 clamp 到 [kMinLimit, kMaxLimit]，缺失或解析失败回退缺省值
+	int64_t parseLimitParam(const std::optional<std::string>& val, int64_t fallback)
+	{
+		return std::clamp(parseIntParamNoClamp(val, fallback), kMinLimit, kMaxLimit);
+	}
+
+	// 把 tags 列的 jsonb_out 输出（紧凑 JSON 数组串，如 `["fast","new"]`）解析成
+	// json::value。空串 / 非法 JSON 回退空数组，避免二次引号包裹成字符串嵌套。
+	boost::json::value parseTags(std::string_view raw)
+	{
+		if (raw.empty())
+		{
+			return boost::json::array();
+		}
+		boost::system::error_code ec;
+		auto parsed = boost::json::parse(raw, ec);
+		if (ec || !parsed.is_array())
+		{
+			return boost::json::array();
+		}
+		return parsed;
+	}
+
+} // namespace
+
+#endif // HICAL_HAS_PGSQL
 
 // ── 构建 JSON items 数组 ───────────────────────────────────────────────────
 
@@ -290,6 +445,222 @@ int main()
 						   }
 					   });
 
+#ifdef HICAL_HAS_PGSQL
+
+	// ── GET /async-db → 异步参数化查询（rating 聚合）─────────────────────
+	// 懒连接：minConnections 置 0，init() 不预连，首请求时由 acquire() 现场建连。
+	// DATABASE_URL 未设置时跳过 DB 接入，端点返回空结果占位。
+	const char* dbUrlEnv = std::getenv("DATABASE_URL");
+	if (dbUrlEnv && *dbUrlEnv)
+	{
+		hical::db::DbConfig dbConfig;
+		if (!parsePostgresUrl(dbUrlEnv, dbConfig))
+		{
+			HICAL_LOG_ERROR("Invalid DATABASE_URL, skipping async-db backend: {}", dbUrlEnv);
+		}
+		else
+		{
+			// maxConnections：DATABASE_MAX_CONN 环境变量，缺省 256
+			const char* maxConnEnv = std::getenv("DATABASE_MAX_CONN");
+			size_t maxConn = kDefaultMaxConnections;
+			if (maxConnEnv && *maxConnEnv)
+			{
+				try
+				{
+					maxConn = static_cast<size_t>(std::max(kConnectionFloor, std::stoi(maxConnEnv)));
+				}
+				catch (...)
+				{
+					maxConn = kDefaultMaxConnections;
+				}
+			}
+
+			dbConfig.minConnections = 0; // 懒连接：不在启动期建连，PG 未就绪也不阻塞启动
+			dbConfig.maxConnections = maxConn;
+			dbConfig.acquireTimeout = std::chrono::seconds(3); // PG 未就绪时快速失败，避免长等待
+
+			auto pool = std::make_shared<hical::db::DbConnectionPool>(server.ioContext(),
+																	  dbConfig,
+																	  hical::db::PgsqlConnection::makeFactory());
+
+			// 启动期 init：预创建 0 个连接，正常不会抛异常；万一抛了也 catch 住不 crash，
+			// 连接会推迟到请求到达时的 acquire() 现场建立（懒连接 + 隐式 retry）。
+			try
+			{
+				hical::coSpawn(server.ioContext(),
+							   [pool]() -> Awaitable<void>
+							   {
+								   try
+								   {
+									   co_await pool->init();
+								   }
+								   catch (const std::exception& e)
+								   {
+									   HICAL_LOG_WARN("DbConnectionPool init failed (PG not ready yet): {}", e.what());
+								   }
+							   });
+			}
+			catch (...)
+			{
+				// coSpawn 本身理论上不抛，但兜底，避免启动崩溃
+			}
+
+			// 用路由组把 DB 中间件只挂在 /async-db 上，避免影响其它端点的快速路径。
+			// 外层兜底中间件先注册（洋葱最外层）：DB 中间件 acquire 失败或查询抛异常时
+			// 统一吞掉，返回空结果，不让 PG 未就绪把请求打成 500 或挂起。
+			auto dbGroup = server.router().group("/async-db");
+			dbGroup.use(
+				[](HttpRequest& req, MiddlewareNext next) -> Awaitable<HttpResponse>
+				{
+					try
+					{
+						auto resp = co_await next(req);
+						co_return resp;
+					}
+					catch (const std::exception& e)
+					{
+						HICAL_LOG_WARN("async-db backend unavailable: {}", e.what());
+						HttpResponse res;
+						res.setStatus(HttpStatusCode::hOk);
+						res.native().headers.set("Content-Type", "application/json");
+						res.native().body = R"({"items":[],"count":0})";
+						co_return res;
+					}
+				});
+			dbGroup.use(hical::db::makeDbMiddleware(pool));
+
+			auto asyncDbHandler = [](const HttpRequest& req) -> Awaitable<HttpResponse>
+			{
+				// query param：min/max 缺省 10/50，只解析不 clamp；limit 缺省 50，clamp 到 [1, 50]
+				const int64_t min = parseIntParamNoClamp(req.queryParam("min"), 10);
+				const int64_t max = parseIntParamNoClamp(req.queryParam("max"), 50);
+				const int64_t limit = parseLimitParam(req.queryParam("limit"), 50);
+
+				json::array items;
+
+				try
+				{
+					auto conn = hical::db::getDbConnection(req);
+
+					// 官方协议：按价格区间过滤，限制条数，返回 items 表的 9 列原始字段
+					const std::string sql = "SELECT id, name, category, price, quantity, active, tags, "
+											"rating_score, rating_count FROM items "
+											"WHERE price BETWEEN $1 AND $2 LIMIT $3";
+					const std::vector<std::string> params = {std::to_string(min),
+															 std::to_string(max),
+															 std::to_string(limit)};
+
+					auto result = co_await conn->query(sql, params);
+
+					const size_t idIdx = result.columnIndex("id");
+					const size_t nameIdx = result.columnIndex("name");
+					const size_t categoryIdx = result.columnIndex("category");
+					const size_t priceIdx = result.columnIndex("price");
+					const size_t quantityIdx = result.columnIndex("quantity");
+					const size_t activeIdx = result.columnIndex("active");
+					const size_t tagsIdx = result.columnIndex("tags");
+					const size_t scoreIdx = result.columnIndex("rating_score");
+					const size_t countIdx = result.columnIndex("rating_count");
+
+					items.reserve(result.size());
+					for (size_t i = 0; i < result.size(); ++i)
+					{
+						auto row = result[i];
+
+						// PG 文本格式取值：数值列是数字字符串，用 stoll 转 int64
+						auto cellAsInt = [&row](size_t idx) -> int64_t
+						{
+							if (idx == hical::db::DbResult::npos)
+							{
+								return 0;
+							}
+							try
+							{
+								return std::stoll(row[idx]);
+							}
+							catch (...)
+							{
+								return 0;
+							}
+						};
+
+						auto cellAsStr = [&row](size_t idx) -> std::string
+						{
+							if (idx == hical::db::DbResult::npos)
+							{
+								return {};
+							}
+							return std::string(row[idx]);
+						};
+
+						// active BOOLEAN 文本格式是 "t"/"f"，转成 JSON 布尔
+						bool active = false;
+						if (activeIdx != hical::db::DbResult::npos)
+						{
+							active = (row[activeIdx] == "t" || row[activeIdx] == "true");
+						}
+
+						// tags JSONB 的 jsonb_out 输出是紧凑 JSON 数组串，直接 parse 成
+						// json::value，不二次引号包裹。列缺失时回退空数组。
+						std::string_view tagsRaw;
+						if (tagsIdx != hical::db::DbResult::npos)
+						{
+							tagsRaw = row[tagsIdx];
+						}
+
+						json::object item = {
+							{"id", cellAsInt(idIdx)},
+							{"name", cellAsStr(nameIdx)},
+							{"category", cellAsStr(categoryIdx)},
+							{"price", cellAsInt(priceIdx)},
+							{"quantity", cellAsInt(quantityIdx)},
+							{"active", active},
+							{"tags", parseTags(tagsRaw)},
+							{"rating", {{"score", cellAsInt(scoreIdx)}, {"count", cellAsInt(countIdx)}}},
+						};
+						items.push_back(std::move(item));
+					}
+				}
+				catch (const std::exception& e)
+				{
+					// PG 未就绪 / 查询失败：返回空结果，不 crash
+					HICAL_LOG_WARN("async-db query failed: {}", e.what());
+				}
+
+				// count 动态 = items 数组长度（== limit 当有足够行时），不是任何聚合和
+				const std::size_t itemCount = items.size();
+				json::object resp = {
+					{"items", std::move(items)},
+					{"count", itemCount},
+				};
+
+				HttpResponse res;
+				res.setStatus(HttpStatusCode::hOk);
+				res.native().headers.set("Content-Type", "application/json");
+				res.native().body = json::serialize(resp);
+				co_return res;
+			};
+
+			// 同时兼容 /async-db 与 /async-db/（带不带尾斜杠路由都能命中）
+			dbGroup.get("", asyncDbHandler);
+			dbGroup.get("/", asyncDbHandler);
+		}
+	}
+	else
+	{
+		// DATABASE_URL 未设置：注册一个空结果占位的 /async-db，让 benchmark 不因缺后端而 404
+		server.router().get("/async-db",
+							[](const HttpRequest&) -> HttpResponse
+							{
+								HttpResponse res;
+								res.setStatus(HttpStatusCode::hOk);
+								res.native().headers.set("Content-Type", "application/json");
+								res.native().body = R"({"items":[],"count":0})";
+								return res;
+							});
+	}
+
+#endif // HICAL_HAS_PGSQL
 
 	// ── benchmark 极致配置 ────────────────────────────────────────────────
 	server.setMaxConnections(65535);
