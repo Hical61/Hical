@@ -310,12 +310,131 @@ static json::array buildItems(int count, int64_t multiplier)
 	return items;
 }
 
+// ── CPU 核数检测 ───────────────────────────────────────────────────────────
+
+#if defined(__linux__)
+
+namespace
+{
+
+	// cgroup v2 与 v1 的 cpuset 文件路径。v2 用 cpuset.cpus.effective，
+	// v1 用 cpuset.cpus。容器里这两个文件反映的是被限制后的逻辑核集合，
+	// 而不是宿主机的全部核，正好用来对抗 oversubscribe。
+	constexpr std::string_view kCgroupV2Cpuset = "/sys/fs/cgroup/cpuset.cpus.effective";
+	constexpr std::string_view kCgroupV1Cpuset = "/sys/fs/cgroup/cpuset/cpuset.cpus";
+
+	/**
+	 * @brief 解析 cgroup cpuset 文件内容，统计可得逻辑核总数
+	 * 文件内容形如 "0-3,64-67\n"：逗号分隔若干段，每段是 a-b 区间或单个数字。
+	 * @param raw 文件读出的原始文本
+	 * @return 解析出的逻辑核数量，解析失败返回 0
+	 */
+	size_t parseCpuSet(std::string_view raw)
+	{
+		size_t total = 0;
+		size_t pos = 0;
+		while (pos <= raw.size())
+		{
+			const size_t comma = raw.find(',', pos);
+			const std::string_view seg = raw.substr(pos, comma == std::string_view::npos ? raw.size() - pos : comma - pos);
+			if (!seg.empty())
+			{
+				const size_t dash = seg.find('-');
+				try
+				{
+					if (dash == std::string_view::npos)
+					{
+						// 单个核，如 "5"，转数字失败（非法字符）回退 0
+						const long v = std::stol(std::string(seg));
+						if (v < 0)
+						{
+							return 0;
+						}
+						total += 1;
+					}
+					else
+					{
+						// 区间，如 "0-3"，两端都必须是合法数字且 a <= b
+						const long a = std::stol(std::string(seg.substr(0, dash)));
+						const long b = std::stol(std::string(seg.substr(dash + 1)));
+						if (a < 0 || b < a)
+						{
+							return 0;
+						}
+						total += static_cast<size_t>(b - a + 1);
+					}
+				}
+				catch (...)
+				{
+					return 0;
+				}
+			}
+			if (comma == std::string_view::npos)
+			{
+				break;
+			}
+			pos = comma + 1;
+		}
+		return total;
+	}
+
+	/**
+	 * @brief 从 cgroup cpuset 读取可得逻辑核数，失败返回 0
+	 * 先试 v2 再试 v1，任一成功且解析出 >0 即返回。
+	 * @return 解析出的逻辑核数，读取失败或解析为 0 时返回 0
+	 */
+	size_t cgroupCpuCount()
+	{
+		for (const std::string_view path : {kCgroupV2Cpuset, kCgroupV1Cpuset})
+		{
+			std::ifstream ifs(path.data());
+			if (!ifs)
+			{
+				continue;
+			}
+			std::string content;
+			std::getline(ifs, content);
+			if (content.empty())
+			{
+				continue;
+			}
+			const size_t count = parseCpuSet(content);
+			if (count > 0)
+			{
+				return count;
+			}
+		}
+		return 0;
+	}
+
+} // namespace
+
+#endif // defined(__linux__)
+
+/**
+ * @brief 探测工作线程数，优先 cgroup cpuset，非容器回退硬件并发数
+ * 容器里 hardware_concurrency() 返回宿主机核数，会 oversubscribe；cgroup cpuset
+ * 反映被限制后的核集合，才是真实可用的并行度。
+ * @return 逻辑核数，始终 >= 1
+ */
+static size_t detectCpuCount()
+{
+#if defined(__linux__)
+	const size_t cgroupCount = cgroupCpuCount();
+	if (cgroupCount > 0)
+	{
+		return cgroupCount;
+	}
+#endif
+	return std::thread::hardware_concurrency();
+}
+
 // ── main ────────────────────────────────────────────────────────────────────
 
 int main()
 {
 	const char* threadEnv = std::getenv("HICAL_THREADS");
-	size_t threads = threadEnv ? static_cast<size_t>(std::atoi(threadEnv)) : std::thread::hardware_concurrency();
+	size_t threads = threadEnv ? static_cast<size_t>(std::atoi(threadEnv)) : detectCpuCount();
 	if (threads == 0)
 	{
 		threads = 1;
