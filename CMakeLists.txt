@@ -23,14 +23,24 @@ option(HICAL_WITH_DATABASE "Enable database middleware (requires Boost.MySQL)" O
 # PostgreSQL 后端（基于 libpq，需要 HICAL_WITH_DATABASE 一并开启）
 option(HICAL_WITH_PGSQL "Enable PostgreSQL backend (requires libpq)" OFF)
 
-# HttpArena 压测服务器（依赖 DB + PGSQL，构建时自动联动开启对应 option）
+# HttpArena 压测服务器（含 /async-db，依赖 PGSQL；libpq 缺失时自动降级为纯 HTTP）
 option(HICAL_BUILD_HTTPARENA "Build HttpArena benchmark server" OFF)
 
-# HttpArena 压测服务器内置 /async-db handler，依赖 DB 连接池 + PGSQL 后端。
-# 构建该服务器时自动联动开启 DB/PGSQL，不影响其它场景默认 OFF 的预期
+# HttpArena 内置 /async-db handler，依赖 DB 连接池 + PGSQL 后端（libpq）。联动开启
+# 前先软探测 libpq 是否就位：找不到就退回纯 HTTP 编译（/async-db 走空结果兜底，不
+# 报错）。这样 wrk-smoke 这类轻量冒烟无需预装 libpq-dev 也能跑通。
 if(HICAL_BUILD_HTTPARENA)
-    set(HICAL_WITH_DATABASE ON)
-    set(HICAL_WITH_PGSQL ON)
+    # 软探测 libpq（wrk-smoke 没装 libpq-dev，找不到就不联动 DB/PGSQL）
+    find_package(PostgreSQL QUIET)
+    if(PostgreSQL_FOUND)
+        set(HICAL_WITH_DATABASE ON)
+        set(HICAL_WITH_PGSQL ON)
+        message(STATUS "HttpArena: libpq 就位，联动开启 DB/PGSQL（/async-db 可用）")
+    else()
+        set(HICAL_WITH_DATABASE OFF)
+        set(HICAL_WITH_PGSQL OFF)
+        message(WARNING "HttpArena: 未找到 libpq，退回纯 HTTP 编译（/async-db 置空占位）")
+    endif()
 endif()
 
 # OpenAPI 自动生成（无额外依赖，复用 Boost.JSON）

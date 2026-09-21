@@ -810,9 +810,9 @@ int main()
             }
 
             co_return HttpResponse::json({
-                {"id",    rows[0]["id"]},
-                {"name",  rows[0]["name"]},
-                {"email", rows[0]["email"]}
+                {"id",    rows[0][0]},
+                {"name",  rows[0][1]},
+                {"email", rows[0][2]}
             });
         });
 

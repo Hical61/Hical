@@ -5,17 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.7.0] - 2026-09-21
 
 ### Added
 - **HttpRequest 获取对端地址**：`HttpRequest::peerAddr()` 返回客户端对端 `InetAddress`（`toIp()`/`toIpPort()`/`port()` 自取），`InetAddress` 新增 `isValid()` 判断地址有效性。连接层 `handleSession` 在连接建立时取一次 `remote_endpoint()` 注入到本连接所有请求，handler、中间件、WS/SSE 握手链路都能拿到真实对端地址（[#16](https://github.com/Hical61/Hical/issues/16)）
 - **PostgreSQL 后端（libpq）**：新增 `PgsqlConnection` + `PgStmtCache` + `PgSocketAdapter`，用 libpq 的 `PQexecPrepared` 做服务端预编译参数化查询，接入 `DbConnectionPool` 走同一套协程连接池/事务/慢查询日志体系。`backend()` 返回 `"pgsql"`，构建用 `-DHICAL_WITH_DATABASE=ON -DHICAL_WITH_PGSQL=ON`。与 MySQL 三处语义差异需注意：占位符用 `$1/$2`（不是 `?`）、自增主键必须 `INSERT ... RETURNING id` 才拿得到 `insertId`（PG 无 `last_insert_id()`）、`DbConfig::charset` 字段对 PG 无意义。配套示例 `examples/pgsql_example.cpp`（[#5](https://github.com/Hical61/Hical/issues/5)）
+- **HttpArena bench 服务器接入 PostgreSQL**：`docker/HttpArena/src/main.cpp` 补上 `/async-db` 异步查询，走 `DbConnectionPool` 连接池，`DATABASE_URL` 五元组解析、懒连接，PG 未就绪时返回空结果不 crash。查询对齐 HttpArena 官方 async-db 协议：查 `items` 表按 `price` 区间过滤，响应补全 `id/name/category/price/quantity/active/tags` 字段，`count` 返回条数，`min/max` 不 clamp。`CMakeLists.txt` 新增 `HICAL_BUILD_HTTPARENA` 联动开启 DB/PGSQL 编译，`Dockerfile` 补装 libpq
+- **HttpArena bench 服务器 /delay 异步端点**：新增 `GET /delay/{ms}`，协程 `sleep` 等待不阻塞事件循环，对齐官方 async 测试（验证 32K 并发挂起的异步调度模型）
+- **HttpArena bench 服务器 WebSocket 多帧 drain 测试**：`tests/test_ws_pipeline.cpp` 一次 write 16 帧、逐条回读校验，覆盖「单 read 多帧 drain」正确性
 
 ### Fixed
 - **RateLimiter 默认限流 key 失效**：默认 key 提取之前读 `"hical.remote_addr"` 请求属性，但连接层从未注入该属性，导致所有请求共享一个桶（限流形同虚设）。改为优先取 `peerAddr()`、无效时回退 `X-Forwarded-For`、再兜底 `"global"`
 
 ### Changed
 - **移除 `kRemoteAddrKey` 常量**：`"hical.remote_addr"` 属性键随上一条修复退场。此前它只被 RateLimiter 默认 key 提取读取，从未有连接层写入，属于半成品接线；现在对端地址走 `peerAddr()` 一等接口，不再用魔法字符串属性传递
+- **DbResult 行数据扁平化（破坏性变更）**：`rows` 字段移除，行数据改为扁平存储 + `RowProxy` 代理。`result[i][j]` 下标写法保持不变（返回 `const std::string&`），但直接访问 `result.rows`（如 `for (row : result.rows)`）的代码要改成 `for (i : result.size()) result[i]`，用 `DbResult{.rows=...}` 聚合初始化的也要改成 `DbResult::fromRows(...)`。新增 `nfields()`、`fromRows()`、`fromDml()` 便捷接口
+- **HttpArena meta.json 补声明与框架定位**：`docker/HttpArena/meta.json` 的 `type` 从 `engine` 改为 `emerging`（自研框架定位，进入框架联赛），补 `completeness` 四维声明（routing/middleware/request/response 全 true）；`tests` 新增 `echo-ws-pipeline`、`echo-ws-limited`、`async`、`async-db`、`latency-500k-8cpu` 五个 profile
+
+### Performance
+- **PG 后端 socket 桥接复用**：`PgSocketAdapter` 从每个 query 函数里的临时对象提升为连接级成员，连接建立时 `emplace` 一次、后续查询复用，消除每次 SQL 都重建平台等待资源（Windows 的 WSACreateEvent + object_handle、POSIX 的 stream_descriptor）的开销
+- **DbResult 扁平化减少堆分配**：行数据从 `vector<vector<string>>` 改为扁平 `vector<string>` 存储，消除每行一个 vector 的堆分配，大结果集下少 N 次 malloc
+- **手写数字解析换 from_chars**：affectedRows 和 insertId 的逐字符解析换成 `std::from_chars`，顺带修了原 `count*10` 累加的溢出隐患
 
 ## [2.6.8] - 2026-08-09
 
@@ -492,7 +502,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Multipart Part 数量上限（DoS 防护）
 - Session ID 使用密码学安全的随机数生成
 
-[Unreleased]: https://github.com/Hical61/Hical/compare/v2.6.8...HEAD
+[Unreleased]: https://github.com/Hical61/Hical/compare/v2.7.0...HEAD
+[2.7.0]: https://github.com/Hical61/Hical/compare/v2.6.8...v2.7.0
 [2.6.8]: https://github.com/Hical61/Hical/compare/v2.6.7...v2.6.8
 [2.6.7]: https://github.com/Hical61/Hical/compare/v2.6.6...v2.6.7
 [2.6.6]: https://github.com/Hical61/Hical/compare/v2.6.5...v2.6.6

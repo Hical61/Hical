@@ -2026,14 +2026,18 @@ void registerLogAdmin(Router& router, const std::string& prefix = "/admin");
 
 **头文件：** `<hical/db/DbResult.h>`
 
-| 字段           | 类型                                    | 说明         |
-| -------------- | --------------------------------------- | ------------ |
-| `columns`      | `std::vector<std::string>`              | 列名         |
-| `rows`         | `std::vector<std::vector<std::string>>` | 结果行       |
-| `affectedRows` | `uint64_t`                              | DML 影响行数 |
-| `insertId`     | `uint64_t`                              | INSERT 主键  |
+| 字段           | 类型                       | 说明         |
+| -------------- | -------------------------- | ------------ |
+| `columns`      | `std::vector<std::string>` | 列名         |
+| `affectedRows` | `uint64_t`                 | DML 影响行数 |
+| `insertId`     | `uint64_t`                 | INSERT 主键  |
 
-方法：`empty()` / `size()` / `operator[]` / `columnIndex(name)`。
+方法：`empty()` / `size()` / `nfields()` / `operator[]` / `columnIndex(name)`。
+
+> **v2.7 变更**：行数据不再通过 `rows` 字段暴露，改为扁平存储 + `RowProxy` 代理。
+> `result[i][j]` 的下标写法保持不变（返回 `const std::string&`），但 `result.rows` 字段已移除，
+> `for (row : result.rows)` 需改为 `for (i : result.size()) result[i]`。
+> 构造结果集可用静态工厂 `DbResult::fromRows(columns, rows)` / `DbResult::fromDml(affectedRows, insertId)`。
 
 ---
 
@@ -2152,11 +2156,11 @@ PostgreSQL 后端（基于 libpq 原生 C API）。
 
 **构建要求：** `HICAL_WITH_PGSQL=ON`（会一并开启 `HICAL_WITH_DATABASE`），需系统安装 libpq（`libpq-dev` / MSYS2 `mingw-w64-x86_64-postgresql`）。
 
-| 方法                    | 返回值                                         | 说明                                                                 |
-| ----------------------- | ---------------------------------------------- | -------------------------------------------------------------------- |
-| `create(ioCtx, config)` | `Awaitable<std::shared_ptr<PgsqlConnection>>`  | 非阻塞建连（`PQconnectStart` + poll 状态机）                         |
-| `makeFactory()`         | `DbConnectionFactory`                          | 池工厂函数                                                           |
-| `backend()`             | `std::string_view`                            | 返回 `"pgsql"`                                                        |
+| 方法                    | 返回值                                        | 说明                                         |
+| ----------------------- | --------------------------------------------- | -------------------------------------------- |
+| `create(ioCtx, config)` | `Awaitable<std::shared_ptr<PgsqlConnection>>` | 非阻塞建连（`PQconnectStart` + poll 状态机） |
+| `makeFactory()`         | `DbConnectionFactory`                         | 池工厂函数                                   |
+| `backend()`             | `std::string_view`                            | 返回 `"pgsql"`                               |
 
 **与 MySQL 后端的三处语义差异（切换到 PG 时必读）：**
 
