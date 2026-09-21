@@ -371,6 +371,41 @@ int main()
 							return res;
 						});
 
+	// ── GET /delay/{ms} → 异步等待 ms 毫秒后回显数字（text/plain）─────────
+	// 官方 async 协议：用协程 sleep 等待，不阻塞事件循环线程，也不按请求开线程。
+	server.router().get("/delay/{ms}",
+						[](const HttpRequest& req) -> Awaitable<HttpResponse>
+						{
+							HttpResponse res;
+							int64_t ms = 0;
+							try
+							{
+								ms = std::stoll(req.param("ms"));
+							}
+							catch (...)
+							{
+								res.setStatus(HttpStatusCode::hBadRequest);
+								res.native().headers.set("Content-Type", "text/plain");
+								res.native().body = "";
+								co_return res;
+							}
+
+							if (ms < 0)
+							{
+								res.setStatus(HttpStatusCode::hBadRequest);
+								res.native().headers.set("Content-Type", "text/plain");
+								res.native().body = "";
+								co_return res;
+							}
+
+							co_await hical::sleep(std::chrono::milliseconds(ms));
+
+							res.setStatus(HttpStatusCode::hOk);
+							res.native().headers.set("Content-Type", "text/plain");
+							res.native().body = std::to_string(ms);
+							co_return res;
+						});
+
 	// ── GET /json/{count}?m=X → JSON 序列化（路由组挂 Gzip 用于 json-comp）───
 	{
 		auto gzip = makeGzipCompressionMiddleware();
