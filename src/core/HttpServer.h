@@ -189,8 +189,9 @@ namespace hical
 		// 协程式连接监听（每个 acceptor 独立运行）
 		Awaitable<void> acceptLoop(boost::asio::ip::tcp::acceptor& acceptor, IdleFd& idleFd);
 
-		// 协程式 HTTP 会话处理
-		Awaitable<void> handleSession(boost::asio::ip::tcp::socket socket);
+		// 协程式 HTTP 会话处理（模板化，支持 tcp::socket 和 ssl::stream<tcp::socket>）
+		template <typename SocketType>
+		Awaitable<void> handleSession(SocketType socket);
 
 		// 协程式 WebSocket 会话处理（headers 已从 readBuf 拷贝为 owned，调用前已 release readBuf）
 		Awaitable<void> handleWebSocket(boost::asio::ip::tcp::socket socket,

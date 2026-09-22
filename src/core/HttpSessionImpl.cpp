@@ -6,6 +6,7 @@
  */
 
 #include "HttpServer.h"
+#include "../asio/GenericConnection.h"
 #include "FixedBuffer.h"
 #include "InetAddress.h"
 #include "MemoryPool.h"
@@ -127,22 +128,36 @@ namespace hical
 
 		/// RAII TCP_CORK 守卫，让 writeFileResponse 的 head+首块合并成一个 TCP 段
 		/// Linux 用 TCP_CORK，macOS 用 TCP_NOPUSH，Windows 下啥也不干（应用层已经 scatter-gather 了）
+		template <typename SocketType>
 		struct TcpCorkGuard
 		{
-			tcp::socket& sock_;
+			SocketType& sock_;
 			bool corked_ {false};
 
-			explicit TcpCorkGuard(tcp::socket& s) : sock_(s)
+			/// 取底层 fd：ssl::stream 原生 handle 包在 OpenSSL BIO 里，得下一层才能拿到真 socket
+			auto fd()
+			{
+				if constexpr (hIsSslStream<SocketType>)
+				{
+					return sock_.next_layer().native_handle();
+				}
+				else
+				{
+					return sock_.native_handle();
+				}
+			}
+
+			explicit TcpCorkGuard(SocketType& s) : sock_(s)
 			{
 #if defined(__linux__)
 				int flag = 1;
-				if (::setsockopt(sock_.native_handle(), IPPROTO_TCP, TCP_CORK, &flag, sizeof(flag)) == 0)
+				if (::setsockopt(fd(), IPPROTO_TCP, TCP_CORK, &flag, sizeof(flag)) == 0)
 				{
 					corked_ = true;
 				}
 #elif defined(__APPLE__)
 				int flag = 1;
-				if (::setsockopt(sock_.native_handle(), IPPROTO_TCP, TCP_NOPUSH, &flag, sizeof(flag)) == 0)
+				if (::setsockopt(fd(), IPPROTO_TCP, TCP_NOPUSH, &flag, sizeof(flag)) == 0)
 				{
 					corked_ = true;
 				}
@@ -155,10 +170,10 @@ namespace hical
 				{
 #if defined(__linux__)
 					int flag = 0;
-					::setsockopt(sock_.native_handle(), IPPROTO_TCP, TCP_CORK, &flag, sizeof(flag));
+					::setsockopt(fd(), IPPROTO_TCP, TCP_CORK, &flag, sizeof(flag));
 #elif defined(__APPLE__)
 					int flag = 0;
-					::setsockopt(sock_.native_handle(), IPPROTO_TCP, TCP_NOPUSH, &flag, sizeof(flag));
+					::setsockopt(fd(), IPPROTO_TCP, TCP_NOPUSH, &flag, sizeof(flag));
 #endif
 				}
 			}
@@ -170,24 +185,36 @@ namespace hical
 		/// 乐观同步写辅助：socket 在非阻塞模式下先试一把 write_some，
 		/// 写完了直接返回 true（不挂协程、不进 reactor 完成队列），
 		/// would_block / partial / 异常都返回 false，调用方回退 async_write。
-		bool tryOptimisticWrite(tcp::socket& socket, const boost::asio::const_buffer& buf)
+		template <typename SocketType>
+		bool tryOptimisticWrite([[maybe_unused]] SocketType& socket,
+								[[maybe_unused]] const boost::asio::const_buffer& buf)
 		{
-			boost::system::error_code ec;
-			size_t written = socket.write_some(buf, ec);
-			// 完整写完且没出错——最佳情况，零完成队列开销
-			if (!ec && written == buf.size())
+			if constexpr (hIsSslStream<SocketType>)
 			{
-				return true;
+				// SSL 流不能走乐观同步写：ssl::stream 内部 BIO 状态机要求走 async_write，
+				// 直接底层 write_some 会绕过 OpenSSL 的记录层，数据都不加密。直接禁用。
+				return false;
 			}
-			// ec 为 would_block 说明内核发送缓冲区满了，或者只写了部分数据，
-			// 都交回 async_write 处理。
-			// 等 async_write 继续——虽然 async_write 会重写整个 buffer，但
-			// write_some 已写入的数据不会在线上重复，TCP 流式语义兜底。
-			return false;
+			else
+			{
+				boost::system::error_code ec;
+				size_t written = socket.write_some(buf, ec);
+				// 完整写完且没出错——最佳情况，零完成队列开销
+				if (!ec && written == buf.size())
+				{
+					return true;
+				}
+				// ec 为 would_block 说明内核发送缓冲区满了，或者只写了部分数据，
+				// 都交回 async_write 处理。
+				// 等 async_write 继续——虽然 async_write 会重写整个 buffer，但
+				// write_some 已写入的数据不会在线上重复，TCP 流式语义兜底。
+				return false;
+			}
 		}
 
 		/// 快速发送错误响应（栈缓冲区，零堆分配）
-		Awaitable<void> sendRawResponse(tcp::socket& socket,
+		template <typename SocketType>
+		Awaitable<void> sendRawResponse(SocketType& socket,
 										unsigned statusCode,
 										std::string_view reason,
 										std::string_view body)
@@ -222,7 +249,8 @@ namespace hical
 
 		/// 发送 HttpResponse 对象（内部辅助）
 		/// @param skipBody 为 true 时仅发送头部（HEAD 方法响应）
-		Awaitable<void> writeResponse(tcp::socket& socket, NativeResponse& nativeRes, bool skipBody = false)
+		template <typename SocketType>
+		Awaitable<void> writeResponse(SocketType& socket, NativeResponse& nativeRes, bool skipBody = false)
 		{
 			nativeRes.preparePayload();
 
@@ -314,7 +342,8 @@ namespace hical
 
 		/// writeResponse 带前缀版本——通用头部（Server/Connection/Date）已预拼好，
 		/// 直接 memcpy 进去，省掉 3 次 HeaderMap::insert + 序列化循环
-		Awaitable<void> writeResponse(tcp::socket& socket,
+		template <typename SocketType>
+		Awaitable<void> writeResponse(SocketType& socket,
 									  NativeResponse& nativeRes,
 									  const char* prefix,
 									  size_t prefixLen,
@@ -405,7 +434,8 @@ namespace hical
 		/// 发送文件体响应（先发头部，再异步分块读文件发送）
 		/// 用于 Range 请求等大文件场景，避免全量加载到内存。
 		/// prefix 非空时用预构建前缀序列化头部，nullptr 走原始路径。
-		Awaitable<void> writeFileResponse(tcp::socket& socket,
+		template <typename SocketType>
+		Awaitable<void> writeFileResponse(SocketType& socket,
 										  NativeResponse& nativeRes,
 										  const char* prefix = nullptr,
 										  size_t prefixLen = 0)
@@ -506,9 +536,34 @@ namespace hical
 			// TcpCorkGuard 析构时 uncork，内核把剩余积压数据一口气发出去
 		}
 
+		/// socket 析构守卫（handleSession 用），WS 升级时 transferred=true 就跳过
+		template <typename SocketType>
+		struct SocketGuard
+		{
+			SocketType& sock;
+			bool transferred {false};
+			bool cleanExit {false}; // 正常结束才 shutdown，对端早断了就别白调了
+
+			~SocketGuard()
+			{
+				if (!transferred && sock.lowest_layer().is_open())
+				{
+					boost::system::error_code ec;
+					if (cleanExit)
+					{
+						// ssl::stream 的 shutdown 会发 close_notify 握手（慢），对裸 socket 用法也不同；
+						// 统一走 lowest_layer() 拿底层 tcp::socket，shutdown/close 语义一致
+						sock.lowest_layer().shutdown(tcp::socket::shutdown_send, ec);
+					}
+					sock.lowest_layer().close(ec);
+				}
+			}
+		};
+
 	} // namespace
 
-	Awaitable<void> HttpServer::handleSession(tcp::socket socket)
+	template <typename SocketType>
+	Awaitable<void> HttpServer::handleSession(SocketType socket)
 	{
 		// 连接计数：+1 已在 acceptLoop accept 处占位完成（先占位再校验才能做硬上限，
 		// 不能在这里 fetch_add——本协程是 coSpawn 异步投递的，burst 建连时会严重滞后）。
@@ -530,40 +585,48 @@ namespace hical
 		} connCounter {activeConnections_, draining_, *this};
 
 		// socket 析构守卫，WS 升级时 transferred=true 就跳过
-		struct SocketGuard
+		SocketGuard<SocketType> guard {socket};
+
+		// SSL 流先握手：底层 socket 由 OpenSSL BIO 状态机管理，不能直接调 non_blocking
+		// 去碰 fd（那会破坏 OpenSSL 的非阻塞读写状态），握手失败直接 co_return，SocketGuard 负责关掉。
+		if constexpr (hIsSslStream<SocketType>)
 		{
-			tcp::socket& sock;
-			bool transferred {false};
-			bool cleanExit {false}; // 正常结束才 shutdown，对端早断了就别白调了
-
-			~SocketGuard()
+			boost::system::error_code handshakeEc;
+			co_await socket.async_handshake(boost::asio::ssl::stream_base::server,
+											boost::asio::redirect_error(boost::asio::use_awaitable, handshakeEc));
+			if (handshakeEc)
 			{
-				if (!transferred && sock.is_open())
-				{
-					boost::system::error_code ec;
-					if (cleanExit)
-					{
-						sock.shutdown(tcp::socket::shutdown_send, ec);
-					}
-					sock.close(ec);
-				}
+				co_return;
 			}
-		} guard {socket};
+		}
 
-		// 显式设为非阻塞——tryOptimisticWrite 中的 write_some 在阻塞 fd
-		// 上遇到 EAGAIN 会进 poll() 忙等、卡死 io 线程。Asio 异步操作
-		// 期间设置的 O_NONBLOCK 是实现细节，不能依赖它保持生效。
-		socket.non_blocking(true);
+		if constexpr (!hIsSslStream<SocketType>)
+		{
+			// 显式设为非阻塞——tryOptimisticWrite 中的 write_some 在阻塞 fd
+			// 上遇到 EAGAIN 会进 poll() 忙等、卡死 io 线程。Asio 异步操作
+			// 期间设置的 O_NONBLOCK 是实现细节，不能依赖它保持生效。
+			socket.non_blocking(true);
+		}
 
 		// 对端地址是连接级信息，取一次供本连接所有请求复用。
 		// socket 刚 accept 必然已连接，getpeername() 不会失败，与 TcpServer::acceptLoop 同款写法。
-		auto remoteEp = socket.remote_endpoint();
+		// ssl::stream 没有 remote_endpoint，走 lowest_layer() 拿底层 tcp::socket。
+		auto remoteEp = socket.lowest_layer().remote_endpoint();
 		InetAddress peerAddr(remoteEp.address().to_string(), remoteEp.port());
 
 		// entry 在协程栈上，Guard 析构时自动注销
 		// 声明在 SocketGuard 后面 → 先析构（先 unregister 再关 socket）
 		IdleScanner::Entry idleEntry;
-		idleEntry.socket = &socket;
+		// SSL 流要存 next_layer() 的底层 tcp::socket*（Entry::socket 就是这个类型），
+		// 关闭底层 socket 就能让挂起的 SSL 操作报错退出，不用发 close_notify。
+		if constexpr (hIsSslStream<SocketType>)
+		{
+			idleEntry.socket = &socket.next_layer();
+		}
+		else
+		{
+			idleEntry.socket = &socket;
+		}
 		idleEntry.touch();
 
 		IdleScanner::Guard idleGuard(currentThreadIdleScanner(), idleEntry);
@@ -1026,131 +1089,140 @@ namespace hical
 				req.setPeerAddr(peerAddr);
 
 				// 检查 WebSocket 升级请求
-				if (req.native().isUpgrade())
+				// SSL 下 WS/SseSession 按值收 tcp::socket，无法接收 ssl::stream，
+				// 编译期排除掉，Upgrade 请求自然落到后面 404 的普通 HTTP 分发路径。
+				if constexpr (!hIsSslStream<SocketType>)
 				{
-					auto reqPath = req.path();
-
-					auto wsMatch = router_.findWsRoute(reqPath);
-					if (wsMatch.route)
+					if (req.native().isUpgrade())
 					{
-						const auto& wsRoute = *wsMatch.route;
+						auto reqPath = req.path();
 
-						// 注入 WebSocket 参数路由捕获的参数
-						for (const auto& [name, value] : wsMatch.params)
+						auto wsMatch = router_.findWsRoute(reqPath);
+						if (wsMatch.route)
 						{
-							req.setParam(name, value);
-						}
+							const auto& wsRoute = *wsMatch.route;
 
-						// Origin 白名单校验（CSWSH 防护）
-						if (!wsRoute.allowedOrigins.empty())
-						{
-							// 透明哈希：string_view 直接查找，零临时 string 堆分配
-							auto origin = req.header("Origin");
-							if (wsRoute.allowedOrigins.find(origin) == wsRoute.allowedOrigins.end())
+							// 注入 WebSocket 参数路由捕获的参数
+							for (const auto& [name, value] : wsMatch.params)
 							{
-								HttpResponse forbiddenRes;
-								forbiddenRes.setStatus(HttpStatusCode::hForbidden);
-								forbiddenRes.setBody("403 Forbidden: Origin not allowed", "text/plain");
-								auto& nativeRes = forbiddenRes.native();
+								req.setParam(name, value);
+							}
+
+							// Origin 白名单校验（CSWSH 防护）
+							if (!wsRoute.allowedOrigins.empty())
+							{
+								// 透明哈希：string_view 直接查找，零临时 string 堆分配
+								auto origin = req.header("Origin");
+								if (wsRoute.allowedOrigins.find(origin) == wsRoute.allowedOrigins.end())
+								{
+									HttpResponse forbiddenRes;
+									forbiddenRes.setStatus(HttpStatusCode::hForbidden);
+									forbiddenRes.setBody("403 Forbidden: Origin not allowed", "text/plain");
+									auto& nativeRes = forbiddenRes.native();
+									nativeRes.httpVersionMinor = 1;
+									nativeRes.headers.set("Connection", "close");
+									co_await writeResponse(socket, nativeRes);
+									co_return;
+								}
+							}
+
+							// WebSocket 升级也走中间件管道（认证/限流/日志等）
+							if (wsMiddlewareChain_)
+							{
+								auto wsAuthRes = co_await wsMiddlewareChain_(req);
+
+								auto wsAuthCode = wsAuthRes.statusCode();
+								if (wsAuthCode != HttpStatusCode::hOk)
+								{
+									// 中间件拦截了（401/403 之类），拒绝升级
+									auto& nativeRes = wsAuthRes.native();
+									nativeRes.httpVersionMinor = 1;
+									nativeRes.headers.set("Connection", "close");
+									co_await writeResponse(socket, nativeRes);
+									co_return;
+								}
+							}
+
+							// 提前拷贝 WS 握手头部（string_view 引用 readBuf，release 后悬挂）
+							std::string wsKey(req.native().headers.find("Sec-WebSocket-Key"));
+							std::string wsExtensions(req.native().headers.find("Sec-WebSocket-Extensions"));
+							std::string wsProtocol(req.native().headers.find("Sec-WebSocket-Protocol"));
+
+							// 验证必须在 readBuf 归还前完成（validateWsUpgrade 读 headers 的 string_view）
+							if (validateWsUpgrade(req.native()).empty())
+							{
+								HttpResponse badRes;
+								badRes.setStatus(HttpStatusCode::hBadRequest);
+								badRes.setBody("400 Bad Request: invalid WebSocket upgrade", "text/plain");
+								auto& nativeRes = badRes.native();
 								nativeRes.httpVersionMinor = 1;
 								nativeRes.headers.set("Connection", "close");
 								co_await writeResponse(socket, nativeRes);
 								co_return;
 							}
-						}
 
-						// WebSocket 升级也走中间件管道（认证/限流/日志等）
-						if (wsMiddlewareChain_)
-						{
-							auto wsAuthRes = co_await wsMiddlewareChain_(req);
-
-							auto wsAuthCode = wsAuthRes.statusCode();
-							if (wsAuthCode != HttpStatusCode::hOk)
-							{
-								// 中间件拦截了（401/403 之类），拒绝升级
-								auto& nativeRes = wsAuthRes.native();
-								nativeRes.httpVersionMinor = 1;
-								nativeRes.headers.set("Connection", "close");
-								co_await writeResponse(socket, nativeRes);
-								co_return;
-							}
-						}
-
-						// 提前拷贝 WS 握手头部（string_view 引用 readBuf，release 后悬挂）
-						std::string wsKey(req.native().headers.find("Sec-WebSocket-Key"));
-						std::string wsExtensions(req.native().headers.find("Sec-WebSocket-Extensions"));
-						std::string wsProtocol(req.native().headers.find("Sec-WebSocket-Protocol"));
-
-						// 验证必须在 readBuf 归还前完成（validateWsUpgrade 读 headers 的 string_view）
-						if (validateWsUpgrade(req.native()).empty())
-						{
-							HttpResponse badRes;
-							badRes.setStatus(HttpStatusCode::hBadRequest);
-							badRes.setBody("400 Bad Request: invalid WebSocket upgrade", "text/plain");
-							auto& nativeRes = badRes.native();
-							nativeRes.httpVersionMinor = 1;
-							nativeRes.headers.set("Connection", "close");
-							co_await writeResponse(socket, nativeRes);
+							// socket 所有权转移给 WebSocket 会话，标记 guard 跳过析构
+							guard.transferred = true;
+							// readBuf 已不再需要（握手字段已拷贝），提前归还，
+							// 避免 WS 长连接期间占用 + 解耦 tlsPool 的析构顺序
+							readBufHandle.release();
+							// socket 即将 move 走，handleSession 的 idleEntry 指针立刻失效，
+							// 必须在 move 前注销，防止悬空指针残留在 scanner 链表
+							idleGuard.release();
+							co_await handleWebSocket(std::move(socket),
+													 std::move(wsKey),
+													 std::move(wsExtensions),
+													 std::move(wsProtocol),
+													 wsRoute);
 							co_return;
 						}
-
-						// socket 所有权转移给 WebSocket 会话，标记 guard 跳过析构
-						guard.transferred = true;
-						// readBuf 已不再需要（握手字段已拷贝），提前归还，
-						// 避免 WS 长连接期间占用 + 解耦 tlsPool 的析构顺序
-						readBufHandle.release();
-						// socket 即将 move 走，handleSession 的 idleEntry 指针立刻失效，
-						// 必须在 move 前注销，防止悬空指针残留在 scanner 链表
-						idleGuard.release();
-						co_await handleWebSocket(std::move(socket),
-												 std::move(wsKey),
-												 std::move(wsExtensions),
-												 std::move(wsProtocol),
-												 wsRoute);
-						co_return;
 					}
 				}
 
 				// 检查 SSE 路由（GET 请求匹配 SSE 路由时转换为 SSE 长连接）
-				if (req.method() == HttpMethod::hGet)
+				// 同样编译期排除：SSL 下 SSE 不支持升级，落到普通分发。
+				if constexpr (!hIsSslStream<SocketType>)
 				{
-					auto reqPath = req.path();
-					auto sseMatch = router_.findSseRoute(reqPath);
-					if (sseMatch.route)
+					if (req.method() == HttpMethod::hGet)
 					{
-						const auto& sseRoute = *sseMatch.route;
-
-						// 注入 SSE 参数路由捕获的参数
-						for (const auto& [name, value] : sseMatch.params)
+						auto reqPath = req.path();
+						auto sseMatch = router_.findSseRoute(reqPath);
+						if (sseMatch.route)
 						{
-							req.setParam(name, value);
-						}
+							const auto& sseRoute = *sseMatch.route;
 
-						// SSE 路由也走中间件管道（认证/限流/日志等）
-						if (wsMiddlewareChain_)
-						{
-							auto sseAuthRes = co_await wsMiddlewareChain_(req);
-							auto sseAuthCode = sseAuthRes.statusCode();
-							if (sseAuthCode != HttpStatusCode::hOk)
+							// 注入 SSE 参数路由捕获的参数
+							for (const auto& [name, value] : sseMatch.params)
 							{
-								auto& nativeRes = sseAuthRes.native();
-								nativeRes.httpVersionMinor = 1;
-								nativeRes.headers.set("Connection", "close");
-								co_await writeResponse(socket, nativeRes);
-								co_return;
+								req.setParam(name, value);
 							}
+
+							// SSE 路由也走中间件管道（认证/限流/日志等）
+							if (wsMiddlewareChain_)
+							{
+								auto sseAuthRes = co_await wsMiddlewareChain_(req);
+								auto sseAuthCode = sseAuthRes.statusCode();
+								if (sseAuthCode != HttpStatusCode::hOk)
+								{
+									auto& nativeRes = sseAuthRes.native();
+									nativeRes.httpVersionMinor = 1;
+									nativeRes.headers.set("Connection", "close");
+									co_await writeResponse(socket, nativeRes);
+									co_return;
+								}
+							}
+
+							// readBuf 归还（SseSession 不依赖它）
+							readBufHandle.release();
+
+							// socket 所有权转移给 SSE 会话，标记 guard 跳过析构
+							guard.transferred = true;
+							// handleSession 的 idleEntry 指针失效，在 move 前注销
+							idleGuard.release();
+
+							co_await handleSseSession(std::move(socket), sseRoute);
+							co_return;
 						}
-
-						// readBuf 归还（SseSession 不依赖它）
-						readBufHandle.release();
-
-						// socket 所有权转移给 SSE 会话，标记 guard 跳过析构
-						guard.transferred = true;
-						// handleSession 的 idleEntry 指针失效，在 move 前注销
-						idleGuard.release();
-
-						co_await handleSseSession(std::move(socket), sseRoute);
-						co_return;
 					}
 				}
 
@@ -1622,4 +1694,10 @@ namespace hical
 			}
 		}
 	}
+
+	// handleSession 模板定义在本编译防火墙 .cpp，用显式实例化限制实例化类型，
+	// 避免每个 TU 重编模板体，也让其他 TU 能引用到这两个实例。
+	template Awaitable<void> HttpServer::handleSession<tcp::socket>(tcp::socket);
+	template Awaitable<void> HttpServer::handleSession<boost::asio::ssl::stream<tcp::socket>>(
+		boost::asio::ssl::stream<tcp::socket>);
 } // namespace hical

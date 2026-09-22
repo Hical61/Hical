@@ -441,7 +441,17 @@ namespace hical
 					boost::system::error_code optEc;
 					socket.set_option(boost::asio::ip::tcp::no_delay(true), optEc); // 失败不致命，忽略
 
-					coSpawn(co_await boost::asio::this_coro::executor, handleSession(std::move(socket)));
+					// SSL 分流：启用 sslCtx_ 时把裸 socket 包成 ssl::stream，明文路径行为完全不变。
+					// 握手不在 acceptLoop 里做，交给 handleSession 内部的 if constexpr 分支。
+					if (sslCtx_)
+					{
+						boost::asio::ssl::stream<tcp::socket> sslStream(std::move(socket), sslCtx_->native());
+						coSpawn(co_await boost::asio::this_coro::executor, handleSession(std::move(sslStream)));
+					}
+					else
+					{
+						coSpawn(co_await boost::asio::this_coro::executor, handleSession(std::move(socket)));
+					}
 					committed = true; // 移交成功
 				}
 				else
@@ -489,7 +499,16 @@ namespace hical
 					boost::system::error_code optEc;
 					socket.set_option(boost::asio::ip::tcp::no_delay(true), optEc); // 失败不致命，忽略
 
-					coSpawn(targetIoCtx.get_executor(), handleSession(std::move(socket)));
+					// SSL 分流：与 SO_REUSEPORT 路径一致，握手交给 handleSession 内部处理。
+					if (sslCtx_)
+					{
+						boost::asio::ssl::stream<tcp::socket> sslStream(std::move(socket), sslCtx_->native());
+						coSpawn(targetIoCtx.get_executor(), handleSession(std::move(sslStream)));
+					}
+					else
+					{
+						coSpawn(targetIoCtx.get_executor(), handleSession(std::move(socket)));
+					}
 					committed = true; // 移交成功
 				}
 			}
