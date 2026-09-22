@@ -26,6 +26,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cstdlib>
+#include <filesystem>
 #include <fstream>
 #include <optional>
 #include <string>
@@ -429,25 +430,16 @@ static size_t detectCpuCount()
 	return std::thread::hardware_concurrency();
 }
 
-// ── main ────────────────────────────────────────────────────────────────────
+// ── 共享路由注册 ────────────────────────────────────────────────────────────
 
-int main()
+/**
+ * @brief 向指定服务器注册纯路由集合（不含 DB 端点）
+ * 这些端点对 8080 明文与 8081 TLS 两个实例完全一致，
+ * 抽成函数确保双实例挂载同一套路由、行为一致。
+ * @param server 目标 HttpServer 实例（注册时尚未 start）
+ */
+static void registerRoutes(HttpServer& server)
 {
-	const char* threadEnv = std::getenv("HICAL_THREADS");
-	size_t threads = threadEnv ? static_cast<size_t>(std::atoi(threadEnv)) : detectCpuCount();
-	if (threads == 0)
-	{
-		threads = 1;
-	}
-
-	HttpServer server(8080, threads);
-
-	// 加载数据集（挂载卷 /data/dataset.json）
-	if (!loadDataset("/data/dataset.json"))
-	{
-		// 数据集不存在也可以启动，json 端点返回空数组
-	}
-
 	// ── GET /baseline11?a=X&b=Y → X + Y（text/plain）────────────────────
 	server.router().get("/baseline11",
 						[](const HttpRequest& req) -> HttpResponse
@@ -599,8 +591,29 @@ int main()
 						   }
 					   });
 
+	// ── POST /echo → body 原样回显（octet-stream，8gbit 测协议）───────────
+	// 真读 body 再回写，不按 Content-Length 编造；chunked / 空 / 任意大小都逐字节原样返回。
+	server.router().post("/echo",
+						 [](const HttpRequest& req) -> HttpResponse
+						 {
+							 HttpResponse res;
+							 res.setStatus(HttpStatusCode::hOk);
+							 res.native().headers.set("Content-Type", "application/octet-stream");
+							 res.native().body = req.body();
+							 return res;
+						 });
+}
+
 #ifdef HICAL_HAS_PGSQL
 
+/**
+ * @brief 向指定服务器注册 async-db 端点（依赖 DATABASE_URL + 连接池）
+ * 这个端点依赖 io_context 和 DB 连接池，实例间无法完全共享；抽成函数后
+ * 每个需要该端点的实例各自调用一次、各自建一个连接池。
+ * @param server 目标 HttpServer 实例（注册时尚未 start）
+ */
+static void registerAsyncDbRoute(HttpServer& server)
+{
 	// ── GET /async-db → 异步参数化查询（rating 聚合）─────────────────────
 	// 懒连接：minConnections 置 0，init() 不预连，首请求时由 acquire() 现场建连。
 	// DATABASE_URL 未设置时跳过 DB 接入，端点返回空结果占位。
@@ -813,15 +826,95 @@ int main()
 								return res;
 							});
 	}
+}
 
 #endif // HICAL_HAS_PGSQL
 
-	// ── benchmark 极致配置 ────────────────────────────────────────────────
+// ── main ────────────────────────────────────────────────────────────────────
+
+// 证书与私钥在容器内的挂载路径（官方 runner 仅在 TLS profile 下才挂 /certs 卷）
+constexpr std::string_view kTlsCertPath = "/certs/server.crt";
+constexpr std::string_view kTlsKeyPath = "/certs/server.key";
+
+// TLS 实例缺省线程数。8gbit 固定 5 万 req/s、json-tls 长连接低频，负载远低于 baseline，
+// TLS 瓶颈在加解密 CPU 而非连接数；固定小值避免与明文实例线程相加翻倍、还原 oversubscribe。
+constexpr size_t kDefaultTlsThreads = 2;
+
+/**
+ * @brief 统一施加 benchmark 运行时配置
+ * 两个实例（明文 8080 / TLS 8081）共用同一套极限值，保证负载下的行为一致。
+ * @param server 目标实例（注册路由、尚未 start）
+ */
+static void configureBenchmark(HttpServer& server)
+{
 	server.setMaxConnections(65535);
 	server.setIdleTimeout(0);
 	server.setGcInterval(0);
 	server.setMaxBodySize(32ULL * 1024 * 1024); // 32MB 大文件上传
+}
 
+int main()
+{
+	// 明文 8080 线程数：HICAL_THREADS 显式覆盖，缺省按 cgroup 核数探测
+	const char* threadEnv = std::getenv("HICAL_THREADS");
+	size_t threads = threadEnv ? static_cast<size_t>(std::atoi(threadEnv)) : detectCpuCount();
+	if (threads == 0)
+	{
+		threads = 1;
+	}
+
+	// TLS 8081 线程数：固定小值，防止与明文实例线程相加翻倍导致 oversubscribe
+	size_t tlsThreads = kDefaultTlsThreads;
+	const char* tlsThreadEnv = std::getenv("HICAL_TLS_THREADS");
+	if (tlsThreadEnv && *tlsThreadEnv)
+	{
+		const int parsed = std::atoi(tlsThreadEnv);
+		if (parsed > 0)
+		{
+			tlsThreads = static_cast<size_t>(parsed);
+		}
+	}
+
+	// 加载数据集（挂载卷 /data/dataset.json）
+	if (!loadDataset("/data/dataset.json"))
+	{
+		// 数据集不存在也可以启动，json 端点返回空数组
+	}
+
+	// ── 明文 8080 实例 ────────────────────────────────────────────────────
+	HttpServer server(8080, threads);
+	registerRoutes(server);
+#ifdef HICAL_HAS_PGSQL
+	registerAsyncDbRoute(server); // async-db 只挂明文，TLS 端口不测 DB
+#endif // HICAL_HAS_PGSQL
+	configureBenchmark(server);
+
+	// ── TLS 8081 实例（证书/私钥存在才建）────────────────────────────────
+	// 官方 runner 只在 TLS profile 才挂 /certs；缺失时降级为单明文实例，不启用 TLS。
+	std::optional<HttpServer> tlsServer;
+	std::thread tlsThread;
+	if (std::filesystem::exists(kTlsCertPath) && std::filesystem::exists(kTlsKeyPath))
+	{
+		tlsServer.emplace(8081, tlsThreads);
+		registerRoutes(*tlsServer);
+		tlsServer->enableSsl(std::string(kTlsCertPath), std::string(kTlsKeyPath));
+		configureBenchmark(*tlsServer);
+
+		// TLS 实例后台跑，明文实例占主线程。两者各注册的 signal_set 都会收到
+		// SIGINT/SIGTERM 并各自 gracefulStop → stop() → run() 返回。
+		tlsThread = std::thread([&tlsServer]()
+								{
+									tlsServer->start();
+								});
+	}
+
+	// 主线程跑明文实例（阻塞直到信号触发 stop）
 	server.start();
+
+	if (tlsThread.joinable())
+	{
+		tlsThread.join();
+	}
+
 	return 0;
 }
