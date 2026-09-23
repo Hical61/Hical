@@ -836,9 +836,6 @@ static void registerAsyncDbRoute(HttpServer& server)
 constexpr std::string_view kTlsCertPath = "/certs/server.crt";
 constexpr std::string_view kTlsKeyPath = "/certs/server.key";
 
-// TLS 实例缺省线程数。8gbit 固定 5 万 req/s、json-tls 长连接低频，负载远低于 baseline，
-// TLS 瓶颈在加解密 CPU 而非连接数；固定小值避免与明文实例线程相加翻倍、还原 oversubscribe。
-constexpr size_t kDefaultTlsThreads = 2;
 
 /**
  * @brief 统一施加 benchmark 运行时配置
@@ -863,8 +860,10 @@ int main()
 		threads = 1;
 	}
 
-	// TLS 8081 线程数：固定小值，防止与明文实例线程相加翻倍导致 oversubscribe
-	size_t tlsThreads = kDefaultTlsThreads;
+	// TLS 8081 线程数：默认跟着明文实例用 cgroup 核数，HICAL_TLS_THREADS 可覆盖。
+	// 8gbit 的 cpuset 是 64 核、AES-GCM 加解密是纯 CPU 密集，之前固定 2 线程只能吃 2 核，
+	// rate 掉到 0.82；benchmark 逐 profile 独立跑，TLS/明文不会同时压，不存在线程翻倍问题。
+	size_t tlsThreads = detectCpuCount();
 	const char* tlsThreadEnv = std::getenv("HICAL_TLS_THREADS");
 	if (tlsThreadEnv && *tlsThreadEnv)
 	{
