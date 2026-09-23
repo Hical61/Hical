@@ -5,6 +5,7 @@
 
 #include "HttpServer.h"
 #include "MemoryPool.h"
+#include "RequestDispatch.h"
 #include "core/Version.h"
 #include <iostream>
 #include <optional>
@@ -140,16 +141,22 @@ namespace hical
 		running_.store(true);
 		started_ = true;
 
-		// 中间件链预构建
+		// 中间件链在此锁定（build 后再 use 会抛异常）并初始化 profiling 统计。
+		// build 的 finalHandler 是「终端骨架」：只从请求内部槽取每请求分发上下文并调用其
+		// tailHandler（tailHandler 由 handleSession 每请求写入，封装了「读 body + 用前置
+		// resolveRoute 缓存结果 dispatch」）。链本身只 build 一次，每请求零重建，
+		// resolve 全程只匹配一次，中间件后置仍拿到真实 handler 响应。
 		if (middlewarePipeline_.size() > 0)
 		{
 			middlewarePipeline_.build(
-				[this](HttpRequest& req) -> Awaitable<HttpResponse>
+				[](HttpRequest& r) -> Awaitable<HttpResponse>
 				{
-					co_return co_await router_.dispatch(req);
+					co_return co_await detail::runInternalDispatch(r);
 				});
 
-			// WS 升级也走中间件，这里预构建好链避免每次动态分配
+			// WS/SSE 升级也走中间件，这里预构建好链避免每次动态分配。
+			// 注意：WS/SSE 不读 body，它的终端是占位 ok("")，与骨架链（读槽）无关——
+			// 它们的分支不走 runInternalDispatch，req 也不塞槽。
 			wsMiddlewareChain_ = middlewarePipeline_.buildFor(
 				[](HttpRequest&) -> Awaitable<HttpResponse>
 				{

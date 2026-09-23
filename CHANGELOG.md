@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- **慢 body 防护：无效请求在读 body 前直接拒绝**：以前请求 headers 解析完会先整段读 body、再走路由匹配，所以带大 body 的无效 uri、方法不匹配（405）、超深路径都得先把 body 吃进内存才报错。现在把路由匹配前置到读 body 之前，这几类请求在读 body 前就能直接回 404/405/400，body 一字不读，省掉把无效请求的大 body 白读进内存的开销
+- **中间件前置到读 body 之前**：认证、限流这类拦截型中间件以前是在 body 读完之后才跑的，无效请求光是为了塞满中间件需要的 body 就得先把全部数据读进来。现在中间件在 body 之前执行，中间件只看到 header（`req.body()` 此时为空），被拦截的请求 body 一字不读；字段级 body 校验下沉到 handler 自己负责
+- **header 超限判断改用「解析长度」**：TCP 是流式的，headers 读完后缓冲区里可能还粘连着 body 残留，之前拿缓冲区总长当 header 大小去跟上限比，粘连 body 一多就把正常请求误判成 431。现在改用 picohttpparser 返回的 header 实际字节数来判断，只有 header 真的超限才回 431
+
 ## [2.7.0] - 2026-09-21
 
 ### Added

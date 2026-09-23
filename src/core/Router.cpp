@@ -244,8 +244,19 @@ namespace hical
 
 	Awaitable<HttpResponse> Router::dispatch(HttpRequest& req)
 	{
-		auto result = resolveRoute(req);
+		// resolveRoute 结果存局部变量：协程挂起时临时对象必须存活，不能直接内联进参数
+		ResolveResult result = resolveRoute(req);
+		co_return co_await dispatchResolved(req, result);
+	}
 
+	std::optional<HttpResponse> Router::dispatchSync(HttpRequest& req)
+	{
+		ResolveResult result = resolveRoute(req);
+		return dispatchSyncResolved(req, result);
+	}
+
+	Awaitable<HttpResponse> Router::dispatchResolved(HttpRequest& req, const ResolveResult& result)
+	{
 		if (result.pathTooDeep)
 		{
 			co_return HttpResponse::badRequest("Path too deep");
@@ -302,10 +313,8 @@ namespace hical
 		co_return HttpResponse::notFound();
 	}
 
-	std::optional<HttpResponse> Router::dispatchSync(HttpRequest& req)
+	std::optional<HttpResponse> Router::dispatchSyncResolved(HttpRequest& req, const ResolveResult& result)
 	{
-		auto result = resolveRoute(req);
-
 		if (result.pathTooDeep)
 		{
 			return HttpResponse::badRequest("Path too deep");
@@ -321,7 +330,7 @@ namespace hical
 			{
 				return result.staticEntry->syncHandler(req);
 			}
-			return std::nullopt; // 异步 handler，需要 fallback 到 co_await dispatch()
+			return std::nullopt; // 异步 handler，需要 fallback 到 co_await dispatchResolved()
 		}
 
 		if (result.paramEntry)

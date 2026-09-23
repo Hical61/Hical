@@ -11,6 +11,7 @@
 #include "InetAddress.h"
 #include "MemoryPool.h"
 #include "ReadBufferPool.h"
+#include "RequestDispatch.h"
 #include "SseSession.h"
 #include "core/Version.h"
 #include "WebSocket.h"
@@ -791,16 +792,6 @@ namespace hical
 						boost::asio::use_awaitable);
 					bufUsed += bytesRead;
 
-					// 头部大小检查
-					if (bufUsed > maxHeaderSize_)
-					{
-						co_await sendRawResponse(socket,
-												 431,
-												 "Request Header Fields Too Large",
-												 "Request header too large");
-						co_return;
-					}
-
 					numHeaders = 64;
 					parseResult = phr_parse_request(readBuf.data(),
 													bufUsed,
@@ -816,7 +807,18 @@ namespace hical
 
 					if (parseResult > 0)
 					{
-						break; // 头部解析完成
+						// 头部解析完成。TCP 是流式，buf 里可能还粘连着 body 残留，
+						// 此时 bufUsed 是「header+body」的总长，判断超限只能看 picohttpparser
+						// 给出的 header 字节数（parseResult），不能看 bufUsed。
+						if (static_cast<size_t>(parseResult) > maxHeaderSize_)
+						{
+							co_await sendRawResponse(socket,
+													 431,
+													 "Request Header Fields Too Large",
+													 "Request header too large");
+							co_return;
+						}
+						break;
 					}
 					if (parseResult == -1)
 					{
@@ -824,7 +826,19 @@ namespace hical
 						co_await sendRawResponse(socket, 400, "Bad Request", "Malformed HTTP request");
 						co_return;
 					}
-					// parseResult == -2：数据不完整，继续读取
+
+					// parseResult == -2：头部不完整。这里 buf 里的字节都是还没解析完的 header
+					// 前缀（header 一旦完整 picohttpparser 就返回 >0，不会带着 body 返回 -2），
+					// 所以用 bufUsed 判断超限是准确的。
+					if (bufUsed > maxHeaderSize_)
+					{
+						co_await sendRawResponse(socket,
+												 431,
+												 "Request Header Fields Too Large",
+												 "Request header too large");
+						co_return;
+					}
+					// 数据不完整，继续读取
 				}
 
 				// 读完头部，刷新活跃时间
@@ -927,166 +941,328 @@ namespace hical
 					nativeReq.keepAlive = (minorVersion >= 1);
 				}
 
-				// ====== 阶段 C：读取 Body ======
+				// ====== 前置路由匹配（阶段 B.5）：读 body 之前先 resolveRoute ======
+				// 从这往下的时序两个不变量：① 中间件在 body 之前执行（req.body() 那时是空的），
+				// ② 无效请求（404/405/超深路径）在读 body 前就拒绝，body 一字不读。
+				// body 现在还是空的，但路由匹配只看 method+path，不受影响。
+				// 提前构建 HttpRequest，后续 body 读取通过 req.native() 写入（阶段 C 填充）。
+				HttpRequest req = HttpRequest::fromParsed(std::move(nativeReq));
+				req.setPeerAddr(peerAddr);
+
+				// 一次性 resolveRoute，结果缓存到 resolveResult，dispatch 阶段复用，绝不二次匹配。
+				// 有效请求命中后照常读 body；无效请求（404/405/超深）在读 body 之前就直接拒绝，
+				// 避免把整个 body 白读进内存。
+				auto resolveResult = router_.resolveRoute(req);
+				bool hasRequestBody = (hasContentLength && contentLength > 0) || isChunked;
+
+				if (resolveResult.pathTooDeep)
+				{
+					// 超深路径：resolveRoute 直接判定，400 语义与 dispatch 内一致，body 不用读
+					co_await sendRawResponse(socket, 400, "Bad Request", "Path too deep");
+					co_return;
+				}
+
+				if (!resolveResult.isMatch() && hasRequestBody)
+				{
+					// 未命中且带 body：带 body 的请求绝不可能是 WS 升级（GET）或 SSE（GET），
+					// 这里可以安全地提前拒绝，不必读 body。
+					if (resolveResult.isMethodNotAllowed())
+					{
+						const std::string& allowed = resolveResult.allowedMethods;
+						HttpResponse res;
+						res.setStatus(HttpStatusCode::hMethodNotAllowed);
+						res.setHeader("Allow", allowed);
+						res.setBody("Method Not Allowed", "text/plain");
+						auto& nativeRes = res.native();
+						nativeRes.httpVersionMinor = 1;
+						// body 还没读，连接状态已脏，必须 close，避免下个请求把残留 body 当请求头解析
+						nativeRes.keepAlive = false;
+						nativeRes.headers.set("Connection", "close");
+						co_await writeResponse(socket, nativeRes);
+						co_return;
+					}
+					co_await sendRawResponse(socket, 404, "Not Found", "Not Found");
+					co_return;
+				}
+				// 未命中且无 body 的（GET 打不存在的路径之类）走原路，留给阶段 D 的 WS/SSE/dispatch 再定
+				// ——反正没 body 可读，「提前拒绝省内存」在这里没啥便宜可占。
+
+				// ====== 阶段 C：读取 Body（抽成 lambda，供中间件 final next 与无中间件路径共用） ======
+				// 中间件前置后 body 在中间件之后才读，这个 lambda 只在「中间件已通过、或无中间件」时被调用。
+				// 返回 nullopt = body 读成功（继续 dispatch）；返回 HttpResponse = 读 body 阶段出错（413/400 等），
+				// 调用方直接写回该响应并关闭连接（body 没读完，连接已脏）。
 				size_t headerBytes = static_cast<size_t>(parseResult);
 				size_t remainingInBuf = bufUsed - headerBytes;
-
-				// Expect: 100-continue 处理（仅 HTTP/1.1+，有 body 时才生效）
-				// 只查路由存在性，404/413 提前拒绝；通过后发 100 Continue 再读 body。
-				// 方法不匹配（405 语义）在此一律以 404 快速拒绝——预检目的是省带宽，
-				// 不值得为收集 Allow 头做完整 resolveRoute；真正的 405 在客户端不发 Expect
-				// 时由正常分发路径给出。
-				if (nativeReq.expectContinue && (hasContentLength || isChunked) && minorVersion >= 1)
-				{
-					auto reqPath = nativeReq.target;
-					auto qmark = reqPath.find('?');
-					if (qmark != std::string_view::npos)
-					{
-						reqPath = reqPath.substr(0, qmark);
-					}
-
-					if (!router_.exists(nativeReq.method, reqPath))
-					{
-						co_await sendRawResponse(socket, 404, "Not Found", "Not Found");
-						co_return;
-					}
-
-					// Content-Length 已知时，超限在发 100 前就拒——这才是 Expect 省带宽的意义所在。
-					// chunked 长度未知，只能边读边查（维持现状）。
-					if (hasContentLength && contentLength > maxBodySize_)
-					{
-						co_await sendRawResponse(socket, 413, "Payload Too Large", "Request body too large");
-						co_return;
-					}
-
-					constexpr std::string_view k100 = "HTTP/1.1 100 Continue\r\n\r\n";
-					co_await boost::asio::async_write(socket,
-													  boost::asio::buffer(k100.data(), k100.size()),
-													  boost::asio::use_awaitable);
-				}
 
 				// memmove 要等阶段 D 用完 string_view 后再做，否则覆盖了 readBuf 的头部数据
 				size_t memmoveSrc = 0; // memmove 源偏移
 				size_t memmoveLen = 0; // memmove 长度（0 表示无需 memmove）
 
-				if (hasContentLength && contentLength > 0)
+				auto readRequestBody = [&]() -> Awaitable<std::optional<HttpResponse>>
 				{
-					// Content-Length body 读取
-					if (contentLength > maxBodySize_)
+					// 读 body 阶段出错：body 未读完，连接已脏，必须 close
+					auto bodyError = [](HttpStatusCode code, const std::string& msg)
 					{
-						co_await sendRawResponse(socket, 413, "Payload Too Large", "Request body too large");
-						co_return;
-					}
+						HttpResponse res;
+						res.setStatus(code);
+						res.setBody(msg, "text/plain");
+						res.native().keepAlive = false;
+						return res;
+					};
 
-					nativeReq.body.resize(contentLength);
-					size_t bodyCopied = std::min(remainingInBuf, contentLength);
-					if (bodyCopied > 0)
+					// Expect: 100-continue 处理（仅 HTTP/1.1+，有 body 时才生效）
+					// 路由是否存在已经在阶段 B.5 的 resolveRoute 里判过：带 body 且走到这里，
+					// 必然是 resolveResult.isMatch() 为 true（未命中带 body 的早在 964 行就 co_return 了）。
+					// 所以这里不能再调 router_.exists() 二次匹配——exists 只查 static + 同 method 的 param 路由，
+					// 不查 wildcard，范围比 resolveRoute 窄，会漏掉 wildcard 路由，把正常请求误判成 404。
+					// 真需要提前拒绝的只有超限这一种，直接交给下面的 Content-Length 预检。
+					if (req.native().expectContinue && (hasContentLength || isChunked) && minorVersion >= 1)
 					{
-						std::memcpy(nativeReq.body.data(), readBuf.data() + headerBytes, bodyCopied);
-					}
-
-					// 把 body 后面的残留数据位置记下来，后面再 memmove
-					size_t tailLen = remainingInBuf - bodyCopied;
-					if (tailLen > 0)
-					{
-						memmoveSrc = headerBytes + bodyCopied;
-						memmoveLen = tailLen;
-					}
-					bufUsed = tailLen;
-
-					size_t bodyRemaining = contentLength - bodyCopied;
-					size_t offset = bodyCopied;
-					while (bodyRemaining > 0)
-					{
-						auto bytesRead = co_await socket.async_read_some(
-							boost::asio::buffer(nativeReq.body.data() + offset, bodyRemaining),
-							boost::asio::use_awaitable);
-						offset += bytesRead;
-						bodyRemaining -= bytesRead;
-					}
-				}
-				else if (isChunked)
-				{
-					// Chunked transfer-encoding 解码
-					// phr_decode_chunked 是原地解码：将 chunk 帧头剥离，解码数据覆写到同一缓冲区。
-					// 契约：输入 chunkBuf[0..size) 是待解码编码数据，*bufsz 返回产出解码字节数 dst。
-					//   ret == -2：不完整，且此时编码数据已被全部消费（内部 src 推到 bufsz），剩余编码 = 0；
-					//   ret == -1：错误；
-					//   ret >= 0：完成，返回值 = 未解码尾部字节数（chunked 之后的 pipeline 残留），
-					//             位于 chunkBuf[dst .. dst+ret)。
-					// 因此每次循环必须保证 chunkBuf 从头就是「未消费的编码数据」，ret == -2 时
-					// 清空缓冲重新累积，而不是推进一个错误的编码消费偏移。
-					std::string chunkBuf;
-					if (remainingInBuf > 0)
-					{
-						chunkBuf.assign(readBuf.data() + headerBytes, remainingInBuf);
-					}
-					// chunked 路径消费了 readBuf 所有残留数据，清零
-					bufUsed = 0;
-
-					struct phr_chunked_decoder decoder = {};
-
-					for (;;)
-					{
-						size_t decodeBufLen = chunkBuf.size();
-						auto decodeRet = phr_decode_chunked(&decoder, chunkBuf.data(), &decodeBufLen);
-
-						// decodeBufLen = 本次产出解码字节数，数据位于 chunkBuf[0..decodeBufLen)
-						nativeReq.body.append(chunkBuf.data(), decodeBufLen);
-
-						if (nativeReq.body.size() > maxBodySize_)
+						// Content-Length 已知时，超限在发 100 前就拒——这才是 Expect 省带宽的意义所在。
+						// chunked 长度未知，只能边读边查（维持现状）。
+						if (hasContentLength && contentLength > maxBodySize_)
 						{
-							co_await sendRawResponse(socket, 413, "Payload Too Large", "Request body too large");
-							co_return;
+							co_return bodyError(HttpStatusCode::hPayloadTooLarge, "Request body too large");
 						}
 
-						if (decodeRet >= 0)
+						constexpr std::string_view k100 = "HTTP/1.1 100 Continue\r\n\r\n";
+						co_await boost::asio::async_write(socket,
+														  boost::asio::buffer(k100.data(), k100.size()),
+														  boost::asio::use_awaitable);
+					}
+
+					if (hasContentLength && contentLength > 0)
+					{
+						// Content-Length body 读取
+						if (contentLength > maxBodySize_)
 						{
-							// 解码完成，把 chunked 之后的残留（keep-alive pipeline）写回 pipelineSpill，
-							// 否则下一个请求会被丢掉
-							size_t tailLen = static_cast<size_t>(decodeRet);
-							if (tailLen > 0)
+							co_return bodyError(HttpStatusCode::hPayloadTooLarge, "Request body too large");
+						}
+
+						req.native().body.resize(contentLength);
+						size_t bodyCopied = std::min(remainingInBuf, contentLength);
+						if (bodyCopied > 0)
+						{
+							std::memcpy(req.native().body.data(), readBuf.data() + headerBytes, bodyCopied);
+						}
+
+						// 把 body 后面的残留数据位置记下来，后面再 memmove
+						size_t tailLen = remainingInBuf - bodyCopied;
+						if (tailLen > 0)
+						{
+							memmoveSrc = headerBytes + bodyCopied;
+							memmoveLen = tailLen;
+						}
+						bufUsed = tailLen;
+
+						size_t bodyRemaining = contentLength - bodyCopied;
+						size_t offset = bodyCopied;
+						while (bodyRemaining > 0)
+						{
+							auto bytesRead = co_await socket.async_read_some(
+								boost::asio::buffer(req.native().body.data() + offset, bodyRemaining),
+								boost::asio::use_awaitable);
+							offset += bytesRead;
+							bodyRemaining -= bytesRead;
+						}
+					}
+					else if (isChunked)
+					{
+						// Chunked transfer-encoding 解码
+						// phr_decode_chunked 是原地解码：将 chunk 帧头剥离，解码数据覆写到同一缓冲区。
+						// 契约：输入 chunkBuf[0..size) 是待解码编码数据，*bufsz 返回产出解码字节数 dst。
+						//   ret == -2：不完整，且此时编码数据已被全部消费（内部 src 推到 bufsz），剩余编码 = 0；
+						//   ret == -1：错误；
+						//   ret >= 0：完成，返回值 = 未解码尾部字节数（chunked 之后的 pipeline 残留），
+						//             位于 chunkBuf[dst .. dst+ret)。
+						// 因此每次循环必须保证 chunkBuf 从头就是「未消费的编码数据」，ret == -2 时
+						// 清空缓冲重新累积，而不是推进一个错误的编码消费偏移。
+						std::string chunkBuf;
+						if (remainingInBuf > 0)
+						{
+							chunkBuf.assign(readBuf.data() + headerBytes, remainingInBuf);
+						}
+						// chunked 路径消费了 readBuf 所有残留数据，清零
+						bufUsed = 0;
+
+						struct phr_chunked_decoder decoder = {};
+
+						for (;;)
+						{
+							size_t decodeBufLen = chunkBuf.size();
+							auto decodeRet = phr_decode_chunked(&decoder, chunkBuf.data(), &decodeBufLen);
+
+							// decodeBufLen = 本次产出解码字节数，数据位于 chunkBuf[0..decodeBufLen)
+							req.native().body.append(chunkBuf.data(), decodeBufLen);
+
+							if (req.native().body.size() > maxBodySize_)
 							{
-								pipelineSpill.assign(chunkBuf.data() + decodeBufLen, tailLen);
+								co_return bodyError(HttpStatusCode::hPayloadTooLarge, "Request body too large");
 							}
-							break;
-						}
-						if (decodeRet == -1)
-						{
-							// 解码错误
-							co_await sendRawResponse(socket, 400, "Bad Request", "Malformed chunked encoding");
-							co_return;
-						}
 
-						// decodeRet == -2：编码数据已全部消费，清空后继续读
-						chunkBuf.clear();
+							if (decodeRet >= 0)
+							{
+								// 解码完成，把 chunked 之后的残留（keep-alive pipeline）写回 pipelineSpill，
+								// 否则下一个请求会被丢掉
+								size_t tailLen = static_cast<size_t>(decodeRet);
+								if (tailLen > 0)
+								{
+									pipelineSpill.assign(chunkBuf.data() + decodeBufLen, tailLen);
+								}
+								break;
+							}
+							if (decodeRet == -1)
+							{
+								// 解码错误
+								co_return bodyError(HttpStatusCode::hBadRequest, "Malformed chunked encoding");
+							}
 
-						chunkBuf.resize(4096);
-						auto bytesRead = co_await socket.async_read_some(boost::asio::buffer(chunkBuf.data(), 4096),
-																		 boost::asio::use_awaitable);
-						if (bytesRead == 0)
-						{
-							// 对端在不完整 chunked body 时断开，避免死循环
-							co_await sendRawResponse(socket, 400, "Bad Request", "Incomplete chunked body");
-							co_return;
+							// decodeRet == -2：编码数据已全部消费，清空后继续读
+							chunkBuf.clear();
+
+							chunkBuf.resize(4096);
+							auto bytesRead = co_await socket.async_read_some(boost::asio::buffer(chunkBuf.data(), 4096),
+																			 boost::asio::use_awaitable);
+							if (bytesRead == 0)
+							{
+								// 对端在不完整 chunked body 时断开，避免死循环
+								co_return bodyError(HttpStatusCode::hBadRequest, "Incomplete chunked body");
+							}
+							chunkBuf.resize(bytesRead);
 						}
-						chunkBuf.resize(bytesRead);
 					}
-				}
-				else
-				{
-					// 无 body（GET/HEAD 等）：记录延迟 memmove 参数
-					if (remainingInBuf > 0)
+					else
 					{
-						memmoveSrc = headerBytes;
-						memmoveLen = remainingInBuf;
+						// 无 body（GET/HEAD 等）：记录延迟 memmove 参数
+						if (remainingInBuf > 0)
+						{
+							memmoveSrc = headerBytes;
+							memmoveLen = remainingInBuf;
+						}
+						bufUsed = remainingInBuf;
 					}
-					bufUsed = remainingInBuf;
+
+					co_return std::nullopt;
+				};
+
+				// ====== 阶段 D：分发（中间件已前置到读 body 之前） ======
+				// WS/SSE 有独立的 wsMiddlewareChain_，在各自分支单独执行，这里跳过全局中间件，
+				// 避免同一组中间件的链被跑两遍（认证/日志会执行两次）。
+				bool isWsOrSse = false;
+				if constexpr (!hIsSslStream<SocketType>)
+				{
+					if (req.native().isUpgrade() && router_.findWsRoute(req.path()).route)
+					{
+						isWsOrSse = true;
+					}
+					else if (req.method() == HttpMethod::hGet && router_.findSseRoute(req.path()).route)
+					{
+						isWsOrSse = true;
+					}
 				}
 
-				// ====== 阶段 D：构建 HttpRequest 并分发 ======
-				HttpRequest req = HttpRequest::fromParsed(std::move(nativeReq));
-				req.setPeerAddr(peerAddr);
+				HttpResponse res;
+				if (!isWsOrSse)
+				{
+					if (middlewarePipeline_.size() > 0)
+					{
+						// 中间件在 body 之前执行。最终 next 的 per-request 状态（读 body + 前置 resolveRoute 缓存
+						// 结果 dispatch）装进栈上 ctx，挂到 req 内部槽，走 start() 预构建的 cachedChain_。
+						// 链只 build 一次，每请求零重建；中间件后置拿真实 handler 响应，
+						// 短路（认证失败等）时不触发终端骨架，body 一字不读。
+						detail::RequestDispatchContext ctx;
+						ctx.tailHandler = [&](HttpRequest& r) -> Awaitable<HttpResponse>
+						{
+							if (auto err = co_await readRequestBody(); err)
+							{
+								co_return std::move(*err);
+							}
+							if (auto sync = router_.dispatchSyncResolved(r, resolveResult); sync)
+							{
+								co_return std::move(*sync);
+							}
+							co_return co_await router_.dispatchResolved(r, resolveResult);
+						};
+						detail::RequestDispatchContext::attach(req, &ctx);
+						try
+						{
+							res = co_await middlewarePipeline_.execute(req);
+						}
+						catch (const std::exception& e)
+						{
+							if (errorHandler_)
+							{
+								try
+								{
+									res = errorHandler_(e, req);
+								}
+								catch (...)
+								{
+									// errorHandler 自身抛异常时 fallback
+									res = HttpResponse::serverError();
+								}
+							}
+							else
+							{
+								res = HttpResponse::serverError();
+							}
+						}
+						catch (...)
+						{
+							res = HttpResponse::serverError();
+						}
+						// 链执行完显式解绑：ctx 是栈上的裸指针槽，光靠「每请求新建 req 默认归零」
+						// 这条隐式不变量防悬空太脆弱。趁 ctx 还活着把槽清空，以后就算复用 req 也
+						// 不会拿到已析构的 ctx 指针。
+						detail::RequestDispatchContext::attach(req, nullptr);
+					}
+					else
+					{
+						// 无中间件：读 body 后走同步快速路径 dispatchSyncResolved，
+						// 异步/编译期链 handler 再回退到 dispatchResolved。
+						try
+						{
+							if (auto err = co_await readRequestBody(); err)
+							{
+								res = std::move(*err);
+							}
+							else
+							{
+								auto syncResult = router_.dispatchSyncResolved(req, resolveResult);
+								if (syncResult)
+								{
+									res = std::move(*syncResult);
+								}
+								else
+								{
+									res = co_await router_.dispatchResolved(req, resolveResult);
+								}
+							}
+						}
+						catch (const std::exception& e)
+						{
+							if (errorHandler_)
+							{
+								try
+								{
+									res = errorHandler_(e, req);
+								}
+								catch (...)
+								{
+									res = HttpResponse::serverError();
+								}
+							}
+							else
+							{
+								res = HttpResponse::serverError();
+							}
+						}
+						catch (...)
+						{
+							res = HttpResponse::serverError();
+						}
+					}
+				}
 
 				// 检查 WebSocket 升级请求
 				// SSL 下 WS/SseSession 按值收 tcp::socket，无法接收 ssl::stream，
@@ -1226,53 +1402,6 @@ namespace hical
 					}
 				}
 
-				// 通过中间件管道 + 路由器分发（带全局错误处理）
-				HttpResponse res;
-				try
-				{
-					if (middlewarePipeline_.size() > 0)
-					{
-						// 中间件链已经在 start() 里 build 好了
-						res = co_await middlewarePipeline_.execute(req);
-					}
-					else
-					{
-						// 同步路由直接调就完了，不走协程
-						auto syncResult = router_.dispatchSync(req);
-						if (syncResult)
-						{
-							res = std::move(*syncResult);
-						}
-						else
-						{
-							res = co_await router_.dispatch(req);
-						}
-					}
-				}
-				catch (const std::exception& e)
-				{
-					if (errorHandler_)
-					{
-						try
-						{
-							res = errorHandler_(e, req);
-						}
-						catch (...)
-						{
-							// errorHandler 自身抛异常时 fallback
-							res = HttpResponse::serverError();
-						}
-					}
-					else
-					{
-						res = HttpResponse::serverError();
-					}
-				}
-				catch (...)
-				{
-					res = HttpResponse::serverError();
-				}
-
 				// 通用头部走预构建前缀，不再 insert 到 HeaderMap
 				auto& nativeRes = res.native();
 				nativeRes.httpVersionMinor = 1;
@@ -1322,14 +1451,14 @@ namespace hical
 				// 写完，刷新活跃时间
 				idleEntry.touch();
 
-				// 延迟 memmove：响应已发送或已暂存，nativeReq.target/headers 不再被引用，
+				// 延迟 memmove：响应已发送或已暂存，req.native().target/headers 不再被引用，
 				// 安全地将残留数据移到缓冲区开头（为下一个 pipelined 请求做准备）
 				if (memmoveLen > 0)
 				{
 					std::memmove(readBuf.data(), readBuf.data() + memmoveSrc, memmoveLen);
 				}
 
-				// pipeline 残留已暂存，响应已发送，nativeReq.target/headers
+				// pipeline 残留已暂存，响应已发送，req.native().target/headers
 				// 的 string_view 不再被引用，提前把缓冲区还回去。
 				// 别等到协程末尾析构——万连接下能省几十 MB 在途内存。
 				if (bufUsed > 0)

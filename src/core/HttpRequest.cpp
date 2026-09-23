@@ -33,6 +33,34 @@ namespace hical
 		req_.httpVersionMinor = 1;
 	}
 
+	HttpRequest::HttpRequest(HttpRequest&& other) noexcept
+	{
+		*this = std::move(other);
+	}
+
+	HttpRequest& HttpRequest::operator=(HttpRequest&& other) noexcept
+	{
+		if (this == &other)
+		{
+			return *this;
+		}
+		req_ = std::move(other.req_);
+		peerAddr_ = std::move(other.peerAddr_);
+		ownedTarget_ = std::move(other.ownedTarget_);
+		ownedHeaders_ = std::move(other.ownedHeaders_);
+		pathParams_ = std::move(other.pathParams_);
+		cookies_ = std::move(other.cookies_);
+		cachedJsonBody_ = std::move(other.cachedJsonBody_);
+		queryParams_ = std::move(other.queryParams_);
+		formParams_ = std::move(other.formParams_);
+		cachedMultipartParts_ = std::move(other.cachedMultipartParts_);
+		attributes_ = std::move(other.attributes_);
+		// 槽指针必须清源，避免被 move 的旧对象残留脏槽（指向已失效的 dispatch 上下文）
+		internalSlot_ = other.internalSlot_;
+		other.internalSlot_ = nullptr;
+		return *this;
+	}
+
 	HttpRequest HttpRequest::fromParsed(NativeRequest&& req)
 	{
 		HttpRequest result;

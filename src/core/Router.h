@@ -277,6 +277,47 @@ namespace hical
 
 		[[nodiscard]] SseRouteMatch findSseRoute(std::string_view path) const;
 
+		// 路由 entry 类型前向声明（完整定义见下方，ResolveResult 用指针引用）
+		struct RouteEntry;
+		struct ParamRouteEntry;
+		struct WildcardRouteEntry;
+
+		/**
+		 * @brief 路由匹配结果
+		 * entry 指针指向 router 内部 map 节点，进程生命周期内稳定有效，可作为缓存跨阶段复用。
+		 */
+		struct ResolveResult
+		{
+			const RouteEntry* staticEntry = nullptr;
+			const ParamRouteEntry* paramEntry = nullptr;
+			const WildcardRouteEntry* wildcardEntry = nullptr;
+			std::string allowedMethods;
+			bool pathTooDeep = false;
+
+			/**
+			 * @brief 是否命中某个路由（静态/参数/通配）
+			 */
+			[[nodiscard]] bool isMatch() const noexcept
+			{
+				return staticEntry != nullptr || paramEntry != nullptr || wildcardEntry != nullptr;
+			}
+
+			/**
+			 * @brief 是否「路径存在但方法不匹配」的 405 场景
+			 */
+			[[nodiscard]] bool isMethodNotAllowed() const noexcept
+			{
+				return !isMatch() && !allowedMethods.empty();
+			}
+		};
+
+		/**
+		 * @brief 前置路由匹配，返回完整匹配结果。
+		 * 副作用：参数路由/通配路由命中时会向 req 写入路径参数（setParam）。
+		 * 调用方应缓存返回的 ResolveResult 并复用，避免二次匹配导致参数重复写入或二次匹配不一致。
+		 */
+		[[nodiscard]] ResolveResult resolveRoute(HttpRequest& req) const;
+
 		/**
 		 * @brief 分发请求到匹配的路由处理器
 		 */
@@ -286,6 +327,20 @@ namespace hical
 		 * @brief 同步快速路径分发（零协程帧开销）
 		 */
 		[[nodiscard]] std::optional<HttpResponse> dispatchSync(HttpRequest& req);
+
+		/**
+		 * @brief 用已缓存的路由匹配结果直接分发（跳过二次 resolveRoute）
+		 * @param req 请求对象（路径参数已由前置 resolveRoute 写入）
+		 * @param result 前置 resolveRoute 得到的匹配结果
+		 */
+		[[nodiscard]] Awaitable<HttpResponse> dispatchResolved(HttpRequest& req, const ResolveResult& result);
+
+		/**
+		 * @brief 用已缓存的路由匹配结果走同步快速路径分发
+		 * @param req 请求对象
+		 * @param result 前置 resolveRoute 得到的匹配结果
+		 */
+		[[nodiscard]] std::optional<HttpResponse> dispatchSyncResolved(HttpRequest& req, const ResolveResult& result);
 
 		struct WsRouteMatch
 		{
@@ -388,16 +443,6 @@ namespace hical
 			std::optional<MiddlewareNext> compileTimeChain;
 		};
 
-		/**
-		 * @brief 注入运行时完美哈希加速查找（可选增强）
-		 * 由 MetaRoutes::registerRoutes() 自动调用，用户无需手动操作。
-		 * 命中时跳过 unordered_map，miss 时透明回退。
-		 */
-		void setPerfectHashLookup(RuntimePerfectHashLookup lookup);
-
-	private:
-		std::unordered_map<RouteKey, RouteEntry, RouteKeyHash, RouteKeyEqual> staticRoutes_;
-
 		struct ParamRouteEntry
 		{
 			HttpMethod method;
@@ -406,8 +451,6 @@ namespace hical
 			SyncRouteHandler syncHandler;
 			std::optional<MiddlewareNext> compileTimeChain;
 		};
-
-		std::unordered_map<HttpMethod, std::vector<ParamRouteEntry>> paramRoutesByMethod_;
 
 		struct WildcardRouteEntry
 		{
@@ -420,19 +463,19 @@ namespace hical
 			std::optional<MiddlewareNext> compileTimeChain;
 		};
 
+		/**
+		 * @brief 注入运行时完美哈希加速查找（可选增强）
+		 * 由 MetaRoutes::registerRoutes() 自动调用，用户无需手动操作。
+		 * 命中时跳过 unordered_map，miss 时透明回退。
+		 */
+		void setPerfectHashLookup(RuntimePerfectHashLookup lookup);
+
+	private:
+		std::unordered_map<RouteKey, RouteEntry, RouteKeyHash, RouteKeyEqual> staticRoutes_;
+
+		std::unordered_map<HttpMethod, std::vector<ParamRouteEntry>> paramRoutesByMethod_;
+
 		std::unordered_map<HttpMethod, std::vector<WildcardRouteEntry>> wildcardRoutesByMethod_;
-
-		struct ResolveResult
-		{
-			const RouteEntry* staticEntry = nullptr;
-			const ParamRouteEntry* paramEntry = nullptr;
-			const WildcardRouteEntry* wildcardEntry = nullptr;
-			std::string allowedMethods;
-			bool pathTooDeep = false;
-		};
-
-		ResolveResult resolveRoute(HttpRequest& req) const;
-
 		std::unordered_map<std::string, std::vector<HttpMethod>, StringHash, StringEqual> staticPathMethods_;
 
 		std::vector<WsRoute> wsRoutes_;
