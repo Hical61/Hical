@@ -2,7 +2,6 @@
 #include "iguana/json_reader.hpp"
 #include "iguana/json_writer.hpp"
 #include "iguana/reflection.hpp"
-#include <functional>
 #include <string>
 
 using namespace cinatra;
@@ -32,27 +31,6 @@ struct UserResponseDTO
 };
 
 REFLECTION(UserResponseDTO, userId, name);
-
-struct MiddlewareDTO
-{
-	int middleware_count {0};
-};
-
-REFLECTION(MiddlewareDTO, middleware_count);
-
-// 模拟 N 层空操作中间件调用链（与 Crow/Oat++/cpp-httplib 方案一致）
-std::string runWithMiddleware(int layers, std::function<std::string()> handler)
-{
-	auto chain = std::move(handler);
-	for (int i = 0; i < layers; ++i)
-	{
-		chain = [prev = std::move(chain)]() -> std::string
-		{
-			return prev();
-		};
-	}
-	return chain();
-}
 
 int main()
 {
@@ -99,82 +77,6 @@ int main()
 									 iguana::to_json(dto, json);
 									 res.add_header("Content-Type", "application/json");
 									 res.set_status_and_content(status_type::ok, std::move(json));
-								 });
-
-	// ============ 中间件链测试端点 ============
-
-	// 无中间件
-	server.set_http_handler<GET>("/middleware/0",
-								 [](coro_http_request& req, coro_http_response& res)
-								 {
-									 MiddlewareDTO dto {0};
-									 std::string json;
-									 iguana::to_json(dto, json);
-									 res.add_header("Content-Type", "application/json");
-									 res.set_status_and_content(status_type::ok, std::move(json));
-								 });
-
-	// 3 层空操作中间件
-	server.set_http_handler<GET>("/middleware/3",
-								 [](coro_http_request& req, coro_http_response& res)
-								 {
-									 auto result = runWithMiddleware(3,
-																	 []() -> std::string
-																	 {
-																		 MiddlewareDTO dto {3};
-																		 std::string json;
-																		 iguana::to_json(dto, json);
-																		 return json;
-																	 });
-									 res.add_header("Content-Type", "application/json");
-									 res.set_status_and_content(status_type::ok, std::move(result));
-								 });
-
-	// 10 层空操作中间件
-	server.set_http_handler<GET>("/middleware/10",
-								 [](coro_http_request& req, coro_http_response& res)
-								 {
-									 auto result = runWithMiddleware(10,
-																	 []() -> std::string
-																	 {
-																		 MiddlewareDTO dto {10};
-																		 std::string json;
-																		 iguana::to_json(dto, json);
-																		 return json;
-																	 });
-									 res.add_header("Content-Type", "application/json");
-									 res.set_status_and_content(status_type::ok, std::move(result));
-								 });
-
-	// /sync-filter — 模拟同步函数调用链
-	server.set_http_handler<GET>("/sync-filter/3",
-								 [](coro_http_request& req, coro_http_response& res)
-								 {
-									 auto result = runWithMiddleware(3,
-																	 []() -> std::string
-																	 {
-																		 MiddlewareDTO dto {3};
-																		 std::string json;
-																		 iguana::to_json(dto, json);
-																		 return json;
-																	 });
-									 res.add_header("Content-Type", "application/json");
-									 res.set_status_and_content(status_type::ok, std::move(result));
-								 });
-
-	server.set_http_handler<GET>("/sync-filter/10",
-								 [](coro_http_request& req, coro_http_response& res)
-								 {
-									 auto result = runWithMiddleware(10,
-																	 []() -> std::string
-																	 {
-																		 MiddlewareDTO dto {10};
-																		 std::string json;
-																		 iguana::to_json(dto, json);
-																		 return json;
-																	 });
-									 res.add_header("Content-Type", "application/json");
-									 res.set_status_and_content(status_type::ok, std::move(result));
 								 });
 
 	server.sync_start();

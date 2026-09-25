@@ -19,7 +19,7 @@ struct UserDTO
 int main()
 {
 	HttpServer server(8080, 4);
-	server.setIdleTimeout(0); // benchmark 无需超时检测，省掉 per-connection timer 协程 + 3 次堆分配
+	server.setIdleTimeout(0); // benchmark 无需空闲检测，省掉 IdleScanner 的注册/注销和活跃时间戳写入
 
 	// Hello World
 	server.router().get("/",
@@ -57,6 +57,8 @@ int main()
 						});
 
 	// ============ 中间件链测试端点 ============
+	// 不参与六框架横评（其余五家没有可比的原生运行时中间件机制），
+	// 只留给 Hical 自己跟踪中间件开销
 
 	// 空操作洋葱中间件
 	auto passthrough = [](HttpRequest& req, MiddlewareNext next) -> Awaitable<HttpResponse>
@@ -73,22 +75,6 @@ int main()
 							return HttpResponse::json(json::value(std::move(obj)));
 						});
 
-	// /middleware/3 — 3 层空操作中间件
-	{
-		auto g3 = server.router().group("");
-		for (int i = 0; i < 3; ++i)
-		{
-			g3.use(passthrough);
-		}
-		g3.get("/middleware/3",
-			   [](const HttpRequest&) -> HttpResponse
-			   {
-				   json::object obj;
-				   obj["middleware_count"] = 3;
-				   return HttpResponse::json(json::value(std::move(obj)));
-			   });
-	}
-
 	// /middleware/10 — 10 层空操作中间件
 	{
 		auto g10 = server.router().group("");
@@ -103,47 +89,6 @@ int main()
 					obj["middleware_count"] = 10;
 					return HttpResponse::json(json::value(std::move(obj)));
 				});
-	}
-
-	// ============ 同步中间件链测试端点（SyncMiddleware 快速路径） ============
-
-	SyncBeforeHandler passthroughSync = [](HttpRequest&) -> SyncMiddlewareResult
-	{
-		return std::nullopt; // 继续执行
-	};
-
-	// /sync-middleware/3 — 3 层同步中间件
-	{
-		auto gs3 = server.router().group("");
-		for (int i = 0; i < 3; ++i)
-		{
-			gs3.use(passthroughSync);
-		}
-		gs3.get("/sync-middleware/3",
-				[](const HttpRequest&) -> HttpResponse
-				{
-					json::object obj;
-					obj["middleware_count"] = 3;
-					obj["type"] = "sync";
-					return HttpResponse::json(json::value(std::move(obj)));
-				});
-	}
-
-	// /sync-middleware/10 — 10 层同步中间件
-	{
-		auto gs10 = server.router().group("");
-		for (int i = 0; i < 10; ++i)
-		{
-			gs10.use(passthroughSync);
-		}
-		gs10.get("/sync-middleware/10",
-				 [](const HttpRequest&) -> HttpResponse
-				 {
-					 json::object obj;
-					 obj["middleware_count"] = 10;
-					 obj["type"] = "sync";
-					 return HttpResponse::json(json::value(std::move(obj)));
-				 });
 	}
 
 	server.start();

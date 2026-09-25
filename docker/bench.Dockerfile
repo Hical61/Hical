@@ -128,12 +128,9 @@ run_get  "JSON 响应"          "/api/status"
 run_post "JSON Echo"          "/api/echo"
 run_get  "路径参数"           "/users/42"
 
-# 中间件场景
+# 中间件场景（Hical 自测用，不参与框架对比）
 run_get  "中间件 0 层"        "/middleware/0"
-run_get  "中间件 3 层"        "/middleware/3"
 run_get  "中间件 10 层"       "/middleware/10"
-run_get  "同步中间件 3 层"    "/sync-middleware/3"
-run_get  "同步中间件 10 层"   "/sync-middleware/10"
 
 # 高并发场景
 run_get  "高并发 c=100"       "/" 100

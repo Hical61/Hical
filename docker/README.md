@@ -23,10 +23,15 @@ docker/
 │   ├── hical.dockerfile        # TFB 专用 Dockerfile（遵循 TFB 命名规范）
 │   ├── benchmark_config.json   # TFB 配置文件
 │   └── bench_main.cpp          # TFB 极简服务器（仅 /json + /plaintext）
+├── HttpArena/                  # HttpArena 框架联赛的 bench 服务器（meta.json + src/）
 ├── bench.Dockerfile            # 一体化 benchmark（编译 + wrk 全场景测试）
+├── bench-server.Dockerfile     # 分离模式：Server 镜像（多阶段构建）
+├── bench-wrk.Dockerfile        # 分离模式：wrk 压测客户端镜像
+├── bench-pgo.Dockerfile        # PGO 优化构建
+├── bench-entrypoint.sh         # 一体化容器入口（RPS softirq 亲和 + 启动 server）
+├── docker-compose.bench.yml    # Compose 编排（同一 VM 双容器）
 ├── bench_main.cpp              # 压测服务器入口
-├── flamegraph-analysis-cn.md   # 火焰图分析（中文）
-├── flamegraph-analysis.md      # 火焰图分析（英文）
+├── data/                       # 火焰图与 profiling 数据（gitignored）
 └── README.md                   # 本文件
 ```
 
@@ -110,22 +115,21 @@ docker run --rm hical-bench 2>&1 | tee bench-raw-output.txt
 sed -n '/^## Results Summary/,$ p' bench-raw-output.txt >> docker/benchmark-results.md
 ```
 
-### 4. 测试场景（12 场景）
+### 4. 测试场景（9 场景）
 
-| #   | 场景             | 路径                  | 方法 | 并发  |
-| --- | ---------------- | --------------------- | ---- | ----- |
-| 1   | Hello World      | `/`                   | GET  | 100   |
-| 2   | JSON 响应        | `/api/status`         | GET  | 100   |
-| 3   | JSON Echo        | `/api/echo`           | POST | 100   |
-| 4   | 路径参数         | `/users/42`           | GET  | 100   |
-| 5   | 中间件 0 层      | `/middleware/0`       | GET  | 100   |
-| 6   | 中间件 3 层      | `/middleware/3`       | GET  | 100   |
-| 7   | 中间件 10 层     | `/middleware/10`      | GET  | 100   |
-| 8   | 同步中间件 3 层  | `/sync-middleware/3`  | GET  | 100   |
-| 9   | 同步中间件 10 层 | `/sync-middleware/10` | GET  | 100   |
-| 10  | 高并发 100       | `/`                   | GET  | 100   |
-| 11  | 高并发 1000      | `/`                   | GET  | 1000  |
-| 12  | 高并发 10000     | `/`                   | GET  | 10000 |
+| #   | 场景         | 路径             | 方法 | 并发  |
+| --- | ------------ | ---------------- | ---- | ----- |
+| 1   | Hello World  | `/`              | GET  | 100   |
+| 2   | JSON 响应    | `/api/status`    | GET  | 100   |
+| 3   | JSON Echo    | `/api/echo`      | POST | 100   |
+| 4   | 路径参数     | `/users/42`      | GET  | 100   |
+| 5   | 中间件 0 层  | `/middleware/0`  | GET  | 100   |
+| 6   | 中间件 10 层 | `/middleware/10` | GET  | 100   |
+| 7   | 高并发 100   | `/`              | GET  | 100   |
+| 8   | 高并发 1000  | `/`              | GET  | 1000  |
+| 9   | 高并发 10000 | `/`              | GET  | 10000 |
+
+> 中间件两个场景是 Hical 自测用的（跟踪中间件调度开销），不参与 benchmark/ 下的六框架横评——其余五家框架没有可比的原生运行时中间件机制。
 
 ### 5. 可调参数
 

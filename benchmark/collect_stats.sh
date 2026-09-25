@@ -6,11 +6,13 @@ set -euo pipefail
 #
 # 前置条件：docker compose --profile <mode> up -d 已启动服务
 # 运行方式：cd benchmark && BENCH_MODE=cpp bash collect_stats.sh
-# 输出文件：benchmark/stats.md
+# 输出文件：benchmark/output/stats.md
 # ============================================================
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-OUTPUT="$SCRIPT_DIR/stats.md"
+OUTPUT_DIR="$SCRIPT_DIR/output"
+mkdir -p "$OUTPUT_DIR"
+OUTPUT="$OUTPUT_DIR/stats.md"
 PREFIX="benchmark"
 WRK_CONTAINER="${PREFIX}-wrk-1"
 
@@ -31,6 +33,7 @@ CPP_FRAMEWORKS=(
     "Oat++ (C++)|oatpp|oatpp/main.cpp|8085"
     "cpp-httplib (C++)|cpphttplib|cpphttplib/main.cpp|8086"
     "Cinatra (C++)|cinatra|cinatra/main.cpp|8087"
+    "libuvcpp (C++)|libuvcpp|libuvcpp/main.cpp|8088"
 )
 
 CROSS_LANG_FRAMEWORKS=(
@@ -47,6 +50,7 @@ ALL_FRAMEWORKS=(
     "Oat++ (C++)|oatpp|oatpp/main.cpp|8085"
     "cpp-httplib (C++)|cpphttplib|cpphttplib/main.cpp|8086"
     "Cinatra (C++)|cinatra|cinatra/main.cpp|8087"
+    "libuvcpp (C++)|libuvcpp|libuvcpp/main.cpp|8088"
     "Gin (Go)|gin|gin/main.go|8081"
     "Fiber (Go)|fiber|fiber/main.go|8089"
     "Actix-web (Rust)|actix|actix/src/main.rs|8082"

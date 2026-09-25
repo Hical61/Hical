@@ -1,28 +1,17 @@
 #include "httplib.h"
 #include "json.hpp"
-#include <functional>
 #include <string>
 
 using json = nlohmann::json;
 
-// 模拟 N 层空操作中间件调用链（与 Crow/Oat++ 方案一致）
-std::string runWithMiddleware(int layers, std::function<std::string()> handler)
-{
-	auto chain = std::move(handler);
-	for (int i = 0; i < layers; ++i)
-	{
-		chain = [prev = std::move(chain)]() -> std::string
-		{
-			// 空操作，直接透传
-			return prev();
-		};
-	}
-	return chain();
-}
-
 int main()
 {
 	httplib::Server svr;
+
+	// 必须开 TCP_NODELAY：cpp-httplib 的服务端默认是 false，而它的响应分「响应头」和
+	// 「body」两次 write 发出去，Nagle 会把第二个小包压住等前一个包的 ACK，客户端又
+	// 延迟 ACK 拖着不回——每个请求稳定卡 ~40ms。不关掉它，压出来的是 Nagle 不是框架。
+	svr.set_tcp_nodelay(true);
 
 	// 设置线程池大小为 4（与其他框架一致）
 	svr.new_task_queue = []
@@ -70,74 +59,6 @@ int main()
 				obj["userId"] = id;
 				obj["name"] = "User " + id;
 				res.set_content(obj.dump(), "application/json");
-			});
-
-	// ============ 中间件链测试端点 ============
-
-	// 无中间件
-	svr.Get("/middleware/0",
-			[](const httplib::Request&, httplib::Response& res)
-			{
-				json obj;
-				obj["middleware_count"] = 0;
-				res.set_content(obj.dump(), "application/json");
-			});
-
-	// 3 层空操作中间件
-	svr.Get("/middleware/3",
-			[](const httplib::Request&, httplib::Response& res)
-			{
-				auto result = runWithMiddleware(3,
-												[]() -> std::string
-												{
-													json obj;
-													obj["middleware_count"] = 3;
-													return obj.dump();
-												});
-				res.set_content(result, "application/json");
-			});
-
-	// 10 层空操作中间件
-	svr.Get("/middleware/10",
-			[](const httplib::Request&, httplib::Response& res)
-			{
-				auto result = runWithMiddleware(10,
-												[]() -> std::string
-												{
-													json obj;
-													obj["middleware_count"] = 10;
-													return obj.dump();
-												});
-				res.set_content(result, "application/json");
-			});
-
-	// /sync-filter — 模拟同步函数调用链
-	svr.Get("/sync-filter/3",
-			[](const httplib::Request&, httplib::Response& res)
-			{
-				auto result = runWithMiddleware(3,
-												[]() -> std::string
-												{
-													json obj;
-													obj["middleware_count"] = 3;
-													obj["type"] = "sync";
-													return obj.dump();
-												});
-				res.set_content(result, "application/json");
-			});
-
-	svr.Get("/sync-filter/10",
-			[](const httplib::Request&, httplib::Response& res)
-			{
-				auto result = runWithMiddleware(10,
-												[]() -> std::string
-												{
-													json obj;
-													obj["middleware_count"] = 10;
-													obj["type"] = "sync";
-													return obj.dump();
-												});
-				res.set_content(result, "application/json");
 			});
 
 	svr.listen("0.0.0.0", 8086);

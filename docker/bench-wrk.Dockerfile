@@ -96,12 +96,9 @@ run_wrk "JSON 响应"          "/api/status"  GET 100
 run_wrk "JSON Echo"          "/api/echo"    POST 100
 run_wrk "路径参数"           "/users/42"    GET 100
 
-# 中间件场景
+# 中间件场景（Hical 自测用，不参与框架对比）
 run_wrk "中间件 0 层"        "/middleware/0"         GET 100
-run_wrk "中间件 3 层"        "/middleware/3"         GET 100
 run_wrk "中间件 10 层"       "/middleware/10"        GET 100
-run_wrk "同步中间件 3 层"    "/sync-middleware/3"    GET 100
-run_wrk "同步中间件 10 层"   "/sync-middleware/10"   GET 100
 
 # 高并发场景
 run_wrk "高并发 c=100"       "/" GET 100
@@ -168,13 +165,9 @@ mkdir -p "$(dirname "$REPORT_FILE")"
     echo ""
     echo "| Type | Count | QPS | Avg Latency |"
     echo "| --- | ---: | ---: | --- |"
-    # 索引 4=mw0, 5=mw3, 6=mw10, 7=smw3, 8=smw10
+    # 索引 4=mw0, 5=mw10
     printf "| 无中间件 | 0 | %s | %s |\n" "${S_QPS[4]}" "${S_LAT[4]}"
-    printf "| 异步中间件 | 3 | %s | %s |\n" "${S_QPS[5]}" "${S_LAT[5]}"
-    printf "| 异步中间件 | 10 | %s | %s |\n" "${S_QPS[6]}" "${S_LAT[6]}"
-    printf "| **同步中间件** | 3 | **%s** | %s |\n" "${S_QPS[7]}" "${S_LAT[7]}"
-    printf "| **同步中间件** | 10 | **%s** | %s |\n" "${S_QPS[8]}" "${S_LAT[8]}"
-    echo ""
+    printf "| 异步中间件 | 10 | %s | %s |\n" "${S_QPS[5]}" "${S_LAT[5]}"
 
 } > "$REPORT_FILE"
 
