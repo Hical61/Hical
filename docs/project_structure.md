@@ -1,6 +1,6 @@
 # Hical 项目代码结构
 
-> 最后更新：2026-08-05
+> 最后更新：2026-09-28
 
 ## 项目概述
 
@@ -10,7 +10,7 @@ Hical 是基于 Boost.Asio、采用原生 HTTP/WebSocket 网络栈（picohttppar
 
 ```
 hical/
-├── CMakeLists.txt              # 顶层 CMake（C++20，project(VERSION 2.6.7)，Boost/OpenSSL/GTest）
+├── CMakeLists.txt              # 顶层 CMake（C++20，project(VERSION 2.7.0)，Boost/OpenSSL/GTest）
 ├── README.md / README_CN.md    # 项目主页（英文 / 中文双语，含 CI/License/平台徽章）
 ├── LICENSE                     # MIT 协议
 ├── CHANGELOG.md                # 版本变更日志（按版本倒序）

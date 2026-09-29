@@ -552,7 +552,7 @@ int main()
     buffer.append("PMR world!");
     std::cout << "缓冲区: " << buffer.readAll() << std::endl;
 
-    // 模拟请求级池：一次 HTTP 请求的生命周期
+    // 请求级池得自己创建，框架不会在请求路径上自动接入
     {
         auto requestPool = MemoryPool::instance().createRequestPool(4096);
         std::pmr::polymorphic_allocator<std::byte> reqAlloc(requestPool.get());
@@ -1518,10 +1518,11 @@ HttpServer server(8080, 4);  // 4 个 IO 线程
 
 ### Q: 内存池需要手动管理吗？
 
-不需要。Hical 的 PMR 内存池自动管理：
+基本不用。Hical 的 PMR 内存池自动管理：
 - 线程本地池：线程启动时自动创建
-- 请求级池：请求结束时自动释放
 - 全局池：进程退出时自动清理
+
+请求级单调池是例外：框架请求路径没有接入，要自己调 `MemoryPool::instance().createRequestPool()` 创建，用完让它析构整体释放。参考[示例 7：PMR 内存池使用](#示例-7pmr-内存池使用)。
 
 如需自定义配置，在创建 `HttpServer` 之前调用：
 ```cpp

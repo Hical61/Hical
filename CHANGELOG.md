@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **HttpServer 补 `use(SyncBeforeHandler)` 系列重载**：`makeJwtAuthMiddleware`、`makeRateLimiterMiddleware` 这类返回 `SyncBeforeHandler` 的中间件以前只能塞进 `MiddlewarePipeline`，直接 `server.use(makeJwtAuthMiddleware(...))` 编译不过。现在 `HttpServer::use` 补齐了 `use(SyncBeforeHandler)`、`use(SyncBeforeHandler, SyncAfterHandler)`、`use(name, SyncBeforeHandler, SyncAfterHandler)` 三个重载
+
+### Fixed
+- **405 检测漏了通配路由（外部可观测的契约变化）**：`Router::resolveRoute()` 的 405 检测以前只查静态路由和参数路由，通配路由不参与，所以 `get("/*path", ...)` 这类注册对 POST/HEAD 一律回 404，正确的行为是 405 + `Allow` 头。现在通配路由和另外两类一起收集允许方法。顺带修了 `Allow` 头重复列方法的问题——静态路由和通配路由都注册了 GET 时会吐出 `GET, GET`，改成用方法位掩码去重后一次性拼串。`examples/static_server` 用的就是 `/*path` 模式，变化最直接
+- **profiling 模式下 Sync 中间件被整条丢弃**：开 `HICAL_ENABLE_MIDDLEWARE_PROFILING=ON` 时 `MiddlewarePipeline::build()` 按 `vector<MiddlewareHandler>` 搭统计链，而 `hSync` 条目根本没有 handler 可挂，于是被整条从链里丢掉——`makeJwtAuthMiddleware`、`makeRateLimiterMiddleware` 这类 `SyncBeforeHandler` 直接不执行，认证和限流静默 fail-open。这不是「不计时」，是「不跑」。现在检测到 Sync 条目就回退到不丢条目的普通链并记一条 WARN 说明本管线 profiling 关闭，`middlewareStats()` 对这类管线返回空 vector
+
 ### Changed
 - **慢 body 防护：无效请求在读 body 前直接拒绝**：以前请求 headers 解析完会先整段读 body、再走路由匹配，所以带大 body 的无效 uri、方法不匹配（405）、超深路径都得先把 body 吃进内存才报错。现在把路由匹配前置到读 body 之前，这几类请求在读 body 前就能直接回 404/405/400，body 一字不读，省掉把无效请求的大 body 白读进内存的开销
 - **中间件前置到读 body 之前**：认证、限流这类拦截型中间件以前是在 body 读完之后才跑的，无效请求光是为了塞满中间件需要的 body 就得先把全部数据读进来。现在中间件在 body 之前执行，中间件只看到 header（`req.body()` 此时为空），被拦截的请求 body 一字不读；字段级 body 校验下沉到 handler 自己负责

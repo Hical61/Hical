@@ -121,7 +121,7 @@ namespace hical
 
 		/**
 		 * @brief 用组级中间件包装 handler
-		 * 无中间件时直接返回原 handler，有中间件时用 buildChainFrom 构建局部链。
+		 * 无中间件时直接返回原 handler，有中间件时用 MiddlewarePipeline::buildOptimizedChain 构建局部链。
 		 */
 		RouteHandler wrapHandler(RouteHandler handler) const;
 

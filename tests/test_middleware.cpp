@@ -1,3 +1,8 @@
+/**
+ * @file test_middleware.cpp
+ * @brief 中间件管线测试（洋葱模型、Sync 快速路径、profiling 统计）
+ */
+
 #include "core/Middleware.h"
 #include "core/Coroutine.h"
 #include "asio/AsioEventLoop.h"
@@ -277,6 +282,74 @@ TEST(MiddlewareTest, NamedUseWorks)
 	EXPECT_EQ(pipeline.size(), 2);
 }
 
+// ============ execute(req, finalHandler) 重载 ============
+
+// 这个重载以前只从 entries_ 里挑 hAsync 搭链，Sync 中间件在任何编译模式下都被吞掉。
+// 用它跑一遍带拦截的 Sync 中间件，钉死「Sync 也得进链」。
+TEST(MiddlewareTest, ExecuteWithFinalHandlerRunsSyncMiddleware)
+{
+	MiddlewarePipeline pipeline;
+	int syncCalls = 0;
+
+	pipeline.use(
+		[&syncCalls](HttpRequest& req) -> SyncMiddlewareResult
+		{
+			++syncCalls;
+			if (req.path() == "/blocked")
+			{
+				HttpResponse res;
+				res.setStatus(HttpStatusCode::hUnauthorized);
+				res.setBody("nope", "text/plain");
+				return res;
+			}
+			return std::nullopt;
+		});
+
+	pipeline.use("passthrough",
+				 [](HttpRequest& req, MiddlewareNext next) -> Awaitable<HttpResponse>
+				 {
+					 co_return co_await next(req);
+				 });
+
+	// 被 Sync 中间件拦下
+	// 注意 req 必须建在用例作用域里：execute 是协程，协程体要等 co_await 才跑，
+	// 塞进 runCoroutine 的 lambda 里的话 f() 一返回 req 就析构了，链上读到的就是悬垂对象。
+	HttpRequest blockedReq;
+	blockedReq.setMethod(HttpMethod::hGet);
+	blockedReq.setTarget("/blocked");
+
+	auto blocked = runCoroutine(
+		[&]()
+		{
+			return pipeline.execute(blockedReq,
+									[](HttpRequest&) -> Awaitable<HttpResponse>
+									{
+										co_return HttpResponse::ok("handler");
+									});
+		});
+	ASSERT_TRUE(blocked.has_value());
+	EXPECT_EQ(blocked->statusCode(), HttpStatusCode::hUnauthorized);
+	EXPECT_EQ(syncCalls, 1);
+
+	// 放行时 Sync 中间件照样执行，最终处理器正常返回
+	HttpRequest openReq;
+	openReq.setMethod(HttpMethod::hGet);
+	openReq.setTarget("/open");
+
+	auto passed = runCoroutine(
+		[&]()
+		{
+			return pipeline.execute(openReq,
+									[](HttpRequest&) -> Awaitable<HttpResponse>
+									{
+										co_return HttpResponse::ok("handler");
+									});
+		});
+	ASSERT_TRUE(passed.has_value());
+	EXPECT_EQ(passed->body(), "handler");
+	EXPECT_EQ(syncCalls, 2);
+}
+
 // ============ Profiling 测试（仅在编译选项开启时生效） ============
 
 #ifdef HICAL_ENABLE_MIDDLEWARE_PROFILING
@@ -352,6 +425,135 @@ TEST(MiddlewareProfilingTest, ResetTimingStats)
 	auto stats = pipeline.getTimingStats();
 	ASSERT_EQ(stats.size(), 1);
 	EXPECT_EQ(stats[0].callCount, 0);
+}
+
+// profiling 链是按 vector<MiddlewareHandler> 搭的，Sync 条目没有 handler 可挂，
+// 硬上就是「不执行」而不是「不计时」。这条用例盯着「宁可少统计也不能少执行」。
+TEST(MiddlewareProfilingTest, SyncMiddlewareStillRunsInsteadOfBeingDropped)
+{
+	MiddlewarePipeline pipeline;
+	int syncCalls = 0;
+
+	pipeline.use("auth-like",
+				 [&syncCalls](HttpRequest&) -> SyncMiddlewareResult
+				 {
+					 ++syncCalls;
+					 HttpResponse res;
+					 res.setStatus(HttpStatusCode::hUnauthorized);
+					 res.setBody("nope", "text/plain");
+					 return res;
+				 });
+
+	pipeline.build(
+		[](HttpRequest&) -> Awaitable<HttpResponse>
+		{
+			co_return HttpResponse::ok("handler");
+		});
+
+	HttpRequest req;
+	req.setMethod(HttpMethod::hGet);
+	req.setTarget("/private");
+
+	// req 得活到 co_await 结束（协程体是延迟跑的），所以建在用例作用域里
+	auto result = runCoroutine(
+		[&]()
+		{
+			return pipeline.execute(req);
+		});
+
+	ASSERT_TRUE(result.has_value());
+	EXPECT_EQ(syncCalls, 1);                                        // 真执行了
+	EXPECT_EQ(result->statusCode(), HttpStatusCode::hUnauthorized); // 拦截也生效了
+
+	// 回退的管线不做 profiling，统计里不该留 callCount 恒为 0 的假行
+	EXPECT_TRUE(pipeline.getTimingStats().empty());
+}
+
+// Sync + Async 混编：Async 照常计时路径上的行为不变，Sync 也不能丢
+TEST(MiddlewareProfilingTest, MixedSyncAndAsyncFallsBackWithoutFakeStats)
+{
+	MiddlewarePipeline pipeline;
+	int syncCalls = 0;
+	int asyncCalls = 0;
+
+	pipeline.use("sync",
+				 [&syncCalls](HttpRequest&) -> SyncMiddlewareResult
+				 {
+					 ++syncCalls;
+					 return std::nullopt;
+				 });
+
+	pipeline.use("async",
+				 [&asyncCalls](HttpRequest& req, MiddlewareNext next) -> Awaitable<HttpResponse>
+				 {
+					 ++asyncCalls;
+					 co_return co_await next(req);
+				 });
+
+	pipeline.build(
+		[](HttpRequest&) -> Awaitable<HttpResponse>
+		{
+			co_return HttpResponse::ok("ok");
+		});
+
+	HttpRequest req;
+	auto result = runCoroutine(
+		[&]()
+		{
+			return pipeline.execute(req);
+		});
+
+	ASSERT_TRUE(result.has_value());
+	EXPECT_EQ(result->body(), "ok");
+	EXPECT_EQ(syncCalls, 1);
+	EXPECT_EQ(asyncCalls, 1);
+	EXPECT_TRUE(pipeline.getTimingStats().empty());
+}
+
+// HttpServer 就是这么用的：build() 之后再用 buildFor() 预构建 WS/SSE 那条链，
+// 这条链同样不能丢 Sync 条目。
+TEST(MiddlewareProfilingTest, BuildForKeepsSyncMiddleware)
+{
+	MiddlewarePipeline pipeline;
+	int syncCalls = 0;
+
+	pipeline.use("sync",
+				 [&syncCalls](HttpRequest&) -> SyncMiddlewareResult
+				 {
+					 ++syncCalls;
+					 return std::nullopt;
+				 });
+
+	pipeline.build(
+		[](HttpRequest&) -> Awaitable<HttpResponse>
+		{
+			co_return HttpResponse::ok("main");
+		});
+
+	auto wsChain = pipeline.buildFor(
+		[](HttpRequest&) -> Awaitable<HttpResponse>
+		{
+			co_return HttpResponse::ok("");
+		});
+
+	HttpRequest mainReq;
+	auto mainRes = runCoroutine(
+		[&]()
+		{
+			return pipeline.execute(mainReq);
+		});
+	ASSERT_TRUE(mainRes.has_value());
+	EXPECT_EQ(mainRes->body(), "main");
+	EXPECT_EQ(syncCalls, 1);
+
+	HttpRequest wsReq;
+	auto wsRes = runCoroutine(
+		[&]()
+		{
+			return wsChain(wsReq);
+		});
+	ASSERT_TRUE(wsRes.has_value());
+	EXPECT_EQ(syncCalls, 2);
 }
 
 #endif // HICAL_ENABLE_MIDDLEWARE_PROFILING

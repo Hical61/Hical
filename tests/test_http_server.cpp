@@ -1,5 +1,12 @@
+/**
+ * @file test_http_server.cpp
+ * @brief HttpServer 端到端测试（路由、中间件、连接管理）
+ */
+
 #include "TestHttpClient.h"
 #include "core/HttpServer.h"
+#include "core/JwtAuth.h"
+#include "core/RateLimiter.h"
 #include <boost/asio.hpp>
 #include <boost/json.hpp>
 #include <gtest/gtest.h>
@@ -666,6 +673,100 @@ TEST(HttpServerTest, MiddlewareKeepAliveNoStaleBody)
 
 	boost::system::error_code ec;
 	sock.close(ec);
+
+	server.stop();
+	serverThread.join();
+}
+
+// ============ SyncBeforeHandler 重载（use(SyncBeforeHandler)） ============
+
+// 通过这个重载注册的 Sync 中间件必须真跑起来（以前 HttpServer 压根没这个重载，
+// 加完之后还得确认它进了管线而不是被吃掉），并且能正常短路。
+TEST(HttpServerTest, SyncBeforeMiddlewareInterceptsRequest)
+{
+	HttpServer server(0);
+	std::atomic<int> syncCalls {0};
+
+	server.use(
+		[&syncCalls](HttpRequest& req) -> SyncMiddlewareResult
+		{
+			syncCalls.fetch_add(1, std::memory_order_relaxed);
+			if (req.path() == "/private")
+			{
+				HttpResponse res;
+				res.setStatus(HttpStatusCode::hUnauthorized);
+				res.setBody("denied", "text/plain");
+				return res;
+			}
+			return std::nullopt;
+		});
+
+	server.router().get("/private",
+						[](const HttpRequest&) -> HttpResponse
+						{
+							return HttpResponse::ok("should not reach");
+						});
+	server.router().get("/public",
+						[](const HttpRequest&) -> HttpResponse
+						{
+							return HttpResponse::ok("public");
+						});
+
+	std::thread serverThread;
+	uint16_t port = startServerAndWait(server, serverThread);
+
+	auto [privateStatus, privateBody] = httpGet("127.0.0.1", port, "/private");
+	EXPECT_EQ(privateStatus, 401);
+	EXPECT_EQ(privateBody, "denied");
+
+	auto [publicStatus, publicBody] = httpGet("127.0.0.1", port, "/public");
+	EXPECT_EQ(publicStatus, 200);
+	EXPECT_EQ(publicBody, "public");
+
+	EXPECT_EQ(syncCalls.load(std::memory_order_relaxed), 2);
+
+	server.stop();
+	serverThread.join();
+}
+
+// 三处文档示例（JwtAuth.h / RateLimiter.h / api_reference.md）都写的是
+// server.use(makeJwtAuthMiddleware(...)) 这种写法，这里把它真用起来：
+// 既当编译验证，也确认 JWT 中间件真的拦住了未认证请求、skipPaths 照常放行。
+TEST(HttpServerTest, JwtAndRateLimiterFactoriesUsableViaUse)
+{
+	HttpServer server(0);
+
+	JwtAuthOptions jwtOpts;
+	jwtOpts.secret = std::string(32, 's');
+	jwtOpts.skipPaths = {"/public/health"};
+	server.use(makeJwtAuthMiddleware(jwtOpts));
+
+	RateLimiterOptions rlOpts;
+	rlOpts.config = {100.0, 200.0};
+	server.use(makeRateLimiterMiddleware(rlOpts));
+
+	server.router().get("/private",
+						[](const HttpRequest&) -> HttpResponse
+						{
+							return HttpResponse::ok("secret");
+						});
+	server.router().get("/public/health",
+						[](const HttpRequest&) -> HttpResponse
+						{
+							return HttpResponse::ok("alive");
+						});
+
+	std::thread serverThread;
+	uint16_t port = startServerAndWait(server, serverThread);
+
+	// 没带 Authorization 头：JWT Sync 中间件直接 401
+	auto [noTokenStatus, noTokenBody] = httpGet("127.0.0.1", port, "/private");
+	EXPECT_EQ(noTokenStatus, 401);
+
+	// 白名单路径：JWT 放行，限流器也没超限
+	auto [healthStatus, healthBody] = httpGet("127.0.0.1", port, "/public/health");
+	EXPECT_EQ(healthStatus, 200);
+	EXPECT_EQ(healthBody, "alive");
 
 	server.stop();
 	serverThread.join();

@@ -276,7 +276,7 @@ Hical 采用 C++17 PMR（Polymorphic Memory Resource）标准，设计了三层�
 │    ┌────────────────────────────────────┐    │
 │    │  上游: 线程本地池                    │    │
 │    └────────────────────────────────────┘    │
-│    用途：单次 HTTP 请求的生命周期分配           │
+│    用途：单次请求内的临时分配，需手动创建       │
 │    特点：只分配不释放，析构时整体回收            │
 └──────────────────────────────────────────────┘
 ```
@@ -314,14 +314,15 @@ thread_local std::pmr::unsynchronized_pool_resource* threadPool = nullptr;
 
 ```cpp
 auto pool = MemoryPool::instance().createRequestPool(4096);
-// 请求处理期间所有分配都使用此 pool
-// 请求结束时 pool 析构 → 所有内存一次性释放
+// 池要自己建，框架的请求路径没有自动接进来
+// 用完让 pool 析构 → 所有内存一次性释放
 ```
 
-- **职责**：单次 HTTP 请求生命周期内的分配器
+- **职责**：单次请求生命周期内的临时分配器；当前要使用者自己调 `createRequestPool()` 才会用到
 - **零释放开销**：`monotonic_buffer_resource` 只分配不释放，析构时整体回收
 - **内存局部性**：请求内的所有数据在连续内存中，缓存友好
-- **适用场景**：HTTP 消息体、JSON 解析结果、临时字符串
+- **适用场景**：handler 里自己拼装的大块临时数据，比如渲染模板、聚合查询结果
+- **框架请求路径未接入**：HTTP 请求路径用的是从 `ReadBufferPool` 借出的连接级 `readBuf`、栈缓冲和普通堆分配，`HttpSessionImpl` 里没有引用过这个池
 
 ### 4.4 TrackedResource 统计机制
 
@@ -369,25 +370,25 @@ HTTP 请求到达
     │
     ▼
 TcpConnection 读取数据
-    │  使用线程本地池分配 PmrBuffer
+    │  从 ReadBufferPool 借一块线程本地 readBuf
     ▼
 HttpRequest 解析
-    │  使用请求级单调池
+    │  头部存栈上 array<Entry,64>，值指向连接级 readBuf
     ▼
 JSON 解析 (boost::json::value)
-    │  使用请求级单调池
+    │  boost::json 默认分配器（堆）
     ▼
 路由分发 → Handler 执行
     │
     ▼
 HttpResponse 构建
-    │  使用请求级单调池
+    │  响应头写进栈上 FixedBuffer<512>
     ▼
 TcpConnection 发送响应
-    │  使用线程本地池的 PmrBuffer
+    │  栈上 FixedBuffer + 堆上的 shared_ptr<string>
     ▼
 请求结束
-    │  请求级单调池析构 → 整体释放
+    │  借出的 readBuf 归还 ReadBufferPool
     ▼
 等待下一个请求
 ```
@@ -1084,7 +1085,7 @@ handleSession()                          IdleScanner::run()
 │  每个连接从 accept 到 I/O 全生命周期在同一线程      │
 │  线程间无共享状态，无跨线程 dispatch               │
 │                                                  │
-│  Windows 自动回退为单 acceptor + Round-Robin 分发  │
+│  Windows 回退为单 acceptor + Least-Connections 分发│
 └─────────────────────────────────────────────────┘
 ```
 
@@ -1276,7 +1277,7 @@ struct NetworkError
 | 变量                 | 默认值 | 说明                                                            |
 | -------------------- | ------ | --------------------------------------------------------------- |
 | `HICAL_WITH_OPENAPI` | `ON`   | 是否编译 OpenAPI 模块                                           |
-| `HICAL_HAS_OPENAPI`  | —      | 由 CMake 根据 `HICAL_WITH_OPENAPI` 自动定义，用于 `#ifdef` 保护 |
+| `HICAL_HAS_OPENAPI`  | —      | 开启时由 CMake 定义为 `1` 并随 `hical_core` 导出，供使用者判断模块是否可用；模块本身靠 CMake 不编译 `OpenApi*.cpp` 来排除，源码里没有 `#ifdef` 守卫 |
 
 ```bash
 # 关闭 OpenAPI 模块（极端体积敏感场景）
@@ -1452,8 +1453,8 @@ struct WsOptions
 ┌────────────────────────────────────────────────────┐
 │                     WsHub                           │
 │                                                    │
-│  m_connections: map<WsConnectionId, weak_ptr>      │
-│  m_rooms: map<string, vector<RoomMember>>          │
+│  connections_: unordered_map<WsConnectionId, Entry>│
+│  rooms_: unordered_map<string, vector<RoomMember>> │
 │                                                    │
 │  add(session) → id        remove(id)               │
 │  join(id, room)           leave(id, room)          │
@@ -1470,7 +1471,7 @@ struct WsOptions
 **设计要点**：
 - **weak_ptr 存储**：Hub 不延长 WebSocketSession 生命周期，连接断开后自然失效
 - **coSpawn 跨线程广播**：每条广播消息通过 `coSpawn` 投递到目标连接所属的 executor，保证写入线程安全
-- **RoomMember 缓存行优化**：冗余存储 `weak_ptr` 消除广播时的 `m_connections.find(id)` 指针追踪
+- **RoomMember 缓存行优化**：冗余存储 `weak_ptr` 消除广播时的 `connections_.find(id)` 指针追踪
 - **用户需在 onDisconnect 中调用 `remove(id)`**：Hub 不自动清理，dead entries 在广播时通过 `weak_ptr::lock()` 跳过
 
 ### 18.5 消息类型回调

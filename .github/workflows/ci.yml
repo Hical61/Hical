@@ -262,6 +262,63 @@ jobs:
         if: matrix.compiler == 'msvc'
         run: ctest --test-dir build --output-on-failure --timeout 60 -j4 -C Release -E 'RouterPerfTest|PerfectHashPerfTest|HttpServerPerfTest'
 
+  # ── 中间件 profiling 构建（打开 HICAL_ENABLE_MIDDLEWARE_PROFILING） ──
+  # 这个选项默认 OFF，上面那个 build job 从来不开它，于是 tests/test_middleware.cpp 里
+  # #ifdef HICAL_ENABLE_MIDDLEWARE_PROFILING 包住的 MiddlewareProfilingTest 用例在所有
+  # CI 里都不参与编译。那几条用例守的是「profiling 模式下 Sync 中间件被整条丢弃、认证/限流
+  # 静默 fail-open」这个缺陷，没人守着的话，重构 MiddlewarePipeline::build() 会无声退回原状。
+  # 只起 Linux + GCC 一路，不铺矩阵，CI 时间克制。
+  middleware-profiling:
+    runs-on: ubuntu-24.04
+    name: ubuntu-24.04 / gcc / middleware-profiling
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libboost-all-dev libssl-dev libgtest-dev liburing-dev zlib1g-dev cmake
+
+      - name: Setup ccache
+        uses: hendrikmuhs/ccache-action@v1
+        with:
+          key: ubuntu-24.04-gcc-middleware-profiling
+
+      - name: Configure (middleware profiling)
+        run: |
+          cmake -B build -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER=gcc-14 \
+            -DCMAKE_CXX_COMPILER=g++-14 \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            -DHICAL_ENABLE_MIDDLEWARE_PROFILING=ON \
+            -DHICAL_DISABLE_IO_URING=ON
+
+      - name: Build (middleware profiling)
+        run: cmake --build build -j$(nproc)
+
+      - name: Test (middleware profiling)
+        run: ctest --test-dir build --output-on-failure --timeout 60 -j4 -E 'RouterPerfTest|PerfectHashPerfTest|HttpServerPerfTest'
+
+      # 光看 ctest 绿没用：profiling 没打开、用例被 #ifdef 编没了的时候 gtest 照样返回 0
+      # （只打印 "0 tests from 0 test suites" 和一句 WARNING）。所以这里显式逐条确认用例名
+      # 真的出现在 [ OK ] 行里，把「跑了」和「没编进来」区分开。
+      - name: Assert MiddlewareProfilingTest actually ran
+        run: |
+          bin=$(find build -type f -name 'test_middleware' -print -quit)
+          if [[ -z $bin || ! -x $bin ]]; then
+            echo "::error::找不到 test_middleware 测试可执行文件，构建产物布局和预期不符"
+            exit 1
+          fi
+          out=$("$bin" --gtest_filter='MiddlewareProfilingTest.*' --gtest_color=no)
+          echo "$out"
+          for t in MiddlewareProfilingTest.SyncMiddlewareStillRunsInsteadOfBeingDropped \
+                   MiddlewareProfilingTest.MixedSyncAndAsyncFallsBackWithoutFakeStats \
+                   MiddlewareProfilingTest.BuildForKeepsSyncMiddleware; do
+            grep -q "OK ] $t" <<< "$out" || { echo "::error::$t 没有执行，profiling 用例可能根本没编进来"; exit 1; }
+          done
+          echo "MiddlewareProfilingTest 三条关键用例均已执行通过"
+
   # ── PR 自动打标签 ──
   labeler:
     if: github.event_name == 'pull_request'

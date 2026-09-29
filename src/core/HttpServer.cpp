@@ -68,6 +68,33 @@ namespace hical
 		middlewarePipeline_.use(name, std::move(middleware));
 	}
 
+	void HttpServer::use(SyncBeforeHandler before)
+	{
+		if (started_)
+		{
+			throw std::logic_error("HttpServer: cannot add middleware after start()");
+		}
+		middlewarePipeline_.use(std::move(before));
+	}
+
+	void HttpServer::use(SyncBeforeHandler before, SyncAfterHandler after)
+	{
+		if (started_)
+		{
+			throw std::logic_error("HttpServer: cannot add middleware after start()");
+		}
+		middlewarePipeline_.use(std::move(before), std::move(after));
+	}
+
+	void HttpServer::use(const std::string& name, SyncBeforeHandler before, SyncAfterHandler after)
+	{
+		if (started_)
+		{
+			throw std::logic_error("HttpServer: cannot add middleware after start()");
+		}
+		middlewarePipeline_.use(name, std::move(before), std::move(after));
+	}
+
 #ifdef HICAL_ENABLE_MIDDLEWARE_PROFILING
 	std::vector<MiddlewarePipeline::TimingSnapshot> HttpServer::middlewareStats() const
 	{

@@ -30,7 +30,7 @@ namespace hical
 	/**
 	 * @brief 静态文件服务
 	 * 提供 serveStatic() 工厂函数，将指定 URL 前缀映射到本地目录，
-	 * 返回可直接注册到 Router 的 SyncRouteHandler。
+	 * 返回可直接注册到 Router 的 RouteHandler（协程版）。
 	 * 用法：
 	 * ```cpp
 	 * // 将 /static/... 映射到 ./public 目录
@@ -342,7 +342,7 @@ namespace hical
 	 * @param rootDir     本地目录路径（如 "./public"）
 	 * @param urlPrefix   URL 前缀（如 "/static/"），用于从请求路径中去除前缀得到相对路径
 	 * @param maxFileSize 单文件最大字节数（默认 64MB），超出返回 413
-	 * @return SyncRouteHandler 可直接注册到 Router 的处理器
+	 * @return RouteHandler 可直接注册到 Router 的处理器（协程版）
 	 * 示例：
 	 * ```cpp
 	 * // 注册通配路由：/static/{path} -> ./public/{path}

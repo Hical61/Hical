@@ -19,7 +19,7 @@ namespace hical
 	/**
 	 * @brief 基于 pmr 的统一缓冲区
 	 * hical 统一缓冲区，使用 pmr 分配器管理内存。
-	 * 支持 prepend 区域和自动扩容，底层使用 std::pmr::vector。
+	 * 预留一段前导区域（hPrependSize 字节，给 makeSpace 前移数据兜底）并支持自动扩容，底层使用 std::pmr::vector。
 	 */
 	class PmrBuffer
 	{

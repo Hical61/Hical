@@ -36,7 +36,7 @@ namespace hical
 	 * @brief 追踪型内存资源包装器
 	 * 包装一个上游 memory_resource，在 allocate/deallocate 时做原子计数统计。
 	 * 缓存行优化：
-	 * - HICAL_ENABLE_MEMORY_TRACKING=OFF（默认）：do_allocate/do_deallocate 直接透传，零额外开销
+	 * - HICAL_ENABLE_MEMORY_TRACKING 关闭后：do_allocate/do_deallocate 直接透传，零额外开销
 	 * - HICAL_ENABLE_MEMORY_TRACKING=ON：每个计数器 alignas(64) 独占 cache line，
 	 *   消除多核并发分配时的 false sharing（4 个 atomic 共处 32B 同一 cache line 的问题）
 	 */

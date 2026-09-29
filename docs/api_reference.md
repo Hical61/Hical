@@ -1108,7 +1108,7 @@ std::function<Awaitable<HttpResponse>(const HttpRequest&)> serveStatic(
     std::uintmax_t maxFileSize = 64ULL * 1024 * 1024);
 ```
 
-**功能特性：** 异步文件 I/O、PathCache（4096 条目/60s TTL）、MIME 自动推断（27 种扩展名）、ETag/304、路径遍历防护（403）、大文件保护（413）、HTTP 206 Range 请求（单范围 `Range` / `If-Range` ETag 条件请求，200 响应自动添加 `Accept-Ranges: bytes`）。
+**功能特性：** 异步文件 I/O、TlPathCache（每线程 64 条目/60s TTL）、MIME 自动推断（27 种扩展名）、ETag/304、路径遍历防护（403）、大文件保护（413）、HTTP 206 Range 请求（单范围 `Range` / `If-Range` ETag 条件请求，200 响应自动添加 `Accept-Ranges: bytes`）。
 
 #### 示例
 
@@ -1616,7 +1616,7 @@ IP 地址 + 端口封装（支持 IPv4/IPv6）。
 
 ### PmrBuffer
 
-基于 pmr 的统一缓冲区，支持 prepend 区域和自动扩容。
+基于 pmr 的统一缓冲区，预留一段前导区域（`hPrependSize` 字节，给 `makeSpace` 前移数据兜底）并支持自动扩容。
 
 **头文件：** `<hical/core/PmrBuffer.h>`
 
@@ -1764,7 +1764,7 @@ C++20 Concept 约束，定义网络后端必须满足的接口。
 | `TimerLike<T>`         | 定时器接口约束   |
 | `NetworkBackend<T>`    | 网络后端统一约束 |
 
-默认后端：`AsioBackend`（`AsioEventLoop` + `PlainConnection` + `AsioTimer`）。
+默认后端：`AsioBackend`（`AsioEventLoop` + `TcpConnection` + `AsioTimer`）。其中 `ConnectionType` 指的是 `core/TcpConnection.h` 里的抽象接口 `TcpConnection`；Asio 层的落地实现是 `GenericConnection<tcp::socket>`，别名 `PlainConnection`。
 
 ---
 
@@ -2016,8 +2016,8 @@ void registerLogAdmin(Router& router, const std::string& prefix = "/admin");
 | `maxConnections`      | `size_t`               | `16`        | 最大连接数                   |
 | `idleTimeout`         | `std::chrono::seconds` | `300s`      | 空闲回收超时                 |
 | `acquireTimeout`      | `std::chrono::seconds` | `5s`        | 获取连接超时                 |
-| `queryTimeout`        | `std::chrono::seconds` | `30s`       | 查询执行超时                 |
-| `autoReconnect`       | `bool`                 | `true`      | 断线自动重连                 |
+| `queryTimeout`        | `std::chrono::seconds` | `30s`       | 字段保留，当前无后端消费，设置不生效 |
+| `autoReconnect`       | `bool`                 | `true`      | 字段保留，当前无后端消费；重连行为恒开启，没法用它关闭 |
 | `idleCheckInterval`   | `std::chrono::seconds` | `60s`       | 空闲连接回收检查间隔         |
 | `healthCheckInterval` | `std::chrono::seconds` | `30s`       | 后台健康检查间隔（0=禁用）   |
 | `pingGracePeriod`     | `std::chrono::seconds` | `15s`       | acquire() 跳过 ping 的宽限期 |
