@@ -59,16 +59,14 @@ TEST(CtConvTest, 字符大小写转换)
 
 TEST(CtConvTest, 整型转字符串)
 {
-	// toString 是 consteval，只能在常量表达式中调用
-	constexpr std::string zero = toString(0);
-	constexpr std::string positive = toString(42);
-	constexpr std::string negative = toString(-7);
-	constexpr std::string wide = toString(9223372036854775807LL);
-
-	EXPECT_EQ(zero, "0");
-	EXPECT_EQ(positive, "42");
-	EXPECT_EQ(negative, "-7");
-	EXPECT_EQ(wide, "9223372036854775807");
+	// toString 是 consteval，只能在常量表达式里求值。
+	// 注意不能用 constexpr std::string 接住结果——字符串缓冲区的堆分配没法在
+	// 常量求值里跨出表达式存活，GCC16 会报 "refers to a result of 'operator new'"。
+	// 所以当场用 static_assert 比，属于「用完即毁」的临时分配，合法。
+	static_assert(toString(0) == "0");
+	static_assert(toString(42) == "42");
+	static_assert(toString(-7) == "-7");
+	static_assert(toString(9223372036854775807LL) == "9223372036854775807");
 }
 
 #endif // __cplusplus >= 202302L

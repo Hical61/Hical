@@ -29,11 +29,19 @@ namespace
 TEST(CollectMemberTest, 收集_包含基类成员)
 {
 	constexpr auto ctx = std::meta::access_context::unprivileged();
-	const auto members = hical::CollectMember::collectNonstaticMemberInfos(^^Derived, ctx);
+
+	// 结果不能先存成变量：collectNonstaticMemberInfos 是 consteval 且返回
+	// std::vector（带堆分配），存下来会让分配跨出常量求值而报 operator new。
+	// 直接用 define_static_array 包住，让它在同一个常量表达式里用完即毁——
+	// 这也是库内的用法。
+	// static 是必须的：函数内的 constexpr 变量每次调用地址都可能不同，
+	// 而 template for 要求固定地址。
+	constexpr static auto kMembers =
+		std::define_static_array(hical::CollectMember::collectNonstaticMemberInfos(^^Derived, ctx));
 
 	bool hasBase = false;
 	bool hasDerived = false;
-	template for (constexpr auto info : std::define_static_array(members))
+	template for (constexpr auto info : kMembers)
 	{
 		if (std::meta::identifier_of(info) == "baseField")
 		{

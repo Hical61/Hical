@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.20)
 project(hical VERSION 2.7.0 LANGUAGES C CXX)
 
 # C++26 反射可选支持
-option(HICAL_ENABLE_REFLECTION "Enable C++26 reflection (requires compatible compiler)" OFF)
+option(HICAL_ENABLE_REFLECTION "Enable C++26 reflection (requires a compiler with P2996, e.g. GCC 16, plus Boost >= 1.90)" OFF)
 
 # 构建控制选项（作为库分发时关闭以加快构建）
 option(HICAL_BUILD_TESTS    "Build unit tests"       ON)
@@ -62,12 +62,10 @@ option(HICAL_WITH_NUMA "Enable NUMA-aware memory allocation (requires libnuma, L
 
 if(HICAL_ENABLE_REFLECTION)
     set(CMAKE_CXX_STANDARD 26)
-    # P2996 反射只靠 -std=c++26 开不起来：特性宏 __cpp_impl_reflection / __cpp_lib_reflection
-    # 只有在显式传 -freflection 之后才会定义。不加的话 Reflection.h 检测不到宏，
-    # HICAL_HAS_REFLECTION 恒为 0，反射代码会静默走 C++20 分支、一行都不编译。
-    # 限定 COMPILE_LANGUAGE:CXX —— 项目里有 C 源文件（picohttpparser.c），
-    # 而 gcc 对 C 文件不接受这个 flag。
-    add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-freflection>)
+    # -freflection 不在这里加：目录级 add_compile_options 在 CMake 4.x 下会漏进
+    # project() 的编译器探测，而那一步没有 -std=c++26，gcc 会直接报
+    # "-freflection only supported with '-std=c++26'"。改在 src/CMakeLists.txt
+    # 里用 target_compile_options 挂到 hical_core 上（target 级不会影响探测）。
 else()
     set(CMAKE_CXX_STANDARD 20)
 endif()

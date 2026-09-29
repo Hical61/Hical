@@ -35,7 +35,10 @@ target_compile_definitions(static_server PRIVATE
     STATIC_SERVER_PUBLIC_DIR="${CMAKE_CURRENT_SOURCE_DIR}/static_server/public")
 
 # OpenAPI 自动生成示例（可选，仅当 HICAL_WITH_OPENAPI=ON）
-if (HICAL_WITH_OPENAPI)
+# 开反射时跳过：OpenApiRegistry.h / OpenApiSchema.h 对 HICAL_ROUTES / HICAL_JSON
+# 宏生成的 hicalRouteTable() / hicalJsonFields() 有硬性 static_assert，而那些宏在
+# C++26 反射路径下被定义成空（详见 tests/CMakeLists.txt 的同名说明）
+if (HICAL_WITH_OPENAPI AND NOT HICAL_ENABLE_REFLECTION)
     add_executable(openapi_server openapi_server.cpp)
     target_link_libraries(openapi_server PRIVATE hical_core)
 endif()

@@ -132,6 +132,18 @@ if(HICAL_ENABLE_MIDDLEWARE_PROFILING)
     target_compile_definitions(hical_core PUBLIC HICAL_ENABLE_MIDDLEWARE_PROFILING)
 endif()
 
+# C++26 反射编译选项（可选）
+# 为什么是 target 级而不是根 CMakeLists 的 add_compile_options：CMake 4.x 下
+# 目录级选项会漏进 project() 的编译器探测，那一步没有 -std=c++26，gcc 直接报
+# "-freflection only supported with '-std=c++26'"。target 级不会影响探测。
+# P2996 反射只靠 -std=c++26 开不起来：特性宏 __cpp_impl_reflection /
+# __cpp_lib_reflection 只有在显式传 -freflection 之后才会定义，不加的话
+# Reflection.h 检测不到宏、HICAL_HAS_REFLECTION 恒为 0，反射代码静默不编译。
+# PUBLIC：测试与示例目标会继承；限定 CXX：项目里有 C 源文件（picohttpparser.c）。
+if(HICAL_ENABLE_REFLECTION)
+    target_compile_options(hical_core PUBLIC $<$<COMPILE_LANGUAGE:CXX>:-freflection>)
+endif()
+
 # 数据库中间件（可选）
 # 分为两层：
 #   1. DB 核心（连接池/中间件/查询日志）— 后端无关，仅依赖 DbConnection 抽象

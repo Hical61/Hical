@@ -21,8 +21,23 @@ set(TESTS_NEEDING_PICOHTTPPARSER
     test_optimistic_write
 )
 
+# 这几个测试整篇基于 C++20 回退路线的宏 API（HICAL_JSON / HICAL_ROUTES / HICAL_HANDLER），
+# 而那些宏在 C++26 反射路径下被定义成空（MetaJson.h / MetaRoutes.h 的 #else 分支），
+# 开反射时它们编不过。反射路径的测试是另外的 test_meta_anno / test_meta_schema /
+# test_collect_member。
+set(HICAL_CXX20_ONLY_TESTS
+    test_reflection
+    test_openapi
+    test_compile_time_json
+    test_perfect_hash_router
+)
+
 # helper：封装三行样板（add_executable + target_link_libraries + gtest_discover_tests）
 function(hical_add_test name)
+    if(HICAL_ENABLE_REFLECTION AND name IN_LIST HICAL_CXX20_ONLY_TESTS)
+        message(STATUS "反射构建：跳过 ${name}（基于 C++20 宏 API）")
+        return()
+    endif()
     add_executable(${name} ${name}.cpp ${CMAKE_CURRENT_SOURCE_DIR}/test_main.cpp)
     target_link_libraries(${name} PRIVATE hical_core GTest::gtest)
     gtest_discover_tests(${name} DISCOVERY_TIMEOUT ${HICAL_TEST_DISCOVERY_TIMEOUT})

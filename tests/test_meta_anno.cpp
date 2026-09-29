@@ -31,9 +31,9 @@ TEST(MetaAnnoTest, 序列化_忽略与重命名生效)
 	AnnoDto dto;
 	const auto jv = hical::meta::toJson(dto);
 
-	EXPECT_FALSE(jv.as_object().if_contains("ignoredField_"));
-	EXPECT_TRUE(jv.as_object().if_contains("userName"));
-	EXPECT_TRUE(jv.as_object().if_contains("plain"));
+	EXPECT_FALSE(jv.if_contains("ignoredField_"));
+	EXPECT_TRUE(jv.if_contains("userName"));
+	EXPECT_TRUE(jv.if_contains("plain"));
 }
 
 TEST(MetaAnnoTest, 反序列化_重命名字段回填)

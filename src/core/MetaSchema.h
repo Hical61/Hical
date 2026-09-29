@@ -9,6 +9,14 @@
 #include <ranges>
 #include <variant>
 
+// 下面的 Schema 特化用了 boost::json::is_optional_like，而这个 trait 是 Boost
+// 较新版本才有的（1.83 没有、1.90 有，中间从哪版开始有没查证），这里按 1.90
+// 设个保守下限。不设的话只会报一句 "'is_optional_like' is not a member of ..."
+// 加上一串级联错误，看不出真正原因。
+#if BOOST_VERSION < 109000
+	#error "C++26 反射路径需要 Boost 1.90 或更新（boost::json::is_optional_like）"
+#endif
+
 namespace hical::schema
 {
 	namespace json = boost::json;
