@@ -3,6 +3,8 @@
  * @brief C++26 反射继承链成员收集测试（CollectMember）
  */
 
+#include "core/Reflection.h"
+
 #include <gtest/gtest.h>
 
 #if HICAL_HAS_REFLECTION
