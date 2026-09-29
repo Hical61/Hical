@@ -458,7 +458,7 @@ namespace hical::meta
 				template for (constexpr auto memberInfo : kMemberInfos)
 				{
 					// 执行编译时注解
-					constexpr auto [ignoreMember, memberName] = anno::applyKeyAnnotations<memberInfo>();
+					constexpr auto [ignoreMember, memberName, requiredMember] = anno::applyKeyAnnotations<memberInfo>();
 					if constexpr (ignoreMember)
 					{
 						continue;
@@ -618,7 +618,7 @@ namespace hical::meta
 
 			// 获取成员注解信息集合
 			constexpr static auto kAnnotationInfos = std::define_static_array(
-				[]
+				[memberInfo]
 				{
 					std::vector<M::info> result;
 					template for (constexpr auto annoInfo :
