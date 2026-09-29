@@ -1,11 +1,11 @@
-//
-// Created by LaoZu on 2026/9/6.
-//
+/**
+ * @file CTConv.cpp
+ * @brief CTConv 命名转换的编译期回归断言
+ */
 
-#include "CTConv.hpp"
+#include "CTConv.h"
 
 using namespace hical::CT;
-
 
 static_assert(caseSnakeToLowerCamel("hello_world") == "helloWorld");
 static_assert(caseSnakeToLowerCamel("___foo_bar___") == "fooBar");

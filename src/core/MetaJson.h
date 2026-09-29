@@ -24,9 +24,9 @@
 
 // CPP26 反射路线用到的头文件
 #if HICAL_HAS_REFLECTION
-#include "MetaAnno.h"
-#include "MetaSchema.h"
-#include "Utils/CollectMember.hpp"
+	#include "MetaAnno.h"
+	#include "MetaSchema.h"
+	#include "Utils/CollectMember.h"
 #endif
 
 namespace hical::meta
@@ -429,49 +429,64 @@ namespace hical::meta
 	     * @note 本质是 json::value_from() 的分类包装，若 json::value_from() 没有对应的重载函数，则走通用成员遍历函数
 	     * @attention 仅在走通用成员遍历函数会自动处理注解相关
 	     */
-	    template <
-	        typename ClassType,
-			CollectMember::MemberInfoGatherer auto MembersOfFunc = CollectMember::collect_nonstatic_member_infos,
-	        M::access_context Ctx = M::access_context::unprivileged()
-	    >
-	    auto toJsonTemplate(ClassType const& classValue) -> json::value {
-	        // 优先进入 value_from 用户定制 tag_invoke 函数
-	        if constexpr (json::has_value_from<ClassType>::value) {
-		        return json::value_from(classValue);
-	        }
+		template <typename ClassType,
+				  CollectMember::MemberInfoGatherer auto MembersOfFunc = CollectMember::collectNonstaticMemberInfos,
+				  M::access_context Ctx = M::access_context::unprivileged()>
+		auto toJsonTemplate(const ClassType& classValue) -> json::value
+		{
+			// 优先进入 value_from 用户定制 tag_invoke 函数
+			if constexpr (json::has_value_from<ClassType>::value)
+			{
+				return json::value_from(classValue);
+			}
 
-	        // 通用函数部分
-	        else {
-	            // 获取成员反射信息集合
-	            constexpr static auto kMemberInfos = std::define_static_array(MembersOfFunc(M::remove_cvref(^^ClassType), Ctx));
+			// 通用函数部分
+			else
+			{
+				// 获取成员反射信息集合
+				constexpr static auto kMemberInfos =
+					std::define_static_array(MembersOfFunc(M::remove_cvref(^^ClassType), Ctx));
 
-	            // 结果，先预分配
-	            constexpr auto joCapacity = kMemberInfos.size() + 1;
-	            json::object jo{};
-	            jo.reserve(joCapacity);
+				// 结果，先预分配
+				constexpr auto joCapacity = kMemberInfos.size() + 1;
+				json::object jo {};
+				jo.reserve(joCapacity);
 
-	            template for (constexpr auto memberInfo : kMemberInfos) {
-	                // 执行编译时注解
-	                constexpr auto [ignoreMember, memberName] = anno::applyKeyAnnotations<memberInfo>();
-	                if constexpr (ignoreMember) continue;
+				template for (constexpr auto memberInfo : kMemberInfos)
+				{
+					// 执行编译时注解
+					constexpr auto [ignoreMember, memberName] = anno::applyKeyAnnotations<memberInfo>();
+					if constexpr (ignoreMember)
+					{
+						continue;
+					}
 
-	                // 成员值
-	                auto const& memberValue = classValue.[:memberInfo:];
+					// 成员值
+					const auto& memberValue = classValue.[:memberInfo:];
 
-	            	// 序列化
-	            	json::object::const_iterator memberJvIt;
-	            	if (auto optValue = anno::applySerializeAnnotations<memberInfo>(memberValue))
-	            		memberJvIt = jo.emplace(memberName, *std::move(optValue)).first;
-	            	else
-	            		memberJvIt = jo.emplace(memberName, toJsonTemplate<typename [:M::type_of(memberInfo):], MembersOfFunc, Ctx>(memberValue)).first;
+					// 序列化
+					json::object::const_iterator memberJvIt;
+					if (auto optValue = anno::applySerializeAnnotations<memberInfo>(memberValue))
+					{
+						memberJvIt = jo.emplace(memberName, *std::move(optValue)).first;
+					}
+					else
+					{
+						memberJvIt = jo.emplace(memberName,
+												toJsonTemplate<typename[:M::type_of(memberInfo):], MembersOfFunc, Ctx>(
+													memberValue))
+										 .first;
+					}
 
-	            	// 视图注解
-	            	anno::MemberAnnotationView<true, memberInfo, ClassType> view{ .classValue_ = classValue, .memberValue_ = memberValue, .memberJv_ = memberJvIt->value() };
-	            	anno::applyViewAnnotations(view);
-	            }
-	            return jo;
-	        }
-	    }
+					// 视图注解
+					anno::MemberAnnotationView<true, memberInfo, ClassType> view {.classValue_ = classValue,
+																				  .memberValue_ = memberValue,
+																				  .memberJv_ = memberJvIt->value()};
+					anno::applyViewAnnotations(view);
+				}
+				return jo;
+			}
+		}
 
 		/**
 	     * @brief 基于反射规则将json::value转换为对象实例的执行模板。 json -> class
@@ -483,53 +498,77 @@ namespace hical::meta
 	     * @note 本质是 json::value_to() 的分类包装，若 json::value_to() 没有对应的重载函数，则走通用成员遍历函数
 	     * @attention 仅在走通用成员遍历函数会自动处理注解相关
 	     */
-	    template <
-	        std::default_initializable ClassType,
-	        CollectMember::MemberInfoGatherer auto MembersOfFunc = CollectMember::collect_nonstatic_member_infos,
-	        M::access_context Ctx = M::access_context::unprivileged()
-	    >
-	    auto fromJsonTemplate(json::value const& jsonValue) -> ClassType {
-	        // 先走 json::value_to() 函数
-	        if constexpr (json::has_value_to<ClassType>::value) {
-		        return json::value_to<ClassType>(jsonValue);
-	        }
+		template <std::default_initializable ClassType,
+				  CollectMember::MemberInfoGatherer auto MembersOfFunc = CollectMember::collectNonstaticMemberInfos,
+				  M::access_context Ctx = M::access_context::unprivileged()>
+		auto fromJsonTemplate(const json::value& jsonValue) -> ClassType
+		{
+			// 先走 json::value_to() 函数
+			if constexpr (json::has_value_to<ClassType>::value)
+			{
+				return json::value_to<ClassType>(jsonValue);
+			}
 
-	        // 通用函数不分
-	        else {
-	            // 获取成员反射信息集合
-	            constexpr static auto kMemberInfos = std::define_static_array(MembersOfFunc(M::remove_cvref(^^ClassType), Ctx));
+			// 通用函数部分
+			else
+			{
+				// 获取成员反射信息集合
+				constexpr static auto kMemberInfos =
+					std::define_static_array(MembersOfFunc(M::remove_cvref(^^ClassType), Ctx));
 
-	            // 默认构造
-	            ClassType classValue{};
+				// 默认构造
+				ClassType classValue {};
 
-	            template for (constexpr auto memberInfo : kMemberInfos) {
-	                // 执行编译时注解
-	                constexpr auto [ignoreMember, memberName] = anno::applyKeyAnnotations<memberInfo>();
-	                if constexpr (ignoreMember) continue;
+				// 通用成员遍历只处理对象，非对象的反序列化前面已由 value_to 重载接走
+				const json::object& jsonObj = jsonValue.as_object();
 
-	                // 成员值
-	                json::value const& memberJv = jsonValue.at(memberName);
-	                auto &memberValue = classValue.[:memberInfo:];
+				template for (constexpr auto memberInfo : kMemberInfos)
+				{
+					// 执行编译时注解
+					constexpr auto [ignoreMember, memberName, requiredMember] = anno::applyKeyAnnotations<memberInfo>();
+					if constexpr (ignoreMember)
+					{
+						continue;
+					}
 
-	            	// 反序列化
-	            	if (auto optValue = anno::applyDeserializeAnnotations<memberInfo>(memberJv))
-	            		memberValue = *std::move(optValue);
-	            	else
-	            		memberValue = fromJsonTemplate<typename [:M::type_of(memberInfo):], MembersOfFunc, Ctx>(memberJv);
+					// 缺字段时：标了 required 的报错，其余静默跳过（与 C++20 回退路线语义一致）
+					auto memberJvIt = jsonObj.find(memberName);
+					if (memberJvIt != jsonObj.end())
+					{
+						const json::value& memberJv = memberJvIt->value();
+						auto& memberValue = classValue.[:memberInfo:];
 
-	            	// 视图注解
-	            	anno::MemberAnnotationView<false, memberInfo, ClassType> view{ .classValue_ = classValue, .memberValue_ = memberValue, .memberJv_ = memberJv };
-	            	anno::applyViewAnnotations(view);
-	            }
-	            return classValue;
-	        }
-	    }
+						// 反序列化
+						if (auto optValue = anno::applyDeserializeAnnotations<memberInfo>(memberJv))
+						{
+							memberValue = *std::move(optValue);
+						}
+						else
+						{
+							memberValue =
+								fromJsonTemplate<typename[:M::type_of(memberInfo):], MembersOfFunc, Ctx>(memberJv);
+						}
+
+						// 视图注解
+						anno::MemberAnnotationView<false, memberInfo, ClassType> view {.classValue_ = classValue,
+																					   .memberValue_ = memberValue,
+																					   .memberJv_ = memberJv};
+						anno::applyViewAnnotations(view);
+					}
+					else if constexpr (requiredMember)
+					{
+						detail::throwMissingField(memberName);
+					}
+				}
+				return classValue;
+			}
+		}
 
 	} // namespace detail
 
 	/**
 	 * @brief 序列化结构体为 JSON（C++26 反射）
-	 * 支持 [[hical::json_ignore]]、[[hical::json_name("xxx")]]
+	 * 支持 [[=hical::anno::json_ignore]]、[[=hical::anno::json_rename("xxx")]]
 	 */
 	template <typename T>
 	boost::json::object toJson(const T& obj)
@@ -539,23 +578,21 @@ namespace hical::meta
 
 	/**
 	 * @brief 从 JSON 反序列化为结构体（C++26 反射）
-	 * 支持 [[hical::json_ignore]]、[[hical::json_name("xxx")]]、[[hical::json_required]]
+	 * 支持 [[=hical::anno::json_ignore]]、[[=hical::anno::json_rename("xxx")]]、[[=hical::anno::json_required]]
 	 */
 	template <typename T>
 	T fromJson(const boost::json::value& json)
 	{
-		return detail::fromJsonTemplate<T>(json.as_object());
+		return detail::fromJsonTemplate<T>(json);
 	}
 
 	/**
 	 * @brief 编译期生成 JSON Schema（C++26 反射）
 	 * 根据结构体成员类型和属性注解自动生成符合 JSON Schema 规范的描述。
 	 */
-	template <
-		typename ClassType,
-		CollectMember::MemberInfoGatherer auto MembersOfFunc = CollectMember::collect_nonstatic_member_infos,
-		M::access_context Ctx = M::access_context::unprivileged()
-	>
+	template <typename ClassType,
+			  CollectMember::MemberInfoGatherer auto MembersOfFunc = CollectMember::collectNonstaticMemberInfos,
+			  M::access_context Ctx = M::access_context::unprivileged()>
 	boost::json::object jsonSchema()
 	{
 		namespace json = boost::json;
@@ -567,50 +604,71 @@ namespace hical::meta
 		json::object properties;
 		json::array requiredFields;
 
-		template for (constexpr auto memberInfo :
-			std::define_static_array(MembersOfFunc(classTypeInfo, Ctx))
-		) {
-			constexpr auto [ignoreMember, memberName] = anno::applyKeyAnnotations<memberInfo>();
-			if constexpr (ignoreMember) continue;
+		template for (constexpr auto memberInfo : std::define_static_array(MembersOfFunc(classTypeInfo, Ctx)))
+		{
+			constexpr auto [ignoreMember, memberName, requiredMember] = anno::applyKeyAnnotations<memberInfo>();
+			if constexpr (ignoreMember)
+			{
+				continue;
+			}
 			using MemberType = [:M::remove_cvref(M::type_of(memberInfo)):];
 
 			// 获取成员注解信息集合
-			constexpr static auto kAnnotationInfos = std::define_static_array([] {
-				std::vector<M::info> result;
-				template for (constexpr auto annoInfo : std::define_static_array(anno::annotationsOfMemberWithParent(memberInfo))) {
-					constexpr auto annoValue = [:M::constant_of(annoInfo):];
-					constexpr auto typeValue = std::type_identity<MemberType>{};
-					if constexpr (requires{ { annoValue.applyAnnotationSchema(std::declval<json::object&>(), typeValue) } -> std::same_as<void>; })
-						result.push_back(annoInfo);
-				}
-				return result;
-			}());
+			constexpr static auto kAnnotationInfos = std::define_static_array(
+				[]
+				{
+					std::vector<M::info> result;
+					template for (constexpr auto annoInfo :
+								  std::define_static_array(anno::annotationsOfMemberWithParent(memberInfo)))
+					{
+						constexpr auto annoValue = [:M::constant_of(annoInfo):];
+						constexpr auto typeValue = std::type_identity<MemberType> {};
+						if constexpr (requires {
+										  {
+											  annoValue.applyAnnotationSchema(std::declval<json::object&>(), typeValue)
+										  } -> std::same_as<void>;
+									  })
+						{
+							result.push_back(annoInfo);
+						}
+					}
+					return result;
+				}());
 
 			json::object prop;
 			// 如果有注解，就直接调用注解的函数
-			if constexpr (not kAnnotationInfos.empty()) {
-				template for (constexpr auto annoInfo : kAnnotationInfos) {
-					[:M::constant_of(annoInfo):].applyAnnotationSchema(prop, std::type_identity<MemberType>{});
+			if constexpr (not kAnnotationInfos.empty())
+			{
+				template for (constexpr auto annoInfo : kAnnotationInfos)
+				{
+					[:M::constant_of(annoInfo):].applyAnnotationSchema(prop, std::type_identity<MemberType> {});
 				}
 			}
 			// 否则，如果MetaSchema有对应的偏特化，就调用偏特化函数
-			else if constexpr (requires{ { schema::kSchema<MemberType>(prop) } -> std::same_as<void>; }) {
+			else if constexpr (requires {
+								   { schema::kSchema<MemberType>(prop) } -> std::same_as<void>;
+							   })
+			{
 				schema::kSchema<MemberType>(prop);
 			}
-			// 否则，如果是类对象，继续递归调用jsonSchema函数
-			else if constexpr (M::is_class_type(classTypeInfo)) {
+			// 否则，如果成员本身是类对象，继续递归调用 jsonSchema
+			else if constexpr (M::is_class_type(M::remove_cvref(M::type_of(memberInfo))))
+			{
 				prop = jsonSchema<MemberType>();
 			}
 			// 否则，直接硬错误
-			else {
-				static_assert(false, std::string{ "No JSON Schema specialization for type: " } + M::display_string_of(classTypeInfo));
+			else
+			{
+				static_assert(false,
+							  std::string {"No JSON Schema specialization for type: "}
+								  + M::display_string_of(M::remove_cvref(M::type_of(memberInfo))));
 			}
 
-			// 检查是否有nullable属性，且为true，则说明是可选的值，不添加到requiredFields
-			if (const json::value *it = prop.if_contains("nullable");
-				it != nullptr && it->is_bool() && it->get_bool() == true
-			) {}
-			else {
+			// 显式标了 json_required 的必进；否则只有 nullable（optional）才豁免
+			const json::value* nullableIt = prop.if_contains("nullable");
+			const bool nullableMember = nullableIt != nullptr && nullableIt->is_bool() && nullableIt->get_bool();
+			if (requiredMember || not nullableMember)
+			{
 				requiredFields.emplace_back(memberName);
 			}
 
@@ -618,7 +676,8 @@ namespace hical::meta
 		}
 
 		schema["properties"] = properties;
-		if (!requiredFields.empty()) {
+		if (!requiredFields.empty())
+		{
 			schema["required"] = requiredFields;
 		}
 		return schema;

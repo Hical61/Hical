@@ -858,13 +858,13 @@ router.route(HttpMethod::hGet, "/api/users", handler);
 struct UserHandler
 {
     // 反射自动提取路由信息
-    [[hical::route("/api/users", "GET")]]
+    [[=hical::anno::route.get("/api/users")]]
     Awaitable<HttpResponse> listUsers(const HttpRequest& req)
     {
         co_return HttpResponse::json({{"users", "..."}});
     }
 
-    [[hical::route("/api/users/{id}", "GET")]]
+    [[=hical::anno::route.get("/api/users/{id}")]]
     Awaitable<HttpResponse> getUser(const HttpRequest& req)
     {
         co_return HttpResponse::json({{"id", req.param("id")}});

@@ -87,6 +87,9 @@ hical/
 │   │   ├── Reflection.h        # C++26 反射特性检测 + RouteInfo + 类型萃取
 │   │   ├── MetaJson.h          # 自动 JSON 序列化（ALIAS/REQUIRED/IGNORE 装饰器 + MIN/MAX/PATTERN/NOT_EMPTY/LENGTH DTO 校验）
 │   │   ├── MetaJsonError.h/.cpp # MetaJson 错误辅助（[[noreturn]] 非模板函数，编译防火墙）
+│   │   ├── MetaAnno.h          # C++26 反射注解框架（Key/Serialize/Deserialize/View 三阶段 + 内置 JSON 注解）
+│   │   ├── MetaSchema.h        # C++26 JSON Schema 类型特化（基本类型/optional/array/枚举/union/variant）
+│   │   ├── Utils/              # 编译期工具（CTConv 命名转换 / CollectMember 继承链成员收集）
 │   │   ├── MetaRoutes.h        # 自动路由注册（HICAL_HANDLER/HICAL_ROUTES 宏）
 │   │   ├── Log.h/.cpp          # 日志系统（6 级 LogLevel + format/流式/条件/字段四种 API）
 │   │   ├── LogRecord.h         # 结构化日志条目（level/timestamp/threadId/file/line/message/fields/traceId）
@@ -249,6 +252,8 @@ hical/
 | `hical::`       | 框架核心（HTTP/WebSocket/中间件/Session/日志/OpenAPI）                  | `<hical/core/>`                                         |
 | `hical::meta::` | 反射层（MetaJson / MetaRoutes 的 `toJson`/`fromJson`/`registerRoutes`） | `<hical/core/MetaJson.h>` / `<hical/core/MetaRoutes.h>` |
 | `hical::db::`   | 数据库中间件（可选）                                                    | `<hical/db/>`                                           |
+| `hical::anno::` | C++26 反射注解（`json_ignore`/`json_rename`/`json_required`、`route.get/post/...`） | `<hical/core/MetaAnno.h>` / `<hical/core/MetaRoutes.h>` |
+| `hical::schema::` | C++26 JSON Schema 类型特化                                              | `<hical/core/MetaSchema.h>`                            |
 
 **公共 vs 内部 API 边界**：
 

@@ -2,7 +2,7 @@
  * @file MetaRoutes.h
  * @brief 反射驱动的自动路由注册
  * 双路线：
- * - C++26 反射：用户用 [[hical::route(...)]] 标注，框架自动发现并注册
+ * - C++26 反射：用户用 [[=hical::anno::route.get(...)]] 标注，框架自动发现并注册
  * - C++20 回退：用户用 HICAL_HANDLER / HICAL_ROUTES 宏标注，框架遍历注册
  * 对外 API：
  *   hical::meta::registerRoutes<UserHandler>(router, handler);
@@ -193,28 +193,36 @@ namespace hical::meta
 	namespace V = std::views;
 
 	/// @brief 路由注解结构体
-	struct RouteAnnotation {
+	struct RouteAnnotation
+	{
 		const char* path_;
 		const char* methodStr_;
 	};
 
 	/// @brief 路由成员函数元信息结构体
-	struct RouteFnMeta {
-		M::info memberFunctionInfo_{};
-		M::info annotationInfo_{};
+	struct RouteFnMeta
+	{
+		M::info memberFunctionInfo_ {};
+		M::info annotationInfo_ {};
 	};
 
 	/// @brief 发现所有具有 RouteAnnotation 注解值的成员函数
-	consteval auto discoverRoutes(const M::info handlerType, const M::access_context ctx = M::access_context::unprivileged())
+	consteval auto discoverRoutes(const M::info handlerType,
+								  const M::access_context ctx = M::access_context::unprivileged())
 		-> std::vector<RouteFnMeta>
 	{
-		return M::members_of(handlerType, ctx)
-			| V::filter(M::is_function)
-			| V::filter([](const M::info info) { return not M::annotations_of_with_type(info, ^^RouteAnnotation).empty(); })
-			| V::transform([](const M::info info) {
-				return RouteFnMeta{ info, M::annotations_of_with_type(info, ^^RouteAnnotation).front() };
-			})
-			| R::to<std::vector<RouteFnMeta>>();
+		return M::members_of(handlerType, ctx) | V::filter(M::is_function)
+			   | V::filter(
+				   [](const M::info info)
+				   {
+					   return not M::annotations_of_with_type(info, ^^RouteAnnotation).empty();
+				   })
+			   | V::transform(
+				   [](const M::info info)
+				   {
+					   return RouteFnMeta {info, M::annotations_of_with_type(info, ^^RouteAnnotation).front()};
+				   })
+			   | R::to<std::vector<RouteFnMeta>>();
 	}
 
 	/// @brief 自动注册 Handler 中所有路由到 Router
@@ -245,30 +253,29 @@ namespace hical::meta
 								 co_return co_await handler.[:fn:](req);
 							 }
 						 });
-
 		}
 	}
 
 	/// @brief 把 handler 上的每条路由，翻译成一段人类可读的描述文本
 	/// @note method 列和 path 列会自动对齐，剩余属性不做对齐要求
-	consteval auto describeHandlerRoutes(std::vector<M::info> const& handlerTypes,
-						const M::access_context ctx = M::access_context::unprivileged()) -> std::vector<const char*> {
-
+	consteval auto describeHandlerRoutes(const std::vector<M::info>& handlerTypes,
+										 const M::access_context ctx = M::access_context::unprivileged())
+		-> std::vector<const char*>
+	{
 		// ---- 第一遍：收集各片段 + 统计 method / path 列的最大宽度 ----
-		struct RouteEntry {
+		struct RouteEntry
+		{
 			std::string method_;
 			std::string path_;
-			std::string rest_;   // 函数名 + 源码位置，不要求对齐
+			std::string rest_; // 函数名 + 源码位置，不要求对齐
 		};
 
 		std::vector<RouteEntry> entries;
 		std::size_t maxMethodLen = 0;
-		std::size_t maxPathLen  = 0;
+		std::size_t maxPathLen = 0;
 
-		for (const auto [fn, anno] : handlerTypes
-			| V::transform(std::bind_back(discoverRoutes, ctx))
-			| V::join
-		) {
+		for (const auto [fn, anno] : handlerTypes | V::transform(std::bind_back(discoverRoutes, ctx)) | V::join)
+		{
 			const auto [path, methodStr] = M::extract<RouteAnnotation>(anno);
 
 			RouteEntry entry;
@@ -290,20 +297,21 @@ namespace hical::meta
 			entry.rest_ = std::move(rest);
 
 			maxMethodLen = std::max(maxMethodLen, entry.method_.size());
-			maxPathLen   = std::max(maxPathLen,   entry.path_.size());
+			maxPathLen = std::max(maxPathLen, entry.path_.size());
 
 			entries.push_back(std::move(entry));
 		}
 
 		// ---- 第二遍：用空格 padding 对齐 method / path 列，再拼接最终字符串 ----
 		std::vector<const char*> result;
-		for (auto& e : entries) {
+		for (auto& e : entries)
+		{
 			std::string infoStr;
 			infoStr.append(e.method_);
-			infoStr.append(maxMethodLen - e.method_.size(), ' ');  // method 列右填充对齐
+			infoStr.append(maxMethodLen - e.method_.size(), ' '); // method 列右填充对齐
 			infoStr.append("  ");
 			infoStr.append(e.path_);
-			infoStr.append(maxPathLen - e.path_.size(), ' ');      // path 列右填充对齐
+			infoStr.append(maxPathLen - e.path_.size(), ' '); // path 列右填充对齐
 			infoStr.append("  ");
 			infoStr.append(e.rest_);
 
@@ -318,18 +326,41 @@ namespace hical::meta
 
 // ============ C++26 路由注解函数 ==========
 #if HICAL_HAS_REFLECTION
-namespace hical::anno {
-	struct FnRoute {
-		static consteval meta::RouteAnnotation operator() (const std::string_view path, const std::string_view methodStr) {
-			return { .path_ = std::define_static_string(path), .methodStr_ = std::define_static_string(methodStr) };
+namespace hical::anno
+{
+	struct FnRoute
+	{
+		static consteval meta::RouteAnnotation operator()(const std::string_view path, const std::string_view methodStr)
+		{
+			return {.path_ = std::define_static_string(path), .methodStr_ = std::define_static_string(methodStr)};
 		}
-		static consteval meta::RouteAnnotation get(const std::string_view path) { return operator()(path, "GET"); }
-		static consteval meta::RouteAnnotation post(const std::string_view path) { return operator()(path, "POST"); }
-		static consteval meta::RouteAnnotation put(const std::string_view path) { return operator()(path, "PUT"); }
-		static consteval meta::RouteAnnotation delete_(const std::string_view path) { return operator()(path, "DELETE"); }
-		static consteval meta::RouteAnnotation patch(const std::string_view path) { return operator()(path, "PATCH"); }
-	}inline constexpr route;
-}
+
+		static consteval meta::RouteAnnotation get(const std::string_view path)
+		{
+			return operator()(path, "GET");
+		}
+
+		static consteval meta::RouteAnnotation post(const std::string_view path)
+		{
+			return operator()(path, "POST");
+		}
+
+		static consteval meta::RouteAnnotation put(const std::string_view path)
+		{
+			return operator()(path, "PUT");
+		}
+
+		static consteval meta::RouteAnnotation delete_(const std::string_view path)
+		{
+			return operator()(path, "DELETE");
+		}
+
+		static consteval meta::RouteAnnotation patch(const std::string_view path)
+		{
+			return operator()(path, "PATCH");
+		}
+	} inline constexpr route;
+} // namespace hical::anno
 #endif
 
 // ============ C++20 回退宏 ============

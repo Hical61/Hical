@@ -52,6 +52,10 @@ hical_add_test(test_ws_pipeline)          # WebSocket 单 read 多帧 drain（16
 hical_add_test(test_perfect_hash_router)  # PerfectHashRouter 正确性
 hical_add_test(test_concepts)             # Concepts 编译期验证
 hical_add_test(test_reflection)           # 反射层（MetaJson + MetaRoutes）
+hical_add_test(test_ct_conv)              # CTConv 命名转换与整型转字符串
+hical_add_test(test_meta_anno)            # C++26 注解框架（反射可用时才跑）
+hical_add_test(test_meta_schema)          # C++26 JSON Schema（反射可用时才跑）
+hical_add_test(test_collect_member)       # C++26 成员收集（反射可用时才跑）
 hical_add_test(test_integration)          # 端到端集成
 hical_add_test(test_cookie)               # Cookie 解析与 Set-Cookie
 hical_add_test(test_static_files)         # 静态文件服务、ETag、路径遍历防护
