@@ -5,20 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+
 ## [Unreleased]
 
 ### Added
+- **C++26 反射注解框架**：新增 `MetaAnno.h`（注解三阶段处理器框架 + 内置 JSON 注解 `json_ignore`/`json_rename`/`json_reset`/`json_required`/蛇形驼峰互转）、`MetaSchema.h`（JSON Schema 类型特化，覆盖基本类型/optional/array/枚举/union/variant）、`CollectMember.h`（继承链成员收集，两层过滤名字二义与菱形非虚继承子对象二义）、`CTConv.h`（编译期命名风格转换）。注解的分派从「标准属性字符串匹配」改为「注解值（`[[=...]]`）+ `requires` 重载检测」，用户可为自定义类型增量提供重载，类型不匹配的成员自动跳过。配套示例 `examples/reflection_server_26.cpp`，配套测试 `test_ct_conv`/`test_meta_anno`/`test_meta_schema`/`test_collect_member`（后三者需编译器支持 C++26 反射，否则 GTEST_SKIP）
+- **C++26 反射特性检测阈值更新**：`Reflection.h` 的检测宏从 `202306L` 提到 `202506L`，并补 `#include <version>`（`__cpp_lib_reflection` 定义在 `<version>` 中）
 - **HttpServer 补 `use(SyncBeforeHandler)` 系列重载**：`makeJwtAuthMiddleware`、`makeRateLimiterMiddleware` 这类返回 `SyncBeforeHandler` 的中间件以前只能塞进 `MiddlewarePipeline`，直接 `server.use(makeJwtAuthMiddleware(...))` 编译不过。现在 `HttpServer::use` 补齐了 `use(SyncBeforeHandler)`、`use(SyncBeforeHandler, SyncAfterHandler)`、`use(name, SyncBeforeHandler, SyncAfterHandler)` 三个重载
 - **`use(SyncAfterHandler)` 重载补齐**：`makeHelmetMiddleware()`、`makeGzipCompressionMiddleware()` 返回的是 `SyncAfterHandler`（只有后置、没有前置），而 `HttpServer::use`、`RouteGroup::use`、`MiddlewarePipeline::use` 以前都没有只吃 after 的重载，照文档写 `server.use(makeHelmetMiddleware())` 就是编译不过，只能绕成 `server.use(nullptr, makeHelmetMiddleware())` 或者包一层协程 lambda。现在三个入口都补了裸 `SyncAfterHandler` 重载，`MiddlewarePipeline` 和 `HttpServer` 还各多一个命名版 `use(name, after)`（`RouteGroup` 那三个重载本来就没有命名版，保持一致没加）。注意多个 after 之间按注册逆序执行——洋葱模型里后注册的更靠内，先退出
 
 ### Fixed
+- **CTConv 缺 `<charconv>`/`<system_error>` 导致默认构建失败**：`CTConv.cpp` 被无条件编进 `hical_core`，但其头文件没有包含 `std::to_chars`/`std::errc` 所在的标准头，在 GCC 15 上直接编译报错（写这份代码的编译器因间接包含而未暴露）
 - **405 检测漏了通配路由（外部可观测的契约变化）**：`Router::resolveRoute()` 的 405 检测以前只查静态路由和参数路由，通配路由不参与，所以 `get("/*path", ...)` 这类注册对 POST/HEAD 一律回 404，正确的行为是 405 + `Allow` 头。现在通配路由和另外两类一起收集允许方法。顺带修了 `Allow` 头重复列方法的问题——静态路由和通配路由都注册了 GET 时会吐出 `GET, GET`，改成用方法位掩码去重后一次性拼串。`examples/static_server` 用的就是 `/*path` 模式，变化最直接
 - **profiling 模式下 Sync 中间件被整条丢弃**：开 `HICAL_ENABLE_MIDDLEWARE_PROFILING=ON` 时 `MiddlewarePipeline::build()` 按 `vector<MiddlewareHandler>` 搭统计链，而 `hSync` 条目根本没有 handler 可挂，于是被整条从链里丢掉——`makeJwtAuthMiddleware`、`makeRateLimiterMiddleware` 这类 `SyncBeforeHandler` 直接不执行，认证和限流静默 fail-open。这不是「不计时」，是「不跑」。现在检测到 Sync 条目就回退到不丢条目的普通链并记一条 WARN 说明本管线 profiling 关闭，`middlewareStats()` 对这类管线返回空 vector
 
 ### Changed
+- **反射注解命名空间收敛到 `hical::anno`**：`json_ignore`/`json_rename`/`json_reset`/`json_snake_to_lowerCamel` 等注解常量从顶层 `hical::` 移入 `hical::anno`，与路由注解 `hical::anno::route` 归到一处。**迁移**：`[[=hical::json_ignore]]` → `[[=hical::anno::json_ignore]]`
+- **`toJsonSnakeCase()` 移除（破坏性）**：改用类级注解 `[[=hical::anno::json_snake_to_lowerCamel]]`，风格转换由注解驱动
+- **反射路径 `fromJson` 缺字段语义对齐 C++20 路线（破坏性）**：缺字段默认跳过，只有标了 `[[=hical::anno::json_required]]` 的成员才报错。此前的实现用 `boost::json` 的 `at()`，对**任何**缺失字段都抛异常，PATCH 语义的部分字段 payload、老客户端少发字段、DTO 里的 `std::optional` 成员全部中招
+- **`jsonSchema` 的 `required` 判定（破坏性）**：默认所有成员进 `required`，`std::optional` 成员（生成 `nullable: true`）豁免，显式标 `json_required` 的强制进入
+- **路由注解语法（破坏性）**：`[[hical::route("/x", "GET")]]` 变为 `[[=hical::anno::route.get("/x")]]`。旧写法是标准属性，新实现只认注解值，写旧语法不会报错但路由不注册（表现为 404），迁移时注意
 - **慢 body 防护：无效请求在读 body 前直接拒绝**：以前请求 headers 解析完会先整段读 body、再走路由匹配，所以带大 body 的无效 uri、方法不匹配（405）、超深路径都得先把 body 吃进内存才报错。现在把路由匹配前置到读 body 之前，这几类请求在读 body 前就能直接回 404/405/400，body 一字不读，省掉把无效请求的大 body 白读进内存的开销
 - **中间件前置到读 body 之前**：认证、限流这类拦截型中间件以前是在 body 读完之后才跑的，无效请求光是为了塞满中间件需要的 body 就得先把全部数据读进来。现在中间件在 body 之前执行，中间件只看到 header（`req.body()` 此时为空），被拦截的请求 body 一字不读；字段级 body 校验下沉到 handler 自己负责
 - **header 超限判断改用「解析长度」**：TCP 是流式的，headers 读完后缓冲区里可能还粘连着 body 残留，之前拿缓冲区总长当 header 大小去跟上限比，粘连 body 一多就把正常请求误判成 431。现在改用 picohttpparser 返回的 header 实际字节数来判断，只有 header 真的超限才回 431
+
 
 ## [2.7.0] - 2026-09-21
 

@@ -666,9 +666,10 @@ C++26 反射 / C++20 宏双轨的 JSON 自动序列化/反序列化系统。
 | `toJson(obj)`             | obj: 带 `HICAL_JSON` 的对象 | `boost::json::object` | 序列化结构体为 JSON                        |
 | `fromJson<T>(json)`       | json: `boost::json::value`  | `T`                   | 反序列化 JSON 为结构体（类型不匹配抛异常） |
 | `readJson<T>(req)`        | req: `HttpRequest&`         | `T`                   | 从请求体反序列化（JSON 无效时抛异常）      |
-| `toJsonSnakeCase<T>(obj)` | obj: 结构体对象             | `boost::json::object` | 序列化时 key 自动转 snake_case（仅 C++26） |
 
 > `HttpRequest::readJson<T>()` 是 `meta::readJson<T>(req)` 的便捷成员函数包装。
+>
+> C++26 反射路线下，命名风格转换（蛇形↔驼峰）改用注解 `[[=hical::anno::json_snake_to_lowerCamel]]` / `[[=hical::anno::json_camel_to_snake]]` 表达，不再提供独立函数。
 
 #### 宏（C++20 回退模式）
 
@@ -690,9 +691,9 @@ C++26 反射 / C++20 宏双轨的 JSON 自动序列化/反序列化系统。
 ```cpp
 struct User
 {
-    [[hical::json_required]]        int id;
-    [[hical::json_name("userName")]] std::string name;
-    [[hical::json_ignore]]          std::string internal;
+    [[=hical::anno::json_required]]           int id;
+    [[=hical::anno::json_rename("userName")]] std::string name;
+    [[=hical::anno::json_ignore]]             std::string internal;
 };
 ```
 
@@ -757,7 +758,7 @@ HICAL_ROUTES(Type, func1, func2, ...)
 ```cpp
 struct Handler
 {
-    [[hical::route("/users/{id}", "GET")]]
+    [[=hical::anno::route.get("/users/{id}")]]
     Awaitable<HttpResponse> getUser(const HttpRequest& req) { ... }
 };
 ```
