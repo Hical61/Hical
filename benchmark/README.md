@@ -2,10 +2,12 @@
 
 通过 Docker Compose profile 管理两套独立的压测集：
 
-| Profile      | 框架                                                  | 场景数 | 报告文件                  |
-| ------------ | ----------------------------------------------------- | ------ | ------------------------- |
-| `cpp`        | Hical / Drogon / Crow / Oat++ / cpp-httplib / Cinatra | 11     | `CPP_BENCHMARK_REPORT.md` |
-| `cross-lang` | Hical / Gin / Fiber / Actix-web                       | 4      | `BENCHMARK_REPORT.md`     |
+| Profile      | 框架                                                  | 场景数 |
+| ------------ | ----------------------------------------------------- | ------ |
+| `cpp`        | Hical / Drogon / Crow / Oat++ / cpp-httplib / Cinatra / libuvcpp | 6      |
+| `cross-lang` | Hical / Gin / Fiber / Actix-web                       | 4      |
+
+> 两套 profile 共用 `run_bench.sh`，输出都写到 `output/results.md`（见文末「结果输出」）。跑 cross-lang 会覆盖上一次 cpp 的结果，需要留存的话先备份或改 `RESULT_FILE`。
 
 ## 快速开始：C++ 框架对比
 
@@ -13,10 +15,12 @@
 cd benchmark
 
 # 1. 内核调优（VM / Linux 宿主机上执行，容器启动前生效）
+ulimit -n 65535
 sudo sysctl -w net.ipv4.ip_local_port_range="1024 65535"
 sudo sysctl -w net.core.somaxconn=65535
 sudo sysctl -w net.ipv4.tcp_max_syn_backlog=65535
 sudo sysctl -w net.ipv4.tcp_tw_reuse=1
+sudo sysctl -w net.ipv4.tcp_fin_timeout=15
 
 # 2. 构建（首次约 15-30 分钟，Drogon 编译较慢）
 docker compose --profile cpp build
@@ -31,8 +35,9 @@ curl http://localhost:8084/           # Crow
 curl http://localhost:8085/           # Oat++
 curl http://localhost:8086/           # cpp-httplib
 curl http://localhost:8087/           # Cinatra
+curl http://localhost:8088/           # libuvcpp
 
-# 5. 运行压测（11 场景：基础 4 + 中间件 5 + 高并发 2）
+# 5. 运行压测（6 场景：基础 4 + 高并发 2）
 docker compose --profile cpp exec wrk bash -c "BENCH_MODE=cpp bash /bench/run_bench.sh"
 
 # 6. 采集补充数据（内存、二进制大小等）
@@ -48,10 +53,12 @@ docker compose --profile cpp down
 cd benchmark
 
 # 1. 内核调优（如果已在同一次启动中执行过，可跳过）
+ulimit -n 65535
 sudo sysctl -w net.ipv4.ip_local_port_range="1024 65535"
 sudo sysctl -w net.core.somaxconn=65535
 sudo sysctl -w net.ipv4.tcp_max_syn_backlog=65535
 sudo sysctl -w net.ipv4.tcp_tw_reuse=1
+sudo sysctl -w net.ipv4.tcp_fin_timeout=15
 
 # 2. 构建并启动
 docker compose --profile cross-lang up -d --build
@@ -104,6 +111,7 @@ docker compose --profile cpp exec wrk bash -c "BENCH_MODE=cpp CONNECTIONS=500 DU
 | oatpp      | 8085 | Oat++ v1.3.0      | C++20 (Ubuntu 24.04 GCC, 零外部依赖) |
 | cpphttplib | 8086 | cpp-httplib v0.18 | C++20 (Ubuntu 24.04 GCC, 单头文件)   |
 | cinatra    | 8087 | Cinatra latest    | C++20 (Ubuntu 24.04 GCC, 协程框架)   |
+| libuvcpp   | 8088 | libuvcpp v1.3.0   | C++11（Ubuntu 24.04 GCC + 自带 libuv 依赖） |
 | gin        | 8081 | Gin v1.10         | Go 1.24                              |
 | fiber      | 8089 | Fiber v2          | Go 1.24 (fasthttp)                   |
 | actix      | 8082 | Actix-web 4       | Rust latest stable                   |
@@ -122,21 +130,6 @@ docker compose --profile cpp exec wrk bash -c "BENCH_MODE=cpp CONNECTIONS=500 DU
 | JSON Echo   | `POST /api/echo`  | JSON 反序列化+序列化，测试完整 JSON 处理 |
 | 路径参数    | `GET /users/42`   | 路由匹配+参数提取+JSON 响应              |
 
-### 中间件链场景（5 个）
-
-| 场景                         | 端点                      | 描述                     |
-| ---------------------------- | ------------------------- | ------------------------ |
-| 协程洋葱 0 层（基线）        | `GET /middleware/0`       | 无中间件基线             |
-| 协程洋葱 3 层                | `GET /middleware/3`       | 3 层异步洋葱中间件       |
-| 协程洋葱 10 层               | `GET /middleware/10`      | 10 层异步洋葱中间件      |
-| 同步过滤 3 层                | `GET /sync-filter/3`      | 3 层同步前置过滤         |
-| 同步过滤 10 层               | `GET /sync-filter/10`     | 10 层同步前置过滤        |
-
-> **中间件实现差异**：
-> - `/middleware/*`（协程洋葱）：Hical 使用 `co_await next(req)` 协程链，Drogon 使用 `HttpCoroMiddleware + co_await next` 协程链，双方语义对齐——每层创建一个协程帧，支持 before/after 完整洋葱语义。
-> - `/sync-filter/*`（同步过滤）：Hical 使用 `SyncBeforeHandler` 零协程帧快速路径，Drogon 使用 `HttpFilter` 同线程同步递归，双方语义对齐——纯函数调用，无协程帧。
-> - Crow 和 Oat++ 因编译时/全局中间件限制，使用 handler 内 `std::function` 调用链模拟等价开销。
-
 ### 高并发场景（2 个）
 
 | 场景          | 端点    | 并发连接 | 描述                       |
@@ -149,11 +142,9 @@ docker compose --profile cpp exec wrk bash -c "BENCH_MODE=cpp CONNECTIONS=500 DU
 ```
 benchmark/
 ├── README.md                  # 本文件
-├── BENCHMARK_REPORT.md        # 跨语言对比报告（Hical/Gin/Fiber/Actix-web）
-├── CPP_BENCHMARK_REPORT.md    # C++ 框架对比报告（Hical/Drogon/Crow/Oat++/cpp-httplib/Cinatra）
 ├── output/                    # 压测结果输出目录（自动创建）
-│   └── results.md             # 压测结果（自动生成）
-├── stats.md                   # 统计数据（自动生成）
+│   ├── results.md             # 压测结果（run_bench.sh 生成）
+│   └── stats.md               # 统计数据（collect_stats.sh 生成）
 ├── run_bench.sh               # 压测脚本（BENCH_MODE 驱动）
 ├── collect_stats.sh           # 统计采集脚本（BENCH_MODE 驱动）
 ├── docker-compose.yml         # 容器编排（profile: cpp / cross-lang）
@@ -178,6 +169,10 @@ benchmark/
 │   ├── CMakeLists.txt
 │   └── main.cpp
 ├── cinatra/                   # Cinatra benchmark 源码
+│   ├── Dockerfile
+│   ├── CMakeLists.txt
+│   └── main.cpp
+├── libuvcpp/                  # libuvcpp benchmark 源码
 │   ├── Dockerfile
 │   ├── CMakeLists.txt
 │   └── main.cpp
@@ -235,7 +230,7 @@ Drogon 需要从源码编译整个框架（含 Trantor 网络库），首次构�
 | 脚本               | 输出文件            | 内容                                     |
 | ------------------ | ------------------- | ---------------------------------------- |
 | `run_bench.sh`     | `output/results.md` | QPS、延迟、吞吐量（场景数取决于模式）    |
-| `collect_stats.sh` | `stats.md`          | 内存占用、二进制大小、镜像大小、代码行数 |
+| `collect_stats.sh` | `output/stats.md`   | 内存占用、二进制大小、镜像大小、代码行数 |
 
 ### collect_stats.sh 采集项
 

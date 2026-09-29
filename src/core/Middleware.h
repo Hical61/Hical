@@ -186,11 +186,32 @@ namespace hical
 		void use(const std::string& name, SyncBeforeHandler before, SyncAfterHandler after = nullptr);
 
 		/**
+		 * @brief 添加同步后置中间件（无协程帧开销）
+		 * 只有出口逻辑，没有前置逻辑。helmet 补安全头、gzip 压 body 这类只动响应的
+		 * 中间件直接 use(makeHelmetMiddleware()) 就行，不用再套一层协程 lambda。
+		 * 多个 after 之间按注册逆序执行：后注册的在洋葱里更靠内，它的 after 先跑。
+		 * @param after 后置处理器
+		 * @throw std::logic_error 当 build() 已调用后再 use() 时抛出
+		 */
+		void use(SyncAfterHandler after);
+
+		/**
+		 * @brief 添加命名同步后置中间件（启用 profiling 时记录名称用于统计）
+		 * @param name 中间件名称
+		 * @param after 后置处理器
+		 * @throw std::logic_error 当 build() 已调用后再 use() 时抛出
+		 */
+		void use(const std::string& name, SyncAfterHandler after);
+
+		/**
 		 * @brief 预构建中间件调用链
 		 * @param finalHandler 最终处理器（通常是路由分发）
 		 * @throw std::logic_error 当重复调用 build() 时抛出
 		 * 调用后，execute() 直接使用缓存的调用链，避免每次请求重建。
 		 * 调用后不应再 use() 添加中间件。
+		 * @note profiling 开启时若管线里含 Sync 中间件，本管线会放弃 profiling 退回普通链——
+		 *       profiling 链只认 async handler，Sync 条目进去就是不执行（不是不计时），
+		 *       此时 getTimingStats() 返回空，不会有 callCount 恒为 0 的假行。
 		 */
 		void build(MiddlewareNext finalHandler);
 
@@ -207,7 +228,8 @@ namespace hical
 		 * @param req HTTP 请求
 		 * @param finalHandler 最终处理器
 		 * @return 协程化的 HTTP 响应
-		 * @note 此重载始终动态构建链，profiling 开启时不记录统计数据。
+		 * @note 此重载每次都重建链，Sync 和 Async 条目都会进链；profiling 开启时也不记录统计数据
+		 *       （计时钩子只挂在 build() 预构建的那条缓存链上）。
 		 */
 		[[nodiscard]] Awaitable<HttpResponse> execute(HttpRequest& req, MiddlewareNext finalHandler);
 
@@ -268,14 +290,13 @@ namespace hical
 #endif
 
 	private:
-		/**
-		 * @brief 从中间件列表构建洋葱调用链
-		 * @param finalHandler 最终处理器
-		 * @return 构建好的调用链
-		 */
-		MiddlewareNext buildChain(MiddlewareNext finalHandler) const;
-
 #ifdef HICAL_ENABLE_MIDDLEWARE_PROFILING
+		/**
+		 * @brief entries_ 里是否存在 Sync 条目
+		 * @return true 表示有 Sync 中间件，profiling 链撑不住这种管线
+		 */
+		[[nodiscard]] bool hasSyncEntries() const;
+
 		/**
 		 * @brief 构建带计时统计的洋葱调用链
 		 */

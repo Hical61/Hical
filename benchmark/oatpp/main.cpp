@@ -4,7 +4,6 @@
 #include "oatpp/network/tcp/server/ConnectionProvider.hpp"
 #include "oatpp/parser/json/mapping/ObjectMapper.hpp"
 #include "oatpp/core/macro/codegen.hpp"
-#include <functional>
 #include <thread>
 #include <vector>
 
@@ -26,12 +25,6 @@ class StatusDTO : public oatpp::DTO
 	DTO_FIELD(String, framework);
 };
 
-class MiddlewareDTO : public oatpp::DTO
-{
-	DTO_INIT(MiddlewareDTO, DTO)
-	DTO_FIELD(Int32, middleware_count);
-};
-
 class UserResponseDTO : public oatpp::DTO
 {
 	DTO_INIT(UserResponseDTO, DTO)
@@ -40,22 +33,6 @@ class UserResponseDTO : public oatpp::DTO
 };
 
 #include OATPP_CODEGEN_END(DTO)
-
-// ---- 空操作中间件调用链（handler 内部构造，与 Crow 方案一致）----
-// 与其他框架保持相同的测试语义：模拟 N 层洋葱模型开销
-oatpp::Object<MiddlewareDTO> runWithMiddleware(int layers, std::function<oatpp::Object<MiddlewareDTO>()> handler)
-{
-	auto chain = std::move(handler);
-	for (int i = 0; i < layers; ++i)
-	{
-		chain = [prev = std::move(chain)]() -> oatpp::Object<MiddlewareDTO>
-		{
-			// 空操作，直接透传
-			return prev();
-		};
-	}
-	return chain();
-}
 
 // ---- Controller 定义 ----
 #include OATPP_CODEGEN_BEGIN(ApiController)
@@ -97,65 +74,6 @@ public:
 		dto->userId = id;
 		dto->name = "User " + *id;
 		return createDtoResponse(Status::CODE_200, dto);
-	}
-
-	// 无中间件
-	ENDPOINT("GET", "/middleware/0", mw0)
-	{
-		auto dto = MiddlewareDTO::createShared();
-		dto->middleware_count = 0;
-		return createDtoResponse(Status::CODE_200, dto);
-	}
-
-	// 3 层空操作中间件
-	ENDPOINT("GET", "/middleware/3", mw3)
-	{
-		auto result = runWithMiddleware(3,
-										[]() -> oatpp::Object<MiddlewareDTO>
-										{
-											auto dto = MiddlewareDTO::createShared();
-											dto->middleware_count = 3;
-											return dto;
-										});
-		return createDtoResponse(Status::CODE_200, result);
-	}
-
-	// 10 层空操作中间件
-	ENDPOINT("GET", "/middleware/10", mw10)
-	{
-		auto result = runWithMiddleware(10,
-										[]() -> oatpp::Object<MiddlewareDTO>
-										{
-											auto dto = MiddlewareDTO::createShared();
-											dto->middleware_count = 10;
-											return dto;
-										});
-		return createDtoResponse(Status::CODE_200, result);
-	}
-
-	// /sync-filter — 模拟同步函数调用链
-	ENDPOINT("GET", "/sync-filter/3", syncMw3)
-	{
-		auto result = runWithMiddleware(3,
-										[]() -> oatpp::Object<MiddlewareDTO>
-										{
-											auto dto = MiddlewareDTO::createShared();
-											dto->middleware_count = 3;
-											return dto;
-										});
-		return createDtoResponse(Status::CODE_200, result);
-	}
-
-	ENDPOINT("GET", "/sync-filter/10", syncMw10)
-	{
-		auto result = runWithMiddleware(10,
-										[]() -> oatpp::Object<MiddlewareDTO>
-										{
-											auto dto = MiddlewareDTO::createShared();
-											dto->middleware_count = 10;
-											return dto;
-										});
-		return createDtoResponse(Status::CODE_200, result);
 	}
 };
 

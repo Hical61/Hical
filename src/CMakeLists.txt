@@ -119,7 +119,10 @@ if(UNIX AND NOT APPLE)
     endif()
 endif()
 
-# 内存池追踪统计编译定义（PUBLIC：头文件 TrackedResource 条件编译需全局一致，避免 ODR 违规）
+# 内存分配追踪（选项在根 CMakeLists.txt 中定义，默认开启以保持兼容性；
+# 生产高性能场景可通过 -DHICAL_ENABLE_MEMORY_TRACKING=OFF 关闭）
+# 开启时每个计数器 alignas(64) 独占 cache line，消除 false sharing
+# PUBLIC：头文件 TrackedResource 条件编译需全局一致，避免 ODR 违规
 if(HICAL_ENABLE_MEMORY_TRACKING)
     target_compile_definitions(hical_core PUBLIC HICAL_ENABLE_MEMORY_TRACKING)
 endif()
@@ -127,13 +130,6 @@ endif()
 # 中间件性能剖析编译定义
 if(HICAL_ENABLE_MIDDLEWARE_PROFILING)
     target_compile_definitions(hical_core PUBLIC HICAL_ENABLE_MIDDLEWARE_PROFILING)
-endif()
-
-# 内存分配追踪（默认开启以保持兼容性；生产高性能场景可通过 -DHICAL_ENABLE_MEMORY_TRACKING=OFF 关闭）
-# 开启时每个计数器 alignas(64) 独占 cache line，消除 false sharing
-option(HICAL_ENABLE_MEMORY_TRACKING "Enable memory allocation statistics (alignas(64) per counter, disable for zero-overhead in production)" ON)
-if(HICAL_ENABLE_MEMORY_TRACKING)
-    target_compile_definitions(hical_core PUBLIC HICAL_ENABLE_MEMORY_TRACKING)
 endif()
 
 # 数据库中间件（可选）
@@ -149,14 +145,6 @@ if(HICAL_WITH_DATABASE)
     )
     target_compile_definitions(hical_core PUBLIC HICAL_HAS_DATABASE=1)
 
-    # MySQL 后端
-    target_sources(hical_core PRIVATE
-        db/MysqlConnection.cpp
-        db/StmtCache.cpp
-    )
-    # boost::mysql 的 client-side SQL formatting 依赖 boost::charconv
-    target_link_libraries(hical_core PUBLIC Boost::charconv)
-
     # PostgreSQL 后端（依赖 libpq）
     if(HICAL_WITH_PGSQL)
         target_sources(hical_core PRIVATE
@@ -171,6 +159,17 @@ if(HICAL_WITH_DATABASE)
             target_link_libraries(hical_core PUBLIC ${PGSQL_LIBRARY})
         endif()
     endif()
+endif()
+
+# MySQL 后端（独立 option，依赖 boost::mysql + boost::charconv 1.85+）。
+# MySQL 源文件沿用 HICAL_HAS_DATABASE 包裹，开启时根 CMakeLists 已联动 DATABASE=ON。
+if(HICAL_WITH_MYSQL)
+    target_sources(hical_core PRIVATE
+        db/MysqlConnection.cpp
+        db/StmtCache.cpp
+    )
+    # boost::mysql 的 client-side SQL formatting 依赖 boost::charconv
+    target_link_libraries(hical_core PUBLIC Boost::charconv)
 endif()
 
 # OpenAPI 自动生成（可选，默认开启，选项在根 CMakeLists.txt 中定义）

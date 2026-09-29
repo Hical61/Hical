@@ -18,6 +18,94 @@ using boost::asio::ip::tcp;
 namespace
 {
 
+	/// 发送带 Expect: 100-continue 的 POST 请求，分两步：先发头部，收到 100/错误 后再决定是否发 body
+	/// 返回 {interim_status, final_status, final_body}
+	/// interim_status: 100 = 收到 100 Continue；其他 = 收到错误响应（body 未发）
+	struct ExpectResult
+	{
+		unsigned interimStatus = 0; // 100 = 继续；其他 = 直接拒绝
+		unsigned finalStatus = 0;   // 最终响应码（只有 interimStatus==100 时有意义）
+		std::string finalBody;
+	};
+
+	/// 向指定端口发送带 Expect 头的分步请求，供各 fixture 复用
+	/// @param extraHeaders 追加在 Expect 头之后的可选头部（如认证头），为空则不加
+	ExpectResult sendWithExpectToPort(uint16_t port,
+									  const std::string& path,
+									  const std::string& body,
+									  const std::string& extraHeaders = "")
+	{
+		boost::asio::io_context io;
+		tcp::socket sock(io);
+		sock.connect(tcp::endpoint(boost::asio::ip::make_address("127.0.0.1"), port));
+
+		// 第一步：只发头部，带 Expect: 100-continue
+		std::string req = "POST " + path
+						  + " HTTP/1.1\r\n"
+							"Host: localhost\r\n"
+							"Content-Length: "
+						  + std::to_string(body.size())
+						  + "\r\n"
+							"Expect: 100-continue\r\n"
+						  + extraHeaders
+						  + "Connection: close\r\n"
+							"\r\n";
+		boost::asio::write(sock, boost::asio::buffer(req));
+
+		// 读取中间响应，直到收到完整头部（\r\n\r\n）
+		char tmp[4096];
+		std::string recvBuf;
+
+		for (;;)
+		{
+			boost::system::error_code ec;
+			auto n = sock.read_some(boost::asio::buffer(tmp), ec);
+			if (n > 0)
+			{
+				recvBuf.append(tmp, n);
+			}
+			if (recvBuf.find("\r\n\r\n") != std::string::npos)
+			{
+				break;
+			}
+			if (ec)
+			{
+				break;
+			}
+		}
+
+		// 解析状态码
+		unsigned status = 0;
+		if (recvBuf.size() >= 12)
+		{
+			// "HTTP/1.1 XXX"
+			std::from_chars(recvBuf.data() + 9, recvBuf.data() + 12, status);
+		}
+
+		ExpectResult result;
+		result.interimStatus = status;
+
+		if (status != 100)
+		{
+			// 拒绝，body 不发
+			sock.close();
+			return result;
+		}
+
+		// 第二步：收到 100，发送 body
+		boost::asio::write(sock, boost::asio::buffer(body));
+
+		// 读取最终响应
+		std::string residual = recvBuf.substr(
+			recvBuf.find("\r\n\r\n") != std::string::npos ? recvBuf.find("\r\n\r\n") + 4 : recvBuf.size());
+		auto finalRes = hical::test::detail::readHttpResponse(sock, residual);
+		result.finalStatus = finalRes.status;
+		result.finalBody = finalRes.body;
+
+		sock.close();
+		return result;
+	}
+
 	class ExpectContinueTest : public ::testing::Test
 	{
 	protected:
@@ -40,6 +128,12 @@ namespace
 								   [](const HttpRequest& req) -> HttpResponse
 								   {
 									   return HttpResponse::ok("item:" + req.param("id"));
+								   });
+
+			server_->router().post("/files/*rest",
+								   [](const HttpRequest& req) -> HttpResponse
+								   {
+									   return HttpResponse::ok("file:" + req.param("rest"));
 								   });
 		}
 
@@ -83,86 +177,9 @@ namespace
 			}
 		}
 
-		/// 发送带 Expect: 100-continue 的 POST 请求，分两步：先发头部，收到 100/错误 后再决定是否发 body
-		/// 返回 {interim_status, final_status, final_body}
-		/// interim_status: 100 = 收到 100 Continue；其他 = 收到错误响应（body 未发）
-		struct ExpectResult
-		{
-			unsigned interimStatus = 0; // 100 = 继续；其他 = 直接拒绝
-			unsigned finalStatus = 0;   // 最终响应码（只有 interimStatus==100 时有意义）
-			std::string finalBody;
-		};
-
 		ExpectResult sendWithExpect(const std::string& path, const std::string& body)
 		{
-			boost::asio::io_context io;
-			tcp::socket sock(io);
-			sock.connect(tcp::endpoint(boost::asio::ip::make_address("127.0.0.1"), port_));
-
-			// 第一步：只发头部，带 Expect: 100-continue
-			std::string req = "POST " + path
-							  + " HTTP/1.1\r\n"
-								"Host: localhost\r\n"
-								"Content-Length: "
-							  + std::to_string(body.size())
-							  + "\r\n"
-								"Expect: 100-continue\r\n"
-								"Connection: close\r\n"
-								"\r\n";
-			boost::asio::write(sock, boost::asio::buffer(req));
-
-			// 读取中间响应，直到收到完整头部（\r\n\r\n）
-			char tmp[4096];
-			std::string recvBuf;
-
-			for (;;)
-			{
-				boost::system::error_code ec;
-				auto n = sock.read_some(boost::asio::buffer(tmp), ec);
-				if (n > 0)
-				{
-					recvBuf.append(tmp, n);
-				}
-				if (recvBuf.find("\r\n\r\n") != std::string::npos)
-				{
-					break;
-				}
-				if (ec)
-				{
-					break;
-				}
-			}
-
-			// 解析状态码
-			unsigned status = 0;
-			if (recvBuf.size() >= 12)
-			{
-				// "HTTP/1.1 XXX"
-				std::from_chars(recvBuf.data() + 9, recvBuf.data() + 12, status);
-			}
-
-			ExpectResult result;
-			result.interimStatus = status;
-
-			if (status != 100)
-			{
-				// 拒绝，body 不发
-				sock.close();
-				return result;
-			}
-
-			// 第二步：收到 100，发送 body
-			boost::asio::write(sock, boost::asio::buffer(body));
-
-			// 读取最终响应
-			std::string residual = recvBuf.substr(
-				recvBuf.find("\r\n\r\n") != std::string::npos ? recvBuf.find("\r\n\r\n") + 4 : recvBuf.size());
-			auto finalRes = hical::test::detail::readHttpResponse(sock, residual);
-			result.finalStatus = finalRes.status;
-			result.finalBody = finalRes.body;
-
-			sock.close();
-			return result;
+			return sendWithExpectToPort(port_, path, body);
 		}
 	};
 
@@ -235,6 +252,125 @@ TEST_F(ExpectContinueTest, OversizedBodyRejects413BeforeSending100)
 	EXPECT_EQ(result.finalStatus, 0u);
 }
 
+// 独立的 header 大小场景 fixture：body 上限放宽，专门验证「header 粘连 body」不会误判 431
+class HeaderSizeTest : public ::testing::Test
+{
+protected:
+	uint16_t port_ {0};
+	std::unique_ptr<HttpServer> server_;
+	std::thread serverThread_;
+
+	void SetUp() override
+	{
+		server_ = std::make_unique<HttpServer>(0);
+		server_->setMaxBodySize(64 * 1024); // 放开，避免先撞 body 413
+		server_->setMaxHeaderSize(4096);    // 4KB，比 kBufferSize(8KB) 小，能逼出 bufUsed 粘连误判
+
+		server_->router().post("/upload",
+							   [](const HttpRequest& req) -> HttpResponse
+							   {
+								   return HttpResponse::ok("received:" + std::to_string(req.body().size()));
+							   });
+	}
+
+	void startServer()
+	{
+		serverThread_ = std::thread(
+			[this]()
+			{
+				server_->start();
+			});
+
+		for (int i = 0; i < 50; ++i)
+		{
+			port_ = server_->port();
+			if (port_ == 0)
+			{
+				std::this_thread::sleep_for(std::chrono::milliseconds(20));
+				continue;
+			}
+			try
+			{
+				boost::asio::io_context io;
+				tcp::socket sock(io);
+				sock.connect(tcp::endpoint(boost::asio::ip::make_address("127.0.0.1"), port_));
+				sock.close();
+				return;
+			}
+			catch (...)
+			{
+				std::this_thread::sleep_for(std::chrono::milliseconds(20));
+			}
+		}
+	}
+
+	void TearDown() override
+	{
+		server_->stop();
+		if (serverThread_.joinable())
+		{
+			serverThread_.join();
+		}
+	}
+
+	// 一次 write 把 header + body 整段发出去，逼服务端 async_read_some 一次读回粘连数据
+	hical::test::detail::ParsedResponse sendOnce(const std::string& rawRequest)
+	{
+		boost::asio::io_context io;
+		tcp::socket sock(io);
+		sock.connect(tcp::endpoint(boost::asio::ip::make_address("127.0.0.1"), port_));
+
+		boost::asio::write(sock, boost::asio::buffer(rawRequest));
+
+		std::string residual;
+		return hical::test::detail::readHttpResponse(sock, residual);
+	}
+};
+
+// header 约 2KB（< 4KB 上限）但 header+body 一次 send 总长 > 4KB → 不应 431，应正常到达 handler
+TEST_F(HeaderSizeTest, HeaderWithPassthroughBodyNot431)
+{
+	startServer();
+
+	// header 值 2KB，超出 256B 的 speculative read，逼 picohttpparser 分两轮读，body 跟着粘连进 buf
+	std::string padding(2 * 1024, 'A');
+	std::string body(16 * 1024, 'B'); // 16KB body，header 本身只有约 2KB
+	std::string req = "POST /upload HTTP/1.1\r\n"
+					  "Host: localhost\r\n"
+					  "Content-Length: "
+					  + std::to_string(body.size())
+					  + "\r\n"
+						"X-Padding: "
+					  + padding
+					  + "\r\n"
+						"Connection: close\r\n"
+						"\r\n"
+					  + body;
+
+	auto res = sendOnce(req);
+	EXPECT_EQ(res.status, 200u);
+	EXPECT_EQ(res.body, "received:16384");
+}
+
+// 纯 header > 4KB → 仍要被 431 拒绝
+TEST_F(HeaderSizeTest, OversizedHeaderStill431)
+{
+	startServer();
+
+	std::string bigHeaderValue(8 * 1024, 'B'); // 单个 header 值就 8KB，超过 4KB 上限
+	std::string req = "POST /upload HTTP/1.1\r\n"
+					  "Host: localhost\r\n"
+					  "Content-Length: 0\r\n"
+					  "X-Big: "
+					  + bigHeaderValue
+					  + "\r\n"
+						"Connection: close\r\n"
+						"\r\n";
+
+	auto res = sendOnce(req);
+	EXPECT_EQ(res.status, 431u);
+}
+
 // 参数路由 + Expect → exists() 走参数分支，正常发 100
 TEST_F(ExpectContinueTest, ParamRouteReceives100ThenOk)
 {
@@ -246,6 +382,19 @@ TEST_F(ExpectContinueTest, ParamRouteReceives100ThenOk)
 	EXPECT_EQ(result.interimStatus, 100u);
 	EXPECT_EQ(result.finalStatus, 200u);
 	EXPECT_EQ(result.finalBody, "item:42");
+}
+
+// wildcard 路由 + Expect → resolveRoute 命中，不应被 exists() 误判 404
+TEST_F(ExpectContinueTest, WildcardRouteReceives100ThenOk)
+{
+	startServer();
+
+	std::string body = "payload";
+	auto result = sendWithExpect("/files/abc/def.txt", body);
+
+	EXPECT_EQ(result.interimStatus, 100u);
+	EXPECT_EQ(result.finalStatus, 200u);
+	EXPECT_EQ(result.finalBody, "file:abc/def.txt");
 }
 
 // HTTP/1.0 带 Expect 头 → 忽略（不发 100），直接读 body，正常响应
@@ -274,4 +423,125 @@ TEST_F(ExpectContinueTest, Http10IgnoresExpect)
 	EXPECT_EQ(res.body, "received:2");
 
 	sock.close();
+}
+
+// ============ 中间件前置 + Expect 组合回归 ============
+// 背景：任务 3 把中间件前置到「读 body / Expect 预检 / 发 100 Continue」之前。
+// 期望：认证中间件在 before 阶段短路 401 时，不应发 100 Continue，也不消费 body。
+class ExpectMiddlewareTest : public ::testing::Test
+{
+protected:
+	uint16_t port_ {0};
+	std::unique_ptr<HttpServer> server_;
+	std::thread serverThread_;
+
+	void SetUp() override
+	{
+		server_ = std::make_unique<HttpServer>(0);
+		server_->setMaxBodySize(512);
+
+		// 认证中间件：没有 X-Auth-Token 头就短路 401，不调用 next（即不读 body、不发 100）
+		server_->use(
+			[](HttpRequest& req, MiddlewareNext next) -> Awaitable<HttpResponse>
+			{
+				if (req.header("X-Auth-Token").empty())
+				{
+					HttpResponse res;
+					res.setStatus(HttpStatusCode::hUnauthorized);
+					res.setBody("unauthorized", "text/plain");
+					co_return res;
+				}
+				co_return co_await next(req);
+			});
+
+		server_->router().post("/upload",
+							   [](const HttpRequest& req) -> HttpResponse
+							   {
+								   return HttpResponse::ok("received:" + std::to_string(req.body().size()));
+							   });
+	}
+
+	void startServer()
+	{
+		serverThread_ = std::thread(
+			[this]()
+			{
+				server_->start();
+			});
+
+		for (int i = 0; i < 50; ++i)
+		{
+			port_ = server_->port();
+			if (port_ == 0)
+			{
+				std::this_thread::sleep_for(std::chrono::milliseconds(20));
+				continue;
+			}
+			try
+			{
+				boost::asio::io_context io;
+				tcp::socket sock(io);
+				sock.connect(tcp::endpoint(boost::asio::ip::make_address("127.0.0.1"), port_));
+				sock.close();
+				return;
+			}
+			catch (...)
+			{
+				std::this_thread::sleep_for(std::chrono::milliseconds(20));
+			}
+		}
+	}
+
+	void TearDown() override
+	{
+		server_->stop();
+		if (serverThread_.joinable())
+		{
+			serverThread_.join();
+		}
+	}
+};
+
+// 认证中间件短路 401 + Expect → 不发 100 Continue，也不读 body
+TEST_F(ExpectMiddlewareTest, AuthInterceptShortCircuitsBefore100Continue)
+{
+	startServer();
+
+	// 不带认证头，声明 128 字节 body；中间件在发 100 之前短路，服务端不会期待 body
+	std::string body(128, 'A');
+	auto result = sendWithExpectToPort(port_, "/upload", body);
+
+	// 第一步收到的是 401，而非 100 Continue
+	EXPECT_EQ(result.interimStatus, 401u);
+	// 拒绝后连接被关闭，没有最终响应
+	EXPECT_EQ(result.finalStatus, 0u);
+	// finalBody 为空：短路响应由中间件直接返回，body 未被读取
+	EXPECT_TRUE(result.finalBody.empty());
+}
+
+// 认证放行 + Expect → 正常收到 100 Continue 再发 body，最终 200
+TEST_F(ExpectMiddlewareTest, AuthPassReceives100ThenOk)
+{
+	startServer();
+
+	std::string body(128, 'B');
+	auto result = sendWithExpectToPort(port_, "/upload", body, "X-Auth-Token: pass\r\n");
+
+	EXPECT_EQ(result.interimStatus, 100u);
+	EXPECT_EQ(result.finalStatus, 200u);
+	EXPECT_EQ(result.finalBody, "received:128");
+}
+
+// 认证放行但 Content-Length 超限 + Expect → 中间件通过后，读 body 前的预检仍要 413，不经 handler
+TEST_F(ExpectMiddlewareTest, AuthPassThenOversizedBodyStill413)
+{
+	startServer();
+
+	// 带认证头放行，但 body 声明 1024 字节，超过 maxBodySize 512
+	std::string body(1024, 'C');
+	auto result = sendWithExpectToPort(port_, "/upload", body, "X-Auth-Token: pass\r\n");
+
+	// 预检在发 100 之前拒绝，直接返回 413
+	EXPECT_EQ(result.interimStatus, 413u);
+	EXPECT_EQ(result.finalStatus, 0u);
 }

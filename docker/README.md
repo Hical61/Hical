@@ -23,10 +23,15 @@ docker/
 │   ├── hical.dockerfile        # TFB 专用 Dockerfile（遵循 TFB 命名规范）
 │   ├── benchmark_config.json   # TFB 配置文件
 │   └── bench_main.cpp          # TFB 极简服务器（仅 /json + /plaintext）
+├── HttpArena/                  # HttpArena 框架联赛的 bench 服务器（meta.json + src/）
 ├── bench.Dockerfile            # 一体化 benchmark（编译 + wrk 全场景测试）
+├── bench-server.Dockerfile     # 分离模式：Server 镜像（多阶段构建）
+├── bench-wrk.Dockerfile        # 分离模式：wrk 压测客户端镜像
+├── bench-pgo.Dockerfile        # PGO 优化构建
+├── bench-entrypoint.sh         # 一体化容器入口（RPS softirq 亲和 + 启动 server）
+├── docker-compose.bench.yml    # Compose 编排（同一 VM 双容器）
 ├── bench_main.cpp              # 压测服务器入口
-├── flamegraph-analysis-cn.md   # 火焰图分析（中文）
-├── flamegraph-analysis.md      # 火焰图分析（英文）
+├── data/                       # 火焰图与 profiling 数据（gitignored）
 └── README.md                   # 本文件
 ```
 
@@ -59,6 +64,113 @@ docker compose up -d --build
 - Linux VM（推荐 Ubuntu 22.04/24.04），**至少 4 核 CPU + 4GB 内存**
 - 已安装 Docker Engine（推荐 24.0+）
 - 已将 Hical 源码传输到 VM 上
+
+#### 拉不到 base 镜像时怎么排查
+
+本目录下所有 Dockerfile 的 base 镜像都是 `ubuntu:24.04`。`docker build` 卡在 `load metadata` 并报下面这种错时：
+
+```
+ERROR: failed to build: failed to solve: DeadlineExceeded:
+ubuntu:24.04: failed to resolve source metadata for docker.io/library/ubuntu:24.04:
+dial tcp 69.63.181.12:443: i/o timeout
+```
+
+**先别急着换镜像源**——最常见的原因是这一次 DNS 解析到了坏地址，重试一下就过去了。
+
+先确认 Docker Hub 到底通不通（`401` 就是通的，那是 `/v2/` 的正常响应，带 `www-authenticate` 才叫握手成功）：
+
+```bash
+curl -I  --max-time 8 https://registry-1.docker.io/v2/
+curl -4 -I --max-time 8 https://registry-1.docker.io/v2/   # 强制走 IPv4
+curl -6 -I --max-time 8 https://registry-1.docker.io/v2/   # 强制走 IPv6
+```
+
+再对一下解析结果，看看有没有对不上的地址：
+
+```bash
+getent ahostsv4 registry-1.docker.io
+```
+
+正常应该是 AWS us-east-1 段（`3.x` / `34.x` / `54.x`）。如果混进了 `100.64.0.0/10`（CGNAT 段，公网不可路由）之类的地址，说明本地 DNS 被干扰了，报错里那个 IP 多半就是这么来的。
+
+确认可达之后按顺序试：
+
+```bash
+# 1. 直接重试，多数情况这一下就好了
+docker pull ubuntu:24.04
+
+# 2. 还不行就清 resolver 缓存 + 重启 daemon 再拉
+#    没跑 systemd-resolved 的话 resolvectl 会直接报错，跳过这行（resolvectl status 没输出就是没跑）
+sudo resolvectl flush-caches
+sudo systemctl restart docker
+docker pull ubuntu:24.04
+```
+
+> `daemon.json` 里的 `"ipv6": true` 解决不了这个问题，那只管容器网络。daemon 出站拉镜像由 Go resolver 按 RFC 6724 选路，VM 没有全局 IPv6 时自然走 IPv4。
+
+实在拉不动再走下面的兜底方案。
+
+**兜底一：本地灌镜像（最稳，不依赖任何镜像站）**
+
+在能 pull 的机器上导出，scp 到 VM 再 load：
+
+```bash
+# 能 pull 的机器（宿主机 / 有代理的机器）
+docker pull ubuntu:24.04
+docker save ubuntu:24.04 -o ubuntu2404.tar
+scp ubuntu2404.tar hical@<VM_IP>:~/
+
+# VM 上
+docker load -i ~/ubuntu2404.tar
+docker images | grep ubuntu   # 确认 ubuntu:24.04 已在本地
+```
+
+之后原命令直接用，**Dockerfile 一行都不用改**——BuildKit 发现本地已有该 tag 就不会再发 registry 请求（前提是走默认 builder；切到 buildx 的 `docker-container` driver 后 builder 看不到本机镜像，还是会回源，所以这里别加 `--builder`）：
+
+```bash
+docker build -f docker/bench.Dockerfile -t hical-bench .
+```
+
+**兜底二：配置镜像加速器**
+
+`tee` 是截断写，照抄下面的命令会把 daemon.json 里已有的配置全盖掉。先 `cat /etc/docker/daemon.json` 看一眼，有 `data-root`、`log-driver`、`"ipv6": true` 之类的键就手工把 `registry-mirrors` 并进去，别直接覆盖：
+
+```bash
+sudo mkdir -p /etc/docker
+# 仅当还没有 daemon.json（或里面没别的配置）时才这么直接写
+sudo tee /etc/docker/daemon.json <<'EOF'
+{
+  "registry-mirrors": [
+    "https://docker.m.daocloud.io",
+    "https://docker.1panel.live",
+    "https://hub.rat.dev"
+  ]
+}
+EOF
+sudo systemctl daemon-reload && sudo systemctl restart docker
+docker info | grep -A3 "Registry Mirrors"
+```
+
+> 2024 年之后 tuna / ustc / 阿里云的公共加速器基本都已停服，上面这几个是社区维护的，存活状况随时会变。
+
+**兜底三：给 Docker daemon 配代理**
+
+宿主机上有可用代理时（VirtualBox NAT 模式下宿主机地址是 `10.0.2.2`，Host-Only 网卡则是宿主机在该网段的 IP）：
+
+```bash
+sudo mkdir -p /etc/systemd/system/docker.service.d
+sudo tee /etc/systemd/system/docker.service.d/proxy.conf <<'EOF'
+[Service]
+Environment="HTTP_PROXY=http://<proxy-ip>:<port>"
+Environment="HTTPS_PROXY=http://<proxy-ip>:<port>"
+Environment="NO_PROXY=localhost,127.0.0.1"
+EOF
+sudo systemctl daemon-reload && sudo systemctl restart docker
+```
+
+代理要监听 `0.0.0.0` 而不是 `127.0.0.1`，否则 VM 连不上。
+
+> 兜底一灌一次，`docker/` 下所有 Dockerfile（bench / TFB / HttpArena / test / prod）都受益，它们用的是同一个 base 镜像。
 
 ### 1. 传输源码到 VM
 
@@ -110,22 +222,21 @@ docker run --rm hical-bench 2>&1 | tee bench-raw-output.txt
 sed -n '/^## Results Summary/,$ p' bench-raw-output.txt >> docker/benchmark-results.md
 ```
 
-### 4. 测试场景（12 场景）
+### 4. 测试场景（9 场景）
 
-| #   | 场景             | 路径                  | 方法 | 并发  |
-| --- | ---------------- | --------------------- | ---- | ----- |
-| 1   | Hello World      | `/`                   | GET  | 100   |
-| 2   | JSON 响应        | `/api/status`         | GET  | 100   |
-| 3   | JSON Echo        | `/api/echo`           | POST | 100   |
-| 4   | 路径参数         | `/users/42`           | GET  | 100   |
-| 5   | 中间件 0 层      | `/middleware/0`       | GET  | 100   |
-| 6   | 中间件 3 层      | `/middleware/3`       | GET  | 100   |
-| 7   | 中间件 10 层     | `/middleware/10`      | GET  | 100   |
-| 8   | 同步中间件 3 层  | `/sync-middleware/3`  | GET  | 100   |
-| 9   | 同步中间件 10 层 | `/sync-middleware/10` | GET  | 100   |
-| 10  | 高并发 100       | `/`                   | GET  | 100   |
-| 11  | 高并发 1000      | `/`                   | GET  | 1000  |
-| 12  | 高并发 10000     | `/`                   | GET  | 10000 |
+| #   | 场景         | 路径             | 方法 | 并发  |
+| --- | ------------ | ---------------- | ---- | ----- |
+| 1   | Hello World  | `/`              | GET  | 100   |
+| 2   | JSON 响应    | `/api/status`    | GET  | 100   |
+| 3   | JSON Echo    | `/api/echo`      | POST | 100   |
+| 4   | 路径参数     | `/users/42`      | GET  | 100   |
+| 5   | 中间件 0 层  | `/middleware/0`  | GET  | 100   |
+| 6   | 中间件 10 层 | `/middleware/10` | GET  | 100   |
+| 7   | 高并发 100   | `/`              | GET  | 100   |
+| 8   | 高并发 1000  | `/`              | GET  | 1000  |
+| 9   | 高并发 10000 | `/`              | GET  | 10000 |
+
+> 中间件两个场景是 Hical 自测用的（跟踪中间件调度开销），不参与 benchmark/ 下的六框架横评——其余五家框架没有可比的原生运行时中间件机制。
 
 ### 5. 可调参数
 

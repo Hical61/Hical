@@ -5,6 +5,7 @@
 
 #include "HttpServer.h"
 #include "MemoryPool.h"
+#include "RequestDispatch.h"
 #include "core/Version.h"
 #include <iostream>
 #include <optional>
@@ -65,6 +66,51 @@ namespace hical
 			throw std::logic_error("HttpServer: cannot add middleware after start()");
 		}
 		middlewarePipeline_.use(name, std::move(middleware));
+	}
+
+	void HttpServer::use(SyncBeforeHandler before)
+	{
+		if (started_)
+		{
+			throw std::logic_error("HttpServer: cannot add middleware after start()");
+		}
+		middlewarePipeline_.use(std::move(before));
+	}
+
+	void HttpServer::use(SyncBeforeHandler before, SyncAfterHandler after)
+	{
+		if (started_)
+		{
+			throw std::logic_error("HttpServer: cannot add middleware after start()");
+		}
+		middlewarePipeline_.use(std::move(before), std::move(after));
+	}
+
+	void HttpServer::use(const std::string& name, SyncBeforeHandler before, SyncAfterHandler after)
+	{
+		if (started_)
+		{
+			throw std::logic_error("HttpServer: cannot add middleware after start()");
+		}
+		middlewarePipeline_.use(name, std::move(before), std::move(after));
+	}
+
+	void HttpServer::use(SyncAfterHandler after)
+	{
+		if (started_)
+		{
+			throw std::logic_error("HttpServer: cannot add middleware after start()");
+		}
+		middlewarePipeline_.use(std::move(after));
+	}
+
+	void HttpServer::use(const std::string& name, SyncAfterHandler after)
+	{
+		if (started_)
+		{
+			throw std::logic_error("HttpServer: cannot add middleware after start()");
+		}
+		middlewarePipeline_.use(name, std::move(after));
 	}
 
 #ifdef HICAL_ENABLE_MIDDLEWARE_PROFILING
@@ -140,16 +186,22 @@ namespace hical
 		running_.store(true);
 		started_ = true;
 
-		// 中间件链预构建
+		// 中间件链在此锁定（build 后再 use 会抛异常）并初始化 profiling 统计。
+		// build 的 finalHandler 是「终端骨架」：只从请求内部槽取每请求分发上下文并调用其
+		// tailHandler（tailHandler 由 handleSession 每请求写入，封装了「读 body + 用前置
+		// resolveRoute 缓存结果 dispatch」）。链本身只 build 一次，每请求零重建，
+		// resolve 全程只匹配一次，中间件后置仍拿到真实 handler 响应。
 		if (middlewarePipeline_.size() > 0)
 		{
 			middlewarePipeline_.build(
-				[this](HttpRequest& req) -> Awaitable<HttpResponse>
+				[](HttpRequest& r) -> Awaitable<HttpResponse>
 				{
-					co_return co_await router_.dispatch(req);
+					co_return co_await detail::runInternalDispatch(r);
 				});
 
-			// WS 升级也走中间件，这里预构建好链避免每次动态分配
+			// WS/SSE 升级也走中间件，这里预构建好链避免每次动态分配。
+			// 注意：WS/SSE 不读 body，它的终端是占位 ok("")，与骨架链（读槽）无关——
+			// 它们的分支不走 runInternalDispatch，req 也不塞槽。
 			wsMiddlewareChain_ = middlewarePipeline_.buildFor(
 				[](HttpRequest&) -> Awaitable<HttpResponse>
 				{
@@ -441,7 +493,17 @@ namespace hical
 					boost::system::error_code optEc;
 					socket.set_option(boost::asio::ip::tcp::no_delay(true), optEc); // 失败不致命，忽略
 
-					coSpawn(co_await boost::asio::this_coro::executor, handleSession(std::move(socket)));
+					// SSL 分流：启用 sslCtx_ 时把裸 socket 包成 ssl::stream，明文路径行为完全不变。
+					// 握手不在 acceptLoop 里做，交给 handleSession 内部的 if constexpr 分支。
+					if (sslCtx_)
+					{
+						boost::asio::ssl::stream<tcp::socket> sslStream(std::move(socket), sslCtx_->native());
+						coSpawn(co_await boost::asio::this_coro::executor, handleSession(std::move(sslStream)));
+					}
+					else
+					{
+						coSpawn(co_await boost::asio::this_coro::executor, handleSession(std::move(socket)));
+					}
 					committed = true; // 移交成功
 				}
 				else
@@ -489,7 +551,16 @@ namespace hical
 					boost::system::error_code optEc;
 					socket.set_option(boost::asio::ip::tcp::no_delay(true), optEc); // 失败不致命，忽略
 
-					coSpawn(targetIoCtx.get_executor(), handleSession(std::move(socket)));
+					// SSL 分流：与 SO_REUSEPORT 路径一致，握手交给 handleSession 内部处理。
+					if (sslCtx_)
+					{
+						boost::asio::ssl::stream<tcp::socket> sslStream(std::move(socket), sslCtx_->native());
+						coSpawn(targetIoCtx.get_executor(), handleSession(std::move(sslStream)));
+					}
+					else
+					{
+						coSpawn(targetIoCtx.get_executor(), handleSession(std::move(socket)));
+					}
 					committed = true; // 移交成功
 				}
 			}

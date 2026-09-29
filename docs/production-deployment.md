@@ -1009,7 +1009,7 @@ done
 | `maxConnections`      | 16     | 压测确定，通常 50-200               |
 | `idleTimeout`         | 300s   | 过长浪费 MySQL 连接数，过短频繁重连 |
 | `acquireTimeout`      | 5s     | 高并发下可适当加长                  |
-| `queryTimeout`        | 30s    | 复杂报表查询场景可调大              |
+| `queryTimeout`        | 30s    | 当前不生效（无后端消费），别指望它兜住慢查询 |
 | `stmtCacheSize`       | 64     | 查询种类多时调大（如 256）          |
 | `healthCheckInterval` | 30s    | 网络不稳定时缩短                    |
 

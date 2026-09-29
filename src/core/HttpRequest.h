@@ -25,6 +25,11 @@ namespace hical
 
 	class MultipartParser; // 前向声明，用于友元
 
+	namespace detail
+	{
+		struct RequestDispatchContext; // 前向声明：请求分发上下文（见 RequestDispatch.h）
+	} // namespace detail
+
 	/**
 	 * @brief 零拷贝请求头部容器
 	 * 存储 string_view 对，引用外部缓冲区（如连接级 readBuf）。
@@ -168,9 +173,14 @@ namespace hical
 	class HttpRequest
 	{
 		friend class MultipartParser;
+		friend struct detail::RequestDispatchContext;
 
 	public:
 		HttpRequest();
+		HttpRequest(const HttpRequest&) = delete;
+		HttpRequest& operator=(const HttpRequest&) = delete;
+		HttpRequest(HttpRequest&& other) noexcept;
+		HttpRequest& operator=(HttpRequest&& other) noexcept;
 
 		/**
 		 * @brief 从已解析的 NativeRequest 构造（内部使用，跳过 CRLF 检查）
@@ -320,6 +330,12 @@ namespace hical
 		mutable std::optional<std::unordered_multimap<std::string, std::string, StringHash, StringEqual>> formParams_;
 		mutable std::any cachedMultipartParts_;
 		std::unique_ptr<std::unordered_map<std::string, std::any, StringHash, StringEqual>> attributes_;
+
+		// 框架内部请求级上下文槽（detail 命名空间专用），零堆分配。
+		// 无中间件路径完全不读写；有中间件时由分发骨架在每请求写入，
+		// 沿洋葱链跨 co_await 引用栈上的 dispatch 上下文。
+		// 移动构造/赋值必须把源置 nullptr，防止被 move 走的旧对象残留脏指针。
+		void* internalSlot_ = nullptr;
 	};
 
 } // namespace hical

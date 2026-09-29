@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(hical VERSION 2.6.8 LANGUAGES C CXX)
+project(hical VERSION 2.7.0 LANGUAGES C CXX)
 
 # C++26 反射可选支持
 option(HICAL_ENABLE_REFLECTION "Enable C++26 reflection (requires compatible compiler)" OFF)
@@ -17,11 +17,39 @@ option(HICAL_ENABLE_MIDDLEWARE_PROFILING "Enable per-middleware timing statistic
 # 使用系统安装的 picohttpparser 替代 bundled 版本（vcpkg 场景下启用）
 option(HICAL_USE_SYSTEM_PICOHTTPPARSER "Use system-installed picohttpparser instead of bundled" OFF)
 
-# 数据库中间件（启用后编译 DB 连接池和 MySQL 后端，需要 boost-mysql）
-option(HICAL_WITH_DATABASE "Enable database middleware (requires Boost.MySQL)" OFF)
+# 数据库中间件（启用后编译 DB 连接池/中间件/查询日志，后端无关）
+option(HICAL_WITH_DATABASE "Enable database middleware (backend-agnostic core)" OFF)
+
+# MySQL 后端（基于 boost::mysql + boost::charconv，需要 Boost 1.85+）
+option(HICAL_WITH_MYSQL "Enable MySQL backend (requires Boost.MySQL 1.85+)" OFF)
 
 # PostgreSQL 后端（基于 libpq，需要 HICAL_WITH_DATABASE 一并开启）
 option(HICAL_WITH_PGSQL "Enable PostgreSQL backend (requires libpq)" OFF)
+
+# MySQL 后端构建在 DB 核心之上，开启时联动 DATABASE（MySQL 源文件仍用 HICAL_HAS_DATABASE 包裹）
+if(HICAL_WITH_MYSQL)
+    set(HICAL_WITH_DATABASE ON)
+endif()
+
+# HttpArena 压测服务器（含 /async-db，依赖 PGSQL；libpq 缺失时自动降级为纯 HTTP）
+option(HICAL_BUILD_HTTPARENA "Build HttpArena benchmark server" OFF)
+
+# HttpArena 内置 /async-db handler，依赖 DB 连接池 + PGSQL 后端（libpq）。联动开启
+# 前先软探测 libpq 是否就位：找不到就退回纯 HTTP 编译（/async-db 走空结果兜底，不
+# 报错）。这样 wrk-smoke 这类轻量冒烟无需预装 libpq-dev 也能跑通。
+if(HICAL_BUILD_HTTPARENA)
+    # 软探测 libpq（wrk-smoke 没装 libpq-dev，找不到就不联动 DB/PGSQL）
+    find_package(PostgreSQL QUIET)
+    if(PostgreSQL_FOUND)
+        set(HICAL_WITH_DATABASE ON)
+        set(HICAL_WITH_PGSQL ON)
+        message(STATUS "HttpArena: libpq 就位，联动开启 DB/PGSQL（/async-db 可用）")
+    else()
+        set(HICAL_WITH_DATABASE OFF)
+        set(HICAL_WITH_PGSQL OFF)
+        message(WARNING "HttpArena: 未找到 libpq，退回纯 HTTP 编译（/async-db 置空占位）")
+    endif()
+endif()
 
 # OpenAPI 自动生成（无额外依赖，复用 Boost.JSON）
 option(HICAL_WITH_OPENAPI "Enable OpenAPI 3.0 auto-generation module" ON)
@@ -62,8 +90,8 @@ endif()
 find_package(OpenSSL REQUIRED)
 find_package(ZLIB REQUIRED)
 
-# DB 依赖：boost::mysql any_connection(1.84+) + boost::charconv(1.85+)
-if(HICAL_WITH_DATABASE)
+# MySQL 后端依赖：boost::mysql any_connection(1.84+) + boost::charconv(1.85+)
+if(HICAL_WITH_MYSQL)
     find_package(Boost 1.85 REQUIRED COMPONENTS charconv)
 endif()
 
@@ -154,8 +182,7 @@ if(HICAL_BUILD_TFB)
     target_link_libraries(tfb_server PRIVATE hical_core)
 endif()
 
-# HttpArena 压测服务器
-option(HICAL_BUILD_HTTPARENA "Build HttpArena benchmark server" OFF)
+# HttpArena 压测服务器（option 已在顶部定义，此处仅声明可执行目标）
 if(HICAL_BUILD_HTTPARENA)
     add_executable(httparena_server docker/HttpArena/src/main.cpp)
     target_link_libraries(httparena_server PRIVATE hical_core)

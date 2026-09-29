@@ -1,6 +1,6 @@
 # Hical 项目代码结构
 
-> 最后更新：2026-08-05
+> 最后更新：2026-09-28
 
 ## 项目概述
 
@@ -10,7 +10,7 @@ Hical 是基于 Boost.Asio、采用原生 HTTP/WebSocket 网络栈（picohttppar
 
 ```
 hical/
-├── CMakeLists.txt              # 顶层 CMake（C++20，project(VERSION 2.6.7)，Boost/OpenSSL/GTest）
+├── CMakeLists.txt              # 顶层 CMake（C++20，project(VERSION 2.7.0)，Boost/OpenSSL/GTest）
 ├── README.md / README_CN.md    # 项目主页（英文 / 中文双语，含 CI/License/平台徽章）
 ├── LICENSE                     # MIT 协议
 ├── CHANGELOG.md                # 版本变更日志（按版本倒序）
@@ -119,7 +119,7 @@ hical/
 │   │
 │   └── db/                     # 数据库中间件（可选，HICAL_WITH_DATABASE=ON）
 │       ├── DbConfig.h          # 数据库连接配置（池大小/超时/健康检查/字符集）
-│       ├── DbResult.h          # 查询结果封装（columns/rows/affectedRows/insertId）
+│       ├── DbResult.h          # 查询结果封装（columns/扁平行数据/affectedRows/insertId）
 │       ├── DbConnection.h      # 数据库连接抽象接口（参数化查询/事务/ping/touch）
 │       ├── DbConnectionPool.h/.cpp # 协程化连接池（steady_timer 协程信号量 + 健康检查 + 空闲淘汰）
 │       ├── DbMiddleware.h      # HTTP 数据库中间件（连接注入 + 自动事务）
@@ -345,18 +345,18 @@ hical/
 
 > 完整版本历史与逐次变更见 [CHANGELOG.md](../CHANGELOG.md)。本节仅给出主要里程碑，便于理解仓库当前状态来源。
 
-| 阶段       | 关键模块                                                                                                       | 说明                                                           |
-| ---------- | -------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
-| 基础设施   | `MemoryPool` / `PmrBuffer` / `EventLoop` / `Concepts`                                                          | 三层 PMR 池 + Asio 抽象 + C++20 概念约束                       |
-| 网络层     | `TcpServer` / `GenericConnection` / `SslContext`                                                               | SO_REUSEPORT 多 acceptor、TCP/SSL 模板统一、零分配写队列       |
-| HTTP 框架  | `HttpServer` / `Router` / `Middleware` / `HttpRequest` / `HttpResponse`                                        | 协程化处理、洋葱中间件、参数路由、`dispatchSync` 同步快路径    |
-| 协议增强   | `Session` / `Cookie` / `Cors` / `StaticFiles` / `Multipart` / `RouteGroup`                                     | 完整 HTTP 周边能力                                             |
-| WebSocket  | `WebSocket` / `WsFrame` / `WsHandshake` / `WsDeflate` / `WsHub`                                                | 自研 RFC 6455 栈，子协议/心跳/压缩/广播                        |
-| 反射层     | `Reflection` / `MetaJson` / `MetaRoutes`                                                                       | 双轨设计：C++26 原生 P2996 + C++20 宏回退                      |
-| 日志系统   | `Log` / `LogChannel` / `LogFormatter` / `LogSink` / `LogFile` / `AsyncFileSink` / `LogMiddleware` / `LogAdmin` | 6 级日志、命名通道、异步双缓冲、动态级别管理                   |
-| OpenAPI    | `OpenApiSchema` / `OpenApiRegistry` / `OpenApiDocument` / `OpenApiEndpoint`                                    | 从 `HICAL_JSON` 自动派生 OpenAPI 3.0 文档                      |
+| 阶段       | 关键模块                                                                                                                              | 说明                                                                               |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| 基础设施   | `MemoryPool` / `PmrBuffer` / `EventLoop` / `Concepts`                                                                                 | 三层 PMR 池 + Asio 抽象 + C++20 概念约束                                           |
+| 网络层     | `TcpServer` / `GenericConnection` / `SslContext`                                                                                      | SO_REUSEPORT 多 acceptor、TCP/SSL 模板统一、零分配写队列                           |
+| HTTP 框架  | `HttpServer` / `Router` / `Middleware` / `HttpRequest` / `HttpResponse`                                                               | 协程化处理、洋葱中间件、参数路由、`dispatchSync` 同步快路径                        |
+| 协议增强   | `Session` / `Cookie` / `Cors` / `StaticFiles` / `Multipart` / `RouteGroup`                                                            | 完整 HTTP 周边能力                                                                 |
+| WebSocket  | `WebSocket` / `WsFrame` / `WsHandshake` / `WsDeflate` / `WsHub`                                                                       | 自研 RFC 6455 栈，子协议/心跳/压缩/广播                                            |
+| 反射层     | `Reflection` / `MetaJson` / `MetaRoutes`                                                                                              | 双轨设计：C++26 原生 P2996 + C++20 宏回退                                          |
+| 日志系统   | `Log` / `LogChannel` / `LogFormatter` / `LogSink` / `LogFile` / `AsyncFileSink` / `LogMiddleware` / `LogAdmin`                        | 6 级日志、命名通道、异步双缓冲、动态级别管理                                       |
+| OpenAPI    | `OpenApiSchema` / `OpenApiRegistry` / `OpenApiDocument` / `OpenApiEndpoint`                                                           | 从 `HICAL_JSON` 自动派生 OpenAPI 3.0 文档                                          |
 | 数据库     | `DbConfig` / `DbConnectionPool` / `DbMiddleware` / `DbQueryLog` / `MysqlConnection` / `StmtCache` / `PgsqlConnection` / `PgStmtCache` | 协程化连接池 + 装饰器查询日志 + PreparedStatement LRU（MySQL + PostgreSQL 双后端） |
-| 编译期组件 | `PerfectHashRouter` / `CompileTimeChain` / `CompileTimeJson`                                                   | 运行时零开销：完美哈希路由 + 编译期中件链 + 编译期 JSON 序列化 |
+| 编译期组件 | `PerfectHashRouter` / `CompileTimeChain` / `CompileTimeJson`                                                                          | 运行时零开销：完美哈希路由 + 编译期中件链 + 编译期 JSON 序列化                     |
 
 ## 命名风格
 

@@ -4,6 +4,7 @@
  */
 
 #include "Middleware.h"
+#include "Log.h"
 #include <stdexcept>
 
 namespace hical
@@ -84,6 +85,35 @@ namespace hical
 		entries_.push_back(std::move(entry));
 	}
 
+	void MiddlewarePipeline::use(SyncAfterHandler after)
+	{
+		if (cachedChain_)
+		{
+			throw std::logic_error("MiddlewarePipeline::use: cannot add middleware after build()");
+		}
+		auto name = "sync_middleware_" + std::to_string(entries_.size());
+
+		MiddlewareEntry entry;
+		entry.type = MiddlewareEntry::Type::hSync;
+		entry.name = std::move(name);
+		entry.after = std::move(after);
+		entries_.push_back(std::move(entry));
+	}
+
+	void MiddlewarePipeline::use(const std::string& name, SyncAfterHandler after)
+	{
+		if (cachedChain_)
+		{
+			throw std::logic_error("MiddlewarePipeline::use: cannot add middleware after build()");
+		}
+
+		MiddlewareEntry entry;
+		entry.type = MiddlewareEntry::Type::hSync;
+		entry.name = name;
+		entry.after = std::move(after);
+		entries_.push_back(std::move(entry));
+	}
+
 	void MiddlewarePipeline::build(MiddlewareNext finalHandler)
 	{
 		if (cachedChain_)
@@ -92,8 +122,21 @@ namespace hical
 		}
 
 #ifdef HICAL_ENABLE_MIDDLEWARE_PROFILING
+		if (hasSyncEntries())
+		{
+			// profiling 链是按 vector<MiddlewareHandler> 搭的，而 hSync 条目压根没有 handler 可挂。
+			// 也就是说 Sync 中间件在这条链上是「不执行」，不是「不计时」——认证、限流这类
+			// SyncBeforeHandler 会静默 fail-open。宁可少统计也不能少执行，整条管线退回普通链。
+			HICAL_LOG_WARN("MiddlewarePipeline: 本管线含 Sync 中间件，profiling 链挂不上它们（会直接丢执行，"
+						   "认证/限流静默失效），已回退到不丢条目的普通链，本管线 profiling 关闭");
+			// 统计对象留着只会变成一串 callCount 永远为 0 的假行，一同清掉
+			timingStats_.clear();
+			cachedChain_ = buildOptimizedChain(entries_, std::move(finalHandler));
+			return;
+		}
+
 		rebuildTimingStats();
-		// Profiling 模式：从 entries_ 提取 async handlers（Sync 中间件视为无 handler，跳过计时）
+		// Profiling 模式：从 entries_ 提取 async handlers（这里已确保没有 Sync 条目，不会丢东西）
 		std::vector<MiddlewareHandler> asyncHandlers;
 		asyncHandlers.reserve(entries_.size());
 		for (const auto& e : entries_)
@@ -110,20 +153,19 @@ namespace hical
 #endif
 	}
 
-	MiddlewareNext MiddlewarePipeline::buildChain(MiddlewareNext finalHandler) const
+#ifdef HICAL_ENABLE_MIDDLEWARE_PROFILING
+	bool MiddlewarePipeline::hasSyncEntries() const
 	{
-		// 从 entries_ 提取 async handlers（兼容旧接口）
-		std::vector<MiddlewareHandler> asyncHandlers;
-		asyncHandlers.reserve(entries_.size());
 		for (const auto& e : entries_)
 		{
-			if (e.type == MiddlewareEntry::Type::hAsync)
+			if (e.type == MiddlewareEntry::Type::hSync)
 			{
-				asyncHandlers.push_back(e.asyncHandler);
+				return true;
 			}
 		}
-		return buildChainFrom(asyncHandlers, std::move(finalHandler));
+		return false;
 	}
+#endif
 
 	MiddlewareNext MiddlewarePipeline::buildChainFrom(const std::vector<MiddlewareHandler>& middlewares,
 													  MiddlewareNext finalHandler)
@@ -307,14 +349,18 @@ namespace hical
 
 	Awaitable<HttpResponse> MiddlewarePipeline::execute(HttpRequest& req, MiddlewareNext finalHandler)
 	{
-		auto chain = buildChain(std::move(finalHandler));
+		// 走优化链，Sync 条目也一起进链——以前这里只挑 hAsync，Sync 中间件在任何模式下都被吞掉
+		auto chain = buildOptimizedChain(entries_, std::move(finalHandler));
 		co_return co_await chain(req);
 	}
 
 	MiddlewareNext MiddlewarePipeline::buildFor(MiddlewareNext finalHandler) const
 	{
 #ifdef HICAL_ENABLE_MIDDLEWARE_PROFILING
-		if (!timingStats_.empty())
+		// build() 已经把「含 Sync 就清空统计」这步做掉了，这里的 Sync 判断只是兜底：
+		// buildFor() 是 const 公开接口，不保证一定在 build() 之后调用，别让 profiling 链
+		// 有任何机会拿到带 Sync 的 entries_。
+		if (!timingStats_.empty() && !hasSyncEntries())
 		{
 			std::vector<MiddlewareHandler> asyncHandlers;
 			asyncHandlers.reserve(entries_.size());

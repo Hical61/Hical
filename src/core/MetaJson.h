@@ -5,7 +5,7 @@
  * - C++26 反射：通过 ^^T 自动枚举数据成员，无需用户标注
  * - C++20 回退：用户使用 HICAL_JSON(StructType, field1, field2, ...) 宏标注字段
  * 对外 API：
- *   boost::json::value json = hical::meta::toJson(myStruct);
+ *   boost::json::object json = hical::meta::toJson(myStruct);
  *   auto obj = hical::meta::fromJson<MyStruct>(jsonValue);
  * 支持类型：int, int64_t, double, bool, std::string, std::vector<T>, 嵌套结构体
  */
@@ -708,19 +708,6 @@ namespace hical
  *   NOT_EMPTY(field)                  - 字符串非空校验
  *   PATTERN(field, "re")              - 正则匹配校验
  *   LENGTH(field, min, max)           - 字符串长度范围校验
- * 当 C++26 反射可用时，此宏及所有装饰器为空操作          - 自定义 JSON key
- *   REQUIRED(field)                   - 反序列化时必需
- *   REQUIRED_ALIAS(field, "json_key")          - 自定义 JSON key
- *   REQUIRED(field)                   - 反序列化时必需
- *   REQUIRED_ALIAS(field, "json_key") - 必需 + 自定义 key
- *   HICAL_IGNORE(field)               - 序列化/反序列化均跳过
- *   MIN(field, val)                   - 数值最小值校验
- *   MAX(field, val)                   - 数值最大值校验
- *   NOT_EMPTY(field)                  - 字符串非空校验
- *   PATTERN(field, "re")              - 正则匹配校验
- *   LENGTH(field, min, max)           - 字符串长度范围校验
- * 当 C++26 反射可用时，此宏及所有装饰器为空操作 - 必需 + 自定义 key
- *   HICAL_IGNORE(field)               - 序列化/反序列化均跳过
  * 当 C++26 反射可用时，此宏及所有装饰器为空操作。
  */
 #if !HICAL_HAS_REFLECTION

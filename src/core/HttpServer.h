@@ -27,7 +27,7 @@ namespace hical
 
 	/**
 	 * @brief HTTP 服务器
-	 * 高层封装：整合 TcpServer + Router + 中间件管道。
+	 * 高层封装：自己起 acceptLoop 管连接，整合 EventLoopPool + Router + 中间件管道。
 	 * 提供简洁的 API 配置路由、中间件，一键启动。
 	 * 用法：
 	 * ```cpp
@@ -73,10 +73,59 @@ namespace hical
 		 */
 		void use(const std::string& name, MiddlewareHandler middleware);
 
+		/**
+		 * @brief 添加同步前置中间件（无协程帧开销）
+		 * 认证、限流这类只做判断的中间件用这个，省掉协程帧。
+		 * 示例：
+		 * ```cpp
+		 * server.use(makeJwtAuthMiddleware({.secret = "..."}));
+		 * server.use(makeRateLimiterMiddleware({.config = {100.0, 200.0}}));
+		 * ```
+		 * @param before 前置处理器（返回 nullopt 继续，返回 HttpResponse 拦截）
+		 */
+		void use(SyncBeforeHandler before);
+
+		/**
+		 * @brief 添加同步前/后中间件（无协程帧开销）
+		 * @param before 前置处理器
+		 * @param after 后置处理器（可为空）
+		 */
+		void use(SyncBeforeHandler before, SyncAfterHandler after);
+
+		/**
+		 * @brief 添加命名同步中间件（启用 profiling 时记录名称用于统计）
+		 * @param name 中间件名称
+		 * @param before 前置处理器
+		 * @param after 后置处理器（可为空）
+		 */
+		void use(const std::string& name, SyncBeforeHandler before, SyncAfterHandler after = nullptr);
+
+		/**
+		 * @brief 添加同步后置中间件（无协程帧开销）
+		 * 只有出口逻辑，没有前置逻辑。helmet、gzip 这类只改响应的中间件直接用这个：
+		 * ```cpp
+		 * server.use(makeHelmetMiddleware());
+		 * server.use(makeGzipCompressionMiddleware());
+		 * ```
+		 * 多个 after 之间按注册逆序执行：后注册的在洋葱里更靠内，它的 after 先跑。
+		 * @param after 后置处理器
+		 */
+		void use(SyncAfterHandler after);
+
+		/**
+		 * @brief 添加命名同步后置中间件（启用 profiling 时记录名称用于统计）
+		 * @param name 中间件名称
+		 * @param after 后置处理器
+		 */
+		void use(const std::string& name, SyncAfterHandler after);
+
 #ifdef HICAL_ENABLE_MIDDLEWARE_PROFILING
 		/**
 		 * @brief 获取中间件计时统计快照
 		 * @return 各层中间件的统计数据
+		 * @note 管线里只要带了 Sync 中间件（认证、限流这类），这个函数就返回空 vector——别当成统计没开：
+		 *       profiling 链挂不上 Sync 条目，整条管线会退回普通链，统计对象也一并清掉，
+		 *       启动日志里会有一条 WARN 说明原因
 		 */
 		[[nodiscard]] std::vector<MiddlewarePipeline::TimingSnapshot> middlewareStats() const;
 #endif
@@ -189,8 +238,9 @@ namespace hical
 		// 协程式连接监听（每个 acceptor 独立运行）
 		Awaitable<void> acceptLoop(boost::asio::ip::tcp::acceptor& acceptor, IdleFd& idleFd);
 
-		// 协程式 HTTP 会话处理
-		Awaitable<void> handleSession(boost::asio::ip::tcp::socket socket);
+		// 协程式 HTTP 会话处理（模板化，支持 tcp::socket 和 ssl::stream<tcp::socket>）
+		template <typename SocketType>
+		Awaitable<void> handleSession(SocketType socket);
 
 		// 协程式 WebSocket 会话处理（headers 已从 readBuf 拷贝为 owned，调用前已 release readBuf）
 		Awaitable<void> handleWebSocket(boost::asio::ip::tcp::socket socket,

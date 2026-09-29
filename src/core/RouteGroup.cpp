@@ -52,6 +52,14 @@ namespace hical
 		entries_.push_back(std::move(entry));
 	}
 
+	void RouteGroup::use(SyncAfterHandler after)
+	{
+		MiddlewareEntry entry;
+		entry.type = MiddlewareEntry::Type::hSync;
+		entry.after = std::move(after);
+		entries_.push_back(std::move(entry));
+	}
+
 	RouteGroup RouteGroup::group(const std::string& subPrefix)
 	{
 		return RouteGroup(router_, joinPath(subPrefix), entries_);

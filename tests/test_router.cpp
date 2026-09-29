@@ -1,3 +1,8 @@
+/**
+ * @file test_router.cpp
+ * @brief 路由器测试（静态/参数/通配匹配、404/405 与 Allow 头）
+ */
+
 #include "core/Router.h"
 #include "test_helpers.h"
 #include <gtest/gtest.h>
@@ -531,4 +536,152 @@ TEST(RouterTest, MethodNotAllowedParamRoute)
 	EXPECT_EQ(result->statusCode(), HttpStatusCode::hMethodNotAllowed);
 	auto allow = result->header("Allow");
 	EXPECT_NE(allow.find("GET"), std::string::npos);
+}
+
+// 通配路由上的方法不匹配同样算 405，以前这段是缺的，一律掉 404 且 Allow 为空
+TEST(RouterTest, MethodNotAllowedWildcardRoute)
+{
+	AsioEventLoop loop;
+	Router router;
+
+	router.get("/api/*path",
+			   [](const HttpRequest&) -> HttpResponse
+			   {
+				   return HttpResponse::ok("get");
+			   });
+
+	HttpRequest req;
+	req.setMethod(HttpMethod::hPost);
+	req.setTarget("/api/users");
+
+	auto result = runCoroutine(loop,
+							   [&]()
+							   {
+								   return router.dispatch(req);
+							   });
+
+	ASSERT_TRUE(result.has_value());
+	EXPECT_EQ(result->statusCode(), HttpStatusCode::hMethodNotAllowed);
+	auto allow = result->header("Allow");
+	EXPECT_NE(allow.find("GET"), std::string::npos);
+}
+
+// HEAD 是最常见的躺枪者：同一个通配路由，HEAD 也该拿到 405 而不是 404
+TEST(RouterTest, MethodNotAllowedWildcardRouteHead)
+{
+	AsioEventLoop loop;
+	Router router;
+
+	router.get("/api/*path",
+			   [](const HttpRequest&) -> HttpResponse
+			   {
+				   return HttpResponse::ok("get");
+			   });
+
+	HttpRequest req;
+	req.setMethod(HttpMethod::hHead);
+	req.setTarget("/api/users");
+
+	auto result = runCoroutine(loop,
+							   [&]()
+							   {
+								   return router.dispatch(req);
+							   });
+
+	ASSERT_TRUE(result.has_value());
+	EXPECT_EQ(result->statusCode(), HttpStatusCode::hMethodNotAllowed);
+	EXPECT_EQ(result->header("Allow"), "GET");
+}
+
+// 静态 GET 和通配 GET 并存时，Allow 不能出现重复方法
+TEST(RouterTest, AllowHeaderDedupesStaticAndWildcard)
+{
+	AsioEventLoop loop;
+	Router router;
+
+	router.get("/api/users",
+			   [](const HttpRequest&) -> HttpResponse
+			   {
+				   return HttpResponse::ok("static");
+			   });
+	router.get("/api/*path",
+			   [](const HttpRequest&) -> HttpResponse
+			   {
+				   return HttpResponse::ok("wildcard");
+			   });
+
+	HttpRequest req;
+	req.setMethod(HttpMethod::hPost);
+	req.setTarget("/api/users");
+
+	auto result = runCoroutine(loop,
+							   [&]()
+							   {
+								   return router.dispatch(req);
+							   });
+
+	ASSERT_TRUE(result.has_value());
+	EXPECT_EQ(result->statusCode(), HttpStatusCode::hMethodNotAllowed);
+	EXPECT_EQ(result->header("Allow"), "GET");
+}
+
+// 同一段里重复注册同方法（静态 GET 两条）也不能重复输出
+TEST(RouterTest, AllowHeaderDedupesRepeatedRegistration)
+{
+	AsioEventLoop loop;
+	Router router;
+
+	router.get("/api/users",
+			   [](const HttpRequest&) -> HttpResponse
+			   {
+				   return HttpResponse::ok("first");
+			   });
+	router.get("/api/users",
+			   [](const HttpRequest&) -> HttpResponse
+			   {
+				   return HttpResponse::ok("second");
+			   });
+	router.post("/api/users",
+				[](const HttpRequest&) -> HttpResponse
+				{
+					return HttpResponse::ok("post");
+				});
+
+	HttpRequest req;
+	req.setMethod(HttpMethod::hDelete);
+	req.setTarget("/api/users");
+
+	auto result = runCoroutine(loop,
+							   [&]()
+							   {
+								   return router.dispatch(req);
+							   });
+
+	ASSERT_TRUE(result.has_value());
+	EXPECT_EQ(result->statusCode(), HttpStatusCode::hMethodNotAllowed);
+	EXPECT_EQ(result->header("Allow"), "GET, POST");
+}
+
+// 加了通配的 405 收集之后，方法匹配的请求照旧正常命中
+TEST(RouterTest, WildcardRouteStillMatchesOwnMethod)
+{
+	Router router;
+	bool handlerCalled = false;
+
+	router.get("/api/*path",
+			   [&handlerCalled](const HttpRequest& req) -> HttpResponse
+			   {
+				   handlerCalled = true;
+				   EXPECT_EQ(req.param("path"), "users");
+				   return HttpResponse::ok("wildcard");
+			   });
+
+	HttpRequest req;
+	req.setMethod(HttpMethod::hGet);
+	req.setTarget("/api/users");
+
+	auto result = router.dispatchSync(req);
+	ASSERT_TRUE(result.has_value());
+	EXPECT_EQ(result->statusCode(), HttpStatusCode::hOk);
+	EXPECT_TRUE(handlerCalled);
 }

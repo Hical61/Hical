@@ -16,9 +16,9 @@ JSON_BODY='{"name":"Alice","age":30,"email":"alice@example.com"}'
 RESULT_FILE="${RESULT_FILE:-/bench/output/results.md}"
 
 # ==================== 运行模式 ====================
-# cpp:        Hical / Drogon / Crow / Oat++ / cpp-httplib / Cinatra（默认，11 场景含中间件和高并发）
+# cpp:        Hical / Drogon / Crow / Oat++ / cpp-httplib / Cinatra / libuvcpp（默认，6 场景：基础 4 + 高并发 2）
 # cross-lang: Hical / Gin / Fiber / Actix-web（4 基础场景）
-# all:        全部 9 个框架，11 场景
+# all:        全部 10 个框架，6 场景
 BENCH_MODE="${BENCH_MODE:-cpp}"
 
 # ==================== 框架 Host 定义 ====================
@@ -28,6 +28,7 @@ CROW_HOST="${CROW_HOST:-crow:8084}"
 OATPP_HOST="${OATPP_HOST:-oatpp:8085}"
 CPPHTTPLIB_HOST="${CPPHTTPLIB_HOST:-cpphttplib:8086}"
 CINATRA_HOST="${CINATRA_HOST:-cinatra:8087}"
+LIBUVCPP_HOST="${LIBUVCPP_HOST:-libuvcpp:8088}"
 GIN_HOST="${GIN_HOST:-gin:8081}"
 ACTIX_HOST="${ACTIX_HOST:-actix:8082}"
 FIBER_HOST="${FIBER_HOST:-fiber:8089}"
@@ -44,6 +45,7 @@ case "$BENCH_MODE" in
             "Oat++|${OATPP_HOST}"
             "cpp-httplib|${CPPHTTPLIB_HOST}"
             "Cinatra|${CINATRA_HOST}"
+            "libuvcpp|${LIBUVCPP_HOST}"
         )
         ;;
     cross-lang)
@@ -62,6 +64,7 @@ case "$BENCH_MODE" in
             "Oat++|${OATPP_HOST}"
             "cpp-httplib|${CPPHTTPLIB_HOST}"
             "Cinatra|${CINATRA_HOST}"
+            "libuvcpp|${LIBUVCPP_HOST}"
             "Gin|${GIN_HOST}"
             "Fiber|${FIBER_HOST}"
             "Actix-web|${ACTIX_HOST}"
@@ -82,15 +85,10 @@ BASE_SCENES=(
     "param|测试 4: 路径参数|/users/42|GET|"
 )
 
-# 中间件 + 高并发场景（仅 cpp / all 模式）
+# 高并发场景（仅 cpp / all 模式）
 EXTRA_SCENES=(
-    "mw0|测试 5: 协程洋葱 0 层（基线）|/middleware/0|GET|"
-    "mw3|测试 6: 协程洋葱 3 层|/middleware/3|GET|"
-    "mw10|测试 7: 协程洋葱 10 层|/middleware/10|GET|"
-    "sf3|测试 8: 同步过滤 3 层|/sync-filter/3|GET|"
-    "sf10|测试 9: 同步过滤 10 层|/sync-filter/10|GET|"
-    "c1000|测试 10: 高并发 1000|/|GET|1000"
-    "c10000|测试 11: 高并发 10000|/|GET|10000"
+    "c1000|测试 5: 高并发 1000|/|GET|1000"
+    "c10000|测试 6: 高并发 10000|/|GET|10000"
 )
 
 SCENES=("${BASE_SCENES[@]}")
@@ -304,6 +302,10 @@ build_summary_row() {
     done
     echo "$row"
 }
+
+# 默认 RESULT_FILE 是容器内路径 /bench/output/results.md，宿主机直跑时这目录不存在，
+# 不建的话最后一步重定向会失败，整轮结果全丢
+mkdir -p "$(dirname "$RESULT_FILE")"
 
 {
     echo "# 框架压测结果"

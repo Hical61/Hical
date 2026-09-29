@@ -38,7 +38,10 @@ namespace hical
 		struct Entry
 		{
 			std::atomic<int64_t> lastActiveMs {0};
-			boost::asio::ip::tcp::socket* socket = nullptr; // non-owning
+			// non-owning，统一存 lowest_layer()/next_layer() 拿到的底层 tcp::socket*。
+			// SSL 连接下存的是 ssl::stream.next_layer()（底层裸 socket），
+			// 关掉它足以让挂起的 async_handshake/async_read 报错退出协程。
+			boost::asio::ip::tcp::socket* socket = nullptr;
 			Entry* prev = nullptr;
 			Entry* next = nullptr;
 

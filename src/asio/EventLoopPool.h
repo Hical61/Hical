@@ -18,7 +18,7 @@ namespace hical
 	 * @brief 多线程事件循环池
 	 * 管理多个 AsioEventLoop 实例，每个运行在独立线程中。
 	 * 采用 1 Thread : 1 io_context 模型。
-	 * 通过 round-robin 策略将新连接分发到不同的事件循环。
+	 * 按最少连接数把新连接分给当前负载最轻的事件循环。
 	 */
 	class EventLoopPool
 	{
@@ -48,7 +48,7 @@ namespace hical
 		void releaseWork();
 
 		/**
-		 * @brief 获取下一个事件循环（round-robin）
+		 * @brief 获取下一个事件循环（最少连接数）
 		 * @return 事件循环指针
 		 */
 		[[nodiscard]] AsioEventLoop* getNextLoop();

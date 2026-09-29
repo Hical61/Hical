@@ -1,8 +1,16 @@
+/**
+ * @file test_route_group.cpp
+ * @brief 路由组（前缀分组 + 组级中间件）测试
+ */
+
 #include "core/Router.h"
 #include "core/RouteGroup.h"
 #include "core/Middleware.h"
+#include "core/Helmet.h"
 #include "test_helpers.h"
 #include <gtest/gtest.h>
+#include <string>
+#include <vector>
 
 using namespace hical;
 using hical::test::runCoroutine;
@@ -289,4 +297,139 @@ TEST(RouteGroupTest, GroupDoesNotAffectOtherRoutes)
 		ASSERT_TRUE(result.has_value());
 		EXPECT_EQ(result->body(), "yes");
 	}
+}
+
+// ============ 裸 SyncAfterHandler 重载（RouteGroup::use(SyncAfterHandler)） ============
+//
+// RouteGroup 这条链走的是 wrapHandler 里的静态 buildOptimizedChain，跟 HttpServer 那条
+// 不是同一条，得单独盯。
+
+// 异步路由处理器：走 wrapHandler → buildOptimizedChain
+TEST(RouteGroupTest, AfterOnlyMiddleware_AsyncHandler_AddsHeadersAndRunsInReverseOrder)
+{
+	AsioEventLoop loop;
+	Router router;
+	std::vector<std::string> order;
+
+	auto api = router.group("/api");
+	api.use(
+		[&order](HttpRequest&, HttpResponse& res) -> void
+		{
+			order.push_back("first");
+			res.setHeader("X-First", "1");
+		});
+	api.use(
+		[&order](HttpRequest&, HttpResponse& res) -> void
+		{
+			order.push_back("second");
+			res.setHeader("X-Second", "1");
+		});
+
+	api.get("/secure",
+			[&order](const HttpRequest&) -> Awaitable<HttpResponse>
+			{
+				order.push_back("handler");
+				co_return HttpResponse::ok("secure");
+			});
+
+	HttpRequest req;
+	req.setMethod(HttpMethod::hGet);
+	req.setTarget("/api/secure");
+
+	auto result = runCoroutine(loop,
+							   [&]()
+							   {
+								   return router.dispatch(req);
+							   });
+
+	ASSERT_TRUE(result.has_value());
+	EXPECT_EQ(result->body(), "secure");
+	EXPECT_EQ(result->header("X-First"), "1");
+	EXPECT_EQ(result->header("X-Second"), "1");
+
+	ASSERT_EQ(order.size(), 3u);
+	EXPECT_EQ(order[0], "handler");
+	EXPECT_EQ(order[1], "second"); // 后注册的先跑
+	EXPECT_EQ(order[2], "first");
+}
+
+// 同步路由处理器：走 route(SyncRouteHandler) 里那条纯同步快速路径（另一段循环）
+TEST(RouteGroupTest, AfterOnlyMiddleware_SyncHandler_AddsHeadersAndRunsInReverseOrder)
+{
+	AsioEventLoop loop;
+	Router router;
+	std::vector<std::string> order;
+
+	auto api = router.group("/api");
+	api.use(
+		[&order](HttpRequest&, HttpResponse& res) -> void
+		{
+			order.push_back("first");
+			res.setHeader("X-First", "1");
+		});
+	api.use(
+		[&order](HttpRequest&, HttpResponse& res) -> void
+		{
+			order.push_back("second");
+			res.setHeader("X-Second", "1");
+		});
+
+	api.get("/secure-sync",
+			[&order](const HttpRequest&) -> HttpResponse
+			{
+				order.push_back("handler");
+				return HttpResponse::ok("secure-sync");
+			});
+
+	HttpRequest req;
+	req.setMethod(HttpMethod::hGet);
+	req.setTarget("/api/secure-sync");
+
+	auto result = runCoroutine(loop,
+							   [&]()
+							   {
+								   return router.dispatch(req);
+							   });
+
+	ASSERT_TRUE(result.has_value());
+	EXPECT_EQ(result->body(), "secure-sync");
+	EXPECT_EQ(result->header("X-First"), "1");
+	EXPECT_EQ(result->header("X-Second"), "1");
+
+	ASSERT_EQ(order.size(), 3u);
+	EXPECT_EQ(order[0], "handler");
+	EXPECT_EQ(order[1], "second");
+	EXPECT_EQ(order[2], "first");
+}
+
+// 直接拿 helmet 工厂验证：组内路由真的带上安全头
+TEST(RouteGroupTest, AfterOnlyHelmetMiddleware_GroupRoutesGetSecurityHeaders)
+{
+	AsioEventLoop loop;
+	Router router;
+
+	auto api = router.group("/api");
+	api.use(makeHelmetMiddleware());
+
+	api.get("/secure",
+			[](const HttpRequest&) -> Awaitable<HttpResponse>
+			{
+				co_return HttpResponse::ok("secure");
+			});
+
+	HttpRequest req;
+	req.setMethod(HttpMethod::hGet);
+	req.setTarget("/api/secure");
+
+	auto result = runCoroutine(loop,
+							   [&]()
+							   {
+								   return router.dispatch(req);
+							   });
+
+	ASSERT_TRUE(result.has_value());
+	EXPECT_EQ(result->statusCode(), HttpStatusCode::hOk);
+	EXPECT_EQ(result->header("X-Content-Type-Options"), "nosniff");
+	EXPECT_EQ(result->header("X-Frame-Options"), "DENY");
+	EXPECT_EQ(result->header("Content-Security-Policy"), "default-src 'self'");
 }

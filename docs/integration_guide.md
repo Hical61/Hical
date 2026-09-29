@@ -310,7 +310,7 @@ server.router().get("/users/{id}", [](const hical::HttpRequest& req)
     -> hical::Awaitable<hical::HttpResponse> {
     auto conn = hical::db::getDbConnection(req);
     auto result = co_await conn->query("SELECT * FROM users WHERE id = ?", {req.param("id")});
-    co_return hical::HttpResponse::json({{"user", result.rows[0]}});
+    co_return hical::HttpResponse::json({{"user", result[0]}});
 });
 ```
 

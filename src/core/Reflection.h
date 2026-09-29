@@ -5,8 +5,8 @@
  * - 当编译器支持 C++26 反射时（HICAL_HAS_REFLECTION == 1），使用原生反射语法
  * - 否则回退到 C++20 宏 + 模板方案，提供相同的用户 API
  * 检测方式：
- * - __cpp_impl_reflection >= 202506L 且 __cpp_lib_reflection >= 202506L
- * - 或 CMake 手动定义 HICAL_FORCE_REFLECTION
+ * - __cpp_impl_reflection >= 202506L 且 __cpp_lib_reflection >= 202506L（P2996 标准特性测试宏）
+ * - 或自行传 -DHICAL_FORCE_REFLECTION 编译定义强制打开（CMake 未提供该选项）
  */
 
 #pragma once

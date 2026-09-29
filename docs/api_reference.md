@@ -140,6 +140,8 @@ HTTP 服务器，整合路由、中间件和网络层，提供一键启动的高
 | ------------------------------ | ----------------------------------------------- | ---------- | ---------------------------- |
 | `router()`                     | 无                                              | `Router&`  | 获取路由器引用，用于注册路由 |
 | `use(MiddlewareHandler)`       | middleware: 中间件处理器                        | `void`     | 添加中间件到管道             |
+| `use(SyncAfterHandler)`        | after: 同步后置处理器                           | `void`     | 添加同步后置中间件           |
+| `use(name, SyncAfterHandler)`  | name: 名称<br>after: 同步后置处理器             | `void`     | 添加命名同步后置中间件       |
 | `enableSsl(certFile, keyFile)` | certFile: 证书文件路径<br>keyFile: 私钥文件路径 | `void`     | 启用 SSL/TLS                 |
 | `start()`                      | 无                                              | `void`     | 启动服务器（阻塞）           |
 | `stop()`                       | 无                                              | `void`     | 停止服务器                   |
@@ -147,6 +149,8 @@ HTTP 服务器，整合路由、中间件和网络层，提供一键启动的高
 | `port()`                       | 无                                              | `uint16_t` | 获取监听端口                 |
 | `setErrorHandler(handler)`     | handler: `ErrorHandler`                         | `void`     | 设置全局错误处理器           |
 | `setGcInterval(seconds)`       | seconds: GC 间隔（秒）                          | `void`     | 设置内存池 GC 间隔           |
+
+> `use(SyncAfterHandler)` 只吃后置逻辑，没有前置——helmet、gzip 这类只改响应的中间件直接 `server.use(makeHelmetMiddleware())` 就行，不用包协程 lambda。多个 after 之间按注册逆序执行：后注册的在洋葱里更靠内，先退出。
 
 #### 类型定义
 
@@ -209,6 +213,9 @@ int main()
 | `ws(path, options, onMessage, onConnect, onDisconnect)` | path: 路由路径<br>options: `WsOptions`<br>onMessage/onConnect/onDisconnect: 回调                                                                  | `void`                    | 注册带选项的 WebSocket 路由                                                     |
 | `compileTimeRoute<Entries...>(method, path, handler)`   | method: HTTP 方法<br>path: 路由路径<br>handler: 协程或同步处理器<br>Entries...: `CompileTimeMwEntry` 模板参数<br>（如 `CompileTimeSyncMw<myMw>`） | `void`                    | 注册带编译期预构建中间件链的路由；dispatch 时跳过运行时 `buildOptimizedChain()` |
 | `dispatch(req)`                                         | req: HTTP 请求                                                                                                                                    | `Awaitable<HttpResponse>` | 分发请求到匹配的路由                                                            |
+| `resolveRoute(req)`                                      | req: HTTP 请求                                                                                                                                    | `ResolveResult`           | 路由匹配（读 body 前调用，缓存结果复用，返回 handler/params/405 信息）         |
+| `dispatchResolved(req, result)`                          | req: HTTP 请求<br>result: 缓存的路由查找结果                                                                                                      | `Awaitable<HttpResponse>` | 按缓存 `ResolveResult` 分发（避免二次路由查找）                                |
+| `dispatchSyncResolved(req, result)`                      | req: HTTP 请求<br>result: 缓存的路由查找结果                                                                                                      | `optional<HttpResponse>`  | 同步快速路径：复用缓存结果直接调用 sync handler，无协程帧                      |
 | `routeCount()`                                          | 无                                                                                                                                                | `size_t`                  | 获取已注册路由数量                                                              |
 | `group(prefix)`                                         | prefix: 路由前缀                                                                                                                                  | `RouteGroup`              | 创建路由组（前缀分组）                                                          |
 | `setPerfectHashLookup(lookup)`                          | lookup: `RuntimePerfectHashLookup` 函数                                                                                                           | `void`                    | 注入完美哈希加速查找（`MetaRoutes` 自动调用）                                   |
@@ -273,12 +280,15 @@ router.ws("/ws/chat", wsOpts,
 | 方法                           | 参数                     | 返回值       | 说明                                 |
 | ------------------------------ | ------------------------ | ------------ | ------------------------------------ |
 | `use(middleware)`              | middleware: 中间件处理器 | `void`       | 添加组级中间件（仅对组内路由生效）   |
+| `use(after)`                   | after: 同步后置处理器    | `void`       | 添加组级同步后置中间件               |
 | `group(subPrefix)`             | subPrefix: 子前缀        | `RouteGroup` | 创建嵌套子组（继承父组中间件和前缀） |
 | `route(method, path, handler)` | method/path/handler      | `void`       | 注册路由（协程/同步）                |
 | `get(path, handler)`           | path/handler             | `void`       | 注册 GET 路由                        |
 | `post(path, handler)`          | path/handler             | `void`       | 注册 POST 路由                       |
 | `put(path, handler)`           | path/handler             | `void`       | 注册 PUT 路由                        |
 | `del(path, handler)`           | path/handler             | `void`       | 注册 DELETE 路由                     |
+
+> `use(after)` 是组级同步后置中间件，只在组内 handler 返回响应后执行。多个 after 之间按注册逆序执行。
 
 #### 示例
 
@@ -599,6 +609,8 @@ using SyncAfterHandler     = std::function<void(HttpRequest&, HttpResponse&)>;
 | `use(before)`                         | before: 同步前置处理器                             | `void`                    | 添加同步前置中间件                     |
 | `use(before, after)`                  | before/after: 同步前后处理器                       | `void`                    | 添加同步前后处理器对                   |
 | `use(name, before, after)`            | name/before/after                                  | `void`                    | 添加命名同步前后处理器对               |
+| `use(after)`                          | after: 同步后置处理器                              | `void`                    | 添加同步后置中间件（零协程帧）         |
+| `use(name, after)`                    | name: 名称<br>after: 同步后置处理器                | `void`                    | 添加命名同步后置中间件                 |
 | `build(finalHandler)`                 | finalHandler: 最终处理器                           | `void`                    | 预构建调用链（仅调用一次）             |
 | `buildFor(finalHandler)`              | finalHandler: 最终处理器                           | `MiddlewareNext`          | 预构建并返回可缓存的调用链             |
 | `execute(req)`                        | req: HTTP 请求                                     | `Awaitable<HttpResponse>` | 执行预构建缓存链（需先 `build()`）     |
@@ -606,6 +618,10 @@ using SyncAfterHandler     = std::function<void(HttpRequest&, HttpResponse&)>;
 | `size()`                              | 无                                                 | `size_t`                  | 获取中间件数量                         |
 | `buildChainFrom(handlers, final)`     | handlers: 中间件列表<br>final: 最终处理器          | `MiddlewareNext`          | 静态方法：从异步 handler 列表构建链    |
 | `buildOptimizedChain(entries, final)` | entries: MiddlewareEntry 列表<br>final: 最终处理器 | `MiddlewareNext`          | 静态方法：合并连续同步中间件为单协程帧 |
+
+> 后置中间件（`SyncAfterHandler`）在 handler 返回响应后执行；多个 after 之间按注册逆序执行（洋葱模型：后注册的更靠内，先退出）。`makeHelmetMiddleware()`、`makeGzipCompressionMiddleware()` 返回的就是 `SyncAfterHandler`，直接 `server.use(...)` 即可，既不用套协程 lambda，也不用写 `server.use(nullptr, ...)` 这种占位前置。
+>
+> 两点容易踩：一是**它仍属 Sync 条目**，只要管线里有它（helmet、gzip 都算），`HICAL_ENABLE_MIDDLEWARE_PROFILING` 下整条管线就会放弃 profiling（`getTimingStats()` 返回空，启动日志里有一条 WARN 说明原因）。二是**重载决议**——`MiddlewareHandler` 和 `SyncAfterHandler` 都是两参 `std::function`，而 `std::function<void(...)>` 接受任何返回类型，所以 `server.use([](auto&&...) -> Awaitable<HttpResponse> { ... })` 这种变参泛型 lambda 会变歧义；参数写具体类型就没这问题。
 
 #### 示例
 
@@ -1105,7 +1121,7 @@ std::function<Awaitable<HttpResponse>(const HttpRequest&)> serveStatic(
     std::uintmax_t maxFileSize = 64ULL * 1024 * 1024);
 ```
 
-**功能特性：** 异步文件 I/O、PathCache（4096 条目/60s TTL）、MIME 自动推断（27 种扩展名）、ETag/304、路径遍历防护（403）、大文件保护（413）、HTTP 206 Range 请求（单范围 `Range` / `If-Range` ETag 条件请求，200 响应自动添加 `Accept-Ranges: bytes`）。
+**功能特性：** 异步文件 I/O、TlPathCache（每线程 64 条目/60s TTL）、MIME 自动推断（27 种扩展名）、ETag/304、路径遍历防护（403）、大文件保护（413）、HTTP 206 Range 请求（单范围 `Range` / `If-Range` ETag 条件请求，200 响应自动添加 `Accept-Ranges: bytes`）。
 
 #### 示例
 
@@ -1613,7 +1629,7 @@ IP 地址 + 端口封装（支持 IPv4/IPv6）。
 
 ### PmrBuffer
 
-基于 pmr 的统一缓冲区，支持 prepend 区域和自动扩容。
+基于 pmr 的统一缓冲区，预留一段前导区域（`hPrependSize` 字节，给 `makeSpace` 前移数据兜底）并支持自动扩容。
 
 **头文件：** `<hical/core/PmrBuffer.h>`
 
@@ -1761,7 +1777,7 @@ C++20 Concept 约束，定义网络后端必须满足的接口。
 | `TimerLike<T>`         | 定时器接口约束   |
 | `NetworkBackend<T>`    | 网络后端统一约束 |
 
-默认后端：`AsioBackend`（`AsioEventLoop` + `PlainConnection` + `AsioTimer`）。
+默认后端：`AsioBackend`（`AsioEventLoop` + `TcpConnection` + `AsioTimer`）。其中 `ConnectionType` 指的是 `core/TcpConnection.h` 里的抽象接口 `TcpConnection`；Asio 层的落地实现是 `GenericConnection<tcp::socket>`，别名 `PlainConnection`。
 
 ---
 
@@ -2013,8 +2029,8 @@ void registerLogAdmin(Router& router, const std::string& prefix = "/admin");
 | `maxConnections`      | `size_t`               | `16`        | 最大连接数                   |
 | `idleTimeout`         | `std::chrono::seconds` | `300s`      | 空闲回收超时                 |
 | `acquireTimeout`      | `std::chrono::seconds` | `5s`        | 获取连接超时                 |
-| `queryTimeout`        | `std::chrono::seconds` | `30s`       | 查询执行超时                 |
-| `autoReconnect`       | `bool`                 | `true`      | 断线自动重连                 |
+| `queryTimeout`        | `std::chrono::seconds` | `30s`       | 字段保留，当前无后端消费，设置不生效 |
+| `autoReconnect`       | `bool`                 | `true`      | 字段保留，当前无后端消费；重连行为恒开启，没法用它关闭 |
 | `idleCheckInterval`   | `std::chrono::seconds` | `60s`       | 空闲连接回收检查间隔         |
 | `healthCheckInterval` | `std::chrono::seconds` | `30s`       | 后台健康检查间隔（0=禁用）   |
 | `pingGracePeriod`     | `std::chrono::seconds` | `15s`       | acquire() 跳过 ping 的宽限期 |
@@ -2026,14 +2042,18 @@ void registerLogAdmin(Router& router, const std::string& prefix = "/admin");
 
 **头文件：** `<hical/db/DbResult.h>`
 
-| 字段           | 类型                                    | 说明         |
-| -------------- | --------------------------------------- | ------------ |
-| `columns`      | `std::vector<std::string>`              | 列名         |
-| `rows`         | `std::vector<std::vector<std::string>>` | 结果行       |
-| `affectedRows` | `uint64_t`                              | DML 影响行数 |
-| `insertId`     | `uint64_t`                              | INSERT 主键  |
+| 字段           | 类型                       | 说明         |
+| -------------- | -------------------------- | ------------ |
+| `columns`      | `std::vector<std::string>` | 列名         |
+| `affectedRows` | `uint64_t`                 | DML 影响行数 |
+| `insertId`     | `uint64_t`                 | INSERT 主键  |
 
-方法：`empty()` / `size()` / `operator[]` / `columnIndex(name)`。
+方法：`empty()` / `size()` / `nfields()` / `operator[]` / `columnIndex(name)`。
+
+> **v2.7 变更**：行数据不再通过 `rows` 字段暴露，改为扁平存储 + `RowProxy` 代理。
+> `result[i][j]` 的下标写法保持不变（返回 `const std::string&`），但 `result.rows` 字段已移除，
+> `for (row : result.rows)` 需改为 `for (i : result.size()) result[i]`。
+> 构造结果集可用静态工厂 `DbResult::fromRows(columns, rows)` / `DbResult::fromDml(affectedRows, insertId)`。
 
 ---
 
@@ -2152,11 +2172,11 @@ PostgreSQL 后端（基于 libpq 原生 C API）。
 
 **构建要求：** `HICAL_WITH_PGSQL=ON`（会一并开启 `HICAL_WITH_DATABASE`），需系统安装 libpq（`libpq-dev` / MSYS2 `mingw-w64-x86_64-postgresql`）。
 
-| 方法                    | 返回值                                         | 说明                                                                 |
-| ----------------------- | ---------------------------------------------- | -------------------------------------------------------------------- |
-| `create(ioCtx, config)` | `Awaitable<std::shared_ptr<PgsqlConnection>>`  | 非阻塞建连（`PQconnectStart` + poll 状态机）                         |
-| `makeFactory()`         | `DbConnectionFactory`                          | 池工厂函数                                                           |
-| `backend()`             | `std::string_view`                            | 返回 `"pgsql"`                                                        |
+| 方法                    | 返回值                                        | 说明                                         |
+| ----------------------- | --------------------------------------------- | -------------------------------------------- |
+| `create(ioCtx, config)` | `Awaitable<std::shared_ptr<PgsqlConnection>>` | 非阻塞建连（`PQconnectStart` + poll 状态机） |
+| `makeFactory()`         | `DbConnectionFactory`                         | 池工厂函数                                   |
+| `backend()`             | `std::string_view`                            | 返回 `"pgsql"`                               |
 
 **与 MySQL 后端的三处语义差异（切换到 PG 时必读）：**
 

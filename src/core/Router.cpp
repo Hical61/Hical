@@ -6,6 +6,8 @@
 #include "Router.h"
 #include "RouteGroup.h"
 
+#include <iterator>
+
 namespace hical
 {
 
@@ -244,8 +246,19 @@ namespace hical
 
 	Awaitable<HttpResponse> Router::dispatch(HttpRequest& req)
 	{
-		auto result = resolveRoute(req);
+		// resolveRoute 结果存局部变量：协程挂起时临时对象必须存活，不能直接内联进参数
+		ResolveResult result = resolveRoute(req);
+		co_return co_await dispatchResolved(req, result);
+	}
 
+	std::optional<HttpResponse> Router::dispatchSync(HttpRequest& req)
+	{
+		ResolveResult result = resolveRoute(req);
+		return dispatchSyncResolved(req, result);
+	}
+
+	Awaitable<HttpResponse> Router::dispatchResolved(HttpRequest& req, const ResolveResult& result)
+	{
 		if (result.pathTooDeep)
 		{
 			co_return HttpResponse::badRequest("Path too deep");
@@ -302,10 +315,8 @@ namespace hical
 		co_return HttpResponse::notFound();
 	}
 
-	std::optional<HttpResponse> Router::dispatchSync(HttpRequest& req)
+	std::optional<HttpResponse> Router::dispatchSyncResolved(HttpRequest& req, const ResolveResult& result)
 	{
-		auto result = resolveRoute(req);
-
 		if (result.pathTooDeep)
 		{
 			return HttpResponse::badRequest("Path too deep");
@@ -321,7 +332,7 @@ namespace hical
 			{
 				return result.staticEntry->syncHandler(req);
 			}
-			return std::nullopt; // 异步 handler，需要 fallback 到 co_await dispatch()
+			return std::nullopt; // 异步 handler，需要 fallback 到 co_await dispatchResolved()
 		}
 
 		if (result.paramEntry)
@@ -353,6 +364,70 @@ namespace hical
 		// 404/405 无法同步处理，回退到异步 dispatch
 		return std::nullopt;
 	}
+
+	namespace
+	{
+		// 真实方法列表，只列这些；hUnknown 是解析兜底值，不该出现在 Allow 里
+		constexpr HttpMethod kMethods[] = {HttpMethod::hGet,
+										   HttpMethod::hPost,
+										   HttpMethod::hPut,
+										   HttpMethod::hDelete,
+										   HttpMethod::hPatch,
+										   HttpMethod::hHead,
+										   HttpMethod::hOptions};
+
+		// Allow 头就是靠这张手写表拼的：methodBit() 会给任何枚举值置位，但只有列进
+		// kMethods 的才会被打印。哪天有人在 hOptions 后面插个 hTrace 却忘了同步这张表，
+		// 位照样置上、方法却列不出来——不报错也不崩，只是 405 的 Allow 头悄悄少一个方法。
+		// 下面这几条把「表 == 枚举全集，且逐项按枚举顺序」钉死在编译期。
+		static_assert(std::size(kMethods) == static_cast<size_t>(HttpMethod::hUnknown),
+					  "新增 HttpMethod 时必须同步 kMethods，否则 Allow 头会静默漏方法");
+		static_assert(
+			[]() constexpr
+			{
+				for (size_t i = 0; i < std::size(kMethods); ++i)
+				{
+					if (kMethods[i] != static_cast<HttpMethod>(i))
+					{
+						return false;
+					}
+				}
+				return true;
+			}(),
+			"kMethods 必须按枚举顺序完整列出 hGet..hOptions，错位一样会让 Allow 头列错方法");
+		// allowMask 是 32 位掩码，枚举值一旦超过 32 个，移位就撞上 UB 了
+		static_assert(static_cast<size_t>(HttpMethod::hUnknown) <= 32,
+					  "HttpMethod 枚举值超过 32 个，methodBit() 的移位会溢出");
+
+		/**
+		 * @brief 把方法映射成掩码里的 1 bit
+		 */
+		inline uint32_t methodBit(HttpMethod method) noexcept
+		{
+			return 1u << static_cast<unsigned>(method);
+		}
+
+		/**
+		 * @brief 掩码拼回 Allow 头字符串，按枚举顺序输出
+		 */
+		std::string allowedMethodsFromMask(uint32_t mask)
+		{
+			std::string out;
+			for (auto method : kMethods)
+			{
+				if ((mask & methodBit(method)) == 0)
+				{
+					continue;
+				}
+				if (!out.empty())
+				{
+					out += ", ";
+				}
+				out += httpMethodToString(method);
+			}
+			return out;
+		}
+	} // namespace
 
 	Router::ResolveResult Router::resolveRoute(HttpRequest& req) const
 	{
@@ -449,6 +524,10 @@ namespace hical
 		}
 
 		// 4. 405 检测：路径匹配但方法不匹配时收集 Allow 头
+		// 静态索引、参数路由、通配路由三段都可能给出同一个方法（比如静态 GET 和通配 GET 并存），
+		// 所以先用掩码去重，最后再一次性拼串——不然 Allow 会吐出 "GET, GET"。
+		uint32_t allowMask = 0;
+
 		// 静态路由：O(1) 反向索引查找
 		if (auto pathIt = staticPathMethods_.find(reqPath); pathIt != staticPathMethods_.end())
 		{
@@ -456,11 +535,7 @@ namespace hical
 			{
 				if (m != reqMethod)
 				{
-					if (!result.allowedMethods.empty())
-					{
-						result.allowedMethods += ", ";
-					}
-					result.allowedMethods += httpMethodToString(m);
+					allowMask |= methodBit(m);
 				}
 			}
 		}
@@ -477,15 +552,31 @@ namespace hical
 			{
 				if (matchParamPath(entry.path, reqPath, tempParams))
 				{
-					if (!result.allowedMethods.empty())
-					{
-						result.allowedMethods += ", ";
-					}
-					result.allowedMethods += httpMethodToString(method);
+					allowMask |= methodBit(method);
 					break;
 				}
 			}
 		}
+
+		// 通配路由：同样线性扫其他 method，命中条件和上面的匹配阶段一致
+		// （以前这段漏了，通配路由上的方法不匹配一律掉到 404，HEAD 也躺枪）
+		for (const auto& [method, routes] : wildcardRoutesByMethod_)
+		{
+			if (method == reqMethod)
+			{
+				continue;
+			}
+			for (const auto& entry : routes)
+			{
+				if (reqPath.size() >= entry.prefix.size() && reqPath.starts_with(entry.prefix))
+				{
+					allowMask |= methodBit(method);
+					break;
+				}
+			}
+		}
+
+		result.allowedMethods = allowedMethodsFromMask(allowMask);
 
 		return result;
 	}
