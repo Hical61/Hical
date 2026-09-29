@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **HttpServer 补 `use(SyncBeforeHandler)` 系列重载**：`makeJwtAuthMiddleware`、`makeRateLimiterMiddleware` 这类返回 `SyncBeforeHandler` 的中间件以前只能塞进 `MiddlewarePipeline`，直接 `server.use(makeJwtAuthMiddleware(...))` 编译不过。现在 `HttpServer::use` 补齐了 `use(SyncBeforeHandler)`、`use(SyncBeforeHandler, SyncAfterHandler)`、`use(name, SyncBeforeHandler, SyncAfterHandler)` 三个重载
+- **`use(SyncAfterHandler)` 重载补齐**：`makeHelmetMiddleware()`、`makeGzipCompressionMiddleware()` 返回的是 `SyncAfterHandler`（只有后置、没有前置），而 `HttpServer::use`、`RouteGroup::use`、`MiddlewarePipeline::use` 以前都没有只吃 after 的重载，照文档写 `server.use(makeHelmetMiddleware())` 就是编译不过，只能绕成 `server.use(nullptr, makeHelmetMiddleware())` 或者包一层协程 lambda。现在三个入口都补了裸 `SyncAfterHandler` 重载，`MiddlewarePipeline` 和 `HttpServer` 还各多一个命名版 `use(name, after)`（`RouteGroup` 那三个重载本来就没有命名版，保持一致没加）。注意多个 after 之间按注册逆序执行——洋葱模型里后注册的更靠内，先退出
 
 ### Fixed
 - **405 检测漏了通配路由（外部可观测的契约变化）**：`Router::resolveRoute()` 的 405 检测以前只查静态路由和参数路由，通配路由不参与，所以 `get("/*path", ...)` 这类注册对 POST/HEAD 一律回 404，正确的行为是 405 + `Allow` 头。现在通配路由和另外两类一起收集允许方法。顺带修了 `Allow` 头重复列方法的问题——静态路由和通配路由都注册了 GET 时会吐出 `GET, GET`，改成用方法位掩码去重后一次性拼串。`examples/static_server` 用的就是 `/*path` 模式，变化最直接

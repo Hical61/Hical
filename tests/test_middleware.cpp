@@ -350,6 +350,174 @@ TEST(MiddlewareTest, ExecuteWithFinalHandlerRunsSyncMiddleware)
 	EXPECT_EQ(syncCalls, 2);
 }
 
+// ============ 裸 SyncAfterHandler 重载（use(SyncAfterHandler)） ============
+
+// after-only 重载最核心的语义：after 必须在最终处理器「之后」跑。
+// 只看响应内容区分不出先后（顺序反了结果也一样），所以这里记录执行序列来断言。
+TEST(MiddlewareTest, AfterOnlyHandler_RunsAfterFinalHandler_OrderRecorded)
+{
+	MiddlewarePipeline pipeline;
+	std::vector<std::string> order;
+
+	pipeline.use(
+		[&order](HttpRequest&, HttpResponse& res) -> void
+		{
+			order.push_back("after");
+			res.setHeader("X-After-Only", "hit");
+		});
+
+	pipeline.build(
+		[&order](HttpRequest&) -> Awaitable<HttpResponse>
+		{
+			order.push_back("handler");
+			co_return HttpResponse::ok("body");
+		});
+
+	HttpRequest req;
+	req.setMethod(HttpMethod::hGet);
+	req.setTarget("/test");
+
+	auto result = runCoroutine(
+		[&]()
+		{
+			return pipeline.execute(req);
+		});
+
+	ASSERT_TRUE(result.has_value());
+
+	// 先把执行顺序钉死再看响应内容：顺序反了内容未必错，这条断言才是关键
+	ASSERT_EQ(order.size(), 2u);
+	EXPECT_EQ(order[0], "handler"); // 先 handler
+	EXPECT_EQ(order[1], "after");   // 后 after
+
+	EXPECT_EQ(result->body(), "body");
+	EXPECT_EQ(result->header("X-After-Only"), "hit"); // after 确实跑了
+}
+
+// 多个 after-only 条目之间：后注册的在洋葱里更靠内，它的 after 先退出。
+// 即执行顺序 = 注册顺序的逆序。
+TEST(MiddlewareTest, MultipleAfterOnlyHandlers_RunInReverseRegistrationOrder)
+{
+	MiddlewarePipeline pipeline;
+	std::vector<std::string> order;
+
+	pipeline.use(
+		[&order](HttpRequest&, HttpResponse&) -> void
+		{
+			order.push_back("first");
+		});
+	pipeline.use(
+		[&order](HttpRequest&, HttpResponse&) -> void
+		{
+			order.push_back("second");
+		});
+
+	pipeline.build(
+		[&order](HttpRequest&) -> Awaitable<HttpResponse>
+		{
+			order.push_back("handler");
+			co_return HttpResponse::ok("body");
+		});
+
+	HttpRequest req;
+	req.setMethod(HttpMethod::hGet);
+	req.setTarget("/test");
+
+	auto result = runCoroutine(
+		[&]()
+		{
+			return pipeline.execute(req);
+		});
+
+	ASSERT_TRUE(result.has_value());
+	ASSERT_EQ(order.size(), 3u);
+	EXPECT_EQ(order[0], "handler");
+	EXPECT_EQ(order[1], "second"); // 后注册的先跑
+	EXPECT_EQ(order[2], "first");
+}
+
+// 命名重载：命名 after-only 同样只占一个条目，且照常执行
+TEST(MiddlewareTest, NamedAfterOnlyHandler_RegisteredAndRuns)
+{
+	MiddlewarePipeline pipeline;
+	int calls = 0;
+
+	pipeline.use("named-after",
+				 [&calls](HttpRequest&, HttpResponse& res) -> void
+				 {
+					 ++calls;
+					 res.setHeader("X-Named-After", "hit");
+				 });
+
+	EXPECT_EQ(pipeline.size(), 1);
+
+	pipeline.build(
+		[](HttpRequest&) -> Awaitable<HttpResponse>
+		{
+			co_return HttpResponse::ok("body");
+		});
+
+	HttpRequest req;
+	req.setMethod(HttpMethod::hGet);
+	req.setTarget("/test");
+
+	auto result = runCoroutine(
+		[&]()
+		{
+			return pipeline.execute(req);
+		});
+
+	ASSERT_TRUE(result.has_value());
+	EXPECT_EQ(calls, 1);
+	EXPECT_EQ(result->header("X-Named-After"), "hit");
+}
+
+// after-only 重载也得守住「build() 之后不许再加中间件」这条线
+TEST(MiddlewareTest, UseAfterOnlyAfterBuildThrows)
+{
+	MiddlewarePipeline pipeline;
+
+	pipeline.build(
+		[](HttpRequest&) -> Awaitable<HttpResponse>
+		{
+			co_return HttpResponse::ok("final");
+		});
+
+	EXPECT_THROW(pipeline.use(
+					 [](HttpRequest&, HttpResponse&) -> void
+					 {
+					 }),
+				 std::logic_error);
+}
+
+// 边界：传了个空的 SyncAfterHandler，链条构建和执行都不能崩
+TEST(MiddlewareTest, EmptyAfterOnlyHandler_BuiltAndExecutedWithoutCrash)
+{
+	MiddlewarePipeline pipeline;
+	pipeline.use(SyncAfterHandler {}); // 空 std::function，等价于没注册 after
+
+	EXPECT_EQ(pipeline.size(), 1);
+
+	pipeline.build(
+		[](HttpRequest&) -> Awaitable<HttpResponse>
+		{
+			co_return HttpResponse::ok("still-ok");
+		});
+
+	HttpRequest req;
+	req.setMethod(HttpMethod::hGet);
+	req.setTarget("/test");
+
+	auto result = runCoroutine(
+		[&]()
+		{
+			return pipeline.execute(req);
+		});
+
+	ASSERT_TRUE(result.has_value());
+	EXPECT_EQ(result->body(), "still-ok");
+}
+
 // ============ Profiling 测试（仅在编译选项开启时生效） ============
 
 #ifdef HICAL_ENABLE_MIDDLEWARE_PROFILING

@@ -100,6 +100,25 @@ namespace hical
 		 */
 		void use(const std::string& name, SyncBeforeHandler before, SyncAfterHandler after = nullptr);
 
+		/**
+		 * @brief 添加同步后置中间件（无协程帧开销）
+		 * 只有出口逻辑，没有前置逻辑。helmet、gzip 这类只改响应的中间件直接用这个：
+		 * ```cpp
+		 * server.use(makeHelmetMiddleware());
+		 * server.use(makeGzipCompressionMiddleware());
+		 * ```
+		 * 多个 after 之间按注册逆序执行：后注册的在洋葱里更靠内，它的 after 先跑。
+		 * @param after 后置处理器
+		 */
+		void use(SyncAfterHandler after);
+
+		/**
+		 * @brief 添加命名同步后置中间件（启用 profiling 时记录名称用于统计）
+		 * @param name 中间件名称
+		 * @param after 后置处理器
+		 */
+		void use(const std::string& name, SyncAfterHandler after);
+
 #ifdef HICAL_ENABLE_MIDDLEWARE_PROFILING
 		/**
 		 * @brief 获取中间件计时统计快照

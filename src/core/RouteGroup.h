@@ -60,6 +60,14 @@ namespace hical
 		void use(SyncBeforeHandler before, SyncAfterHandler after);
 
 		/**
+		 * @brief 添加同步后置中间件（无协程帧开销）
+		 * 只在组内 handler 返回响应之后执行，没有前置逻辑。
+		 * 多个 after 之间按注册逆序执行。
+		 * @param after 后置处理器
+		 */
+		void use(SyncAfterHandler after);
+
+		/**
 		 * @brief 创建嵌套子组
 		 * @param subPrefix 子前缀
 		 * @return 子路由组（继承当前组的中间件和前缀）

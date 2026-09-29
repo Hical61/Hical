@@ -5,17 +5,24 @@
 
 #include "TestHttpClient.h"
 #include "core/HttpServer.h"
+#include "core/Helmet.h"
+#include "core/GzipCompression.h"
 #include "core/JwtAuth.h"
 #include "core/RateLimiter.h"
 #include <boost/asio.hpp>
 #include <boost/json.hpp>
 #include <gtest/gtest.h>
+#include <zlib.h>
+#include <array>
 #include <atomic>
 #include <cctype>
 #include <charconv>
 #include <chrono>
+#include <mutex>
 #include <string>
+#include <string_view>
 #include <thread>
+#include <vector>
 
 using namespace hical;
 using boost::asio::ip::tcp;
@@ -60,6 +67,85 @@ uint16_t startServerAndWait(HttpServer& server, std::thread& serverThread)
 		}
 	}
 	return port;
+}
+
+// 带自定义请求头的 GET，返回完整响应（Accept-Encoding 这类场景用得上）
+static hical::test::detail::ParsedResponse httpGetWithHeaders(
+	const std::string& host,
+	uint16_t port,
+	const std::string& target,
+	const std::vector<std::pair<std::string, std::string>>& headers)
+{
+	boost::asio::io_context io;
+	tcp::socket sock(io);
+	sock.connect(tcp::endpoint(boost::asio::ip::make_address(host), port));
+
+	std::string req = "GET " + target
+					  + " HTTP/1.1\r\n"
+						"Host: "
+					  + host + "\r\n";
+	for (const auto& [name, value] : headers)
+	{
+		req += name + ": " + value + "\r\n";
+	}
+	req += "Connection: close\r\n\r\n";
+	boost::asio::write(sock, boost::asio::buffer(req));
+
+	std::string buf;
+	auto result = hical::test::detail::readHttpResponse(sock, buf);
+
+	boost::system::error_code ec;
+	sock.shutdown(tcp::socket::shutdown_both, ec);
+	return result;
+}
+
+// 用 zlib inflate 解开 gzip 数据。test_compression.cpp 里有同源的一份，
+// 但测试文件之间不共享头文件，这边自留一份省得跨文件耦合。
+static std::string gunzipBody(std::string_view input)
+{
+	if (input.empty())
+	{
+		return {};
+	}
+
+	z_stream strm = {};
+	auto ret = inflateInit2(&strm, 15 + 16); // MAX_WBITS + 16 = gzip 容器
+	if (ret != Z_OK)
+	{
+		throw std::runtime_error("inflateInit2 failed: " + std::to_string(ret));
+	}
+
+	strm.next_in = const_cast<Bytef*>(reinterpret_cast<const Bytef*>(input.data()));
+	strm.avail_in = static_cast<uInt>(input.size());
+
+	std::string output;
+	std::array<char, 16384> outBuf {};
+
+	do
+	{
+		strm.next_out = reinterpret_cast<Bytef*>(outBuf.data());
+		strm.avail_out = sizeof(outBuf);
+
+		ret = inflate(&strm, Z_NO_FLUSH);
+		if (ret != Z_OK && ret != Z_STREAM_END && ret != Z_BUF_ERROR)
+		{
+			inflateEnd(&strm);
+			throw std::runtime_error("inflate failed: " + std::to_string(ret));
+		}
+
+		if (ret == Z_BUF_ERROR && strm.avail_in == 0)
+		{
+			// 输入吃完了流还没结束 = 数据被截断。不拦这一下会在这里空转，测试直接挂死
+			inflateEnd(&strm);
+			throw std::runtime_error("inflate: truncated gzip stream");
+		}
+
+		output.append(outBuf.data(), sizeof(outBuf) - strm.avail_out);
+	}
+	while (ret != Z_STREAM_END);
+
+	inflateEnd(&strm);
+	return output;
 }
 
 // 测试 HttpServer 基本启动
@@ -767,6 +853,208 @@ TEST(HttpServerTest, JwtAndRateLimiterFactoriesUsableViaUse)
 	auto [healthStatus, healthBody] = httpGet("127.0.0.1", port, "/public/health");
 	EXPECT_EQ(healthStatus, 200);
 	EXPECT_EQ(healthBody, "alive");
+
+	server.stop();
+	serverThread.join();
+}
+
+// ============ 裸 SyncAfterHandler 重载（use(SyncAfterHandler)） ============
+//
+// 文档里写的是 server.use(makeHelmetMiddleware()) / server.use(makeGzipCompressionMiddleware())
+// 这种形态，以前编译不过（只能靠 use(nullptr, ...) 绕）。这几条用例既当编译验证，
+// 也确认注册进去的 after 真的执行、顺序真的对。
+
+// after 在 handler 之后执行。只看最终结果分不出先后（顺序反了结果一样），
+// 所以用序号记录两个阶段各自是第几个跑的。
+TEST(HttpServerTest, AfterOnlyMiddleware_RunsAfterHandler_OrderRecorded)
+{
+	HttpServer server(0);
+	std::atomic<int> counter {0};
+	std::atomic<int> handlerOrder {-1};
+	std::atomic<int> afterOrder {-1};
+
+	server.use(
+		[&counter, &afterOrder](HttpRequest&, HttpResponse& res) -> void
+		{
+			afterOrder.store(counter.fetch_add(1, std::memory_order_relaxed), std::memory_order_relaxed);
+			res.setHeader("X-After-Only", "hit");
+		});
+
+	server.router().get("/order",
+						[&counter, &handlerOrder](const HttpRequest&) -> HttpResponse
+						{
+							handlerOrder.store(counter.fetch_add(1, std::memory_order_relaxed),
+											   std::memory_order_relaxed);
+							return HttpResponse::ok("ok");
+						});
+
+	std::thread serverThread;
+	uint16_t port = startServerAndWait(server, serverThread);
+
+	auto result = hical::test::httpGetFull("127.0.0.1", port, "/order");
+	EXPECT_EQ(result.status, 200u);
+
+	// 先断言执行顺序，再看响应内容
+	EXPECT_EQ(handlerOrder.load(std::memory_order_relaxed), 0);
+	EXPECT_EQ(afterOrder.load(std::memory_order_relaxed), 1); // 排在 handler 后面
+
+	EXPECT_EQ(result.body, "ok");
+	EXPECT_EQ(result.findHeader("X-After-Only"), "hit"); // after 真跑了
+
+	server.stop();
+	serverThread.join();
+}
+
+// helmet 走裸重载注册后，安全响应头真的出现在线上响应里
+TEST(HttpServerTest, HelmetViaAfterOnlyOverload_AddsSecurityHeaders)
+{
+	HttpServer server(0);
+
+	server.use(makeHelmetMiddleware());
+
+	server.router().get("/secure",
+						[](const HttpRequest&) -> HttpResponse
+						{
+							return HttpResponse::ok("secure");
+						});
+
+	std::thread serverThread;
+	uint16_t port = startServerAndWait(server, serverThread);
+
+	auto result = hical::test::httpGetFull("127.0.0.1", port, "/secure");
+	EXPECT_EQ(result.status, 200u);
+	EXPECT_EQ(result.body, "secure");
+	EXPECT_EQ(result.findHeader("X-Content-Type-Options"), "nosniff");
+	EXPECT_EQ(result.findHeader("X-Frame-Options"), "DENY");
+	EXPECT_EQ(result.findHeader("Strict-Transport-Security"), "max-age=31536000; includeSubDomains");
+	EXPECT_EQ(result.findHeader("Content-Security-Policy"), "default-src 'self'");
+	EXPECT_EQ(result.findHeader("Referrer-Policy"), "strict-origin-when-cross-origin");
+
+	server.stop();
+	serverThread.join();
+}
+
+// 命名重载 use("name", SyncAfterHandler)：配置要透传到实例上，别退化成默认配置
+TEST(HttpServerTest, NamedHelmetViaAfterOnlyOverload_UsesGivenOptions)
+{
+	HttpServer server(0);
+
+	server.use("helmet", makeHelmetMiddleware({.csp = "default-src 'none'", .customHeaders = {}}));
+
+	server.router().get("/secure",
+						[](const HttpRequest&) -> HttpResponse
+						{
+							return HttpResponse::ok("secure");
+						});
+
+	std::thread serverThread;
+	uint16_t port = startServerAndWait(server, serverThread);
+
+	auto result = hical::test::httpGetFull("127.0.0.1", port, "/secure");
+	EXPECT_EQ(result.status, 200u);
+	EXPECT_EQ(result.findHeader("Content-Security-Policy"), "default-src 'none'");
+	EXPECT_EQ(result.findHeader("X-Content-Type-Options"), "nosniff");
+
+	server.stop();
+	serverThread.join();
+}
+
+// gzip 走裸重载注册后，响应真的带 Content-Encoding: gzip，且 body 能解压还原
+TEST(HttpServerTest, GzipViaAfterOnlyOverload_CompressesResponse)
+{
+	HttpServer server(0);
+
+	// minSize 压到 0，小 body 也走压缩（这条是同步压缩分支）
+	GzipCompressionOptions gzipOpts;
+	gzipOpts.minSize = 0;
+	server.use(makeGzipCompressionMiddleware(gzipOpts));
+
+	const std::string payload = "gzip-over-the-wire payload: the quick brown fox jumps over the lazy dog. "
+								"the quick brown fox jumps over the lazy dog.";
+	server.router().get("/zipped",
+						[payload](const HttpRequest&) -> HttpResponse
+						{
+							return HttpResponse::ok(payload);
+						});
+
+	std::thread serverThread;
+	uint16_t port = startServerAndWait(server, serverThread);
+
+	auto result = httpGetWithHeaders("127.0.0.1", port, "/zipped", {{"Accept-Encoding", "gzip"}});
+	EXPECT_EQ(result.status, 200u);
+	EXPECT_EQ(result.findHeader("Content-Encoding"), "gzip");
+	EXPECT_NE(result.body, payload); // 确实压过了，不是原样发回来
+	EXPECT_EQ(gunzipBody(result.body), payload);
+
+	// 不带 Accept-Encoding 时不压，body 原样
+	auto plain = hical::test::httpGetFull("127.0.0.1", port, "/zipped");
+	EXPECT_EQ(plain.status, 200u);
+	EXPECT_EQ(plain.findHeader("Content-Encoding"), "");
+	EXPECT_EQ(plain.body, payload);
+
+	server.stop();
+	serverThread.join();
+}
+
+// 多个 after 同时注册：后注册的先跑（后置逆序）
+TEST(HttpServerTest, MultipleAfterOnlyMiddlewares_RunInReverseOrder)
+{
+	HttpServer server(0);
+	std::mutex mtx;
+	std::vector<std::string> order;
+
+	server.use("first",
+			   [&mtx, &order](HttpRequest&, HttpResponse& res) -> void
+			   {
+				   std::lock_guard lock(mtx);
+				   order.push_back("first");
+				   res.setHeader("X-First", "1");
+			   });
+	server.use("second",
+			   [&mtx, &order](HttpRequest&, HttpResponse& res) -> void
+			   {
+				   std::lock_guard lock(mtx);
+				   order.push_back("second");
+				   res.setHeader("X-Second", "1");
+			   });
+
+	server.router().get("/order2",
+						[&mtx, &order](const HttpRequest&) -> HttpResponse
+						{
+							std::lock_guard lock(mtx);
+							order.push_back("handler");
+							return HttpResponse::ok("ok");
+						});
+
+	std::thread serverThread;
+	uint16_t port = startServerAndWait(server, serverThread);
+
+	auto result = hical::test::httpGetFull("127.0.0.1", port, "/order2");
+	EXPECT_EQ(result.status, 200u);
+	EXPECT_EQ(result.findHeader("X-First"), "1");
+	EXPECT_EQ(result.findHeader("X-Second"), "1");
+
+	// 响应发出来的时候三个都跑完了（after 是在序列化之前改响应头的）
+	std::lock_guard lock(mtx);
+	ASSERT_EQ(order.size(), 3u);
+	EXPECT_EQ(order[0], "handler");
+	EXPECT_EQ(order[1], "second");
+	EXPECT_EQ(order[2], "first");
+
+	server.stop();
+	serverThread.join();
+}
+
+// start() 之后再用裸 after 重载注册，要和其它重载一样抛 logic_error
+TEST(HttpServerTest, UseAfterOnlyAfterStartThrows)
+{
+	HttpServer server(0);
+
+	std::thread serverThread;
+	startServerAndWait(server, serverThread);
+	ASSERT_TRUE(server.isRunning());
+
+	EXPECT_THROW(server.use(makeHelmetMiddleware()), std::logic_error);
 
 	server.stop();
 	serverThread.join();

@@ -140,6 +140,8 @@ HTTP 服务器，整合路由、中间件和网络层，提供一键启动的高
 | ------------------------------ | ----------------------------------------------- | ---------- | ---------------------------- |
 | `router()`                     | 无                                              | `Router&`  | 获取路由器引用，用于注册路由 |
 | `use(MiddlewareHandler)`       | middleware: 中间件处理器                        | `void`     | 添加中间件到管道             |
+| `use(SyncAfterHandler)`        | after: 同步后置处理器                           | `void`     | 添加同步后置中间件           |
+| `use(name, SyncAfterHandler)`  | name: 名称<br>after: 同步后置处理器             | `void`     | 添加命名同步后置中间件       |
 | `enableSsl(certFile, keyFile)` | certFile: 证书文件路径<br>keyFile: 私钥文件路径 | `void`     | 启用 SSL/TLS                 |
 | `start()`                      | 无                                              | `void`     | 启动服务器（阻塞）           |
 | `stop()`                       | 无                                              | `void`     | 停止服务器                   |
@@ -147,6 +149,8 @@ HTTP 服务器，整合路由、中间件和网络层，提供一键启动的高
 | `port()`                       | 无                                              | `uint16_t` | 获取监听端口                 |
 | `setErrorHandler(handler)`     | handler: `ErrorHandler`                         | `void`     | 设置全局错误处理器           |
 | `setGcInterval(seconds)`       | seconds: GC 间隔（秒）                          | `void`     | 设置内存池 GC 间隔           |
+
+> `use(SyncAfterHandler)` 只吃后置逻辑，没有前置——helmet、gzip 这类只改响应的中间件直接 `server.use(makeHelmetMiddleware())` 就行，不用包协程 lambda。多个 after 之间按注册逆序执行：后注册的在洋葱里更靠内，先退出。
 
 #### 类型定义
 
@@ -276,12 +280,15 @@ router.ws("/ws/chat", wsOpts,
 | 方法                           | 参数                     | 返回值       | 说明                                 |
 | ------------------------------ | ------------------------ | ------------ | ------------------------------------ |
 | `use(middleware)`              | middleware: 中间件处理器 | `void`       | 添加组级中间件（仅对组内路由生效）   |
+| `use(after)`                   | after: 同步后置处理器    | `void`       | 添加组级同步后置中间件               |
 | `group(subPrefix)`             | subPrefix: 子前缀        | `RouteGroup` | 创建嵌套子组（继承父组中间件和前缀） |
 | `route(method, path, handler)` | method/path/handler      | `void`       | 注册路由（协程/同步）                |
 | `get(path, handler)`           | path/handler             | `void`       | 注册 GET 路由                        |
 | `post(path, handler)`          | path/handler             | `void`       | 注册 POST 路由                       |
 | `put(path, handler)`           | path/handler             | `void`       | 注册 PUT 路由                        |
 | `del(path, handler)`           | path/handler             | `void`       | 注册 DELETE 路由                     |
+
+> `use(after)` 是组级同步后置中间件，只在组内 handler 返回响应后执行。多个 after 之间按注册逆序执行。
 
 #### 示例
 
@@ -602,6 +609,8 @@ using SyncAfterHandler     = std::function<void(HttpRequest&, HttpResponse&)>;
 | `use(before)`                         | before: 同步前置处理器                             | `void`                    | 添加同步前置中间件                     |
 | `use(before, after)`                  | before/after: 同步前后处理器                       | `void`                    | 添加同步前后处理器对                   |
 | `use(name, before, after)`            | name/before/after                                  | `void`                    | 添加命名同步前后处理器对               |
+| `use(after)`                          | after: 同步后置处理器                              | `void`                    | 添加同步后置中间件（零协程帧）         |
+| `use(name, after)`                    | name: 名称<br>after: 同步后置处理器                | `void`                    | 添加命名同步后置中间件                 |
 | `build(finalHandler)`                 | finalHandler: 最终处理器                           | `void`                    | 预构建调用链（仅调用一次）             |
 | `buildFor(finalHandler)`              | finalHandler: 最终处理器                           | `MiddlewareNext`          | 预构建并返回可缓存的调用链             |
 | `execute(req)`                        | req: HTTP 请求                                     | `Awaitable<HttpResponse>` | 执行预构建缓存链（需先 `build()`）     |
@@ -609,6 +618,10 @@ using SyncAfterHandler     = std::function<void(HttpRequest&, HttpResponse&)>;
 | `size()`                              | 无                                                 | `size_t`                  | 获取中间件数量                         |
 | `buildChainFrom(handlers, final)`     | handlers: 中间件列表<br>final: 最终处理器          | `MiddlewareNext`          | 静态方法：从异步 handler 列表构建链    |
 | `buildOptimizedChain(entries, final)` | entries: MiddlewareEntry 列表<br>final: 最终处理器 | `MiddlewareNext`          | 静态方法：合并连续同步中间件为单协程帧 |
+
+> 后置中间件（`SyncAfterHandler`）在 handler 返回响应后执行；多个 after 之间按注册逆序执行（洋葱模型：后注册的更靠内，先退出）。`makeHelmetMiddleware()`、`makeGzipCompressionMiddleware()` 返回的就是 `SyncAfterHandler`，直接 `server.use(...)` 即可，既不用套协程 lambda，也不用写 `server.use(nullptr, ...)` 这种占位前置。
+>
+> 两点容易踩：一是**它仍属 Sync 条目**，只要管线里有它（helmet、gzip 都算），`HICAL_ENABLE_MIDDLEWARE_PROFILING` 下整条管线就会放弃 profiling（`getTimingStats()` 返回空，启动日志里有一条 WARN 说明原因）。二是**重载决议**——`MiddlewareHandler` 和 `SyncAfterHandler` 都是两参 `std::function`，而 `std::function<void(...)>` 接受任何返回类型，所以 `server.use([](auto&&...) -> Awaitable<HttpResponse> { ... })` 这种变参泛型 lambda 会变歧义；参数写具体类型就没这问题。
 
 #### 示例
 

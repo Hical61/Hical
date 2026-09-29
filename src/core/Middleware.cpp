@@ -85,6 +85,35 @@ namespace hical
 		entries_.push_back(std::move(entry));
 	}
 
+	void MiddlewarePipeline::use(SyncAfterHandler after)
+	{
+		if (cachedChain_)
+		{
+			throw std::logic_error("MiddlewarePipeline::use: cannot add middleware after build()");
+		}
+		auto name = "sync_middleware_" + std::to_string(entries_.size());
+
+		MiddlewareEntry entry;
+		entry.type = MiddlewareEntry::Type::hSync;
+		entry.name = std::move(name);
+		entry.after = std::move(after);
+		entries_.push_back(std::move(entry));
+	}
+
+	void MiddlewarePipeline::use(const std::string& name, SyncAfterHandler after)
+	{
+		if (cachedChain_)
+		{
+			throw std::logic_error("MiddlewarePipeline::use: cannot add middleware after build()");
+		}
+
+		MiddlewareEntry entry;
+		entry.type = MiddlewareEntry::Type::hSync;
+		entry.name = name;
+		entry.after = std::move(after);
+		entries_.push_back(std::move(entry));
+	}
+
 	void MiddlewarePipeline::build(MiddlewareNext finalHandler)
 	{
 		if (cachedChain_)
