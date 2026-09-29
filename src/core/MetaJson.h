@@ -413,6 +413,9 @@ namespace hical::meta
 
 	// ============ C++26 反射实现 ============
 
+	// detail 之外的 jsonSchema 也要用 M，别名放在 hical::meta 这一层
+	namespace M = std::meta;
+
 	namespace detail
 	{
 
@@ -420,15 +423,15 @@ namespace hical::meta
 		namespace json = boost::json;
 
 		/**
-	     * @brief 基于反射规则将对象实例转换为json::value的执行模板。class -> json
-	     * @tparam ClassType 待序列化的目标对象类型
-	     * @tparam MembersOfFunc 获取成员反射信息的函数
-	     * @tparam Ctx 反射访问权限检查上下文，控制是否可以访问私有/保护成员
-	     * @param classValue 待序列化的对象const引用
-	     * @return json::value 序列化好的值
-	     * @note 本质是 json::value_from() 的分类包装，若 json::value_from() 没有对应的重载函数，则走通用成员遍历函数
-	     * @attention 仅在走通用成员遍历函数会自动处理注解相关
-	     */
+		 * @brief 基于反射规则将对象实例转换为json::value的执行模板。class -> json
+		 * @tparam ClassType 待序列化的目标对象类型
+		 * @tparam MembersOfFunc 获取成员反射信息的函数
+		 * @tparam Ctx 反射访问权限检查上下文，控制是否可以访问私有/保护成员
+		 * @param classValue 待序列化的对象const引用
+		 * @return json::value 序列化好的值
+		 * @note 本质是 json::value_from() 的分类包装，若 json::value_from() 没有对应的重载函数，则走通用成员遍历函数
+		 * @attention 仅在走通用成员遍历函数会自动处理注解相关
+		 */
 		template <typename ClassType,
 				  CollectMember::MemberInfoGatherer auto MembersOfFunc = CollectMember::collectNonstaticMemberInfos,
 				  M::access_context Ctx = M::access_context::unprivileged()>
@@ -489,15 +492,15 @@ namespace hical::meta
 		}
 
 		/**
-	     * @brief 基于反射规则将json::value转换为对象实例的执行模板。 json -> class
-	     * @tparam ClassType 待序列化的目标对象类型
-	     * @tparam MembersOfFunc 获取成员反射信息的函数
-	     * @tparam Ctx 反射访问权限检查上下文，控制是否可以访问私有/保护成员
-	     * @param jsonValue 待反序列化的 json::value const&
-	     * @return 返回填充好的对象
-	     * @note 本质是 json::value_to() 的分类包装，若 json::value_to() 没有对应的重载函数，则走通用成员遍历函数
-	     * @attention 仅在走通用成员遍历函数会自动处理注解相关
-	     */
+		 * @brief 基于反射规则将json::value转换为对象实例的执行模板。 json -> class
+		 * @tparam ClassType 待序列化的目标对象类型
+		 * @tparam MembersOfFunc 获取成员反射信息的函数
+		 * @tparam Ctx 反射访问权限检查上下文，控制是否可以访问私有/保护成员
+		 * @param jsonValue 待反序列化的 json::value const&
+		 * @return 返回填充好的对象
+		 * @note 本质是 json::value_to() 的分类包装，若 json::value_to() 没有对应的重载函数，则走通用成员遍历函数
+		 * @attention 仅在走通用成员遍历函数会自动处理注解相关
+		 */
 		template <std::default_initializable ClassType,
 				  CollectMember::MemberInfoGatherer auto MembersOfFunc = CollectMember::collectNonstaticMemberInfos,
 				  M::access_context Ctx = M::access_context::unprivileged()>

@@ -12,7 +12,6 @@
 
 /**
  * @brief 编译期注解（Annotation）命名空间
- *
  * 包含注解处理器框架及内置注解类型。
  * 注解处理分为三个阶段：
  * 1. Key 阶段（编译期）：处理成员字段到 JSON key 的映射
@@ -98,10 +97,13 @@ namespace hical::anno
 		result.keyName_ = M::identifier_of(MemberInfo);
 
 		constexpr static auto kAnnotationInfos = std::define_static_array(annotationsOfMemberWithParent(MemberInfo));
-		template for (constexpr auto annoInfo :
-					  kAnnotationInfos) if constexpr (std::derived_from<typename[:M::type_of(annoInfo):
-		], KeyAnnotationHandler>) [:M::constant_of(annoInfo):]
-			.applyAnnotation(result, MemberInfo);
+		// clang-format off
+		// 注意：clang-format 会把 splice 的 ':' 和 ']' 拆到两行，而 [: :] 必须成对相邻，
+		// 拆开就是语法错误（GCC16 实测报 parse error in template argument list）。这里禁用它。
+		template for (constexpr auto annoInfo : kAnnotationInfos)
+			if constexpr (std::derived_from<typename [:M::type_of(annoInfo):], KeyAnnotationHandler>)
+				[:M::constant_of(annoInfo):].applyAnnotation(result, MemberInfo);
+		// clang-format on
 
 		return result;
 	}
@@ -223,10 +225,11 @@ namespace hical::anno
 	{
 		constexpr static auto kAnnotationInfos =
 			std::define_static_array(annotationsOfMemberWithParent(view.kMemberInfo));
-		template for (constexpr auto annoInfo :
-					  kAnnotationInfos) if constexpr (std::derived_from<typename[:M::type_of(annoInfo):
-		], ViewAnnotationHandler>) [:M::constant_of(annoInfo):]
-			.applyAnnotation(view);
+		// clang-format off
+		template for (constexpr auto annoInfo : kAnnotationInfos)
+			if constexpr (std::derived_from<typename [:M::type_of(annoInfo):], ViewAnnotationHandler>)
+				[:M::constant_of(annoInfo):].applyAnnotation(view);
+		// clang-format on
 	}
 
 	// ================================================================================================
