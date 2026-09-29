@@ -65,7 +65,9 @@ if(HICAL_ENABLE_REFLECTION)
     # P2996 反射只靠 -std=c++26 开不起来：特性宏 __cpp_impl_reflection / __cpp_lib_reflection
     # 只有在显式传 -freflection 之后才会定义。不加的话 Reflection.h 检测不到宏，
     # HICAL_HAS_REFLECTION 恒为 0，反射代码会静默走 C++20 分支、一行都不编译。
-    add_compile_options(-freflection)
+    # 限定 COMPILE_LANGUAGE:CXX —— 项目里有 C 源文件（picohttpparser.c），
+    # 而 gcc 对 C 文件不接受这个 flag。
+    add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-freflection>)
 else()
     set(CMAKE_CXX_STANDARD 20)
 endif()
