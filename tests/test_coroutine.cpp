@@ -7,6 +7,25 @@
 
 using namespace hical;
 
+namespace
+{
+	// 轮询等条件成立（最多 timeoutMs 毫秒）。CI runner 负载高时，"硬等固定时长
+	// 再断言"不可靠——定时器触发 + 协程恢复 + 置位这一串没跑完就断言，必挂。
+	template <typename Pred>
+	bool waitUntil(Pred pred, int timeoutMs = 5000)
+	{
+		for (int waited = 0; waited < timeoutMs; waited += 5)
+		{
+			if (pred())
+			{
+				return true;
+			}
+			std::this_thread::sleep_for(std::chrono::milliseconds(5));
+		}
+		return pred();
+	}
+} // namespace
+
 // 测试协程 sleep（使用 executor 版本）
 TEST(CoroutineTest, Sleep)
 {
@@ -27,9 +46,11 @@ TEST(CoroutineTest, Sleep)
 			loop.run();
 		});
 
-	std::this_thread::sleep_for(std::chrono::milliseconds(200));
-
-	EXPECT_TRUE(executed.load());
+	EXPECT_TRUE(waitUntil(
+		[&]
+		{
+			return executed.load();
+		}));
 
 	auto elapsed =
 		std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count();
@@ -58,9 +79,11 @@ TEST(CoroutineTest, SleepForWithIoContext)
 			loop.run();
 		});
 
-	std::this_thread::sleep_for(std::chrono::milliseconds(150));
-
-	EXPECT_TRUE(executed.load());
+	EXPECT_TRUE(waitUntil(
+		[&]
+		{
+			return executed.load();
+		}));
 
 	loop.stop();
 	loopThread.join();
@@ -85,9 +108,11 @@ TEST(CoroutineTest, SleepForChrono)
 			loop.run();
 		});
 
-	std::this_thread::sleep_for(std::chrono::milliseconds(150));
-
-	EXPECT_TRUE(executed.load());
+	EXPECT_TRUE(waitUntil(
+		[&]
+		{
+			return executed.load();
+		}));
 
 	loop.stop();
 	loopThread.join();

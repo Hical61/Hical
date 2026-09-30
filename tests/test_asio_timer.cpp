@@ -7,6 +7,25 @@
 
 using namespace hical;
 
+namespace
+{
+	// 轮询等条件成立（最多 timeoutMs 毫秒）。CI runner 负载高时，"硬等固定时长
+	// 再断言"不可靠——定时器触发 + 协程恢复 + 置位这一串没跑完就断言，必挂。
+	template <typename Pred>
+	bool waitUntil(Pred pred, int timeoutMs = 5000)
+	{
+		for (int waited = 0; waited < timeoutMs; waited += 5)
+		{
+			if (pred())
+			{
+				return true;
+			}
+			std::this_thread::sleep_for(std::chrono::milliseconds(5));
+		}
+		return pred();
+	}
+} // namespace
+
 // 测试单次定时器
 TEST(AsioTimerTest, RunOnce)
 {
@@ -68,12 +87,17 @@ TEST(AsioTimerTest, RunRepeatedly)
 	EXPECT_TRUE(timer->isRepeating());
 	timer->start();
 
-	// 等待约 0.35 秒（应执行 3 次）
-	std::this_thread::sleep_for(std::chrono::milliseconds(350));
+	// 等到至少触发 3 次。CI 上墙钟不可靠，别硬等 350ms 就断言
+	ASSERT_TRUE(waitUntil(
+		[&]
+		{
+			return counter.load() >= 3;
+		}))
+		<< "重复定时器没触发到 3 次";
 
-	int count = counter.load();
+	const int count = counter.load();
 	EXPECT_GE(count, 3);
-	EXPECT_LE(count, 4);
+	EXPECT_LE(count, 5); // 轮询停下后最多再多触发一次
 
 	timer->cancel();
 	EXPECT_FALSE(timer->isActive());
@@ -141,18 +165,24 @@ TEST(AsioTimerTest, CancelRepeating)
 
 	timer->start();
 
-	// 等待执行几次
-	std::this_thread::sleep_for(std::chrono::milliseconds(250));
-
-	int countBefore = counter.load();
-	EXPECT_GE(countBefore, 2);
+	// 等到至少触发 2 次（别硬等固定时长）
+	ASSERT_TRUE(waitUntil(
+		[&]
+		{
+			return counter.load() >= 2;
+		}))
+		<< "重复定时器没触发到 2 次";
 
 	timer->cancel();
+
+	// 先让已经排上队的回调跑完再取快照。否则快照和 cancel() 之间插进来一次触发，后面的 EXPECT_EQ 会误判
+	std::this_thread::sleep_for(std::chrono::milliseconds(50));
+	const int countAfterCancel = counter.load();
 
 	std::this_thread::sleep_for(std::chrono::milliseconds(200));
 
 	// 取消后不应再增加
-	EXPECT_EQ(counter.load(), countBefore);
+	EXPECT_EQ(counter.load(), countAfterCancel);
 
 	loop.stop();
 	loopThread.join();
