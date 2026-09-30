@@ -29,6 +29,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **中间件前置到读 body 之前**：认证、限流这类拦截型中间件以前是在 body 读完之后才跑的，无效请求光是为了塞满中间件需要的 body 就得先把全部数据读进来。现在中间件在 body 之前执行，中间件只看到 header（`req.body()` 此时为空），被拦截的请求 body 一字不读；字段级 body 校验下沉到 handler 自己负责
 - **header 超限判断改用「解析长度」**：TCP 是流式的，headers 读完后缓冲区里可能还粘连着 body 残留，之前拿缓冲区总长当 header 大小去跟上限比，粘连 body 一多就把正常请求误判成 431。现在改用 picohttpparser 返回的 header 实际字节数来判断，只有 header 真的超限才回 431
 
+### Performance
+- **404/405 路径判定不再线性扫描全部路由**：`Router::resolveRoute()` 落到 405 收集段时得遍历「其他 method 的所有路由」才能判断该报 404 还是 405，参数路由和通配路由两段各自线性扫一遍，路径压根没注册过也照扫不误（静态路由那段早就有 `staticPathMethods_` 反向索引，是 O(1)）。现在按路径首段建了三张掩码表——首段字面量映射、首段可为任意值的动态掩码，外加星号落在段内时的首段前缀表——先算出「哪些 method 有可能匹配」，为空直接 404，不空才扫，而且首段对不上的 method 整组跳过。命中路径在更早的地方就返回了，源码逐字节未动
 
 ## [2.7.0] - 2026-09-21
 

@@ -478,6 +478,22 @@ namespace hical
 		std::unordered_map<HttpMethod, std::vector<WildcardRouteEntry>> wildcardRoutesByMethod_;
 		std::unordered_map<std::string, std::vector<HttpMethod>, StringHash, StringEqual> staticPathMethods_;
 
+		// ============ 404/405 首段索引 ============
+		// 被拒的请求会走到 resolveRoute 末尾收集 Allow，那段原本要遍历「其他 method 的所有路由」，
+		// 路径压根没注册时也照扫不误。下面几张表按路径首段归档，让「所有 method 下都没这个路径」
+		// 能先一步判掉，省掉两段线性扫描。命中路径在更早的地方就 return 了，碰不到这些结构。
+		// 维护方式和上面四个索引一致：注册期写入、运行期只读，不需要加锁。
+
+		/// 首段字面量 -> 方法掩码（静态路由、首段是字面量的参数路由、星号落在段边界的通配路由）
+		std::unordered_map<std::string, uint32_t, StringHash, StringEqual> firstSegmentMethodMasks_;
+
+		/// 首段可以是任意值的方法掩码（首段本身就是 {param} 的参数路由）
+		uint32_t dynamicFirstSegmentMask_ = 0;
+
+		/// 星号落在段内的通配路由（比如 "/files*x" 的 "/files"）：{首段前缀, 方法掩码}。
+		/// 这种写法少见，小项目里这张表是空的，判定时直接线性比一下，不额外建索引。
+		std::vector<std::pair<std::string, uint32_t>> wildcardSegmentPrefixMasks_;
+
 		std::vector<WsRoute> wsRoutes_;
 
 		std::vector<SseRoute> sseRoutes_;
@@ -488,6 +504,30 @@ namespace hical
 		RuntimePerfectHashLookup phrLookup_;
 		/// index -> RouteEntry* 映射（和 phrLookup_ 的 index_ 字段对应）
 		std::shared_ptr<std::vector<const RouteEntry*>> phrEntryMap_;
+
+		/// 路由种类，决定首段索引怎么归档；由注册分支自己报上来，省得再判一遍路径长什么样
+		enum class RouteKind
+		{
+			hStatic,   ///< 静态路由，整条路径精确匹配
+			hParam,    ///< 参数路由，按段匹配
+			hWildcard, ///< 通配路由，按前缀匹配
+		};
+
+		/**
+		 * @brief 把一条路由归档进 404/405 首段索引
+		 * @param method 路由的 HTTP 方法
+		 * @param path 路由路径
+		 * @param kind 路由种类（调用方所在注册分支必须和它一致）
+		 * @note 只管索引，路由本体挂在哪个容器由调用方负责
+		 */
+		void indexRouteFirstSegment(HttpMethod method, const std::string& path, RouteKind kind);
+
+		/**
+		 * @brief 归档星号落在段内的通配路由前缀
+		 * @param method 路由的 HTTP 方法
+		 * @param prefix 首段内的前缀（如 "/files*x" 的 "files"）
+		 */
+		void indexWildcardSegmentPrefix(HttpMethod method, std::string_view prefix);
 
 		static bool isParamRoute(const std::string& path);
 		static bool matchParamPath(std::string_view pattern, std::string_view path, ParamList& params);
@@ -525,15 +565,18 @@ namespace hical
 			we.paramName = path.substr(starPos + 1);
 			we.compileTimeChain = std::move(chain);
 			wildcardRoutesByMethod_[method].push_back(std::move(we));
+			indexRouteFirstSegment(method, path, RouteKind::hWildcard);
 		}
 		else if (isParamRoute(path))
 		{
 			paramRoutesByMethod_[method].push_back({method, path, nullptr, nullptr, std::move(chain)});
+			indexRouteFirstSegment(method, path, RouteKind::hParam);
 		}
 		else
 		{
 			staticRoutes_[{method, path}] = RouteEntry {nullptr, nullptr, std::move(chain)};
 			staticPathMethods_[path].push_back(method);
+			indexRouteFirstSegment(method, path, RouteKind::hStatic);
 		}
 	}
 
@@ -557,15 +600,18 @@ namespace hical
 			we.paramName = path.substr(starPos + 1);
 			we.compileTimeChain = std::move(chain);
 			wildcardRoutesByMethod_[method].push_back(std::move(we));
+			indexRouteFirstSegment(method, path, RouteKind::hWildcard);
 		}
 		else if (isParamRoute(path))
 		{
 			paramRoutesByMethod_[method].push_back({method, path, nullptr, nullptr, std::move(chain)});
+			indexRouteFirstSegment(method, path, RouteKind::hParam);
 		}
 		else
 		{
 			staticRoutes_[{method, path}] = RouteEntry {nullptr, nullptr, std::move(chain)};
 			staticPathMethods_[path].push_back(method);
+			indexRouteFirstSegment(method, path, RouteKind::hStatic);
 		}
 	}
 

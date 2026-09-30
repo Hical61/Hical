@@ -25,15 +25,18 @@ namespace hical
 			we.paramName = path.substr(starPos + 1);
 			we.handler = std::move(handler);
 			wildcardRoutesByMethod_[method].push_back(std::move(we));
+			indexRouteFirstSegment(method, path, RouteKind::hWildcard);
 		}
 		else if (isParamRoute(path))
 		{
 			paramRoutesByMethod_[method].push_back({method, path, std::move(handler), nullptr, std::nullopt});
+			indexRouteFirstSegment(method, path, RouteKind::hParam);
 		}
 		else
 		{
 			staticRoutes_[{method, path}] = RouteEntry {std::move(handler), nullptr, std::nullopt};
 			staticPathMethods_[path].push_back(method);
+			indexRouteFirstSegment(method, path, RouteKind::hStatic);
 		}
 	}
 
@@ -49,15 +52,18 @@ namespace hical
 			we.paramName = path.substr(starPos + 1);
 			we.syncHandler = std::move(handler);
 			wildcardRoutesByMethod_[method].push_back(std::move(we));
+			indexRouteFirstSegment(method, path, RouteKind::hWildcard);
 		}
 		else if (isParamRoute(path))
 		{
 			paramRoutesByMethod_[method].push_back({method, path, nullptr, std::move(handler), std::nullopt});
+			indexRouteFirstSegment(method, path, RouteKind::hParam);
 		}
 		else
 		{
 			staticRoutes_[{method, path}] = RouteEntry {nullptr, std::move(handler), std::nullopt};
 			staticPathMethods_[path].push_back(method);
+			indexRouteFirstSegment(method, path, RouteKind::hStatic);
 		}
 	}
 
@@ -427,6 +433,29 @@ namespace hical
 			}
 			return out;
 		}
+
+		/**
+		 * @brief 取路径首段：丢掉前导 '/'，切到下一个 '/' 为止
+		 * 切段规则必须和 matchParamPath 一致，否则索引算出来的首段和实际匹配用的首段对不上
+		 */
+		std::string_view firstPathSegment(std::string_view path) noexcept
+		{
+			if (!path.empty() && path.front() == '/')
+			{
+				path.remove_prefix(1);
+			}
+			auto slash = path.find('/');
+			return slash == std::string_view::npos ? path : path.substr(0, slash);
+		}
+
+		/**
+		 * @brief 判断一个路径段是不是参数段（{name}）
+		 * 判定条件抄的 matchParamPath，改那边记得同步这里
+		 */
+		bool isParamSegment(std::string_view segment) noexcept
+		{
+			return segment.size() >= 3 && segment.front() == '{' && segment.back() == '}';
+		}
 	} // namespace
 
 	Router::ResolveResult Router::resolveRoute(HttpRequest& req) const
@@ -528,50 +557,73 @@ namespace hical
 		// 所以先用掩码去重，最后再一次性拼串——不然 Allow 会吐出 "GET, GET"。
 		uint32_t allowMask = 0;
 
-		// 静态路由：O(1) 反向索引查找
-		if (auto pathIt = staticPathMethods_.find(reqPath); pathIt != staticPathMethods_.end())
+		// 先拿首段索引判一下「这个路径是不是在所有 method 下都没注册过」：candidateMask 是可能匹配的
+		// 方法集合，为 0 就直接 404 走人，省掉下面两段对 param/wildcard 路由的全量线性扫描。
+		// 命中路径在上面早就返回了，压根到不了这儿，热路径不受影响。
+		auto firstSegment = firstPathSegment(reqPath);
+		uint32_t candidateMask = dynamicFirstSegmentMask_;
+		if (auto segIt = firstSegmentMethodMasks_.find(firstSegment); segIt != firstSegmentMethodMasks_.end())
 		{
-			for (auto m : pathIt->second)
+			candidateMask |= segIt->second;
+		}
+		for (const auto& [prefix, methods] : wildcardSegmentPrefixMasks_)
+		{
+			if (firstSegment.starts_with(prefix))
 			{
-				if (m != reqMethod)
-				{
-					allowMask |= methodBit(m);
-				}
+				candidateMask |= methods;
 			}
 		}
 
-		// 参数路由：线性扫描其他 method 的路由（路径匹配需要模式匹配）
-		ParamList tempParams;
-		for (const auto& [method, routes] : paramRoutesByMethod_)
+		// reqMethod 自己的路由在上面已经匹配过一轮了，这里只关心别的方法
+		uint32_t otherMethods = candidateMask & ~methodBit(reqMethod);
+		if (otherMethods != 0)
 		{
-			if (method == reqMethod)
+			// 静态路由：O(1) 反向索引查找
+			if (auto pathIt = staticPathMethods_.find(reqPath); pathIt != staticPathMethods_.end())
 			{
-				continue;
-			}
-			for (const auto& entry : routes)
-			{
-				if (matchParamPath(entry.path, reqPath, tempParams))
+				for (auto m : pathIt->second)
 				{
-					allowMask |= methodBit(method);
-					break;
+					if (m != reqMethod)
+					{
+						allowMask |= methodBit(m);
+					}
 				}
 			}
-		}
 
-		// 通配路由：同样线性扫其他 method，命中条件和上面的匹配阶段一致
-		// （以前这段漏了，通配路由上的方法不匹配一律掉到 404，HEAD 也躺枪）
-		for (const auto& [method, routes] : wildcardRoutesByMethod_)
-		{
-			if (method == reqMethod)
+			// 参数路由：线性扫描其他 method 的路由（路径匹配需要模式匹配）
+			// 首段就对不上的 method 整组跳过，靠 candidateMask 筛，不然又多扫一遍
+			ParamList tempParams;
+			for (const auto& [method, routes] : paramRoutesByMethod_)
 			{
-				continue;
-			}
-			for (const auto& entry : routes)
-			{
-				if (reqPath.size() >= entry.prefix.size() && reqPath.starts_with(entry.prefix))
+				if ((otherMethods & methodBit(method)) == 0)
 				{
-					allowMask |= methodBit(method);
-					break;
+					continue;
+				}
+				for (const auto& entry : routes)
+				{
+					if (matchParamPath(entry.path, reqPath, tempParams))
+					{
+						allowMask |= methodBit(method);
+						break;
+					}
+				}
+			}
+
+			// 通配路由：同样线性扫其他 method，命中条件和上面的匹配阶段一致
+			// （以前这段漏了，通配路由上的方法不匹配一律掉到 404，HEAD 也躺枪）
+			for (const auto& [method, routes] : wildcardRoutesByMethod_)
+			{
+				if ((otherMethods & methodBit(method)) == 0)
+				{
+					continue;
+				}
+				for (const auto& entry : routes)
+				{
+					if (reqPath.size() >= entry.prefix.size() && reqPath.starts_with(entry.prefix))
+					{
+						allowMask |= methodBit(method);
+						break;
+					}
 				}
 			}
 		}
@@ -643,6 +695,61 @@ namespace hical
 	}
 
 	// ============ 辅助方法 ============
+
+	void Router::indexRouteFirstSegment(HttpMethod method, const std::string& path, RouteKind kind)
+	{
+		const uint32_t bit = methodBit(method);
+
+		if (kind == RouteKind::hWildcard)
+		{
+			// 通配路由按前缀匹配，星号可能落在段边界（"/api/*rest" 的前缀 "/api/"），
+			// 也可能落在段中间（"/files*x" 的前缀 "/files"），两种情况归档方式不一样
+			auto starPos = path.find('*');
+			std::string_view prefix = std::string_view(path).substr(0, starPos);
+
+			// 前缀不以 '/' 开头（正常注册不会出现）时 starts_with 的语义没法用首段描述，
+			// 直接当「任意首段都可能匹配」，宁可少优化也别把该报 405 的路径误判成 404
+			if (prefix.empty() || prefix.front() != '/')
+			{
+				dynamicFirstSegmentMask_ |= bit;
+				return;
+			}
+
+			auto rest = prefix.substr(1);
+			auto slash = rest.find('/');
+			if (slash == std::string_view::npos)
+			{
+				// 前缀没跨过首段，星号在段中间：任何以 rest 开头的首段都可能命中
+				indexWildcardSegmentPrefix(method, rest);
+				return;
+			}
+			firstSegmentMethodMasks_[std::string(rest.substr(0, slash))] |= bit;
+			return;
+		}
+
+		auto segment = firstPathSegment(path);
+		if (kind == RouteKind::hParam && isParamSegment(segment))
+		{
+			// 首段本身就是 {param}，那什么首段都可能是它匹配上的
+			dynamicFirstSegmentMask_ |= bit;
+			return;
+		}
+		firstSegmentMethodMasks_[std::string(segment)] |= bit;
+	}
+
+	void Router::indexWildcardSegmentPrefix(HttpMethod method, std::string_view prefix)
+	{
+		const uint32_t bit = methodBit(method);
+		for (auto& [token, mask] : wildcardSegmentPrefixMasks_)
+		{
+			if (std::string_view(token) == prefix)
+			{
+				mask |= bit;
+				return;
+			}
+		}
+		wildcardSegmentPrefixMasks_.emplace_back(std::string(prefix), bit);
+	}
 
 	bool Router::isParamRoute(const std::string& path)
 	{
