@@ -142,16 +142,22 @@ namespace hical
 		std::pmr::memory_resource* upstream_;
 
 #ifdef HICAL_ENABLE_MEMORY_TRACKING
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4324)
+#endif
 		// 每个计数器独占一条 cache line（64B），消除多核并发分配时的 false sharing
 		struct alignas(64) AlignedCounter
 		{
 			std::atomic<size_t> value {0};
 		};
-
 		AlignedCounter totalAllocations_;
 		AlignedCounter totalDeallocations_;
 		AlignedCounter currentBytes_;
 		AlignedCounter peakBytes_;
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
 #endif
 	};
 
