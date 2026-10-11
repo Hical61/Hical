@@ -1,10 +1,10 @@
 # Hical 项目代码结构
 
-> 最后更新：2026-09-28
+> 最后更新：2026-10-10
 
 ## 项目概述
 
-Hical 是基于 Boost.Asio、采用原生 HTTP/WebSocket 网络栈（picohttpparser + 自研 WebSocket）的现代 C++20 高性能 Web 框架。核心特性：PMR 三层内存池、协程化 I/O（`asio::awaitable`）、C++20 Concepts 后端约束、C++26 反射双轨设计（原生 P2996 / C++20 宏回退）、可选数据库中间件（Boost.MySQL）、可选 OpenAPI 3.0 元数据层、生产级日志系统。
+Hical 是基于 Boost.Asio、采用原生 HTTP/WebSocket 网络栈（picohttpparser + 自研 WebSocket）的现代 C++20 高性能 Web 框架。核心特性：PMR 三层内存池、协程化 I/O（`asio::awaitable`）、C++20 Concepts 后端约束、C++26 反射双轨设计（原生 P2996 / C++20 宏回退）、可选数据库中间件（MySQL / PostgreSQL 双后端）、可选 OpenAPI 3.0 元数据层、生产级日志系统、编译期组件（完美哈希路由 / 中间件链 / JSON 直序列化）。
 
 ## 根目录文件
 
@@ -21,12 +21,19 @@ hical/
 ├── .clang-format               # clang-format 22+ 规则（Allman/4 空格/120 列）
 ├── .clang-tidy                 # clang-tidy 检查项（readability/bugprone/cppcoreguidelines 等）
 ├── .editorconfig               # 编辑器跨平台编码规范（UTF-8 + LF）
+├── .gitattributes              # Git 属性（换行符归一、二进制标记）
 ├── .gitignore                  # 忽略 build/、build-*/、IDE 缓存等
+├── .dockerignore               # Docker 构建上下文排除规则
+│
+├── cmake/                      # CMake 包配置模板
+│   └── hicalConfig.cmake.in    #   find_package(hical) 的 config 模板
 │
 ├── .github/                    # GitHub 社区与 CI 配置
 │   ├── workflows/              #   CI 工作流
 │   │   ├── ci.yml              #     Ubuntu(GCC14/Clang20) + Windows(MSYS2/MSVC+vcpkg) 矩阵
 │   │   ├── sanitizer.yml       #     ASan/UBSan/TSan 检查
+│   │   ├── benchmark.yml       #     基准测试
+│   │   ├── labeler.yml         #     PR 自动打标签（独立 workflow，fork PR 也生效）
 │   │   ├── release.yml         #     Release 发布流程
 │   │   └── conan-publish.yml   #     Conan 包发布
 │   ├── ISSUE_TEMPLATE/         #   Issue 模板（bug_report / feature_request / config）
@@ -39,11 +46,33 @@ hical/
 │   ├── hical61-hical/          #   vcpkg overlay port（portfile.cmake + vcpkg.json + versions 模板）
 │   └── picohttpparser/         #   picohttpparser 的 vcpkg port（hical 内嵌依赖的可选系统版本）
 │
+├── vcpkg.json                  # vcpkg manifest（version 2.7.0 + 依赖声明）
+├── conanfile.py                # Conan 配方（CMakeToolchain / CMakeDeps / cmake_layout）
+├── test_package/               # Conan test_package（消费端冒烟验证）
+│
 ├── src/                        # 框架源码（详见下节）
 ├── tests/                      # 单元测试
 ├── examples/                   # 示例程序
+├── benchmark/                  # 横向对比基准（hical 与其他 C++ Web 框架）
+│   ├── hical/                  #   hical 侧的实现（注意：不参与 hical 主构建）
+│   ├── drogon/ crow/ oatpp/    #   对照框架
+│   ├── cinatra/ cpphttplib/    #   对照框架
+│   ├── actix/ gin/ fiber/      #   对照框架（非 C++）
+│   ├── libuvcpp/ wrk/          #   对照框架 / 压测工具
+│   ├── run_bench.sh            #   一键跑全部对比
+│   └── collect_stats.sh        #   结果汇总
+├── docker/                     # 容器化与压测环境
+│   ├── HttpArena/              #   HttpArena 参赛服务器（bench_main.cpp 为实际入口）
+│   ├── TFB/                    #   TechEmpower Framework Benchmarks 服务器
+│   ├── prod/                   #   生产部署镜像
+│   ├── bench*.Dockerfile       #   压测镜像（wrk / pgo / server）
+│   ├── docker-compose.bench.yml
+│   └── bench_main.cpp          #   压测服务器真实源码（见下方注意事项）
 └── docs/                       # 文档
 ```
+
+> **注意**：`benchmark/hical/main.cpp` 与 `docker/HttpArena/src/main.cpp` **不是同一份代码**。压测与 HttpArena 跑分实际使用的是 `docker/HttpArena/src/main.cpp`；`benchmark/hical/` 下的副本不参与 hical 主构建。改路由时若只改一处，会静默测到 404。
+
 
 ## 目录结构
 
@@ -58,7 +87,11 @@ hical/
 │   │   ├── Concepts.h          # C++20 Concepts 约束
 │   │   ├── Error.h/.cpp        # 错误码枚举 + boost error_code 转换
 │   │   ├── MemoryPool.h/.cpp   # pmr 内存池管理器（TrackedResource + PoolConfig + thread_local）
+│   │   ├── MimallocResource.h  # mimalloc 的 memory_resource 适配（HICAL_WITH_MIMALLOC=ON 时启用）
+│   │   ├── NumaTopology.h/.cpp # NUMA 拓扑检测 + 节点查询（HICAL_WITH_NUMA=ON；非 NUMA 自动退化 UMA）
 │   │   ├── PmrBuffer.h         # 基于 pmr 的统一缓冲区（指数增长 + 自适应缩容）
+│   │   ├── ReadBufferPool.h/.cpp # 读缓冲区 thread_local 对象池（8KB slot + BufferHandle RAII 借还）
+│   │   ├── StringPool.h        # 分级字符串对象池（5 档 256B~4KB，shared_ptr + 自定义 deleter）
 │   │   ├── InetAddress.h/.cpp  # 网络地址封装（IPv4/IPv6）
 │   │   ├── SslContext.h/.cpp   # SSL/TLS 上下文配置封装
 │   │   ├── Coroutine.h         # 协程工具（Awaitable/sleep/coSpawn，header-only）
@@ -69,6 +102,7 @@ hical/
 │   │   ├── Router.h/.cpp       # 路由器（O(1) 静态 + 按方法分桶参数 + WebSocket + dispatchSync 同步快路径）
 │   │   ├── Middleware.h/.cpp   # 中间件系统（异步/同步双轨 + buildOptimizedChain 合并连续同步帧）
 │   │   ├── HttpServer.h/.cpp   # HTTP 服务器（SO_REUSEPORT 多 acceptor + fd 耗尽防护 + 中间件预构建）
+│   │   ├── RequestDispatch.h   # 请求分发上下文 + 预构建中间件链的终端骨架（框架内部）
 │   │   ├── HeaderMap.h         # HTTP 头部容器（vector<pair> 实现，大小写不敏感）
 │   │   ├── HttpSessionImpl.cpp # HTTP/WS 会话编译防火墙（隔离 picohttpparser + WebSocket）
 │   │   ├── WebSocket.h/.cpp    # WebSocket 会话封装（自研实现，子协议/心跳/上下文）
@@ -77,11 +111,17 @@ hical/
 │   │   ├── WsDeflate.h/.cpp    # WebSocket permessage-deflate 压缩（pimpl + zlib，zip bomb 防护）
 │   │   ├── WsHub.h/.cpp        # WebSocket 广播管理器（weak_ptr 存储，房间/单播/广播）
 │   │   ├── WriteNode.h         # 多态写队列节点（MemoryWriteNode / PmrBufferWriteNode / FileWriteNode）
-│   │   ├── StaticFiles.h       # 静态文件服务（异步 I/O + PathCache + ETag/304 + 路径遍历防护）
+│   │   ├── StaticFiles.h       # 静态文件服务（异步 I/O + 双层 thread_local 缓存 + ETag/304 + Range）
 │   │   ├── Multipart.h/.cpp    # multipart/form-data 解析（dual API: req 版 + parts 版）
 │   │   ├── Session.h/.cpp      # Session 会话管理（shared_mutex + regenerate + migrateFrom）
 │   │   ├── Cors.h              # CORS 中间件（makeCorsMiddleware + CorsOptions）
 │   │   ├── JwtAuth.h/.cpp      # JWT 认证中间件（HMAC-SHA256 签发/验证 + SyncBeforeHandler）
+│   │   ├── RateLimiter.h/.cpp  # 令牌桶限流（per-key 独立桶 + burst + 惰性 GC + SyncBeforeHandler）
+│   │   ├── Helmet.h/.cpp       # 安全响应头中间件（7 个头 + SyncAfterHandler）
+│   │   ├── GzipCompression.h/.cpp # Gzip 响应压缩（整体 / chunked 流式双策略 + 已压缩格式跳过）
+│   │   ├── ChunkedBody.h/.cpp  # Chunked Transfer-Encoding（收集模式 + 流式编码 + wireSize 预算）
+│   │   ├── SseSession.h/.cpp   # Server-Sent Events 会话（sendEvent/sendData + 心跳保活）
+│   │   ├── HealthEndpoint.h/.cpp # K8s 健康检查端点（/admin/health + /admin/ready）
 │   │   ├── RouteGroup.h/.cpp   # 路由组（前缀分组 + 组级中间件 + 嵌套子组）
 │   │   ├── ConfigLoader.h/.cpp # JSON 配置加载器（层级 key + 环境变量覆盖 + env 缓存）
 │   │   ├── Reflection.h        # C++26 反射特性检测 + RouteInfo + 类型萃取
@@ -133,8 +173,9 @@ hical/
 │       ├── PgStmtCache.h/.cpp  # PG 服务端预处理语句 LRU 缓存
 │       └── PgSocketAdapter.h   # libpq 与 Boost.Asio 的 socket 适配层
 │
-├── tests/                      # 单元测试（Google Test）— 55 个基础测试套件（+ 1 个可选 OpenAPI + 5 个可选 DB 测试）
-│   ├── CMakeLists.txt          # gtest_discover_tests 自动注册 + Windows ws2_32/mswsock 链接
+├── tests/                      # 单元测试（Google Test）— 69 个测试目标
+│   ├── CMakeLists.txt          # hical_add_test 辅助函数 + gtest_discover_tests 自动注册
+│   ├── test_main.cpp           # GTest main（所有测试目标共用）
 │   │
 │   │ # —— 基础设施 ——
 │   ├── test_basic.cpp                # 基础测试
@@ -148,6 +189,7 @@ hical/
 │   ├── test_asio_tcp_connection.cpp  # TcpConnection
 │   ├── test_tcp_server.cpp           # TcpServer + EventLoopPool
 │   ├── test_ssl_connection.cpp       # SSL 连接
+│   ├── test_numa_topology.cpp        # NUMA 拓扑检测与绑核验证
 │   │ # —— HTTP 核心 ——
 │   ├── test_http_types.cpp           # HTTP 类型
 │   ├── test_router.cpp               # 路由器（含路径参数）
@@ -184,9 +226,14 @@ hical/
 │   │ # —— WebSocket ——
 │   ├── test_websocket.cpp            # WebSocket 基础
 │   ├── test_ws_advanced.cpp          # WebSocket 进阶（子协议/心跳/压缩/Hub 广播）
+│   ├── test_ws_pipeline.cpp          # 单 read 多帧 drain（16 帧一次写、逐条回显）
 │   │ # —— 反射 / OpenAPI ——
-│   ├── test_reflection.cpp           # MetaJson + MetaRoutes（61 个，含 DTO 校验）
-│   ├── test_openapi.cpp              # OpenAPI 自动生成（35 个）
+│   ├── test_reflection.cpp           # MetaJson + MetaRoutes（C++20 宏路径；开反射时跳过）
+│   ├── test_openapi.cpp              # OpenAPI 自动生成（开反射时跳过）
+│   ├── test_ct_conv.cpp              # CTConv 命名转换与整型转字符串
+│   ├── test_meta_anno.cpp            # C++26 注解框架（需反射，否则 SKIP）
+│   ├── test_meta_schema.cpp          # C++26 JSON Schema（需反射，否则 SKIP）
+│   ├── test_collect_member.cpp       # C++26 成员收集（需反射，否则 SKIP）
 │   │ # —— 日志系统 ——
 │   ├── test_log.cpp                  # Log 核心（36 个）
 │   ├── test_log_ndebug.cpp           # NDEBUG TRACE 消除（3 个）
@@ -202,28 +249,34 @@ hical/
 │   ├── test_db_pool.cpp              # 连接池单元测试（Mock，12 个）
 │   ├── test_db_middleware.cpp        # DB 中间件（Mock，8 个）
 │   ├── test_db_query_log.cpp         # 查询日志（Mock，6 个）
-│   ├── test_stmt_cache.cpp           # PreparedStatement 缓存（9 个）
-│   ├── test_mysql_integration.cpp    # MySQL 集成（需真实数据库，7 个）
-│   └── test_pgsql*.cpp               # PostgreSQL 集成/单元（需真实数据库，HICAL_WITH_PGSQL=ON）
+│   ├── test_stmt_cache.cpp           # MySQL PreparedStatement 缓存（需 HICAL_WITH_MYSQL=ON）
+│   ├── test_mysql_integration.cpp    # MySQL 集成（无实例时自动 SKIP）
+│   ├── test_pgsql_conn.cpp           # PostgreSQL 连接与静态 SQL 集成（无实例时自动 SKIP）
+│   ├── test_pgsql_socket.cpp         # PgSocketAdapter 异步等待（不依赖真实 PG）
+│   └── test_pgsql_unit.cpp           # PgStmtCache LRU 缓存纯单元测试（不依赖真实 PG）
 │
-├── examples/                   # 示例程序（8 个）
+├── examples/                   # 示例程序（11 个，部分按构建开关条件编译）
 │   ├── CMakeLists.txt
-│   ├── echo_server.cpp         # 协程式 Echo Server
+│   ├── echo_server.cpp         # 协程式 Echo Server（走 TcpServer，无 HTTP 解析）
 │   ├── pmr_poc.cpp             # pmr 内存池验证
 │   ├── benchmark.cpp           # Echo Server 压力测试工具
 │   ├── http_server.cpp         # HTTP Server 完整示例（路由 + 中间件 + WebSocket）
 │   ├── http_benchmark.cpp      # HTTP 基准测试工具（QPS/P50/P99）
 │   ├── pmr_benchmark.cpp       # pmr 内存池基准测试（多策略对比）
-│   ├── openapi_server.cpp      # OpenAPI 文档自动生成示例
-│   └── reflection_server.cpp   # 反射层 DTO + 路由自动注册示例
+│   ├── reflection_server.cpp   # 反射层 DTO + 路由自动注册示例（C++20 宏路径）
+│   ├── reflection_server_26.cpp # C++26 注解路径示例（HICAL_ENABLE_REFLECTION=ON 时才构建）
+│   ├── static_server/          # 静态文件服务示例（含 public/ 资源）
+│   ├── openapi_server.cpp      # OpenAPI 文档自动生成示例（HICAL_WITH_OPENAPI=ON 且未开反射时构建）
+│   └── pgsql_example.cpp       # PostgreSQL 后端示例（HICAL_WITH_PGSQL=ON 时才构建）
 │
 └── docs/                       # 文档
     ├── project_structure.md    # 本文件 — 项目代码结构说明
     ├── api_reference.md        # 完整 API 参考（公共类/方法/枚举/宏）
-    ├── architecture.md         # 架构设计（两层架构/PMR 三层池/协程模型/Concepts/反射）
+    ├── architecture.md         # 架构设计（两层架构/PMR 三层池/协程模型/Concepts/反射/编译期组件）
     ├── build_and_test_guide.md # 编译与测试指南
-    ├── quickstart.md           # 5 分钟快速上手
-    ├── examples_guide.md       # 8 个由浅入深的完整示例讲解
+    ├── quickstart.md           # 5 分钟快速上手（英文）
+    ├── quickstart_cn.md        # 5 分钟快速上手（中文）
+    ├── examples_guide.md       # 9 个由浅入深的完整示例讲解
     ├── integration_guide.md    # 集成指南（vcpkg overlay / FetchContent / cmake install）
     ├── coroutine-guide.md      # 协程入门教程
     ├── logging-guide.md        # 日志系统完全指南
@@ -235,25 +288,57 @@ hical/
 
 ## CMake 构建选项
 
-| 选项                              | 默认 | 说明                                                                          |
-| --------------------------------- | ---- | ----------------------------------------------------------------------------- |
-| `HICAL_WITH_DATABASE`             | OFF  | 启用 [src/db/](../src/db/) 数据库中间件，需 Boost.MySQL >= 1.85               |
-| `HICAL_WITH_OPENAPI`              | ON   | 启用 OpenAPI 3.0 元数据层（`OpenApi*.h/cpp`），无额外依赖                     |
-| `HICAL_ENABLE_REFLECTION`         | OFF  | 启用 C++26 原生反射（P2996），需兼容编译器；OFF 时回退到 C++20 宏             |
-| `HICAL_USE_SYSTEM_PICOHTTPPARSER` | OFF  | 使用系统安装的 picohttpparser 替代内嵌副本                                    |
-| `HICAL_WITH_MIMALLOC`             | OFF  | 使用 mimalloc 作为 PMR 最底层 upstream 分配器，替代默认 `new_delete_resource` |
-| `HICAL_BUILD_TESTS`               | ON   | 构建 [tests/](../tests/) 单元测试                                             |
-| `CMAKE_BUILD_TYPE`                | —    | `Debug` / `Release` / `RelWithDebInfo`                                        |
+**构建目标**
+
+| 选项                    | 默认 | 说明                                                                             |
+| ----------------------- | ---- | -------------------------------------------------------------------------------- |
+| `HICAL_BUILD_TESTS`     | ON   | 构建 [tests/](../tests/) 单元测试                                                |
+| `HICAL_BUILD_EXAMPLES`  | ON   | 构建 [examples/](../examples/) 示例程序                                          |
+| `HICAL_WITH_BENCHMARK`  | OFF  | 启用 Google Benchmark 微基准（`tests/benchmarks/` 子目录）                       |
+| `HICAL_BUILD_HTTPARENA` | OFF  | 构建 HttpArena 参赛服务器（联动开启 `HICAL_WITH_DATABASE` + `HICAL_WITH_PGSQL`） |
+| `HICAL_BUILD_BENCH`     | OFF  | 构建压测服务器                                                                   |
+| `HICAL_BUILD_TFB`       | OFF  | 构建 TechEmpower Framework Benchmarks 服务器                                     |
+| `HICAL_BUILD_DEPLOY`    | OFF  | 构建生产部署服务器                                                               |
+
+**可选模块**
+
+| 选项                  | 默认 | 说明                                                        |
+| --------------------- | ---- | ----------------------------------------------------------- |
+| `HICAL_WITH_DATABASE` | OFF  | 启用 [src/db/](../src/db/) 数据库中间件（后端无关的核心层） |
+| `HICAL_WITH_MYSQL`    | OFF  | 启用 MySQL 后端，需 Boost.MySQL 1.85+                       |
+| `HICAL_WITH_PGSQL`    | OFF  | 启用 PostgreSQL 后端，需 libpq                              |
+| `HICAL_WITH_OPENAPI`  | ON   | 启用 OpenAPI 3.0 元数据层（`OpenApi*.h/cpp`），无额外依赖   |
+
+**特性开关**
+
+| 选项                                | 默认 | 说明                                                                                       |
+| ----------------------------------- | ---- | ------------------------------------------------------------------------------------------ |
+| `HICAL_ENABLE_REFLECTION`           | OFF  | 启用 C++26 原生反射（P2996），需 GCC 16 等兼容编译器 + Boost ≥ 1.90；OFF 时回退到 C++20 宏 |
+| `HICAL_ENABLE_MEMORY_TRACKING`      | ON   | 内存池分配/释放统计（`TrackedResource` 原子计数器，各占一条缓存行）                        |
+| `HICAL_ENABLE_MIDDLEWARE_PROFILING` | OFF  | 逐中间件计时统计；**管线含 Sync 中间件时该管线自动退回普通链并记一条 WARN**                |
+| `HICAL_WITH_NUMA`                   | OFF  | NUMA 感知内存分配与 worker 绑核，需 libnuma（仅 Linux）                                    |
+| `HICAL_WITH_MIMALLOC`               | OFF  | 用 mimalloc 替代 `new_delete_resource` 作为 PMR 最底层 upstream                            |
+| `HICAL_USE_SYSTEM_PICOHTTPPARSER`   | OFF  | 使用系统安装的 picohttpparser 替代内嵌副本                                                 |
+
+**通用**
+
+| 变量               | 默认 | 说明                                   |
+| ------------------ | ---- | -------------------------------------- |
+| `CMAKE_BUILD_TYPE` | —    | `Debug` / `Release` / `RelWithDebInfo` |
+
 
 ## 命名空间布局
 
-| 命名空间        | 范围                                                                    | 头文件位置                                              |
-| --------------- | ----------------------------------------------------------------------- | ------------------------------------------------------- |
-| `hical::`       | 框架核心（HTTP/WebSocket/中间件/Session/日志/OpenAPI）                  | `<hical/core/>`                                         |
-| `hical::meta::` | 反射层（MetaJson / MetaRoutes 的 `toJson`/`fromJson`/`registerRoutes`） | `<hical/core/MetaJson.h>` / `<hical/core/MetaRoutes.h>` |
-| `hical::db::`   | 数据库中间件（可选）                                                    | `<hical/db/>`                                           |
-| `hical::anno::` | C++26 反射注解（`json_ignore`/`json_rename`/`json_required`、`route.get/post/...`） | `<hical/core/MetaAnno.h>` / `<hical/core/MetaRoutes.h>` |
-| `hical::schema::` | C++26 JSON Schema 类型特化                                              | `<hical/core/MetaSchema.h>`                            |
+| 命名空间                 | 范围                                                                                                            | 头文件位置                                                                                 |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `hical::`                | 框架核心（HTTP/WebSocket/中间件/Session/日志/OpenAPI/编译期组件）                                               | `<hical/core/>`                                                                            |
+| `hical::meta::`          | 反射层（MetaJson / MetaRoutes 的 `toJson`/`fromJson`/`registerRoutes`；CompileTimeJson 的 `compileTimeToJson`） | `<hical/core/MetaJson.h>` / `<hical/core/MetaRoutes.h>` / `<hical/core/CompileTimeJson.h>` |
+| `hical::db::`            | 数据库中间件（可选）                                                                                            | `<hical/db/>`                                                                              |
+| `hical::anno::`          | C++26 反射注解（`json_ignore`/`json_rename`/`json_required`、`route.get/post/...`）                             | `<hical/core/MetaAnno.h>` / `<hical/core/MetaRoutes.h>`                                    |
+| `hical::schema::`        | C++26 JSON Schema 类型特化                                                                                      | `<hical/core/MetaSchema.h>`                                                                |
+| `hical::CT::`            | 编译期命名风格转换（`caseSnakeToLowerCamel` 等）                                                                | `<hical/core/Utils/CTConv.h>`                                                              |
+| `hical::CollectMember::` | 继承链成员收集（C++26 反射辅助）                                                                                | `<hical/core/Utils/CollectMember.h>`                                                       |
+| `hical::detail::`        | 框架内部实现（如 `RequestDispatchContext`），非公开 API                                                         | `<hical/core/RequestDispatch.h>` 等                                                        |
 
 **公共 vs 内部 API 边界**：
 
@@ -329,20 +414,23 @@ hical/
 
 - **C++ 标准**：C++20（C++26 反射可选，由 `HICAL_ENABLE_REFLECTION` 控制）
 - **构建工具**：CMake 3.20+，推荐 Ninja
-- **编译器支持**：GCC 14+ / Clang 20+ / MSVC 2022+
+- **编译器支持**：GCC 14+ / Clang 20+ / MSVC 2022+（C++26 反射路径需 GCC 16 等支持 P2996 的编译器）
 - **依赖**：
-  - Boost 1.82+（system / json，Asio header-only）
+  - Boost 1.82+（json / system，Asio header-only）
   - Boost 1.85+（DB 中间件额外需要 mysql / charconv）
-  - OpenSSL 3.x（SSL/TLS、Session ID 生成）
-  - zlib（WebSocket permessage-deflate）
+  - OpenSSL 3.x（SSL/TLS、Session ID 生成、JWT HMAC、trace-id 随机源）
+  - zlib（WebSocket permessage-deflate、HTTP 响应 gzip）
   - picohttpparser（内嵌副本，可选系统版本）
   - Google Test（测试套件）
+  - libpq — 可选，仅 PostgreSQL 后端（`HICAL_WITH_PGSQL=ON`）
+  - libnuma — 可选，仅 NUMA 感知（`HICAL_WITH_NUMA=ON`，Linux）
+  - mimalloc — 可选，仅 `HICAL_WITH_MIMALLOC=ON`
   - Windows 额外：`ws2_32`、`mswsock`
 - **构建产物**：
-  - `hical_core` — 框架核心静态库（仅静态库，DLL/ABI 不兼容）
-  - `test_*` — 55 个基础测试套件（+ 1 个可选 OpenAPI + 5 个可选 DB 测试）
-  - 8 个示例可执行文件
-- **CI 工作流**：见 [.github/workflows/](../.github/workflows/) — `ci.yml`（多平台矩阵）、`sanitizer.yml`（ASan/UBSan/TSan）、`release.yml` / `conan-publish.yml`
+  - `hical_core` — 框架核心静态库（**仅静态库**，DLL/ABI 不兼容）
+  - `test_*` — 69 个测试目标（60 个基础 + 1 个可选 OpenAPI + 3 个可选 DB 基础 + 3 个可选 PG + 2 个可选 MySQL）
+  - 11 个示例可执行文件（部分按构建开关条件编译）
+- **CI 工作流**：见 [.github/workflows/](../.github/workflows/) — `ci.yml`（多平台矩阵）、`sanitizer.yml`（ASan/UBSan/TSan）、`benchmark.yml`、`labeler.yml`（fork PR 也生效）、`release.yml`、`conan-publish.yml`
 
 详细构建步骤参见 [build_and_test_guide.md](build_and_test_guide.md)；分发与集成参见 [integration_guide.md](integration_guide.md)。
 

@@ -51,7 +51,9 @@ namespace hical
 	{
 	public:
 		/**
-		 * @brief 默认构造单线程 HTTP 服务器，由系统分配监听端口
+		 * @brief 默认构造单线程 HTTP 服务器，等价于 HttpServer(0, 1)
+		 * 端口传 0 表示交给系统挑，所以 start() 之后绑的是个随机端口，不是某个固定值。
+		 * 想要固定端口就写 HttpServer(port)，或者构造完再 listen(port) / listen(ip, port)。
 		 */
 		explicit HttpServer();
 
