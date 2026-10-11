@@ -90,6 +90,10 @@ jobs:
         if: runner.os == 'Linux' && matrix.compiler != 'clang'
         run: cmake --build build -j$(nproc)
 
+      - name: Generate test certificates (Linux)
+        if: runner.os == 'Linux' && matrix.compiler != 'clang'
+        run: python3 scripts/gen_test_certs.py
+
       - name: Test (Linux)
         if: runner.os == 'Linux' && matrix.compiler != 'clang'
         run: ctest --test-dir build --output-on-failure --timeout 60 -j4 -E 'RouterPerfTest|PerfectHashPerfTest|HttpServerPerfTest'
@@ -110,6 +114,10 @@ jobs:
       - name: Build with sanitizers (Clang)
         if: matrix.compiler == 'clang'
         run: cmake --build build -j$(nproc)
+
+      - name: Generate test certificates (Clang)
+        if: matrix.compiler == 'clang'
+        run: python3 scripts/gen_test_certs.py
 
       - name: Test with sanitizers (Clang)
         if: matrix.compiler == 'clang'
@@ -134,6 +142,10 @@ jobs:
             -DCMAKE_EXE_LINKER_FLAGS="--coverage" \
             -DHICAL_DISABLE_IO_URING=ON
           cmake --build build-cov -j$(nproc)
+
+      - name: Generate test certificates (coverage)
+        if: matrix.compiler == 'gcc'
+        run: python3 scripts/gen_test_certs.py --out-dir build-cov/tests
 
       - name: Run tests for coverage
         if: matrix.compiler == 'gcc'
@@ -202,6 +214,7 @@ jobs:
             mingw-w64-x86_64-boost
             mingw-w64-x86_64-openssl
             mingw-w64-x86_64-gtest
+            mingw-w64-x86_64-python
 
       - name: Configure (MSYS2)
         if: matrix.compiler == 'msys2-gcc'
@@ -212,6 +225,11 @@ jobs:
         if: matrix.compiler == 'msys2-gcc'
         shell: msys2 {0}
         run: cmake --build build
+
+      - name: Generate test certificates (MSYS2)
+        if: matrix.compiler == 'msys2-gcc'
+        shell: msys2 {0}
+        run: python scripts/gen_test_certs.py
 
       - name: Test (MSYS2)
         if: matrix.compiler == 'msys2-gcc'
@@ -258,6 +276,10 @@ jobs:
         env:
           CCACHE_COMPILERTYPE: msvc
 
+      - name: Generate test certificates (MSVC)
+        if: matrix.compiler == 'msvc'
+        run: python scripts/gen_test_certs.py
+
       - name: Test (MSVC)
         if: matrix.compiler == 'msvc'
         run: ctest --test-dir build --output-on-failure --timeout 60 -j4 -C Release -E 'RouterPerfTest|PerfectHashPerfTest|HttpServerPerfTest'
@@ -296,6 +318,9 @@ jobs:
 
       - name: Build (middleware profiling)
         run: cmake --build build -j$(nproc)
+
+      - name: Generate test certificates (middleware profiling)
+        run: python3 scripts/gen_test_certs.py
 
       - name: Test (middleware profiling)
         run: ctest --test-dir build --output-on-failure --timeout 60 -j4 -E 'RouterPerfTest|PerfectHashPerfTest|HttpServerPerfTest'
