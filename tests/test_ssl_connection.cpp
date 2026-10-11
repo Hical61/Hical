@@ -1,9 +1,12 @@
 #include "asio/SslConnection.h"
 #include "asio/AsioEventLoop.h"
 #include "core/SslContext.h"
+#include "core/HttpServer.h"
 #include <gtest/gtest.h>
+#include <boost/asio.hpp>
 #include <atomic>
 #include <chrono>
+#include <cstdlib>
 #include <thread>
 #include <fstream>
 
@@ -19,6 +22,27 @@ static bool testCertsExist()
 	std::ifstream cert(hTestCertFile);
 	std::ifstream key(hTestKeyFile);
 	return cert.good() && key.good();
+}
+
+// 启动 HttpServer 并等端口就绪，返回实际监听端口
+static uint16_t startServerAndWaitPort(HttpServer& server, std::thread& serverThread)
+{
+	serverThread = std::thread(
+		[&server]()
+		{
+			server.start();
+		});
+
+	uint16_t port = 0;
+	for (int i = 0; i < 100 && port == 0; ++i)
+	{
+		port = server.port();
+		if (port == 0)
+		{
+			std::this_thread::sleep_for(std::chrono::milliseconds(20));
+		}
+	}
+	return port;
 }
 
 // 测试 SslContext 基本功能
@@ -184,4 +208,87 @@ TEST(GenericConnectionTest, IsSslCompileTime)
 	static_assert(!PlainConnection::isSsl(), "PlainConnection 不是 SSL 连接");
 	static_assert(SslConnection::isSsl(), "SslConnection 是 SSL 连接");
 	SUCCEED();
+}
+
+// 回归：TCP 连上后一直不发 ClientHello，握手协程挂死。这条连接必须跟普通空闲
+// 连接一样被 IdleScanner 在 idleTimeout_ 内回收，否则光握手就能把连接槽占满。
+TEST(SslConnectionTest, StalledHandshakeReapedByIdleTimeout)
+{
+	if (!testCertsExist())
+	{
+		if (std::getenv("HICAL_REQUIRE_SSL_CERTS") != nullptr)
+		{
+			FAIL() << "HICAL_REQUIRE_SSL_CERTS 已置位，但测试证书不存在（" << hTestCertFile << ", " << hTestKeyFile
+				   << "）";
+		}
+		GTEST_SKIP() << "跳过：测试证书不存在（" << hTestCertFile << ", " << hTestKeyFile << "）";
+	}
+
+	using boost::asio::ip::tcp;
+
+	HttpServer server(0);
+	// 用短的 idleTimeout_ 控制耗时；扫描间隔是 max(1000ms, timeout/4)，
+	// 2 秒超时 → 最坏 ~3 秒被扫到关掉，下面的断言窗口给到 10 秒，留足余量。
+	server.setIdleTimeout(2.0);
+	server.enableSsl(hTestCertFile, hTestKeyFile);
+
+	std::thread serverThread;
+	uint16_t port = startServerAndWaitPort(server, serverThread);
+	if (port == 0)
+	{
+		// 用 FAIL 而不是 ASSERT：线程已经起来了，直接 return 会让 joinable 的
+		// serverThread 析构触发 std::terminate，得先把服务器停干净。
+		server.stop();
+		serverThread.join();
+		FAIL() << "服务器没有在预期时间内分配端口";
+	}
+
+	// 客户端只做 TCP 三次握手，一个字节都不发（压根不开始 TLS 握手）
+	boost::asio::io_context ioCtx;
+	tcp::socket socket(ioCtx);
+	boost::system::error_code connectEc;
+	socket.connect(tcp::endpoint(boost::asio::ip::make_address("127.0.0.1"), port), connectEc);
+	if (connectEc)
+	{
+		server.stop();
+		serverThread.join();
+		FAIL() << "TCP 连接失败：" << connectEc.message();
+	}
+
+	std::atomic<bool> deadlineFired {false};
+	std::atomic<bool> serverClosed {false};
+
+	// 兜底 deadline：10 秒还没被回收就直接关掉本地 socket 结束等待，
+	// 靠 deadlineFired 把「服务端关的」和「我们自己关的」区分开，避免假绿。
+	boost::asio::steady_timer deadline(ioCtx, std::chrono::seconds(10));
+	deadline.async_wait(
+		[&](const boost::system::error_code& dEc)
+		{
+			if (dEc)
+			{
+				return; // 被正常取消，不是真的超时
+			}
+			deadlineFired.store(true);
+			boost::system::error_code closeEc;
+			socket.close(closeEc);
+		});
+
+	char buf[1];
+	socket.async_read_some(boost::asio::buffer(buf),
+						   [&](const boost::system::error_code& readEc, std::size_t)
+						   {
+							   if (!deadlineFired.load())
+							   {
+								   serverClosed.store(readEc.operator bool());
+							   }
+							   deadline.cancel();
+						   });
+
+	ioCtx.run();
+
+	EXPECT_TRUE(serverClosed.load()) << (deadlineFired.load() ? "10 秒上限已到，服务端仍没回收这条停滞的 SSL 握手连接"
+															  : "服务端关连接时客户端没拿到 EOF/错误");
+
+	server.stop();
+	serverThread.join();
 }

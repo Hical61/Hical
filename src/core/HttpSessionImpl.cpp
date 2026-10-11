@@ -588,6 +588,25 @@ namespace hical
 		// socket 析构守卫，WS 升级时 transferred=true 就跳过
 		SocketGuard<SocketType> guard {socket};
 
+		// entry 在协程栈上，Guard 析构时自动注销
+		// 声明在 SocketGuard 后面 → 先析构（先 unregister 再关 socket）
+		// 注册要赶在 SSL 握手之前：握手期间连接同样处于「已建立但对端沉默」的状态，
+		// 不挂进扫描链的话，一个 TCP 连上却不发 ClientHello 的客户端能把连接和 fd 一直占住。
+		IdleScanner::Entry idleEntry;
+		// SSL 流要存 next_layer() 的底层 tcp::socket*（Entry::socket 就是这个类型），
+		// 关闭底层 socket 就能让挂起的 SSL 操作报错退出，不用发 close_notify。
+		if constexpr (hIsSslStream<SocketType>)
+		{
+			idleEntry.socket = &socket.next_layer();
+		}
+		else
+		{
+			idleEntry.socket = &socket;
+		}
+		idleEntry.touch();
+
+		IdleScanner::Guard idleGuard(currentThreadIdleScanner(), idleEntry);
+
 		// SSL 流先握手：底层 socket 由 OpenSSL BIO 状态机管理，不能直接调 non_blocking
 		// 去碰 fd（那会破坏 OpenSSL 的非阻塞读写状态），握手失败直接 co_return，SocketGuard 负责关掉。
 		if constexpr (hIsSslStream<SocketType>)
@@ -614,23 +633,6 @@ namespace hical
 		// ssl::stream 没有 remote_endpoint，走 lowest_layer() 拿底层 tcp::socket。
 		auto remoteEp = socket.lowest_layer().remote_endpoint();
 		InetAddress peerAddr(remoteEp.address().to_string(), remoteEp.port());
-
-		// entry 在协程栈上，Guard 析构时自动注销
-		// 声明在 SocketGuard 后面 → 先析构（先 unregister 再关 socket）
-		IdleScanner::Entry idleEntry;
-		// SSL 流要存 next_layer() 的底层 tcp::socket*（Entry::socket 就是这个类型），
-		// 关闭底层 socket 就能让挂起的 SSL 操作报错退出，不用发 close_notify。
-		if constexpr (hIsSslStream<SocketType>)
-		{
-			idleEntry.socket = &socket.next_layer();
-		}
-		else
-		{
-			idleEntry.socket = &socket;
-		}
-		idleEntry.touch();
-
-		IdleScanner::Guard idleGuard(currentThreadIdleScanner(), idleEntry);
 
 		try
 		{

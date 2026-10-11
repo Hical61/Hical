@@ -97,6 +97,8 @@ jobs:
       - name: Test (Linux)
         if: runner.os == 'Linux' && matrix.compiler != 'clang'
         run: ctest --test-dir build --output-on-failure --timeout 60 -j4 -E 'RouterPerfTest|PerfectHashPerfTest|HttpServerPerfTest'
+        env:
+          HICAL_REQUIRE_SSL_CERTS: "1"
 
       # ── Clang: Sanitizer 构建 (ASan + UBSan) ──
       - name: Configure with sanitizers (Clang)
@@ -122,6 +124,8 @@ jobs:
       - name: Test with sanitizers (Clang)
         if: matrix.compiler == 'clang'
         run: ctest --test-dir build --output-on-failure --timeout 120 -j4 -E 'RouterPerfTest|PerfectHashPerfTest|HttpServerPerfTest'
+        env:
+          HICAL_REQUIRE_SSL_CERTS: "1"
 
       # ── clang-tidy 检查 (仅 Clang job, 警告模式) ──
       - name: Run clang-tidy
@@ -150,6 +154,8 @@ jobs:
       - name: Run tests for coverage
         if: matrix.compiler == 'gcc'
         run: ctest --test-dir build-cov --output-on-failure --timeout 60 -j4 -E 'RouterPerfTest|PerfectHashPerfTest|HttpServerPerfTest'
+        env:
+          HICAL_REQUIRE_SSL_CERTS: "1"
 
       - name: Generate coverage report
         if: matrix.compiler == 'gcc'
@@ -234,6 +240,8 @@ jobs:
       - name: Test (MSYS2)
         if: matrix.compiler == 'msys2-gcc'
         shell: msys2 {0}
+        env:
+          HICAL_REQUIRE_SSL_CERTS: "1"
         run: |
           ctest --test-dir build --output-on-failure --timeout 60 -j4 -E 'RouterPerfTest|PerfectHashPerfTest|HttpServerPerfTest' || {
             echo "First attempt failed (likely MinGW exit-time segfault), retrying..."
@@ -283,6 +291,8 @@ jobs:
       - name: Test (MSVC)
         if: matrix.compiler == 'msvc'
         run: ctest --test-dir build --output-on-failure --timeout 60 -j4 -C Release -E 'RouterPerfTest|PerfectHashPerfTest|HttpServerPerfTest'
+        env:
+          HICAL_REQUIRE_SSL_CERTS: "1"
 
   # ── 中间件 profiling 构建（打开 HICAL_ENABLE_MIDDLEWARE_PROFILING） ──
   # 这个选项默认 OFF，上面那个 build job 从来不开它，于是 tests/test_middleware.cpp 里
@@ -324,6 +334,8 @@ jobs:
 
       - name: Test (middleware profiling)
         run: ctest --test-dir build --output-on-failure --timeout 60 -j4 -E 'RouterPerfTest|PerfectHashPerfTest|HttpServerPerfTest'
+        env:
+          HICAL_REQUIRE_SSL_CERTS: "1"
 
       # 光看 ctest 绿没用：profiling 没打开、用例被 #ifdef 编没了的时候 gtest 照样返回 0
       # （只打印 "0 tests from 0 test suites" 和一句 WARNING）。所以这里显式逐条确认用例名
