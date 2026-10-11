@@ -399,6 +399,11 @@ namespace hical
 		{
 			scanner->shutdown();
 		}
+
+		// 走到这儿说明 start() 是正常收尾的（包括 stop() 之后返回），监听地址已经用掉一次，
+		// 锁就保持住——重启本来也不支持。只有中途抛异常才会让 guardListenLock 把锁放回去，
+		// 那种情况下用户改个端口重试是合理的。
+		guardListenLock.dismiss();
 	}
 
 	void HttpServer::stop()

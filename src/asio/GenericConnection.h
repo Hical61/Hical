@@ -53,8 +53,8 @@ namespace hical
 	inline constexpr bool hIsSslStream = IsSslStream<T>::value;
 
 #if defined(_MSC_VER)
-#pragma warning(push)
-#pragma warning(disable : 4324)
+	#pragma warning(push)
+	#pragma warning(disable : 4324)
 #endif
 	/**
 	 * @brief 通用连接模板类（支持普通 TCP 和 SSL）
@@ -457,7 +457,7 @@ namespace hical
 		std::shared_ptr<void> context_;
 	};
 #if defined(_MSC_VER)
-#pragma warning(pop)
+	#pragma warning(pop)
 #endif
 
 	// ============ 类型别名 ============

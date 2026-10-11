@@ -31,15 +31,16 @@ namespace hical
 	 * 提供简洁的 API 配置路由、中间件，一键启动。
 	 * 用法：
 	 * ```cpp
-	 * hical::HttpServer server;          // 默认构造，监听任意地址，实际端口由系统启动后分配
-	 * hical::HttpServer server(8080);    // 监听任意地址的 8080 端口
-	 * hical::HttpServer server(0, 8);    // 监听任意地址的 0 端口，使用 8 个 IO 线程
-	 * server.listen("127.0.0.1", 8080);  // 只监听本机回环
-	 * server.listenAny(443);             // 修改为监听任意地址的 443 端口
+	 * hical::HttpServer server(8080);    // 监听 0.0.0.0:8080
+	 * server.listen("127.0.0.1", 8080);  // 可选：改成只监听本机回环
 	 * server.router().get("/", handler);
 	 * server.use(logMiddleware);
 	 * server.start();                    // 阻塞
 	 * ```
+	 * 构造三选一：`HttpServer()`（端口 0 + 单线程）、`HttpServer(port)`、
+	 * `HttpServer(port, ioThreads)`。端口传 0 表示交给系统分配，启动之后用 `endpoint()`
+	 * 或 `port()` 查实际端口。监听地址默认 `0.0.0.0`，想只监听某块网卡就在 `start()`
+	 * 之前调 `listen()`，几个 listen 入口都只能在 `start()` 之前调。
 	 * @note 线程模型
 	 * 采用 1 Thread : 1 io_context 架构。baseLoop_ 运行 accept/signal/GC，
 	 * ioPool_ 中的 worker loop 处理连接 I/O。每个 worker loop 单线程运行，
