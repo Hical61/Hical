@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **CTConv 缺 `<charconv>`/`<system_error>` 导致默认构建失败**：`CTConv.cpp` 被无条件编进 `hical_core`，但其头文件没有包含 `std::to_chars`/`std::errc` 所在的标准头，在 GCC 15 上直接编译报错（写这份代码的编译器因间接包含而未暴露）
 - **405 检测漏了通配路由（外部可观测的契约变化）**：`Router::resolveRoute()` 的 405 检测以前只查静态路由和参数路由，通配路由不参与，所以 `get("/*path", ...)` 这类注册对 POST/HEAD 一律回 404，正确的行为是 405 + `Allow` 头。现在通配路由和另外两类一起收集允许方法。顺带修了 `Allow` 头重复列方法的问题——静态路由和通配路由都注册了 GET 时会吐出 `GET, GET`，改成用方法位掩码去重后一次性拼串。`examples/static_server` 用的就是 `/*path` 模式，变化最直接
 - **profiling 模式下 Sync 中间件被整条丢弃**：开 `HICAL_ENABLE_MIDDLEWARE_PROFILING=ON` 时 `MiddlewarePipeline::build()` 按 `vector<MiddlewareHandler>` 搭统计链，而 `hSync` 条目根本没有 handler 可挂，于是被整条从链里丢掉——`makeJwtAuthMiddleware`、`makeRateLimiterMiddleware` 这类 `SyncBeforeHandler` 直接不执行，认证和限流静默 fail-open。这不是「不计时」，是「不跑」。现在检测到 Sync 条目就回退到不丢条目的普通链并记一条 WARN 说明本管线 profiling 关闭，`middlewareStats()` 对这类管线返回空 vector
+- **SSL 握手期间的连接不受空闲超时约束**：`handleSession` 里 `IdleScanner` 的注册排在 `async_handshake` 之后，握手这段窗口里连接既不在扫描链上、也没有独立超时，所以客户端做完 TCP 三次握手后一直不发 ClientHello 就能把连接和 fd 长期占住，只受 `maxConnections_` 封顶（默认 10000）。现在注册提到握手之前，停滞的握手会被普通空闲超时按 `idleTimeout_` 回收。`IdleScanner` 本来就打算覆盖握手——`IdleScanner.h` 里写着「关掉底层 socket 足以让挂起的 `async_handshake` 报错退出」——只是注册顺序放晚了
 
 ### Changed
 - **反射注解命名空间收敛到 `hical::anno`**：`json_ignore`/`json_rename`/`json_reset`/`json_snake_to_lowerCamel` 等注解常量从顶层 `hical::` 移入 `hical::anno`，与路由注解 `hical::anno::route` 归到一处。**迁移**：`[[=hical::json_ignore]]` → `[[=hical::anno::json_ignore]]`
