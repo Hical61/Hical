@@ -290,7 +290,7 @@ Hical 的 `makeLogMiddleware()` 是一个洋葱模型中间件，放在中间件
 #include <hical/HttpServer.h>
 #include <hical/LogMiddleware.h>
 
-HttpServer server;
+HttpServer server(8080);
 
 server.use(makeLogMiddleware({
     .accessLogChannel = "access",  // 写到哪个通道
@@ -304,7 +304,7 @@ server.use(makeLogMiddleware({
 在业务处理器里提取 trace-id，传递给下游调用或写到日志里：
 
 ```cpp
-server.get("/api/user/{id}", [](HttpRequest& req) -> Awaitable<HttpResponse>
+server.router().get("/api/user/{id}", [](const HttpRequest& req) -> Awaitable<HttpResponse>
 {
     auto traceId = getTraceId(req); // 获取本请求的 trace-id
 
@@ -314,7 +314,7 @@ server.get("/api/user/{id}", [](HttpRequest& req) -> Awaitable<HttpResponse>
     );
 
     // ... 业务逻辑
-    co_return HttpResponse::ok().body("{}");
+    co_return HttpResponse::ok("{}");
 });
 ```
 
@@ -422,7 +422,7 @@ int main()
         }));
 
     // --- 3. 构建 HTTP 服务器 ---
-    HttpServer server;
+    HttpServer server(8080);
 
     server.use(makeLogMiddleware({
         .accessLogChannel = "access",
@@ -435,8 +435,7 @@ int main()
     registerLogAdminEndpoints(server.router(), "/admin");
 
     HICAL_LOG_INFO("server starting on port=8080");
-    server.listen(8080);
-    server.run();
+    server.start(); // 阻塞，直到 stop() 被调用
     return 0;
 }
 ```

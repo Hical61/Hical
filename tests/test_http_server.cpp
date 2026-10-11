@@ -1059,3 +1059,188 @@ TEST(HttpServerTest, UseAfterOnlyAfterStartThrows)
 	server.stop();
 	serverThread.join();
 }
+
+// 没调 listen() 时默认监听 0.0.0.0（IPv4）+ 构造端口
+TEST(HttpServerTest, DefaultListenAddressIsWildcardV4)
+{
+	HttpServer server(0);
+
+	auto configured = server.endpoint();
+	EXPECT_TRUE(configured.address().is_v4());
+	EXPECT_TRUE(configured.address().is_unspecified());
+	EXPECT_EQ(configured.port(), 0);
+}
+
+// 默认构造函数：等价于 HttpServer(0, 1)——启动前未运行、端口 0，start() 后由系统分配端口并能正常收发
+// （地址与 endpoint() 的初始状态见 DefaultListenAddressIsWildcardV4，listen() 的行为见下面几个用例）
+TEST(HttpServerTest, DefaultConstructorServerServesRequests)
+{
+	HttpServer server;
+
+	EXPECT_FALSE(server.isRunning());
+	EXPECT_EQ(server.port(), 0); // 端口交给系统分配，start() 之后才有值
+
+	server.router().get("/",
+						[](const HttpRequest&) -> HttpResponse
+						{
+							return HttpResponse::ok("default-ctor");
+						});
+
+	std::thread serverThread;
+	uint16_t port = startServerAndWait(server, serverThread);
+	ASSERT_NE(port, 0);
+
+	auto [status, body] = httpGet("127.0.0.1", port, "/");
+	EXPECT_EQ(status, 200u);
+	EXPECT_EQ(body, "default-ctor");
+
+	server.stop();
+	serverThread.join();
+}
+
+// listen(endpoint) 存下来的地址要能在 start() 前读回来，start() 后端口换成内核分配的
+TEST(HttpServerTest, ListenEndpointReflectsConfiguredAddress)
+{
+	HttpServer server;
+	server.listen("127.0.0.1", 0);
+
+	auto configured = server.endpoint();
+	EXPECT_EQ(configured.address().to_string(), "127.0.0.1");
+	EXPECT_EQ(configured.port(), 0);
+
+	server.router().get("/",
+						[](const HttpRequest&) -> HttpResponse
+						{
+							return HttpResponse::ok("local-only");
+						});
+
+	std::thread serverThread;
+	uint16_t port = startServerAndWait(server, serverThread);
+	ASSERT_NE(port, 0);
+
+	// 只监听 127.0.0.1 时照样能连上，且 endpoint() 报的是实际端口
+	auto bound = server.endpoint();
+	EXPECT_EQ(bound.address().to_string(), "127.0.0.1");
+	EXPECT_EQ(bound.port(), port);
+
+	auto [status, body] = httpGet("127.0.0.1", port, "/");
+	EXPECT_EQ(status, 200u);
+	EXPECT_EQ(body, "local-only");
+
+	server.stop();
+	serverThread.join();
+}
+
+// 只监听 127.0.0.1 时，127.0.0.2 上不该有人 accept——这条能抓「listen() 没生效、还绑在 0.0.0.0」的回归
+// （绑 0.0.0.0 时连 127.0.0.2 是通的，反之必然被拒）
+TEST(HttpServerTest, ListenSpecificIpRejectsOtherAddress)
+{
+	HttpServer server;
+	server.listen("127.0.0.1", 0);
+
+	std::thread serverThread;
+	uint16_t port = startServerAndWait(server, serverThread);
+	ASSERT_NE(port, 0);
+
+	boost::asio::io_context io;
+	tcp::socket sock(io);
+	boost::system::error_code ec;
+	sock.connect(tcp::endpoint(boost::asio::ip::make_address("127.0.0.2"), port), ec);
+	EXPECT_TRUE(ec) << "只监听 127.0.0.1 时不该在 127.0.0.2 上接受连接";
+
+	server.stop();
+	serverThread.join();
+}
+
+// listenAny() 绑的是通配地址：127.0.0.2 也该能连上。这条和 ListenSpecificIpRejectsOtherAddress
+// 是一对——两条都过才说明「只监听指定 IP」和「监听所有接口」确实被区分开了
+TEST(HttpServerTest, ListenAnyAcceptsOnOtherLoopbackAddress)
+{
+	HttpServer server;
+	server.listenAny(static_cast<uint16_t>(0));
+
+	std::thread serverThread;
+	uint16_t port = startServerAndWait(server, serverThread);
+	ASSERT_NE(port, 0);
+
+	boost::asio::io_context io;
+	tcp::socket sock(io);
+	boost::system::error_code ec;
+	sock.connect(tcp::endpoint(boost::asio::ip::make_address("127.0.0.2"), port), ec);
+	EXPECT_FALSE(ec) << "listenAny() 绑 0.0.0.0，127.0.0.2 上也该能连上";
+
+	boost::system::error_code closeEc;
+	sock.shutdown(tcp::socket::shutdown_both, closeEc);
+	sock.close(closeEc);
+
+	server.stop();
+	serverThread.join();
+}
+
+// listenAny() 会覆盖之前 listen(...) 设过的地址：先绑死 127.0.0.1，再调 listenAny 应切回通配
+TEST(HttpServerTest, ListenAnyResetsAddressToWildcard)
+{
+	HttpServer server;
+	server.listen("127.0.0.1", 4321);
+	ASSERT_EQ(server.endpoint().address().to_string(), "127.0.0.1");
+
+	server.listenAny(static_cast<uint16_t>(0));
+	EXPECT_TRUE(server.endpoint().address().is_v4());
+	EXPECT_TRUE(server.endpoint().address().is_unspecified());
+	EXPECT_EQ(server.port(), 0);
+}
+
+// listenAny(uint16_t) / listen(endpoint) 两个重载都得改到实际生效的成员上
+TEST(HttpServerTest, ListenOverloadsTakeEffect)
+{
+	{
+		HttpServer server(1234);
+		server.listenAny(static_cast<uint16_t>(0));
+		EXPECT_EQ(server.port(), 0);
+		EXPECT_TRUE(server.endpoint().address().is_unspecified());
+	}
+
+	{
+		HttpServer server(0);
+		server.listen(tcp::endpoint(boost::asio::ip::make_address("127.0.0.1"), 0));
+		EXPECT_EQ(server.endpoint().address().to_string(), "127.0.0.1");
+		EXPECT_EQ(server.port(), 0);
+	}
+}
+
+// 非法 IP 抛 boost::system::system_error，且不能把已配好的监听地址改坏
+TEST(HttpServerTest, ListenInvalidIpThrows)
+{
+	HttpServer server;
+	server.listen("127.0.0.1", 0);
+
+	EXPECT_THROW(server.listen("not-an-ip", 0), boost::system::system_error);
+	EXPECT_EQ(server.endpoint().address().to_string(), "127.0.0.1");
+
+	// IPv6 字面量正常解析
+	server.listen("::1", 0);
+	EXPECT_EQ(server.endpoint().address().to_string(), "::1");
+}
+
+// start() 之后改监听地址抛 logic_error，与 router()/use() 一致
+TEST(HttpServerTest, ListenAfterStartThrows)
+{
+	HttpServer server;
+
+	std::thread serverThread;
+	uint16_t port = startServerAndWait(server, serverThread);
+	ASSERT_TRUE(server.isRunning());
+	ASSERT_NE(port, 0);
+
+	EXPECT_THROW(server.listenAny(static_cast<uint16_t>(0)), std::logic_error);
+	EXPECT_THROW(server.listen(tcp::endpoint(tcp::v4(), 0)), std::logic_error);
+	EXPECT_THROW(server.listen("127.0.0.1", 0), std::logic_error);
+
+	// 抛完不能把服务器状态改坏
+	EXPECT_EQ(server.port(), port);
+	EXPECT_EQ(server.endpoint().port(), port);
+	EXPECT_TRUE(server.isRunning());
+
+	server.stop();
+	serverThread.join();
+}

@@ -31,10 +31,14 @@ namespace hical
 	 * 提供简洁的 API 配置路由、中间件，一键启动。
 	 * 用法：
 	 * ```cpp
-	 * hical::HttpServer server(8080);
+	 * hical::HttpServer server;          // 默认构造，监听任意地址，实际端口由系统启动后分配
+	 * hical::HttpServer server(8080);    // 监听任意地址的 8080 端口
+	 * hical::HttpServer server(0, 8);    // 监听任意地址的 0 端口，使用 8 个 IO 线程
+	 * server.listen("127.0.0.1", 8080);  // 只监听本机回环
+	 * server.listenAny(443);             // 修改为监听任意地址的 443 端口
 	 * server.router().get("/", handler);
 	 * server.use(logMiddleware);
-	 * server.start();  // 阻塞
+	 * server.start();                    // 阻塞
 	 * ```
 	 * @note 线程模型
 	 * 采用 1 Thread : 1 io_context 架构。baseLoop_ 运行 accept/signal/GC，
@@ -46,8 +50,13 @@ namespace hical
 	{
 	public:
 		/**
+		 * @brief 默认构造单线程 HTTP 服务器，由系统分配监听端口
+		 */
+		explicit HttpServer();
+
+		/**
 		 * @brief 构造 HTTP 服务器
-		 * @param port 监听端口
+		 * @param port 监听端口（监听地址默认为 0.0.0.0，可用 listen() 在 start() 前改）
 		 * @param ioThreads IO 线程数（默认 1，即单线程）
 		 */
 		explicit HttpServer(uint16_t port, size_t ioThreads = 1);
@@ -221,7 +230,38 @@ namespace hical
 		[[nodiscard]] bool isRunning() const;
 
 		/**
+		 * @brief 设置监听地址
+		 * 只监听给定 endpoint（比如仅本机 127.0.0.1），必须在 start() 之前调用。
+		 * 不调用时监听 0.0.0.0（IPv4）+ 构造时传入的端口。
+		 * @param ep 监听地址，IPv4/IPv6 由地址族决定
+		 */
+		void listen(const boost::asio::ip::tcp::endpoint& ep);
+
+		/**
+		 * @brief 设置监听 IP 和端口
+		 * @param ip IP 地址字符串（IPv4 点分十进制或 IPv6 字面量）
+		 * @param port 端口号（0 表示由系统分配）
+		 * @throw ip 不是合法 IP 字面量时抛出 boost::system::system_error
+		 */
+		void listen(const std::string& ip, uint16_t port);
+
+		/**
+		 * @brief 设置监听端口并绑定通配地址（0.0.0.0，所有 IPv4 接口）
+		 * 会覆盖之前 listen(...) 设过的地址，即切回默认的「全接口监听」。
+		 * @param port 端口号（0 表示由系统分配）
+		 */
+		void listenAny(uint16_t port);
+
+		/**
+		 * @brief 获取监听地址与实际端口
+		 * start() 之前返回配置的地址中端口可能还是 0，start() 之后为内核实际分配的端口。
+		 * @return 监听 endpoint
+		 */
+		[[nodiscard]] boost::asio::ip::tcp::endpoint endpoint() const;
+
+		/**
 		 * @brief 获取监听端口
+		 * start() 之前返回配置的地址中端口可能还是 0，start() 之后为内核实际分配的端口。
 		 * @return 端口号
 		 */
 		[[nodiscard]] uint16_t port() const;
@@ -268,7 +308,13 @@ namespace hical
 		std::atomic<size_t> activeConnections_ {0};
 		std::atomic<bool> draining_ {false};
 
+		// 监听 IP 与端口
+		// listenAddr_ 只在 start() 之前写，之后只读，不用原子。
+		// port_ 必须原子: 端口 0 时 start() 会回写内核分配的端口，而 port() 可能被别的线程轮询。
+		boost::asio::ip::address listenAddr_ {boost::asio::ip::address_v4::any()};
 		std::atomic<uint16_t> port_;
+		std::atomic<bool> listenLock_ {false};
+
 		size_t ioThreads_;
 		AsioEventLoop baseLoop_;                // 主 loop（accept + signal + GC）
 		std::unique_ptr<EventLoopPool> ioPool_; // IO 线程池（ioThreads-1 个 worker loop）

@@ -130,27 +130,34 @@ HTTP 服务器，整合路由、中间件和网络层，提供一键启动的高
 
 #### 构造函数
 
-| 方法                                              | 参数                                   | 说明             |
-| ------------------------------------------------- | -------------------------------------- | ---------------- |
-| `HttpServer(uint16_t port, size_t ioThreads = 1)` | port: 监听端口<br>ioThreads: IO 线程数 | 创建 HTTP 服务器 |
+| 方法                                              | 参数                                   | 说明                                 |
+| ------------------------------------------------- | -------------------------------------- | ------------------------------------ |
+| `HttpServer()`                                    | 无                                     | 默认构造：端口 0（系统分配）、单线程 |
+| `HttpServer(uint16_t port, size_t ioThreads = 1)` | port: 监听端口<br>ioThreads: IO 线程数 | 创建 HTTP 服务器                     |
 
 #### 公共方法
 
-| 方法                           | 参数                                            | 返回值     | 说明                         |
-| ------------------------------ | ----------------------------------------------- | ---------- | ---------------------------- |
-| `router()`                     | 无                                              | `Router&`  | 获取路由器引用，用于注册路由 |
-| `use(MiddlewareHandler)`       | middleware: 中间件处理器                        | `void`     | 添加中间件到管道             |
-| `use(SyncAfterHandler)`        | after: 同步后置处理器                           | `void`     | 添加同步后置中间件           |
-| `use(name, SyncAfterHandler)`  | name: 名称<br>after: 同步后置处理器             | `void`     | 添加命名同步后置中间件       |
-| `enableSsl(certFile, keyFile)` | certFile: 证书文件路径<br>keyFile: 私钥文件路径 | `void`     | 启用 SSL/TLS                 |
-| `start()`                      | 无                                              | `void`     | 启动服务器（阻塞）           |
-| `stop()`                       | 无                                              | `void`     | 停止服务器                   |
-| `isRunning()`                  | 无                                              | `bool`     | 服务器是否正在运行           |
-| `port()`                       | 无                                              | `uint16_t` | 获取监听端口                 |
-| `setErrorHandler(handler)`     | handler: `ErrorHandler`                         | `void`     | 设置全局错误处理器           |
-| `setGcInterval(seconds)`       | seconds: GC 间隔（秒）                          | `void`     | 设置内存池 GC 间隔           |
+| 方法                           | 参数                                            | 返回值          | 说明                         |
+| ------------------------------ | ----------------------------------------------- | --------------- | ---------------------------- |
+| `router()`                     | 无                                              | `Router&`       | 获取路由器引用，用于注册路由 |
+| `use(MiddlewareHandler)`       | middleware: 中间件处理器                        | `void`          | 添加中间件到管道             |
+| `use(SyncAfterHandler)`        | after: 同步后置处理器                           | `void`          | 添加同步后置中间件           |
+| `use(name, SyncAfterHandler)`  | name: 名称<br>after: 同步后置处理器             | `void`          | 添加命名同步后置中间件       |
+| `enableSsl(certFile, keyFile)` | certFile: 证书文件路径<br>keyFile: 私钥文件路径 | `void`          | 启用 SSL/TLS                 |
+| `listen(endpoint)`             | ep: 监听地址（`tcp::endpoint`）                 | `void`          | 设置监听地址（仅监听该 IP）  |
+| `listen(ip, port)`             | ip: IP 字符串<br>port: 端口号                   | `void`          | 设置监听 IP + 端口           |
+| `listenAny(port)`              | port: 端口号（0 = 系统分配）                    | `void`          | 设置监听端口（绑回 0.0.0.0） |
+| `start()`                      | 无                                              | `void`          | 启动服务器（阻塞）           |
+| `stop()`                       | 无                                              | `void`          | 停止服务器                   |
+| `isRunning()`                  | 无                                              | `bool`          | 服务器是否正在运行           |
+| `port()`                       | 无                                              | `uint16_t`      | 获取监听端口                 |
+| `endpoint()`                   | 无                                              | `tcp::endpoint` | 获取监听地址与端口           |
+| `setErrorHandler(handler)`     | handler: `ErrorHandler`                         | `void`          | 设置全局错误处理器           |
+| `setGcInterval(seconds)`       | seconds: GC 间隔（秒）                          | `void`          | 设置内存池 GC 间隔           |
 
 > `use(SyncAfterHandler)` 只吃后置逻辑，没有前置——helmet、gzip 这类只改响应的中间件直接 `server.use(makeHelmetMiddleware())` 就行，不用包协程 lambda。多个 after 之间按注册逆序执行：后注册的在洋葱里更靠内，先退出。
+>
+> `listen(endpoint)` / `listen(ip, port)` 用来监听指定地址（比如 `127.0.0.1` 或某块网卡），`listenAny(port)` 则绑回通配地址 `0.0.0.0`，也就是默认行为。在开始监听后调用它们会抛 `std::logic_error`；`listen(ip, port)` 的 `ip` 是非法 IP 字面量时抛 `boost::system::system_error`。`endpoint()` 在 `start()` 之后返回带实际端口的监听地址（构造时端口传 0 时用它查系统分配的端口）。
 
 #### 类型定义
 
@@ -169,7 +176,10 @@ int main()
 {
     // 创建服务器，4 个 IO 线程
     HttpServer server(8080, 4);
-    
+
+    // 只监听本机回环（可选；不调用则监听 0.0.0.0）
+    server.listen("127.0.0.1", 8080);
+
     // 注册路由
     server.router().get("/", [](const HttpRequest&) -> HttpResponse {
         return HttpResponse::ok("Hello, hical!");

@@ -15,10 +15,44 @@
 
 namespace hical
 {
+	template <typename Func>
+	class ScopedGuard
+	{
+	public:
+		ScopedGuard(Func func) : func_(std::move(func))
+		{
+		}
+
+		~ScopedGuard()
+		{
+			if (!dismissed_)
+			{
+				func_();
+			}
+		}
+
+		ScopedGuard(const ScopedGuard&) = delete;
+		ScopedGuard& operator=(const ScopedGuard&) = delete;
+		ScopedGuard(ScopedGuard&&) = delete;
+		ScopedGuard& operator=(ScopedGuard&&) = delete;
+
+		void dismiss()
+		{
+			dismissed_ = true;
+		}
+
+	private:
+		Func func_;
+		bool dismissed_ {false};
+	};
 
 	using boost::asio::ip::tcp;
 
 	HttpServer::HttpServer(uint16_t port, size_t ioThreads) : port_(port), ioThreads_(ioThreads > 0 ? ioThreads : 1)
+	{
+	}
+
+	HttpServer::HttpServer() : HttpServer(0, 1)
 	{
 	}
 
@@ -184,7 +218,21 @@ namespace hical
 	void HttpServer::start()
 	{
 		running_.store(true);
-		started_ = true;
+		auto guardRunning = ScopedGuard(
+			[this]()
+			{
+				running_.store(false);
+			});
+
+		// start_ 用于锁定配置，而重启现在不支持，因此一旦 start() 被调用，配置就不能再改了。
+		started_.store(true);
+
+		listenLock_.store(true);
+		auto guardListenLock = ScopedGuard(
+			[this]()
+			{
+				listenLock_.store(false);
+			});
 
 		// 中间件链在此锁定（build 后再 use 会抛异常）并初始化 profiling 统计。
 		// build 的 finalHandler 是「终端骨架」：只从请求内部槽取每请求分发上下文并调用其
@@ -227,7 +275,7 @@ namespace hical
 			}
 		}
 
-		auto endpoint = tcp::endpoint(tcp::v4(), port_.load());
+		auto listenEndpoint = tcp::endpoint(listenAddr_, port_.load());
 
 		// SO_REUSEPORT：每个 loop 各有 acceptor，内核负载均衡，省掉跨线程分发。
 		// Windows 不支持，走下面的 fallback。
@@ -239,7 +287,7 @@ namespace hical
 			for (auto* loop : allLoops)
 			{
 				auto acc = std::make_unique<tcp::acceptor>(loop->getIoContext());
-				acc->open(endpoint.protocol());
+				acc->open(listenEndpoint.protocol());
 				acc->set_option(boost::asio::socket_base::reuse_address(true));
 
 				boost::system::error_code ec;
@@ -251,7 +299,7 @@ namespace hical
 					break;
 				}
 
-				acc->bind(endpoint);
+				acc->bind(listenEndpoint);
 				acc->listen();
 				tempAcceptors.push_back(std::move(acc));
 			}
@@ -268,9 +316,9 @@ namespace hical
 		if (!reusePortEnabled_)
 		{
 			auto acc = std::make_unique<tcp::acceptor>(baseLoop_.getIoContext());
-			acc->open(endpoint.protocol());
+			acc->open(listenEndpoint.protocol());
 			acc->set_option(boost::asio::socket_base::reuse_address(true));
-			acc->bind(endpoint);
+			acc->bind(listenEndpoint);
 			acc->listen();
 			acceptors_.push_back(std::move(acc));
 		}
@@ -351,8 +399,6 @@ namespace hical
 		{
 			scanner->shutdown();
 		}
-
-		running_.store(false);
 	}
 
 	void HttpServer::stop()
@@ -428,6 +474,33 @@ namespace hical
 	bool HttpServer::isRunning() const
 	{
 		return running_.load();
+	}
+
+	void HttpServer::listen(const tcp::endpoint& ep)
+	{
+		if (listenLock_.load())
+		{
+			throw std::logic_error("HttpServer: cannot change listen address after start()");
+		}
+
+		listenAddr_ = ep.address();
+		port_.store(ep.port());
+	}
+
+	void HttpServer::listen(const std::string& ip, uint16_t port)
+	{
+		auto addr = boost::asio::ip::make_address(ip);
+		listen(tcp::endpoint(addr, port));
+	}
+
+	void HttpServer::listenAny(uint16_t port)
+	{
+		listen(tcp::endpoint(tcp::v4(), port));
+	}
+
+	tcp::endpoint HttpServer::endpoint() const
+	{
+		return {listenAddr_, port_.load()};
 	}
 
 	uint16_t HttpServer::port() const
