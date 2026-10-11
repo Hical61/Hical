@@ -48,6 +48,85 @@ namespace hical
 
 	using boost::asio::ip::tcp;
 
+	namespace
+	{
+		/**
+		 * @brief accept 成功后占位计数的回退守卫
+		 * 占位即计数（先 fetch_add 再判上限），committed 置位之前协程任何提前退出都要
+		 * 把占位回退掉，否则连接槽泄漏、计数只增不减。
+		 */
+		struct AcceptGuard
+		{
+			std::atomic<size_t>& count;
+			bool& committed;
+
+			~AcceptGuard()
+			{
+				if (!committed)
+				{
+					count.fetch_sub(1, std::memory_order_acq_rel);
+				}
+			}
+		};
+
+		/**
+		 * @brief 接住一个已 accept 的 socket 之后的收尾
+		 * 占位计数 → 超限拒绝 → no_delay → SSL 分流 → 投递 handleSession。
+		 * 两条 acceptor 路径（SO_REUSEPORT / 回退）只有「socket 从哪来」和「用哪个
+		 * executor 投递」两处差异，收尾逻辑收在这里，免得逐行复制之后慢慢发散。
+		 * @param socket 已 accept 的裸 socket，按值接管所有权
+		 * @param sslCtx 非空时把 socket 包成 ssl::stream
+		 * @param activeConnections 活跃连接计数，占位与回退都动它
+		 * @param maxConnections 连接上限，0 表示不限制
+		 * @param spawn 投递回调，接住最终的 socket 或 ssl::stream 并 coSpawn handleSession
+		 * @return true 表示已占位并投递；false 表示超限已关 socket，调用方应 continue
+		 */
+		template <typename SpawnFn>
+		bool commitAcceptedSocket(tcp::socket socket,
+								  const std::shared_ptr<SslContext>& sslCtx,
+								  std::atomic<size_t>& activeConnections,
+								  const std::atomic<size_t>& maxConnections,
+								  SpawnFn&& spawn)
+		{
+			// 先占位再校验：原子地把计数 +1。绝不能像以前那样「先 load 判断、再到
+			// handleSession 里 fetch_add」——handleSession 是 coSpawn 异步投递的，
+			// 高速 burst 建连时大批连接已 accept 但协程还没被调度执行 fetch_add，
+			// load() 读到的计数严重滞后，限流直接形同虚设。占位即计数才是硬上限。
+			size_t maxConns = maxConnections.load(std::memory_order_relaxed);
+			size_t prev = activeConnections.fetch_add(1, std::memory_order_acq_rel);
+			if (maxConns > 0 && prev >= maxConns)
+			{
+				activeConnections.fetch_sub(1, std::memory_order_acq_rel);
+				boost::system::error_code ec;
+				socket.close(ec);
+				return false;
+			}
+
+			// 占位成功，计数所有权移交 handleSession（由它析构时 fetch_sub）。
+			// committed 之前任何提前退出都要回退占位，否则计数泄漏。
+			bool committed = false;
+			AcceptGuard acceptGuard {activeConnections, committed};
+
+			boost::system::error_code optEc;
+			socket.set_option(boost::asio::ip::tcp::no_delay(true), optEc); // 失败不致命，忽略
+
+			// SSL 分流：启用 sslCtx 时把裸 socket 包成 ssl::stream，明文路径行为完全不变。
+			// 握手不在 accept 路径里做，交给 handleSession 内部的 if constexpr 分支。
+			if (sslCtx)
+			{
+				boost::asio::ssl::stream<tcp::socket> sslStream(std::move(socket), sslCtx->native());
+				spawn(std::move(sslStream));
+			}
+			else
+			{
+				spawn(std::move(socket));
+			}
+
+			committed = true; // 移交成功
+			return true;
+		}
+	} // namespace
+
 	HttpServer::HttpServer(uint16_t port, size_t ioThreads) : port_(port), ioThreads_(ioThreads > 0 ? ioThreads : 1)
 	{
 	}
@@ -536,53 +615,16 @@ namespace hical
 						break;
 					}
 
-					// 先占位再校验：原子地把计数 +1。绝不能像以前那样「先 load 判断、再到
-					// handleSession 里 fetch_add」——handleSession 是 coSpawn 异步投递的，
-					// 高速 burst 建连时大批连接已 accept 但协程还没被调度执行 fetch_add，
-					// load() 读到的计数严重滞后，限流直接形同虚设。占位即计数才是硬上限。
-					size_t maxConns = maxConnections_.load(std::memory_order_relaxed);
-					size_t prev = activeConnections_.fetch_add(1, std::memory_order_acq_rel);
-					if (maxConns > 0 && prev >= maxConns)
+					// 收尾逻辑与回退路径共用，差异只有「socket 从哪来」和「用哪个 executor 投递」
+					auto executor = co_await boost::asio::this_coro::executor;
+					auto spawn = [this, executor](auto&& streamOrSocket)
 					{
-						activeConnections_.fetch_sub(1, std::memory_order_acq_rel);
-						boost::system::error_code ec;
-						socket.close(ec);
+						coSpawn(executor, handleSession(std::forward<decltype(streamOrSocket)>(streamOrSocket)));
+					};
+					if (!commitAcceptedSocket(std::move(socket), sslCtx_, activeConnections_, maxConnections_, spawn))
+					{
 						continue;
 					}
-
-					// 占位成功，计数所有权移交 handleSession（由它析构时 fetch_sub）。
-					// committed 之前任何提前返回/抛出都要回退占位，否则计数泄漏。
-					bool committed = false;
-
-					struct AcceptGuard
-					{
-						std::atomic<size_t>& count;
-						bool& committed;
-
-						~AcceptGuard()
-						{
-							if (!committed)
-							{
-								count.fetch_sub(1, std::memory_order_acq_rel);
-							}
-						}
-					} acceptGuard {activeConnections_, committed};
-
-					boost::system::error_code optEc;
-					socket.set_option(boost::asio::ip::tcp::no_delay(true), optEc); // 失败不致命，忽略
-
-					// SSL 分流：启用 sslCtx_ 时把裸 socket 包成 ssl::stream，明文路径行为完全不变。
-					// 握手不在 acceptLoop 里做，交给 handleSession 内部的 if constexpr 分支。
-					if (sslCtx_)
-					{
-						boost::asio::ssl::stream<tcp::socket> sslStream(std::move(socket), sslCtx_->native());
-						coSpawn(co_await boost::asio::this_coro::executor, handleSession(std::move(sslStream)));
-					}
-					else
-					{
-						coSpawn(co_await boost::asio::this_coro::executor, handleSession(std::move(socket)));
-					}
-					committed = true; // 移交成功
 				}
 				else
 				{
@@ -599,47 +641,14 @@ namespace hical
 						break;
 					}
 
-					// 同 SO_REUSEPORT 路径：先占位再校验，占位即计数（硬上限）
-					size_t maxConns = maxConnections_.load(std::memory_order_relaxed);
-					size_t prev = activeConnections_.fetch_add(1, std::memory_order_acq_rel);
-					if (maxConns > 0 && prev >= maxConns)
+					auto spawn = [this, exec = targetIoCtx.get_executor()](auto&& streamOrSocket)
 					{
-						activeConnections_.fetch_sub(1, std::memory_order_acq_rel);
-						boost::system::error_code ec;
-						socket.close(ec);
+						coSpawn(exec, handleSession(std::forward<decltype(streamOrSocket)>(streamOrSocket)));
+					};
+					if (!commitAcceptedSocket(std::move(socket), sslCtx_, activeConnections_, maxConnections_, spawn))
+					{
 						continue;
 					}
-
-					bool committed = false;
-
-					struct AcceptGuard
-					{
-						std::atomic<size_t>& count;
-						bool& committed;
-
-						~AcceptGuard()
-						{
-							if (!committed)
-							{
-								count.fetch_sub(1, std::memory_order_acq_rel);
-							}
-						}
-					} acceptGuard {activeConnections_, committed};
-
-					boost::system::error_code optEc;
-					socket.set_option(boost::asio::ip::tcp::no_delay(true), optEc); // 失败不致命，忽略
-
-					// SSL 分流：与 SO_REUSEPORT 路径一致，握手交给 handleSession 内部处理。
-					if (sslCtx_)
-					{
-						boost::asio::ssl::stream<tcp::socket> sslStream(std::move(socket), sslCtx_->native());
-						coSpawn(targetIoCtx.get_executor(), handleSession(std::move(sslStream)));
-					}
-					else
-					{
-						coSpawn(targetIoCtx.get_executor(), handleSession(std::move(socket)));
-					}
-					committed = true; // 移交成功
 				}
 			}
 			catch (const boost::system::system_error& e)
