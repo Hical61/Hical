@@ -344,7 +344,11 @@ namespace hical
 		{
 			throw std::logic_error("MiddlewarePipeline::execute: must call build() first");
 		}
-		co_return co_await cachedChain_(req);
+		// 这里直接返回缓存的 awaitable，别再包一层 co_return co_await——
+		// 包一层只为转发，白白多一个协程帧（分配 + 挂起/恢复 + 析构）。
+		// 注意：函数从协程变成普通函数后，上面那个抛异常从「恢复时抛」变成「调用时抛」，
+		// 调用点（HttpSessionImpl::processRequest）的 try 两种都接得住，语义不变。
+		return cachedChain_(req);
 	}
 
 	Awaitable<HttpResponse> MiddlewarePipeline::execute(HttpRequest& req, MiddlewareNext finalHandler)

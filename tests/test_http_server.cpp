@@ -689,7 +689,7 @@ TEST(HttpServerTest, MiddlewareKeepAliveNoStaleDispatch)
 }
 
 // 有中间件 + keep-alive + 带 body：同一连接连发多个 POST 且 body 各不相同，
-// 验证 tailHandler 里的 readRequestBody 每请求独立，body 不相互串（stale/UAF 回归）。
+// 验证链尾分发上下文里的 readRequestBody 每请求独立，body 不相互串（stale/UAF 回归）。
 TEST(HttpServerTest, MiddlewareKeepAliveNoStaleBody)
 {
 	HttpServer server(0);
@@ -1243,4 +1243,37 @@ TEST(HttpServerTest, ListenAfterStartThrows)
 
 	server.stop();
 	serverThread.join();
+}
+
+// recommendedMaxConnections 明文口径回归：1024MB 可用内存下的推荐值
+// 1024MB * 0.7 / 16KB = 45875
+TEST(HttpServerTest, RecommendedMaxConnections_PlainText_MatchesEstimate)
+{
+	EXPECT_EQ(HttpServer::recommendedMaxConnections(1024), 45875u);
+}
+
+// TLS 口径：ssl::stream 每连接 eager 分配约 34KB，推荐值应明显小于明文
+TEST(HttpServerTest, RecommendedMaxConnections_Tls_LowerThanPlainText)
+{
+	const size_t plain = HttpServer::recommendedMaxConnections(1024);
+	const size_t tls = HttpServer::recommendedMaxConnections(1024, true);
+
+	// 50KB vs 16KB，TLS 值约为明文的 1/3
+	EXPECT_LT(tls, plain);
+	EXPECT_EQ(tls, 1024ull * 1024 * 1024 * 7 / 10 / (50 * 1024));
+}
+
+// 两档都受 100 万封顶约束
+TEST(HttpServerTest, RecommendedMaxConnections_CapsAtOneMillion)
+{
+	constexpr size_t kCap = 1'000'000;
+	EXPECT_EQ(HttpServer::recommendedMaxConnections(1'000'000), kCap);
+	EXPECT_EQ(HttpServer::recommendedMaxConnections(1'000'000, true), kCap);
+}
+
+// 传 0 不该崩，返回 0
+TEST(HttpServerTest, RecommendedMaxConnections_ZeroMemory_ReturnsZero)
+{
+	EXPECT_EQ(HttpServer::recommendedMaxConnections(0), 0u);
+	EXPECT_EQ(HttpServer::recommendedMaxConnections(0, true), 0u);
 }

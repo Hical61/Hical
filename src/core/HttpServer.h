@@ -170,7 +170,7 @@ namespace hical
 		void setMaxConnections(size_t maxConns);
 
 		/**
-		 * @brief 根据可用内存计算推荐的最大连接数
+		 * @brief 根据可用内存计算推荐的最大连接数（明文口径）
 		 * 按每连接约 16KB 估算（readBuf 借还 + PmrBuffer 懒分配后空闲约 8KB，
 		 * 再加活跃连接临时缓冲和 socket 开销），
 		 * 预留 30% 内存给业务逻辑和系统开销。
@@ -178,6 +178,18 @@ namespace hical
 		 * @return 推荐的最大连接数（最多 100 万；只管推荐值，setMaxConnections 不受此限）
 		 */
 		[[nodiscard]] static size_t recommendedMaxConnections(size_t availableMemoryMB);
+
+		/**
+		 * @brief 根据可用内存计算推荐的最大连接数（区分明文/TLS）
+		 * TLS 连接下 ssl::stream 一构造出来就 eager 分配两个 17KB 的 TLS 记录缓冲
+		 * （Boost 的 stream_core，output/input 各一块，跟有没有收发数据无关），
+		 * 空闲连接光 SSL 层就多占约 34KB，故 TLS 口径按每连接约 50KB 估算
+		 * （16KB 明文开销 + 34KB TLS 缓冲）。
+		 * @param availableMemoryMB 可用内存（MB）
+		 * @param isTls 是否为 TLS 连接
+		 * @return 推荐的最大连接数（最多 100 万；只管推荐值，setMaxConnections 不受此限）
+		 */
+		[[nodiscard]] static size_t recommendedMaxConnections(size_t availableMemoryMB, bool isTls);
 
 		/**
 		 * @brief 设置空闲连接超时时间

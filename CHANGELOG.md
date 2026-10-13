@@ -8,19 +8,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.7.1] - 2026-10-12
+
 ### Added
+- **SSL/TLS 连接接通**：`HttpServer::enableSsl(certFile, keyFile)` 2.7.0 就有，但一直是个空壳——只把 `sslCtx_` 建起来，`acceptLoop` 压根没读它，accept 到的 socket 从不包成 `ssl::stream`，所以「启用 SSL」之后跑的其实还是明文。现在 `acceptLoop` 看 `sslCtx_` 非空就包一层 `ssl::stream<tcp::socket>` 再交给会话，`handleSession` 改成模板，按 `IsSslStream` trait 用 `if constexpr` 在编译期把明文和加密分开。明文那条照旧走乐观同步写；SSL 连接握手失败直接断掉，响应一律走 `async_write`，不去碰底层 fd，免得把 OpenSSL 的状态机搞坏。加密连接下 WS/SSE 升级编译期就不实例化（用不了）。`IdleScanner` 的 `Entry` 统一存 `next_layer()` 拿到的底层 `tcp::socket*`，关掉它足以让挂起的 `async_handshake` 报错退出，所以握手这段时间也归空闲超时管。SO_REUSEPORT 多 acceptor 那条路径同样处理
+- **SSL 测试证书改成脚本生成**：`scripts/gen_test_certs.py` 现场签一套，不再往仓库里塞固定证书。CI 里六个跑 ctest 的 job 都会跑 SSL 用例；置位 `HICAL_REQUIRE_SSL_CERTS` 时证书缺失直接 FAIL，免得用例悄悄跳过，CI 却还是绿的
 - **C++26 反射注解框架**：新增 `MetaAnno.h`（注解三阶段处理器框架 + 内置 JSON 注解 `json_ignore`/`json_rename`/`json_reset`/`json_required`/蛇形驼峰互转）、`MetaSchema.h`（JSON Schema 类型特化，覆盖基本类型/optional/array/枚举/union/variant）、`CollectMember.h`（继承链成员收集，两层过滤名字二义与菱形非虚继承子对象二义）、`CTConv.h`（编译期命名风格转换）。注解的分派从「标准属性字符串匹配」改为「注解值（`[[=...]]`）+ `requires` 重载检测」，用户可为自定义类型增量提供重载，类型不匹配的成员自动跳过。配套示例 `examples/reflection_server_26.cpp`，配套测试 `test_ct_conv`/`test_meta_anno`/`test_meta_schema`/`test_collect_member`（后三者需编译器支持 C++26 反射，否则 GTEST_SKIP）
 - **C++26 反射特性检测阈值更新**：`Reflection.h` 的检测宏从 `202306L` 提到 `202506L`，并补 `#include <version>`（`__cpp_lib_reflection` 定义在 `<version>` 中）
 - **HttpServer 补 `use(SyncBeforeHandler)` 系列重载**：`makeJwtAuthMiddleware`、`makeRateLimiterMiddleware` 这类返回 `SyncBeforeHandler` 的中间件以前只能塞进 `MiddlewarePipeline`，直接 `server.use(makeJwtAuthMiddleware(...))` 编译不过。现在 `HttpServer::use` 补齐了 `use(SyncBeforeHandler)`、`use(SyncBeforeHandler, SyncAfterHandler)`、`use(name, SyncBeforeHandler, SyncAfterHandler)` 三个重载
 - **`use(SyncAfterHandler)` 重载补齐**：`makeHelmetMiddleware()`、`makeGzipCompressionMiddleware()` 返回的是 `SyncAfterHandler`（只有后置、没有前置），而 `HttpServer::use`、`RouteGroup::use`、`MiddlewarePipeline::use` 以前都没有只吃 after 的重载，照文档写 `server.use(makeHelmetMiddleware())` 就是编译不过，只能绕成 `server.use(nullptr, makeHelmetMiddleware())` 或者包一层协程 lambda。现在三个入口都补了裸 `SyncAfterHandler` 重载，`MiddlewarePipeline` 和 `HttpServer` 还各多一个命名版 `use(name, after)`（`RouteGroup` 那三个重载本来就没有命名版，保持一致没加）。注意多个 after 之间按注册逆序执行——洋葱模型里后注册的更靠内，先退出
 - **`HttpServer::listen()` 指定监听地址**：以前监听地址写死在 `start()` 里（`tcp::endpoint(tcp::v4(), port)`），只能全地址监听，想只监听本机回环或某块网卡做不到。现在监听地址存成员，并补了 `listen(const asio::ip::tcp::endpoint&)`、`listen(const std::string& ip, uint16_t port)`、`listenAny(uint16_t port)`（绑回通配 `0.0.0.0`，可覆盖之前设过的地址）三个入口（`ip` 非法抛 `boost::system::system_error`），另加 `endpoint()` 读回监听地址。三者都须在 `start()` 之前调用，之后调用抛 `std::logic_error`，与 `router()`/`use()` 一致。原有构造函数、`port()`、SO_REUSEPORT 多 acceptor 路径行为不变
 - **`HttpServer` 默认构造函数**：新增 `HttpServer()`，等价于 `HttpServer(0, 1)`——端口 0 由系统分配（`start()` 之后绑的是随机端口，不是固定值）、单线程，配合 `listen()` 就能「先建对象、再配监听地址」，不必在构造时先定下端口。原有的 `HttpServer(uint16_t port, size_t ioThreads = 1)` 未改动，因此 `HttpServer(80)` 这类既有写法行为不变。配套测试 `test_http_server` 补默认构造用例（端到端跑通）
+- **HttpArena bench 服务器改双实例（明文 + TLS）**：8080 跑明文、8081 跑 TLS，抽了个公共路由注册函数让两个端口挂同一套端点，顺手补了 `POST /echo` 回显 body。`meta.json` 新增 `8gbit`、`json-tls` 两个测试。TLS 端口是「有证书才启用」——`/certs` 由官方 runner 挂载，没有就退回纯明文。TLS 实例的 worker 线程数跟明文一样走 `detectCpuCount()` 取 cgroup 核数：一开始写死 2 个线程，8gbit 的 cpuset 明明给了 64 核却只用上 2 核，AES-GCM 加解密跟不上 5 万 req/s，rate 掉到 0.82，现在默认吃满 cpuset，仍可用 `HICAL_TLS_THREADS` 手动覆盖
+- **压测集加上 libuvcpp（第七家）**：`benchmark/libuvcpp/` 走它自带的 webapp 路由 + 4 条事件循环，Linux 上靠 SO_REUSEPORT 让内核分流。中间件那五个场景全删了——只有 Hical 和 Drogon 有等价的运行时协程中间件，其余四家是 `std::function` 模仿的，摆一起比不出东西。顺带修了 cpp-httplib 侧默认关着的 `TCP_NODELAY`：它的响应分两次 write，被 Nagle 和延迟 ACK 钉在 ~40ms，之前测出来的 82 QPS 测的是 Nagle 不是框架，打开后 66443（808 倍）。压测输出目录统一到 `output/` 并自动创建
+- **`recommendedMaxConnections()` 支持按 TLS 估算**：新增 `recommendedMaxConnections(size_t availableMemoryMB, bool isTls)` 重载。`ssl::stream` 一构造出来就 eager 分配两个 17KB 的 TLS 记录缓冲（Boost 的 `stream_core`，跟收发数据与否无关），空闲 TLS 连接比明文多占约 34KB。原来的推荐值按每连接 16KB 估（明文口径），拿它给 TLS 配内存会低估约 2.6 倍。原签名的行为不变
 
 ### Fixed
 - **CTConv 缺 `<charconv>`/`<system_error>` 导致默认构建失败**：`CTConv.cpp` 被无条件编进 `hical_core`，但其头文件没有包含 `std::to_chars`/`std::errc` 所在的标准头，在 GCC 15 上直接编译报错（写这份代码的编译器因间接包含而未暴露）
+- **反射路径的构建接线补齐**：`HICAL_ENABLE_REFLECTION=ON` 之前只打开了 `HICAL_HAS_REFLECTION` 宏，没给编译器加 `-freflection`，等于开关拨了但反射实际不启用；而这个选项还对所有语言生效，C 源文件也被带上 `-freflection` 直接报错，现在限定只对 C++。另外修了 `MetaAnno.h`/`CollectMember.h` 里 `M` 作用域与 `splice` 被换行拆开、GCC16 下必现的两处编译错误，以及测试里 `HICAL_HAS_REFLECTION` 写在守卫之前未定义、导致整组用例永远跳过
 - **405 检测漏了通配路由（外部可观测的契约变化）**：`Router::resolveRoute()` 的 405 检测以前只查静态路由和参数路由，通配路由不参与，所以 `get("/*path", ...)` 这类注册对 POST/HEAD 一律回 404，正确的行为是 405 + `Allow` 头。现在通配路由和另外两类一起收集允许方法。顺带修了 `Allow` 头重复列方法的问题——静态路由和通配路由都注册了 GET 时会吐出 `GET, GET`，改成用方法位掩码去重后一次性拼串。`examples/static_server` 用的就是 `/*path` 模式，变化最直接
 - **profiling 模式下 Sync 中间件被整条丢弃**：开 `HICAL_ENABLE_MIDDLEWARE_PROFILING=ON` 时 `MiddlewarePipeline::build()` 按 `vector<MiddlewareHandler>` 搭统计链，而 `hSync` 条目根本没有 handler 可挂，于是被整条从链里丢掉——`makeJwtAuthMiddleware`、`makeRateLimiterMiddleware` 这类 `SyncBeforeHandler` 直接不执行，认证和限流静默 fail-open。这不是「不计时」，是「不跑」。现在检测到 Sync 条目就回退到不丢条目的普通链并记一条 WARN 说明本管线 profiling 关闭，`middlewareStats()` 对这类管线返回空 vector
 - **SSL 握手期间的连接不受空闲超时约束**：`handleSession` 里 `IdleScanner` 的注册排在 `async_handshake` 之后，握手这段窗口里连接既不在扫描链上、也没有独立超时，所以客户端做完 TCP 三次握手后一直不发 ClientHello 就能把连接和 fd 长期占住，只受 `maxConnections_` 封顶（默认 10000）。现在注册提到握手之前，停滞的握手会被普通空闲超时按 `idleTimeout_` 回收。`IdleScanner` 本来就打算覆盖握手——`IdleScanner.h` 里写着「关掉底层 socket 足以让挂起的 `async_handshake` 报错退出」——只是注册顺序放晚了
+- **定时器/协程测试硬等固定时长导致 CI flaky**：`AsioTimerTest`、`CoroutineTest` 里有 5 个用例在 CI 上老挂，根因就是「硬等固定时长再断言」——runner 一忙，定时器触发加协程恢复这一串还没跑完，断言已经执行了，必挂。改成轮询到条件成立（最多 5 秒）。`CancelRepeating` 顺带修了个 race：快照和 `cancel()` 之间又插进来一次触发
+- **MSVC C4324 对齐警告刷屏**：`MemoryPool.h` 的 `alignas(64) AlignedCounter` 和 `GenericConnection.h` 的 `alignas(64)` 成员会让 MSVC 报「structure was padded due to alignment specifier」，旧日志里一共刷了 104 次（MemoryPool.h 80 次 + GenericConnection.h 24 次）。这是刻意的 false sharing 优化，警告纯属噪音，就在头文件里就地按掉，没做成 CMake 的 PUBLIC 开关，免得传播给下游
 
 ### Changed
 - **反射注解命名空间收敛到 `hical::anno`**：`json_ignore`/`json_rename`/`json_reset`/`json_snake_to_lowerCamel` 等注解常量从顶层 `hical::` 移入 `hical::anno`，与路由注解 `hical::anno::route` 归到一处。**迁移**：`[[=hical::json_ignore]]` → `[[=hical::anno::json_ignore]]`
@@ -31,9 +41,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **慢 body 防护：无效请求在读 body 前直接拒绝**：以前请求 headers 解析完会先整段读 body、再走路由匹配，所以带大 body 的无效 uri、方法不匹配（405）、超深路径都得先把 body 吃进内存才报错。现在把路由匹配前置到读 body 之前，这几类请求在读 body 前就能直接回 404/405/400，body 一字不读，省掉把无效请求的大 body 白读进内存的开销
 - **中间件前置到读 body 之前**：认证、限流这类拦截型中间件以前是在 body 读完之后才跑的，无效请求光是为了塞满中间件需要的 body 就得先把全部数据读进来。现在中间件在 body 之前执行，中间件只看到 header（`req.body()` 此时为空），被拦截的请求 body 一字不读；字段级 body 校验下沉到 handler 自己负责
 - **header 超限判断改用「解析长度」**：TCP 是流式的，headers 读完后缓冲区里可能还粘连着 body 残留，之前拿缓冲区总长当 header 大小去跟上限比，粘连 body 一多就把正常请求误判成 431。现在改用 picohttpparser 返回的 header 实际字节数来判断，只有 header 真的超限才回 431
+- **acceptLoop 两条 acceptor 路径合并**：普通 `async_accept` 那条和 SO_REUSEPORT 那条里，「设 `no_delay` → 按 `sslCtx_` 决定包不包 `ssl::stream` → `coSpawn` → 标记移交成功」是复制粘贴的两份，合并成一份，行为没变
+- **`RequestHeaders` / `NativeRequest` 变成 move-only（破坏性）**：`RequestHeaders` 加了用户定义的移动语义，隐式拷贝构造 / 赋值随之被删除，`NativeRequest` 里含它，所以也一并变成 move-only。如果你的代码里有 `auto n = req.native();` 这类值拷贝，要改成 `auto& n`。仓内没有这种用法，编译验证过。这样改是故意的——这种零拷贝视图类型拷一次就是 2KB，能在编译期拦下比运行期悄悄拷更合适
 
 ### Performance
 - **404/405 路径判定不再线性扫描全部路由**：`Router::resolveRoute()` 落到 405 收集段时得遍历「其他 method 的所有路由」才能判断该报 404 还是 405，参数路由和通配路由两段各自线性扫一遍，路径压根没注册过也照扫不误（静态路由那段早就有 `staticPathMethods_` 反向索引，是 O(1)）。现在按路径首段建了三张掩码表——首段字面量映射、首段可为任意值的动态掩码，外加星号落在段内时的首段前缀表——先算出「哪些 method 有可能匹配」，为空直接 404，不空才扫，而且首段对不上的 method 整组跳过。命中路径在更早的地方就返回了，源码逐字节未动
+- **请求分发骨架去掉一次堆分配和一个协程帧**：`RequestDispatchContext` 的 `tailHandler` 从 `std::function` 换成「函数指针 + `void*`」。原来那个闭包按引用捕获三个东西（`readRequestBody` / `resolveResult` / `this`）共 24 字节，超过 libstdc++ 的 `std::function` 内联缓冲上限（16 字节），所以每个带中间件的请求都要走一次 `operator new` / `delete`（MSVC 的内联缓冲是 48 字节，不受影响）。同一次改动里 `runInternalDispatch` 从协程降级成普通函数，`HttpServer` 里包它的 finalHandler lambda 也跟着去掉了协程化。三处加起来，每个带中间件的请求省一次堆分配、最多两个协程帧
+- **`MiddlewarePipeline::execute(req)` 去掉转发协程帧**：这个函数唯一的活是把请求转发给 `cachedChain_`，却因为写成了协程，让每个带中间件的请求白搭一个协程帧。去掉 `co_return co_await`、直接 `return` awaitable 就行，语义不变
+- **Connection 头预扫 upgrade，`isUpgrade()` 不再重复扫描**：慢 body 防护让 `isUpgrade()` 的调用点从 1 处变成 2 处，而它的实现是从头线性扫一遍 header 找 `Connection`（实测每个请求约 24ns）。其实 `Connection` 头在解析阶段 B 就扫过了（keep-alive 判定用的就是那次预扫结果），现在顺手把 upgrade 也判掉存进 `NativeRequest::upgradePreScanned`，`isUpgrade()` 优先读这个标志。字段用 `std::optional<bool>` 是为了区分「没预扫过」（比如手工构造的 `NativeRequest`，回退到原来的线性扫描）和「预扫过但没有 upgrade」，保证既有行为不变
+- **`RequestHeaders` 每个请求少碰 4KB 内存**：它的 `entries_` 是 `std::array<Entry, 64>`（2048 字节），原来一个请求路径上被完整碰了三遍——`NativeRequest nativeReq;` 默认构造清零一次、`HttpRequest result;` 再清零一次、`fromParsed` 里 move 赋值又整块拷一次，加起来约 30ns，而且跟实际有几个 header 完全无关。现在：用匿名 union 包住 `entries_`，默认构造不再碰它；`RequestHeaders` 加了自定义 move，只搬有效的 `size_` 个元素，不再整块 2KB 地拷；`HttpRequest` 加了私有构造函数直接吃 `NativeRequest&&`，`fromParsed` 直接 move 构造 `req_`，不再「先默认构造再赋值」。实测 `fromParsed` 从 59.5ns 降到 40.9ns，纯构造 `RequestHeaders` 从 12.3~15.1ns 降到 1.5~1.6ns
 
 ## [2.7.0] - 2026-09-21
 
@@ -532,7 +548,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Multipart Part 数量上限（DoS 防护）
 - Session ID 使用密码学安全的随机数生成
 
-[Unreleased]: https://github.com/Hical61/Hical/compare/v2.7.0...HEAD
+[Unreleased]: https://github.com/Hical61/Hical/compare/v2.7.1...HEAD
+[2.7.1]: https://github.com/Hical61/Hical/compare/v2.7.0...v2.7.1
 [2.7.0]: https://github.com/Hical61/Hical/compare/v2.6.8...v2.7.0
 [2.6.8]: https://github.com/Hical61/Hical/compare/v2.6.7...v2.6.8
 [2.6.7]: https://github.com/Hical61/Hical/compare/v2.6.6...v2.6.7

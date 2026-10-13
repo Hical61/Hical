@@ -63,9 +63,8 @@ namespace hical
 
 	HttpRequest HttpRequest::fromParsed(NativeRequest&& req)
 	{
-		HttpRequest result;
-		result.req_ = std::move(req);
-		return result;
+		// 直接 move 构造，保证消除（guaranteed copy elision），无多余的默认构造和移动
+		return HttpRequest(std::move(req));
 	}
 
 	HttpMethod HttpRequest::method() const
@@ -160,6 +159,8 @@ namespace hical
 		{
 			req_.headers.add(k, v);
 		}
+		// 头部被改过，预扫的 upgrade 标志作废，isUpgrade() 下次现算
+		req_.upgradePreScanned.reset();
 	}
 
 	void HttpRequest::setBody(const std::string& body)

@@ -21,6 +21,7 @@
     - [3.1 HTTP 反向代理](#31-http-反向代理)
     - [3.2 WebSocket 代理](#32-websocket-代理)
     - [3.3 SSL 终止策略](#33-ssl-终止策略)
+      - [TLS 连接的额外内存开销](#tls-连接的额外内存开销)
   - [四、监控与可观测性](#四监控与可观测性)
     - [4.1 Prometheus 指标暴露](#41-prometheus-指标暴露)
     - [4.2 日志接入 ELK / Loki](#42-日志接入-elk--loki)
@@ -424,6 +425,33 @@ location /api/ {
     proxy_ssl_server_name on;
 }
 ```
+
+#### TLS 连接的额外内存开销
+
+改成全链路加密之后，最容易被忽略的一件事就是**连接数的内存预算要跟着放大**——TLS 连接比明文连接"重"不少，按明文的数字去配，很容易把内存算爆。
+
+多出来的部分来自 SSL 层本身：每条 TLS 连接在 `ssl::stream` 一构造出来的时候，就固定分配了两块 17KB 的记录缓冲（一块收、一块发），**跟有没有数据在传没关系**，连接干挂着也占着。两块加起来约 34KB。加上明文连接本身那点开销（读缓冲、socket 等，空连接按 16KB 估），一条空闲的 TLS 连接实际要按约 **50KB** 来算。
+
+怎么估连接数：用 `HttpServer::recommendedMaxConnections()`，它是根据可用内存反推推荐值的静态函数，会预留 30% 内存给业务逻辑和系统开销。跑 TLS 就传第二个参数 `true`：
+
+```cpp
+// 假设机器给这个进程留了 2GB，全走 TLS
+size_t maxConns = HttpServer::recommendedMaxConnections(2048, true); // 约 2.9 万条
+server.setMaxConnections(maxConns);
+```
+
+注意它只是帮你算个数，返回值不会自动生效，得自己喂给 `setMaxConnections()`。
+
+如果明文和 TLS 混布（比如内网调用走明文、公网入口走 TLS），别用一个平均口径糊弄——分开算再加起来最准：
+
+```cpp
+// 内网 8080 明文留 500MB 预算，公网 8081 TLS 留 1.5GB
+size_t plainConns = HttpServer::recommendedMaxConnections(512, false);
+size_t tlsConns   = HttpServer::recommendedMaxConnections(1536, true);
+// 两个实例各自 setMaxConnections
+```
+
+一句话：只要上了 TLS，每连接的内存口径就从 16KB 台阶跳到 50KB，大约 3 倍。按老数字配，连接数会超得比你以为的多。
 
 ---
 
@@ -983,15 +1011,15 @@ done
 
 ### Hical 应用级
 
-| 参数           | 默认值 | 调整建议                                                  | API                    |
-| -------------- | ------ | --------------------------------------------------------- | ---------------------- |
-| IO 线程数      | 1      | CPU 核数（不超过 8）                                      | `HttpServer(port, N)`  |
-| 最大连接数     | 10000  | 根据内存预算：每连接约 25KB（v2.6.0 atomic 超时）         | `setMaxConnections()`  |
-| 空闲连接超时   | 60s    | 反向代理后面可设短些（30s）；纯压测可设 0 省掉 timer 协程 | `setIdleTimeout()`     |
-| 最大请求体     | 1MB    | 文件上传场景调大（如 50MB）                               | `setMaxBodySize()`     |
-| 最大请求头     | 8KB    | 含大 Cookie 时调大（如 16KB）                             | `setMaxHeaderSize()`   |
-| 关机超时       | 30s    | 长请求场景调大（如 60s）                                  | `setShutdownTimeout()` |
-| 内存池 GC 间隔 | 60s    | 高频请求可缩短（30s）                                     | `setGcInterval()`      |
+| 参数           | 默认值 | 调整建议                                                                        | API                    |
+| -------------- | ------ | ------------------------------------------------------------------------------- | ---------------------- |
+| IO 线程数      | 1      | CPU 核数（不超过 8）                                                            | `HttpServer(port, N)`  |
+| 最大连接数     | 10000  | 按内存预算估，用 `recommendedMaxConnections()`（明文约 16KB/连接，TLS 约 50KB） | `setMaxConnections()`  |
+| 空闲连接超时   | 60s    | 反向代理后面可设短些（30s）；纯压测可设 0 省掉 timer 协程                       | `setIdleTimeout()`     |
+| 最大请求体     | 1MB    | 文件上传场景调大（如 50MB）                                                     | `setMaxBodySize()`     |
+| 最大请求头     | 8KB    | 含大 Cookie 时调大（如 16KB）                                                   | `setMaxHeaderSize()`   |
+| 关机超时       | 30s    | 长请求场景调大（如 60s）                                                        | `setShutdownTimeout()` |
+| 内存池 GC 间隔 | 60s    | 高频请求可缩短（30s）                                                           | `setGcInterval()`      |
 
 ### PMR 内存池
 
@@ -1003,15 +1031,15 @@ done
 
 ### 数据库连接池
 
-| 参数                  | 默认值 | 调整建议                            |
-| --------------------- | ------ | ----------------------------------- |
-| `minConnections`      | 2      | IO 线程数 × 2                       |
-| `maxConnections`      | 16     | 压测确定，通常 50-200               |
-| `idleTimeout`         | 300s   | 过长浪费 MySQL 连接数，过短频繁重连 |
-| `acquireTimeout`      | 5s     | 高并发下可适当加长                  |
+| 参数                  | 默认值 | 调整建议                                     |
+| --------------------- | ------ | -------------------------------------------- |
+| `minConnections`      | 2      | IO 线程数 × 2                                |
+| `maxConnections`      | 16     | 压测确定，通常 50-200                        |
+| `idleTimeout`         | 300s   | 过长浪费 MySQL 连接数，过短频繁重连          |
+| `acquireTimeout`      | 5s     | 高并发下可适当加长                           |
 | `queryTimeout`        | 30s    | 当前不生效（无后端消费），别指望它兜住慢查询 |
-| `stmtCacheSize`       | 64     | 查询种类多时调大（如 256）          |
-| `healthCheckInterval` | 30s    | 网络不稳定时缩短                    |
+| `stmtCacheSize`       | 64     | 查询种类多时调大（如 256）                   |
+| `healthCheckInterval` | 30s    | 网络不稳定时缩短                             |
 
 ### 日志系统
 

@@ -447,7 +447,7 @@ io_context.run()
     │       │               ├── router_.resolveRoute()             ──→ 路由匹配前置（缓存 ResolveResult）
     │       │               │   └── 无效请求（404/405/400）读 body 前直接拒绝
     │       │               ├── middlewarePipeline.execute()        ──→ 中间件链（读 body 前执行）
-    │       │               │       └── tailHandler（internalSlot_）
+    │       │               │       └── 分发上下文（internalSlot_ 里的 obj/invoke）
     │       │               │               ├── 读 body
     │       │               │               └── dispatchSyncResolved(req) / dispatchResolved(req)  ──→ 按缓存结果分发
     │       │               └── co_await async_write(FixedBuffer)  ──→ 单次系统调用发送
@@ -597,7 +597,7 @@ std::optional<HttpResponse> Router::dispatchSync(HttpRequest& req)
 
 // HttpSessionImpl 主路径：
 // 1. read body 前先 resolveRoute() 缓存 ResolveResult
-// 2. 经中间件链后由 tailHandler 读 body
+// 2. 经中间件链后由链尾的分发上下文读 body
 // 3. dispatchSyncResolved(req, resolveResult) 有值直接发送（零协程帧开销）
 // 4. nullopt 时 fallback 到 co_await dispatchResolved(req, resolveResult)（经中间件链）
 ```
@@ -680,7 +680,7 @@ class MiddlewarePipeline
 
 **执行时序（相对 body 读取）**：中间件在 `resolveRoute()` 之后、读取 body 之前执行。中间件此时只能看到 header，`req.body()` 还是空的；被中间件拦截（如认证失败），请求体一字不读。body 字段级校验由 handler 负责，中间件和 handler 共享同一个 `HttpRequest&` 实例，`setAttribute`/`getAttribute` 沿途不丢。
 
-**链预构建（P1 优化）**：中间件链在 `HttpServer::start()` 里 `build()` 一次，finalHandler 是终端骨架 `detail::runInternalDispatch`；每个请求的尾部动作（读 body + 按缓存 resolveResult 分发）打包成 `tailHandler`，通过 `HttpRequest::internalSlot_`（`void*` 私有槽，`detail` 命名空间专用）传给骨架，每请求零链重建。WS/SSE 链仍走 `buildFor` + 占位 `ok("")`。
+**链预构建（P1 优化）**：中间件链在 `HttpServer::start()` 里 `build()` 一次，finalHandler 是终端骨架 `detail::runInternalDispatch`；每个请求的尾部动作（读 body + 按缓存 resolveResult 分发）打包成栈上闭包（`obj` + `invoke` 函数指针对），通过 `HttpRequest::internalSlot_`（`void*` 私有槽，`detail` 命名空间专用）传给骨架，每请求零链重建。WS/SSE 链仍走 `buildFor` + 占位 `ok("")`。
 
 ---
 

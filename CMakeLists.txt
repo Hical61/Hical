@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(hical VERSION 2.7.0 LANGUAGES C CXX)
+project(hical VERSION 2.7.1 LANGUAGES C CXX)
 
 # C++26 反射可选支持
 option(HICAL_ENABLE_REFLECTION "Enable C++26 reflection (requires a compiler with P2996, e.g. GCC 16, plus Boost >= 1.90)" OFF)

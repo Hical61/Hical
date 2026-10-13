@@ -154,10 +154,14 @@ HTTP 服务器，整合路由、中间件和网络层，提供一键启动的高
 | `endpoint()`                   | 无                                              | `tcp::endpoint` | 获取监听地址与端口           |
 | `setErrorHandler(handler)`     | handler: `ErrorHandler`                         | `void`          | 设置全局错误处理器           |
 | `setGcInterval(seconds)`       | seconds: GC 间隔（秒）                          | `void`          | 设置内存池 GC 间隔           |
+| `recommendedMaxConnections(availableMemoryMB)` | availableMemoryMB: 可用内存（MB） | `size_t` | 按明文口径估算推荐的最大连接数（每连接约 16KB） |
+| `recommendedMaxConnections(availableMemoryMB, isTls)` | availableMemoryMB: 可用内存（MB）<br>isTls: 是否 TLS | `size_t` | 按明文/TLS 口径估算推荐的最大连接数（TLS 每连接约 50KB） |
 
 > `use(SyncAfterHandler)` 只吃后置逻辑，没有前置——helmet、gzip 这类只改响应的中间件直接 `server.use(makeHelmetMiddleware())` 就行，不用包协程 lambda。多个 after 之间按注册逆序执行：后注册的在洋葱里更靠内，先退出。
 >
 > `listen(endpoint)` / `listen(ip, port)` 用来监听指定地址（比如 `127.0.0.1` 或某块网卡），`listenAny(port)` 则绑回通配地址 `0.0.0.0`，也就是默认行为。在开始监听后调用它们会抛 `std::logic_error`；`listen(ip, port)` 的 `ip` 是非法 IP 字面量时抛 `boost::system::system_error`。`endpoint()` 在 `start()` 之后返回带实际端口的监听地址（构造时端口传 0 时用它查系统分配的端口）。
+>
+> `recommendedMaxConnections()` 只是个估算助手，返回的值不会自动生效，得自己传给 `setMaxConnections()`。带 `isTls` 的重载是给「打算跑 TLS」的场景用的：TLS 连接光 SSL 层就固定多占约 34KB（`ssl::stream` 一构造出来就分配的两个 17KB 记录缓冲，收没收发数据都占着），所以每连接口径从 16KB 提到 50KB。拿明文口径（16KB）给 TLS 配内存会低估约 2.6 倍。
 
 #### 类型定义
 

@@ -887,6 +887,12 @@ namespace hical
 					{
 						if (HeaderMap::iequals(hname, "Connection"))
 						{
+							// 只认首个 Connection 头，和 RequestHeaders::find 的语义对齐
+							if (!hasConnectionHeader)
+							{
+								// 顺手判掉 upgrade，isUpgrade() 就不用再扫一遍头部
+								nativeReq.upgradePreScanned = detail::connectionHasUpgradeToken(hvalue);
+							}
 							hasConnectionHeader = true;
 							connectionClose = HeaderMap::iequals(hvalue, "close");
 						}
@@ -1172,8 +1178,7 @@ namespace hical
 						// 结果 dispatch）装进栈上 ctx，挂到 req 内部槽，走 start() 预构建的 cachedChain_。
 						// 链只 build 一次，每请求零重建；中间件后置拿真实 handler 响应，
 						// 短路（认证失败等）时不触发终端骨架，body 一字不读。
-						detail::RequestDispatchContext ctx;
-						ctx.tailHandler = [&](HttpRequest& r) -> Awaitable<HttpResponse>
+						auto tail = [&](HttpRequest& r) -> Awaitable<HttpResponse>
 						{
 							if (auto err = co_await readRequestBody(); err)
 							{
@@ -1185,6 +1190,9 @@ namespace hical
 							}
 							co_return co_await router_.dispatchResolved(r, resolveResult);
 						};
+						detail::RequestDispatchContext ctx;
+						ctx.obj = &tail;
+						ctx.invoke = &detail::tailInvoke<decltype(tail)>;
 						detail::RequestDispatchContext::attach(req, &ctx);
 						try
 						{

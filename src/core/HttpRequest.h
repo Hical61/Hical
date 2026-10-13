@@ -11,6 +11,7 @@
 #include <any>
 #include <array>
 #include <boost/json.hpp>
+#include <cstring>
 #include <memory>
 #include <memory_resource>
 #include <optional>
@@ -28,6 +29,37 @@ namespace hical
 	namespace detail
 	{
 		struct RequestDispatchContext; // 前向声明：请求分发上下文（见 RequestDispatch.h）
+
+		/**
+		 * @brief 判断逗号分隔的 Connection 头值里是否含 upgrade token
+		 * 逐 token 切分，只裁 ASCII 空格不裁制表符，大小写不敏感。
+		 * NativeRequest 预扫和 isUpgrade 回退两条路都走这里，保证判定完全一致。
+		 * @param connValue Connection 头的原始值
+		 * @return 含 upgrade token 返回 true
+		 */
+		inline bool connectionHasUpgradeToken(std::string_view connValue) noexcept
+		{
+			std::string_view sv = connValue;
+			while (!sv.empty())
+			{
+				auto comma = sv.find(',');
+				auto token = (comma != std::string_view::npos) ? sv.substr(0, comma) : sv;
+				sv = (comma != std::string_view::npos) ? sv.substr(comma + 1) : std::string_view {};
+				while (!token.empty() && token.front() == ' ')
+				{
+					token.remove_prefix(1);
+				}
+				while (!token.empty() && token.back() == ' ')
+				{
+					token.remove_suffix(1);
+				}
+				if (HeaderMap::iequals(token, "upgrade"))
+				{
+					return true;
+				}
+			}
+			return false;
+		}
 	} // namespace detail
 
 	/**
@@ -45,6 +77,31 @@ namespace hical
 		};
 
 		static constexpr size_t kMaxHeaders = 64;
+
+		// 不能用 = default：entries_ 在匿名 union 里，是非平凡默认构造的变体成员，
+		// 会让 union（从而本类）的默认构造被 delete。手写个空体，压根不碰 entries_，
+		// size_ 走它自己的默认成员初始化器置 0。
+		RequestHeaders() noexcept
+		{
+		}
+
+		// 默认的 move 会把整块 2048B 的 entries_ 全搬一遍，与真实 header 数量无关
+		// （典型 6-8 条其实只有 200 来字节有效）。这里只搬 size_ 个有效元素。
+		// string_view 的"移动"本就是拷指针+长度，所以沿用旧语义：源原样不动，
+		// 调用方 move 之后仍能读源对象。
+		RequestHeaders(RequestHeaders&& other) noexcept
+		{
+			copyValidEntries(other);
+		}
+
+		RequestHeaders& operator=(RequestHeaders&& other) noexcept
+		{
+			if (this != &other)
+			{
+				copyValidEntries(other);
+			}
+			return *this;
+		}
 
 		void add(std::string_view name, std::string_view value) noexcept
 		{
@@ -104,7 +161,27 @@ namespace hical
 		}
 
 	private:
-		std::array<Entry, kMaxHeaders> entries_;
+		// 把 other 的前 size_ 个有效元素拷过来，other 保持不变
+		void copyValidEntries(const RequestHeaders& other) noexcept
+		{
+			size_ = other.size_;
+			if (size_ > 0)
+			{
+				std::memcpy(entries_.data(), other.entries_.data(), size_ * sizeof(Entry));
+			}
+		}
+
+		// 匿名 union 把 entries_ 变成变体成员，默认构造不再碰它。否则每构造一个
+		// RequestHeaders 都要把 2048B 的 string_view 数组清零（64 次 string_view
+		// 构造），而实际请求通常只有几条 header。Entry 是 string_view 聚合，
+		// trivial 析构，union 不需要自定义析构。
+		// 读安全：find/contains/operator[]/begin/end 都只在 size_ > 0 时读 entries_，
+		// 而 size_ > 0 意味着 add() 至少写过一次，不会读到未构造的对象。
+		union
+		{
+			std::array<Entry, kMaxHeaders> entries_;
+		};
+
 		size_t size_ = 0;
 	};
 
@@ -125,38 +202,20 @@ namespace hical
 		bool keepAlive = true;
 		bool expectContinue = false; // 请求携带了 Expect: 100-continue
 
+		// 解析阶段预扫 Connection 头得到的 upgrade 判定结果。
+		// nullopt：没预扫过（手工构造的 NativeRequest 就是这样），isUpgrade() 回退线性扫描；
+		// 有值：预扫过，直接采纳（Upgrade 头那一步仍需另查）。
+		std::optional<bool> upgradePreScanned;
+
 		/**
 		 * @brief 是否为 WebSocket 升级请求
 		 */
 		bool isUpgrade() const
 		{
-			auto conn = headers.find("Connection");
-			if (conn.empty())
-			{
-				return false;
-			}
-			// Connection 可能是 "keep-alive, Upgrade" 形式
-			bool hasUpgrade = false;
-			std::string_view sv(conn);
-			while (!sv.empty())
-			{
-				auto comma = sv.find(',');
-				auto token = (comma != std::string_view::npos) ? sv.substr(0, comma) : sv;
-				sv = (comma != std::string_view::npos) ? sv.substr(comma + 1) : std::string_view {};
-				while (!token.empty() && token.front() == ' ')
-				{
-					token.remove_prefix(1);
-				}
-				while (!token.empty() && token.back() == ' ')
-				{
-					token.remove_suffix(1);
-				}
-				if (HeaderMap::iequals(token, "upgrade"))
-				{
-					hasUpgrade = true;
-					break;
-				}
-			}
+			// Connection 侧：预扫过就读标志，省掉再扫一遍头部；没预扫才现算
+			bool hasUpgrade = upgradePreScanned.has_value()
+								  ? *upgradePreScanned
+								  : detail::connectionHasUpgradeToken(headers.find("Connection"));
 			if (!hasUpgrade)
 			{
 				return false;
@@ -312,6 +371,12 @@ namespace hical
 		}
 
 	private:
+		// 直接 move 构造 req_，省掉"先默认构造（清 2KB headers）+ 再 move 赋值"的白工。
+		// 仅供 fromParsed 使用。
+		explicit HttpRequest(NativeRequest&& req) noexcept : req_(std::move(req))
+		{
+		}
+
 		void parseCookies() const;
 		static void parseUrlEncoded(std::string_view input,
 									std::unordered_multimap<std::string, std::string, StringHash, StringEqual>& out);

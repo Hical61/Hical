@@ -251,15 +251,29 @@ namespace hical
 
 	size_t HttpServer::recommendedMaxConnections(size_t availableMemoryMB)
 	{
-		// 每连接内存粗估：readBuf 借还 + PmrBuffer 懒分配后空闲连接约 8KB，
-		// 再加上活跃时的临时缓冲和 socket 开销，按 16KB 估。
-		constexpr size_t kBytesPerConnection = 16 * 1024;
+		// 明文口径，转发给带 isTls 的重载，两处估算口径天然一致
+		return recommendedMaxConnections(availableMemoryMB, false);
+	}
+
+	size_t HttpServer::recommendedMaxConnections(size_t availableMemoryMB, bool isTls)
+	{
+		// 每连接内存粗估：
+		// 明文：readBuf 借还 + PmrBuffer 懒分配后空闲连接约 8KB，
+		//      再加上活跃时的临时缓冲和 socket 开销，按 16KB 估。
+		// TLS：明文那 16KB 之外，ssl::stream 构造时 eager 分配两个 17KB 的
+		//      TLS 记录缓冲（Boost 1.90 boost/asio/ssl/detail/stream_core.hpp 的
+		//      max_tls_record_size = 17 * 1024，output_buffer_space_ 和
+		//      input_buffer_space_ 各一块），跟收发数据无关，空闲 TLS 连接
+		//      光 SSL 层就多占 34KB，所以按 16 + 34 = 50KB 估。
+		constexpr size_t kBytesPerConnectionPlain = 16 * 1024;
+		constexpr size_t kBytesPerConnectionTls = 50 * 1024;
 		// 给推荐值封个顶，免得有人传进来个离谱的 availableMemoryMB 算出天文数字。
 		// 封顶 100 万够用了。注意这只管「自动推荐值」，setMaxConnections() 不受这限制，想设更高自己传。
 		constexpr size_t kMaxRecommendedConnections = 1'000'000;
 
+		size_t bytesPerConnection = isTls ? kBytesPerConnectionTls : kBytesPerConnectionPlain;
 		size_t usableBytes = availableMemoryMB * 1024 * 1024 * 7 / 10;
-		size_t recommended = usableBytes / kBytesPerConnection;
+		size_t recommended = usableBytes / bytesPerConnection;
 		return std::min(recommended, kMaxRecommendedConnections);
 	}
 
@@ -314,16 +328,17 @@ namespace hical
 			});
 
 		// 中间件链在此锁定（build 后再 use 会抛异常）并初始化 profiling 统计。
-		// build 的 finalHandler 是「终端骨架」：只从请求内部槽取每请求分发上下文并调用其
-		// tailHandler（tailHandler 由 handleSession 每请求写入，封装了「读 body + 用前置
-		// resolveRoute 缓存结果 dispatch」）。链本身只 build 一次，每请求零重建，
-		// resolve 全程只匹配一次，中间件后置仍拿到真实 handler 响应。
+		// build 的 finalHandler 是「终端骨架」：只从请求内部槽取每请求分发上下文并调
+		// ctx->invoke(ctx->obj, r)（obj 指向 handleSession 每请求写在栈上的闭包，封装了
+		// 「读 body + 用前置 resolveRoute 缓存结果 dispatch」，由它的 for 循环保活）。
+		// 链本身只 build 一次，每请求零重建，resolve 全程只匹配一次，中间件后置仍拿到
+		// 真实 handler 响应。
 		if (middlewarePipeline_.size() > 0)
 		{
 			middlewarePipeline_.build(
 				[](HttpRequest& r) -> Awaitable<HttpResponse>
 				{
-					co_return co_await detail::runInternalDispatch(r);
+					return detail::runInternalDispatch(r);
 				});
 
 			// WS/SSE 升级也走中间件，这里预构建好链避免每次动态分配。

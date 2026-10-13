@@ -4,6 +4,10 @@
 #include "core/HttpResponse.h"
 #include <gtest/gtest.h>
 
+#include <string_view>
+#include <utility>
+#include <vector>
+
 using namespace hical;
 
 // ============ HttpTypes 测试 ============
@@ -153,6 +157,273 @@ TEST(HttpRequestTest, FromNativeRequest)
 	HttpRequest req = HttpRequest::fromParsed(std::move(nativeReq));
 	EXPECT_EQ(req.method(), HttpMethod::hGet);
 	EXPECT_EQ(req.path(), "/test");
+}
+
+// ============ NativeRequest::isUpgrade 测试 ============
+
+TEST(HttpRequestTest, IsUpgrade_NoConnectionHeader_ReturnsFalse)
+{
+	NativeRequest nativeReq;
+	EXPECT_FALSE(nativeReq.isUpgrade());
+}
+
+TEST(HttpRequestTest, IsUpgrade_KeepAliveOnly_ReturnsFalse)
+{
+	NativeRequest nativeReq;
+	nativeReq.headers.add("Connection", "keep-alive");
+	nativeReq.headers.add("Upgrade", "websocket");
+	EXPECT_FALSE(nativeReq.isUpgrade());
+}
+
+TEST(HttpRequestTest, IsUpgrade_ConnectionUpgradeWithWebsocket_ReturnsTrue)
+{
+	NativeRequest nativeReq;
+	nativeReq.headers.add("Connection", "Upgrade");
+	nativeReq.headers.add("Upgrade", "websocket");
+	EXPECT_TRUE(nativeReq.isUpgrade());
+}
+
+TEST(HttpRequestTest, IsUpgrade_CommaSeparatedUpgrade_ReturnsTrue)
+{
+	NativeRequest nativeReq;
+	nativeReq.headers.add("Connection", "keep-alive, Upgrade");
+	nativeReq.headers.add("Upgrade", "websocket");
+	EXPECT_TRUE(nativeReq.isUpgrade());
+}
+
+TEST(HttpRequestTest, IsUpgrade_CaseInsensitive_ReturnsTrue)
+{
+	NativeRequest nativeReq;
+	nativeReq.headers.add("Connection", "UPGRADE");
+	nativeReq.headers.add("Upgrade", "WebSocket");
+	EXPECT_TRUE(nativeReq.isUpgrade());
+}
+
+TEST(HttpRequestTest, IsUpgrade_ConnectionUpgradeNoUpgradeHeader_ReturnsFalse)
+{
+	NativeRequest nativeReq;
+	nativeReq.headers.add("Connection", "Upgrade");
+	EXPECT_FALSE(nativeReq.isUpgrade());
+}
+
+TEST(HttpRequestTest, IsUpgrade_NonWebsocketUpgrade_ReturnsFalse)
+{
+	NativeRequest nativeReq;
+	nativeReq.headers.add("Connection", "Upgrade");
+	nativeReq.headers.add("Upgrade", "h2c");
+	EXPECT_FALSE(nativeReq.isUpgrade());
+}
+
+TEST(HttpRequestTest, IsUpgrade_ValueWithSurroundingSpaces_ReturnsTrue)
+{
+	NativeRequest nativeReq;
+	nativeReq.headers.add("Connection", "  Upgrade ");
+	nativeReq.headers.add("Upgrade", "websocket");
+	EXPECT_TRUE(nativeReq.isUpgrade());
+}
+
+// ============ isUpgrade 预扫标志路径测试 ============
+
+// 预扫置 true 且带 Upgrade: websocket，即使没有 Connection 头也该判 true
+TEST(HttpRequestTest, IsUpgrade_PreScannedTrue_UsesFlagWithoutConnectionHeader)
+{
+	NativeRequest nativeReq;
+	nativeReq.upgradePreScanned = true;
+	nativeReq.headers.add("Upgrade", "websocket");
+	EXPECT_TRUE(nativeReq.isUpgrade());
+}
+
+// 预扫置 true 但 Upgrade 头不是 websocket，仍然 false（Upgrade 那一步照查）
+TEST(HttpRequestTest, IsUpgrade_PreScannedTrue_NoUpgradeHeader_ReturnsFalse)
+{
+	NativeRequest nativeReq;
+	nativeReq.upgradePreScanned = true;
+	EXPECT_FALSE(nativeReq.isUpgrade());
+}
+
+// 预扫置 false 就以标志为准，Connection 头里写 Upgrade 也不再回头扫
+TEST(HttpRequestTest, IsUpgrade_PreScannedFalse_IgnoresConnectionToken)
+{
+	NativeRequest nativeReq;
+	nativeReq.upgradePreScanned = false;
+	nativeReq.headers.add("Connection", "Upgrade");
+	nativeReq.headers.add("Upgrade", "websocket");
+	EXPECT_FALSE(nativeReq.isUpgrade());
+}
+
+// ============ RequestHeaders 测试 ============
+
+TEST(HttpRequestTest, RequestHeaders_DefaultConstructed_IsEmpty)
+{
+	RequestHeaders h;
+	EXPECT_EQ(h.size(), 0u);
+	EXPECT_TRUE(h.find("anything").empty());
+	EXPECT_FALSE(h.contains("anything"));
+	EXPECT_EQ(h.begin(), h.end());
+}
+
+TEST(HttpRequestTest, RequestHeaders_Add_StoresNameAndValue)
+{
+	RequestHeaders h;
+	EXPECT_EQ(h.size(), 0u);
+
+	h.add("Host", "example.com");
+	EXPECT_EQ(h.size(), 1u);
+
+	h.add("Accept", "text/html");
+	EXPECT_EQ(h.size(), 2u);
+
+	// find 命中，值取回
+	EXPECT_EQ(h.find("Host"), "example.com");
+	EXPECT_EQ(h.find("Accept"), "text/html");
+	EXPECT_TRUE(h.contains("Host"));
+	EXPECT_FALSE(h.contains("Cookie"));
+
+	// operator[] 按插入顺序索引
+	EXPECT_EQ(h[0].name, "Host");
+	EXPECT_EQ(h[0].value, "example.com");
+	EXPECT_EQ(h[1].name, "Accept");
+	EXPECT_EQ(h[1].value, "text/html");
+}
+
+TEST(HttpRequestTest, RequestHeaders_Find_IsCaseInsensitive)
+{
+	RequestHeaders h;
+	h.add("Content-Type", "application/json");
+
+	EXPECT_EQ(h.find("content-type"), "application/json");
+	EXPECT_EQ(h.find("CONTENT-TYPE"), "application/json");
+	EXPECT_TRUE(h.contains("Content-type"));
+	EXPECT_TRUE(h.contains("cOnTeNt-TyPe"));
+	EXPECT_FALSE(h.contains("content-length"));
+	EXPECT_FALSE(h.contains("content-typ")); // 长度不同，不匹配
+}
+
+TEST(HttpRequestTest, RequestHeaders_Find_ReturnsFirstMatch)
+{
+	RequestHeaders h;
+	h.add("Set-Cookie", "a=1");
+	h.add("Set-Cookie", "b=2");
+
+	EXPECT_EQ(h.size(), 2u);
+	// 同名多条时 find 只返回第一条
+	EXPECT_EQ(h.find("set-cookie"), "a=1");
+	EXPECT_TRUE(h.contains("Set-Cookie"));
+	// 遍历仍能看到两条
+	EXPECT_EQ(h[0].value, "a=1");
+	EXPECT_EQ(h[1].value, "b=2");
+}
+
+TEST(HttpRequestTest, RequestHeaders_Iteration_PreservesInsertionOrder)
+{
+	RequestHeaders h;
+	h.add("A", "1");
+	h.add("B", "2");
+	h.add("C", "3");
+
+	std::vector<std::pair<std::string_view, std::string_view>> seen;
+	for (const auto& e : h)
+	{
+		seen.emplace_back(e.name, e.value);
+	}
+
+	ASSERT_EQ(seen.size(), 3u);
+	EXPECT_EQ(seen[0].first, "A");
+	EXPECT_EQ(seen[1].first, "B");
+	EXPECT_EQ(seen[2].first, "C");
+	EXPECT_EQ(seen[0].second, "1");
+	EXPECT_EQ(seen[1].second, "2");
+	EXPECT_EQ(seen[2].second, "3");
+
+	// begin()/end() 遍历出的条数应与 size() 一致
+	EXPECT_EQ(static_cast<size_t>(h.end() - h.begin()), h.size());
+}
+
+TEST(HttpRequestTest, RequestHeaders_EmptyValue_ContainsButFindEmpty)
+{
+	RequestHeaders h;
+	h.add("X-Empty", "");
+
+	EXPECT_EQ(h.size(), 1u);
+	EXPECT_TRUE(h.contains("X-Empty"));     // 条目存在
+	EXPECT_TRUE(h.find("X-Empty").empty()); // 但值本身为空
+}
+
+TEST(HttpRequestTest, RequestHeaders_Add_AtCapacity_SilentlyDropsOverflow)
+{
+	RequestHeaders h;
+	for (size_t i = 0; i < RequestHeaders::kMaxHeaders; ++i)
+	{
+		h.add("X-H", "v");
+	}
+	EXPECT_EQ(h.size(), RequestHeaders::kMaxHeaders);
+
+	// 超出上限的头静默丢弃，不报错也不扩容
+	h.add("X-Overflow", "dropped");
+	EXPECT_EQ(h.size(), RequestHeaders::kMaxHeaders);
+	EXPECT_FALSE(h.contains("X-Overflow"));
+}
+
+TEST(HttpRequestTest, RequestHeaders_Clear_ResetsThenReusable)
+{
+	RequestHeaders h;
+	h.add("Host", "example.com");
+	h.add("Accept", "text/html");
+	ASSERT_EQ(h.size(), 2u);
+
+	h.clear();
+	EXPECT_EQ(h.size(), 0u);
+	EXPECT_TRUE(h.find("Host").empty());
+	EXPECT_FALSE(h.contains("Host"));
+	EXPECT_EQ(h.begin(), h.end());
+
+	// clear 之后还能继续 add，从索引 0 重新开始
+	h.add("X-New", "v");
+	EXPECT_EQ(h.size(), 1u);
+	EXPECT_EQ(h[0].name, "X-New");
+	EXPECT_EQ(h.find("X-New"), "v");
+}
+
+TEST(HttpRequestTest, RequestHeaders_MoveConstruction_TransfersData)
+{
+	RequestHeaders src;
+	src.add("Host", "example.com");
+	src.add("Accept", "text/html");
+	src.add("X-Custom", "abc");
+
+	RequestHeaders dst(std::move(src));
+
+	// 目标完整拿到数据，顺序不变
+	EXPECT_EQ(dst.size(), 3u);
+	EXPECT_EQ(dst.find("Host"), "example.com");
+	EXPECT_EQ(dst.find("accept"), "text/html");
+	EXPECT_EQ(dst[2].name, "X-Custom");
+	EXPECT_EQ(dst[2].value, "abc");
+
+	// RequestHeaders 用的是自定义 move：只搬前 size_ 个有效元素（string_view 移动本就是
+	// 拷指针+长度），源对象原样保留，size_ 不变，move 之后还能接着读源。
+	EXPECT_EQ(src.size(), 3u);
+	EXPECT_EQ(src.find("Host"), "example.com");
+	EXPECT_TRUE(src.contains("Accept"));
+}
+
+TEST(HttpRequestTest, RequestHeaders_MoveAssignment_OverwritesTarget)
+{
+	RequestHeaders src;
+	src.add("Host", "example.com");
+	src.add("Accept", "text/html");
+
+	RequestHeaders dst;
+	dst.add("Old", "gone");
+	ASSERT_EQ(dst.size(), 1u);
+
+	dst = std::move(src);
+
+	// 目标被源覆盖：旧内容消失，新内容就位
+	EXPECT_EQ(dst.size(), 2u);
+	EXPECT_EQ(dst.find("Host"), "example.com");
+	EXPECT_EQ(dst.find("Accept"), "text/html");
+	EXPECT_FALSE(dst.contains("Old"));
 }
 
 // ============ HttpResponse 测试 ============
