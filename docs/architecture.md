@@ -177,18 +177,18 @@ PostgreSQL 后端层  PgsqlConnection（libpq PQexecPrepared）+ PgStmtCache（L
 
 #### 核心组件
 
-| 组件               | 职责                                                   |
-| ------------------ | ------------------------------------------------------ |
-| `DbConfig`         | 连接参数（host/port/user/password/db/pool_size 等）    |
-| `DbResult`         | 查询结果封装，行列迭代器，类型安全字段访问             |
-| `DbConnection`     | 纯虚接口：`query()` / `execute()` / `ping()`           |
-| `DbConnectionPool` | 协程安全连接池，`acquire()` 挂起等待，`release()` 唤醒 |
-| `DbMiddleware`     | HTTP 中间件，将连接池引用注入 `HttpRequest` 属性       |
-| `DbQueryLog`       | 装饰器模式，透明记录 SQL、耗时、错误                   |
-| `MysqlConnection`  | Boost.MySQL 后端实现 `DbConnection`                    |
-| `StmtCache`        | 每连接 LRU PreparedStatement 缓存，避免重复 prepare    |
-| `PgsqlConnection`  | libpq 后端实现 `DbConnection`（`HICAL_WITH_PGSQL=ON`） |
-| `PgStmtCache`      | PG 服务端预处理语句 LRU 缓存，复用 `PQexecPrepared`    |
+| 组件               | 职责                                                                                                          |
+| ------------------ | ------------------------------------------------------------------------------------------------------------- |
+| `DbConfig`         | 连接参数（host/port/user/password/db/pool_size 等）                                                           |
+| `DbResult`         | 查询结果封装，行列迭代器，类型安全字段访问                                                                    |
+| `DbConnection`     | 纯虚接口：`query()` / `execute()` / `ping()`                                                                  |
+| `DbConnectionPool` | 协程安全连接池，`acquire()` 挂起等待，`release()` 唤醒                                                        |
+| `DbMiddleware`     | HTTP 中间件，将连接池引用注入 `HttpRequest` 属性                                                              |
+| `DbQueryLog`       | 装饰器模式，透明记录 SQL、耗时、错误                                                                          |
+| `MysqlConnection`  | Boost.MySQL 后端实现 `DbConnection`                                                                           |
+| `StmtCache`        | 每连接 LRU PreparedStatement 缓存，避免重复 prepare                                                           |
+| `PgsqlConnection`  | libpq 后端实现 `DbConnection`（`HICAL_WITH_PGSQL=ON`）                                                        |
+| `PgStmtCache`      | PG 服务端预处理语句 LRU 缓存，复用 `PQexecPrepared`                                                           |
 | `PgSocketAdapter`  | libpq `PQsocket()` 的 socket 桥接层（POSIX `stream_descriptor` / Windows `WSAEventSelect`），协程化非阻塞 I/O |
 
 ### 3.4 组件依赖关系
@@ -611,7 +611,18 @@ std::optional<HttpResponse> Router::dispatchSync(HttpRequest& req)
     (router).route(::hical::HttpMethod::h##method, path, handler)
 ```
 
-这是 C++26 反射自动路由注册的降级方案。当反射可用时，将替换为编译期自动发现机制。
+这是宏轨（C++20，默认）的手动注册入口。注解轨用 `[[=hical::anno::route.get(...)]]` 让框架自动发现，两条轨的取舍见[第 10 章](#10-反射-api-包装层设计)。
+
+### 6.6 404 / 405 判定
+
+同一个路径注册了别的方法时回 405 而不是 404，响应带 `Allow` 头列出该路径支持的方法。三类路由（静态 / 参数 / 通配）都参与这个判定。
+
+2.7.1 改了两处：
+
+- **通配路由纳入 405 判定**。以前 405 检测只查静态路由和参数路由，通配路由不参与，所以 `get("/*path", ...)` 这类注册对 POST/HEAD 一律回 404，正确的行为是 405 + `Allow` 头。这是外部可观测的契约变化。
+- **`Allow` 头去重**。静态路由和通配路由都注册了 GET 时会吐出 `GET, GET`，改成按方法位掩码去重后一次性拼串。
+
+判定本身也是两段式：先按路径首段算出"哪些 method 有可能匹配"（首段字面量映射 / 首段可为任意值的动态掩码 / 星号落在段内时的首段前缀表三张掩码表），为空直接 404，不空才扫，且首段对不上的 method 整组跳过。静态路由那段本来就有 `staticPathMethods_` 反向索引，一直是 O(1)。命中路径在更早的地方就返回了，这段只在落到 404/405 时才跑。
 
 ---
 
@@ -688,26 +699,19 @@ class MiddlewarePipeline
 
 ### 8.1 模板化连接
 
-Hical 使用模板而非虚函数来支持 TCP 和 SSL 两种连接模式：
+Hical 使用模板而非虚函数来支持 TCP 和 SSL 两种连接模式。会话入口 `handleSession` 本身就按 `SocketType` 模板化（定义在编译防火墙 `HttpSessionImpl.cpp` 里，只实例化明文和 `ssl::stream` 两份）：
 
 ```cpp
 template <typename SocketType>
-class GenericConnection : public TcpConnection,
-                          public std::enable_shared_from_this<GenericConnection<SocketType>>
+Awaitable<void> HttpServer::handleSession(SocketType socket)
 {
-    SocketType socket_;
-
-    // 编译期分支：SSL 连接需要额外的握手步骤
-    Awaitable<void> sslHandshake()
+    if constexpr (hIsSslStream<SocketType>)
     {
-        if constexpr (IsSslStream<SocketType>)
-        {
-            co_await socket_.async_handshake(
-                ssl::stream_base::server, use_awaitable);
-        }
-        // 普通 TCP 连接：此分支在编译期被消除，零开销
+        co_await socket.async_handshake(ssl::stream_base::server, use_awaitable);
     }
-};
+    // ... 读请求 / 分发 / 响应
+    // 明文实例化里 SSL 分支在编译期被整段消除，零开销
+}
 ```
 
 ### 8.2 类型别名
@@ -722,16 +726,46 @@ using SslConnection = GenericConnection<boost::asio::ssl::stream<tcp::socket>>;
 
 ### 8.3 SSL 类型检测
 
+定义在 `GenericConnection.h`，一个 trait 加一个变量模板：
+
 ```cpp
-// 编译期类型特征：检测是否为 SSL 流
+// 编译期类型特征
 template <typename T>
-constexpr bool IsSslStream = false;
+struct IsSslStream : std::false_type {};
 
 template <typename T>
-constexpr bool IsSslStream<boost::asio::ssl::stream<T>> = true;
+struct IsSslStream<boost::asio::ssl::stream<T>> : std::true_type {};
+
+// 变量模板，`h` 前缀跟枚举常量一个路子
+template <typename T>
+inline constexpr bool hIsSslStream = IsSslStream<T>::value;
 ```
 
-### 8.4 优势
+### 8.4 accept 到会话的接线与会话分流
+
+accept 到裸 socket 之后的处理走同一份 helper——SO_REUSEPORT 多 acceptor 那条路径和普通 `async_accept` 那条共用（2.7.1 把原先复制粘贴的两份合并了）：
+
+```
+async_accept 拿到 tcp::socket
+    │  设 TCP_NODELAY
+    ▼
+commitAcceptedSocket(socket, sslCtx_, ...)
+    ├── sslCtx_ 为空 → 裸 socket 直接交给 handleSession<tcp::socket>
+    └── sslCtx_ 非空 → 包成 ssl::stream<tcp::socket>（拿 sslCtx_->native() 建）
+                       交给 handleSession<ssl::stream<tcp::socket>>
+```
+
+几条约束值得记住：
+
+- **`enableSsl()` 在 2.7.1 之前是个空壳**——只把 `sslCtx_` 建起来，accept 到的 socket 从不包成 `ssl::stream`，所以"启用 SSL"之后跑的其实还是明文。
+- **SSL 连接的响应一律走 `async_write`**，不拿底层 fd 做乐观同步写——明文那条的 `write_some` 会把 OpenSSL 的状态机搞坏。
+- **WS / SSE 升级在 SSL 下编译期就不实例化**（`if constexpr (!hIsSslStream<SocketType>)`），加密连接用不了这两个。
+- **握手也归空闲超时管**：`IdleScanner` 的注册排在 `async_handshake` 之前，`Entry` 统一存 `next_layer()` 拿到的底层 `tcp::socket*`——关掉它足以让挂起的 `async_handshake` 报错退出。所以客户端做完 TCP 三次握手却一直不发 ClientHello，会被普通空闲超时按 `idleTimeout_` 回收，不会白占连接。握手失败直接断连。
+- **TLS 的内存口径不一样**：`ssl::stream` 构造时就 eager 分配两个 17KB 记录缓冲（收/发各一块，跟有没有数据在传无关），空闲 TLS 连接比明文多占约 34KB。算连接数用 `recommendedMaxConnections(memMB, true)`，别拿明文口径估。
+
+SSL 终止策略怎么选（Nginx 终止 vs 全链路加密）见 [production-deployment.md](production-deployment.md)。
+
+### 8.5 优势
 
 | 对比项     | 虚函数方案         | 模板方案（Hical）         |
 | ---------- | ------------------ | ------------------------- |
@@ -829,17 +863,20 @@ GenericServer<AsioBackend> server;
 
 ## 10. 反射 API 包装层设计
 
-### 10.1 设计目标
+### 10.1 双轨策略
 
-C++26 反射特性（`std::meta::info`）将使框架能够：
+反射层同一套用户 API 跑两条轨，靠特性测试宏自动选：
 
-1. **自动发现** — 通过反射自动提取用户 Handler 类的成员函数签名
-2. **自动包装** — 将 `co_await request.readBody()` 等高层调用映射到底层异步操作
-3. **自动注册** — 编译期生成路由分发表，零运行时开销
+| 轨道                   | 触发条件                                                                                                                          | 注册方式                                                 |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| **C++26 注解轨**       | `__cpp_impl_reflection >= 202506L` 且 `__cpp_lib_reflection >= 202506L`（需 `-freflection`），或手动定义 `HICAL_FORCE_REFLECTION` | `[[=hical::anno::...]]` 注解值，框架用 `^^T` 自动枚举    |
+| **C++20 宏轨**（默认） | 其余情况（GCC 14 / Clang 20 / MSVC 2022 等）                                                                                      | `HICAL_JSON` / `HICAL_HANDLER` / `HICAL_ROUTES` 装饰器宏 |
 
-### 10.2 当前降级方案
+检测逻辑在 `Reflection.h`：`#include <version>` 之后同时看 `__cpp_impl_reflection` 和 `__cpp_lib_reflection` 是否都 ≥ `202506L`，两者都满足才把 `HICAL_HAS_REFLECTION` 置 1。`__cpp_lib_reflection` 只在显式传了 `-freflection` 之后才会定义，所以注解轨不是"编译器支持就自动开"——得在构建上把开关拨开（`-DHICAL_ENABLE_REFLECTION=ON`，CMake 只对 C++ 源加 `-freflection`，否则 C 源会被这个选项带崩）。用户代码不用自己判 `HICAL_HAS_REFLECTION`，头文件已做好条件编译隔离。
 
-由于 C++26 反射尚未被主流编译器完全支持，Hical 采用**宏 + Concepts**作为降级方案：
+### 10.2 C++20 宏轨（默认）
+
+编译器不支持 P2996 时走这条，用**宏 + Concepts**替代：
 
 ```cpp
 // 降级方案：HICAL_ROUTE 宏手动注册
@@ -849,56 +886,73 @@ HICAL_ROUTE(router, Get, "/api/users", handler);
 router.route(HttpMethod::hGet, "/api/users", handler);
 ```
 
-### 10.3 未来反射方案（C++26）
+### 10.3 C++26 注解轨
 
-当编译器支持成熟后，目标 API 形态：
+注解轨已经落地可用（不再是目标形态），注解挂在 handler 成员函数上，`registerRoutes()` 编译期发现并注册：
 
 ```cpp
-// 用户定义带标注的 Handler 结构体
 struct UserHandler
 {
-    // 反射自动提取路由信息
     [[=hical::anno::route.get("/api/users")]]
-    Awaitable<HttpResponse> listUsers(const HttpRequest& req)
-    {
-        co_return HttpResponse::json({{"users", "..."}});
-    }
+    Awaitable<HttpResponse> listUsers(const HttpRequest& req);
 
     [[=hical::anno::route.get("/api/users/{id}")]]
-    Awaitable<HttpResponse> getUser(const HttpRequest& req)
-    {
-        co_return HttpResponse::json({{"id", req.param("id")}});
-    }
+    Awaitable<HttpResponse> getUser(const HttpRequest& req);
 };
 
-// 框架通过反射自动注册所有路由
-hical::meta::registerRoutes<UserHandler>(router);
+hical::meta::registerRoutes<UserHandler>(router, handler);
 ```
+
+DTO 侧用注解值代替装饰器宏：
+
+```cpp
+struct UserDTO
+{
+    [[=hical::anno::json_rename("user_name")]]  std::string userName;
+    [[=hical::anno::json_required]]             std::string email;
+    [[=hical::anno::json_ignore]]               std::string passwordHash;
+    int age;
+};
+```
+
+**必须是注解值 `[[=...]]` 而不是标准属性 `[[...]]`**。旧的标准属性写法不会报错，但注解不生效——路由不注册（表现为 404）、`json_ignore` 被忽略（字段照常序列化出去），迁移时最容易踩这个。
+
+注解的分派不是标准属性的字符串匹配，而是「注解值 + `requires` 重载检测」：类型不匹配的成员自动跳过，自定义类型可以增量提供自己的重载，同一对方括号里也能跟用户注解并列（`[[= hical::anno::json_snake_to_lowerCamel, = user_define::do_log]]`）。
+
+支撑这套的四个组件：
+
+| 组件                    | 职责                                                                                                                                                       |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `MetaAnno.h`            | 注解三阶段处理器框架（Key / Serialize / Deserialize / View）+ 内置 JSON 注解 `json_ignore` / `json_rename` / `json_reset` / `json_required` / 蛇形驼峰互转 |
+| `MetaSchema.h`          | JSON Schema 类型特化，覆盖基本类型 / `optional` / `array` / 枚举 / `union` / `variant`                                                                     |
+| `Utils/CollectMember.h` | 继承链成员收集，两层过滤名字二义与菱形非虚继承子对象二义                                                                                                   |
+| `Utils/CTConv.h`        | 编译期命名风格转换（`caseSnakeToLowerCamel` / `caseSnakeToUpperCamel` / `caseCamelToSnake`）                                                               |
 
 ### 10.4 反射驱动的请求封装
 
-目标：让用户写高层业务代码，框架自动生成底层异步逻辑：
+两条轨的用户写法一致，框架负责把高层调用落到具体实现：
 
 ```cpp
-// 用户写（未来）
-co_await request.readJson<UserDTO>();
+// 用户写（两条轨都是这样）
+auto user = co_await request.readJson<UserDTO>();
 
-// 框架通过反射自动生成
-// 1. co_await async_read(stream, buffer, req)
-// 2. 解析 JSON → 反射自动映射字段到 UserDTO 结构体
-// 3. 使用 pmr 分配器分配 UserDTO
+// 框架内部
+// 1. 读消息体并解析 JSON
+// 2. 按轨道映射字段到 UserDTO（注解轨用 ^^T 枚举，宏轨用 HICAL_JSON 生成的 FieldDescriptor）
+// 3. 缺字段默认跳过，保持成员默认值；只有标了 json_required 的成员才报错
 ```
 
-### 10.5 迁移路径
+### 10.5 两条轨的能力对照
 
-```
-当前 (C++20)                  →  未来 (C++26)
-─────────────────────────────────────────────
-HICAL_ROUTE 宏手动注册          →  反射自动发现路由
-SyncRouteHandler 手动定义       →  反射自动提取签名
-手动 JSON 解析                  →  反射自动映射字段
-运行时路由表                    →  编译期路由分发表
-```
+| 能力         | C++20 宏轨（默认）                                                          | C++26 注解轨（需 `-freflection`）                                             |
+| ------------ | --------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| JSON 序列化  | `HICAL_JSON` + `toJson` / `fromJson`                                        | `[[=hical::anno::json_*]]`，`^^T` 自动枚举成员                                |
+| 路由注册     | `HICAL_HANDLER` + `HICAL_ROUTES` + `registerRoutes()`                       | `[[=hical::anno::route.*]]` + `registerRoutes()`                              |
+| JSON Schema  | `hical::meta::openapi::jsonSchema<T>()`，`REQUIRED()` 装饰器决定 `required` | `hical::meta::jsonSchema<T>()`，默认全进 `required`，`std::optional` 成员豁免 |
+| 命名风格转换 | `ALIAS` 装饰器逐个手写                                                      | 类级 `[[=hical::anno::json_snake_to_lowerCamel]]` 等注解                      |
+| 继承链成员   | 不支持                                                                      | `CollectMember.h` 收集，含二义过滤                                            |
+
+注解轨目前唯一的前置是编译器：P2996 还在实验阶段（如 GCC 16），所以默认轨仍是宏轨。示例见 `examples/reflection_server_26.cpp`，配套测试 `test_meta_anno` / `test_meta_schema` / `test_collect_member` / `test_ct_conv`（不支持反射的编译器上后三者走 GTEST_SKIP）。
 
 ---
 
@@ -1193,7 +1247,7 @@ struct NetworkError
 | 后端抽象               | C++20 Concepts                                   | 编译期约束，不引入虚函数开销，面向未来可扩展                                      |
 | 路由查找               | 编译期完美哈希 + 哈希表回退                      | 编译期注册的路由 O(1) 无碰撞哈希，未注册的走 `unordered_map` + 按方法分桶线性匹配 |
 | 中间件模型             | 洋葱模型 + 编译期预构建链                        | 前置/后置/拦截能力完整，`CompileTimeChain` 编译期展开类型列表合并连续 Sync 帧     |
-| 反射降级               | HICAL_ROUTE 宏                                   | C++26 反射尚不成熟，宏方案保持向前兼容                                            |
+| 反射双轨               | C++20 宏 + C++26 注解值                          | 注解轨已落地（需 `-freflection`），但 P2996 仍在实验阶段，宏轨保持默认向前兼容    |
 | 线程模型               | 1 Thread : 1 io_context                          | 线程间无共享状态，天然避免锁竞争                                                  |
 | 连接池信号量           | `steady_timer` 作协程信号量                      | 协程不能用 `condition_variable`，`timer.cancel()` 唤醒挂起协程                    |
 | 查询日志               | 装饰器模式                                       | 透明拦截所有查询，不修改连接池和业务代码                                          |
@@ -1274,9 +1328,9 @@ struct NetworkError
 
 ### 15.5 CMake 编译开关
 
-| 变量                 | 默认值 | 说明                                                            |
-| -------------------- | ------ | --------------------------------------------------------------- |
-| `HICAL_WITH_OPENAPI` | `ON`   | 是否编译 OpenAPI 模块                                           |
+| 变量                 | 默认值 | 说明                                                                                                                                                |
+| -------------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `HICAL_WITH_OPENAPI` | `ON`   | 是否编译 OpenAPI 模块                                                                                                                               |
 | `HICAL_HAS_OPENAPI`  | —      | 开启时由 CMake 定义为 `1` 并随 `hical_core` 导出，供使用者判断模块是否可用；模块本身靠 CMake 不编译 `OpenApi*.cpp` 来排除，源码里没有 `#ifdef` 守卫 |
 
 ```bash

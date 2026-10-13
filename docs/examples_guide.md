@@ -423,9 +423,11 @@ websocat ws://localhost:8080/ws/echo
 ### 生成测试证书
 
 ```bash
-openssl req -x509 -newkey rsa:2048 -keyout server.key -out server.crt \
-    -days 365 -nodes -subj "/CN=localhost"
+# 脚本默认生成到 build/tests（给 ctest 用），这里生成到当前目录
+python scripts/gen_test_certs.py --out-dir .
 ```
+
+生成 `test_server.crt` / `test_server.key` 一对自签证书（`CN=localhost`），用完即弃。
 
 ### HTTPS 服务器
 
@@ -439,7 +441,7 @@ int main()
     HttpServer server(8443);
 
     // 启用 SSL
-    server.enableSsl("server.crt", "server.key");
+    server.enableSsl("test_server.crt", "test_server.key");
 
     server.router().get("/", [](const HttpRequest&) -> HttpResponse {
         return HttpResponse::ok("Hello from HTTPS!");
@@ -1398,7 +1400,7 @@ curl -X PUT -H "Content-Type: application/json" \
 
 ## 运行内置示例程序
 
-Hical 项目自带 7 个示例程序：
+Hical 项目自带 11 个示例程序（其中 3 个是条件构建的可选示例）：
 
 ```bash
 # 编译所有示例
@@ -1471,6 +1473,38 @@ cmake --build build
 # 输出: QPS、总耗时、成功/失败数
 ```
 
+### Reflection Server（宏轨自动路由注册）
+
+```bash
+./build/examples/reflection_server 8080
+# 路由由 HICAL_HANDLER + HICAL_ROUTES 宏自动注册，启动时会打印登记到的路由表
+```
+
+### Reflection Server C++26（注解轨）
+
+> 只在 `-DHICAL_ENABLE_REFLECTION=ON` 时构建（`examples/reflection_server_26.cpp`）。
+
+```bash
+./build/examples/reflection_server_26
+# 演示 [[=hical::anno::route.get(...)]] 自动注册、[[=hical::anno::json_*]] 注解、
+# 继承链成员收集与 jsonSchema 生成
+```
+
+### Static Server（静态文件服务）
+
+```bash
+./build/examples/static_server 8080 [publicDir]
+# publicDir 不传时用示例自带的目录
+```
+
+### PostgreSQL Example
+
+> 只在 `-DHICAL_WITH_PGSQL=ON` 时构建，需要一个能连上的 PG 实例。
+
+```bash
+./build/examples/pgsql_example [pgPort]     # 默认 5432，HTTP 服务起在 8080
+```
+
 ---
 
 ## 常见问题
@@ -1534,7 +1568,7 @@ MemoryPool::instance().configure(config);
 ### Q: 如何启用 SSL？
 
 ```cpp
-server.enableSsl("server.crt", "server.key");
+server.enableSsl("test_server.crt", "test_server.key");
 ```
 
 详见 [示例 5：SSL/TLS 安全服务](#示例-5ssltls-安全服务)。

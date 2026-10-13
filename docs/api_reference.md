@@ -137,25 +137,25 @@ HTTP 服务器，整合路由、中间件和网络层，提供一键启动的高
 
 #### 公共方法
 
-| 方法                           | 参数                                            | 返回值          | 说明                         |
-| ------------------------------ | ----------------------------------------------- | --------------- | ---------------------------- |
-| `router()`                     | 无                                              | `Router&`       | 获取路由器引用，用于注册路由 |
-| `use(MiddlewareHandler)`       | middleware: 中间件处理器                        | `void`          | 添加中间件到管道             |
-| `use(SyncAfterHandler)`        | after: 同步后置处理器                           | `void`          | 添加同步后置中间件           |
-| `use(name, SyncAfterHandler)`  | name: 名称<br>after: 同步后置处理器             | `void`          | 添加命名同步后置中间件       |
-| `enableSsl(certFile, keyFile)` | certFile: 证书文件路径<br>keyFile: 私钥文件路径 | `void`          | 启用 SSL/TLS                 |
-| `listen(endpoint)`             | ep: 监听地址（`tcp::endpoint`）                 | `void`          | 设置监听地址（仅监听该 IP）  |
-| `listen(ip, port)`             | ip: IP 字符串<br>port: 端口号                   | `void`          | 设置监听 IP + 端口           |
-| `listenAny(port)`              | port: 端口号（0 = 系统分配）                    | `void`          | 设置监听端口（绑回 0.0.0.0） |
-| `start()`                      | 无                                              | `void`          | 启动服务器（阻塞）           |
-| `stop()`                       | 无                                              | `void`          | 停止服务器                   |
-| `isRunning()`                  | 无                                              | `bool`          | 服务器是否正在运行           |
-| `port()`                       | 无                                              | `uint16_t`      | 获取监听端口                 |
-| `endpoint()`                   | 无                                              | `tcp::endpoint` | 获取监听地址与端口           |
-| `setErrorHandler(handler)`     | handler: `ErrorHandler`                         | `void`          | 设置全局错误处理器           |
-| `setGcInterval(seconds)`       | seconds: GC 间隔（秒）                          | `void`          | 设置内存池 GC 间隔           |
-| `recommendedMaxConnections(availableMemoryMB)` | availableMemoryMB: 可用内存（MB） | `size_t` | 按明文口径估算推荐的最大连接数（每连接约 16KB） |
-| `recommendedMaxConnections(availableMemoryMB, isTls)` | availableMemoryMB: 可用内存（MB）<br>isTls: 是否 TLS | `size_t` | 按明文/TLS 口径估算推荐的最大连接数（TLS 每连接约 50KB） |
+| 方法                                                  | 参数                                                 | 返回值          | 说明                                                     |
+| ----------------------------------------------------- | ---------------------------------------------------- | --------------- | -------------------------------------------------------- |
+| `router()`                                            | 无                                                   | `Router&`       | 获取路由器引用，用于注册路由                             |
+| `use(MiddlewareHandler)`                              | middleware: 中间件处理器                             | `void`          | 添加中间件到管道                                         |
+| `use(SyncAfterHandler)`                               | after: 同步后置处理器                                | `void`          | 添加同步后置中间件                                       |
+| `use(name, SyncAfterHandler)`                         | name: 名称<br>after: 同步后置处理器                  | `void`          | 添加命名同步后置中间件                                   |
+| `enableSsl(certFile, keyFile)`                        | certFile: 证书文件路径<br>keyFile: 私钥文件路径      | `void`          | 启用 SSL/TLS                                             |
+| `listen(endpoint)`                                    | ep: 监听地址（`tcp::endpoint`）                      | `void`          | 设置监听地址（仅监听该 IP）                              |
+| `listen(ip, port)`                                    | ip: IP 字符串<br>port: 端口号                        | `void`          | 设置监听 IP + 端口                                       |
+| `listenAny(port)`                                     | port: 端口号（0 = 系统分配）                         | `void`          | 设置监听端口（绑回 0.0.0.0）                             |
+| `start()`                                             | 无                                                   | `void`          | 启动服务器（阻塞）                                       |
+| `stop()`                                              | 无                                                   | `void`          | 停止服务器                                               |
+| `isRunning()`                                         | 无                                                   | `bool`          | 服务器是否正在运行                                       |
+| `port()`                                              | 无                                                   | `uint16_t`      | 获取监听端口                                             |
+| `endpoint()`                                          | 无                                                   | `tcp::endpoint` | 获取监听地址与端口                                       |
+| `setErrorHandler(handler)`                            | handler: `ErrorHandler`                              | `void`          | 设置全局错误处理器                                       |
+| `setGcInterval(seconds)`                              | seconds: GC 间隔（秒）                               | `void`          | 设置内存池 GC 间隔                                       |
+| `recommendedMaxConnections(availableMemoryMB)`        | availableMemoryMB: 可用内存（MB）                    | `size_t`        | 按明文口径估算推荐的最大连接数（每连接约 16KB）          |
+| `recommendedMaxConnections(availableMemoryMB, isTls)` | availableMemoryMB: 可用内存（MB）<br>isTls: 是否 TLS | `size_t`        | 按明文/TLS 口径估算推荐的最大连接数（TLS 每连接约 50KB） |
 
 > `use(SyncAfterHandler)` 只吃后置逻辑，没有前置——helmet、gzip 这类只改响应的中间件直接 `server.use(makeHelmetMiddleware())` 就行，不用包协程 lambda。多个 after 之间按注册逆序执行：后注册的在洋葱里更靠内，先退出。
 >
@@ -227,9 +227,9 @@ int main()
 | `ws(path, options, onMessage, onConnect, onDisconnect)` | path: 路由路径<br>options: `WsOptions`<br>onMessage/onConnect/onDisconnect: 回调                                                                  | `void`                    | 注册带选项的 WebSocket 路由                                                     |
 | `compileTimeRoute<Entries...>(method, path, handler)`   | method: HTTP 方法<br>path: 路由路径<br>handler: 协程或同步处理器<br>Entries...: `CompileTimeMwEntry` 模板参数<br>（如 `CompileTimeSyncMw<myMw>`） | `void`                    | 注册带编译期预构建中间件链的路由；dispatch 时跳过运行时 `buildOptimizedChain()` |
 | `dispatch(req)`                                         | req: HTTP 请求                                                                                                                                    | `Awaitable<HttpResponse>` | 分发请求到匹配的路由                                                            |
-| `resolveRoute(req)`                                      | req: HTTP 请求                                                                                                                                    | `ResolveResult`           | 路由匹配（读 body 前调用，缓存结果复用，返回 handler/params/405 信息）         |
-| `dispatchResolved(req, result)`                          | req: HTTP 请求<br>result: 缓存的路由查找结果                                                                                                      | `Awaitable<HttpResponse>` | 按缓存 `ResolveResult` 分发（避免二次路由查找）                                |
-| `dispatchSyncResolved(req, result)`                      | req: HTTP 请求<br>result: 缓存的路由查找结果                                                                                                      | `optional<HttpResponse>`  | 同步快速路径：复用缓存结果直接调用 sync handler，无协程帧                      |
+| `resolveRoute(req)`                                     | req: HTTP 请求                                                                                                                                    | `ResolveResult`           | 路由匹配（读 body 前调用，缓存结果复用，返回 handler/params/405 信息）          |
+| `dispatchResolved(req, result)`                         | req: HTTP 请求<br>result: 缓存的路由查找结果                                                                                                      | `Awaitable<HttpResponse>` | 按缓存 `ResolveResult` 分发（避免二次路由查找）                                 |
+| `dispatchSyncResolved(req, result)`                     | req: HTTP 请求<br>result: 缓存的路由查找结果                                                                                                      | `optional<HttpResponse>`  | 同步快速路径：复用缓存结果直接调用 sync handler，无协程帧                       |
 | `routeCount()`                                          | 无                                                                                                                                                | `size_t`                  | 获取已注册路由数量                                                              |
 | `group(prefix)`                                         | prefix: 路由前缀                                                                                                                                  | `RouteGroup`              | 创建路由组（前缀分组）                                                          |
 | `setPerfectHashLookup(lookup)`                          | lookup: `RuntimePerfectHashLookup` 函数                                                                                                           | `void`                    | 注入完美哈希加速查找（`MetaRoutes` 自动调用）                                   |
@@ -237,6 +237,12 @@ int main()
 #### 路径参数
 
 路径中使用 `{参数名}` 定义参数，如 `/users/{id}`。匹配时参数会被提取到 `HttpRequest` 中。
+
+#### 方法不匹配（405）与 Allow 头
+
+同一个路径注册了别的方法时回 405 而不是 404，响应带 `Allow` 头列出该路径支持的方法。三类路由（静态 / 参数 / 通配）都参与这个判定——`get("/*path", ...)` 这种通配注册对 POST 同样回 405 + `Allow: GET`（2.7.1 之前通配路由不参与判定，一律回 404）。`Allow` 里的方法按位掩码去重，同一个方法在静态和通配两处都注册了也只列一次。
+
+判定顺序是「先算出哪些 method 有可能匹配，为空直接 404，不空才逐组扫」：按路径首段建了三张掩码表（首段字面量映射 / 首段可为任意值的动态掩码 / 星号落在段内时的首段前缀表），所以没注册过的路径不会白扫一遍参数路由和通配路由。
 
 #### 示例
 
@@ -675,11 +681,11 @@ C++26 反射 / C++20 宏双轨的 JSON 自动序列化/反序列化系统。
 
 #### 函数（`namespace hical::meta`）
 
-| 函数                      | 参数                        | 返回值                | 说明                                       |
-| ------------------------- | --------------------------- | --------------------- | ------------------------------------------ |
-| `toJson(obj)`             | obj: 带 `HICAL_JSON` 的对象 | `boost::json::object` | 序列化结构体为 JSON                        |
-| `fromJson<T>(json)`       | json: `boost::json::value`  | `T`                   | 反序列化 JSON 为结构体（类型不匹配抛异常） |
-| `readJson<T>(req)`        | req: `HttpRequest&`         | `T`                   | 从请求体反序列化（JSON 无效时抛异常）      |
+| 函数                | 参数                        | 返回值                | 说明                                       |
+| ------------------- | --------------------------- | --------------------- | ------------------------------------------ |
+| `toJson(obj)`       | obj: 带 `HICAL_JSON` 的对象 | `boost::json::object` | 序列化结构体为 JSON                        |
+| `fromJson<T>(json)` | json: `boost::json::value`  | `T`                   | 反序列化 JSON 为结构体（类型不匹配抛异常） |
+| `readJson<T>(req)`  | req: `HttpRequest&`         | `T`                   | 从请求体反序列化（JSON 无效时抛异常）      |
 
 > `HttpRequest::readJson<T>()` 是 `meta::readJson<T>(req)` 的便捷成员函数包装。
 >
@@ -2032,24 +2038,24 @@ void registerLogAdmin(Router& router, const std::string& prefix = "/admin");
 
 **头文件：** `<hical/db/DbConfig.h>`
 
-| 字段                  | 类型                   | 默认值      | 说明                         |
-| --------------------- | ---------------------- | ----------- | ---------------------------- |
-| `host`                | `std::string`          | `127.0.0.1` | 主机地址                     |
-| `port`                | `uint16_t`             | `3306`      | 端口                         |
-| `user`                | `std::string`          | `""`        | 用户名                       |
-| `password`            | `std::string`          | `""`        | 密码                         |
-| `database`            | `std::string`          | `""`        | 数据库名                     |
-| `charset`             | `std::string`          | `"utf8mb4"` | 字符集                       |
-| `minConnections`      | `size_t`               | `2`         | 最小连接数                   |
-| `maxConnections`      | `size_t`               | `16`        | 最大连接数                   |
-| `idleTimeout`         | `std::chrono::seconds` | `300s`      | 空闲回收超时                 |
-| `acquireTimeout`      | `std::chrono::seconds` | `5s`        | 获取连接超时                 |
-| `queryTimeout`        | `std::chrono::seconds` | `30s`       | 字段保留，当前无后端消费，设置不生效 |
+| 字段                  | 类型                   | 默认值      | 说明                                                   |
+| --------------------- | ---------------------- | ----------- | ------------------------------------------------------ |
+| `host`                | `std::string`          | `127.0.0.1` | 主机地址                                               |
+| `port`                | `uint16_t`             | `3306`      | 端口                                                   |
+| `user`                | `std::string`          | `""`        | 用户名                                                 |
+| `password`            | `std::string`          | `""`        | 密码                                                   |
+| `database`            | `std::string`          | `""`        | 数据库名                                               |
+| `charset`             | `std::string`          | `"utf8mb4"` | 字符集                                                 |
+| `minConnections`      | `size_t`               | `2`         | 最小连接数                                             |
+| `maxConnections`      | `size_t`               | `16`        | 最大连接数                                             |
+| `idleTimeout`         | `std::chrono::seconds` | `300s`      | 空闲回收超时                                           |
+| `acquireTimeout`      | `std::chrono::seconds` | `5s`        | 获取连接超时                                           |
+| `queryTimeout`        | `std::chrono::seconds` | `30s`       | 字段保留，当前无后端消费，设置不生效                   |
 | `autoReconnect`       | `bool`                 | `true`      | 字段保留，当前无后端消费；重连行为恒开启，没法用它关闭 |
-| `idleCheckInterval`   | `std::chrono::seconds` | `60s`       | 空闲连接回收检查间隔         |
-| `healthCheckInterval` | `std::chrono::seconds` | `30s`       | 后台健康检查间隔（0=禁用）   |
-| `pingGracePeriod`     | `std::chrono::seconds` | `15s`       | acquire() 跳过 ping 的宽限期 |
-| `stmtCacheSize`       | `size_t`               | `64`        | PreparedStatement 缓存上限   |
+| `idleCheckInterval`   | `std::chrono::seconds` | `60s`       | 空闲连接回收检查间隔                                   |
+| `healthCheckInterval` | `std::chrono::seconds` | `30s`       | 后台健康检查间隔（0=禁用）                             |
+| `pingGracePeriod`     | `std::chrono::seconds` | `15s`       | acquire() 跳过 ping 的宽限期                           |
+| `stmtCacheSize`       | `size_t`               | `64`        | PreparedStatement 缓存上限                             |
 
 ---
 

@@ -1,6 +1,6 @@
 # Hical 编译与测试指南
 
-**最后更新：** 2026-07-17
+**最后更新：** 2026-10-13
 **支持平台：** Windows / Linux / macOS
 
 ---
@@ -169,15 +169,15 @@ cmake -B build -G "Ninja" \
 
 **可选编译开关：**
 
-| 选项                      | 默认值 | 说明                                                       |
-| ------------------------- | ------ | ---------------------------------------------------------- |
-| `HICAL_WITH_DATABASE`     | `OFF`  | 启用数据库中间件（需 Boost.MySQL，即 Boost >= 1.85）       |
-| `HICAL_WITH_PGSQL`        | `OFF`  | 启用 PostgreSQL 后端（需 libpq；会一并开启 `HICAL_WITH_DATABASE`） |
-| `HICAL_WITH_OPENAPI`      | `ON`   | 启用 OpenAPI 文档自动生成模块（复用 Boost.JSON，无新依赖） |
-| `HICAL_ENABLE_REFLECTION` | `OFF`  | 启用 C++26 原生反射（需兼容编译器）                        |
-| `HICAL_BUILD_TESTS`       | `ON`   | 是否编译测试套件                                           |
-| `HICAL_BUILD_EXAMPLES`    | `ON`   | 是否编译示例程序                                           |
-| `HICAL_WITH_MIMALLOC`     | `OFF`  | 使用 mimalloc 作为 PMR 最底层 upstream 分配器              |
+| 选项                      | 默认值 | 说明                                                                                                |
+| ------------------------- | ------ | --------------------------------------------------------------------------------------------------- |
+| `HICAL_WITH_DATABASE`     | `OFF`  | 启用数据库中间件（需 Boost.MySQL，即 Boost >= 1.85）                                                |
+| `HICAL_WITH_PGSQL`        | `OFF`  | 启用 PostgreSQL 后端（需 libpq；会一并开启 `HICAL_WITH_DATABASE`）                                  |
+| `HICAL_WITH_OPENAPI`      | `ON`   | 启用 OpenAPI 文档自动生成模块（复用 Boost.JSON，无新依赖）                                          |
+| `HICAL_ENABLE_REFLECTION` | `OFF`  | 启用 C++26 原生反射（需支持 P2996 的编译器如 GCC 16 + Boost >= 1.90；只对 C++ 源加 `-freflection`） |
+| `HICAL_BUILD_TESTS`       | `ON`   | 是否编译测试套件                                                                                    |
+| `HICAL_BUILD_EXAMPLES`    | `ON`   | 是否编译示例程序                                                                                    |
+| `HICAL_WITH_MIMALLOC`     | `OFF`  | 使用 mimalloc 作为 PMR 最底层 upstream 分配器                                                       |
 
 ```bash
 # 示例：启用数据库 + 关闭 OpenAPI（体积敏感场景）
@@ -258,7 +258,7 @@ ctest --test-dir build --output-on-failure -j4
 # Timer 测试
 ./build/tests/test_asio_timer.exe
 
-# SSL 连接测试（需要先生成测试证书，见 4.4）
+# SSL 连接测试（需要先生成测试证书，见 4.5）
 ./build/tests/test_ssl_connection.exe
 
 # 协程工具测试
@@ -394,89 +394,97 @@ ctest --test-dir build --output-on-failure -j4
 
 ### 4.5 生成 SSL 测试证书
 
-SSL 握手测试需要自签名证书。在 `build/` 目录下执行：
+SSL 握手测试读的是相对路径 `test_server.crt` / `test_server.key`，而 ctest 跑测试时的工作目录是测试可执行文件所在的构建目录（默认 `build/tests`）。所以证书要落到 `build/tests`，不是 `build/`——放错地方用例会找不到证书而静默 SKIP。
+
+用仓库里的脚本生成就行（跨平台，Windows 那个路径转换的坑脚本自己处理了）：
 
 ```bash
-cd build
+# 默认生成到 build/tests
+python scripts/gen_test_certs.py
 
-# Linux / macOS
-openssl req -x509 -newkey rsa:2048 \
-    -keyout test_server.key -out test_server.crt \
-    -days 365 -nodes -subj "/CN=localhost"
-
-# Windows (MSYS2) — 需要 MSYS_NO_PATHCONV=1 防止路径转换
-MSYS_NO_PATHCONV=1 openssl req -x509 -newkey rsa:2048 \
-    -keyout test_server.key -out test_server.crt \
-    -days 365 -nodes -subj "/CN=localhost"
+# 换目录 / 强制重新生成 / 指定 openssl
+python scripts/gen_test_certs.py --out-dir build-cov/tests
+python scripts/gen_test_certs.py --force
+HICAL_OPENSSL=/path/to/openssl python scripts/gen_test_certs.py
 ```
 
-### 4.6 测试用例清单（52 + 1 个 OpenAPI + 5 个可选 DB 测试）
+脚本现场签一套用完即弃的自签证书（`CN=localhost`），本地调试够用。找不到 `openssl` 时脚本以非零码退出，不会静默放过——证书缺失会让 SSL 用例 SKIP，静默跳过等于没有回归保护。
 
-| 测试文件                                                | 用例数 | 覆盖范围                                                       |
-| ------------------------------------------------------- | ------ | -------------------------------------------------------------- |
-| test_basic                                              | 2      | Boost 版本、C++ 标准                                           |
-| test_error                                              | 17     | 错误码映射、NetworkError 结构体                                |
-| test_asio_event_loop                                    | 10     | run/stop/post/dispatch/定时器/pmr                              |
-| test_asio_tcp_connection                                | 8      | 连接/收发/回调/上下文/PmrBuffer                                |
-| test_memory_pool                                        | 21     | 单例/全局池/线程本地池/请求池/TrackedResource/PmrBuffer        |
-| test_asio_timer                                         | 8      | 单次/周期/取消/精度/EventLoop 集成                             |
-| test_ssl_connection                                     | 9      | SslContext/SSL 握手/加密通信/类型别名                          |
-| test_coroutine                                          | 5      | sleep/sleepFor/coSpawn/多协程/返回值                           |
-| test_http_types                                         | 23     | HttpMethod/HttpStatusCode/HttpRequest/HttpResponse/工厂方法    |
-| test_router                                             | 14     | 路由注册/分发/404/协程/JSON/宏/路径参数/{param}                |
-| test_router_perf                                        | 5      | 静态路由首条/末条/未命中/参数路由/1000 路由性能                |
-| test_http_server_perf                                   | —      | HTTP Server 全链路吞吐量基准                                   |
-| test_tcp_server                                         | 8      | EventLoopPool/TcpServer(accept/消息/IO 线程池)                 |
-| test_middleware                                         | 5      | 空管道/单层/洋葱顺序/拦截/响应修改                             |
-| test_http_server                                        | 7      | GET/POST/404/路径参数/中间件/JSON                              |
-| test_websocket                                          | 3      | Echo/连接回调/未注册路径                                       |
-| test_ws_advanced                                        | —      | WebSocket 进阶（Binary/Close/Subprotocol/Hub/Heartbeat）       |
-| test_concepts                                           | —      | C++20 Concepts 编译期约束验证                                  |
-| test_reflection                                         | 35     | MetaJson 装饰器/alias/required/ignore/unsigned/backward compat |
-| test_cookie                                             | —      | Cookie 解析/Set-Cookie 头/CookieOptions                        |
-| test_static_files                                       | —      | 静态文件服务/ETag 304/路径遍历防护/大文件拒绝                  |
-| test_multipart                                          | —      | multipart/form-data 解析/256 part 上限                         |
-| test_session                                            | —      | Session 生命周期/线程安全/regenerate/migrateFrom/并发          |
-| test_openapi                                            | 35     | OpenAPI Schema 生成/registry CRUD/文档组装/端点注册/完整集成   |
-| test_query_params                                       | —      | 查询参数解析（queryParam/queryParams/hasQueryParam）           |
-| test_form_params                                        | —      | 表单参数解析（formParam/formParams/hasFormParam）              |
-| test_redirect                                           | —      | 重定向响应（redirect 工厂方法/Location 头/CRLF 防护）          |
-| test_cors                                               | —      | CORS 中间件（通配符/精确匹配/Preflight/凭证模式）              |
-| test_route_group                                        | —      | 路由组（前缀拼接/组级中间件/嵌套子组）                         |
-| test_rate_limiter                                       | —      | 令牌桶限流中间件（burst/refill/per-key/429/并发）              |
-| test_helmet                                             | —      | 安全头中间件（7 个安全响应头）                                 |
-| test_health                                             | —      | 健康检查端点（K8s liveness/readiness）                         |
-| test_config_loader                                      | 17     | ConfigLoader 配置加载（loadFile/loadString/env 覆盖）          |
-| test_jwt_auth                                           | 15     | JWT Auth 中间件（HS256 签发/验证/路径白名单）                  |
-| test_wildcard_route                                     | —      | 通配路由（*path 模式，优先级/参数提取/方法隔离）               |
-| test_compression                                        | —      | Gzip 压缩中间件（Accept-Encoding/流式压缩/级别配置）           |
-| test_chunked_sse                                        | —      | Chunked Transfer-Encoding + SSE 流式推送                       |
-| test_expect_continue                                    | —      | Expect: 100-continue 支持                                      |
-| test_http_client                                        | —      | HTTP 客户端测试工具                                            |
-| test_optimistic_write                                   | —      | 乐观同步写（tryOptimisticWrite 路径覆盖）                      |
-| test_error_handler                                      | —      | 全局错误处理器（异常捕获/自定义响应）                          |
-| test_graceful_shutdown                                  | —      | 优雅关闭（stop()/进行中请求完成）                              |
-| test_log                                                | 36     | 日志核心（format API、Sink API、多线程安全、Fatal abort）      |
-| test_log_ndebug                                         | 3      | NDEBUG 编译消除（TRACE/TRACE_IF/TRACE_STREAM 消除）            |
-| test_fixed_buffer                                       | 19     | FixedBuffer 栈缓冲（append、溢出 fallback、格式化）            |
-| test_read_buffer_pool                                   | —      | ReadBufferPool 借还（thread_local 借出/归还/空闲不持有）       |
-| test_log_file                                           | 7      | LogFile 文件轮转（写入、大小轮转、文件数限制）                 |
-| test_async_file_sink                                    | 7      | AsyncFileSink 异步日志（多线程、优雅关闭、轮转）               |
-| test_log_formatter                                      | 12     | TextFormatter + JsonFormatter（格式、traceId、JSON）           |
-| test_log_channel                                        | 12     | LogChannel + Registry（通道路由、HICAL_LOG_TO 宏）             |
-| test_log_middleware                                     | 3      | LogMiddleware（trace-id 生成长度/hex/唯一性）                  |
-| test_log_admin                                          | 4      | LogAdmin 端点（注册、级别往返、通道级别调整）                  |
-| test_integration                                        | —      | 完整 HTTP 请求/响应周期集成测试                                |
-| **以下为可选 DB 测试（需 `-DHICAL_WITH_DATABASE=ON`）** |        |                                                                |
-| test_db_pool                                            | 12     | 连接池获取/释放、健康检查、空闲淘汰、统计                      |
-| test_db_middleware                                      | 8      | DB 中间件连接注入、自动事务、洋葱模型集成                      |
-| test_db_query_log                                       | 6      | 查询日志记录、慢查询检测、回调                                 |
-| test_stmt_cache                                         | 9      | PreparedStatement LRU 缓存淘汰/提升/禁用                       |
-| test_mysql_integration                                  | 7      | 真实 MySQL CRUD、事务、参数化查询（需数据库）                  |
-| **以下为 PostgreSQL 后端测试（需 `-DHICAL_WITH_PGSQL=ON`）** |        |                                                                |
-| test_pgsql_socket                                       | 3      | PgSocketAdapter 异步等待（TCP 回环，不依赖真实 PG）            |
-| test_pgsql_unit                                         | 12     | PgStmtCache LRU 缓存纯单元（不依赖真实 PG）                    |
-| test_pgsql_conn                                         | 15     | PostgreSQL 连接/CRUD/参数化/事务集成（需真实 PG）              |
+CI 里六个跑 ctest 的 job 都会先跑这个脚本。想让证书缺失时直接 FAIL 而不是 SKIP，置位 `HICAL_REQUIRE_SSL_CERTS`。
+
+### 4.6 测试用例清单
+
+> 数量随版本变动，这份表只是索引；权威名单看 `tests/CMakeLists.txt` 的 `hical_add_test` 注册。
+
+| 测试文件                                                     | 用例数 | 覆盖范围                                                                                    |
+| ------------------------------------------------------------ | ------ | ------------------------------------------------------------------------------------------- |
+| test_basic                                                   | 2      | Boost 版本、C++ 标准                                                                        |
+| test_error                                                   | 17     | 错误码映射、NetworkError 结构体                                                             |
+| test_asio_event_loop                                         | 10     | run/stop/post/dispatch/定时器/pmr                                                           |
+| test_asio_tcp_connection                                     | 8      | 连接/收发/回调/上下文/PmrBuffer                                                             |
+| test_memory_pool                                             | 21     | 单例/全局池/线程本地池/请求池/TrackedResource/PmrBuffer                                     |
+| test_asio_timer                                              | 8      | 单次/周期/取消/精度/EventLoop 集成                                                          |
+| test_ssl_connection                                          | 9      | SslContext/SSL 握手/加密通信/类型别名                                                       |
+| test_coroutine                                               | 5      | sleep/sleepFor/coSpawn/多协程/返回值                                                        |
+| test_http_types                                              | 23     | HttpMethod/HttpStatusCode/HttpRequest/HttpResponse/工厂方法                                 |
+| test_router                                                  | 14     | 路由注册/分发/404/协程/JSON/宏/路径参数/{param}                                             |
+| test_router_perf                                             | 5      | 静态路由首条/末条/未命中/参数路由/1000 路由性能                                             |
+| test_http_server_perf                                        | —      | HTTP Server 全链路吞吐量基准                                                                |
+| test_tcp_server                                              | 8      | EventLoopPool/TcpServer(accept/消息/IO 线程池)                                              |
+| test_middleware                                              | 5      | 空管道/单层/洋葱顺序/拦截/响应修改                                                          |
+| test_http_server                                             | 7      | GET/POST/404/路径参数/中间件/JSON                                                           |
+| test_websocket                                               | 3      | Echo/连接回调/未注册路径                                                                    |
+| test_ws_advanced                                             | —      | WebSocket 进阶（Binary/Close/Subprotocol/Hub/Heartbeat）                                    |
+| test_concepts                                                | —      | C++20 Concepts 编译期约束验证                                                               |
+| test_reflection                                              | 61     | MetaJson 装饰器/alias/required/ignore/unsigned/DTO 校验/backward compat                     |
+| test_ct_conv                                                 | —      | CTConv 编译期命名转换（蛇形↔驼峰）与整型转字符串                                            |
+| test_meta_anno                                               | —      | C++26 注解框架（Key/Serialize/Deserialize/View 三阶段；需反射，否则 SKIP）                  |
+| test_meta_schema                                             | —      | C++26 JSON Schema 类型特化（基本类型/optional/array/枚举/union/variant；需反射，否则 SKIP） |
+| test_collect_member                                          | —      | C++26 继承链成员收集（名字二义与菱形非虚继承二义过滤；需反射，否则 SKIP）                   |
+| test_cookie                                                  | —      | Cookie 解析/Set-Cookie 头/CookieOptions                                                     |
+| test_static_files                                            | —      | 静态文件服务/ETag 304/路径遍历防护/大文件拒绝                                               |
+| test_multipart                                               | —      | multipart/form-data 解析/256 part 上限                                                      |
+| test_session                                                 | —      | Session 生命周期/线程安全/regenerate/migrateFrom/并发                                       |
+| test_openapi                                                 | 35     | OpenAPI Schema 生成/registry CRUD/文档组装/端点注册/完整集成                                |
+| test_query_params                                            | —      | 查询参数解析（queryParam/queryParams/hasQueryParam）                                        |
+| test_form_params                                             | —      | 表单参数解析（formParam/formParams/hasFormParam）                                           |
+| test_redirect                                                | —      | 重定向响应（redirect 工厂方法/Location 头/CRLF 防护）                                       |
+| test_cors                                                    | —      | CORS 中间件（通配符/精确匹配/Preflight/凭证模式）                                           |
+| test_route_group                                             | —      | 路由组（前缀拼接/组级中间件/嵌套子组）                                                      |
+| test_rate_limiter                                            | —      | 令牌桶限流中间件（burst/refill/per-key/429/并发）                                           |
+| test_helmet                                                  | —      | 安全头中间件（7 个安全响应头）                                                              |
+| test_health                                                  | —      | 健康检查端点（K8s liveness/readiness）                                                      |
+| test_config_loader                                           | 17     | ConfigLoader 配置加载（loadFile/loadString/env 覆盖）                                       |
+| test_jwt_auth                                                | 15     | JWT Auth 中间件（HS256 签发/验证/路径白名单）                                               |
+| test_wildcard_route                                          | —      | 通配路由（*path 模式，优先级/参数提取/方法隔离）                                            |
+| test_compression                                             | —      | Gzip 压缩中间件（Accept-Encoding/流式压缩/级别配置）                                        |
+| test_chunked_sse                                             | —      | Chunked Transfer-Encoding + SSE 流式推送                                                    |
+| test_expect_continue                                         | —      | Expect: 100-continue 支持                                                                   |
+| test_http_client                                             | —      | HTTP 客户端测试工具                                                                         |
+| test_optimistic_write                                        | —      | 乐观同步写（tryOptimisticWrite 路径覆盖）                                                   |
+| test_error_handler                                           | —      | 全局错误处理器（异常捕获/自定义响应）                                                       |
+| test_graceful_shutdown                                       | —      | 优雅关闭（stop()/进行中请求完成）                                                           |
+| test_log                                                     | 36     | 日志核心（format API、Sink API、多线程安全、Fatal abort）                                   |
+| test_log_ndebug                                              | 3      | NDEBUG 编译消除（TRACE/TRACE_IF/TRACE_STREAM 消除）                                         |
+| test_fixed_buffer                                            | 19     | FixedBuffer 栈缓冲（append、溢出 fallback、格式化）                                         |
+| test_read_buffer_pool                                        | —      | ReadBufferPool 借还（thread_local 借出/归还/空闲不持有）                                    |
+| test_log_file                                                | 7      | LogFile 文件轮转（写入、大小轮转、文件数限制）                                              |
+| test_async_file_sink                                         | 7      | AsyncFileSink 异步日志（多线程、优雅关闭、轮转）                                            |
+| test_log_formatter                                           | 12     | TextFormatter + JsonFormatter（格式、traceId、JSON）                                        |
+| test_log_channel                                             | 12     | LogChannel + Registry（通道路由、HICAL_LOG_TO 宏）                                          |
+| test_log_middleware                                          | 3      | LogMiddleware（trace-id 生成长度/hex/唯一性）                                               |
+| test_log_admin                                               | 4      | LogAdmin 端点（注册、级别往返、通道级别调整）                                               |
+| test_integration                                             | —      | 完整 HTTP 请求/响应周期集成测试                                                             |
+| **以下为可选 DB 测试（需 `-DHICAL_WITH_DATABASE=ON`）**      |        |                                                                                             |
+| test_db_pool                                                 | 12     | 连接池获取/释放、健康检查、空闲淘汰、统计                                                   |
+| test_db_middleware                                           | 8      | DB 中间件连接注入、自动事务、洋葱模型集成                                                   |
+| test_db_query_log                                            | 6      | 查询日志记录、慢查询检测、回调                                                              |
+| test_stmt_cache                                              | 9      | PreparedStatement LRU 缓存淘汰/提升/禁用                                                    |
+| test_mysql_integration                                       | 7      | 真实 MySQL CRUD、事务、参数化查询（需数据库）                                               |
+| **以下为 PostgreSQL 后端测试（需 `-DHICAL_WITH_PGSQL=ON`）** |        |                                                                                             |
+| test_pgsql_socket                                            | 3      | PgSocketAdapter 异步等待（TCP 回环，不依赖真实 PG）                                         |
+| test_pgsql_unit                                              | 12     | PgStmtCache LRU 缓存纯单元（不依赖真实 PG）                                                 |
+| test_pgsql_conn                                              | 15     | PostgreSQL 连接/CRUD/参数化/事务集成（需真实 PG）                                           |
 
 ---
 

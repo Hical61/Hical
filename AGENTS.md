@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-Hical is a modern C++20 high-performance web framework built on Boost.Asio, featuring a native HTTP/WebSocket stack (picohttpparser + self-developed WebSocket implementation), PMR three-tier memory pools, coroutine-based async I/O (`asio::awaitable<T>`), C++20 Concepts for compile-time type safety, a C++26 reflection layer (dual-track: native P2996 or C++20 macro fallback), and an optional coroutine-based database middleware (Boost.MySQL and libpq/PostgreSQL backends).
+Hical is a modern C++20 high-performance web framework built on Boost.Asio, featuring a native HTTP/WebSocket stack (picohttpparser + self-developed WebSocket implementation) over both plain TCP and TLS (`ssl::stream`), PMR three-tier memory pools, coroutine-based async I/O (`asio::awaitable<T>`), C++20 Concepts for compile-time type safety, a C++26 reflection layer (dual-track: native P2996 annotation values or C++20 macro fallback, plus a compile-time utility layer), and an optional coroutine-based database middleware (Boost.MySQL and libpq/PostgreSQL backends).
 
 ## Project Structure & Module Organization
 
@@ -11,12 +11,13 @@ Hical is a modern C++20 high-performance web framework built on Boost.Asio, feat
 - `src/db/` — Optional database middleware (enable with `-DHICAL_WITH_DATABASE=ON`, guarded by `HICAL_HAS_DATABASE` macro)
 - `src/third_party/` — Bundled dependencies (picohttpparser)
 - `tests/` — GoogleTest test suite, one `test_<feature>.cpp` per module
-- `examples/` — Example servers (echo, benchmark, OpenAPI, reflection, PMR)
+- `examples/` — Example servers (echo, benchmark, OpenAPI, reflection, C++26 annotation reflection, static files, PMR, PostgreSQL)
 - `docs/` — Longer guides (architecture, coroutines, logging, OpenAPI, deployment)
 - `docker/` — CI test matrix, production deployment, benchmark tooling
 - `benchmark/` — Multi-framework HTTP benchmark suite (hical vs actix/drogon/cinatra/etc.)
+- `scripts/` — Dev tooling (`gen_test_certs.py`, `bump_version.py`, `fix-comment-indent.py`, flamegraph helpers)
 
-Namespaces: public API in `hical::`, reflection in `hical::meta::`, database in `hical::db::`, internals in anonymous namespace or `detail::`.
+Namespaces: public API in `hical::`, JSON/route reflection in `hical::meta::`, C++26 annotation values in `hical::anno::`, JSON Schema specializations in `hical::schema::`, compile-time helpers in `hical::CT::` / `hical::CollectMember::`, database in `hical::db::`, internals in anonymous namespace or `detail::`.
 
 ## Build, Test, and Development Commands
 
@@ -43,7 +44,7 @@ cmake --build build --config Release
 cmake -B build -DHICAL_WITH_DATABASE=ON ...    # Database middleware (requires Boost.MySQL >= 1.85)
 cmake -B build -DHICAL_WITH_PGSQL=ON ...       # PostgreSQL backend (requires libpq, implies HICAL_WITH_DATABASE)
 cmake -B build -DHICAL_WITH_OPENAPI=OFF ...    # Disable OpenAPI (enabled by default)
-cmake -B build -DHICAL_ENABLE_REFLECTION=ON ... # C++26 reflection (requires compatible compiler)
+cmake -B build -DHICAL_ENABLE_REFLECTION=ON ... # C++26 reflection (GCC 16 + Boost >= 1.90; adds -freflection to C++ sources only)
 ```
 
 ### Run Tests
@@ -78,26 +79,31 @@ find src -name '*.cpp' | xargs clang-tidy -p build
 - `EventLoop.h` / `Timer.h` / `TcpConnection.h` — Abstract base classes
 - `Concepts.h` — C++20 concepts (`EventLoopLike`, `TcpConnectionLike`, `TimerLike`, `NetworkBackend`)
 - `MemoryPool.h` — Three-tier PMR: global synchronized pool → thread-local unsynchronized pool → request-level monotonic buffer. **Critical constraint:** objects from request-level monotonic buffer must not escape request lifetime (use-after-free).
-- `HttpServer.h` — Top-level facade: TcpServer + Router + MiddlewarePipeline + WebSocket + IdleScanner. SO_REUSEPORT multi-acceptor (Linux/macOS), single-acceptor fallback (Windows). Graceful stop via `releaseWork()` (no `io_context::stop()`).
+- `SslContext.h/cpp` — SSL/TLS context wrapper (`loadCertificate` / `loadPrivateKey` / `native()`). A non-empty `sslCtx_` is exactly what makes `HttpServer` wrap accepted sockets in `ssl::stream`
+- `HttpServer.h` — Top-level facade: TcpServer + Router + MiddlewarePipeline + WebSocket + IdleScanner. `enableSsl(cert, key)` wraps accepted sockets in `ssl::stream<tcp::socket>` — before 2.7.1 it was a no-op stub that left plaintext running. Bind address is a member, set before `start()`: `listen(endpoint)`, `listen(ip, port)`, `listenAny(port)`, read back via `endpoint()`; the default ctor `HttpServer()` == `HttpServer(0, 1)` (OS-assigned port). SO_REUSEPORT multi-acceptor (Linux/macOS), single-acceptor fallback (Windows); both acceptor paths share one `commitAcceptedSocket` helper. Graceful stop via `releaseWork()` (no `io_context::stop()`).
 - `HeaderMap.h` — `vector<pair<string,string>>` backed, case-insensitive lookup, L1-cache-friendly for typical <20 headers
-- `HttpRequest.h/cpp` — Zero-copy request wrapper: `string_view` referencing connection-level read buffer, stack-allocated `array<Entry,64>` headers. Public API: `method()`, `path()`, `header()`, `body()`, `cookie()`, `queryParam()`, `formParam()`, `readJson<T>()`
+- `HttpRequest.h/cpp` — Zero-copy request wrapper: `string_view` referencing connection-level read buffer, stack-allocated `array<Entry,64>` headers. Public API: `method()`, `path()`, `header()`, `body()`, `cookie()`, `queryParam()`, `formParam()`, `readJson<T>()`, `peerAddr()`. `RequestHeaders`/`NativeRequest` are **move-only** on purpose (one copy is 2KB) — `native()` returns a reference, so `auto n = req.native()` must be `auto& n`
 - `HttpResponse.h/cpp` — Response wrapper with `FileBody` deferred async file sending, `serializeHeadTo(FixedBuffer<512>&)` zero-heap scatter-gather I/O, `setHeader()` accepts `std::string_view`
-- `HttpSessionImpl.cpp` — Compilation firewall for picohttpparser + WebSocket. ReadBufferPool borrow/return (8KB thread_local pool), optimistic sync write (≤512B single-buffer), response prefix template (~90B pre-built wire bytes), IdleScanner::Guard RAII idle timeout. Resolves the route before reading the body, so 404/405/400 are rejected up front without swallowing the body
-- `Router.h` — Static routes (compile-time perfect hash for registered routes, O(1) hash map fallback with transparent hashing for zero-alloc `string_view` lookup) + parameter routes (`{id}`) + wildcard routes (`*path`). Priority: static > param > wildcard. `dispatchSync()` sync fast-path skips coroutine frame (~40-130ns savings). `compileTimeRoute()` for routes with compile-time middleware chains. `resolveRoute()` returns a cached `ResolveResult`; `dispatchResolved()`/`dispatchSyncResolved()` reuse it to skip a second lookup
-- `Middleware.h` — Onion-model pipeline: `SyncBeforeHandler` / `SyncAfterHandler` for zero-coroutine-frame middleware, `buildOptimizedChain()` merges consecutive sync entries into single frame, `CompileTimeChain` template pre-builds chains at compile time. The pipeline is `build()`-built once in `HttpServer::start()`; per-request tail work (read body + dispatch) is passed via the request's `internalSlot_`
+- `HttpSessionImpl.cpp` — Compilation firewall for picohttpparser + WebSocket. `handleSession` is templated on `SocketType` and splits plain from TLS at compile time via `if constexpr (hIsSslStream<SocketType>)`; TLS responses always go through `async_write` (never the optimistic sync path, which would corrupt OpenSSL's state machine) and WS/SSE upgrade is not instantiated at all for TLS. ReadBufferPool borrow/return (8KB thread_local pool), optimistic sync write (≤512B single-buffer), response prefix template (~90B pre-built wire bytes), IdleScanner::Guard RAII idle timeout — registered *before* `async_handshake`, so a stalled handshake is still reclaimed by the normal idle timeout. Resolves the route before reading the body, so 404/405/400 are rejected up front without swallowing the body
+- `Router.h` — Static routes (compile-time perfect hash for registered routes, O(1) hash map fallback with transparent hashing for zero-alloc `string_view` lookup) + parameter routes (`{id}`) + wildcard routes (`*path`). Priority: static > param > wildcard. 404-vs-405 is decided across all three kinds (wildcards participate since 2.7.1) with the `Allow` header deduplicated by method bitmask; the decision is gated by per-first-segment method masks, so unregistered paths never scan the param/wildcard groups. `dispatchSync()` sync fast-path skips coroutine frame (~40-130ns savings). `compileTimeRoute()` for routes with compile-time middleware chains. `resolveRoute()` returns a cached `ResolveResult`; `dispatchResolved()`/`dispatchSyncResolved()` reuse it to skip a second lookup
+- `Middleware.h` — Onion-model pipeline: `SyncBeforeHandler` / `SyncAfterHandler` for zero-coroutine-frame middleware, `buildOptimizedChain()` merges consecutive sync entries into single frame, `CompileTimeChain` template pre-builds chains at compile time. **Middleware runs after route resolution but before the body is read** — it only sees headers (`req.body()` is empty), an intercepting middleware means the body is never read at all, and field-level body validation belongs in the handler. The pipeline is `build()`-built once in `HttpServer::start()`; per-request tail work (read body + dispatch) is passed via the request's `internalSlot_` as a function-pointer + `void*` pair. `use()` has overloads for a bare `SyncBeforeHandler` and a bare `SyncAfterHandler` (helmet/gzip return the latter). Note: with `HICAL_ENABLE_MIDDLEWARE_PROFILING=ON`, any pipeline containing a Sync entry drops profiling entirely and logs a WARN — `middlewareStats()` returns empty for it
 - `Coroutine.h` — `Awaitable<T>` alias, `sleep()`, `coSpawn()` with `recycling_allocator` and `logOnException`
 - `Error.h/cpp` — `ErrorCode` enum + `NetworkError` struct, isolating from raw Asio error codes. Use these, not `boost::system::error_code`.
 - `ConfigLoader.h/cpp` — JSON config with dot-separated key access, `HICAL_` env var override, `get<T>(key, defaultVal)`
 - `StaticFiles.h` — Async file serving, ETag/304, Range Request (206), MIME detection, path traversal protection, 64MB limit
 - `WsFrame.h` / `WsHandshake.h` / `WsDeflate.h/cpp` — WebSocket RFC 6455 stack: frame parsing, handshake, permessage-deflate compression
-- `Reflection.h` / `MetaJson.h` / `MetaRoutes.h` — C++26 dual-track reflection: native P2996 `^^T` attributes or C++20 `HICAL_JSON`/`HICAL_ROUTES` macros. API: `toJson()`, `fromJson<T>()`, `req.readJson<T>()`, `registerRoutes()`
+- `Reflection.h` / `MetaJson.h` / `MetaRoutes.h` — C++26 dual-track reflection: native P2996 **annotation values** (`[[=hical::anno::...]]`) or C++20 `HICAL_JSON`/`HICAL_ROUTES` macros. API: `toJson()`, `fromJson<T>()`, `req.readJson<T>()`, `registerRoutes()`. The annotation track is genuinely implemented (not aspirational), but it needs a compiler with P2996 (e.g. GCC 16) plus `-freflection`, so it's opt-in via `HICAL_ENABLE_REFLECTION=ON` and the macro track remains the default. Mind the syntax: it's an annotation *value* `[[=...]]`, not a standard attribute `[[...]]` — the old attribute form compiles fine but silently does nothing
+- `MetaAnno.h` — annotation framework: three-stage handlers (Key / Serialize / Deserialize / View) plus the built-in JSON annotations `json_ignore`, `json_rename`, `json_reset`, `json_required`, and the class-level `json_snake_to_lowerCamel` / `json_snake_to_UpperCamel` / `json_camel_to_snake`. Dispatch is annotation-value + `requires` overload detection rather than attribute string matching, so type-mismatched members are skipped and user types can add their own overloads
+- `MetaSchema.h` — JSON Schema type specializations (`hical::schema::kSchema<T>`): primitives, `optional`, `array`, enums, `union`, `variant`
+- `Utils/CTConv.h` — compile-time naming-style conversion (`caseSnakeToLowerCamel` / `caseSnakeToUpperCamel` / `caseCamelToSnake`)
+- `Utils/CollectMember.h` — inheritance-chain member collection, with two-stage filtering of name ambiguity and diamond non-virtual base-subobject ambiguity
 - `Log.h/cpp` — 6-level logging: `HICAL_LOG_INFO("port={}", 8080)`, `HICAL_LOG_INFO_STREAM`, `HICAL_LOG_INFO_IF`. TRACE eliminated under NDEBUG. Use these macros, not printf/iostream.
 - `Session.h/cpp` — In-memory sessions, `makeSessionMiddleware`, `regenerate()` for fixation prevention
 - `RateLimiter.h/cpp` — Token Bucket middleware, per-key limiting, 429 + Retry-After headers
 - `Helmet.h/cpp` — Security headers middleware (7 headers, all toggleable)
 - `JwtAuth.h/cpp` — HS256 JWT middleware, zero third-party deps (OpenSSL EVP + self-implemented Base64URL)
 - `GzipCompression.h/cpp` — Response compression, auto-checks `Accept-Encoding`, small body inline, large body streaming
-- `SseSession.h/cpp` — Server-Sent Events (RFC 8895), chunked streaming, 30s heartbeat
+- `SseSession.h/cpp` — Server-Sent Events (WHATWG EventSource; chunked streaming, 30s heartbeat)
 - `OpenApi*.h/cpp` — OpenAPI 3.0 auto-generation: schema → registry → document → endpoints (`/openapi.json` + `/docs`). Opt-in via `HICAL_WITH_OPENAPI=ON`.
 - `PerfectHashRouter.h` — Compile-time perfect hash for static routes: replaces `unordered_map` lookup with djb2 hash + multiply-shift + one string comparison at runtime, computed in `MetaRoutes` and injected into `Router`. Fallback to original hash map on miss.
 - `CompileTimeChain.h` — Compile-time middleware chain pre-build: `CompileTimeChain` template unrolls middleware type lists at compile time, merging consecutive `SyncBeforeHandler`/`SyncAfterHandler` entries into single coroutine frames. `compileTimeRoute()`-registered routes dispatch via pre-built chain, skipping dynamic `buildOptimizedChain()`.
@@ -111,6 +117,7 @@ find src -name '*.cpp' | xargs clang-tidy -p build
 - `GenericConnection<SocketType>` — Template for plain + SSL sockets. MPSC lock-free write queue (`alignas(64)` cache-line isolation), `MpscNodePool` thread_local free list, `kMaxDrainBatch=256`
 - `EventLoopPool` — 1:1 thread-to-io_context, least-connections distribution, `pthread_setaffinity_np` CPU pinning (Linux)
 - `TcpServer` — Accept loop, `alive_` guard, SO_REUSEPORT multi-acceptor (Windows auto-fallback), `IdleFd` EMFILE protection
+- `SslConnection.h` — `GenericConnection<ssl::stream<tcp::socket>>` type alias, lazy-includes OpenSSL
 
 **`src/db/` (optional) modules:**
 - `DbConnectionPool` — Coroutine-based pool with LIFO reuse, health check + idle eviction background loops, `pingGracePeriod`, auto-rollback on release
@@ -127,7 +134,9 @@ find src -name '*.cpp' | xargs clang-tidy -p build
 - **PMR everywhere**: `PmrBuffer` and JSON objects use `std::pmr` allocators. Note: the HTTP body itself is a plain `std::string`, not PMR-backed. Request-level `monotonic_buffer` objects must not escape request scope.
 - **Compilation firewalls**: `.hci` files with `extern template` + explicit instantiation in `.cpp`. Large templates must not live directly in headers.
 - **Optional modules**: compile-time `#ifdef HICAL_HAS_XXX` gating via CMake options. Users not using DB/OpenAPI compile zero bytes of that code.
-- **Template-based SSL**: `if constexpr (hIsSslStream<SocketType>)` for compile-time SSL vs plain branching.
+- **Template-based SSL**: `if constexpr (hIsSslStream<SocketType>)` for compile-time SSL vs plain branching. TLS never uses the raw fd for writes, and WS/SSE are plain-only.
+- **Move-only zero-copy views**: `RequestHeaders` / `NativeRequest` are move-only on purpose — a copy is 2KB, and the compiler catching it beats a silent runtime copy. Always take `native()` by reference.
+- **Headers first, body later**: route resolution and middleware both run before the body is read, so invalid requests and intercepted requests never pull a body into memory. Middleware sees headers only; handlers own body-level validation.
 - **Synchronous fast path**: `dispatchSync()` / `dispatchSyncResolved()` skip coroutine frame allocation for sync handlers. Middleware chains are pre-built once in `start()`; the per-request tail (read body + dispatch) is passed via `HttpRequest::internalSlot_`, so nothing is rebuilt per request. `CompileTimeChain` pre-builds middleware chains at compile time. `CompileTimeJson` serializes DTOs at compile time bypassing `boost::json::object`.
 
 ## Coding Style & Naming Conventions
@@ -187,7 +196,11 @@ Use `HICAL_LOG_*` macros exclusively, not printf/iostream. Level guide:
 
 ## Testing Guidelines
 
-Add GoogleTest coverage in `tests/test_<feature>.cpp` and register with `hical_add_test(test_<feature>)` in `tests/CMakeLists.txt`. CI covers GCC 14, Clang 20 (ASan/UBSan), MSYS2 MINGW64, and MSVC. Avoid brittle timing assertions in performance tests. Database tests need `HICAL_WITH_DATABASE=ON`; most use mock connections, `test_mysql_integration.cpp` requires a live MySQL instance.
+Add GoogleTest coverage in `tests/test_<feature>.cpp` and register with `hical_add_test(test_<feature>)` in `tests/CMakeLists.txt`. CI covers GCC 14, Clang 20 (ASan/UBSan), MSYS2 MINGW64, and MSVC. Avoid brittle timing assertions in performance tests — poll until the condition holds instead of sleeping a fixed duration. Database tests need `HICAL_WITH_DATABASE=ON`; most use mock connections, `test_mysql_integration.cpp` requires a live MySQL instance.
+
+SSL tests read `test_server.crt` / `test_server.key` relative to the test binary's working directory (`build/tests`), so generate them there with `python scripts/gen_test_certs.py` rather than dropping them in `build/` — a misplaced cert makes those cases SKIP silently. Set `HICAL_REQUIRE_SSL_CERTS` to turn a missing cert into a hard failure instead.
+
+`test_meta_anno` / `test_meta_schema` / `test_collect_member` need a reflection-capable compiler and `GTEST_SKIP` otherwise; `test_ct_conv` runs everywhere.
 
 ## Commit & Pull Request Guidelines
 
@@ -205,12 +218,12 @@ Commit prefix convention: `[feat]`, `[fix]`, `[perf]`, `[refactor]`, `[docs]`, `
 | picohttpparser | Bundled (system install optional via `HICAL_USE_SYSTEM_PICOHTTPPARSER`) |
 | Google Test    | Required                                                                |
 | CMake          | >= 3.20                                                                 |
-| Compiler       | GCC 14+ / Clang 20+ / MSVC 2022+                                        |
+| Compiler       | GCC 14+ / Clang 20+ / MSVC 2022+ (GCC 16+ for C++26 reflection)         |
 
 ## CI
 
-GitHub Actions (`.github/workflows/ci.yml`): Ubuntu 24.04 (GCC 14, Clang 20) + Windows (MSYS2 MINGW64, MSVC + vcpkg). GCC job runs clang-format check; Clang job runs clang-tidy (warning mode, non-blocking).
+GitHub Actions (`.github/workflows/ci.yml`): a `build` matrix over Ubuntu 24.04 (GCC 14, Clang 20) and Windows (MSYS2 MINGW64, MSVC + vcpkg), plus a `middleware-profiling` job. Six ctest runs in total — GCC, GCC coverage, Clang sanitizers, MSYS2, MSVC, middleware-profiling — and every one of them generates SSL test certs first. GCC job runs clang-format check; Clang job runs clang-tidy (warning mode, non-blocking).
 
 ## Security & Configuration
 
-Do not commit credentials, certificates, or local environment files. Treat changes to TLS, JWT, static-file paths, headers, and database configuration as security-sensitive. For vulnerability reporting, see [SECURITY.md](SECURITY.md) — do **not** open a public issue.
+Do not commit credentials, certificates, or local environment files — test certs are generated on the spot by `scripts/gen_test_certs.py` and never checked in. Treat changes to TLS, JWT, static-file paths, headers, and database configuration as security-sensitive. For vulnerability reporting, see [SECURITY.md](SECURITY.md) — do **not** open a public issue.

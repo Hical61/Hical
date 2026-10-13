@@ -246,6 +246,13 @@ def main():
         print(f'  3. git add -u && git commit -m "[chore] bump version to v{new_ver}"')
         print(f"  4. git tag v{new_ver}")
         print(f"  5. git push origin main v{new_ver}")
+        print()
+        print("  [注意] ports/hical61-hical/portfile.cmake 的 SHA512 本脚本改不了——")
+        print("        它得等 tag 推上去之后才存在（GitHub 的 tarball 是按 tag 现场生成的）。")
+        print("        第 5 步做完回来补一个：")
+        print(f"          curl -sL https://github.com/Hical61/Hical/archive/refs/tags/v{new_ver}.tar.gz | sha512sum")
+        print("        结果（128 位全小写）填进 portfile.cmake 的 SHA512，单独提交：")
+        print(f'          git commit -m "[chore] 回填 vcpkg port 的 v{new_ver} SHA512"')
 
 
 if __name__ == "__main__":
