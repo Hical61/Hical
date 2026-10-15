@@ -10,13 +10,15 @@
 | 组件        | 最低版本                         | 用途                              |
 | ----------- | -------------------------------- | --------------------------------- |
 | C++ 编译器  | GCC 14+ / Clang 20+ / MSVC 2022+ | C++20 编译器（协程支持）          |
-| CMake       | 3.20+                            | 构建系统                          |
+| CMake       | 3.28+                            | 构建系统                          |
 | Ninja       | 1.10+                            | 构建工具（比 Make 更快）          |
 | Boost       | 1.82+（DB 中间件 1.85+）         | Asio / JSON / MySQL               |
 | OpenSSL     | 3.0+                             | SSL/TLS 支持                      |
 | zlib        | —                                | WebSocket permessage-deflate 压缩 |
 | liburing    | —（Linux 可选）                  | Boost.Asio 异步文件 I/O           |
 | Google Test | 1.10+                            | 单元测试框架                      |
+
+日常开发推荐使用 CMake 4.x。主 CI 的 Linux/MSVC 和 middleware-profiling 任务固定使用 4.4.3；MSYS2 使用原生滚动包并校验为 4.x。另有 GCC + CMake 3.28.4 任务执行完整构建与测试，验证最低版本兼容性。
 
 ---
 
@@ -71,7 +73,7 @@ sudo apt install g++-14
 
 ```bash
 g++ --version                        # 需要 14+
-cmake --version                      # 需要 3.20+
+cmake --version                      # 需要 3.28+
 dpkg -s libboost-dev | grep Version  # 需要 1.82+（DB 中间件需 1.85+）
 openssl version                      # 需要 3.0+
 ```
@@ -94,7 +96,7 @@ sudo dnf install -y gcc-c++ cmake ninja-build \
 
 ```bash
 g++ --version      # 需要 14+
-cmake --version    # 需要 3.20+
+cmake --version    # 需要 3.28+
 rpm -q boost-devel # 需要 1.82+（DB 中间件需 1.85+）
 openssl version    # 需要 3.0+
 ```
@@ -131,7 +133,7 @@ brew install cmake ninja boost openssl@3 googletest
 
 ```bash
 clang++ --version                   # 需要 Xcode 14+（Apple Clang 14+）
-cmake --version                     # 需要 3.20+
+cmake --version                     # 需要 3.28+
 brew list --versions boost          # 需要 1.82+（DB 中间件需 1.85+）
 $(brew --prefix openssl@3)/bin/openssl version  # 需要 3.0+
 ```
@@ -410,7 +412,7 @@ HICAL_OPENSSL=/path/to/openssl python scripts/gen_test_certs.py
 
 脚本现场签一套用完即弃的自签证书（`CN=localhost`），本地调试够用。找不到 `openssl` 时脚本以非零码退出，不会静默放过——证书缺失会让 SSL 用例 SKIP，静默跳过等于没有回归保护。
 
-CI 里六个跑 ctest 的 job 都会先跑这个脚本。想让证书缺失时直接 FAIL 而不是 SKIP，置位 `HICAL_REQUIRE_SSL_CERTS`。
+主 CI 的七路 ctest 执行（含覆盖率、中间件 profiling 和 CMake 最低版本兼容性检查）都会先跑这个脚本。想让证书缺失时直接 FAIL 而不是 SKIP，置位 `HICAL_REQUIRE_SSL_CERTS`。
 
 ### 4.6 测试用例清单
 

@@ -11,7 +11,7 @@
 | 组件       | 最低版本                                              |
 | ---------- | ----------------------------------------------------- |
 | C++ 编译器 | GCC 14+ / Clang 20+ / MSVC 2022+（需支持 C++20 协程） |
-| CMake      | 3.20+                                                 |
+| CMake      | 3.28+                                                 |
 | Boost      | 1.82+（Asio / JSON）；DB 中间件 >= 1.85               |
 | OpenSSL    | 3.0+                                                  |
 
@@ -132,7 +132,7 @@ target_link_libraries(my_app PRIVATE hical_core)
 **CMakeLists.txt：**
 
 ```cmake
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.28)
 project(my_server LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)

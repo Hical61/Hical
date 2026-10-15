@@ -92,7 +92,7 @@ cd benchmark && docker compose up
 | Boost >= 1.82                    | Asio, System, JSON; DB middleware needs >= 1.85 |
 | OpenSSL                          | Required                                        |
 | zlib                             | Required (WebSocket compression)                |
-| CMake >= 3.20                    | Build system                                    |
+| CMake >= 3.28                    | Build system                                    |
 | GCC 14+ / Clang 20+ / MSVC 2022+ | Compiler                                        |
 
 ## Build

@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **CMake 最低版本提高到 3.28**：同步源码构建、包消费测试、Hical 基准程序及安装文档的最低要求；显式关闭未使用的 C++ Modules 自动扫描，避免新版 policy 引入额外扫描工具依赖。
+- **主 CI 使用 CMake 4.x**：Linux/MSVC 和中间件 profiling 固定使用 4.4.3，MSYS2 校验其原生包为 4.x；新增 GCC + CMake 3.28.4 矩阵项，执行完整构建、测试及 TLS 证书检查，验证最低版本兼容性。
+
 ## [2.7.1] - 2026-10-12
 
 ### Added

@@ -22,7 +22,7 @@ See [docs/build_and_test_guide.md](docs/build_and_test_guide.md) for full detail
 | ------------ | --------------------------------------------------- |
 | C++ Standard | C++20                                               |
 | Boost        | >= 1.82 (Asio, System, JSON); DB middleware >= 1.85 |
-| CMake        | >= 3.20                                             |
+| CMake        | >= 3.28                                             |
 | OpenSSL      | Required                                            |
 | zlib         | Required (WebSocket permessage-deflate)             |
 | Google Test  | Required                                            |
@@ -135,7 +135,7 @@ Use the [issue templates](https://github.com/Hical61/Hical/issues/new/choose). P
 | ----------- | ------------------------------------------------ |
 | C++ 标准    | C++20                                            |
 | Boost       | >= 1.82（Asio、System、JSON）；DB 中间件 >= 1.85 |
-| CMake       | >= 3.20                                          |
+| CMake       | >= 3.28                                          |
 | OpenSSL     | 必需                                             |
 | zlib        | 必需（WebSocket permessage-deflate）             |
 | Google Test | 必需                                             |

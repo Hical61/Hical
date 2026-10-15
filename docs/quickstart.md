@@ -11,7 +11,7 @@ English | [简体中文](quickstart_cn.md)
 | Component    | Minimum Version                                            |
 | ------------ | ---------------------------------------------------------- |
 | C++ Compiler | GCC 14+ / Clang 20+ / MSVC 2022+ (C++20 coroutine support) |
-| CMake        | 3.20+                                                      |
+| CMake        | 3.28+                                                      |
 | Boost        | 1.82+ (Asio / JSON); DB middleware requires ≥ 1.85         |
 | OpenSSL      | 3.0+                                                       |
 
@@ -132,7 +132,7 @@ Create two files:
 **CMakeLists.txt:**
 
 ```cmake
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.28)
 project(my_server LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)

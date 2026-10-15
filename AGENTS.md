@@ -217,12 +217,12 @@ Commit prefix convention: `[feat]`, `[fix]`, `[perf]`, `[refactor]`, `[docs]`, `
 | zlib           | Required (WebSocket permessage-deflate)                                 |
 | picohttpparser | Bundled (system install optional via `HICAL_USE_SYSTEM_PICOHTTPPARSER`) |
 | Google Test    | Required                                                                |
-| CMake          | >= 3.20                                                                 |
+| CMake          | >= 3.28                                                                 |
 | Compiler       | GCC 14+ / Clang 20+ / MSVC 2022+ (GCC 16+ for C++26 reflection)         |
 
 ## CI
 
-GitHub Actions (`.github/workflows/ci.yml`): a `build` matrix over Ubuntu 24.04 (GCC 14, Clang 20) and Windows (MSYS2 MINGW64, MSVC + vcpkg), plus a `middleware-profiling` job. Six ctest runs in total — GCC, GCC coverage, Clang sanitizers, MSYS2, MSVC, middleware-profiling — and every one of them generates SSL test certs first. GCC job runs clang-format check; Clang job runs clang-tidy (warning mode, non-blocking).
+GitHub Actions (`.github/workflows/ci.yml`): a `build` matrix over Ubuntu 24.04 (GCC 14, Clang 20) and Windows (MSYS2 MINGW64, MSVC + vcpkg), plus a `middleware-profiling` job. Linux/MSVC and profiling use pinned CMake 4.4.3; MSYS2 uses its native rolling CMake package with a 4.x version check. An extra GCC matrix entry uses CMake 3.28.4 to verify the minimum supported version. Seven ctest runs in total — GCC, GCC coverage, Clang sanitizers, CMake minimum, MSYS2, MSVC, middleware-profiling — and every one of them generates SSL test certs first. GCC job runs clang-format check; Clang job runs clang-tidy (warning mode, non-blocking).
 
 ## Security & Configuration
 
