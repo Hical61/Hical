@@ -7,6 +7,7 @@ set(HICAL_TEST_DISCOVERY_TIMEOUT 30)
 # 使用 TestHttpClient.h 的测试需要 picohttpparser include 路径
 # （picohttpparser 是 hical_core 的 PRIVATE 实现细节，测试直接引用需单独声明）
 set(TESTS_NEEDING_PICOHTTPPARSER
+    test_middleware_body
     test_http_server
     test_websocket
     test_ws_advanced
@@ -60,6 +61,7 @@ hical_add_test(test_http_types)           # HTTP 类型
 hical_add_test(test_router)               # 路由器
 hical_add_test(test_route_group)          # 路由组
 hical_add_test(test_middleware)           # 中间件
+hical_add_test(test_middleware_body)      # 中间件 body 声明接口
 hical_add_test(test_http_server)          # HttpServer 集成
 hical_add_test(test_websocket)            # WebSocket
 hical_add_test(test_ws_advanced)          # WebSocket 高级功能（Binary/Close/Subprotocol/Context/Param/Hub/Heartbeat）
@@ -89,6 +91,7 @@ hical_add_test(test_wildcard_route)       # 通配路由 `*path`
 hical_add_test(test_compression)          # 响应压缩（gzip）
 hical_add_test(test_chunked_sse)          # Chunked Transfer-Encoding + SSE
 hical_add_test(test_graceful_shutdown)    # 优雅关机与信号处理
+hical_add_test(test_periodic_task)        # 周期性任务接口层（注册、参数校验、时序守卫）
 hical_add_test(test_error_handler)        # 全局错误处理器
 hical_add_test(test_expect_continue)      # Expect: 100-continue
 hical_add_test(test_http_server_perf)     # HttpServer 吞量基准测试

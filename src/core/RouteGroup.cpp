@@ -60,6 +60,25 @@ namespace hical
 		entries_.push_back(std::move(entry));
 	}
 
+	void RouteGroup::useBody(MiddlewareHandler middleware)
+	{
+		MiddlewareEntry entry;
+		entry.type = MiddlewareEntry::Type::hAsync;
+		entry.asyncHandler = std::move(middleware);
+		entry.needsBody = true;
+		entries_.push_back(std::move(entry));
+	}
+
+	void RouteGroup::useBody(SyncBeforeHandler before, SyncAfterHandler after)
+	{
+		MiddlewareEntry entry;
+		entry.type = MiddlewareEntry::Type::hSync;
+		entry.before = std::move(before);
+		entry.after = std::move(after);
+		entry.needsBody = true;
+		entries_.push_back(std::move(entry));
+	}
+
 	RouteGroup RouteGroup::group(const std::string& subPrefix)
 	{
 		return RouteGroup(router_, joinPath(subPrefix), entries_);

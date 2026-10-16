@@ -323,7 +323,18 @@ protected:
 		boost::asio::write(sock, boost::asio::buffer(rawRequest));
 
 		std::string residual;
-		return hical::test::detail::readHttpResponse(sock, residual);
+		try
+		{
+			return hical::test::detail::readHttpResponse(sock, residual);
+		}
+		catch (const boost::system::system_error& e)
+		{
+			// 服务端 close 时接收队列里还有未读数据，内核就发 RST，这边连已经收到的
+			// 响应都会被丢掉。报成明确的失败，别让异常以 "unknown file: error:
+			// C++ exception ..." 的形式挂掉用例，那样看不出是哪一步、什么原因。
+			ADD_FAILURE() << "读响应时连接被重置: " << e.what();
+			return {};
+		}
 	}
 };
 
@@ -353,11 +364,19 @@ TEST_F(HeaderSizeTest, HeaderWithPassthroughBodyNot431)
 }
 
 // 纯 header > 4KB → 仍要被 431 拒绝
+//
+// 超限幅度只留一点点（总长 4201，刚过 4096）。服务端有条「头部不完整但已超限」
+// 的早退分支，一看 bufUsed > maxHeaderSize_ 就回 431 关连接，此时客户端可能还有
+// 字节在路上，close 会被内核判成 RST，已经发出去的 431 一起丢。超得越多窗口越宽
+// ——原来塞 8KB，窗口有 4KB 出头，机器一忙就偶发挂（CI 的 MSVC job 上抓到过一次）。
+// 压到刚过线，窗口只剩一百来字节。
 TEST_F(HeaderSizeTest, OversizedHeaderStill431)
 {
 	startServer();
 
-	std::string bigHeaderValue(8 * 1024, 'B'); // 单个 header 值就 8KB，超过 4KB 上限
+	// 请求固定开销 89B（请求行 + Host/Content-Length/Connection + 各分隔符），
+	// 4112 + 89 = 4201，刚好越过 4096 的 maxHeaderSize_
+	std::string bigHeaderValue(4112, 'B');
 	std::string req = "POST /upload HTTP/1.1\r\n"
 					  "Host: localhost\r\n"
 					  "Content-Length: 0\r\n"

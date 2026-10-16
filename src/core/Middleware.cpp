@@ -4,11 +4,97 @@
  */
 
 #include "Middleware.h"
+#include "RequestDispatch.h"
 #include "Log.h"
+#include <cstddef>
+#include <optional>
 #include <stdexcept>
 
 namespace hical
 {
+
+	namespace
+	{
+		/**
+		 * @brief 链上的 body 门：命中 needsBody 声明之前先把请求体读进来
+		 * 门不捕获任何 per-request 状态，是个能缓存进 cachedChain_ 的静态节点；真正「怎么读」
+		 * 由每请求写在请求内部槽上的 readBody 决定（handleSession 挂上去的，见任务 3）。
+		 * 槽没写或没挂 readBody 就直接放行——WS/SSE 那条链的 req 本来就不塞槽，走到这儿无害。
+		 * 读失败（readBody 返回有值）就把那个错误响应原样抛出去短路，后面的中间件和 handler 都不跑。
+		 */
+		Awaitable<HttpResponse> bodyGate(HttpRequest& req, MiddlewareNext next)
+		{
+			auto* ctx = detail::RequestDispatchContext::get(req);
+			if (ctx != nullptr && ctx->readBody != nullptr)
+			{
+				if (auto err = co_await ctx->readBody(ctx->bodyObj); err.has_value())
+				{
+					co_return std::move(*err);
+				}
+			}
+			co_return co_await next(req);
+		}
+
+		/**
+		 * @brief 在第一个 needsBody 条目前插一道 body 门，产出新条目列表
+		 * 门尽量靠后：读 body 是慢操作，能让前面认证/限流先拦掉的无效请求就不该白读。
+		 * 多个 needsBody 也只插一道——body 读一次就够，多插会把它读重。
+		 * 一个都没声明时返回 nullopt，调用方沿用原列表，链结构与加这个特性之前逐字节相同。
+		 * @param entries 原始条目列表
+		 * @return 需要插门时返回插好门的新列表，否则 nullopt
+		 */
+		std::optional<std::vector<MiddlewareEntry>> withBodyGate(const std::vector<MiddlewareEntry>& entries)
+		{
+			size_t firstNeedsBody = entries.size();
+			for (size_t i = 0; i < entries.size(); ++i)
+			{
+				if (entries[i].needsBody)
+				{
+					firstNeedsBody = i;
+					break;
+				}
+			}
+
+			if (firstNeedsBody == entries.size())
+			{
+				return std::nullopt;
+			}
+
+			auto at = entries.begin() + static_cast<std::ptrdiff_t>(firstNeedsBody);
+
+			std::vector<MiddlewareEntry> gated;
+			gated.reserve(entries.size() + 1);
+			gated.insert(gated.end(), entries.begin(), at);
+
+			// 门是 hAsync：它前后哪边是连续 Sync 都会被这道门截断，合并不到一起。
+			// 声明 needsBody 就得认这个代价，不声明的管线压根不走这里。
+			MiddlewareEntry gate;
+			gate.type = MiddlewareEntry::Type::hAsync;
+			gate.name = "body_gate";
+			gate.asyncHandler = bodyGate;
+			gated.push_back(std::move(gate));
+
+			gated.insert(gated.end(), at, entries.end());
+			return gated;
+		}
+
+#ifdef HICAL_ENABLE_MIDDLEWARE_PROFILING
+		/**
+		 * @brief entries 里有没有声明 needsBody 的条目（profiling 分支判断用）
+		 */
+		bool hasNeedsBody(const std::vector<MiddlewareEntry>& entries)
+		{
+			for (const auto& e : entries)
+			{
+				if (e.needsBody)
+				{
+					return true;
+				}
+			}
+			return false;
+		}
+#endif
+	} // namespace
 
 	void MiddlewarePipeline::use(MiddlewareHandler middleware)
 	{
@@ -114,6 +200,70 @@ namespace hical
 		entries_.push_back(std::move(entry));
 	}
 
+	void MiddlewarePipeline::useBody(MiddlewareHandler middleware)
+	{
+		if (cachedChain_)
+		{
+			throw std::logic_error("MiddlewarePipeline::useBody: cannot add middleware after build()");
+		}
+		auto name = "middleware_" + std::to_string(entries_.size());
+
+		MiddlewareEntry entry;
+		entry.type = MiddlewareEntry::Type::hAsync;
+		entry.name = std::move(name);
+		entry.asyncHandler = std::move(middleware);
+		entry.needsBody = true;
+		entries_.push_back(std::move(entry));
+	}
+
+	void MiddlewarePipeline::useBody(const std::string& name, MiddlewareHandler middleware)
+	{
+		if (cachedChain_)
+		{
+			throw std::logic_error("MiddlewarePipeline::useBody: cannot add middleware after build()");
+		}
+
+		MiddlewareEntry entry;
+		entry.type = MiddlewareEntry::Type::hAsync;
+		entry.name = name;
+		entry.asyncHandler = std::move(middleware);
+		entry.needsBody = true;
+		entries_.push_back(std::move(entry));
+	}
+
+	void MiddlewarePipeline::useBody(SyncBeforeHandler before, SyncAfterHandler after)
+	{
+		if (cachedChain_)
+		{
+			throw std::logic_error("MiddlewarePipeline::useBody: cannot add middleware after build()");
+		}
+		auto name = "sync_middleware_" + std::to_string(entries_.size());
+
+		MiddlewareEntry entry;
+		entry.type = MiddlewareEntry::Type::hSync;
+		entry.name = std::move(name);
+		entry.before = std::move(before);
+		entry.after = std::move(after);
+		entry.needsBody = true;
+		entries_.push_back(std::move(entry));
+	}
+
+	void MiddlewarePipeline::useBody(const std::string& name, SyncBeforeHandler before, SyncAfterHandler after)
+	{
+		if (cachedChain_)
+		{
+			throw std::logic_error("MiddlewarePipeline::useBody: cannot add middleware after build()");
+		}
+
+		MiddlewareEntry entry;
+		entry.type = MiddlewareEntry::Type::hSync;
+		entry.name = name;
+		entry.before = std::move(before);
+		entry.after = std::move(after);
+		entry.needsBody = true;
+		entries_.push_back(std::move(entry));
+	}
+
 	void MiddlewarePipeline::build(MiddlewareNext finalHandler)
 	{
 		if (cachedChain_)
@@ -122,13 +272,14 @@ namespace hical
 		}
 
 #ifdef HICAL_ENABLE_MIDDLEWARE_PROFILING
-		if (hasSyncEntries())
+		if (hasSyncEntries() || hasNeedsBody(entries_))
 		{
-			// profiling 链是按 vector<MiddlewareHandler> 搭的，而 hSync 条目压根没有 handler 可挂。
-			// 也就是说 Sync 中间件在这条链上是「不执行」，不是「不计时」——认证、限流这类
-			// SyncBeforeHandler 会静默 fail-open。宁可少统计也不能少执行，整条管线退回普通链。
-			HICAL_LOG_WARN("MiddlewarePipeline: 本管线含 Sync 中间件，profiling 链挂不上它们（会直接丢执行，"
-						   "认证/限流静默失效），已回退到不丢条目的普通链，本管线 profiling 关闭");
+			// profiling 链是按 vector<MiddlewareHandler> 搭的，而 hSync 条目压根没有 handler 可挂，
+			// body 门又得靠普通链插——两者都挂不上这条链。Sync 中间件在 profiling 链上是「不执行」
+			// 不是「不计时」（认证、限流这类会静默 fail-open）；body 门缺失则会让 needsBody 中间件
+			// 拿到空 body。宁可少统计也不能少执行/少读 body，整条管线退回普通链。
+			HICAL_LOG_WARN("MiddlewarePipeline: 本管线含 Sync 或 needsBody 中间件，profiling 链处理不了它们"
+						   "（前者丢执行，后者漏 body 门），已回退到不丢条目的普通链，本管线 profiling 关闭");
 			// 统计对象留着只会变成一串 callCount 永远为 0 的假行，一同清掉
 			timingStats_.clear();
 			cachedChain_ = buildOptimizedChain(entries_, std::move(finalHandler));
@@ -192,14 +343,19 @@ namespace hical
 	MiddlewareNext MiddlewarePipeline::buildOptimizedChain(const std::vector<MiddlewareEntry>& entries,
 														   MiddlewareNext finalHandler)
 	{
-		if (entries.empty())
+		// 声明了 needsBody 就先插一道 body 门。没声明的管线 chainEntries 就是原列表，
+		// 后面走的分支、合并方式全都不受影响，链逐字节和加这个特性之前一样。
+		auto gated = withBodyGate(entries);
+		const std::vector<MiddlewareEntry>& chainEntries = gated.has_value() ? *gated : entries;
+
+		if (chainEntries.empty())
 		{
 			return finalHandler;
 		}
 
 		// 如果全是 Async，退化为 buildChainFrom
 		bool hasSync = false;
-		for (const auto& e : entries)
+		for (const auto& e : chainEntries)
 		{
 			if (e.type == MiddlewareEntry::Type::hSync)
 			{
@@ -211,8 +367,8 @@ namespace hical
 		if (!hasSync)
 		{
 			std::vector<MiddlewareHandler> asyncHandlers;
-			asyncHandlers.reserve(entries.size());
-			for (const auto& e : entries)
+			asyncHandlers.reserve(chainEntries.size());
+			for (const auto& e : chainEntries)
 			{
 				asyncHandlers.push_back(e.asyncHandler);
 			}
@@ -222,13 +378,13 @@ namespace hical
 		// 逆序构建优化链：连续 Sync 条目合并为单个协程 lambda
 		MiddlewareNext current = std::move(finalHandler);
 
-		int i = static_cast<int>(entries.size()) - 1;
+		int i = static_cast<int>(chainEntries.size()) - 1;
 		while (i >= 0)
 		{
-			if (entries[i].type == MiddlewareEntry::Type::hAsync)
+			if (chainEntries[i].type == MiddlewareEntry::Type::hAsync)
 			{
 				// Async 条目：独立协程 lambda（不变）
-				auto mw = entries[i].asyncHandler;
+				auto mw = chainEntries[i].asyncHandler;
 				current = [mw = std::move(mw), next = std::move(current)](HttpRequest& r) -> Awaitable<HttpResponse>
 				{
 					return mw(r, next);
@@ -239,7 +395,7 @@ namespace hical
 			{
 				// 收集连续 Sync 条目
 				int syncEnd = i; // inclusive
-				while (i >= 0 && entries[i].type == MiddlewareEntry::Type::hSync)
+				while (i >= 0 && chainEntries[i].type == MiddlewareEntry::Type::hSync)
 				{
 					--i;
 				}
@@ -250,13 +406,13 @@ namespace hical
 				std::vector<SyncAfterHandler> afters;
 				for (int j = syncStart; j <= syncEnd; ++j)
 				{
-					if (entries[j].before)
+					if (chainEntries[j].before)
 					{
-						befores.push_back(entries[j].before);
+						befores.push_back(chainEntries[j].before);
 					}
-					if (entries[j].after)
+					if (chainEntries[j].after)
 					{
-						afters.push_back(entries[j].after);
+						afters.push_back(chainEntries[j].after);
 					}
 				}
 
@@ -361,10 +517,10 @@ namespace hical
 	MiddlewareNext MiddlewarePipeline::buildFor(MiddlewareNext finalHandler) const
 	{
 #ifdef HICAL_ENABLE_MIDDLEWARE_PROFILING
-		// build() 已经把「含 Sync 就清空统计」这步做掉了，这里的 Sync 判断只是兜底：
+		// build() 已经把「含 Sync / needsBody 就清空统计」这步做掉了，这里只是兜底：
 		// buildFor() 是 const 公开接口，不保证一定在 build() 之后调用，别让 profiling 链
-		// 有任何机会拿到带 Sync 的 entries_。
-		if (!timingStats_.empty() && !hasSyncEntries())
+		// 有任何机会拿到带 Sync 或 needsBody 的 entries_（前者丢执行，后者漏 body 门）。
+		if (!timingStats_.empty() && !hasSyncEntries() && !hasNeedsBody(entries_))
 		{
 			std::vector<MiddlewareHandler> asyncHandlers;
 			asyncHandlers.reserve(entries_.size());

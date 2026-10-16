@@ -597,3 +597,56 @@ TEST(SseIntegrationTest, SseConnectionAndEvents)
 	server.stop();
 	serverThread.join();
 }
+
+TEST(SseIntegrationTest, ShutdownNotBlockedByHeartbeatTimer)
+{
+	// 回归：SSE 心跳 timer 不随会话结束取消的话，stop() 会干等一个 30 秒心跳周期
+	HttpServer server(0);
+	server.setIdleTimeout(0);
+
+	server.router().sse("/events",
+						[](std::shared_ptr<SseSession> session) -> Awaitable<void>
+						{
+							co_await session->sendData("hello from SSE");
+							co_await session->close();
+						});
+
+	std::thread serverThread;
+	uint16_t port = startSseServerAndWait(server, serverThread);
+
+	boost::asio::io_context ioc;
+	tcp::socket sock(ioc);
+	sock.connect(tcp::endpoint(boost::asio::ip::make_address("127.0.0.1"), port));
+
+	std::string req = "GET /events HTTP/1.1\r\n"
+					  "Host: 127.0.0.1\r\n"
+					  "Connection: close\r\n"
+					  "\r\n";
+	boost::asio::write(sock, boost::asio::buffer(req));
+
+	// 读到 EOF 表示服务端已 close，此时 onConnect 已返回，心跳协程仍挂在 timer 上
+	std::string raw;
+	char buf[4096];
+	sock.non_blocking(false);
+	boost::system::error_code ec;
+	while (true)
+	{
+		auto n = sock.read_some(boost::asio::buffer(buf), ec);
+		if (ec)
+		{
+			break;
+		}
+		raw.append(buf, n);
+	}
+	sock.close();
+	EXPECT_NE(raw.find("hello from SSE"), std::string::npos);
+
+	auto begin = std::chrono::steady_clock::now();
+	server.stop();
+	serverThread.join();
+	auto elapsedMs =
+		std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - begin).count();
+
+	// 心跳周期是 30 秒；cancel 生效的话关服应当在毫秒级完成
+	EXPECT_LT(elapsedMs, 5000) << "关服被未取消的心跳 timer 拖慢，耗时 " << elapsedMs << " ms";
+}

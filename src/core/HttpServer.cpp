@@ -4,6 +4,7 @@
  */
 
 #include "HttpServer.h"
+#include "Log.h"
 #include "MemoryPool.h"
 #include "RequestDispatch.h"
 #include "core/Version.h"
@@ -226,6 +227,42 @@ namespace hical
 		middlewarePipeline_.use(name, std::move(after));
 	}
 
+	void HttpServer::useBody(MiddlewareHandler middleware)
+	{
+		if (started_)
+		{
+			throw std::logic_error("HttpServer: cannot add middleware after start()");
+		}
+		middlewarePipeline_.useBody(std::move(middleware));
+	}
+
+	void HttpServer::useBody(const std::string& name, MiddlewareHandler middleware)
+	{
+		if (started_)
+		{
+			throw std::logic_error("HttpServer: cannot add middleware after start()");
+		}
+		middlewarePipeline_.useBody(name, std::move(middleware));
+	}
+
+	void HttpServer::useBody(SyncBeforeHandler before, SyncAfterHandler after)
+	{
+		if (started_)
+		{
+			throw std::logic_error("HttpServer: cannot add middleware after start()");
+		}
+		middlewarePipeline_.useBody(std::move(before), std::move(after));
+	}
+
+	void HttpServer::useBody(const std::string& name, SyncBeforeHandler before, SyncAfterHandler after)
+	{
+		if (started_)
+		{
+			throw std::logic_error("HttpServer: cannot add middleware after start()");
+		}
+		middlewarePipeline_.useBody(name, std::move(before), std::move(after));
+	}
+
 #ifdef HICAL_ENABLE_MIDDLEWARE_PROFILING
 	std::vector<MiddlewarePipeline::TimingSnapshot> HttpServer::middlewareStats() const
 	{
@@ -299,6 +336,33 @@ namespace hical
 			throw std::logic_error("HttpServer: cannot set error handler after start()");
 		}
 		errorHandler_ = std::move(handler);
+	}
+
+	void HttpServer::addPeriodicTask(const std::string& name,
+									 std::chrono::milliseconds interval,
+									 std::function<Awaitable<void>()> callback)
+	{
+		if (started_)
+		{
+			throw std::logic_error("HttpServer: cannot add periodic task after start()");
+		}
+
+		// 0 或负间隔会让定时器立刻反复触发，等于把事件循环打满，直接拒掉
+		if (interval <= std::chrono::milliseconds::zero())
+		{
+			throw std::invalid_argument("HttpServer: periodic task interval must be > 0");
+		}
+
+		if (!callback)
+		{
+			throw std::invalid_argument("HttpServer: periodic task callback must not be empty");
+		}
+
+		auto task = std::make_unique<PeriodicTask>();
+		task->name = name;
+		task->interval = interval;
+		task->callback = std::move(callback);
+		periodicTasks_.push_back(std::move(task));
 	}
 
 	void HttpServer::enableSsl(const std::string& certFile, const std::string& keyFile)
@@ -472,6 +536,17 @@ namespace hical
 			coSpawn(baseIoCtx, gcLoop());
 		}
 
+		// 启动周期性任务协程：每个任务一个循环，跑在 baseLoop_ 上。
+		// 捕获的是 task.get()（裸指针）——periodicTasks_ 里存 unique_ptr，地址稳定，
+		// 且 addPeriodicTask 在 start() 之后就抛异常，容器不会再扩容，指针一直有效。
+		// 协程体本身隐式持有 this，但 HttpServer 生命周期长于协程：baseLoop_.run() 要等
+		// 所有协程（包括这些周期任务）退出后才返回，而 run() 在 start() 里，start() 又在
+		// ~HttpServer 之前——所以 this 和 periodicTasks_ 在协程活着期间一直有效。
+		for (auto& task : periodicTasks_)
+		{
+			coSpawn(baseIoCtx, runPeriodicTask(task.get()));
+		}
+
 		// 主线程阻塞在这。work_guard 保证不会因为"暂时没活"就提前返回。
 		// stop() 把所有 pending op cancel 掉再 releaseWork()，协程走完 run() 就退了。
 		// 这样退出时 IOCP queue 是空的，不会触发两阶段 destroy 那个 SegFault。
@@ -509,6 +584,13 @@ namespace hical
 
 		draining_.store(true);
 
+		// 通知周期任务停机。置标志用 atomic，随便哪个线程写都行；协程在每轮
+		// callback 前后都会看它，调用户回调时即使正卡在里面，回调一返回就会退出循环。
+		for (auto& task : periodicTasks_)
+		{
+			task->stopRequested.store(true);
+		}
+
 		// timer/socket 操作不是线程安全的，stop() 可能从外面调进来，
 		// 所以把真正的 shutdown 动作 post 到 io_context 线程里做
 		boost::asio::post(baseLoop_.getIoContext(),
@@ -529,6 +611,20 @@ namespace hical
 							  if (gcTimer_.has_value())
 							  {
 								  gcTimer_->cancel();
+							  }
+
+							  // 周期任务定时器的 cancel 必须在 io_context 线程上做。
+							  // 协程大多数时候挂在 async_wait 上等下一个 interval，如果从别的
+							  // 线程直接 cancel，会和协程「重新 arm 定时器」的时序赛跑：万一
+							  // cancel 落在两次 async_wait 之间的空档，就没人唤醒协程，run()
+							  // 得干等满一个 interval 才退出。放到这儿和协程串行执行，cancel
+							  // 必定命中挂起的 wait（timer 为 null 说明协程还没建/已建完退出）。
+							  for (auto& task : periodicTasks_)
+							  {
+								  if (task->timer)
+								  {
+									  task->timer->cancel();
+								  }
 							  }
 
 							  // 把所有还活着的连接 socket 关掉，协程自然收到错误退出
@@ -715,6 +811,46 @@ namespace hical
 		}
 
 		gcTimer_.reset();
+	}
+
+	Awaitable<void> HttpServer::runPeriodicTask(PeriodicTask* task)
+	{
+		// timer 在协程体内建：executor 取当前协程的，自然绑在 baseLoop_ 上。
+		// 用 shared_ptr 是为了 stop() 侧能拿到同一个对象去 cancel。
+		auto executor = co_await boost::asio::this_coro::executor;
+		task->timer = std::make_shared<boost::asio::steady_timer>(executor);
+
+		// 周期语义：上一轮 callback 跑完，再等 interval 触发下一轮——不是固定频率。
+		// 这样某轮 callback 偶尔跑超了，下一轮从「这次结束」重新计时，任务不会堆积。
+		while (!task->stopRequested.load())
+		{
+			task->timer->expires_after(task->interval);
+			boost::system::error_code ec;
+			co_await task->timer->async_wait(boost::asio::redirect_error(boost::asio::use_awaitable, ec));
+
+			// cancel 会让 async_wait 带 operation_aborted 返回；stopRequested 是双保险
+			if (ec || task->stopRequested.load())
+			{
+				break;
+			}
+
+			try
+			{
+				co_await task->callback();
+			}
+			catch (const std::exception& e)
+			{
+				// 一轮失败不能把整个任务带走，记日志，下一轮照跑
+				HICAL_LOG_ERROR("periodic task [{}] callback failed: {}", task->name, e.what());
+			}
+			catch (...)
+			{
+				HICAL_LOG_ERROR("periodic task [{}] callback failed: unknown exception", task->name);
+			}
+		}
+
+		// 协程收尾：把 timer 引用放掉。stop() 侧可能已经 cancel 过它，这里只是释放。
+		task->timer.reset();
 	}
 
 	void HttpServer::gracefulStop()

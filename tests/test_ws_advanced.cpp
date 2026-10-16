@@ -605,3 +605,44 @@ TEST(WsAdvancedTest, HeartbeatPingSent)
 	server.stop();
 	serverThread.join();
 }
+
+// 回归：WS ping timer 不随会话结束取消的话，关服会干等一个 pingInterval。
+// 之前 timer 是心跳协程里的局部变量，外面拿不到句柄去 cancel，只能等它自然到期。
+// 顺带一提，ping 协程持有 session 强引用，它不退出 session 也一直被 hold 住。
+TEST(WsAdvancedTest, ShutdownNotBlockedByPingTimer)
+{
+	HttpServer server(0);
+
+	Router::WsOptions opts;
+	opts.pingInterval = std::chrono::seconds(10); // 放大效应：不 cancel 就得干等 10 秒
+	opts.maxMissedPongs = 30;                     // 大到不会触发超时关连接
+
+	server.router().ws("/ws/ping-shutdown",
+					   std::move(opts),
+					   [](const std::string& msg, WebSocketSession& session) -> Awaitable<void>
+					   {
+						   co_await session.send("echo:" + msg);
+					   });
+
+	std::thread serverThread;
+	uint16_t port = startWsServerAndWait(server, serverThread);
+
+	boost::asio::io_context ioCtx;
+	TestWsClient wsClient(ioCtx);
+	wsClient.connect("127.0.0.1", port, "/ws/ping-shutdown"); // 返回时握手已完成
+
+	// 等心跳协程跑起来、把 timer 挂上（此刻它挂在 async_wait 上等下一个 10 秒）
+	std::this_thread::sleep_for(std::chrono::milliseconds(200));
+
+	// 客户端保持连接不断，就是「关服时连接还活着、心跳协程正挂在 timer 上」的场景
+	auto begin = std::chrono::steady_clock::now();
+	server.stop();
+	serverThread.join();
+	auto elapsedMs =
+		std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - begin).count();
+
+	wsClient.close();
+
+	// ping 周期是 10 秒；cancel 生效的话关服应该在毫秒级完成
+	EXPECT_LT(elapsedMs, 3000) << "关服被未取消的 ping timer 拖慢，耗时 " << elapsedMs << " ms";
+}
