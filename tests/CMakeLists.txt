@@ -97,6 +97,11 @@ hical_add_test(test_error_handler)        # 全局错误处理器
 hical_add_test(test_expect_continue)      # Expect: 100-continue
 hical_add_test(test_http_server_perf)     # HttpServer 吞量基准测试
 hical_add_test(test_http_client)          # 测试客户端（链式调用）
+# 协程 HttpClient（接口骨架），仅在 HICAL_WITH_HTTP_CLIENT=ON 时构建，
+# 否则 OFF 下测试目标会因为找不到客户端符号而链接失败。
+if(HICAL_WITH_HTTP_CLIENT)
+    hical_add_test(test_async_http_client)
+endif()
 hical_add_test(test_optimistic_write)     # 乐观同步写 + readBuf 提前归还
 hical_add_test(test_compile_time_chain)  # 编译期中间件链与运行时 buildOptimizedChain 语义一致性
 hical_add_test(test_compile_time_json)   # 编译期 JSON 直序列化

@@ -114,6 +114,12 @@
 - [OpenApiDocument](#openapidocument) — 文档组装
 - [OpenApiEndpoint](#openapiendpoint) — 端点暴露
 
+**HTTP 客户端 API（可选，需 `HICAL_WITH_HTTP_CLIENT=ON`，默认关闭）**
+- [HttpClient](#httpclient) — 单连接协程 HTTP 客户端
+- [HttpClientPool](#httpclientpool) — 按 endpoint 复用的连接池
+- [HttpClientResult](#httpclientresult) — 请求结果
+- [HttpClientOptions](#httpclientoptions) — 客户端配置
+
 **附录**
 - [类型别名速查](#类型别名速查)
 - [回调类型速查](#回调类型速查)
@@ -2384,6 +2390,173 @@ void serveOpenApi(
     std::string jsonPath = "/openapi.json",
     std::string docsPath = "/docs");
 ```
+
+---
+
+## HTTP 客户端 API
+
+> 需要 `HICAL_WITH_HTTP_CLIENT=ON`（默认关闭）。命名空间 `hical`，头文件在 `<hical/asio/>`。这是纯客户端能力，跟上面的服务端 API 没有耦合。
+
+---
+
+### HttpClientResult
+
+一次 HTTP 请求的结果。网络层的失败（连不上、超时、TLS 握手挂掉）走 `error` 字段返回，**不抛异常**——对端不可达对客户端来说是常规情况。HTTP 层的错误（404/500）不算网络错误：那种情况 `error` 为空，得看 `status`。两条轴分开判断，别混。
+
+**头文件：** `<hical/asio/HttpClient.h>`
+
+| 字段         | 类型           | 说明                                             |
+| ------------ | -------------- | ------------------------------------------------ |
+| `error`      | `NetworkError` | 网络层错误码；无网络错误时为空                   |
+| `status`     | `int`          | HTTP 状态码，0 表示压根没收到响应                |
+| `statusText` | `std::string`  | 状态行里的原因短语（如 `"OK"`、`"Not Found"`）   |
+| `body`       | `std::string`  | 响应体（已按 Content-Length / chunked 解码后的内容） |
+| `headers`    | `HeaderMap`    | 响应头                                           |
+
+| 方法               | 返回值 | 说明                                            |
+| ------------------ | ------ | ----------------------------------------------- |
+| `ok()`             | `bool` | 无网络错误且拿到 2xx 响应                       |
+| `isNetworkError()` | `bool` | 是否栽在网络层（连接失败 / 超时 / TLS 等传输层错误） |
+| `operator bool()`  | `bool` | 等价 `ok()`，方便 `if (result)` 这样写          |
+
+### HttpClientOptions
+
+客户端配置。connect / request 两档超时都给了非零默认值——不设超时的链路最怕对端接了连接却永远不回；想关掉某档超时把对应字段设成 0 或负数即可。
+
+| 字段             | 类型                            | 默认值 | 说明                                                    |
+| ---------------- | ------------------------------- | ------ | ------------------------------------------------------- |
+| `tlsContext`     | `std::shared_ptr<SslContext>`   | 空     | 非空即启用 HTTPS（用 `ssl::context::tls_client` 构造）  |
+| `sniHost`        | `std::string`                   | `""`   | SNI 主机名，留空则回落到构造时传入的 host               |
+| `verifyPeer`     | `bool`                          | `true` | 是否校验对端证书                                        |
+| `connectTimeout` | `std::chrono::steady_clock::duration` | `10s`  | resolve + TCP 连接（含 TLS 握手）的总时限；非正值不设超时 |
+| `requestTimeout` | `std::chrono::steady_clock::duration` | `30s`  | 单次请求（写请求 + 读完整响应）的时限；非正值不设超时   |
+
+常量：`static constexpr auto kDefaultConnectTimeout`（10s）、`static constexpr auto kDefaultRequestTimeout`（30s）。
+
+### HttpClient
+
+单连接的协程 HTTP/1.1 客户端：一个实例对应一条到 host:port 的连接，请求之间尽量复用（keep-alive）。实例本身不跨线程共享；要管一批连接用 `HttpClientPool`。所有异步操作跑在构造时传入的 io_context 上。**请求协程在挂起点之后要用对象上的 socket / 缓冲，所以调用方必须保证本对象活到 awaitable 跑完**——池子持有实例、协程期间不释放即可满足。
+
+**头文件：** `<hical/asio/HttpClient.h>`
+
+#### 构造函数
+
+| 方法                                        | 参数                                                                                                       | 说明                                     |
+| ------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
+| `HttpClient(ioCtx, host, port, options)`    | ioCtx: `io_context&`<br>host: 目标主机（域名或 IP）<br>port: 目标端口<br>options: `HttpClientOptions`（可选） | `options.tlsContext` 非空则走 HTTPS      |
+
+独占一条连接，拷贝 / 移动都禁用。
+
+#### 公共方法
+
+| 方法                                 | 参数                                                                                             | 返回值                   | 说明                                       |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------ | ------------------------ | ------------------------------------------ |
+| `request(method, target, body, headers)` | method: HTTP 方法<br>target: 请求目标（如 `"/api/notice"`）<br>body: 请求体（默认空）<br>headers: 附加请求头（默认空） | `Awaitable<HttpClientResult>` | 发起一次请求；网络错误在 `result.error` 里 |
+| `get(target, headers)`               | target: 请求目标<br>headers: 附加请求头                                                          | `Awaitable<HttpClientResult>` | 便捷 GET                                   |
+| `post(target, body, contentType)`    | target: 请求目标<br>body: 请求体<br>contentType: Content-Type（默认 `"application/json"`）        | `Awaitable<HttpClientResult>` | 便捷 POST                                  |
+| `isAlive()`                          | 无                                                                                               | `bool`                   | 连接当前是否可用（已建立且没关）           |
+| `close()`                            | 无                                                                                               | `void`                   | 主动关闭连接                               |
+| `key()`                              | 无                                                                                               | `std::string_view`       | 分桶键 `"host:port"`，连接池据此归并同类目标 |
+
+> `Host` / `Content-Length` / `Connection` 三个头由客户端自己补齐；用户在 `headers` 里给了同名头会被跳过，免得发出去两份。响应 body 按头部选路：有 `Content-Length` 读满指定字节，`Transfer-Encoding: chunked` 走原地解码，两者都没有就靠连接关闭（EOF）收尾。
+
+#### 示例
+
+```cpp
+#include <hical/asio/HttpClient.h>
+#include <hical/core/SslContext.h>
+
+using namespace hical;
+namespace asio = boost::asio;
+
+asio::io_context io;
+
+// 明文：一个实例对应一条到 127.0.0.1:8080 的连接
+HttpClient client(io, "127.0.0.1", 8080);
+auto res = co_await client.post("/notify", R"({"msg":"hi"})");
+if (res.isNetworkError()) {
+    // 连不上 / 超时 / TLS 出错，看 res.error
+} else if (res.ok()) {
+    // 2xx
+} else {
+    // 404 / 500 之类，看 res.status
+}
+
+// HTTPS：tlsContext 非空即启用
+auto tls = std::make_shared<SslContext>(asio::ssl::context::tls_client);
+HttpClientOptions opts;
+opts.tlsContext = tls;
+opts.sniHost = "api.example.com";
+HttpClient https(io, "api.example.com", 443, opts);
+auto r = co_await https.get("/v1/status");
+```
+
+---
+
+### HttpClientPool
+
+按 `host:port`（明文 / TLS 分开）分桶复用的连接池。定位是「每个 io_context 一个池、不跨线程共享」——池子所有状态都跑在构造时传入的那个 io_context 上，不加锁；多线程场景每个 loop 各建一个。`request()` / `get()` / `post()` 内部自动 acquire / release，最省事。
+
+**头文件：** `<hical/asio/HttpClientPool.h>`
+
+#### HttpClientPoolOptions 结构体
+
+| 字段              | 类型                                  | 默认值 | 说明                                       |
+| ----------------- | ------------------------------------- | ------ | ------------------------------------------ |
+| `idleTimeout`     | `std::chrono::steady_clock::duration` | `30s`  | 单条空闲连接超过这个时长没人用就关掉       |
+| `cleanupInterval` | `std::chrono::steady_clock::duration` | `10s`  | 清理扫描周期（一个 timer 管整池）          |
+| `maxIdlePerBucket`| `std::size_t`                         | `8`    | 每个 host:port 桶最多留几条空闲连接，超了挤掉最老的 |
+
+常量：`kDefaultIdleTimeout`（30s）、`kDefaultCleanupInterval`（10s）。
+
+#### 构造函数
+
+| 方法                              | 参数                                                                    | 说明                                                              |
+| --------------------------------- | ----------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| `HttpClientPool(ioCtx, options)`  | ioCtx: `io_context&`<br>options: `HttpClientPoolOptions`（可选）          | `cleanupInterval` / `idleTimeout` 非正会抛 `std::invalid_argument` |
+
+拷贝 / 移动均禁用。
+
+#### 公共方法
+
+| 方法                                                       | 参数                                                                                                                                    | 返回值                        | 说明                                                     |
+| ---------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- | -------------------------------------------------------- |
+| `acquire(host, port, options)`                             | host/port: 目标<br>options: `HttpClientOptions`                                                                                          | `std::shared_ptr<HttpClient>` | 取一条可用连接：桶里有活着的就复用，否则新建             |
+| `release(client)`                                          | client: 之前 acquire 出来的连接                                                                                                          | `void`                        | 还回池子；坏掉的（出错 / 超时被置 closed）直接销毁        |
+| `request(host, port, method, target, body, headers, options)` | host/port/method/target<br>body: 请求体（默认空）<br>headers: 附加请求头（默认空）<br>options: `HttpClientOptions`（默认空）            | `Awaitable<HttpClientResult>` | 发一次请求，内部自动 acquire / release                   |
+| `get(host, port, target, headers, options)`                | host/port/target<br>headers: 附加请求头（默认空）<br>options: 客户端配置（默认空）                                                        | `Awaitable<HttpClientResult>` | 便捷 GET，内部自动 acquire / release                     |
+| `post(host, port, target, body, contentType, options)`     | host/port/target/body<br>contentType: Content-Type（默认 `"application/json"`）<br>options: 客户端配置（默认空）                          | `Awaitable<HttpClientResult>` | 便捷 POST，内部自动 acquire / release                    |
+| `shutdown()`                                               | 无                                                                                                                                      | `void`                        | 关掉所有空闲连接并取消清理 timer；幂等，可从任意线程调   |
+| `idleCount()`                                              | 无                                                                                                                                      | `std::size_t`                 | 当前桶里空闲连接总数（主要给测试用）                     |
+
+> `request()` 系列对**复用的连接**做了重试：复用的连接可能已经被对端悄悄关了，遇到「网络错误且一个字节响应都没收到（`status == 0`）」时会丢掉死连接、重开一条重试一次，免得一次本可成功的请求因为陈旧 keep-alive 连接而判死。`status` 已经非 0 说明聊到一半了，不重试。注意这对非幂等方法给的是「至少一次」语义——极端情况下可能重发一次，需要严格一次的场景别依赖它，改用 `acquire()` 自己控制。
+>
+> 析构 / `shutdown()` 会把「取消 timer、关空闲连接」post 回 io_context 线程执行，所以从别的线程调它们是安全的；但事件循环若不跑了，这些动作要等下一次 `run()` / `poll()` 才落地。池子的清理协程自己持有一份内部状态引用，析构后协程收到取消才真正释放，不会留下悬空。
+
+#### 示例
+
+```cpp
+#include <hical/asio/HttpClientPool.h>
+
+using namespace hical;
+namespace asio = boost::asio;
+
+asio::io_context io;
+HttpClientPool pool(io);
+
+// 内部自动 acquire / release（同一 host:port 会自动复用连接）
+auto res = co_await pool.get("127.0.0.1", 8080, "/health");
+auto r2  = co_await pool.post("127.0.0.1", 8080, "/api/notice", R"({"a":1})");
+
+// 想自己管连接生命周期也能拆开
+auto client = pool.acquire("127.0.0.1", 8080);
+if (client->isAlive()) {
+    auto r3 = co_await client->get("/next");
+}
+pool.release(std::move(client));
+```
+
+> 当前不支持 HTTP/2、重定向跟随、cookie jar、range 下载、流式响应，也不做连接池负载均衡；不处理 1xx 中间响应。
 
 ---
 

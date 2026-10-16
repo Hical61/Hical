@@ -238,6 +238,18 @@ DbMiddleware / DbQueryLog          [可选，HICAL_WITH_DATABASE=ON]
 
 ---
 
+### 3.5 HTTP 客户端（可选，`HICAL_WITH_HTTP_CLIENT`）
+
+客户端归在 `src/asio/`——跟服务端一样是「拿 Asio 干活的具体实现」，不属于 `src/core/` 那层抽象接口。默认不编（`HICAL_WITH_HTTP_CLIENT=OFF`），打开才把 `HttpClient.cpp` / `HttpClientPool.cpp` 编进 `hical_core`、并导出 `HICAL_HAS_HTTP_CLIENT` 宏；理由很直白，服务端框架的用户不该为客户端多付编译时间。
+
+它最有意思的一点是**和服务端共用一套 HTTP 解析器**：两边都链 picohttpparser，服务端解析请求用 `phr_parse_request`、客户端解析响应用 `phr_parse_response`，chunked 解码也是同一个 `phr_decode_chunked`。同源的好处是对畸形报文和边界情况的行为天然一致——不会出现「服务端这么理解、客户端那么理解」的分叉；代价是得跟着 picohttpparser 的解析契约走（比如「返回 -2 表示数据还不完整、继续读」那套），没引 Beast。请求侧是手写序列化：请求行 + `Host` + `Content-Length` + 自定义头 + body，本来也没多少东西。
+
+明文和 HTTPS 走同一份 `requestOn()` 实现，底层传输是个 `PlainSocket` / `TlsSocket` 二选一的 `variant`，建连 / 握手 / 关闭的差异用 `if constexpr` 在编译期分掉，请求序列化、读循环、body 读取不分叉——跟服务端 `handleSession` 一个套路。超时用 `boost::asio::cancel_after`，但每段 I/O 按「离整段绝对截止点还剩多久」算，整段共用一个 deadline，避免慢速滴发的对端每段都踩回来无限拖住请求。
+
+连接池 `HttpClientPool` 按 `host:port`（明文 / TLS 分开）分桶，取连接优先复用还活着的，空闲清理**用一个 timer 管整池**（照 `IdleScanner` 的思路，不给每条连接配 timer）。定位是「每个 io_context 一个池、不跨线程共享」，池子所有状态都跑在构造时传入的那个 io_context 上、不加锁，多线程场景每个 loop 各建一个。
+
+---
+
 ## 4. PMR 内存池设计
 
 ### 4.1 设计动机
@@ -1242,6 +1254,7 @@ struct NetworkError
 | ---------------------- | ------------------------------------------------ | --------------------------------------------------------------------------------- |
 | 协程模型               | `asio::awaitable<T>`                             | 与 Boost.Asio 原生集成，零额外开销，代码线性化                                    |
 | HTTP 解析器            | picohttpparser（原生栈集成）                     | 轻量零拷贝，性能优于 Beast                                                        |
+| HTTP 客户端            | 可选模块 + 与服务端共用 picohttpparser           | 服务端框架默认不编客户端；两边解析器同源，畸形报文行为一致，零新增第三方依赖       |
 | 内存管理               | C++17 PMR 三层池                                 | 标准化接口，高并发低碎片，与 Boost.JSON 天然兼容                                  |
 | SSL 实现               | 模板化 `GenericConnection<SocketType>`           | 编译期分支消除，零运行时开销                                                      |
 | 后端抽象               | C++20 Concepts                                   | 编译期约束，不引入虚函数开销，面向未来可扩展                                      |

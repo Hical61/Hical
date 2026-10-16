@@ -193,6 +193,17 @@ if(HICAL_WITH_OPENAPI)
     target_compile_definitions(hical_core PUBLIC HICAL_HAS_OPENAPI=1)
 endif()
 
+# 协程 HTTP 客户端（可选，默认关闭，选项在根 CMakeLists.txt 中定义）。
+# 头文件不包 #ifdef（对齐 db/ 约定），开关只管 .cpp——没开模块却 include 会链接失败，
+# 这是预期行为。任务 7 的 HttpClientPool.cpp 也往这个块里加。
+if(HICAL_WITH_HTTP_CLIENT)
+    target_sources(hical_core PRIVATE
+        asio/HttpClient.cpp
+        asio/HttpClientPool.cpp
+    )
+    target_compile_definitions(hical_core PUBLIC HICAL_HAS_HTTP_CLIENT=1)
+endif()
+
 # NUMA 感知（可选，Linux + libnuma）
 if(HICAL_WITH_NUMA)
     target_include_directories(hical_core PRIVATE ${NUMA_INCLUDE_DIR})
@@ -244,7 +255,19 @@ install(
     DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/asio/
     DESTINATION include/hical/asio
     FILES_MATCHING PATTERN "*.h" PATTERN "*.hci"
+    PATTERN "HttpClient.h" EXCLUDE
+    PATTERN "HttpClientPool.h" EXCLUDE
 )
+
+# 协程 HTTP 客户端头文件（可选）：ON 才装，OFF 下连头带实现一起缺席，
+# 免得用户 include 到一个注定链接不上的头。
+if(HICAL_WITH_HTTP_CLIENT)
+    install(
+        FILES ${CMAKE_CURRENT_SOURCE_DIR}/asio/HttpClient.h
+              ${CMAKE_CURRENT_SOURCE_DIR}/asio/HttpClientPool.h
+        DESTINATION include/hical/asio
+    )
+endif()
 
 # 数据库头文件安装（可选）
 if(HICAL_WITH_DATABASE)

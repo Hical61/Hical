@@ -54,6 +54,10 @@ endif()
 # OpenAPI 自动生成（无额外依赖，复用 Boost.JSON）
 option(HICAL_WITH_OPENAPI "Enable OpenAPI 3.0 auto-generation module" ON)
 
+# 协程 HTTP 客户端（roadmap P5 第 28 项）。默认 OFF —— 服务端框架的用户绝大多数
+# 只跑服务端，不该为客户端功能付编译时间；真要发起上游请求再显式打开。
+option(HICAL_WITH_HTTP_CLIENT "启用协程 HTTP 客户端" OFF)
+
 # mimalloc 替代系统 malloc 作为 PMR 最底层分配器
 option(HICAL_WITH_MIMALLOC "Use mimalloc as PMR upstream allocator" OFF)
 
