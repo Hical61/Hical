@@ -1006,8 +1006,24 @@ namespace hical
 				size_t memmoveSrc = 0; // memmove 源偏移
 				size_t memmoveLen = 0; // memmove 长度（0 表示无需 memmove）
 
+				// body 读没读过的标记。链里有 needsBody 声明时会插一道门，门和 tail 共用同一个
+				// readRequestBody：谁先读就把这块置上，另一个看到就跳过，保证 body 只读一遍、
+				// memmoveSrc/bufUsed 这些副作用也只落一次。链里没门时它恒为 false，tail 照旧兜底读。
+				bool bodyRead = false;
+
 				auto readRequestBody = [&]() -> Awaitable<std::optional<HttpResponse>>
 				{
+					// 读过就直接返回成功，保证 body 只读一遍。调用方不止一个：全局链上的门、
+					// tail 兜底、还有组级 useBody 挂在路由 handler 上的局部链门——组级那道门
+					// 在 dispatchResolved 里才跑到，那时 body 早读过了，靠这个判断挡掉二次读。
+					// 少了它，组级 useBody + 超出一个 readBuf（8KB）的 body 会在第二次读时挂死。
+					if (bodyRead)
+					{
+						co_return std::nullopt;
+					}
+					// 成功失败都算读过：失败时 body 没读完、连接已脏，调用方会短路写回错误响应，
+					// 谁都不该再读第二遍。
+					bodyRead = true;
 					// 读 body 阶段出错：body 未读完，连接已脏，必须 close
 					auto bodyError = [](HttpStatusCode code, const std::string& msg)
 					{
@@ -1180,9 +1196,15 @@ namespace hical
 						// 短路（认证失败等）时不触发终端骨架，body 一字不读。
 						auto tail = [&](HttpRequest& r) -> Awaitable<HttpResponse>
 						{
-							if (auto err = co_await readRequestBody(); err)
+							// 门（链里有 needsBody 声明才插）已经替我读过 body 时 bodyRead 为真，
+							// 这次跳过兜底读；没有门（普通请求）就照旧读一遍。两条路都没多出协程帧：
+							// 没门时这次就是原来那次，有门时省下的正是尾巴上多读一遍的代价。
+							if (!bodyRead)
 							{
-								co_return std::move(*err);
+								if (auto err = co_await readRequestBody(); err)
+								{
+									co_return std::move(*err);
+								}
 							}
 							if (auto sync = router_.dispatchSyncResolved(r, resolveResult); sync)
 							{
@@ -1193,6 +1215,12 @@ namespace hical
 						detail::RequestDispatchContext ctx;
 						ctx.obj = &tail;
 						ctx.invoke = &detail::tailInvoke<decltype(tail)>;
+						// 把「读 body」入口也交给链。声明了 needsBody 的管线里有一道门，门取这两个
+						// 字段在声明者之前把 body 读掉；没声明时门不存在，这两个字段没人调，body 由
+						// 上面的 tail 兜底读。obj/invoke 与 bodyObj/readBody 都指向本 for 循环栈上的
+						// 闭包，链执行完即失效，attach(nullptr) 会一并解绑。
+						ctx.bodyObj = &readRequestBody;
+						ctx.readBody = &detail::bodyInvoke<decltype(readRequestBody)>;
 						detail::RequestDispatchContext::attach(req, &ctx);
 						try
 						{
@@ -1569,39 +1597,49 @@ namespace hical
 			auto* wsScanner = currentThreadIdleScanner();
 			IdleScanner::Guard wsIdleGuard(wsScanner, wsIdleEntry);
 
-			// 使用 alive 标志防止 timer/ping 回调在 session 销毁后访问悬空引用
+			// 使用 alive 标志防止 timer/ping 回调在 session 销毁后访问悬空引用。
+			// timer 提到协程外面，会话结束时 guard 才拿得到句柄去 cancel；不开 ping 的就不建（nullptr）。
 			auto wsAlive = std::make_shared<std::atomic<bool>>(true);
+			std::shared_ptr<boost::asio::steady_timer> wsPingTimer;
+			if (wsRoute.pingInterval.count() > 0)
+			{
+				wsPingTimer = std::make_shared<boost::asio::steady_timer>(session->socket().get_executor());
+			}
 
-			// RAII：确保协程退出时标记 session 已失效
+			// RAII：确保协程退出时标记 session 已失效，并把还在 wait 的 ping timer 取消掉。
+			// 只置标志不行——ping 协程多半正挂在 async_wait 上，收不到这个通知，只能等 timer 自然到期。
 			struct WsAliveGuard
 			{
 				std::shared_ptr<std::atomic<bool>> alive;
+				std::shared_ptr<boost::asio::steady_timer> timer; // 可空（未开 ping）
 
 				~WsAliveGuard()
 				{
 					alive->store(false);
+					if (timer)
+					{
+						timer->cancel();
+					}
 				}
-			} wsAliveGuard {wsAlive};
+			} wsAliveGuard {wsAlive, wsPingTimer};
 
 			// 7. 启动心跳 Ping 协程（Feature 1）
-			if (wsRoute.pingInterval.count() > 0)
+			if (wsPingTimer)
 			{
 				auto pingInterval = wsRoute.pingInterval;
 				auto maxMissed = wsRoute.maxMissedPongs;
 				auto pingPayload = wsRoute.pingPayload;
 
 				coSpawn(session->socket().get_executor(),
-						[session, wsAlive, pingInterval, maxMissed, pingPayload = std::move(pingPayload)]()
+						[session, wsAlive, wsPingTimer, pingInterval, maxMissed, pingPayload = std::move(pingPayload)]()
 							-> Awaitable<void>
 						{
-							auto executor = co_await boost::asio::this_coro::executor;
-							boost::asio::steady_timer timer(executor);
-
 							while (wsAlive->load(std::memory_order_acquire) && session->isOpen())
 							{
-								timer.expires_after(pingInterval);
+								wsPingTimer->expires_after(pingInterval);
 								boost::system::error_code ec;
-								co_await timer.async_wait(boost::asio::redirect_error(boost::asio::use_awaitable, ec));
+								co_await wsPingTimer->async_wait(
+									boost::asio::redirect_error(boost::asio::use_awaitable, ec));
 								if (ec || !wsAlive->load(std::memory_order_acquire))
 								{
 									break;
@@ -1787,30 +1825,25 @@ namespace hical
 			co_await sseSession->sendResponseHead();
 			sseIdleEntry.touch();
 
-			// 心跳保活，每 30 秒一条注释
-			auto alive = std::make_shared<bool>(true);
-
-			struct AliveGuard
-			{
-				std::shared_ptr<bool> a;
-
-				~AliveGuard()
-				{
-					*a = false;
-				}
-			} aliveGuard {alive};
+			// 心跳 timer 提到协程外面，会话结束时 guard 才拿得到句柄去 cancel。
+			// 另外留着 alive 标志：协程可能正挂在 sendComment 上（timer 没在 wait），
+			// 这时 cancel 打不到 wait，得靠标志让它醒来后别再重挂 timer。
+			auto heartbeatAlive = std::make_shared<bool>(true);
+			auto heartbeatTimer = std::make_shared<boost::asio::steady_timer>(sseSession->socket().get_executor());
 
 			coSpawn(sseSession->socket().get_executor(),
-					[alive, sessionWeak = std::weak_ptr<SseSession>(sseSession)]() -> Awaitable<void>
+					[heartbeatAlive,
+					 heartbeatTimer,
+					 sessionWeak = std::weak_ptr<SseSession>(sseSession)]() -> Awaitable<void>
 					{
-						auto executor = co_await boost::asio::this_coro::executor;
-						boost::asio::steady_timer timer(executor);
-						while (*alive)
+						while (*heartbeatAlive)
 						{
-							timer.expires_after(std::chrono::seconds(30));
+							heartbeatTimer->expires_after(std::chrono::seconds(30));
 							boost::system::error_code ec;
-							co_await timer.async_wait(boost::asio::redirect_error(boost::asio::use_awaitable, ec));
-							if (ec || !*alive)
+							co_await heartbeatTimer->async_wait(
+								boost::asio::redirect_error(boost::asio::use_awaitable, ec));
+							// ec 来自 cancel，标志兜住停在 sendComment 时被结束的情况
+							if (ec || !*heartbeatAlive)
 							{
 								break;
 							}
@@ -1820,6 +1853,24 @@ namespace hical
 							}
 						}
 					});
+
+			// 会话结束（正常退出或异常）时停心跳：置标志 + cancel timer，两个都不能少——
+			// 只置标志，协程挂在 async_wait 上要等 timer 自然到期（30 秒）；只 cancel，会漏掉停在
+			// sendComment 时那次。timer 和它的 wait 在同一个 executor，同线程调用，直接 cancel 即可
+			struct HeartbeatGuard
+			{
+				std::shared_ptr<bool> alive;
+				std::shared_ptr<boost::asio::steady_timer> timer;
+
+				~HeartbeatGuard()
+				{
+					*alive = false;
+					if (timer)
+					{
+						timer->cancel();
+					}
+				}
+			} heartbeatGuard {heartbeatAlive, heartbeatTimer};
 
 			// 调用 onConnect 回调
 			co_await sseRoute.onConnect(std::move(sseSession));

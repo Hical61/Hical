@@ -68,6 +68,21 @@ namespace hical
 		void use(SyncAfterHandler after);
 
 		/**
+		 * @brief 添加需要请求 body 的组级异步中间件
+		 * 语义同 use()，额外声明这一层要读请求 body。组内路由的链会在该层之前插一道
+		 * body 门，声明者排到门之后，验签类中间件才拿得到完整 req.body()。
+		 * @param middleware 中间件处理器
+		 */
+		void useBody(MiddlewareHandler middleware);
+
+		/**
+		 * @brief 添加需要请求 body 的组级同步前/后中间件（无协程帧开销）
+		 * @param before 前置处理器
+		 * @param after 后置处理器（可为空）
+		 */
+		void useBody(SyncBeforeHandler before, SyncAfterHandler after = nullptr);
+
+		/**
 		 * @brief 创建嵌套子组
 		 * @param subPrefix 子前缀
 		 * @return 子路由组（继承当前组的中间件和前缀）

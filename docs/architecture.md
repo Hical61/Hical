@@ -446,9 +446,9 @@ io_context.run()
     │       │               ├── picohttpparser 解析请求（零拷贝 string_view）
     │       │               ├── router_.resolveRoute()             ──→ 路由匹配前置（缓存 ResolveResult）
     │       │               │   └── 无效请求（404/405/400）读 body 前直接拒绝
-    │       │               ├── middlewarePipeline.execute()        ──→ 中间件链（读 body 前执行）
-    │       │               │       └── 分发上下文（internalSlot_ 里的 obj/invoke）
-    │       │               │               ├── 读 body
+    │       │               ├── middlewarePipeline.execute()        ──→ 中间件链（默认读 body 前执行）
+    │       │               │       └── 分发上下文（internalSlot_ 里的 obj/invoke 与 bodyObj/readBody）
+    │       │               │               ├── 读 body（默认在最内层；链里有 useBody 声明时提前到 body 门）
     │       │               │               └── dispatchSyncResolved(req) / dispatchResolved(req)  ──→ 按缓存结果分发
     │       │               └── co_await async_write(FixedBuffer)  ──→ 单次系统调用发送
     │       │
@@ -689,9 +689,9 @@ class MiddlewarePipeline
 3. **后置处理** — 在 `next(req)` 返回后修改响应（如添加 CORS 头）
 4. **异常处理** — 用 try/catch 包裹 `next(req)`，统一处理异常
 
-**执行时序（相对 body 读取）**：中间件在 `resolveRoute()` 之后、读取 body 之前执行。中间件此时只能看到 header，`req.body()` 还是空的；被中间件拦截（如认证失败），请求体一字不读。body 字段级校验由 handler 负责，中间件和 handler 共享同一个 `HttpRequest&` 实例，`setAttribute`/`getAttribute` 沿途不丢。
+**执行时序（相对 body 读取）**：默认情况下中间件在 `resolveRoute()` 之后、读取 body 之前执行——中间件此时只能看到 header，`req.body()` 还是空的；被中间件拦截（如认证失败），请求体一字不读；body 字段级校验由 handler 负责。如果某个中间件必须读原始 body（验签这类），就用 `useBody()` 声明：链构建时会在第一个声明者之前插一道 body 门，命中它先把 body 读进来，声明者以及它后面的中间件跑的时候 `req.body()` 已经就绪。门插在第一个声明者之前，所以声明者前面那批不声明的中间件仍然在 body 之前执行、不受影响；不声明的管线维持原状，body 读取仍在洋葱链最内层。中间件和 handler 共享同一个 `HttpRequest&` 实例，`setAttribute`/`getAttribute` 沿途不丢。
 
-**链预构建（P1 优化）**：中间件链在 `HttpServer::start()` 里 `build()` 一次，finalHandler 是终端骨架 `detail::runInternalDispatch`；每个请求的尾部动作（读 body + 按缓存 resolveResult 分发）打包成栈上闭包（`obj` + `invoke` 函数指针对），通过 `HttpRequest::internalSlot_`（`void*` 私有槽，`detail` 命名空间专用）传给骨架，每请求零链重建。WS/SSE 链仍走 `buildFor` + 占位 `ok("")`。
+**链预构建（P1 优化）**：中间件链在 `HttpServer::start()` 里 `build()` 一次，finalHandler 是终端骨架 `detail::runInternalDispatch`；每个请求的尾部动作（读 body + 按缓存 resolveResult 分发）打包成栈上闭包（`obj` + `invoke` 函数指针对），通过 `HttpRequest::internalSlot_`（`void*` 私有槽，`detail` 命名空间专用）传给骨架，每请求零链重建。`useBody()` 插的 body 门共用同一套入口——它不捕获任何 per-request 状态，只从槽里取 `bodyObj` + `readBody`（同套路的第二对类型擦除入口）调读 body，所以门本身能缓存进链里，body 读没读过由请求内部的 `bodyRead` 标志保证只读一遍。WS/SSE 链仍走 `buildFor` + 占位 `ok("")`。
 
 ---
 

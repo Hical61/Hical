@@ -8,6 +8,7 @@
 #include "HttpRequest.h"
 #include "HttpResponse.h"
 #include "Coroutine.h"
+#include <optional>
 
 namespace hical::detail
 {
@@ -24,6 +25,9 @@ namespace hical::detail
 	 * handleSession 栈上的闭包，生命周期由 handleSession 的 for 循环保证：链执行完 ctx
 	 * 即失效，req 下一轮复用前槽会被重新写入。禁止把 obj/invoke 这一对缓存到链里跨请求
 	 * 复用，那样上一请求的 resolveResult 会 stale，obj 甚至会悬空。
+	 * bodyObj + readBody 是同套路的第二对，把「读 body」这一步也做成可挂进预构建链的类型擦除
+	 * 入口，一样是栈上闭包加函数指针，生命周期约束同 obj/invoke。只有声明了 needsBody 的
+	 * 管线才会用到它，没声明时两个字段都留 nullptr。
 	 */
 	struct RequestDispatchContext
 	{
@@ -35,8 +39,20 @@ namespace hical::detail
 		 */
 		using InvokeFn = Awaitable<HttpResponse> (*)(void* obj, HttpRequest& req);
 
-		void* obj = nullptr;       ///< 指向 handleSession 栈上的终端闭包，链执行完即失效
-		InvokeFn invoke = nullptr; ///< 与 obj 配套的调用入口，由 tailInvoke<闭包类型> 生成
+		/**
+		 * @brief 读 body 的类型擦除调用约定：从 bodyObj 取回闭包并转发调用
+		 * 返回 nullopt 表示读成功、body 已落进 req；返回 HttpResponse 表示读失败，
+		 * 那个响应就是错误响应，调用方（body 门）要短路返回它、不再往下走。
+		 * 跟 obj + invoke 一个套路，同样刻意不用 std::function——每请求一次堆分配省掉。
+		 * @param obj handleSession 栈上读 body 闭包的地址
+		 * @return nullopt = 读成功；有值 = 读失败（错误响应）
+		 */
+		using BodyReadFn = Awaitable<std::optional<HttpResponse>> (*)(void* obj);
+
+		void* obj = nullptr;           ///< 指向 handleSession 栈上的终端闭包，链执行完即失效
+		InvokeFn invoke = nullptr;     ///< 与 obj 配套的调用入口，由 tailInvoke<闭包类型> 生成
+		void* bodyObj = nullptr;       ///< 指向 handleSession 栈上的读 body 闭包，链执行完即失效
+		BodyReadFn readBody = nullptr; ///< 与 bodyObj 配套的读 body 入口，由 bodyInvoke<闭包类型> 生成
 
 		/**
 		 * @brief 写入请求的内部槽（供 HttpSessionImpl 有中间件路径调用）
@@ -68,6 +84,17 @@ namespace hical::detail
 	inline Awaitable<HttpResponse> tailInvoke(void* obj, HttpRequest& req)
 	{
 		return (*static_cast<Closure*>(obj))(req);
+	}
+
+	/**
+	 * @brief 读 body 的类型擦除入口：把 void* 还原成真实闭包再转发调用
+	 * 同 tailInvoke，本函数自己不是协程，直接 return 闭包产出的 awaitable，不多一个帧。
+	 * @tparam Closure 读 body 闭包类型（由 handleSession 里 `ctx.readBody = &bodyInvoke<decltype(...)>` 推导）
+	 */
+	template <typename Closure>
+	inline Awaitable<std::optional<HttpResponse>> bodyInvoke(void* obj)
+	{
+		return (*static_cast<Closure*>(obj))();
 	}
 
 	/**

@@ -17,7 +17,9 @@
 #include "../asio/EventLoopPool.h"
 #include <boost/asio.hpp>
 #include <atomic>
+#include <chrono>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
@@ -131,6 +133,37 @@ namespace hical
 		 */
 		void use(const std::string& name, SyncAfterHandler after);
 
+		/**
+		 * @brief 添加需要请求 body 的中间件
+		 * 语义同 use()，额外声明这一层要读请求 body。链构建时会在第一个声明者之前插一道
+		 * body 门，声明者排到门之后，验签类中间件才拿得到完整 req.body()。
+		 * 只在真需要读 body 时用：声明了会让该层之前的无效请求也走一遍读 body。
+		 * @param middleware 中间件处理器
+		 */
+		void useBody(MiddlewareHandler middleware);
+
+		/**
+		 * @brief 添加需要请求 body 的命名中间件（启用 profiling 时记录名称用于统计）
+		 * @param name 中间件名称
+		 * @param middleware 中间件处理器
+		 */
+		void useBody(const std::string& name, MiddlewareHandler middleware);
+
+		/**
+		 * @brief 添加需要请求 body 的同步前/后中间件（无协程帧开销）
+		 * @param before 前置处理器（返回 nullopt 继续，返回 HttpResponse 拦截）
+		 * @param after 后置处理器（可为空）
+		 */
+		void useBody(SyncBeforeHandler before, SyncAfterHandler after = nullptr);
+
+		/**
+		 * @brief 添加需要请求 body 的命名同步中间件（启用 profiling 时记录名称用于统计）
+		 * @param name 中间件名称
+		 * @param before 前置处理器
+		 * @param after 后置处理器（可为空）
+		 */
+		void useBody(const std::string& name, SyncBeforeHandler before, SyncAfterHandler after = nullptr);
+
 #ifdef HICAL_ENABLE_MIDDLEWARE_PROFILING
 		/**
 		 * @brief 获取中间件计时统计快照
@@ -224,6 +257,21 @@ namespace hical
 		 * @note 必须在 start() 之前调用
 		 */
 		void setErrorHandler(ErrorHandler handler);
+
+		/**
+		 * @brief 注册周期性任务
+		 * 任务由 HttpServer 统一管理生命周期：start() 时自动启动，stop() 时自动
+		 * 取消定时器并让协程退出，调用方不需要自己管停止标志。
+		 * @param name 任务名（日志与统计用）
+		 * @param interval 周期间隔
+		 * @param callback 每次触发的协程体
+		 * @throw std::logic_error 当 start() 已调用后注册
+		 * @throw std::invalid_argument interval 非正或 callback 为空
+		 * @note 必须在 start() 之前调用
+		 */
+		void addPeriodicTask(const std::string& name,
+							 std::chrono::milliseconds interval,
+							 std::function<Awaitable<void>()> callback);
 
 		/**
 		 * @brief 启动服务器（阻塞）
@@ -386,6 +434,33 @@ namespace hical
 
 		// signal_set 放成员上——stop() 得能 cancel 它，不然 async_wait 会卡住 run() 不退
 		std::optional<boost::asio::signal_set> signals_;
+
+		// 周期性任务描述。start() 时每个任务起一个循环协程跑在 baseLoop_ 上，
+		// stop() 时置 stopRequested + cancel 定时器让协程退出。
+		// 注册只允许发生在 start() 之前，那时还是单线程，所以 periodicTasks_ 不用加锁；
+		// start() 之后 addPeriodicTask 直接抛异常，容器不再变化。
+		//
+		// 存 unique_ptr 而不是直接放值：PeriodicTask 里那个 std::atomic<bool> 不可拷贝
+		// 也不可移动，vector 扩容时搬不动元素（编译不过）。换成 unique_ptr 后容器搬的是
+		// 指针，元素地址稳定，循环协程可以放心持有 PeriodicTask*。
+		//
+		// periodicTasks_ 声明在 baseLoop_/ioPool_ 之后 → 先析构。里面的 steady_timer
+		// 在 stop() 已 cancel，这里只是兜底，保证就算走了非正常路径，timer 也在
+		// io_context 还活着时先销毁。
+		struct PeriodicTask
+		{
+			std::string name;
+			std::chrono::milliseconds interval;
+			std::function<Awaitable<void>()> callback;
+			std::shared_ptr<boost::asio::steady_timer> timer; // 协程体内创建，stop() 时 cancel
+			std::atomic<bool> stopRequested {false};          // stop() 置位，协程每轮检查决定是否退出
+		};
+
+		// 周期任务循环协程：等 interval → 跑 callback → 再等下一轮，直到 stopRequested。
+		// 详见 HttpServer.cpp 里关于「周期语义」和「异常不终止任务」的注释。
+		Awaitable<void> runPeriodicTask(PeriodicTask* task);
+
+		std::vector<std::unique_ptr<PeriodicTask>> periodicTasks_;
 	};
 
 } // namespace hical

@@ -88,6 +88,11 @@ namespace hical
 		// Sync：前/后分离（连续 Sync 共享一个协程帧）
 		SyncBeforeHandler before;
 		SyncAfterHandler after; // 可为空
+
+		// 声明本层要读请求 body：链构建时会在它之前插一道 body 门，声明者排到门之后，
+		// 运行时才拿得到完整 req.body()（验签这类必须读原始 body 的中间件靠它）。
+		// 默认 false——不声明时链结构与加这个字段之前逐字节相同，慢 body 防护不受影响。
+		bool needsBody = false;
 	};
 
 #ifdef HICAL_ENABLE_MIDDLEWARE_PROFILING
@@ -202,6 +207,41 @@ namespace hical
 		 * @throw std::logic_error 当 build() 已调用后再 use() 时抛出
 		 */
 		void use(const std::string& name, SyncAfterHandler after);
+
+		/**
+		 * @brief 添加需要请求 body 的异步中间件
+		 * 语义同 use()，额外把这个条目标记为「需要 body」。链构建时会在第一个这类条目之前
+		 * 插一道 body 门，命中声明者之前先把 body 读进来，验签类中间件才拿得到原始 body。
+		 * 只在真正要读 body 时用——声明了就会让该层之前的无效请求也走一遍读 body。
+		 * @param middleware 中间件处理器
+		 * @throw std::logic_error 当 build() 已调用后再 useBody() 时抛出
+		 */
+		void useBody(MiddlewareHandler middleware);
+
+		/**
+		 * @brief 添加需要请求 body 的命名异步中间件（启用 profiling 时记录名称用于统计）
+		 * @param name 中间件名称
+		 * @param middleware 中间件处理器
+		 * @throw std::logic_error 当 build() 已调用后再 useBody() 时抛出
+		 */
+		void useBody(const std::string& name, MiddlewareHandler middleware);
+
+		/**
+		 * @brief 添加需要请求 body 的同步前/后中间件（无协程帧开销）
+		 * @param before 前置处理器（返回 nullopt 继续，返回 HttpResponse 拦截）
+		 * @param after 后置处理器（可为空）
+		 * @throw std::logic_error 当 build() 已调用后再 useBody() 时抛出
+		 */
+		void useBody(SyncBeforeHandler before, SyncAfterHandler after = nullptr);
+
+		/**
+		 * @brief 添加需要请求 body 的命名同步中间件（启用 profiling 时记录名称用于统计）
+		 * @param name 中间件名称
+		 * @param before 前置处理器
+		 * @param after 后置处理器（可为空）
+		 * @throw std::logic_error 当 build() 已调用后再 useBody() 时抛出
+		 */
+		void useBody(const std::string& name, SyncBeforeHandler before, SyncAfterHandler after = nullptr);
 
 		/**
 		 * @brief 预构建中间件调用链

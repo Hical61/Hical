@@ -143,10 +143,15 @@ HTTP 服务器，整合路由、中间件和网络层，提供一键启动的高
 | `use(MiddlewareHandler)`                              | middleware: 中间件处理器                             | `void`          | 添加中间件到管道                                         |
 | `use(SyncAfterHandler)`                               | after: 同步后置处理器                                | `void`          | 添加同步后置中间件                                       |
 | `use(name, SyncAfterHandler)`                         | name: 名称<br>after: 同步后置处理器                  | `void`          | 添加命名同步后置中间件                                   |
+| `useBody(MiddlewareHandler)`                          | middleware: 中间件处理器                             | `void`          | 添加需读请求 body 的中间件                               |
+| `useBody(name, MiddlewareHandler)`                    | name: 名称<br>middleware: 中间件处理器               | `void`          | 添加命名需读请求 body 的中间件                           |
+| `useBody(before, after)`                              | before/after: 同步前后处理器                         | `void`          | 添加需读请求 body 的同步中间件                           |
+| `useBody(name, before, after)`                        | name/before/after                                    | `void`          | 添加命名需读请求 body 的同步中间件                       |
 | `enableSsl(certFile, keyFile)`                        | certFile: 证书文件路径<br>keyFile: 私钥文件路径      | `void`          | 启用 SSL/TLS                                             |
 | `listen(endpoint)`                                    | ep: 监听地址（`tcp::endpoint`）                      | `void`          | 设置监听地址（仅监听该 IP）                              |
 | `listen(ip, port)`                                    | ip: IP 字符串<br>port: 端口号                        | `void`          | 设置监听 IP + 端口                                       |
 | `listenAny(port)`                                     | port: 端口号（0 = 系统分配）                         | `void`          | 设置监听端口（绑回 0.0.0.0）                             |
+| `addPeriodicTask(name, interval, callback)`           | name: 名称<br>interval: 周期<br>callback: 协程体     | `void`          | 注册由服务器托管生命周期的周期任务（`start()` 前调用）   |
 | `start()`                                             | 无                                                   | `void`          | 启动服务器（阻塞）                                       |
 | `stop()`                                              | 无                                                   | `void`          | 停止服务器                                               |
 | `isRunning()`                                         | 无                                                   | `bool`          | 服务器是否正在运行                                       |
@@ -162,6 +167,10 @@ HTTP 服务器，整合路由、中间件和网络层，提供一键启动的高
 > `listen(endpoint)` / `listen(ip, port)` 用来监听指定地址（比如 `127.0.0.1` 或某块网卡），`listenAny(port)` 则绑回通配地址 `0.0.0.0`，也就是默认行为。在开始监听后调用它们会抛 `std::logic_error`；`listen(ip, port)` 的 `ip` 是非法 IP 字面量时抛 `boost::system::system_error`。`endpoint()` 在 `start()` 之后返回带实际端口的监听地址（构造时端口传 0 时用它查系统分配的端口）。
 >
 > `recommendedMaxConnections()` 只是个估算助手，返回的值不会自动生效，得自己传给 `setMaxConnections()`。带 `isTls` 的重载是给「打算跑 TLS」的场景用的：TLS 连接光 SSL 层就固定多占约 34KB（`ssl::stream` 一构造出来就分配的两个 17KB 记录缓冲，收没收发数据都占着），所以每连接口径从 16KB 提到 50KB。拿明文口径（16KB）给 TLS 配内存会低估约 2.6 倍。
+>
+> `useBody(...)` 系列跟对应的 `use(...)` 语义一样，只是额外声明这层要读请求 body。链构建时会在第一个声明者之前插一道 body 门，命中它先把 body 读进来，声明者以及它后面的中间件跑的时候 `req.body()` 才有内容——验签这类必须先拿原始 body 的中间件用它。只在真需要读 body 的中间件上用：声明以后，声明者后面那批中间件就没法在「不读 body」的前提下短路了（不过 404/405/超深路径这类无效请求在更早的路由匹配阶段就被拒了，压根不读 body）。注意 chunked 请求门里读到的是解码后的实体载荷，不是线路原始字节，按 wire 字节算的签名该验不过还是验不过。
+>
+> `addPeriodicTask(...)` 注册的周期任务由服务器托管生命周期：`start()` 时自动起协程、`stop()` 时自动取消定时器并让协程退出，调用方不用自己管停止逻辑。周期是「上一轮 `callback` 跑完再等 `interval`」，不是固定频率，某轮超时不会堆积；`callback` 抛异常会被接住记日志、继续下一轮。`interval` 非正或 `callback` 为空抛 `std::invalid_argument`，`start()` 之后调用抛 `std::logic_error`——必须在 `start()` 之前注册。
 
 #### 类型定义
 
@@ -301,6 +310,8 @@ router.ws("/ws/chat", wsOpts,
 | ------------------------------ | ------------------------ | ------------ | ------------------------------------ |
 | `use(middleware)`              | middleware: 中间件处理器 | `void`       | 添加组级中间件（仅对组内路由生效）   |
 | `use(after)`                   | after: 同步后置处理器    | `void`       | 添加组级同步后置中间件               |
+| `useBody(middleware)`          | middleware: 中间件处理器 | `void`       | 添加需读请求 body 的组级中间件       |
+| `useBody(before, after)`       | before/after: 同步前后   | `void`       | 添加需读请求 body 的组级同步中间件   |
 | `group(subPrefix)`             | subPrefix: 子前缀        | `RouteGroup` | 创建嵌套子组（继承父组中间件和前缀） |
 | `route(method, path, handler)` | method/path/handler      | `void`       | 注册路由（协程/同步）                |
 | `get(path, handler)`           | path/handler             | `void`       | 注册 GET 路由                        |
@@ -619,6 +630,7 @@ using SyncAfterHandler     = std::function<void(HttpRequest&, HttpResponse&)>;
 | `asyncHandler` | `MiddlewareHandler` | 异步处理器（仅 Async 有值） |
 | `before`       | `SyncBeforeHandler` | 同步前置处理器（仅 Sync）   |
 | `after`        | `SyncAfterHandler`  | 同步后置处理器（仅 Sync）   |
+| `needsBody`    | `bool`              | 声明本层要读请求 body（默认 `false`，链构建时在第一个声明者前插 body 门） |
 
 #### MiddlewarePipeline 类
 
@@ -631,6 +643,10 @@ using SyncAfterHandler     = std::function<void(HttpRequest&, HttpResponse&)>;
 | `use(name, before, after)`            | name/before/after                                  | `void`                    | 添加命名同步前后处理器对               |
 | `use(after)`                          | after: 同步后置处理器                              | `void`                    | 添加同步后置中间件（零协程帧）         |
 | `use(name, after)`                    | name: 名称<br>after: 同步后置处理器                | `void`                    | 添加命名同步后置中间件                 |
+| `useBody(middleware)`                 | middleware: 异步中间件                             | `void`                    | 添加需读请求 body 的异步中间件（`build()` 后禁止） |
+| `useBody(name, middleware)`           | name: 名称<br>middleware: 异步中间件               | `void`                    | 添加命名需读请求 body 的异步中间件     |
+| `useBody(before, after)`              | before/after: 同步前后处理器                       | `void`                    | 添加需读请求 body 的同步前后处理器对   |
+| `useBody(name, before, after)`        | name/before/after                                  | `void`                    | 添加命名需读请求 body 的同步前后处理器对 |
 | `build(finalHandler)`                 | finalHandler: 最终处理器                           | `void`                    | 预构建调用链（仅调用一次）             |
 | `buildFor(finalHandler)`              | finalHandler: 最终处理器                           | `MiddlewareNext`          | 预构建并返回可缓存的调用链             |
 | `execute(req)`                        | req: HTTP 请求                                     | `Awaitable<HttpResponse>` | 执行预构建缓存链（需先 `build()`）     |
@@ -642,6 +658,8 @@ using SyncAfterHandler     = std::function<void(HttpRequest&, HttpResponse&)>;
 > 后置中间件（`SyncAfterHandler`）在 handler 返回响应后执行；多个 after 之间按注册逆序执行（洋葱模型：后注册的更靠内，先退出）。`makeHelmetMiddleware()`、`makeGzipCompressionMiddleware()` 返回的就是 `SyncAfterHandler`，直接 `server.use(...)` 即可，既不用套协程 lambda，也不用写 `server.use(nullptr, ...)` 这种占位前置。
 >
 > 两点容易踩：一是**它仍属 Sync 条目**，只要管线里有它（helmet、gzip 都算），`HICAL_ENABLE_MIDDLEWARE_PROFILING` 下整条管线就会放弃 profiling（`getTimingStats()` 返回空，启动日志里有一条 WARN 说明原因）。二是**重载决议**——`MiddlewareHandler` 和 `SyncAfterHandler` 都是两参 `std::function`，而 `std::function<void(...)>` 接受任何返回类型，所以 `server.use([](auto&&...) -> Awaitable<HttpResponse> { ... })` 这种变参泛型 lambda 会变歧义；参数写具体类型就没这问题。
+>
+> `useBody(...)` 是对应 `use(...)` 的「需要 body」版本，把条目的 `needsBody` 置真。`build()` 时在第一个 `needsBody` 条目前插一道 `hAsync` 的 body 门，命中先把请求体读进来，声明者及其后面的中间件才拿得到 `req.body()`；门不捕获 per-request 状态，靠请求内部槽上的 `bodyObj` + `readBody` 调读 body，所以能缓存进链里。同样要注意：`build()` 之后调用这些重载会抛 `std::logic_error`。
 
 #### 示例
 
