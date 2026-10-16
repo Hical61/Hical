@@ -23,7 +23,7 @@ int main()
 
 **CMakeLists.txt**
 ```cmake
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.28)
 project(my_app CXX)
 set(CMAKE_CXX_STANDARD 20)
 

@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - **中间件可以声明自己需要请求 body**：2.7.1 为了做慢 body 防护，把路由匹配和中间件都前置到了读 body 之前，无效请求不再白读 body，但 body 读取也被钉死成整条洋葱链的最内一环——验签类中间件（支付回调、Webhook、开放平台回调、SDK 服务端通知）恰恰要先拿到原始 body 才能验签，这下够不着了。现在补上 `useBody()` 系列重载（`HttpServer`、`MiddlewarePipeline`、`RouteGroup` 三处，异步和同步前后都有）：声明的条目会被排到 body 之后，链构建时在第一个声明者之前插一道 body 门，命中先把 body 读进来，不声明的条目维持原样、链结构逐字节不变。有个取舍得说清楚：门插在第一个声明者之前，所以声明者前面那批不声明的中间件跑的还是 body 之前，「无效请求不读 body」这层防护对它们照样成立；真正让出去的是「声明者及其后面那批中间件能在不读 body 时短路」——它们现在跑的时候 body 已经进来了。不过 404/405/超深路径这类无效请求压根走不到中间件链，在更早的阶段（前置 `resolveRoute`）就被拒了，所以那条「不读 body」的承诺没被动到，牺牲的只是「中间件自己拦掉一个请求、顺手省一次 body 读取」这种便宜。另一个代价是 body 门是 `hAsync`，会把它前后连续 Sync 中间件的合并截断，只有声明了 `needsBody` 的管线才付。最后说下它不解决什么：chunked 请求门里读到的是 `phr_decode_chunked` 解码后的实体载荷，不是线路原始字节，验签方要是按 wire 字节算的签名，chunked 传输仍然会验失败——这是解析层的语义，本次没碰
 - **周期性任务 `addPeriodicTask()`**：`coSpawn` 是公开的，想自己起个轮询/清理协程不难，麻烦在生命周期——`HttpServer::stop()` 走 `releaseWork()` 温柔退出，刻意不调 `io_context::stop()`（那玩意会留一堆没 dispatch 的 completion 在 IOCP queue 里，然后 `~io_context` 暴力 destroy 协程帧，GCC MinGW 上直接炸），这套退出要求所有协程自然跑完 `run()` 才返回，外部协程只要手里还捏着个没 cancel 的 timer，关服就卡在那儿等。现在补了 `addPeriodicTask(name, interval, callback)`，`start()` 自动把每个任务起一个循环协程跑在 `baseLoop_` 上，`stop()` 自动取消定时器并让协程退出，调用方不用再管停止逻辑；周期语义是「上一轮 callback 跑完，再等一个 interval 才触发下一轮」，不是固定频率，某轮 callback 偶尔跑超了下一轮从这次结束重新计时、任务不会堆积；callback 抛异常会被接住记一条 ERROR 日志、继续下一轮，不会把整个任务带走。一个值得一提的实现细节：`stop()` 里的 `timer->cancel()` 是 post 到 `baseLoop_` 上执行的，不是直接跨线程 cancel——timer 操作不是线程安全的，而且协程大多数时候挂在 `async_wait` 上，跨线程 cancel 会和「协程重新 arm 定时器」的时序赛跑，万一 cancel 落在两次 `async_wait` 之间的极小空档就没人唤醒协程，`run()` 得干等满一个 interval 才退；放进 io_context 线程跟协程串行执行才躲得掉
+### Changed
+- **CMake 最低版本提高到 3.28**：同步源码构建、包消费测试、Hical 基准程序及安装文档的最低要求；显式关闭未使用的 C++ Modules 自动扫描，避免新版 policy 引入额外扫描工具依赖。
+- **主 CI 使用 CMake 4.x**：Linux/MSVC 和中间件 profiling 固定使用 4.4.3，MSYS2 校验其原生包为 4.x；新增 GCC + CMake 3.28.4 矩阵项，执行完整构建、测试及 TLS 证书检查，验证最低版本兼容性。
 
 ## [2.7.1] - 2026-10-12
 

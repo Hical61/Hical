@@ -413,7 +413,7 @@ hical/
 ## 构建系统
 
 - **C++ 标准**：C++20（C++26 反射可选，由 `HICAL_ENABLE_REFLECTION` 控制）
-- **构建工具**：CMake 3.20+，推荐 Ninja
+- **构建工具**：CMake 3.28+，推荐 Ninja
 - **编译器支持**：GCC 14+ / Clang 20+ / MSVC 2022+（C++26 反射路径需 GCC 16 等支持 P2996 的编译器）
 - **依赖**：
   - Boost 1.82+（json / system，Asio header-only）
