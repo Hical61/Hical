@@ -63,6 +63,7 @@ hical_add_test(test_route_group)          # 路由组
 hical_add_test(test_middleware)           # 中间件
 hical_add_test(test_middleware_body)      # 中间件 body 声明接口
 hical_add_test(test_http_server)          # HttpServer 集成
+hical_add_test(test_http_framing)         # HTTP 请求格式验证
 hical_add_test(test_websocket)            # WebSocket
 hical_add_test(test_ws_advanced)          # WebSocket 高级功能（Binary/Close/Subprotocol/Context/Param/Hub/Heartbeat）
 hical_add_test(test_ws_pipeline)          # WebSocket 单 read 多帧 drain（16 帧一次写、逐条回显）

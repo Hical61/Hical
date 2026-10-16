@@ -8,6 +8,8 @@
 #include "HttpServer.h"
 #include "../asio/GenericConnection.h"
 #include "FixedBuffer.h"
+#include "HeaderMap.h"
+#include "HttpTypes.h"
 #include "InetAddress.h"
 #include "MemoryPool.h"
 #include "ReadBufferPool.h"
@@ -22,6 +24,8 @@
 #include <ctime>
 #include <fstream>
 #include <optional>
+#include <string_view>
+#include <system_error>
 
 // TCP_CORK / TCP_NOPUSH（writeFileResponse 合并小包用）
 #if defined(__linux__)
@@ -43,6 +47,41 @@ namespace hical
 
 	namespace
 	{
+
+		/// RFC 9112 §6: requests must end their transfer-coding chain with chunked.
+		/// Only plain chunked decoding is implemented; other preceding codings need a 501.
+		HttpStatusCode validateTransferEncoding(std::string_view value)
+		{
+			bool unsupportedCoding = false;
+			for (;;)
+			{
+				auto comma = value.find(',');
+				auto token = value.substr(0, comma);
+				auto first = token.find_first_not_of(" \t");
+				if (first == std::string_view::npos)
+				{
+					return HttpStatusCode::hBadRequest;
+				}
+				token.remove_prefix(first);
+				token = token.substr(0, token.find_last_not_of(" \t") + 1);
+				auto codingEnd = token.find_first_of(" \t;");
+				if (HeaderMap::iequals(token.substr(0, codingEnd), "chunked"))
+				{
+					// chunked must be last, unique, and have no parameters.
+					if (codingEnd != std::string_view::npos || comma != std::string_view::npos)
+					{
+						return HttpStatusCode::hBadRequest;
+					}
+					return unsupportedCoding ? HttpStatusCode::hNotImplemented : HttpStatusCode::hOk;
+				}
+				if (comma == std::string_view::npos)
+				{
+					return HttpStatusCode::hBadRequest;
+				}
+				unsupportedCoding = true;
+				value.remove_prefix(comma + 1);
+			}
+		}
 
 		/// 将方法字符串映射到 HttpMethod 枚举
 		HttpMethod methodFromStringView(std::string_view sv)
@@ -858,12 +897,21 @@ namespace hical
 				bool hasContentLength = false;
 				bool isChunked = false;
 				bool hasTransferEncoding = false;
+				bool invalidFraming = false;
+				auto transferEncodingStatus = HttpStatusCode::hOk;
 				bool connectionClose = false;     // 逮到 Connection: close 就记下来
 				bool hasConnectionHeader = false; // 有 Connection 头就把这位置 1
 
 				nativeReq.headers.clear();
 				for (size_t i = 0; i < numHeaders; ++i)
 				{
+					// picohttpparser represents obsolete folded lines with a null name.
+					// Reject them rather than silently ignoring a continuation of a framing field.
+					if (headers[i].name == nullptr)
+					{
+						invalidFraming = true;
+						continue;
+					}
 					std::string_view hname(headers[i].name, headers[i].name_len);
 					std::string_view hvalue(headers[i].value, headers[i].value_len);
 
@@ -878,9 +926,13 @@ namespace hical
 					{
 						if (HeaderMap::iequals(hname, "Content-Length"))
 						{
+							size_t parsedLength = 0;
 							auto [ptr, ec] =
-								std::from_chars(hvalue.data(), hvalue.data() + hvalue.size(), contentLength);
-							hasContentLength = (ec == std::errc {});
+								std::from_chars(hvalue.data(), hvalue.data() + hvalue.size(), parsedLength);
+							invalidFraming |= ec != std::errc {} || ptr != hvalue.data() + hvalue.size()
+											  || (hasContentLength && parsedLength != contentLength);
+							hasContentLength = true;
+							contentLength = parsedLength;
 						}
 					}
 					else if (hname.size() == 10 && (hname[0] == 'C' || hname[0] == 'c'))
@@ -908,29 +960,24 @@ namespace hical
 					{
 						if (HeaderMap::iequals(hname, "Transfer-Encoding"))
 						{
+							// Conservatively reject multiple TE fields instead of merging coding chains.
+							invalidFraming |= hasTransferEncoding;
 							hasTransferEncoding = true;
-							// RFC 7230 ：chunked 必须是最后一个编码
-							auto lastComma = hvalue.rfind(',');
-							std::string_view lastToken =
-								(lastComma != std::string_view::npos) ? hvalue.substr(lastComma + 1) : hvalue;
-							while (!lastToken.empty() && lastToken.front() == ' ')
-							{
-								lastToken.remove_prefix(1);
-							}
-							while (!lastToken.empty() && lastToken.back() == ' ')
-							{
-								lastToken.remove_suffix(1);
-							}
-							if (HeaderMap::iequals(lastToken, "chunked"))
-							{
-								isChunked = true;
-							}
+							transferEncodingStatus = validateTransferEncoding(hvalue);
+							isChunked = transferEncodingStatus == HttpStatusCode::hOk;
 						}
 					}
 				}
 
-				// RFC 7230 ：不认识的 Transfer-Encoding 返回 501
-				if (hasTransferEncoding && !isChunked)
+				// Validate framing before routing, middleware, 100 Continue, or reading any body.
+				// An error closes the connection so buffered bytes cannot become another request.
+				if (invalidFraming || transferEncodingStatus == HttpStatusCode::hBadRequest
+					|| (hasTransferEncoding && (hasContentLength || minorVersion == 0)))
+				{
+					co_await sendRawResponse(socket, 400, "Bad Request", "Invalid request framing");
+					co_return;
+				}
+				if (transferEncodingStatus == HttpStatusCode::hNotImplemented)
 				{
 					co_await sendRawResponse(socket, 501, "Not Implemented", "Unsupported Transfer-Encoding");
 					co_return;
