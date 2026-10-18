@@ -214,6 +214,7 @@ namespace hical
 
 		// 写串行化：防止心跳 Ping 与消息发送并发 async_write
 		bool writePending_ = false;
+		size_t waiters_ = 0; ///< 正在写锁上排队的协程数（单连接跑在单线程上，不用原子）
 		std::unique_ptr<boost::asio::steady_timer> writeReady_;
 
 		/// 获取写权限（等待前一个 async_write 完成）

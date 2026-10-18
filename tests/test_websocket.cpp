@@ -7,6 +7,7 @@
 #include <chrono>
 #include <string>
 #include <thread>
+#include <vector>
 
 using namespace hical;
 using boost::asio::ip::tcp;
@@ -235,4 +236,111 @@ TEST(WebSocketTest, ServerStopDuringConnection)
 	serverThread.join();
 
 	// 关键：执行到这里没 crash 说明 timer 回调不会访问已析构的 session
+}
+
+// ============ 写锁：等待者计数不影响串行化和顺序 ============
+
+// 两个协程同时往同一个 session 发消息，写锁必须把它们排开：
+// 各自的消息按自己发出的顺序到达，帧内容也不能被另一路踩花
+TEST(WebSocketTest, ConcurrentSendersSerializeAndKeepOrder)
+{
+	constexpr int kPerSender = 200;
+	constexpr size_t kTotal = static_cast<size_t>(kPerSender) * 2;
+
+	boost::asio::io_context ioCtx;
+	tcp::acceptor acceptor(ioCtx, tcp::endpoint(boost::asio::ip::make_address("127.0.0.1"), 0));
+	tcp::socket clientSock(ioCtx);
+	clientSock.connect(tcp::endpoint(boost::asio::ip::make_address("127.0.0.1"), acceptor.local_endpoint().port()));
+	tcp::socket serverSock = acceptor.accept();
+
+	WebSocketSession session(std::move(serverSock));
+
+	std::vector<std::string> received;
+	std::string readBuf;
+	bool timedOut = false;
+	bool readError = false;
+
+	// 兜底超时：写锁要是卡死，测试不能跟着挂住
+	boost::asio::steady_timer watchdog(ioCtx, std::chrono::seconds(5));
+
+	// 客户端：攒够一整个帧就切出来
+	coSpawn(
+		ioCtx,
+		[&]() -> Awaitable<void>
+		{
+			for (;;)
+			{
+				if (auto hdr = parseWsFrameHeader(reinterpret_cast<const uint8_t*>(readBuf.data()), readBuf.size()))
+				{
+					const size_t frameSize = hdr->headerSize + static_cast<size_t>(hdr->payloadLength);
+					if (readBuf.size() >= frameSize)
+					{
+						received.emplace_back(readBuf.substr(hdr->headerSize, static_cast<size_t>(hdr->payloadLength)));
+						readBuf.erase(0, frameSize);
+						if (received.size() >= kTotal)
+						{
+							watchdog.cancel();
+							co_return;
+						}
+						continue;
+					}
+				}
+
+				char tmp[4096];
+				boost::system::error_code ec;
+				size_t n =
+					co_await clientSock.async_read_some(boost::asio::buffer(tmp),
+														boost::asio::redirect_error(boost::asio::use_awaitable, ec));
+				if (ec)
+				{
+					readError = true;
+					watchdog.cancel();
+					co_return;
+				}
+				readBuf.append(tmp, n);
+			}
+		});
+
+	for (const char tag : {'A', 'B'})
+	{
+		coSpawn(ioCtx,
+				[&session, tag]() -> Awaitable<void>
+				{
+					for (int i = 0; i < kPerSender; ++i)
+					{
+						co_await session.send(std::string(1, tag) + '#' + std::to_string(i));
+					}
+				});
+	}
+
+	watchdog.async_wait(
+		[&](const boost::system::error_code& ec)
+		{
+			if (!ec)
+			{
+				timedOut = true;
+				boost::system::error_code ignored;
+				clientSock.close(ignored);
+			}
+		});
+
+	ioCtx.run();
+
+	EXPECT_FALSE(timedOut);
+	EXPECT_FALSE(readError);
+	ASSERT_EQ(received.size(), kTotal);
+
+	// 每路消息的序号必须连续递增：插队、丢帧、帧内容被踩都会让这里对不上
+	int nextIndex[2] = {0, 0};
+	for (const auto& payload : received)
+	{
+		ASSERT_GE(payload.size(), 3u);
+		ASSERT_EQ(payload[1], '#');
+		ASSERT_TRUE(payload[0] == 'A' || payload[0] == 'B');
+		const int sender = payload[0] == 'A' ? 0 : 1;
+		EXPECT_EQ(std::stoi(payload.substr(2)), nextIndex[sender]);
+		++nextIndex[sender];
+	}
+	EXPECT_EQ(nextIndex[0], kPerSender);
+	EXPECT_EQ(nextIndex[1], kPerSender);
 }

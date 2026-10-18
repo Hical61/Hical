@@ -223,32 +223,85 @@ namespace hical
 		};
 
 		/// 乐观同步写辅助：socket 在非阻塞模式下先试一把 write_some，
-		/// 写完了直接返回 true（不挂协程、不进 reactor 完成队列），
-		/// would_block / partial / 异常都返回 false，调用方回退 async_write。
+		/// 写完了直接返回 true（不挂协程、不进 reactor 完成队列）。
+		/// 没写完时返回 false，并把已经写出去的字节数带回来（一个字节都没出去就是 0）——
+		/// 调用方必须用 writeRemaining 从那个偏移往后接着发。别想着直接 async_write 整段：
+		/// TCP 是有序字节流，重发的前缀不会被对端吞掉，只会被当成新数据再收一遍。
 		template <typename SocketType>
 		bool tryOptimisticWrite([[maybe_unused]] SocketType& socket,
-								[[maybe_unused]] const boost::asio::const_buffer& buf)
+								[[maybe_unused]] const boost::asio::const_buffer& buf,
+								[[maybe_unused]] size_t& written)
 		{
 			if constexpr (hIsSslStream<SocketType>)
 			{
 				// SSL 流不能走乐观同步写：ssl::stream 内部 BIO 状态机要求走 async_write，
 				// 直接底层 write_some 会绕过 OpenSSL 的记录层，数据都不加密。直接禁用。
+				written = 0;
 				return false;
 			}
 			else
 			{
 				boost::system::error_code ec;
-				size_t written = socket.write_some(buf, ec);
-				// 完整写完且没出错——最佳情况，零完成队列开销
-				if (!ec && written == buf.size())
-				{
-					return true;
-				}
-				// ec 为 would_block 说明内核发送缓冲区满了，或者只写了部分数据，
-				// 都交回 async_write 处理。
-				// 等 async_write 继续——虽然 async_write 会重写整个 buffer，但
-				// write_some 已写入的数据不会在线上重复，TCP 流式语义兜底。
+				size_t n = socket.write_some(buf, ec);
+				// 出错就当作一个字节都没写出去，别拿 write_some 的返回值去推偏移
+				written = ec ? 0 : n;
+				return !ec && n == buf.size();
+			}
+		}
+
+		/// 两个 buffer 的版本：一次 writev 把头部和 body 一起推出去
+		template <typename SocketType>
+		bool tryOptimisticWrite([[maybe_unused]] SocketType& socket,
+								[[maybe_unused]] const std::array<boost::asio::const_buffer, 2>& bufs,
+								[[maybe_unused]] size_t& written)
+		{
+			if constexpr (hIsSslStream<SocketType>)
+			{
+				// 同上：ssl::stream 一律走 async_write，不碰底层 write_some
+				written = 0;
 				return false;
+			}
+			else
+			{
+				boost::system::error_code ec;
+				size_t n = socket.write_some(bufs, ec);
+				written = ec ? 0 : n;
+				return !ec && n == boost::asio::buffer_size(bufs);
+			}
+		}
+
+		/// 从 written 偏移处把剩下没写的字节发完（乐观写只写出去一部分时用）
+		template <typename SocketType>
+		Awaitable<void> writeRemaining(SocketType& socket, boost::asio::const_buffer buf, size_t written)
+		{
+			co_await boost::asio::async_write(
+				socket,
+				boost::asio::buffer(static_cast<const char*>(buf.data()) + written, buf.size() - written),
+				boost::asio::use_awaitable);
+		}
+
+		/// 两个 buffer 的续写版本：written 可能落在头部里，也可能已经进了 body
+		template <typename SocketType>
+		Awaitable<void> writeRemaining(SocketType& socket,
+									   std::array<boost::asio::const_buffer, 2> bufs,
+									   size_t written)
+		{
+			const size_t headSize = bufs[0].size();
+			if (written < headSize)
+			{
+				std::array<boost::asio::const_buffer, 2> rest = {
+					boost::asio::buffer(static_cast<const char*>(bufs[0].data()) + written, headSize - written),
+					bufs[1]};
+				co_await boost::asio::async_write(socket, rest, boost::asio::use_awaitable);
+			}
+			else
+			{
+				const size_t bodyWritten = written - headSize;
+				co_await boost::asio::async_write(
+					socket,
+					boost::asio::buffer(static_cast<const char*>(bufs[1].data()) + bodyWritten,
+										bufs[1].size() - bodyWritten),
+					boost::asio::use_awaitable);
 			}
 		}
 
@@ -276,15 +329,14 @@ namespace hical
 			buf << body;
 
 			// 错误响应通常很小（几十到几百字节），乐观同步写几乎必中
-			if (tryOptimisticWrite(socket, boost::asio::buffer(buf.data(), buf.size())))
+			auto wire = boost::asio::buffer(buf.data(), buf.size());
+			size_t sent = 0;
+			if (tryOptimisticWrite(socket, wire, sent))
 			{
 				co_return;
 			}
 
-			boost::system::error_code writeEc;
-			co_await boost::asio::async_write(socket,
-											  boost::asio::buffer(buf.data(), buf.size()),
-											  boost::asio::redirect_error(boost::asio::use_awaitable, writeEc));
+			co_await writeRemaining(socket, wire, sent);
 		}
 
 		/// 发送 HttpResponse 对象（内部辅助）
@@ -317,26 +369,26 @@ namespace hical
 					}
 					else
 					{
-						if (tryOptimisticWrite(socket, boost::asio::buffer(headBuf.data(), headBuf.size())))
+						auto head = boost::asio::buffer(headBuf.data(), headBuf.size());
+						size_t sent = 0;
+						if (tryOptimisticWrite(socket, head, sent))
 						{
 							co_return;
 						}
 
-						co_await boost::asio::async_write(socket,
-														  boost::asio::buffer(headBuf.data(), headBuf.size()),
-														  boost::asio::use_awaitable);
+						co_await writeRemaining(socket, head, sent);
 					}
 				}
 				else
 				{
-					if (tryOptimisticWrite(socket, boost::asio::buffer(headBuf.data(), headBuf.size())))
+					auto head = boost::asio::buffer(headBuf.data(), headBuf.size());
+					size_t sent = 0;
+					if (tryOptimisticWrite(socket, head, sent))
 					{
 						co_return;
 					}
 
-					co_await boost::asio::async_write(socket,
-													  boost::asio::buffer(headBuf.data(), headBuf.size()),
-													  boost::asio::use_awaitable);
+					co_await writeRemaining(socket, head, sent);
 				}
 				co_return;
 			}
@@ -348,35 +400,43 @@ namespace hical
 			if (skipBody || nativeRes.body.empty())
 			{
 				// HEAD 方法或空 body：仅发送头部
-				if (tryOptimisticWrite(socket, boost::asio::buffer(headBuf.data(), headBuf.size())))
+				auto head = boost::asio::buffer(headBuf.data(), headBuf.size());
+				size_t sent = 0;
+				if (tryOptimisticWrite(socket, head, sent))
 				{
 					co_return;
 				}
 
-				co_await boost::asio::async_write(socket,
-												  boost::asio::buffer(headBuf.data(), headBuf.size()),
-												  boost::asio::use_awaitable);
+				co_await writeRemaining(socket, head, sent);
 			}
 			else if (headBuf.size() + nativeRes.body.size() <= 512 && !headBuf.overflowed())
 			{
 				// 小响应（head + body <= 512）：合并到栈缓冲区，单次 write，零堆分配
 				headBuf.append(nativeRes.body.data(), nativeRes.body.size());
-				if (tryOptimisticWrite(socket, boost::asio::buffer(headBuf.data(), headBuf.size())))
+				auto wire = boost::asio::buffer(headBuf.data(), headBuf.size());
+				size_t sent = 0;
+				if (tryOptimisticWrite(socket, wire, sent))
 				{
 					co_return;
 				}
 
-				co_await boost::asio::async_write(socket,
-												  boost::asio::buffer(headBuf.data(), headBuf.size()),
-												  boost::asio::use_awaitable);
+				co_await writeRemaining(socket, wire, sent);
 			}
 			else
 			{
 				// 大响应：scatter-gather I/O，head 在栈上 + body 零拷贝引用
-				// 一次 writev 系统调用，消除 body 的额外 memcpy
+				// 一次 writev 系统调用，消除 body 的额外 memcpy。
+				// 乐观同步写对 JSON 这类 body 几百字节到几十 KB 的响应命中率很高，
+				// 命不中也只是回到原来那次 async_write
 				std::array<boost::asio::const_buffer, 2> bufs = {boost::asio::buffer(headBuf.data(), headBuf.size()),
 																 boost::asio::buffer(nativeRes.body)};
-				co_await boost::asio::async_write(socket, bufs, boost::asio::use_awaitable);
+				size_t sent = 0;
+				if (tryOptimisticWrite(socket, bufs, sent))
+				{
+					co_return;
+				}
+
+				co_await writeRemaining(socket, bufs, sent);
 			}
 		}
 
@@ -413,26 +473,26 @@ namespace hical
 					}
 					else
 					{
-						if (tryOptimisticWrite(socket, boost::asio::buffer(headBuf.data(), headBuf.size())))
+						auto head = boost::asio::buffer(headBuf.data(), headBuf.size());
+						size_t sent = 0;
+						if (tryOptimisticWrite(socket, head, sent))
 						{
 							co_return;
 						}
 
-						co_await boost::asio::async_write(socket,
-														  boost::asio::buffer(headBuf.data(), headBuf.size()),
-														  boost::asio::use_awaitable);
+						co_await writeRemaining(socket, head, sent);
 					}
 				}
 				else
 				{
-					if (tryOptimisticWrite(socket, boost::asio::buffer(headBuf.data(), headBuf.size())))
+					auto head = boost::asio::buffer(headBuf.data(), headBuf.size());
+					size_t sent = 0;
+					if (tryOptimisticWrite(socket, head, sent))
 					{
 						co_return;
 					}
 
-					co_await boost::asio::async_write(socket,
-													  boost::asio::buffer(headBuf.data(), headBuf.size()),
-													  boost::asio::use_awaitable);
+					co_await writeRemaining(socket, head, sent);
 				}
 				co_return;
 			}
@@ -442,32 +502,40 @@ namespace hical
 
 			if (skipBody || nativeRes.body.empty())
 			{
-				if (tryOptimisticWrite(socket, boost::asio::buffer(headBuf.data(), headBuf.size())))
+				auto head = boost::asio::buffer(headBuf.data(), headBuf.size());
+				size_t sent = 0;
+				if (tryOptimisticWrite(socket, head, sent))
 				{
 					co_return;
 				}
 
-				co_await boost::asio::async_write(socket,
-												  boost::asio::buffer(headBuf.data(), headBuf.size()),
-												  boost::asio::use_awaitable);
+				co_await writeRemaining(socket, head, sent);
 			}
 			else if (headBuf.size() + nativeRes.body.size() <= 512 && !headBuf.overflowed())
 			{
 				headBuf.append(nativeRes.body.data(), nativeRes.body.size());
-				if (tryOptimisticWrite(socket, boost::asio::buffer(headBuf.data(), headBuf.size())))
+				auto wire = boost::asio::buffer(headBuf.data(), headBuf.size());
+				size_t sent = 0;
+				if (tryOptimisticWrite(socket, wire, sent))
 				{
 					co_return;
 				}
 
-				co_await boost::asio::async_write(socket,
-												  boost::asio::buffer(headBuf.data(), headBuf.size()),
-												  boost::asio::use_awaitable);
+				co_await writeRemaining(socket, wire, sent);
 			}
 			else
 			{
+				// 大响应（JSON 基本都落这儿）：head + body 两段一起乐观写，命中就省掉一次
+				// composed operation；没命中也只是回到原来那次 writev
 				std::array<boost::asio::const_buffer, 2> bufs = {boost::asio::buffer(headBuf.data(), headBuf.size()),
 																 boost::asio::buffer(nativeRes.body)};
-				co_await boost::asio::async_write(socket, bufs, boost::asio::use_awaitable);
+				size_t sent = 0;
+				if (tryOptimisticWrite(socket, bufs, sent))
+				{
+					co_return;
+				}
+
+				co_await writeRemaining(socket, bufs, sent);
 			}
 		}
 
@@ -1049,13 +1117,13 @@ namespace hical
 				size_t headerBytes = static_cast<size_t>(parseResult);
 				size_t remainingInBuf = bufUsed - headerBytes;
 
-				// memmove 要等阶段 D 用完 string_view 后再做，否则覆盖了 readBuf 的头部数据
-				size_t memmoveSrc = 0; // memmove 源偏移
-				size_t memmoveLen = 0; // memmove 长度（0 表示无需 memmove）
+				// 残留数据（下一个 pipelined 请求的字节）在 readBuf 里的起始偏移。
+				// 要等阶段 D 用完 string_view 才能挪，所以这里只记位置，响应写完再存进 pipelineSpill
+				size_t spillSrc = 0;
 
 				// body 读没读过的标记。链里有 needsBody 声明时会插一道门，门和 tail 共用同一个
 				// readRequestBody：谁先读就把这块置上，另一个看到就跳过，保证 body 只读一遍、
-				// memmoveSrc/bufUsed 这些副作用也只落一次。链里没门时它恒为 false，tail 照旧兜底读。
+				// spillSrc/bufUsed 这些副作用也只落一次。链里没门时它恒为 false，tail 照旧兜底读。
 				bool bodyRead = false;
 
 				auto readRequestBody = [&]() -> Awaitable<std::optional<HttpResponse>>
@@ -1117,12 +1185,11 @@ namespace hical
 							std::memcpy(req.native().body.data(), readBuf.data() + headerBytes, bodyCopied);
 						}
 
-						// 把 body 后面的残留数据位置记下来，后面再 memmove
+						// 把 body 后面的残留数据位置记下来，响应写完再存进 pipelineSpill
 						size_t tailLen = remainingInBuf - bodyCopied;
 						if (tailLen > 0)
 						{
-							memmoveSrc = headerBytes + bodyCopied;
-							memmoveLen = tailLen;
+							spillSrc = headerBytes + bodyCopied;
 						}
 						bufUsed = tailLen;
 
@@ -1204,12 +1271,8 @@ namespace hical
 					}
 					else
 					{
-						// 无 body（GET/HEAD 等）：记录延迟 memmove 参数
-						if (remainingInBuf > 0)
-						{
-							memmoveSrc = headerBytes;
-							memmoveLen = remainingInBuf;
-						}
+						// 无 body（GET/HEAD 等）：残留数据就在头部后面
+						spillSrc = headerBytes;
 						bufUsed = remainingInBuf;
 					}
 
@@ -1536,19 +1599,16 @@ namespace hical
 				// 写完，刷新活跃时间
 				idleEntry.touch();
 
-				// 延迟 memmove：响应已发送或已暂存，req.native().target/headers 不再被引用，
-				// 安全地将残留数据移到缓冲区开头（为下一个 pipelined 请求做准备）
-				if (memmoveLen > 0)
-				{
-					std::memmove(readBuf.data(), readBuf.data() + memmoveSrc, memmoveLen);
-				}
-
-				// pipeline 残留已暂存，响应已发送，req.native().target/headers
-				// 的 string_view 不再被引用，提前把缓冲区还回去。
-				// 别等到协程末尾析构——万连接下能省几十 MB 在途内存。
+				// 残留数据直接在原位置暂存，不再先 memmove 到缓冲区开头——反正下一轮
+				// 也是 memcpy 进另一个 readBuf，中间那次搬没有意义。
+				// bufUsed 就是残留长度：Content-Length 路径 bufUsed = tailLen，无 body 路径
+				// bufUsed = remainingInBuf，两种情况下 spillSrc 都正好指向残留的起点；
+				// 没读过 body 的路径 spillSrc 还是 0，从头存，跟以前一样。
+				// pipelineSpill 已暂存、响应已发送，req.native().target/headers 的 string_view
+				// 不再被引用，提前把缓冲区还回去。别等到协程末尾析构——万连接下能省几十 MB 在途内存。
 				if (bufUsed > 0)
 				{
-					pipelineSpill.assign(readBuf.data(), bufUsed);
+					pipelineSpill.assign(readBuf.data() + spillSrc, bufUsed);
 				}
 				readBufHandle.release();
 

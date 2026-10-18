@@ -186,8 +186,10 @@ namespace hical
 		while (writePending_)
 		{
 			// 等待前一个写完成（timer 过期 = 就绪信号）
+			++waiters_;
 			boost::system::error_code ec;
 			co_await writeReady_->async_wait(boost::asio::redirect_error(boost::asio::use_awaitable, ec));
+			--waiters_;
 			// ec 可能是 operation_aborted（被 releaseWrite cancel），这正是我们要的唤醒信号
 		}
 		writePending_ = true;
@@ -196,8 +198,12 @@ namespace hical
 	void WebSocketSession::releaseWrite()
 	{
 		writePending_ = false;
-		// 唤醒等待的协程：cancel 使 async_wait 返回 operation_aborted
-		writeReady_->cancel_one();
+		// 有人排队才需要主动唤醒：单连接串行发送时 writePending_ 基本恒假，
+		// 没等待者还去 cancel_one 就是白跑一趟 reactor
+		if (waiters_ > 0)
+		{
+			writeReady_->cancel_one();
+		}
 	}
 
 	Awaitable<void> WebSocketSession::sendFrame(WsOpcode opcode, std::string_view payload, bool fin, bool rsv1)

@@ -7,8 +7,12 @@
 #include "core/HttpServer.h"
 #include <gtest/gtest.h>
 #include <atomic>
+#include <cctype>
 #include <chrono>
+#include <cstdlib>
+#include <cstring>
 #include <string>
+#include <string_view>
 #include <thread>
 
 using namespace hical;
@@ -16,6 +20,93 @@ using hical::test::httpGet;
 
 namespace
 {
+	/// 生成确定性内容：字节只要错位或重复一段，逐字节比对就对不上
+	std::string makePatternBody(size_t size)
+	{
+		std::string body(size, '\0');
+		for (size_t i = 0; i < size; ++i)
+		{
+			body[i] = static_cast<char>('a' + (i * 7 + i / 251) % 26);
+		}
+		return body;
+	}
+
+	/// 从响应头里取 Content-Length（头名大小写不敏感）
+	size_t parseContentLength(std::string_view head)
+	{
+		static constexpr std::string_view kName = "content-length:";
+		auto toLower = [](char c)
+		{
+			return static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+		};
+
+		size_t pos = 0;
+		while (pos < head.size())
+		{
+			auto eol = head.find("\r\n", pos);
+			if (eol == std::string_view::npos)
+			{
+				eol = head.size();
+			}
+			std::string_view line = head.substr(pos, eol - pos);
+			if (line.size() > kName.size())
+			{
+				bool match = true;
+				for (size_t i = 0; i < kName.size(); ++i)
+				{
+					if (toLower(line[i]) != kName[i])
+					{
+						match = false;
+						break;
+					}
+				}
+				if (match)
+				{
+					std::string value(line.substr(kName.size()));
+					return static_cast<size_t>(std::strtoull(value.c_str(), nullptr, 10));
+				}
+			}
+			pos = eol + 2;
+		}
+		return 0;
+	}
+
+	/// 按 Content-Length 读回一个完整响应的 body（keep-alive 连接上可以连续调用）
+	std::string readResponseBody(boost::asio::ip::tcp::socket& sock, size_t& headerBytes)
+	{
+		std::string buf;
+		char tmp[8192];
+		size_t headEnd = std::string::npos;
+		size_t bodyNeed = 0;
+
+		for (;;)
+		{
+			boost::system::error_code ec;
+			size_t n = sock.read_some(boost::asio::buffer(tmp), ec);
+			if (ec)
+			{
+				return {};
+			}
+			buf.append(tmp, n);
+
+			if (headEnd == std::string::npos)
+			{
+				headEnd = buf.find("\r\n\r\n");
+				if (headEnd == std::string::npos)
+				{
+					continue;
+				}
+				bodyNeed = parseContentLength(std::string_view(buf.data(), headEnd));
+			}
+
+			if (buf.size() >= headEnd + 4 + bodyNeed)
+			{
+				headerBytes = headEnd + 4;
+				return buf.substr(headerBytes, bodyNeed);
+			}
+		}
+	}
+
 	uint16_t startServerAndWait(HttpServer& server, std::thread& serverThread)
 	{
 		serverThread = std::thread(
@@ -249,6 +340,49 @@ TEST(OptimisticWriteTest, NonBlockingSocketWithBodyRead)
 	}
 	EXPECT_NE(response.find("200"), std::string::npos);
 	EXPECT_NE(response.find("X"), std::string::npos);
+
+	sock.close();
+	server.stop();
+	serverThread.join();
+}
+
+/**
+ * @brief 大 body 走 2-iov 乐观写：客户端先不读，把服务端的发送路径堵住，
+ * 逼出 write_some 写不完 → 回退续写。收到的 body 必须逐字节和发送端一致——
+ * 回退时若把已经写出去的头部/前段重发一遍，这里就会多出字节、整体错位。
+ */
+TEST(OptimisticWriteTest, LargeBodySlowReaderKeepsBytesIntact)
+{
+	HttpServer server(0);
+	const std::string payload = makePatternBody(2 * 1024 * 1024);
+	server.router().get("/big",
+						[&payload](const HttpRequest&) -> HttpResponse
+						{
+							return HttpResponse::ok(payload);
+						});
+
+	std::thread serverThread;
+	uint16_t port = startServerAndWait(server, serverThread);
+
+	boost::asio::io_context io;
+	boost::asio::ip::tcp::socket sock(io);
+	sock.connect(boost::asio::ip::tcp::endpoint(boost::asio::ip::make_address("127.0.0.1"), port));
+
+	// 两条请求走同一个 keep-alive 连接，第二次同样落在这条路径上
+	static constexpr const char* kReq = "GET /big HTTP/1.1\r\nHost: localhost\r\nConnection: keep-alive\r\n\r\n";
+	for (int round = 0; round < 2; ++round)
+	{
+		boost::asio::write(sock, boost::asio::buffer(kReq, std::char_traits<char>::length(kReq)));
+
+		// 先让服务端写一会儿（客户端不读，发送缓冲区迟早被填满）
+		std::this_thread::sleep_for(std::chrono::milliseconds(150));
+
+		size_t headerBytes = 0;
+		std::string body = readResponseBody(sock, headerBytes);
+		ASSERT_GT(headerBytes, 0u);
+		ASSERT_EQ(body.size(), payload.size());
+		EXPECT_TRUE(std::memcmp(body.data(), payload.data(), payload.size()) == 0);
+	}
 
 	sock.close();
 	server.stop();
