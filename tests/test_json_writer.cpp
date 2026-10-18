@@ -7,6 +7,8 @@
 #include "core/JsonWriter.h"
 #include <gtest/gtest.h>
 #include <boost/json.hpp>
+#include <charconv>
+#include <cmath>
 #include <limits>
 #include <string>
 #include <string_view>
@@ -175,6 +177,48 @@ TEST(JsonWriterTest, NonFiniteDouble_FallsBackToNull)
 	expectParsable(out);
 }
 
+TEST(JsonWriterTest, DoubleExtremes_RoundTripToSameValue)
+{
+	// shortest 表示的要求是「读回来还是那个数」，所以这里不比对文本，直接回解比数值
+	const double values[] = {
+		std::numeric_limits<double>::max(),
+		-std::numeric_limits<double>::max(),
+		std::numeric_limits<double>::min(), // 最小正规数
+		-std::numeric_limits<double>::min(),
+		std::numeric_limits<double>::denorm_min(), // 最小次正规数，to_chars 只给一位有效数字也要能还原
+		1.0 / 3.0,
+		1e-300,
+		1e300,
+	};
+
+	for (const double v : values)
+	{
+		std::string out;
+		JsonWriter w(out);
+		w.value(v);
+
+		double back = 0;
+		const auto res = std::from_chars(out.data(), out.data() + out.size(), back);
+		ASSERT_EQ(res.ec, std::errc {}) << "回读失败，输出是: " << out;
+		ASSERT_EQ(res.ptr, out.data() + out.size()) << "输出里有多余字符: " << out;
+		EXPECT_EQ(back, v) << "最短表示回读后数值变了，输出是: " << out;
+	}
+}
+
+TEST(JsonWriterTest, NegativeZero_KeepsSign)
+{
+	// -0.0 不是 0：to_chars 得保留负号，否则下游按符号区分正负零时会对不上
+	std::string out;
+	JsonWriter w(out);
+	w.value(-0.0);
+
+	double back = 1.0;
+	const auto res = std::from_chars(out.data(), out.data() + out.size(), back);
+	ASSERT_EQ(res.ec, std::errc {}) << "输出是: " << out;
+	EXPECT_EQ(back, 0.0);
+	EXPECT_TRUE(std::signbit(back)) << "负号丢了，输出是: " << out;
+}
+
 // ============ 字符串转义（规则跟 CompileTimeJson 那套保持一致）============
 
 TEST(JsonWriterTest, StringValue_EscapesQuoteBackslashSlash)
@@ -193,6 +237,37 @@ TEST(JsonWriterTest, StringValue_EscapesControlChars)
 	w.value(std::string_view("\x01\x08\x09\x0a\x0c\x0d\x1f", 7));
 
 	EXPECT_EQ(out, R"("\u0001\b\t\n\f\r\u001f")");
+}
+
+TEST(JsonWriterTest, StringValue_AllControlChars_UseExactEscapeForm)
+{
+	// 0x00-0x1F 全表过一遍：8/9/10/12/13 必须是缩写形式，其余必须是 \u00XX。
+	// 这里把期望值单独抄一份，不引用 JsonEscape.h 里那张表——引用过来的话码表改错了测试也跟着错，
+	// 等于没测。
+	static constexpr std::string_view kExpected[32] = {
+		R"(\u0000)", R"(\u0001)", R"(\u0002)", R"(\u0003)", R"(\u0004)", R"(\u0005)", R"(\u0006)", R"(\u0007)",
+		R"(\b)",     R"(\t)",     R"(\n)",     R"(\u000b)", R"(\f)",     R"(\r)",     R"(\u000e)", R"(\u000f)",
+		R"(\u0010)", R"(\u0011)", R"(\u0012)", R"(\u0013)", R"(\u0014)", R"(\u0015)", R"(\u0016)", R"(\u0017)",
+		R"(\u0018)", R"(\u0019)", R"(\u001a)", R"(\u001b)", R"(\u001c)", R"(\u001d)", R"(\u001e)", R"(\u001f)",
+	};
+
+	for (int c = 0; c < 32; ++c)
+	{
+		const char raw = static_cast<char>(c);
+
+		std::string out;
+		JsonWriter w(out);
+		w.value(std::string_view(&raw, 1));
+
+		EXPECT_EQ(out, "\"" + std::string(kExpected[c]) + "\"") << "控制字符 0x" << std::hex << c;
+
+		// 形状对了还不够，回解得还原成原来那个字节
+		const auto parsed = boost::json::parse(out);
+		const std::string_view decoded = parsed.as_string();
+		ASSERT_EQ(decoded.size(), 1u) << "控制字符 0x" << std::hex << c;
+		EXPECT_EQ(static_cast<unsigned char>(decoded[0]), static_cast<unsigned char>(c))
+			<< "控制字符 0x" << std::hex << c;
+	}
 }
 
 TEST(JsonWriterTest, StringValue_EmbeddedNull_Escaped)
@@ -214,6 +289,19 @@ TEST(JsonWriterTest, StringValue_Utf8PassedThrough)
 	w.value("\xE4\xBD\xA0\xE5\xA5\xBD"); // UTF-8 "你好"
 
 	EXPECT_EQ(out, "\"\xE4\xBD\xA0\xE5\xA5\xBD\"");
+}
+
+TEST(JsonWriterTest, EmptyStringValue_ProducesEmptyQuotes)
+{
+	// 空 string_view 的 data() 是 nullptr，转义函数里那段指针算术得能扛住
+	std::string out;
+	JsonWriter w(out);
+	w.beginObject();
+	w.key("").value(std::string_view {});
+	w.endObject();
+
+	EXPECT_EQ(out, R"({"":""})");
+	expectParsable(out);
 }
 
 TEST(JsonWriterTest, KeyWithSpecialChars_Escaped)
@@ -382,6 +470,32 @@ TEST(JsonWriterTest, Misuse_TwoKeysInARow_PadsNull)
 	expectParsable(out);
 }
 
+TEST(JsonWriterTest, Misuse_NestingBeyondMaxDepth_ExtraBeginIgnored)
+{
+	// kMaxDepth 是 32 层。第 33 次 beginArray 该被丢掉，不写字节也不涨深度，
+	// 这样后面 32 次 endArray 还能正常收口，不会把已经写出来的结构搅乱。
+	constexpr int kMaxDepth = 32;
+
+	std::string out;
+	JsonWriter w(out);
+	for (int i = 0; i < kMaxDepth; ++i)
+	{
+		w.beginArray();
+	}
+	w.beginArray(); // 越界那一层，应该被丢掉
+	w.value(1);
+	w.endArray(); // 收的是真实存在的第 32 层，不是刚才那个越界的
+
+	for (int i = 0; i < kMaxDepth; ++i)
+	{
+		w.endArray();
+	}
+
+	EXPECT_EQ(out, std::string(kMaxDepth, '[') + "1" + std::string(kMaxDepth, ']'));
+	EXPECT_TRUE(w.isComplete());
+	expectParsable(out);
+}
+
 #endif // NDEBUG
 
 // ============ HttpResponse 集成 ============
@@ -471,4 +585,44 @@ TEST(JsonWriterResponseTest, JsonWriter_RuntimeShapedArray_MatchesExpectedWire)
 	EXPECT_EQ(res.body(), R"({"count":2,"items":[{"id":1},{"id":2}]})");
 	EXPECT_EQ(res.header("Content-Length"), std::to_string(res.body().size()));
 	expectParsable(res.body());
+}
+
+TEST(JsonWriterResponseTest, JsonWriter_LargeBodyOver512_WritesCompleteAndLengthMatches)
+{
+	// head + body 一旦超过 512 字节，发送端就不再合并到栈缓冲区，改走 head/body 分开的
+	// scatter-gather（body 零拷贝引用）。这里确认 writer 写出的 body 没被截断，
+	// Content-Length 跟实际长度一致，拼出来的整包结构也对得上。
+	constexpr int kItemCount = 100; // 每条 30 字节上下，总量稳稳超过 512
+
+	HttpResponse res;
+	{
+		auto w = res.jsonWriter();
+		w.beginArray();
+		for (int i = 0; i < kItemCount; ++i)
+		{
+			w.beginObject().key("id").value(i).key("name").value("user").endObject();
+		}
+		w.endArray();
+		EXPECT_TRUE(w.isComplete());
+	}
+
+	ASSERT_GT(res.body().size(), 512u);
+
+	res.native().preparePayload();
+	EXPECT_EQ(res.header("Content-Length"), std::to_string(res.body().size()));
+
+	// 结构完整：100 个元素，逐个核对首尾的值
+	const auto parsed = boost::json::parse(res.body());
+	const auto& items = parsed.as_array();
+	ASSERT_EQ(items.size(), static_cast<size_t>(kItemCount));
+	EXPECT_EQ(items.front().at("id").as_int64(), 0);
+	EXPECT_EQ(items.front().at("name").as_string(), "user");
+	EXPECT_EQ(items.back().at("id").as_int64(), kItemCount - 1);
+	EXPECT_EQ(items.back().at("name").as_string(), "user");
+
+	// 整包序列化后 body 原样落在末尾，没被 head 缓冲区的大小限制切掉
+	const auto wire = res.native().serialize();
+	ASSERT_GE(wire.size(), res.body().size());
+	EXPECT_EQ(wire.size() - res.body().size(), wire.find(res.body()));
+	EXPECT_NE(wire.find("Content-Length: " + std::to_string(res.body().size())), std::string::npos);
 }
