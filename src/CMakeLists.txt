@@ -44,6 +44,7 @@ add_library(hical_core STATIC
     core/HttpSessionImpl.cpp
     core/ReadBufferPool.cpp
     core/IdleScanner.cpp
+    core/TimerService.cpp
     core/WsDeflate.cpp
     core/WebSocket.cpp
     core/WsHub.cpp

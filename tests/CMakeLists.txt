@@ -51,6 +51,7 @@ hical_add_test(test_asio_event_loop)      # AsioEventLoop
 hical_add_test(test_asio_tcp_connection)  # GenericConnection (PlainConnection)
 hical_add_test(test_memory_pool)          # MemoryPool 和 PmrBuffer
 hical_add_test(test_asio_timer)           # AsioTimer
+hical_add_test(test_timer_service)        # TimerService 集中式定时器
 hical_add_test(test_ssl_connection)       # SSL 连接
 hical_add_test(test_coroutine)            # 协程工具
 hical_add_test(test_tcp_server)           # TcpServer + EventLoopPool
