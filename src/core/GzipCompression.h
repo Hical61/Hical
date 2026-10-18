@@ -26,6 +26,8 @@ namespace hical
 		size_t streamingThreshold = 65536; // 64KB
 
 		/// zlib 压缩级别（1-9，6 是默认平衡点）
+		/// 注意：json-comp 场景按带宽调整后计分，压得越小反而分越高，
+		/// 调 level 要按总分算，别只盯 CPU 开销
 		int compressionLevel = 6;
 
 		/// 异步压缩线程数。0 = 同步压缩（被调用线程上执行），>0 则在独立线程上执行

@@ -24,6 +24,7 @@
 
 #include <boost/json.hpp>
 #include <algorithm>
+#include <charconv>
 #include <chrono>
 #include <cstdlib>
 #include <filesystem>
@@ -430,6 +431,85 @@ static size_t detectCpuCount()
 	return std::thread::hardware_concurrency();
 }
 
+// ── gzip 调参（环境变量）────────────────────────────────────────────────────
+
+namespace
+{
+
+	// json-comp 按带宽调整后计分，压得越小分越高，level 和流式阈值得能在压测机上
+	// 现场 A/B，改环境变量即可，不用重新编译。
+	constexpr std::string_view kGzipLevelEnv = "HICAL_GZIP_LEVEL";
+	constexpr std::string_view kGzipThresholdEnv = "HICAL_GZIP_THRESHOLD";
+
+	// zlib 只认 1..9，9 最慢但压得最狠
+	constexpr int kGzipMinLevel = 1;
+	constexpr int kGzipMaxLevel = 9;
+
+	/**
+	 * @brief 把整串字符串当十进制整数解析
+	 * 带尾巴（"6x"）、前导空格、溢出都算失败，比 std::stoi 严格，
+	 * 免得环境变量拼错了还悄悄按半截数字生效。
+	 * @param raw 待解析的字符串
+	 * @param out 解析成功时写入的值
+	 * @return 解析成功返回 true
+	 */
+	template <typename IntType>
+	bool parseDecimal(std::string_view raw, IntType& out)
+	{
+		const char* end = raw.data() + raw.size();
+		const auto parsed = std::from_chars(raw.data(), end, out);
+		return parsed.ec == std::errc {} && parsed.ptr == end;
+	}
+
+	/**
+	 * @brief 从环境变量读 gzip 调参，没设就用 GzipCompressionOptions 的默认值
+	 * 设了但不合法（非数字、level 越界、阈值负数）回退默认值并打一条 WARN。
+	 * @return json 路由组要用的压缩选项
+	 */
+	GzipCompressionOptions readGzipOptions()
+	{
+		GzipCompressionOptions opts;
+
+		if (const char* raw = std::getenv(kGzipLevelEnv.data()); raw != nullptr && *raw != '\0')
+		{
+			int level = 0;
+			if (parseDecimal(raw, level) && level >= kGzipMinLevel && level <= kGzipMaxLevel)
+			{
+				opts.compressionLevel = level;
+			}
+			else
+			{
+				HICAL_LOG_WARN("{}={} 不是合法压缩级别（{}..{}），沿用默认 {}",
+							   kGzipLevelEnv,
+							   raw,
+							   kGzipMinLevel,
+							   kGzipMaxLevel,
+							   opts.compressionLevel);
+			}
+		}
+
+		if (const char* raw = std::getenv(kGzipThresholdEnv.data()); raw != nullptr && *raw != '\0')
+		{
+			long long threshold = 0;
+			// 0 是有意义的：强制所有过了 minSize 的响应都走 chunked 流式压缩
+			if (parseDecimal(raw, threshold) && threshold >= 0)
+			{
+				opts.streamingThreshold = static_cast<size_t>(threshold);
+			}
+			else
+			{
+				HICAL_LOG_WARN("{}={} 不是合法字节数（>=0），沿用默认 {}",
+							   kGzipThresholdEnv,
+							   raw,
+							   opts.streamingThreshold);
+			}
+		}
+
+		return opts;
+	}
+
+} // namespace
+
 // ── 共享路由注册 ────────────────────────────────────────────────────────────
 
 /**
@@ -519,7 +599,7 @@ static void registerRoutes(HttpServer& server)
 
 	// ── GET /json/{count}?m=X → JSON 序列化（路由组挂 Gzip 用于 json-comp）───
 	{
-		auto gzip = makeGzipCompressionMiddleware();
+		auto gzip = makeGzipCompressionMiddleware(readGzipOptions());
 		auto jsonGroup = server.router().group("/json");
 		jsonGroup.use([gzip](HttpRequest& req, MiddlewareNext next) -> Awaitable<HttpResponse> {
 			auto resp = co_await next(req);
