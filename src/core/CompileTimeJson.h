@@ -8,85 +8,18 @@
  *   #include "core/CompileTimeJson.h"
  *   std::string json = hical::meta::compileTimeToJson(myDto);
  * 与 toJson() 的产出在语义上等价，区别在于跳过 boost::json 中间层。
+ * 字符串转义规则放在 detail/JsonEscape.h，跟 JsonWriter 共用同一套。
  */
 
 #pragma once
 
 #include "FixedBuffer.h"
 #include "MetaJson.h"
+#include "detail/JsonEscape.h"
 #include <string>
 
 namespace hical::meta
 {
-
-	namespace detail
-	{
-
-		/**
-		 * @brief JSON 转义表，索引为控制字符 0x00-0x1F
-		 * 8/9/10/12/13 用缩写形式，其余用 \u00XX
-		 */
-		inline constexpr const char* kJsonEscapes[32] = {
-			"\\u0000", "\\u0001", "\\u0002", "\\u0003", "\\u0004", "\\u0005", "\\u0006", "\\u0007",
-			"\\b",     "\\t",     "\\n",     "\\u000b", "\\f",     "\\r",     "\\u000e", "\\u000f",
-			"\\u0010", "\\u0011", "\\u0012", "\\u0013", "\\u0014", "\\u0015", "\\u0016", "\\u0017",
-			"\\u0018", "\\u0019", "\\u001a", "\\u001b", "\\u001c", "\\u001d", "\\u001e", "\\u001f",
-		};
-
-		/**
-		 * @brief 将 string_view 按 JSON 字符串规则转义后追加到缓冲区
-		 * 需要转义的字符：" \ / 以及 0x00-0x1F 控制字符。
-		 * 扫描时把正常字符跨度批量追加，遇到需转义的字符才打断。
-		 */
-		template <size_t N>
-		void appendJsonString(FixedBuffer<N>& buf, std::string_view str)
-		{
-			const char* p = str.data();
-			const char* end = p + str.size();
-			const char* spanStart = p;
-
-			while (p < end)
-			{
-				unsigned char c = static_cast<unsigned char>(*p);
-				if (c < 0x20 || c == '"' || c == '\\' || c == '/')
-				{
-					// 刷出前面累积的正常字符
-					if (spanStart < p)
-					{
-						buf.append(spanStart, static_cast<size_t>(p - spanStart));
-					}
-
-					// 追加转义序列
-					if (c == '"')
-					{
-						buf.append("\\\"", 2);
-					}
-					else if (c == '\\')
-					{
-						buf.append("\\\\", 2);
-					}
-					else if (c == '/')
-					{
-						buf.append("\\/", 2);
-					}
-					else
-					{
-						buf << kJsonEscapes[c];
-					}
-
-					spanStart = p + 1;
-				}
-				++p;
-			}
-
-			// 刷出末尾的正常字符
-			if (spanStart < p)
-			{
-				buf.append(spanStart, static_cast<size_t>(p - spanStart));
-			}
-		}
-
-	} // namespace detail
 
 	// 前向声明（必须在 meta 命名空间），嵌套 DTO 递归时需要
 	template <typename T>
@@ -105,7 +38,7 @@ namespace hical::meta
 			if constexpr (std::is_same_v<T, std::string>)
 			{
 				buf << '"';
-				appendJsonString(buf, val);
+				hical::detail::appendJsonString(buf, val);
 				buf << '"';
 			}
 			else if constexpr (std::is_same_v<T, bool>)

@@ -105,6 +105,7 @@ endif()
 hical_add_test(test_optimistic_write)     # 乐观同步写 + readBuf 提前归还
 hical_add_test(test_compile_time_chain)  # 编译期中间件链与运行时 buildOptimizedChain 语义一致性
 hical_add_test(test_compile_time_json)   # 编译期 JSON 直序列化
+hical_add_test(test_json_writer)         # 零 DOM 增量 JSON writer
 
 # --- 日志系统 ---
 hical_add_test(test_log)                  # 日志系统主测试
