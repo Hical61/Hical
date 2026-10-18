@@ -142,6 +142,17 @@ namespace hical
 		res_.preparePayload();
 	}
 
+	JsonWriter HttpResponse::jsonWriter() &
+	{
+		// body 是 writer 直接改的，绕过了 setBody 那几条路径，只能自己把 payload 标脏；
+		// Content-Length 留给 dispatch 阶段那次 preparePayload() 按最终长度算
+		res_.invalidatePayload();
+		res_.body.clear();
+		res_.headers.set("Content-Type", "application/json");
+		// 直接构造在返回值里（C++17 保证的复制消除），所以 JsonWriter 不用提供移动构造
+		return JsonWriter(res_.body);
+	}
+
 	void HttpResponse::setCookie(const std::string& name, const std::string& value, const CookieOptions& options)
 	{
 		// cookie name 必须是 token 字符

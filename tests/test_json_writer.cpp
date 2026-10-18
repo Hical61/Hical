@@ -3,12 +3,14 @@
  * @brief JsonWriter 零 DOM 增量序列化测试
  */
 
+#include "core/HttpResponse.h"
 #include "core/JsonWriter.h"
 #include <gtest/gtest.h>
 #include <boost/json.hpp>
 #include <limits>
 #include <string>
 #include <string_view>
+#include <type_traits>
 
 using namespace hical;
 
@@ -25,6 +27,11 @@ namespace
 		boost::json::parse(text, ec);
 		EXPECT_EQ(ec.value(), 0) << "拼出来的不是合法 JSON: " << text;
 	}
+
+	// jsonWriter() 挂了 `&` 限定：从左值响应上取得到，从临时响应上取不到。
+	// 临时对象在整条表达式结束时就没了，writer 里那个指向 body 的指针会当场悬空。
+	static_assert(std::is_invocable_v<decltype(&HttpResponse::jsonWriter), HttpResponse&>);
+	static_assert(!std::is_invocable_v<decltype(&HttpResponse::jsonWriter), HttpResponse&&>);
 
 } // namespace
 
@@ -376,3 +383,92 @@ TEST(JsonWriterTest, Misuse_TwoKeysInARow_PadsNull)
 }
 
 #endif // NDEBUG
+
+// ============ HttpResponse 集成 ============
+
+TEST(JsonWriterResponseTest, JsonWriter_WritesIntoResponseBody)
+{
+	HttpResponse res;
+	{
+		auto w = res.jsonWriter();
+		w.beginObject();
+		w.key("ok").value(true);
+		w.endObject();
+	}
+
+	EXPECT_EQ(res.body(), R"({"ok":true})");
+	expectParsable(res.body());
+}
+
+TEST(JsonWriterResponseTest, JsonWriter_SetsJsonContentType)
+{
+	HttpResponse res;
+	{
+		auto w = res.jsonWriter();
+		w.beginObject().endObject();
+	}
+
+	// 跟 json()/jsonFrom() 那两条路保持一致，不额外带 charset
+	HttpResponse ref;
+	ref.setJsonBody(boost::json::value {1});
+	EXPECT_EQ(res.header("Content-Type"), "application/json");
+	EXPECT_EQ(res.header("Content-Type"), ref.header("Content-Type"));
+}
+
+TEST(JsonWriterResponseTest, JsonWriter_PreparePayloadContentLengthMatchesBody)
+{
+	HttpResponse res;
+	{
+		auto w = res.jsonWriter();
+		w.beginArray().value(1).value(2).value(3).endArray();
+	}
+	res.native().preparePayload();
+
+	EXPECT_EQ(res.header("Content-Length"), std::to_string(res.body().size()));
+}
+
+TEST(JsonWriterResponseTest, JsonWriter_OverwritesBodyPreparedBySetBody)
+{
+	// setBody 那步已经把 Content-Length 算成 1 了，writer 写完得能重新算
+	HttpResponse res;
+	res.setBody("x");
+	ASSERT_EQ(res.header("Content-Length"), "1");
+
+	{
+		auto w = res.jsonWriter();
+		w.beginObject();
+		w.key("n").value(12345);
+		w.endObject();
+	}
+	res.native().preparePayload();
+
+	EXPECT_EQ(res.body(), R"({"n":12345})");
+	EXPECT_EQ(res.header("Content-Length"), std::to_string(res.body().size()));
+}
+
+TEST(JsonWriterResponseTest, JsonWriter_RuntimeShapedArray_MatchesExpectedWire)
+{
+	// 运行时才知道有几条，这正是 writer 存在的理由：jsonFrom 那种编译期形状套不上
+	constexpr int kItemCount = 2;
+	const int ids[kItemCount] = {1, 2};
+
+	HttpResponse res;
+	{
+		auto w = res.jsonWriter();
+		w.beginObject();
+		w.key("count").value(kItemCount);
+		w.key("items").beginArray();
+		for (int id : ids)
+		{
+			w.beginObject().key("id").value(id).endObject();
+		}
+		w.endArray();
+		w.endObject();
+		EXPECT_TRUE(w.isComplete());
+	}
+	res.native().preparePayload();
+
+	EXPECT_EQ(res.body(), R"({"count":2,"items":[{"id":1},{"id":2}]})");
+	EXPECT_EQ(res.header("Content-Length"), std::to_string(res.body().size()));
+	expectParsable(res.body());
+}

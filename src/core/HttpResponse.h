@@ -11,6 +11,7 @@
 #include "FixedBuffer.h"
 #include "HeaderMap.h"
 #include "HttpTypes.h"
+#include "JsonWriter.h"
 #include <boost/json.hpp>
 #include <charconv>
 #include <filesystem>
@@ -285,6 +286,27 @@ namespace hical
 		 * @param json JSON 值
 		 */
 		void setJsonBody(const boost::json::value& json);
+
+		/**
+		 * @brief 拿一个直接往本响应 body 上追加 JSON 的 writer
+		 * 编译期形状固定的 DTO 走 jsonFrom()，手里已经有 boost::json::value 的走 json()，
+		 * 剩下「一边遍历一边拼」的场景（分页列表、树、字段名和层级运行时才定）用这个，
+		 * 全程不建 DOM，标量直接 to_chars 写到 body 上。
+		 * 副作用：调用时清空 body、把 Content-Type 设成 application/json、把 payload 标成
+		 * 待重算，Content-Length 由 dispatch 阶段那次 preparePayload() 按最终 body 长度补。
+		 * 不走 handler 返回路径、自己手动 serialize 的代码记得先 preparePayload()。
+		 * 使用契约（writer 里存的是裸指针，这些得守）：
+		 * - writer 存的是本响应 body 这个 std::string 的地址，必须比它先死。这里挂了 `&` 限定
+		 *   就是为了挡住「从临时响应上取 writer」——`auto w = makeResp().jsonWriter();` 这条表达
+		 *   式一结束临时对象就没了，w 指着的是一块已经释放的内存；加了限定符这种写法编译期
+		 *   就报错。别手滑把它去掉。
+		 * - 拿到 writer 之后别把 response move 走再接着写。body 跟着搬去了新对象，写进旧壳
+		 *   里的字节到不了你手上那个 response。
+		 * - 一个响应只开一个 writer。再调一次会重新清空 body 从头写——writer 不知道 body
+		 *   里还留着上一次的半截内容。
+		 * @return 绑定在本响应 body 上的 writer
+		 */
+		[[nodiscard]] JsonWriter jsonWriter() &;
 
 		/**
 		 * @brief 添加 Set-Cookie 响应头
