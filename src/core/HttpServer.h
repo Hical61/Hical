@@ -13,6 +13,7 @@
 #include "SslContext.h"
 #include "IdleFd.h"
 #include "IdleScanner.h"
+#include "TimerService.h"
 #include "../asio/AsioEventLoop.h"
 #include "../asio/EventLoopPool.h"
 #include <boost/asio.hpp>
@@ -388,6 +389,14 @@ namespace hical
 		// 的问题，在当前 releaseWork 路径下不成立——stop() 的 closeAll 关闭所有 socket，
 		// 协程在 baseLoop_.run() 返回前已退出，Guard 析构在 scanner 析构前已完成。
 		std::vector<std::unique_ptr<IdleScanner>> idleScanners_;
+
+		// 每个 loop 一个 TimerService（跟 allLoops 一一对应），sleep() 靠
+		// currentThreadTimerService() 拿它。同样声明在 baseLoop_/ioPool_ 之后 → 先析构，
+		// 保证服务里的 timer 在 io_context 还活着时才销毁。
+		// stop() 不碰它：shutdown() 会把没触发的回调直接扔掉，而挂在 sleep 上的协程就靠
+		// 那个回调唤醒，提前关掉会让它永远醒不过来、baseLoop_.run() 收不了尾。等到
+		// 析构阶段再扔就无所谓了，那时候循环已经退出。
+		std::vector<std::unique_ptr<TimerService>> timerServices_;
 
 		// SO_REUSEPORT 多 acceptor，不支持时回退单 acceptor
 		std::vector<std::unique_ptr<boost::asio::ip::tcp::acceptor>> acceptors_;

@@ -3,6 +3,7 @@
  * @brief 集中式定时器服务的单元测试
  */
 
+#include "core/Coroutine.h"
 #include "core/TimerService.h"
 #include <boost/asio/io_context.hpp>
 #include <boost/asio/post.hpp>
@@ -334,6 +335,88 @@ TEST(TimerServiceTest, ThreadLocal_BindAndUnbind_ReturnsService)
 	}
 	// 析构顺手解绑，不然线程上就留了个悬空指针
 	EXPECT_EQ(currentThreadTimerService(), nullptr);
+}
+
+// ---------- sleep() 走哪条路 ----------
+// 两条路径都得能等到时长，区别只在「有没有往服务里挂定时器」
+
+TEST(TimerSleepTest, ServiceBound_RegistersInServiceAndWaits)
+{
+	boost::asio::io_context ioContext;
+	TimerService service(ioContext.get_executor());
+	service.bindToCurrentThread();
+
+	bool hadService = false;
+	bool probeSawSleepTimer = false;
+	std::chrono::steady_clock::duration slept {};
+
+	coSpawn(ioContext,
+			[&]() -> Awaitable<void>
+			{
+				hadService = currentThreadTimerService() == &service;
+				const auto start = TimerService::Clock::now();
+				co_await sleep(30ms);
+				slept = TimerService::Clock::now() - start;
+			});
+
+	// 探针 5ms 到点：那会儿 sleep 还该挂在服务里，pendingCount 是 1
+	service.scheduleAfter(5ms,
+						  [&]()
+						  {
+							  probeSawSleepTimer = service.pendingCount() == 1;
+						  });
+
+	ioContext.run();
+
+	EXPECT_TRUE(hadService);
+	EXPECT_TRUE(probeSawSleepTimer) << "sleep 应该挂到 TimerService 上，而不是自己造 timer";
+	EXPECT_GE(slept, 20ms); // 定时器可能早个把 tick，留点余量
+	EXPECT_EQ(service.pendingCount(), 0u);
+}
+
+TEST(TimerSleepTest, NoService_FallsBackToOwnTimerAndWaits)
+{
+	boost::asio::io_context ioContext;
+	ASSERT_EQ(currentThreadTimerService(), nullptr);
+
+	bool hadService = true;
+	std::chrono::steady_clock::duration slept {};
+
+	coSpawn(ioContext,
+			[&]() -> Awaitable<void>
+			{
+				hadService = currentThreadTimerService() != nullptr;
+				const auto start = TimerService::Clock::now();
+				co_await sleep(20ms);
+				slept = TimerService::Clock::now() - start;
+			});
+
+	ioContext.run();
+
+	EXPECT_FALSE(hadService);
+	EXPECT_GE(slept, 10ms);
+}
+
+TEST(TimerSleepTest, ServiceStopped_FallsBackInsteadOfReturningImmediately)
+{
+	boost::asio::io_context ioContext;
+	TimerService service(ioContext.get_executor());
+	service.bindToCurrentThread();
+	service.shutdown();
+
+	std::chrono::steady_clock::duration slept {};
+	coSpawn(ioContext,
+			[&]() -> Awaitable<void>
+			{
+				const auto start = TimerService::Clock::now();
+				co_await sleep(20ms);
+				slept = TimerService::Clock::now() - start;
+			});
+
+	ioContext.run();
+
+	// 停了就立刻返回的话，accept 循环里那个 while 会变成空转
+	EXPECT_GE(slept, 10ms);
 }
 
 TEST(TimerServiceTest, CallbackDestroyingService_NoCrash)

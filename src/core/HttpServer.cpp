@@ -505,6 +505,29 @@ namespace hical
 				}
 			});
 
+		// 每个 loop 一个 TimerService，handler 里 co_await hical::sleep() 就挂到它上面，
+		// 整条 io_context 共用一个 timerfd。绑定必须在跑那条 io_context 的线程上做：
+		// baseLoop_ 的那个就在这儿绑（这线程待会儿就 baseLoop_.run() 了），worker 的交由
+		// post 过去，排在下面 acceptLoop 的 coSpawn 之前。
+		for (auto* loop : allLoops)
+		{
+			auto service = std::make_unique<TimerService>(loop->getIoContext().get_executor());
+			if (loop == &baseLoop_)
+			{
+				service->bindToCurrentThread();
+			}
+			else
+			{
+				TimerService* rawService = service.get();
+				boost::asio::post(loop->getIoContext(),
+								  [rawService]()
+								  {
+									  rawService->bindToCurrentThread();
+								  });
+			}
+			timerServices_.push_back(std::move(service));
+		}
+
 		// 给每个 io_context 跑一个空闲扫描器（干掉 per-connection timer 协程）
 		if (idleTimeout_ > 0)
 		{
@@ -555,6 +578,12 @@ namespace hical
 		// 趁 io_context 还活着把 signal_set 干掉——Windows 下这玩意有 static mutex，
 		// 不提前清理的话同一进程里下次创建可能踩到脏状态
 		signals_.reset();
+
+		// 这条线程的 thread_local 还指着 baseLoop_ 的服务（timerServices_[0] 就是它）。
+		// 服务本身要等析构才没，但它那条 io_context 已经没人跑了，这条线程后面要是再调
+		// currentThreadTimerService() 拿到的就是个不会再触发的服务。跟 IdleScanner
+		// 在 run() 收尾时把 tls 清掉一个道理。
+		timerServices_[0]->unbindFromCurrentThread();
 
 		// worker loop 同理——socket 已经被 closeAll 关了，放掉 work_guard 等它们退
 		if (ioPool_)

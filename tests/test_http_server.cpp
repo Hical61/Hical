@@ -1245,6 +1245,36 @@ TEST(HttpServerTest, ListenAfterStartThrows)
 	serverThread.join();
 }
 
+// 服务端接线：handler 里 co_await sleep() 时，当前线程该已经绑好 TimerService，
+// 不然每个 sleep 又得现造一个 timerfd。ioThreads=2 是有意的——Windows 回退路径下
+// 连接被扔到 worker loop 上处理，正好顺带验证 worker 线程也绑了。
+TEST(HttpServerTest, AsyncHandlerSleep_UsesThreadTimerService_StillResponds)
+{
+	// 声明在 server 之前：handler 捕获了它的引用，得让它比 server 活得久
+	std::atomic<bool> hadService {false};
+	HttpServer server(0, 2);
+
+	server.router().get("/delay",
+						[&hadService](const HttpRequest&) -> Awaitable<HttpResponse>
+						{
+							hadService.store(currentThreadTimerService() != nullptr);
+							co_await sleep(std::chrono::milliseconds(20));
+							co_return HttpResponse::ok("delayed");
+						});
+
+	std::thread serverThread;
+	uint16_t port = startServerAndWait(server, serverThread);
+	ASSERT_NE(port, 0);
+
+	auto [status, body] = httpGet("127.0.0.1", port, "/delay");
+	EXPECT_EQ(status, 200u);
+	EXPECT_EQ(body, "delayed");
+	EXPECT_TRUE(hadService.load()) << "跑 handler 的线程上应该已经 bindToCurrentThread() 过了";
+
+	server.stop();
+	serverThread.join();
+}
+
 // recommendedMaxConnections 明文口径回归：1024MB 可用内存下的推荐值
 // 1024MB * 0.7 / 16KB = 45875
 TEST(HttpServerTest, RecommendedMaxConnections_PlainText_MatchesEstimate)
