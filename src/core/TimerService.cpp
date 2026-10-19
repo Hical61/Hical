@@ -84,6 +84,8 @@ namespace hical
 			// 已经挂到 timer 上的 deadline，空表示 timer 闲着没在等
 			std::optional<TimerService::Clock::time_point> armedDeadline;
 			TimerService::TimerId nextId = kFirstTimerId;
+			// fireDue 正在跑那批摘出来的节点。这期间不能重建取消表，见 compactCancelled
+			bool inFireDue = false;
 			bool stopped = false;
 		};
 	} // namespace detail
@@ -91,6 +93,30 @@ namespace hical
 	namespace
 	{
 		void rearm(detail::TimerServiceCore& core);
+
+		/**
+		 * @brief fireDue 期间把 inFireDue 挂上，告诉 compactCancelled 先别重建
+		 * 那批到期的节点已经从堆里摘出来了，这时的重建只认堆里的活标记，会顺手把「取消
+		 * 同批节点」留下的标记当幽灵删掉，那个回调就照样跑了。中途 break、回调抛异常都
+		 * 得复位，所以用 RAII 而不是手工置位。
+		 */
+		struct FireDueGuard
+		{
+			explicit FireDueGuard(bool& flag) : flag_(flag)
+			{
+				flag_ = true;
+			}
+
+			~FireDueGuard()
+			{
+				flag_ = false;
+			}
+
+			FireDueGuard(const FireDueGuard&) = delete;
+			FireDueGuard& operator=(const FireDueGuard&) = delete;
+
+			bool& flag_;
+		};
 
 		/**
 		 * @brief 到点了：一次性把过期的全摘出来执行，再按新堆顶重挂
@@ -102,6 +128,9 @@ namespace hical
 			{
 				return;
 			}
+
+			// 下面这批摘出来之后就不在堆里了，这期间取消表不许重建
+			FireDueGuard firing(core.inFireDue);
 
 			const auto now = TimerService::Clock::now();
 
@@ -142,9 +171,16 @@ namespace hical
 		 * 正常情况取消的都是还挂在堆里的，节点摘出来时顺手 erase 掉，表一直是小的。
 		 * 但如果有人取消一个已经触发过的 id，那个标记就没人清了，攒多了一直涨——
 		 * 超过堆里实际节点数太多时就按堆重建一次，把幽灵 id 都扔掉。
+		 * 重建只从堆里捞活标记，所以 fireDue 跑着那一批的时候不能重建：那批已经不在堆里，
+		 * 它们的取消标记会被当幽灵扔掉，取消就失效了（inFireDue 拦的就是这个）。
 		 */
 		void compactCancelled(detail::TimerServiceCore& core)
 		{
+			if (core.inFireDue)
+			{
+				return;
+			}
+
 			if (core.cancelled.size() <= core.heap.size() + kCancelledSlack)
 			{
 				return;

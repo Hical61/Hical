@@ -174,6 +174,57 @@ TEST(TimerServiceTest, CancelSameBatchInsideCallback_DropsThatTimer)
 	EXPECT_EQ(second, 0);
 }
 
+TEST(TimerServiceTest, CancelSameBatchUnderCompaction_StillDropped)
+{
+	boost::asio::io_context ioContext;
+	TimerService service(ioContext.get_executor());
+
+	// 先攒一批幽灵标记：拿已经触发过的 id 去取消，每次留个没人清的标记扔在取消表里。
+	// compactCancelled 的容忍上限是「比堆还大 256 个」，堆这时是空的，所以攒到 256 刚好
+	// 不触发重建
+	constexpr int kGhostCount = 256;
+	std::vector<TimerService::TimerId> firedIds;
+	firedIds.reserve(kGhostCount);
+	for (int i = 0; i < kGhostCount; ++i)
+	{
+		firedIds.push_back(service.scheduleAfter(0ms,
+												 []()
+												 {
+												 }));
+	}
+	ioContext.run_for(50ms);
+	ASSERT_EQ(service.pendingCount(), 0u);
+	ioContext.restart();
+	for (auto id : firedIds)
+	{
+		ASSERT_TRUE(service.cancel(id));
+	}
+
+	// 同一批里的第一个回调取消第二个。这一刻两个节点都已经从堆里摘到 due 了，堆是空的，
+	// 取消表再插一个就是 257 > 0 + 256 —— 正好踩上重建，而重建只从堆里捞活标记，
+	// 第二个节点的标记就会被当幽灵扔掉，后面那个回调照样执行
+	int firstFired = 0;
+	int secondFired = 0;
+	const auto deadline = TimerService::Clock::now() + 2ms;
+	TimerService::TimerId secondId = TimerService::kInvalidId;
+	service.schedule(deadline,
+					 [&service, &secondId, &firstFired]()
+					 {
+						 ++firstFired;
+						 service.cancel(secondId);
+					 });
+	secondId = service.schedule(deadline,
+								[&secondFired]()
+								{
+									++secondFired;
+								});
+
+	ioContext.run_for(100ms);
+
+	EXPECT_EQ(firstFired, 1);
+	EXPECT_EQ(secondFired, 0) << "取消同批节点的标记被重建当幽灵扔了，取消失效";
+}
+
 TEST(TimerServiceTest, CallbackSchedulesAnother_BothFire)
 {
 	boost::asio::io_context ioContext;
