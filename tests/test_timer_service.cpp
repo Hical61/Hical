@@ -419,6 +419,260 @@ TEST(TimerSleepTest, ServiceStopped_FallsBackInsteadOfReturningImmediately)
 	EXPECT_GE(slept, 10ms);
 }
 
+TEST(TimerServiceTest, CancelArmedHeapTop_SurvivingTimerNotFiredEarly)
+{
+	boost::asio::io_context ioContext;
+	TimerService service(ioContext.get_executor());
+
+	bool laterFired = false;
+	service.scheduleAfter(150ms,
+						  [&laterFired]()
+						  {
+							  laterFired = true;
+						  });
+	// 这个挂进来的时候堆顶是它，timer 已经被改到 5ms。取消它之后 TimerService 不会
+	// 主动重挂（堆顶一定是到期最早的，取消堆顶不会让别的项提前），所以真正的考验是
+	// 到点那一刻 fireDue 拿到新堆顶后有没有把 timer 挪到 150ms 去
+	auto topId = service.scheduleAfter(5ms,
+									   []()
+									   {
+									   });
+	EXPECT_TRUE(service.cancel(topId));
+	EXPECT_EQ(service.pendingCount(), 1u);
+
+	ioContext.run_for(60ms);
+	EXPECT_FALSE(laterFired) << "堆顶取消之后不该让后面的项提前触发";
+	EXPECT_EQ(service.pendingCount(), 1u);
+
+	ioContext.run_for(200ms);
+	EXPECT_TRUE(laterFired);
+	EXPECT_EQ(service.pendingCount(), 0u);
+}
+
+TEST(TimerServiceTest, LaterDeadlineScheduled_EarlierArmedStayOnTime)
+{
+	boost::asio::io_context ioContext;
+	TimerService service(ioContext.get_executor());
+
+	bool earlyFired = false;
+	bool lateFired = false;
+	service.scheduleAfter(2ms,
+						  [&earlyFired]()
+						  {
+							  earlyFired = true;
+						  });
+	// 后挂的这个晚得多。rearm 看到堆里已经挂着更早的就不该动 timer，
+	// 动了的话 2ms 那个会被推到 600ms 才回调
+	service.scheduleAfter(600ms,
+						  [&lateFired]()
+						  {
+							  lateFired = true;
+						  });
+
+	ioContext.run_for(200ms);
+	EXPECT_TRUE(earlyFired);
+	EXPECT_EQ(service.pendingCount(), 1u);
+
+	ioContext.run_for(600ms);
+	EXPECT_TRUE(lateFired);
+	EXPECT_EQ(service.pendingCount(), 0u);
+}
+
+TEST(TimerServiceTest, EarlierTimerScheduledLater_PullsArmedDeadlineForward)
+{
+	boost::asio::io_context ioContext;
+	TimerService service(ioContext.get_executor());
+
+	bool earlyFired = false;
+	bool lateFired = false;
+	// 先把唯一的 timer 挂到 3 秒去
+	service.scheduleAfter(3s,
+						  [&lateFired]()
+						  {
+							  lateFired = true;
+						  });
+	// 再挂一个马上到期的，堆顶比挂着的那条早，rearm 必须把 timer 往前挪
+	service.scheduleAfter(2ms,
+						  [&earlyFired]()
+						  {
+							  earlyFired = true;
+						  });
+
+	ioContext.run_for(150ms);
+
+	EXPECT_TRUE(earlyFired) << "更早的定时器挂进来之后 timer 没往前挪，得等到 3 秒才回调";
+	EXPECT_FALSE(lateFired);
+	EXPECT_EQ(service.pendingCount(), 1u);
+}
+
+TEST(TimerServiceTest, CancelLaterTimerInsideCallback_ThatTimerNeverFires)
+{
+	boost::asio::io_context ioContext;
+	TimerService service(ioContext.get_executor());
+
+	int fired = 0;
+	TimerService::TimerId laterId = TimerService::kInvalidId;
+	service.scheduleAfter(2ms,
+						  [&service, &laterId, &fired]()
+						  {
+							  ++fired;
+							  // 这一批只摘出来了自己，后面的项还在堆里躺着
+							  service.cancel(laterId);
+						  });
+	laterId = service.scheduleAfter(40ms,
+									[&fired]()
+									{
+										++fired;
+									});
+
+	ioContext.run_for(200ms);
+
+	EXPECT_EQ(fired, 1);
+	EXPECT_EQ(service.pendingCount(), 0u);
+}
+
+TEST(TimerServiceTest, CancelFiredIds_CompactionDropsGhostsKeepsLiveMarks)
+{
+	boost::asio::io_context ioContext;
+	TimerService service(ioContext.get_executor());
+
+	constexpr int kCount = 300;
+
+	// 先烧掉 300 个定时器，拿到一批「已经触发过」的 id。拿它们去 cancel
+	// 只会留下没人清的幽灵标记
+	std::vector<TimerService::TimerId> firedIds;
+	firedIds.reserve(kCount);
+	for (int i = 0; i < kCount; ++i)
+	{
+		firedIds.push_back(service.scheduleAfter(0ms,
+												 []()
+												 {
+												 }));
+	}
+	ioContext.run_for(50ms);
+	ASSERT_EQ(service.pendingCount(), 0u);
+	// run_for 把活儿干完之后 io_context 是 stopped 的，不重启后面再 run 就立刻返回
+	ioContext.restart();
+
+	// 再挂 300 个然后全取消：取消标记和堆里节点一样多，压不出重建
+	int firedAfterCancel = 0;
+	std::vector<TimerService::TimerId> cancelledIds;
+	cancelledIds.reserve(kCount);
+	for (int i = 0; i < kCount; ++i)
+	{
+		cancelledIds.push_back(service.scheduleAfter(100ms,
+													 [&firedAfterCancel]()
+													 {
+														 ++firedAfterCancel;
+													 }));
+	}
+	for (auto id : cancelledIds)
+	{
+		EXPECT_TRUE(service.cancel(id));
+	}
+	EXPECT_EQ(service.pendingCount(), 0u);
+
+	// 幽灵标记攒够 257 个就把 cancelled 顶到 heap.size() + 256 以上，触发重建
+	for (auto id : firedIds)
+	{
+		EXPECT_TRUE(service.cancel(id));
+	}
+
+	// 重建之后最早那个幽灵 id 已经从表里扔掉，能再取消一次；不重建的话表只涨不清，
+	// 这里会拿到 false。这一步必须在挂哨兵之前做：cancel 一个已经触发过的 id 会顺带
+	// 扣 pendingCount，扣完再真触发一次就下溢成 SIZE_MAX 了
+	ASSERT_EQ(service.pendingCount(), 0u);
+	EXPECT_TRUE(service.cancel(firedIds.front())) << "幽灵标记没被回收，cancelled 表会一直涨";
+
+	// 哨兵：证明最后这段 run_for 真的等到了 100ms 之后，不是上下文空转一遍就返回
+	bool sentinelFired = false;
+	service.scheduleAfter(150ms,
+						  [&sentinelFired]()
+						  {
+							  sentinelFired = true;
+						  });
+	ASSERT_EQ(service.pendingCount(), 1u);
+
+	// 重建按堆重建，堆里那些还活着的取消标记不能一起扔掉
+	ioContext.run_for(300ms);
+	EXPECT_TRUE(sentinelFired) << "这段 run_for 没真跑起来，下面的断言等于没测";
+	EXPECT_EQ(firedAfterCancel, 0) << "重建把还挂在堆里的取消标记丢了";
+	EXPECT_EQ(service.pendingCount(), 0u);
+}
+
+TEST(TimerServiceTest, Shutdown_ThenCancelAndSchedule_AllRejected)
+{
+	boost::asio::io_context ioContext;
+	TimerService service(ioContext.get_executor());
+
+	int fired = 0;
+	auto id = service.scheduleAfter(1h,
+									[&fired]()
+									{
+										++fired;
+									});
+	service.shutdown();
+
+	EXPECT_EQ(service.pendingCount(), 0u);
+	EXPECT_FALSE(service.cancel(id)) << "停了之后 cancel 一律不认";
+	EXPECT_EQ(service.scheduleAfter(1ms,
+									[&fired]()
+									{
+										++fired;
+									}),
+			  TimerService::kInvalidId);
+
+	// 重复停不该出问题
+	service.shutdown();
+
+	ioContext.run();
+	EXPECT_EQ(fired, 0);
+	EXPECT_EQ(service.pendingCount(), 0u);
+}
+
+TEST(TimerServiceTest, TwoServicesSameIoContext_StateIndependent)
+{
+	boost::asio::io_context ioContext;
+	TimerService first(ioContext.get_executor());
+	TimerService second(ioContext.get_executor());
+
+	FiredOrder recorder;
+	auto firstId = first.scheduleAfter(2ms, recorder.record(1));
+	auto secondId = second.scheduleAfter(4ms, recorder.record(2));
+
+	ASSERT_EQ(first.pendingCount(), 1u);
+	ASSERT_EQ(second.pendingCount(), 1u);
+
+	EXPECT_TRUE(first.cancel(firstId));
+	EXPECT_EQ(first.pendingCount(), 0u);
+	EXPECT_EQ(second.pendingCount(), 1u) << "取消第一个服务的定时器不该动到第二个";
+
+	ioContext.run();
+
+	ASSERT_EQ(recorder.order.size(), 1u);
+	EXPECT_EQ(recorder.order[0], 2);
+	EXPECT_NE(secondId, TimerService::kInvalidId);
+	EXPECT_EQ(second.pendingCount(), 0u);
+}
+
+TEST(TimerServiceTest, UnbindOneOfTwoBoundServices_KeepsTheOther)
+{
+	boost::asio::io_context ioContext;
+	TimerService first(ioContext.get_executor());
+	TimerService second(ioContext.get_executor());
+
+	first.bindToCurrentThread();
+	second.bindToCurrentThread();
+	ASSERT_EQ(currentThreadTimerService(), &second);
+
+	// 后绑的覆盖了先绑的；先绑的那个解绑时不该把别人绑的也抹掉
+	first.unbindFromCurrentThread();
+	EXPECT_EQ(currentThreadTimerService(), &second);
+
+	second.unbindFromCurrentThread();
+	EXPECT_EQ(currentThreadTimerService(), nullptr);
+}
+
 TEST(TimerServiceTest, CallbackDestroyingService_NoCrash)
 {
 	boost::asio::io_context ioContext;
