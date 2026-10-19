@@ -579,8 +579,7 @@ TEST(TimerServiceTest, CancelFiredIds_CompactionDropsGhostsKeepsLiveMarks)
 	}
 
 	// 重建之后最早那个幽灵 id 已经从表里扔掉，能再取消一次；不重建的话表只涨不清，
-	// 这里会拿到 false。这一步必须在挂哨兵之前做：cancel 一个已经触发过的 id 会顺带
-	// 扣 pendingCount，扣完再真触发一次就下溢成 SIZE_MAX 了
+	// 这里会拿到 false
 	ASSERT_EQ(service.pendingCount(), 0u);
 	EXPECT_TRUE(service.cancel(firedIds.front())) << "幽灵标记没被回收，cancelled 表会一直涨";
 
@@ -597,6 +596,39 @@ TEST(TimerServiceTest, CancelFiredIds_CompactionDropsGhostsKeepsLiveMarks)
 	ioContext.run_for(300ms);
 	EXPECT_TRUE(sentinelFired) << "这段 run_for 没真跑起来，下面的断言等于没测";
 	EXPECT_EQ(firedAfterCancel, 0) << "重建把还挂在堆里的取消标记丢了";
+	EXPECT_EQ(service.pendingCount(), 0u);
+}
+
+TEST(TimerServiceTest, CancelFiredId_DoesNotEatPendingCount)
+{
+	boost::asio::io_context ioContext;
+	TimerService service(ioContext.get_executor());
+
+	// 先烧掉一个，手上拿到个「已经触发过」的 id
+	auto firedId = service.scheduleAfter(0ms,
+										 []()
+										 {
+										 });
+	ioContext.run_for(50ms);
+	ASSERT_EQ(service.pendingCount(), 0u);
+	ioContext.restart();
+
+	// 再挂一个真定时器，待触发计数是 1
+	bool laterFired = false;
+	service.scheduleAfter(20ms,
+						  [&laterFired]()
+						  {
+							  laterFired = true;
+						  });
+	ASSERT_EQ(service.pendingCount(), 1u);
+
+	// 拿已经触发过的 id 去取消：标记照插、照约定返回 true，但那个定时器早就不是待触发了
+	EXPECT_TRUE(service.cancel(firedId));
+	EXPECT_EQ(service.pendingCount(), 1u) << "取消一个已经触发过的 id 不该动待触发计数";
+
+	ioContext.run_for(200ms);
+	EXPECT_TRUE(laterFired);
+	// 计量靠维护计数器的话，上面那次取消先扣成 0，这里真定时器触发再扣一次就下溢成 SIZE_MAX
 	EXPECT_EQ(service.pendingCount(), 0u);
 }
 

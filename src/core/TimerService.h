@@ -92,7 +92,9 @@ namespace hical
 		void shutdown();
 
 		/**
-		 * @brief 还没触发的定时器数量（含已取消但没到期的）
+		 * @brief 还没触发、也没被取消的定时器数量
+		 * 每次调用现数一遍堆，O(堆大小)，堆里一个取消标记都没有时直接返回堆大小。
+		 * 只有测试和诊断会调，没在 schedule / cancel 那条路上维护计数器。
 		 */
 		[[nodiscard]] std::size_t pendingCount() const;
 

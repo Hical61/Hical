@@ -84,7 +84,6 @@ namespace hical
 			// 已经挂到 timer 上的 deadline，空表示 timer 闲着没在等
 			std::optional<TimerService::Clock::time_point> armedDeadline;
 			TimerService::TimerId nextId = kFirstTimerId;
-			std::size_t pendingCount = 0;
 			bool stopped = false;
 		};
 	} // namespace detail
@@ -126,8 +125,6 @@ namespace hical
 				{
 					continue;
 				}
-
-				--core.pendingCount;
 
 				// 先挪出来再调，回调里干了什么都不会影响 node 自己的生命周期
 				auto callback = std::move(node.callback);
@@ -226,7 +223,6 @@ namespace hical
 
 		const auto id = core.nextId++;
 		core.push(detail::TimerServiceCore::Node {deadline, id, std::move(callback)});
-		++core.pendingCount;
 		rearm(core);
 		return id;
 	}
@@ -254,11 +250,6 @@ namespace hical
 			return false;
 		}
 
-		if (core.pendingCount > 0)
-		{
-			--core.pendingCount;
-		}
-
 		compactCancelled(core);
 		return true;
 	}
@@ -276,7 +267,6 @@ namespace hical
 		core.cancelled.clear();
 		// heap.clear() 会把没触发的 callback 一起析构掉——按约定这里就是不执行
 		core.heap.clear();
-		core.pendingCount = 0;
 
 		// 挂着的 async_wait 会带着 operation_aborted 回来，handler 里直接忽略
 		core.timer.cancel();
@@ -284,7 +274,25 @@ namespace hical
 
 	std::size_t TimerService::pendingCount() const
 	{
-		return core_->pendingCount;
+		// 现数堆，不维护计数器。计数器得在 schedule、cancel、触发三处各改一次，而 cancel
+		// 这条路上判断不出那个 id 的节点还在不在堆里（取消一个已经触发过的 id 时标记照样
+		// 插得进去），一处判错整个数就开始漂，扣穿一次就下溢成 SIZE_MAX。这个接口只有测试
+		// 和诊断在用，一次 O(堆大小) 换掉这份账是划算的。
+		const auto& core = *core_;
+		if (core.cancelled.empty())
+		{
+			return core.heap.size();
+		}
+
+		std::size_t live = 0;
+		for (const auto& node : core.heap)
+		{
+			if (core.cancelled.count(node.id) == 0)
+			{
+				++live;
+			}
+		}
+		return live;
 	}
 
 	void TimerService::bindToCurrentThread()
