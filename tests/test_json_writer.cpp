@@ -470,6 +470,44 @@ TEST(JsonWriterTest, Misuse_TwoKeysInARow_PadsNull)
 	expectParsable(out);
 }
 
+TEST(JsonWriterTest, Misuse_SecondTopLevelValue_Ignored)
+{
+	// 顶层只认一个值。第二次写要是放过去，产出会变成 "12"，谁也解不了
+	std::string out;
+	JsonWriter w(out);
+	w.value(1);
+	w.value(2);
+
+	EXPECT_EQ(out, "1");
+	EXPECT_TRUE(w.isComplete());
+	expectParsable(out);
+}
+
+TEST(JsonWriterTest, Misuse_ValueAfterRootObject_Ignored)
+{
+	std::string out;
+	JsonWriter w(out);
+	w.beginObject().key("a").value(1).endObject();
+	w.value(2);
+
+	EXPECT_EQ(out, R"({"a":1})");
+	EXPECT_TRUE(w.isComplete());
+	expectParsable(out);
+}
+
+TEST(JsonWriterTest, Misuse_SecondRootContainer_Ignored)
+{
+	// 容器当顶层值也占掉那唯一一个名额，第二个容器照样丢掉
+	std::string out;
+	JsonWriter w(out);
+	w.beginObject().endObject();
+	w.beginArray().value(1).endArray();
+
+	EXPECT_EQ(out, "{}");
+	EXPECT_TRUE(w.isComplete());
+	expectParsable(out);
+}
+
 TEST(JsonWriterTest, Misuse_NestingBeyondMaxDepth_ExtraBeginIgnored)
 {
 	// kMaxDepth 是 32 层。第 33 次 beginArray 该被丢掉，不写字节也不涨深度，

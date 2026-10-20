@@ -199,7 +199,7 @@ namespace hical
 	{
 		writePending_ = false;
 		// 有人排队才需要主动唤醒：单连接串行发送时 writePending_ 基本恒假，
-		// 没等待者还去 cancel_one 就是白跑一趟 reactor
+		// 没等待者还去 cancel_one 就是白锁一次 timer 队列
 		if (waiters_ > 0)
 		{
 			writeReady_->cancel_one();

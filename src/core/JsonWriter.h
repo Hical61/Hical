@@ -13,6 +13,7 @@
  * 规矩：
  *   - 对象里必须先 key() 再 value()，数组里直接 value()；
  *   - 空对象自然产出 {}，空数组产出 []，不用特殊判断；
+ *   - 顶层只能写一个值，写完再写直接丢掉（Debug 下 assert），不然拼出来不是 JSON；
  *   - 误用（end 不配对、对象里漏 key）Debug 下 assert 挂掉，Release 下当没调或者
  *     补个 null，保证不会踩内存、不会把已写出的内容搅乱；
  *   - 单线程使用，别把同一个 writer 拿到多个线程上写。
@@ -181,6 +182,8 @@ namespace hical
 
 		/**
 		 * @brief 所有容器都闭合了没有，写响应前用它兜底检查
+		 * 只看「容器配没配对、有没有悬着的 key」，不看顶层写了几个值——顶层多写的那些
+		 * 在 beforeValue() 那一步就被丢掉了，跑不到这里。
 		 */
 		[[nodiscard]] bool isComplete() const noexcept
 		{
@@ -239,7 +242,7 @@ namespace hical
 
 		/**
 		 * @brief 写一个值之前调，负责补逗号、翻容器状态
-		 * @return false 表示当前是误用（对象里没 key 就写值），调用方应直接放弃这次写
+		 * @return false 表示当前是误用（对象里没 key 就写值、顶层已经写过值），调用方应直接放弃这次写
 		 */
 		bool beforeValue()
 		{
@@ -252,7 +255,13 @@ namespace hical
 
 			if (depth_ == 0)
 			{
-				// 顶层单值，没有分隔符概念
+				// 顶层只认一个值，多写的这次直接丢掉，别拼出 "12" 这种非法 JSON
+				if (rootWritten_)
+				{
+					assert(false && "JsonWriter: 顶层只能写一个值");
+					return false;
+				}
+				rootWritten_ = true;
 				return true;
 			}
 
@@ -299,6 +308,8 @@ namespace hical
 		std::array<Frame, kMaxDepth> frames_ {};
 		size_t depth_ {0};
 		bool pendingKey_ {false};
+		// 顶层那个唯一的值写没写过。写完再写第二个，拼出来就不是 JSON 了，得挡住
+		bool rootWritten_ {false};
 	};
 
 } // namespace hical
