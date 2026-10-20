@@ -737,6 +737,20 @@ namespace hical
 		return baseLoop_.getIoContext();
 	}
 
+	size_t HttpServer::responseWriteCount() const
+	{
+		return responseWriteCount_.load(std::memory_order_relaxed);
+	}
+
+	void HttpServer::enableResponseWriteCount()
+	{
+		if (started_.load(std::memory_order_relaxed))
+		{
+			throw std::logic_error("HttpServer: enableResponseWriteCount() must be called before start()");
+		}
+		writeCountEnabled_.store(true, std::memory_order_relaxed);
+	}
+
 	Awaitable<void> HttpServer::acceptLoop(tcp::acceptor& acceptor, IdleFd& idleFd)
 	{
 		while (running_.load())

@@ -7,7 +7,12 @@
 #include <boost/asio.hpp>
 #include <gtest/gtest.h>
 #include <atomic>
+#include <cctype>
 #include <chrono>
+#include <cstdlib>
+#include <filesystem>
+#include <fstream>
+#include <functional>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -78,12 +83,210 @@ namespace
 		return count;
 	}
 
+	struct ClientResponse
+	{
+		unsigned status = 0;
+		std::string body;
+	};
+
+	/// 从 raw[pos..] 切一个完整响应出来（按 Content-Length 算长度）
+	/// @return 吃掉的字节数，凑不齐一个完整响应就返回 0
+	size_t takeResponse(std::string_view raw, size_t pos, ClientResponse& out)
+	{
+		auto headEndAbs = raw.find("\r\n\r\n", pos);
+		if (headEndAbs == std::string_view::npos)
+		{
+			return 0;
+		}
+		// 相对 pos 的头部总长度，后面算 body 偏移和返回吃掉多少字节都用它
+		const size_t headLen = headEndAbs + 4 - pos;
+
+		constexpr std::string_view kName = "content-length:";
+		size_t contentLength = 0;
+		auto lineStart = raw.find("\r\n", pos);
+		lineStart = (lineStart == std::string_view::npos) ? std::string_view::npos : lineStart + 2;
+		while (lineStart != std::string_view::npos && lineStart < pos + headLen)
+		{
+			auto eol = raw.find("\r\n", lineStart);
+			if (eol == std::string_view::npos)
+			{
+				return 0;
+			}
+			auto line = raw.substr(lineStart, eol - lineStart);
+			bool match = line.size() > kName.size();
+			for (size_t i = 0; match && i < kName.size(); ++i)
+			{
+				match = std::tolower(static_cast<unsigned char>(line[i])) == kName[i];
+			}
+			if (match)
+			{
+				auto value = line.substr(kName.size());
+				contentLength = static_cast<size_t>(std::strtoull(std::string(value).c_str(), nullptr, 10));
+			}
+			lineStart = eol + 2;
+		}
+
+		if (raw.size() < pos + headLen + contentLength)
+		{
+			return 0;
+		}
+		out.status = firstStatus(raw.substr(pos));
+		out.body.assign(raw.substr(pos + headLen, contentLength));
+		return headLen + contentLength;
+	}
+
+	/// 流水线客户端：一次把一串请求怼出去，再按「响应个数」收回来
+	class PipelineClient
+	{
+	public:
+		explicit PipelineClient(uint16_t port) : socket_(io_)
+		{
+			socket_.connect(tcp::endpoint(boost::asio::ip::make_address("127.0.0.1"), port));
+		}
+
+		void send(std::string_view bytes)
+		{
+			boost::asio::write(socket_, boost::asio::buffer(bytes.data(), bytes.size()));
+		}
+
+		/// 读到攒够 want 个完整响应为止。超时就关连接并置 timedOut，让用例自己去断言——
+		/// 这里抛异常的话现场（收到了几个、收到哪一步）全丢了
+		std::vector<ClientResponse> read(size_t want, std::chrono::milliseconds timeout = std::chrono::seconds(3))
+		{
+			timedOut_ = false;
+			std::vector<ClientResponse> got;
+			drain(got);
+			if (got.size() >= want)
+			{
+				return got;
+			}
+
+			boost::asio::steady_timer timer(io_, timeout);
+			timer.async_wait(
+				[&](const boost::system::error_code& ec)
+				{
+					if (!ec)
+					{
+						timedOut_ = true;
+						boost::system::error_code ignored;
+						socket_.close(ignored);
+					}
+				});
+
+			std::function<void(const boost::system::error_code&, size_t)> onRead;
+			char chunk[4096];
+			onRead = [&](const boost::system::error_code& ec, size_t n)
+			{
+				if (ec)
+				{
+					// eof / 超时关闭 / 主动取消，都从这里退；定时器得一起收掉，不然 run() 要等满超时
+					timer.cancel();
+					return;
+				}
+				raw_.append(chunk, n);
+				drain(got);
+				if (got.size() >= want)
+				{
+					// 够数了，把还挂着的读取消掉，run() 才能返回
+					boost::system::error_code ignored;
+					socket_.cancel(ignored);
+					timer.cancel();
+					return;
+				}
+				socket_.async_read_some(boost::asio::buffer(chunk, sizeof(chunk)), onRead);
+			};
+			socket_.async_read_some(boost::asio::buffer(chunk, sizeof(chunk)), onRead);
+			io_.restart();
+			io_.run();
+			return got;
+		}
+
+		/// 一直读到对端关连接（或超时），返回期间收到的全部原始字节
+		std::string readToEnd(std::chrono::milliseconds timeout = std::chrono::seconds(3))
+		{
+			timedOut_ = false;
+			boost::asio::steady_timer timer(io_, timeout);
+			timer.async_wait(
+				[&](const boost::system::error_code& ec)
+				{
+					if (!ec)
+					{
+						timedOut_ = true;
+						boost::system::error_code ignored;
+						socket_.close(ignored);
+					}
+				});
+
+			std::function<void(const boost::system::error_code&, size_t)> onRead;
+			char chunk[4096];
+			onRead = [&](const boost::system::error_code& ec, size_t n)
+			{
+				if (ec)
+				{
+					timer.cancel();
+					return;
+				}
+				raw_.append(chunk, n);
+				socket_.async_read_some(boost::asio::buffer(chunk, sizeof(chunk)), onRead);
+			};
+			socket_.async_read_some(boost::asio::buffer(chunk, sizeof(chunk)), onRead);
+			io_.restart();
+			io_.run();
+			return raw_;
+		}
+
+		bool timedOut() const
+		{
+			return timedOut_;
+		}
+
+	private:
+		void drain(std::vector<ClientResponse>& got)
+		{
+			size_t pos = 0;
+			for (;;)
+			{
+				ClientResponse res;
+				auto span = takeResponse(raw_, pos, res);
+				if (span == 0)
+				{
+					break;
+				}
+				pos += span;
+				got.push_back(std::move(res));
+			}
+			if (pos > 0)
+			{
+				raw_.erase(0, pos);
+			}
+		}
+
+		boost::asio::io_context io_;
+		tcp::socket socket_;
+		std::string raw_; // 收到但还没切出去的字节
+		bool timedOut_ = false;
+	};
+
 	class HttpFramingTest : public ::testing::Test
 	{
 	protected:
 		void SetUp() override
 		{
+			filePath_ = std::filesystem::temp_directory_path() / "hical_test_framing_file.bin";
+			fileContent_ = "file-body-0123456789-abcdefghijklmnopqrstuvwxyz";
+			{
+				std::ofstream ofs(filePath_, std::ios::binary | std::ios::trunc);
+				ofs.write(fileContent_.data(), static_cast<std::streamsize>(fileContent_.size()));
+			}
+
 			server_ = std::make_unique<HttpServer>(0);
+			// 写次数统计得在 start() 之前打开：连接处理协程一起来就取一次计数器指针，
+			// 之后这个连接还打不开。开关只由派生 fixture 的构造函数置上，
+			// 默认关着才是生产环境的真实样子
+			if (writeCountEnabled_)
+			{
+				server_->enableResponseWriteCount();
+			}
 			server_->use(
 				[this](HttpRequest&) -> SyncMiddlewareResult
 				{
@@ -101,6 +304,25 @@ namespace
 								  {
 									  nextCalls_.fetch_add(1, std::memory_order_relaxed);
 									  return HttpResponse::ok("next");
+								  });
+			server_->router().get("/chunked",
+								  [](const HttpRequest&) -> HttpResponse
+								  {
+									  auto res = HttpResponse::chunked();
+									  auto& body = res.chunkedBody();
+									  body.write("hello");
+									  body.end();
+									  return res;
+								  });
+			server_->router().get("/file",
+								  [this](const HttpRequest&) -> HttpResponse
+								  {
+									  HttpResponse res;
+									  res.setFileBody(filePath_,
+													  0,
+													  static_cast<int64_t>(fileContent_.size()),
+													  "application/octet-stream");
+									  return res;
 								  });
 
 			serverThread_ = std::thread(
@@ -120,6 +342,8 @@ namespace
 		{
 			server_->stop();
 			serverThread_.join();
+			std::error_code ec;
+			std::filesystem::remove(filePath_, ec);
 		}
 
 		uint16_t port() const
@@ -132,6 +356,22 @@ namespace
 		std::atomic<size_t> middlewareCalls_ {0};
 		std::atomic<size_t> echoCalls_ {0};
 		std::atomic<size_t> nextCalls_ {0};
+		std::filesystem::path filePath_;
+		std::string fileContent_;
+
+		// 由派生 fixture 的构造函数打开，SetUp 起来 server 之前读它
+		bool writeCountEnabled_ {false};
+	};
+
+	/// 要断言「回了几趟」的用例走这个 fixture。开关必须在 start() 之前打开，
+	/// 而用例体是 SetUp 跑完之后才执行的，所以只能靠构造函数先把它置上。
+	class HttpFramingWriteCountTest : public HttpFramingTest
+	{
+	public:
+		HttpFramingWriteCountTest()
+		{
+			writeCountEnabled_ = true;
+		}
 	};
 
 	TEST_F(HttpFramingTest, RejectsAmbiguousOrInvalidFramingBeforePipeline)
@@ -230,6 +470,186 @@ namespace
 			EXPECT_EQ(echoCalls_.load(std::memory_order_relaxed), i + 1);
 			EXPECT_EQ(nextCalls_.load(std::memory_order_relaxed), i + 1);
 		}
+	}
+
+	// ============ pipelined 响应合批 ============
+	// 一批请求要能全部按序回对（上面那些用例已经盯着），这里额外盯「回了几趟」：
+	// 16 个请求攒成一条写，服务端只该走 1~2 次 socket 写。
+
+	TEST_F(HttpFramingWriteCountTest, PipelinedBatchSharesOneWriteAndKeepsOrder)
+	{
+		// 每条 31 字节，16 条 496 字节，服务端 256B 投机读最多切两刀，所以最多 2 趟写；
+		// 一个请求一趟写的老实现是 16 趟
+		static constexpr std::string_view kOne = "GET /next HTTP/1.1\r\nHost: a\r\n\r\n";
+		std::string batch;
+		for (int i = 0; i < 16; ++i)
+		{
+			batch.append(kOne);
+		}
+
+		PipelineClient client(port());
+		client.send(batch);
+		auto responses = client.read(16);
+
+		ASSERT_EQ(responses.size(), 16u);
+		EXPECT_FALSE(client.timedOut());
+		for (const auto& r : responses)
+		{
+			EXPECT_EQ(r.status, 200u);
+			EXPECT_EQ(r.body, "next");
+		}
+		EXPECT_EQ(nextCalls_.load(std::memory_order_relaxed), 16u);
+		EXPECT_LE(server_->responseWriteCount(), 2u);
+	}
+
+	TEST_F(HttpFramingWriteCountTest, SingleRequestIsWrittenWithoutWaitingForMore)
+	{
+		PipelineClient client(port());
+
+		// 串行请求（不是流水线）：每条响应都得立刻发出去，不能为了攒批拖到下一次读。
+		// 写次数严格一请求一趟——合批不能给单请求路径多加任何一趟
+		for (size_t i = 0; i < 2; ++i)
+		{
+			client.send("GET /next HTTP/1.1\r\nHost: a\r\n\r\n");
+			auto responses = client.read(1);
+			ASSERT_EQ(responses.size(), 1u);
+			EXPECT_FALSE(client.timedOut());
+			EXPECT_EQ(responses[0].status, 200u);
+			EXPECT_EQ(responses[0].body, "next");
+			EXPECT_EQ(server_->responseWriteCount(), i + 1);
+		}
+
+		client.send("GET /next HTTP/1.1\r\nHost: a\r\nConnection: close\r\n\r\n");
+		auto last = client.read(1);
+		ASSERT_EQ(last.size(), 1u);
+		EXPECT_EQ(last[0].body, "next");
+		EXPECT_EQ(server_->responseWriteCount(), 3u);
+	}
+
+	TEST_F(HttpFramingWriteCountTest, PipelineKeepsOrderAcrossErrorResponse)
+	{
+		std::string batch;
+		batch += "GET /next HTTP/1.1\r\nHost: a\r\n\r\n";
+		batch += "GET /next HTTP/1.1\r\nHost: a\r\n\r\n";
+		batch += "GET /missing HTTP/1.1\r\nHost: a\r\n\r\n";
+		batch += "GET /next HTTP/1.1\r\nHost: a\r\n\r\n";
+		batch += "GET /next HTTP/1.1\r\nHost: a\r\n\r\n";
+
+		PipelineClient client(port());
+		client.send(batch);
+		auto responses = client.read(5);
+
+		ASSERT_EQ(responses.size(), 5u);
+		EXPECT_FALSE(client.timedOut());
+		EXPECT_EQ(responses[0].status, 200u);
+		EXPECT_EQ(responses[1].status, 200u);
+		EXPECT_EQ(responses[2].status, 404u);
+		EXPECT_EQ(responses[3].status, 200u);
+		EXPECT_EQ(responses[4].status, 200u);
+		EXPECT_EQ(responses[4].body, "next");
+		EXPECT_LE(server_->responseWriteCount(), 2u);
+	}
+
+	TEST_F(HttpFramingTest, PipelineFlushesBeforeWaitingForRequestBody)
+	{
+		// 第二个请求的 body 分开发：服务端如果等 body 之前不把第一个响应放出去，
+		// 客户端就一直等第一个响应才发 body——两边死等，到超时为止。
+		PipelineClient client(port());
+		client.send(std::string("GET /next HTTP/1.1\r\nHost: a\r\n\r\n")
+					+ "POST /echo HTTP/1.1\r\nHost: a\r\nContent-Length: 5\r\n\r\n");
+
+		auto first = client.read(1);
+		ASSERT_EQ(first.size(), 1u);
+		EXPECT_FALSE(client.timedOut());
+		EXPECT_EQ(first[0].body, "next");
+
+		client.send(std::string("hello") + "GET /next HTTP/1.1\r\nHost: a\r\n\r\n");
+		auto rest = client.read(2);
+		ASSERT_EQ(rest.size(), 2u);
+		EXPECT_EQ(rest[0].body, "hello");
+		EXPECT_EQ(rest[1].body, "next");
+	}
+
+	TEST_F(HttpFramingWriteCountTest, PipelineWithConnectionCloseKeepsLastResponse)
+	{
+		PipelineClient client(port());
+		client.send("GET /next HTTP/1.1\r\nHost: a\r\n\r\n"
+					"GET /next HTTP/1.1\r\nHost: a\r\n\r\n"
+					"GET /next HTTP/1.1\r\nHost: a\r\nConnection: close\r\n\r\n");
+
+		auto responses = client.read(3);
+		ASSERT_EQ(responses.size(), 3u);
+		EXPECT_FALSE(client.timedOut());
+		for (const auto& r : responses)
+		{
+			EXPECT_EQ(r.status, 200u);
+			EXPECT_EQ(r.body, "next");
+		}
+		// 最后一个响应发完服务端主动关连接：再读一次得是 EOF，不是超时
+		client.read(4);
+		EXPECT_FALSE(client.timedOut());
+		EXPECT_LE(server_->responseWriteCount(), 2u);
+	}
+
+	// 开关没开时，生产路径上不该有人去记这笔账——计数必须一直是 0
+	TEST_F(HttpFramingTest, WriteCountStaysZeroWhenNotEnabled)
+	{
+		PipelineClient client(port());
+		std::string batch;
+		for (int i = 0; i < 4; ++i)
+		{
+			batch.append("GET /next HTTP/1.1\r\nHost: a\r\n\r\n");
+		}
+		client.send(batch);
+
+		auto responses = client.read(4);
+		ASSERT_EQ(responses.size(), 4u);
+		EXPECT_FALSE(client.timedOut());
+		EXPECT_EQ(nextCalls_.load(std::memory_order_relaxed), 4u);
+		EXPECT_EQ(server_->responseWriteCount(), 0u);
+	}
+
+	TEST_F(HttpFramingTest, ChunkedResponseInPipelineKeepsOrder)
+	{
+		PipelineClient client(port());
+		client.send("GET /next HTTP/1.1\r\nHost: a\r\n\r\n"
+					"GET /chunked HTTP/1.1\r\nHost: a\r\n\r\n"
+					"GET /next HTTP/1.1\r\nHost: a\r\nConnection: close\r\n\r\n");
+
+		auto raw = client.readToEnd();
+		EXPECT_FALSE(client.timedOut());
+		EXPECT_EQ(countStatus(raw, "HTTP/1.1 200"), 3u);
+
+		auto firstBody = raw.find("\r\n\r\n");
+		ASSERT_NE(firstBody, std::string::npos);
+		EXPECT_EQ(raw.substr(firstBody + 4, 4), "next");
+
+		auto chunkFrame = raw.find("5\r\nhello\r\n0\r\n\r\n");
+		EXPECT_NE(chunkFrame, std::string::npos);
+		auto lastStatus = raw.rfind("HTTP/1.1 200");
+		EXPECT_GT(lastStatus, chunkFrame);
+	}
+
+	TEST_F(HttpFramingTest, FileResponseInPipelineKeepsOrder)
+	{
+		PipelineClient client(port());
+		client.send("GET /next HTTP/1.1\r\nHost: a\r\n\r\n"
+					"GET /file HTTP/1.1\r\nHost: a\r\n\r\n"
+					"GET /next HTTP/1.1\r\nHost: a\r\nConnection: close\r\n\r\n");
+
+		auto raw = client.readToEnd();
+		EXPECT_FALSE(client.timedOut());
+		EXPECT_EQ(countStatus(raw, "HTTP/1.1 200"), 3u);
+
+		auto firstBody = raw.find("\r\n\r\n");
+		ASSERT_NE(firstBody, std::string::npos);
+		EXPECT_EQ(raw.substr(firstBody + 4, 4), "next");
+
+		auto fileBytes = raw.find(fileContent_);
+		EXPECT_NE(fileBytes, std::string::npos);
+		auto lastStatus = raw.rfind("HTTP/1.1 200");
+		// 最后一个响应紧跟着文件字节后面开始，等于也算对
+		EXPECT_GE(lastStatus, fileBytes + fileContent_.size());
 	}
 
 } // namespace

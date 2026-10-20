@@ -18,6 +18,8 @@
 #include "core/Version.h"
 #include "WebSocket.h"
 #include "WsHandshake.h"
+#include <algorithm>
+#include <atomic>
 #include <charconv>
 #include <chrono>
 #include <cstring>
@@ -307,13 +309,60 @@ namespace hical
 			}
 		}
 
+		/// 序列化响应头：prefix 非空时把预拼好的 Server/Connection/Date 直接拼进去
+		inline void serializeHeadWithPrefix(FixedBuffer<512>& buf,
+											const NativeResponse& nativeRes,
+											std::string_view prefix)
+		{
+			if (prefix.empty())
+			{
+				nativeRes.serializeHeadTo(buf);
+			}
+			else
+			{
+				nativeRes.serializeHeadTo(buf, prefix.data(), prefix.size());
+			}
+		}
+
+		/// 记一笔「往 socket 发了一趟响应」。计数只给诊断和测试看，没接计数器就是空操作
+		inline void recordResponseWrite(std::atomic<size_t>* writeCount)
+		{
+			if (writeCount != nullptr)
+			{
+				writeCount->fetch_add(1, std::memory_order_relaxed);
+			}
+		}
+
+		/// 把攒着的响应一次性发出去。空批直接返回——单请求路径上这里只是一次分支，
+		/// 不进内核，也不会让协程挂起。
+		template <typename SocketType>
+		Awaitable<void> flushResponseBatch(SocketType& socket, std::string& batch, std::atomic<size_t>* writeCount)
+		{
+			if (batch.empty())
+			{
+				co_return;
+			}
+			recordResponseWrite(writeCount);
+			auto wire = boost::asio::buffer(batch.data(), batch.size());
+			size_t sent = 0;
+			if (!tryOptimisticWrite(socket, wire, sent))
+			{
+				co_await writeRemaining(socket, wire, sent);
+			}
+			// 只在写成功后清：中途抛异常的话连接已经在往死里走，上一批必然发不出去，
+			// 脏数据跟着协程帧一起销毁，别留着下个请求接着用
+			batch.clear();
+		}
+
 		/// 快速发送错误响应（栈缓冲区，零堆分配）
 		template <typename SocketType>
 		Awaitable<void> sendRawResponse(SocketType& socket,
 										unsigned statusCode,
 										std::string_view reason,
-										std::string_view body)
+										std::string_view body,
+										std::atomic<size_t>* writeCount)
 		{
+			recordResponseWrite(writeCount);
 			FixedBuffer<512> buf;
 			buf << "HTTP/1.1 ";
 
@@ -344,8 +393,12 @@ namespace hical
 		/// 发送 HttpResponse 对象（内部辅助）
 		/// @param skipBody 为 true 时仅发送头部（HEAD 方法响应）
 		template <typename SocketType>
-		Awaitable<void> writeResponse(SocketType& socket, NativeResponse& nativeRes, bool skipBody = false)
+		Awaitable<void> writeResponse(SocketType& socket,
+									  NativeResponse& nativeRes,
+									  bool skipBody,
+									  std::atomic<size_t>* writeCount)
 		{
+			recordResponseWrite(writeCount);
 			nativeRes.preparePayload();
 
 			// ChunkedBody 路径：scatter-gather 头部 + 全部 chunk 帧，一次 async_write
@@ -447,17 +500,18 @@ namespace hical
 		template <typename SocketType>
 		Awaitable<void> writeResponse(SocketType& socket,
 									  NativeResponse& nativeRes,
-									  const char* prefix,
-									  size_t prefixLen,
-									  bool skipBody = false)
+									  std::string_view prefix,
+									  bool skipBody,
+									  std::atomic<size_t>* writeCount)
 		{
+			recordResponseWrite(writeCount);
 			nativeRes.preparePayload();
 
 			// ChunkedBody 路径
 			if (nativeRes.hasChunkedBody())
 			{
 				FixedBuffer<512> headBuf;
-				nativeRes.serializeHeadTo(headBuf, prefix, prefixLen);
+				serializeHeadWithPrefix(headBuf, nativeRes, prefix);
 
 				if (nativeRes.chunkedBody && !skipBody)
 				{
@@ -500,7 +554,7 @@ namespace hical
 			}
 
 			FixedBuffer<512> headBuf;
-			nativeRes.serializeHeadTo(headBuf, prefix, prefixLen);
+			serializeHeadWithPrefix(headBuf, nativeRes, prefix);
 
 			if (skipBody || nativeRes.body.empty())
 			{
@@ -541,15 +595,45 @@ namespace hical
 			}
 		}
 
+		/// 把一个响应序列化进批缓冲，不碰 socket。
+		/// 只收「head + 整块 body」这种能直接拼的响应；文件体和 chunked 自己会写，
+		/// 调用方得先 flush 再单发，不能混进来。
+		inline void appendResponseToBatch(std::string& batch,
+										  NativeResponse& nativeRes,
+										  std::string_view prefix,
+										  bool skipBody)
+		{
+			nativeRes.preparePayload();
+			FixedBuffer<512> headBuf;
+			serializeHeadWithPrefix(headBuf, nativeRes, prefix);
+
+			const size_t bodyLen = skipBody ? 0 : nativeRes.body.size();
+			const size_t needed = batch.size() + headBuf.size() + bodyLen;
+			if (needed > batch.capacity())
+			{
+				// 按几何倍数涨，别固定一上来就占几 KB：只回一条响应就走的连接（绝大多数）
+				// 只占「一条响应」那么大。批稳定下来之后这里不再分配。
+				batch.reserve((std::max)(needed, batch.capacity() * 2));
+			}
+
+			batch.append(headBuf.data(), headBuf.size());
+			if (bodyLen > 0)
+			{
+				batch.append(nativeRes.body.data(), bodyLen);
+			}
+		}
+
 		/// 发送文件体响应（先发头部，再异步分块读文件发送）
 		/// 用于 Range 请求等大文件场景，避免全量加载到内存。
-		/// prefix 非空时用预构建前缀序列化头部，nullptr 走原始路径。
+		/// prefix 为空时用原始路径序列化头部。
 		template <typename SocketType>
 		Awaitable<void> writeFileResponse(SocketType& socket,
 										  NativeResponse& nativeRes,
-										  const char* prefix = nullptr,
-										  size_t prefixLen = 0)
+										  std::string_view prefix,
+										  std::atomic<size_t>* writeCount)
 		{
+			// 按「一个文件响应」记一笔，不按 64KB 分块数记
+			recordResponseWrite(writeCount);
 			nativeRes.preparePayload();
 
 			auto& fb = *nativeRes.fileBody;
@@ -567,14 +651,7 @@ namespace hical
 
 			// 文件打开成功，发送头部
 			FixedBuffer<512> headBuf;
-			if (prefix)
-			{
-				nativeRes.serializeHeadTo(headBuf, prefix, prefixLen);
-			}
-			else
-			{
-				nativeRes.serializeHeadTo(headBuf);
-			}
+			serializeHeadWithPrefix(headBuf, nativeRes, prefix);
 			co_await boost::asio::async_write(socket,
 											  boost::asio::buffer(headBuf.data(), headBuf.size()),
 											  boost::asio::use_awaitable);
@@ -612,14 +689,7 @@ namespace hical
 			}
 
 			FixedBuffer<512> headBuf;
-			if (prefix)
-			{
-				nativeRes.serializeHeadTo(headBuf, prefix, prefixLen);
-			}
-			else
-			{
-				nativeRes.serializeHeadTo(headBuf);
-			}
+			serializeHeadWithPrefix(headBuf, nativeRes, prefix);
 			co_await boost::asio::async_write(socket,
 											  boost::asio::buffer(headBuf.data(), headBuf.size()),
 											  boost::asio::use_awaitable);
@@ -745,8 +815,22 @@ namespace hical
 
 		try
 		{
+			// 写次数计数器：连接建起来时解析一次，没开统计就是 nullptr。
+			// 之后就传这个局部指针，别每个响应去读一次开关——计数器是所有 worker
+			// 共用的一条 cache line，生产路径上少一次跨核 fetch_add 就少一次抖动。
+			// 关着的时候下游只剩 recordResponseWrite 里那句 if (writeCount != nullptr)，
+			// 空指针判断完美预测，跟没这块代码基本一样。
+			std::atomic<size_t>* writeCounter =
+				writeCountEnabled_.load(std::memory_order_relaxed) ? &responseWriteCount_ : nullptr;
+
 			// 跨请求的粘包残留；大多数连接空着不额外占内存
 			std::string pipelineSpill;
+
+			// 响应合批缓冲：同一次读里能解出几个请求，响应就先按顺序拼进来，攒完一次写出去。
+			// 跨迭代复用，容量按需涨（见 appendResponseToBatch），稳态零分配。
+			// 单请求路径上它最多装一条，flush 时就是原来那一次写。
+			std::string responseBatch;
+			static constexpr size_t kMaxResponseBatchBytes = 64 * 1024;
 
 			// ── 连接级响应前缀模板 ──
 			// 把 Server / Connection / Date 三个通用头部预拼成 wire bytes，
@@ -793,6 +877,16 @@ namespace hical
 
 			rebuildPrefix(true); // 默认 keep-alive
 
+			// 所有「要离开当前处理顺序」的地方都得先调它：阻塞读、直接写（错误响应/文件/chunked）、
+			// 把 socket 交给 WS/SSE、以及任何 co_return/break。攒着不发就是响应卡在服务端。
+			auto flushPendingResponses = [&]() -> Awaitable<void>
+			{
+				if (!responseBatch.empty())
+				{
+					co_await flushResponseBatch(socket, responseBatch, writeCounter);
+				}
+			};
+
 			for (;;)
 			{
 				// pipeline 有残留时数据已在用户态，直接借缓冲区处理；
@@ -804,6 +898,10 @@ namespace hical
 
 				if (bufUsed == 0)
 				{
+					// 要阻塞等下一批数据了：攒着没发出去的响应先落地。
+					// 不在这里发的话，客户端等响应、我们等数据，两边干等到超时。这是合批的主出口。
+					co_await flushPendingResponses();
+
 					// 路径 A：空闲连接 → 栈缓冲 speculative read，零 epoll_ctl(MOD)
 					char smallBuf[256];
 					size_t bytesRead = co_await socket.async_read_some(boost::asio::buffer(smallBuf, sizeof(smallBuf)),
@@ -877,7 +975,12 @@ namespace hical
 						}
 						if (parseResult == -1)
 						{
-							co_await sendRawResponse(socket, 400, "Bad Request", "Malformed HTTP request");
+							co_await flushPendingResponses();
+							co_await sendRawResponse(socket,
+													 400,
+													 "Bad Request",
+													 "Malformed HTTP request",
+													 writeCounter);
 							co_return;
 						}
 						// parseResult == -2：数据不完整，fall through 到 async_read_some
@@ -889,14 +992,20 @@ namespace hical
 						if (readBuf.size() >= maxHeaderSize_)
 						{
 							// 头部过大
+							co_await flushPendingResponses();
 							co_await sendRawResponse(socket,
 													 431,
 													 "Request Header Fields Too Large",
-													 "Request header too large");
+													 "Request header too large",
+													 writeCounter);
 							co_return;
 						}
 						readBuf.resize(readBuf.size() * 2);
 					}
+
+					// 头部还没收全，这里要阻塞等数据——批里攒着的响应先放出去，
+					// 否则客户端拿着半截请求等响应，我们等剩下的头部，谁都动不了
+					co_await flushPendingResponses();
 
 					auto bytesRead = co_await socket.async_read_some(
 						boost::asio::buffer(readBuf.data() + bufUsed, readBuf.size() - bufUsed),
@@ -923,10 +1032,12 @@ namespace hical
 						// 给出的 header 字节数（parseResult），不能看 bufUsed。
 						if (static_cast<size_t>(parseResult) > maxHeaderSize_)
 						{
+							co_await flushPendingResponses();
 							co_await sendRawResponse(socket,
 													 431,
 													 "Request Header Fields Too Large",
-													 "Request header too large");
+													 "Request header too large",
+													 writeCounter);
 							co_return;
 						}
 						break;
@@ -934,7 +1045,8 @@ namespace hical
 					if (parseResult == -1)
 					{
 						// 解析错误
-						co_await sendRawResponse(socket, 400, "Bad Request", "Malformed HTTP request");
+						co_await flushPendingResponses();
+						co_await sendRawResponse(socket, 400, "Bad Request", "Malformed HTTP request", writeCounter);
 						co_return;
 					}
 
@@ -943,10 +1055,12 @@ namespace hical
 					// 所以用 bufUsed 判断超限是准确的。
 					if (bufUsed > maxHeaderSize_)
 					{
+						co_await flushPendingResponses();
 						co_await sendRawResponse(socket,
 												 431,
 												 "Request Header Fields Too Large",
-												 "Request header too large");
+												 "Request header too large",
+												 writeCounter);
 						co_return;
 					}
 					// 数据不完整，继续读取
@@ -1044,12 +1158,18 @@ namespace hical
 				if (invalidFraming || transferEncodingStatus == HttpStatusCode::hBadRequest
 					|| (hasTransferEncoding && (hasContentLength || minorVersion == 0)))
 				{
-					co_await sendRawResponse(socket, 400, "Bad Request", "Invalid request framing");
+					co_await flushPendingResponses();
+					co_await sendRawResponse(socket, 400, "Bad Request", "Invalid request framing", writeCounter);
 					co_return;
 				}
 				if (transferEncodingStatus == HttpStatusCode::hNotImplemented)
 				{
-					co_await sendRawResponse(socket, 501, "Not Implemented", "Unsupported Transfer-Encoding");
+					co_await flushPendingResponses();
+					co_await sendRawResponse(socket,
+											 501,
+											 "Not Implemented",
+											 "Unsupported Transfer-Encoding",
+											 writeCounter);
 					co_return;
 				}
 
@@ -1083,7 +1203,8 @@ namespace hical
 				if (resolveResult.pathTooDeep)
 				{
 					// 超深路径：resolveRoute 直接判定，400 语义与 dispatch 内一致，body 不用读
-					co_await sendRawResponse(socket, 400, "Bad Request", "Path too deep");
+					co_await flushPendingResponses();
+					co_await sendRawResponse(socket, 400, "Bad Request", "Path too deep", writeCounter);
 					co_return;
 				}
 
@@ -1103,10 +1224,12 @@ namespace hical
 						// body 还没读，连接状态已脏，必须 close，避免下个请求把残留 body 当请求头解析
 						nativeRes.keepAlive = false;
 						nativeRes.headers.set("Connection", "close");
-						co_await writeResponse(socket, nativeRes);
+						co_await flushPendingResponses();
+						co_await writeResponse(socket, nativeRes, false, writeCounter);
 						co_return;
 					}
-					co_await sendRawResponse(socket, 404, "Not Found", "Not Found");
+					co_await flushPendingResponses();
+					co_await sendRawResponse(socket, 404, "Not Found", "Not Found", writeCounter);
 					co_return;
 				}
 				// 未命中且无 body 的（GET 打不存在的路径之类）走原路，留给阶段 D 的 WS/SSE/dispatch 再定
@@ -1141,6 +1264,7 @@ namespace hical
 					// 成功失败都算读过：失败时 body 没读完、连接已脏，调用方会短路写回错误响应，
 					// 谁都不该再读第二遍。
 					bodyRead = true;
+
 					// 读 body 阶段出错：body 未读完，连接已脏，必须 close
 					auto bodyError = [](HttpStatusCode code, const std::string& msg)
 					{
@@ -1167,6 +1291,8 @@ namespace hical
 						}
 
 						constexpr std::string_view k100 = "HTTP/1.1 100 Continue\r\n\r\n";
+						// 100-continue 也是往 socket 上写：前面攒着的响应必须先出去，不能让 100 插队
+						co_await flushPendingResponses();
 						co_await boost::asio::async_write(socket,
 														  boost::asio::buffer(k100.data(), k100.size()),
 														  boost::asio::use_awaitable);
@@ -1197,6 +1323,12 @@ namespace hical
 
 						size_t bodyRemaining = contentLength - bodyCopied;
 						size_t offset = bodyCopied;
+						if (bodyRemaining > 0)
+						{
+							// 要阻塞等 body 了：攒着的响应先落地。客户端多半是收完前一个响应才发 body 的，
+							// 攒着不发就是两边互相等
+							co_await flushPendingResponses();
+						}
 						while (bodyRemaining > 0)
 						{
 							auto bytesRead = co_await socket.async_read_some(
@@ -1260,6 +1392,9 @@ namespace hical
 							// decodeRet == -2：编码数据已全部消费，清空后继续读
 							chunkBuf.clear();
 
+							// 阻塞读之前把攒着的响应放出去。第一次读之前批里才可能有东西，
+							// 后面几轮读完就接着解码、不会攒新的，调了也是空转
+							co_await flushPendingResponses();
 							chunkBuf.resize(4096);
 							auto bytesRead = co_await socket.async_read_some(boost::asio::buffer(chunkBuf.data(), 4096),
 																			 boost::asio::use_awaitable);
@@ -1428,6 +1563,10 @@ namespace hical
 						{
 							const auto& wsRoute = *wsMatch.route;
 
+							// socket 很快要整个交给 WS 会话（拒绝升级的分支也会自己写响应），
+							// 批里攒着的响应先发出去，不能留到所有权转走之后
+							co_await flushPendingResponses();
+
 							// 注入 WebSocket 参数路由捕获的参数
 							for (const auto& [name, value] : wsMatch.params)
 							{
@@ -1447,7 +1586,7 @@ namespace hical
 									auto& nativeRes = forbiddenRes.native();
 									nativeRes.httpVersionMinor = 1;
 									nativeRes.headers.set("Connection", "close");
-									co_await writeResponse(socket, nativeRes);
+									co_await writeResponse(socket, nativeRes, false, writeCounter);
 									co_return;
 								}
 							}
@@ -1464,7 +1603,7 @@ namespace hical
 									auto& nativeRes = wsAuthRes.native();
 									nativeRes.httpVersionMinor = 1;
 									nativeRes.headers.set("Connection", "close");
-									co_await writeResponse(socket, nativeRes);
+									co_await writeResponse(socket, nativeRes, false, writeCounter);
 									co_return;
 								}
 							}
@@ -1483,7 +1622,7 @@ namespace hical
 								auto& nativeRes = badRes.native();
 								nativeRes.httpVersionMinor = 1;
 								nativeRes.headers.set("Connection", "close");
-								co_await writeResponse(socket, nativeRes);
+								co_await writeResponse(socket, nativeRes, false, writeCounter);
 								co_return;
 							}
 
@@ -1517,6 +1656,9 @@ namespace hical
 						{
 							const auto& sseRoute = *sseMatch.route;
 
+							// 同上：SSE 接管 socket 之前，批里的响应先落地
+							co_await flushPendingResponses();
+
 							// 注入 SSE 参数路由捕获的参数
 							for (const auto& [name, value] : sseMatch.params)
 							{
@@ -1533,7 +1675,7 @@ namespace hical
 									auto& nativeRes = sseAuthRes.native();
 									nativeRes.httpVersionMinor = 1;
 									nativeRes.headers.set("Connection", "close");
-									co_await writeResponse(socket, nativeRes);
+									co_await writeResponse(socket, nativeRes, false, writeCounter);
 									co_return;
 								}
 							}
@@ -1561,20 +1703,22 @@ namespace hical
 				// 发送响应（scatter-gather I/O：状态行+头部在栈，body 零拷贝）
 				// HEAD 方法：仅发送头部，不发送 body（RFC 7231 §4.3.2）
 				bool isHead = (req.method() == HttpMethod::hHead);
+				std::string_view prefix {responsePrefix, prefixLen};
 
 				if (!shouldKeepAlive)
 				{
-					// 连接即将关闭——频率极低，走原始路径就好
+					// 连接即将关闭——先把批里攒着的前几个响应落地，再走原始路径
+					co_await flushPendingResponses();
 					nativeRes.headers.insert("Server", HICAL_VERSION_STRING);
 					nativeRes.headers.insert("Connection", "close");
 					nativeRes.headers.insert("Date", cachedHttpDate());
 					if (nativeRes.hasFileBody() && !isHead)
 					{
-						co_await writeFileResponse(socket, nativeRes);
+						co_await writeFileResponse(socket, nativeRes, {}, writeCounter);
 					}
 					else
 					{
-						co_await writeResponse(socket, nativeRes, isHead);
+						co_await writeResponse(socket, nativeRes, isHead, writeCounter);
 					}
 				}
 				else
@@ -1588,13 +1732,40 @@ namespace hical
 						std::memcpy(responsePrefix + dateValueOffset, date.data(), date.size());
 					}
 
-					if (nativeRes.hasFileBody() && !isHead)
+					if (nativeRes.hasFileBody() || nativeRes.hasChunkedBody())
 					{
-						co_await writeFileResponse(socket, nativeRes, responsePrefix, prefixLen);
+						// 这两种响应自己往 socket 上写（文件分块读、chunked 自己凑帧），
+						// 混进批里顺序就乱了：先把前面的响应发出去，再单独发它
+						co_await flushPendingResponses();
+						if (nativeRes.hasFileBody() && !isHead)
+						{
+							co_await writeFileResponse(socket, nativeRes, prefix, writeCounter);
+						}
+						else
+						{
+							co_await writeResponse(socket, nativeRes, prefix, isHead, writeCounter);
+						}
+					}
+					else if (nativeRes.body.size() >= kMaxResponseBatchBytes)
+					{
+						// 大响应：拼进批里只是白抄一遍（批里还有东西就先落地，别乱序）
+						co_await flushPendingResponses();
+						co_await writeResponse(socket, nativeRes, prefix, isHead, writeCounter);
+					}
+					else if (responseBatch.empty() && bufUsed == 0)
+					{
+						// 批里空着、缓冲区里也没有下一个请求的字节——这次就是单独一条响应。
+						// 直接发，跟合批之前一模一样：不多一次拷贝，也不多一次分配。
+						co_await writeResponse(socket, nativeRes, prefix, isHead, writeCounter);
 					}
 					else
 					{
-						co_await writeResponse(socket, nativeRes, responsePrefix, prefixLen, isHead);
+						appendResponseToBatch(responseBatch, nativeRes, prefix, isHead);
+						if (responseBatch.size() >= kMaxResponseBatchBytes)
+						{
+							// 攒到上限就先落一盘，别让一个贪心客户端把内存顶起来
+							co_await flushResponseBatch(socket, responseBatch, writeCounter);
+						}
 					}
 				}
 

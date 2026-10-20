@@ -338,6 +338,26 @@ namespace hical
 		 */
 		[[nodiscard]] boost::asio::io_context& ioContext();
 
+		/**
+		 * @brief 已发起的响应写次数（合批效果诊断 / 测试用）
+		 * 一次「写一趟」记一笔：批里的多个响应合成一次写只算一笔，文件响应按一次调用算一笔。
+		 * 不追求 syscall 级精确，看的是响应到 socket 之间走了几趟。
+		 * 只有先调过 enableResponseWriteCount() 才有数，否则恒为 0。
+		 * @return 本 server 全部连接累计的写次数
+		 */
+		[[nodiscard]] size_t responseWriteCount() const;
+
+		/**
+		 * @brief 打开响应写次数统计（诊断 / 测试用）
+		 * 默认关着：计数器是所有 worker 共用的一个原子量，热路径上每条响应都 fetch_add
+		 * 会变成跨核弹 cache line，跟合批省 syscall 的目的正好对着干。
+		 * 打开后 handleSession 在建连接时取一次计数器指针，之后本连接每条响应才记账。
+		 * 重复调没关系（本质就是置个标志，幂等），因为测试里可能好几个用例共用一套 setup。
+		 * @throw std::logic_error 已经在 start() 之后才调——那时连接都建好了，
+		 *        再打开只能统计到一半，没意义，直接拦下来
+		 */
+		void enableResponseWriteCount();
+
 	private:
 		// 协程式连接监听（每个 acceptor 独立运行）
 		Awaitable<void> acceptLoop(boost::asio::ip::tcp::acceptor& acceptor, IdleFd& idleFd);
@@ -371,6 +391,14 @@ namespace hical
 		// 这俩 atomic 必须在 io_context 之前声明（析构顺序），协程帧里会引用它们
 		std::atomic<size_t> activeConnections_ {0};
 		std::atomic<bool> draining_ {false};
+
+		// 响应写次数，同上：handleSession 的协程帧会引用它，必须比 io_context 活得久
+		std::atomic<size_t> responseWriteCount_ {0};
+
+		// 写次数统计的开关，默认关。handleSession 建连接时读一次（relaxed 够用：
+		// 只要求 start() 之前那次写对它之后的读可见，中间没有别的数据要靠它排序），
+		// 关着就把 nullptr 传给 recordResponseWrite，生产路径只剩一次空指针判断
+		std::atomic<bool> writeCountEnabled_ {false};
 
 		// 监听 IP 与端口
 		// listenAddr_ 只在 start() 之前写，之后只读，不用原子。
