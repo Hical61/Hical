@@ -125,10 +125,15 @@ namespace hical
 
 				~CachedStream()
 				{
+#ifndef __MINGW32__
+					// MinGW 下的 thread_local 析构是在 DLL TLS 回调里跑的，那个时机
+					// 不确定 CRT 堆还在不在，deflateEnd 内部要 free()，下去就是 0xc0000374。
+					// 进程退出 OS 会帮我们收，一个线程就一份 z_stream，无所谓了。
 					if (initialized)
 					{
 						deflateEnd(&strm);
 					}
+#endif
 				}
 			};
 

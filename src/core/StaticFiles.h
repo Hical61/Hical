@@ -299,8 +299,18 @@ namespace hical
 		/// @brief 返回当前线程的 PathCache
 		[[nodiscard]] inline TlPathCache& getTlPathCache()
 		{
+#ifdef __MINGW32__
+			// 这个对象的析构是编译器生成的，会去释放 list 里 Entry 的 string 和 path，
+			// 但 MinGW 下 thread_local 析构是在 DLL TLS 回调里跑的，那个时机不确定
+			// CRT 堆还在不在，释放下去就是 0xc0000374。
+			// 这里改成指针 + new，故意不析构：指针本身是平凡类型，没有析构，绕开回调。
+			// 一个线程的路径缓存撑死几十 KB，进程退出 OS 会收。
+			static thread_local TlPathCache* cache = new TlPathCache();
+			return *cache;
+#else
 			static thread_local TlPathCache cache;
 			return cache;
+#endif
 		}
 
 		/**
@@ -331,8 +341,16 @@ namespace hical
 		/// @brief 返回当前线程的文件内容缓存
 		[[nodiscard]] inline TlContentCache& getTlContentCache()
 		{
+#ifdef __MINGW32__
+			// 同上，这个缓存里存着文件 body 的 string，析构要释放的堆块更大，
+			// 落在 DLL TLS 回调里更容易踩到已经拆了一半的 CRT 堆。
+			// 指针是平凡类型没有析构，故意泄漏，进程退出 OS 会收。
+			static thread_local TlContentCache* cache = new TlContentCache();
+			return *cache;
+#else
 			static thread_local TlContentCache cache;
 			return cache;
+#endif
 		}
 
 	} // namespace detail

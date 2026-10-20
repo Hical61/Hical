@@ -22,10 +22,12 @@
 #include <chrono>
 #include <cstring>
 #include <ctime>
+#include <exception>
 #include <fstream>
 #include <optional>
 #include <string_view>
 #include <system_error>
+#include <vector>
 
 // TCP_CORK / TCP_NOPUSH（writeFileResponse 合并小包用）
 #if defined(__linux__)
@@ -1780,12 +1782,35 @@ namespace hical
 				co_await wsRoute.onConnect(*session);
 			}
 
-			// 消息循环（根据是否有 onTypedMessage 选择接收方式）
-			if (wsRoute.onTypedMessage)
+			// 消息循环：一批读入的数据能解出几条消息就解几条，回调跑完再统一落一次盘。
+			// 以前是一帧一个 receive/write 往返，16 帧进来就是 16 次系统调用。
+			auto dispatchMessage = [&wsRoute](const WsMessage& msg, WebSocketSession& session) -> Awaitable<void>
 			{
-				// 类型感知消息循环（区分 Text/Binary）
-				while (session->isOpen())
+				if (wsRoute.onTypedMessage)
 				{
+					co_await wsRoute.onTypedMessage(msg, session);
+				}
+				else if (wsRoute.onMessage)
+				{
+					co_await wsRoute.onMessage(msg.data, session);
+				}
+			};
+
+			// 一批里通常也就十几条消息，先按这个数预留，省掉反复扩容
+			static constexpr size_t kInitialWsBatchMessages = 16;
+			std::vector<WsMessage> batch;
+			batch.reserve(kInitialWsBatchMessages);
+
+			while (session->isOpen())
+			{
+				bool alive = false;
+				// 回调或读出错时不能就地 co_await（catch 里不许挂起），
+				// 先把异常存下来，等出站缓冲刷完再抛出去
+				std::exception_ptr error;
+
+				try
+				{
+					// 空闲超时只覆盖「等下一批数据」这一段，回调执行期间不设防
 					if (wsDeadline)
 					{
 						wsDeadline->expires_after(wsTimeoutDuration);
@@ -1804,61 +1829,39 @@ namespace hical
 							});
 					}
 
-					auto msg = co_await session->receiveMessage();
+					alive = co_await session->receiveBatch(batch);
 
 					if (wsDeadline)
 					{
 						wsDeadline->cancel();
 					}
 
-					if (!msg.has_value())
+					// 合批窗口只包住回调这一段：回调里的 send() 先入队，跑完统一落一次盘。
+					// 挂起等数据那段不合批，心跳 Ping 和 WsHub 广播才能立刻发出去
+					session->beginBatch();
+					for (const auto& msg : batch)
 					{
-						break;
+						co_await dispatchMessage(msg, *session);
 					}
-
-					co_await wsRoute.onTypedMessage(*msg, *session);
 				}
-			}
-			else
-			{
-				// 原有文本消息循环（向后兼容）
-				while (session->isOpen())
+				catch (...)
 				{
-					if (wsDeadline)
-					{
-						wsDeadline->expires_after(wsTimeoutDuration);
-						wsDeadline->async_wait(
-							[sessionWeak = std::weak_ptr(session),
-							 aliveFlag = wsAlive](const boost::system::error_code& ec)
-							{
-								if (!ec && aliveFlag->load())
-								{
-									if (auto sp = sessionWeak.lock(); sp && sp->isOpen())
-									{
-										boost::system::error_code closeEc;
-										sp->socket().close(closeEc);
-									}
-								}
-							});
-					}
-
-					auto msg = co_await session->receive();
-
-					if (wsDeadline)
-					{
-						wsDeadline->cancel();
-					}
-
-					if (!msg.has_value())
-					{
-						break;
-					}
-
-					if (wsRoute.onMessage)
-					{
-						co_await wsRoute.onMessage(*msg, *session);
-					}
+					error = std::current_exception();
 				}
+
+				// 正常收尾还是出错收尾，攒着的响应都得刷出去
+				co_await session->endBatch();
+
+				if (error)
+				{
+					std::rethrow_exception(error);
+				}
+
+				if (!alive)
+				{
+					break;
+				}
+				// 只有 ping/pong 的一批解不出消息，但连接还在，回去接着读
 			}
 		}
 		catch (const boost::system::system_error& e)

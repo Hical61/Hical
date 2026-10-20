@@ -24,6 +24,7 @@
 
 #include <boost/json.hpp>
 #include <algorithm>
+#include <cassert>
 #include <charconv>
 #include <chrono>
 #include <cstdlib>
@@ -272,44 +273,48 @@ namespace
 
 #endif // HICAL_HAS_PGSQL
 
-// ── 构建 JSON items 数组 ───────────────────────────────────────────────────
+// ── 写 JSON items 数组 ─────────────────────────────────────────────────────
 
-static json::array buildItems(int count, int64_t multiplier)
+/**
+ * @brief 把 g_items 的前 count 条逐个写进 writer，不建中间 DOM
+ * 条目数超出数据集长度时按取模绕回去，跟原来 buildItems 的行为一致。
+ * @param w 目标 writer，调用时当前必须已经在数组里
+ * @param count 要写多少条，<=0 或者数据集没加载时一个都不写
+ * @param multiplier total 的乘数，来自 query 的 m
+ */
+static void writeItems(JsonWriter& w, int count, int64_t multiplier)
 {
 	const size_t dsSize = g_items.size();
 	if (dsSize == 0 || count <= 0)
 	{
-		return {};
+		return;
 	}
-
-	json::array items;
-	items.reserve(static_cast<std::size_t>(count));
 
 	for (int i = 0; i < count; ++i)
 	{
 		const auto& src = g_items[static_cast<size_t>(i) % dsSize];
 
-		json::array tags;
-		tags.reserve(src.tags.size());
+		// 字段顺序跟之前序列化出来的保持一致，省得下游有做字符串比对的
+		w.beginObject();
+		w.key("id").value(src.id);
+		w.key("name").value(src.name);
+		w.key("category").value(src.category);
+		w.key("price").value(src.price);
+		w.key("quantity").value(src.quantity);
+		w.key("active").value(src.active);
+		w.key("tags").beginArray();
 		for (const auto& t : src.tags)
 		{
-			tags.push_back(boost::json::value(t));
+			w.value(t);
 		}
-
-		json::object item = {
-			{"id", src.id},
-			{"name", src.name},
-			{"category", src.category},
-			{"price", src.price},
-			{"quantity", src.quantity},
-			{"active", src.active},
-			{"tags", std::move(tags)},
-			{"rating", {{"score", src.rating.score}, {"count", src.rating.count}}},
-			{"total", src.price * src.quantity * multiplier},
-		};
-		items.push_back(std::move(item));
+		w.endArray();
+		w.key("rating").beginObject();
+		w.key("score").value(src.rating.score);
+		w.key("count").value(src.rating.count);
+		w.endObject();
+		w.key("total").value(src.price * src.quantity * multiplier);
+		w.endObject();
 	}
-	return items;
 }
 
 // ── CPU 核数检测 ───────────────────────────────────────────────────────────
@@ -338,7 +343,8 @@ namespace
 		while (pos <= raw.size())
 		{
 			const size_t comma = raw.find(',', pos);
-			const std::string_view seg = raw.substr(pos, comma == std::string_view::npos ? raw.size() - pos : comma - pos);
+			const std::string_view seg =
+				raw.substr(pos, comma == std::string_view::npos ? raw.size() - pos : comma - pos);
 			if (!seg.empty())
 			{
 				const size_t dash = seg.find('-');
@@ -601,11 +607,13 @@ static void registerRoutes(HttpServer& server)
 	{
 		auto gzip = makeGzipCompressionMiddleware(readGzipOptions());
 		auto jsonGroup = server.router().group("/json");
-		jsonGroup.use([gzip](HttpRequest& req, MiddlewareNext next) -> Awaitable<HttpResponse> {
-			auto resp = co_await next(req);
-			gzip(req, resp);
-			co_return resp;
-		});
+		jsonGroup.use(
+			[gzip](HttpRequest& req, MiddlewareNext next) -> Awaitable<HttpResponse>
+			{
+				auto resp = co_await next(req);
+				gzip(req, resp);
+				co_return resp;
+			});
 		jsonGroup.get("/{count}",
 					  [](const HttpRequest& req) -> HttpResponse
 					  {
@@ -630,15 +638,19 @@ static void registerRoutes(HttpServer& server)
 							  }
 						  }
 
-						  json::object resp = {
-							  {"count", count},
-							  {"items", buildItems(count, m)},
-						  };
-
 						  HttpResponse res;
 						  res.setStatus(HttpStatusCode::hOk);
-						  res.native().headers.set("Content-Type", "application/json");
-						  res.native().body = json::serialize(resp);
+						  // 条目数来自路径、乘数来自 query，形状运行时才定，走不了要求编译期
+						  // 定形的 jsonFrom<T>()，只能用零 DOM 的增量 writer 边遍历边拼。
+						  // writer 里存的是 res body 的地址，拿到它之后别再动 res。
+						  auto w = res.jsonWriter();
+						  w.beginObject();
+						  w.key("count").value(count);
+						  w.key("items").beginArray();
+						  writeItems(w, count, m);
+						  w.endArray();
+						  w.endObject();
+						  assert(w.isComplete());
 						  return res;
 					  });
 	}
@@ -916,7 +928,6 @@ static void registerAsyncDbRoute(HttpServer& server)
 constexpr std::string_view kTlsCertPath = "/certs/server.crt";
 constexpr std::string_view kTlsKeyPath = "/certs/server.key";
 
-
 /**
  * @brief 统一施加 benchmark 运行时配置
  * 两个实例（明文 8080 / TLS 8081）共用同一套极限值，保证负载下的行为一致。
@@ -965,7 +976,7 @@ int main()
 	registerRoutes(server);
 #ifdef HICAL_HAS_PGSQL
 	registerAsyncDbRoute(server); // async-db 只挂明文，TLS 端口不测 DB
-#endif // HICAL_HAS_PGSQL
+#endif                            // HICAL_HAS_PGSQL
 	configureBenchmark(server);
 
 	// ── TLS 8081 实例（证书/私钥存在才建）────────────────────────────────
@@ -981,10 +992,11 @@ int main()
 
 		// TLS 实例后台跑，明文实例占主线程。两者各注册的 signal_set 都会收到
 		// SIGINT/SIGTERM 并各自 gracefulStop → stop() → run() 返回。
-		tlsThread = std::thread([&tlsServer]()
-								{
-									tlsServer->start();
-								});
+		tlsThread = std::thread(
+			[&tlsServer]()
+			{
+				tlsServer->start();
+			});
 	}
 
 	// 主线程跑明文实例（阻塞直到信号触发 stop）
