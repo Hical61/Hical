@@ -1,3 +1,8 @@
+/**
+ * @file test_ssl_connection.cpp
+ * @brief TLS 上下文、握手与会话回收测试
+ */
+
 #include "asio/SslConnection.h"
 #include "asio/AsioEventLoop.h"
 #include "core/SslContext.h"
@@ -9,6 +14,8 @@
 #include <cstdlib>
 #include <thread>
 #include <fstream>
+#include <future>
+#include <vector>
 
 using namespace hical;
 
@@ -291,4 +298,75 @@ TEST(SslConnectionTest, StalledHandshakeReapedByIdleTimeout)
 
 	server.stop();
 	serverThread.join();
+}
+
+// 验证关服会回收未发送 ClientHello 的连接，不依赖客户端主动断开或空闲超时。
+// 公开接口无法固定 accept 检查与会话投递之间的时序，本用例不是晚到窗口的确定性复现。
+TEST(SslConnectionTest, StopClosesConnectionsWithoutClientHello)
+{
+	if (!testCertsExist())
+	{
+		if (std::getenv("HICAL_REQUIRE_SSL_CERTS") != nullptr)
+		{
+			FAIL() << "HICAL_REQUIRE_SSL_CERTS 已置位，但测试证书不存在（" << hTestCertFile << ", " << hTestKeyFile
+				   << "）";
+		}
+		GTEST_SKIP() << "跳过：测试证书不存在（" << hTestCertFile << ", " << hTestKeyFile << "）";
+	}
+
+	using boost::asio::ip::tcp;
+	constexpr size_t kPendingConnections = 8;
+	HttpServer server(0, 3);
+	server.enableSsl(hTestCertFile, hTestKeyFile);
+	std::thread serverThread;
+	const auto port = startServerAndWaitPort(server, serverThread);
+
+	struct StopOnExit
+	{
+		HttpServer& server;
+		std::thread& thread;
+
+		~StopOnExit()
+		{
+			server.stop();
+			if (thread.joinable())
+			{
+				thread.join();
+			}
+		}
+	} stopOnExit {server, serverThread};
+
+	ASSERT_NE(port, 0);
+
+	// 端口先于 scanner 等组件发布；base loop 开始执行回调才表示初始化已完成。
+	auto initialized = std::make_shared<std::promise<void>>();
+	auto ready = initialized->get_future();
+	boost::asio::post(server.ioContext(),
+					  [initialized]()
+					  {
+						  initialized->set_value();
+					  });
+	ready.wait();
+
+	boost::asio::io_context io;
+	std::vector<tcp::socket> clients;
+	clients.reserve(kPendingConnections);
+	for (size_t i = 0; i < kPendingConnections; ++i)
+	{
+		auto& client = clients.emplace_back(io);
+		boost::system::error_code ec;
+		client.connect(tcp::endpoint(boost::asio::ip::make_address("127.0.0.1"), port), ec);
+		ASSERT_FALSE(ec) << ec.message();
+	}
+
+	server.stop();
+	for (auto& client : clients)
+	{
+		char byte;
+		boost::system::error_code ec;
+		EXPECT_EQ(client.read_some(boost::asio::buffer(&byte, 1), ec), 0u);
+		EXPECT_TRUE(ec == boost::asio::error::eof || ec == boost::asio::error::connection_reset) << ec.message();
+	}
+	serverThread.join();
+	EXPECT_FALSE(server.isRunning());
 }

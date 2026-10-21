@@ -530,7 +530,14 @@ namespace hical
 		void indexWildcardSegmentPrefix(HttpMethod method, std::string_view prefix);
 
 		static bool isParamRoute(const std::string& path);
-		static bool matchParamPath(std::string_view pattern, std::string_view path, ParamList& params);
+		/**
+		 * @brief 完整匹配参数路径，按需生成拥有型参数
+		 * @param pattern 路由模式
+		 * @param path 待匹配路径
+		 * @param params 非空时接收匹配参数；为空时仅判断，不分配字符串
+		 * @return 路径和参数边界均符合模式时返回 true；失败时 params 保持为空
+		 */
+		static bool matchParamPath(std::string_view pattern, std::string_view path, ParamList* params = nullptr);
 		static bool isWildcardRoute(const std::string& path);
 		static bool matchWildcardPath(std::string_view prefix,
 									  std::string_view paramName,

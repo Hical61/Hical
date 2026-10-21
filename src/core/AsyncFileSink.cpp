@@ -77,35 +77,34 @@ namespace hical
 
 	void AsyncFileSink::backgroundLoop(std::stop_token stopToken)
 	{
+		std::deque<std::promise<void>> batchRequests;
 		while (true)
 		{
 			{
 				std::unique_lock<std::mutex> lock(bufMutex_);
 
-				// 等数据、超时、或被要求停
+				// 空缓冲区的 flush 也需要唤醒后台线程。
 				cond_.wait_for(lock,
 							   stopToken,
 							   opts_.flushInterval,
 							   [this]()
 							   {
-								   return !curBuf_.empty();
+								   return !curBuf_.empty() || !flushRequests_.empty();
 							   });
 
-				if (stopToken.stop_requested() && curBuf_.empty())
+				if (stopToken.stop_requested() && curBuf_.empty() && flushRequests_.empty())
 				{
 					break;
 				}
 
-				if (!curBuf_.empty())
-				{
-					// 双缓冲交换
-					curBuf_.swap(flushBuf_);
-					curBuf_.clear();
-				}
-				else
+				if (curBuf_.empty() && flushRequests_.empty())
 				{
 					continue;
 				}
+
+				// 数据和等待者一起截取，写盘期间新入队的 flush 留给下一批。
+				curBuf_.swap(flushBuf_);
+				batchRequests.swap(flushRequests_);
 			}
 
 			// 锁外批量写盘
@@ -124,44 +123,16 @@ namespace hical
 				}
 
 				logFile_.append(flushBuf_.data(), flushBuf_.size());
-				logFile_.flush();
 				flushBuf_.clear();
 			}
-
-			// 通知 flush() 的等待者
-			{
-				std::lock_guard<std::mutex> lock(bufMutex_);
-				for (auto& req : flushRequests_)
-				{
-					req.set_value();
-				}
-				flushRequests_.clear();
-			}
-		}
-
-		// 停之前把 curBuf_ 里剩的也写掉
-		{
-			std::lock_guard<std::mutex> lock(bufMutex_);
-			if (!curBuf_.empty())
-			{
-				curBuf_.swap(flushBuf_);
-				curBuf_.clear();
-			}
-		}
-		if (!flushBuf_.empty())
-		{
-			logFile_.append(flushBuf_.data(), flushBuf_.size());
 			logFile_.flush();
-		}
 
-		// 通知残留的 flush 等待者
-		{
-			std::lock_guard<std::mutex> lock(bufMutex_);
-			for (auto& req : flushRequests_)
+			// 本批数据已写出，只唤醒随本批取出的等待者；此处不用持有缓冲区锁。
+			for (auto& request : batchRequests)
 			{
-				req.set_value();
+				request.set_value();
 			}
-			flushRequests_.clear();
+			batchRequests.clear();
 		}
 	}
 

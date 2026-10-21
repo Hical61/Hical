@@ -97,11 +97,20 @@ namespace hical
 		/**
 		 * @brief 借一块读缓冲区
 		 * 从线程本地池取，池空则新建（预留 kBufferSize）。
-		 * 返回的 string 已 clear()，容量 >= kBufferSize。
+		 * @return 空字符串的借用句柄，容量 >= kBufferSize
 		 */
 		static BufferHandle acquire();
 
+		/**
+		 * @brief 借用指定大小的可写缓冲区，同尺寸复用时不重复清零
+		 * @param size 需要的可写字节数，默认 kBufferSize
+		 * @return size() 等于 size 的借用句柄，容量至少为 kBufferSize
+		 * @warning 缓冲区可能保留上次请求的数据，只能处理本次实际写入的字节。
+		 */
+		static BufferHandle acquireForRead(size_t size = kBufferSize);
+
 	private:
+		static BufferHandle takeBuffer();
 		static void returnBuffer(std::string* buf);
 
 		struct PoolSlots

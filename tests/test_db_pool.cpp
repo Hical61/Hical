@@ -1,3 +1,8 @@
+/**
+ * @file test_db_pool.cpp
+ * @brief 数据库连接池及空闲回收行为测试
+ */
+
 #include "db/DbConfig.h"
 #include "db/DbConnection.h"
 #include "db/DbConnectionPool.h"
@@ -88,6 +93,7 @@ public:
 
 	std::chrono::steady_clock::time_point lastActiveTime() const override
 	{
+		lastActiveReadCount_.fetch_add(1, std::memory_order_relaxed);
 		return lastActive_;
 	}
 
@@ -108,8 +114,23 @@ public:
 	int executeCount_ = 0;
 	int commitCount_ = 0;
 	int rollbackCount_ = 0;
+	mutable std::atomic<size_t> lastActiveReadCount_ {0};
 	std::chrono::steady_clock::time_point lastActive_ = std::chrono::steady_clock::now();
 	std::chrono::steady_clock::time_point lastPing_;
+};
+
+class ExpiredMockDbConnection : public MockDbConnection
+{
+public:
+	ExpiredMockDbConnection()
+	{
+		lastActive_ = std::chrono::steady_clock::time_point {};
+	}
+
+	void touch() override
+	{
+		// 固定为已过期，init()/release() 都不能刷新这个测试时钟。
+	}
 };
 
 // Mock 连接工厂
@@ -120,6 +141,88 @@ DbConnectionFactory makeMockFactory()
 	{
 		co_return std::make_shared<MockDbConnection>();
 	};
+}
+
+class DbPoolIdleCheckTest : public ::testing::Test
+{
+protected:
+	void checkExpiredConnections(size_t minConnections, size_t initialConnections)
+	{
+		boost::asio::io_context ioCtx;
+		auto config = DbConfig {.minConnections = minConnections,
+								.maxConnections = initialConnections,
+								.idleTimeout = std::chrono::seconds(1),
+								.idleCheckInterval = std::chrono::seconds(1),
+								.healthCheckInterval = std::chrono::seconds(0)};
+		std::vector<std::shared_ptr<MockDbConnection>> connections;
+		auto factory = [&connections](boost::asio::io_context&,
+									  const DbConfig&) -> Awaitable<std::shared_ptr<DbConnection>>
+		{
+			auto connection = std::make_shared<ExpiredMockDbConnection>();
+			connections.push_back(connection);
+			co_return connection;
+		};
+		auto pool = std::make_shared<DbConnectionPool>(ioCtx, config, factory);
+		bool initialized = false;
+		coSpawn(ioCtx,
+				[&]() -> Awaitable<void>
+				{
+					co_await pool->init();
+					std::vector<std::shared_ptr<DbConnection>> acquired;
+					for (size_t i = 0; i < initialConnections; ++i)
+					{
+						acquired.push_back(co_await pool->acquire());
+					}
+					for (auto& connection : acquired)
+					{
+						pool->release(std::move(connection));
+					}
+					initialized = true;
+				});
+
+		const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(3);
+		do
+		{
+			ioCtx.run_for(std::chrono::milliseconds(20));
+		}
+		while ((!initialized || pool->idleCount() != minConnections) && std::chrono::steady_clock::now() < deadline);
+		// 继续驱动事件循环，检查保留下来的过期连接是否反复触发扫描。
+		ioCtx.run_for(std::chrono::milliseconds(25));
+		EXPECT_TRUE(initialized);
+		EXPECT_EQ(pool->idleCount(), minConnections);
+		size_t activeTimeReads = 0;
+		for (const auto& connection : connections)
+		{
+			activeTimeReads += connection->lastActiveReadCount_.load(std::memory_order_relaxed);
+		}
+		EXPECT_LE(activeTimeReads, initialConnections * 3) << "过期保底连接不应反复扫描";
+
+		coSpawn(ioCtx,
+				[pool]() -> Awaitable<void>
+				{
+					co_await pool->shutdown();
+				});
+		ioCtx.run();
+		EXPECT_EQ(pool->idleCount(), 0u);
+		std::weak_ptr<DbConnectionPool> weakPool = pool;
+		pool.reset();
+		EXPECT_TRUE(weakPool.expired()) << "shutdown 应退出后台协程并释放池的所有权";
+	}
+};
+
+TEST_F(DbPoolIdleCheckTest, ExpiredMinimumConnectionsDoNotSpin)
+{
+	checkExpiredConnections(1, 1);
+}
+
+TEST_F(DbPoolIdleCheckTest, EvictionStopsAtMinimumWithoutSpinning)
+{
+	checkExpiredConnections(1, 3);
+}
+
+TEST_F(DbPoolIdleCheckTest, ZeroMinimumEvictsAllExpiredConnections)
+{
+	checkExpiredConnections(0, 3);
 }
 
 // 辅助：在事件循环中运行协程

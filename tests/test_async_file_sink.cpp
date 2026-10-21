@@ -1,11 +1,18 @@
+/**
+ * @file test_async_file_sink.cpp
+ * @brief 异步日志写入、刷盘屏障和关闭行为测试
+ */
+
 #include "core/AsyncFileSink.h"
 #include "core/LogSink.h"
 #include <gtest/gtest.h>
+#include <barrier>
 #include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <string>
 #include <thread>
+#include <vector>
 
 using namespace hical;
 
@@ -51,6 +58,64 @@ TEST_F(AsyncFileSinkTest, BasicWrite)
 
 	auto content = readFile(logPath);
 	EXPECT_NE(content.find("hello async"), std::string::npos) << "Content: " << content;
+}
+
+TEST_F(AsyncFileSinkTest, FlushWithoutWritesCompletes)
+{
+	auto logPath = (testDir_ / "empty.log").string();
+	AsyncFileSink sink(AsyncFileSink::Options {.file = {.basePath = logPath}});
+	// 直接调用；回归时由独立 CTest 进程的 timeout 截止，避免 future 析构再次阻塞。
+	sink.flush();
+	EXPECT_TRUE(readFile(logPath).empty());
+}
+
+TEST_F(AsyncFileSinkTest, FlushAfterAutomaticDrainCompletesRepeatedly)
+{
+	auto logPath = (testDir_ / "drained.log").string();
+	AsyncFileSink sink(AsyncFileSink::Options {.file = {.basePath = logPath}});
+	const std::string message = "自动写出后仍可重复 flush\n";
+	sink.write(message);
+	const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(3);
+	while (readFile(logPath) != message && std::chrono::steady_clock::now() < deadline)
+	{
+		std::this_thread::yield();
+	}
+	ASSERT_EQ(readFile(logPath), message);
+	sink.flush();
+	sink.flush();
+	EXPECT_EQ(readFile(logPath), message);
+}
+
+TEST_F(AsyncFileSinkTest, ConcurrentFlushIncludesAllEarlierWrites)
+{
+	auto logPath = (testDir_ / "flush-barrier.log").string();
+	AsyncFileSink sink(AsyncFileSink::Options {.file = {.basePath = logPath, .maxFileSize = 0}});
+	constexpr size_t kWriters = 4;
+	constexpr size_t kBatches = 32;
+	constexpr size_t kPayloadSize = 64 * 1024;
+	std::barrier start(static_cast<std::ptrdiff_t>(kWriters));
+	std::vector<std::jthread> writers;
+	for (size_t writer = 0; writer < kWriters; ++writer)
+	{
+		writers.emplace_back(
+			[&, writer]()
+			{
+				start.arrive_and_wait();
+				for (size_t batch = 0; batch < kBatches; ++batch)
+				{
+					auto marker = "writer=" + std::to_string(writer) + ",batch=" + std::to_string(batch) + "\n";
+					auto message = std::string(kPayloadSize, 'x') + marker;
+					sink.write(message);
+					sink.flush();
+					EXPECT_NE(readFile(logPath).find(marker), std::string::npos)
+						<< "flush 返回前应写出同线程此前提交的数据：" << marker;
+				}
+			});
+	}
+	for (auto& writer : writers)
+	{
+		writer.join();
+	}
 }
 
 TEST_F(AsyncFileSinkTest, MultipleWrites)

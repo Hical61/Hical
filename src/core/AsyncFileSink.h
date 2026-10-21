@@ -46,6 +46,11 @@ namespace hical
 		AsyncFileSink& operator=(AsyncFileSink&&) = delete;
 
 		void write(std::string_view formattedLine) override;
+		/**
+		 * @brief 等待本次调用入队前已接收的日志写入文件，并刷新文件缓冲区
+		 * 无日志时同样可调用；背压丢弃的日志不在等待范围内。
+		 * @return 无
+		 */
 		void flush() override;
 
 		/**

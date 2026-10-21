@@ -1,3 +1,8 @@
+/**
+ * @file test_form_params.cpp
+ * @brief 表单参数解析与缓存测试
+ */
+
 #include "core/HttpRequest.h"
 #include <gtest/gtest.h>
 
@@ -81,4 +86,22 @@ TEST(FormParamTest, CachedParsing)
 	const auto& p1 = req.formParams();
 	const auto& p2 = req.formParams();
 	EXPECT_EQ(&p1, &p2);
+}
+
+TEST(FormParamTest, LargeBody_PreservesPayloadAndRepeatedFields)
+{
+	const std::string payload(64 * 1024, 'x');
+	const auto body = "payload=" + payload + "&tag=one&tag=two&escaped=a%26b+c&empty=";
+	HttpRequest req;
+	req.setHeader("Content-Type", "application/x-www-form-urlencoded");
+	req.setBody(body);
+
+	const auto& params = req.formParams();
+	EXPECT_EQ(params.size(), 5);
+	EXPECT_EQ(params.count("tag"), 2);
+	EXPECT_EQ(req.formParam("payload"), payload);
+	EXPECT_EQ(req.formParam("escaped"), "a&b c");
+	EXPECT_EQ(req.formParam("empty"), "");
+	EXPECT_EQ(req.body(), body);
+	EXPECT_EQ(&params, &req.formParams());
 }

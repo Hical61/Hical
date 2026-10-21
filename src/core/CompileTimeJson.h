@@ -3,7 +3,7 @@
  * @brief 编译期 JSON 直序列化，绕开 boost::json::object 直接在栈缓冲上拼接 wire bytes
  * 核心思路：利用 HICAL_JSON 提供的编译期字段信息，逐个字段往 FixedBuffer<512> 上拼
  * `{"key":value,...}`，省掉 boost::json::object 的创建和 lookup 开销。
- * 小 DTO（<512B wire）零堆分配，大 DTO 自动溢出到堆。
+ * 小 DTO（≤512B wire）的拼接缓冲不分配堆内存，大 DTO 自动溢出到堆；返回字符串独立持有结果。
  * 用法：
  *   #include "core/CompileTimeJson.h"
  *   std::string json = hical::meta::compileTimeToJson(myDto);
@@ -21,12 +21,11 @@
 namespace hical::meta
 {
 
-	// 前向声明（必须在 meta 命名空间），嵌套 DTO 递归时需要
-	template <typename T>
-	std::string compileTimeToJson(const T& obj);
-
 	namespace detail
 	{
+
+		template <size_t N, typename T>
+		void objectToJsonBuffer(FixedBuffer<N>& buf, const T& obj);
 
 		/**
 		 * @brief 将单个 C++ 值序列化为 JSON 片段写入缓冲区
@@ -85,9 +84,8 @@ namespace hical::meta
 			}
 			else if constexpr (HasJsonFields<T>::value)
 			{
-				// 嵌套 DTO：递归序列化为完整 JSON 对象，再拼入父缓冲区
-				auto innerJson = meta::compileTimeToJson(val);
-				buf.append(innerJson);
+				// 嵌套 DTO 复用外层缓冲，不再生成临时 JSON 字符串。
+				objectToJsonBuffer(buf, val);
 			}
 			else
 			{
@@ -95,12 +93,52 @@ namespace hical::meta
 			}
 		}
 
+		/**
+		 * @brief 将 DTO 的字段直接追加到已有缓冲区，供顶层和嵌套对象复用
+		 * @param buf 接收 JSON 内容的缓冲区
+		 * @param obj 已标注 HICAL_JSON 的对象
+		 */
+		template <size_t N, typename T>
+		void objectToJsonBuffer(FixedBuffer<N>& buf, const T& obj)
+		{
+			static_assert(HasJsonFields<T>::value, "compileTimeToJson requires HICAL_JSON() annotation on the type");
+			buf << '{';
+
+			const auto& fields = T::hicalJsonFields();
+			constexpr auto fieldCount = std::tuple_size_v<std::remove_cvref_t<decltype(fields)>>;
+
+			bool first = true;
+			auto emitField = [&](const auto& field)
+			{
+				if (!field.ignored)
+				{
+					if (!first)
+					{
+						buf << ',';
+					}
+					first = false;
+
+					buf << '"';
+					buf.append(field.name);
+					buf << '"' << ':';
+					valueToJsonBuffer(buf, obj.*field.pointer);
+				}
+			};
+
+			[&]<size_t... I>(std::index_sequence<I...>)
+			{
+				(emitField(std::get<I>(fields)), ...);
+			}(std::make_index_sequence<fieldCount> {});
+
+			buf << '}';
+		}
+
 	} // namespace detail
 
 	/**
 	 * @brief 编译期 JSON 直序列化入口
-	 * 从 HICAL_JSON 标注的编译期字段信息出发，逐个字段拼 `"key":value`，用
-	 * FixedBuffer<512> 做栈缓冲。字段不超过 512B 时不触发堆分配。
+	 * 从 HICAL_JSON 字段信息直接拼接 JSON，所有嵌套对象共用 FixedBuffer<512>。
+	 * 总内容不超过 512B 时缓冲区不触发堆回退，返回字符串独立持有结果。
 	 * @tparam T 已标注 HICAL_JSON 的结构体类型
 	 * @param obj 要序列化的对象
 	 * @return JSON 字符串，语义等价于 boost::json::serialize(toJson(obj))
@@ -108,38 +146,8 @@ namespace hical::meta
 	template <typename T>
 	std::string compileTimeToJson(const T& obj)
 	{
-		static_assert(HasJsonFields<T>::value, "compileTimeToJson requires HICAL_JSON() annotation on the type");
-
 		FixedBuffer<512> buf;
-		buf << '{';
-
-		const auto& fields = T::hicalJsonFields();
-		constexpr auto fieldCount = std::tuple_size_v<std::remove_cvref_t<decltype(fields)>>;
-
-		bool first = true;
-		auto emitField = [&](const auto& field)
-		{
-			if (!field.ignored)
-			{
-				if (!first)
-				{
-					buf << ',';
-				}
-				first = false;
-
-				buf << '"';
-				buf.append(field.name);
-				buf << '"' << ':';
-				detail::valueToJsonBuffer(buf, obj.*field.pointer);
-			}
-		};
-
-		[&]<size_t... I>(std::index_sequence<I...>)
-		{
-			(emitField(std::get<I>(fields)), ...);
-		}(std::make_index_sequence<fieldCount> {});
-
-		buf << '}';
+		detail::objectToJsonBuffer(buf, obj);
 		return std::string(buf.view());
 	}
 

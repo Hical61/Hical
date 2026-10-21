@@ -90,9 +90,32 @@ struct WithNestedVector
 	HICAL_JSON(WithNestedVector, title, tags)
 };
 
+struct NestedJsonItem
+{
+	std::string text;
+	std::string hidden;
+
+	HICAL_JSON(NestedJsonItem, ALIAS(text, "value"), HICAL_IGNORE(hidden))
+};
+
+struct NestedJsonItems
+{
+	std::vector<NestedJsonItem> items;
+
+	HICAL_JSON(NestedJsonItems, items)
+};
+
+struct NestedJsonEnvelope
+{
+	NestedJsonItems content;
+	bool complete;
+
+	HICAL_JSON(NestedJsonEnvelope, content, complete)
+};
+
 // 辅助：用 compileTimeToJson 序列化后直接返回 string
 template <typename T>
-std::string toJson(const T& obj)
+std::string toCompiledJson(const T& obj)
 {
 	return meta::compileTimeToJson(obj);
 }
@@ -102,35 +125,35 @@ std::string toJson(const T& obj)
 TEST(CompileTimeJsonTest, SimpleDTO_ProducesCorrectJson)
 {
 	SimpleDTO dto {"Alice", 30};
-	auto json = toJson(dto);
+	auto json = toCompiledJson(dto);
 	EXPECT_EQ(json, "{\"name\":\"Alice\",\"age\":30}");
 }
 
 TEST(CompileTimeJsonTest, BoolFields_TrueAndFalse)
 {
 	WithDouble dto {3.14, true};
-	auto json = toJson(dto);
+	auto json = toCompiledJson(dto);
 	EXPECT_EQ(json, "{\"value\":3.14,\"active\":true}");
 }
 
 TEST(CompileTimeJsonTest, BoolField_FalseValue)
 {
 	WithDouble dto {2.0, false};
-	auto json = toJson(dto);
+	auto json = toCompiledJson(dto);
 	EXPECT_EQ(json, "{\"value\":2,\"active\":false}");
 }
 
 TEST(CompileTimeJsonTest, IntField_Zero)
 {
 	SimpleDTO dto {"", 0};
-	auto json = toJson(dto);
+	auto json = toCompiledJson(dto);
 	EXPECT_EQ(json, "{\"name\":\"\",\"age\":0}");
 }
 
 TEST(CompileTimeJsonTest, IntField_Negative)
 {
 	SimpleDTO dto {"X", -42};
-	auto json = toJson(dto);
+	auto json = toCompiledJson(dto);
 	EXPECT_EQ(json, "{\"name\":\"X\",\"age\":-42}");
 }
 
@@ -138,7 +161,7 @@ TEST(CompileTimeJsonTest, DoubleField_Fractional)
 {
 	// std::to_chars general format 会将 1.5 输出为 "1.5"
 	WithDouble dto {1.5, false};
-	auto json = toJson(dto);
+	auto json = toCompiledJson(dto);
 	EXPECT_TRUE(json.find("\"value\":1.5") != std::string::npos);
 	EXPECT_TRUE(json.find("\"active\":false") != std::string::npos);
 }
@@ -148,7 +171,7 @@ TEST(CompileTimeJsonTest, DoubleField_Fractional)
 TEST(CompileTimeJsonTest, NestedStruct_ProducesNestedJson)
 {
 	UserWithAddress user {"Dave", 35, {"Beijing", "Chang'an Street"}};
-	auto json = toJson(user);
+	auto json = toCompiledJson(user);
 
 	// 外层字段
 	EXPECT_TRUE(json.find("\"name\":\"Dave\"") != std::string::npos);
@@ -159,26 +182,41 @@ TEST(CompileTimeJsonTest, NestedStruct_ProducesNestedJson)
 	EXPECT_TRUE(json.find("\"street\":\"Chang'an Street\"") != std::string::npos);
 }
 
+TEST(CompileTimeJsonTest, NestedArray_PreservesAliasesIgnoredFieldsAndEscapes)
+{
+	NestedJsonEnvelope dto {{{{"a\n\"b", "hidden"}, {"c\\d", "hidden"}}}, true};
+	EXPECT_EQ(toCompiledJson(dto),
+			  "{\"content\":{\"items\":[{\"value\":\"a\\n\\\"b\"},{\"value\":\"c\\\\d\"}]},\"complete\":true}");
+}
+
+TEST(CompileTimeJsonTest, NestedArray_BufferOverflowMatchesRuntimeJson)
+{
+	NestedJsonEnvelope dto {{{{std::string(700, 'x'), "hidden"}, {std::string(900, 'y'), "hidden"}}}, false};
+	EXPECT_EQ(boost::json::parse(toCompiledJson(dto)), meta::toJson(dto));
+	dto.content.items.clear();
+	EXPECT_EQ(toCompiledJson(dto), "{\"content\":{\"items\":[]},\"complete\":false}");
+}
+
 // ============ vector 序列化测试 ============
 
 TEST(CompileTimeJsonTest, VectorOfInts_ProducesJsonArray)
 {
 	WithVector dto {"ScoreSheet", {90, 85, 100}};
-	auto json = toJson(dto);
+	auto json = toCompiledJson(dto);
 	EXPECT_EQ(json, "{\"name\":\"ScoreSheet\",\"scores\":[90,85,100]}");
 }
 
 TEST(CompileTimeJsonTest, VectorOfStrings_ProducesJsonArray)
 {
 	WithNestedVector dto {"Tags", {"c++", "json", "fast"}};
-	auto json = toJson(dto);
+	auto json = toCompiledJson(dto);
 	EXPECT_EQ(json, "{\"title\":\"Tags\",\"tags\":[\"c++\",\"json\",\"fast\"]}");
 }
 
 TEST(CompileTimeJsonTest, Vector_Empty)
 {
 	WithVector dto {"Empty", {}};
-	auto json = toJson(dto);
+	auto json = toCompiledJson(dto);
 	EXPECT_EQ(json, "{\"name\":\"Empty\",\"scores\":[]}");
 }
 
@@ -187,7 +225,7 @@ TEST(CompileTimeJsonTest, Vector_Empty)
 TEST(CompileTimeJsonTest, IgnoredField_NotSerialized)
 {
 	WithIgnore dto {"visible", "secret"};
-	auto json = toJson(dto);
+	auto json = toCompiledJson(dto);
 	// privateNote 不应该出现
 	EXPECT_EQ(json, "{\"publicField\":\"visible\"}");
 }
@@ -197,7 +235,7 @@ TEST(CompileTimeJsonTest, IgnoredField_NotSerialized)
 TEST(CompileTimeJsonTest, AliasField_UsesAliasName)
 {
 	WithAlias dto {"John", 28};
-	auto json = toJson(dto);
+	auto json = toCompiledJson(dto);
 	EXPECT_EQ(json, "{\"first_name\":\"John\",\"user_age\":28}");
 }
 
@@ -206,14 +244,14 @@ TEST(CompileTimeJsonTest, AliasField_UsesAliasName)
 TEST(CompileTimeJsonTest, StringEscape_Quotes)
 {
 	SimpleDTO dto {"He said \"hello\"", 1};
-	auto json = toJson(dto);
+	auto json = toCompiledJson(dto);
 	EXPECT_EQ(json, "{\"name\":\"He said \\\"hello\\\"\",\"age\":1}");
 }
 
 TEST(CompileTimeJsonTest, StringEscape_Backslash)
 {
 	SimpleDTO dto {"path\\file", 1};
-	auto json = toJson(dto);
+	auto json = toCompiledJson(dto);
 	EXPECT_EQ(json, "{\"name\":\"path\\\\file\",\"age\":1}");
 }
 
@@ -221,7 +259,7 @@ TEST(CompileTimeJsonTest, StringEscape_Slash)
 {
 	// RFC 要求转义 /（boost::json::serialize 行为）
 	SimpleDTO dto {"a/b", 1};
-	auto json = toJson(dto);
+	auto json = toCompiledJson(dto);
 	EXPECT_EQ(json, "{\"name\":\"a\\/b\",\"age\":1}");
 }
 
@@ -229,7 +267,7 @@ TEST(CompileTimeJsonTest, StringEscape_ControlChars)
 {
 	// 换行、制表符、回车、退格、换页
 	SimpleDTO dto {"A\tB\nC\rD", 1};
-	auto json = toJson(dto);
+	auto json = toCompiledJson(dto);
 	EXPECT_EQ(json, "{\"name\":\"A\\tB\\nC\\rD\",\"age\":1}");
 }
 
@@ -240,7 +278,7 @@ TEST(CompileTimeJsonTest, StringEscape_NullChar)
 	raw.push_back('\0');
 	raw.push_back('b');
 	SimpleDTO dto {raw, 1};
-	auto json = toJson(dto);
+	auto json = toCompiledJson(dto);
 	EXPECT_EQ(json, "{\"name\":\"a\\u0000b\",\"age\":1}");
 }
 
@@ -262,14 +300,14 @@ TEST(CompileTimeJsonTest, Int64Max)
 TEST(CompileTimeJsonTest, StringWithUnicode)
 {
 	SimpleDTO dto {"\xE4\xBD\xA0\xE5\xA5\xBD", 1}; // UTF-8 "你好"
-	auto json = toJson(dto);
+	auto json = toCompiledJson(dto);
 	EXPECT_TRUE(json.find("\"name\":\"\xE4\xBD\xA0\xE5\xA5\xBD\"") != std::string::npos);
 }
 
 TEST(CompileTimeJsonTest, AllTypes_ComprehensiveRoundtrip)
 {
 	WithAllTypes dto {"hello", 42, 3.14, true};
-	auto json = toJson(dto);
+	auto json = toCompiledJson(dto);
 	// 验证每个字段都在 JSON 中
 	EXPECT_TRUE(json.find("\"text\":\"hello\"") != std::string::npos);
 	EXPECT_TRUE(json.find("\"count\":42") != std::string::npos);

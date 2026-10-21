@@ -354,9 +354,9 @@ namespace hical::db
 			std::chrono::steady_clock::time_point nextExpire;
 			{
 				std::lock_guard lock(mutex_);
-				if (idle_.empty())
+				if (idle_.size() <= config_.minConnections)
 				{
-					// 池空了就按默认间隔睡一觉
+					// 保底连接不能回收，不能用它们已过期的时间反复唤醒。
 					nextExpire = std::chrono::steady_clock::now() + config_.idleCheckInterval;
 				}
 				else

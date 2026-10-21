@@ -6,6 +6,7 @@
 #include "Router.h"
 #include "RouteGroup.h"
 
+#include <array>
 #include <iterator>
 
 namespace hical
@@ -208,7 +209,7 @@ namespace hical
 		for (const auto& route : sseRoutes_)
 		{
 			ParamList params;
-			if (isParamRoute(route.path) && matchParamPath(route.path, path, params))
+			if (isParamRoute(route.path) && matchParamPath(route.path, path, &params))
 			{
 				result.route = &route;
 				result.params = std::move(params);
@@ -237,7 +238,7 @@ namespace hical
 		for (const auto& route : wsRoutes_)
 		{
 			ParamList params;
-			if (isParamRoute(route.path) && matchParamPath(route.path, path, params))
+			if (isParamRoute(route.path) && matchParamPath(route.path, path, &params))
 			{
 				result.route = &route;
 				result.params = std::move(params);
@@ -521,7 +522,7 @@ namespace hical
 			ParamList params;
 			for (const auto& entry : groupIt->second)
 			{
-				if (matchParamPath(entry.path, reqPath, params))
+				if (matchParamPath(entry.path, reqPath, &params))
 				{
 					for (const auto& [name, value] : params)
 					{
@@ -592,7 +593,6 @@ namespace hical
 
 			// 参数路由：线性扫描其他 method 的路由（路径匹配需要模式匹配）
 			// 首段就对不上的 method 整组跳过，靠 candidateMask 筛，不然又多扫一遍
-			ParamList tempParams;
 			for (const auto& [method, routes] : paramRoutesByMethod_)
 			{
 				if ((otherMethods & methodBit(method)) == 0)
@@ -601,7 +601,7 @@ namespace hical
 				}
 				for (const auto& entry : routes)
 				{
-					if (matchParamPath(entry.path, reqPath, tempParams))
+					if (matchParamPath(entry.path, reqPath))
 					{
 						allowMask |= methodBit(method);
 						break;
@@ -666,10 +666,9 @@ namespace hical
 		// 2. 参数路由匹配（仅同 method）
 		if (auto groupIt = paramRoutesByMethod_.find(method); groupIt != paramRoutesByMethod_.end())
 		{
-			ParamList dummy;
 			for (const auto& entry : groupIt->second)
 			{
-				if (matchParamPath(entry.path, reqPath, dummy))
+				if (matchParamPath(entry.path, reqPath))
 				{
 					return true;
 				}
@@ -756,9 +755,25 @@ namespace hical
 		return path.find('{') != std::string::npos;
 	}
 
-	bool Router::matchParamPath(std::string_view pattern, std::string_view path, ParamList& params)
+	bool Router::matchParamPath(std::string_view pattern, std::string_view path, ParamList* params)
 	{
-		params.clear();
+		if (params != nullptr)
+		{
+			params->clear();
+		}
+
+		struct ParamCapture
+		{
+			const char* nameData;
+			size_t nameSize;
+			const char* valueData;
+			size_t valueSize;
+		};
+
+		// 热路径只写实际捕获的槽位，避免每次候选匹配都清零整块栈空间。
+		// captureCount 不超过已检查的段数；视图仅在本次调用内使用，成功后才拷贝为拥有型字符串。
+		std::array<ParamCapture, kMaxPathSegments> captures;
+		size_t captureCount = 0;
 
 		// 跳过前导 '/'
 		if (!pattern.empty() && pattern.front() == '/')
@@ -777,7 +792,6 @@ namespace hical
 			// 段数限制，防止超深路径 DoS
 			if (++segmentCount > Router::kMaxPathSegments)
 			{
-				params.clear();
 				return false;
 			}
 
@@ -797,16 +811,16 @@ namespace hical
 				// 参数值长度限制
 				if (reqSeg.size() > Router::kMaxParamValueLength)
 				{
-					params.clear();
 					return false;
 				}
-				// 参数段：提取参数名和值
-				auto paramName = patSeg.substr(1, patSeg.size() - 2);
-				params.emplace_back(std::string(paramName), std::string(reqSeg));
+				if (params != nullptr)
+				{
+					auto paramName = patSeg.substr(1, patSeg.size() - 2);
+					captures[captureCount++] = {paramName.data(), paramName.size(), reqSeg.data(), reqSeg.size()};
+				}
 			}
 			else if (patSeg != reqSeg)
 			{
-				params.clear();
 				return false;
 			}
 		}
@@ -814,10 +828,19 @@ namespace hical
 		// 两边必须同时用完
 		if (!pattern.empty() || !path.empty())
 		{
-			params.clear();
 			return false;
 		}
 
+		if (params != nullptr)
+		{
+			params->reserve(captureCount);
+			for (size_t i = 0; i < captureCount; ++i)
+			{
+				const auto& capture = captures[i];
+				params->emplace_back(std::string(capture.nameData, capture.nameSize),
+									 std::string(capture.valueData, capture.valueSize));
+			}
+		}
 		return true;
 	}
 

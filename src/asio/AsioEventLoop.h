@@ -18,6 +18,7 @@ namespace hical
 {
 
 	class AsioTimer;
+	class HttpServer;
 
 	/**
 	 * @brief 基于 Boost.Asio 的事件循环实现
@@ -106,13 +107,16 @@ namespace hical
 		}
 
 	private:
+		// HTTP 会话守卫只借用现有计数地址，不向调用方公开可变统计接口。
+		friend class HttpServer;
+		// io_context 销毁未启动的会话帧时仍会归还计数，必须比它后析构。
+		std::atomic<size_t> connectionCount_ {0};
 		boost::asio::io_context ioContext_;
 		std::unique_ptr<boost::asio::executor_work_guard<boost::asio::io_context::executor_type>> workGuard_;
 		std::atomic<std::thread::id> threadId_;
 		std::atomic<bool> running_ {false};
 		std::atomic<bool> quit_ {false};
 		size_t index_ {0};
-		std::atomic<size_t> connectionCount_ {0};
 
 		// 定时器管理（使用独立 AsioTimer 类）
 		std::atomic<TimerId> nextTimerId_ {1};

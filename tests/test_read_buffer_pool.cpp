@@ -1,5 +1,12 @@
+/**
+ * @file test_read_buffer_pool.cpp
+ * @brief 读缓冲池的借还、复用和异常回收测试
+ */
+
 #include "core/ReadBufferPool.h"
 #include <gtest/gtest.h>
+#include <limits>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -111,4 +118,70 @@ TEST(ReadBufferPoolTest, DefaultHandleIsNull)
 {
 	ReadBufferPool::BufferHandle h;
 	EXPECT_EQ(h.buf_, nullptr);
+}
+
+TEST(ReadBufferPoolTest, AcquireForReadProvidesWritableSize)
+{
+	auto handle = ReadBufferPool::acquireForRead();
+	EXPECT_EQ(handle.get().size(), ReadBufferPool::kBufferSize);
+	EXPECT_GE(handle.get().capacity(), ReadBufferPool::kBufferSize);
+}
+
+TEST(ReadBufferPoolTest, AcquireForReadReusesStorageWithoutClearing)
+{
+	std::string* rawBuffer = nullptr;
+	const char* storage = nullptr;
+	{
+		auto handle = ReadBufferPool::acquireForRead();
+		handle.get().assign(ReadBufferPool::kBufferSize, 'x');
+		rawBuffer = handle.buf_;
+		storage = handle.get().data();
+	}
+	auto reused = ReadBufferPool::acquireForRead();
+	EXPECT_EQ(reused.buf_, rawBuffer);
+	EXPECT_EQ(reused.get().data(), storage);
+	EXPECT_EQ(reused.get(), std::string(ReadBufferPool::kBufferSize, 'x'));
+}
+
+TEST(ReadBufferPoolTest, AcquireAfterReadBufferStillReturnsEmpty)
+{
+	{
+		auto handle = ReadBufferPool::acquireForRead();
+		handle.get().front() = 'x';
+	}
+	auto ordinary = ReadBufferPool::acquire();
+	EXPECT_TRUE(ordinary.get().empty());
+	EXPECT_GE(ordinary.get().capacity(), ReadBufferPool::kBufferSize);
+}
+
+TEST(ReadBufferPoolTest, AcquireForReadUsesRequestedSizeAfterLargerBuffer)
+{
+	{
+		auto large = ReadBufferPool::acquireForRead(ReadBufferPool::kBufferSize * 2);
+		large.get().assign(large.get().size(), 'x');
+	}
+	auto normal = ReadBufferPool::acquireForRead();
+	EXPECT_EQ(normal.get().size(), ReadBufferPool::kBufferSize);
+	EXPECT_EQ(normal.get().back(), 'x');
+	normal.release();
+
+	auto empty = ReadBufferPool::acquireForRead(0);
+	EXPECT_TRUE(empty.get().empty());
+	EXPECT_GE(empty.get().capacity(), ReadBufferPool::kBufferSize);
+	empty.release();
+	auto expanded = ReadBufferPool::acquireForRead();
+	EXPECT_EQ(expanded.get().size(), ReadBufferPool::kBufferSize);
+}
+
+TEST(ReadBufferPoolTest, AcquireForReadFailureReturnsBufferToPool)
+{
+	std::string* rawBuffer = nullptr;
+	{
+		auto handle = ReadBufferPool::acquireForRead();
+		rawBuffer = handle.buf_;
+	}
+	EXPECT_THROW(ReadBufferPool::acquireForRead(std::numeric_limits<size_t>::max()), std::length_error);
+	auto next = ReadBufferPool::acquireForRead();
+	EXPECT_EQ(next.buf_, rawBuffer);
+	EXPECT_EQ(next.get().size(), ReadBufferPool::kBufferSize);
 }

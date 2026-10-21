@@ -18,7 +18,11 @@
 #include <cctype>
 #include <charconv>
 #include <chrono>
+#include <future>
+#include <map>
 #include <mutex>
+#include <set>
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <thread>
@@ -1273,6 +1277,157 @@ TEST(HttpServerTest, AsyncHandlerSleep_UsesThreadTimerService_StillResponds)
 
 	server.stop();
 	serverThread.join();
+}
+
+// Windows 的单 acceptor 回退需要按活跃连接分配 worker；连接必须同时保持存活。
+TEST(HttpServerTest, SingleAcceptorDistributesLiveConnectionsAcrossWorkers)
+{
+#ifndef _WIN32
+	GTEST_SKIP() << "此回归针对 Windows 单 acceptor；SO_REUSEPORT 的内核分发不验证相同算法";
+#else
+	constexpr size_t kWorkerCount = 3;
+	constexpr size_t kConnectionCount = kWorkerCount * 4;
+	std::mutex executorsMutex;
+	std::map<std::thread::id, boost::asio::any_io_executor> executors;
+	HttpServer server(0, kWorkerCount + 1);
+	server.router().get("/worker",
+						[&](const HttpRequest&) -> Awaitable<HttpResponse>
+						{
+							auto executor = co_await boost::asio::this_coro::executor;
+							{
+								std::lock_guard lock(executorsMutex);
+								executors.emplace(std::this_thread::get_id(), std::move(executor));
+							}
+							std::ostringstream threadId;
+							threadId << std::this_thread::get_id();
+							co_return HttpResponse::ok(threadId.str());
+						});
+
+	std::thread serverThread;
+	const auto port = startServerAndWait(server, serverThread);
+
+	struct StopOnExit
+	{
+		HttpServer& server;
+		std::thread& thread;
+
+		~StopOnExit()
+		{
+			server.stop();
+			thread.join();
+		}
+	} stopOnExit {server, serverThread};
+
+	boost::asio::io_context io;
+	std::vector<tcp::socket> clients;
+	clients.reserve(kConnectionCount);
+	std::set<std::string> workerThreads;
+	const std::string request = "GET /worker HTTP/1.1\r\nHost: localhost\r\nConnection: keep-alive\r\n\r\n";
+	for (size_t i = 0; i < kConnectionCount; ++i)
+	{
+		auto& client = clients.emplace_back(io);
+		client.connect(tcp::endpoint(boost::asio::ip::make_address("127.0.0.1"), port));
+		boost::asio::write(client, boost::asio::buffer(request));
+		std::string residual;
+		const auto response = hical::test::detail::readHttpResponse(client, residual);
+		ASSERT_EQ(response.status, 200u);
+		ASSERT_FALSE(response.body.empty());
+		workerThreads.insert(response.body);
+	}
+	EXPECT_EQ(workerThreads.size(), kWorkerCount) << "保持存活的 HTTP 连接应覆盖所有 worker";
+
+	// 让服务端逐个自然结束会话，再等 worker 队列走过析构，避免 stop 干扰分发断言。
+	const std::string closeRequest = "GET /worker HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
+	for (auto& client : clients)
+	{
+		boost::asio::write(client, boost::asio::buffer(closeRequest));
+		std::string residual;
+		EXPECT_EQ(hical::test::detail::readHttpResponse(client, residual).status, 200u);
+		char byte;
+		boost::system::error_code ec;
+		client.read_some(boost::asio::buffer(&byte, 1), ec);
+		EXPECT_EQ(ec, boost::asio::error::eof);
+	}
+	clients.clear();
+	std::lock_guard lock(executorsMutex);
+	for (const auto& [threadId, executor] : executors)
+	{
+		auto completed = std::make_shared<std::promise<void>>();
+		auto ready = completed->get_future();
+		boost::asio::post(executor,
+						  [completed]()
+						  {
+							  completed->set_value();
+						  });
+		EXPECT_EQ(ready.wait_for(std::chrono::seconds(2)), std::future_status::ready);
+	}
+	executors.clear();
+#endif
+}
+
+// 所有连接都已收到响应并挂起读操作，再调用 stop，验证每个 worker 都完成关服。
+TEST(HttpServerTest, StopClosesLiveKeepAliveConnectionsAcrossWorkers)
+{
+#ifndef _WIN32
+	GTEST_SKIP() << "此用例使用 Windows 单 acceptor 的确定性 worker 分发";
+#else
+	constexpr size_t kWorkerCount = 3;
+	constexpr size_t kConnectionCount = kWorkerCount * 4;
+	HttpServer server(0, kWorkerCount + 1);
+	server.router().get("/alive",
+						[](const HttpRequest&) -> HttpResponse
+						{
+							std::ostringstream threadId;
+							threadId << std::this_thread::get_id();
+							return HttpResponse::ok(threadId.str());
+						});
+
+	std::thread serverThread;
+	const auto port = startServerAndWait(server, serverThread);
+
+	struct StopOnExit
+	{
+		HttpServer& server;
+		std::thread& thread;
+
+		~StopOnExit()
+		{
+			server.stop();
+			if (thread.joinable())
+			{
+				thread.join();
+			}
+		}
+	} stopOnExit {server, serverThread};
+
+	boost::asio::io_context io;
+	std::vector<tcp::socket> clients;
+	clients.reserve(kConnectionCount);
+	std::set<std::string> workerThreads;
+	const std::string request = "GET /alive HTTP/1.1\r\nHost: localhost\r\nConnection: keep-alive\r\n\r\n";
+	for (size_t i = 0; i < kConnectionCount; ++i)
+	{
+		auto& client = clients.emplace_back(io);
+		client.connect(tcp::endpoint(boost::asio::ip::make_address("127.0.0.1"), port));
+		boost::asio::write(client, boost::asio::buffer(request));
+		std::string residual;
+		const auto response = hical::test::detail::readHttpResponse(client, residual);
+		ASSERT_EQ(response.status, 200u);
+		workerThreads.insert(response.body);
+	}
+	EXPECT_EQ(workerThreads.size(), kWorkerCount);
+
+	server.stop();
+	for (auto& client : clients)
+	{
+		char byte;
+		boost::system::error_code ec;
+		EXPECT_EQ(client.read_some(boost::asio::buffer(&byte, 1), ec), 0u);
+		EXPECT_TRUE(ec == boost::asio::error::eof || ec == boost::asio::error::connection_reset) << ec.message();
+	}
+	serverThread.join();
+	EXPECT_FALSE(server.isRunning());
+#endif
 }
 
 // recommendedMaxConnections 明文口径回归：1024MB 可用内存下的推荐值

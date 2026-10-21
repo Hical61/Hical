@@ -971,6 +971,114 @@ TEST(RouterTest, MethodNotAllowed_CompileTimeWildcardRoute_Returns405)
 	expectMethodNotAllowed(router, HttpMethod::hDelete, "/ctw/x", "GET");
 }
 
+TEST(RouterTest, ParamResolve_FailedCandidateDoesNotLeakParameters)
+{
+	Router router;
+	router.get("/items/{discarded}/wrong", placeholderHandler());
+	router.get("/items/{id}/detail", placeholderHandler());
+	HttpRequest req;
+	req.setMethod(HttpMethod::hGet);
+	req.setTarget("/items/42/detail");
+	req.setParam("existing", "preserved");
+	EXPECT_TRUE(router.resolveRoute(req).isMatch());
+	EXPECT_FALSE(req.hasParam("discarded"));
+	EXPECT_EQ(req.param("id"), "42");
+	EXPECT_EQ(req.param("existing"), "preserved");
+}
+
+TEST(RouterTest, ParamResolve_DuplicateNamesKeepLastValueAndMergeExisting)
+{
+	Router router;
+	router.get("/items/{id}/{id}", placeholderHandler());
+	HttpRequest req;
+	req.setMethod(HttpMethod::hGet);
+	req.setTarget("/items/first/second");
+	req.setParam("id", "old");
+	req.setParam("existing", "preserved");
+	EXPECT_TRUE(router.resolveRoute(req).isMatch());
+	EXPECT_EQ(req.param("id"), "second");
+	EXPECT_EQ(req.param("existing"), "preserved");
+}
+
+TEST(RouterTest, ParamResolve_DecodedValuesOwnTheirStorage)
+{
+	Router router;
+	router.get("/items/{name}", placeholderHandler());
+	HttpRequest req;
+	req.setMethod(HttpMethod::hGet);
+	const std::string name(256, 'x');
+	req.setTarget("/items/" + name + "%20tail");
+	ASSERT_TRUE(router.resolveRoute(req).isMatch());
+	req.setTarget("/replacement");
+	EXPECT_EQ(req.param("name"), name + " tail");
+}
+
+TEST(RouterTest, ParamResolve_EmptySegmentsAndTrailingSlashKeepMatchingRules)
+{
+	Router router;
+	router.get("/items/{id}/detail", placeholderHandler());
+	for (const auto& target : {"/items//detail", "/items//detail/"})
+	{
+		HttpRequest req;
+		req.setMethod(HttpMethod::hGet);
+		req.setTarget(target);
+		EXPECT_TRUE(router.resolveRoute(req).isMatch());
+		EXPECT_TRUE(req.hasParam("id"));
+		EXPECT_EQ(req.param("id"), "");
+	}
+}
+
+TEST(RouterTest, ParamResolve_LengthLimitAppliesToMatchExistsAndAllow)
+{
+	Router router;
+	router.get("/items/{id}/detail", placeholderHandler());
+	for (size_t length : {Router::kMaxParamValueLength, Router::kMaxParamValueLength + 1})
+	{
+		const auto path = "/items/" + std::string(length, 'x') + "/detail";
+		const bool valid = length == Router::kMaxParamValueLength;
+		HttpRequest req;
+		req.setMethod(HttpMethod::hGet);
+		req.setTarget(path);
+		EXPECT_EQ(router.resolveRoute(req).isMatch(), valid);
+		EXPECT_EQ(req.hasParam("id"), valid);
+		EXPECT_EQ(router.exists(HttpMethod::hGet, path), valid);
+		HttpRequest otherMethod;
+		otherMethod.setMethod(HttpMethod::hPost);
+		otherMethod.setTarget(path);
+		EXPECT_EQ(router.resolveRoute(otherMethod).isMethodNotAllowed(), valid);
+		EXPECT_FALSE(otherMethod.hasParam("id"));
+	}
+}
+
+TEST(RouterTest, ParamResolve_SegmentLimitAcceptsBoundaryAndRejectsOverflow)
+{
+	for (size_t segments : {Router::kMaxPathSegments, Router::kMaxPathSegments + 1})
+	{
+		Router router;
+		std::string pattern;
+		std::string path;
+		for (size_t i = 0; i < segments; ++i)
+		{
+			pattern += "/{p" + std::to_string(i) + "}";
+			path += "/x";
+		}
+		router.get(pattern, placeholderHandler());
+		HttpRequest req;
+		req.setMethod(HttpMethod::hGet);
+		req.setTarget(path);
+		const auto result = router.resolveRoute(req);
+		const bool valid = segments == Router::kMaxPathSegments;
+		EXPECT_EQ(result.isMatch(), valid);
+		EXPECT_EQ(result.pathTooDeep, !valid);
+		EXPECT_EQ(router.exists(HttpMethod::hGet, path), valid);
+		EXPECT_EQ(req.hasParam("p0"), valid);
+		if (valid)
+		{
+			EXPECT_EQ(req.param("p31"), "x");
+		}
+	}
+}
+
 // ============ 复杂度守卫 ============
 
 // 路径在所有 method 下都没注册过时，404 判定不该随路由表规模线性增长。

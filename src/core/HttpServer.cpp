@@ -12,6 +12,7 @@
 #include <optional>
 #include <stdexcept>
 #include <thread>
+#include <utility>
 #include <vector>
 
 namespace hical
@@ -49,84 +50,73 @@ namespace hical
 
 	using boost::asio::ip::tcp;
 
-	namespace
+	HttpServer::ConnectionReservation::ConnectionReservation(HttpServer& server,
+															 std::atomic<size_t>& loopConnections) noexcept
+		: server_(&server), loopConnections_(&loopConnections)
 	{
-		/**
-		 * @brief accept 成功后占位计数的回退守卫
-		 * 占位即计数（先 fetch_add 再判上限），committed 置位之前协程任何提前退出都要
-		 * 把占位回退掉，否则连接槽泄漏、计数只增不减。
-		 */
-		struct AcceptGuard
+		loopConnections_->fetch_add(1, std::memory_order_relaxed);
+	}
+
+	HttpServer::ConnectionReservation::ConnectionReservation(ConnectionReservation&& other) noexcept
+		: server_(std::exchange(other.server_, nullptr)), loopConnections_(other.loopConnections_)
+	{
+	}
+
+	HttpServer::ConnectionReservation::~ConnectionReservation()
+	{
+		if (server_ != nullptr)
 		{
-			std::atomic<size_t>& count;
-			bool& committed;
-
-			~AcceptGuard()
+			// 先归还 worker 负载，再让最后一个连接触发关服。
+			// io_context 销毁未启动帧时也走这里，两个计数都比 io_context 后析构。
+			loopConnections_->fetch_sub(1, std::memory_order_relaxed);
+			if (server_->activeConnections_.fetch_sub(1, std::memory_order_acq_rel) == 1 && server_->draining_.load())
 			{
-				if (!committed)
-				{
-					count.fetch_sub(1, std::memory_order_acq_rel);
-				}
+				server_->stop();
 			}
-		};
-
-		/**
-		 * @brief 接住一个已 accept 的 socket 之后的收尾
-		 * 占位计数 → 超限拒绝 → no_delay → SSL 分流 → 投递 handleSession。
-		 * 两条 acceptor 路径（SO_REUSEPORT / 回退）只有「socket 从哪来」和「用哪个
-		 * executor 投递」两处差异，收尾逻辑收在这里，免得逐行复制之后慢慢发散。
-		 * @param socket 已 accept 的裸 socket，按值接管所有权
-		 * @param sslCtx 非空时把 socket 包成 ssl::stream
-		 * @param activeConnections 活跃连接计数，占位与回退都动它
-		 * @param maxConnections 连接上限，0 表示不限制
-		 * @param spawn 投递回调，接住最终的 socket 或 ssl::stream 并 coSpawn handleSession
-		 * @return true 表示已占位并投递；false 表示超限已关 socket，调用方应 continue
-		 */
-		template <typename SpawnFn>
-		bool commitAcceptedSocket(tcp::socket socket,
-								  const std::shared_ptr<SslContext>& sslCtx,
-								  std::atomic<size_t>& activeConnections,
-								  const std::atomic<size_t>& maxConnections,
-								  SpawnFn&& spawn)
-		{
-			// 先占位再校验：原子地把计数 +1。绝不能像以前那样「先 load 判断、再到
-			// handleSession 里 fetch_add」——handleSession 是 coSpawn 异步投递的，
-			// 高速 burst 建连时大批连接已 accept 但协程还没被调度执行 fetch_add，
-			// load() 读到的计数严重滞后，限流直接形同虚设。占位即计数才是硬上限。
-			size_t maxConns = maxConnections.load(std::memory_order_relaxed);
-			size_t prev = activeConnections.fetch_add(1, std::memory_order_acq_rel);
-			if (maxConns > 0 && prev >= maxConns)
-			{
-				activeConnections.fetch_sub(1, std::memory_order_acq_rel);
-				boost::system::error_code ec;
-				socket.close(ec);
-				return false;
-			}
-
-			// 占位成功，计数所有权移交 handleSession（由它析构时 fetch_sub）。
-			// committed 之前任何提前退出都要回退占位，否则计数泄漏。
-			bool committed = false;
-			AcceptGuard acceptGuard {activeConnections, committed};
-
-			boost::system::error_code optEc;
-			socket.set_option(boost::asio::ip::tcp::no_delay(true), optEc); // 失败不致命，忽略
-
-			// SSL 分流：启用 sslCtx 时把裸 socket 包成 ssl::stream，明文路径行为完全不变。
-			// 握手不在 accept 路径里做，交给 handleSession 内部的 if constexpr 分支。
-			if (sslCtx)
-			{
-				boost::asio::ssl::stream<tcp::socket> sslStream(std::move(socket), sslCtx->native());
-				spawn(std::move(sslStream));
-			}
-			else
-			{
-				spawn(std::move(socket));
-			}
-
-			committed = true; // 移交成功
-			return true;
 		}
-	} // namespace
+	}
+
+	/**
+	 * @brief 接管已 accept 的 socket，完成占位、TLS 包装和协程投递
+	 * @param socket 已接受的 socket，按值接管所有权
+	 * @param loopConnections 处理该会话的 loop 负载计数
+	 * @param spawn 接收 socket 和计数守卫并投递会话的回调
+	 * @return true 表示已投递，false 表示超过连接上限并已关闭 socket
+	 */
+	template <typename SpawnFn>
+	bool HttpServer::commitAcceptedSocket(tcp::socket socket, std::atomic<size_t>& loopConnections, SpawnFn&& spawn)
+	{
+		// accept 后立即占位，不能等 worker 开始跑会话才记账，否则 burst 建连会绕过上限。
+		size_t maxConns = maxConnections_.load(std::memory_order_relaxed);
+		size_t prev = activeConnections_.fetch_add(1, std::memory_order_acq_rel);
+		if (maxConns > 0 && prev >= maxConns)
+		{
+			activeConnections_.fetch_sub(1, std::memory_order_acq_rel);
+			boost::system::error_code ec;
+			socket.close(ec);
+			return false;
+		}
+
+		// 同时占住目标 worker 的负载；下一次 getNextLoop() 必须看到本次分发。
+		// 守卫随协程参数移动，TLS 构造、帧分配和 coSpawn 失败都只归还一次。
+		ConnectionReservation reservation(*this, loopConnections);
+
+		boost::system::error_code optEc;
+		socket.set_option(boost::asio::ip::tcp::no_delay(true), optEc); // 失败不致命，忽略
+
+		// 握手仍由会话内部异步执行，accept 路径只包装 TLS 流。
+		if (sslCtx_)
+		{
+			boost::asio::ssl::stream<tcp::socket> sslStream(std::move(socket), sslCtx_->native());
+			spawn(std::move(sslStream), std::move(reservation));
+		}
+		else
+		{
+			spawn(std::move(socket), std::move(reservation));
+		}
+
+		return true;
+	}
 
 	HttpServer::HttpServer(uint16_t port, size_t ioThreads) : port_(port), ioThreads_(ioThreads > 0 ? ioThreads : 1)
 	{
@@ -545,12 +535,13 @@ namespace hical
 		{
 			for (size_t i = 0; i < allLoops.size(); ++i)
 			{
-				coSpawn(allLoops[i]->getIoContext(), acceptLoop(*acceptors_[i], *idleFds_[i]));
+				coSpawn(allLoops[i]->getIoContext(),
+						acceptLoop(*acceptors_[i], *idleFds_[i], allLoops[i]->connectionCount_));
 			}
 		}
 		else
 		{
-			coSpawn(baseIoCtx, acceptLoop(*acceptors_[0], *idleFds_[0]));
+			coSpawn(baseIoCtx, acceptLoop(*acceptors_[0], *idleFds_[0], baseLoop_.connectionCount_));
 		}
 
 		// 启动内存池 GC 定时器协程
@@ -612,6 +603,7 @@ namespace hical
 		}
 
 		draining_.store(true);
+		closeAllAcceptors();
 
 		// 通知周期任务停机。置标志用 atomic，随便哪个线程写都行；协程在每轮
 		// callback 前后都会看它，调用户回调时即使正卡在里面，回调一返回就会退出循环。
@@ -625,13 +617,6 @@ namespace hical
 		boost::asio::post(baseLoop_.getIoContext(),
 						  [this]()
 						  {
-							  // 关 acceptor → acceptLoop 自然退出
-							  for (auto& acc : acceptors_)
-							  {
-								  boost::system::error_code ec;
-								  acc->close(ec);
-							  }
-
 							  if (signals_.has_value())
 							  {
 								  signals_->cancel();
@@ -656,17 +641,12 @@ namespace hical
 								  }
 							  }
 
-							  // 把所有还活着的连接 socket 关掉，协程自然收到错误退出
-							  for (auto& scanner : idleScanners_)
-							  {
-								  scanner->closeAll();
-							  }
-
-							  // scanner 的 scan timer 也 cancel 掉
+							  // 只操作本 loop 的链表；worker 会在各自的回调中关闭连接和 timer。
 							  for (auto& scanner : idleScanners_)
 							  {
 								  if (scanner->getExecutor() == baseLoop_.getIoContext().get_executor())
 								  {
+									  scanner->closeAll();
 									  scanner->stop();
 									  scanner->shutdown();
 								  }
@@ -751,7 +731,9 @@ namespace hical
 		writeCountEnabled_.store(true, std::memory_order_relaxed);
 	}
 
-	Awaitable<void> HttpServer::acceptLoop(tcp::acceptor& acceptor, IdleFd& idleFd)
+	Awaitable<void> HttpServer::acceptLoop(tcp::acceptor& acceptor,
+										   IdleFd& idleFd,
+										   std::atomic<size_t>& acceptorConnections)
 	{
 		while (running_.load())
 		{
@@ -771,11 +753,13 @@ namespace hical
 
 					// 收尾逻辑与回退路径共用，差异只有「socket 从哪来」和「用哪个 executor 投递」
 					auto executor = co_await boost::asio::this_coro::executor;
-					auto spawn = [this, executor](auto&& streamOrSocket)
+					auto spawn = [this, executor](auto&& streamOrSocket, ConnectionReservation reservation)
 					{
-						coSpawn(executor, handleSession(std::forward<decltype(streamOrSocket)>(streamOrSocket)));
+						coSpawn(executor,
+								handleSession(std::forward<decltype(streamOrSocket)>(streamOrSocket),
+											  std::move(reservation)));
 					};
-					if (!commitAcceptedSocket(std::move(socket), sslCtx_, activeConnections_, maxConnections_, spawn))
+					if (!commitAcceptedSocket(std::move(socket), acceptorConnections, spawn))
 					{
 						continue;
 					}
@@ -785,7 +769,8 @@ namespace hical
 					// 回退路径（Windows 等无 SO_REUSEPORT 平台）：
 					// 借鉴 Cinatra 策略——socket 直接创建在目标 worker 的 io_context 上，
 					// 使 socket 的 IOCP/epoll 关联从一开始就在正确的线程，减少迁移开销。
-					auto& targetIoCtx = ioPool_ ? ioPool_->getNextLoop()->getIoContext() : baseLoop_.getIoContext();
+					auto* targetLoop = ioPool_ ? ioPool_->getNextLoop() : &baseLoop_;
+					auto& targetIoCtx = targetLoop->getIoContext();
 					tcp::socket socket(targetIoCtx.get_executor());
 
 					co_await acceptor.async_accept(socket, boost::asio::use_awaitable);
@@ -795,11 +780,14 @@ namespace hical
 						break;
 					}
 
-					auto spawn = [this, exec = targetIoCtx.get_executor()](auto&& streamOrSocket)
+					auto spawn = [this, exec = targetIoCtx.get_executor()](auto&& streamOrSocket,
+																		   ConnectionReservation reservation)
 					{
-						coSpawn(exec, handleSession(std::forward<decltype(streamOrSocket)>(streamOrSocket)));
+						coSpawn(exec,
+								handleSession(std::forward<decltype(streamOrSocket)>(streamOrSocket),
+											  std::move(reservation)));
 					};
-					if (!commitAcceptedSocket(std::move(socket), sslCtx_, activeConnections_, maxConnections_, spawn))
+					if (!commitAcceptedSocket(std::move(socket), targetLoop->connectionCount_, spawn))
 					{
 						continue;
 					}
@@ -936,7 +924,7 @@ namespace hical
 	void HttpServer::stopAllLoops()
 	{
 		// baseLoop_.stop() 和 AsioEventLoop::stop() 都是幂等的（内部 atomic + ioContext_.stop()），
-		// 多线程并发调用此函数是安全的（ConnectionCounter 析构 / gracefulStop 超时可能同时触发）。
+		// 多线程并发调用此函数是安全的（ConnectionReservation 析构 / gracefulStop 超时可能同时触发）。
 		// ioPool_ 生命周期由 start() 保证：ioPool_->stop() 在 baseLoop_.run() 返回后才执行，
 		// 而 baseLoop_.run() 返回前 ioPool_ 必然存活。
 		baseLoop_.stop();

@@ -397,7 +397,7 @@ namespace hical
 		auto ct = contentType();
 		if (ct.find("application/x-www-form-urlencoded") != std::string_view::npos)
 		{
-			auto b = body();
+			const auto& b = body();
 			if (!b.empty())
 			{
 				parseUrlEncoded(b, *formParams_);

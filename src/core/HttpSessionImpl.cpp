@@ -743,26 +743,16 @@ namespace hical
 	} // namespace
 
 	template <typename SocketType>
-	Awaitable<void> HttpServer::handleSession(SocketType socket)
+	Awaitable<void> HttpServer::handleSession(SocketType socket, [[maybe_unused]] ConnectionReservation reservation)
 	{
-		// 连接计数：+1 已在 acceptLoop accept 处占位完成（先占位再校验才能做硬上限，
-		// 不能在这里 fetch_add——本协程是 coSpawn 异步投递的，burst 建连时会严重滞后）。
-		// 这里只接管计数所有权，由 ConnectionCounter 析构时唯一负责 -1。
-		struct ConnectionCounter
+		// reservation 从 accept 处接管全局及 worker 计数；即使帧未启动就销毁，也会自动归还。
+		// WS/SSE 在本协程内 co_await，参数一直持有到升级后的完整会话结束。
+		// stop 可能已在目标 worker 上关闭扫描器，排队晚到的会话不能再发起读或 TLS 握手。
+		// 检查到注册 Guard 之间没有挂起点，与同一 worker 的关闭回调串行执行。
+		if (!running_.load())
 		{
-			std::atomic<size_t>& count;
-			std::atomic<bool>& draining;
-			HttpServer& server;
-
-			~ConnectionCounter()
-			{
-				// fetch_sub 返回旧值；旧值为 1 表示减到 0（最后一个连接）
-				if (count.fetch_sub(1) == 1 && draining.load())
-				{
-					server.stop();
-				}
-			}
-		} connCounter {activeConnections_, draining_, *this};
+			co_return;
+		}
 
 		// socket 析构守卫，WS 升级时 transferred=true 就跳过
 		SocketGuard<SocketType> guard {socket};
@@ -911,11 +901,9 @@ namespace hical
 						break;
 					}
 
-					readBufHandle = ReadBufferPool::acquire();
+					readBufHandle = ReadBufferPool::acquireForRead();
 					{
 						auto& buf = readBufHandle.get();
-						size_t initSize = std::max(bytesRead, ReadBufferPool::kBufferSize);
-						buf.resize(initSize);
 						std::memcpy(buf.data(), smallBuf, bytesRead);
 					}
 					bufUsed = bytesRead;
@@ -923,20 +911,15 @@ namespace hical
 				else
 				{
 					// 路径 B：有 pipeline 残留 → 直接借 8KB readBuf
-					readBufHandle = ReadBufferPool::acquire();
+					readBufHandle = ReadBufferPool::acquireForRead(std::max(bufUsed, ReadBufferPool::kBufferSize));
 					{
 						auto& buf = readBufHandle.get();
-						size_t initSize = std::max(bufUsed, ReadBufferPool::kBufferSize);
-						if (initSize > buf.capacity())
-						{
-							buf.reserve(initSize);
-						}
-						buf.resize(initSize);
 						std::memcpy(buf.data(), pipelineSpill.data(), bufUsed);
 					}
 					pipelineSpill.clear();
 				}
 
+				// size() 只表示可写范围，池里的旧字节不能参与解析；有效输入始终由 bufUsed 界定。
 				std::string& readBuf = readBufHandle.get();
 
 				// picohttpparser 输出
@@ -2168,7 +2151,8 @@ namespace hical
 
 	// handleSession 模板定义在本编译防火墙 .cpp，用显式实例化限制实例化类型，
 	// 避免每个 TU 重编模板体，也让其他 TU 能引用到这两个实例。
-	template Awaitable<void> HttpServer::handleSession<tcp::socket>(tcp::socket);
+	template Awaitable<void> HttpServer::handleSession<tcp::socket>(tcp::socket, HttpServer::ConnectionReservation);
 	template Awaitable<void> HttpServer::handleSession<boost::asio::ssl::stream<tcp::socket>>(
-		boost::asio::ssl::stream<tcp::socket>);
+		boost::asio::ssl::stream<tcp::socket>,
+		HttpServer::ConnectionReservation);
 } // namespace hical

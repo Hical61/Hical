@@ -359,12 +359,46 @@ namespace hical
 		void enableResponseWriteCount();
 
 	private:
+		// accept 占位之后即拥有计数，作为协程参数移交，未启动的帧也能归还。
+		class ConnectionReservation
+		{
+		public:
+			/**
+			 * @brief 接管已占用的全局连接槽，并占用目标 loop 的负载
+			 * @param server 拥有已占用全局槽的服务器
+			 * @param loopConnections 目标 loop 的连接计数
+			 */
+			ConnectionReservation(HttpServer& server, std::atomic<size_t>& loopConnections) noexcept;
+			/**
+			 * @brief 转移计数所有权，原守卫不再归还
+			 * @param other 转出所有权的守卫
+			 */
+			ConnectionReservation(ConnectionReservation&& other) noexcept;
+			~ConnectionReservation();
+
+			ConnectionReservation(const ConnectionReservation&) = delete;
+			ConnectionReservation& operator=(const ConnectionReservation&) = delete;
+			ConnectionReservation& operator=(ConnectionReservation&&) = delete;
+
+		private:
+			HttpServer* server_;
+			std::atomic<size_t>* loopConnections_;
+		};
+
+		// 两条 accept 路径共用：连接上限、负载占位、TLS 包装与投递。
+		template <typename SpawnFn>
+		bool commitAcceptedSocket(boost::asio::ip::tcp::socket socket,
+								  std::atomic<size_t>& loopConnections,
+								  SpawnFn&& spawn);
+
 		// 协程式连接监听（每个 acceptor 独立运行）
-		Awaitable<void> acceptLoop(boost::asio::ip::tcp::acceptor& acceptor, IdleFd& idleFd);
+		Awaitable<void> acceptLoop(boost::asio::ip::tcp::acceptor& acceptor,
+								   IdleFd& idleFd,
+								   std::atomic<size_t>& acceptorConnections);
 
 		// 协程式 HTTP 会话处理（模板化，支持 tcp::socket 和 ssl::stream<tcp::socket>）
 		template <typename SocketType>
-		Awaitable<void> handleSession(SocketType socket);
+		Awaitable<void> handleSession(SocketType socket, ConnectionReservation reservation);
 
 		// 协程式 WebSocket 会话处理（headers 已从 readBuf 拷贝为 owned，调用前已 release readBuf）
 		Awaitable<void> handleWebSocket(boost::asio::ip::tcp::socket socket,
@@ -388,9 +422,10 @@ namespace hical
 		// 关闭所有 acceptor（stop/gracefulStop 共用）
 		void closeAllAcceptors();
 
-		// 这俩 atomic 必须在 io_context 之前声明（析构顺序），协程帧里会引用它们
+		// 会话帧归还计数时会检查关服状态，三个 atomic 都必须比 io_context 活得久。
 		std::atomic<size_t> activeConnections_ {0};
 		std::atomic<bool> draining_ {false};
+		std::atomic<bool> running_ {false};
 
 		// 响应写次数，同上：handleSession 的协程帧会引用它，必须比 io_context 活得久
 		std::atomic<size_t> responseWriteCount_ {0};
@@ -430,8 +465,6 @@ namespace hical
 		std::vector<std::unique_ptr<boost::asio::ip::tcp::acceptor>> acceptors_;
 		std::vector<std::unique_ptr<IdleFd>> idleFds_;
 		bool reusePortEnabled_ {false};
-
-		std::atomic<bool> running_ {false};
 
 		Router router_;
 		MiddlewarePipeline middlewarePipeline_;
