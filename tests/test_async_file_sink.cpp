@@ -90,9 +90,12 @@ TEST_F(AsyncFileSinkTest, ConcurrentFlushIncludesAllEarlierWrites)
 {
 	auto logPath = (testDir_ / "flush-barrier.log").string();
 	AsyncFileSink sink(AsyncFileSink::Options {.file = {.basePath = logPath, .maxFileSize = 0}});
+	// 这里验的是「flush 返回前排在前面的日志已经落盘」，并发够就行，数据量不必大。
+	// 之前是 64KB × 32 批 × 4 线程，日志涨到 8MB，每批还整份读回来断一次言，
+	// 一个用例要读几百 MB，Debug / 带插桩的 CI 直接被 60 秒超时掐死
 	constexpr size_t kWriters = 4;
-	constexpr size_t kBatches = 32;
-	constexpr size_t kPayloadSize = 64 * 1024;
+	constexpr size_t kBatches = 8;
+	constexpr size_t kPayloadSize = 4 * 1024;
 	std::barrier start(static_cast<std::ptrdiff_t>(kWriters));
 	std::vector<std::jthread> writers;
 	for (size_t writer = 0; writer < kWriters; ++writer)

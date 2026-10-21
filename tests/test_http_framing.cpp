@@ -9,11 +9,14 @@
 #include <atomic>
 #include <cctype>
 #include <chrono>
+#include <cstdint>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <functional>
 #include <memory>
+#include <random>
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <thread>
@@ -267,12 +270,25 @@ namespace
 		bool timedOut_ = false;
 	};
 
+	/// 给临时文件造个唯一后缀
+	/// ctest 把每个用例当独立进程并行跑，文件名写死的话，隔壁用例的 TearDown
+	/// 会把这边正在服务的文件删掉——/file 打不开就整条连接断，只剩第一个响应
+	std::string uniqueTempSuffix()
+	{
+		std::mt19937_64 rng(std::random_device {}());
+		std::uniform_int_distribution<std::uint64_t> dist;
+		std::ostringstream oss;
+		oss << std::hex << dist(rng);
+		return oss.str();
+	}
+
 	class HttpFramingTest : public ::testing::Test
 	{
 	protected:
 		void SetUp() override
 		{
-			filePath_ = std::filesystem::temp_directory_path() / "hical_test_framing_file.bin";
+			filePath_ = std::filesystem::temp_directory_path()
+						/ ("hical_test_framing_file_" + uniqueTempSuffix() + ".bin");
 			fileContent_ = "file-body-0123456789-abcdefghijklmnopqrstuvwxyz";
 			{
 				std::ofstream ofs(filePath_, std::ios::binary | std::ios::trunc);
