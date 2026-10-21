@@ -287,8 +287,8 @@ namespace
 	protected:
 		void SetUp() override
 		{
-			filePath_ = std::filesystem::temp_directory_path()
-						/ ("hical_test_framing_file_" + uniqueTempSuffix() + ".bin");
+			filePath_ =
+				std::filesystem::temp_directory_path() / ("hical_test_framing_file_" + uniqueTempSuffix() + ".bin");
 			fileContent_ = "file-body-0123456789-abcdefghijklmnopqrstuvwxyz";
 			{
 				std::ofstream ofs(filePath_, std::ios::binary | std::ios::trunc);
