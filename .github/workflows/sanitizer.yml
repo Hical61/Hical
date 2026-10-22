@@ -134,9 +134,17 @@ jobs:
             --output-on-failure \
             --timeout 600 \
             -j2 \
-            -E RouterPerfTest \
+            -E "RouterPerfTest|LogTest\.Fatal" \
             --overwrite MemoryCheckCommand=/usr/bin/valgrind \
             --overwrite "MemoryCheckCommandOptions=--leak-check=full --show-leak-kinds=all --error-exitcode=1 --track-origins=yes" \
             -T memcheck
         env:
           GTEST_DEATH_TEST_USE_FORK: 1
+
+      - name: Upload Memcheck logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: valgrind-memcheck-logs
+          path: build/Testing/Temporary/MemoryChecker.*.log
+          if-no-files-found: ignore

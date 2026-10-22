@@ -81,10 +81,13 @@ TEST(TimerServiceTest, OutOfOrderDeadlines_FireByDeadline)
 	TimerService service(ioContext.get_executor());
 
 	FiredOrder recorder;
-	// 故意倒着挂，堆得自己排好
-	service.scheduleAfter(30ms, recorder.record(30));
-	service.scheduleAfter(10ms, recorder.record(10));
-	service.scheduleAfter(20ms, recorder.record(20));
+	// 故意倒着挂，堆得自己排好。这里用绝对时间点而不是 scheduleAfter：相对延迟要靠
+	// 三次调用几乎同时发生才排得对，Valgrind 这种慢环境能把间隔拖到十几毫秒，
+	// 20ms 那条的 deadline 反而跑到 30ms 后面去了。钉死 base 之后调用多慢都不影响顺序
+	const auto base = TimerService::Clock::now();
+	service.schedule(base + 30ms, recorder.record(30));
+	service.schedule(base + 10ms, recorder.record(10));
+	service.schedule(base + 20ms, recorder.record(20));
 
 	ioContext.run();
 

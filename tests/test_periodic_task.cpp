@@ -23,6 +23,11 @@ using boost::asio::ip::tcp;
 
 namespace
 {
+	// 下面这些 tick 计数器不只是计数，主线程拿它当「服务端已经跑起来了」的信号用，
+	// 所以写侧一律 release、读侧一律 acquire。tick 的写发生在 start() 线程初始化
+	// acceptors_ 之后，release 写 + acquire 读正好给主线程搭出这条 happens-before；
+	// 换成 relaxed 就断了链，主线程随后 stop() 读 acceptors_ 会被 TSan 判成 data race。
+
 	// 每次触发啥也不干的协程体，接口层测试只关心能不能存下来
 	Awaitable<void> noopCallback()
 	{
@@ -233,7 +238,7 @@ TEST(PeriodicTaskTest, StopWithLongIntervalTask_DoesNotBlockShutdown)
 							interval,
 							[ticks]() -> Awaitable<void>
 							{
-								ticks->fetch_add(1, std::memory_order_relaxed);
+								ticks->fetch_add(1, std::memory_order_release);
 								co_return;
 							});
 
@@ -244,7 +249,7 @@ TEST(PeriodicTaskTest, StopWithLongIntervalTask_DoesNotBlockShutdown)
 	const bool fired = waitUntil(
 		[&ticks]()
 		{
-			return ticks->load() > 0;
+			return ticks->load(std::memory_order_acquire) > 0;
 		},
 		std::chrono::seconds(20));
 	EXPECT_TRUE(fired) << "周期任务在 20s 内一次都没触发";
@@ -286,7 +291,7 @@ TEST(PeriodicTaskTest, FiresRepeatedly_AtInterval)
 							std::chrono::milliseconds(20),
 							[ticks]() -> Awaitable<void>
 							{
-								ticks->fetch_add(1, std::memory_order_relaxed);
+								ticks->fetch_add(1, std::memory_order_release);
 								co_return;
 							});
 
@@ -296,10 +301,11 @@ TEST(PeriodicTaskTest, FiresRepeatedly_AtInterval)
 	const bool firedThreeTimes = waitUntil(
 		[&ticks]()
 		{
-			return ticks->load() >= 3;
+			return ticks->load(std::memory_order_acquire) >= 3;
 		},
 		std::chrono::seconds(10));
-	EXPECT_TRUE(firedThreeTimes) << "20ms 的任务在 10s 内触发不到 3 次，实际 " << ticks->load();
+	EXPECT_TRUE(firedThreeTimes) << "20ms 的任务在 10s 内触发不到 3 次，实际 "
+								 << ticks->load(std::memory_order_acquire);
 
 	server->stop();
 	if (waitStartReturned(*run, std::chrono::milliseconds(5000)))
@@ -325,7 +331,7 @@ TEST(PeriodicTaskTest, CallbackThrows_TaskKeepsRunning)
 							std::chrono::milliseconds(20),
 							[ticks]() -> Awaitable<void>
 							{
-								ticks->fetch_add(1, std::memory_order_relaxed);
+								ticks->fetch_add(1, std::memory_order_release);
 								throw std::runtime_error("boom");
 							});
 
@@ -336,10 +342,11 @@ TEST(PeriodicTaskTest, CallbackThrows_TaskKeepsRunning)
 	const bool survived = waitUntil(
 		[&ticks]()
 		{
-			return ticks->load() >= 3;
+			return ticks->load(std::memory_order_acquire) >= 3;
 		},
 		std::chrono::seconds(10));
-	EXPECT_TRUE(survived) << "callback 每次抛异常后任务被终止了，实际只触发 " << ticks->load() << " 次";
+	EXPECT_TRUE(survived) << "callback 每次抛异常后任务被终止了，实际只触发 " << ticks->load(std::memory_order_acquire)
+						  << " 次";
 
 	server->stop();
 	if (waitStartReturned(*run, std::chrono::milliseconds(5000)))
@@ -367,14 +374,14 @@ TEST(PeriodicTaskTest, MultipleTasks_RunIndependently)
 							std::chrono::milliseconds(15),
 							[fastTicks]() -> Awaitable<void>
 							{
-								fastTicks->fetch_add(1, std::memory_order_relaxed);
+								fastTicks->fetch_add(1, std::memory_order_release);
 								co_return;
 							});
 	server->addPeriodicTask("slow",
 							std::chrono::milliseconds(60),
 							[slowTicks]() -> Awaitable<void>
 							{
-								slowTicks->fetch_add(1, std::memory_order_relaxed);
+								slowTicks->fetch_add(1, std::memory_order_release);
 								co_return;
 							});
 
@@ -384,10 +391,11 @@ TEST(PeriodicTaskTest, MultipleTasks_RunIndependently)
 	const bool both = waitUntil(
 		[&fastTicks, &slowTicks]()
 		{
-			return fastTicks->load() >= 2 && slowTicks->load() >= 2;
+			return fastTicks->load(std::memory_order_acquire) >= 2 && slowTicks->load(std::memory_order_acquire) >= 2;
 		},
 		std::chrono::seconds(10));
-	EXPECT_TRUE(both) << "两个任务没各自独立触发，fast=" << fastTicks->load() << " slow=" << slowTicks->load();
+	EXPECT_TRUE(both) << "两个任务没各自独立触发，fast=" << fastTicks->load(std::memory_order_acquire)
+					  << " slow=" << slowTicks->load(std::memory_order_acquire);
 
 	server->stop();
 	if (waitStartReturned(*run, std::chrono::milliseconds(5000)))
@@ -414,7 +422,7 @@ TEST(PeriodicTaskTest, AfterStop_TaskNoLongerFires)
 							std::chrono::milliseconds(20),
 							[ticks]() -> Awaitable<void>
 							{
-								ticks->fetch_add(1, std::memory_order_relaxed);
+								ticks->fetch_add(1, std::memory_order_release);
 								co_return;
 							});
 
@@ -424,7 +432,7 @@ TEST(PeriodicTaskTest, AfterStop_TaskNoLongerFires)
 	ASSERT_TRUE(waitUntil(
 		[&ticks]()
 		{
-			return ticks->load() > 0;
+			return ticks->load(std::memory_order_acquire) > 0;
 		},
 		std::chrono::seconds(10)));
 
@@ -444,10 +452,10 @@ TEST(PeriodicTaskTest, AfterStop_TaskNoLongerFires)
 		return;
 	}
 
-	const int frozen = ticks->load();
+	const int frozen = ticks->load(std::memory_order_acquire);
 	// 留出足够时间让（如果没停干净的话）任务再触发几次：20ms 间隔，200ms 够跑十轮
 	std::this_thread::sleep_for(std::chrono::milliseconds(200));
-	EXPECT_EQ(ticks->load(), frozen) << "stop() 之后任务还在触发";
+	EXPECT_EQ(ticks->load(std::memory_order_acquire), frozen) << "stop() 之后任务还在触发";
 }
 
 // 高频任务（1ms）：能被高频调度，但 stop() 仍要迅速退出——验证「高频 ≠ 关不掉」。
@@ -462,7 +470,7 @@ TEST(PeriodicTaskTest, HighFrequencyTask_StopReturnsPromptly)
 							std::chrono::milliseconds(1),
 							[ticks]() -> Awaitable<void>
 							{
-								ticks->fetch_add(1, std::memory_order_relaxed);
+								ticks->fetch_add(1, std::memory_order_release);
 								co_return;
 							});
 
@@ -472,10 +480,11 @@ TEST(PeriodicTaskTest, HighFrequencyTask_StopReturnsPromptly)
 	const bool fired = waitUntil(
 		[&ticks]()
 		{
-			return ticks->load() >= kMinFires;
+			return ticks->load(std::memory_order_acquire) >= kMinFires;
 		},
 		std::chrono::seconds(10));
-	EXPECT_TRUE(fired) << "1ms 任务在 10s 内触发不到 " << kMinFires << " 次，实际 " << ticks->load();
+	EXPECT_TRUE(fired) << "1ms 任务在 10s 内触发不到 " << kMinFires << " 次，实际 "
+					   << ticks->load(std::memory_order_acquire);
 
 	const auto stopAt = std::chrono::steady_clock::now();
 	server->stop();
@@ -497,7 +506,7 @@ TEST(PeriodicTaskTest, HighFrequencyTask_StopReturnsPromptly)
 
 	std::fprintf(stdout,
 				 "[periodic-hot] fires=%d, stop->start-return=%lldms\n",
-				 ticks->load(),
+				 ticks->load(std::memory_order_acquire),
 				 static_cast<long long>(elapsed.count()));
 
 	// 高频任务下关服耗时仍要远小于「卡住一个 interval」的量级
@@ -518,21 +527,21 @@ TEST(PeriodicTaskTest, ThreeTasksDifferentIntervals_PaceIndependently)
 							std::chrono::milliseconds(10),
 							[fastTicks]() -> Awaitable<void>
 							{
-								fastTicks->fetch_add(1, std::memory_order_relaxed);
+								fastTicks->fetch_add(1, std::memory_order_release);
 								co_return;
 							});
 	server->addPeriodicTask("mid-50ms",
 							std::chrono::milliseconds(50),
 							[midTicks]() -> Awaitable<void>
 							{
-								midTicks->fetch_add(1, std::memory_order_relaxed);
+								midTicks->fetch_add(1, std::memory_order_release);
 								co_return;
 							});
 	server->addPeriodicTask("slow-200ms",
 							std::chrono::milliseconds(200),
 							[slowTicks]() -> Awaitable<void>
 							{
-								slowTicks->fetch_add(1, std::memory_order_relaxed);
+								slowTicks->fetch_add(1, std::memory_order_release);
 								co_return;
 							});
 
@@ -543,14 +552,17 @@ TEST(PeriodicTaskTest, ThreeTasksDifferentIntervals_PaceIndependently)
 	const bool allFired = waitUntil(
 		[&fastTicks, &midTicks, &slowTicks]()
 		{
-			return fastTicks->load() >= 2 && midTicks->load() >= 1 && slowTicks->load() >= 1;
+			return fastTicks->load(std::memory_order_acquire) >= 2 && midTicks->load(std::memory_order_acquire) >= 1
+				   && slowTicks->load(std::memory_order_acquire) >= 1;
 		},
 		std::chrono::seconds(10));
-	EXPECT_TRUE(allFired) << "三个任务没各自独立触发，fast=" << fastTicks->load() << " mid=" << midTicks->load()
-						  << " slow=" << slowTicks->load();
+	EXPECT_TRUE(allFired) << "三个任务没各自独立触发，fast=" << fastTicks->load(std::memory_order_acquire)
+						  << " mid=" << midTicks->load(std::memory_order_acquire)
+						  << " slow=" << slowTicks->load(std::memory_order_acquire);
 
 	// 10ms 的到这一刻触发的次数应当多于 200ms 的，节奏确实分开了
-	EXPECT_GT(fastTicks->load(), slowTicks->load()) << "快慢任务的节奏没有分开";
+	EXPECT_GT(fastTicks->load(std::memory_order_acquire), slowTicks->load(std::memory_order_acquire))
+		<< "快慢任务的节奏没有分开";
 
 	server->stop();
 	if (waitStartReturned(*run, std::chrono::milliseconds(5000)))
@@ -578,7 +590,7 @@ TEST(PeriodicTaskTest, StopTwice_IsIdempotent)
 							std::chrono::milliseconds(20),
 							[ticks]() -> Awaitable<void>
 							{
-								ticks->fetch_add(1, std::memory_order_relaxed);
+								ticks->fetch_add(1, std::memory_order_release);
 								co_return;
 							});
 
@@ -588,7 +600,7 @@ TEST(PeriodicTaskTest, StopTwice_IsIdempotent)
 	ASSERT_TRUE(waitUntil(
 		[&ticks]()
 		{
-			return ticks->load() > 0;
+			return ticks->load(std::memory_order_acquire) > 0;
 		},
 		std::chrono::seconds(10)));
 
@@ -644,7 +656,7 @@ TEST(PeriodicTaskTest, StopWhileCallbackRunning_DoesNotBlock)
 							std::chrono::milliseconds(20),
 							[entered, callbackWork]() -> Awaitable<void>
 							{
-								entered->store(true, std::memory_order_relaxed);
+								entered->store(true, std::memory_order_release);
 								// 占住 loop 线程，模拟一个耗时回调
 								std::this_thread::sleep_for(callbackWork);
 								co_return;
@@ -656,7 +668,7 @@ TEST(PeriodicTaskTest, StopWhileCallbackRunning_DoesNotBlock)
 	ASSERT_TRUE(waitUntil(
 		[&entered]()
 		{
-			return entered->load();
+			return entered->load(std::memory_order_acquire);
 		},
 		std::chrono::seconds(10)))
 		<< "回调一直没进入";
@@ -695,7 +707,7 @@ TEST(PeriodicTaskTest, MultiIoThreads_PeriodicTaskTicksAndStops)
 							std::chrono::milliseconds(20),
 							[ticks]() -> Awaitable<void>
 							{
-								ticks->fetch_add(1, std::memory_order_relaxed);
+								ticks->fetch_add(1, std::memory_order_release);
 								co_return;
 							});
 
@@ -705,10 +717,10 @@ TEST(PeriodicTaskTest, MultiIoThreads_PeriodicTaskTicksAndStops)
 	const bool fired = waitUntil(
 		[&ticks]()
 		{
-			return ticks->load() >= 3;
+			return ticks->load(std::memory_order_acquire) >= 3;
 		},
 		std::chrono::seconds(10));
-	EXPECT_TRUE(fired) << "多 IO 线程下周期任务在 10s 内触发不到 3 次，实际 " << ticks->load();
+	EXPECT_TRUE(fired) << "多 IO 线程下周期任务在 10s 内触发不到 3 次，实际 " << ticks->load(std::memory_order_acquire);
 
 	server->stop();
 	bool returned = waitStartReturned(*run, std::chrono::milliseconds(5000));
