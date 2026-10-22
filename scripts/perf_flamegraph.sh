@@ -74,4 +74,4 @@ rm -f perf_out.txt perf.data perf.data.old
 ls -lh flame.svg
 echo ""
 echo "完成！火焰图已生成：flame.svg"
-echo "拷贝到宿主机查看：cp flame.svg /mnt/hical_host/docker/"
+echo "VM 里看不到图的话，把 flame.svg 拷到共享目录或者直接在浏览器里打开："
