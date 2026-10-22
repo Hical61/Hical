@@ -1938,22 +1938,11 @@ namespace hical
 
 			// 消息循环：一批读入的数据能解出几条消息就解几条，回调跑完再统一落一次盘。
 			// 以前是一帧一个 receive/write 往返，16 帧进来就是 16 次系统调用。
-			auto dispatchMessage = [&wsRoute](const WsMessage& msg, WebSocketSession& session) -> Awaitable<void>
-			{
-				if (wsRoute.onTypedMessage)
-				{
-					co_await wsRoute.onTypedMessage(msg, session);
-				}
-				else if (wsRoute.onMessage)
-				{
-					co_await wsRoute.onMessage(msg.data, session);
-				}
-			};
 
-			// 一批里通常也就十几条消息，先按这个数预留，省掉反复扩容
-			static constexpr size_t kInitialWsBatchMessages = 16;
+			// 这里故意不预留容量。按 16 条预留的话 16384 条连接光这个 vector 就白吃 10MB 常驻，
+			// 而绝大多数连接一次只来一帧，预留的容量根本用不上。
+			// 真赶上 pipeline 一次十几条的，多扩容两次也看不出来
 			std::vector<WsMessage> batch;
-			batch.reserve(kInitialWsBatchMessages);
 
 			while (session->isOpen())
 			{
@@ -1995,7 +1984,14 @@ namespace hical
 					session->beginBatch();
 					for (const auto& msg : batch)
 					{
-						co_await dispatchMessage(msg, *session);
+						if (wsRoute.onTypedMessage)
+						{
+							co_await wsRoute.onTypedMessage(msg, *session);
+						}
+						else if (wsRoute.onMessage)
+						{
+							co_await wsRoute.onMessage(msg.data, *session);
+						}
 					}
 				}
 				catch (...)
@@ -2003,7 +1999,10 @@ namespace hical
 					error = std::current_exception();
 				}
 
-				// 正常收尾还是出错收尾，攒着的响应都得刷出去
+				// 正常收尾还是出错收尾，攒着的响应都得刷出去。
+				// 这里别学 receiveInternal() 那边加「有活才调」的守卫：endBatch() 第一件事
+				// 是退出合批模式，跳过它 batching_ 就一直是 true，下一轮挂起等数据的
+				// 那段时间里心跳 Ping 和 WsHub 广播会被塞进批里发不出去
 				co_await session->endBatch();
 
 				if (error)

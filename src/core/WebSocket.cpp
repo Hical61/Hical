@@ -598,8 +598,13 @@ namespace hical
 			pending_.clear();
 			pendingPos_ = 0;
 			(void)co_await receiveBatch(pending_);
-			// 单条 API 自己就是一批的边界：攒下的 pong、待补的 close 回帧在这刷掉
-			co_await endBatch();
+			// 单条 API 自己就是一批的边界：攒下的 pong、待补的 close 回帧在这刷掉。
+			// 没活就别调——endBatch 是协程，调一次就得分一次协程帧，
+			// 空判断写进函数体里也拦不住这次分配，只能放在调用点
+			if (hasPendingBatchWork())
+			{
+				co_await endBatch();
+			}
 			if (pending_.empty())
 			{
 				co_return std::nullopt;

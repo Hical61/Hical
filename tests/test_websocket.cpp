@@ -344,3 +344,75 @@ TEST(WebSocketTest, ConcurrentSendersSerializeAndKeepOrder)
 	EXPECT_EQ(nextIndex[0], kPerSender);
 	EXPECT_EQ(nextIndex[1], kPerSender);
 }
+
+// ============ 公共单条 receive 路径 ============
+
+// 公共 receiveMessage() 收一条不用回的纯文本：不该产生任何写，也不该把调用方
+// 开着的合批窗口顺手关掉。后一条是「没活就跳过 endBatch」唯一能被观察到的差别——
+// 空批本来就不落盘，只看写次数分不出来
+TEST(WebSocketTest, PublicReceive_NoPendingWork_NoExtraWrite)
+{
+	boost::asio::io_context ioCtx;
+	tcp::acceptor acceptor(ioCtx, tcp::endpoint(boost::asio::ip::make_address("127.0.0.1"), 0));
+	tcp::socket clientSock(ioCtx);
+	clientSock.connect(tcp::endpoint(boost::asio::ip::make_address("127.0.0.1"), acceptor.local_endpoint().port()));
+	tcp::socket serverSock = acceptor.accept();
+
+	WebSocketSession session(std::move(serverSock));
+
+	// 兜底超时：真卡在 receive 里也不能把用例挂死
+	boost::asio::steady_timer watchdog(ioCtx, std::chrono::seconds(5));
+	bool timedOut = false;
+	watchdog.async_wait(
+		[&](const boost::system::error_code& ec)
+		{
+			if (!ec)
+			{
+				timedOut = true;
+				ioCtx.stop();
+			}
+		});
+
+	// 下面几个哨兵初值故意跟期望值都不一样，超时提前收场时一眼能看出来
+	constexpr size_t kNotMeasured = static_cast<size_t>(-1);
+	bool done = false;
+	bool gotMessage = false;
+	size_t writesAfterReceive = kNotMeasured;
+	size_t writesAfterQueuedSend = kNotMeasured;
+	size_t writesAfterEndBatch = kNotMeasured;
+
+	coSpawn(ioCtx,
+			[&]() -> Awaitable<void>
+			{
+				static constexpr uint8_t kMaskKey[4] = {0x12, 0x34, 0x56, 0x78};
+
+				// 调用方自己开着合批窗口（beginBatch 是公共 API）
+				session.beginBatch();
+
+				auto frame = hical::buildMaskedWsFrame(hical::WsOpcode::hText, "quiet", kMaskKey);
+				co_await boost::asio::async_write(clientSock, boost::asio::buffer(frame), boost::asio::use_awaitable);
+
+				auto msg = co_await session.receiveMessage();
+				gotMessage = msg.has_value() && msg->data == "quiet";
+				writesAfterReceive = session.writeCount();
+
+				// 还在批窗口里：这条只该入队，不该出网
+				co_await session.send("after");
+				writesAfterQueuedSend = session.writeCount();
+
+				co_await session.endBatch();
+				writesAfterEndBatch = session.writeCount();
+
+				done = true;
+				watchdog.cancel();
+			});
+
+	ioCtx.run();
+
+	EXPECT_FALSE(timedOut);
+	EXPECT_TRUE(done);
+	EXPECT_TRUE(gotMessage);
+	EXPECT_EQ(writesAfterReceive, 0u) << "单条 receive 没东西要回，却写了盘";
+	EXPECT_EQ(writesAfterQueuedSend, 0u) << "合批窗口被单条 receive 提前关掉了，批内的 send 直接落了盘";
+	EXPECT_EQ(writesAfterEndBatch, 1u) << "endBatch 没把批里的那条刷出去";
+}

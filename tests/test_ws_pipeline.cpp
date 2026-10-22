@@ -115,6 +115,83 @@ static size_t waitForCount(const std::atomic<size_t>& counter, size_t expectAtLe
 	return counter.load();
 }
 
+// 报数帧的载荷：回显路由见到它只把「此刻的写次数」记下来，不回任何东西
+static constexpr const char* kWriteReportPayload = "__report_writes__";
+
+// 等一个标志被服务端线程置位；超时返回 false，让断言去报
+static bool waitForFlag(const std::atomic<bool>& flag, int timeoutMs = 3000)
+{
+	for (int i = 0; i < timeoutMs / 10; ++i)
+	{
+		if (flag.load())
+		{
+			return true;
+		}
+		std::this_thread::sleep_for(std::chrono::milliseconds(10));
+	}
+	return flag.load();
+}
+
+// 注册一条回显路由，另外认出 kWriteReportPayload 就把此刻的写次数报进原子量。
+// 报数发生在前面那些回显全部落盘之后、连接还没关的时候，close 回帧那一次写不会混进来
+static void registerEchoWithWriteReport(HttpServer& server,
+										const std::string& path,
+										std::atomic<bool>& reported,
+										std::atomic<size_t>& writes)
+{
+	server.router().ws(path,
+					   [&reported, &writes](const std::string& msg, WebSocketSession& session) -> Awaitable<void>
+					   {
+						   if (msg == kWriteReportPayload)
+						   {
+							   writes.store(session.writeCount());
+							   reported.store(true);
+							   co_return;
+						   }
+						   co_await session.send(msg);
+					   });
+}
+
+// 一问一答时每条消息恰好落一次盘：攒成 2N 说明同一条回显被刷了两遍，
+// N+1 说明有人多刷了一次，两种都得在这儿红
+TEST(WsPipelineTest, SingleFrame_EchoWritesExactlyOnce)
+{
+	static constexpr int kFrameTotal = 8;
+
+	HttpServer server(0);
+	std::atomic<bool> reported {false};
+	std::atomic<size_t> writesAtReport {0};
+	registerEchoWithWriteReport(server, "/ws/single", reported, writesAtReport);
+
+	std::thread serverThread;
+	uint16_t port = startWsServerAndWait(server, serverThread);
+
+	boost::asio::io_context ioCtx;
+	TestWsClient wsClient(ioCtx);
+	wsClient.connect("127.0.0.1", port, "/ws/single");
+
+	// 读完上一条回显再发下一条，服务端一次只会解出一条消息，合批里也只有一条
+	for (int i = 0; i < kFrameTotal; ++i)
+	{
+		const std::string payload = "single-" + std::to_string(i);
+		wsClient.write(payload);
+		EXPECT_EQ(wsClient.read(), payload);
+	}
+
+	// 报数帧自己不用回显，它进批的时候前面的回显已经全写完了
+	wsClient.write(kWriteReportPayload);
+	bool gotReport = waitForFlag(reported);
+
+	wsClient.close();
+	server.stop();
+	serverThread.join();
+
+	ASSERT_TRUE(gotReport) << "服务端没把写次数报回来";
+	const size_t writes = writesAtReport.load();
+	EXPECT_EQ(writes, static_cast<size_t>(kFrameTotal))
+		<< kFrameTotal << " 条单帧消息本该恰好写 " << kFrameTotal << " 次，实际 " << writes << " 次";
+}
+
 // 一批里 16 帧只应该落一两次 async_write；修复前是 16 次（一帧一次系统调用）
 TEST(WsPipelineTest, EchoBatch_SixteenFrames_OneWritePerBatch)
 {
@@ -163,6 +240,48 @@ TEST(WsPipelineTest, EchoBatch_SixteenFrames_OneWritePerBatch)
 
 	server.stop();
 	serverThread.join();
+}
+
+// 16 帧一次灌进来那条合批路径，不能因为单帧路径的优化被一起改坏：
+// 回显落盘次数还是压在 2 次以内（正常一写就成，TCP 把这一写切成两段才会是 2 次）
+TEST(WsPipelineTest, PipelinedBatch_StillTwoWrites)
+{
+	HttpServer server(0);
+	std::atomic<bool> reported {false};
+	std::atomic<size_t> writesAtReport {0};
+	registerEchoWithWriteReport(server, "/ws/pipeline", reported, writesAtReport);
+
+	std::thread serverThread;
+	uint16_t port = startWsServerAndWait(server, serverThread);
+
+	boost::asio::io_context ioCtx;
+	TestWsClient wsClient(ioCtx);
+	wsClient.connect("127.0.0.1", port, "/ws/pipeline");
+
+	static constexpr uint8_t kMaskKey[4] = {0x12, 0x34, 0x56, 0x78};
+	std::string allFrames;
+	for (int i = 0; i < kFrameCount; ++i)
+	{
+		allFrames += hical::buildMaskedWsFrame(hical::WsOpcode::hText, "hello", kMaskKey);
+	}
+	boost::asio::write(wsClient.socket(), boost::asio::buffer(allFrames));
+
+	for (int i = 0; i < kFrameCount; ++i)
+	{
+		EXPECT_EQ(wsClient.read(), "hello");
+	}
+
+	wsClient.write(kWriteReportPayload);
+	bool gotReport = waitForFlag(reported);
+
+	wsClient.close();
+	server.stop();
+	serverThread.join();
+
+	ASSERT_TRUE(gotReport) << "服务端没把写次数报回来";
+	const size_t writes = writesAtReport.load();
+	EXPECT_GE(writes, 1u) << "一条回显都没写出去，写次数计数没生效";
+	EXPECT_LE(writes, 2u) << kFrameCount << " 帧合批却写了 " << writes << " 次，合批被改坏了";
 }
 
 // 数据帧中间插 ping：pong 不能因为合批被吞掉或延后到关闭前，两个类别的相对顺序都要对

@@ -141,6 +141,17 @@ namespace hical
 		Awaitable<void> endBatch();
 
 		/**
+		 * @brief 合批缓冲里还有没有待发的东西
+		 * endBatch() 是协程，光调一下就得分协程帧，空判断塞函数体里救不了这次分配，
+		 * 所以调用点先问一句。读写都跑在同一条 executor 线程上，不加锁。
+		 * @return true 表示攒着待发帧，或者 close 回帧还等着批末补发
+		 */
+		[[nodiscard]] bool hasPendingBatchWork() const noexcept
+		{
+			return !writeBatch_.empty() || closeReplyPending_;
+		}
+
+		/**
 		 * @brief 立刻把出站缓冲发出去（不退出合批模式）
 		 */
 		Awaitable<void> flushBatch();
