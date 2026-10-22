@@ -134,7 +134,11 @@ namespace hical
 		{
 			if (shard.loop->isInLoopThread())
 			{
-				for (auto& conn : shard.connections)
+				// close() 会同步回调到 removeConnection，把连接从这个 set 里 erase 掉，
+				// 边遍历边删迭代器马上失效，所以先拷一份再挨个关；拷贝的 shared_ptr
+				// 顺带把引用计数兜住，erase 不影响快照里的元素
+				auto conns = shard.connections;
+				for (auto& conn : conns)
 				{
 					conn->close();
 				}
@@ -147,7 +151,9 @@ namespace hical
 				boost::asio::post(shard.loop->getIoContext(),
 								  [&shard, &shardDone]()
 								  {
-									  for (auto& conn : shard.connections)
+									  // 同上，先拷快照再关，遍历期间 close() 会同步 erase
+									  auto conns = shard.connections;
+									  for (auto& conn : conns)
 									  {
 										  conn->close();
 									  }

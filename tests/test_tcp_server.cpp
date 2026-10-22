@@ -5,7 +5,9 @@
 #include <gtest/gtest.h>
 #include <atomic>
 #include <chrono>
+#include <future>
 #include <thread>
+#include <vector>
 
 using namespace hical;
 using boost::asio::ip::tcp;
@@ -80,6 +82,26 @@ TEST(EventLoopPoolTest, PostTaskToPoolLoop)
 }
 
 // ============ TcpServer 测试 ============
+
+namespace
+{
+	// 轮询等连接数到 expected，不用固定 sleep——CI 上机器慢也不至于误报
+	bool waitForConnCount(TcpServer& server,
+						  size_t expected,
+						  std::chrono::milliseconds timeout = std::chrono::milliseconds(3000))
+	{
+		auto deadline = std::chrono::steady_clock::now() + timeout;
+		while (std::chrono::steady_clock::now() < deadline)
+		{
+			if (server.connectionCount() == expected)
+			{
+				return true;
+			}
+			std::this_thread::sleep_for(std::chrono::milliseconds(5));
+		}
+		return server.connectionCount() == expected;
+	}
+} // namespace
 
 TEST(TcpServerTest, StartAndStop)
 {
@@ -247,6 +269,104 @@ TEST(TcpServerTest, WithIoPool)
 		c.close();
 	}
 	server.stop();
+	loop.stop();
+	loopThread.join();
+}
+
+// 回归用例：stop() 遍历 shard.connections 时调 close()，close() 会同步回调
+// removeConnection 把正被遍历的元素 erase 掉，边遍历边删是 UAF。
+// 这里故意让每条 shard 都挂着不止一条活连接再 stop()，必走那条路径；
+// 普通构建看不出来，靠 CI 的 Valgrind job 抓回归。
+TEST(TcpServerTest, StopWithLiveConnections)
+{
+	AsioEventLoop loop;
+	InetAddress addr("127.0.0.1", 0);
+
+	TcpServer server(&loop, addr, "test-stop-live");
+	server.setIoLoopNum(2);
+
+	std::thread loopThread(
+		[&loop]()
+		{
+			loop.run();
+		});
+
+	std::this_thread::sleep_for(std::chrono::milliseconds(50));
+	server.start();
+	std::this_thread::sleep_for(std::chrono::milliseconds(50));
+
+	auto localEp = server.listenAddr();
+
+	// 6 条连接轮转分到 2 个 IO 线程，每条 shard 上至少 2 条
+	std::vector<tcp::socket> clients;
+	for (int i = 0; i < 6; ++i)
+	{
+		clients.emplace_back(loop.getIoContext());
+		clients.back().connect(tcp::endpoint(boost::asio::ip::make_address("127.0.0.1"), localEp.port()));
+	}
+
+	// 用 EXPECT 不用 ASSERT：万一连接没起来也得走到 stop()/join，否则
+	// 局部 std::thread 还 joinable 就析构，直接 std::terminate
+	EXPECT_TRUE(waitForConnCount(server, 6));
+
+	// 客户端一条都不关，连接全都活着的时候直接 stop()
+	server.stop();
+	EXPECT_FALSE(server.isRunning());
+	EXPECT_EQ(server.connectionCount(), 0);
+
+	for (auto& c : clients)
+	{
+		c.close();
+	}
+	loop.stop();
+	loopThread.join();
+}
+
+// 同上，但 stop() 从 loop 线程内自己调，覆盖 isInLoopThread() 那条分支
+TEST(TcpServerTest, StopFromLoopThread_WithLiveConnections)
+{
+	AsioEventLoop loop;
+	InetAddress addr("127.0.0.1", 0);
+
+	TcpServer server(&loop, addr, "test-stop-in-loop");
+
+	std::thread loopThread(
+		[&loop]()
+		{
+			loop.run();
+		});
+
+	std::this_thread::sleep_for(std::chrono::milliseconds(50));
+	server.start();
+	std::this_thread::sleep_for(std::chrono::milliseconds(50));
+
+	auto localEp = server.listenAddr();
+
+	std::vector<tcp::socket> clients;
+	for (int i = 0; i < 4; ++i)
+	{
+		clients.emplace_back(loop.getIoContext());
+		clients.back().connect(tcp::endpoint(boost::asio::ip::make_address("127.0.0.1"), localEp.port()));
+	}
+
+	EXPECT_TRUE(waitForConnCount(server, 4));
+
+	std::promise<void> stopped;
+	loop.post(
+		[&server, &stopped]()
+		{
+			server.stop();
+			stopped.set_value();
+		});
+	stopped.get_future().wait();
+
+	EXPECT_FALSE(server.isRunning());
+	EXPECT_EQ(server.connectionCount(), 0);
+
+	for (auto& c : clients)
+	{
+		c.close();
+	}
 	loop.stop();
 	loopThread.join();
 }
