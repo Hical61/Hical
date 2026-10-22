@@ -58,6 +58,8 @@ co_await hical::sleep(std::chrono::milliseconds(500)); // 等待 500ms
 
 在协程内暂停指定时间，**不阻塞线程**。比 `std::this_thread::sleep_for` 好——线程空闲期间可以处理其他连接。
 
+底层走的是 `TimerService`：每条 io_context 只有一个 `steady_timer` 配一个 deadline 小顶堆，几万个协程同时睡也只占一个等待操作，不是一协程一个 timer。省的是注册/销毁那套簿记；Windows 上 Asio timer 本来就在一个队列里排，「几万个内核定时器变成一个」这说法只在 Linux（一个 timerfd）成立。没绑 `TimerService` 的地方（客户端、单测里自己 new 的 io_context）会自动退回各自独立的 `steady_timer`，用起来没区别。
+
 ### 3. `coSpawn()` — 启动协程
 
 ```cpp

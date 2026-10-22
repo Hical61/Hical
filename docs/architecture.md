@@ -1125,6 +1125,16 @@ handleSession()                          IdleScanner::run()
 - **扫描间隔**：`max(1s, timeout/4)`，与 TcpServer::idleCheckLoop 策略一致
 - **socket.close() 安全性**：scanner 和 handleSession 在同一 io_context 线程，close() 取消 pending 的 async_read，completion handler 在下一次 dispatch 时才执行，扫描循环提前保存的 `next` 指针在整个循环内有效
 
+### 11.5 关服：谁的东西谁关
+
+`stop()` 以前是站在 base 线程上，把每个 acceptor 关掉，再把每个 `IdleScanner` 的链表也 `closeAll()` 一遍。问题是扫描器归各 worker 线程跑：`scan()` 正遍历着那条链表，主线程这边删、worker 那边注销——`IdleScanner` 本身是按「单线程无锁」设计的，这么跨线程动它就是裸奔。
+
+现在动作都发回各自线程：acceptor 的 `close` 投到自己的 executor，worker 的扫描器也 post 回自己线程做 `closeAll` + `stop` + `shutdown`，base 只管自己那条。补的另一个洞是：`stop()` 之后才轮到执行的会话，以前会照常注册进已经关掉的扫描器，然后再挂一个读或等 TLS 握手，谁也叫不醒它——现在 `handleSession` 进门先看 `running_`，停了就 `co_return`，socket 由守卫关掉。
+
+`TcpServer::stop()` 那边还有个独立的坑（2.7.2 发布前由 Valgrind 抓到的 use-after-free）：它遍历 `shard.connections` 挨个调 `conn->close()`，而 `close()` 在连接所在 loop 线程内会**同步**走到 `handleClose` → `onClose` 回调 → `removeConnection` → `shard.connections.erase(conn)`，正被遍历的元素当场被删，迭代器失效，下一轮读它就是 UAF。现在两个分支（本线程直调 / post 到目标 loop）都改成先拷一份连接快照再关——元素是 `shared_ptr`，拷贝顺带把引用计数兜住。
+
+顺带记一下 `findShard()` 的兜底：它拿 `shards_[0]` 当找不到时的回退，而 `stop()` 末尾会 `shards_.clear()`。当前可达性靠「`ioPool_->stop()` 会丢弃未执行的 handler」压着，窗口很窄，但别把 `findShard()` 挪到别的线程去调。
+
 ---
 
 ## 12. 线程模型
@@ -1182,6 +1192,10 @@ class EventLoopPool
 - `AsioEventLoop` 维护 `atomic<size_t> connectionCount_`（relaxed 序），`TcpServer::addConnection()`/`removeConnection()` 负责增减
 - **Linux / macOS**：SO_REUSEPORT 模式下，每个 worker loop 运行独立 `acceptLoop()`，内核自动在多个 acceptor 间做负载均衡，`EventLoopPool::getNextLoop()` 不参与 accept 分发。
 - **Windows**：无 SO_REUSEPORT，回退为单 acceptor + Least-Connections 分发到 worker loop。
+
+这套分发有个曾经「看着在分、实际没分」的坑：`getNextLoop()` 一直是按各 loop 的 `connectionCount()` 挑最闲的，可 **HTTP 这条路径从来没调过 `incrementConnections()`**，计数器永远是 0，于是每回都挑中 `loops_[0]`。Windows 这种单 acceptor 平台上 `ioThreads` 开 3 个 4 个都白开，连接全堆在第一个线程上。
+
+现在 accept 成功就先占住目标 loop 的计数：占位守卫 `ConnectionReservation` 跟着协程帧一起走，会话正常结束、TLS 包装抛异常、投递不上、WS/SSE 升级后退出——这几条路都只归还一次。占位放在 accept 处还有个额外好处：下一轮 `getNextLoop()` 立刻能看见这次分发，不会因为会话还没被调度、计数还没涨就重复挑同一个 loop。
 
 ### 12.2.1 Worker 线程 CPU 亲和性（Linux）
 
@@ -1254,7 +1268,7 @@ struct NetworkError
 | ---------------------- | ------------------------------------------------ | --------------------------------------------------------------------------------- |
 | 协程模型               | `asio::awaitable<T>`                             | 与 Boost.Asio 原生集成，零额外开销，代码线性化                                    |
 | HTTP 解析器            | picohttpparser（原生栈集成）                     | 轻量零拷贝，性能优于 Beast                                                        |
-| HTTP 客户端            | 可选模块 + 与服务端共用 picohttpparser           | 服务端框架默认不编客户端；两边解析器同源，畸形报文行为一致，零新增第三方依赖       |
+| HTTP 客户端            | 可选模块 + 与服务端共用 picohttpparser           | 服务端框架默认不编客户端；两边解析器同源，畸形报文行为一致，零新增第三方依赖      |
 | 内存管理               | C++17 PMR 三层池                                 | 标准化接口，高并发低碎片，与 Boost.JSON 天然兼容                                  |
 | SSL 实现               | 模板化 `GenericConnection<SocketType>`           | 编译期分支消除，零运行时开销                                                      |
 | 后端抽象               | C++20 Concepts                                   | 编译期约束，不引入虚函数开销，面向未来可扩展                                      |
@@ -1457,6 +1471,18 @@ server.setErrorHandler([](const std::exception& e, const HttpRequest& req) {
 });
 ```
 
+### 17.6 请求边界校验（防请求走私）
+
+HTTP/1.1 的请求边界靠 `Content-Length` 和 `Transfer-Encoding` 两条头来划，前端代理和后端服务器对这两条头理解不一致时，攻击者就能把一段数据同时算成「上一个请求的 body」和「下一个请求的开头」，也就是请求走私。Hical 在解析阶段就把这类歧义全部拒掉：
+
+- **`Content-Length` 严格校验**：空值、非数字字符、溢出、逗号分隔的列表（`Content-Length: 5, 5` 这类老式写法）、以及两个值不同的重复头，一律拒。两个**相同**的重复值放行——那是上游把重复字段原样转发、而不是合并成逗号列表时的产物。
+- **`Transfer-Encoding` 与 `Content-Length` 并存**：直接拒。RFC 9112 §6.1 对这种组合的态度就是回 400 并关连接——不同实现各自选了不同的赢家（有的信 CL、有的信 TE），正是走私的经典入口。
+- **其余拒信条件**：重复的 TE 字段、HTTP/1.0 带 TE、过时的折行续行、非法的 chunked 编码链。遇到没实现的 transfer coding（比如 `gzip` 作为前置编码）返回 501，不猜。
+
+所有拒绝响应一律关闭连接。这一步不能省——只要连接还在，缓冲区里那截没被解释的字节就会被当成下一条请求的开头，前面拒得再干净也白搭。
+
+校验发生在路由、中间件、`100 Continue` 和 body 读取之前，校验不过的请求连 body 都不会被读。
+
 ---
 
 ## 18. WebSocket 增强设计
@@ -1559,6 +1585,27 @@ struct WsMessage
 
 `WsTypedMessageCallback` 存储在 `WsRoute::onTypedMessage` 字段中，运行时优先于传统 `onMessage` 调用。当前通过内部设置（非公开 `ws()` 重载），用户如需区分二进制消息可使用 `receiveMessage()` 循环。
 
+### 18.6 一次读内多帧合批
+
+WebSocket 压测里有个反直觉的数字：同样的 16 帧，对端 1 次 recv + 1 次 send 能拿到 6362 万 msg/s，这边只有 424 万，差 15 倍。原因不在解析，在**每解一条消息就往返一次**——`receiveInternal` 解出一帧就 `co_return`，调用方回写、回来再读下一条，16 帧就是 16 个「读→回调→写」完整往返。
+
+现在读侧和写侧各加了半套：
+
+- **读侧 `receiveBatch()`**：一次把 `readBuf_` 里能解出来的完整帧全跑完，只在真只剩半帧时才去 `ensureBytes` 读 socket。
+- **写侧合批窗口**：`beginBatch()` 到 `endBatch()` 之间，`send()` 系列只往连接级出站缓冲里追加，一批回调跑完才落地一次 `async_write`。`encodeFrame()` 从 `sendFrame` 里抽成纯追加编码，合批时直接写进出站缓冲，顺带省一次拷贝。
+- 一批只有一条消息时仍然是一次写，不多一次 flush 往返。
+
+几个必须交代清楚的坑：
+
+- **合批窗口只包住回调执行期，挂起等数据那段不合批**。第一版把窗口套住了整个 `receiveBatch`，结果心跳 Ping 协程和 WsHub 广播塞进缓冲的帧没人刷，`HeartbeatPingSent` 直接挂死——客户端干等 ping、服务端干等消息。现在解帧阶段产生的 pong 用一个独立的 `queueFrame()` 攒，并且在 `ensureBytes()` 开头（马上要阻塞读之前）先刷一次。
+- **出站缓冲有 64KB 上限**，超了中途落一次盘，否则客户端狂灌时内存会涨。
+- **close 回帧延后到批末**：客户端得先收到批内响应的数据再收到关闭，抢跑会乱序。
+- `handleWebSocket` 循环末尾那次 `endBatch()` **不能**照抄 `receiveInternal()` 里那个「有活才调」的守卫——`endBatch()` 第一行就是 `batching_ = false`，跳过它 `batching_` 会一直卡在 true，下一轮等数据的那几毫秒里心跳和广播就发不出去了。
+
+最后一个行为变化得写进文档：合批窗口里的 `co_await send()` 语义是「已入队」而不是「已经写到线上」。对端不收数据时，背压信号会滞后一批才传回业务协程；要确保落地得自己 `co_await flushBatch()`。
+
+改造前后有硬证据：`test_ws_pipeline` 里那条 Prove-It 用例，改造前一批 16 帧打了 **17 次写**（16 次回显 + 1 次 close 回帧），改造后降到 2 次以内。
+
 ---
 
 ## 19. HTTP 热路径优化
@@ -1634,6 +1681,23 @@ thread_local DateCache dateTlsCache; // {cachedSec, buf[30], len}
 - **延迟 memmove**：只在 readBuf 前半空间耗尽时才 memmove 紧凑数据，而非每次请求后立即移动
 - **ReadBufferPool 借还**：每请求借一块缓冲区，响应写完后归还；粘包残留暂存在 `pipelineSpill`（`for(;;)` 外的 `std::string`，大多数连接为空，SSO 不分配堆内存）
 - **栈缓冲 speculative read**：空闲连接不用 `async_wait(wait_read)` 等着（有 MOD 开销），改用 256B 栈数组 `async_read_some`。Asio 投机路径下有数据直返、无数据挂起，都不产生 `epoll_ctl(MOD)`。实测 10K 并发下 epoll_ctl 调用从 32,563 降到 9,173（降 71.8%），总 CPU 降 ~16-20%
+
+#### Pipelined 响应攒批
+
+一次 read 里拿到 N 个 pipelined 请求时，以前是处理一个写一个，N 次 `write_some`。HttpArena 的 pipelined 榜单上这边 4,851,267、Aegon 27,608,511，差的就是这笔「一个响应一趟 syscall」的账。
+
+现在 `handleSession` 的循环外多一个跨请求复用的 `std::string responseBatch`：正常 keep-alive 响应先按顺序拼进去，攒到该走的时候一次性写出去（先 `tryOptimisticWrite`，没写完再 `writeRemaining`，跟单响应同一套快路径）。
+
+难点全在**什么时候必须落地**。主出口是路径 A 阻塞读之前；此外头部没读全的那次读之前、`100-continue` 之前、等 body（`Content-Length` / chunked）之前、每条提前返回的错误响应（400/431/501/404/405）之前、以及把 socket 交给 WS/SSE 之前，都必须先把批发出去——漏一个就是响应留在服务端、客户端干等。
+
+其它几条约束：
+
+- 批内顺序天然有序，因为请求处理本来就是串行的
+- 文件响应和 chunked 响应自己往 socket 上写，所以它们之前先 flush、再单发，不跟批搅在一起
+- 缓冲容量按几何倍数涨，不是一上来就占几 KB——只回一条响应就走的连接只占「一条响应」那么大；攒到 64KB 中途落一次盘，免得客户端狂灌时内存涨
+- **单请求路径逐字节没变**：批空、缓冲区里也没有下一个请求的字节时直接走原来的散射写，不多一次拷贝、不多一次分配、不多一次往返
+
+硬证据是 `responseWriteCount()`（默认不计数，要先调 `enableResponseWriteCount()` 打开——它要在每条响应上累加，而计数器是所有 worker 共用的一条 cache line，生产环境没理由为诊断付这笔钱）：`test_http_framing` 里一批 16 个 pipelined 请求，改造前实测 16 次写，改造后 2 次；串行三条请求仍是严格 3 次。
 
 ### 19.5 同步中间件零协程帧 + 异步转发帧消除 + CompileTimeChain 编译期预构建
 

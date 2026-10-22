@@ -49,6 +49,7 @@
 - [RouteGroup](#routegroup) — 路由分组
 - [HttpRequest](#httprequest) — HTTP 请求
 - [HttpResponse](#httpresponse) — HTTP 响应
+- [JsonWriter](#jsonwriter) — 零 DOM 增量 JSON 构造
 - [HeaderMap](#headermap) — HTTP 头部容器
 - [HttpTypes](#httptypes) — HTTP 类型定义
 - [Middleware](#middleware) — 中间件
@@ -70,6 +71,7 @@
 
 **基础设施 API（进阶用户）**
 - [Coroutine](#coroutine) — 协程工具
+- [TimerService](#timerservice) — 集中式定时器
 - [MemoryPool](#memorypool) — pmr 内存池
 - [SslContext](#sslcontext) — SSL/TLS 配置
 - [Error](#error) — 错误处理
@@ -312,18 +314,18 @@ router.ws("/ws/chat", wsOpts,
 
 #### 公共方法
 
-| 方法                           | 参数                     | 返回值       | 说明                                 |
-| ------------------------------ | ------------------------ | ------------ | ------------------------------------ |
-| `use(middleware)`              | middleware: 中间件处理器 | `void`       | 添加组级中间件（仅对组内路由生效）   |
-| `use(after)`                   | after: 同步后置处理器    | `void`       | 添加组级同步后置中间件               |
-| `useBody(middleware)`          | middleware: 中间件处理器 | `void`       | 添加需读请求 body 的组级中间件       |
-| `useBody(before, after)`       | before/after: 同步前后   | `void`       | 添加需读请求 body 的组级同步中间件   |
-| `group(subPrefix)`             | subPrefix: 子前缀        | `RouteGroup` | 创建嵌套子组（继承父组中间件和前缀） |
-| `route(method, path, handler)` | method/path/handler      | `void`       | 注册路由（协程/同步）                |
-| `get(path, handler)`           | path/handler             | `void`       | 注册 GET 路由                        |
-| `post(path, handler)`          | path/handler             | `void`       | 注册 POST 路由                       |
-| `put(path, handler)`           | path/handler             | `void`       | 注册 PUT 路由                        |
-| `del(path, handler)`           | path/handler             | `void`       | 注册 DELETE 路由                     |
+| 方法                           | 参数                     | 返回值       | 说明                                                                                                    |
+| ------------------------------ | ------------------------ | ------------ | ------------------------------------------------------------------------------------------------------- |
+| `use(middleware)`              | middleware: 中间件处理器 | `void`       | 添加组级中间件（仅对组内路由生效）                                                                      |
+| `use(after)`                   | after: 同步后置处理器    | `void`       | 添加组级同步后置中间件                                                                                  |
+| `useBody(middleware)`          | middleware: 中间件处理器 | `void`       | 添加需读请求 body 的组级中间件（组级门在 dispatch 阶段才跑，body 此时已读过，声明语义成立但省不到 I/O） |
+| `useBody(before, after)`       | before/after: 同步前后   | `void`       | 添加需读请求 body 的组级同步中间件（同上）                                                              |
+| `group(subPrefix)`             | subPrefix: 子前缀        | `RouteGroup` | 创建嵌套子组（继承父组中间件和前缀）                                                                    |
+| `route(method, path, handler)` | method/path/handler      | `void`       | 注册路由（协程/同步）                                                                                   |
+| `get(path, handler)`           | path/handler             | `void`       | 注册 GET 路由                                                                                           |
+| `post(path, handler)`          | path/handler             | `void`       | 注册 POST 路由                                                                                          |
+| `put(path, handler)`           | path/handler             | `void`       | 注册 PUT 路由                                                                                           |
+| `del(path, handler)`           | path/handler             | `void`       | 注册 DELETE 路由                                                                                        |
 
 > `use(after)` 是组级同步后置中间件，只在组内 handler 返回响应后执行。多个 after 之间按注册逆序执行。
 
@@ -457,17 +459,18 @@ HTTP 响应封装，对原生 HTTP 响应的 hical 风格封装。
 
 #### 公共方法
 
-| 方法                           | 参数                                                       | 返回值               | 说明                          |
-| ------------------------------ | ---------------------------------------------------------- | -------------------- | ----------------------------- |
-| `statusCode()`                 | 无                                                         | `HttpStatusCode`     | 获取状态码                    |
-| `setStatus(code)`              | code: 状态码                                               | `void`               | 设置状态码                    |
-| `header(name)`                 | name: 字段名                                               | `std::string_view`   | 获取指定头部字段值            |
-| `setHeader(name, value)`       | name: 字段名<br>value: 字段值 (`std::string_view`)         | `void`               | 设置头部字段                  |
-| `body()`                       | 无                                                         | `const std::string&` | 获取消息体                    |
-| `setBody(body, contentType)`   | body: 消息体<br>contentType: Content-Type                  | `void`               | 设置消息体并指定 Content-Type |
-| `setJsonBody(json)`            | json: JSON 值                                              | `void`               | 设置 JSON 消息体              |
-| `setCookie(name, value, opts)` | name: Cookie 名<br>value: Cookie 值<br>opts: CookieOptions | `void`               | 追加 Set-Cookie 响应头        |
-| `native()`                     | 无                                                         | `NativeResponse&`    | 获取底层原生响应引用          |
+| 方法                           | 参数                                                       | 返回值               | 说明                                                                           |
+| ------------------------------ | ---------------------------------------------------------- | -------------------- | ------------------------------------------------------------------------------ |
+| `statusCode()`                 | 无                                                         | `HttpStatusCode`     | 获取状态码                                                                     |
+| `setStatus(code)`              | code: 状态码                                               | `void`               | 设置状态码                                                                     |
+| `header(name)`                 | name: 字段名                                               | `std::string_view`   | 获取指定头部字段值                                                             |
+| `setHeader(name, value)`       | name: 字段名<br>value: 字段值 (`std::string_view`)         | `void`               | 设置头部字段                                                                   |
+| `body()`                       | 无                                                         | `const std::string&` | 获取消息体                                                                     |
+| `setBody(body, contentType)`   | body: 消息体<br>contentType: Content-Type                  | `void`               | 设置消息体并指定 Content-Type                                                  |
+| `setJsonBody(json)`            | json: JSON 值                                              | `void`               | 设置 JSON 消息体                                                               |
+| `jsonWriter()`                 | 无                                                         | `JsonWriter`         | 拿一个直接往本响应 body 追加 JSON 的 writer（见 [JsonWriter](#jsonwriter) 节） |
+| `setCookie(name, value, opts)` | name: Cookie 名<br>value: Cookie 值<br>opts: CookieOptions | `void`               | 追加 Set-Cookie 响应头                                                         |
+| `native()`                     | 无                                                         | `NativeResponse&`    | 获取底层原生响应引用                                                           |
 
 #### 工厂方法
 
@@ -504,6 +507,81 @@ HttpResponse handler(const HttpRequest& req)
     HttpResponse res2 = HttpResponse::ok("ok");
     res2.setCookie("token", "abc123", opts);
     return res2;
+}
+```
+
+---
+
+### JsonWriter
+
+零 DOM 的增量 JSON 构造器，边遍历边把 wire 字节追加到一个外部 `std::string` 上。对标手写 `append` 的零分配做法，但只依赖标准库：不建 `boost::json::object` 树，也就省掉「建树 + `serialize()` 遍历」两遍开销，中间不产生任何临时节点。标量直接走 `std::to_chars`，字符串复用现成的转义函数，全程零中间对象。
+
+它补的是另外两个 JSON 入口够不着的空档：`HttpResponse::json()` 收手里已经有的 `boost::json::value`；`jsonFrom<T>()` 收形状编译期就定死的 DTO；剩下「分页列表里现查现拼」「树形结构深度运行时才知道」这类只能一层层建对象的场景，就交给 `JsonWriter`。比建 DOM 快，比 `jsonFrom` 慢一点，代价是嵌套配对得自己管。
+
+**头文件：** `<hical/core/JsonWriter.h>`
+
+#### 构造与成员
+
+| 成员              | 参数                         | 返回值        | 说明                                                     |
+| ----------------- | ---------------------------- | ------------- | -------------------------------------------------------- |
+| `JsonWriter(out)` | out: 输出 `std::string&`     | —             | 绑定输出目标，只追加不拥有，调用方保证它活得比 writer 久 |
+| `beginObject()`   | 无                           | `JsonWriter&` | 开始一个对象                                             |
+| `endObject()`     | 无                           | `JsonWriter&` | 结束当前对象                                             |
+| `beginArray()`    | 无                           | `JsonWriter&` | 开始一个数组                                             |
+| `endArray()`      | 无                           | `JsonWriter&` | 结束当前数组                                             |
+| `key(name)`       | name: 成员名 (`string_view`) | `JsonWriter&` | 写对象成员名，后面必须紧跟一个 `value()`                 |
+| `value(nullptr)`  | 无                           | `JsonWriter&` | 写 `null`                                                |
+| `value(str)`      | str: 字符串 (`string_view`)  | `JsonWriter&` | 写字符串，内部转义并加引号                               |
+| `value(num)`      | num: 整数 / `bool` / 浮点    | `JsonWriter&` | 写标量，整数走 `to_chars`，浮点走最短表示                |
+| `isComplete()`    | 无                           | `bool`        | 容器都闭合、没有悬着的 key，写响应前兜底检查             |
+
+`JsonWriter` 不可拷贝也不可移动（内部存着指向输出 `std::string` 的裸指针，能移动反而是个坑），也不能从临时对象上取。嵌套状态记在一个固定大小的 `std::array` 里（上限 32 层），不碰堆也不碰 PMR，所以 writer 本身随便放栈上。
+
+#### 使用契约（踩了会出事）
+
+- **对象里必须先 `key()` 再 `value()`，数组里直接 `value()`**。空对象自然产出 `{}`，空数组产出 `[]`，不用特殊判断。
+- **顶层只能写一个值**。写完第一个再写第二个，这次写会被直接丢掉、Debug 下 `assert` 挂掉（Release 下当没调），不然拼出来就成了 `12{}` 这种非法 JSON，挡在 `beforeValue()` 那一步。
+- **误用兜底**：`end` 不配对、对象里漏了 `value()`，Debug 下 `assert` 挂掉，Release 下当没调或者补个 `null`，至少不会踩内存、不会把已写出的内容搅乱。
+- **单线程使用**，别把同一个 writer 拿到多个线程上写。
+
+#### 配合 HttpResponse::jsonWriter()
+
+`HttpResponse::jsonWriter()` 把 writer 直接接到本响应 `native().body` 那个 `std::string` 上，是 HTTP 响应最顺手的用法。它调用时顺手清空 body、把 `Content-Type` 设成 `application/json`（跟 `json()` / `jsonFrom()` 逐字节一致，不带 charset），并把 payload 标脏——writer 是绕过 `setBody` 直接改写 body 的，不标脏的话 dispatch 阶段那次 `preparePayload()` 会拿着旧的 `Content-Length` 提前返回，长度跟 body 对不上。
+
+几条必须守的契约：
+
+- **别从临时响应上取 writer**。writer 里存的是响应 body 那个 `std::string` 的地址，`auto w = makeResp().jsonWriter();` 这条表达式一结束临时对象就没了，`w` 指着已经释放的内存。`jsonWriter()` 上挂了 `&` 限定，这种写法编译期就报错。
+- **拿到 writer 之后别把 response move 走再接着写**。body 跟着搬去了新对象，写进旧壳里的字节到不了你手上那个 response。
+- **一个响应只开一个 writer**。再调一次会重新清空 body 从头写——writer 不知道 body 里还留着上一次的半截内容。
+- 不走 handler 返回路径、自己手动 serialize 的代码，记得写完先 `preparePayload()` 再发。
+
+#### 示例
+
+```cpp
+#include <hical/core/HttpResponse.h>
+#include <hical/core/JsonWriter.h>
+
+HttpResponse listUsers(const HttpRequest& req)
+{
+    HttpResponse res = HttpResponse::ok();   // 先有响应对象，再从它身上取 writer
+    auto w = res.jsonWriter();
+
+    w.beginObject();
+    w.key("total").value(users.size());
+    w.key("items").beginArray();
+    for (const auto& u : users)
+    {
+        w.beginObject();
+        w.key("id").value(u.id);
+        w.key("name").value(u.name);
+        w.key("active").value(u.active);
+        w.endObject();
+    }
+    w.endArray();
+    w.endObject();
+
+    assert(w.isComplete());   // 容器配对、没有悬着的 key
+    return res;
 }
 ```
 
@@ -629,37 +707,37 @@ using SyncAfterHandler     = std::function<void(HttpRequest&, HttpResponse&)>;
 
 同步与异步中间件的统一容器，由 `buildOptimizedChain()` 合并连续同步条目。
 
-| 字段           | 类型                | 说明                        |
-| -------------- | ------------------- | --------------------------- |
-| `type`         | `Type` (Async/Sync) | 中间件类型                  |
-| `name`         | `std::string`       | 中间件名称（调试用）        |
-| `asyncHandler` | `MiddlewareHandler` | 异步处理器（仅 Async 有值） |
-| `before`       | `SyncBeforeHandler` | 同步前置处理器（仅 Sync）   |
-| `after`        | `SyncAfterHandler`  | 同步后置处理器（仅 Sync）   |
+| 字段           | 类型                | 说明                                                                      |
+| -------------- | ------------------- | ------------------------------------------------------------------------- |
+| `type`         | `Type` (Async/Sync) | 中间件类型                                                                |
+| `name`         | `std::string`       | 中间件名称（调试用）                                                      |
+| `asyncHandler` | `MiddlewareHandler` | 异步处理器（仅 Async 有值）                                               |
+| `before`       | `SyncBeforeHandler` | 同步前置处理器（仅 Sync）                                                 |
+| `after`        | `SyncAfterHandler`  | 同步后置处理器（仅 Sync）                                                 |
 | `needsBody`    | `bool`              | 声明本层要读请求 body（默认 `false`，链构建时在第一个声明者前插 body 门） |
 
 #### MiddlewarePipeline 类
 
-| 方法                                  | 参数                                               | 返回值                    | 说明                                   |
-| ------------------------------------- | -------------------------------------------------- | ------------------------- | -------------------------------------- |
-| `use(middleware)`                     | middleware: 异步中间件                             | `void`                    | 添加异步中间件（`build()` 后禁止调用） |
-| `use(name, middleware)`               | name: 名称<br>middleware: 异步中间件               | `void`                    | 添加命名异步中间件                     |
-| `use(before)`                         | before: 同步前置处理器                             | `void`                    | 添加同步前置中间件                     |
-| `use(before, after)`                  | before/after: 同步前后处理器                       | `void`                    | 添加同步前后处理器对                   |
-| `use(name, before, after)`            | name/before/after                                  | `void`                    | 添加命名同步前后处理器对               |
-| `use(after)`                          | after: 同步后置处理器                              | `void`                    | 添加同步后置中间件（零协程帧）         |
-| `use(name, after)`                    | name: 名称<br>after: 同步后置处理器                | `void`                    | 添加命名同步后置中间件                 |
+| 方法                                  | 参数                                               | 返回值                    | 说明                                               |
+| ------------------------------------- | -------------------------------------------------- | ------------------------- | -------------------------------------------------- |
+| `use(middleware)`                     | middleware: 异步中间件                             | `void`                    | 添加异步中间件（`build()` 后禁止调用）             |
+| `use(name, middleware)`               | name: 名称<br>middleware: 异步中间件               | `void`                    | 添加命名异步中间件                                 |
+| `use(before)`                         | before: 同步前置处理器                             | `void`                    | 添加同步前置中间件                                 |
+| `use(before, after)`                  | before/after: 同步前后处理器                       | `void`                    | 添加同步前后处理器对                               |
+| `use(name, before, after)`            | name/before/after                                  | `void`                    | 添加命名同步前后处理器对                           |
+| `use(after)`                          | after: 同步后置处理器                              | `void`                    | 添加同步后置中间件（零协程帧）                     |
+| `use(name, after)`                    | name: 名称<br>after: 同步后置处理器                | `void`                    | 添加命名同步后置中间件                             |
 | `useBody(middleware)`                 | middleware: 异步中间件                             | `void`                    | 添加需读请求 body 的异步中间件（`build()` 后禁止） |
-| `useBody(name, middleware)`           | name: 名称<br>middleware: 异步中间件               | `void`                    | 添加命名需读请求 body 的异步中间件     |
-| `useBody(before, after)`              | before/after: 同步前后处理器                       | `void`                    | 添加需读请求 body 的同步前后处理器对   |
-| `useBody(name, before, after)`        | name/before/after                                  | `void`                    | 添加命名需读请求 body 的同步前后处理器对 |
-| `build(finalHandler)`                 | finalHandler: 最终处理器                           | `void`                    | 预构建调用链（仅调用一次）             |
-| `buildFor(finalHandler)`              | finalHandler: 最终处理器                           | `MiddlewareNext`          | 预构建并返回可缓存的调用链             |
-| `execute(req)`                        | req: HTTP 请求                                     | `Awaitable<HttpResponse>` | 执行预构建缓存链（需先 `build()`）     |
-| `execute(req, finalHandler)`          | req: HTTP 请求<br>finalHandler: 最终处理器         | `Awaitable<HttpResponse>` | 动态构建并执行                         |
-| `size()`                              | 无                                                 | `size_t`                  | 获取中间件数量                         |
-| `buildChainFrom(handlers, final)`     | handlers: 中间件列表<br>final: 最终处理器          | `MiddlewareNext`          | 静态方法：从异步 handler 列表构建链    |
-| `buildOptimizedChain(entries, final)` | entries: MiddlewareEntry 列表<br>final: 最终处理器 | `MiddlewareNext`          | 静态方法：合并连续同步中间件为单协程帧 |
+| `useBody(name, middleware)`           | name: 名称<br>middleware: 异步中间件               | `void`                    | 添加命名需读请求 body 的异步中间件                 |
+| `useBody(before, after)`              | before/after: 同步前后处理器                       | `void`                    | 添加需读请求 body 的同步前后处理器对               |
+| `useBody(name, before, after)`        | name/before/after                                  | `void`                    | 添加命名需读请求 body 的同步前后处理器对           |
+| `build(finalHandler)`                 | finalHandler: 最终处理器                           | `void`                    | 预构建调用链（仅调用一次）                         |
+| `buildFor(finalHandler)`              | finalHandler: 最终处理器                           | `MiddlewareNext`          | 预构建并返回可缓存的调用链                         |
+| `execute(req)`                        | req: HTTP 请求                                     | `Awaitable<HttpResponse>` | 执行预构建缓存链（需先 `build()`）                 |
+| `execute(req, finalHandler)`          | req: HTTP 请求<br>finalHandler: 最终处理器         | `Awaitable<HttpResponse>` | 动态构建并执行                                     |
+| `size()`                              | 无                                                 | `size_t`                  | 获取中间件数量                                     |
+| `buildChainFrom(handlers, final)`     | handlers: 中间件列表<br>final: 最终处理器          | `MiddlewareNext`          | 静态方法：从异步 handler 列表构建链                |
+| `buildOptimizedChain(entries, final)` | entries: MiddlewareEntry 列表<br>final: 最终处理器 | `MiddlewareNext`          | 静态方法：合并连续同步中间件为单协程帧             |
 
 > 后置中间件（`SyncAfterHandler`）在 handler 返回响应后执行；多个 after 之间按注册逆序执行（洋葱模型：后注册的更靠内，先退出）。`makeHelmetMiddleware()`、`makeGzipCompressionMiddleware()` 返回的就是 `SyncAfterHandler`，直接 `server.use(...)` 即可，既不用套协程 lambda，也不用写 `server.use(nullptr, ...)` 这种占位前置。
 >
@@ -1412,6 +1490,8 @@ WebSocket 会话封装（RFC 6455），支持文本/二进制消息、心跳保�
 | `sendPing(payload)`        | payload: Ping 载荷（≤125B）             | `Awaitable<void>`                  | 发送 Ping 帧                        |
 | `closeAsync()`             | 无                                      | `Awaitable<void>`                  | 优雅关闭（Normal Closure）          |
 | `closeAsync(code, reason)` | code: `WsCloseCode`<br>reason: 关闭原因 | `Awaitable<void>`                  | 优雅关闭（自定义关闭码）            |
+
+handler（`onMessage` / `onTypedMessage`）跑在合批窗口里，所以 `co_await send()` 的语义是「已入队」而不是「已经写到线上」——对端不收数据时背压会滞后一批才传回；要确保落地就自己 `co_await flushBatch()`。`closeAsync()` 的关闭帧排在批末发，保证客户端先收完批内数据再收关闭。
 | `close()`                  | 无                                      | `void`                             | 同步关闭（不发 close 帧）           |
 | `isOpen()`                 | 无                                      | `bool`                             | 连接是否打开                        |
 | `socket()`                 | 无                                      | `tcp::socket&`                     | 获取底层 socket 引用                |
@@ -1543,6 +1623,76 @@ Awaitable<void> asyncTask()
     co_await hical::sleep(1.0);
     co_await hical::sleep(std::chrono::milliseconds(500));
 }
+```
+
+---
+
+### TimerService
+
+每条 io_context 一个的集中式定时器。以前每次 `hical::sleep()` 都就地造一个 `boost::asio::steady_timer`，3 万个协程同时睡 10ms 就是 3 万个 timer，每个都得走一遍注册和销毁的簿记。`TimerService` 拿一个 `steady_timer` 配一个按 deadline 的小顶堆，兜住该线程所有挂着的定时器：堆顶变了才重新 `expires_at`，连着挂 N 个只有刷新最小值的那几次真动 timer，所以挂多少个定时器都只占一个等待操作。
+
+`HttpServer` 给每条 loop 各建一个（base loop 和每个 worker loop 都算），在目标线程上 `bindToCurrentThread()` 绑进 thread_local，`hical::sleep()` 通过 `currentThreadTimerService()` 自动取到它。没绑服务的地方（客户端、单测里自己 new 的 io_context）照旧退回各自的 `steady_timer`，行为不变。
+
+**头文件：** `<hical/core/TimerService.h>`
+
+#### 类型
+
+```cpp
+using Clock    = std::chrono::steady_clock;
+using TimerId  = std::uint64_t;
+using Callback = std::function<void()>;
+
+inline static constexpr TimerId kInvalidId = 0;   // 服务停了之后 schedule 返回它
+```
+
+#### 方法
+
+| 方法                             | 参数                        | 返回值    | 说明                                                                            |
+| -------------------------------- | --------------------------- | --------- | ------------------------------------------------------------------------------- |
+| `TimerService(executor)`         | executor: `any_io_executor` | —         | 构造。**不会**自动绑线程，绑定走 `bindToCurrentThread()`                        |
+| `schedule(deadline, callback)`   | deadline: 绝对时间点        | `TimerId` | 挂定时器，服务已停止返回 `kInvalidId`                                           |
+| `scheduleAfter(delay, callback)` | delay: 相对延迟（负数当 0） | `TimerId` | 相对现在挂一个，`sleep` 这类用法更顺手                                          |
+| `cancel(id)`                     | id: 定时器 id               | `bool`    | 取消，幂等；返回 false 有三种情况：之前取消过、这个 id 根本没派出去过、服务已停 |
+| `shutdown()`                     | 无                          | `void`    | 扔掉所有没触发的回调，可重复调（析构里自动调）                                  |
+| `pendingCount()`                 | 无                          | `size_t`  | 还没触发、也没被取消的数量（每次现数堆，O(堆大小)）                             |
+| `bindToCurrentThread()`          | 无                          | `void`    | 绑到当前线程的 thread_local，须在目标 io_context 线程上调                       |
+| `unbindFromCurrentThread()`      | 无                          | `void`    | 从当前线程解绑（只解自己绑的那个）                                              |
+
+另有自由函数 `TimerService* currentThreadTimerService()`，拿当前线程绑的服务，没绑就是 `nullptr`。
+
+#### 线程模型与坑
+
+- **单线程无锁**。`schedule` / `cancel` 和回调执行都必须在同一条线程（跑那个 io_context 的线程）上。跨线程建的时候（比如 `HttpServer` 在主线程给每个 worker loop 建一个），构造完要先 post 到目标线程再 `bindToCurrentThread()`，不然主线程上的 `sleep` 会拿到别的 loop 的服务，协程就被 resume 到错的线程去了。
+- **回调里引用的外部对象由调用方保证生命周期**，服务只存 `std::function`。
+- **`shutdown()` 会丢掉没触发的回调，一个都不执行**。扔掉的回调没人去唤醒挂在上面的等待方——拿 `sleep()` 来说，协程会一直挂在那儿不返回、帧也不释放。所以别在还有在途 `co_await sleep()` 的时候关服务。`HttpServer::stop()` 就是绕开这条不调它：睡着的协程得靠定时器自然醒来才能把 `run()` 收尾，提前关掉整条循环就卡住了。服务必须先于 io_context 销毁，跟 `IdleScanner` 一个规矩。
+- **`cancel` 只是打个标记**，节点赖在堆里等它到期再清，回调保证不会再执行。取消一个已经触发过的 id 也会返回 true，但除了留个没人清的幽灵标记什么都不做（标记攒到比堆还大 256 个会按堆重建一次）。
+- deadline 相同的按 id 排，先挂的先执行。
+- 一点如实说明：新 `sleep()` **没接 per-op cancellation**，对挂着的 `co_await sleep()` 做取消，请求会被丢掉、人还是得睡满才醒。
+
+#### 示例
+
+```cpp
+#include <hical/core/TimerService.h>
+#include <boost/asio/io_context.hpp>
+
+boost::asio::io_context io;
+
+// 在跑目标 io_context 的那条线程上建服务并绑定
+hical::TimerService timers(io.get_executor());
+timers.bindToCurrentThread();   // 必须在 io 线程上调，别在主线程替别的 loop 绑
+
+// 相对时间挂一个，1 秒后跑回调
+auto id = timers.scheduleAfter(std::chrono::seconds(1), [] {
+    HICAL_LOG_INFO("timers: 1 秒到了");
+});
+
+// 提前取消（幂等；已经触发过的再取消返回 true 但什么都不做）
+timers.cancel(id);
+
+// 绑好服务之后，协程里普通的 sleep 就自动走这套集中定时器了
+// co_await hical::sleep(std::chrono::milliseconds(100));
+
+io.run();
 ```
 
 ---
@@ -2405,31 +2555,31 @@ void serveOpenApi(
 
 **头文件：** `<hical/asio/HttpClient.h>`
 
-| 字段         | 类型           | 说明                                             |
-| ------------ | -------------- | ------------------------------------------------ |
-| `error`      | `NetworkError` | 网络层错误码；无网络错误时为空                   |
-| `status`     | `int`          | HTTP 状态码，0 表示压根没收到响应                |
-| `statusText` | `std::string`  | 状态行里的原因短语（如 `"OK"`、`"Not Found"`）   |
+| 字段         | 类型           | 说明                                                 |
+| ------------ | -------------- | ---------------------------------------------------- |
+| `error`      | `NetworkError` | 网络层错误码；无网络错误时为空                       |
+| `status`     | `int`          | HTTP 状态码，0 表示压根没收到响应                    |
+| `statusText` | `std::string`  | 状态行里的原因短语（如 `"OK"`、`"Not Found"`）       |
 | `body`       | `std::string`  | 响应体（已按 Content-Length / chunked 解码后的内容） |
-| `headers`    | `HeaderMap`    | 响应头                                           |
+| `headers`    | `HeaderMap`    | 响应头                                               |
 
-| 方法               | 返回值 | 说明                                            |
-| ------------------ | ------ | ----------------------------------------------- |
-| `ok()`             | `bool` | 无网络错误且拿到 2xx 响应                       |
+| 方法               | 返回值 | 说明                                                 |
+| ------------------ | ------ | ---------------------------------------------------- |
+| `ok()`             | `bool` | 无网络错误且拿到 2xx 响应                            |
 | `isNetworkError()` | `bool` | 是否栽在网络层（连接失败 / 超时 / TLS 等传输层错误） |
-| `operator bool()`  | `bool` | 等价 `ok()`，方便 `if (result)` 这样写          |
+| `operator bool()`  | `bool` | 等价 `ok()`，方便 `if (result)` 这样写               |
 
 ### HttpClientOptions
 
 客户端配置。connect / request 两档超时都给了非零默认值——不设超时的链路最怕对端接了连接却永远不回；想关掉某档超时把对应字段设成 0 或负数即可。
 
-| 字段             | 类型                            | 默认值 | 说明                                                    |
-| ---------------- | ------------------------------- | ------ | ------------------------------------------------------- |
-| `tlsContext`     | `std::shared_ptr<SslContext>`   | 空     | 非空即启用 HTTPS（用 `ssl::context::tls_client` 构造）  |
-| `sniHost`        | `std::string`                   | `""`   | SNI 主机名，留空则回落到构造时传入的 host               |
-| `verifyPeer`     | `bool`                          | `true` | 是否校验对端证书                                        |
+| 字段             | 类型                                  | 默认值 | 说明                                                      |
+| ---------------- | ------------------------------------- | ------ | --------------------------------------------------------- |
+| `tlsContext`     | `std::shared_ptr<SslContext>`         | 空     | 非空即启用 HTTPS（用 `ssl::context::tls_client` 构造）    |
+| `sniHost`        | `std::string`                         | `""`   | SNI 主机名，留空则回落到构造时传入的 host                 |
+| `verifyPeer`     | `bool`                                | `true` | 是否校验对端证书                                          |
 | `connectTimeout` | `std::chrono::steady_clock::duration` | `10s`  | resolve + TCP 连接（含 TLS 握手）的总时限；非正值不设超时 |
-| `requestTimeout` | `std::chrono::steady_clock::duration` | `30s`  | 单次请求（写请求 + 读完整响应）的时限；非正值不设超时   |
+| `requestTimeout` | `std::chrono::steady_clock::duration` | `30s`  | 单次请求（写请求 + 读完整响应）的时限；非正值不设超时     |
 
 常量：`static constexpr auto kDefaultConnectTimeout`（10s）、`static constexpr auto kDefaultRequestTimeout`（30s）。
 
@@ -2441,22 +2591,22 @@ void serveOpenApi(
 
 #### 构造函数
 
-| 方法                                        | 参数                                                                                                       | 说明                                     |
-| ------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
-| `HttpClient(ioCtx, host, port, options)`    | ioCtx: `io_context&`<br>host: 目标主机（域名或 IP）<br>port: 目标端口<br>options: `HttpClientOptions`（可选） | `options.tlsContext` 非空则走 HTTPS      |
+| 方法                                     | 参数                                                                                                          | 说明                                |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
+| `HttpClient(ioCtx, host, port, options)` | ioCtx: `io_context&`<br>host: 目标主机（域名或 IP）<br>port: 目标端口<br>options: `HttpClientOptions`（可选） | `options.tlsContext` 非空则走 HTTPS |
 
 独占一条连接，拷贝 / 移动都禁用。
 
 #### 公共方法
 
-| 方法                                 | 参数                                                                                             | 返回值                   | 说明                                       |
-| ------------------------------------ | ------------------------------------------------------------------------------------------------ | ------------------------ | ------------------------------------------ |
-| `request(method, target, body, headers)` | method: HTTP 方法<br>target: 请求目标（如 `"/api/notice"`）<br>body: 请求体（默认空）<br>headers: 附加请求头（默认空） | `Awaitable<HttpClientResult>` | 发起一次请求；网络错误在 `result.error` 里 |
-| `get(target, headers)`               | target: 请求目标<br>headers: 附加请求头                                                          | `Awaitable<HttpClientResult>` | 便捷 GET                                   |
-| `post(target, body, contentType)`    | target: 请求目标<br>body: 请求体<br>contentType: Content-Type（默认 `"application/json"`）        | `Awaitable<HttpClientResult>` | 便捷 POST                                  |
-| `isAlive()`                          | 无                                                                                               | `bool`                   | 连接当前是否可用（已建立且没关）           |
-| `close()`                            | 无                                                                                               | `void`                   | 主动关闭连接                               |
-| `key()`                              | 无                                                                                               | `std::string_view`       | 分桶键 `"host:port"`，连接池据此归并同类目标 |
+| 方法                                     | 参数                                                                                                                   | 返回值                        | 说明                                         |
+| ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | ----------------------------- | -------------------------------------------- |
+| `request(method, target, body, headers)` | method: HTTP 方法<br>target: 请求目标（如 `"/api/notice"`）<br>body: 请求体（默认空）<br>headers: 附加请求头（默认空） | `Awaitable<HttpClientResult>` | 发起一次请求；网络错误在 `result.error` 里   |
+| `get(target, headers)`                   | target: 请求目标<br>headers: 附加请求头                                                                                | `Awaitable<HttpClientResult>` | 便捷 GET                                     |
+| `post(target, body, contentType)`        | target: 请求目标<br>body: 请求体<br>contentType: Content-Type（默认 `"application/json"`）                             | `Awaitable<HttpClientResult>` | 便捷 POST                                    |
+| `isAlive()`                              | 无                                                                                                                     | `bool`                        | 连接当前是否可用（已建立且没关）             |
+| `close()`                                | 无                                                                                                                     | `void`                        | 主动关闭连接                                 |
+| `key()`                                  | 无                                                                                                                     | `std::string_view`            | 分桶键 `"host:port"`，连接池据此归并同类目标 |
 
 > `Host` / `Content-Length` / `Connection` 三个头由客户端自己补齐；用户在 `headers` 里给了同名头会被跳过，免得发出去两份。响应 body 按头部选路：有 `Content-Length` 读满指定字节，`Transfer-Encoding: chunked` 走原地解码，两者都没有就靠连接关闭（EOF）收尾。
 
@@ -2501,33 +2651,33 @@ auto r = co_await https.get("/v1/status");
 
 #### HttpClientPoolOptions 结构体
 
-| 字段              | 类型                                  | 默认值 | 说明                                       |
-| ----------------- | ------------------------------------- | ------ | ------------------------------------------ |
-| `idleTimeout`     | `std::chrono::steady_clock::duration` | `30s`  | 单条空闲连接超过这个时长没人用就关掉       |
-| `cleanupInterval` | `std::chrono::steady_clock::duration` | `10s`  | 清理扫描周期（一个 timer 管整池）          |
-| `maxIdlePerBucket`| `std::size_t`                         | `8`    | 每个 host:port 桶最多留几条空闲连接，超了挤掉最老的 |
+| 字段               | 类型                                  | 默认值 | 说明                                                |
+| ------------------ | ------------------------------------- | ------ | --------------------------------------------------- |
+| `idleTimeout`      | `std::chrono::steady_clock::duration` | `30s`  | 单条空闲连接超过这个时长没人用就关掉                |
+| `cleanupInterval`  | `std::chrono::steady_clock::duration` | `10s`  | 清理扫描周期（一个 timer 管整池）                   |
+| `maxIdlePerBucket` | `std::size_t`                         | `8`    | 每个 host:port 桶最多留几条空闲连接，超了挤掉最老的 |
 
 常量：`kDefaultIdleTimeout`（30s）、`kDefaultCleanupInterval`（10s）。
 
 #### 构造函数
 
-| 方法                              | 参数                                                                    | 说明                                                              |
-| --------------------------------- | ----------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| `HttpClientPool(ioCtx, options)`  | ioCtx: `io_context&`<br>options: `HttpClientPoolOptions`（可选）          | `cleanupInterval` / `idleTimeout` 非正会抛 `std::invalid_argument` |
+| 方法                             | 参数                                                             | 说明                                                               |
+| -------------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `HttpClientPool(ioCtx, options)` | ioCtx: `io_context&`<br>options: `HttpClientPoolOptions`（可选） | `cleanupInterval` / `idleTimeout` 非正会抛 `std::invalid_argument` |
 
 拷贝 / 移动均禁用。
 
 #### 公共方法
 
-| 方法                                                       | 参数                                                                                                                                    | 返回值                        | 说明                                                     |
-| ---------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- | -------------------------------------------------------- |
-| `acquire(host, port, options)`                             | host/port: 目标<br>options: `HttpClientOptions`                                                                                          | `std::shared_ptr<HttpClient>` | 取一条可用连接：桶里有活着的就复用，否则新建             |
-| `release(client)`                                          | client: 之前 acquire 出来的连接                                                                                                          | `void`                        | 还回池子；坏掉的（出错 / 超时被置 closed）直接销毁        |
-| `request(host, port, method, target, body, headers, options)` | host/port/method/target<br>body: 请求体（默认空）<br>headers: 附加请求头（默认空）<br>options: `HttpClientOptions`（默认空）            | `Awaitable<HttpClientResult>` | 发一次请求，内部自动 acquire / release                   |
-| `get(host, port, target, headers, options)`                | host/port/target<br>headers: 附加请求头（默认空）<br>options: 客户端配置（默认空）                                                        | `Awaitable<HttpClientResult>` | 便捷 GET，内部自动 acquire / release                     |
-| `post(host, port, target, body, contentType, options)`     | host/port/target/body<br>contentType: Content-Type（默认 `"application/json"`）<br>options: 客户端配置（默认空）                          | `Awaitable<HttpClientResult>` | 便捷 POST，内部自动 acquire / release                    |
-| `shutdown()`                                               | 无                                                                                                                                      | `void`                        | 关掉所有空闲连接并取消清理 timer；幂等，可从任意线程调   |
-| `idleCount()`                                              | 无                                                                                                                                      | `std::size_t`                 | 当前桶里空闲连接总数（主要给测试用）                     |
+| 方法                                                          | 参数                                                                                                                         | 返回值                        | 说明                                                   |
+| ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ----------------------------- | ------------------------------------------------------ |
+| `acquire(host, port, options)`                                | host/port: 目标<br>options: `HttpClientOptions`                                                                              | `std::shared_ptr<HttpClient>` | 取一条可用连接：桶里有活着的就复用，否则新建           |
+| `release(client)`                                             | client: 之前 acquire 出来的连接                                                                                              | `void`                        | 还回池子；坏掉的（出错 / 超时被置 closed）直接销毁     |
+| `request(host, port, method, target, body, headers, options)` | host/port/method/target<br>body: 请求体（默认空）<br>headers: 附加请求头（默认空）<br>options: `HttpClientOptions`（默认空） | `Awaitable<HttpClientResult>` | 发一次请求，内部自动 acquire / release                 |
+| `get(host, port, target, headers, options)`                   | host/port/target<br>headers: 附加请求头（默认空）<br>options: 客户端配置（默认空）                                           | `Awaitable<HttpClientResult>` | 便捷 GET，内部自动 acquire / release                   |
+| `post(host, port, target, body, contentType, options)`        | host/port/target/body<br>contentType: Content-Type（默认 `"application/json"`）<br>options: 客户端配置（默认空）             | `Awaitable<HttpClientResult>` | 便捷 POST，内部自动 acquire / release                  |
+| `shutdown()`                                                  | 无                                                                                                                           | `void`                        | 关掉所有空闲连接并取消清理 timer；幂等，可从任意线程调 |
+| `idleCount()`                                                 | 无                                                                                                                           | `std::size_t`                 | 当前桶里空闲连接总数（主要给测试用）                   |
 
 > `request()` 系列对**复用的连接**做了重试：复用的连接可能已经被对端悄悄关了，遇到「网络错误且一个字节响应都没收到（`status == 0`）」时会丢掉死连接、重开一条重试一次，免得一次本可成功的请求因为陈旧 keep-alive 连接而判死。`status` 已经非 0 说明聊到一半了，不重试。注意这对非幂等方法给的是「至少一次」语义——极端情况下可能重发一次，需要严格一次的场景别依赖它，改用 `acquire()` 自己控制。
 >

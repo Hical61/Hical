@@ -1,6 +1,6 @@
 # Hical 项目代码结构
 
-> 最后更新：2026-10-13
+> 最后更新：2026-10-22
 
 ## 项目概述
 
@@ -10,7 +10,7 @@ Hical 是基于 Boost.Asio、采用原生 HTTP/WebSocket 网络栈（picohttppar
 
 ```
 hical/
-├── CMakeLists.txt              # 顶层 CMake（C++20，project(VERSION 2.7.1)，Boost/OpenSSL/GTest）
+├── CMakeLists.txt              # 顶层 CMake（C++20，project(VERSION 2.7.2)，Boost/OpenSSL/GTest）
 ├── README.md / README_CN.md    # 项目主页（英文 / 中文双语，含 CI/License/平台徽章）
 ├── LICENSE                     # MIT 协议
 ├── CHANGELOG.md                # 版本变更日志（按版本倒序）
@@ -46,7 +46,7 @@ hical/
 │   ├── hical61-hical/          #   vcpkg overlay port（portfile.cmake + vcpkg.json + versions 模板）
 │   └── picohttpparser/         #   picohttpparser 的 vcpkg port（hical 内嵌依赖的可选系统版本）
 │
-├── vcpkg.json                  # vcpkg manifest（version 2.7.1 + 依赖声明）
+├── vcpkg.json                  # vcpkg manifest（version 2.7.2 + 依赖声明）
 ├── conanfile.py                # Conan 配方（CMakeToolchain / CMakeDeps / cmake_layout）
 ├── test_package/               # Conan test_package（消费端冒烟验证）
 │
@@ -95,6 +95,7 @@ hical/
 │   │   ├── InetAddress.h/.cpp  # 网络地址封装（IPv4/IPv6）
 │   │   ├── SslContext.h/.cpp   # SSL/TLS 上下文配置封装
 │   │   ├── Coroutine.h         # 协程工具（Awaitable/sleep/coSpawn，header-only）
+│   │   ├── TimerService.h/.cpp # 集中式定时器（每 io_context 一个 steady_timer + deadline 小顶堆 + thread_local 绑定）
 │   │   ├── HttpTypes.h         # HTTP 方法/状态码枚举 + 字符串转换
 │   │   ├── HttpRequest.h/.cpp  # HttpRequest 封装（string_view 返回类型，jsonBody 缓存）
 │   │   ├── HttpResponse.h/.cpp # HttpResponse 封装 + 工厂方法（setHeader CR/LF 防护）
@@ -148,6 +149,8 @@ hical/
 │   │   ├── PerfectHashRouter.h # 编译期完美哈希路由表（multiply-shift 方案编译期搜种子）
 │   │   ├── CompileTimeChain.h  # 编译期中间件链预构建（模板展开类型列表合并 Sync 帧）
 │   │   ├── CompileTimeJson.h   # 编译期直序列化（绕开 boost::json::object 零分配）
+│   │   ├── JsonWriter.h        # 零 DOM 增量 JSON writer（嵌套状态 array<Frame,32>，标量 to_chars 直写，HttpResponse::jsonWriter() 的底座）
+│   │   ├── detail/JsonEscape.h # JSON 转义表（JsonWriter 与 CompileTimeJson 共用，框架内部）
 │   │   ├── IdleFd.h            # 空闲 fd 预留（POSIX /dev/null，Windows no-op）
 │   │   ├── IdleScanner.h/.cpp  # 集中式空闲连接扫描器（per-io_context，侵入式链表 + 单 timer）
 │   │   └── Version.h.in        # CMake 配置版本头（唯一版本号来源）
@@ -158,6 +161,8 @@ hical/
 │   │   ├── SslConnection.h           # SSL 连接类型别名（懒包含 OpenSSL）
 │   │   ├── AsioTimer.h/.cpp          # 基于 steady_timer 的定时器
 │   │   ├── EventLoopPool.h/.cpp      # 多线程事件循环池（1 Thread : 1 io_context）
+│   │   ├── HttpClient.h/.cpp         # 协程 HTTP/1.1 客户端（keep-alive 复用 + 整段共用一个 deadline 的超时 + picohttpparser 解析响应；HICAL_WITH_HTTP_CLIENT=ON 才编）
+│   │   ├── HttpClientPool.h/.cpp     # 按 host:port（+TLS）分桶的连接池（per-io_context 无锁，一个 timer 管整池清理，死连接丢掉重试一次）
 │   │   └── TcpServer.h/.cpp          # TCP 服务器（SO_REUSEPORT 多 acceptor + 空闲超时 + IdleFd）
 │   │
 │   └── db/                     # 数据库中间件（可选，HICAL_WITH_DATABASE=ON）
@@ -173,7 +178,7 @@ hical/
 │       ├── PgStmtCache.h/.cpp  # PG 服务端预处理语句 LRU 缓存
 │       └── PgSocketAdapter.h   # libpq 与 Boost.Asio 的 socket 适配层
 │
-├── tests/                      # 单元测试（Google Test）— 69 个测试目标
+├── tests/                      # 单元测试（Google Test）— 75 个测试目标
 │   ├── CMakeLists.txt          # hical_add_test 辅助函数 + gtest_discover_tests 自动注册
 │   ├── test_main.cpp           # GTest main（所有测试目标共用）
 │   │
@@ -186,6 +191,7 @@ hical/
 │   │ # —— Asio 适配层 ——
 │   ├── test_asio_event_loop.cpp      # AsioEventLoop
 │   ├── test_asio_timer.cpp           # AsioTimer
+│   ├── test_timer_service.cpp        # TimerService 集中式定时器（堆序/取消/绑定）
 │   ├── test_asio_tcp_connection.cpp  # TcpConnection
 │   ├── test_tcp_server.cpp           # TcpServer + EventLoopPool
 │   ├── test_ssl_connection.cpp       # SSL 连接
@@ -196,7 +202,9 @@ hical/
 │   ├── test_router_perf.cpp          # 路由性能基准（dispatchSync 对比 + 100/1000 路由）
 │   ├── test_http_server_perf.cpp     # HTTP 全链路吞吐量基准（单连接/并发）
 │   ├── test_middleware.cpp           # 中间件（洋葱模型/拦截）
+│   ├── test_middleware_body.cpp      # 中间件声明需要 body（useBody）
 │   ├── test_http_server.cpp          # HttpServer 集成
+│   ├── test_http_framing.cpp         # HTTP 请求边界校验（Content-Length / Transfer-Encoding / chunked 编码链）
 │   ├── test_integration.cpp          # 完整请求/响应周期集成
 │   ├── test_cookie.cpp               # Cookie 解析与 Set-Cookie
 │   ├── test_static_files.cpp         # 静态文件 / ETag / 路径遍历
@@ -211,6 +219,7 @@ hical/
 │   ├── test_route_group.cpp          # 路由组
 │   ├── test_error_handler.cpp        # 全局错误处理器
 │   ├── test_graceful_shutdown.cpp    # 优雅关闭
+│   ├── test_periodic_task.cpp        # 周期性任务（addPeriodicTask 托管生命周期）
 │   ├── test_rate_limiter.cpp         # 令牌桶限流
 │   ├── test_helmet.cpp               # 安全头中间件
 │   ├── test_health.cpp               # 健康检查端点
@@ -223,6 +232,7 @@ hical/
 │   ├── test_perfect_hash_router.cpp  # 编译期完美哈希路由表
 │   ├── test_compile_time_chain.cpp   # 编译期中间件链预构建
 │   ├── test_compile_time_json.cpp    # 编译期直序列化
+│   ├── test_json_writer.cpp          # JsonWriter 零 DOM 增量 JSON 与响应集成
 │   │ # —— WebSocket ——
 │   ├── test_websocket.cpp            # WebSocket 基础
 │   ├── test_ws_advanced.cpp          # WebSocket 进阶（子协议/心跳/压缩/Hub 广播）
@@ -245,6 +255,8 @@ hical/
 │   ├── test_log_channel.cpp          # LogChannel + Registry（12 个）
 │   ├── test_log_middleware.cpp       # LogMiddleware trace-id（3 个）
 │   ├── test_log_admin.cpp            # LogAdmin 端点（4 个）
+│   │ # —— HTTP 客户端（可选，需 HICAL_WITH_HTTP_CLIENT=ON） ——
+│   ├── test_async_http_client.cpp    # 协程 HttpClient / HttpClientPool
 │   │ # —— 数据库（可选，需 HICAL_WITH_DATABASE=ON） ——
 │   ├── test_db_pool.cpp              # 连接池单元测试（Mock，12 个）
 │   ├── test_db_middleware.cpp        # DB 中间件（Mock，8 个）
@@ -302,12 +314,13 @@ hical/
 
 **可选模块**
 
-| 选项                  | 默认 | 说明                                                        |
-| --------------------- | ---- | ----------------------------------------------------------- |
-| `HICAL_WITH_DATABASE` | OFF  | 启用 [src/db/](../src/db/) 数据库中间件（后端无关的核心层） |
-| `HICAL_WITH_MYSQL`    | OFF  | 启用 MySQL 后端，需 Boost.MySQL 1.85+                       |
-| `HICAL_WITH_PGSQL`    | OFF  | 启用 PostgreSQL 后端，需 libpq                              |
-| `HICAL_WITH_OPENAPI`  | ON   | 启用 OpenAPI 3.0 元数据层（`OpenApi*.h/cpp`），无额外依赖   |
+| 选项                     | 默认 | 说明                                                                                                     |
+| ------------------------ | ---- | -------------------------------------------------------------------------------------------------------- |
+| `HICAL_WITH_DATABASE`    | OFF  | 启用 [src/db/](../src/db/) 数据库中间件（后端无关的核心层）                                              |
+| `HICAL_WITH_MYSQL`       | OFF  | 启用 MySQL 后端，需 Boost.MySQL 1.85+                                                                    |
+| `HICAL_WITH_PGSQL`       | OFF  | 启用 PostgreSQL 后端，需 libpq                                                                           |
+| `HICAL_WITH_OPENAPI`     | ON   | 启用 OpenAPI 3.0 元数据层（`OpenApi*.h/cpp`），无额外依赖                                                |
+| `HICAL_WITH_HTTP_CLIENT` | OFF  | 启用协程 HTTP 客户端（`src/asio/HttpClient*`，开关只管 `.cpp` 和头文件安装，包含头却没开会在链接期报错） |
 
 **特性开关**
 
@@ -428,7 +441,7 @@ hical/
   - Windows 额外：`ws2_32`、`mswsock`
 - **构建产物**：
   - `hical_core` — 框架核心静态库（**仅静态库**，DLL/ABI 不兼容）
-  - `test_*` — 69 个测试目标（60 个基础 + 1 个可选 OpenAPI + 3 个可选 DB 基础 + 3 个可选 PG + 2 个可选 MySQL）
+  - `test_*` — 75 个测试目标（65 个基础 + 1 个可选 OpenAPI + 1 个可选 HTTP 客户端 + 3 个可选 DB 基础 + 3 个可选 PG + 2 个可选 MySQL）
   - 11 个示例可执行文件（部分按构建开关条件编译）
 - **CI 工作流**：见 [.github/workflows/](../.github/workflows/) — `ci.yml`（多平台矩阵）、`sanitizer.yml`（ASan/UBSan/TSan）、`benchmark.yml`、`labeler.yml`（fork PR 也生效）、`release.yml`、`conan-publish.yml`
 
@@ -438,18 +451,20 @@ hical/
 
 > 完整版本历史与逐次变更见 [CHANGELOG.md](../CHANGELOG.md)。本节仅给出主要里程碑，便于理解仓库当前状态来源。
 
-| 阶段       | 关键模块                                                                                                                              | 说明                                                                               |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| 基础设施   | `MemoryPool` / `PmrBuffer` / `EventLoop` / `Concepts`                                                                                 | 三层 PMR 池 + Asio 抽象 + C++20 概念约束                                           |
-| 网络层     | `TcpServer` / `GenericConnection` / `SslContext`                                                                                      | SO_REUSEPORT 多 acceptor、TCP/SSL 模板统一、零分配写队列                           |
-| HTTP 框架  | `HttpServer` / `Router` / `Middleware` / `HttpRequest` / `HttpResponse`                                                               | 协程化处理、洋葱中间件、参数路由、`dispatchSync` 同步快路径                        |
-| 协议增强   | `Session` / `Cookie` / `Cors` / `StaticFiles` / `Multipart` / `RouteGroup`                                                            | 完整 HTTP 周边能力                                                                 |
-| WebSocket  | `WebSocket` / `WsFrame` / `WsHandshake` / `WsDeflate` / `WsHub`                                                                       | 自研 RFC 6455 栈，子协议/心跳/压缩/广播                                            |
-| 反射层     | `Reflection` / `MetaJson` / `MetaRoutes`                                                                                              | 双轨设计：C++26 原生 P2996 + C++20 宏回退                                          |
-| 日志系统   | `Log` / `LogChannel` / `LogFormatter` / `LogSink` / `LogFile` / `AsyncFileSink` / `LogMiddleware` / `LogAdmin`                        | 6 级日志、命名通道、异步双缓冲、动态级别管理                                       |
-| OpenAPI    | `OpenApiSchema` / `OpenApiRegistry` / `OpenApiDocument` / `OpenApiEndpoint`                                                           | 从 `HICAL_JSON` 自动派生 OpenAPI 3.0 文档                                          |
-| 数据库     | `DbConfig` / `DbConnectionPool` / `DbMiddleware` / `DbQueryLog` / `MysqlConnection` / `StmtCache` / `PgsqlConnection` / `PgStmtCache` | 协程化连接池 + 装饰器查询日志 + PreparedStatement LRU（MySQL + PostgreSQL 双后端） |
-| 编译期组件 | `PerfectHashRouter` / `CompileTimeChain` / `CompileTimeJson`                                                                          | 运行时零开销：完美哈希路由 + 编译期中件链 + 编译期 JSON 序列化                     |
+| 阶段        | 关键模块                                                                                                                              | 说明                                                                               |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| 基础设施    | `MemoryPool` / `PmrBuffer` / `EventLoop` / `Concepts`                                                                                 | 三层 PMR 池 + Asio 抽象 + C++20 概念约束                                           |
+| 网络层      | `TcpServer` / `GenericConnection` / `SslContext`                                                                                      | SO_REUSEPORT 多 acceptor、TCP/SSL 模板统一、零分配写队列                           |
+| HTTP 框架   | `HttpServer` / `Router` / `Middleware` / `HttpRequest` / `HttpResponse`                                                               | 协程化处理、洋葱中间件、参数路由、`dispatchSync` 同步快路径                        |
+| 协议增强    | `Session` / `Cookie` / `Cors` / `StaticFiles` / `Multipart` / `RouteGroup`                                                            | 完整 HTTP 周边能力                                                                 |
+| WebSocket   | `WebSocket` / `WsFrame` / `WsHandshake` / `WsDeflate` / `WsHub`                                                                       | 自研 RFC 6455 栈，子协议/心跳/压缩/广播                                            |
+| 反射层      | `Reflection` / `MetaJson` / `MetaRoutes`                                                                                              | 双轨设计：C++26 原生 P2996 + C++20 宏回退                                          |
+| 日志系统    | `Log` / `LogChannel` / `LogFormatter` / `LogSink` / `LogFile` / `AsyncFileSink` / `LogMiddleware` / `LogAdmin`                        | 6 级日志、命名通道、异步双缓冲、动态级别管理                                       |
+| OpenAPI     | `OpenApiSchema` / `OpenApiRegistry` / `OpenApiDocument` / `OpenApiEndpoint`                                                           | 从 `HICAL_JSON` 自动派生 OpenAPI 3.0 文档                                          |
+| 数据库      | `DbConfig` / `DbConnectionPool` / `DbMiddleware` / `DbQueryLog` / `MysqlConnection` / `StmtCache` / `PgsqlConnection` / `PgStmtCache` | 协程化连接池 + 装饰器查询日志 + PreparedStatement LRU（MySQL + PostgreSQL 双后端） |
+| 编译期组件  | `PerfectHashRouter` / `CompileTimeChain` / `CompileTimeJson`                                                                          | 运行时零开销：完美哈希路由 + 编译期中件链 + 编译期 JSON 序列化                     |
+| 定时与输出  | `TimerService` / `JsonWriter`                                                                                                         | 集中式定时器（一个 timer 兜住所有 sleep）+ 零 DOM 增量 JSON writer                 |
+| HTTP 客户端 | `HttpClient` / `HttpClientPool`                                                                                                       | 主动外呼：协程 HTTP/1.1 + 按 host:port 分桶的连接池（`HICAL_WITH_HTTP_CLIENT=ON`） |
 
 ## 命名风格
 
