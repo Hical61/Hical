@@ -14,26 +14,17 @@ namespace hical::detail
 {
 
 	/**
-	 * @brief 每请求分发上下文（栈上），由有中间件路径写入 HttpRequest 内部槽
-	 * 洋葱链的结构（哪些中间件、顺序、Sync 合并）是进程级不变的，start() 里就预构建好；
-	 * 只有「读 body + 按前置 resolveRoute 结果分发」这最后一步依赖 per-request 状态。
-	 * 本结构把这个 per-request 的终端处理器塞进 HttpRequest 的内部槽，让预构建链终端
-	 * 骨架（runInternalDispatch）执行时从槽里取——链只 build() 一次，每请求零重建。
-	 * 终端处理器用「obj + invoke」这一对表达，刻意不用 std::function：libstdc++ 的
-	 * std::function 内联缓冲（SBO）只有 16 字节，装不下这里 24 字节的闭包（按引用捕获
-	 * readRequestBody / resolveResult / this），每请求都要多一次堆分配。obj 指向
-	 * handleSession 栈上的闭包，生命周期由 handleSession 的 for 循环保证：链执行完 ctx
-	 * 即失效，req 下一轮复用前槽会被重新写入。禁止把 obj/invoke 这一对缓存到链里跨请求
-	 * 复用，那样上一请求的 resolveResult 会 stale，obj 甚至会悬空。
-	 * bodyObj + readBody 是同套路的第二对，把「读 body」这一步也做成可挂进预构建链的类型擦除
-	 * 入口，一样是栈上闭包加函数指针，生命周期约束同 obj/invoke。只有声明了 needsBody 的
-	 * 管线才会用到它，没声明时两个字段都留 nullptr。
+	 * @brief 每个请求的分发上下文，保存在会话栈或 HTTP/2 应用协程帧内
+	 * 中间件链在 start() 时构建一次，读 body 和路由分发所需的请求状态通过内部槽传入。
+	 * obj/invoke 保存终端闭包地址和调用入口，避免用 std::function 复制闭包并额外分配内存。
+	 * 闭包必须活到应用链执行结束，不能缓存到中间件链中跨请求复用。
+	 * bodyObj/readBody 用同样的方式调用 body 门，仅 needsBody 管线会设置这两个字段。
 	 */
 	struct RequestDispatchContext
 	{
 		/**
 		 * @brief 终端处理器的类型擦除调用约定：从 obj 取回闭包并转发调用
-		 * @param obj handleSession 栈上终端闭包的地址
+		 * @param obj 会话栈或应用协程帧内的终端闭包地址
 		 * @param req 请求
 		 * @return 分发结果
 		 */
@@ -44,14 +35,14 @@ namespace hical::detail
 		 * 返回 nullopt 表示读成功、body 已落进 req；返回 HttpResponse 表示读失败，
 		 * 那个响应就是错误响应，调用方（body 门）要短路返回它、不再往下走。
 		 * 跟 obj + invoke 一个套路，同样刻意不用 std::function——每请求一次堆分配省掉。
-		 * @param obj handleSession 栈上读 body 闭包的地址
+		 * @param obj 会话栈或应用协程帧内的读 body 闭包地址
 		 * @return nullopt = 读成功；有值 = 读失败（错误响应）
 		 */
 		using BodyReadFn = Awaitable<std::optional<HttpResponse>> (*)(void* obj);
 
-		void* obj = nullptr;           ///< 指向 handleSession 栈上的终端闭包，链执行完即失效
+		void* obj = nullptr;           ///< 终端闭包地址，应用链执行完即失效
 		InvokeFn invoke = nullptr;     ///< 与 obj 配套的调用入口，由 tailInvoke<闭包类型> 生成
-		void* bodyObj = nullptr;       ///< 指向 handleSession 栈上的读 body 闭包，链执行完即失效
+		void* bodyObj = nullptr;       ///< 读 body 闭包地址，应用链执行完即失效
 		BodyReadFn readBody = nullptr; ///< 与 bodyObj 配套的读 body 入口，由 bodyInvoke<闭包类型> 生成
 
 		/**

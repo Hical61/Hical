@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - 增加 HTTP 协议身份、独立尾字段和资源配置，HTTP/2 默认关闭。
 - 增加 HTTP/2 编解码、流控和有界收发组件。
+- 接入 TLS HTTP/2 服务端，支持请求分发、文件响应和连接排空。
 
 ### Changed
 

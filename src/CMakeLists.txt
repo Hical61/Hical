@@ -221,6 +221,7 @@ endif()
 
 if(HICAL_WITH_HTTP2)
     target_sources(hical_core PRIVATE
+        core/HttpConnectionRegistry.cpp
         core/http2/Http2Codec.cpp
         core/http2/Http2Headers.cpp
         core/http2/Http2Stream.cpp
@@ -229,6 +230,7 @@ if(HICAL_WITH_HTTP2)
         core/http2/Http2FileBody.cpp
         core/http2/Http2Response.cpp
         core/http2/Http2Connection.cpp
+        core/http2/Http2ServerSession.cpp
     )
     target_compile_definitions(hical_core PUBLIC HICAL_HAS_HTTP2=1)
     target_link_libraries(hical_core PUBLIC Nghttp2::Nghttp2)

@@ -5,6 +5,10 @@
 
 #pragma once
 
+#ifdef HICAL_HAS_HTTP2
+	#include "Error.h"
+	#include "HttpProtocol.h"
+#endif
 #include <boost/asio/ssl.hpp>
 #include <string>
 
@@ -54,6 +58,53 @@ namespace hical
 		 */
 		void setVerifyPeer(bool verifyPeer);
 
+#ifdef HICAL_HAS_HTTP2
+		/**
+		 * @brief 设置服务端协议策略；默认 H1，冻结后不可修改
+		 * 仅记录策略，不立即改变 context，可先后加载证书。配置过程只在启动线程执行。
+		 * @param mode H1、优先 H2 并允许 H1，或仅 H2；无效枚举抛 invalid_argument
+		 */
+		void setServerHttpProtocolMode(HttpProtocolMode mode);
+
+		/**
+		 * @brief 启动前应用并冻结服务端 ALPN 和 H2 TLS 配置，重复调用无副作用
+		 * 所有 SSL 对象必须在本调用后创建；冻结后不再通过 native() 改写协议或 TLS 参数。
+		 * H2 配置失败抛 runtime_error；仅 H2 模式仍须在握手后检查协商结果。
+		 */
+		void freezeServerHttpProtocolConfig();
+
+		/**
+		 * @brief 获取服务端协议策略
+		 * @return 配置的协议策略，冻结后只读
+		 */
+		[[nodiscard]] HttpProtocolMode serverHttpProtocolMode() const noexcept;
+
+		/**
+		 * @brief 查询服务端协议配置是否已冻结
+		 * @return 已应用配置时返回 true
+		 */
+		[[nodiscard]] bool serverHttpProtocolConfigFrozen() const noexcept;
+
+		/**
+		 * @brief 在客户端单个 SSL 对象上设置 ALPN 列表和 H2 TLS 参数，不修改共享 context
+		 * @param ssl 握手前的有效 SSL 对象，由调用方持有
+		 * @param mode H1、优先 H2 并允许 H1，或仅 H2
+		 * @return 配置错误；成功不代表 TLS 或协议协商已完成
+		 */
+		[[nodiscard]] static NetworkError configureClientHttpProtocols(SSL* ssl, HttpProtocolMode mode);
+
+		/**
+		 * @brief TLS 握手完成后读取协议并检查策略；仅 H2 时缺少 h2 明确失败
+		 * @param ssl 完成握手的 SSL 对象，由调用方持有
+		 * @param mode 该连接的协议策略
+		 * @param protocol 输出实际协议；错误时保持 H1，调用方必须先检查返回错误
+		 * @return 协商或 TLS 参数错误；自动模式的无 ALPN 结果回退 H1
+		 */
+		[[nodiscard]] static NetworkError negotiatedHttpProtocol(SSL* ssl,
+																 HttpProtocolMode mode,
+																 HttpProtocol& protocol);
+#endif
+
 		/**
 		 * @brief 获取底层 boost::asio::ssl::context 引用
 		 * @return ssl context 引用
@@ -68,6 +119,10 @@ namespace hical
 
 	private:
 		boost::asio::ssl::context ctx_;
+#ifdef HICAL_HAS_HTTP2
+		HttpProtocolMode serverHttpProtocolMode_ {HttpProtocolMode::hHttp1Only};
+		bool serverHttpProtocolConfigFrozen_ {false};
+#endif
 	};
 
 } // namespace hical

@@ -14,6 +14,9 @@
 #include "IdleFd.h"
 #include "IdleScanner.h"
 #include "TimerService.h"
+#ifdef HICAL_HAS_HTTP2
+	#include "Http2Options.h"
+#endif
 #include "../asio/AsioEventLoop.h"
 #include "../asio/EventLoopPool.h"
 #include <boost/asio.hpp>
@@ -27,6 +30,14 @@
 
 namespace hical
 {
+
+#ifdef HICAL_HAS_HTTP2
+	namespace detail
+	{
+		class HttpConnectionRegistry;
+		class Http2ServiceBudget;
+	} // namespace detail
+#endif
 
 	/**
 	 * @brief HTTP 服务器
@@ -178,10 +189,32 @@ namespace hical
 
 		/**
 		 * @brief 启用 SSL/TLS
+		 * 必须在 start() 之前调用。
 		 * @param certFile 证书文件路径
 		 * @param keyFile 私钥文件路径
 		 */
 		void enableSsl(const std::string& certFile, const std::string& keyFile);
+
+#ifdef HICAL_HAS_HTTP2
+		/**
+		 * @brief 设置 HTTP/2 资源配置，必须在 start() 之前调用
+		 * @param options 资源预算；非法配置抛 invalid_argument
+		 * @note 与 enableSsl() 的调用顺序无关；start() 时没有 TLS 会明确报错
+		 */
+		void enableHttp2(Http2Options options = {});
+
+		/**
+		 * @brief 获取已占用的 TCP 连接槽数量快照，允许跨线程查询
+		 * @return 包括尚未启动的会话和握手；每个 TCP 连接只占一个槽
+		 */
+		[[nodiscard]] size_t activeConnectionCount() const noexcept;
+
+		/**
+		 * @brief 获取独立控制表的登记数量快照，允许跨线程查询
+		 * @return 启动配置尚未发布或未启用 HTTP/2 时为 0；该快照与连接槽快照不保证同时取得
+		 */
+		[[nodiscard]] size_t controlledConnectionCount() const;
+#endif
 
 		/**
 		 * @brief 设置最大请求体大小
@@ -239,7 +272,9 @@ namespace hical
 
 		/**
 		 * @brief 设置优雅关机超时时间
-		 * @param seconds 超时秒数（默认 30 秒，超时后强制关闭）
+		 * @param seconds 有限非负秒数（默认 30 秒，0 表示立即强制关闭）
+		 * @throw std::invalid_argument 秒数为负数或非有限值
+		 * @note 允许跨线程更新；已开始的排空仍使用开始时取得的期限
 		 */
 		void setShutdownTimeout(double seconds);
 
@@ -286,6 +321,13 @@ namespace hical
 		 * @brief 停止服务器
 		 */
 		void stop();
+
+		/**
+		 * @brief 发起优雅停机：停止接纳新连接/流，等待已有请求完成，超时后强制关闭。
+		 * 可从所属 loop 或其他线程调用；本调用立即返回，start() 等全部任务收尾后才返回。
+		 * 仅对已启动的服务器生效，重复调用无副作用；对象必须存活到 start() 返回。
+		 */
+		void gracefulStop();
 
 		/**
 		 * @brief 服务器是否正在运行
@@ -413,14 +455,17 @@ namespace hical
 		// 内存池定期 GC 协程
 		Awaitable<void> gcLoop();
 
-		// 优雅关机：停止接受新连接，等待活跃连接处理完毕
-		void gracefulStop();
-
 		// 停止所有 loop（baseLoop + ioPool）
 		void stopAllLoops();
 
 		// 关闭所有 acceptor（stop/gracefulStop 共用）
 		void closeAllAcceptors();
+
+		// 仅在 base loop 执行；生命周期控制锁保护 owner 指针，不在此方法内重复取锁。
+		void beginGracefulStopOnLoop();
+
+		struct StopControl;
+		std::shared_ptr<StopControl> stopControl_;
 
 		// 会话帧归还计数时会检查关服状态，三个 atomic 都必须比 io_context 活得久。
 		std::atomic<size_t> activeConnections_ {0};
@@ -443,6 +488,11 @@ namespace hical
 		std::atomic<bool> listenLock_ {false};
 
 		size_t ioThreads_;
+#ifdef HICAL_HAS_HTTP2
+		// start 配置阶段创建一次，在 started_ 的 release/acquire 发布后只读。
+		// 声明在 io_context 前，确保销毁残留会话帧时控制表仍然存活。
+		std::unique_ptr<detail::HttpConnectionRegistry> connectionRegistry_;
+#endif
 		AsioEventLoop baseLoop_;                // 主 loop（accept + signal + GC）
 		std::unique_ptr<EventLoopPool> ioPool_; // IO 线程池（ioThreads-1 个 worker loop）
 
@@ -470,6 +520,10 @@ namespace hical
 		MiddlewarePipeline middlewarePipeline_;
 
 		std::shared_ptr<SslContext> sslCtx_;
+#ifdef HICAL_HAS_HTTP2
+		std::optional<Http2Options> http2Options_;
+		std::shared_ptr<detail::Http2ServiceBudget> http2ServiceBudget_;
+#endif
 
 		// start() 后配置不可改
 		std::atomic<bool> started_ {false};
@@ -494,13 +548,16 @@ namespace hical
 		double gcInterval_ {60.0};
 
 		// 优雅关机
-		double shutdownTimeout_ {30.0};
+		std::atomic<double> shutdownTimeout_ {30.0};
 
 		// 全局错误处理器
 		ErrorHandler errorHandler_;
 
 		// gcLoop 的 timer，放成员上是为了 stop 时能从外面 cancel 掉
 		std::optional<boost::asio::steady_timer> gcTimer_;
+
+		// 只在 base loop 操作；强制关闭或最后一个连接退出时取消，避免空服仍等待旧期限。
+		std::optional<boost::asio::steady_timer> shutdownTimer_;
 
 		// signal_set 放成员上——stop() 得能 cancel 它，不然 async_wait 会卡住 run() 不退
 		std::optional<boost::asio::signal_set> signals_;

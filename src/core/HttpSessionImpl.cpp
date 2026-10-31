@@ -10,6 +10,10 @@
 #include "FixedBuffer.h"
 #include "HeaderMap.h"
 #include "HttpTypes.h"
+#ifdef HICAL_HAS_HTTP2
+	#include "HttpConnectionRegistry.h"
+	#include "http2/Http2ServerSession.h"
+#endif
 #include "InetAddress.h"
 #include "MemoryPool.h"
 #include "ReadBufferPool.h"
@@ -757,6 +761,28 @@ namespace hical
 		// socket 析构守卫，WS 升级时 transferred=true 就跳过
 		SocketGuard<SocketType> guard {socket};
 
+#ifdef HICAL_HAS_HTTP2
+		// 只在启用 H2 的 TLS 服务登记；守卫先于 SocketGuard/socket 析构，迟到通知因注销失效。
+		detail::HttpConnectionRegistry::Registration connectionControl;
+		if constexpr (hIsSslStream<SocketType>)
+		{
+			if (connectionRegistry_)
+			{
+				connectionControl = connectionRegistry_->add(socket.get_executor(),
+															 [&socket]
+															 {
+																 boost::system::error_code ec;
+																 socket.lowest_layer().close(ec);
+															 });
+				// stop/drain 可能已在登记前取完快照；复查覆盖这条晚到的连接。
+				if (!running_.load() || draining_.load())
+				{
+					co_return;
+				}
+			}
+		}
+#endif
+
 		// entry 在协程栈上，Guard 析构时自动注销
 		// 声明在 SocketGuard 后面 → 先析构（先 unregister 再关 socket）
 		// 注册要赶在 SSL 握手之前：握手期间连接同样处于「已建立但对端沉默」的状态，
@@ -787,6 +813,12 @@ namespace hical
 			{
 				co_return;
 			}
+#ifdef HICAL_HAS_HTTP2
+			if (connectionRegistry_ && (!running_.load() || draining_.load() || connectionControl.draining()))
+			{
+				co_return;
+			}
+#endif
 		}
 
 		if constexpr (!hIsSslStream<SocketType>)
@@ -812,6 +844,46 @@ namespace hical
 			// 空指针判断完美预测，跟没这块代码基本一样。
 			std::atomic<size_t>* writeCounter =
 				writeCountEnabled_.load(std::memory_order_relaxed) ? &responseWriteCount_ : nullptr;
+
+#ifdef HICAL_HAS_HTTP2
+			if constexpr (hIsSslStream<SocketType>)
+			{
+				if (http2Options_)
+				{
+					HttpProtocol protocol;
+					if (auto error = SslContext::negotiatedHttpProtocol(socket.native_handle(),
+																		HttpProtocolMode::hNegotiateHttp2,
+																		protocol))
+					{
+						co_return;
+					}
+					if (protocol == HttpProtocol::hHttp2)
+					{
+						detail::Http2ServerSession::Context context {router_,
+																	 middlewarePipeline_,
+																	 peerAddr,
+																	 errorHandler_,
+																	 http2ServiceBudget_,
+																	 [&idleEntry]
+																	 {
+																		 idleEntry.touch();
+																	 }};
+						auto session = detail::Http2ServerSession::create(socket, *http2Options_, std::move(context));
+						connectionControl.setDrainHandler(
+							[weak = std::weak_ptr(session)]
+							{
+								if (auto owner = weak.lock())
+								{
+									owner->drain();
+								}
+							});
+						auto error = co_await session->run();
+						guard.cleanExit = !error;
+						co_return;
+					}
+				}
+			}
+#endif
 
 			// 跨请求的粘包残留；大多数连接空着不额外占内存
 			std::string pipelineSpill;
@@ -1169,11 +1241,11 @@ namespace hical
 					nativeReq.keepAlive = (minorVersion >= 1);
 				}
 
-				// ====== 前置路由匹配（阶段 B.5）：读 body 之前先 resolveRoute ======
+				// ====== 前置路由匹配：读 body 之前先 resolveRoute ======
 				// 从这往下的时序两个不变量：① 中间件在 body 之前执行（req.body() 那时是空的），
 				// ② 无效请求（404/405/超深路径）在读 body 前就拒绝，body 一字不读。
 				// body 现在还是空的，但路由匹配只看 method+path，不受影响。
-				// 提前构建 HttpRequest，后续 body 读取通过 req.native() 写入（阶段 C 填充）。
+				// 先构建请求供路由和中间件读取头部，正文稍后写入 req.native()。
 				HttpRequest req = HttpRequest::fromParsed(std::move(nativeReq));
 				req.setPeerAddr(peerAddr);
 

@@ -7,8 +7,15 @@
 #include "Log.h"
 #include "MemoryPool.h"
 #include "RequestDispatch.h"
+#ifdef HICAL_HAS_HTTP2
+	#include "HttpConnectionRegistry.h"
+	#include "http2/Http2Budget.h"
+#endif
 #include "core/Version.h"
+#include <algorithm>
+#include <cmath>
 #include <iostream>
+#include <mutex>
 #include <optional>
 #include <stdexcept>
 #include <thread>
@@ -49,6 +56,17 @@ namespace hical
 	};
 
 	using boost::asio::ip::tcp;
+
+	struct HttpServer::StopControl
+	{
+		explicit StopControl(HttpServer& server) : owner(&server)
+		{
+		}
+
+		// 只保护 owner 及通过它执行的同步入口，不跨 await 或用户回调持锁。
+		std::mutex mutex;
+		HttpServer* owner;
+	};
 
 	HttpServer::ConnectionReservation::ConnectionReservation(HttpServer& server,
 															 std::atomic<size_t>& loopConnections) noexcept
@@ -118,7 +136,8 @@ namespace hical
 		return true;
 	}
 
-	HttpServer::HttpServer(uint16_t port, size_t ioThreads) : port_(port), ioThreads_(ioThreads > 0 ? ioThreads : 1)
+	HttpServer::HttpServer(uint16_t port, size_t ioThreads)
+		: stopControl_(std::make_shared<StopControl>(*this)), port_(port), ioThreads_(ioThreads > 0 ? ioThreads : 1)
 	{
 	}
 
@@ -128,6 +147,11 @@ namespace hical
 
 	HttpServer::~HttpServer()
 	{
+		{
+			std::lock_guard lock(stopControl_->mutex);
+			stopControl_->owner = nullptr;
+		}
+		// stop 不获取控制锁；对象仍须按公开契约存活到 start 返回。
 		if (running_.load())
 		{
 			stop();
@@ -316,7 +340,11 @@ namespace hical
 
 	void HttpServer::setShutdownTimeout(double seconds)
 	{
-		shutdownTimeout_ = seconds;
+		if (!std::isfinite(seconds) || seconds < 0)
+		{
+			throw std::invalid_argument("HttpServer: shutdown timeout must be finite and >= 0");
+		}
+		shutdownTimeout_.store(seconds, std::memory_order_relaxed);
 	}
 
 	void HttpServer::setErrorHandler(ErrorHandler handler)
@@ -357,13 +385,67 @@ namespace hical
 
 	void HttpServer::enableSsl(const std::string& certFile, const std::string& keyFile)
 	{
+		if (started_.load())
+		{
+			throw std::logic_error("HttpServer: enableSsl() 必须在 start() 之前调用");
+		}
 		sslCtx_ = std::make_shared<SslContext>(boost::asio::ssl::context::tls_server);
 		sslCtx_->loadCertificate(certFile);
 		sslCtx_->loadPrivateKey(keyFile);
 	}
 
+#ifdef HICAL_HAS_HTTP2
+	void HttpServer::enableHttp2(Http2Options options)
+	{
+		if (started_.load())
+		{
+			throw std::logic_error("HttpServer: enableHttp2() 必须在 start() 之前调用");
+		}
+		options.validate();
+		http2Options_ = std::move(options);
+	}
+
+	size_t HttpServer::activeConnectionCount() const noexcept
+	{
+		return activeConnections_.load(std::memory_order_acquire);
+	}
+
+	size_t HttpServer::controlledConnectionCount() const
+	{
+		// 创建表发生在首次发布 started_ 之前，此后直到析构都不替换或清空指针。
+		if (!started_.load(std::memory_order_acquire))
+		{
+			return 0;
+		}
+		return connectionRegistry_ ? connectionRegistry_->size() : 0;
+	}
+#endif
+
 	void HttpServer::start()
 	{
+#ifdef HICAL_HAS_HTTP2
+		if (http2Options_)
+		{
+			http2Options_->maxHeaderBytes = (std::min)(http2Options_->maxHeaderBytes, maxHeaderSize_);
+			http2Options_->maxBodyBytes = (std::min)(http2Options_->maxBodyBytes, maxBodySize_);
+			http2Options_->validate();
+			if (!sslCtx_)
+			{
+				throw std::invalid_argument("HttpServer: HTTP/2 必须配置 TLS");
+			}
+			if (!connectionRegistry_)
+			{
+				connectionRegistry_ = std::make_unique<detail::HttpConnectionRegistry>();
+			}
+			http2ServiceBudget_ =
+				std::make_shared<detail::Http2ServiceBudget>(http2Options_->maxServerApplicationTasks);
+			if (!sslCtx_->serverHttpProtocolConfigFrozen())
+			{
+				sslCtx_->setServerHttpProtocolMode(HttpProtocolMode::hNegotiateHttp2);
+				sslCtx_->freezeServerHttpProtocolConfig();
+			}
+		}
+#endif
 		running_.store(true);
 		auto guardRunning = ScopedGuard(
 			[this]()
@@ -382,11 +464,8 @@ namespace hical
 			});
 
 		// 中间件链在此锁定（build 后再 use 会抛异常）并初始化 profiling 统计。
-		// build 的 finalHandler 是「终端骨架」：只从请求内部槽取每请求分发上下文并调
-		// ctx->invoke(ctx->obj, r)（obj 指向 handleSession 每请求写在栈上的闭包，封装了
-		// 「读 body + 用前置 resolveRoute 缓存结果 dispatch」，由它的 for 循环保活）。
-		// 链本身只 build 一次，每请求零重建，resolve 全程只匹配一次，中间件后置仍拿到
-		// 真实 handler 响应。
+		// 管线只构建一次，终端从请求内部槽读取分发上下文。
+		// 闭包由所属会话栈或逐流协程帧持有，负责读 body 并按已匹配的路由分发。
 		if (middlewarePipeline_.size() > 0)
 		{
 			middlewarePipeline_.build(
@@ -603,6 +682,12 @@ namespace hical
 		}
 
 		draining_.store(true);
+#ifdef HICAL_HAS_HTTP2
+		if (connectionRegistry_)
+		{
+			connectionRegistry_->requestClose();
+		}
+#endif
 		closeAllAcceptors();
 
 		// 通知周期任务停机。置标志用 atomic，随便哪个线程写都行；协程在每轮
@@ -625,6 +710,11 @@ namespace hical
 							  if (gcTimer_.has_value())
 							  {
 								  gcTimer_->cancel();
+							  }
+
+							  if (shutdownTimer_.has_value())
+							  {
+								  shutdownTimer_->cancel();
 							  }
 
 							  // 周期任务定时器的 cancel 必须在 io_context 线程上做。
@@ -746,7 +836,7 @@ namespace hical
 					// SO_REUSEPORT 路径：socket 已在当前 loop 上，零跨线程调度
 					auto socket = co_await acceptor.async_accept(boost::asio::use_awaitable);
 
-					if (!running_.load())
+					if (!running_.load() || draining_.load())
 					{
 						break;
 					}
@@ -775,7 +865,7 @@ namespace hical
 
 					co_await acceptor.async_accept(socket, boost::asio::use_awaitable);
 
-					if (!running_.load())
+					if (!running_.load() || draining_.load())
 					{
 						break;
 					}
@@ -886,23 +976,70 @@ namespace hical
 
 	void HttpServer::gracefulStop()
 	{
-		if (draining_.exchange(true))
+		if (!running_.load(std::memory_order_acquire) || draining_.exchange(true))
+		{
+			return;
+		}
+		// 外线程只发布停止接纳状态；timer、控制广播和 acceptor 容器统一由 base loop 访问。
+		std::weak_ptr<StopControl> weak = stopControl_;
+		boost::asio::post(baseLoop_.getIoContext(),
+						  [weak]
+						  {
+							  if (auto control = weak.lock())
+							  {
+								  std::lock_guard lock(control->mutex);
+								  if (control->owner)
+								  {
+									  control->owner->beginGracefulStopOnLoop();
+								  }
+							  }
+						  });
+	}
+
+	void HttpServer::beginGracefulStopOnLoop()
+	{
+		if (!running_.load(std::memory_order_acquire))
 		{
 			return;
 		}
 
-		closeAllAcceptors();
+#ifdef HICAL_HAS_HTTP2
+		if (connectionRegistry_)
+		{
+			connectionRegistry_->requestDrain();
+		}
+#endif
 
-		// 超时后强制停止（防止活跃连接迟迟不退出）
-		auto& baseIoCtx = baseLoop_.getIoContext();
-		auto timer = std::make_shared<boost::asio::steady_timer>(baseIoCtx);
-		timer->expires_after(std::chrono::milliseconds(static_cast<int64_t>(shutdownTimeout_ * 1000)));
-		timer->async_wait(
-			[this, timer](const boost::system::error_code& ec)
+		closeAllAcceptors();
+		if (activeConnections_.load(std::memory_order_acquire) == 0)
+		{
+			stop();
+			return;
+		}
+
+		using Clock = std::chrono::steady_clock;
+		const auto now = Clock::now();
+		const auto seconds = std::chrono::duration<long double>(shutdownTimeout_.load(std::memory_order_relaxed));
+		const auto remaining = Clock::time_point::max() - now;
+		const auto deadline = seconds >= std::chrono::duration<long double>(remaining)
+								  ? Clock::time_point::max()
+								  : now + std::chrono::duration_cast<Clock::duration>(seconds);
+		shutdownTimer_.emplace(baseLoop_.getIoContext());
+		shutdownTimer_->expires_at(deadline);
+		std::weak_ptr<StopControl> weak = stopControl_;
+		shutdownTimer_->async_wait(
+			[weak](const boost::system::error_code& ec)
 			{
 				if (!ec)
 				{
-					stop();
+					if (auto control = weak.lock())
+					{
+						std::lock_guard lock(control->mutex);
+						if (control->owner)
+						{
+							control->owner->stop();
+						}
+					}
 				}
 			});
 	}
