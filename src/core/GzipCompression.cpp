@@ -5,13 +5,16 @@
 
 #include "GzipCompression.h"
 #include "ChunkedBody.h"
-#include <zlib.h>
-#include <array>
-#include <string>
-
-#include <boost/asio/post.hpp>
+#include <boost/asio/bind_executor.hpp>
+#include <boost/asio/co_spawn.hpp>
 #include <boost/asio/thread_pool.hpp>
 #include <boost/asio/use_awaitable.hpp>
+#include <zlib.h>
+#include <array>
+#include <memory>
+#include <stdexcept>
+#include <string>
+#include <utility>
 
 namespace hical
 {
@@ -66,46 +69,122 @@ namespace hical
 			return false;
 		}
 
-		/// 检查 Accept-Encoding 是否包含 gzip
-		bool acceptsGzip(const HttpRequest& req)
+		std::string_view trimOws(std::string_view text)
 		{
-			auto ae = req.header("Accept-Encoding");
-			if (ae.empty())
+			while (!text.empty() && (text.front() == ' ' || text.front() == '\t'))
+			{
+				text.remove_prefix(1);
+			}
+			while (!text.empty() && (text.back() == ' ' || text.back() == '\t'))
+			{
+				text.remove_suffix(1);
+			}
+			return text;
+		}
+
+		std::string_view takePart(std::string_view& text, char separator)
+		{
+			const auto position = text.find(separator);
+			const auto part = trimOws(text.substr(0, position));
+			text = position == std::string_view::npos ? std::string_view {} : text.substr(position + 1);
+			return part;
+		}
+
+		bool positiveQuality(std::string_view quality)
+		{
+			constexpr size_t kMaxQualityLength = 5;
+			if (quality.empty() || (quality.front() != '0' && quality.front() != '1'))
 			{
 				return false;
 			}
-			std::string_view sv(ae);
-			while (!sv.empty())
+			if (quality.size() == 1)
 			{
-				auto comma = sv.find(',');
-				auto token = (comma != std::string_view::npos) ? sv.substr(0, comma) : sv;
-				sv = (comma != std::string_view::npos) ? sv.substr(comma + 1) : std::string_view {};
-
-				while (!token.empty() && token.front() == ' ')
+				return quality.front() == '1';
+			}
+			if (quality.size() > kMaxQualityLength || quality[1] != '.')
+			{
+				return false;
+			}
+			bool positive = quality.front() == '1';
+			for (char digit : quality.substr(2))
+			{
+				if (digit < '0' || digit > '9' || (quality.front() == '1' && digit != '0'))
 				{
-					token.remove_prefix(1);
+					return false;
 				}
-				while (!token.empty() && token.back() == ' ')
-				{
-					token.remove_suffix(1);
-				}
+				positive = positive || digit != '0';
+			}
+			return positive;
+		}
 
-				auto semi = token.find(';');
-				if (semi != std::string_view::npos)
+		/// 只协商 gzip；q=0 或非法 qvalue 都不压缩。
+		bool acceptsGzip(const HttpRequest& req)
+		{
+			auto encodings = req.header("Accept-Encoding");
+			while (!encodings.empty())
+			{
+				auto parameters = takePart(encodings, ',');
+				if (!HeaderMap::iequals(takePart(parameters, ';'), "gzip"))
 				{
-					token = token.substr(0, semi);
-					while (!token.empty() && token.back() == ' ')
+					continue;
+				}
+				bool acceptable = true;
+				while (!parameters.empty())
+				{
+					auto parameter = takePart(parameters, ';');
+					auto equals = parameter.find('=');
+					if (HeaderMap::iequals(trimOws(parameter.substr(0, equals)), "q"))
 					{
-						token.remove_suffix(1);
+						acceptable =
+							equals != std::string_view::npos && positiveQuality(trimOws(parameter.substr(equals + 1)));
+						if (!acceptable)
+						{
+							break;
+						}
 					}
 				}
-
-				if (token == "gzip")
+				if (acceptable)
 				{
 					return true;
 				}
 			}
 			return false;
+		}
+
+		void varyAcceptEncoding(HeaderMap& headers)
+		{
+			for (const auto& [name, value] : headers)
+			{
+				if (!HeaderMap::iequals(name, "vary"))
+				{
+					continue;
+				}
+				std::string_view tokens = value;
+				while (!tokens.empty())
+				{
+					const auto token = takePart(tokens, ',');
+					if (token == "*" || HeaderMap::iequals(token, "accept-encoding"))
+					{
+						return;
+					}
+				}
+			}
+			auto vary = std::string(headers.find("Vary"));
+			if (!vary.empty())
+			{
+				vary += ", ";
+			}
+			vary += "Accept-Encoding";
+			headers.set("Vary", vary);
+		}
+
+		bool compressionEligible(const NativeResponse& response, const GzipCompressionOptions& options)
+		{
+			const auto status = static_cast<unsigned>(response.status);
+			return !response.body.empty() && !response.hasChunkedBody() && !response.hasFileBody()
+				   && !response.headers.contains("Content-Encoding") && response.body.size() >= options.minSize
+				   && isCompressible(response.headers.find("Content-Type")) && status >= 200 && status != 204
+				   && status != 304;
 		}
 
 		/**
@@ -207,7 +286,7 @@ namespace hical
 		}
 
 		/**
-		 * @brief 流式压缩，每次输出编码为 chunked frame
+		 * @brief 将 gzip 输出包装为 HTTP/1 分块正文，完整缓冲后返回
 		 */
 		std::string gzipCompressChunked(std::string_view input, int level)
 		{
@@ -297,107 +376,62 @@ namespace hical
 			return result;
 		}
 
-	} // namespace
-
-	SyncAfterHandler makeGzipCompressionMiddleware(GzipCompressionOptions opts)
-	{
-		return [opts](HttpRequest& req, HttpResponse& res) -> void
+		std::string compressBytes(std::string_view body, int level, bool chunked)
 		{
-			if (!acceptsGzip(req))
-			{
-				return;
-			}
+			return chunked ? gzipCompressChunked(body, level) : gzipCompress(body, level);
+		}
 
-			auto& native = res.native();
-
-			if (!native.body.empty() && !native.hasChunkedBody() && !native.hasFileBody())
-			{
-				if (!isCompressible(native.headers.find("Content-Type")))
-				{
-					return;
-				}
-
-				auto bodySize = native.body.size();
-				if (bodySize < opts.minSize)
-				{
-					return;
-				}
-
-				if (bodySize >= opts.streamingThreshold)
-				{
-					native.invalidatePayload();
-					auto compressedWire = gzipCompressChunked(native.body, opts.compressionLevel);
-					native.body = std::move(compressedWire);
-					native.headers.set("Content-Encoding", "gzip");
-					native.headers.set("Transfer-Encoding", "chunked");
-					native.headers.erase("Content-Length");
-				}
-				else
-				{
-					native.invalidatePayload();
-					auto compressed = gzipCompress(native.body, opts.compressionLevel);
-					native.body = std::move(compressed);
-					native.headers.set("Content-Encoding", "gzip");
-					native.preparePayload();
-				}
-			}
-		};
-	}
-
-	MiddlewareHandler makeGzipCompressionMiddlewareAsync(GzipCompressionOptions opts)
-	{
-		auto pool =
-			std::make_shared<boost::asio::thread_pool>(opts.asyncThreads > 0 ? static_cast<int>(opts.asyncThreads) : 1);
-
-		auto guard = std::make_shared<std::shared_ptr<boost::asio::thread_pool>>(pool);
-
-		return [opts, pool, guard](HttpRequest& req, MiddlewareNext next) -> Awaitable<HttpResponse>
+		void applyCompressed(NativeResponse& response, std::string bytes, bool chunked)
 		{
-			(void)guard;
-
-			auto res = co_await next(req);
-
-			if (!acceptsGzip(req))
+			response.invalidatePayload();
+			response.body = std::move(bytes);
+			response.headers.set("Content-Encoding", "gzip");
+			response.headers.erase("Transfer-Encoding");
+			response.headers.erase("Content-Length");
+			if (chunked)
 			{
-				co_return res;
+				response.headers.set("Transfer-Encoding", "chunked");
 			}
+			response.preparePayload();
+		}
 
-			auto& native = res.native();
-			if (native.body.empty() || native.hasChunkedBody() || native.hasFileBody())
+		Awaitable<std::string> compressOnWorker(std::string body, int level, bool chunked)
+		{
+			// 协程帧持有输入；压缩过程不挂起，thread_local z_stream 不跨 co_await 使用。
+			co_return compressBytes(body, level, chunked);
+		}
+
+		Awaitable<HttpResponse> compressAfter(HttpRequest& request,
+											  MiddlewareNext next,
+											  GzipCompressionOptions options,
+											  std::shared_ptr<boost::asio::thread_pool> pool)
+		{
+			auto response = co_await next(request);
+			auto& native = response.native();
+			if (!compressionEligible(native, options))
 			{
-				co_return res;
+				co_return response;
 			}
-
-			if (!isCompressible(native.headers.find("Content-Type")))
+			varyAcceptEncoding(native.headers);
+			if (!acceptsGzip(request))
 			{
-				co_return res;
+				co_return response;
 			}
-
-			auto bodySize = native.body.size();
-			if (bodySize < opts.minSize)
+			const auto bodySize = native.body.size();
+			const bool chunked = request.protocol() != HttpProtocol::hHttp2 && bodySize >= options.streamingThreshold;
+			if (!pool || bodySize < options.streamingThreshold)
 			{
-				co_return res;
+				applyCompressed(native, compressBytes(native.body, options.compressionLevel, chunked), chunked);
+				co_return response;
 			}
-
-			if (bodySize < opts.streamingThreshold)
-			{
-				native.invalidatePayload();
-				auto compressed = gzipCompress(native.body, opts.compressionLevel);
-				native.body = std::move(compressed);
-				native.headers.set("Content-Encoding", "gzip");
-				native.preparePayload();
-				co_return res;
-			}
-
-			auto body = std::make_shared<std::string>(std::move(native.body));
-			auto compressedWire = std::make_shared<std::string>();
-			auto ioExecutor = co_await boost::asio::this_coro::executor;
-
-			co_await boost::asio::post(*pool, boost::asio::use_awaitable);
-
+			auto owner = co_await boost::asio::this_coro::executor;
 			try
 			{
-				*compressedWire = gzipCompressChunked(*body, opts.compressionLevel);
+				auto compressed = co_await boost::asio::co_spawn(
+					*pool,
+					compressOnWorker(std::move(native.body), options.compressionLevel, chunked),
+					boost::asio::bind_executor(owner, boost::asio::use_awaitable));
+				applyCompressed(native, std::move(compressed), chunked);
 			}
 			catch (const std::exception&)
 			{
@@ -406,16 +440,41 @@ namespace hical
 				errorRes.setBody("gzip compression failed", "text/plain");
 				co_return errorRes;
 			}
+			co_return response;
+		}
+	} // namespace
 
-			co_await boost::asio::post(boost::asio::bind_executor(ioExecutor, boost::asio::use_awaitable));
+	SyncAfterHandler makeGzipCompressionMiddleware(GzipCompressionOptions opts)
+	{
+		return [opts](HttpRequest& request, HttpResponse& response)
+		{
+			auto& native = response.native();
+			if (!compressionEligible(native, opts))
+			{
+				return;
+			}
+			varyAcceptEncoding(native.headers);
+			if (!acceptsGzip(request))
+			{
+				return;
+			}
+			const bool chunked =
+				request.protocol() != HttpProtocol::hHttp2 && native.body.size() >= opts.streamingThreshold;
+			applyCompressed(native, compressBytes(native.body, opts.compressionLevel, chunked), chunked);
+		};
+	}
 
-			native.invalidatePayload();
-			native.body = std::move(*compressedWire);
-			native.headers.set("Content-Encoding", "gzip");
-			native.headers.set("Transfer-Encoding", "chunked");
-			native.headers.erase("Content-Length");
-
-			co_return res;
+	MiddlewareHandler makeGzipCompressionMiddlewareAsync(GzipCompressionOptions opts)
+	{
+		std::shared_ptr<boost::asio::thread_pool> pool;
+		if (opts.asyncThreads > 0)
+		{
+			pool = std::make_shared<boost::asio::thread_pool>(opts.asyncThreads);
+		}
+		// 返回 awaitable 前先复制配置和线程池引用，协程不再依赖这个闭包。
+		return [opts, pool](HttpRequest& request, MiddlewareNext next) -> Awaitable<HttpResponse>
+		{
+			return compressAfter(request, std::move(next), opts, pool);
 		};
 	}
 

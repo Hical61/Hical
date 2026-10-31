@@ -83,6 +83,7 @@ namespace hical
 		/**
 		 * @brief 设置 Content-Length / Transfer-Encoding 头部
 		 * 空 body 且状态码非 204/304 时设置 Content-Length: 0
+		 * 已有明确 chunked 编码的普通 body 不再计算 Content-Length；文件体仍按文件长度准备。
 		 * 幂等：频繁调用不会重复计算。
 		 */
 		void preparePayload()
@@ -107,6 +108,13 @@ namespace hical
 				char buf[20];
 				auto [ptr, ec] = std::to_chars(buf, buf + 20, static_cast<size_t>(fileBody->length));
 				headers.set("Content-Length", std::string_view(buf, static_cast<size_t>(ptr - buf)));
+				return;
+			}
+
+			// 大 gzip 等普通 body 可能已带 H1 分块编码，重新准备时仍不能加 Content-Length。
+			if (HeaderMap::iequals(headers.find("Transfer-Encoding"), "chunked"))
+			{
+				headers.erase("Content-Length");
 				return;
 			}
 

@@ -17,6 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **安装目标传递线程 ABI 定义**：MinGW 的 Asio 线程实现等必要编译定义随 `hical::hical_core` 公开传递，避免库、测试和安装消费者混用不同线程布局。消费者应链接导出目标，不另设冲突宏。
 
+### Fixed
+
+- **gzip 压缩与传输编码**：HTTP/2 发送原始 gzip 字节，HTTP/1 保留分块编码；重新准备响应时不再同时设置 Content-Length。补齐 qvalue、Vary 和已编码响应的处理，异步压缩结果回到原执行器后再写入响应。
+
 ## [2.7.2] - 2026-10-22
 
 ### Added

@@ -70,6 +70,7 @@ if(HICAL_WITH_HTTP2)
     hical_add_test(test_http2_response)
     hical_add_test(test_http2_body)
     hical_add_test(test_http2_limits)
+    hical_add_test(test_http2_gzip)
     hical_add_test(test_http2_transport)
 endif()
 hical_add_test(test_router)               # 路由器
