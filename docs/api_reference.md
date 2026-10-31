@@ -116,6 +116,10 @@
 - [OpenApiDocument](#openapidocument) — 文档组装
 - [OpenApiEndpoint](#openapiendpoint) — 端点暴露
 
+**HTTP 协议与资源 API**
+
+- [HttpProtocol 与 Http2Options](#httpprotocol-与-http2options) — 协议策略与有限资源配置
+
 **HTTP 客户端 API（可选，需 `HICAL_WITH_HTTP_CLIENT=ON`，默认关闭）**
 - [HttpClient](#httpclient) — 单连接协程 HTTP 客户端
 - [HttpClientPool](#httpclientpool) — 按 endpoint 复用的连接池
@@ -156,12 +160,15 @@ HTTP 服务器，整合路由、中间件和网络层，提供一键启动的高
 | `useBody(before, after)`                              | before/after: 同步前后处理器                         | `void`          | 添加需读请求 body 的同步中间件                           |
 | `useBody(name, before, after)`                        | name/before/after                                    | `void`          | 添加命名需读请求 body 的同步中间件                       |
 | `enableSsl(certFile, keyFile)`                        | certFile: 证书文件路径<br>keyFile: 私钥文件路径      | `void`          | 启用 SSL/TLS                                             |
+| `enableHttp2(options)`                               | options: `Http2Options`，默认值可省略                | `void`          | 启用 TLS H2 候选实现；仅 H2 构建提供，启动前调用          |
 | `listen(endpoint)`                                    | ep: 监听地址（`tcp::endpoint`）                      | `void`          | 设置监听地址（仅监听该 IP）                              |
 | `listen(ip, port)`                                    | ip: IP 字符串<br>port: 端口号                        | `void`          | 设置监听 IP + 端口                                       |
 | `listenAny(port)`                                     | port: 端口号（0 = 系统分配）                         | `void`          | 设置监听端口（绑回 0.0.0.0）                             |
 | `addPeriodicTask(name, interval, callback)`           | name: 名称<br>interval: 周期<br>callback: 协程体     | `void`          | 注册由服务器托管生命周期的周期任务（`start()` 前调用）   |
 | `start()`                                             | 无                                                   | `void`          | 启动服务器（阻塞）                                       |
 | `stop()`                                              | 无                                                   | `void`          | 停止服务器                                               |
+| `gracefulStop()`                                      | 无                                                   | `void`          | 停止接纳并排空，立即返回；对象须存活到 `start()` 返回     |
+| `setShutdownTimeout(seconds)`                         | seconds: 有限非负秒数，默认 30，0 为立即关闭         | `void`          | 设置排空期限；到期关闭传输，业务协程继续自然收尾         |
 | `isRunning()`                                         | 无                                                   | `bool`          | 服务器是否正在运行                                       |
 | `port()`                                              | 无                                                   | `uint16_t`      | 获取监听端口                                             |
 | `endpoint()`                                          | 无                                                   | `tcp::endpoint` | 获取监听地址与端口                                       |
@@ -177,6 +184,8 @@ HTTP 服务器，整合路由、中间件和网络层，提供一键启动的高
 > `recommendedMaxConnections()` 只是个估算助手，返回的值不会自动生效，得自己传给 `setMaxConnections()`。带 `isTls` 的重载是给「打算跑 TLS」的场景用的：TLS 连接光 SSL 层就固定多占约 34KB（`ssl::stream` 一构造出来就分配的两个 17KB 记录缓冲，收没收发数据都占着），所以每连接口径从 16KB 提到 50KB。拿明文口径（16KB）给 TLS 配内存会低估约 2.6 倍。
 >
 > `useBody(...)` 系列跟对应的 `use(...)` 语义一样，只是额外声明这层要读请求 body。链构建时会在第一个声明者之前插一道 body 门，命中它先把 body 读进来，声明者以及它后面的中间件跑的时候 `req.body()` 才有内容——验签这类必须先拿原始 body 的中间件用它。只在真需要读 body 的中间件上用：声明以后，声明者后面那批中间件就没法在「不读 body」的前提下短路了（不过 404/405/超深路径这类无效请求在更早的路由匹配阶段就被拒了，压根不读 body）。注意 chunked 请求门里读到的是解码后的实体载荷，不是线路原始字节，按 wire 字节算的签名该验不过还是验不过。
+>
+> H2 保持相同的应用可见顺序：初始头与尾头独立，`trailers()` 在 body 完成后才可读。读泵已接收的 DATA 受预算约束，不会提前暴露给门前中间件。`enableHttp2()` 与 `enableSsl()` 顺序不限，但启动时必须具备 TLS；非法 H2 配置抛 `std::invalid_argument`。ALPN 可回退 H1，H2 不支持 h2c、WS/SSE 升级或 gRPC。此实现仍待最终验收，见 [HTTP/2 使用指南](http2-guide.md)。
 >
 > `addPeriodicTask(...)` 注册的周期任务由服务器托管生命周期：`start()` 时自动起协程、`stop()` 时自动取消定时器并让协程退出，调用方不用自己管停止逻辑。周期是「上一轮 `callback` 跑完再等 `interval`」，不是固定频率，某轮超时不会堆积；`callback` 抛异常会被接住记日志、继续下一轮。`interval` 非正或 `callback` 为空抛 `std::invalid_argument`，`start()` 之后调用抛 `std::logic_error`——必须在 `start()` 之前注册。
 
@@ -360,10 +369,13 @@ HTTP 请求封装，对原生 HTTP 解析结果的 hical 风格封装。
 | 方法             | 参数             | 返回值                      | 说明                                        |
 | ---------------- | ---------------- | --------------------------- | ------------------------------------------- |
 | `method()`       | 无               | `HttpMethod`                | 获取 HTTP 方法                              |
+| `protocol()`     | 无               | `HttpProtocol`              | 实际 H1/H2 协议，与 H1 minor version 分开    |
 | `path()`         | 无               | `std::string_view`          | 获取请求路径（不含查询参数）                |
 | `target()`       | 无               | `std::string_view`          | 获取完整 URI（含查询参数）                  |
 | `query()`        | 无               | `std::string_view`          | 获取查询字符串（? 后面的部分）              |
 | `header(name)`   | name: 头部字段名 | `std::string_view`          | 获取指定头部字段值                          |
+| `trailer(name)`  | name: 尾字段名   | `std::string_view`          | 查独立尾字段，不回退初始头                  |
+| `trailers()`     | 无               | `const HeaderMap&`          | 尾字段集合；body 完成前为空                 |
 | `body()`         | 无               | `const std::string&`        | 获取消息体                                  |
 | `jsonBody()`     | 无               | `const boost::json::value&` | 将消息体解析为 JSON（多次调用返回缓存引用） |
 | `readJson<T>()`  | 无               | `T`                         | 将消息体反序列化为 T（需 `HICAL_JSON`）     |
@@ -465,12 +477,18 @@ HTTP 响应封装，对原生 HTTP 响应的 hical 风格封装。
 | `setStatus(code)`              | code: 状态码                                               | `void`               | 设置状态码                                                                     |
 | `header(name)`                 | name: 字段名                                               | `std::string_view`   | 获取指定头部字段值                                                             |
 | `setHeader(name, value)`       | name: 字段名<br>value: 字段值 (`std::string_view`)         | `void`               | 设置头部字段                                                                   |
+| `setTrailer(name, value)`      | name/value: 尾字段名和值                                    | `void`               | 设置 H2 尾字段，忽略 CR/LF；H1 分块尾字段仍用 `ChunkedBody::end()`              |
+| `trailer(name)`               | name: 尾字段名                                             | `std::string_view`   | 查独立尾字段，不回退初始头                                                     |
+| `trailers()`                  | 无                                                         | `const HeaderMap&`   | 获取独立尾字段集合                                                             |
 | `body()`                       | 无                                                         | `const std::string&` | 获取消息体                                                                     |
 | `setBody(body, contentType)`   | body: 消息体<br>contentType: Content-Type                  | `void`               | 设置消息体并指定 Content-Type                                                  |
+| `setFileBody(path, offset, length, contentType)` | path: 文件路径<br>offset/length: 起始偏移及字节数<br>contentType: 类型 | `void` | 延迟到传输层按指定范围异步发送文件 |
 | `setJsonBody(json)`            | json: JSON 值                                              | `void`               | 设置 JSON 消息体                                                               |
 | `jsonWriter()`                 | 无                                                         | `JsonWriter`         | 拿一个直接往本响应 body 追加 JSON 的 writer（见 [JsonWriter](#jsonwriter) 节） |
 | `setCookie(name, value, opts)` | name: Cookie 名<br>value: Cookie 值<br>opts: CookieOptions | `void`               | 追加 Set-Cookie 响应头                                                         |
 | `native()`                     | 无                                                         | `NativeResponse&`    | 获取底层原生响应引用                                                           |
+
+H2 的普通字符串、三种 JSON 入口、gzip 和 `FileBody` 都经 H2 DATA 输出，不发送 H1 状态行或 chunked 边界。文件只在窗口、预取和连接预算允许时读取；HEAD、204、304 及零长度响应不读取文件内容。gzip 仍完整缓冲压缩结果，不能当作网络流式生产接口。RST 后停止生产，但已发起文件 I/O 的缓冲和句柄保留到完成返回。详见 [HTTP/2 使用指南](http2-guide.md)。
 
 #### 工厂方法
 
@@ -2543,6 +2561,42 @@ void serveOpenApi(
 
 ---
 
+## HTTP 协议与资源 API
+
+### HttpProtocol 与 Http2Options
+
+**头文件：** `<hical/core/HttpProtocol.h>`、`<hical/core/Http2Options.h>`。配置类型本身不会启用 H2；默认构建 `HICAL_WITH_HTTP2=OFF`，显式启用后还需配置 TLS。当前实现仍待最终验收，安装依赖和完整示例见 [HTTP/2 使用指南](http2-guide.md)。
+
+| 类型 | 枚举值或方法 | 语义 |
+| --- | --- | --- |
+| `HttpProtocol` | `hHttp1` / `hHttp2` | 实际传输协议 |
+| `HttpProtocolMode` | `hHttp1Only` | 默认仅 H1 |
+| `HttpProtocolMode` | `hNegotiateHttp2` | TLS ALPN 提议 h2/H1，对端未选 h2 时可回退 H1 |
+| `HttpProtocolMode` | `hHttp2Only` | 必须 ALPN 选中 h2，否则协议协商失败 |
+| `HttpRequestDisposition` | `hNotSent` / `hNotProcessed` / `hPossiblyProcessed` | 尚未发送 / 协议证明未处理 / 可能已处理；不等于可安全重试 |
+| `Http2Options` | `validationError()` / `validate()` | 返回首个错误文本 / 非法时抛 `std::invalid_argument` |
+
+H2 关闭时后两种客户端策略明确返回协议不可用。H2 需要 TLS；没有 ALPN 的 H1 回退只适用于自动协商模式，不会因证书错误回退明文。
+
+| `Http2Options` 字段 | 默认值 | 口径 |
+| --- | --- | --- |
+| `maxConcurrentStreams` | 64 | 每连接协议流；客户端还取对端 SETTINGS 的较小值 |
+| `maxApplicationTasks` / `maxServerApplicationTasks` | 64 / 4096 | 每连接 / 服务级未收尾应用任务，含 reset 后仍运行的 handler |
+| `maxHeaderBytes` / `maxHeaderFields` | 8 KiB / 64 | 初始头块和尾头块分别计费，单字段按 name + value + 32 字节，含伪头 |
+| `maxBodyBytes` / `maxConnectionReceiveBytes` | 1 MiB / 8 MiB | 服务端单流请求体 / 连接接收预算，还与原服务端限制取较小值 |
+| `maxConnectionSendBytes` | 8 MiB | 所有待发响应及文件预取共用 |
+| `maxOutputBatchBytes` / `maxFilePrefetchBytes` | 各 64 KiB | 输出批 / 单流文件预取，均不超过连接待发预算 |
+| `maxResponseBytes` / `maxClientConnectionReceiveBytes` | 16 MiB / 32 MiB | 客户端单流 / 整连接响应聚合上限 |
+| `maxConnectionsPerOrigin` / `maxQueuedRequestsPerOrigin` | 2 / 256 | 客户端高层池的连接 / 待调度请求上限 |
+| `initialStreamWindow` / `initialConnectionWindow` | 各 65535 | 流窗口可为零，连接窗口不可低于协议初值 |
+| `maxFrameBytes` / `headerTableBytes` | 16384 / 4096 | 入站帧 / HPACK 动态表上限，动态表可为零 |
+| `negotiationTimeout` / `headerTimeout` | 各 10s | 协商 / 头部阶段期限 |
+| `bodyTimeout` / `writeTimeout` / `queueTimeout` | 各 30s | 请求体 / 响应输出 / 排队期限，PING 不延长请求体期限 |
+
+容量和阶段期限要求为正，只有上述明确允许的窗口/动态表可为零；字段数不能超过 64，单流容量与预取不得超过对应连接预算。这些预算约束框架持有的任务和缓冲，不是进程 RSS 的总上限。
+
+---
+
 ## HTTP 客户端 API
 
 > 需要 `HICAL_WITH_HTTP_CLIENT=ON`（默认关闭）。命名空间 `hical`，头文件在 `<hical/asio/>`。这是纯客户端能力，跟上面的服务端 API 没有耦合。
@@ -2559,9 +2613,12 @@ void serveOpenApi(
 | ------------ | -------------- | ---------------------------------------------------- |
 | `error`      | `NetworkError` | 网络层错误码；无网络错误时为空                       |
 | `status`     | `int`          | HTTP 状态码，0 表示压根没收到响应                    |
-| `statusText` | `std::string`  | 状态行里的原因短语（如 `"OK"`、`"Not Found"`）       |
+| `statusText` | `std::string`  | H1 状态行原因短语；H2 为空                           |
 | `body`       | `std::string`  | 响应体（已按 Content-Length / chunked 解码后的内容） |
 | `headers`    | `HeaderMap`    | 响应头                                               |
+| `protocol`   | `HttpProtocol` | 实际协商协议；未协商时默认 H1                        |
+| `trailers`   | `HeaderMap`    | END_STREAM 前收到的独立尾字段                        |
+| `requestDisposition` | `HttpRequestDisposition` | 传输层处理证据；`status == 0` 不证明请求未处理 |
 
 | 方法               | 返回值 | 说明                                                 |
 | ------------------ | ------ | ---------------------------------------------------- |
@@ -2576,16 +2633,20 @@ void serveOpenApi(
 | 字段             | 类型                                  | 默认值 | 说明                                                      |
 | ---------------- | ------------------------------------- | ------ | --------------------------------------------------------- |
 | `tlsContext`     | `std::shared_ptr<SslContext>`         | 空     | 非空即启用 HTTPS（用 `ssl::context::tls_client` 构造）    |
-| `sniHost`        | `std::string`                         | `""`   | SNI 主机名，留空则回落到构造时传入的 host                 |
-| `verifyPeer`     | `bool`                                | `true` | 是否校验对端证书                                          |
+| `sniHost`        | `std::string`                         | `""`   | SNI 路由名称，留空用目标 host；不改变身份校验目标          |
+| `verifyPeer`     | `bool`                                | `true` | 同时校验证书链和目标 host 的 DNS 名或 IP SAN               |
 | `connectTimeout` | `std::chrono::steady_clock::duration` | `10s`  | resolve + TCP 连接（含 TLS 握手）的总时限；非正值不设超时 |
-| `requestTimeout` | `std::chrono::steady_clock::duration` | `30s`  | 单次请求（写请求 + 读完整响应）的时限；非正值不设超时     |
+| `requestTimeout` | `std::chrono::steady_clock::duration` | `30s`  | 普通入口提交起覆盖建连等待、排队、发送和完整响应；非正值关闭此时限 |
+| `protocolMode`   | `HttpProtocolMode`                    | `hHttp1Only` | H1 / 自动协商 / 强 H2，见上节                         |
+| `http2`          | `Http2Options`                        | 有限默认值 | H2 流、响应聚合和队列预算；H1 不创建对应资源           |
 
 常量：`static constexpr auto kDefaultConnectTimeout`（10s）、`static constexpr auto kDefaultRequestTimeout`（30s）。
 
 ### HttpClient
 
-单连接的协程 HTTP/1.1 客户端：一个实例对应一条到 host:port 的连接，请求之间尽量复用（keep-alive）。实例本身不跨线程共享；要管一批连接用 `HttpClientPool`。所有异步操作跑在构造时传入的 io_context 上。**请求协程在挂起点之后要用对象上的 socket / 缓冲，所以调用方必须保证本对象活到 awaitable 跑完**——池子持有实例、协程期间不释放即可满足。
+一个实例对应一条到 host:port 的连接，默认 H1 keep-alive；显式启用且协商成功后支持 H2 多路复用。实例本身不跨线程共享，所有异步操作由构造时的 io_context 驱动。普通 `request/get/post` 在返回 awaitable 前同步持有参数和内部状态，记录本次绝对期限；保存后再启动不会重置计时。H1 完整往返串行，多个首请求共享建连；H2 按有限流容量并发。
+
+facade 析构会取消旧请求并投递清理，已保存的 awaitable 仍能安全启动并返回取消结果；**io_context 必须覆盖所有请求、读写泵和投递的清理**。通过 Asio cancellation slot 取消一个 H2 请求只取消该流或队列项，`close()` 则取消整条连接的当前代次。调用方式见 [协程生命周期说明](coroutine-guide.md#http2-的请求与取消生命周期)。
 
 **头文件：** `<hical/asio/HttpClient.h>`
 
@@ -2605,10 +2666,10 @@ void serveOpenApi(
 | `get(target, headers)`                   | target: 请求目标<br>headers: 附加请求头                                                                                | `Awaitable<HttpClientResult>` | 便捷 GET                                     |
 | `post(target, body, contentType)`        | target: 请求目标<br>body: 请求体<br>contentType: Content-Type（默认 `"application/json"`）                             | `Awaitable<HttpClientResult>` | 便捷 POST                                    |
 | `isAlive()`                              | 无                                                                                                                     | `bool`                        | 连接当前是否可用（已建立且没关）             |
-| `close()`                                | 无                                                                                                                     | `void`                        | 主动关闭连接                                 |
+| `close()`                                | 无                                                                                                                     | `void`                        | 取消当前代次并投递关闭；后续新请求可以重新建连 |
 | `key()`                                  | 无                                                                                                                     | `std::string_view`            | 分桶键 `"host:port"`，连接池据此归并同类目标 |
 
-> `Host` / `Content-Length` / `Connection` 三个头由客户端自己补齐；用户在 `headers` 里给了同名头会被跳过，免得发出去两份。响应 body 按头部选路：有 `Content-Length` 读满指定字节，`Transfer-Encoding: chunked` 走原地解码，两者都没有就靠连接关闭（EOF）收尾。
+> H1 的 `Host` / `Content-Length` / `Connection` 由客户端补齐，响应按 Content-Length、chunked 或 EOF 收尾。H2 使用伪头和 DATA/END_STREAM，不发送 H1 状态行或 chunked 边界；响应完整聚合后返回，受 H2 单流和连接预算限制，支持 1xx 后继续等待最终响应。TLS 默认同时校验链与目标身份；覆盖 SNI 不会绕过身份校验。
 
 #### 示例
 
@@ -2645,7 +2706,7 @@ auto r = co_await https.get("/v1/status");
 
 ### HttpClientPool
 
-按 `host:port`（明文 / TLS 分开）分桶复用的连接池。定位是「每个 io_context 一个池、不跨线程共享」——池子所有状态都跑在构造时传入的那个 io_context 上，不加锁；多线程场景每个 loop 各建一个。`request()` / `get()` / `post()` 内部自动 acquire / release，最省事。
+每个 io_context 一份的连接池，普通请求、租借、归还和统计查询在所属 loop 上调用，不跨线程共享。身份包含地址、TLS context、有效 SNI、验证模式、协议策略与生效的 H2 配置，不跨 authority 合并。高层 `request/get/post` 在协商/H2 模式下按流容量共享活动连接、有界排队；协商退回 H1 后独占往返。旧 `acquire/release` 始终独占租借，与高层共享调度分开。
 
 **头文件：** `<hical/asio/HttpClientPool.h>`
 
@@ -2671,17 +2732,22 @@ auto r = co_await https.get("/v1/status");
 
 | 方法                                                          | 参数                                                                                                                         | 返回值                        | 说明                                                   |
 | ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ----------------------------- | ------------------------------------------------------ |
-| `acquire(host, port, options)`                                | host/port: 目标<br>options: `HttpClientOptions`                                                                              | `std::shared_ptr<HttpClient>` | 取一条可用连接：桶里有活着的就复用，否则新建           |
+| `acquire(host, port, options)`                                | host/port: 目标<br>options: `HttpClientOptions`                                                                              | `std::shared_ptr<HttpClient>` | 独占租借，不接入高层共享调度；停机后为空               |
 | `release(client)`                                             | client: 之前 acquire 出来的连接                                                                                              | `void`                        | 还回池子；坏掉的（出错 / 超时被置 closed）直接销毁     |
 | `request(host, port, method, target, body, headers, options)` | host/port/method/target<br>body: 请求体（默认空）<br>headers: 附加请求头（默认空）<br>options: `HttpClientOptions`（默认空） | `Awaitable<HttpClientResult>` | 发一次请求，内部自动 acquire / release                 |
 | `get(host, port, target, headers, options)`                   | host/port/target<br>headers: 附加请求头（默认空）<br>options: 客户端配置（默认空）                                           | `Awaitable<HttpClientResult>` | 便捷 GET，内部自动 acquire / release                   |
 | `post(host, port, target, body, contentType, options)`        | host/port/target/body<br>contentType: Content-Type（默认 `"application/json"`）<br>options: 客户端配置（默认空）             | `Awaitable<HttpClientResult>` | 便捷 POST，内部自动 acquire / release                  |
 | `shutdown()`                                                  | 无                                                                                                                           | `void`                        | 关掉所有空闲连接并取消清理 timer；幂等，可从任意线程调 |
 | `idleCount()`                                                 | 无                                                                                                                           | `std::size_t`                 | 当前桶里空闲连接总数（主要给测试用）                   |
+| `stats()`                                                     | 无                                                                                                                           | `HttpClientPool::Stats`        | 所属 loop 上的高层协商/H2 调度快照                    |
 
-> `request()` 系列对**复用的连接**做了重试：复用的连接可能已经被对端悄悄关了，遇到「网络错误且一个字节响应都没收到（`status == 0`）」时会丢掉死连接、重开一条重试一次，免得一次本可成功的请求因为陈旧 keep-alive 连接而判死。`status` 已经非 0 说明聊到一半了，不重试。注意这对非幂等方法给的是「至少一次」语义——极端情况下可能重发一次，需要严格一次的场景别依赖它，改用 `acquire()` 自己控制。
+> 普通入口同步持有参数与内部状态，并记录本次请求的绝对期限；延迟启动 awaitable 不会重新计时。高层 H2 调度受 `maxConnectionsPerOrigin` / `maxQueuedRequestsPerOrigin` 限制，对端 SETTINGS 配额为零或降低时等待容量，不超发。`release()` 前须结束该租借连接的全部请求，保存或运行中请求不能作为空闲容量归还；外来连接和其他池的连接也不能进入本池。
 >
-> 析构 / `shutdown()` 会把「取消 timer、关空闲连接」post 回 io_context 线程执行，所以从别的线程调它们是安全的；但事件循环若不跑了，这些动作要等下一次 `run()` / `poll()` 才落地。池子的清理协程自己持有一份内部状态引用，析构后协程收到取消才真正释放，不会留下悬空。
+> 高层请求最多自动重试一次，仅限 GET、HEAD、PUT、DELETE、OPTIONS；POST/PATCH 默认不自动重放，即使协议明确证明未处理。协商/H2 路径要求 `hNotSent` 且为明确瞬态传输错误，或 `hNotProcessed` 且具有真实 REFUSED_STREAM/GOAWAY 证据；`hPossiblyProcessed` 不重放。H1 仅在首次为复用连接、`status == 0` 且为瞬态白名单错误时重试。取消、超时、证书、配置和资源错误均不重试；沿用原总期限及首次实际排队的队列期限。没有新增公开重试配置字段，完整白名单与迁移说明见 [连接池与重试边界](http2-guide.md#连接池与重试边界)。
+>
+> 析构 / `shutdown()` 把取消 timer、取消池高层请求和关空闲连接的动作交回所属 loop；允许外线程发起清理，loop 仍要继续处理完成事件。旧 `acquire()` 的外部租借由持有者管理，关池不会主动关闭其业务交换。
+
+`Stats` 包含 `managedConnections`、`connectingConnections`、`activeRequests`、`queuedRequests`、`peakQueuedRequests`。它统计高层协商/H2 调度，包括协商回退 H1 的连接；不包含旧租借表或 H1-only 桶。峰值是池生命周期内同时排队数，不随排空清零；没有编译 H2 或未使用该调度入口时为零，不支持跨线程查询。
 
 #### 示例
 
@@ -2700,13 +2766,16 @@ auto r2  = co_await pool.post("127.0.0.1", 8080, "/api/notice", R"({"a":1})");
 
 // 想自己管连接生命周期也能拆开
 auto client = pool.acquire("127.0.0.1", 8080);
-if (client->isAlive()) {
+if (client) {
     auto r3 = co_await client->get("/next");
 }
 pool.release(std::move(client));
+
+// 让 io_context 继续运行至清理完成
+pool.shutdown();
 ```
 
-> 当前不支持 HTTP/2、重定向跟随、cookie jar、range 下载、流式响应，也不做连接池负载均衡；不处理 1xx 中间响应。
+> 当前不支持自动重定向、cookie jar、流式结果或连接池负载均衡。H2 候选支持 1xx 后继续等待最终响应，H1 暂不支持。HTTP/2 的依赖、限制及完整示例见 [HTTP/2 使用指南](http2-guide.md)。
 
 ---
 

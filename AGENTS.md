@@ -8,6 +8,7 @@ Hical is a modern C++20 high-performance web framework built on Boost.Asio, feat
 
 - `src/core/` — Abstract interfaces, HTTP framework, routing, middleware, logging, server code, reflection layer. Must **not** include `src/asio/` headers.
 - `src/asio/` — Boost.Asio concrete implementations (event loop, TCP connection, TCP server, event-loop pool, optional HTTP client)
+- `src/core/http2/` — 可选 HTTP/2 协议实现：nghttp2 编解码、流状态、收发预算、TLS 服务端会话及文件生产；内部头不安装
 - `src/db/` — Optional database middleware (enable with `-DHICAL_WITH_DATABASE=ON`, guarded by `HICAL_HAS_DATABASE` macro)
 - `src/third_party/` — Bundled dependencies (picohttpparser)
 - `tests/` — GoogleTest test suite, one `test_<feature>.cpp` per module
@@ -46,7 +47,10 @@ cmake -B build -DHICAL_WITH_PGSQL=ON ...       # PostgreSQL backend (requires li
 cmake -B build -DHICAL_WITH_OPENAPI=OFF ...    # Disable OpenAPI (enabled by default)
 cmake -B build -DHICAL_ENABLE_REFLECTION=ON ... # C++26 reflection (GCC 16 + Boost >= 1.90; adds -freflection to C++ sources only)
 cmake -B build -DHICAL_WITH_HTTP_CLIENT=ON ...  # Coroutine HTTP client (default OFF)
+cmake -B build -DHICAL_WITH_HTTP2=ON ...        # TLS HTTP/2 双端候选实现（默认 OFF，客户端另开 HTTP_CLIENT）
 ```
+
+HTTP/2 当前仍在最终验收，不能把配置入口或测试源码存在当作跨平台检查已通过。需静态 nghttp2 `>=1.70.0,<2` 和 OpenSSL 1.1.1+；服务端 Boost 下限保持 1.82，生产客户端开启时下限为 1.86。安装消费者使用 `hical::hical_core` 传递的依赖与宏，MinGW 的 `BOOST_ASIO_HAS_PTHREADS` 等线程 ABI 定义不能在消费者另设冲突值。详见 [HTTP/2 使用指南](docs/http2-guide.md)。
 
 ### Run Tests
 ```bash
@@ -86,6 +90,7 @@ find src -name '*.cpp' | xargs clang-tidy -p build
 - `HttpRequest.h/cpp` — Zero-copy request wrapper: `string_view` referencing connection-level read buffer, stack-allocated `array<Entry,64>` headers. Public API: `method()`, `path()`, `header()`, `body()`, `cookie()`, `queryParam()`, `formParam()`, `readJson<T>()`, `peerAddr()`. `RequestHeaders`/`NativeRequest` are **move-only** on purpose (one copy is 2KB) — `native()` returns a reference, so `auto n = req.native()` must be `auto& n`
 - `HttpResponse.h/cpp` — Response wrapper with `FileBody` deferred async file sending, `serializeHeadTo(FixedBuffer<512>&)` zero-heap scatter-gather I/O, `setHeader()` accepts `std::string_view`
 - `HttpSessionImpl.cpp` — Compilation firewall for picohttpparser + WebSocket. `handleSession` is templated on `SocketType` and splits plain from TLS at compile time via `if constexpr (hIsSslStream<SocketType>)`; TLS responses always go through `async_write` (never the optimistic sync path, which would corrupt OpenSSL's state machine) and WS/SSE upgrade is not instantiated at all for TLS. ReadBufferPool borrow/return (8KB thread_local pool), optimistic sync write (≤512B single-buffer), response prefix template (~90B pre-built wire bytes), IdleScanner::Guard RAII idle timeout — registered *before* `async_handshake`, so a stalled handshake is still reclaimed by the normal idle timeout. Resolves the route before reading the body, so 404/405/400 are rejected up front without swallowing the body
+- `HttpProtocol.h` / `Http2Options.h` / `http2/` — HTTP/2 候选实现。`enableHttp2()` 必须配合 TLS，ALPN 选 h2 后进入独立会话；H1 路径保持独立。初始头/尾头分开，路由和中间件复用现有分发，`useBody()` 门前不暴露请求体。协议流与应用任务分别计数，RST 后 handler 自然收尾并继续占任务配额；不得把 RST 当数据库回滚。文件按流窗口和连接预算异步生产，输出回调不阻塞读盘；`gracefulStop()` 先 GOAWAY 排空，期限后强制关闭传输但仍等待业务收尾。
 - `Router.h` — Static routes (compile-time perfect hash for registered routes, O(1) hash map fallback with transparent hashing for zero-alloc `string_view` lookup) + parameter routes (`{id}`) + wildcard routes (`*path`). Priority: static > param > wildcard. 404-vs-405 is decided across all three kinds (wildcards participate since 2.7.1) with the `Allow` header deduplicated by method bitmask; the decision is gated by per-first-segment method masks, so unregistered paths never scan the param/wildcard groups. `dispatchSync()` sync fast-path skips coroutine frame (~40-130ns savings). `compileTimeRoute()` for routes with compile-time middleware chains. `resolveRoute()` returns a cached `ResolveResult`; `dispatchResolved()`/`dispatchSyncResolved()` reuse it to skip a second lookup
 - `Middleware.h` — Onion-model pipeline: `SyncBeforeHandler` / `SyncAfterHandler` for zero-coroutine-frame middleware, `buildOptimizedChain()` merges consecutive sync entries into single frame, `CompileTimeChain` template pre-builds chains at compile time. **Middleware runs after route resolution but before the body is read** — it only sees headers (`req.body()` is empty), an intercepting middleware means the body is never read at all, and field-level body validation belongs in the handler. The pipeline is `build()`-built once in `HttpServer::start()`; per-request tail work (read body + dispatch) is passed via the request's `internalSlot_` as a function-pointer + `void*` pair. `use()` has overloads for a bare `SyncBeforeHandler` and a bare `SyncAfterHandler` (helmet/gzip return the latter). Note: with `HICAL_ENABLE_MIDDLEWARE_PROFILING=ON`, any pipeline containing a Sync entry drops profiling entirely and logs a WARN — `middlewareStats()` returns empty for it
 - `Coroutine.h` — `Awaitable<T>` alias, `sleep()`, `coSpawn()` with `recycling_allocator` and `logOnException`
@@ -121,7 +126,7 @@ find src -name '*.cpp' | xargs clang-tidy -p build
 - `EventLoopPool` — 1:1 thread-to-io_context, least-connections distribution, `pthread_setaffinity_np` CPU pinning (Linux)
 - `TcpServer` — Accept loop, `alive_` guard, SO_REUSEPORT multi-acceptor (Windows auto-fallback), `IdleFd` EMFILE protection
 - `SslConnection.h` — `GenericConnection<ssl::stream<tcp::socket>>` type alias, lazy-includes OpenSSL
-- `HttpClient.h/cpp` + `HttpClientPool.h/cpp` — Coroutine HTTP/1.1 client for outbound calls, gated by `HICAL_WITH_HTTP_CLIENT` (**default OFF**; nothing on the server path touches it, so users who only serve pay zero). Both the `.cpp` files and the installed headers are behind the option — with it OFF the headers aren't installed at all, so `#include` fails at compile time; including them from a source-tree build with the option off gets a link error instead. The headers themselves carry no `#ifdef`. `HttpClient` owns one keep-alive connection — plain `tcp::socket` or `ssl::stream` behind a `variant`, `if constexpr`-dispatched — and parses responses with the server's own `phr_parse_response` / `phr_decode_chunked`, so no Beast and no new dependency. Timeouts (`cancel_after`) run against a single absolute deadline for the whole exchange, so a byte-dribbling peer can't stretch a request indefinitely. `HttpClientPool` buckets by `host:port` (+TLS), one idle queue per bucket, per-io_context and lock-free, drops dead keep-alive connections and retries once. Not implemented: HTTP/2, redirects, cookie jar, range/streaming downloads, 1xx interim responses.
+- `HttpClient.h/cpp` + `HttpClientPool.h/cpp` — 可选协程客户端，`HICAL_WITH_HTTP_CLIENT` 默认 OFF，关闭时不编译实现、不安装客户端头。默认 H1；H2 模块开启后可用 TLS ALPN 自动协商或强制 H2。普通入口同步持有参数和内部状态，提交时记录覆盖建连等待、排队、收发的绝对期限；H1 串行、H2 有界多路复用。facade 析构取消旧请求，`close()` 取消当前代次，清理交回 owner loop，io_context 必须覆盖收尾。`verifyPeer` 同时检查证书链与目标 host/IP SAN，`sniHost` 只改路由名称。池身份包括地址、TLS context、有效 SNI、验证模式、协议和生效 H2 配置；高层共享调度与 `acquire/release` 独占租借分开。`requestDisposition` 表达传输证据，`status==0` 不证明未处理。池高层仅对 GET/HEAD/PUT/DELETE/OPTIONS 按证据至多重试一次，POST/PATCH 默认不重放；H2 要求未发送的瞬态错误或 REFUSED_STREAM/GOAWAY 的真实未处理证据，H1 仅首次复用陈旧连接、`status==0` 且命中瞬态白名单时重试。取消/超时/证书/配置/资源错误不重试，原请求与首次排队期限不重置；没有公开重试配置字段。不支持自动重定向、cookie jar 或流式下载；H2 可处理 1xx 后等待最终响应，H1 暂不支持。
 
 **`src/db/` (optional) modules:**
 - `DbConnectionPool` — Coroutine-based pool with LIFO reuse, health check + idle eviction background loops, `pingGracePeriod`, auto-rollback on release
@@ -216,6 +221,8 @@ Commit prefix convention: `[feat]`, `[fix]`, `[perf]`, `[refactor]`, `[docs]`, `
 | -------------- | ----------------------------------------------------------------------- |
 | C++ Standard   | C++20 (C++26 optional for reflection)                                   |
 | Boost          | >= 1.82 (Asio, System, JSON); DB middleware >= 1.85 (MySQL, charconv)   |
+| HTTP 客户端    | 开启 `HICAL_WITH_HTTP_CLIENT` 时 Boost >= 1.86                          |
+| nghttp2        | 仅 HTTP/2：静态 C 库，>= 1.70.0 且 < 2；OpenSSL >= 1.1.1              |
 | libpq          | PostgreSQL backend only (`HICAL_WITH_PGSQL=ON`)                         |
 | OpenSSL        | Required                                                                |
 | zlib           | Required (WebSocket permessage-deflate)                                 |

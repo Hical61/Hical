@@ -26,6 +26,7 @@
 - [18. WebSocket 增强设计](#18-websocket-增强设计)
 - [19. HTTP 热路径优化](#19-http-热路径优化)
 - [20. 编译期组件设计](#20-编译期组件设计)
+- [21. 可选 HTTP/2 与客户端生命周期](#21-可选-http2-与客户端生命周期)
 
 ---
 
@@ -104,7 +105,7 @@ Hical 采用**两层分离**架构：核心抽象层（`src/core/`）与网络�
 
 ### 核心设计原则
 
-1. **上层不依赖下层实现** — `src/core/` 定义纯虚接口和 Concepts，不直接引用 Boost.Asio
+1. **分层依赖明确** — `src/core/` 不包含项目 `src/asio/` 的头文件；核心中的网络会话可直接使用 Boost.Asio
 2. **用户不感知网络细节** — `HttpServer` 封装了全部网络操作，用户只与 Router/Request/Response 交互
 3. **内存池贯穿全链路** — 从网络缓冲区到 HTTP 消息体到 JSON 对象，共享 PMR 内存池
 
@@ -244,9 +245,13 @@ DbMiddleware / DbQueryLog          [可选，HICAL_WITH_DATABASE=ON]
 
 它最有意思的一点是**和服务端共用一套 HTTP 解析器**：两边都链 picohttpparser，服务端解析请求用 `phr_parse_request`、客户端解析响应用 `phr_parse_response`，chunked 解码也是同一个 `phr_decode_chunked`。同源的好处是对畸形报文和边界情况的行为天然一致——不会出现「服务端这么理解、客户端那么理解」的分叉；代价是得跟着 picohttpparser 的解析契约走（比如「返回 -2 表示数据还不完整、继续读」那套），没引 Beast。请求侧是手写序列化：请求行 + `Host` + `Content-Length` + 自定义头 + body，本来也没多少东西。
 
-明文和 HTTPS 走同一份 `requestOn()` 实现，底层传输是个 `PlainSocket` / `TlsSocket` 二选一的 `variant`，建连 / 握手 / 关闭的差异用 `if constexpr` 在编译期分掉，请求序列化、读循环、body 读取不分叉——跟服务端 `handleSession` 一个套路。超时用 `boost::asio::cancel_after`，但每段 I/O 按「离整段绝对截止点还剩多久」算，整段共用一个 deadline，避免慢速滴发的对端每段都踩回来无限拖住请求。
+H1 的明文和 HTTPS 使用 `PlainSocket` / `TlsSocket` 的 `variant`，通过 `if constexpr` 分开传输操作，解析仍复用 picohttpparser。普通请求入口在返回 awaitable 前同步持有参数与内部状态，并记录绝对期限；建连等待、排队、写请求和读完整响应共用这条期限，各段 I/O 使用 `cancel_at`，慢速滴发不会重新计时。启用客户端需 Boost 1.86+，仅服务端仍支持 1.82。
 
-连接池 `HttpClientPool` 按 `host:port`（明文 / TLS 分开）分桶，取连接优先复用还活着的，空闲清理**用一个 timer 管整池**（照 `IdleScanner` 的思路，不给每条连接配 timer）。定位是「每个 io_context 一个池、不跨线程共享」，池子所有状态都跑在构造时传入的那个 io_context 上、不加锁，多线程场景每个 loop 各建一个。
+`HttpClient` facade 与内部状态分离：请求持有内部状态，facade 析构会取消旧请求并把清理交回所属 loop；已经返回的 awaitable 可以安全启动并返回取消结果。`close()` 取消当前代次，后续新请求可重新建连。`io_context` 必须覆盖所有请求、读写泵和析构投递的清理。
+
+连接池每个 io_context 一份，普通操作在所属 loop 上执行，不跨线程共享。身份键包含地址、TLS context、有效 SNI、证书验证模式、协议策略与生效的 H2 配置，不跨 authority 合并。H1-only 与旧 `acquire/release` 使用独占连接；高层协商/H2 请求按连接与流容量共享调度，二者不混用连接。空闲清理用一个 timer 管整池。H2 候选实现的边界见第 21 节。
+
+池高层最多自动重试一次，仅限 GET、HEAD、PUT、DELETE、OPTIONS；POST/PATCH 默认不重放。协商/H2 要求未发送的瞬态传输错误，或有 REFUSED_STREAM/GOAWAY 证据的 `hNotProcessed`；可能已处理时不重放。H1 保留幂等方法在首次复用陈旧连接、`status == 0` 且属于瞬态白名单时的一次重试。取消、超时、证书、配置与资源错误不重试；原请求及首次实际排队的期限不重置。旧版 POST 自动重放已取消，具体条件见 [连接池与重试边界](http2-guide.md#连接池与重试边界)。
 
 ---
 
@@ -702,6 +707,8 @@ class MiddlewarePipeline
 4. **异常处理** — 用 try/catch 包裹 `next(req)`，统一处理异常
 
 **执行时序（相对 body 读取）**：默认情况下中间件在 `resolveRoute()` 之后、读取 body 之前执行——中间件此时只能看到 header，`req.body()` 还是空的；被中间件拦截（如认证失败），请求体一字不读；body 字段级校验由 handler 负责。如果某个中间件必须读原始 body（验签这类），就用 `useBody()` 声明：链构建时会在第一个声明者之前插一道 body 门，命中它先把 body 读进来，声明者以及它后面的中间件跑的时候 `req.body()` 已经就绪。门插在第一个声明者之前，所以声明者前面那批不声明的中间件仍然在 body 之前执行、不受影响；不声明的管线维持原状，body 读取仍在洋葱链最内层。中间件和 handler 共享同一个 `HttpRequest&` 实例，`setAttribute`/`getAttribute` 沿途不丢。
+
+HTTP/2 保持同样的应用可见顺序；读泵可能已接收少量 DATA，但受连接预算约束，不会因此提前把 `req.body()` 暴露给门前中间件。初始头与尾头独立，尾头在 body 完成后才可用。流在 body 门前被拒绝时不进入 handler。
 
 **链预构建（P1 优化）**：中间件链在 `HttpServer::start()` 里 `build()` 一次，finalHandler 是终端骨架 `detail::runInternalDispatch`；每个请求的尾部动作（读 body + 按缓存 resolveResult 分发）打包成栈上闭包（`obj` + `invoke` 函数指针对），通过 `HttpRequest::internalSlot_`（`void*` 私有槽，`detail` 命名空间专用）传给骨架，每请求零链重建。`useBody()` 插的 body 门共用同一套入口——它不捕获任何 per-request 状态，只从槽里取 `bodyObj` + `readBody`（同套路的第二对类型擦除入口）调读 body，所以门本身能缓存进链里，body 读没读过由请求内部的 `bodyRead` 标志保证只读一遍。WS/SSE 链仍走 `buildFor` + 占位 `ok("")`。
 
@@ -1762,6 +1769,26 @@ TcpCorkGuard 析构 → setsockopt(TCP_CORK, 0) → flush
 - **无运行时开销**：编译期链完全跳过 `buildOptimizedChain()` 的动态构建（vector 遍历 + lambda 层层包装 + `std::function` 堆分配）
 
 语义与 `buildOptimizedChain` 对齐：同优先级的 Sync 连续条目合并到一帧、Async 条目单独成帧。
+
+---
+
+## 21. 可选 HTTP/2 与客户端生命周期
+
+此部分描述当前候选实现，仍待互操作、压力、平台工具检查及最终验收。`HICAL_WITH_HTTP2` 默认 OFF，与默认 OFF 的 `HICAL_WITH_HTTP_CLIENT` 可独立组合；关闭 H2 时不查找 nghttp2。开启时链接静态 nghttp2 C 库 `>=1.70.0,<2`，协议/HPACK 由它处理，Asio 继续负责 TLS I/O，内部头不对外安装。
+
+服务端在启动前同时配置 `enableSsl()` 与 `enableHttp2()`。TLS 握手后由 ALPN 分派 H1 或 H2 会话，H2 不经过 HTTP/1 序列化，也不走明文 fd 的乐观写路径。H2 的编解码、流状态、收发预算和文件生产位于 `core/http2/`；`HttpConnectionRegistry` 负责停止与排空，不引用项目 `asio/` 头。
+
+每条 H2 连接在其 owner loop 上维护单读泵、单写泵和流状态。nghttp2 同步回调只做有界状态更新，不挂起、不读盘、不重入协议泵；路由与中间件在回调退出后运行。每流持有自己的请求存储，初始头与尾头独立，视图不引用下一次 TLS 读取的临时区。应用仍不得让请求视图或请求级 PMR 对象逃逸。
+
+协议流与应用任务的占位分开：收到 RST_STREAM 可以停止输出并回收协议资源，但已运行的 handler 必须自然结束，期间继续占每连接和服务级应用任务配额。连接关闭、单流超时也不会强制销毁业务协程，数据库事务继续按原中间件的成功/异常路径提交或回滚。
+
+`Http2Options` 分别限制头部块、请求体、响应聚合、连接接收/待发缓冲、文件预取、活跃流、应用任务和客户端排队。DATA 流控、连接预算及有限阶段期限同时约束生产；PING 或少量 DATA 不会无限延长请求体期限。预算针对框架持有的数据与任务，不是整个进程 RSS 的承诺。文件按需异步读取，RST 后仍等待已发起 I/O 返回再释放其缓冲和句柄。
+
+`gracefulStop()` 关闭 acceptor、停止接纳新流并发送 GOAWAY，已有请求在 `setShutdownTimeout()` 的上限内排空；超时关闭传输后，业务与读写任务继续收尾，`start()` 最后自然返回，不调用 `io_context::stop()` 丢弃清理。
+
+客户端默认 `hHttp1Only`。显式选择 `hNegotiateHttp2` 时可 ALPN 回退 H1，`hHttp2Only` 则必须选中 h2；两者均要求 TLS。单流取消只取消该流或其队列项，`close()` 取消整条连接的当前代次。结果提供实际协议、独立尾字段与请求处理证据，收到完整 END_STREAM 的结果不会被后续连接错误覆写。连接池按本地与对端 SETTINGS 的容量调度，零配额时有界排队。
+
+范围不含 h2c、HTTP/1 Upgrade、CONNECT/扩展 CONNECT、HTTP/2 WebSocket、TLS SSE、服务端推送或 gRPC。构建、公开示例和完整配置见 [HTTP/2 使用指南](http2-guide.md)。
 
 ---
 

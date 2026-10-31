@@ -1,6 +1,6 @@
 # Hical 项目代码结构
 
-> 最后更新：2026-10-22
+> 最后核对：2026-10-24；HTTP/2 仍为待最终验收的候选实现
 
 ## 项目概述
 
@@ -26,7 +26,8 @@ hical/
 ├── .dockerignore               # Docker 构建上下文排除规则
 │
 ├── cmake/                      # CMake 包配置模板
-│   └── hicalConfig.cmake.in    #   find_package(hical) 的 config 模板
+│   ├── hicalConfig.cmake.in    #   find_package(hical) 的 config 模板
+│   └── FindNghttp2.cmake       #   可选静态 nghttp2 的版本与消费接口探测
 │
 ├── .github/                    # GitHub 社区与 CI 配置
 │   ├── workflows/              #   CI 工作流
@@ -97,6 +98,8 @@ hical/
 │   │   ├── Coroutine.h         # 协程工具（Awaitable/sleep/coSpawn，header-only）
 │   │   ├── TimerService.h/.cpp # 集中式定时器（每 io_context 一个 steady_timer + deadline 小顶堆 + thread_local 绑定）
 │   │   ├── HttpTypes.h         # HTTP 方法/状态码枚举 + 字符串转换
+│   │   ├── HttpProtocol.h      # H1/H2 身份、客户端协商策略、请求处理证据
+│   │   ├── Http2Options.h      # H2 有限流、应用任务、收发、文件预取和时限配置
 │   │   ├── HttpRequest.h/.cpp  # HttpRequest 封装（string_view 返回类型，jsonBody 缓存）
 │   │   ├── HttpResponse.h/.cpp # HttpResponse 封装 + 工厂方法（setHeader CR/LF 防护）
 │   │   ├── Cookie.h            # CookieOptions 结构体
@@ -106,6 +109,8 @@ hical/
 │   │   ├── RequestDispatch.h   # 请求分发上下文 + 预构建中间件链的终端骨架（框架内部）
 │   │   ├── HeaderMap.h         # HTTP 头部容器（vector<pair> 实现，大小写不敏感）
 │   │   ├── HttpSessionImpl.cpp # HTTP/WS 会话编译防火墙（隔离 picohttpparser + WebSocket）
+│   │   ├── HttpConnectionRegistry.h/.cpp # 活动会话停止与排空控制（内部）
+│   │   ├── http2/             # 可选协议内部实现：Codec/Connection/Stream/Receive/Output/Response/ServerSession/FileBody
 │   │   ├── WebSocket.h/.cpp    # WebSocket 会话封装（自研实现，子协议/心跳/上下文）
 │   │   ├── WsFrame.h           # WebSocket 帧解析/构造（RFC 6455，掩码/RSV/控制帧）
 │   │   ├── WsHandshake.h       # WebSocket 握手协议（Sec-WebSocket-Key/Accept + 子协议协商）
@@ -161,8 +166,9 @@ hical/
 │   │   ├── SslConnection.h           # SSL 连接类型别名（懒包含 OpenSSL）
 │   │   ├── AsioTimer.h/.cpp          # 基于 steady_timer 的定时器
 │   │   ├── EventLoopPool.h/.cpp      # 多线程事件循环池（1 Thread : 1 io_context）
-│   │   ├── HttpClient.h/.cpp         # 协程 HTTP/1.1 客户端（keep-alive 复用 + 整段共用一个 deadline 的超时 + picohttpparser 解析响应；HICAL_WITH_HTTP_CLIENT=ON 才编）
-│   │   ├── HttpClientPool.h/.cpp     # 按 host:port（+TLS）分桶的连接池（per-io_context 无锁，一个 timer 管整池清理，死连接丢掉重试一次）
+│   │   ├── HttpClient.h/.cpp         # 默认 H1、可选 TLS H2 的协程客户端，参数持有与提交起绝对期限
+│   │   ├── Http2ClientSession.h/.cpp # 可选 H2 客户端单读/写泵与流调度，内部头不安装
+│   │   ├── HttpClientPool.h/.cpp     # 每 loop 一池；独占租借与高层 H2 有界共享调度分开，幂等请求按证据至多重试一次
 │   │   └── TcpServer.h/.cpp          # TCP 服务器（SO_REUSEPORT 多 acceptor + 空闲超时 + IdleFd）
 │   │
 │   └── db/                     # 数据库中间件（可选，HICAL_WITH_DATABASE=ON）
@@ -257,6 +263,9 @@ hical/
 │   ├── test_log_admin.cpp            # LogAdmin 端点（4 个）
 │   │ # —— HTTP 客户端（可选，需 HICAL_WITH_HTTP_CLIENT=ON） ——
 │   ├── test_async_http_client.cpp    # 协程 HttpClient / HttpClientPool
+│   ├── test_http2_client*.cpp        # 客户端协议、TLS 身份、期限与取消（部分也覆盖 H2 OFF）
+│   ├── test_http2_pool.cpp           # 高层共享调度、连接/流配额与独占租借边界
+│   ├── test_http2_*.cpp              # 可选 H2 编解码、收发预算、body 门、文件、取消、排空与压力回归
 │   │ # —— 数据库（可选，需 HICAL_WITH_DATABASE=ON） ——
 │   ├── test_db_pool.cpp              # 连接池单元测试（Mock，12 个）
 │   ├── test_db_middleware.cpp        # DB 中间件（Mock，8 个）
@@ -267,12 +276,14 @@ hical/
 │   ├── test_pgsql_socket.cpp         # PgSocketAdapter 异步等待（不依赖真实 PG）
 │   └── test_pgsql_unit.cpp           # PgStmtCache LRU 缓存纯单元测试（不依赖真实 PG）
 │
-├── examples/                   # 示例程序（11 个，部分按构建开关条件编译）
+├── examples/                   # 示例程序（按构建开关条件编译）
 │   ├── CMakeLists.txt
 │   ├── echo_server.cpp         # 协程式 Echo Server（走 TcpServer，无 HTTP 解析）
 │   ├── pmr_poc.cpp             # pmr 内存池验证
 │   ├── benchmark.cpp           # Echo Server 压力测试工具
 │   ├── http_server.cpp         # HTTP Server 完整示例（路由 + 中间件 + WebSocket）
+│   ├── http2_server.cpp        # TLS H2 路由、尾字段与有限排空示例
+│   ├── http2_client.cpp        # H1/auto/H2 与共享客户端/高层池的有限并发示例
 │   ├── http_benchmark.cpp      # HTTP 基准测试工具（QPS/P50/P99）
 │   ├── pmr_benchmark.cpp       # pmr 内存池基准测试（多策略对比）
 │   ├── reflection_server.cpp   # 反射层 DTO + 路由自动注册示例（C++20 宏路径）
@@ -291,6 +302,7 @@ hical/
     ├── examples_guide.md       # 9 个由浅入深的完整示例讲解
     ├── integration_guide.md    # 集成指南（vcpkg overlay / FetchContent / cmake install）
     ├── coroutine-guide.md      # 协程入门教程
+    ├── http2-guide.md          # HTTP/2 候选实现的开关、协议范围、生命周期与公开示例
     ├── logging-guide.md        # 日志系统完全指南
     ├── openapi-guide.md        # OpenAPI/Swagger 集成指南
     ├── performance_report.md   # 性能测试报告（基准方法 + 调优指南）
@@ -320,7 +332,8 @@ hical/
 | `HICAL_WITH_MYSQL`       | OFF  | 启用 MySQL 后端，需 Boost.MySQL 1.85+                                                                    |
 | `HICAL_WITH_PGSQL`       | OFF  | 启用 PostgreSQL 后端，需 libpq                                                                           |
 | `HICAL_WITH_OPENAPI`     | ON   | 启用 OpenAPI 3.0 元数据层（`OpenApi*.h/cpp`），无额外依赖                                                |
-| `HICAL_WITH_HTTP_CLIENT` | OFF  | 启用协程 HTTP 客户端（`src/asio/HttpClient*`，开关只管 `.cpp` 和头文件安装，包含头却没开会在链接期报错） |
+| `HICAL_WITH_HTTP_CLIENT` | OFF  | 启用生产协程客户端，需 Boost 1.86+；关闭时不安装其公开头，源码树直接包含后使用会链接失败 |
+| `HICAL_WITH_HTTP2`       | OFF  | 启用 TLS H2 候选实现，需静态 nghttp2 `>=1.70.0,<2` 和 OpenSSL 1.1.1+；与客户端开关独立 |
 
 **特性开关**
 
@@ -431,7 +444,9 @@ hical/
 - **依赖**：
   - Boost 1.82+（json / system，Asio header-only）
   - Boost 1.85+（DB 中间件额外需要 mysql / charconv）
-  - OpenSSL 3.x（SSL/TLS、Session ID 生成、JWT HMAC、trace-id 随机源）
+  - Boost 1.86+（启用生产 HTTP 客户端时，配置阶段检查所需取消 API）
+  - OpenSSL（SSL/TLS、Session ID 生成、JWT HMAC、trace-id 随机源；HTTP/2 需 1.1.1+）
+  - 静态 nghttp2 C 库 `>=1.70.0,<2`（仅 `HICAL_WITH_HTTP2=ON` 时查找，不要求其命令行工具）
   - zlib（WebSocket permessage-deflate、HTTP 响应 gzip）
   - picohttpparser（内嵌副本，可选系统版本）
   - Google Test（测试套件）
@@ -441,11 +456,11 @@ hical/
   - Windows 额外：`ws2_32`、`mswsock`
 - **构建产物**：
   - `hical_core` — 框架核心静态库（**仅静态库**，DLL/ABI 不兼容）
-  - `test_*` — 75 个测试目标（65 个基础 + 1 个可选 OpenAPI + 1 个可选 HTTP 客户端 + 3 个可选 DB 基础 + 3 个可选 PG + 2 个可选 MySQL）
-  - 11 个示例可执行文件（部分按构建开关条件编译）
+  - `test_*` — 测试目标按模块开关登记，实际数量以 `tests/CMakeLists.txt` 和 CTest 发现结果为准
+  - 示例可执行文件按 `examples/CMakeLists.txt` 的条件登记
 - **CI 工作流**：见 [.github/workflows/](../.github/workflows/) — `ci.yml`（多平台矩阵）、`sanitizer.yml`（ASan/UBSan/TSan）、`benchmark.yml`、`labeler.yml`（fork PR 也生效）、`release.yml`、`conan-publish.yml`
 
-详细构建步骤参见 [build_and_test_guide.md](build_and_test_guide.md)；分发与集成参见 [integration_guide.md](integration_guide.md)。
+详细构建步骤参见 [build_and_test_guide.md](build_and_test_guide.md)；分发与集成参见 [integration_guide.md](integration_guide.md)。HTTP/2 的四种构建组合、安装依赖和公开头示例见 [HTTP/2 使用指南](http2-guide.md)；消费者应直接链接 `hical::hical_core` 传递线程 ABI 和静态库定义。
 
 ## 模块演进摘要
 
@@ -464,7 +479,8 @@ hical/
 | 数据库      | `DbConfig` / `DbConnectionPool` / `DbMiddleware` / `DbQueryLog` / `MysqlConnection` / `StmtCache` / `PgsqlConnection` / `PgStmtCache` | 协程化连接池 + 装饰器查询日志 + PreparedStatement LRU（MySQL + PostgreSQL 双后端） |
 | 编译期组件  | `PerfectHashRouter` / `CompileTimeChain` / `CompileTimeJson`                                                                          | 运行时零开销：完美哈希路由 + 编译期中件链 + 编译期 JSON 序列化                     |
 | 定时与输出  | `TimerService` / `JsonWriter`                                                                                                         | 集中式定时器（一个 timer 兜住所有 sleep）+ 零 DOM 增量 JSON writer                 |
-| HTTP 客户端 | `HttpClient` / `HttpClientPool`                                                                                                       | 主动外呼：协程 HTTP/1.1 + 按 host:port 分桶的连接池（`HICAL_WITH_HTTP_CLIENT=ON`） |
+| HTTP 客户端 | `HttpClient` / `HttpClientPool`                                                                                                       | 默认 H1、可选 TLS H2；每 loop 的连接池，独占租借与共享调度分开 |
+| HTTP/2 候选 | `HttpProtocol` / `Http2Options` / `core/http2/` / `Http2ClientSession`                                                                 | TLS ALPN、有限资源与阶段期限、流取消及业务自然收尾；仍待最终验收 |
 
 ## 命名风格
 

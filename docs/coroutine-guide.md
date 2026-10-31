@@ -130,7 +130,7 @@ server.router().get("/api/users",
 - 用 `co_return` 代替 `return`
 - 内部可以 `co_await` 任何异步操作
 
-### 场景三：中间件（总是协程）
+### 场景三：异步中间件
 
 中间件采用洋葱模型——请求进入时从外到内，响应返回时从内到外：
 
@@ -257,7 +257,8 @@ int main()
 | 数据库查询        | 协程         | `Awaitable<HttpResponse>` |
 | 调用外部 HTTP API | 协程         | `Awaitable<HttpResponse>` |
 | 需要延时/定时     | 协程         | `Awaitable<HttpResponse>` |
-| 中间件            | **总是协程** | `Awaitable<HttpResponse>` |
+| 异步中间件        | 协程         | `Awaitable<HttpResponse>` |
+| 同步前置/后置中间件 | 同步       | `SyncBeforeHandler` / `SyncAfterHandler` |
 | WebSocket 回调    | **总是协程** | `Awaitable<void>`         |
 
 **经验法则**：如果函数体里没有 `co_await`，用同步。需要 `co_await` 任何东西，就用协程。
@@ -295,4 +296,16 @@ Hical 使用 Boost.Asio 协程，底层仍然是 epoll/IOCP 事件驱动，协�
 
 ### Q：性能有差异吗？
 
-几乎没有。协程的暂停/恢复开销是纳秒级的，远小于一次网络 I/O。同步处理器在内部也会被包装成协程执行，所以两种写法性能一致。
+同步处理器可走 `dispatchSync()` 快速路径，省掉处理器的协程帧；需要异步等待时使用协程。实际差异取决于工作量，不能把两种写法笼统地说成性能相同。
+
+## HTTP/2 的请求与取消生命周期
+
+当前 HTTP/2 为可选候选实现，仍待最终验收；它复用同样的同步/异步路由和中间件。`useBody()` 在第一个需要 body 的中间件前设置读取门，门前只看到头，门后才看到完整 body 与尾字段。H2 读泵提前收到的 DATA 受有限预算约束，不会改变应用可见顺序。
+
+对端 RST_STREAM、超时或断连会停止流输出，却不会强制销毁正在运行的 handler。跨 `co_await` 的对象仍需有效所有权，请求视图和请求级 PMR 对象仍不能逃逸。handler 的自然收尾期间继续占应用任务配额；数据库中间件按原有成功或异常路径处理事务，RST 本身不等于回滚。服务端用 `gracefulStop()` 排空，保持对象存活到 `start()` 返回。
+
+可选 `HttpClient` 的普通 `request/get/post` 入口在返回 awaitable 前持有参数和内部状态，所以保存 awaitable 后可以释放原 target/body/header；请求绝对期限从提交开始，稍后启动不会重新计时。facade 析构会取消旧请求，已保存的 awaitable 仍能安全启动并返回取消结果；`io_context` 则必须覆盖所有未完成请求、读写泵与投递的清理。
+
+同一个客户端在 H1 下串行，在 H2 下按流配额并发。通过 Asio cancellation slot 取消一个 H2 请求只影响该流；还在排队、没有 stream ID 的请求直接退出队列。`close()` 取消整条连接当前代次，后续请求可以重新建连。连接池的 `shutdown()` 清理也需 owner loop 继续运行，不能调用后立即销毁 io_context。构建、TLS 配置与完整可运行示例见 [HTTP/2 使用指南](http2-guide.md)。
+
+原生取消和超时不会触发池高层的自动重试。允许的幂等方法至多重试一次，继续使用原请求期限与首次实际排队的截止时间；POST/PATCH 默认不重放，RST 或 GOAWAY 也不能替应用决定业务重试。具体证据与白名单见 [连接池与重试边界](http2-guide.md#连接池与重试边界)。
