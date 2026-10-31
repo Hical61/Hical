@@ -16,21 +16,55 @@ on:
         type: boolean
         default: false
 
+env:
+  HICAL_REQUIRE_SSL_CERTS: '1'
+  # 实际 Suite 名称，涵盖生产客户端与 H2 生命周期、池、排空、文件及取消。
+  HTTP2_TEST_REGEX: '^(Http2(Lifecycle|Registry|ServerConfig|Client|Pool|Drain|File|Cancellation|DispatchCancellation)[^.]*|AsyncHttpClient[^.]*)\.'
+
 jobs:
+  http2-dependency-tests:
+    name: HTTP2 dependency extraction tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m unittest discover -s scripts -p test_ci_http2_deps.py -v
+
   asan:
+    needs: http2-dependency-tests
     if: ${{ inputs.run_asan }}
     runs-on: ubuntu-24.04
-    name: ASan + UBSan (Clang-20)
+    name: HTTP2 ASan + UBSan (Clang-20)
+    timeout-minutes: 60
 
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Fixed CMake and Ninja
+        run: |
+          python -m pip install --only-binary=:all: cmake==4.4.3 ninja==1.13.0
+
       - name: Install dependencies
         run: |
-          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/llvm.asc
-          echo "deb http://apt.llvm.org/noble/ llvm-toolchain-noble-20 main" | sudo tee /etc/apt/sources.list.d/llvm-20.list
+          set -euo pipefail
+          curl --fail --show-error --proto '=https' https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/llvm.asc >/dev/null
+          echo "deb https://apt.llvm.org/noble/ llvm-toolchain-noble-20 main" | sudo tee /etc/apt/sources.list.d/llvm-20.list
           sudo apt-get update
-          sudo apt-get install -y libboost-all-dev libssl-dev libgtest-dev zlib1g-dev cmake clang-20
+          sudo apt-get install -y libssl-dev libgtest-dev zlib1g-dev clang-20
+
+      - name: Fixed Boost 1.90 and nghttp2 1.70 (ASan/UBSan)
+        run: >-
+          python scripts/ci_http2_deps.py --root build-h2-deps --compiler clang --cc clang-20 --cxx clang++-20
+          --configuration Debug --sanitizer address,undefined --build
 
       - name: Setup ccache
         uses: hendrikmuhs/ccache-action@v1
@@ -39,38 +73,87 @@ jobs:
 
       - name: Configure
         run: |
-          cmake -B build -DCMAKE_BUILD_TYPE=Debug \
+          set -euo pipefail
+          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug \
             -DCMAKE_C_COMPILER=clang-20 \
             -DCMAKE_CXX_COMPILER=clang++-20 \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
+            -DCMAKE_C_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
             -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined" \
-            -DHICAL_DISABLE_IO_URING=ON
+            -DCMAKE_PREFIX_PATH="$PWD/build-h2-deps/prefix" \
+            -DBoost_DIR="$PWD/build-h2-deps/prefix/lib/cmake/Boost-1.90.0" \
+            -DNghttp2_ROOT="$PWD/build-h2-deps/prefix" \
+            -DHICAL_WITH_HTTP2=ON -DHICAL_WITH_HTTP_CLIENT=ON -DHICAL_DISABLE_IO_URING=ON 2>&1 | tee sanitizer-configure.log
 
       - name: Build
-        run: cmake --build build -j$(nproc)
+        run: |
+          set -euo pipefail
+          cmake --build build --parallel 2 2>&1 | tee sanitizer-build.log
+
+      - name: Certificates and actual test discovery
+        run: |
+          set -euo pipefail
+          python scripts/gen_test_certs.py --out-dir build/tests
+          ctest --test-dir build -N 2>&1 | tee sanitizer-discovery.log
+          ctest --test-dir build --show-only=json-v1 > sanitizer-discovery.json
+          python -c "import json; n=[t['name'] for t in json.load(open('sanitizer-discovery.json'))['tests']]; required=('Http2Lifecycle','Http2Client','Http2Pool','Http2Drain','Http2File','Http2Cancellation','AsyncHttpClientNetworkTest.'); assert all(any(x.startswith(r) for x in n) for r in required)"
 
       - name: Test
-        run: ctest --test-dir build --output-on-failure --timeout 120 -j4 -E RouterPerfTest
+        run: |
+          set -euo pipefail
+          ctest --test-dir build --no-tests=error --output-on-failure --timeout 120 -j2 \
+            -R "$HTTP2_TEST_REGEX" --output-junit sanitizer-tests.xml 2>&1 | tee sanitizer-tests.log
         env:
           ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
           UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
 
+      - name: Preserve ASan/UBSan raw evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: http2-asan-ubsan
+          path: |
+            sanitizer-*.log
+            sanitizer-*.json
+            sanitizer-tests.xml
+            build/Testing/
+            build/CMakeCache.txt
+            build-h2-deps/manifest.json
+            build-h2-deps/logs/
+          if-no-files-found: warn
+
   tsan:
+    needs: http2-dependency-tests
     if: ${{ inputs.run_tsan }}
     runs-on: ubuntu-24.04
-    name: TSan (Clang-20)
+    name: HTTP2 TSan (Clang-20)
+    timeout-minutes: 90
 
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Fixed CMake and Ninja
+        run: |
+          python -m pip install --only-binary=:all: cmake==4.4.3 ninja==1.13.0
+
       - name: Install dependencies
         run: |
-          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/llvm.asc
-          echo "deb http://apt.llvm.org/noble/ llvm-toolchain-noble-20 main" | sudo tee /etc/apt/sources.list.d/llvm-20.list
+          set -euo pipefail
+          curl --fail --show-error --proto '=https' https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/llvm.asc >/dev/null
+          echo "deb https://apt.llvm.org/noble/ llvm-toolchain-noble-20 main" | sudo tee /etc/apt/sources.list.d/llvm-20.list
           sudo apt-get update
-          sudo apt-get install -y libboost-all-dev libssl-dev libgtest-dev zlib1g-dev cmake clang-20
+          sudo apt-get install -y libssl-dev libgtest-dev zlib1g-dev clang-20
+
+      - name: Fixed Boost 1.90 and nghttp2 1.70 (TSan)
+        run: >-
+          python scripts/ci_http2_deps.py --root build-h2-deps --compiler clang --cc clang-20 --cxx clang++-20
+          --configuration Debug --sanitizer thread --build
 
       - name: Setup ccache
         uses: hendrikmuhs/ccache-action@v1
@@ -79,37 +162,86 @@ jobs:
 
       - name: Configure
         run: |
-          cmake -B build -DCMAKE_BUILD_TYPE=Debug \
+          set -euo pipefail
+          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug \
             -DCMAKE_C_COMPILER=clang-20 \
             -DCMAKE_CXX_COMPILER=clang++-20 \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_FLAGS="-fsanitize=thread -fno-omit-frame-pointer" \
+            -DCMAKE_C_FLAGS="-fsanitize=thread -fno-omit-frame-pointer" \
             -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=thread" \
-            -DHICAL_DISABLE_IO_URING=ON
+            -DCMAKE_PREFIX_PATH="$PWD/build-h2-deps/prefix" \
+            -DBoost_DIR="$PWD/build-h2-deps/prefix/lib/cmake/Boost-1.90.0" \
+            -DNghttp2_ROOT="$PWD/build-h2-deps/prefix" \
+            -DHICAL_WITH_HTTP2=ON -DHICAL_WITH_HTTP_CLIENT=ON -DHICAL_DISABLE_IO_URING=ON 2>&1 | tee sanitizer-configure.log
 
       - name: Build
-        run: cmake --build build -j$(nproc)
+        run: |
+          set -euo pipefail
+          cmake --build build --parallel 2 2>&1 | tee sanitizer-build.log
+
+      - name: Certificates and actual test discovery
+        run: |
+          set -euo pipefail
+          python scripts/gen_test_certs.py --out-dir build/tests
+          ctest --test-dir build -N 2>&1 | tee sanitizer-discovery.log
+          ctest --test-dir build --show-only=json-v1 > sanitizer-discovery.json
+          python -c "import json; n=[t['name'] for t in json.load(open('sanitizer-discovery.json'))['tests']]; required=('Http2Lifecycle','Http2Client','Http2Pool','Http2Drain','Http2File','Http2Cancellation','AsyncHttpClientNetworkTest.'); assert all(any(x.startswith(r) for x in n) for r in required)"
 
       - name: Test
-        run: ctest --test-dir build --output-on-failure --timeout 300 -j4 -E RouterPerfTest
+        run: |
+          set -euo pipefail
+          ctest --test-dir build --no-tests=error --output-on-failure --timeout 300 -j2 \
+            -R "$HTTP2_TEST_REGEX" --output-junit sanitizer-tests.xml 2>&1 | tee sanitizer-tests.log
         env:
           TSAN_OPTIONS: halt_on_error=1:second_deadlock_stack=1
 
+      - name: Preserve TSan raw evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: http2-tsan
+          path: |
+            sanitizer-*.log
+            sanitizer-*.json
+            sanitizer-tests.xml
+            build/Testing/
+            build/CMakeCache.txt
+            build-h2-deps/manifest.json
+            build-h2-deps/logs/
+          if-no-files-found: warn
+
   valgrind:
+    needs: http2-dependency-tests
     if: ${{ inputs.run_valgrind }}
     runs-on: ubuntu-24.04
-    name: Valgrind Memcheck (Clang-20)
+    name: HTTP2 Valgrind Memcheck (Clang-20)
+    timeout-minutes: 90
 
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Fixed CMake and Ninja
+        run: |
+          python -m pip install --only-binary=:all: cmake==4.4.3 ninja==1.13.0
+
       - name: Install dependencies
         run: |
-          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/llvm.asc
-          echo "deb http://apt.llvm.org/noble/ llvm-toolchain-noble-20 main" | sudo tee /etc/apt/sources.list.d/llvm-20.list
+          set -euo pipefail
+          curl --fail --show-error --proto '=https' https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/llvm.asc >/dev/null
+          echo "deb https://apt.llvm.org/noble/ llvm-toolchain-noble-20 main" | sudo tee /etc/apt/sources.list.d/llvm-20.list
           sudo apt-get update
-          sudo apt-get install -y libboost-all-dev libssl-dev libgtest-dev zlib1g-dev cmake clang-20 valgrind
+          sudo apt-get install -y libssl-dev libgtest-dev zlib1g-dev clang-20 valgrind
+
+      - name: Fixed Boost 1.90 and nghttp2 1.70 (Memcheck)
+        run: >-
+          python scripts/ci_http2_deps.py --root build-h2-deps --compiler clang --cc clang-20 --cxx clang++-20
+          --configuration RelWithDebInfo --build
 
       - name: Setup ccache
         uses: hendrikmuhs/ccache-action@v1
@@ -118,26 +250,54 @@ jobs:
 
       - name: Configure
         run: |
-          cmake -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+          set -euo pipefail
+          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo \
             -DCMAKE_C_COMPILER=clang-20 \
             -DCMAKE_CXX_COMPILER=clang++-20 \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
-            -DHICAL_DISABLE_IO_URING=ON
+            -DCMAKE_PREFIX_PATH="$PWD/build-h2-deps/prefix" \
+            -DBoost_DIR="$PWD/build-h2-deps/prefix/lib/cmake/Boost-1.90.0" \
+            -DNghttp2_ROOT="$PWD/build-h2-deps/prefix" \
+            -DHICAL_WITH_HTTP2=ON -DHICAL_WITH_HTTP_CLIENT=ON -DHICAL_DISABLE_IO_URING=ON 2>&1 | tee sanitizer-configure.log
 
       - name: Build
-        run: cmake --build build -j$(nproc)
+        run: |
+          set -euo pipefail
+          cmake --build build --parallel 2 2>&1 | tee sanitizer-build.log
+
+      - name: Certificates and actual test discovery
+        run: |
+          set -euo pipefail
+          python scripts/gen_test_certs.py --out-dir build/tests
+          ctest --test-dir build -N 2>&1 | tee sanitizer-discovery.log
+          ctest --test-dir build --show-only=json-v1 > sanitizer-discovery.json
+          python -c "import json; n=[t['name'] for t in json.load(open('sanitizer-discovery.json'))['tests']]; required=('Http2Lifecycle','Http2Client','Http2Pool','Http2Drain','Http2File','Http2Cancellation','AsyncHttpClientNetworkTest.'); assert all(any(x.startswith(r) for x in n) for r in required)"
+
+      - name: CTest Memcheck configuration (without shared CMake edits)
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          root = Path.cwd()
+          build = root / 'build'
+          lines = [f'SourceDirectory: {root}', f'BuildDirectory: {build}',
+                   'Site: GitHubActions', 'BuildName: HTTP2-Memcheck', 'NightlyStartTime: 00:00:00 UTC']
+          (build / 'DartConfiguration.tcl').write_text('\n'.join(lines) + '\n', encoding='utf-8')
+          PY
 
       - name: Test under Valgrind
         run: |
+          set -euo pipefail
           ctest --test-dir build \
+            --no-tests=error \
             --output-on-failure \
             --timeout 600 \
             -j2 \
-            -E "RouterPerfTest|LogTest\.Fatal" \
+            -R "$HTTP2_TEST_REGEX" \
             --overwrite MemoryCheckCommand=/usr/bin/valgrind \
             --overwrite "MemoryCheckCommandOptions=--leak-check=full --show-leak-kinds=all --error-exitcode=1 --track-origins=yes" \
-            -T memcheck
+            --output-junit sanitizer-tests.xml \
+            -T memcheck 2>&1 | tee sanitizer-tests.log
         env:
           GTEST_DEATH_TEST_USE_FORK: 1
 
@@ -145,6 +305,14 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: valgrind-memcheck-logs
-          path: build/Testing/Temporary/MemoryChecker.*.log
-          if-no-files-found: ignore
+          name: http2-valgrind-memcheck
+          path: |
+            sanitizer-*.log
+            sanitizer-*.json
+            sanitizer-tests.xml
+            build/Testing/
+            build/CMakeCache.txt
+            build/DartConfiguration.tcl
+            build-h2-deps/manifest.json
+            build-h2-deps/logs/
+          if-no-files-found: warn

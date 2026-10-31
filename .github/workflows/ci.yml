@@ -9,7 +9,6 @@ on:
       - 'LICENSE'
       - '.gitignore'
       - '.dockerignore'
-      - 'docker/**'
       - 'docker-compose*.yml'
       - 'ports/**'
       - 'benchmark/**'
@@ -21,17 +20,287 @@ on:
       - 'LICENSE'
       - '.gitignore'
       - '.dockerignore'
-      - 'docker/**'
       - 'docker-compose*.yml'
       - 'ports/**'
       - 'benchmark/**'
   workflow_dispatch:
+    inputs:
+      run_http2_interop:
+        description: '运行固定外部工具的原生双向 HTTP/2 互操作（较慢）'
+        type: boolean
+        default: false
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  http2-dependency-tests:
+    name: HTTP2 dependency extraction tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m unittest discover -s scripts -p test_ci_http2_deps.py -v
+
+  # 原有 build/profiling 保持 OFF；H2 双端使用独立前缀，不借用 Ubuntu apt Boost 1.83。
+  http2:
+    needs: http2-dependency-tests
+    name: HTTP2 ON / ${{ matrix.compiler }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            compiler: gcc
+            cc: gcc-14
+            cxx: g++-14
+            configuration: Release
+            sanitizer: none
+          - os: ubuntu-24.04
+            compiler: clang
+            cc: clang-20
+            cxx: clang++-20
+            configuration: Debug
+            sanitizer: address,undefined
+          - os: windows-latest
+            compiler: msys2-gcc
+            cc: gcc
+            cxx: g++
+            configuration: Release
+            sanitizer: none
+          - os: windows-latest
+            compiler: msvc
+            cc: cl
+            cxx: cl
+            configuration: Release
+            sanitizer: none
+    env:
+      HICAL_REQUIRE_SSL_CERTS: '1'
+      ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
+      UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        if: matrix.compiler != 'msys2-gcc'
+        with:
+          python-version: '3.12'
+      - name: CMake / Ninja
+        if: matrix.compiler != 'msys2-gcc'
+        run: |
+          python -m pip install --only-binary=:all: cmake==4.4.3 ninja==1.13.0
+      - name: Linux system dependencies
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --proto '=https' https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/llvm.asc >/dev/null
+          echo 'deb https://apt.llvm.org/noble/ llvm-toolchain-noble-20 main' | sudo tee /etc/apt/sources.list.d/llvm-20.list
+          sudo apt-get update
+          sudo apt-get install -y gcc-14 g++-14 clang-20 libssl-dev libgtest-dev zlib1g-dev
+      - name: MSYS2 system dependencies
+        if: matrix.compiler == 'msys2-gcc'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          cache: true
+          install: >-
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-ninja
+            mingw-w64-x86_64-openssl
+            mingw-w64-x86_64-zlib
+            mingw-w64-x86_64-gtest
+            mingw-w64-x86_64-python
+            curl
+      - name: MSVC environment
+        if: matrix.compiler == 'msvc'
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+      - name: MSVC system dependencies in workspace
+        if: matrix.compiler == 'msvc'
+        shell: pwsh
+        run: |
+          & "$env:VCPKG_INSTALLATION_ROOT/vcpkg.exe" install openssl zlib gtest --classic --triplet x64-windows-static-md --x-install-root="$env:GITHUB_WORKSPACE/build-h2-vcpkg"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Cache verified source archives
+        uses: actions/cache@v4
+        with:
+          path: build-h2-deps/downloads
+          key: http2-sources-boost190-ng170-${{ runner.os }}-${{ hashFiles('scripts/ci_http2_deps.py') }}
+      - name: Build fixed dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: >-
+          python scripts/ci_http2_deps.py --root build-h2-deps --compiler ${{ matrix.compiler }}
+          --cc ${{ matrix.cc }} --cxx ${{ matrix.cxx }} --configuration ${{ matrix.configuration }}
+          --sanitizer ${{ matrix.sanitizer }} --build
+      - name: Build fixed dependencies (MSYS2)
+        if: matrix.compiler == 'msys2-gcc'
+        shell: msys2 {0}
+        run: |
+          set -euo pipefail
+          python scripts/ci_http2_deps.py --root build-h2-deps --compiler gcc --cc gcc --cxx g++ --build
+      - name: Build fixed dependencies (MSVC)
+        if: matrix.compiler == 'msvc'
+        run: python scripts/ci_http2_deps.py --root build-h2-deps --compiler msvc --cc cl --cxx cl --build
+      - name: Configure / build / test H2 (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          extra=()
+          if [[ '${{ matrix.sanitizer }}' != none ]]; then
+            extra+=("-DCMAKE_C_FLAGS=-fsanitize=${{ matrix.sanitizer }} -fno-omit-frame-pointer")
+            extra+=("-DCMAKE_CXX_FLAGS=-fsanitize=${{ matrix.sanitizer }} -fno-omit-frame-pointer")
+            extra+=("-DCMAKE_EXE_LINKER_FLAGS=-fsanitize=${{ matrix.sanitizer }}")
+          fi
+          cmake -B build-h2 -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.configuration }} \
+            -DCMAKE_C_COMPILER=${{ matrix.cc }} -DCMAKE_CXX_COMPILER=${{ matrix.cxx }} \
+            -DCMAKE_PREFIX_PATH="$PWD/build-h2-deps/prefix" \
+            -DBoost_DIR="$PWD/build-h2-deps/prefix/lib/cmake/Boost-1.90.0" \
+            -DNghttp2_ROOT="$PWD/build-h2-deps/prefix" \
+            -DHICAL_WITH_HTTP2=ON -DHICAL_WITH_HTTP_CLIENT=ON -DHICAL_DISABLE_IO_URING=ON \
+            "${extra[@]}" 2>&1 | tee build-h2-configure.log
+          cmake --build build-h2 --parallel 2 2>&1 | tee build-h2-build.log
+          python scripts/gen_test_certs.py --out-dir build-h2/tests
+          ctest --test-dir build-h2 -N 2>&1 | tee build-h2-discovery.log
+          ctest --test-dir build-h2 --show-only=json-v1 > build-h2/discovery.json
+          python -c "import json; n=[t['name'] for t in json.load(open('build-h2/discovery.json'))['tests']]; required=('AsyncHttpClientNetworkTest.','Http2Client','Http2Pool','Http2Lifecycle','Http2Drain','Http2File','Http2Cancellation'); assert all(any(x.startswith(r) for x in n) for r in required)"
+          ctest --test-dir build-h2 --no-tests=error --output-on-failure --timeout 120 -j2 \
+            -E 'RouterPerfTest|PerfectHashPerfTest|HttpServerPerfTest' --output-junit build-h2-tests.xml 2>&1 | tee build-h2-tests.log
+      - name: Configure / build / test H2 (MSYS2)
+        if: matrix.compiler == 'msys2-gcc'
+        shell: msys2 {0}
+        run: |
+          set -euo pipefail
+          prefix="$(cygpath -m "$PWD/build-h2-deps/prefix")"
+          cmake -B build-h2 -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_PREFIX_PATH="$prefix" -DBoost_DIR="$prefix/lib/cmake/Boost-1.90.0" \
+            -DNghttp2_ROOT="$prefix" -DHICAL_WITH_HTTP2=ON -DHICAL_WITH_HTTP_CLIENT=ON 2>&1 | tee build-h2-configure.log
+          cmake --build build-h2 --parallel 2 2>&1 | tee build-h2-build.log
+          python scripts/gen_test_certs.py --out-dir build-h2/tests
+          ctest --test-dir build-h2 -N 2>&1 | tee build-h2-discovery.log
+          ctest --test-dir build-h2 --show-only=json-v1 > build-h2/discovery.json
+          python -c "import json; n=[t['name'] for t in json.load(open('build-h2/discovery.json'))['tests']]; required=('AsyncHttpClientNetworkTest.','Http2Client','Http2Pool','Http2Lifecycle','Http2Drain','Http2File','Http2Cancellation'); assert all(any(x.startswith(r) for x in n) for r in required)"
+          ctest --test-dir build-h2 --no-tests=error --output-on-failure --timeout 120 -j2 \
+            -E 'RouterPerfTest|PerfectHashPerfTest|HttpServerPerfTest' --output-junit build-h2-tests.xml 2>&1 | tee build-h2-tests.log
+      - name: Configure / build / test H2 (MSVC)
+        if: matrix.compiler == 'msvc'
+        shell: pwsh
+        run: |
+          cmake -B build-h2 -G Ninja -DCMAKE_BUILD_TYPE=Release `
+            -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" `
+            -DVCPKG_MANIFEST_MODE=OFF -DVCPKG_INSTALLED_DIR="$env:GITHUB_WORKSPACE/build-h2-vcpkg" `
+            -DVCPKG_TARGET_TRIPLET=x64-windows-static-md -DCMAKE_VS_GLOBALS=VcpkgEnabled=false `
+            -DCMAKE_PREFIX_PATH="$env:GITHUB_WORKSPACE/build-h2-deps/prefix" `
+            -DBoost_DIR="$env:GITHUB_WORKSPACE/build-h2-deps/prefix/lib/cmake/Boost-1.90.0" `
+            -DNghttp2_ROOT="$env:GITHUB_WORKSPACE/build-h2-deps/prefix" `
+            -DHICAL_WITH_HTTP2=ON -DHICAL_WITH_HTTP_CLIENT=ON 2>&1 | Tee-Object build-h2-configure.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake --build build-h2 --parallel 2 2>&1 | Tee-Object build-h2-build.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python scripts/gen_test_certs.py --out-dir build-h2/tests
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          ctest --test-dir build-h2 -N 2>&1 | Tee-Object build-h2-discovery.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          ctest --test-dir build-h2 --show-only=json-v1 > build-h2/discovery.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python -c "import json; n=[t['name'] for t in json.load(open('build-h2/discovery.json',encoding='utf-8-sig'))['tests']]; required=('AsyncHttpClientNetworkTest.','Http2Client','Http2Pool','Http2Lifecycle','Http2Drain','Http2File','Http2Cancellation'); assert all(any(x.startswith(r) for x in n) for r in required)"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          ctest --test-dir build-h2 --no-tests=error --output-on-failure --timeout 120 -j2 `
+            -E 'RouterPerfTest|PerfectHashPerfTest|HttpServerPerfTest' --output-junit build-h2-tests.xml 2>&1 | Tee-Object build-h2-tests.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Preserve H2 logs and dependency identity
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: http2-${{ matrix.compiler }}
+          path: |
+            build-h2-*.log
+            build-h2-tests.xml
+            build-h2/discovery.json
+            build-h2/CMakeCache.txt
+            build-h2/Testing/
+            build-h2-deps/manifest.json
+            build-h2-deps/logs/
+          if-no-files-found: warn
+
+  # 外部工具互操作耗时较长，仅在手动运行时启用。
+  http2-interop:
+    needs: http2-dependency-tests
+    if: github.event_name == 'workflow_dispatch' && inputs.run_http2_interop
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    env:
+      HICAL_REQUIRE_SSL_CERTS: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: summerwind/h2spec
+          ref: 70ac2294010887f48b18e2d64f5cccd48421fad1
+          path: build-h2-deps/h2spec-source
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.6'
+          cache: false
+      - name: Install system tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-14 g++-14 libssl-dev libgtest-dev zlib1g-dev libev-dev libc-ares-dev libjansson-dev libxml2-dev
+          python -m pip install --only-binary=:all: cmake==4.4.3 ninja==1.13.0
+      - name: Build fixed library and independent CLI tools
+        run: >-
+          python scripts/ci_http2_deps.py --root build-h2-deps --compiler gcc --cc gcc-14 --cxx g++-14
+          --build --interop-tools --h2spec-source build-h2-deps/h2spec-source
+      - name: Build production probes
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake -B build-h2 -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=gcc-14 -DCMAKE_CXX_COMPILER=g++-14 \
+            -DCMAKE_PREFIX_PATH="$PWD/build-h2-deps/prefix" -DBoost_DIR="$PWD/build-h2-deps/prefix/lib/cmake/Boost-1.90.0" \
+            -DNghttp2_ROOT="$PWD/build-h2-deps/prefix" \
+            -DHICAL_WITH_HTTP2=ON -DHICAL_WITH_HTTP_CLIENT=ON -DHICAL_DISABLE_IO_URING=ON 2>&1 | tee build-h2-configure.log
+          cmake --build build-h2 --parallel 2 --target http2_interop_server http2_interop_client 2>&1 | tee build-h2-build.log
+          python scripts/gen_test_certs.py --out-dir build-h2/tests
+      - name: Run native bidirectional interoperability
+        run: >-
+          python scripts/test_http2_interop.py
+          --server-driver build-h2/tests/http2_interop_server --client-driver build-h2/tests/http2_interop_client
+          --nghttp build-h2-deps/prefix/bin/nghttp --nghttpd build-h2-deps/prefix/bin/nghttpd
+          --h2load build-h2-deps/prefix/bin/h2load --h2spec build-h2-deps/prefix/bin/h2spec
+          --cert build-h2/tests/test_server.crt --key build-h2/tests/test_server.key --ca build-h2/tests/test_server.crt
+          --expected-nghttp-version 1.70.0 --external-insecure --build-source-identity ${{ github.sha }}
+          --h2spec-max-header-length 3000 --h2spec-rfc9113-review docker/test/http2/h2spec-rfc9113.json
+          --out build-h2-interop
+      - name: Preserve every interoperability case and raw log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: http2-native-interop
+          path: |
+            build-h2-interop/
+            build-h2-*.log
+            build-h2-deps/manifest.json
+            build-h2-deps/logs/
+          if-no-files-found: warn
+
   build:
     strategy:
       fail-fast: false
@@ -106,7 +375,9 @@ jobs:
             -DCMAKE_CXX_COMPILER=${{ matrix.cxx }} \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
-            -DHICAL_DISABLE_IO_URING=ON
+            -DHICAL_DISABLE_IO_URING=ON \
+            -DHICAL_WITH_HTTP2=OFF \
+            -DHICAL_WITH_HTTP_CLIENT=OFF
 
       - name: Build (Linux)
         if: runner.os == 'Linux' && matrix.compiler != 'clang'
@@ -118,7 +389,9 @@ jobs:
 
       - name: Test (Linux)
         if: runner.os == 'Linux' && matrix.compiler != 'clang'
-        run: ctest --test-dir build --output-on-failure --timeout 60 -j4 -E 'RouterPerfTest|PerfectHashPerfTest|HttpServerPerfTest'
+        run: |
+          ctest --test-dir build -N
+          ctest --test-dir build --no-tests=error --output-on-failure --timeout 60 -j4 -E 'RouterPerfTest|PerfectHashPerfTest|HttpServerPerfTest'
         env:
           HICAL_REQUIRE_SSL_CERTS: "1"
 
@@ -133,7 +406,9 @@ jobs:
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
             -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined" \
-            -DHICAL_DISABLE_IO_URING=ON
+            -DHICAL_DISABLE_IO_URING=ON \
+            -DHICAL_WITH_HTTP2=OFF \
+            -DHICAL_WITH_HTTP_CLIENT=OFF
 
       - name: Build with sanitizers (Clang)
         if: matrix.compiler == 'clang'
@@ -145,7 +420,9 @@ jobs:
 
       - name: Test with sanitizers (Clang)
         if: matrix.compiler == 'clang'
-        run: ctest --test-dir build --output-on-failure --timeout 120 -j4 -E 'RouterPerfTest|PerfectHashPerfTest|HttpServerPerfTest'
+        run: |
+          ctest --test-dir build -N
+          ctest --test-dir build --no-tests=error --output-on-failure --timeout 120 -j4 -E 'RouterPerfTest|PerfectHashPerfTest|HttpServerPerfTest'
         env:
           HICAL_REQUIRE_SSL_CERTS: "1"
 
@@ -166,7 +443,9 @@ jobs:
             -DCMAKE_CXX_FLAGS="--coverage" \
             -DCMAKE_C_FLAGS="--coverage" \
             -DCMAKE_EXE_LINKER_FLAGS="--coverage" \
-            -DHICAL_DISABLE_IO_URING=ON
+            -DHICAL_DISABLE_IO_URING=ON \
+            -DHICAL_WITH_HTTP2=OFF \
+            -DHICAL_WITH_HTTP_CLIENT=OFF
           cmake --build build-cov -j$(nproc)
 
       - name: Generate test certificates (coverage)
@@ -175,7 +454,9 @@ jobs:
 
       - name: Run tests for coverage
         if: matrix.compiler == 'gcc'
-        run: ctest --test-dir build-cov --output-on-failure --timeout 60 -j4 -E 'RouterPerfTest|PerfectHashPerfTest|HttpServerPerfTest'
+        run: |
+          ctest --test-dir build-cov -N
+          ctest --test-dir build-cov --no-tests=error --output-on-failure --timeout 60 -j4 -E 'RouterPerfTest|PerfectHashPerfTest|HttpServerPerfTest'
         env:
           HICAL_REQUIRE_SSL_CERTS: "1"
 
@@ -250,7 +531,7 @@ jobs:
         run: |
           cmake --version
           cmake --version | grep '^cmake version 4\.'
-          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DHICAL_WITH_HTTP2=OFF -DHICAL_WITH_HTTP_CLIENT=OFF
 
       - name: Build (MSYS2)
         if: matrix.compiler == 'msys2-gcc'
@@ -268,9 +549,10 @@ jobs:
         env:
           HICAL_REQUIRE_SSL_CERTS: "1"
         run: |
-          ctest --test-dir build --output-on-failure --timeout 60 -j4 -E 'RouterPerfTest|PerfectHashPerfTest|HttpServerPerfTest' || {
+          ctest --test-dir build -N
+          ctest --test-dir build --no-tests=error --output-on-failure --timeout 60 -j4 -E 'RouterPerfTest|PerfectHashPerfTest|HttpServerPerfTest' || {
             echo "First attempt failed (likely MinGW exit-time segfault), retrying..."
-            ctest --test-dir build --output-on-failure --timeout 60 -j4 -E 'RouterPerfTest|PerfectHashPerfTest|HttpServerPerfTest'
+            ctest --test-dir build --no-tests=error --output-on-failure --timeout 60 -j4 -E 'RouterPerfTest|PerfectHashPerfTest|HttpServerPerfTest'
           }
 
       # ── Windows MSVC ──
@@ -297,6 +579,7 @@ jobs:
         run: >
           cmake -B build
           -DCMAKE_BUILD_TYPE=Release
+          -DHICAL_WITH_HTTP2=OFF -DHICAL_WITH_HTTP_CLIENT=OFF
           -DCMAKE_C_COMPILER_LAUNCHER=ccache
           -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
           -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake
@@ -315,7 +598,9 @@ jobs:
 
       - name: Test (MSVC)
         if: matrix.compiler == 'msvc'
-        run: ctest --test-dir build --output-on-failure --timeout 60 -j4 -C Release -E 'RouterPerfTest|PerfectHashPerfTest|HttpServerPerfTest'
+        run: |
+          ctest --test-dir build -N -C Release
+          ctest --test-dir build --no-tests=error --output-on-failure --timeout 60 -j4 -C Release -E 'RouterPerfTest|PerfectHashPerfTest|HttpServerPerfTest'
         env:
           HICAL_REQUIRE_SSL_CERTS: "1"
 
@@ -361,7 +646,9 @@ jobs:
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             -DHICAL_ENABLE_MIDDLEWARE_PROFILING=ON \
-            -DHICAL_DISABLE_IO_URING=ON
+            -DHICAL_DISABLE_IO_URING=ON \
+            -DHICAL_WITH_HTTP2=OFF \
+            -DHICAL_WITH_HTTP_CLIENT=OFF
 
       - name: Build (middleware profiling)
         run: cmake --build build -j$(nproc)
@@ -370,7 +657,9 @@ jobs:
         run: python3 scripts/gen_test_certs.py
 
       - name: Test (middleware profiling)
-        run: ctest --test-dir build --output-on-failure --timeout 60 -j4 -E 'RouterPerfTest|PerfectHashPerfTest|HttpServerPerfTest'
+        run: |
+          ctest --test-dir build -N
+          ctest --test-dir build --no-tests=error --output-on-failure --timeout 60 -j4 -E 'RouterPerfTest|PerfectHashPerfTest|HttpServerPerfTest'
         env:
           HICAL_REQUIRE_SSL_CERTS: "1"
 

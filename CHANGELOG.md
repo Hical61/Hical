@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 接入 TLS HTTP/2 服务端，支持请求分发、文件响应和连接排空。
 - 客户端支持 TLS ALPN 自动协商和强制 HTTP/2。
 - Conan 和 vcpkg 增加 HTTP/2 功能选项及安装消费检查。
+- 增加原生互操作、性能采样和跨平台检测入口。
 
 ### Changed
 
@@ -27,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **gzip 压缩与传输编码**：HTTP/2 发送原始 gzip 字节，HTTP/1 保留分块编码；重新准备响应时不再同时设置 Content-Length。补齐 qvalue、Vary 和已编码响应的处理，异步压缩结果回到原执行器后再写入响应。
 - **H2 连接池重连期限**：等待流槽位的请求遇到旧连接断开后，按自身 `connectTimeout` 等待共享重连，超时请求不再迟到发送；原请求总期限和队列期限保持不变。
+- **Linux H2 CI 依赖解包**：保留归档普通文件的执行权限并剥离特殊权限，避免 Boost 内部构建脚本因不可执行而失败；旧规则生成的源码缓存会明确要求使用新的依赖目录。
 
 ## [2.7.2] - 2026-10-22
 

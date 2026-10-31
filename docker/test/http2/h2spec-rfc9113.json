@@ -1,0 +1,152 @@
+{
+  "schema": 1,
+  "suite_version": "2.6.0",
+  "suite_commit": "70ac2294010887f48b18e2d64f5cccd48421fad1",
+  "review_status": "independent_review_confirmed",
+  "review_date": "2026-10-24",
+  "policy": "仅显式 --h2spec-rfc9113-review 才采用；完整七项签名固定。原始 testcase.status、进程退出码和日志不修改；未知失败、跳过、缺失、重复、整轮超时及异常退出一律拒绝。",
+  "scope_notice": "这七项不是 h2spec 通过，也不是完整 RFC 9113 合规证明。PRIORITY 流 0 和 CONTINUATION 不在差异名单；4.2/3 与 6.10/1 只做显式尺寸输入复验。",
+  "evidence": {
+    "observed_raw_cases": 146,
+    "raw_failures": 8,
+    "reviewed_differences": 7,
+    "notice": "固定提交的两轮本地真实运行中，这七项失败载荷逐项相同；其余一个为 3000 字节输入下 4.2/3 未生成超大单帧。",
+    "source_archive_sha256": "a2aaa7cb33045628fc91324e8a7e7ca695482c208bb605bd4b3cf7996f4b06a6"
+  },
+  "reviewed_differences": [
+    {
+      "id": "http2/5.1/8",
+      "package": "http2/5.1",
+      "classname": "closed: Sends a DATA frame after sending RST_STREAM frame",
+      "name": "",
+      "failure_details": [
+        {
+          "kind": "error",
+          "attributes": {},
+          "payload": "GOAWAY Frame (Error Code: STREAM_CLOSED)\nRST_STREAM Frame (Error Code: STREAM_CLOSED)\nConnection closed\nTimeout"
+        }
+      ],
+      "reason": "对端 RST 后该流已 closed；RFC 9113 §5.1 允许对所有 closed 流做最小处理并丢弃后续帧，旧套件强制期待 STREAM_CLOSED。",
+      "boundary": "仅限已 closed 的流；DATA 仍须纳入连接流控，不允许重新派发业务。",
+      "references": [
+        "https://www.rfc-editor.org/rfc/rfc9113.html#section-5.1",
+        "https://www.rfc-editor.org/rfc/rfc9113.html#section-5.2"
+      ]
+    },
+    {
+      "id": "http2/5.1/9",
+      "package": "http2/5.1",
+      "classname": "closed: Sends a HEADERS frame after sending RST_STREAM frame",
+      "name": "",
+      "failure_details": [
+        {
+          "kind": "error",
+          "attributes": {},
+          "payload": "GOAWAY Frame (Error Code: STREAM_CLOSED)\nRST_STREAM Frame (Error Code: STREAM_CLOSED)\nConnection closed\nTimeout"
+        }
+      ],
+      "reason": "对端 RST 后该流已 closed；RFC 9113 §5.1 允许做最小处理，旧套件强制期待 STREAM_CLOSED。",
+      "boundary": "头块仍须解压以同步 HPACK；不接受跳过压缩处理或重新派发业务。",
+      "references": [
+        "https://www.rfc-editor.org/rfc/rfc9113.html#section-5.1",
+        "https://www.rfc-editor.org/rfc/rfc9113.html#section-4.3"
+      ]
+    },
+    {
+      "id": "http2/5.1/11",
+      "package": "http2/5.1",
+      "classname": "closed: Sends a DATA frame",
+      "name": "",
+      "failure_details": [
+        {
+          "kind": "error",
+          "attributes": {},
+          "payload": "GOAWAY Frame (Error Code: STREAM_CLOSED)\nRST_STREAM Frame (Error Code: STREAM_CLOSED)\nConnection closed\nTimeout"
+        }
+      ],
+      "reason": "双向 END 后该流已 closed；RFC 9113 §5.1 允许将最小处理适用于全部 closed 流，旧套件强制期待连接错误。",
+      "boundary": "仅限实际双向关闭的流；仍须正确计算连接流控，不据此接受空闲新流 DATA。",
+      "references": [
+        "https://www.rfc-editor.org/rfc/rfc9113.html#section-5.1",
+        "https://www.rfc-editor.org/rfc/rfc9113.html#section-5.2"
+      ]
+    },
+    {
+      "id": "http2/5.1/12",
+      "package": "http2/5.1",
+      "classname": "closed: Sends a HEADERS frame",
+      "name": "",
+      "failure_details": [
+        {
+          "kind": "error",
+          "attributes": {},
+          "payload": "GOAWAY Frame (Error Code: STREAM_CLOSED)\nConnection closed\nTimeout"
+        }
+      ],
+      "reason": "双向 END 后该流已 closed；RFC 9113 §5.1 允许做最小处理，旧套件强制期待连接错误。",
+      "boundary": "仍须同步 HPACK 且不得再次进入应用；不能扩大为忽略所有无 stream 对象的头块。",
+      "references": [
+        "https://www.rfc-editor.org/rfc/rfc9113.html#section-5.1",
+        "https://www.rfc-editor.org/rfc/rfc9113.html#section-4.3"
+      ]
+    },
+    {
+      "id": "http2/5.1.1/2",
+      "package": "http2/5.1.1",
+      "classname": "Sends stream identifier that is numerically smaller than previous",
+      "name": "",
+      "failure_details": [
+        {
+          "kind": "error",
+          "attributes": {},
+          "payload": "GOAWAY Frame (Error Code: PROTOCOL_ERROR)\nConnection closed\nDATA Frame (length:14, flags:0x01, stream_id:5)"
+        }
+      ],
+      "reason": "固定用例先打开流 5，再发流 3；跳过的 3 已按 §5.1.1 隐式 closed，§5.1 允许对全部 closed 流做最小处理。独审核对 nghttp2 未创建或派发流 3，仍同步 HPACK。",
+      "boundary": "只覆盖先 5 后 3 的隐式 closed 输入；不豁免流 0、偶数流或实际非法新建流，不删去 §5.1.1 的 unexpected ID 错误要求。",
+      "references": [
+        "https://www.rfc-editor.org/rfc/rfc9113.html#section-5.1",
+        "https://www.rfc-editor.org/rfc/rfc9113.html#section-5.1.1",
+        "https://www.rfc-editor.org/rfc/rfc9113.html#section-4.3"
+      ]
+    },
+    {
+      "id": "http2/5.3.1/2",
+      "package": "http2/5.3.1",
+      "classname": "Sends PRIORITY frame that depend on itself",
+      "name": "",
+      "failure_details": [
+        {
+          "kind": "error",
+          "attributes": {},
+          "payload": "GOAWAY Frame (Error Code: PROTOCOL_ERROR)\nRST_STREAM Frame (Error Code: PROTOCOL_ERROR)\nConnection closed\nTimeout"
+        }
+      ],
+      "reason": "RFC 9113 §5.3.2 弃用旧依赖树语义；§6.3 保留 PRIORITY 线格式而不再要求自依赖报错。",
+      "boundary": "只接受非零 PRIORITY 的旧语义差异；长度、流 0 及其他线格式约束仍必须验证，不能借 PRIORITY 占用新流 ID。",
+      "references": [
+        "https://www.rfc-editor.org/rfc/rfc9113.html#section-5.3.2",
+        "https://www.rfc-editor.org/rfc/rfc9113.html#section-6.3"
+      ]
+    },
+    {
+      "id": "http2/6.9.1/3",
+      "package": "http2/6.9.1",
+      "classname": "Sends multiple WINDOW_UPDATE frames increasing the flow control window to above 2^31-1 on a stream",
+      "name": "",
+      "failure_details": [
+        {
+          "kind": "error",
+          "attributes": {},
+          "payload": "RST_STREAM Frame (Error Code: FLOW_CONTROL_ERROR)\nConnection closed"
+        }
+      ],
+      "reason": "nghttp2 检出流窗口溢出后终止连接；RFC 9113 §5.4.1 允许把流错误升级为连接错误，旧套件只接受 RST_STREAM。",
+      "boundary": "保留 §6.9.1 的溢出检测；连接错误必须终止传输，GOAWAY 为尽力通知，不能泛化为忽略窗口溢出。",
+      "references": [
+        "https://www.rfc-editor.org/rfc/rfc9113.html#section-5.4.1",
+        "https://www.rfc-editor.org/rfc/rfc9113.html#section-6.9.1"
+      ]
+    }
+  ]
+}

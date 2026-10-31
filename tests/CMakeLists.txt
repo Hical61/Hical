@@ -178,7 +178,13 @@ foreach(_test IN LISTS TESTS_NEEDING_PICOHTTPPARSER)
     target_include_directories(${_test} PRIVATE ${HICAL_PICOHTTPPARSER_INCLUDE_DIR})
 endforeach()
 
-
+# 原生互操作探针使用公开 API，由脚本驱动；不作为 GoogleTest 用例登记。
+add_executable(http2_interop_server ${PROJECT_SOURCE_DIR}/docker/test/http2/server_probe.cpp)
+target_link_libraries(http2_interop_server PRIVATE hical_core)
+if(HICAL_WITH_HTTP_CLIENT)
+    add_executable(http2_interop_client ${PROJECT_SOURCE_DIR}/docker/test/http2/client_probe.cpp)
+    target_link_libraries(http2_interop_client PRIVATE hical_core)
+endif()
 
 # Google Benchmark 微基准测试（可选，HICAL_WITH_BENCHMARK=ON 时启用）
 if(HICAL_WITH_BENCHMARK)

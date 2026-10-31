@@ -17,3 +17,9 @@ target_link_libraries(bench_hot_paths PRIVATE hical_core benchmark::benchmark)
 add_executable(bench_read_buffer bench_read_buffer.cpp bench_main.cpp)
 target_link_libraries(bench_read_buffer PRIVATE hical_core benchmark::benchmark)
 target_compile_definitions(bench_read_buffer PRIVATE HICAL_BENCH_READ_BUFFER_REUSE)
+
+# HTTP/2 客户端使用公开 API 驱动有限请求，由独立脚本采样。
+if(HICAL_WITH_HTTP_CLIENT)
+    add_executable(bench_http2 bench_http2.cpp)
+    target_link_libraries(bench_http2 PRIVATE hical_core)
+endif()
