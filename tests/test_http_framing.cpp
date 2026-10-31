@@ -296,6 +296,7 @@ namespace
 			}
 
 			server_ = std::make_unique<HttpServer>(0);
+			server_->listen("127.0.0.1", 0);
 			// 写次数统计得在 start() 之前打开：连接处理协程一起来就取一次计数器指针，
 			// 之后这个连接还打不开。开关只由派生 fixture 的构造函数置上，
 			// 默认关着才是生产环境的真实样子

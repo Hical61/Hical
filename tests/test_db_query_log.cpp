@@ -1,3 +1,8 @@
+/**
+ * @file test_db_query_log.cpp
+ * @brief 数据库查询日志中间件测试
+ */
+
 #include "db/DbConfig.h"
 #include "db/DbConnection.h"
 #include "db/DbConnectionPool.h"
@@ -8,7 +13,11 @@
 #include "core/HttpRequest.h"
 #include "core/HttpResponse.h"
 #include "core/Middleware.h"
+#include <boost/asio/steady_timer.hpp>
+#include <boost/asio/this_coro.hpp>
+#include <boost/asio/use_awaitable.hpp>
 #include <gtest/gtest.h>
+#include <chrono>
 #include <memory>
 
 // 测试中使用静态字面量 SQL 调用无参数化重载，属于合法用途，抑制 deprecated 警告
@@ -30,6 +39,12 @@ public:
 	{
 		++queryCount_;
 		lastSql_ = std::string(sql);
+		if (queryDelay_.count() > 0)
+		{
+			auto executor = co_await boost::asio::this_coro::executor;
+			boost::asio::steady_timer timer(executor, queryDelay_);
+			co_await timer.async_wait(boost::asio::use_awaitable);
+		}
 		co_return DbResult::fromRows({"id", "name"}, {{"1", "test"}});
 	}
 
@@ -111,17 +126,25 @@ public:
 	bool inTransaction_ = false;
 	int queryCount_ = 0;
 	int executeCount_ = 0;
+	std::chrono::microseconds queryDelay_ {0};
 	std::string lastSql_;
 	std::chrono::steady_clock::time_point lastActive_ = std::chrono::steady_clock::now();
 	std::chrono::steady_clock::time_point lastPing_;
 };
 
-DbConnectionFactory makeMockFactory()
+/**
+ * @brief 创建模拟连接工厂
+ * @param queryDelay 无参查询的异步延迟，0 表示立即完成
+ * @return 创建带指定延迟的模拟连接的工厂
+ */
+DbConnectionFactory makeMockFactory(std::chrono::microseconds queryDelay = std::chrono::microseconds {0})
 {
-	return
-		[](boost::asio::io_context& /*ioCtx*/, const DbConfig& /*config*/) -> Awaitable<std::shared_ptr<DbConnection>>
+	return [queryDelay](boost::asio::io_context& /*ioCtx*/,
+						const DbConfig& /*config*/) -> Awaitable<std::shared_ptr<DbConnection>>
 	{
-		co_return std::make_shared<MockDbConnection>();
+		auto conn = std::make_shared<MockDbConnection>();
+		conn->queryDelay_ = queryDelay;
+		co_return conn;
 	};
 }
 
@@ -279,21 +302,25 @@ TEST(DbQueryLogTest, ParameterizedQueryMarkedCorrectly)
 
 TEST(DbQueryLogTest, SlowQueryCallbackInvoked)
 {
+	static constexpr auto kSlowQueryThreshold = std::chrono::milliseconds {1};
+	static constexpr auto kMockQueryDelay = std::chrono::milliseconds {2};
 	boost::asio::io_context ioCtx;
 	auto config = DbConfig {.minConnections = 1,
 							.maxConnections = 4,
 							.idleCheckInterval = std::chrono::seconds(0),
 							.healthCheckInterval = std::chrono::seconds(0),
 							.pingGracePeriod = std::chrono::seconds(0)};
-	auto pool = std::make_shared<DbConnectionPool>(ioCtx, config, makeMockFactory());
+	auto pool = std::make_shared<DbConnectionPool>(ioCtx, config, makeMockFactory(kMockQueryDelay));
 
 	int slowQueryCount = 0;
 
 	QueryLogOptions opts;
-	opts.slowQueryThreshold = std::chrono::microseconds(1); // 极低阈值，所有查询都触发
-	opts.onSlowQuery = [&slowQueryCount](const QueryLogEntry& /*entry*/)
+	opts.slowQueryThreshold = kSlowQueryThreshold;
+	opts.onSlowQuery = [&slowQueryCount](const QueryLogEntry& entry)
 	{
 		++slowQueryCount;
+		EXPECT_GE(entry.duration, kMockQueryDelay);
+		EXPECT_EQ(entry.sql, slowQueryCount == 1 ? "SELECT 1" : "SELECT 2");
 	};
 
 	coSpawn(ioCtx,
@@ -320,8 +347,8 @@ TEST(DbQueryLogTest, SlowQueryCallbackInvoked)
 			});
 	ioCtx.run();
 
-	// Mock 查询几乎无耗时，但至少有 1 个应超过 1us 阈值
-	EXPECT_GE(slowQueryCount, 1);
+	// 让查询实际等待超过阈值，避免依赖立即返回的 mock 碰巧耗时超过 1us。
+	EXPECT_EQ(slowQueryCount, 2);
 }
 
 TEST(DbQueryLogTest, OnRequestCompleteCallbackInvoked)
