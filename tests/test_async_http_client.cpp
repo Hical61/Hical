@@ -1,9 +1,8 @@
 /**
  * @file test_async_http_client.cpp
- * @brief 协程 HTTP 客户端：接口骨架 + 真实往返（建连 / 请求 / 解析响应头）
- * 接口签名在编译期钉死（本文件顶部 static_assert）；网络用例对端起 Hical
- * 自己的 HttpServer，跑在随机端口上。读 body / 超时 / TLS 的用例在后面切片补。
- * 注意别和 test_http_client.cpp 混了——那个测的是测试用的 raw socket 客户端。
+ * @brief 协程 HTTP 客户端的接口、请求响应、超时和 TLS 测试
+ * static_assert 检查接口签名；网络用例使用随机端口上的 HttpServer 或独立 TCP/TLS 对端。
+ * test_http_client.cpp 测试的是测试辅助客户端，与本文件覆盖的生产客户端不同。
  */
 
 #include "asio/HttpClient.h"
@@ -11,6 +10,7 @@
 #include "core/Coroutine.h"
 #include "core/HttpServer.h"
 #include "core/SslContext.h"
+#include <boost/asio/cancel_after.hpp>
 #include <boost/asio/io_context.hpp>
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/asio/ssl.hpp>
@@ -924,7 +924,7 @@ TEST(AsyncHttpClientRawTest, ConnectionCloseWithLength_ReadsBodyThenStopsReuse)
 
 TEST(HttpClientOptionsTest, DefaultTimeoutsAreNonZero)
 {
-	// 默认不能是 0：0 等于永不超时，那正是这批改动要修的东西
+	// 默认开启超时，避免对端不响应时一直等待。
 	HttpClientOptions options;
 	EXPECT_GT(options.connectTimeout.count(), 0);
 	EXPECT_GT(options.requestTimeout.count(), 0);
@@ -989,11 +989,26 @@ TEST(AsyncHttpClientTimeoutTest, RequestTimeout_ServerAcceptsButNeverResponds)
 
 TEST(AsyncHttpClientTimeoutTest, ConnectTimeout_BlackholeAddress)
 {
-	// 192.0.2.0/24 是 RFC 5737 留作文档用的网段，正常路由到不了：SYN 发出去石沉大海，
-	// 正好逼出连接超时那条路。（连不监听的本机端口回的是 refused，不是 timeout，别混。）
+	// 尝试用 RFC 5737 文档地址触发建连超时；有些网络会立即拒绝或代理，下面先检查环境条件。
 	HttpClientOptions options;
 	options.connectTimeout = std::chrono::milliseconds(300);
 	options.requestTimeout = std::chrono::seconds(5);
+
+	// 某些网络会代理文档地址并立即建立 TCP；此时随后超时的是响应读取，不能当作建连反例。
+	io_context probeIo;
+	boost::asio::ip::tcp::socket probe(probeIo);
+	boost::system::error_code probeError;
+	probe.async_connect({boost::asio::ip::make_address("192.0.2.1"), 81},
+						boost::asio::cancel_after(options.connectTimeout,
+												  [&probeError](const boost::system::error_code& error)
+												  {
+													  probeError = error;
+												  }));
+	probeIo.run();
+	if (!probeError)
+	{
+		GTEST_SKIP() << "环境允许文档地址建立 TCP，无法验证黑洞建连超时";
+	}
 
 	io_context io;
 	HttpClient client(io, "192.0.2.1", 81, options);
@@ -1792,8 +1807,7 @@ namespace
 	/**
 	 * @brief 每响应完就关连接的 raw TLS 服务端，能接连接受若干条
 	 * 读一个请求、回一个带 Connection: close 的响应、立刻关掉，然后继续接。
-	 * 客户端收到这种响应会以为还能复用，实际上连接已经被对端关了——第二次请求
-	 * 必须在同一条 TLS 流上重连 + 重握手，专门验这条恢复路径。
+	 * 第二次请求须由同一客户端重新建连并握手，覆盖 TLS 对象重建后的恢复路径。
 	 */
 	class RawTlsAlwaysCloseServer
 	{
@@ -1907,8 +1921,7 @@ TEST(AsyncHttpClientTlsTest, ReconnectsAndRehandshakesAfterPeerCloses)
 			});
 	io.run();
 
-	// 第一次响应带 Connection: close，连接被对端关了；第二次必须重连并在同一条
-	// ssl::stream 上重新握手，两次都得成
+	// 首次响应要求关闭连接，第二次请求须重新建连和握手，两次都应成功。
 	ASSERT_TRUE(results[0].error.ok()) << results[0].error.message;
 	EXPECT_EQ(results[0].body, "hello");
 	ASSERT_TRUE(results[1].error.ok()) << results[1].error.message;

@@ -125,6 +125,9 @@ hical_add_test(test_http_client)          # 测试客户端（链式调用）
 # 否则 OFF 下测试目标会因为找不到客户端符号而链接失败。
 if(HICAL_WITH_HTTP_CLIENT)
     hical_add_test(test_async_http_client)
+    hical_add_test(test_http2_client)
+    hical_add_test(test_http2_client_cancel)
+    hical_add_test(test_http2_client_tls)
 endif()
 hical_add_test(test_optimistic_write)     # 乐观同步写 + readBuf 提前归还
 hical_add_test(test_compile_time_chain)  # 编译期中间件链与运行时 buildOptimizedChain 语义一致性

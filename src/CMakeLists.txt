@@ -234,6 +234,9 @@ if(HICAL_WITH_HTTP2)
     )
     target_compile_definitions(hical_core PUBLIC HICAL_HAS_HTTP2=1)
     target_link_libraries(hical_core PUBLIC Nghttp2::Nghttp2)
+    if(HICAL_WITH_HTTP_CLIENT)
+        target_sources(hical_core PRIVATE asio/Http2ClientSession.cpp)
+    endif()
 endif()
 
 # NUMA 感知（可选，Linux + libnuma）

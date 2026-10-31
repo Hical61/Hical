@@ -6,6 +6,12 @@
 #include "core/Http2Options.h"
 #include "core/HttpRequest.h"
 #include "core/HttpResponse.h"
+#ifdef HICAL_HAS_HTTP_CLIENT
+	#include "asio/HttpClient.h"
+	#include <boost/asio/co_spawn.hpp>
+	#include <boost/asio/io_context.hpp>
+	#include <boost/asio/use_future.hpp>
+#endif
 #include <gtest/gtest.h>
 #include <chrono>
 #include <utility>
@@ -108,3 +114,52 @@ TEST(Http2ContractTest, RejectsZeroOrIncompatibleMemoryAndTaskLimits)
 	rejected(&Http2Options::bodyTimeout, std::chrono::seconds {0});
 	rejected(&Http2Options::writeTimeout, std::chrono::seconds {-1});
 }
+
+#ifdef HICAL_HAS_HTTP_CLIENT
+TEST(Http2ContractTest, ClientDefaultsToHttp1AndConservativeRetryDisposition)
+{
+	HttpClientOptions options;
+	EXPECT_EQ(options.protocolMode, HttpProtocolMode::hHttp1Only);
+	HttpClientResult result;
+	EXPECT_EQ(result.protocol, HttpProtocol::hHttp1);
+	EXPECT_EQ(result.requestDisposition, HttpRequestDisposition::hPossiblyProcessed);
+	result.headers.set("x-checksum", "initial");
+	result.trailers.set("x-checksum", "final");
+	EXPECT_EQ(result.headers.find("x-checksum"), "initial");
+	EXPECT_EQ(result.trailers.find("x-checksum"), "final");
+}
+
+	#ifndef HICAL_HAS_HTTP2
+TEST(Http2ContractTest, DisabledHttp2ClientModesFailBeforeConnecting)
+{
+	for (auto mode : {HttpProtocolMode::hNegotiateHttp2, HttpProtocolMode::hHttp2Only})
+	{
+		boost::asio::io_context io;
+		HttpClientOptions options;
+		options.protocolMode = mode;
+		HttpClient client(io, "invalid.invalid", 443, options);
+		auto resultFuture = boost::asio::co_spawn(io, client.get("/"), boost::asio::use_future);
+		io.run();
+		auto result = resultFuture.get();
+		EXPECT_EQ(result.error.code, ErrorCode::hProtocolUnavailable);
+		EXPECT_EQ(result.requestDisposition, HttpRequestDisposition::hNotSent);
+		EXPECT_EQ(result.status, 0);
+		EXPECT_FALSE(client.isAlive());
+	}
+}
+	#endif
+
+TEST(Http2ContractTest, InvalidClientProtocolModeIsAConfigurationError)
+{
+	boost::asio::io_context io;
+	HttpClientOptions options;
+	options.protocolMode = static_cast<HttpProtocolMode>(255);
+	HttpClient client(io, "invalid.invalid", 443, options);
+	auto resultFuture = boost::asio::co_spawn(io, client.get("/"), boost::asio::use_future);
+	io.run();
+	auto result = resultFuture.get();
+	EXPECT_EQ(result.error.code, ErrorCode::hInvalidConfiguration);
+	EXPECT_EQ(result.requestDisposition, HttpRequestDisposition::hNotSent);
+	EXPECT_FALSE(client.isAlive());
+}
+#endif

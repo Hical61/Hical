@@ -13,10 +13,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 增加 HTTP 协议身份、独立尾字段和资源配置，HTTP/2 默认关闭。
 - 增加 HTTP/2 编解码、流控和有界收发组件。
 - 接入 TLS HTTP/2 服务端，支持请求分发、文件响应和连接排空。
+- 客户端支持 TLS ALPN 自动协商和强制 HTTP/2。
 
 ### Changed
 
 - **安装目标传递线程 ABI 定义**：MinGW 的 Asio 线程实现等必要编译定义随 `hical::hical_core` 公开传递，避免库、测试和安装消费者混用不同线程布局。消费者应链接导出目标，不另设冲突宏。
+- **客户端 TLS 身份校验**：`verifyPeer=true` 同时检查证书链与目标 host；DNS 名校验 DNS SAN，IP 校验 IP SAN。`sniHost` 只负责 SNI 路由，不改变身份校验目标。以前仅验证证书链时能建立的目标名不匹配连接，现在会明确失败。
+- **客户端调用与收尾契约**：普通请求入口在返回 awaitable 前持有参数和内部状态，请求绝对期限从提交开始覆盖建连等待、排队和收发。facade 析构取消旧请求；事件循环仍需存活并运行到清理完成。启用生产客户端需 Boost 1.86+，仅服务端的最低版本仍为 1.82。
 
 ### Fixed
 
