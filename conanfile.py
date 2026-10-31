@@ -23,6 +23,8 @@ class HicalConan(ConanFile):
         "with_database": [True, False],
         "with_openapi": [True, False],
         "with_mimalloc": [True, False],
+        "with_http_client": [True, False],
+        "with_http2": [True, False],
     }
     default_options = {
         "fPIC": True,
@@ -30,6 +32,8 @@ class HicalConan(ConanFile):
         "with_database": False,
         "with_openapi": True,
         "with_mimalloc": False,
+        "with_http_client": False,
+        "with_http2": False,
     }
 
     exports_sources = (
@@ -56,8 +60,16 @@ class HicalConan(ConanFile):
 
     def requirements(self):
         self.requires("boost/1.90.0", transitive_headers=True, transitive_libs=True)
-        self.requires("openssl/[>=1.1.0]", transitive_headers=True, transitive_libs=True)
+        openssl_minimum = "1.1.1" if self.options.with_http2 else "1.1.0"
+        self.requires(f"openssl/[>={openssl_minimum}]", transitive_headers=True, transitive_libs=True)
         self.requires("zlib/[>=1.2.11]", transitive_headers=True, transitive_libs=True)
+        if self.options.with_http2:
+            self.requires(
+                "libnghttp2/[>=1.70.0 <2]",
+                options={"shared": False, "with_app": False, "with_hpack": False},
+                transitive_headers=True,
+                transitive_libs=True,
+            )
         if self.options.with_mimalloc:
             self.requires("mimalloc/[>=2.0]")
 
@@ -75,6 +87,9 @@ class HicalConan(ConanFile):
         tc.variables["HICAL_WITH_DATABASE"] = bool(self.options.with_database)
         tc.variables["HICAL_WITH_OPENAPI"] = bool(self.options.with_openapi)
         tc.variables["HICAL_WITH_MIMALLOC"] = bool(self.options.with_mimalloc)
+        tc.variables["HICAL_WITH_HTTP_CLIENT"] = bool(self.options.with_http_client)
+        tc.variables["HICAL_WITH_HTTP2"] = bool(self.options.with_http2)
+        tc.variables["HICAL_ENABLE_MEMORY_TRACKING"] = True
         tc.generate()
 
     def build(self):
@@ -93,9 +108,17 @@ class HicalConan(ConanFile):
         self.cpp_info.set_property("cmake_target_name", "hical::hical_core")
 
         self.cpp_info.libs = ["hical_core"]
+        # 与本配方生成的核心库保持同一份公开头文件布局。
+        self.cpp_info.defines.append("HICAL_ENABLE_MEMORY_TRACKING")
+
+        if self.settings.compiler == "msvc":
+            self.cpp_info.cxxflags.extend(["/utf-8", "/Zc:preprocessor"])
 
         if self.settings.os == "Windows":
             self.cpp_info.system_libs.extend(["ws2_32", "mswsock"])
+            if self.settings.compiler == "gcc":
+                # 与 MinGW CMake 导出保持相同的 Asio 线程 ABI。
+                self.cpp_info.defines.append("BOOST_ASIO_HAS_PTHREADS=1")
 
         if self.settings.os in ["Linux", "FreeBSD"]:
             self.cpp_info.system_libs.append("pthread")
@@ -106,3 +129,14 @@ class HicalConan(ConanFile):
 
         if self.options.with_database:
             self.cpp_info.defines.append("HICAL_HAS_DATABASE=1")
+
+        if self.options.with_http_client:
+            self.cpp_info.defines.append("HICAL_HAS_HTTP_CLIENT=1")
+
+        if self.options.with_http2:
+            self.cpp_info.defines.append("HICAL_HAS_HTTP2=1")
+            if self.settings.compiler == "msvc":
+                # MSVC 没有 ssize_t，保留 nghttp2_ssize 和 *2 接口即可。
+                self.cpp_info.defines.append("NGHTTP2_NO_SSIZE_T")
+            if self.settings.os == "Windows" and not self.dependencies["libnghttp2"].options.shared:
+                self.cpp_info.defines.append("NGHTTP2_STATICLIB")

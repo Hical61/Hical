@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 增加 HTTP/2 编解码、流控和有界收发组件。
 - 接入 TLS HTTP/2 服务端，支持请求分发、文件响应和连接排空。
 - 客户端支持 TLS ALPN 自动协商和强制 HTTP/2。
+- Conan 和 vcpkg 增加 HTTP/2 功能选项及安装消费检查。
 
 ### Changed
 

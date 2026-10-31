@@ -11,6 +11,8 @@ vcpkg_from_github(
 vcpkg_check_features(OUT_FEATURE_OPTIONS FEATURE_OPTIONS
     FEATURES
         database HICAL_WITH_DATABASE
+        http-client HICAL_WITH_HTTP_CLIENT
+        http2 HICAL_WITH_HTTP2
 )
 
 vcpkg_cmake_configure(
