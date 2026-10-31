@@ -1,6 +1,6 @@
 /**
  * @file HttpClientPool.h
- * @brief 协程 HTTP 连接池：按 host:port 分桶复用连接
+ * @brief 协程 HTTP 连接池：连接复用与有界请求调度
  */
 
 #pragma once
@@ -19,8 +19,7 @@ namespace hical
 
 	/**
 	 * @brief 连接池配置
-	 * 只管池子自己的事（多久清一次、空闲多久算过期、每桶最多留几条），
-	 * 跟单个客户端的超时 / TLS 配置分开——那些按 acquire / post 调用时传。
+	 * 配置空闲回收和每桶保留数量；请求的超时、TLS 和协议配置由调用方另行传入。
 	 */
 	struct HttpClientPoolOptions
 	{
@@ -36,38 +35,34 @@ namespace hical
 		/// 清理扫描周期（一个 timer 管整池）
 		std::chrono::steady_clock::duration cleanupInterval {kDefaultCleanupInterval};
 
-		/// 每个 host:port 桶最多留几条空闲连接，超了挤掉最老的
+		/// 每个连接身份桶保留的空闲连接上限，超过时移除最老的
 		std::size_t maxIdlePerBucket {8};
 	};
 
 	/**
 	 * @brief 协程 HTTP 连接池
-	 * 按 "host:port"（再加是否 TLS）分桶，每桶一个空闲连接队列。取连接时优先
-	 * 复用桶里还活着的，没有才新建；还回来时连接已经坏掉就直接销毁、不回队列。
-	 * 定位是「每个 io_context 一个池、不跨线程共享」——池子所有状态都跑在构造时
-	 * 传入的那个 io_context 上，不加锁。多线程场景就每个 loop 各建一个池。
-	 * 空闲清理靠一个 timer 管整池（照 IdleScanner 的思路，不给每条连接配 timer）。
-	 * 那个 timer 由清理协程持有、池子也存了一份句柄，析构 / shutdown() 时能主动
-	 * cancel 掉——不这么做的话，一个还挂着的 steady_timer 会让 io_context::run()
-	 * 一直不返回（这个坑项目里 SSE 心跳、WS ping 都踩过）。
-	 * 生命周期：池子所有读写连接的操作都跑在构造时那个 io_context 上。析构 / shutdown()
-	 * 会把「取消 timer、关空闲连接」post 回 io_context 线程执行，所以从别的线程调它们是
-	 * 安全的；但事件循环若不跑了，这些动作要等下一次 run()/poll() 才会落地。
+	 * 按目标地址、TLS context、有效 SNI、验证模式、协议策略及生效的 H2 配置分桶。取连接时优先
+	 * 复用桶里还活着的，没有才新建；高层 H2 请求共享活动连接并按容量有界排队。
+	 * acquire/release 始终独占租借，不与高层 H2 调度共享连接。
+	 * 每个 io_context 使用一个池，连接和队列只在该事件循环访问，不加锁。
+	 * 整个池共用一个清理 timer，析构或 shutdown() 时取消，避免阻止 io_context::run() 返回。
+	 * request/get/post 返回前持有参数和内部状态，并记录本次调用的绝对请求期限。
+	 * 析构和 shutdown() 可从其他线程调用，清理会 post 回所属事件循环。
+	 * io_context 须继续运行到清理完成；若已经停止，需再次 run()/poll() 才会执行清理。
 	 */
 	class HttpClientPool
 	{
 	public:
 		/**
 		 * @brief 构造连接池并启动清理协程
-		 * @param ioCtx 事件循环，生命周期必须长于本对象
+		 * @param ioCtx 事件循环，须存活到本池的请求和清理操作全部结束
 		 * @param options 池子配置；cleanupInterval / idleTimeout 非正会抛 std::invalid_argument
 		 */
 		explicit HttpClientPool(boost::asio::io_context& ioCtx, HttpClientPoolOptions options = {});
 
 		/**
-		 * @brief 析构：停掉清理 timer、放掉池子引用
-		 * 清理协程自己持有一份内部状态，所以这里丢掉引用是安全的——协程收到取消后
-		 * 才把状态真正释放掉，不会留下悬空。
+		 * @brief 投递停机清理并释放池持有的内部状态
+		 * 请求和清理协程各自持有状态，退出后才会释放最后一份引用。
 		 */
 		~HttpClientPool();
 
@@ -78,12 +73,11 @@ namespace hical
 
 		/**
 		 * @brief 取一条到目标 host:port 的可用连接
-		 * 桶里有还活着的空闲连接就复用，否则新建一条。拿到的连接用完必须还回来
-		 * （release），别自己留着——池子靠还回来的连接维持复用。
+		 * 优先复用对应身份桶中的空闲连接，否则新建；使用完成后调用 release() 归还。
 		 * @param host 目标主机
 		 * @param port 目标端口
 		 * @param options 客户端配置；tlsContext 非空即走 HTTPS（跟明文分桶）
-		 * @return 连接实例
+		 * @return 独占租借的连接实例；停机后返回空指针
 		 */
 		std::shared_ptr<HttpClient> acquire(const std::string& host,
 											uint16_t port,
@@ -92,14 +86,18 @@ namespace hical
 		/**
 		 * @brief 把连接还回池子
 		 * 还活着的放回对应桶，坏掉的（出错 / 超时被置 closed）直接销毁。
+		 * 有保存或运行中请求时仍由调用方管理，不作为空闲容量，也不主动关闭。
+		 * 外来实例和其他池的连接不能进入本池。
 		 * @param client 之前 acquire 出来的连接
 		 */
 		void release(std::shared_ptr<HttpClient> client);
 
 		/**
-		 * @brief 发一次请求，内部自动 acquire / release
-		 * 复用的连接可能已经被对端悄悄关了——这种情况下会丢掉死连接、重开一条重试
-		 * 一次，免得把一次本可成功的请求因为陈旧 keep-alive 连接而判死。
+		 * @brief 发起请求并由连接池管理连接
+		 * 最多重试一次，默认仅限 GET/HEAD/PUT/DELETE/OPTIONS；POST/PATCH 不自动重放。
+		 * H2 还须有未发送的瞬态传输错误，或 REFUSED_STREAM/GOAWAY 的明确未处理证据；
+		 * H1 仅保留复用陈旧连接的瞬态传输错误重试。status 为零本身不构成重试依据。
+		 * 请求体由入口持有，可供重放；重试沿用原请求期限和首次实际排队的期限。
 		 * @param host 目标主机
 		 * @param port 目标端口
 		 * @param method HTTP 方法
@@ -118,7 +116,13 @@ namespace hical
 											const HttpClientOptions& options = {});
 
 		/**
-		 * @brief 便捷 GET，内部自动 acquire / release
+		 * @brief 发起 GET 请求
+		 * @param host 目标主机
+		 * @param port 目标端口
+		 * @param target 请求目标
+		 * @param headers 附加请求头
+		 * @param options 客户端配置
+		 * @return 完整响应或网络错误
 		 */
 		Awaitable<HttpClientResult> get(const std::string& host,
 										uint16_t port,
@@ -127,8 +131,14 @@ namespace hical
 										const HttpClientOptions& options = {});
 
 		/**
-		 * @brief 便捷 POST，内部自动 acquire / release
+		 * @brief 发起 POST 请求
+		 * @param host 目标主机
+		 * @param port 目标端口
+		 * @param target 请求目标
+		 * @param body 请求体
 		 * @param contentType Content-Type，默认 application/json
+		 * @param options 客户端配置
+		 * @return 完整响应或网络错误
 		 */
 		Awaitable<HttpClientResult> post(const std::string& host,
 										 uint16_t port,
@@ -138,54 +148,69 @@ namespace hical
 										 const HttpClientOptions& options = {});
 
 		/**
-		 * @brief 主动停机：关掉所有空闲连接并取消清理 timer
+		 * @brief 主动停机：取消本池高层请求、关闭空闲连接并取消清理 timer
+		 * acquire() 借出的连接仍由持有者管理，不主动关闭其业务交换。
 		 * 幂等，可从任意线程调；具体动作 post 回 io_context 线程执行，
 		 * 事件循环不跑了就等下一次 run()/poll()。
 		 */
 		void shutdown();
 
 		/**
-		 * @brief 当前桶里空闲连接总数（主要给测试用）
+		 * @brief 查询池中的空闲连接总数
+		 * @return 当前空闲连接数；仅在所属事件循环调用
 		 */
 		[[nodiscard]] std::size_t idleCount() const noexcept;
 
+		/** 协商模式的调度统计，包含退回 H1 的连接；不统计 acquire() 租借和 H1-only 桶。 */
+		struct Stats
+		{
+			std::size_t managedConnections {0};    ///< 当前受调度器跟踪的连接，含首请求预留的建连槽
+			std::size_t connectingConnections {0}; ///< 正在建连或首请求尚未进入建连的连接
+			std::size_t activeRequests {0};        ///< 已获连接预留的请求，含尚未建立协议流的首请求
+			std::size_t queuedRequests {0};        ///< 尚未获得连接/流容量的有限队列总长度
+			std::size_t peakQueuedRequests {0};    ///< 池生命周期内所有 origin 同时排队的峰值
+		};
+
+		/**
+		 * @brief 查询当前调度负载，用于观察连接预算及队列拥塞。
+		 * @return 所属 io_context 上的一致快照；H2 未编译或未使用协商入口时为零。
+		 * @note 仅在所属事件循环调用，不支持跨线程读取；峰值不因队列排空而清零。
+		 */
+		[[nodiscard]] Stats stats() const noexcept;
+
 	private:
-		/// 一次取连接的结果：连接本体 + 是不是从空闲队列里翻出来的
+		/// 连接及其是否来自空闲队列。
 		struct Lease
 		{
 			std::shared_ptr<HttpClient> client;
 			bool reused {false};
 		};
 
-		/// 池子内部状态。用 shared_ptr 持有，清理协程和各请求协程也各留一份引用，
-		/// 这样池子析构后协程还能安全收尾，不会踩到已经没了的状态。
+		/// 请求和清理协程共同持有，覆盖池对象析构后的异步收尾。
 		struct Impl;
+		struct OwnedRequest;
 
 		/// 取连接并区分新建 / 复用（静态，不碰 this，方便请求协程按值持有 Impl）
-		static Lease acquireFrom(Impl& impl, const std::string& host, uint16_t port, const HttpClientOptions& options);
+		static Lease acquireFrom(Impl& impl,
+								 const std::string& host,
+								 uint16_t port,
+								 const HttpClientOptions& options,
+								 bool managed = false);
 
 		/// 还连接：活着的入桶，坏的丢掉（静态，理由同上）
 		static void releaseTo(Impl& impl, std::shared_ptr<HttpClient> client);
 
-		/// 发请求的实打实逻辑。入口 get/post/request 都委托到它，协程帧里
-		/// 只按值持有 shared_ptr<Impl>，不捕获裸 this。
-		static Awaitable<HttpClientResult> doRequest(std::shared_ptr<Impl> impl,
-													 const std::string& host,
-													 uint16_t port,
-													 HttpMethod method,
-													 std::string_view target,
-													 std::string_view body,
-													 const HeaderMap& headers,
-													 const HttpClientOptions& options);
+		/// 请求入口都转到这里，协程帧按值持有 Impl 和参数，不捕获裸 this。
+		static Awaitable<HttpClientResult> doRequest(std::shared_ptr<Impl> impl, OwnedRequest request);
+#ifdef HICAL_HAS_HTTP2
+		static Awaitable<HttpClientResult> doManagedRequest(std::shared_ptr<Impl> impl, OwnedRequest request);
+#endif
 
 		/// 置停机标志并把「关空闲连接 + 取消 timer」post 到 io_context 线程执行
 		void scheduleStop();
 
 		/// 清理循环：等一个 cleanupInterval → 扫一遍所有桶 → 再等下一轮，直到 stopping
 		static Awaitable<void> cleanupLoop(std::shared_ptr<Impl> impl);
-
-		/// 拼分桶键："host:port"，TLS 再加 ":tls" 后缀
-		static std::string makeBucketKey(std::string_view host, uint16_t port, bool tls);
 
 		std::shared_ptr<Impl> impl_;
 	};

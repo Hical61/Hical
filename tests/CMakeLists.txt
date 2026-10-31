@@ -128,6 +128,7 @@ if(HICAL_WITH_HTTP_CLIENT)
     hical_add_test(test_http2_client)
     hical_add_test(test_http2_client_cancel)
     hical_add_test(test_http2_client_tls)
+    hical_add_test(test_http2_pool)
 endif()
 hical_add_test(test_optimistic_write)     # 乐观同步写 + readBuf 提前归还
 hical_add_test(test_compile_time_chain)  # 编译期中间件链与运行时 buildOptimizedChain 语义一致性
