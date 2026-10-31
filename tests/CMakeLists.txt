@@ -59,6 +59,7 @@ hical_add_test(test_numa_topology)        # NUMA 拓扑检测与绑核验证
 
 # --- HTTP 层 ---
 hical_add_test(test_http_types)           # HTTP 类型
+hical_add_test(test_http2_contract)       # 协议契约在 HTTP/2 ON/OFF 下都验证
 hical_add_test(test_router)               # 路由器
 hical_add_test(test_route_group)          # 路由组
 hical_add_test(test_middleware)           # 中间件
@@ -150,6 +151,8 @@ endif()
 foreach(_test IN LISTS TESTS_NEEDING_PICOHTTPPARSER)
     target_include_directories(${_test} PRIVATE ${HICAL_PICOHTTPPARSER_INCLUDE_DIR})
 endforeach()
+
+
 
 # Google Benchmark 微基准测试（可选，HICAL_WITH_BENCHMARK=ON 时启用）
 if(HICAL_WITH_BENCHMARK)

@@ -58,6 +58,9 @@ option(HICAL_WITH_OPENAPI "Enable OpenAPI 3.0 auto-generation module" ON)
 # 只跑服务端，不该为客户端功能付编译时间；真要发起上游请求再显式打开。
 option(HICAL_WITH_HTTP_CLIENT "启用协程 HTTP 客户端" OFF)
 
+# HTTP/2 仅启用 nghttp2 C 协议引擎，网络仍由 Asio 驱动。
+option(HICAL_WITH_HTTP2 "Enable TLS HTTP/2 support (nghttp2 >=1.70, <2)" OFF)
+
 # mimalloc 替代系统 malloc 作为 PMR 最底层分配器
 option(HICAL_WITH_MIMALLOC "Use mimalloc as PMR upstream allocator" OFF)
 
@@ -98,8 +101,37 @@ if(NOT TARGET Boost::system)
     # Boost.System is header-only since 1.69; Conan may not provide this target
     add_library(Boost::system ALIAS Boost::headers)
 endif()
-find_package(OpenSSL REQUIRED)
+if(HICAL_WITH_HTTP2)
+    find_package(OpenSSL 1.1.1 REQUIRED)
+else()
+    find_package(OpenSSL REQUIRED)
+endif()
 find_package(ZLIB REQUIRED)
+
+if(HICAL_WITH_HTTP_CLIENT)
+    find_package(Boost 1.86 REQUIRED COMPONENTS json)
+    include(CheckCXXSourceCompiles)
+    include(CMakePushCheckState)
+    cmake_push_check_state(RESET)
+    # 只探测 Asio 头文件能力，不将包管理器的整棵组件目标图导入 try_compile。
+    # Conan 的 Boost::headers 依赖若含别名目标，CMake 3.28 的测试项目无法完整重建。
+    set(CMAKE_REQUIRED_INCLUDES ${Boost_INCLUDE_DIRS})
+    set(CMAKE_REQUIRED_DEFINITIONS -DBOOST_ALL_NO_LIB)
+    if(WIN32)
+        list(APPEND CMAKE_REQUIRED_LIBRARIES ws2_32)
+    endif()
+    check_cxx_source_compiles("#include <boost/asio/cancel_after.hpp>\n#include <chrono>\nint main() { auto token = boost::asio::cancel_after(std::chrono::seconds(1)); (void)token; }"
+        HICAL_HAS_CANCEL_AFTER)
+    cmake_pop_check_state()
+    if(NOT HICAL_HAS_CANCEL_AFTER)
+        message(FATAL_ERROR "HICAL_WITH_HTTP_CLIENT requires Boost.Asio cancel_after (Boost >= 1.86)")
+    endif()
+endif()
+
+if(HICAL_WITH_HTTP2)
+    list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+    find_package(Nghttp2 1.70...<2 REQUIRED)
+endif()
 
 # MySQL 后端依赖：boost::mysql any_connection(1.84+) + boost::charconv(1.85+)
 if(HICAL_WITH_MYSQL)
@@ -234,3 +266,7 @@ install(
     ${CMAKE_CURRENT_BINARY_DIR}/hicalConfigVersion.cmake
     DESTINATION lib/cmake/hical
 )
+
+if(HICAL_WITH_HTTP2)
+    install(FILES cmake/FindNghttp2.cmake DESTINATION lib/cmake/hical)
+endif()

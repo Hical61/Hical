@@ -1,8 +1,38 @@
+/**
+ * @file test_error.cpp
+ * @brief 统一网络错误和 HTTP/2 错误元数据的行为测试
+ */
+
 #include "core/Error.h"
 #include <gtest/gtest.h>
 #include <boost/asio/error.hpp>
 
 using namespace hical;
+
+TEST(ErrorCodeTest, Http2MetadataDistinguishesConnectionAndStreamErrors)
+{
+	NetworkError legacy {ErrorCode::hTimedOut, "timeout"};
+	EXPECT_FALSE(legacy.http2.has_value());
+	NetworkError connection {ErrorCode::hHttp2ConnectionError, "goaway", Http2ErrorInfo {0, 0}};
+	EXPECT_FALSE(connection.ok());
+	ASSERT_TRUE(connection.http2.has_value());
+	EXPECT_EQ(connection.http2->code, 0U);
+	EXPECT_EQ(connection.http2->streamId, 0);
+	NetworkError stream {ErrorCode::hHttp2StreamError, "refused", Http2ErrorInfo {7, 3}};
+	ASSERT_TRUE(stream.http2.has_value());
+	EXPECT_EQ(stream.http2->streamId, 3);
+	EXPECT_EQ(stream.http2->code, 7U);
+}
+
+TEST(ErrorCodeTest, HttpProtocolErrorsHaveDistinctDescriptions)
+{
+	EXPECT_STREQ(errorCodeToString(ErrorCode::hProtocolUnavailable), "HTTP 协议不可用");
+	EXPECT_STREQ(errorCodeToString(ErrorCode::hProtocolNegotiationFailed), "HTTP 协议协商失败");
+	EXPECT_STREQ(errorCodeToString(ErrorCode::hHttp2ConnectionError), "HTTP/2 连接协议错误");
+	EXPECT_STREQ(errorCodeToString(ErrorCode::hHttp2StreamError), "HTTP/2 流协议错误");
+	EXPECT_STREQ(errorCodeToString(ErrorCode::hResourceLimitExceeded), "HTTP 资源预算已耗尽");
+	EXPECT_STREQ(errorCodeToString(ErrorCode::hInvalidConfiguration), "HTTP 配置无效");
+}
 
 // 测试无错误
 TEST(ErrorCodeTest, NoError)

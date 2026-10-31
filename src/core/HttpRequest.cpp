@@ -175,6 +175,16 @@ namespace hical
 		}
 	}
 
+#ifdef HICAL_HAS_HTTP2
+	void HttpRequest::acceptBody(std::string&& body) noexcept
+	{
+		req_.body = std::move(body);
+		cachedJsonBody_.reset();
+		formParams_.reset();
+		cachedMultipartParts_.reset();
+	}
+#endif
+
 	const InetAddress& HttpRequest::peerAddr() const
 	{
 		return peerAddr_;

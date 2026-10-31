@@ -212,6 +212,18 @@ namespace hical
 				return "SSL invalid certificate";
 			case ErrorCode::hSslProtocolError:
 				return "SSL protocol error";
+			case ErrorCode::hProtocolUnavailable:
+				return "HTTP 协议不可用";
+			case ErrorCode::hProtocolNegotiationFailed:
+				return "HTTP 协议协商失败";
+			case ErrorCode::hHttp2ConnectionError:
+				return "HTTP/2 连接协议错误";
+			case ErrorCode::hHttp2StreamError:
+				return "HTTP/2 流协议错误";
+			case ErrorCode::hResourceLimitExceeded:
+				return "HTTP 资源预算已耗尽";
+			case ErrorCode::hInvalidConfiguration:
+				return "HTTP 配置无效";
 			case ErrorCode::hUnknown:
 				return "Unknown error";
 		}

@@ -7,6 +7,7 @@
 
 #include <boost/system/error_code.hpp>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <system_error>
 
@@ -72,10 +73,36 @@ namespace hical
 		/** SSL 协议错误 */
 		hSslProtocolError,
 
+		// ============ HTTP 协议与资源错误 ============
+
+		/** 请求的协议未编译或对应实现尚不可用 */
+		hProtocolUnavailable,
+		/** 对端没有协商出要求的协议 */
+		hProtocolNegotiationFailed,
+		/** HTTP/2 连接级协议错误 */
+		hHttp2ConnectionError,
+		/** HTTP/2 流级协议错误，不应关闭无关流 */
+		hHttp2StreamError,
+		/** 请求超过本地流、任务或内存预算 */
+		hResourceLimitExceeded,
+		/** 无效的协议或资源配置 */
+		hInvalidConfiguration,
+
 		// ============ 未知错误 ============
 
 		/** 未知错误 */
 		hUnknown = 0xFFFF
+	};
+
+	/**
+	 * @brief HTTP/2 原始错误元数据，不依赖具体协议库
+	 */
+	struct Http2ErrorInfo
+	{
+		/** RFC 9113 的 32 位错误码；0（NO_ERROR）同样是有效值 */
+		uint32_t code {0};
+		/** 正数表示对应流，0 表示连接级错误 */
+		int32_t streamId {0};
 	};
 
 	/**
@@ -86,6 +113,8 @@ namespace hical
 	{
 		ErrorCode code {ErrorCode::hNoError};
 		std::string message;
+		/** 仅在收到或产生 HTTP/2 协议错误时设置 */
+		std::optional<Http2ErrorInfo> http2 {};
 
 		/**
 		 * @brief 是否有错误

@@ -29,6 +29,9 @@ namespace hical
 	namespace detail
 	{
 		struct RequestDispatchContext; // 前向声明：请求分发上下文（见 RequestDispatch.h）
+#ifdef HICAL_HAS_HTTP2
+		class Http2Stream;
+#endif
 
 		/**
 		 * @brief 判断逗号分隔的 Connection 头值里是否含 upgrade token
@@ -187,8 +190,8 @@ namespace hical
 
 	/**
 	 * @brief HTTP 请求的原生内部表示（零拷贝）
-	 * target 和 headers 中的 string_view 引用连接级 readBuf，
-	 * 生命周期由 handleSession 的 for 循环保证。
+	 * target 和 headers 中的 string_view 引用 HTTP/1 的 readBuf，或 HTTP/2 流持有的稳定头部存储。
+	 * 会话或流必须存活到请求及其异步操作用完这些视图。
 	 * body 拥有独立内存（从 socket 读取时直接写入）。
 	 */
 	struct NativeRequest
@@ -206,6 +209,11 @@ namespace hical
 		// nullopt：没预扫过（手工构造的 NativeRequest 就是这样），isUpgrade() 回退线性扫描；
 		// 有值：预扫过，直接采纳（Upgrade 头那一步仍需另查）。
 		std::optional<bool> upgradePreScanned;
+
+		/** 实际传输协议；H2 不借用 HTTP/1 的版本字段 */
+		HttpProtocol protocol {HttpProtocol::hHttp1};
+		/** 尾字段自己保存字节，不引用连接读缓冲或 HPACK 临时存储 */
+		HeaderMap trailers;
 
 		/**
 		 * @brief 是否为 WebSocket 升级请求
@@ -233,6 +241,9 @@ namespace hical
 	{
 		friend class MultipartParser;
 		friend struct detail::RequestDispatchContext;
+#ifdef HICAL_HAS_HTTP2
+		friend class detail::Http2Stream;
+#endif
 
 	public:
 		HttpRequest();
@@ -243,12 +254,41 @@ namespace hical
 
 		/**
 		 * @brief 从已解析的 NativeRequest 构造（内部使用，跳过 CRLF 检查）
-		 * @param req 已解析的原生请求
+		 * @param req 已解析并校验的原生请求；其视图存储必须覆盖返回对象及异步使用期
 		 * @return HttpRequest
 		 */
 		[[nodiscard]] static HttpRequest fromParsed(NativeRequest&& req);
 
 		[[nodiscard]] HttpMethod method() const;
+
+		/**
+		 * @brief 获取实际传输协议
+		 * @return HTTP/1 或 HTTP/2
+		 */
+		[[nodiscard]] HttpProtocol protocol() const noexcept
+		{
+			return req_.protocol;
+		}
+
+		/**
+		 * @brief 查找尾字段，不回退查找初始头
+		 * @param name 字段名，大小写不敏感
+		 * @return 字段值视图，未找到则为空；有效期不超过本请求
+		 */
+		[[nodiscard]] std::string_view trailer(std::string_view name) const noexcept
+		{
+			return req_.trailers.find(name);
+		}
+
+		/**
+		 * @brief 获取独立的尾字段集合
+		 * @return 请求持有的尾字段，body 完成前为空
+		 */
+		[[nodiscard]] const HeaderMap& trailers() const noexcept
+		{
+			return req_.trailers;
+		}
+
 		[[nodiscard]] std::string_view path() const;
 		[[nodiscard]] std::string_view target() const;
 		[[nodiscard]] std::string_view query() const;
@@ -382,6 +422,13 @@ namespace hical
 									std::unordered_multimap<std::string, std::string, StringHash, StringEqual>& out);
 		void parseQueryParams() const;
 		void parseFormParams() const;
+#ifdef HICAL_HAS_HTTP2
+		/**
+		 * @brief 在 body 门交付完整正文，清除旧正文的解析缓存，头部视图保持有效
+		 * @param body 已完整接收且通过预算检查的正文，由请求接管
+		 */
+		void acceptBody(std::string&& body) noexcept;
+#endif
 
 		NativeRequest req_;
 		InetAddress peerAddr_;

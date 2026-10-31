@@ -52,6 +52,9 @@ namespace hical
 		/// Chunked Transfer-Encoding 响应体（可选）
 		std::optional<ChunkedBody> chunkedBody;
 
+		/** 协议无关的独立尾字段；H1 分块尾字段继续由 ChunkedBody 管理 */
+		HeaderMap trailers;
+
 		/**
 		 * @brief 是否包含文件体（dispatch 层据此选择文件发送路径）
 		 */
@@ -259,6 +262,40 @@ namespace hical
 		 *       避免 const std::string& 重载中字面量传参的临时 string 构造。
 		 */
 		void setHeader(std::string_view name, std::string_view value);
+
+		/**
+		 * @brief 设置独立尾字段，CR/LF 输入会被忽略
+		 * HTTP/2 直接发送这些尾字段；HTTP/1 分块响应使用 ChunkedBody::end()。
+		 * @param name 字段名，HTTP/2 传输层进一步检查伪头和禁用字段
+		 * @param value 字段值
+		 */
+		void setTrailer(std::string_view name, std::string_view value)
+		{
+			if (name.find_first_of("\r\n") == std::string_view::npos
+				&& value.find_first_of("\r\n") == std::string_view::npos)
+			{
+				res_.trailers.set(name, value);
+			}
+		}
+
+		/**
+		 * @brief 查找尾字段，不回退查找初始头
+		 * @param name 字段名，大小写不敏感
+		 * @return 字段值视图，未找到则为空；有效期不超过本响应
+		 */
+		[[nodiscard]] std::string_view trailer(std::string_view name) const noexcept
+		{
+			return res_.trailers.find(name);
+		}
+
+		/**
+		 * @brief 获取独立的尾字段集合
+		 * @return 响应持有的尾字段
+		 */
+		[[nodiscard]] const HeaderMap& trailers() const noexcept
+		{
+			return res_.trailers;
+		}
 
 		/**
 		 * @brief 获取消息体

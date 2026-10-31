@@ -1,3 +1,8 @@
+/**
+ * @file test_http_types.cpp
+ * @brief HTTP 类型、请求与响应的行为测试
+ */
+
 #include "core/HttpTypes.h"
 #include "core/InetAddress.h"
 #include "core/HttpRequest.h"
@@ -9,6 +14,19 @@
 #include <vector>
 
 using namespace hical;
+
+TEST(HttpTypesTest, IdempotenceDoesNotTreatPostOrUnknownAsReplayable)
+{
+	for (auto method :
+		 {HttpMethod::hGet, HttpMethod::hHead, HttpMethod::hPut, HttpMethod::hDelete, HttpMethod::hOptions})
+	{
+		EXPECT_TRUE(isHttpMethodIdempotent(method));
+	}
+	for (auto method : {HttpMethod::hPost, HttpMethod::hPatch, HttpMethod::hUnknown})
+	{
+		EXPECT_FALSE(isHttpMethodIdempotent(method));
+	}
+}
 
 // ============ HttpTypes 测试 ============
 

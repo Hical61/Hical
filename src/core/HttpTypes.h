@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include "HttpProtocol.h"
 #include <cstdint>
 #include <functional>
 #include <string>
@@ -53,6 +54,17 @@ namespace hical
 		hOptions,
 		hUnknown
 	};
+
+	/**
+	 * @brief 判断方法在 HTTP 语义上是否幂等
+	 * @param method HTTP 方法
+	 * @return GET/HEAD/PUT/DELETE/OPTIONS 返回 true，但仍需检查请求是否满足重试条件
+	 */
+	[[nodiscard]] inline constexpr bool isHttpMethodIdempotent(HttpMethod method) noexcept
+	{
+		return method == HttpMethod::hGet || method == HttpMethod::hHead || method == HttpMethod::hPut
+			   || method == HttpMethod::hDelete || method == HttpMethod::hOptions;
+	}
 
 	/**
 	 * @brief HTTP 状态码枚举

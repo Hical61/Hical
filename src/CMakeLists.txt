@@ -99,9 +99,23 @@ target_link_libraries(hical_core
     ZLIB::ZLIB
 )
 
+# 安装后的消费者也会编译中文头文件和 __VA_OPT__ 日志宏，需继承这两个 C++ 选项。
+if(MSVC)
+    target_compile_options(hical_core PUBLIC
+        $<$<COMPILE_LANGUAGE:CXX>:/utf-8>
+        $<$<COMPILE_LANGUAGE:CXX>:/Zc:preprocessor>
+    )
+endif()
+
 # Windows 需要链接 Winsock
 if(WIN32)
     target_link_libraries(hical_core PRIVATE ws2_32 mswsock)
+endif()
+
+# MinGW 的 _POSIX_THREADS 随 include 顺序出现，必须统一 Asio 线程 ABI。
+# PUBLIC 同时约束库、测试和安装消费者，避免 win_thread 与 posix_thread 混编。
+if(MINGW)
+    target_compile_definitions(hical_core PUBLIC BOOST_ASIO_HAS_PTHREADS=1)
 endif()
 
 # Linux 需要链接 liburing（Boost.Asio random_access_file 依赖 io_uring）
@@ -205,6 +219,11 @@ if(HICAL_WITH_HTTP_CLIENT)
     target_compile_definitions(hical_core PUBLIC HICAL_HAS_HTTP_CLIENT=1)
 endif()
 
+if(HICAL_WITH_HTTP2)
+    target_compile_definitions(hical_core PUBLIC HICAL_HAS_HTTP2=1)
+    target_link_libraries(hical_core PUBLIC Nghttp2::Nghttp2)
+endif()
+
 # NUMA 感知（可选，Linux + libnuma）
 if(HICAL_WITH_NUMA)
     target_include_directories(hical_core PRIVATE ${NUMA_INCLUDE_DIR})
@@ -244,6 +263,8 @@ install(
     DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/core/
     DESTINATION include/hical/core
     FILES_MATCHING PATTERN "*.h"
+    PATTERN "http2" EXCLUDE
+    PATTERN "HttpConnectionRegistry.h" EXCLUDE
 )
 
 # 安装 CMake 生成的 Version.h
@@ -258,6 +279,7 @@ install(
     FILES_MATCHING PATTERN "*.h" PATTERN "*.hci"
     PATTERN "HttpClient.h" EXCLUDE
     PATTERN "HttpClientPool.h" EXCLUDE
+    PATTERN "Http2ClientSession.h" EXCLUDE
 )
 
 # 协程 HTTP 客户端头文件（可选）：ON 才装，OFF 下连头带实现一起缺席，
