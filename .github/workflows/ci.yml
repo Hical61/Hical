@@ -177,7 +177,7 @@ jobs:
           ctest --test-dir build-h2 --show-only=json-v1 > build-h2/discovery.json
           python -c "import json; n=[t['name'] for t in json.load(open('build-h2/discovery.json'))['tests']]; required=('AsyncHttpClientNetworkTest.','Http2Client','Http2Pool','Http2Lifecycle','Http2Drain','Http2File','Http2Cancellation'); assert all(any(x.startswith(r) for x in n) for r in required)"
           ctest --test-dir build-h2 --no-tests=error --output-on-failure --timeout 120 -j2 \
-            -E 'RouterPerfTest|PerfectHashPerfTest|HttpServerPerfTest' --output-junit build-h2-tests.xml 2>&1 | tee build-h2-tests.log
+            -E 'RouterPerfTest|PerfectHashPerfTest|HttpServerPerfTest' --output-junit "$PWD/build-h2-tests.xml" 2>&1 | tee build-h2-tests.log
       - name: Configure / build / test H2 (MSYS2)
         if: matrix.compiler == 'msys2-gcc'
         shell: msys2 {0}
@@ -193,7 +193,7 @@ jobs:
           ctest --test-dir build-h2 --show-only=json-v1 > build-h2/discovery.json
           python -c "import json; n=[t['name'] for t in json.load(open('build-h2/discovery.json'))['tests']]; required=('AsyncHttpClientNetworkTest.','Http2Client','Http2Pool','Http2Lifecycle','Http2Drain','Http2File','Http2Cancellation'); assert all(any(x.startswith(r) for x in n) for r in required)"
           ctest --test-dir build-h2 --no-tests=error --output-on-failure --timeout 120 -j2 \
-            -E 'RouterPerfTest|PerfectHashPerfTest|HttpServerPerfTest' --output-junit build-h2-tests.xml 2>&1 | tee build-h2-tests.log
+            -E 'RouterPerfTest|PerfectHashPerfTest|HttpServerPerfTest' --output-junit "$PWD/build-h2-tests.xml" 2>&1 | tee build-h2-tests.log
       - name: Configure / build / test H2 (MSVC)
         if: matrix.compiler == 'msvc'
         shell: pwsh
@@ -218,7 +218,7 @@ jobs:
           python -c "import json; n=[t['name'] for t in json.load(open('build-h2/discovery.json',encoding='utf-8-sig'))['tests']]; required=('AsyncHttpClientNetworkTest.','Http2Client','Http2Pool','Http2Lifecycle','Http2Drain','Http2File','Http2Cancellation'); assert all(any(x.startswith(r) for x in n) for r in required)"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           ctest --test-dir build-h2 --no-tests=error --output-on-failure --timeout 120 -j2 `
-            -E 'RouterPerfTest|PerfectHashPerfTest|HttpServerPerfTest' --output-junit build-h2-tests.xml 2>&1 | Tee-Object build-h2-tests.log
+            -E 'RouterPerfTest|PerfectHashPerfTest|HttpServerPerfTest' --output-junit "$PWD/build-h2-tests.xml" 2>&1 | Tee-Object build-h2-tests.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Preserve H2 logs and dependency identity
         if: always()

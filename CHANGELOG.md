@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Markdown 转 PPTX**：修复 `scripts/md2pptx.py` 丢失章节前导语、正文重叠、表格行高不足、续页编号重复和有序列表编号丢失的问题；按文本实际宽度换行分页，SVG 按目标分辨率缩放，避免火焰图缩在图片左上角。
 - **gzip 压缩与传输编码**：HTTP/2 发送原始 gzip 字节，HTTP/1 保留分块编码；重新准备响应时不再同时设置 Content-Length。补齐 qvalue、Vary 和已编码响应的处理，异步压缩结果回到原执行器后再写入响应。
 - **H2 连接池重连期限**：等待流槽位的请求遇到旧连接断开后，按自身 `connectTimeout` 等待共享重连，超时请求不再迟到发送；原请求总期限和队列期限保持不变。
 - **Linux H2 CI 依赖解包**：保留归档普通文件的执行权限并剥离特殊权限，避免 Boost 内部构建脚本因不可执行而失败；旧规则生成的源码缓存会明确要求使用新的依赖目录。

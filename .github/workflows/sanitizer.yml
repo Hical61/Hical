@@ -104,7 +104,7 @@ jobs:
         run: |
           set -euo pipefail
           ctest --test-dir build --no-tests=error --output-on-failure --timeout 120 -j2 \
-            -R "$HTTP2_TEST_REGEX" --output-junit sanitizer-tests.xml 2>&1 | tee sanitizer-tests.log
+            -R "$HTTP2_TEST_REGEX" --output-junit "$PWD/sanitizer-tests.xml" 2>&1 | tee sanitizer-tests.log
         env:
           ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
           UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
@@ -193,7 +193,7 @@ jobs:
         run: |
           set -euo pipefail
           ctest --test-dir build --no-tests=error --output-on-failure --timeout 300 -j2 \
-            -R "$HTTP2_TEST_REGEX" --output-junit sanitizer-tests.xml 2>&1 | tee sanitizer-tests.log
+            -R "$HTTP2_TEST_REGEX" --output-junit "$PWD/sanitizer-tests.xml" 2>&1 | tee sanitizer-tests.log
         env:
           TSAN_OPTIONS: halt_on_error=1:second_deadlock_stack=1
 
@@ -296,7 +296,7 @@ jobs:
             -R "$HTTP2_TEST_REGEX" \
             --overwrite MemoryCheckCommand=/usr/bin/valgrind \
             --overwrite "MemoryCheckCommandOptions=--leak-check=full --show-leak-kinds=all --error-exitcode=1 --track-origins=yes" \
-            --output-junit sanitizer-tests.xml \
+            --output-junit "$PWD/sanitizer-tests.xml" \
             -T memcheck 2>&1 | tee sanitizer-tests.log
         env:
           GTEST_DEATH_TEST_USE_FORK: 1
