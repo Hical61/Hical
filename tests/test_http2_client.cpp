@@ -141,6 +141,7 @@ namespace
 		std::function<void()> onRequest;
 		std::function<void()> onTimeout;
 		std::function<void()> onStalledHandshake;
+		std::function<void()> onTlsHandshake;
 		size_t accepts {0};
 		size_t requests {0};
 		size_t handshakes {0};
@@ -149,6 +150,7 @@ namespace
 		bool stallHandshake {false};
 		bool holdTlsAfterHandshake {false};
 		bool timedOut {false};
+		bool stopped {false};
 
 		uint16_t port() const
 		{
@@ -163,6 +165,7 @@ namespace
 
 		void stop()
 		{
+			stopped = true;
 			boost::system::error_code ignored;
 			acceptor.close(ignored);
 			for (const auto& socket : sockets)
@@ -270,20 +273,37 @@ namespace
 				co_await socket->next_layer().async_read_some(
 					boost::asio::buffer(hello),
 					boost::asio::redirect_error(boost::asio::use_awaitable, error));
-				if (!error && onStalledHandshake)
+				if (error || stopped)
+				{
+					co_return;
+				}
+				if (onStalledHandshake)
 				{
 					onStalledHandshake();
+				}
+				if (stopped)
+				{
+					co_return;
 				}
 				co_await responseRelease.async_wait(boost::asio::redirect_error(boost::asio::use_awaitable, error));
 				co_return;
 			}
 			co_await socket->async_handshake(boost::asio::ssl::stream_base::server,
 											 boost::asio::redirect_error(boost::asio::use_awaitable, error));
-			if (error)
+			// 握手完成回调可能晚于 stop；先前的取消不会影响新注册的等待。
+			if (error || stopped)
 			{
 				co_return;
 			}
 			++handshakes;
+			if (onTlsHandshake)
+			{
+				onTlsHandshake();
+			}
+			if (stopped)
+			{
+				co_return;
+			}
 			if (holdTlsAfterHandshake)
 			{
 				co_await responseRelease.async_wait(boost::asio::redirect_error(boost::asio::use_awaitable, error));
@@ -813,6 +833,44 @@ TEST_F(Http2ClientTlsStateTest, NewGenerationWaitsForCancelledHandshakeAndSurviv
 	EXPECT_EQ(harness.accepts, 2U);
 	EXPECT_EQ(harness.handshakes, 1U);
 	EXPECT_EQ(harness.requests, 1U);
+}
+
+TEST_F(Http2ClientTlsStateTest, StopDuringHandshakeCompletionDoesNotLeaveAPendingWait)
+{
+	Harness harness;
+	harness.serverTlsContext = serverContext();
+	harness.holdTlsAfterHandshake = true;
+	bool stoppedAfterHandshake = false;
+	harness.onTlsHandshake = [&]
+	{
+		stoppedAfterHandshake = true;
+		harness.stop();
+	};
+	const auto configuration = options();
+	TlsSocket socket(harness.io, configuration.tlsContext->native());
+	socket.set_verify_mode(boost::asio::ssl::verify_none);
+	auto connect = [&]() -> Awaitable<void>
+	{
+		co_await socket.next_layer().async_connect(harness.acceptor.local_endpoint(), boost::asio::use_awaitable);
+		boost::system::error_code ignored;
+		co_await socket.async_handshake(boost::asio::ssl::stream_base::client,
+										boost::asio::redirect_error(boost::asio::use_awaitable, ignored));
+	};
+	coSpawn(harness.io, harness.accept());
+	auto client = boost::asio::co_spawn(harness.io, connect(), boost::asio::use_future);
+	// 在握手完成回调里先停止，再让服务端继续，固定取消早于等待注册的顺序。
+	harness.io.run_for(kTestTimeout);
+	EXPECT_TRUE(stoppedAfterHandshake);
+	EXPECT_TRUE(harness.io.stopped()) << "停止后仍有新注册的等待没有退出";
+
+	// 失败时也清掉迟到的等待，避免夹具问题把整个测试进程挂住。
+	boost::system::error_code ignored;
+	socket.next_layer().close(ignored);
+	harness.stop();
+	harness.io.restart();
+	harness.io.run_for(kTestTimeout);
+	ASSERT_EQ(client.wait_for(std::chrono::seconds::zero()), std::future_status::ready);
+	EXPECT_NO_THROW(client.get());
 }
 
 #ifdef HICAL_HAS_HTTP2

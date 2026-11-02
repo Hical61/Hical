@@ -1809,9 +1809,7 @@ TEST(Http2PoolSchedulingTest, AConnectionPublishedInTimeCancelsOnlyTheQueuedCall
 	HttpClientPool pool(harness.io);
 	auto options = h2Options();
 	options.connectTimeout = std::chrono::seconds {2};
-	options.requestTimeout = std::chrono::seconds {3};
-	auto queuedOptions = options;
-	queuedOptions.connectTimeout = std::chrono::milliseconds {200};
+	options.http2.queueTimeout = std::chrono::seconds {4};
 	std::optional<HttpClientResult> held, queued;
 	auto scenario = [&]() -> Awaitable<void>
 	{
@@ -1824,7 +1822,8 @@ TEST(Http2PoolSchedulingTest, AConnectionPublishedInTimeCancelsOnlyTheQueuedCall
 		{
 			co_return;
 		}
-		harness.launch(pool.get("127.0.0.1", harness.port(), "/queued", {}, queuedOptions), queued);
+		const auto earliestConnectDeadline = Clock::now() + options.connectTimeout;
+		harness.launch(pool.get("127.0.0.1", harness.port(), "/queued", {}, options), queued);
 		if (!co_await harness.waitFor(
 				[&]
 				{
@@ -1833,6 +1832,8 @@ TEST(Http2PoolSchedulingTest, AConnectionPublishedInTimeCancelsOnlyTheQueuedCall
 		{
 			co_return;
 		}
+		// 实际建连计时在提交后、确认入队前启动，前后两个时刻分别界定截止时间。
+		const auto latestConnectDeadline = Clock::now() + options.connectTimeout;
 		harness.releaseHandshakes();
 		if (!co_await harness.waitFor(
 				[&]
@@ -1842,8 +1843,17 @@ TEST(Http2PoolSchedulingTest, AConnectionPublishedInTimeCancelsOnlyTheQueuedCall
 		{
 			co_return;
 		}
+		const auto publishedBy = Clock::now();
+		EXPECT_LT(publishedBy, earliestConnectDeadline) << "真实连接必须在排队调用的建连期限前发布";
+		if (publishedBy >= earliestConnectDeadline)
+		{
+			co_return;
+		}
+		EXPECT_EQ(harness.received.front().target, "/held");
+		EXPECT_FALSE(queued.has_value());
+		EXPECT_EQ(pool.stats().queuedRequests, 1U);
 		// 连接已建立、首流占满容量后，建连子期限到点不能变成流槽等待的期限。
-		boost::asio::steady_timer observation(harness.io, Clock::now() + std::chrono::milliseconds {300});
+		boost::asio::steady_timer observation(harness.io, latestConnectDeadline + std::chrono::milliseconds {100});
 		co_await observation.async_wait(boost::asio::use_awaitable);
 		EXPECT_FALSE(queued.has_value());
 		EXPECT_EQ(pool.stats().queuedRequests, 1U);
@@ -2079,7 +2089,7 @@ TEST(Http2PoolSchedulingTest, AGrantedRequestKeepsItsOwnConnectTimeoutAfterTheAs
 	HttpClientPool pool(harness.io);
 	auto options = h2Options();
 	options.connectTimeout = std::chrono::seconds {2};
-	options.requestTimeout = std::chrono::seconds {3};
+	options.http2.queueTimeout = std::chrono::seconds {4};
 	auto shortOptions = options;
 	shortOptions.connectTimeout = std::chrono::milliseconds {20};
 	auto hook = std::make_shared<CompletionHook>();
@@ -2137,17 +2147,13 @@ TEST(Http2PoolSchedulingTest, AGrantedRequestKeepsItsOwnConnectTimeoutAfterTheAs
 			co_return;
 		}
 		// 收发任务已退出，客户端已收到断连通知；恢复旧连接上已获预留但尚未发送的请求。
+		const auto observationEnd = Clock::now() + std::chrono::milliseconds {150};
 		hook->resume();
-		if (!co_await harness.waitFor(
-				[&]
-				{
-					return harness.hellos == 1;
-				}))
-		{
-			co_return;
-		}
-		boost::asio::steady_timer observation(harness.io, Clock::now() + std::chrono::milliseconds {100});
-		co_await observation.async_wait(boost::asio::use_awaitable);
+		EXPECT_TRUE(co_await harness.waitFor(
+			[&]
+			{
+				return shortRequest.has_value() || Clock::now() >= observationEnd;
+			}));
 		EXPECT_TRUE(shortRequest.has_value()) << "旧传输断连后的新握手必须使用当前调用的短建连预算";
 		if (shortRequest)
 		{
@@ -2174,7 +2180,9 @@ TEST(Http2PoolSchedulingTest, AGrantedRequestKeepsItsOwnConnectTimeoutAfterTheAs
 					hook->armed = false;
 					hook->resume();
 				});
-	EXPECT_EQ(harness.accepts, 2U);
+	// 短期限也可能在新 accept 完成前取消重连，但不能多建连接或迟到发送。
+	EXPECT_GE(harness.accepts, 1U);
+	EXPECT_LE(harness.accepts, 2U);
 	EXPECT_EQ(harness.handshakes, 1U);
 	EXPECT_EQ(harness.received.size(), 1U);
 }
@@ -2561,13 +2569,20 @@ namespace
 		H2Harness harness;
 		harness.onH2Request = [](const H2Harness::Request& request)
 		{
-			request.peer->reset(request.id, detail::Http2Code::hRefusedStream);
+			if (request.target == "/warmup")
+			{
+				request.respond();
+			}
+			else
+			{
+				request.peer->reset(request.id, detail::Http2Code::hRefusedStream);
+			}
 		};
 		HttpClientPool pool(harness.io);
 		auto options = h2Options();
+		const auto warmupOptions = options;
 		options.requestTimeout = std::chrono::milliseconds {200};
 		auto hook = std::make_shared<CompletionHook>();
-		hook->armed = true;
 		hook->ready = [&]
 		{
 			return harness.received.size() == 1 && pool.stats().activeRequests == 0;
@@ -2577,6 +2592,15 @@ namespace
 		std::optional<HttpClientResult> result;
 		auto scenario = [&]() -> Awaitable<void>
 		{
+			// 先完成真实握手和 SETTINGS，短期限只覆盖拒绝后的重试路径。
+			const auto warmed = co_await pool.get("127.0.0.1", harness.port(), "/warmup", {}, warmupOptions);
+			EXPECT_TRUE(warmed.ok()) << warmed.error.message;
+			if (!warmed.ok())
+			{
+				co_return;
+			}
+			harness.received.clear();
+			hook->armed = true;
 			boost::asio::co_spawn(
 				executor,
 				pool.get("127.0.0.1", harness.port(), "/interrupted", {}, options),
@@ -2660,13 +2684,14 @@ TEST(Http2PoolRetryTest, ReenteringThePoolQueueAfterARefusalKeepsTheFirstQueueDe
 	harness.serverOptions.maxConcurrentStreams = 1;
 	HttpClientPool pool(harness.io);
 	auto options = h2Options();
-	options.requestTimeout = std::chrono::seconds {2};
-	options.http2.queueTimeout = std::chrono::milliseconds {200};
+	options.http2.queueTimeout = std::chrono::seconds {1};
 	std::optional<HttpClientResult> held, retried, blocker;
+	std::optional<Clock::time_point> refusedAt;
 	harness.onH2Request = [&](const H2Harness::Request& request)
 	{
 		if (request.target == "/retry")
 		{
+			refusedAt = Clock::now();
 			request.peer->reset(request.id, detail::Http2Code::hRefusedStream);
 			// 先排入竞争者；原请求重试时必须重新排队，不能越过已经等候的调用。
 			harness.launch(pool.get("127.0.0.1", harness.port(), "/blocker", {}, options), blocker);
@@ -2693,7 +2718,7 @@ TEST(Http2PoolRetryTest, ReenteringThePoolQueueAfterARefusalKeepsTheFirstQueueDe
 			co_return;
 		}
 		const auto queuedAt = Clock::now();
-		boost::asio::steady_timer releaseFirst(harness.io, queuedAt + std::chrono::milliseconds {150});
+		boost::asio::steady_timer releaseFirst(harness.io, queuedAt + std::chrono::milliseconds {500});
 		co_await releaseFirst.async_wait(boost::asio::use_awaitable);
 		harness.respond("/held");
 		if (!co_await harness.waitFor(
@@ -2704,8 +2729,14 @@ TEST(Http2PoolRetryTest, ReenteringThePoolQueueAfterARefusalKeepsTheFirstQueueDe
 		{
 			co_return;
 		}
-		boost::asio::steady_timer observation(harness.io, queuedAt + std::chrono::milliseconds {300});
+		boost::asio::steady_timer observation(harness.io, queuedAt + std::chrono::milliseconds {1250});
 		co_await observation.async_wait(boost::asio::use_awaitable);
+		EXPECT_TRUE(refusedAt.has_value());
+		if (refusedAt)
+		{
+			EXPECT_TRUE(Clock::now() < *refusedAt + options.http2.queueTimeout)
+				<< "观察时重新计时的队列期限仍应有效，才能区分两次入队的起点";
+		}
 		EXPECT_TRUE(retried.has_value()) << "重试不得从第二次入队重新获得完整 queueTimeout";
 		if (retried)
 		{

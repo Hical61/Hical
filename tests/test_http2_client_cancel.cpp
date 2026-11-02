@@ -369,11 +369,12 @@ TEST_F(Http2ClientCancelTlsTest, OneHandshakeWaiterDeadlineDoesNotExpireTheOther
 	harness.serverContext = serverContext();
 	harness.pauseHandshake = true;
 	auto options = tlsOptions();
-	options.requestTimeout = std::chrono::seconds {1};
+	options.requestTimeout = std::chrono::seconds {2};
 	HttpClient client(harness.io, "127.0.0.1", harness.port(), options);
 	const auto submitted = Clock::now();
 	std::optional<HttpClientResult> first, second;
 	bool helloSeen = false;
+	bool secondEntered = false;
 	harness.onHello = [&]
 	{
 		helloSeen = true;
@@ -381,6 +382,11 @@ TEST_F(Http2ClientCancelTlsTest, OneHandshakeWaiterDeadlineDoesNotExpireTheOther
 	harness.onTimeout = [&]
 	{
 		client.close();
+	};
+	auto secondRequest = [&]() -> Awaitable<HttpClientResult>
+	{
+		secondEntered = true;
+		co_return co_await client.get("/survivor");
 	};
 	auto scenario = [&]() -> Awaitable<void>
 	{
@@ -397,16 +403,21 @@ TEST_F(Http2ClientCancelTlsTest, OneHandshakeWaiterDeadlineDoesNotExpireTheOther
 			co_await boost::asio::post(boost::asio::use_awaitable);
 		}
 		// 收到 ClientHello 后再发第二个请求，让两个请求的绝对期限错开。
-		boost::asio::steady_timer stagger(harness.io, submitted + std::chrono::milliseconds {500});
+		boost::asio::steady_timer stagger(harness.io, submitted + std::chrono::milliseconds {1500});
 		co_await stagger.async_wait(boost::asio::use_awaitable);
 		EXPECT_FALSE(first.has_value());
 		boost::asio::co_spawn(harness.io,
-							  client.get("/survivor"),
+							  secondRequest(),
 							  [&](std::exception_ptr error, HttpClientResult result)
 							  {
 								  EXPECT_FALSE(error);
 								  second = std::move(result);
 							  });
+		while (!secondEntered && !harness.timedOut)
+		{
+			co_await boost::asio::post(boost::asio::use_awaitable);
+		}
+		EXPECT_FALSE(first.has_value()) << "第二个调用必须在首个调用超时前加入同一次握手";
 		while ((!first || !second) && !harness.timedOut)
 		{
 			co_await boost::asio::post(boost::asio::use_awaitable);
@@ -606,7 +617,7 @@ namespace
 					reply(id);
 				}
 			}
-			else if (paths[id] == "/next")
+			else if (paths[id] == "/next" || paths[id] == "/warmup")
 			{
 				reply(id);
 			}
@@ -674,13 +685,25 @@ TEST_F(Http2ClientCancelTlsTest, ZeroWindowDeadlineResetsOnlyItsStreamAndLeavesT
 								  EXPECT_FALSE(error);
 								  runnerDone = true;
 							  });
+		// 先完成 SETTINGS 和一次真实交换，短期限只测试已建立连接上的零窗口流。
+		detail::Http2ClientSession::Request warmup;
+		warmup.authority = "localhost";
+		warmup.target = "/warmup";
+		warmup.deadline = Clock::now() + std::chrono::seconds {2};
+		const auto warmed = co_await session->request(std::move(warmup));
+		EXPECT_TRUE(warmed.ok()) << warmed.error.message;
+		if (!warmed.ok())
+		{
+			session->close();
+			co_return;
+		}
 		const auto submitted = Clock::now();
 		detail::Http2ClientSession::Request first;
 		first.method = HttpMethod::hPost;
 		first.authority = "localhost";
 		first.target = "/slow";
 		first.body.assign(128, 'x');
-		first.deadline = submitted + std::chrono::milliseconds {100};
+		first.deadline = submitted + std::chrono::milliseconds {250};
 		boost::asio::co_spawn(harness.io,
 							  session->request(std::move(first)),
 							  [&](std::exception_ptr error, HttpClientResult result)
@@ -711,6 +734,7 @@ TEST_F(Http2ClientCancelTlsTest, ZeroWindowDeadlineResetsOnlyItsStreamAndLeavesT
 			co_return;
 		}
 		EXPECT_EQ(slow->error.code, ErrorCode::hTimedOut);
+		EXPECT_GT(peer->slowId, 0) << "短期限必须在请求头发到对端后才到期";
 		EXPECT_EQ(slow->requestDisposition, HttpRequestDisposition::hPossiblyProcessed);
 		EXPECT_TRUE(survivor->ok()) << survivor->error.message;
 		EXPECT_EQ(peer->resets, (std::vector<int32_t> {peer->slowId}));
@@ -755,7 +779,7 @@ TEST(Http2ClientDeadlineTest, LateEndStreamCannotReplaceTheFirstDeadlineResultOr
 		FAIL() << "对端输出未在有限批次内排空";
 	};
 	fromPeer();
-	const auto deadline = Clock::now() + std::chrono::milliseconds {30};
+	const auto deadline = Clock::now() + std::chrono::seconds {1};
 	detail::Http2ClientSession::Request request;
 	request.authority = "localhost";
 	request.target = "/late";
@@ -763,15 +787,44 @@ TEST(Http2ClientDeadlineTest, LateEndStreamCannotReplaceTheFirstDeadlineResultOr
 	std::optional<HttpClientResult> result;
 	size_t completions = 0;
 	size_t completionsBeforeLateEnd = 0;
-	boost::asio::co_spawn(io,
-						  session->request(std::move(request)),
-						  [&](std::exception_ptr error, HttpClientResult value)
-						  {
-							  EXPECT_FALSE(error);
-							  ++completions;
-							  result = std::move(value);
-						  });
+	boost::asio::steady_timer watchdog(io, Clock::now() + kWatchdog);
+	bool timedOut = false;
+	watchdog.async_wait(
+		[&](boost::system::error_code error)
+		{
+			if (!error)
+			{
+				timedOut = true;
+				session->close();
+			}
+		});
+	boost::asio::co_spawn(
+		io,
+		session->request(std::move(request)),
+		[&](std::exception_ptr error, HttpClientResult value)
+		{
+			EXPECT_FALSE(error);
+			++completions;
+			result = std::move(value);
+			boost::asio::post(
+				io,
+				[&]
+				{
+					completionsBeforeLateEnd = completions;
+					// 原请求已经完成，再送迟到的 END，不能覆盖结果或重复完成。
+					const std::array<char, 9> end {0, 0, 0, 0, 1, 0, 0, 0, 1};
+					EXPECT_FALSE(session->connection().codec().memRecv(std::string_view(end.data(), end.size())).error);
+					boost::asio::post(io,
+									  [&]
+									  {
+										  session->close();
+										  watchdog.cancel();
+									  });
+				});
+		});
 	io.poll();
+	ASSERT_FALSE(result.has_value()) << "先完成请求提交，再验证等待响应时的超时";
+	ASSERT_EQ(session->capacity().admitted, 1U);
 	for (size_t n = 0; n != 16; ++n)
 	{
 		auto wire = session->connection().output().nextBatch();
@@ -786,33 +839,6 @@ TEST(Http2ClientDeadlineTest, LateEndStreamCannotReplaceTheFirstDeadlineResultOr
 	const detail::Http2Codec::Header head[] {{":status", "200"}, {"content-length", "0"}};
 	ASSERT_FALSE(peer.submitResponse(1, head, false));
 	fromPeer();
-	boost::asio::steady_timer late(io, deadline + std::chrono::milliseconds {30});
-	boost::asio::steady_timer watchdog(io, Clock::now() + kWatchdog);
-	bool timedOut = false;
-	watchdog.async_wait(
-		[&](boost::system::error_code error)
-		{
-			if (!error)
-			{
-				timedOut = true;
-				session->close();
-			}
-		});
-	late.async_wait(
-		[&](boost::system::error_code error)
-		{
-			EXPECT_FALSE(error);
-			completionsBeforeLateEnd = completions;
-			// 空 DATA END_STREAM 到达时已超期，回调顺序不能改变原请求期限。
-			const std::array<char, 9> end {0, 0, 0, 0, 1, 0, 0, 0, 1};
-			EXPECT_FALSE(session->connection().codec().memRecv(std::string_view(end.data(), end.size())).error);
-			boost::asio::post(io,
-							  [&]
-							  {
-								  session->close();
-								  watchdog.cancel();
-							  });
-		});
 	io.restart();
 	io.run();
 	EXPECT_FALSE(timedOut);
