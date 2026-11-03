@@ -124,9 +124,19 @@ jobs:
             curl
       - name: MSVC environment
         if: matrix.compiler == 'msvc'
-        uses: ilammy/msvc-dev-cmd@v1
-        with:
-          arch: x64
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}/Microsoft Visual Studio/Installer/vswhere.exe"
+          $vsPath = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if ($LASTEXITCODE -ne 0 -or !$vsPath) { throw '找不到已安装的 MSVC 工具链' }
+          $previousEnvironment = @{}
+          Get-ChildItem Env: | ForEach-Object { $previousEnvironment[$_.Name] = $_.Value }
+          & "$vsPath/Common7/Tools/Launch-VsDevShell.ps1" -Arch amd64 -HostArch amd64 -SkipAutomaticLocation
+          Get-Command cl.exe -ErrorAction Stop | Out-Null
+          # 后续步骤会启动新进程，只保存开发环境改动过的变量。
+          Get-ChildItem Env: |
+            Where-Object { $_.Name -notmatch '^(GITHUB_|RUNNER_|NODE_OPTIONS$)' -and $_.Value -ne $previousEnvironment[$_.Name] } |
+            ForEach-Object { "$($_.Name)=$($_.Value)" | Add-Content -LiteralPath $env:GITHUB_ENV -Encoding utf8 }
       - name: MSVC system dependencies in workspace
         if: matrix.compiler == 'msvc'
         shell: pwsh
