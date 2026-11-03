@@ -98,10 +98,10 @@ TEST(Http2HeadersTest, SourceReuseGrowthAndOwnerMovesDoNotInvalidateSealedViews)
 	Headers tiny(Kind::hTrailers, 7);
 	ASSERT_TRUE(tiny.append("x", "y").ok());
 	ASSERT_TRUE(tiny.seal().ok());
-	auto small = tiny.find("x");
+	auto smallValue = tiny.find("x");
 	moved = std::move(tiny);
-	EXPECT_EQ(small, "y");
-	EXPECT_EQ(small.data(), moved.find("x").data());
+	EXPECT_EQ(smallValue, "y");
+	EXPECT_EQ(smallValue.data(), moved.find("x").data());
 }
 
 TEST(Http2HeadersTest, CookieFragmentsMergeInOrderAndSetCookieRemainsSeparate)

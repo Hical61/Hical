@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""验证 HTTP/2 CI 依赖解包的权限、缓存和路径边界，不下载或构建依赖。"""
+"""验证 HTTP/2 CI 依赖的解包和构建参数，不下载或编译依赖。"""
 
 from __future__ import annotations
 
@@ -149,6 +149,100 @@ class ArchiveExtractionTest(unittest.TestCase):
 
         self.assertEqual(oldScript.read_bytes(), b"old cached script")
         self.assertEqual(marker.read_text(encoding="utf-8"), self.source["sha256"] + "\n")
+
+
+class BoostBuildSetupTest(unittest.TestCase):
+    def setUp(self) -> None:
+        """准备安装结果和工具链文件，只替换下载与编译的执行边界。"""
+        self.temporary = tempfile.TemporaryDirectory(prefix="hical-boost-setup-")
+        self.addCleanup(self.temporary.cleanup)
+        self.directory = Path(self.temporary.name)
+        self.source = self.directory / "boost-source"
+        self.source.mkdir()
+        self.args = SimpleNamespace(root=self.directory / "workspace", compiler="msvc", cxx="cl",
+                                    configuration="Release", sanitizer="none", jobs=2)
+        self.args.root.mkdir()
+        self.args.prefix = self.args.root / "prefix"
+        header = self.args.prefix / "include/boost/version.hpp"
+        header.parent.mkdir(parents=True)
+        header.write_text("#define BOOST_VERSION 109000\n", encoding="utf-8")
+        package = self.args.prefix / "lib/cmake/Boost-1.90.0/BoostConfig.cmake"
+        package.parent.mkdir(parents=True)
+        package.write_text("# fixture\n", encoding="utf-8")
+        self.compiler = self.directory / "active toolchain/bin/cl.exe"
+        self.compiler.parent.mkdir(parents=True)
+        self.compiler.touch()
+        self.vcRoot = self.directory / "Visual Studio/VC"
+        self.setupScript = self.vcRoot / "Auxiliary/Build/vcvarsall.bat"
+        self.setupScript.parent.mkdir(parents=True)
+        self.setupScript.write_text("@exit /b 0\n", encoding="utf-8")
+        self.environment = {"COMSPEC": "fixture-cmd.exe", "VCToolsVersion": "14.51.36231",
+                            "VCINSTALLDIR": str(self.vcRoot)}
+
+    def runBuild(self, platform: str):
+        """调用实际构建入口，返回记录下来的外部命令。"""
+        simulatedOs = SimpleNamespace(name=platform, environ=self.environment)
+        with mock.patch.object(DEPS, "os", simulatedOs), \
+             mock.patch.object(DEPS, "unpack", return_value=self.source), \
+             mock.patch.object(DEPS.shutil, "which", return_value=str(self.compiler)), \
+             mock.patch.object(DEPS, "execute", return_value="") as execute:
+            DEPS.build_boost(self.args)
+        return execute
+
+    def test_windows_gcc_bootstraps_without_starting_a_bare_bash(self) -> None:
+        self.args.compiler = "gcc"
+        self.args.cxx = "g++"
+        commands = self.runBuild("nt").call_args_list
+
+        bootstrap = commands[0].args[1]
+        self.assertEqual(bootstrap[0], self.environment["COMSPEC"])
+        self.assertEqual(bootstrap[-2:], ["bootstrap.bat", "gcc"])
+        self.assertNotIn("bash", bootstrap)
+        self.assertEqual(commands[0].kwargs["cwd"], self.source)
+        self.assertEqual(Path(commands[1].args[1][0]).name, "b2.exe")
+
+    def test_windows_msvc_uses_the_active_compiler_version_and_setup_script(self) -> None:
+        commands = self.runBuild("nt").call_args_list
+
+        self.assertEqual(commands[0].args[1][-2:], ["bootstrap.bat", "msvc"])
+        configuration = (self.args.root / "user-config.jam").read_text(encoding="utf-8")
+        # VS 18 不在旧 Boost 的探测表里，版本和 setup 都得来自当前开发环境。
+        self.assertRegex(configuration, r"using msvc\s*:\s*14\.51\s*:")
+        self.assertIn('"' + self.compiler.as_posix() + '"', configuration)
+        self.assertIn('<setup>"' + self.setupScript.as_posix() + '"', configuration)
+        self.assertIn("toolset=msvc-14.51", commands[1].args[1])
+
+    def test_unix_clang_keeps_its_shell_and_sanitizer_flags(self) -> None:
+        self.args.compiler = "clang"
+        self.args.cxx = "clang++-20"
+        self.args.sanitizer = "address,undefined"
+        commands = self.runBuild("posix").call_args_list
+
+        self.assertEqual(commands[0].args[1], ["bash", "./bootstrap.sh", "--with-toolset=clang"])
+        self.assertEqual(Path(commands[1].args[1][0]).name, "b2")
+        self.assertIn("toolset=clang-hical", commands[1].args[1])
+        self.assertIn("cxxflags=-fsanitize=address,undefined -fno-omit-frame-pointer", commands[1].args[1])
+        self.assertIn("linkflags=-fsanitize=address,undefined -fno-omit-frame-pointer", commands[1].args[1])
+
+    def test_msvc_rejects_missing_or_invalid_toolset_version(self) -> None:
+        for version in (None, "", "VS18", "14.51 invalid"):
+            with self.subTest(version=version):
+                if version is None:
+                    self.environment.pop("VCToolsVersion", None)
+                else:
+                    self.environment["VCToolsVersion"] = version
+                with self.assertRaisesRegex(ValueError, "VCToolsVersion"):
+                    self.runBuild("nt")
+
+    def test_msvc_rejects_a_missing_developer_environment_or_setup_script(self) -> None:
+        self.environment.pop("VCINSTALLDIR")
+        with self.assertRaisesRegex(ValueError, "VCINSTALLDIR"):
+            self.runBuild("nt")
+
+        self.environment["VCINSTALLDIR"] = str(self.vcRoot)
+        self.setupScript.unlink()
+        with self.assertRaisesRegex(ValueError, "vcvarsall"):
+            self.runBuild("nt")
 
 
 if __name__ == "__main__":

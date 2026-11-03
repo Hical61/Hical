@@ -123,23 +123,32 @@ def unpack(args, source: dict) -> Path:
 
 def build_boost(args) -> None:
     source = unpack(args, SOURCES["boost"])
+    compiler = shutil.which(args.cxx)
+    if compiler is None:
+        raise ValueError(f"找不到指定编译器：{args.cxx}")
+    config = args.root / "user-config.jam"
     if args.compiler == "msvc":
-        execute(args, [os.environ.get("COMSPEC", "cmd.exe"), "/d", "/c", "bootstrap.bat"], "boost-bootstrap", cwd=source)
-        engine = source / "b2.exe"
-        toolset = "msvc"
-        config = args.root / "user-config.jam"
-        config.write_text("using msvc ;\n", encoding="utf-8")
-        user_config = ["--user-config=" + config.as_posix()]
+        version = re.fullmatch(r"(\d+\.\d+)(?:\.\d+)*", os.environ.get("VCToolsVersion", "").strip())
+        if version is None:
+            raise ValueError("MSVC 环境缺少有效的 VCToolsVersion")
+        vc_install_dir = os.environ.get("VCINSTALLDIR")
+        if not vc_install_dir:
+            raise ValueError("MSVC 环境缺少 VCINSTALLDIR")
+        setup = Path(vc_install_dir) / "Auxiliary/Build/vcvarsall.bat"
+        if not setup.is_file():
+            raise ValueError(f"找不到 MSVC 环境脚本：{setup}")
+        # 编译器和环境都已选好，不让旧版 Boost 再猜 VS 版本和安装路径。
+        config.write_text(f'using msvc : {version.group(1)} : "{Path(compiler).as_posix()}" : <setup>"{setup.as_posix()}" ;\n', encoding="utf-8")
+        toolset = "msvc-" + version.group(1)
     else:
-        execute(args, ["bash", "./bootstrap.sh", "--with-toolset=" + args.compiler], "boost-bootstrap", cwd=source)
-        engine = source / ("b2.exe" if os.name == "nt" else "b2")
-        compiler = shutil.which(args.cxx)
-        if compiler is None:
-            raise ValueError(f"找不到指定编译器：{args.cxx}")
-        config = args.root / "user-config.jam"
         config.write_text(f'using {args.compiler} : hical : "{Path(compiler).as_posix()}" ;\n', encoding="utf-8")
         toolset = args.compiler + "-hical"
-        user_config = ["--user-config=" + config.as_posix()]
+    if os.name == "nt":
+        execute(args, [os.environ.get("COMSPEC", "cmd.exe"), "/d", "/c", "bootstrap.bat", args.compiler], "boost-bootstrap", cwd=source)
+    else:
+        execute(args, ["bash", "./bootstrap.sh", "--with-toolset=" + args.compiler], "boost-bootstrap", cwd=source)
+    engine = source / ("b2.exe" if os.name == "nt" else "b2")
+    user_config = ["--user-config=" + config.as_posix()]
     flags = [] if args.sanitizer == "none" else ["-fsanitize=" + args.sanitizer, "-fno-omit-frame-pointer"]
     command = [str(engine), "-j" + str(args.jobs), "--ignore-site-config", "--with-json", "--layout=system", "--prefix=" + args.prefix.as_posix(),
                "--libdir=" + (args.prefix / "lib").as_posix(), "--build-dir=" + (args.root / "boost-build").as_posix(),

@@ -208,13 +208,16 @@ jobs:
         if: matrix.compiler == 'msvc'
         shell: pwsh
         run: |
+          $workspace = $env:GITHUB_WORKSPACE.Replace('\', '/')
+          $prefix = "$workspace/build-h2-deps/prefix"
+          $vcpkgRoot = $env:VCPKG_INSTALLATION_ROOT.Replace('\', '/')
           cmake -B build-h2 -G Ninja -DCMAKE_BUILD_TYPE=Release `
-            -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" `
-            -DVCPKG_MANIFEST_MODE=OFF -DVCPKG_INSTALLED_DIR="$env:GITHUB_WORKSPACE/build-h2-vcpkg" `
+            -DCMAKE_TOOLCHAIN_FILE="$vcpkgRoot/scripts/buildsystems/vcpkg.cmake" `
+            -DVCPKG_MANIFEST_MODE=OFF -DVCPKG_INSTALLED_DIR="$workspace/build-h2-vcpkg" `
             -DVCPKG_TARGET_TRIPLET=x64-windows-static-md -DCMAKE_VS_GLOBALS=VcpkgEnabled=false `
-            -DCMAKE_PREFIX_PATH="$env:GITHUB_WORKSPACE/build-h2-deps/prefix" `
-            -DBoost_DIR="$env:GITHUB_WORKSPACE/build-h2-deps/prefix/lib/cmake/Boost-1.90.0" `
-            -DNghttp2_ROOT="$env:GITHUB_WORKSPACE/build-h2-deps/prefix" `
+            -DCMAKE_PREFIX_PATH="$prefix" `
+            -DBoost_DIR="$prefix/lib/cmake/Boost-1.90.0" `
+            -DNghttp2_ROOT="$prefix" `
             -DHICAL_WITH_HTTP2=ON -DHICAL_WITH_HTTP_CLIENT=ON 2>&1 | Tee-Object build-h2-configure.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           cmake --build build-h2 --parallel 2 2>&1 | Tee-Object build-h2-build.log
