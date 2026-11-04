@@ -6,6 +6,8 @@ set -euo pipefail
 #
 # 前置条件：docker compose --profile <mode> up -d 已启动服务
 # 运行方式：cd benchmark && BENCH_MODE=cpp bash collect_stats.sh
+# 单框架：cd benchmark && BENCH_ONLY=Hical bash collect_stats.sh
+#         BENCH_ONLY 逗号分隔、大小写不敏感，显示名 / 短名 / 容器后缀都认
 # 输出文件：benchmark/output/stats.md
 # ============================================================
 
@@ -65,6 +67,31 @@ case "$BENCH_MODE" in
         exit 1
         ;;
 esac
+
+# 单框架过滤：BENCH_ONLY 逗号分隔、大小写不敏感。
+# 匹配键是完整显示名（Hical (C++)）、空格前短名（Hical）、容器后缀（hical）。
+# 留空就按 BENCH_MODE 跑整套。
+BENCH_ONLY="${BENCH_ONLY:-}"
+if [ -n "$BENCH_ONLY" ]; then
+    bench_only_lc=$(printf '%s' "$BENCH_ONLY" | tr '[:upper:]' '[:lower:]')
+    filtered=()
+    for fw_entry in "${FRAMEWORKS[@]}"; do
+        IFS='|' read -r s_name s_suffix s_src s_port <<< "$fw_entry"
+        # "Cinatra (C++)" 取空格前那截当短名
+        s_short=${s_name%% *}
+        s_name_lc=$(printf '%s' "$s_name" | tr '[:upper:]' '[:lower:]')
+        s_short_lc=$(printf '%s' "$s_short" | tr '[:upper:]' '[:lower:]')
+        s_suffix_lc=$(printf '%s' "$s_suffix" | tr '[:upper:]' '[:lower:]')
+        case ",${bench_only_lc}," in
+            *",${s_name_lc},"* | *",${s_short_lc},"* | *",${s_suffix_lc},"*) filtered+=("$fw_entry") ;;
+        esac
+    done
+    if [ ${#filtered[@]} -eq 0 ]; then
+        echo "[错误] BENCH_ONLY=${BENCH_ONLY} 没有匹配到任何框架（当前模式: ${BENCH_MODE}）"
+        exit 1
+    fi
+    FRAMEWORKS=("${filtered[@]}")
+fi
 
 # 颜色输出
 info() { printf "\033[1;34m[INFO]\033[0m  %s\n" "$1"; }

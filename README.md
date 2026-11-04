@@ -18,8 +18,6 @@
 
 > **Status**: Stable — production-ready, follows [Semantic Versioning](https://semver.org/).
 
-> HTTP/2 双端支持仍为候选实现，正在完成最终验收；默认构建和默认客户端继续使用 HTTP/1.1。接入方式与范围见 [HTTP/2 使用指南](docs/http2-guide.md)。
-
 English | [简体中文](README_CN.md)
 
 ## Why Hical?
@@ -123,15 +121,15 @@ curl http://localhost:8080/
 
 ## Requirements
 
-| Dependency                       | Notes                                           |
-| -------------------------------- | ----------------------------------------------- |
-| C++20/26                         | C++26 optional (reflection)                     |
-| Boost >= 1.82                    | Asio, System, JSON; DB >= 1.85；生产 HTTP 客户端 >= 1.86 |
-| OpenSSL                          | Required                                        |
+| Dependency                       | Notes                                                           |
+| -------------------------------- | --------------------------------------------------------------- |
+| C++20/26                         | C++26 optional (reflection)                                     |
+| Boost >= 1.82                    | Asio, System, JSON; DB >= 1.85；生产 HTTP 客户端 >= 1.86        |
+| OpenSSL                          | Required                                                        |
 | nghttp2 >= 1.70.0, < 2           | 仅启用 HTTP/2 时需要，使用静态 C 库；HTTP/2 需 OpenSSL >= 1.1.1 |
-| zlib                             | Required (WebSocket compression)                |
-| CMake >= 3.28                    | Build system                                    |
-| GCC 14+ / Clang 20+ / MSVC 2022+ | Compiler                                        |
+| zlib                             | Required (WebSocket compression)                                |
+| CMake >= 3.28                    | Build system                                                    |
+| GCC 14+ / Clang 20+ / MSVC 2022+ | Compiler                                                        |
 
 ## Build
 

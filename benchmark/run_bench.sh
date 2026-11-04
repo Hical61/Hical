@@ -5,6 +5,9 @@
 #   BENCH_MODE=cross-lang docker compose --profile cross-lang exec wrk bash -c "BENCH_MODE=cross-lang bash /bench/run_bench.sh"
 #   BENCH_MODE=all HICAL_HOST=localhost:8080 ... RESULT_FILE=results.md bash benchmark/run_bench.sh
 #   CONNECTIONS=500 DURATION=60s BENCH_MODE=cpp docker compose --profile cpp exec wrk bash -c "BENCH_MODE=cpp CONNECTIONS=500 DURATION=60s bash /bench/run_bench.sh"
+#   BENCH_ONLY=Hical      只跑指定框架，逗号分隔、大小写不敏感，显示名或服务名都认
+#                         docker compose --profile cpp exec wrk bash -c "BENCH_ONLY=Hical bash /bench/run_bench.sh"
+#                         docker compose --profile cpp exec wrk bash -c "BENCH_ONLY=hical,drogon bash /bench/run_bench.sh"
 
 set -euo pipefail
 
@@ -75,6 +78,30 @@ case "$BENCH_MODE" in
         exit 1
         ;;
 esac
+
+# ==================== 单框架过滤 ====================
+# BENCH_ONLY 只跑指定框架，大小写不敏感，显示名或服务名都认：
+#   BENCH_ONLY=Hical           只跑 Hical
+#   BENCH_ONLY=hical,drogon    跑这两个
+# 留空则按 BENCH_MODE 跑整套。
+BENCH_ONLY="${BENCH_ONLY:-}"
+if [ -n "$BENCH_ONLY" ]; then
+    bench_only_lc=$(printf '%s' "$BENCH_ONLY" | tr '[:upper:]' '[:lower:]')
+    filtered=()
+    for fw in "${FRAMEWORKS[@]}"; do
+        IFS='|' read -r fw_name fw_host <<< "$fw"
+        fw_name_lc=$(printf '%s' "$fw_name" | tr '[:upper:]' '[:lower:]')
+        fw_host_lc=${fw_host%%:*}
+        case ",${bench_only_lc}," in
+            *",${fw_name_lc},"* | *",${fw_host_lc},"*) filtered+=("$fw") ;;
+        esac
+    done
+    if [ ${#filtered[@]} -eq 0 ]; then
+        echo "[错误] BENCH_ONLY=${BENCH_ONLY} 没有匹配到任何框架（当前模式: ${BENCH_MODE}）"
+        exit 1
+    fi
+    FRAMEWORKS=("${filtered[@]}")
+fi
 
 # ==================== 根据模式组装测试场景 ====================
 # 基础 4 场景（所有模式共用）

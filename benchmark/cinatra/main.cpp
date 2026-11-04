@@ -67,12 +67,12 @@ int main()
 									  res.set_status_and_content(status_type::ok, std::move(json));
 								  });
 
-	// 路径参数
+	// 路径参数（走 radix tree，参数落在 params_ 里，不是 query）
 	server.set_http_handler<GET>("/users/:id",
 								 [](coro_http_request& req, coro_http_response& res)
 								 {
-									 auto id = req.get_query_value("id");
-									 UserResponseDTO dto {std::string(id), "User " + std::string(id)};
+									 const std::string& id = req.params_["id"];
+									 UserResponseDTO dto {id, "User " + id};
 									 std::string json;
 									 iguana::to_json(dto, json);
 									 res.add_header("Content-Type", "application/json");

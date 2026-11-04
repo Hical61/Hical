@@ -101,6 +101,29 @@ bash run_bench.sh
 docker compose --profile cpp exec wrk bash -c "BENCH_MODE=cpp CONNECTIONS=500 DURATION=60s bash /bench/run_bench.sh"
 ```
 
+### 只跑指定框架
+
+全量跑一轮要等 7 个框架，只关心某一个的时候太浪费时间。用 `BENCH_ONLY` 筛一下就行，逗号分隔，大小写不敏感，显示名（`Hical`）或服务名（`hical`）都能匹配。`collect_stats.sh` 同样支持，也能用容器后缀匹配。
+
+**注意**：只跑 hical 时，容器也用不着全起。全起的话其他 6 个框架的容器白占 4 核，压测数据反而不准。只起需要的那两个容器就够了：
+
+```bash
+# 只起 hical 和压测容器
+docker compose --profile cpp up -d hical wrk
+
+# 只压 Hical
+docker compose --profile cpp exec wrk bash -c "BENCH_ONLY=Hical bash /bench/run_bench.sh"
+```
+
+`collect_stats.sh` 这块尤其要用：它跑之前会检查 `SUFFIXES` 里每个容器是否在跑，只起了 hical 的话不过滤就会直接报「容器未运行」退出。
+
+结果默认还是写 `output/results.md`，单框架跑会覆盖上一次的全量结果。要留档就改 `RESULT_FILE`：
+
+```bash
+docker compose --profile cpp exec wrk \
+  bash -c "BENCH_ONLY=Hical RESULT_FILE=/bench/output/hical.md bash /bench/run_bench.sh"
+```
+
 ## 环境说明
 
 | 服务       | 端口 | 框架              | 语言 / 依赖                          |
@@ -110,7 +133,7 @@ docker compose --profile cpp exec wrk bash -c "BENCH_MODE=cpp CONNECTIONS=500 DU
 | crow       | 8084 | Crow v1.2.0       | C++20 (Ubuntu 24.04 GCC + Asio)      |
 | oatpp      | 8085 | Oat++ v1.3.0      | C++20 (Ubuntu 24.04 GCC, 零外部依赖) |
 | cpphttplib | 8086 | cpp-httplib v0.18 | C++20 (Ubuntu 24.04 GCC, 单头文件)   |
-| cinatra    | 8087 | Cinatra latest    | C++20 (Ubuntu 24.04 GCC, 协程框架)   |
+| cinatra    | 8087 | Cinatra 独立版    | C++20 (Ubuntu 24.04 GCC, header-only) |
 | libuvcpp   | 8088 | libuvcpp v1.3.0   | C++11（Ubuntu 24.04 GCC + 自带 libuv 依赖） |
 | gin        | 8081 | Gin v1.10         | Go 1.24                              |
 | fiber      | 8089 | Fiber v2          | Go 1.24 (fasthttp)                   |
@@ -118,6 +141,8 @@ docker compose --profile cpp exec wrk bash -c "BENCH_MODE=cpp CONNECTIONS=500 DU
 | wrk        | —    | wrk 4.1.0         | Alpine 3.20                          |
 
 每个服务容器限制 **4 CPU + 1024MB 内存**，fd 上限 65536，确保公平对比。
+
+> cinatra 走的是 [qicosmos/cinatra](https://github.com/qicosmos/cinatra) 独立版（不是 yalantinglibs 里那份打包的），Dockerfile 固定到 `ec83583`。header-only，asio / async_simple 已经 vendored 在仓库里，iguana 是 submodule。
 
 ## 压测场景
 
