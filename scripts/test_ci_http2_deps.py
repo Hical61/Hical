@@ -245,5 +245,63 @@ class BoostBuildSetupTest(unittest.TestCase):
             self.runBuild("nt")
 
 
+class PrefixReuseTest(unittest.TestCase):
+    def setUp(self) -> None:
+        """搭一个完整符号的 prefix，再按用例逐个破坏。"""
+        self.temporary = tempfile.TemporaryDirectory(prefix="hical-prefix-reuse-")
+        self.addCleanup(self.temporary.cleanup)
+        self.directory = Path(self.temporary.name)
+        self.args = SimpleNamespace(compiler="gcc")
+        self.args.prefix = self.directory / "prefix"
+        self.boostHeader = self.args.prefix / "include/boost/version.hpp"
+        self.boostHeader.parent.mkdir(parents=True)
+        self.boostHeader.write_text("#define BOOST_VERSION 109000\n", encoding="utf-8")
+        self.nghttp2Header = self.args.prefix / "include/nghttp2/nghttp2ver.h"
+        self.nghttp2Header.parent.mkdir(parents=True)
+        self.nghttp2Header.write_text('#define NGHTTP2_VERSION "1.70.0"\n', encoding="utf-8")
+        package = self.args.prefix / "lib/cmake/Boost-1.90.0/BoostConfig.cmake"
+        package.parent.mkdir(parents=True)
+        package.write_text("# fixture\n", encoding="utf-8")
+        for name in ("libboost_json.a", "libnghttp2.a"):
+            (self.args.prefix / "lib" / name).write_text("", encoding="utf-8")
+
+    def test_complete_prefix_is_reused(self) -> None:
+        self.assertTrue(DEPS.prefix_is_ready(self.args, with_interop=False))
+
+    def test_missing_static_library_forces_a_rebuild(self) -> None:
+        """只有头文件不能说明链接得上，静态库缺一个就得重编。"""
+        (self.args.prefix / "lib/libnghttp2.a").unlink()
+        self.assertFalse(DEPS.prefix_is_ready(self.args, with_interop=False))
+
+    def test_msvc_prefix_looks_for_dot_lib(self) -> None:
+        self.args.compiler = "msvc"
+        for name in ("libboost_json.lib", "libnghttp2.lib"):
+            (self.args.prefix / "lib" / name).write_text("", encoding="utf-8")
+        for name in ("libboost_json.a", "libnghttp2.a"):
+            (self.args.prefix / "lib" / name).unlink()
+        self.assertTrue(DEPS.prefix_is_ready(self.args, with_interop=False))
+        (self.args.prefix / "lib/libnghttp2.lib").unlink()
+        self.assertFalse(DEPS.prefix_is_ready(self.args, with_interop=False))
+
+    def test_wrong_installed_version_is_not_reused(self) -> None:
+        self.boostHeader.write_text("#define BOOST_VERSION 108300\n", encoding="utf-8")
+        self.assertFalse(DEPS.prefix_is_ready(self.args, with_interop=False))
+        self.boostHeader.write_text("#define BOOST_VERSION 109000\n", encoding="utf-8")
+        self.nghttp2Header.write_text('#define NGHTTP2_VERSION "1.64.0"\n', encoding="utf-8")
+        self.assertFalse(DEPS.prefix_is_ready(self.args, with_interop=False))
+
+    def test_interop_prefix_also_needs_every_tool(self) -> None:
+        self.assertTrue(DEPS.prefix_is_ready(self.args, with_interop=False))
+        self.assertFalse(DEPS.prefix_is_ready(self.args, with_interop=True))
+        binary = self.args.prefix / "bin/h2spec"
+        binary.parent.mkdir(parents=True)
+        binary.write_text("", encoding="utf-8")
+        # 只有 h2spec 不够，interop 还要 nghttp / nghttpd / h2load。
+        self.assertFalse(DEPS.prefix_is_ready(self.args, with_interop=True))
+        for name in ("nghttp", "nghttpd", "h2load"):
+            (self.args.prefix / "bin" / name).write_text("", encoding="utf-8")
+        self.assertTrue(DEPS.prefix_is_ready(self.args, with_interop=True))
+
+
 if __name__ == "__main__":
     unittest.main()

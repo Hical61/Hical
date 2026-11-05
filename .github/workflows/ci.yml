@@ -65,24 +65,29 @@ jobs:
             cxx: g++-14
             configuration: Release
             sanitizer: none
+            sanitizerTag: none
           - os: ubuntu-24.04
             compiler: clang
             cc: clang-20
             cxx: clang++-20
             configuration: Debug
             sanitizer: address,undefined
+            # 缓存 key 不允许逗号，这里得单独给一个干净的名字。
+            sanitizerTag: asan-ubsan
           - os: windows-latest
             compiler: msys2-gcc
             cc: gcc
             cxx: g++
             configuration: Release
             sanitizer: none
+            sanitizerTag: none
           - os: windows-latest
             compiler: msvc
             cc: cl
             cxx: cl
             configuration: Release
             sanitizer: none
+            sanitizerTag: none
     env:
       HICAL_REQUIRE_SSL_CERTS: '1'
       ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
@@ -120,6 +125,8 @@ jobs:
             mingw-w64-x86_64-zlib
             mingw-w64-x86_64-gtest
             mingw-w64-x86_64-python
+            # ccache 在 msys 仓库里（没有 mingw 前缀），装一次两个 shell 都能用。
+            ccache
             curl
       - name: MSVC environment
         if: matrix.compiler == 'msvc'
@@ -136,17 +143,60 @@ jobs:
           Get-ChildItem Env: |
             Where-Object { $_.Name -notmatch '^(GITHUB_|RUNNER_|NODE_OPTIONS$)' -and $_.Value -ne $previousEnvironment[$_.Name] } |
             ForEach-Object { "$($_.Name)=$($_.Value)" | Add-Content -LiteralPath $env:GITHUB_ENV -Encoding utf8 }
+      # 必须在 vcpkg install 之前恢复：缓存的是 OpenSSL 等包的编译产物，
+      # 从源码编一遍要七分钟，这是 http2 的 MSVC 最贵的一段。
+      - name: Setup vcpkg cache (MSVC)
+        if: matrix.compiler == 'msvc'
+        uses: actions/cache@v4
+        with:
+          path: C:\Users\runneradmin\AppData\Local\vcpkg\archives
+          key: vcpkg-msvc-x64-${{ hashFiles('vcpkg.json') }}
+          restore-keys: vcpkg-msvc-x64-
       - name: MSVC system dependencies in workspace
         if: matrix.compiler == 'msvc'
         shell: pwsh
         run: |
           & "$env:VCPKG_INSTALLATION_ROOT/vcpkg.exe" install openssl zlib gtest --classic --triplet x64-windows-static-md --x-install-root="$env:GITHUB_WORKSPACE/build-h2-vcpkg"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      # 编译器的启动器：ccache 挂在工具链外面，缓存的是整个编译动作。
+      # key 必须带 configuration 和 sanitizer，Debug+ASan 和 Release 的产物不通用。
+      - name: Setup ccache (Linux)
+        if: runner.os == 'Linux'
+        uses: hendrikmuhs/ccache-action@v1
+        with:
+          key: http2-${{ matrix.os }}-${{ matrix.cc }}-${{ matrix.configuration }}-${{ matrix.sanitizerTag }}
+          # 主构建 362 个编译单元，冷编译要十分钟；命中后只剩增量。
+          # 仓库缓存总共 10G，四份 1G 的 ccache 会把 prefix 和 vcpkg 挤出去，
+          # 落到 500M 够用，挤掉别人的代价比少存一点缓存大得多。
+          max-size: 500M
+      # MSYS2 用的 ccache 来自 msys 仓库，action 在 Windows 下装的是原生版本，
+      # 在 msys2 shell 里未必找得到，所以这条自己管。
+      # key 不能掺源码哈希：ccache 是按单个编译单元命中的，掺了就永远只能用当次那份。
+      - name: Cache ccache (MSYS2)
+        if: matrix.compiler == 'msys2-gcc'
+        uses: actions/cache@v4
+        with:
+          path: .ccache
+          # key 带 sha 是为了每次提交都能把新编出来的缓存存下来；
+          # restore-keys 负责从最近一条恢复出增量。ccache 内部按单个编译单元
+          # 精确匹配，所以整份目录换了 key 也照样能命中大部分。
+          key: http2-ccache-${{ matrix.os }}-${{ matrix.cc }}-${{ github.sha }}
+          restore-keys: |
+            http2-ccache-${{ matrix.os }}-${{ matrix.cc }}-
       - name: Cache verified source archives
         uses: actions/cache@v4
         with:
           path: build-h2-deps/downloads
           key: http2-sources-boost190-ng170-${{ runner.os }}-${{ hashFiles('scripts/ci_http2_deps.py') }}
+      # prefix 只跟编译器、配置、sanitizer 有关，跟源码无关。
+      # hashFiles 盯的是构建参数（版本号、编译开关这些），脚本一改就重建，
+      # 宁可多编一次也不要用一套和当前参数对不上的产物。
+      # 另外脚本自己还会校验版本宏和静态库，缓存残缺时会被丢掉重来。
+      - name: Cache fixed dependency prefix
+        uses: actions/cache@v4
+        with:
+          path: build-h2-deps/prefix
+          key: http2-prefix-${{ runner.os }}-${{ matrix.cc }}-${{ matrix.configuration }}-${{ matrix.sanitizerTag }}-${{ hashFiles('scripts/ci_http2_deps.py') }}
       - name: Build fixed dependencies (Linux)
         if: runner.os == 'Linux'
         run: >-
@@ -158,6 +208,8 @@ jobs:
         shell: msys2 {0}
         run: |
           set -euo pipefail
+          # 这步编的是 Boost 和 nghttp2，b2 和 CMake 都直接用原始工具链，
+          # 不经过 ccache，所以这里什么都不用配。
           python scripts/ci_http2_deps.py --root build-h2-deps --compiler gcc --cc gcc --cxx g++ --build
       - name: Build fixed dependencies (MSVC)
         if: matrix.compiler == 'msvc'
@@ -175,12 +227,15 @@ jobs:
           fi
           cmake -B build-h2 -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.configuration }} \
             -DCMAKE_C_COMPILER=${{ matrix.cc }} -DCMAKE_CXX_COMPILER=${{ matrix.cxx }} \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             -DCMAKE_PREFIX_PATH="$PWD/build-h2-deps/prefix" \
             -DBoost_DIR="$PWD/build-h2-deps/prefix/lib/cmake/Boost-1.90.0" \
             -DNghttp2_ROOT="$PWD/build-h2-deps/prefix" \
             -DHICAL_WITH_HTTP2=ON -DHICAL_WITH_HTTP_CLIENT=ON -DHICAL_DISABLE_IO_URING=ON \
             "${extra[@]}" 2>&1 | tee build-h2-configure.log
-          cmake --build build-h2 --parallel 2 2>&1 | tee build-h2-build.log
+          # ASan+UBSan 的 Debug 编译很吃内存，runner 只有 7G，别开满。
+          jobs=$([[ '${{ matrix.sanitizer }}' == none ]] && nproc || echo 2)
+          cmake --build build-h2 --parallel "$jobs" 2>&1 | tee build-h2-build.log
           python scripts/gen_test_certs.py --out-dir build-h2/tests
           ctest --test-dir build-h2 -N 2>&1 | tee build-h2-discovery.log
           ctest --test-dir build-h2 --show-only=json-v1 > build-h2/discovery.json
@@ -192,11 +247,16 @@ jobs:
         shell: msys2 {0}
         run: |
           set -euo pipefail
+          # 缓存目录固定在工作区里，好让 actions/cache 收走。
+          export CCACHE_DIR="$(cygpath -m "$PWD/.ccache")"
+          export CCACHE_MAXSIZE=500M
+          ccache --version
           prefix="$(cygpath -m "$PWD/build-h2-deps/prefix")"
           cmake -B build-h2 -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             -DCMAKE_PREFIX_PATH="$prefix" -DBoost_DIR="$prefix/lib/cmake/Boost-1.90.0" \
             -DNghttp2_ROOT="$prefix" -DHICAL_WITH_HTTP2=ON -DHICAL_WITH_HTTP_CLIENT=ON 2>&1 | tee build-h2-configure.log
-          cmake --build build-h2 --parallel 2 2>&1 | tee build-h2-build.log
+          cmake --build build-h2 --parallel "$(nproc)" 2>&1 | tee build-h2-build.log
           python scripts/gen_test_certs.py --out-dir build-h2/tests
           ctest --test-dir build-h2 -N 2>&1 | tee build-h2-discovery.log
           ctest --test-dir build-h2 --show-only=json-v1 > build-h2/discovery.json
@@ -219,7 +279,9 @@ jobs:
             -DNghttp2_ROOT="$prefix" `
             -DHICAL_WITH_HTTP2=ON -DHICAL_WITH_HTTP_CLIENT=ON 2>&1 | Tee-Object build-h2-configure.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          cmake --build build-h2 --parallel 2 2>&1 | Tee-Object build-h2-build.log
+          # cl 处理重模板单进程要 1.5~2G，4 路并行会贴到 8G，先把上限压到 3。
+          $jobs = [Math]::Min([int]$env:NUMBER_OF_PROCESSORS, 3)
+          cmake --build build-h2 --parallel $jobs 2>&1 | Tee-Object build-h2-build.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python scripts/gen_test_certs.py --out-dir build-h2/tests
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -277,6 +339,12 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y gcc-14 g++-14 libssl-dev libgtest-dev zlib1g-dev libev-dev libc-ares-dev libjansson-dev libxml2-dev
           python -m pip install --only-binary=:all: cmake==4.4.3 ninja==1.13.0
+      # 手动触发的 job 同样要从源码编 Boost，缓存命中的话能省十来分钟。
+      - name: Cache fixed dependency prefix
+        uses: actions/cache@v4
+        with:
+          path: build-h2-deps/prefix
+          key: http2-prefix-${{ runner.os }}-gcc-interop-${{ hashFiles('scripts/ci_http2_deps.py') }}
       - name: Build fixed library and independent CLI tools
         run: >-
           python scripts/ci_http2_deps.py --root build-h2-deps --compiler gcc --cc gcc-14 --cxx g++-14

@@ -121,6 +121,32 @@ def unpack(args, source: dict) -> Path:
     return root
 
 
+def prefix_is_ready(args, *, with_interop: bool) -> bool:
+    """检查已安装前缀是否完整。CI 缓存命中的就是这一份，没必要重新编一遍 Boost。"""
+    boost_config = args.prefix / "lib/cmake/Boost-1.90.0/BoostConfig.cmake"
+    boost_header = args.prefix / "include/boost/version.hpp"
+    nghttp2_header = args.prefix / "include/nghttp2/nghttp2ver.h"
+    if not (boost_config.is_file() and boost_header.is_file() and nghttp2_header.is_file()):
+        return False
+    if not re.search(r"#define BOOST_VERSION\s+109000\b", boost_header.read_text(encoding="utf-8", errors="replace")):
+        return False
+    if '#define NGHTTP2_VERSION "1.70.0"' not in nghttp2_header.read_text(encoding="utf-8", errors="replace"):
+        return False
+    # 光有头文件说明不了链接得上，静态库也得在。
+    # 名字随工具链变：b2 在 MSVC 下出 boost_json.lib，Unix/MinGW 出 libboost_json.a；
+    # nghttp2 的 CMake install 同理。用前缀通配避开这份差异。
+    suffix = ".lib" if args.compiler == "msvc" else ".a"
+    for component in ("boost_json", "nghttp2"):
+        if not any((args.prefix / "lib").glob("*" + component + suffix)):
+            return False
+    # interop 用例要跑这四个工具，少一个都跑不起来。
+    if with_interop:
+        tools = ("h2spec", "nghttp", "nghttpd", "h2load")
+        if not all((args.prefix / "bin" / name).is_file() for name in tools):
+            return False
+    return True
+
+
 def build_boost(args) -> None:
     source = unpack(args, SOURCES["boost"])
     compiler = shutil.which(args.cxx)
@@ -234,13 +260,17 @@ def main() -> None:
     write_json(args.root / "manifest.json", args.report)
     if args.build:
         try:
-            build_boost(args)
-            build_nghttp2(args)
-            if args.interop_tools:
-                build_h2spec(args)
-            args.report["status"] = "built"
-            args.report["installed_files"] = [{"path": str(path.relative_to(args.prefix)), "sha256": sha256(path)}
-                                              for path in sorted(args.prefix.rglob("*")) if path.is_file() and path.suffix in (".a", ".lib")]
+            # CI 会把整个 prefix 缓存下来，命中时跳过下载和解包，只走这段校验。
+            if prefix_is_ready(args, with_interop=args.interop_tools):
+                args.report["status"] = "reused"
+            else:
+                build_boost(args)
+                build_nghttp2(args)
+                if args.interop_tools:
+                    build_h2spec(args)
+                args.report["status"] = "built"
+                args.report["installed_files"] = [{"path": str(path.relative_to(args.prefix)), "sha256": sha256(path)}
+                                                  for path in sorted(args.prefix.rglob("*")) if path.is_file() and path.suffix in (".a", ".lib")]
         except BaseException as error:
             args.report.update(status="failed", error=str(error))
             raise
