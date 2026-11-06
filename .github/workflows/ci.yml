@@ -126,7 +126,7 @@ jobs:
             mingw-w64-x86_64-zlib
             mingw-w64-x86_64-gtest
             mingw-w64-x86_64-python
-            ccache
+            mingw-w64-x86_64-sccache
             curl
       - name: MSVC environment
         if: matrix.compiler == 'msvc'
@@ -169,20 +169,20 @@ jobs:
           # 仓库缓存总共 10G，四份 1G 的 ccache 会把 prefix 和 vcpkg 挤出去，
           # 落到 500M 够用，挤掉别人的代价比少存一点缓存大得多。
           max-size: 500M
-      # MSYS2 用的 ccache 来自 msys 仓库，action 在 Windows 下装的是原生版本，
-      # 在 msys2 shell 里未必找得到，所以这条自己管。
-      # key 不能掺源码哈希：ccache 是按单个编译单元命中的，掺了就永远只能用当次那份。
-      - name: Cache ccache (MSYS2)
+      # MSYS2 这条不用 ccache：msys 那份是 POSIX 运行时程序，只认 / 分隔符，
+      # 而 CMake 生成的是 D:\a\_temp\... 反斜杠路径，ccache 认不出是路径，
+      # 当成编译器名字去 PATH 里找，直接报 Could not find compiler。
+      # sccache 是原生 Windows 程序，没有这个问题。
+      # key 带 sha 是为了每次提交都能把新编出来的缓存存下来；
+      # restore-keys 负责从最近一条恢复出增量。
+      - name: Cache sccache (MSYS2)
         if: matrix.compiler == 'msys2-gcc'
         uses: actions/cache@v4
         with:
-          path: .ccache
-          # key 带 sha 是为了每次提交都能把新编出来的缓存存下来；
-          # restore-keys 负责从最近一条恢复出增量。ccache 内部按单个编译单元
-          # 精确匹配，所以整份目录换了 key 也照样能命中大部分。
-          key: http2-ccache-${{ matrix.os }}-${{ matrix.cc }}-${{ github.sha }}
+          path: .sccache
+          key: http2-sccache-${{ matrix.os }}-${{ matrix.cc }}-${{ github.sha }}
           restore-keys: |
-            http2-ccache-${{ matrix.os }}-${{ matrix.cc }}-
+            http2-sccache-${{ matrix.os }}-${{ matrix.cc }}-
       - name: Cache verified source archives
         uses: actions/cache@v4
         with:
@@ -247,16 +247,19 @@ jobs:
         shell: msys2 {0}
         run: |
           set -euo pipefail
-          # 缓存目录固定在工作区里，好让 actions/cache 收走。
-          export CCACHE_DIR="$(cygpath -m "$PWD/.ccache")"
-          export CCACHE_MAXSIZE=500M
-          ccache --version
+          # sccache 原生支持 Windows 路径，缓存目录放工作区里好让 actions/cache 收走。
+          export SCCACHE_DIR="$(cygpath -m "$PWD/.sccache")"
+          export SCCACHE_CACHE_SIZE=500M
+          # 名字或路径对不上就当场报错，别等编到一半才发现。
+          command -v sccache
+          sccache --version
           prefix="$(cygpath -m "$PWD/build-h2-deps/prefix")"
           cmake -B build-h2 -G Ninja -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_C_COMPILER_LAUNCHER=sccache -DCMAKE_CXX_COMPILER_LAUNCHER=sccache \
             -DCMAKE_PREFIX_PATH="$prefix" -DBoost_DIR="$prefix/lib/cmake/Boost-1.90.0" \
             -DNghttp2_ROOT="$prefix" -DHICAL_WITH_HTTP2=ON -DHICAL_WITH_HTTP_CLIENT=ON 2>&1 | tee build-h2-configure.log
           cmake --build build-h2 --parallel "$(nproc)" 2>&1 | tee build-h2-build.log
+          sccache --show-stats
           python scripts/gen_test_certs.py --out-dir build-h2/tests
           ctest --test-dir build-h2 -N 2>&1 | tee build-h2-discovery.log
           ctest --test-dir build-h2 --show-only=json-v1 > build-h2/discovery.json
