@@ -84,10 +84,13 @@ cd benchmark && docker compose up
 - **WebSocket** — permessage-deflate 压缩、Hub 广播、子协议协商、心跳
 - **数据库中间件** — 协程连接池 + 自动事务 + 慢查询检测（Boost.MySQL）
 - **生产就绪** — SSL/TLS、SO_REUSEPORT 多 acceptor、静态文件 ETag/304、Docker 部署
+- **HTTP/2 预览** — 通过 TLS ALPN 协商，在同一连接上处理多个请求。服务端沿用现有路由和中间件，两端按需开启。
 
 > 完整特性列表见 [架构设计](docs/architecture.md)。
 
 ## 快速开始
+
+想直接建个带 CMake 和 CTest 的工程，可以运行 `python scripts/hical.py new demo-api`。只有生成这一步需要 Python 3.10 或更新版本。安装 `hical` 命令的步骤见 [CLI 脚手架](docs/cli-guide.md)。
 
 ```cpp
 #include "core/HttpServer.h"
@@ -123,8 +126,9 @@ curl http://localhost:8080/
 | 依赖项                           | 说明                                    |
 | -------------------------------- | --------------------------------------- |
 | C++20/26                         | C++26 可选（反射）                      |
-| Boost >= 1.82                    | Asio, System, JSON；DB 中间件需 >= 1.85 |
+| Boost >= 1.82                    | Asio、System、JSON。DB 中间件需要 1.85+，HTTP 客户端需要 1.86+。 |
 | OpenSSL                          | 必需                                    |
+| nghttp2 >= 1.70.0, < 2           | 开启 HTTP/2 时使用静态 C 库，并要求 OpenSSL 1.1.1 或更新版本。 |
 | zlib                             | 必需（WebSocket 压缩）                  |
 | CMake >= 3.28                    | 构建系统                                |
 | GCC 14+ / Clang 20+ / MSVC 2022+ | 编译器                                  |
@@ -152,7 +156,13 @@ cmake --build build --config Release
 cmake -B build -DHICAL_WITH_DATABASE=ON ...    # 数据库中间件
 cmake -B build -DHICAL_WITH_OPENAPI=OFF ...    # 禁用 OpenAPI
 cmake -B build -DHICAL_ENABLE_REFLECTION=ON ...# C++26 反射
+cmake -B build -DHICAL_WITH_HTTP_CLIENT=ON ... # 协程客户端，默认关闭，需要 Boost >= 1.86
+cmake -B build -DHICAL_WITH_HTTP2=ON ...       # TLS HTTP/2，默认关闭，需要静态 nghttp2
 ```
+
+HTTP/2 和 HTTP 客户端各有一个构建开关。服务端要在启动前调用 `enableSsl()` 和 `enableHttp2()`。客户端默认走 `hHttp1Only`，编译时打开 HTTP/2 后还可以选 `hNegotiateHttp2` 或 `hHttp2Only`。预览版通过 TLS 提供 HTTP/2，暂不支持 h2c、gRPC 和 WebSocket/SSE 升级。用法见 [HTTP/2 使用指南](docs/http2-guide.md)。
+
+连接池不会自动重发 POST 和 PATCH，其他符合条件的请求最多重试一次。HTTP/2 只在请求还没发送就遇到指定的瞬态错误，或协议明确告诉客户端对端没处理请求时重试。HTTP/1.1 则要求第一次用的是已经失效的复用连接，并且在收到响应状态前遇到指定的瞬态错误。HTTP/1.1 相比 v2.7.2 的变化见 [未发布变更](CHANGELOG.md#unreleased)，具体条件见 [连接池重试说明](docs/http2-guide.md#连接池与重试边界)。
 
 ### Docker
 
@@ -203,6 +213,7 @@ target_link_libraries(my_app PRIVATE hical::hical_core)
 - [构建与测试](docs/build_and_test_guide.md)
 - [示例指南](docs/examples_guide.md)
 - [API 参考](docs/api_reference.md)
+- [HTTP/2 使用指南](docs/http2-guide.md)
 - [架构设计](docs/architecture.md)
 - [集成指南](docs/integration_guide.md)
 - [性能报告](docs/performance_report.md)

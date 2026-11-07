@@ -1,0 +1,39 @@
+/**
+ * @file test_app.cpp
+ * @brief GET / 路由测试
+ */
+
+#include "app.h"
+
+#include <hical/core/Router.h>
+#include <hical/core/HttpRequest.h>
+#include <hical/core/HttpResponse.h>
+#include <hical/core/Log.h>
+
+#include <cstdlib>
+
+/**
+ * @brief 直接调用路由器检查响应，不启动服务
+ * @return 全部检查通过返回 EXIT_SUCCESS，否则返回 EXIT_FAILURE
+ */
+int main()
+{
+	hical::Router router;
+	app::registerRoutes(router);
+
+	hical::HttpRequest request;
+	request.setMethod(hical::HttpMethod::hGet);
+	request.setTarget("/");
+	auto response = router.dispatchSync(request);
+	if (!response)
+	{
+		HICAL_LOG_ERROR("GET / 未返回同步响应");
+		return EXIT_FAILURE;
+	}
+	if (response->statusCode() != hical::HttpStatusCode::hOk || response->body() != "Hical 已启动\n")
+	{
+		HICAL_LOG_ERROR("GET / 的状态码或响应内容不符合预期");
+		return EXIT_FAILURE;
+	}
+	return EXIT_SUCCESS;
+}

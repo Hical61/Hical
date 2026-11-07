@@ -47,6 +47,25 @@ jobs:
           python-version: '3.12'
       - run: python -m unittest discover -s scripts -p test_ci_http2_deps.py -v
 
+  cli-tests:
+    name: CLI 生成器测试 / ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: 安装 Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - name: 测试 hical new
+        run: python -m unittest discover -s scripts -p test_hical_cli.py -v
+
   # 原有 build/profiling 保持 OFF；H2 双端使用独立前缀，不借用 Ubuntu apt Boost 1.83。
   http2:
     needs: http2-dependency-tests
@@ -463,6 +482,7 @@ jobs:
             -DCMAKE_CXX_COMPILER=${{ matrix.cxx }} \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            -DHICAL_INSTALL_CLI=ON \
             -DHICAL_DISABLE_IO_URING=ON \
             -DHICAL_WITH_HTTP2=OFF \
             -DHICAL_WITH_HTTP_CLIENT=OFF
@@ -494,6 +514,7 @@ jobs:
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
             -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined" \
+            -DHICAL_INSTALL_CLI=ON \
             -DHICAL_DISABLE_IO_URING=ON \
             -DHICAL_WITH_HTTP2=OFF \
             -DHICAL_WITH_HTTP_CLIENT=OFF
@@ -514,6 +535,19 @@ jobs:
         env:
           HICAL_REQUIRE_SSL_CERTS: "1"
 
+      - name: 安装 CLI 并测试生成的工程（Linux）
+        if: runner.os == 'Linux'
+        run: |
+          config=Release
+          consumer_args=("-DCMAKE_CXX_COMPILER=${{ matrix.cxx }}")
+          if [[ '${{ matrix.compiler }}' == 'clang' ]]; then
+            config=Debug
+            consumer_args+=("-DCMAKE_CXX_FLAGS=-fsanitize=address,undefined -fno-omit-frame-pointer"
+                            "-DCMAKE_EXE_LINKER_FLAGS=-fsanitize=address,undefined")
+          fi
+          python scripts/check_hical_cli.py --hical-build-dir build --work-dir build-cli-check \
+            --config "$config" -- "${consumer_args[@]}"
+
       # ── clang-tidy 检查 (仅 Clang job, 警告模式) ──
       - name: Run clang-tidy
         if: matrix.compiler == 'clang'
@@ -533,6 +567,7 @@ jobs:
             -DCMAKE_CXX_FLAGS="--coverage" \
             -DCMAKE_C_FLAGS="--coverage" \
             -DCMAKE_EXE_LINKER_FLAGS="--coverage" \
+            -DHICAL_INSTALL_CLI=OFF \
             -DHICAL_DISABLE_IO_URING=ON \
             -DHICAL_WITH_HTTP2=OFF \
             -DHICAL_WITH_HTTP_CLIENT=OFF
@@ -624,7 +659,7 @@ jobs:
         run: |
           cmake --version
           cmake --version | grep '^cmake version 4\.'
-          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DHICAL_WITH_HTTP2=OFF -DHICAL_WITH_HTTP_CLIENT=OFF
+          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DHICAL_INSTALL_CLI=ON -DHICAL_WITH_HTTP2=OFF -DHICAL_WITH_HTTP_CLIENT=OFF
 
       - name: Build (MSYS2)
         if: matrix.compiler == 'msys2-gcc'
@@ -647,6 +682,13 @@ jobs:
             echo "First attempt failed (likely MinGW exit-time segfault), retrying..."
             ctest --test-dir build --no-tests=error --output-on-failure --timeout 60 -j4 -E "${{ env.CI_TEST_EXCLUDE }}"
           }
+
+      - name: 安装 CLI 并测试生成的工程（MSYS2）
+        if: matrix.compiler == 'msys2-gcc'
+        shell: msys2 {0}
+        run: |
+          python scripts/check_hical_cli.py --hical-build-dir build --work-dir build-cli-check \
+            --config Release --ascii-build-paths -- -G Ninja -DCMAKE_CXX_COMPILER=g++
 
       # ── Windows MSVC ──
       - name: Install ninja (MSVC)
@@ -672,6 +714,7 @@ jobs:
         run: >
           cmake -B build
           -DCMAKE_BUILD_TYPE=Release
+          -DHICAL_INSTALL_CLI=ON
           -DHICAL_WITH_HTTP2=OFF -DHICAL_WITH_HTTP_CLIENT=OFF
           -DCMAKE_C_COMPILER_LAUNCHER=ccache
           -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
@@ -696,6 +739,18 @@ jobs:
           ctest --test-dir build --no-tests=error --output-on-failure --timeout 60 -j4 -C Release -E "${{ env.CI_TEST_EXCLUDE }}"
         env:
           HICAL_REQUIRE_SSL_CERTS: "1"
+
+      - name: 安装 CLI 并测试生成的工程（MSVC）
+        if: matrix.compiler == 'msvc'
+        run: |
+          $producerBuild = (Resolve-Path -LiteralPath build).Path.Replace('\', '/')
+          $checkArgs = @(
+            '--hical-build-dir', 'build', '--work-dir', 'build-cli-check', '--config', 'Release', '--',
+            '-DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake',
+            "-DVCPKG_INSTALLED_DIR=$producerBuild/vcpkg_installed",
+            '-DVCPKG_MANIFEST_MODE=OFF'
+          )
+          python scripts/check_hical_cli.py @checkArgs
 
   # ── 中间件 profiling 构建（打开 HICAL_ENABLE_MIDDLEWARE_PROFILING） ──
   # 这个选项默认 OFF，上面那个 build job 从来不开它，于是 tests/test_middleware.cpp 里
@@ -740,6 +795,7 @@ jobs:
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
             -DHICAL_ENABLE_MIDDLEWARE_PROFILING=ON \
+            -DHICAL_INSTALL_CLI=OFF \
             -DHICAL_DISABLE_IO_URING=ON \
             -DHICAL_WITH_HTTP2=OFF \
             -DHICAL_WITH_HTTP_CLIENT=OFF

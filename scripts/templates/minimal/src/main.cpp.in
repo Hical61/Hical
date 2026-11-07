@@ -1,0 +1,40 @@
+/**
+ * @file main.cpp
+ * @brief 在 127.0.0.1 上启动示例服务
+ */
+
+#include "app.h"
+
+#include <hical/core/HttpServer.h>
+#include <hical/core/Log.h>
+
+#include <cstdint>
+#include <cstdlib>
+#include <exception>
+
+namespace
+{
+	constexpr std::uint16_t kDefaultPort = 8080;
+} // namespace
+
+/**
+ * @brief 启动服务。按 Ctrl+C 停止。
+ * @return 正常退出返回 EXIT_SUCCESS，启动或运行失败返回 EXIT_FAILURE
+ */
+int main()
+{
+	try
+	{
+		hical::HttpServer server;
+		server.listen("127.0.0.1", kDefaultPort);
+		app::registerRoutes(server.router());
+		HICAL_LOG_INFO("准备监听 http://127.0.0.1:{}", kDefaultPort);
+		server.start();
+		return EXIT_SUCCESS;
+	}
+	catch (const std::exception& error)
+	{
+		HICAL_LOG_ERROR("服务运行失败：{}", error.what());
+		return EXIT_FAILURE;
+	}
+}

@@ -1,6 +1,6 @@
 # Hical 项目代码结构
 
-> 最后核对：2026-10-24；HTTP/2 仍为待最终验收的候选实现
+> 项目结构核对于 2026-10-24，CLI 部分补于 2026-11-05。各平台验证进度见 [HTTP/2 指南](http2-guide.md)和 [CLI 指南](cli-guide.md)。
 
 ## 项目概述
 
@@ -27,7 +27,8 @@ hical/
 │
 ├── cmake/                      # CMake 包配置模板
 │   ├── hicalConfig.cmake.in    #   find_package(hical) 的 config 模板
-│   └── FindNghttp2.cmake       #   可选静态 nghttp2 的版本与消费接口探测
+│   ├── FindNghttp2.cmake       #   可选静态 nghttp2 的版本与消费接口探测
+│   └── HicalCli.cmake         #   HICAL_INSTALL_CLI=ON 时安装 CLI
 │
 ├── .github/                    # GitHub 社区与 CI 配置
 │   ├── workflows/              #   CI 工作流
@@ -69,6 +70,13 @@ hical/
 │   ├── bench*.Dockerfile       #   压测镜像（wrk / pgo / server）
 │   ├── docker-compose.bench.yml
 │   └── bench_main.cpp          #   压测服务器真实源码（见下方注意事项）
+├── scripts/                    # 开发工具
+│   ├── hical.py                #   hical new 生成器，只用 Python 标准库
+│   ├── templates/minimal/      #   C++20 工程模板，自带 CMake 和 CTest
+│   ├── cli/                    #   hical.in（POSIX）和 hical_windows.c（Windows）
+│   ├── test_hical_cli.py       #   测试文件生成和失败后的清理
+│   ├── test_hical_cli_windows.py # 测试 PowerShell 和 cmd 调用时的参数传递
+│   └── check_hical_cli.py      #   安装、搬移、生成后独立编译和测试
 └── docs/                       # 文档
 ```
 
@@ -299,6 +307,7 @@ hical/
     ├── build_and_test_guide.md # 编译与测试指南
     ├── quickstart.md           # 5 分钟快速上手（英文）
     ├── quickstart_cn.md        # 5 分钟快速上手（中文）
+    ├── cli-guide.md            # 生成工程、安装命令和运行测试
     ├── examples_guide.md       # 9 个由浅入深的完整示例讲解
     ├── integration_guide.md    # 集成指南（vcpkg overlay / FetchContent / cmake install）
     ├── coroutine-guide.md      # 协程入门教程
@@ -318,11 +327,15 @@ hical/
 | ----------------------- | ---- | -------------------------------------------------------------------------------- |
 | `HICAL_BUILD_TESTS`     | ON   | 构建 [tests/](../tests/) 单元测试                                                |
 | `HICAL_BUILD_EXAMPLES`  | ON   | 构建 [examples/](../examples/) 示例程序                                          |
+| `HICAL_INSTALL_CLI`     | OFF  | 安装 POSIX `hical` 或 Windows `hical.exe`，一并安装脚本和模板。运行生成器需要 Python 3.10+ |
 | `HICAL_WITH_BENCHMARK`  | OFF  | 启用 Google Benchmark 微基准（`tests/benchmarks/` 子目录）                       |
 | `HICAL_BUILD_HTTPARENA` | OFF  | 构建 HttpArena 参赛服务器（联动开启 `HICAL_WITH_DATABASE` + `HICAL_WITH_PGSQL`） |
 | `HICAL_BUILD_BENCH`     | OFF  | 构建压测服务器                                                                   |
 | `HICAL_BUILD_TFB`       | OFF  | 构建 TechEmpower Framework Benchmarks 服务器                                     |
 | `HICAL_BUILD_DEPLOY`    | OFF  | 构建生产部署服务器                                                               |
+
+CLI 是单独安装的开发工具。命令装在 `bin/`，脚本和模板在 `share/hical/cli/`。
+只有生成工程时需要 Python。源码入口和安装步骤见 [CLI 使用指南](cli-guide.md)。
 
 **可选模块**
 
@@ -481,6 +494,7 @@ hical/
 | 定时与输出  | `TimerService` / `JsonWriter`                                                                                                         | 集中式定时器（一个 timer 兜住所有 sleep）+ 零 DOM 增量 JSON writer                 |
 | HTTP 客户端 | `HttpClient` / `HttpClientPool`                                                                                                       | 默认 H1、可选 TLS H2；每 loop 的连接池，独占租借与共享调度分开 |
 | HTTP/2 候选 | `HttpProtocol` / `Http2Options` / `core/http2/` / `Http2ClientSession`                                                                 | TLS ALPN、有限资源与阶段期限、流取消及业务自然收尾；仍待最终验收 |
+| 开发工具 | `scripts/hical.py` / `scripts/templates/minimal/` / `cmake/HicalCli.cmake` | `hical new` 生成自带 CTest 的 C++20 工程，命令可单独安装 |
 
 ## 命名风格
 

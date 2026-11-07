@@ -1,0 +1,22 @@
+cmake_minimum_required(VERSION 3.28)
+project(@PROJECT_NAME@ LANGUAGES CXX)
+
+set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+find_package(hical 2.7.2 CONFIG REQUIRED)
+
+add_library(@TARGET_NAME@_app STATIC src/app.cpp)
+target_include_directories(@TARGET_NAME@_app PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src")
+target_compile_features(@TARGET_NAME@_app PUBLIC cxx_std_20)
+target_link_libraries(@TARGET_NAME@_app PUBLIC hical::hical_core)
+
+add_executable(@TARGET_NAME@_server src/main.cpp)
+target_link_libraries(@TARGET_NAME@_server PRIVATE @TARGET_NAME@_app)
+
+include(CTest)
+if(BUILD_TESTING)
+    add_executable(@TARGET_NAME@_test tests/test_app.cpp)
+    target_link_libraries(@TARGET_NAME@_test PRIVATE @TARGET_NAME@_app)
+    add_test(NAME @TARGET_NAME@.routes COMMAND @TARGET_NAME@_test)
+endif()

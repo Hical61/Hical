@@ -1,0 +1,47 @@
+# @PROJECT_NAME@
+
+这个示例用 Hical 启动一个 C++20 HTTP 服务，默认只监听 `127.0.0.1:8080`。
+
+## 准备依赖
+
+先装好 CMake 3.28 或更新版本、支持 C++20 的编译器，以及 Hical 2.7.2 或更新的 2.x 版本。
+编译时沿用安装 Hical 时的工具链和依赖，避免 ABI 不匹配。Python 只在生成工程时用到，示例测试也不需要 GTest。
+
+用 MSYS2 MinGW 时，建议把 Hical 和待编译的工程都放在只含 ASCII 字符的路径下，可以有空格。实测链接器打不开中文路径下的库，CLI 在中文目录里生成文件没有问题。
+
+## 配置、构建和测试
+
+把 `/path/to/hical-prefix` 换成 Hical 的安装目录。依赖如果装在别处，也把对应的安装目录加到 `CMAKE_PREFIX_PATH`。
+
+```sh
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="/path/to/hical-prefix"
+cmake --build build --config Release
+ctest --test-dir build -C Release -N
+ctest --test-dir build -C Release --no-tests=error --output-on-failure
+```
+
+用 Visual Studio 时，构建用 `--config Release`，跑测试用 `-C Release`。用 Ninja 或 Make 时，配置时设置 `-DCMAKE_BUILD_TYPE=Release`。
+需要指定生成器、编译器或包管理器工具链的话，在第一次配置时传入对应的 CMake 参数。只想编译服务，可以加 `-DBUILD_TESTING=OFF`。
+
+找不到 `hicalConfig.cmake` 时，先确认 Hical 已安装。可以设置 `CMAKE_PREFIX_PATH`，也可以用
+`-Dhical_DIR="/path/to/hical-prefix/lib/cmake/hical"` 指向安装后的包配置目录。
+
+## 启动服务
+
+Linux/macOS：
+
+```sh
+./build/@TARGET_NAME@_server
+```
+
+Windows 单配置构建：
+
+```powershell
+.\build\@TARGET_NAME@_server.exe
+```
+
+Visual Studio 多配置构建使用 `.\build\Release\@TARGET_NAME@_server.exe`。
+打开 `http://127.0.0.1:8080/`，会看到 `Hical 已启动`。按 Ctrl+C 停止服务。
+如果 8080 已被占用，改一下 `src/main.cpp` 里的 `kDefaultPort`，再重新编译。
+
+服务和测试都通过 `src/app.cpp` 里的 `registerRoutes()` 注册路由。测试直接调用 `Router::dispatchSync()` 检查状态码和正文，不用起服务，Release 构建下也会检查。

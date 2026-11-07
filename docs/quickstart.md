@@ -8,6 +8,8 @@ English | [简体中文](quickstart_cn.md)
 
 ## 1. Prerequisites
 
+To start with a project of your own, run `python scripts/hical.py new demo-api`. The generator needs Python 3.10 or later. The generated C++20 project builds with CMake and runs its test through CTest without Python or GTest. See the [CLI guide](cli-guide.md) for installation and toolchain requirements.
+
 | Component    | Minimum Version                                            |
 | ------------ | ---------------------------------------------------------- |
 | C++ Compiler | GCC 14+ / Clang 20+ / MSVC 2022+ (C++20 coroutine support) |

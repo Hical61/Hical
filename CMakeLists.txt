@@ -8,6 +8,9 @@ option(HICAL_ENABLE_REFLECTION "Enable C++26 reflection (requires a compiler wit
 option(HICAL_BUILD_TESTS    "Build unit tests"       ON)
 option(HICAL_BUILD_EXAMPLES "Build example programs" ON)
 
+# 只有运行 hical 生成工程时才需要 Python。
+option(HICAL_INSTALL_CLI "安装 hical 命令和项目模板" OFF)
+
 # 内存池追踪统计（关闭后 TrackedResource 零开销透传，不记录分配/释放计数）
 option(HICAL_ENABLE_MEMORY_TRACKING "Enable memory pool allocation/deallocation tracking statistics" ON)
 
@@ -269,4 +272,8 @@ install(
 
 if(HICAL_WITH_HTTP2)
     install(FILES cmake/FindNghttp2.cmake DESTINATION lib/cmake/hical)
+endif()
+
+if(HICAL_INSTALL_CLI)
+    include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/HicalCli.cmake")
 endif()

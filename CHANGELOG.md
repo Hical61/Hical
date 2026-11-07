@@ -10,6 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **用 `hical new` 建工程**：可以直接运行 `python scripts/hical.py new demo-api`，也可以打开默认关闭的 `HICAL_INSTALL_CLI`，在 POSIX 上装 `hical`，在 Windows 上装 `hical.exe`。整个安装前缀可以搬走，生成目录也可以带中文和空格。生成的 C++20 工程链接已安装的 `hical::hical_core`，自带 CTest 路由测试，Release 下也会检查状态码和正文。只有生成这一步用到 Python。目标路径已存在时直接报错，中途写入失败时按清单清理这次创建的文件和空目录。
+  - Windows 最初试过批处理入口，PowerShell 传进来的 `R&D` 会被再次解析，可能把工程建到别处。现在用原生 `hical.exe` 直接把 Unicode 参数交给 Python，安装检查会跑一遍 PowerShell 回归。输出仍用当前编码，遇到扩展汉字或 emoji 显示不了就用转义，避免工程明明已生成，打印提示时却抛出 `UnicodeEncodeError` 并返回失败。
+  - 本地用 MSYS2 验证了安装、搬移和独立工程构建。Linux、MSVC 和最低 CMake 版本还要看 CI 结果。MinGW 链接器在中文路径下可能找不到静态库，排查方法见 [CLI 指南](docs/cli-guide.md)。目前只有 `new`，`gen`、`dev` 和热重载都还没加。
+
 - **HTTP/2 双端候选实现**：新增默认关闭的 `HICAL_WITH_HTTP2`，基于静态 nghttp2 `>=1.70.0,<2` 和 TLS ALPN，复用现有路由、请求、响应及中间件。服务端支持有界多流、独立尾字段、文件输出与排空；可选客户端支持 H1、自动协商、强制 H2。当前仍在完成互操作、压力及跨平台验收，使用方式与范围见 [HTTP/2 使用指南](docs/http2-guide.md)。
 
 ### Changed

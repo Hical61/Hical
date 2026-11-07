@@ -18,7 +18,7 @@
 
 > **Status**: Stable — production-ready, follows [Semantic Versioning](https://semver.org/).
 
-English | [简体中文](README_CN.md)
+English | [Simplified Chinese](README_CN.md)
 
 ## Why Hical?
 
@@ -84,11 +84,13 @@ cd benchmark && docker compose up
 - **WebSocket** — permessage-deflate compression, Hub broadcast, subprotocol negotiation, heartbeat
 - **Database middleware** — Coroutine connection pool + auto-transaction + slow query detection (Boost.MySQL)
 - **Production-ready** — SSL/TLS, SO_REUSEPORT multi-acceptor, static file ETag/304, Docker deployment
-- **可选 HTTP/2 候选实现** — TLS ALPN、单连接多路复用、现有路由与中间件复用；服务端和客户端均需显式启用
+- **HTTP/2 preview** — Multiplex requests over TLS with ALPN. The server uses the same routes and middleware as HTTP/1. Enable HTTP/2 on each side you use.
 
 > Full feature list in [Architecture](docs/architecture.md).
 
 ## Quick Start
+
+To start with a CMake project and a CTest test, run `python scripts/hical.py new demo-api`. Only the generator needs Python 3.10 or later. See the [CLI guide](docs/cli-guide.md) to install the `hical` command.
 
 ```cpp
 #include "core/HttpServer.h"
@@ -124,9 +126,9 @@ curl http://localhost:8080/
 | Dependency                       | Notes                                                           |
 | -------------------------------- | --------------------------------------------------------------- |
 | C++20/26                         | C++26 optional (reflection)                                     |
-| Boost >= 1.82                    | Asio, System, JSON; DB >= 1.85；生产 HTTP 客户端 >= 1.86        |
+| Boost >= 1.82                    | Asio, System, JSON. The DB module needs 1.85+, and the HTTP client needs 1.86+. |
 | OpenSSL                          | Required                                                        |
-| nghttp2 >= 1.70.0, < 2           | 仅启用 HTTP/2 时需要，使用静态 C 库；HTTP/2 需 OpenSSL >= 1.1.1 |
+| nghttp2 >= 1.70.0, < 2           | For HTTP/2, use the static C library and OpenSSL 1.1.1 or later. |
 | zlib                             | Required (WebSocket compression)                                |
 | CMake >= 3.28                    | Build system                                                    |
 | GCC 14+ / Clang 20+ / MSVC 2022+ | Compiler                                                        |
@@ -154,13 +156,13 @@ Optional modules:
 cmake -B build -DHICAL_WITH_DATABASE=ON ...    # Database middleware
 cmake -B build -DHICAL_WITH_OPENAPI=OFF ...    # Disable OpenAPI
 cmake -B build -DHICAL_ENABLE_REFLECTION=ON ...# C++26 Reflection
-cmake -B build -DHICAL_WITH_HTTP_CLIENT=ON ...# 协程客户端，默认 OFF，需 Boost >= 1.86
-cmake -B build -DHICAL_WITH_HTTP2=ON ...      # TLS HTTP/2，默认 OFF，需静态 nghttp2
+cmake -B build -DHICAL_WITH_HTTP_CLIENT=ON ... # Coroutine client, OFF by default, requires Boost >= 1.86
+cmake -B build -DHICAL_WITH_HTTP2=ON ...      # TLS HTTP/2, OFF by default, requires static nghttp2
 ```
 
-HTTP/2 与客户端开关可独立组合。服务端还需在启动前调用 `enableSsl()` 和 `enableHttp2()`；客户端默认 `hHttp1Only`，可选择 `hNegotiateHttp2` 或 `hHttp2Only`。HTTP/2 不包含 h2c、gRPC 或 WS/SSE 升级，完整示例见 [HTTP/2 使用指南](docs/http2-guide.md)。
+The HTTP/2 and HTTP client build switches are separate. On the server, call `enableSsl()` and `enableHttp2()` before startup. The client uses `hHttp1Only` by default. With HTTP/2 built in, choose `hNegotiateHttp2` or `hHttp2Only`. The preview runs over TLS and leaves out h2c, gRPC, and WebSocket/SSE upgrades. See the [HTTP/2 guide](docs/http2-guide.md) for examples.
 
-当前候选收紧了连接池重试：POST/PATCH 默认不自动重放，其他允许的方法最多重试一次，仍须满足协议证据或陈旧连接的瞬态错误条件。相对 v2.7.2 的 H1 行为变化与完整边界见 [Unreleased](CHANGELOG.md#unreleased) 和 [重试说明](docs/http2-guide.md#连接池与重试边界)。
+The pool skips automatic retries for POST and PATCH. It can retry eligible methods once. On HTTP/2, that means certain transient failures before sending or a protocol signal that the server did not process the request. On HTTP/1.1, the first attempt must hit a stale reused connection and fail with a qualifying transient error before any response status arrives. The [Unreleased changelog](CHANGELOG.md#unreleased) covers the HTTP/1.1 changes since v2.7.2. The [connection pool guide](docs/http2-guide.md#%E8%BF%9E%E6%8E%A5%E6%B1%A0%E4%B8%8E%E9%87%8D%E8%AF%95%E8%BE%B9%E7%95%8C) has the full rules.
 
 ### Docker
 
@@ -210,7 +212,7 @@ target_link_libraries(my_app PRIVATE hical::hical_core)
 - [Build & Test](docs/build_and_test_guide.md)
 - [Examples Guide](docs/examples_guide.md)
 - [API Reference](docs/api_reference.md)
-- [HTTP/2 使用指南](docs/http2-guide.md)
+- [HTTP/2 Guide](docs/http2-guide.md)
 - [Architecture](docs/architecture.md)
 - [Integration Guide](docs/integration_guide.md)
 - [Performance Report](docs/performance_report.md)
