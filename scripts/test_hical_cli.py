@@ -67,6 +67,20 @@ class ScaffoldCliTest(unittest.TestCase):
                 self.skipTest("当前账户无创建符号链接的权限")
             raise
 
+    def normalizePath(self, path: Path) -> str:
+        """把路径字符串归一化，去掉 Windows 的扩展前缀再统一大小写和分隔符。
+
+        Windows 上 readlink 拿到的是重解析点里存的 NT 路径，用绝对路径建的链接会带回
+        \\\\?\\ 前缀，跟创建时传进来的普通绝对路径字符串对不上，直接比必挂；UNC 路径
+        还多一层 \\\\?\\UNC\\。断言两侧都走这里，免得一边带前缀一边不带。
+        """
+        target = str(path)
+        if target.startswith("\\\\?\\UNC\\"):
+            target = "\\\\" + target[len("\\\\?\\UNC\\"):]
+        elif target.startswith("\\\\?\\"):
+            target = target[len("\\\\?\\"):]
+        return os.path.normcase(target)
+
     def test_help_succeeds_without_creating_files(self) -> None:
         for arguments in (("--help",), ("new", "--help")):
             with self.subTest(arguments=arguments):
@@ -209,7 +223,7 @@ class ScaffoldCliTest(unittest.TestCase):
         result = self.runCli("new", "demo")
         self.assertEqual(result.returncode, 1, result.stderr)
         self.assertTrue(link.is_symlink())
-        self.assertEqual(link.readlink(), real)
+        self.assertEqual(self.normalizePath(link.readlink()), self.normalizePath(real))
         self.assertEqual(self.fileContents(real), {"user.txt": b"untouched"})
 
     def test_existing_dangling_symlink_is_preserved(self) -> None:
@@ -219,7 +233,7 @@ class ScaffoldCliTest(unittest.TestCase):
         result = self.runCli("new", "demo")
         self.assertEqual(result.returncode, 1, result.stderr)
         self.assertTrue(link.is_symlink())
-        self.assertEqual(link.readlink(), missing)
+        self.assertEqual(self.normalizePath(link.readlink()), self.normalizePath(missing))
         self.assertFalse(missing.exists())
 
     def test_symlink_loop_parent_returns_one_without_traceback(self) -> None:

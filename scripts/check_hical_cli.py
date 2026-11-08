@@ -19,6 +19,23 @@ MOVE_RETRY_SECONDS = 5.0
 MOVE_POLL_SECONDS = 0.1
 
 
+def configureOutput() -> None:
+    """让标准输出打得出中文提示。
+
+    CI 的 Windows runner 是英文系统，stdout 重定向到管道时编码是 cp1252，直接 print
+    中文会抛 UnicodeEncodeError，检查还没跑起来就挂了。编码装得下中文就不动；装不下
+    就换成 UTF-8，日志里还能看到中文，个别编码不出来的字符转义掉别崩。
+    """
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is None:
+            continue
+        try:
+            "中文".encode(stream.encoding or "utf-8")
+        except (UnicodeEncodeError, LookupError):
+            reconfigure(encoding="utf-8", errors="backslashreplace")
+
+
 def runCommand(command: list[str], cwd: Path, log, expected: int = 0, environment=None) -> str:
     """运行命令，把输出写入日志后返回。退出码不符时抛出异常。"""
     heading = f"\n执行：{subprocess.list2cmdline(command)}\n"
@@ -154,6 +171,8 @@ def verifyInstallation(options) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     """运行安装检查，成功返回 0，失败返回 1。`--` 后的参数传给生成工程的 CMake。"""
+    # 先配好输出编码，argparse 的提示也是中文，晚了就来不及。
+    configureOutput()
     arguments = list(sys.argv[1:] if argv is None else argv)
     separator = arguments.index("--") if "--" in arguments else len(arguments)
     parser = argparse.ArgumentParser(description=__doc__)
