@@ -33,7 +33,11 @@ exit $LASTEXITCODE
 POWERSHELL_BARE_CALL = POWERSHELL_CALL.replace(
     "$launcher = [string]$data.launcher\n& $launcher @arguments",
     "$resolved = (Get-Command hical -CommandType Application | Select-Object -First 1).Source\n"
-    "if ($resolved -ne [string]$data.launcher) { throw ('PowerShell 找到的是另一个 hical：' + $resolved) }\n"
+    # Get-Command 拼出来的是单反斜杠结尾加文件名，跟传进去的路径分隔符不一定一样，
+    # 先归一化再比，否则 MSYS2 的 Python 传正斜杠就会误报“找到的是另一个”。
+    "if ([IO.Path]::GetFullPath($resolved) -ne [IO.Path]::GetFullPath([string]$data.launcher)) {\n"
+    "    throw ('PowerShell 找到的是另一个 hical：' + $resolved)\n"
+    "}\n"
     "hical @arguments",
 )
 
@@ -170,9 +174,12 @@ class WindowsCliLauncherTest(unittest.TestCase):
         # 直接把命令送进 cmd 的标准输入，模拟在 cmd 窗口里敲命令。
         command = ('"%HICAL_WINDOWS_CLI_LAUNCHER%" new demo '
                    '--directory "%HICAL_WINDOWS_CLI_PARENT%"\nexit /b %errorlevel%\n')
+        # cmd.exe 的路径要反斜杠，MSYS2 的 Python 用正斜杠启动它，连 ver 都会报
+        # “文件名、目录名或卷标语法不正确”，后面的命令自然全挂。
+        systemRoot = os.environ["SystemRoot"].replace("/", "\\")
         for expectedCode in (0, 1):
             result = subprocess.run(
-                [str(Path(os.environ["SystemRoot"]) / "System32" / "cmd.exe"), "/d", "/q", "/v:off"],
+                [systemRoot + "\\System32\\cmd.exe", "/d", "/q", "/v:off"],
                 input=command, cwd=self.directory, env=environment, capture_output=True,
                 text=True, encoding="utf-8", errors="replace", timeout=15, check=False)
             self.assertEqual(result.returncode, expectedCode, result.stdout + result.stderr)
@@ -199,7 +206,9 @@ class WindowsCliLauncherTest(unittest.TestCase):
         self.assertIn("错误：找不到 Python", result.stderr)
 
     def test_extended_launcher_path_finds_adjacent_script(self) -> None:
-        normalPath = str(self.launcher)
+        # 扩展路径前缀 \\?\ 只认反斜杠，正斜杠会直接报“找不到文件”。Path.resolve()
+        # 在 MSYS2 的 Python 里返回正斜杠，所以先统一换掉再拼前缀。
+        normalPath = str(self.launcher).replace("/", "\\")
         if normalPath.startswith("\\\\?\\"):
             extendedPath = normalPath
         elif normalPath.startswith("\\\\"):
