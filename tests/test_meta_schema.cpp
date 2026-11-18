@@ -32,7 +32,8 @@ namespace
 	};
 } // namespace
 
-TEST(MetaSchemaTest, 生成_基本类型与必填)
+// 检查基本类型和必填字段在 Schema 里的写法。
+TEST(MetaSchemaTest, GeneratesPrimitiveProperties)
 {
 	const auto schema = hical::meta::jsonSchema<SchemaDto>();
 	const auto& props = schema.at("properties").as_object();
@@ -42,7 +43,8 @@ TEST(MetaSchemaTest, 生成_基本类型与必填)
 	EXPECT_EQ(props.at("items").at("type").as_string(), "array");
 }
 
-TEST(MetaSchemaTest, 生成_optional不进required)
+// optional 字段不会出现在 required 列表里。
+TEST(MetaSchemaTest, ExcludesOptionalFieldsFromRequired)
 {
 	const auto schema = hical::meta::jsonSchema<SchemaDto>();
 	const auto& required = schema.at("required").as_array();
@@ -54,7 +56,8 @@ TEST(MetaSchemaTest, 生成_optional不进required)
 	EXPECT_EQ(schema.at("properties").as_object().at("maybe").at("nullable").as_bool(), true);
 }
 
-TEST(MetaSchemaTest, 枚举特化生成enum数组)
+// 枚举的 Schema 特化会列出允许的值。
+TEST(MetaSchemaTest, GeneratesEnumValuesFromSpecialization)
 {
 	boost::json::object prop;
 	hical::schema::kSchema<Color>(prop);
@@ -65,7 +68,8 @@ TEST(MetaSchemaTest, 枚举特化生成enum数组)
 
 #else
 
-TEST(MetaSchemaTest, 反射不可用_跳过)
+// 当前编译配置不支持原生反射时跳过。
+TEST(MetaSchemaTest, SkipsWhenReflectionIsUnavailable)
 {
 	GTEST_SKIP() << "当前编译器不支持 C++26 反射（HICAL_HAS_REFLECTION == 0）";
 }

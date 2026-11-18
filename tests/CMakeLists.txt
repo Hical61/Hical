@@ -151,6 +151,61 @@ hical_add_test(test_log_admin)            # LogAdmin 动态级别端点
 # --- OpenAPI（可选，仅当 HICAL_WITH_OPENAPI=ON）---
 if(HICAL_WITH_OPENAPI)
     hical_add_test(test_openapi)          # OpenAPI 自动生成
+    hical_add_test(test_json_contract)    # 检查宏轨和原生轨的 JSON 契约
+    target_compile_definitions(test_json_contract PRIVATE
+        HICAL_JSON_CONTRACT_EXPECT_NATIVE=$<BOOL:${HICAL_ENABLE_REFLECTION}>)
+endif()
+
+# --- 约束装饰器的编译期拦截（仅宏轨）---
+# MIN/MAX/NOT_EMPTY/PATTERN/LENGTH 用错字段类型时靠 static_assert 拦，运行时不再检查。
+# 这几条 static_assert 删掉或放宽，普通测试照样绿，所以这里用编译探测把「必须编不过」钉住。
+if(NOT HICAL_ENABLE_REFLECTION)
+    function(hical_expect_compile_failure name body)
+        # 只编不链：默认的 try_compile 会去链接，探针没有 main 时必然失败，
+        # 那样连「正确代码能过」都验证不了，探测就失去意义了。
+        set(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)
+        try_compile(compiled SOURCE_FROM_CONTENT "${name}.cpp" "${body}"
+            NO_CACHE
+            CXX_STANDARD 20
+            CXX_STANDARD_REQUIRED ON
+            CXX_EXTENSIONS OFF
+            CMAKE_FLAGS
+                "-DINCLUDE_DIRECTORIES=${CMAKE_SOURCE_DIR}/src;${Boost_INCLUDE_DIRS}"
+                # 主工程关了模块扫描，try_compile 的子工程不继承，GCC 下会卡在 .modmap。
+                "-DCMAKE_CXX_SCAN_FOR_MODULES=OFF"
+            OUTPUT_VARIABLE probeOutput)
+        if(compiled)
+            message(FATAL_ERROR
+                "约束装饰器应该拒绝这段代码，但它编过了：${name}。"
+                "检查 MetaJson.h 里 HICAL_JSON_CHECK_ARITHMETIC_ / HICAL_JSON_CHECK_STRING_ 是否还在。")
+        endif()
+    endfunction()
+
+    hical_expect_compile_failure(hical_min_on_string [=[
+#include "core/MetaJson.h"
+struct WrongType
+{
+    std::string label;
+    HICAL_JSON(WrongType, MIN(label, 1))
+};
+]=])
+    hical_expect_compile_failure(hical_notempty_on_int [=[
+#include "core/MetaJson.h"
+struct WrongType
+{
+    int count;
+    HICAL_JSON(WrongType, NOT_EMPTY(count))
+};
+]=])
+    hical_expect_compile_failure(hical_pattern_on_int [=[
+#include "core/MetaJson.h"
+struct WrongType
+{
+    int count;
+    HICAL_JSON(WrongType, PATTERN(count, "^x$"))
+};
+]=])
+    message(STATUS "约束装饰器的编译期拦截已确认（3 个反例都编不过）")
 endif()
 
 # --- 数据库中间件（可选，仅当 HICAL_WITH_DATABASE=ON）---

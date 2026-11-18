@@ -26,7 +26,8 @@ namespace
 	};
 } // namespace
 
-TEST(CollectMemberTest, 收集_包含基类成员)
+// 同时收集当前类和基类的成员。
+TEST(CollectMemberTest, CollectsInheritedAndOwnMembers)
 {
 	constexpr auto ctx = std::meta::access_context::unprivileged();
 
@@ -59,7 +60,8 @@ TEST(CollectMemberTest, 收集_包含基类成员)
 
 #else
 
-TEST(CollectMemberTest, 反射不可用_跳过)
+// 当前编译配置不支持原生反射时跳过。
+TEST(CollectMemberTest, SkipsWhenReflectionIsUnavailable)
 {
 	GTEST_SKIP() << "当前编译器不支持 C++26 反射（HICAL_HAS_REFLECTION == 0）";
 }

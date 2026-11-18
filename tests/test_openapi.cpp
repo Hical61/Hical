@@ -1,4 +1,5 @@
 /**
+ * @file test_openapi.cpp
  * @brief OpenAPI 3.0 自动生成全链路测试
  * 覆盖：Schema 生成、Registry、文档组装、端点暴露
  */
@@ -11,10 +12,299 @@
 #include "core/OpenApiRegistry.h"
 #include "core/OpenApiDocument.h"
 #include "core/OpenApiEndpoint.h"
+#include <cstdint>
+#include <limits>
+#include <memory_resource>
+#include <optional>
 
 using namespace hical;
 using namespace hical::meta;
 using namespace hical::meta::openapi;
+
+struct MergedSchemaDTO
+{
+	std::string name;
+	int capacity;
+	HICAL_JSON(MergedSchemaDTO,
+			   ALIAS(name, "room_name"),
+			   REQUIRED(name),
+			   NOT_EMPTY(name),
+			   REQUIRED(capacity),
+			   MIN(capacity, 1),
+			   MAX(capacity, 100))
+};
+
+TEST(OpenApiContractTest, MergedFieldsUseFinalNamesAndSingleRequiredEntry)
+{
+	auto schema = jsonSchema<MergedSchemaDTO>();
+	const auto& properties = schema.at("properties").as_object();
+	EXPECT_EQ(properties.size(), 2);
+	EXPECT_TRUE(properties.contains("room_name"));
+	EXPECT_FALSE(properties.contains("name"));
+	EXPECT_FALSE(properties.at("capacity").as_object().contains("maximum"));
+	const auto& required = schema.at("required").as_array();
+	ASSERT_EQ(required.size(), 2);
+	EXPECT_EQ(required[0], "room_name");
+	EXPECT_EQ(required[1], "capacity");
+}
+
+struct ContractRoomDTO
+{
+	std::string name;
+	std::int32_t capacity;
+	std::string note;
+	std::string secret;
+	HICAL_JSON(ContractRoomDTO,
+			   ALIAS(name, "room_name"),
+			   REQUIRED(name),
+			   NOT_EMPTY(name),
+			   REQUIRED(capacity),
+			   MIN(capacity, 1),
+			   MAX(capacity, 100),
+			   note,
+			   HICAL_IGNORE(secret))
+};
+HICAL_SCHEMA_NAME(ContractRoomDTO, "ContractRoom")
+
+struct ContractRoomEnvelope
+{
+	ContractRoomDTO featured;
+	std::vector<ContractRoomDTO> rooms;
+	HICAL_JSON(ContractRoomEnvelope, REQUIRED(featured), rooms)
+};
+
+TEST(OpenApiContractTest, InputAndOutputDescribeDifferentRules)
+{
+	const auto input = inputSchema<ContractRoomDTO>();
+	const auto output = outputSchema<ContractRoomDTO>();
+	EXPECT_EQ(input.at("required"), (boost::json::array {"room_name", "capacity"}));
+	EXPECT_EQ(output.at("required"), (boost::json::array {"room_name", "capacity", "note"}));
+	const auto& inputProps = input.at("properties").as_object();
+	const auto& outputProps = output.at("properties").as_object();
+	EXPECT_EQ(inputProps.size(), 3);
+	EXPECT_EQ(outputProps.size(), 3);
+	EXPECT_FALSE(inputProps.contains("secret"));
+	EXPECT_FALSE(outputProps.contains("secret"));
+	EXPECT_EQ(inputProps.at("room_name"), (boost::json::object {{"type", "string"}, {"minLength", 1}}));
+	EXPECT_EQ(outputProps.at("room_name"), (boost::json::object {{"type", "string"}}));
+	const auto& inputCapacity = inputProps.at("capacity").as_object();
+	const auto& outputCapacity = outputProps.at("capacity").as_object();
+	EXPECT_EQ(inputCapacity.at("type"), "integer");
+	EXPECT_EQ(inputCapacity.at("format"), "int32");
+	EXPECT_EQ(inputCapacity.at("minimum"), 1);
+	EXPECT_EQ(inputCapacity.at("maximum"), 100);
+	EXPECT_EQ(outputCapacity.at("minimum"), std::numeric_limits<std::int32_t>::min());
+	EXPECT_EQ(outputCapacity.at("maximum"), std::numeric_limits<std::int32_t>::max());
+	const auto response = toJson(ContractRoomDTO {"大厅", 101, "", "hidden"});
+	EXPECT_EQ(response.at("capacity"), 101);
+	EXPECT_THROW((void)fromJson<ContractRoomDTO>(response), std::runtime_error);
+}
+
+TEST(OpenApiContractTest, InlinesNestedObjectsAndListElements)
+{
+	const auto input = inputSchema<ContractRoomEnvelope>();
+	const auto output = outputSchema<ContractRoomEnvelope>();
+	EXPECT_EQ(input.at("required"), (boost::json::array {"featured"}));
+	EXPECT_EQ(output.at("required"), (boost::json::array {"featured", "rooms"}));
+	const auto& inputProps = input.at("properties").as_object();
+	const auto& outputProps = output.at("properties").as_object();
+	const auto& featured = inputProps.at("featured").as_object();
+	EXPECT_EQ(featured.at("type"), "object");
+	EXPECT_FALSE(featured.contains("$ref"));
+	EXPECT_EQ(featured.at("required"), (boost::json::array {"room_name", "capacity"}));
+	const auto& rooms = outputProps.at("rooms").as_object();
+	EXPECT_EQ(rooms.at("type"), "array");
+	const auto& item = rooms.at("items").as_object();
+	EXPECT_EQ(item.at("type"), "object");
+	EXPECT_FALSE(item.contains("$ref"));
+	EXPECT_EQ(item.at("required"), (boost::json::array {"room_name", "capacity", "note"}));
+	EXPECT_EQ(item.at("properties").at("capacity").at("maximum"), std::numeric_limits<std::int32_t>::max());
+}
+
+namespace
+{
+	struct ContractOptionalDTO
+	{
+		std::optional<std::int32_t> value;
+		HICAL_JSON(ContractOptionalDTO, value)
+	};
+
+	struct ContractLegacyDTO
+	{
+		std::string value;
+		HICAL_JSON(ContractLegacyDTO, LENGTH(value, 1, 5))
+	};
+
+	struct ContractRecursiveDTO
+	{
+		std::vector<ContractRecursiveDTO> children;
+		HICAL_JSON(ContractRecursiveDTO, children)
+	};
+
+	struct ContractCustomDTO
+	{
+		std::string value;
+		HICAL_JSON(ContractCustomDTO, value)
+	};
+
+	struct ContractConstructibleChild
+	{
+		std::int32_t value = 0;
+		ContractConstructibleChild& operator=(const ContractConstructibleChild&) = delete;
+		HICAL_JSON(ContractConstructibleChild, value)
+	};
+
+	struct ContractDirectChild
+	{
+		ContractConstructibleChild child;
+		HICAL_JSON(ContractDirectChild, child)
+	};
+
+	struct ContractListChild
+	{
+		std::vector<ContractConstructibleChild> children;
+		HICAL_JSON(ContractListChild, children)
+	};
+
+	struct ContractHiddenOptionalDTO
+	{
+		std::int32_t value;
+		std::optional<std::int32_t> hidden;
+		HICAL_JSON(ContractHiddenOptionalDTO, value, HICAL_IGNORE(hidden))
+	};
+
+	struct ContractHiddenConstDTO
+	{
+		std::int32_t value;
+		const std::int32_t hidden = 7;
+		HICAL_JSON(ContractHiddenConstDTO, value, HICAL_IGNORE(hidden))
+	};
+
+	struct ContractVisibleConstDTO
+	{
+		const std::int32_t value = 7;
+		HICAL_JSON(ContractVisibleConstDTO, value)
+	};
+
+	struct ContractBaseFields
+	{
+		std::int32_t capacity = 1;
+		HICAL_JSON(ContractBaseFields, REQUIRED(capacity))
+	};
+
+	struct ContractPrivateFieldsDTO : private ContractBaseFields
+	{
+		using ContractBaseFields::hicalJsonFields;
+	};
+
+	struct ContractIgnoredBaseFields
+	{
+		std::int32_t capacity = 1;
+		HICAL_JSON(ContractIgnoredBaseFields, HICAL_IGNORE(capacity))
+	};
+
+	struct ContractPrivateIgnoredFieldsDTO : private ContractIgnoredBaseFields
+	{
+		using ContractIgnoredBaseFields::hicalJsonFields;
+	};
+
+	struct ContractPublicFieldsDTO : virtual ContractBaseFields
+	{
+	};
+
+	void tag_invoke(boost::json::value_from_tag, boost::json::value& output, const ContractCustomDTO& value)
+	{
+		output = value.value;
+	}
+} // namespace
+
+TEST(OpenApiContractTest, RejectsTypesRulesAndConversionsOutsideTheContract)
+{
+	EXPECT_EQ(boost::json::value_from(ContractCustomDTO {"定制"}), "定制");
+	EXPECT_THROW((void)inputSchema<ContractOptionalDTO>(), std::logic_error);
+	EXPECT_THROW((void)outputSchema<ContractOptionalDTO>(), std::logic_error);
+	EXPECT_THROW((void)inputSchema<ContractLegacyDTO>(), std::logic_error);
+	EXPECT_THROW((void)outputSchema<ContractLegacyDTO>(), std::logic_error);
+	EXPECT_THROW((void)inputSchema<ContractRecursiveDTO>(), std::logic_error);
+	EXPECT_THROW((void)outputSchema<ContractRecursiveDTO>(), std::logic_error);
+	EXPECT_THROW((void)inputSchema<ContractCustomDTO>(), std::logic_error);
+	EXPECT_THROW((void)outputSchema<ContractCustomDTO>(), std::logic_error);
+	EXPECT_THROW((void)inputSchema<std::vector<std::string>>(), std::logic_error);
+	EXPECT_THROW((void)inputSchema<std::pmr::vector<ContractRoomDTO>>(), std::logic_error);
+	EXPECT_THROW((void)outputSchema<std::pmr::vector<ContractRoomDTO>>(), std::logic_error);
+}
+
+// bool 字段以前在共同契约里是「不支持的类型」，现在两个方向都按 boolean 输出
+namespace
+{
+	struct ContractBoolDTO
+	{
+		bool enabled;
+		std::int32_t capacity;
+		HICAL_JSON(ContractBoolDTO, enabled, capacity)
+	};
+} // namespace
+
+TEST(OpenApiContractTest, ProjectsBoolFieldsAsBoolean)
+{
+	const auto input = inputSchema<ContractBoolDTO>();
+	const auto output = outputSchema<ContractBoolDTO>();
+	EXPECT_EQ(input.at("properties").at("enabled"), (boost::json::object {{"type", "boolean"}}));
+	EXPECT_EQ(output.at("properties").at("enabled"), (boost::json::object {{"type", "boolean"}}));
+	EXPECT_EQ(output.at("properties").at("capacity").at("type"), "integer");
+	const auto decoded = fromJson<ContractBoolDTO>(boost::json::parse(R"({"enabled":true,"capacity":1})"));
+	EXPECT_TRUE(decoded.enabled);
+	EXPECT_THROW((void)fromJson<ContractBoolDTO>(boost::json::parse(R"({"enabled":1,"capacity":1})")),
+				 std::runtime_error);
+}
+
+TEST(OpenApiContractTest, RequiresAssignmentOnlyForInputFields)
+{
+	static_assert(std::is_move_constructible_v<ContractConstructibleChild>);
+	static_assert(!std::is_assignable_v<ContractConstructibleChild&, ContractConstructibleChild>);
+	EXPECT_THROW((void)inputSchema<ContractDirectChild>(), std::logic_error);
+	const auto output = outputSchema<ContractDirectChild>();
+	EXPECT_EQ(output.at("properties").at("child").at("properties").at("value").at("type"), "integer");
+	EXPECT_EQ(toJson(ContractDirectChild {{42}}).at("child").at("value"), 42);
+	EXPECT_EQ(jsonSchema<ContractDirectChild>().at("properties").at("child").at("type"), "object");
+	EXPECT_THROW((void)inputSchema<ContractVisibleConstDTO>(), std::logic_error);
+	EXPECT_EQ(outputSchema<ContractVisibleConstDTO>().at("properties").at("value").at("type"), "integer");
+	EXPECT_EQ(toJson(ContractVisibleConstDTO {}).at("value"), 7);
+
+	const auto list = inputSchema<ContractListChild>();
+	EXPECT_EQ(list.at("properties").at("children").at("items").at("type"), "object");
+	const auto decoded = fromJson<ContractListChild>(boost::json::parse(R"({"children":[{"value":42}]})"));
+	ASSERT_EQ(decoded.children.size(), 1);
+	EXPECT_EQ(decoded.children[0].value, 42);
+}
+
+TEST(OpenApiContractTest, ChecksMacroHiddenFieldsThatStillInstantiateConversions)
+{
+	EXPECT_THROW((void)inputSchema<ContractHiddenOptionalDTO>(), std::logic_error);
+	EXPECT_THROW((void)outputSchema<ContractHiddenOptionalDTO>(), std::logic_error);
+	EXPECT_THROW((void)inputSchema<ContractHiddenConstDTO>(), std::logic_error);
+	const auto output = outputSchema<ContractHiddenConstDTO>();
+	EXPECT_FALSE(output.at("properties").as_object().contains("hidden"));
+	EXPECT_FALSE(toJson(ContractHiddenConstDTO {42}).contains("hidden"));
+}
+
+TEST(OpenApiContractTest, RejectsMacroPointersToInaccessibleBaseFields)
+{
+	EXPECT_THROW((void)inputSchema<ContractPrivateFieldsDTO>(), std::logic_error);
+	EXPECT_THROW((void)outputSchema<ContractPrivateFieldsDTO>(), std::logic_error);
+	EXPECT_THROW((void)inputSchema<ContractPrivateIgnoredFieldsDTO>(), std::logic_error);
+	EXPECT_THROW((void)outputSchema<ContractPrivateIgnoredFieldsDTO>(), std::logic_error);
+}
+
+TEST(OpenApiContractTest, ProjectsPublicVirtualBaseFieldsUsedByJson)
+{
+	const auto input = inputSchema<ContractPublicFieldsDTO>();
+	const auto output = outputSchema<ContractPublicFieldsDTO>();
+	EXPECT_EQ(input.at("required"), (boost::json::array {"capacity"}));
+	EXPECT_EQ(output.at("properties").at("capacity").at("type"), "integer");
+	const boost::json::value json = {{"capacity", 42}};
+	EXPECT_EQ(toJson(fromJson<ContractPublicFieldsDTO>(json)), json.as_object());
+}
 
 // ============ 测试 DTO 定义 ============
 
@@ -114,7 +404,7 @@ struct WithNamedNested
 struct WithVectorOfNamed
 {
 	std::vector<NamedDTO> items;
-	HICAL_JSON(WithVectorOfNamed, items)
+	HICAL_JSON(WithVectorOfNamed, items, REQUIRED(items), items, REQUIRED(items))
 };
 
 // ============ Phase 1: Schema 生成测试 ============
@@ -270,6 +560,11 @@ TEST(OpenApiSchemaTest, VectorOfNamedRef)
 	auto& itemsItems = itemsProp["items"].as_object();
 	EXPECT_TRUE(itemsItems.contains("$ref"));
 	EXPECT_EQ(itemsItems["$ref"], "#/components/schemas/NamedDTO");
+	EXPECT_EQ(schema.at("required").as_array(), boost::json::array {"items"});
+	std::unordered_map<std::string, boost::json::object> schemas;
+	collectSchemas<WithVectorOfNamed>(schemas);
+	EXPECT_EQ(schemas.size(), 1);
+	EXPECT_TRUE(schemas.contains("NamedDTO"));
 }
 
 TEST(OpenApiSchemaTest, CollectSchemas)

@@ -1,15 +1,413 @@
+/**
+ * @file test_reflection.cpp
+ * @brief 测试宏反射下的 JSON 读写、字段校验和路由
+ */
+
 #include "core/MetaJson.h"
 #include "core/MetaRoutes.h"
 #include "core/HttpRequest.h"
 #include "core/HttpResponse.h"
 #include "core/Router.h"
+#include "core/detail/JsonFieldRules.h"
 #include "test_helpers.h"
 #include <gtest/gtest.h>
+#include <cstdint>
+#include <limits>
+#include <stdexcept>
 #include <string>
+#include <string_view>
 #include <vector>
 
 using namespace hical;
 using hical::test::runCoroutine;
+
+struct MergedContractDTO
+{
+	std::string name;
+	int capacity;
+
+	HICAL_JSON(MergedContractDTO,
+			   ALIAS(name, "room_name"),
+			   REQUIRED(name),
+			   NOT_EMPTY(name),
+			   ALIAS(capacity, "room_capacity"),
+			   REQUIRED(capacity),
+			   MIN(capacity, 1),
+			   MAX(capacity, 100))
+};
+
+struct ReverseMergedContractDTO
+{
+	std::string name;
+	HICAL_JSON(ReverseMergedContractDTO, REQUIRED(name), NOT_EMPTY(name), ALIAS(name, "room_name"))
+};
+
+TEST(MetaJsonContractTest, AliasAndRulesUseOneFinalKey)
+{
+	auto json = meta::toJson(MergedContractDTO {"大厅", 16});
+	EXPECT_EQ(json.size(), 2);
+	EXPECT_FALSE(json.contains("name"));
+	EXPECT_FALSE(json.contains("capacity"));
+	boost::json::value input = boost::json::object {{"room_name", "大厅"}, {"room_capacity", 16}};
+	EXPECT_NO_THROW((void)meta::fromJson<MergedContractDTO>(input));
+	EXPECT_NO_THROW((void)meta::fromJson<ReverseMergedContractDTO>(input));
+	input.as_object()["room_name"] = "";
+	EXPECT_THROW((void)meta::fromJson<MergedContractDTO>(input), std::runtime_error);
+	input.as_object()["room_name"] = "大厅";
+	input.as_object()["room_capacity"] = 101;
+	EXPECT_THROW((void)meta::fromJson<MergedContractDTO>(input), std::runtime_error);
+}
+
+struct MergedListContractDTO
+{
+	std::vector<MergedContractDTO> rooms;
+	HICAL_JSON(MergedListContractDTO, REQUIRED(rooms), ALIAS(rooms, "entries"), rooms)
+};
+
+TEST(MetaJsonContractTest, NestedEntriesUseMergedInputRulesAndOutputIsUnvalidated)
+{
+	auto input = boost::json::parse(
+		R"({"entries":[{"room_name":"A","room_capacity":1},{"room_name":"B","room_capacity":100}]})");
+	auto list = meta::fromJson<MergedListContractDTO>(input);
+	ASSERT_EQ(list.rooms.size(), 2);
+	EXPECT_EQ(list.rooms[0].name, "A");
+	EXPECT_EQ(list.rooms[1].capacity, 100);
+	EXPECT_EQ(meta::toJson(list), input.as_object());
+
+	list.rooms[1].capacity = 101;
+	auto output = meta::toJson(list);
+	EXPECT_EQ(output.at("entries").as_array()[1].as_object().at("room_capacity"), 101);
+	EXPECT_THROW((void)meta::fromJson<MergedListContractDTO>(boost::json::value(output)), std::runtime_error);
+}
+
+struct MergedStringRulesDTO
+{
+	std::string label = "default";
+	HICAL_JSON(MergedStringRulesDTO,
+			   ALIAS(label, "text"),
+			   PATTERN(label, "a.*"),
+			   PATTERN(label, ".*z"),
+			   LENGTH(label, 1, 20),
+			   LENGTH(label, 3, 5),
+			   PATTERN(label, "a.*"))
+};
+
+TEST(MetaJsonContractTest, AppliesEveryPatternAndUsesByteLengths)
+{
+	const auto read = [](const auto& value)
+	{
+		return meta::fromJson<MergedStringRulesDTO>(boost::json::object {{"text", value}}).label;
+	};
+	EXPECT_EQ(read("abz"), "abz");
+	EXPECT_EQ(read("a中z"), "a中z"); // 3 个字符共占 5 个字节，长度按字节算。
+	EXPECT_THROW((void)read("abc"), std::runtime_error);
+	EXPECT_THROW((void)read("bcz"), std::runtime_error);
+	EXPECT_THROW((void)read("az"), std::runtime_error);
+	EXPECT_THROW((void)read("a中文z"), std::runtime_error);
+	EXPECT_THROW((void)read(nullptr), std::runtime_error);
+	EXPECT_EQ(meta::fromJson<MergedStringRulesDTO>(boost::json::object {{"label", "ignored"}}).label, "default");
+}
+
+TEST(MetaJsonContractTest, ChecksMaxLengthBeforeAnyPattern)
+{
+	// 两个字符串都超过 5 个字节。第一个没匹配首条正则，第二个只没匹配追加的正则。
+	for (const auto* text : {"bcdefg", "abcdef"})
+	{
+		SCOPED_TRACE(text);
+		try
+		{
+			(void)meta::fromJson<MergedStringRulesDTO>(boost::json::object {{"text", text}});
+			ADD_FAILURE() << "字段超过最大长度，反序列化却成功了";
+		}
+		catch (const std::runtime_error& error)
+		{
+			EXPECT_NE(std::string_view(error.what()).find("max-length"), std::string_view::npos) << error.what();
+		}
+	}
+}
+
+TEST(MetaJsonContractTest, DefinitionErrorsAreRaisedOnFirstMetadataAccess)
+{
+	struct ConflictingAliases
+	{
+		int count;
+		HICAL_JSON(ConflictingAliases, ALIAS(count, "count"), REQUIRED_ALIAS(count, "size"))
+	};
+
+	struct IgnoreWithBareField
+	{
+		int secret;
+		HICAL_JSON(IgnoreWithBareField, HICAL_IGNORE(secret), secret)
+	};
+
+	struct InvalidPattern
+	{
+		std::string text;
+		HICAL_JSON(InvalidPattern, PATTERN(text, "["))
+	};
+
+	EXPECT_THROW((void)ConflictingAliases::hicalJsonFields(), std::logic_error);
+	EXPECT_THROW((void)IgnoreWithBareField::hicalJsonFields(), std::logic_error);
+	// 正则写错现在在定义期就报，不用等到读数据
+	EXPECT_THROW((void)InvalidPattern::hicalJsonFields(), std::logic_error);
+	EXPECT_THROW((void)meta::fromJson<InvalidPattern>(boost::json::object {{"text", "input"}}), std::logic_error);
+}
+
+TEST(MetaJsonContractTest, RejectsIntegerNarrowingAndSignChange)
+{
+	EXPECT_THROW((void)meta::valueFromJson<int8_t>(boost::json::value(128)), std::runtime_error);
+	EXPECT_THROW((void)meta::valueFromJson<int8_t>(boost::json::value(-129)), std::runtime_error);
+	EXPECT_THROW((void)meta::valueFromJson<int32_t>(boost::json::value(int64_t {2147483648LL})), std::runtime_error);
+	EXPECT_THROW((void)meta::valueFromJson<int32_t>(boost::json::value(int64_t {-2147483649LL})), std::runtime_error);
+	EXPECT_THROW((void)meta::valueFromJson<uint32_t>(boost::json::value(-1)), std::runtime_error);
+	EXPECT_THROW((void)meta::valueFromJson<uint32_t>(boost::json::value(uint64_t {4294967296ULL})), std::runtime_error);
+	EXPECT_THROW((void)meta::valueFromJson<int64_t>(boost::json::value(std::numeric_limits<uint64_t>::max())),
+				 std::runtime_error);
+	EXPECT_THROW((void)meta::valueFromJson<uint64_t>(boost::json::value(-1)), std::runtime_error);
+	EXPECT_THROW((void)meta::valueFromJson<int32_t>(boost::json::parse("1.0")), std::runtime_error);
+}
+
+TEST(MetaJsonContractTest, IntegerEndpointsAndPrecisionStayExact)
+{
+	EXPECT_EQ(meta::valueFromJson<int8_t>(boost::json::value(-128)), -128);
+	EXPECT_EQ(meta::valueFromJson<int8_t>(boost::json::value(127)), 127);
+	EXPECT_EQ(meta::valueFromJson<int32_t>(boost::json::value(std::numeric_limits<int32_t>::min())),
+			  std::numeric_limits<int32_t>::min());
+	constexpr auto kMaxInt32 = std::numeric_limits<int32_t>::max();
+	EXPECT_EQ(meta::valueFromJson<int32_t>(boost::json::value(static_cast<uint64_t>(kMaxInt32))), kMaxInt32);
+	EXPECT_EQ(meta::valueFromJson<int64_t>(boost::json::value(std::numeric_limits<int64_t>::min())),
+			  std::numeric_limits<int64_t>::min());
+	EXPECT_EQ(meta::valueFromJson<int64_t>(boost::json::value(std::numeric_limits<int64_t>::max())),
+			  std::numeric_limits<int64_t>::max());
+	EXPECT_EQ(meta::valueFromJson<uint32_t>(boost::json::value(std::numeric_limits<uint32_t>::max())),
+			  std::numeric_limits<uint32_t>::max());
+	EXPECT_EQ(meta::valueFromJson<uint64_t>(boost::json::value(std::numeric_limits<uint64_t>::max())),
+			  std::numeric_limits<uint64_t>::max());
+	constexpr int64_t kBeyondDoublePrecision = 9007199254740993LL;
+	EXPECT_EQ(meta::valueFromJson<int64_t>(boost::json::value(kBeyondDoublePrecision)), kBeyondDoublePrecision);
+	EXPECT_EQ(meta::valueFromJson<int64_t>(boost::json::parse("9007199254740993")), kBeyondDoublePrecision);
+	EXPECT_TRUE(meta::valueFromJson<bool>(boost::json::value(true)));
+	EXPECT_THROW((void)meta::valueFromJson<bool>(boost::json::value(1)), std::runtime_error);
+}
+
+struct NarrowIntegerDTO
+{
+	int8_t code;
+	std::vector<uint32_t> values;
+	HICAL_JSON(NarrowIntegerDTO, code, values)
+};
+
+struct NestedNarrowIntegerDTO
+{
+	std::vector<NarrowIntegerDTO> entries;
+	HICAL_JSON(NestedNarrowIntegerDTO, entries)
+};
+
+TEST(MetaJsonContractTest, RejectsOutOfRangeInsideNestedDtosAndArrays)
+{
+	auto input = boost::json::parse(R"({"entries":[{"code":127,"values":[0,4294967295]}]})");
+	const auto dto = meta::fromJson<NestedNarrowIntegerDTO>(input);
+	ASSERT_EQ(dto.entries.size(), 1);
+	EXPECT_EQ(dto.entries[0].code, 127);
+	EXPECT_EQ(dto.entries[0].values, (std::vector<uint32_t> {0, std::numeric_limits<uint32_t>::max()}));
+
+	auto& entry = input.as_object().at("entries").as_array()[0].as_object();
+	entry["code"] = 128;
+	EXPECT_THROW((void)meta::fromJson<NestedNarrowIntegerDTO>(input), std::runtime_error);
+	entry["code"] = -128;
+	entry.at("values").as_array()[0] = -1;
+	EXPECT_THROW((void)meta::fromJson<NestedNarrowIntegerDTO>(input), std::runtime_error);
+	entry.at("values").as_array()[0] = uint64_t {4294967296ULL};
+	EXPECT_THROW((void)meta::fromJson<NestedNarrowIntegerDTO>(input), std::runtime_error);
+}
+
+struct DescriptorMembers
+{
+	int first;
+	int second;
+	std::string label;
+};
+
+TEST(JsonFieldRulesTest, ChecksRequiredAndStringRulesWithFinalKey)
+{
+	meta::detail::JsonFieldRules rules {"room_name", true, false, true};
+	static_assert(std::is_trivially_copyable_v<decltype(rules)>);
+	EXPECT_NO_THROW(meta::detail::validateJsonFieldPresence(rules, true));
+	EXPECT_THROW(meta::detail::validateJsonFieldPresence(rules, false), std::runtime_error);
+	EXPECT_NO_THROW(meta::detail::validateJsonFieldValue(rules, "大厅"));
+	EXPECT_THROW(meta::detail::validateJsonFieldValue(rules, ""), std::runtime_error);
+	rules.required = false;
+	rules.notEmpty = false;
+	EXPECT_NO_THROW(meta::detail::validateJsonFieldPresence(rules, false));
+	EXPECT_NO_THROW(meta::detail::validateJsonFieldValue(rules, ""));
+	rules.required = true;
+	rules.notEmpty = true;
+	rules.ignored = true;
+	EXPECT_NO_THROW(meta::detail::validateJsonFieldPresence(rules, false));
+	EXPECT_NO_THROW(meta::detail::validateJsonFieldValue(rules, ""));
+}
+
+TEST(JsonFieldRulesTest, ChecksInt32IntervalAndDefinition)
+{
+	meta::detail::JsonFieldRules rules {"capacity"};
+	rules.minimum = 1;
+	rules.maximum = 100;
+	EXPECT_NO_THROW(meta::detail::validateJsonFieldRuleDefinition(rules));
+	EXPECT_NO_THROW(meta::detail::validateJsonFieldValue(rules, int32_t {1}));
+	EXPECT_NO_THROW(meta::detail::validateJsonFieldValue(rules, int32_t {100}));
+	EXPECT_THROW(meta::detail::validateJsonFieldValue(rules, int32_t {0}), std::runtime_error);
+	EXPECT_THROW(meta::detail::validateJsonFieldValue(rules, int32_t {101}), std::runtime_error);
+	rules.minimum = std::numeric_limits<int32_t>::min();
+	rules.maximum = std::numeric_limits<int32_t>::max();
+	EXPECT_NO_THROW(meta::detail::validateJsonFieldValue(rules, *rules.minimum));
+	EXPECT_NO_THROW(meta::detail::validateJsonFieldValue(rules, *rules.maximum));
+	rules.minimum = 2;
+	rules.maximum = 1;
+	EXPECT_THROW(meta::detail::validateJsonFieldRuleDefinition(rules), std::logic_error);
+}
+
+TEST(JsonFieldRulesTest, AdaptsMergedMacroRulesAndKeepsStaticNames)
+{
+	const auto& fields = MergedContractDTO::hicalJsonFields();
+	const auto nameRules = meta::detail::toJsonFieldRules(std::get<0>(fields));
+	EXPECT_EQ(nameRules.name, "room_name");
+	EXPECT_TRUE(nameRules.required);
+	EXPECT_TRUE(nameRules.notEmpty);
+	EXPECT_FALSE(nameRules.ignored);
+	EXPECT_EQ(nameRules.name.data(), std::get<0>(fields).name.data());
+	const auto capacityRules = meta::detail::toJsonFieldRules(std::get<3>(fields));
+	EXPECT_EQ(capacityRules.name, "room_capacity");
+	EXPECT_TRUE(capacityRules.required);
+	EXPECT_EQ(capacityRules.minimum, 1);
+	EXPECT_EQ(capacityRules.maximum, 100);
+	EXPECT_THROW(meta::detail::validateJsonFieldValue(capacityRules, int32_t {101}), std::runtime_error);
+}
+
+struct LegacyFractionalRulesDTO
+{
+	int32_t count;
+	double ratio;
+	HICAL_JSON(LegacyFractionalRulesDTO, MIN(count, 0.5), MAX(count, 2.5), MIN(ratio, 0.5), MAX(ratio, 2.5))
+};
+
+TEST(JsonFieldRulesTest, KeepsLegacyChecksAndRejectsUnsupportedContractRules)
+{
+	const auto accepted = meta::fromJson<LegacyFractionalRulesDTO>(boost::json::object {{"count", 1}, {"ratio", 1.5}});
+	EXPECT_EQ(accepted.count, 1);
+	EXPECT_DOUBLE_EQ(accepted.ratio, 1.5);
+	EXPECT_THROW((void)meta::fromJson<LegacyFractionalRulesDTO>(boost::json::object {{"count", 0}, {"ratio", 1.5}}),
+				 std::runtime_error);
+	EXPECT_THROW((void)meta::fromJson<LegacyFractionalRulesDTO>(boost::json::object {{"count", 1}, {"ratio", 2.6}}),
+				 std::runtime_error);
+	const auto& legacy = LegacyFractionalRulesDTO::hicalJsonFields();
+	EXPECT_THROW((void)meta::detail::toJsonFieldRules(std::get<0>(legacy)), std::logic_error);
+	EXPECT_THROW((void)meta::detail::toJsonFieldRules(std::get<2>(legacy)), std::logic_error);
+	const auto& text = MergedStringRulesDTO::hicalJsonFields();
+	EXPECT_THROW((void)meta::detail::toJsonFieldRules(std::get<0>(text)), std::logic_error);
+	EXPECT_THROW((void)meta::detail::toJsonInt32RuleBound("count", 2147483648.0), std::logic_error);
+}
+
+TEST(MetaJsonFieldMergeTest, KeepsFirstPositionAndChecksMemberIdentity)
+{
+	auto first = meta::detail::makeField("first", &DescriptorMembers::first);
+	auto duplicate = meta::detail::makeField("first", &DescriptorMembers::first, true, false);
+	duplicate.name = "value";
+	duplicate.explicitAlias = true;
+	auto second = meta::detail::makeField("second", &DescriptorMembers::second);
+	second.memberName = "first";
+	auto label = meta::detail::makeField("label", &DescriptorMembers::label);
+	label.memberName = "first";
+	auto differentName = meta::detail::makeField("different", &DescriptorMembers::first);
+	auto fields = meta::detail::normalizeFields(std::make_tuple(first, second, duplicate, label, differentName));
+	EXPECT_EQ(std::get<0>(fields).name, "value");
+	EXPECT_EQ(std::get<0>(fields).memberName, "first");
+	EXPECT_TRUE(std::get<0>(fields).required);
+	EXPECT_TRUE(std::get<0>(fields).active);
+	EXPECT_TRUE(std::get<1>(fields).active);
+	EXPECT_FALSE(std::get<2>(fields).active);
+	EXPECT_TRUE(std::get<3>(fields).active);
+	EXPECT_TRUE(std::get<4>(fields).active);
+}
+
+TEST(MetaJsonFieldMergeTest, CombinesIntervalsAndOwnsDistinctPatterns)
+{
+	auto first = meta::detail::makeField("first", &DescriptorMembers::first);
+	first.minVal = 1;
+	first.maxVal = 100;
+	auto stricter = first;
+	stricter.minVal = 4;
+	stricter.maxVal = 9;
+	auto numeric = meta::detail::normalizeFields(std::make_tuple(first, stricter));
+	EXPECT_EQ(std::get<0>(numeric).minVal, 4);
+	EXPECT_EQ(std::get<0>(numeric).maxVal, 9);
+
+	auto text = meta::detail::makeField("label", &DescriptorMembers::label);
+	text.pattern = std::string(128, 'a');
+	text.lengthMin = 1;
+	text.lengthMax = 100;
+	auto more = text;
+	more.pattern = ".*z";
+	more.lengthMin = 3;
+	more.lengthMax = 9;
+	more.notEmpty = true;
+	auto normalized = meta::detail::normalizeFields(std::make_tuple(text, more, more));
+	auto copied = normalized;
+	std::get<0>(normalized).additionalPatterns.clear();
+	const auto& merged = std::get<0>(copied);
+	EXPECT_EQ(merged.pattern, std::string(128, 'a'));
+	ASSERT_EQ(merged.additionalPatterns.size(), 1);
+	EXPECT_EQ(merged.additionalPatterns[0], ".*z");
+	EXPECT_EQ(merged.lengthMin, 3);
+	EXPECT_EQ(merged.lengthMax, 9);
+	EXPECT_TRUE(merged.notEmpty);
+}
+
+TEST(MetaJsonFieldMergeTest, RejectsAliasesIgnoreMixAndDuplicateFinalNames)
+{
+	auto first = meta::detail::makeField("first", &DescriptorMembers::first);
+	auto alias = first;
+	first.explicitAlias = true;
+	alias.explicitAlias = true;
+	alias.name = "other";
+	EXPECT_THROW((void)meta::detail::normalizeFields(std::make_tuple(first, alias)), std::logic_error);
+	alias = first;
+	alias.ignored = true;
+	EXPECT_THROW((void)meta::detail::normalizeFields(std::make_tuple(alias, first)), std::logic_error);
+	EXPECT_NO_THROW((void)meta::detail::normalizeFields(std::make_tuple(alias, alias)));
+	auto second = meta::detail::makeField("first", &DescriptorMembers::second);
+	EXPECT_THROW((void)meta::detail::normalizeFields(std::make_tuple(first, second)), std::logic_error);
+	auto text = meta::detail::makeField("first", &DescriptorMembers::label);
+	EXPECT_THROW((void)meta::detail::normalizeFields(std::make_tuple(first, text)), std::logic_error);
+}
+
+TEST(MetaJsonFieldMergeTest, RejectsEmptyApplicableIntervalsAndNonFiniteBounds)
+{
+	auto first = meta::detail::makeField("first", &DescriptorMembers::first);
+	first.minVal = 10;
+	auto next = first;
+	next.minVal.reset();
+	next.maxVal = 9;
+	EXPECT_THROW((void)meta::detail::normalizeFields(std::make_tuple(first, next)), std::logic_error);
+	first.minVal = std::numeric_limits<double>::quiet_NaN();
+	EXPECT_THROW((void)meta::detail::normalizeFields(std::make_tuple(first)), std::logic_error);
+	first.minVal = std::numeric_limits<double>::infinity();
+	EXPECT_THROW((void)meta::detail::normalizeFields(std::make_tuple(first)), std::logic_error);
+	auto text = meta::detail::makeField("label", &DescriptorMembers::label);
+	text.lengthMin = 3;
+	text.lengthMax = 2;
+	EXPECT_THROW((void)meta::detail::normalizeFields(std::make_tuple(text)), std::logic_error);
+	text.lengthMin.reset();
+	text.lengthMax = 0;
+	text.notEmpty = true;
+	EXPECT_THROW((void)meta::detail::normalizeFields(std::make_tuple(text)), std::logic_error);
+	text.lengthMax.reset();
+	text.minVal = std::numeric_limits<double>::infinity();
+	EXPECT_NO_THROW((void)meta::detail::normalizeFields(std::make_tuple(text)));
+	first.minVal.reset();
+	first.lengthMin = 3;
+	first.lengthMax = 2;
+	EXPECT_NO_THROW((void)meta::detail::normalizeFields(std::make_tuple(first)));
+}
 
 // ============ 测试用 DTO 结构体 ============
 
@@ -942,4 +1340,145 @@ TEST(MetaJsonValidationTest, ExistingDecoratorsStillWork)
 	IgnoreDTO ignoreDto {"Jack", "j@test.com", "hash", "token"};
 	auto ignoreJson = meta::toJson(ignoreDto);
 	EXPECT_FALSE(ignoreJson.contains("passwordHash"));
+}
+
+// ---- 正则定义期校验 ----
+
+struct BrokenAdditionalPatternDTO
+{
+	std::string text;
+	// 第一个正则写对，第二个写错，验证附加列表也会在定义期检查
+	HICAL_JSON(BrokenAdditionalPatternDTO, PATTERN(text, "^a"), PATTERN(text, "("))
+};
+
+TEST(MetaJsonValidationTest, RejectsBrokenPatternOnDefinition)
+{
+	const auto expectPatternError = [](const auto& call)
+	{
+		EXPECT_THROW((void)call(), std::logic_error);
+	};
+	expectPatternError(
+		[]
+		{
+			return BrokenAdditionalPatternDTO::hicalJsonFields();
+		});
+}
+
+// 允许的正则在定义期编译一次就存住，后面读入不再重新编译。
+// 缓存由 hicalJsonFields 的 static 初始化填写，这里只验证编译结果可用。
+TEST(MetaJsonValidationTest, CompilesPatternsOnceAtDefinition)
+{
+	const auto& fields = PatternDTO::hicalJsonFields();
+	const auto& emailField = std::get<0>(fields);
+	ASSERT_TRUE(emailField.pattern.has_value());
+	ASSERT_TRUE(emailField.compiledPattern.has_value());
+	const auto& phoneField = std::get<1>(fields);
+	ASSERT_TRUE(phoneField.pattern.has_value());
+	ASSERT_TRUE(phoneField.compiledPattern.has_value());
+	// 缓存里存的就是声明的那条正则
+	EXPECT_TRUE(std::regex_search("valid@test.com", *emailField.compiledPattern));
+	EXPECT_FALSE(std::regex_search("not-an-email", *emailField.compiledPattern));
+}
+
+// ---- 64 位整型边界精度 ----
+
+struct Int64BoundDTO
+{
+	std::int64_t snowflake;
+	HICAL_JSON(Int64BoundDTO, MIN(snowflake, 0), MAX(snowflake, 9007199254740992.0))
+};
+
+struct Uint64BoundDTO
+{
+	std::uint64_t seq;
+	HICAL_JSON(Uint64BoundDTO, MIN(seq, 0), MAX(seq, 9007199254740992.0))
+};
+
+TEST(MetaJsonValidationTest, AcceptsInt64BoundsWithinDoublePrecision)
+{
+	EXPECT_NO_THROW((void)Int64BoundDTO::hicalJsonFields());
+	EXPECT_NO_THROW((void)Uint64BoundDTO::hicalJsonFields());
+}
+
+// double 只能精确表示 ±2^53 内的整数，边界超出就没法表达原本的意图了。
+// 注意 9007199254740993.0 这个字面量在 double 里本身就舍入成 2^53，
+// 能观察到的最小越界值是 2^53+2。
+TEST(MetaJsonValidationTest, RejectsInt64BoundsBeyondDoublePrecision)
+{
+	struct TooBig
+	{
+		std::int64_t id;
+		HICAL_JSON(TooBig, MAX(id, 9007199254740994.0))
+	};
+
+	struct TooSmall
+	{
+		std::int64_t id;
+		HICAL_JSON(TooSmall, MIN(id, -9007199254740994.0))
+	};
+
+	struct UintTooBig
+	{
+		std::uint64_t id;
+		HICAL_JSON(UintTooBig, MAX(id, 18446744073709551615.0))
+	};
+
+	EXPECT_THROW((void)TooBig::hicalJsonFields(), std::logic_error);
+	EXPECT_THROW((void)TooSmall::hicalJsonFields(), std::logic_error);
+	EXPECT_THROW((void)UintTooBig::hicalJsonFields(), std::logic_error);
+}
+
+TEST(MetaJsonValidationTest, RejectsFractionalInt64BoundsButKeepsFloatingFraction)
+{
+	struct FractionalInt64
+	{
+		std::int64_t id;
+		HICAL_JSON(FractionalInt64, MIN(id, 0.5))
+	};
+
+	EXPECT_THROW((void)FractionalInt64::hicalJsonFields(), std::logic_error);
+
+	// 浮点字段的小数边界不受影响，legacy 用例里 MIN(count, 0.5) 这种写法还得能跑
+	struct FractionalDouble
+	{
+		double ratio;
+		HICAL_JSON(FractionalDouble, MIN(ratio, 0.5), MAX(ratio, 2.5))
+	};
+
+	EXPECT_NO_THROW((void)FractionalDouble::hicalJsonFields());
+	const auto dto = meta::fromJson<FractionalDouble>(boost::json::object {{"ratio", 1.5}});
+	EXPECT_DOUBLE_EQ(dto.ratio, 1.5);
+}
+
+// 类型和约束错配现在是编译期错误（宏层 static_assert），运行时不再静默。
+// 正向用例：正确类型的约束仍然照常声明、照常校验。
+namespace
+{
+	struct ConstraintTypeMatrixDTO
+	{
+		int count;
+		std::int64_t wide;
+		std::string text;
+		HICAL_JSON(ConstraintTypeMatrixDTO,
+				   MIN(count, 1),
+				   MAX(wide, 100),
+				   NOT_EMPTY(text),
+				   PATTERN(text, "^[a-z]+$"),
+				   LENGTH(text, 1, 16))
+	};
+} // namespace
+
+TEST(MetaJsonValidationTest, AppliesConstraintsToMatchingFieldTypes)
+{
+	EXPECT_NO_THROW((void)meta::fromJson<ConstraintTypeMatrixDTO>(
+		boost::json::object {{"count", 2}, {"wide", 3}, {"text", "abc"}}));
+	EXPECT_THROW(
+		(void)meta::fromJson<ConstraintTypeMatrixDTO>(boost::json::object {{"count", 0}, {"wide", 3}, {"text", "abc"}}),
+		std::runtime_error);
+	EXPECT_THROW((void)meta::fromJson<ConstraintTypeMatrixDTO>(
+					 boost::json::object {{"count", 2}, {"wide", 101}, {"text", "abc"}}),
+				 std::runtime_error);
+	EXPECT_THROW(
+		(void)meta::fromJson<ConstraintTypeMatrixDTO>(boost::json::object {{"count", 2}, {"wide", 3}, {"text", "ABC"}}),
+		std::runtime_error);
 }

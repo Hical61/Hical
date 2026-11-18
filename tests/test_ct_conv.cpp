@@ -11,14 +11,14 @@
 
 using namespace hical::CT;
 
-TEST(CtConvTest, 蛇形转小驼峰_常规)
+TEST(CtConvTest, SnakeToLowerCamelNormal)
 {
 	EXPECT_EQ(caseSnakeToLowerCamel("hello_world"), "helloWorld");
 	EXPECT_EQ(caseSnakeToLowerCamel("user_name_id"), "userNameId");
 	EXPECT_EQ(caseSnakeToLowerCamel("already"), "already");
 }
 
-TEST(CtConvTest, 蛇形转小驼峰_边界)
+TEST(CtConvTest, SnakeToLowerCamelBoundaries)
 {
 	EXPECT_EQ(caseSnakeToLowerCamel("a"), "a");
 	EXPECT_EQ(caseSnakeToLowerCamel(""), "");
@@ -26,7 +26,7 @@ TEST(CtConvTest, 蛇形转小驼峰_边界)
 	EXPECT_EQ(caseSnakeToLowerCamel("a_b"), "aB");
 }
 
-TEST(CtConvTest, 蛇形转大驼峰)
+TEST(CtConvTest, SnakeToUpperCamel)
 {
 	EXPECT_EQ(caseSnakeToUpperCamel("hello_world"), "HelloWorld");
 	EXPECT_EQ(caseSnakeToUpperCamel("___foo_bar___"), "FooBar");
@@ -34,7 +34,7 @@ TEST(CtConvTest, 蛇形转大驼峰)
 	EXPECT_EQ(caseSnakeToUpperCamel(""), "");
 }
 
-TEST(CtConvTest, 驼峰转蛇形)
+TEST(CtConvTest, CamelToSnake)
 {
 	EXPECT_EQ(caseCamelToSnake("helloWorld"), "hello_world");
 	EXPECT_EQ(caseCamelToSnake("HelloWorld"), "hello_world");
@@ -43,7 +43,7 @@ TEST(CtConvTest, 驼峰转蛇形)
 	EXPECT_EQ(caseCamelToSnake(""), "");
 }
 
-TEST(CtConvTest, 字符大小写转换)
+TEST(CtConvTest, AsciiCharacterCase)
 {
 	EXPECT_EQ(asciiToUpper('a'), 'A');
 	EXPECT_EQ(asciiToUpper('z'), 'Z');
@@ -57,7 +57,7 @@ TEST(CtConvTest, 字符大小写转换)
 
 #if __cplusplus >= 202302L
 
-TEST(CtConvTest, 整型转字符串)
+TEST(CtConvTest, IntegerToString)
 {
 	// toString 是 consteval，只能在常量表达式里求值。
 	// 注意不能用 constexpr std::string 接住结果——字符串缓冲区的堆分配没法在

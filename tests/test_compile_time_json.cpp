@@ -13,6 +13,24 @@
 
 using namespace hical;
 
+struct MergedWireDTO
+{
+	std::string name;
+	int capacity;
+	HICAL_JSON(MergedWireDTO,
+			   ALIAS(name, "room_name"),
+			   REQUIRED(name),
+			   NOT_EMPTY(name),
+			   MIN(capacity, 1),
+			   MAX(capacity, 100),
+			   REQUIRED(capacity))
+};
+
+TEST(CompileTimeJsonContractTest, MergedFieldsAppearOnceInRawWireOutput)
+{
+	EXPECT_EQ(meta::compileTimeToJson(MergedWireDTO {"大厅", 16}), R"({"room_name":"大厅","capacity":16})");
+}
+
 // ============ 测试用 DTO 结构体 ============
 
 struct SimpleDTO
@@ -95,7 +113,12 @@ struct NestedJsonItem
 	std::string text;
 	std::string hidden;
 
-	HICAL_JSON(NestedJsonItem, ALIAS(text, "value"), HICAL_IGNORE(hidden))
+	HICAL_JSON(NestedJsonItem,
+			   text,
+			   ALIAS(text, "value"),
+			   HICAL_IGNORE(hidden),
+			   ALIAS(text, "value"),
+			   HICAL_IGNORE(hidden))
 };
 
 struct NestedJsonItems
