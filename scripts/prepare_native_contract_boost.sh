@@ -18,9 +18,19 @@ if [[ ! -f "$archive" ]]; then
 fi
 printf '%s  %s\n' "$sha" "$archive" | sha256sum --check
 sha256sum "$archive"
+
+# prefix 已经完整就跳过：CI 靠 actions/cache 把它带过来，本地重复跑也不该再编一遍。
+# 用 BoostConfig.cmake 加库文件一起判断，只少一个都算没编完。
+prefix="$root/prefix"
+if [[ -f "$prefix/lib/cmake/Boost-1.90.0/BoostConfig.cmake" ]] &&
+    compgen -G "$prefix/lib/libboost_json*" > /dev/null; then
+    printf 'Boost 1.90 已就绪，跳过编译：%s\n' "$prefix"
+    exit 0
+fi
+
 tar -xjf "$archive" -C "$root" --no-same-owner
 cd "$root/boost_1_90_0"
-CXX="$cxx" ./bootstrap.sh --with-toolset=gcc --with-libraries=json --prefix="$root/prefix"
+CXX="$cxx" ./bootstrap.sh --with-toolset=gcc --with-libraries=json --prefix="$prefix"
 printf 'using gcc : 16 : "%s" ;\n' "$cxx" > "$root/user-config.jam"
 ./b2 -d0 "--user-config=$root/user-config.jam" toolset=gcc-16 cxxstd=20 \
     link=static runtime-link=shared threading=multi variant=release --layout=system -j"$jobs" install

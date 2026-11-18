@@ -66,8 +66,47 @@ jobs:
       - name: 测试 hical new
         run: python -m unittest discover -s scripts -p test_hical_cli.py -v
 
+  # 契约测试要跑 75 分钟，只在 PR 时先看一眼改了些什么。
+  # 用「排除纯文档」的写法而不是正向列举：漏列一条相关路径的代价是「该跑没跑」，
+  # 所以只有确定跟代码无关的 PR 才跳过。push 到 main 时这个 job 不启动，契约测试照跑。
+  contract-scope:
+    name: 契约测试要不要跑
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      needed: ${{ steps.filter.outputs.code }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            code:
+              - '**'
+              - '!*.md'
+              - '!**/*.md'
+              - '!docs/**'
+              - '!.claude/**'
+              - '!LICENSE'
+              - '!.gitignore'
+              - '!.dockerignore'
+
   native-contract-smoke:
     name: Native JSON contract smoke
+    needs: contract-scope
+    # contract-scope 被跳过（push 到 main）或自己挂了的时候都要跑，别因为判断失败漏掉检查。
+    if: >-
+      always() && (
+        needs.contract-scope.result == 'skipped'
+        || needs.contract-scope.result == 'failure'
+        || needs.contract-scope.outputs.needed == 'true'
+      )
     runs-on: ubuntu-24.04
     timeout-minutes: 75
     permissions:
@@ -81,7 +120,8 @@ jobs:
     env:
       HICAL_CC_NATIVE: /usr/bin/gcc-16
       HICAL_CXX_NATIVE: /usr/bin/g++-16
-      HICAL_CONTRACT_JOBS: '2'
+      # GitHub 的 ubuntu runner 是 4 核，压到 2 会白白多花一倍墙钟时间。
+      HICAL_CONTRACT_JOBS: '4'
     steps:
       - name: 安装固定版本的 Ubuntu 工具链
         run: |
@@ -109,6 +149,13 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+      # Boost 每次现编要五到十分钟，而它只跟脚本里的版本号和 sha 有关，跟源码无关。
+      # 脚本里有就绪短路，命中缓存时直接跳过下载和解包。
+      - name: 缓存契约测试用的 Boost
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/native-contract-boost/prefix
+          key: boost-1.90-contract-${{ hashFiles('scripts/prepare_native_contract_boost.sh') }}
       - name: 校验并编译 Boost 1.90
         run: |
           set -euo pipefail
@@ -560,13 +607,26 @@ jobs:
         if: runner.os == 'Linux' && matrix.compiler != 'clang'
         run: python3 scripts/gen_test_certs.py
 
+      # cmake-minimum 那一路只关心「最低版本能不能配起来、能不能编」，跑全量测试没额外价值：
+      # 同样的代码、同样的编译器（gcc-14）在 gcc 那一路已经跑过了，区别只在 CMake 版本。
       - name: Test (Linux)
-        if: runner.os == 'Linux' && matrix.compiler != 'clang'
+        if: runner.os == 'Linux' && matrix.compiler != 'clang' && matrix.compiler != 'gcc-cmake-minimum'
         run: |
           ctest --test-dir build -N
           ctest --test-dir build --no-tests=error --output-on-failure --timeout 60 -j4 -E "${{ env.CI_TEST_EXCLUDE }}"
         env:
           HICAL_REQUIRE_SSL_CERTS: "1"
+
+      # 最低 CMake 版本的冒烟：确认测试可执行文件确实编出来了，只是不跑。
+      - name: Check test binaries exist (cmake minimum)
+        if: matrix.compiler == 'gcc-cmake-minimum'
+        run: |
+          count=$(find build/tests -maxdepth 1 -type f -perm -u+x -name 'test_*' | wc -l)
+          echo "编出了 $count 个测试可执行文件"
+          if [[ $count -lt 10 ]]; then
+            echo "::error::测试目标数量异常（$count），最低 CMake 版本下可能没有正常生成"
+            exit 1
+          fi
 
       # ── Clang: Sanitizer 构建 (ASan + UBSan) ──
       - name: Configure with sanitizers (Clang)
@@ -667,6 +727,62 @@ jobs:
           fail_ci_if_error: false
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+      # ── 中间件 profiling（合进 gcc 组合，不再单开 job）──
+      # 单开一份 job 要重复装一遍 boost/openssl/gtest，而这里依赖早就装好了。
+      - name: Configure (middleware profiling)
+        if: matrix.compiler == 'gcc'
+        run: |
+          cmake -B build-prof -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER=${{ matrix.cc }} \
+            -DCMAKE_CXX_COMPILER=${{ matrix.cxx }} \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            -DHICAL_ENABLE_MIDDLEWARE_PROFILING=ON \
+            -DHICAL_INSTALL_CLI=OFF \
+            -DHICAL_DISABLE_IO_URING=ON \
+            -DHICAL_WITH_HTTP2=OFF \
+            -DHICAL_WITH_HTTP_CLIENT=OFF
+
+      - name: Build (middleware profiling)
+        if: matrix.compiler == 'gcc'
+        run: cmake --build build-prof -j$(nproc)
+
+      - name: Generate test certificates (middleware profiling)
+        if: matrix.compiler == 'gcc'
+        run: python3 scripts/gen_test_certs.py --out-dir build-prof/tests
+
+      - name: Test (middleware profiling)
+        if: matrix.compiler == 'gcc'
+        run: |
+          ctest --test-dir build-prof -N
+          # 只跑中间件相关的套件。全量测试在 build 和 build-cov 里已经跑过两遍，
+          # 这里再跑一遍纯属重复，而 gcc 组合本来就有两份全量测试，时间吃不消。
+          ctest --test-dir build-prof --no-tests=error --output-on-failure --timeout 60 -j4 \
+            -R '^(MiddlewareTest|MiddlewareProfilingTest|MiddlewareBodyTest)' \
+            -E "${{ env.CI_TEST_EXCLUDE }}"
+        env:
+          HICAL_REQUIRE_SSL_CERTS: "1"
+
+      # 光看 ctest 绿没用：profiling 没打开、用例被 #ifdef 编没了的时候 gtest 照样返回 0
+      # （只打印 "0 tests from 0 test suites" 和一句 WARNING）。所以这里显式逐条确认用例名
+      # 真的出现在 [ OK ] 行里，把「跑了」和「没编进来」区分开。
+      - name: Assert MiddlewareProfilingTest actually ran
+        if: matrix.compiler == 'gcc'
+        run: |
+          bin=$(find build-prof -type f -name 'test_middleware' -print -quit)
+          if [[ -z $bin || ! -x $bin ]]; then
+            echo "::error::找不到 test_middleware 测试可执行文件，构建产物布局和预期不符"
+            exit 1
+          fi
+          out=$("$bin" --gtest_filter='MiddlewareProfilingTest.*' --gtest_color=no)
+          echo "$out"
+          for t in MiddlewareProfilingTest.SyncMiddlewareStillRunsInsteadOfBeingDropped \
+                   MiddlewareProfilingTest.MixedSyncAndAsyncFallsBackWithoutFakeStats \
+                   MiddlewareProfilingTest.BuildForKeepsSyncMiddleware; do
+            grep -q "OK ] $t" <<< "$out" || { echo "::error::$t 没有执行，profiling 用例可能根本没编进来"; exit 1; }
+          done
+          echo "MiddlewareProfilingTest 三条关键用例均已执行通过"
 
       # ── 自动格式化修复 (仅 GCC job, 仅非 fork 的 PR) ──
       - name: Auto-fix formatting
@@ -816,83 +932,3 @@ jobs:
             '-DVCPKG_MANIFEST_MODE=OFF'
           )
           python scripts/check_hical_cli.py @checkArgs
-
-  # ── 中间件 profiling 构建（打开 HICAL_ENABLE_MIDDLEWARE_PROFILING） ──
-  # 这个选项默认 OFF，上面那个 build job 从来不开它，于是 tests/test_middleware.cpp 里
-  # #ifdef HICAL_ENABLE_MIDDLEWARE_PROFILING 包住的 MiddlewareProfilingTest 用例在所有
-  # CI 里都不参与编译。那几条用例守的是「profiling 模式下 Sync 中间件被整条丢弃、认证/限流
-  # 静默 fail-open」这个缺陷，没人守着的话，重构 MiddlewarePipeline::build() 会无声退回原状。
-  # 只起 Linux + GCC 一路，不铺矩阵，CI 时间克制。
-  middleware-profiling:
-    runs-on: ubuntu-24.04
-    name: ubuntu-24.04 / gcc / middleware-profiling
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Install CMake
-        run: |
-          python -m pip install --only-binary=:all: cmake==4.4.3
-          cmake --version
-          ctest --version
-          python -c "import subprocess; actual = subprocess.check_output(['cmake', '--version'], text=True).splitlines()[0]; assert actual == 'cmake version 4.4.3', actual"
-
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libboost-all-dev libssl-dev libgtest-dev liburing-dev zlib1g-dev
-
-      - name: Setup ccache
-        uses: hendrikmuhs/ccache-action@v1
-        with:
-          key: ubuntu-24.04-gcc-middleware-profiling
-
-      - name: Configure (middleware profiling)
-        run: |
-          cmake -B build -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_C_COMPILER=gcc-14 \
-            -DCMAKE_CXX_COMPILER=g++-14 \
-            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
-            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
-            -DHICAL_ENABLE_MIDDLEWARE_PROFILING=ON \
-            -DHICAL_INSTALL_CLI=OFF \
-            -DHICAL_DISABLE_IO_URING=ON \
-            -DHICAL_WITH_HTTP2=OFF \
-            -DHICAL_WITH_HTTP_CLIENT=OFF
-
-      - name: Build (middleware profiling)
-        run: cmake --build build -j$(nproc)
-
-      - name: Generate test certificates (middleware profiling)
-        run: python3 scripts/gen_test_certs.py
-
-      - name: Test (middleware profiling)
-        run: |
-          ctest --test-dir build -N
-          ctest --test-dir build --no-tests=error --output-on-failure --timeout 60 -j4 -E "${{ env.CI_TEST_EXCLUDE }}"
-        env:
-          HICAL_REQUIRE_SSL_CERTS: "1"
-
-      # 光看 ctest 绿没用：profiling 没打开、用例被 #ifdef 编没了的时候 gtest 照样返回 0
-      # （只打印 "0 tests from 0 test suites" 和一句 WARNING）。所以这里显式逐条确认用例名
-      # 真的出现在 [ OK ] 行里，把「跑了」和「没编进来」区分开。
-      - name: Assert MiddlewareProfilingTest actually ran
-        run: |
-          bin=$(find build -type f -name 'test_middleware' -print -quit)
-          if [[ -z $bin || ! -x $bin ]]; then
-            echo "::error::找不到 test_middleware 测试可执行文件，构建产物布局和预期不符"
-            exit 1
-          fi
-          out=$("$bin" --gtest_filter='MiddlewareProfilingTest.*' --gtest_color=no)
-          echo "$out"
-          for t in MiddlewareProfilingTest.SyncMiddlewareStillRunsInsteadOfBeingDropped \
-                   MiddlewareProfilingTest.MixedSyncAndAsyncFallsBackWithoutFakeStats \
-                   MiddlewareProfilingTest.BuildForKeepsSyncMiddleware; do
-            grep -q "OK ] $t" <<< "$out" || { echo "::error::$t 没有执行，profiling 用例可能根本没编进来"; exit 1; }
-          done
-          echo "MiddlewareProfilingTest 三条关键用例均已执行通过"
