@@ -37,6 +37,9 @@ OpenAPI 3.0（即过去的 Swagger 规范）是描述 HTTP API 的行业标准 J
 ```cpp
 #include "core/MetaJson.h"
 #include "core/OpenApiSchema.h"
+#include <cstddef>
+#include <string>
+#include <vector>
 
 // 用户信息 DTO
 struct UserDTO
@@ -47,6 +50,14 @@ struct UserDTO
     HICAL_JSON(UserDTO, REQUIRED(name), age, email)
 };
 HICAL_SCHEMA_NAME(UserDTO, "UserDTO")
+
+struct UserListDTO
+{
+    std::vector<UserDTO> users;
+    std::size_t total = 0;
+    HICAL_JSON(UserListDTO, REQUIRED(users), REQUIRED(total))
+};
+HICAL_SCHEMA_NAME(UserListDTO, "UserListDTO")
 
 // 创建用户的请求体
 struct CreateUserRequest
@@ -82,7 +93,7 @@ HICAL_SCHEMA_NAME(ErrorResponse, "ErrorResponse")
 | 嵌套 `HICAL_JSON` 结构体（有 `HICAL_SCHEMA_NAME`） | `{"$ref":"#/components/schemas/XXX"}` |
 | 嵌套 `HICAL_JSON` 结构体（无名称）                 | 内联展开完整 schema                   |
 
-`REQUIRED(field)` 会把该字段加入 schema 的 `required` 数组，与业务验证逻辑保持一致。
+`REQUIRED(field)` 把这个字段用的 JSON 键加进 `required`。如果别名和必填分开写，Schema 也只列一遍，用的是别名。旧的 `jsonSchema<T>()` 还是只写类型和必填项，`MIN`、`LENGTH`、`PATTERN` 这些规则在读请求时检查。
 
 ---
 
@@ -99,15 +110,15 @@ struct UserHandler
     // ---- GET /api/users ----
     HttpResponse listUsers(const HttpRequest& /*req*/)
     {
-        boost::json::array arr;
-        arr.push_back(toJson(UserDTO{"Alice", 30, "alice@example.com"}));
-        return HttpResponse::json({{"users", arr}, {"total", 1}});
+        UserListDTO result {{{"Alice", 30, "alice@example.com"}}};
+        result.total = result.users.size();
+        return HttpResponse::json(toJson(result));
     }
     HICAL_HANDLER(Get, "/api/users", listUsers)
     HICAL_API(listUsers,
         builder::summary(info, "获取用户列表");
         builder::tags(info, {"users"});
-        builder::response<UserDTO>(info, 200, "用户列表"))
+        builder::response<UserListDTO>(info, 200, "用户列表"))
 
     // ---- POST /api/users ----
     HttpResponse createUser(const HttpRequest& req)
@@ -175,7 +186,7 @@ int main()
 
     // 批量注册所有 DTO 的 schema 到 components/schemas
     std::unordered_map<std::string, boost::json::object> schemas;
-    registerSchemas<UserDTO, CreateUserRequest, ErrorResponse>(schemas);
+    registerSchemas<UserListDTO, CreateUserRequest, ErrorResponse>(schemas);
     for (auto& [name, schema] : schemas)
     {
         registry->addSchema(name, std::move(schema));
@@ -234,7 +245,7 @@ GET http://localhost:8080/docs           # Swagger UI 页面
             "description": "用户列表",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/UserDTO" }
+                "schema": { "$ref": "#/components/schemas/UserListDTO" }
               }
             }
           }
@@ -259,6 +270,14 @@ GET http://localhost:8080/docs           # Swagger UI 页面
   },
   "components": {
     "schemas": {
+      "UserListDTO": {
+        "type": "object",
+        "properties": {
+          "users": { "type": "array", "items": { "$ref": "#/components/schemas/UserDTO" } },
+          "total": { "type": "integer", "format": "int64", "minimum": 0 }
+        },
+        "required": ["users", "total"]
+      },
       "UserDTO": {
         "type": "object",
         "properties": {
@@ -332,20 +351,13 @@ HICAL_API(getUserOrders,
 
 ---
 
-## 八、与 Oat++ 的对比
+## 八、分开描述输入和输出
 
-Oat++ 是 C++ 生态里另一个有 Swagger 集成的框架，来看看标注风格的差异：
+开了 OpenAPI，可以用 `hical::meta::openapi::inputSchema<T>()` 生成请求 Schema，用 `outputSchema<T>()` 生成响应 Schema。两种写法都能用普通 DTO、字符串、int32、bool 和普通 DTO 列表，嵌套 Schema 会直接展开。比如创建房间时，房间容量必须在 1～100 之间，响应里的 `capacity` 仍按 int32 的完整范围描述，`bool` 字段两个方向都是 `boolean`。原来的 `jsonSchema<T>()` 和宏路由文档照常用。
 
-| 维度           | Hical                                    | Oat++                                            |
-| -------------- | ---------------------------------------- | ------------------------------------------------ |
-| 路由标注       | `HICAL_HANDLER` + `HICAL_API`            | `ENDPOINT_INFO` + `ENDPOINT`                     |
-| Schema 生成    | 从 `HICAL_JSON` 自动推导                 | 需要继承 `oatpp::DTO` 并用 `DTO_FIELD`           |
-| 响应声明       | `builder::response<T>(info, 200, "...")` | `info->addResponse<Object<T>>(Status::CODE_200)` |
-| 新依赖         | 零（复用 Boost.JSON）                    | 引入 oatpp-swagger 库                            |
-| 编译期类型检查 | `static_assert` + concepts               | 运行时反射                                       |
-| 内存模型       | 零堆分配查找（透明哈希）                 | 智能指针 DTO 对象                                |
+房间示例直接用安装包编译，登记一个同步接口时顺手把 OpenAPI 文档也登记了。示例自带联调脚本（手工跑，依赖 Node、JRE 和 Schemathesis），会用同一份 TypeScript 代码走 HTTP 创建、查询、列出房间，也会用 Schemathesis 检查响应状态码和 JSON 结构。假如服务和文档一起把列表改成单个房间，Schemathesis 可以通过，但重新生成 SDK 后，原来的 TypeScript 代码就编不过了。请求里的业务规则仍由服务端检查。见[房间示例](../examples/api_contract/README.md)。
 
-Hical 的核心差异在于 schema 是**编译期从类型信息推导**的，而不是运行时通过 DTO 对象的虚函数反射。这意味着写错类型在编译阶段就能发现，而不是部署后才看到错误的文档。
+同步适配器放在示例目录，只实现了这三个接口需要的功能。同一组接口也可以对照 [手写 Hical](../tests/contract/api_contract/comparison/hical_manual) 和 [oatpp](../tests/contract/api_contract/comparison/oatpp) 的写法。
 
 ---
 
@@ -357,7 +369,7 @@ Hical OpenAPI 模块的设计目标就是**让文档变成代码的副产品**�
 - 写完路由实现后紧跟一个 `HICAL_API` 块，文档就更新了
 - `serveOpenApi` 一行，Swagger UI 就上线了
 
-整个链路没有运行时解析、没有 YAML 文件、没有代码生成步骤。API 实现改了，下次请求 `/openapi.json` 时文档自动跟着变。
+登记完路由和 DTO 就能生成 OpenAPI 文档，省得另外维护一份 YAML。改了接口以后，还得看看实际响应能不能对上文档。要发 SDK 的话，可以拿导出的文档重新生成，再用原来的调用代码跑一遍。
 
 完整可运行示例见 `examples/openapi_server.cpp`。
 

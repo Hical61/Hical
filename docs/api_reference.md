@@ -826,6 +826,18 @@ C++26 反射 / C++20 宏双轨的 JSON 自动序列化/反序列化系统。
 | `PATTERN(field, "re")`          | 正则匹配校验                             |
 | `LENGTH(field, min, max)`       | 字符串长度范围校验                       |
 
+同一个成员可以分开写几个装饰器。比如同时写 `ALIAS(name, "room_name")`、`REQUIRED(name)` 和 `NOT_EMPTY(name)`，那 `room_name` 就是必填项，传空字符串也不行。输出里只写一次，位置按成员第一次声明算。多个 `MIN`、`MAX` 或 `LENGTH` 取交集，多条 `PATTERN` 要全部匹配。
+
+约束用错字段类型是编译期错误：`MIN` / `MAX` 只认算术类型，`NOT_EMPTY` / `PATTERN` / `LENGTH` 只认 `std::string`，`static_assert` 直接拦下来。这条只管宏展开出来的描述器，手写 `makeField` 拼描述器的代码不受限制。
+
+如果同一个成员写了两个不同的别名，或把 `HICAL_IGNORE` 和其他声明写在一起，第一次读取字段信息时就会抛 `std::logic_error`。不同的可见成员用同一个 JSON 键、适用的数值边界不是有限值、约束区间为空，也会报这个错。`PATTERN` 里的正则写错，同样在第一次拿字段信息时就报 `std::logic_error`，不用等到读数据。正则只编译一次，之后校验直接复用。
+
+`int64_t` / `uint64_t` 这类 64 位整型的数值边界有精度限制：边界必须落在 ±2^53（`9007199254740992`）以内，而且得是整数。描述器内部用 `double` 存边界，超出这个范围就精确表示不了，定义期会抛 `std::logic_error`。浮点字段（`float` / `double`）不受这条限制，`MIN(ratio, 0.5)` 照常用。
+
+读整数时先查目标类型的范围。超出范围、把负数读进无符号类型，或传 `1.0`，都会失败。没传的非必填字段保留默认值，多传的未知键会忽略。如果明确传了 `null`，就按字段类型检查，字符串和整数都不接受它。`bool` 字段只认 `true` / `false`，传 `1` 也是类型错误。
+
+`LENGTH` 算字节数，`PATTERN` 匹配整个字符串。取值检查在读入时执行；正则本身的编译在定义期完成，写错会立刻报定义错误。
+
 #### C++26 反射属性（`HICAL_HAS_REFLECTION == 1` 时）
 
 ```cpp
@@ -834,8 +846,13 @@ struct User
     [[=hical::anno::json_required]]           int id;
     [[=hical::anno::json_rename("userName")]] std::string name;
     [[=hical::anno::json_ignore]]             std::string internal;
+    [[=hical::anno::json_min(1),
+      = hical::anno::json_max(100)]]          std::int32_t capacity;
+    [[=hical::anno::json_not_empty]]          std::string title;
 };
 ```
+
+`json_min` 和 `json_max` 的边界必须是 int32 能表示的整数，`json_not_empty` 只能用在 `std::string` 上，写错类型编译期就报错。这三条规则同时作用于 JSON 读写和 `inputSchema<T>()`。注意旧的 `jsonSchema<T>()` 只描述类型和必填，不反映这三条。
 
 #### 示例
 
@@ -2494,7 +2511,7 @@ int main()
 
 ### OpenApiSchema
 
-从 `HICAL_JSON` 类型自动生成 OpenAPI 3.0 Schema。
+用 DTO 生成 OpenAPI 3.0 Schema。下面这些函数都在 `hical::meta::openapi` 里。
 
 **头文件：** `<hical/core/OpenApiSchema.h>`
 
@@ -2502,12 +2519,18 @@ int main()
 | ---------------------------- | --------------------- | ------------------------------ |
 | `jsonSchema<T>()`            | `boost::json::object` | 生成 Schema Object             |
 | `collectSchemas<T>(schemas)` | `void`                | 递归收集 T 及嵌套类型的 schema |
+| `inputSchema<T>()`           | `boost::json::object` | 描述请求用的 JSON 键、必填项和输入规则 |
+| `outputSchema<T>()`          | `boost::json::object` | 描述响应会写出的字段及类型范围 |
 
 | 宏                                | 说明                     |
 | --------------------------------- | ------------------------ |
 | `HICAL_SCHEMA_NAME(Type, "name")` | 注册类型的 `$ref` 引用名 |
 
 **类型映射：** `bool`→boolean, `int`→integer/int32, `int64_t`→integer/int64, `float`→number/float, `double`→number/double, `string`→string, `vector<T>`→array, 带 `HICAL_JSON` 的结构体→object/$ref。
+
+上面的类型表是给 `jsonSchema<T>()` 用的。`inputSchema<T>()` 和 `outputSchema<T>()` 目前支持 `std::string`、`std::int32_t`、`bool`、普通非递归 DTO，以及用默认分配器的 `std::vector<DTO>`。它们直接展开嵌套 Schema。请求一侧认必填、忽略、别名、字符串非空和 int32 上下界。响应把实际会写出的字段都列为必填，int32 按完整类型范围来写，`bool` 两个方向都出 `{"type":"boolean"}`。碰到不支持的类型或定制，生成时会抛 `std::logic_error`。
+
+服务端会在转换前检查整数范围，还会拒绝 `1.0` 这种浮点写法。OpenAPI 的 `integer` 写不出这条区别。请求和响应 Schema 怎么分开登记，可以看[房间示例](../examples/api_contract/README.md)。
 
 ---
 

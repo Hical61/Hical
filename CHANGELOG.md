@@ -10,9 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **分开生成请求和响应的 Schema。** 开了 OpenAPI，就能用 `inputSchema<T>()` 和 `outputSchema<T>()`。C++20 宏和 C++26 注解都认别名、必填、忽略、字符串非空和 int32 上下界。原生反射为此加了 `json_min`、`json_max` 和 `json_not_empty`。嵌套 DTO 和列表直接写进 Schema。比如创建房间时，房间容量必须在 1～100 之间，响应还是按 int32 的完整范围来写。旧的 `jsonSchema<T>()` 照常用。打开原生反射时，CMake 会先试编译一段反射代码，CI 也会比较两套构建的结果，并从安装包编译小工程。
+- **房间接口示例。** 用已安装的 Hical 包就能编译。创建、查询、列表三个同步接口都在同一处登记路由和 OpenAPI 文档。示例自带联调脚本，需要手动执行（依赖 Node、JRE 和 Schemathesis，不在 CI 里跑）：脚本会用生成的 TypeScript 客户端发请求，也会用 Schemathesis 检查响应的状态码和 JSON 结构。把列表改成单个房间时，原来的客户端会报编译错误。适配器随示例提供。
 - **用 `hical new` 建工程**：可以直接运行 `python scripts/hical.py new demo-api`，也可以打开默认关闭的 `HICAL_INSTALL_CLI`，在 POSIX 上装 `hical`，在 Windows 上装 `hical.exe`。整个安装前缀可以搬走，生成目录也可以带中文和空格。生成的 C++20 工程链接已安装的 `hical::hical_core`，自带 CTest 路由测试，Release 下也会检查状态码和正文。只有生成这一步用到 Python。目标路径已存在时直接报错，中途写入失败时按清单清理这次创建的文件和空目录。
-  - Windows 最初试过批处理入口，PowerShell 传进来的 `R&D` 会被再次解析，可能把工程建到别处。现在用原生 `hical.exe` 直接把 Unicode 参数交给 Python，安装检查会跑一遍 PowerShell 回归。输出仍用当前编码，遇到扩展汉字或 emoji 显示不了就用转义，避免工程明明已生成，打印提示时却抛出 `UnicodeEncodeError` 并返回失败。
-  - 本地用 MSYS2 验证了安装、搬移和独立工程构建。Linux、MSVC 和最低 CMake 版本还要看 CI 结果。MinGW 链接器在中文路径下可能找不到静态库，排查方法见 [CLI 指南](docs/cli-guide.md)。目前只有 `new`，`gen`、`dev` 和热重载都还没加。
 
 - **HTTP/2 双端候选实现**：新增默认关闭的 `HICAL_WITH_HTTP2`，基于静态 nghttp2 `>=1.70.0,<2` 和 TLS ALPN，复用现有路由、请求、响应及中间件。服务端支持有界多流、独立尾字段、文件输出与排空；可选客户端支持 H1、自动协商、强制 H2。当前仍在完成互操作、压力及跨平台验收，使用方式与范围见 [HTTP/2 使用指南](docs/http2-guide.md)。
 
@@ -25,10 +25,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **修了原生 JSON 读写的几个边界。** 最外层 View 改完对象后，再检查非空和范围。成员用了自定义解码，也要遵守自己声明的规则。View 能给列表换顺序或加元素，所以用列表输入里实际用到的规则检查每个最终元素。碰到同一字段路径混用了普通解码和自定义映射、没法分清归属，就直接报错。列表元素有 Boost.JSON 自定义解码器时，可以没有默认构造函数。`const` 列表也能照常序列化，忽略的字段在编译时就跳过。宏写法生成 Schema 时，如果成员指针在当前 DTO 上用不了，会直接报错。
+- **同一字段可以分开写别名、必填和校验规则。** 比如给 `name` 写了 `ALIAS(name, "room_name")`，另写一条 `REQUIRED(name)`，普通 JSON、直接序列化和 OpenAPI 都只认 `room_name`。同一成员有两个不同别名、忽略和其他声明混用、两个可见成员撞了 JSON 键，或者约束区间有问题，第一次拿字段信息时就会报错。读整数时先查范围，越界、负数转无符号、`1.0` 这类浮点写法都会拒绝。用户列表示例的文档现在也写清楚了，返回的是带 `users` 和 `total` 的对象。
 - **Markdown 转 PPTX**：修复 `scripts/md2pptx.py` 丢失章节前导语、正文重叠、表格行高不足、续页编号重复和有序列表编号丢失的问题；按文本实际宽度换行分页，SVG 按目标分辨率缩放，避免火焰图缩在图片左上角。
 - **gzip 压缩与传输编码**：HTTP/2 发送原始 gzip 字节，HTTP/1 保留分块编码；重新准备响应时不再同时设置 Content-Length。补齐 qvalue、Vary 和已编码响应的处理，异步压缩结果回到原执行器后再写入响应。
 - **H2 连接池重连期限**：等待流槽位的请求遇到旧连接断开后，按自身 `connectTimeout` 等待共享重连，超时请求不再迟到发送；原请求总期限和队列期限保持不变。
 - **Linux H2 CI 依赖解包**：保留归档普通文件的执行权限并剥离特殊权限，避免 Boost 内部构建脚本因不可执行而失败；旧规则生成的源码缓存会明确要求使用新的依赖目录。
+- **原生反射轨的整型读写收紧了。** 以前 `fromJsonTemplate` 只给 `int32` 和 `string` 走带范围检查的严格解码，`int8`、`int16`、`int64`、`uint*`、`bool` 这些都丢给 Boost 的 `value_to`。`value_to<int64_t>` 对 `1.0` 是照收不误的，`value_to<int32_t>` 也一样，所以同一个 DTO 里换个字段宽度，浮点写法就从「拒绝」变成「静默截断」。现在凡是整型（`bool` 也算）统一走 `valueFromJson`，宽度、符号、范围一并检查，`bool` 只认 `true`/`false`，传 `1` 照样报错。`nativeCanDeferJsonRules` 里的特殊判断也跟着改了，不然规则会走错暂缓路径。
+- **共同契约支持 `bool` 字段了。** `inputSchema<T>()` 和 `outputSchema<T>()` 以前碰到 `bool` 成员会抛「不支持此字段类型」，现在两个方向都输出 `{"type":"boolean"}`。分支位置放在 string 后面、整型判断前面，跟 `typeToSchema` 的顺序对齐，免得以后有人顺手改成 `is_integral_v` 把 `bool` 吃掉。
+- **约束装饰器用错字段类型改成编译期报错。** `MIN`/`MAX` 写给字符串、`NOT_EMPTY`/`PATTERN`/`LENGTH` 写给整数，以前是静默不生效，跑起来才发现规则没起作用。现在宏展开时先用 `decltype` 推出成员类型，再 `static_assert` 拦一道，编译器直接报「MIN/MAX 只能用于算术类型字段」。运行时语义一点没动，`validateField` 那边该跳过的还是跳过；手写 `makeField` 构造描述器的代码（测试里有好几处）不受这条限制，原来静默的行为保留。
+- **64 位整型的数值边界加了精度护栏。** 描述器里的边界是 `double`，`MIN(id, 9007199254740994.0)` 这种超了 2^53 的写法看着没问题，实际比较时精度早就丢了，约束跟声明者的意图对不上。现在 `int64_t`/`uint64_t`/`long long`（64 位 Linux 上的 `long` 也算）声明边界时会检查：超出 ±2^53 或者不是整数，定义期抛 `std::logic_error`。`FieldConstraintKind` 为此多了个 `hWideNumeric`，`makeFieldMergeEntry` 里用 `is_integral_v && sizeof >= 8` 分类。浮点字段不受影响，`MIN(ratio, 0.5)` 这种小数边界该用还用。有一点得说清楚：`9007199254740993.0` 这个字面量在 double 里本来就舍入成 2^53 了，源码层面已经分不出来，能拦住的最小越界值是 2^53+2。
+- **正则校验：写错的定义期就报，编译过的存起来复用。** 以前 `PATTERN(text, "[")` 要等到真正读数据、`std::regex` 构造抛异常被吞掉，才表现为「匹配失败」，排查起来像业务数据有问题。现在 `validateFieldDefinition` 在第一次拿字段信息时试编译一遍，写错了直接抛 `logic_error` 带上原始 pattern。顺手把编译结果存进描述器的 `compiledPattern`/`compiledAdditionalPatterns`，后续每次读入都复用，不再一个请求编一次正则。缓存填在 `hicalJsonFields()` 的 static 初始化里，那时候还没别的线程看见这个对象，发布之后只读，不需要加锁。代价是 `FieldOptions` 里多了非字面类型成员，`makeField` 的三个重载只能去掉 `constexpr`——全仓没有在常量表达式里用它的地方，编译验证过。
 
 ## [2.7.2] - 2026-10-22
 

@@ -891,7 +891,7 @@ GenericServer<AsioBackend> server;
 | **C++26 注解轨**       | `__cpp_impl_reflection >= 202506L` 且 `__cpp_lib_reflection >= 202506L`（需 `-freflection`），或手动定义 `HICAL_FORCE_REFLECTION` | `[[=hical::anno::...]]` 注解值，框架用 `^^T` 自动枚举    |
 | **C++20 宏轨**（默认） | 其余情况（GCC 14 / Clang 20 / MSVC 2022 等）                                                                                      | `HICAL_JSON` / `HICAL_HANDLER` / `HICAL_ROUTES` 装饰器宏 |
 
-检测逻辑在 `Reflection.h`：`#include <version>` 之后同时看 `__cpp_impl_reflection` 和 `__cpp_lib_reflection` 是否都 ≥ `202506L`，两者都满足才把 `HICAL_HAS_REFLECTION` 置 1。`__cpp_lib_reflection` 只在显式传了 `-freflection` 之后才会定义，所以注解轨不是"编译器支持就自动开"——得在构建上把开关拨开（`-DHICAL_ENABLE_REFLECTION=ON`，CMake 只对 C++ 源加 `-freflection`，否则 C 源会被这个选项带崩）。用户代码不用自己判 `HICAL_HAS_REFLECTION`，头文件已做好条件编译隔离。
+`Reflection.h` 引入 `<version>` 后，会看 `__cpp_impl_reflection` 和 `__cpp_lib_reflection` 是否都达到 `202506L`。配置时打开 `-DHICAL_ENABLE_REFLECTION=ON`，CMake 会试着编译一段用到反射、注解值和静态成员访问的代码。工具链不支持，配置就会报错。`-freflection` 只传给 C++ 源文件。用安装包时，链接 `hical::hical_core` 就能拿到对应的 C++ 标准和反射选项。
 
 ### 10.2 C++20 宏轨（默认）
 
@@ -936,7 +936,7 @@ struct UserDTO
 
 **必须是注解值 `[[=...]]` 而不是标准属性 `[[...]]`**。旧的标准属性写法不会报错，但注解不生效——路由不注册（表现为 404）、`json_ignore` 被忽略（字段照常序列化出去），迁移时最容易踩这个。
 
-注解的分派不是标准属性的字符串匹配，而是「注解值 + `requires` 重载检测」：类型不匹配的成员自动跳过，自定义类型可以增量提供自己的重载，同一对方括号里也能跟用户注解并列（`[[= hical::anno::json_snake_to_lowerCamel, = user_define::do_log]]`）。
+框架拿到注解值后，用 `requires` 看有没有匹配的重载。有匹配才调用自定义转换。同一对方括号里也能写自己的注解，比如 `[[= hical::anno::json_snake_to_lowerCamel, = user_define::do_log]]`。`json_min` 和 `json_max` 的边界必须是 int32 能表示的整数。`json_not_empty` 只能用在 `std::string` 上，写错类型会在编译时报错。
 
 支撑这套的四个组件：
 
@@ -953,12 +953,12 @@ struct UserDTO
 
 ```cpp
 // 用户写（两条轨都是这样）
-auto user = co_await request.readJson<UserDTO>();
+auto user = request.readJson<UserDTO>();
 
 // 框架内部
 // 1. 读消息体并解析 JSON
 // 2. 按轨道映射字段到 UserDTO（注解轨用 ^^T 枚举，宏轨用 HICAL_JSON 生成的 FieldDescriptor）
-// 3. 缺字段默认跳过，保持成员默认值；只有标了 json_required 的成员才报错
+// 3. 没传的非必填字段保留默认值，传了就按字段规则检查
 ```
 
 ### 10.5 两条轨的能力对照
@@ -971,7 +971,25 @@ auto user = co_await request.readJson<UserDTO>();
 | 命名风格转换 | `ALIAS` 装饰器逐个手写                                                      | 类级 `[[=hical::anno::json_snake_to_lowerCamel]]` 等注解                      |
 | 继承链成员   | 不支持                                                                      | `CollectMember.h` 收集，含二义过滤                                            |
 
-注解轨目前唯一的前置是编译器：P2996 还在实验阶段（如 GCC 16），所以默认轨仍是宏轨。示例见 `examples/reflection_server_26.cpp`，配套测试 `test_meta_anno` / `test_meta_schema` / `test_collect_member` / `test_ct_conv`（不支持反射的编译器上后三者走 GTEST_SKIP）。
+默认走 C++20 宏。要用注解，需要支持反射和注解值的工具链，比如 GCC 16、能配置 C++26 的 CMake，以及 Boost 1.90 或更新版本。示例在 `examples/reflection_server_26.cpp`。`test_meta_anno`、`test_meta_schema` 和 `test_collect_member` 在宏模式下会跳过原生用例，`test_ct_conv` 的命名转换两边都能跑。
+
+### 10.6 共同字段契约
+
+两种写法各自找成员。宏第一次拿字段信息时合并描述器，之后通过成员指针读写。注解则用 `template for` 和 splice。共用的规则只管 JSON 键、必填、忽略、字符串非空和 int32 范围。成员指针、tuple 和反射元对象各自留在实现里，字段规则也不用每个请求重新生成。
+
+原生解码会当场检查类型和必填项。如果执行了 View，非空和范围检查要等最外层 View 跑完。成员自定义转换返回值后，由它负责这次解码，该成员自己声明的规则照常检查。
+
+View 能给列表换顺序或加元素，改完就没法按原下标对应了。框架会收集原列表里普通解码实际用到的规则，再检查改完后的每个元素。如果同一个字段路径混用了普通解码和自定义映射，又有规则等着检查，就报错。没有 View 执行时，列表仍然逐项按自己的输入检查。
+
+开启 OpenAPI 后，`hical::meta::openapi::inputSchema<T>()` 会写下明确标为必填的字段和输入规则。`outputSchema<T>()` 把实际会写进响应的字段列为必填，范围按类型本身来算。比如输入要求 `capacity <= 100`，响应里的 101 仍可正常输出。`jsonSchema<T>()`、`MetaSchema` 和已有的路由登记接口照原来的方式用。
+
+这两个入口支持 `std::string`、`bool`、`int32_t`、普通 DTO、嵌套对象和用默认分配器的 `std::vector<DTO>`，嵌套 Schema 会直接展开。用原生反射生成 Schema 时，只接受由 Hical 遍历字段的普通聚合类型。宏那边即使忽略一个字段，编译时也得生成它的转换代码，所以隐藏字段只接受算术类型和字符串。遇到 `optional`、递归 DTO、共同规则没覆盖的旧约束，或自定义 JSON 转换、View、Schema 注解时，生成会报定义错误。用这些定制的代码可以继续走原有 JSON 入口。
+
+读 int32 时先查范围，再转换。`1.0` 这种浮点写法也会拒绝，OpenAPI 的 `integer` 写不出这条区别。旧宏的长度和正则继续由反序列化检查。
+
+`test_json_contract` 先让两个构建分别跑同一组输入、核对各自的预期，再比较结果。`native-contract-smoke` 会编译两边的代码，确认原生用例确实跑到了，再从安装包编译一个小工程。测试还会看 CMake 实际加载了哪份配置。指定目录缺配置时，找到别处的包也算失败。
+
+房间示例在启动时生成 Schema，同一次登记里调用 Router 和 OpenApiRegistry。之后请求直接走同步路由。房间数据放在内存里，由同一个事件循环处理，适配器放在示例目录。见[房间示例](../examples/api_contract/README.md)。
 
 ---
 
@@ -1350,7 +1368,7 @@ struct NetworkError
 
 | 组件              | 文件                    | 关键 API / 宏                                                              |
 | ----------------- | ----------------------- | -------------------------------------------------------------------------- |
-| `OpenApiSchema`   | `OpenApiSchema.h`       | `jsonSchema<T>()`、`collectSchemas<T>()`、`HICAL_SCHEMA_NAME`              |
+| `OpenApiSchema`   | `OpenApiSchema.h`       | `jsonSchema<T>()`、`collectSchemas<T>()`、`HICAL_SCHEMA_NAME`、`inputSchema<T>()`、`outputSchema<T>()` |
 | `OpenApiRegistry` | `OpenApiRegistry.h/cpp` | `RouteApiInfo`、`HICAL_API()`、`builder::*`、`registerRoutesWithOpenApi()` |
 | `OpenApiDocument` | `OpenApiDocument.h/cpp` | `OpenApiDocument`、`OpenApiConfig`、`generate()`                           |
 | `OpenApiEndpoint` | `OpenApiEndpoint.h`     | `serveOpenApi(router, doc)`                                                |
