@@ -32,6 +32,12 @@ if(_HICAL_WITH_DATABASE)
 endif()
 unset(_HICAL_WITH_DATABASE)
 
+# libpq 后端。hicalTargets 里导出了 PostgreSQL::PostgreSQL，配置阶段不先找到它，
+# 使用方一 include targets 就会报「target was not found」。
+if(@HICAL_WITH_PGSQL@)
+    find_dependency(PostgreSQL)
+endif()
+
 include("${CMAKE_CURRENT_LIST_DIR}/hicalTargets.cmake")
 
 check_required_components(hical)

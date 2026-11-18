@@ -85,6 +85,11 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # Hical 使用头文件而非 C++ Modules；避免 CMP0155 启用额外的模块扫描工具依赖。
 set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
 
+if(HICAL_ENABLE_REFLECTION)
+    include(cmake/HicalReflectionCheck.cmake)
+    hical_check_native_reflection()
+endif()
+
 # 导出编译命令（用于 clangd/clang-tidy）
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 

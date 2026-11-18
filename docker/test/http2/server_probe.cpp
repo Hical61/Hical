@@ -94,7 +94,14 @@ namespace
 		server.router().get("/json-dto",
 							[](const hical::HttpRequest&)
 							{
+#if HICAL_HAS_REFLECTION
+								const auto payload = hical::meta::toJson(JsonPayload {});
+								// 互操作脚本逐字节比较响应，这里按固定顺序输出字段。
+								return hical::HttpResponse::json(
+									{{"message", payload.at("message")}, {"answer", payload.at("answer")}});
+#else
 								return hical::HttpResponse::jsonFrom(JsonPayload {});
+#endif
 							});
 		server.router().get(
 			"/json-writer",

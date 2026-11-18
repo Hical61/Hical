@@ -1,4 +1,5 @@
 /**
+ * @file openapi_server.cpp
  * @brief OpenAPI 自动生成完整示例
  * 演示 Hical 反射层与 OpenAPI 3.0 的集成：
  *   - DTO 定义 + HICAL_JSON + HICAL_SCHEMA_NAME
@@ -18,6 +19,7 @@
 #include "core/OpenApiDocument.h"
 #include "core/OpenApiEndpoint.h"
 
+#include <cstddef>
 #include <iostream>
 #include <vector>
 
@@ -35,6 +37,14 @@ struct UserDTO
 	HICAL_JSON(UserDTO, REQUIRED(name), age, email)
 };
 HICAL_SCHEMA_NAME(UserDTO, "UserDTO")
+
+struct UserListDTO
+{
+	std::vector<UserDTO> users;
+	std::size_t total = 0;
+	HICAL_JSON(UserListDTO, REQUIRED(users), REQUIRED(total))
+};
+HICAL_SCHEMA_NAME(UserListDTO, "UserListDTO")
 
 struct CreateUserRequest
 {
@@ -79,14 +89,13 @@ struct ApiHandler
 	// GET /api/users — 列出所有用户
 	HttpResponse listUsers(const HttpRequest& /*req*/)
 	{
-		boost::json::array users;
-		users.push_back(toJson(UserDTO {"Alice", 30, "alice@example.com"}));
-		users.push_back(toJson(UserDTO {"Bob", 25, "bob@example.com"}));
-		return HttpResponse::json({{"users", users}, {"total", 2}});
+		UserListDTO result {{{"Alice", 30, "alice@example.com"}, {"Bob", 25, "bob@example.com"}}};
+		result.total = result.users.size();
+		return HttpResponse::json(toJson(result));
 	}
 	HICAL_HANDLER(Get, "/api/users", listUsers)
 	HICAL_API(listUsers, builder::summary(info, "List all users"); builder::tags(info, {"users"});
-			  builder::response<UserDTO>(info, 200, "User list"))
+			  builder::response<UserListDTO>(info, 200, "User list"))
 
 	// POST /api/users — 创建用户
 	HttpResponse createUser(const HttpRequest& req)
@@ -140,7 +149,7 @@ int main()
 
 	// 注册所有 Schema
 	std::unordered_map<std::string, boost::json::object> schemas;
-	registerSchemas<UserDTO, CreateUserRequest, ErrorResponse, StatusDTO>(schemas);
+	registerSchemas<UserListDTO, CreateUserRequest, ErrorResponse, StatusDTO>(schemas);
 	for (auto& [name, schema] : schemas)
 	{
 		registry->addSchema(name, std::move(schema));
