@@ -118,6 +118,13 @@ if(MINGW)
     target_compile_definitions(hical_core PUBLIC BOOST_ASIO_HAS_PTHREADS=1)
 endif()
 
+# 公共头里有 std::numeric_limits<T>::max() 这类写法，而 <windows.h> 的 max 宏会把它
+# 展开成 (a,b)，MSVC 上直接报 C2589。顶层 CMakeLists 那份 NOMINMAX 只在编 Hical 自己
+# 时生效，不随安装包出去，消费者一 include 就中招。用 PUBLIC 导出去。
+if(MSVC)
+    target_compile_definitions(hical_core PUBLIC NOMINMAX)
+endif()
+
 # Linux 需要链接 liburing（Boost.Asio random_access_file 依赖 io_uring）
 # GitHub Actions 自 2025-04 起封禁 io_uring syscall，CI 中需 -DHICAL_DISABLE_IO_URING=ON
 if(UNIX AND NOT APPLE)

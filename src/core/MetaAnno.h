@@ -438,13 +438,13 @@ namespace hical::anno
 		{
 			if constexpr (std::is_signed_v<Value>)
 			{
-				if (value < std::numeric_limits<std::int32_t>::min()
-					|| value > std::numeric_limits<std::int32_t>::max())
+				if (value < (std::numeric_limits<std::int32_t>::min)()
+					|| value > (std::numeric_limits<std::int32_t>::max)())
 				{
 					throw "json_min/json_max: 边界必须在 int32 [-2147483648,2147483647] 范围内";
 				}
 			}
-			else if (value > static_cast<std::uint32_t>(std::numeric_limits<std::int32_t>::max()))
+			else if (value > static_cast<std::uint32_t>((std::numeric_limits<std::int32_t>::max)()))
 			{
 				throw "json_min/json_max: 边界必须在 int32 [-2147483648,2147483647] 范围内";
 			}

@@ -108,9 +108,9 @@ namespace hical
 	{
 		// 热数据：每次请求经过中间件都写入，各自独占 cache line
 		alignas(64) std::atomic<size_t> callCount {0};
-		alignas(64) std::atomic<int64_t> totalTimeUs {0};                                 // 微秒
-		alignas(64) std::atomic<int64_t> maxTimeUs {0};                                   // 微秒
-		alignas(64) std::atomic<int64_t> minTimeUs {std::numeric_limits<int64_t>::max()}; // 微秒
+		alignas(64) std::atomic<int64_t> totalTimeUs {0};                                   // 微秒
+		alignas(64) std::atomic<int64_t> maxTimeUs {0};                                     // 微秒
+		alignas(64) std::atomic<int64_t> minTimeUs {(std::numeric_limits<int64_t>::max)()}; // 微秒
 
 		// 冷数据：仅查询统计时读取
 		std::string name;

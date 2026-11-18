@@ -102,13 +102,13 @@ namespace hical::meta
 			}
 			if constexpr (std::numeric_limits<T>::digits < std::numeric_limits<Integer>::digits)
 			{
-				if (value > static_cast<Integer>(std::numeric_limits<T>::max()))
+				if (value > static_cast<Integer>((std::numeric_limits<T>::max)()))
 				{
 					throwIntegerOutOfRange();
 				}
 				if constexpr (std::is_signed_v<Integer> && std::is_signed_v<T>)
 				{
-					if (value < static_cast<Integer>(std::numeric_limits<T>::min()))
+					if (value < static_cast<Integer>((std::numeric_limits<T>::min)()))
 					{
 						throwIntegerOutOfRange();
 					}
@@ -358,8 +358,8 @@ namespace hical::meta
 				return {};
 			}
 			if (!std::isfinite(*bound) || std::trunc(*bound) != *bound
-				|| *bound < std::numeric_limits<std::int32_t>::min()
-				|| *bound > std::numeric_limits<std::int32_t>::max())
+				|| *bound < (std::numeric_limits<std::int32_t>::min)()
+				|| *bound > (std::numeric_limits<std::int32_t>::max)())
 			{
 				throwFieldDefinitionError(name, "共同契约的数值边界必须是 int32 范围内的整数");
 			}

@@ -355,8 +355,8 @@ namespace hical::meta::openapi
 			}
 			else if constexpr (std::is_same_v<T, std::int32_t>)
 			{
-				const auto minimum = std::numeric_limits<std::int32_t>::min();
-				const auto maximum = std::numeric_limits<std::int32_t>::max();
+				const auto minimum = (std::numeric_limits<std::int32_t>::min)();
+				const auto maximum = (std::numeric_limits<std::int32_t>::max)();
 				const bool isInput = direction == ContractDirection::hInput;
 				return {{"type", "integer"},
 						{"format", "int32"},
