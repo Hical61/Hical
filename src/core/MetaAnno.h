@@ -6,9 +6,11 @@
 #pragma once
 
 #include "Utils/CTConv.h"
+#include "detail/JsonFieldRules.h"
 
 #include <boost/json.hpp>
 #include <meta>
+#include <limits>
 
 /**
  * @brief 编译期注解（Annotation）命名空间
@@ -232,6 +234,53 @@ namespace hical::anno
 		// clang-format on
 	}
 
+	/**
+	 * @brief 检查成员及其所属类是否声明了 View 处理器
+	 * @tparam MemberInfo 成员反射信息
+	 * @return 找到 View 处理器时返回 true
+	 */
+	template <M::info MemberInfo>
+	consteval bool hasViewAnnotations()
+	{
+		constexpr static auto kAnnotations = std::define_static_array(annotationsOfMemberWithParent(MemberInfo));
+		// clang-format off
+		template for (constexpr auto info : kAnnotations)
+		{
+			if constexpr (std::derived_from<typename [:M::type_of(info):], ViewAnnotationHandler>)
+			{
+				return true;
+			}
+		}
+		// clang-format on
+		return false;
+	}
+
+	/**
+	 * @brief 检查是否声明了适用于该成员类型的 Deserialize 处理函数
+	 * @tparam MemberInfo 成员反射信息
+	 * @return 有处理函数可接收 JSON 值和该成员的解码结果时返回 true
+	 */
+	template <M::info MemberInfo>
+	consteval bool hasDeserializeAnnotations()
+	{
+		constexpr static auto kAnnotations = std::define_static_array(annotationsOfMemberWithParent(MemberInfo));
+		// clang-format off
+		using MemberType = [:M::type_of(MemberInfo):];
+		template for (constexpr auto info : kAnnotations)
+		{
+			constexpr auto annotation = [:M::constant_of(info):];
+			if constexpr (requires(const json::value& input, std::optional<MemberType>& result)
+			{
+				{ annotation.applyAnnotationDeserialize(input, result) } -> std::same_as<void>;
+			})
+			{
+				return true;
+			}
+		}
+		// clang-format on
+		return false;
+	}
+
 	// ================================================================================================
 	//  内置注解类型
 	// ================================================================================================
@@ -352,4 +401,122 @@ namespace hical::anno
 			result.keyName_ = std::define_static_string(CT::caseCamelToSnake(result.keyName_));
 		}
 	} inline constexpr json_camel_to_snake {};
+
+	/**
+	 * @brief int32 字段的最小值注解
+	 */
+	struct JsonMinRule
+	{
+		std::int32_t value_;
+	};
+
+	/**
+	 * @brief int32 字段的最大值注解
+	 */
+	struct JsonMaxRule
+	{
+		std::int32_t value_;
+	};
+
+	/**
+	 * @brief 字符串非空注解
+	 */
+	struct JsonNotEmptyRule
+	{
+	} inline constexpr json_not_empty {};
+
+	/**
+	 * @brief 检查数值注解的边界能否用 int32 表示
+	 * @param value 注解中的整数常量
+	 * @return 转换后的 int32 边界
+	 */
+	template <typename Value>
+	consteval std::int32_t jsonInt32RuleBound(Value value)
+	{
+		static_assert(std::integral<Value> && !std::same_as<Value, bool>, "json_min/json_max 的边界必须是整数");
+		if constexpr (std::integral<Value> && !std::same_as<Value, bool>)
+		{
+			if constexpr (std::is_signed_v<Value>)
+			{
+				if (value < std::numeric_limits<std::int32_t>::min()
+					|| value > std::numeric_limits<std::int32_t>::max())
+				{
+					throw "json_min/json_max: 边界必须在 int32 [-2147483648,2147483647] 范围内";
+				}
+			}
+			else if (value > static_cast<std::uint32_t>(std::numeric_limits<std::int32_t>::max()))
+			{
+				throw "json_min/json_max: 边界必须在 int32 [-2147483648,2147483647] 范围内";
+			}
+			return static_cast<std::int32_t>(value);
+		}
+	}
+
+	/**
+	 * @brief 创建 int32 最小值注解
+	 * @param value int32 可表示的整数常量
+	 * @return 最小值注解
+	 */
+	template <typename Value>
+	consteval JsonMinRule json_min(Value value)
+	{
+		return {jsonInt32RuleBound(value)};
+	}
+
+	/**
+	 * @brief 创建 int32 最大值注解
+	 * @param value int32 可表示的整数常量
+	 * @return 最大值注解
+	 */
+	template <typename Value>
+	consteval JsonMaxRule json_max(Value value)
+	{
+		return {jsonInt32RuleBound(value)};
+	}
+
+	/**
+	 * @brief 按原有注解顺序确定 JSON 键，并收集字段的输入规则
+	 * @tparam MemberInfo 原生成员反射信息
+	 * @return 最终 JSON 键、必填与忽略标记，以及非空和数值范围规则
+	 */
+	template <M::info MemberInfo>
+	consteval meta::detail::JsonFieldRules applyJsonFieldAnnotations()
+	{
+		constexpr auto key = applyKeyAnnotations<MemberInfo>();
+		meta::detail::JsonFieldRules result {key.keyName_, key.requiredMember_, key.ignoreMember_};
+		using MemberType = [:M::remove_cvref(M::type_of(MemberInfo)):];
+		constexpr static auto kAnnotationInfos = std::define_static_array(annotationsOfMemberWithParent(MemberInfo));
+		// clang-format off
+		template for (constexpr auto annoInfo : kAnnotationInfos)
+		{
+			constexpr auto value = [:M::constant_of(annoInfo):];
+			using AnnotationType = std::remove_cvref_t<decltype(value)>;
+			if constexpr (std::same_as<AnnotationType, JsonMinRule> || std::same_as<AnnotationType, JsonMaxRule>)
+			{
+				static_assert(std::same_as<MemberType, std::int32_t>, "json_min/json_max 仅支持 int32 字段");
+				if constexpr (std::same_as<AnnotationType, JsonMinRule>)
+				{
+					if (!result.minimum || value.value_ > *result.minimum)
+					{
+						result.minimum = value.value_;
+					}
+				}
+				else if (!result.maximum || value.value_ < *result.maximum)
+				{
+					result.maximum = value.value_;
+				}
+			}
+			else if constexpr (std::same_as<AnnotationType, JsonNotEmptyRule>)
+			{
+				static_assert(std::same_as<MemberType, std::string>, "json_not_empty 仅支持 std::string 字段");
+				result.notEmpty = true;
+			}
+		}
+		// clang-format on
+		if (result.minimum && result.maximum && *result.minimum > *result.maximum)
+		{
+			throw "json_min/json_max: min > max，数值区间为空";
+		}
+		return result;
+	}
 } // namespace hical::anno

@@ -154,9 +154,13 @@ endif()
 # P2996 反射只靠 -std=c++26 开不起来：特性宏 __cpp_impl_reflection /
 # __cpp_lib_reflection 只有在显式传 -freflection 之后才会定义，不加的话
 # Reflection.h 检测不到宏、HICAL_HAS_REFLECTION 恒为 0，反射代码静默不编译。
-# PUBLIC：测试与示例目标会继承；限定 CXX：项目里有 C 源文件（picohttpparser.c）。
+# 用 PUBLIC 把 C++ 标准和反射选项传给测试、示例和安装包的使用方。
+# -freflection 只传给 C++ 编译器，项目里还有 C 源文件 picohttpparser.c。
 if(HICAL_ENABLE_REFLECTION)
+    target_compile_features(hical_core PUBLIC cxx_std_26)
     target_compile_options(hical_core PUBLIC $<$<COMPILE_LANGUAGE:CXX>:-freflection>)
+else()
+    target_compile_features(hical_core PUBLIC cxx_std_20)
 endif()
 
 # 数据库中间件（可选）

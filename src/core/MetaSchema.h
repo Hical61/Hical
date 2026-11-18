@@ -4,6 +4,7 @@
  */
 #pragma once
 #include <boost/json.hpp>
+#include <boost/version.hpp>
 #include <concepts>
 #include <meta>
 #include <ranges>
