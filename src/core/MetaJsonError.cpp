@@ -11,9 +11,20 @@
 namespace hical::meta::detail
 {
 
+	void throwFieldDefinitionError(std::string_view fieldName, std::string_view reason)
+	{
+		throw std::logic_error(std::string("HICAL_JSON 字段 '") + std::string(fieldName) + "' 定义错误："
+							   + std::string(reason));
+	}
+
 	void throwTypeMismatch(std::string_view expected)
 	{
 		throw std::runtime_error(std::string("JSON type mismatch: expected ") + std::string(expected));
+	}
+
+	void throwIntegerOutOfRange()
+	{
+		throw std::runtime_error("fromJson: 整数超出目标类型的可表示范围");
 	}
 
 	void throwMissingField(std::string_view fieldName)
@@ -59,6 +70,11 @@ namespace hical::meta::detail
 		{
 			return false;
 		}
+	}
+
+	bool validatePattern(std::string_view value, const std::regex& compiled)
+	{
+		return std::regex_match(value.data(), value.data() + value.size(), compiled);
 	}
 
 } // namespace hical::meta::detail

@@ -7,16 +7,31 @@
 
 #pragma once
 
+#include <regex>
 #include <string_view>
 
 namespace hical::meta::detail
 {
 
 	/**
+	 * @brief 报告字段声明中的错误
+	 * @param fieldName 原始成员名或冲突的 JSON 键
+	 * @param reason 定义冲突的原因
+	 * @throws std::logic_error 字段定义无效
+	 */
+	[[noreturn]] void throwFieldDefinitionError(std::string_view fieldName, std::string_view reason);
+
+	/**
 	 * @brief JSON 类型不匹配时抛出异常
 	 * @param expected 期望的类型名（如 "string", "integer", "object"）
 	 */
 	[[noreturn]] void throwTypeMismatch(std::string_view expected);
+
+	/**
+	 * @brief 报告 JSON 整数超出目标类型的范围
+	 * @throws std::runtime_error 整数越界
+	 */
+	[[noreturn]] void throwIntegerOutOfRange();
 
 	/**
 	 * @brief 缺少必需字段时抛出异常
@@ -50,7 +65,16 @@ namespace hical::meta::detail
 	 * @param value 待校验的字符串值
 	 * @param pattern 正则表达式字符串
 	 * @return true 匹配，false 不匹配
+	 * @note 每次调用都要重新编译 pattern。字段校验路径用下面的重载复用已编译结果。
 	 */
 	bool validatePattern(std::string_view value, std::string_view pattern);
+
+	/**
+	 * @brief 用已编译的正则校验字符串
+	 * @param value 待校验的字符串值
+	 * @param compiled 已编译的正则表达式
+	 * @return true 匹配，false 不匹配
+	 */
+	bool validatePattern(std::string_view value, const std::regex& compiled);
 
 } // namespace hical::meta::detail

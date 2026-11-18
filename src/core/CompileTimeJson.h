@@ -110,7 +110,7 @@ namespace hical::meta
 			bool first = true;
 			auto emitField = [&](const auto& field)
 			{
-				if (!field.ignored)
+				if (field.active && !field.ignored)
 				{
 					if (!first)
 					{
