@@ -136,14 +136,13 @@ Enable `HICAL_WITH_OPENAPI=ON` (default) and follow the three-step pattern:
 #include <hical/core/MetaJson.h>
 #include <hical/core/OpenApiSchema.h>
 
-HICAL_SCHEMA_NAME(UserDTO, "User")
-
 struct UserDTO
 {
-    HICAL_JSON(UserDTO, REQUIRED(id), name)
     int id;
     std::string name;
+    HICAL_JSON(UserDTO, REQUIRED(id), name)
 };
+HICAL_SCHEMA_NAME(UserDTO, "User")   // 必须在 struct 之后：它是 SchemaName<UserDTO> 的模板特化
 ```
 
 **Step 2 — Annotate routes and register**
@@ -154,26 +153,21 @@ struct UserDTO
 
 struct UserHandler
 {
-    HICAL_HANDLER(Get, "/api/users/{id}", getUser)
     hical::Awaitable<hical::HttpResponse> getUser(const hical::HttpRequest& req)
     {
         co_return hical::HttpResponse::json({{"id", req.param("id")}});
     }
+    HICAL_HANDLER(Get, "/api/users/{id}", getUser)
+    HICAL_API(getUser,
+              hical::meta::openapi::builder::summary(info, "Get user by ID");
+              hical::meta::openapi::builder::tags(info, {"Users"});
+              hical::meta::openapi::builder::response<UserDTO>(info, 200, "User"))
 
-    static std::vector<hical::RouteApiInfo> routeApiTable()
-    {
-        return {
-            HICAL_API(
-                hical::builder::summary("Get user by ID"),
-                hical::builder::tag("Users"),
-                hical::builder::response<UserDTO>(200)
-            ),
-        };
-    }
-
-    HICAL_ROUTES_WITH_API(UserHandler, getUser)
+    HICAL_ROUTES(UserHandler, getUser)
 };
 ```
+
+`HICAL_API` takes the function name first, then a **sequence of statements** separated by semicolons — not a comma-separated list. Every `builder::*` helper takes `info` as its first argument, and `builder::response<T>` needs `(info, statusCode, desc)`. `HICAL_HANDLER`, `HICAL_API` and `HICAL_ROUTES` all live inside the same class; `HICAL_ROUTES` matches the other two by function name.
 
 **Step 3 — Assemble document and expose endpoints**
 

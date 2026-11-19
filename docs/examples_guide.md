@@ -1026,30 +1026,61 @@ curl http://localhost:8080/openapi.json | python -m json.tool
 ### 关键代码结构
 
 ```cpp
-// 1. 定义 DTO + 注册 schema 名
-HICAL_SCHEMA_NAME(UserDTO, "User")
-struct UserDTO { HICAL_JSON(UserDTO, REQUIRED(id), name); int id; std::string name; };
+using namespace hical;
+using hical::meta::toJson;
 
-// 2. Handler 中标注 API（routeApiTable 静态方法）
-static std::vector<RouteApiInfo> routeApiTable()
+// 1. 定义 DTO + 注册 schema 名（HICAL_SCHEMA_NAME 必须写在 struct 之后，它是模板特化）
+struct UserDTO
 {
-    return {
-        HICAL_API(
-            builder::summary("获取用户"),
-            builder::tag("用户管理"),
-            builder::response<UserDTO>(200),
-            builder::response(404, "用户不存在")
-        ),
-        // ...
-    };
-}
-HICAL_ROUTES_WITH_API(MyHandler, getUser, createUser, ...)
+    int id;
+    std::string name;
+    HICAL_JSON(UserDTO, REQUIRED(id), name)
+};
+HICAL_SCHEMA_NAME(UserDTO, "User")
 
-// 3. 注册路由 + 元数据 + 暴露文档
-registerRoutesWithOpenApi(router, handler, *registry);
-doc->addSchemas(schemas);
+struct UserListDTO
+{
+    std::vector<UserDTO> users;
+    HICAL_JSON(UserListDTO, users)
+};
+HICAL_SCHEMA_NAME(UserListDTO, "UserListDTO")
+
+// 2. Handler 类里：每个方法先标路由，再标 API
+class UserHandler
+{
+public:
+    HttpResponse getUser(const HttpRequest& req)
+    {
+        return HttpResponse::json(toJson(UserDTO {42, "Alice"}));
+    }
+    HICAL_HANDLER(Get, "/api/users/{id}", getUser)
+    HICAL_API(getUser, builder::summary(info, "获取用户"); builder::tags(info, {"用户管理"});
+              builder::response<UserDTO>(info, 200, "用户信息");
+              builder::responseDesc(info, 404, "用户不存在"))
+
+    HttpResponse listUsers(const HttpRequest& req) { /* ... */ }
+    HICAL_HANDLER(Get, "/api/users", listUsers)
+    HICAL_API(listUsers, builder::summary(info, "用户列表"); builder::tags(info, {"用户管理"});
+              builder::response<UserListDTO>(info, 200, "用户列表"))
+
+    // 汇总本类的路由表
+    HICAL_ROUTES(UserHandler, getUser, listUsers)
+};
+
+// 3. 注册路由 + 元数据，再挂文档端点
+UserHandler handler;
+registerRoutesWithOpenApi(router, handler, *registry);   // hical::meta::openapi
+
+std::unordered_map<std::string, boost::json::object> schemas;
+meta::openapi::registerSchemas<UserDTO, UserListDTO>(schemas);
+for (auto& [name, schema] : schemas)
+{
+    registry->addSchema(name, std::move(schema));
+}
 serveOpenApi(router, doc);
 ```
+
+> `HICAL_API` 的第二个参数是**语句序列**，用分号分隔，不用逗号；所有 `builder::*` 的第一个参数都是 `info`。`builder::response<T>` 是三参数 `(info, statusCode, desc)`，`builder::responseDesc(info, statusCode, desc)` 不挂 body。`HICAL_HANDLER`、`HICAL_API`、`HICAL_ROUTES` 三个宏都写在同一个类里，`HICAL_ROUTES` 按方法名把前两者对上；写成自由函数编译不过。
 
 ---
 
