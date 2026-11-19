@@ -12,7 +12,7 @@
 | C++ 编译器  | GCC 14+ / Clang 20+ / MSVC 2022+ | C++20 编译器（协程支持）          |
 | CMake       | 3.28+                            | 构建系统                          |
 | Ninja       | 1.10+                            | 构建工具（比 Make 更快）          |
-| Boost       | 1.82+（DB 中间件 1.85+）         | Asio / JSON / MySQL               |
+| Boost       | 1.82+（DB 中间件 1.85+；协程 HTTP 客户端 1.86+） | Asio / JSON / MySQL               |
 | OpenSSL     | 3.0+                             | SSL/TLS 支持                      |
 | zlib        | —                                | WebSocket permessage-deflate 压缩 |
 | liburing    | —（Linux 可选）                  | Boost.Asio 异步文件 I/O           |
@@ -173,10 +173,15 @@ cmake -B build -G "Ninja" \
 
 | 选项                      | 默认值 | 说明                                                                                                |
 | ------------------------- | ------ | --------------------------------------------------------------------------------------------------- |
-| `HICAL_WITH_DATABASE`     | `OFF`  | 启用数据库中间件（需 Boost.MySQL，即 Boost >= 1.85）                                                |
-| `HICAL_WITH_PGSQL`        | `OFF`  | 启用 PostgreSQL 后端（需 libpq；会一并开启 `HICAL_WITH_DATABASE`）                                  |
+| `HICAL_WITH_HTTP2`        | `OFF`  | 打开 TLS HTTP/2，服务端和客户端都走 ALPN。要自备静态 nghttp2 `>=1.70.0,<2`，用 `-DNghttp2_ROOT=...` 指过去；找不到在配置阶段直接报错，不会静默降级 |
+| `HICAL_WITH_HTTP_CLIENT`  | `OFF`  | 打开协程 HTTP 客户端（`HttpClient` / `HttpClientPool`）。需 Boost 1.86+，配置阶段会检查 `cancel_after`；不开的话连公开头都不装 |
+| `HICAL_INSTALL_CLI`       | `OFF`  | 安装 `hical` / `hical.exe`，脚本和模板落在 `share/hical/cli/`。装完才用得上 `hical new` |
+| `HICAL_WITH_DATABASE`     | `OFF`  | 启用数据库中间件核心（连接池 / 中间件 / 查询日志，不带具体后端）                                     |
+| `HICAL_WITH_MYSQL`        | `OFF`  | 启用 MySQL 后端（Boost.MySQL 即 Boost >= 1.85），需要 `HICAL_WITH_DATABASE`                          |
+| `HICAL_WITH_PGSQL`        | `OFF`  | 启用 PostgreSQL 后端（需 libpq），需要 `HICAL_WITH_DATABASE`                                        |
 | `HICAL_WITH_OPENAPI`      | `ON`   | 启用 OpenAPI 文档自动生成模块（复用 Boost.JSON，无新依赖）                                          |
-| `HICAL_ENABLE_REFLECTION` | `OFF`  | 启用 C++26 原生反射（需支持 P2996 的编译器如 GCC 16 + Boost >= 1.90；只对 C++ 源加 `-freflection`） |
+| `HICAL_ENABLE_REFLECTION` | `OFF`  | 启用 C++26 原生反射（需支持 P2996 的编译器如 GCC 16 + Boost >= 1.90；GNU 工具链还要 CMake >= 3.30。配置阶段会试编译一段反射代码，不过就报错） |
+| `HICAL_DISABLE_IO_URING`  | `OFF`  | 关掉 Linux 的 io_uring。GitHub runner 和 Docker 默认 seccomp 会拦这个系统调用                                  |
 | `HICAL_BUILD_TESTS`       | `ON`   | 是否编译测试套件                                                                                    |
 | `HICAL_BUILD_EXAMPLES`    | `ON`   | 是否编译示例程序                                                                                    |
 | `HICAL_WITH_MIMALLOC`     | `OFF`  | 使用 mimalloc 作为 PMR 最底层 upstream 分配器                                                       |
@@ -224,7 +229,7 @@ cmake --build build --clean-first
 | 平台                  | 注意事项                                                                               |
 | --------------------- | -------------------------------------------------------------------------------------- |
 | Windows (MSYS2)       | 必须指定 `CMAKE_PREFIX_PATH=C:/msys64/mingw64`，否则找不到 Boost/OpenSSL               |
-| Windows (MSVC)        | hical CMakeLists.txt 已自动添加 `/utf-8` 和 `_WIN32_WINNT=0x0A00`                      |
+| Windows (MSVC)        | hical CMakeLists.txt 已自动添加 `/utf-8` 和 `_WIN32_WINNT=0x0A00`；`NOMINMAX` 随 `hical::hical_core` 以 PUBLIC 导出，别在自己的工程里重复定义。反过来说，只拷头文件、不链接这个导出目标的话，公共头里的 `std::numeric_limits<T>::max()` 会吃到 `<windows.h>` 的宏，报 C2589 |
 | Linux                 | 系统包管理器安装的库在标准路径，无需额外指定                                           |
 | macOS                 | **必须**指定 `OPENSSL_ROOT_DIR`，否则 CMake 会找到系统自带的 LibreSSL 而非 OpenSSL 3.x |
 | macOS (Apple Silicon) | `brew --prefix` 自动返回 `/opt/homebrew` 前缀，无需手动区分架构                        |

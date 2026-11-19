@@ -100,9 +100,9 @@ target_link_libraries(my_app PRIVATE hical::hical_core)
 
 ```bash
 # Download source package from GitHub Releases
-curl -LO https://github.com/Hical61/Hical/releases/download/v2.7.2/hical-2.7.2-conan-src.tar.gz
-tar xzf hical-2.7.2-conan-src.tar.gz && cd hical
-conan export . --version=2.7.2
+curl -LO https://github.com/Hical61/Hical/releases/download/v2.7.3/hical-2.7.3-conan-src.tar.gz
+tar xzf hical-2.7.3-conan-src.tar.gz && cd hical
+conan export . --version=2.7.3
 ```
 
 In your consumer project:
@@ -242,10 +242,12 @@ server.use([](HttpRequest& req, MiddlewareNext next) -> Awaitable<HttpResponse> 
 | WebSocket           | [Examples Guide](examples_guide.md)          |
 | SSL/TLS             | [Integration Guide](integration_guide.md)    |
 | Coroutine handlers  | [Coroutine Guide](coroutine-guide.md)        |
+| HTTP/2              | [HTTP/2 Guide](http2-guide.md)               |
+| HTTP client         | [API Reference](api_reference.md)            |
 | Performance tuning  | [Performance Report](performance_report.md)  |
 | OpenAPI generation  | [OpenAPI Guide](openapi-guide.md)            |
 | Database middleware | [Integration Guide](integration_guide.md)    |
-| Full examples       | [examples/](../examples/) — 8 runnable demos |
+| Full examples       | [examples/](../examples/) — 13 demos, some conditional on build switches |
 | API reference       | [API Reference](api_reference.md)            |
 | Architecture        | [Architecture](architecture.md)              |
 

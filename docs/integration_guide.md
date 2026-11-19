@@ -34,6 +34,8 @@ target_link_libraries(my_app PRIVATE hical::hical_core)
 ```
 
 > **Include path convention**: After installation, use `#include <hical/core/X.h>` (e.g. `<hical/core/HttpServer.h>`, `<hical/core/Router.h>`). For database module: `<hical/db/X.h>`.
+>
+> **Link the exported target, don't hand-roll flags.** `hical::hical_core` already exports everything a consumer needs: nghttp2 lookup and static-link defines, `BOOST_ASIO_HAS_PTHREADS` on MinGW, `NOMINMAX` on MSVC, and the C++ standard. Defining any of these yourself risks a conflicting value that is painful to diagnose.
 
 ---
 
@@ -50,7 +52,10 @@ vcpkg install hical61-hical
 Optional features:
 
 ```bash
-vcpkg install hical61-hical[database]   # Enable database middleware
+vcpkg install hical61-hical[database]      # Database middleware
+vcpkg install hical61-hical[http-client]   # Coroutine HTTP client (Boost.Asio >= 1.86)
+vcpkg install hical61-hical[http2]         # TLS HTTP/2 (bundles static nghttp2)
+vcpkg install hical61-hical[database,http2,http-client]
 ```
 
 Configure your project with vcpkg toolchain:

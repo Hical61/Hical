@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-Hical is a modern C++20 high-performance web framework built on Boost.Asio, featuring a native HTTP/WebSocket stack (picohttpparser + self-developed WebSocket implementation) over both plain TCP and TLS (`ssl::stream`), PMR three-tier memory pools, coroutine-based async I/O (`asio::awaitable<T>`), C++20 Concepts for compile-time type safety, a C++26 reflection layer (dual-track: native P2996 annotation values or C++20 macro fallback, plus a compile-time utility layer), and an optional coroutine-based database middleware (Boost.MySQL and libpq/PostgreSQL backends).
+Hical is a modern C++20 high-performance web framework built on Boost.Asio, featuring a native HTTP/WebSocket stack (picohttpparser + self-developed WebSocket implementation) over both plain TCP and TLS (`ssl::stream`), an optional TLS HTTP/2 stack (server and client over nghttp2), PMR three-tier memory pools, coroutine-based async I/O (`asio::awaitable<T>`), C++20 Concepts for compile-time type safety, a C++26 reflection layer (dual-track: native P2996 annotation values or C++20 macro fallback, plus a compile-time utility layer), an optional coroutine-based database middleware (MySQL and libpq/PostgreSQL backends), and a `hical new` project generator.
 
 ## Project Structure & Module Organization
 
@@ -12,11 +12,14 @@ Hical is a modern C++20 high-performance web framework built on Boost.Asio, feat
 - `src/db/` — Optional database middleware (enable with `-DHICAL_WITH_DATABASE=ON`, guarded by `HICAL_HAS_DATABASE` macro)
 - `src/third_party/` — Bundled dependencies (picohttpparser)
 - `tests/` — GoogleTest test suite, one `test_<feature>.cpp` per module
-- `examples/` — Example servers (echo, benchmark, OpenAPI, reflection, C++26 annotation reflection, static files, PMR, PostgreSQL)
-- `docs/` — Longer guides (architecture, coroutines, logging, OpenAPI, deployment)
+- `tests/contract/` — Cross-track contract assets: `field_cases.h` feeds the same inputs to both reflection tracks, `install_consumer/` verifies what an installed package exports, `api_contract/` holds the room-endpoint compile cases, the TypeScript client and the oatpp comparison
+- `tests/benchmarks/` — Google Benchmark microbenchmarks, built only with `HICAL_WITH_BENCHMARK=ON`
+- `examples/` — Example servers (echo, benchmark, OpenAPI, reflection, C++26 annotation reflection, static files, PMR, PostgreSQL, HTTP/2 server and client). `examples/api_contract/` builds against an installed package only and is compiled by the contract smoke run, not by the main build
+- `cmake/` — `FindNghttp2.cmake` (shipped with HTTP/2 packages), `HicalCli.cmake` (CLI install rules), `HicalReflectionCheck.cmake` (C++26 `try_compile` probe), `hicalConfig.cmake.in`
+- `docs/` — Longer guides (architecture, coroutines, logging, OpenAPI, HTTP/2, CLI, deployment)
 - `docker/` — CI test matrix, production deployment, benchmark tooling
 - `benchmark/` — Multi-framework HTTP benchmark suite (hical vs actix/drogon/cinatra/etc.)
-- `scripts/` — Dev tooling (`gen_test_certs.py`, `bump_version.py`, `fix-comment-indent.py`, flamegraph helpers)
+- `scripts/` — Dev tooling (`gen_test_certs.py`, `bump_version.py`, `fix-comment-indent.py`, flamegraph helpers, `ci_http2_deps.py`, `test_http2_interop.py`), plus the contract suite scripts (`check_json_contract.py`, `check_contract_ctest.py`, `run_native_contract_smoke.sh`, `prepare_native_contract_boost.sh`)
 - `scripts/hical.py` / `scripts/templates/minimal/` — Project generator and templates. Set `HICAL_INSTALL_CLI=ON` to install `hical` on POSIX or `hical.exe` on Windows. Python is needed to run the generator. See the [CLI guide](docs/cli-guide.md).
 
 Namespaces: public API in `hical::`, JSON/route reflection in `hical::meta::`, C++26 annotation values in `hical::anno::`, JSON Schema specializations in `hical::schema::`, compile-time helpers in `hical::CT::` / `hical::CollectMember::`, database in `hical::db::`, internals in anonymous namespace or `detail::`.
@@ -44,25 +47,39 @@ cmake --build build --config Release
 ### Optional Modules
 ```bash
 cmake -B build -DHICAL_INSTALL_CLI=ON ...      # Install the CLI (run it with Python 3.10+)
-cmake -B build -DHICAL_WITH_DATABASE=ON ...    # Database middleware (requires Boost.MySQL >= 1.85)
-cmake -B build -DHICAL_WITH_PGSQL=ON ...       # PostgreSQL backend (requires libpq, implies HICAL_WITH_DATABASE)
+cmake -B build -DHICAL_WITH_DATABASE=ON ...    # Backend-agnostic DB core (pool, middleware, query log)
+cmake -B build -DHICAL_WITH_MYSQL=ON ...       # MySQL backend (Boost.MySQL >= 1.85), needs HICAL_WITH_DATABASE
+cmake -B build -DHICAL_WITH_PGSQL=ON ...       # PostgreSQL backend (requires libpq), needs HICAL_WITH_DATABASE
 cmake -B build -DHICAL_WITH_OPENAPI=OFF ...    # Disable OpenAPI (enabled by default)
-cmake -B build -DHICAL_ENABLE_REFLECTION=ON ... # C++26 reflection (GCC 16 + Boost >= 1.90; adds -freflection to C++ sources only)
+cmake -B build -DHICAL_ENABLE_REFLECTION=ON ... # C++26 reflection (GCC 16 + Boost >= 1.90 + CMake >= 3.30 on GNU)
 cmake -B build -DHICAL_WITH_HTTP_CLIENT=ON ...  # Coroutine HTTP client (default OFF)
 cmake -B build -DHICAL_WITH_HTTP2=ON ...       # HTTP/2 preview over TLS (default OFF, client also requires HICAL_WITH_HTTP_CLIENT)
+cmake -B build -DHICAL_DISABLE_IO_URING=ON ... # Turn off io_uring (GitHub runners and Docker's default seccomp block it)
 ```
 
-HTTP/2 is still a preview. Check the test results for your platform. Build it with static nghttp2 `>=1.70.0,<2` and OpenSSL 1.1.1 or later. The server needs Boost 1.82 or later, and the HTTP client needs 1.86 or later. If you use an installed Hical package, link `hical::hical_core` to pick up its dependencies and compile definitions. On MinGW, keep threading definitions such as `BOOST_ASIO_HAS_PTHREADS` consistent with the package. See the [HTTP/2 guide](docs/http2-guide.md).
+`HICAL_ENABLE_REFLECTION` runs a `try_compile` probe during configure. On GNU toolchains it needs CMake 3.30 or newer — earlier versions do not list `cxx_std_26`, and the probe fails with a message pointing at the compiler rather than the real cause. A failed probe is a `FATAL_ERROR` with the log path, not a silent downgrade to the macro track. `-freflection` is added to C++ sources only.
+
+HTTP/2 is still a preview. Check the test results for your platform. Build it with static nghttp2 `>=1.70.0,<2` and OpenSSL 1.1.1 or later; point CMake at nghttp2 with `-DNghttp2_ROOT=... -DNghttp2_USE_STATIC_LIBS=ON` or `CMAKE_PREFIX_PATH`. The server needs Boost 1.82 or later, and the HTTP client needs 1.86 or later. Building `Http2Options` does not enable HTTP/2 — the server still needs `enableHttp2()` and TLS. If you use an installed Hical package, link `hical::hical_core` to pick up its dependencies and compile definitions. The exported target already carries `BOOST_ASIO_HAS_PTHREADS` (MinGW) and `NOMINMAX` (MSVC) as PUBLIC definitions — do not define them yourself, a conflicting value is hard to diagnose. See the [HTTP/2 guide](docs/http2-guide.md).
 
 ### Run Tests
 ```bash
 # Full suite
 ctest --test-dir build --output-on-failure --timeout 60 -j4
 # MSVC needs: ctest ... -C Release
+# CI excludes -E "HttpServerPerfTest"; RouterPerfTest / PerfectHashPerfTest no longer exist
 
 # Single test
 ./build/tests/test_router
 ctest --test-dir build -R test_router --output-on-failure
+
+# HTTP/2 suite (needs its own build)
+cmake -B build-h2 -DHICAL_WITH_HTTP2=ON -DHICAL_WITH_HTTP_CLIENT=ON
+cmake --build build-h2 -j$(nproc)
+ctest --test-dir build-h2 -R 'Http2' --output-on-failure
+
+# Reflection contract suite — the CI path, roughly 75 minutes locally.
+# Needs HICAL_BOOST_PREFIX pointing at Boost 1.90 built with the same native toolchain.
+HICAL_BOOST_PREFIX=/path/to/boost bash scripts/run_native_contract_smoke.sh
 
 # CI-like Linux suite
 cd docker/test && docker compose up --build --abort-on-container-exit
@@ -102,7 +119,7 @@ find src -name '*.cpp' | xargs clang-tidy -p build
 - `StaticFiles.h` — Async file serving, ETag/304, Range Request (206), MIME detection, path traversal protection, 64MB limit
 - `WsFrame.h` / `WsHandshake.h` / `WsDeflate.h/cpp` — WebSocket RFC 6455 stack: frame parsing, handshake, permessage-deflate compression
 - `Reflection.h` / `MetaJson.h` / `MetaRoutes.h` — C++26 dual-track reflection: native P2996 **annotation values** (`[[=hical::anno::...]]`) or C++20 `HICAL_JSON`/`HICAL_ROUTES` macros. API: `toJson()`, `fromJson<T>()`, `req.readJson<T>()`, `registerRoutes()`. The annotation track is genuinely implemented (not aspirational), but it needs a compiler with P2996 (e.g. GCC 16) plus `-freflection`, so it's opt-in via `HICAL_ENABLE_REFLECTION=ON` and the macro track remains the default. Mind the syntax: it's an annotation *value* `[[=...]]`, not a standard attribute `[[...]]` — the old attribute form compiles fine but silently does nothing
-- `MetaAnno.h` — annotation framework: three-stage handlers (Key / Serialize / Deserialize / View) plus the built-in JSON annotations `json_ignore`, `json_rename`, `json_reset`, `json_required`, and the class-level `json_snake_to_lowerCamel` / `json_snake_to_UpperCamel` / `json_camel_to_snake`. Dispatch is annotation-value + `requires` overload detection rather than attribute string matching, so type-mismatched members are skipped and user types can add their own overloads
+- `MetaAnno.h` — annotation framework: three-stage handlers (Key / Serialize / Deserialize / View) plus the built-in JSON annotations `json_ignore`, `json_rename`, `json_reset`, `json_required`, the input rules `json_min` / `json_max` (int32 fields only) and `json_not_empty` (`std::string` only), and the class-level `json_snake_to_lowerCamel` / `json_snake_to_UpperCamel` / `json_camel_to_snake`. Dispatch is annotation-value + `requires` overload detection rather than attribute string matching, so type-mismatched members are skipped and user types can add their own overloads. On the macro track the same rules are `MIN` / `MAX` / `NOT_EMPTY` / `PATTERN` / `LENGTH`; using one on the wrong field type is now a compile-time `static_assert` rather than a silent no-op
 - `MetaSchema.h` — JSON Schema type specializations (`hical::schema::kSchema<T>`): primitives, `optional`, `array`, enums, `union`, `variant`
 - `Utils/CTConv.h` — compile-time naming-style conversion (`caseSnakeToLowerCamel` / `caseSnakeToUpperCamel` / `caseCamelToSnake`)
 - `Utils/CollectMember.h` — inheritance-chain member collection, with two-stage filtering of name ambiguity and diamond non-virtual base-subobject ambiguity
@@ -113,7 +130,7 @@ find src -name '*.cpp' | xargs clang-tidy -p build
 - `JwtAuth.h/cpp` — HS256 JWT middleware, zero third-party deps (OpenSSL EVP + self-implemented Base64URL)
 - `GzipCompression.h/cpp` — Response compression, auto-checks `Accept-Encoding`, small body inline, large body streaming
 - `SseSession.h/cpp` — Server-Sent Events (WHATWG EventSource; chunked streaming, 30s heartbeat)
-- `OpenApi*.h/cpp` — OpenAPI 3.0 auto-generation: schema → registry → document → endpoints (`/openapi.json` + `/docs`). Opt-in via `HICAL_WITH_OPENAPI=ON`.
+- `OpenApi*.h/cpp` — OpenAPI 3.0 auto-generation: schema → registry → document → endpoints (`/openapi.json` + `/docs`). Opt-in via `HICAL_WITH_OPENAPI=ON`. `inputSchema<T>()` and `outputSchema<T>()` in `hical::meta::openapi` describe request and response separately — input lists the explicitly required fields and input rules, output marks every emitted field required and uses the full type range. Both tracks honour aliases, required, ignore, string non-empty and int32 bounds. The older `jsonSchema<T>()` stays as-is and describes shape only.
 - `PerfectHashRouter.h` — Compile-time perfect hash for static routes: replaces `unordered_map` lookup with djb2 hash + multiply-shift + one string comparison at runtime, computed in `MetaRoutes` and injected into `Router`. Fallback to original hash map on miss.
 - `CompileTimeChain.h` — Compile-time middleware chain pre-build: `CompileTimeChain` template unrolls middleware type lists at compile time, merging consecutive `SyncBeforeHandler`/`SyncAfterHandler` entries into single coroutine frames. `compileTimeRoute()`-registered routes dispatch via pre-built chain, skipping dynamic `buildOptimizedChain()`.
 - `RequestDispatch.h` — `detail::RequestDispatchContext`: the terminal "skeleton" handler (`detail::runInternalDispatch`) plus the per-request tail handler (read body + dispatch by cached `resolveResult`), passed to the pre-built pipeline via `HttpRequest::internalSlot_` so no chain is rebuilt per request
@@ -207,11 +224,13 @@ Use `HICAL_LOG_*` macros exclusively, not printf/iostream. Level guide:
 
 ## Testing Guidelines
 
-Add GoogleTest coverage in `tests/test_<feature>.cpp` and register with `hical_add_test(test_<feature>)` in `tests/CMakeLists.txt`. CI covers GCC 14, Clang 20 (ASan/UBSan), MSYS2 MINGW64, and MSVC. Avoid brittle timing assertions in performance tests — poll until the condition holds instead of sleeping a fixed duration. Database tests need `HICAL_WITH_DATABASE=ON`; most use mock connections, `test_mysql_integration.cpp` requires a live MySQL instance.
+Add GoogleTest coverage in `tests/test_<feature>.cpp` and register with `hical_add_test(test_<feature>)` in `tests/CMakeLists.txt`. CI covers GCC 14, Clang 20 (ASan/UBSan), MSYS2 MINGW64, and MSVC. Avoid brittle timing assertions in performance tests — poll until the condition holds instead of sleeping a fixed duration. `HICAL_WITH_DATABASE=ON` builds the backend-agnostic core with mock connections; `HICAL_WITH_MYSQL=ON` adds `test_mysql_integration` / `test_stmt_cache` and `HICAL_WITH_PGSQL=ON` adds `test_pgsql_*`. Both integration suites SKIP when no live instance is reachable.
 
 SSL tests read `test_server.crt` / `test_server.key` relative to the test binary's working directory (`build/tests`), so generate them there with `python scripts/gen_test_certs.py` rather than dropping them in `build/` — a misplaced cert makes those cases SKIP silently. Set `HICAL_REQUIRE_SSL_CERTS` to turn a missing cert into a hard failure instead.
 
-`test_meta_anno` / `test_meta_schema` / `test_collect_member` need a reflection-capable compiler and `GTEST_SKIP` otherwise; `test_ct_conv` runs everywhere.
+`test_meta_anno` / `test_meta_schema` / `test_collect_member` need a reflection-capable compiler and `GTEST_SKIP` otherwise; `test_ct_conv` runs everywhere. Configuring with `HICAL_ENABLE_REFLECTION=ON` does not just skip those files — it drops `test_reflection`, `test_openapi`, `test_compile_time_json` and `test_perfect_hash_router` from the build entirely, because the macro API they exercise is defined as an empty expansion on the C++26 track. Reflection coverage then falls to `test_meta_anno` / `test_meta_schema` / `test_collect_member` / `test_json_contract`.
+
+`test_json_contract` feeds one shared input table (`tests/contract/field_cases.h`) through both reflection tracks, dumps the golden output via `HICAL_JSON_CONTRACT_OUTPUT`, and `scripts/check_json_contract.py` compares them. It also rejects the usual false greens: zero tests run, JUnit counts that do not add up, skipped cases, duplicate JSON keys. `tests/contract/install_consumer` checks what an installed package exports. The TypeScript client and Schemathesis checks under `tests/contract/api_contract` need Node, a JRE and Schemathesis, so they run manually — not in CI.
 
 ## Commit & Pull Request Guidelines
 
@@ -224,10 +243,15 @@ Commit prefix convention: `[feat]`, `[fix]`, `[perf]`, `[refactor]`, `[docs]`, `
 | C++ Standard   | C++20 (C++26 optional for reflection)                                   |
 | Boost          | >= 1.82 (Asio, System, JSON); DB middleware >= 1.85 (MySQL, charconv)   |
 | HTTP client    | Boost >= 1.86 when `HICAL_WITH_HTTP_CLIENT` is enabled                  |
+| Reflection     | Boost >= 1.90, GCC 16 and CMake >= 3.30 on GNU when `HICAL_ENABLE_REFLECTION` is on |
 | nghttp2        | HTTP/2 only. Static C library >= 1.70.0 and < 2, with OpenSSL >= 1.1.1   |
 | libpq          | PostgreSQL backend only (`HICAL_WITH_PGSQL=ON`)                         |
 | OpenSSL        | Required                                                                |
 | zlib           | Required (WebSocket permessage-deflate)                                 |
+| Google Benchmark | `HICAL_WITH_BENCHMARK=ON` only                                        |
+| liburing       | Linux file I/O; disable with `HICAL_DISABLE_IO_URING=ON`                |
+| libnuma        | Linux only, `HICAL_WITH_NUMA=ON`                                        |
+| mimalloc       | `HICAL_WITH_MIMALLOC=ON`                                                |
 | picohttpparser | Bundled (system install optional via `HICAL_USE_SYSTEM_PICOHTTPPARSER`) |
 | Google Test    | Required                                                                |
 | CMake          | >= 3.28                                                                 |
@@ -235,7 +259,11 @@ Commit prefix convention: `[feat]`, `[fix]`, `[perf]`, `[refactor]`, `[docs]`, `
 
 ## CI
 
-GitHub Actions (`.github/workflows/ci.yml`): a `build` matrix over Ubuntu 24.04 (GCC 14, Clang 20) and Windows (MSYS2 MINGW64, MSVC + vcpkg), plus a `middleware-profiling` job. Linux/MSVC and profiling use pinned CMake 4.4.3; MSYS2 uses its native rolling CMake package with a 4.x version check. An extra GCC matrix entry uses CMake 3.28.4 to verify the minimum supported version. Seven ctest runs in total — GCC, GCC coverage, Clang sanitizers, CMake minimum, MSYS2, MSVC, middleware-profiling — and every one of them generates SSL test certs first. GCC job runs clang-format check; Clang job runs clang-tidy (warning mode, non-blocking).
+GitHub Actions (`.github/workflows/ci.yml`) has seven jobs: `build`, `http2`, `cli-tests`, `http2-dependency-tests`, `native-contract-smoke`, `contract-scope` and `http2-interop` (manual dispatch only).
+
+`build` is a matrix over Ubuntu 24.04 (GCC 14, Clang 20) and Windows (MSYS2 MINGW64, MSVC + vcpkg). Linux/MSVC use pinned CMake 4.4.3; MSYS2 uses its native rolling CMake package with a 4.x version check. One extra GCC entry uses CMake 3.28.4 to verify the minimum supported version — that entry only configures and builds, it does not run the suite. Middleware profiling builds under the same GCC entry instead of its own job; its test run is limited to the middleware suites since the full suite already runs twice in that entry (Release and coverage). Every test run generates SSL test certs first. GCC runs the clang-format check; Clang runs clang-tidy in warning mode.
+
+`native-contract-smoke` spends about 75 minutes building four configurations (macro/native × OpenAPI on/off) and is gated by `contract-scope`, which skips it for pull requests that only touch Markdown and docs. It always runs on pushes to `main`.
 
 ## Security & Configuration
 

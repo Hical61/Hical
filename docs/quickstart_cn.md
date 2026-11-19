@@ -100,9 +100,9 @@ target_link_libraries(my_app PRIVATE hical::hical_core)
 
 ```bash
 # 从 GitHub Releases 下载源码包
-curl -LO https://github.com/Hical61/Hical/releases/download/v2.7.2/hical-2.7.2-conan-src.tar.gz
-tar xzf hical-2.7.2-conan-src.tar.gz && cd hical
-conan export . --version=2.7.2
+curl -LO https://github.com/Hical61/Hical/releases/download/v2.7.3/hical-2.7.3-conan-src.tar.gz
+tar xzf hical-2.7.3-conan-src.tar.gz && cd hical
+conan export . --version=2.7.3
 ```
 
 在消费者项目中：
@@ -242,10 +242,12 @@ server.use([](HttpRequest& req, MiddlewareNext next) -> Awaitable<HttpResponse> 
 | WebSocket    | [使用示例](examples_guide.md)                 |
 | SSL/TLS      | [集成指南](integration_guide.md)              |
 | 协程处理器   | [协程指南](coroutine-guide.md)                |
+| HTTP/2       | [HTTP/2 指南](http2-guide.md)                 |
+| HTTP 客户端  | [API 参考](api_reference.md)                  |
 | 性能调优     | [性能报告](performance_report.md)             |
 | OpenAPI 生成 | [OpenAPI 指南](openapi-guide.md)              |
 | 数据库中间件 | [集成指南](integration_guide.md)              |
-| 完整示例     | [examples/](../examples/) — 8 个可运行的 demo |
+| 完整示例     | [examples/](../examples/) — 13 个 demo，部分看编译开关才构建 |
 | API 文档     | [API 参考](api_reference.md)                  |
 | 架构设计     | [架构文档](architecture.md)                   |
 

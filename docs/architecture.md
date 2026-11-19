@@ -1792,7 +1792,7 @@ TcpCorkGuard 析构 → setsockopt(TCP_CORK, 0) → flush
 
 ## 21. 可选 HTTP/2 与客户端生命周期
 
-此部分描述当前候选实现，仍待互操作、压力、平台工具检查及最终验收。`HICAL_WITH_HTTP2` 默认 OFF，与默认 OFF 的 `HICAL_WITH_HTTP_CLIENT` 可独立组合；关闭 H2 时不查找 nghttp2。开启时链接静态 nghttp2 C 库 `>=1.70.0,<2`，协议/HPACK 由它处理，Asio 继续负责 TLS I/O，内部头不对外安装。
+此部分描述当前候选实现，验收状态以 [HTTP/2 使用指南](http2-guide.md)开头的说明为准。`HICAL_WITH_HTTP2` 默认 OFF，与默认 OFF 的 `HICAL_WITH_HTTP_CLIENT` 可独立组合；关闭 H2 时不查找 nghttp2。开启时链接静态 nghttp2 C 库 `>=1.70.0,<2`，协议/HPACK 由它处理，Asio 继续负责 TLS I/O，内部头不对外安装。
 
 服务端在启动前同时配置 `enableSsl()` 与 `enableHttp2()`。TLS 握手后由 ALPN 分派 H1 或 H2 会话，H2 不经过 HTTP/1 序列化，也不走明文 fd 的乐观写路径。H2 的编解码、流状态、收发预算和文件生产位于 `core/http2/`；`HttpConnectionRegistry` 负责停止与排空，不引用项目 `asio/` 头。
 

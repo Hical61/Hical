@@ -1400,7 +1400,7 @@ curl -X PUT -H "Content-Type: application/json" \
 
 ## 运行内置示例程序
 
-Hical 项目自带 11 个示例程序（其中 3 个是条件构建的可选示例）：
+Hical 项目自带 13 个示例程序（其中 5 个是条件构建的可选示例，`http2_client` 还要再叠一个开关）：
 
 ```bash
 # 编译所有示例
@@ -1436,6 +1436,23 @@ cmake --build build
 #   http://localhost:8080/docs          — Swagger UI 交互式文档
 #   curl http://localhost:8080/api/users
 ```
+
+另有一个房间示例在 `examples/api_contract/`，它不参与主仓构建，用自己的 `CMakeLists.txt` 从安装包编译，演示同一处登记路由和 OpenAPI 文档、请求与响应 Schema 分开生成。构建和联调步骤见它自己的 README。
+
+### HTTP/2 Server 与 Client
+
+```bash
+# 服务端需要 -DHICAL_WITH_HTTP2=ON，客户端还要再加 -DHICAL_WITH_HTTP_CLIENT=ON
+cmake -B build-h2 -DHICAL_WITH_HTTP2=ON -DHICAL_WITH_HTTP_CLIENT=ON
+cmake --build build-h2 --target http2_server http2_client
+python scripts/gen_test_certs.py --out-dir build-h2/example-certs
+
+./build-h2/examples/http2_server build-h2/example-certs/test_server.crt \
+    build-h2/example-certs/test_server.key 8443
+./build-h2/examples/http2_client 127.0.0.1 8443 build-h2/example-certs/test_server.crt h2 shared
+```
+
+TLS 是硬性前提，`enableHttp2()` 之后没调 `enableSsl()` 会在启动时抛 `invalid_argument`。协议细节和全部预算参数见 [HTTP/2 使用指南](http2-guide.md)。
 
 ### PMR PoC（内存池验证）
 

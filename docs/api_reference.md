@@ -176,6 +176,8 @@ HTTP 服务器，整合路由、中间件和网络层，提供一键启动的高
 | `setGcInterval(seconds)`                              | seconds: GC 间隔（秒）                               | `void`          | 设置内存池 GC 间隔                                       |
 | `recommendedMaxConnections(availableMemoryMB)`        | availableMemoryMB: 可用内存（MB）                    | `size_t`        | 按明文口径估算推荐的最大连接数（每连接约 16KB）          |
 | `recommendedMaxConnections(availableMemoryMB, isTls)` | availableMemoryMB: 可用内存（MB）<br>isTls: 是否 TLS | `size_t`        | 按明文/TLS 口径估算推荐的最大连接数（TLS 每连接约 50KB） |
+| `activeConnectionCount()`                             | 无                                                   | `size_t`        | 当前活跃连接数（H2 构建才有）。跨线程可查，含未启动会话和握手中的连接 |
+| `controlledConnectionCount()`                         | 无                                                   | `size_t`        | H2 控制表里登记的连接数（H2 构建才有）。H2 未启用时恒为 0 |
 
 > `use(SyncAfterHandler)` 只吃后置逻辑，没有前置——helmet、gzip 这类只改响应的中间件直接 `server.use(makeHelmetMiddleware())` 就行，不用包协程 lambda。多个 after 之间按注册逆序执行：后注册的在洋葱里更靠内，先退出。
 >

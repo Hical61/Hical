@@ -32,7 +32,7 @@ hical/
 │
 ├── .github/                    # GitHub 社区与 CI 配置
 │   ├── workflows/              #   CI 工作流
-│   │   ├── ci.yml              #     Ubuntu(GCC14/Clang20) + Windows(MSYS2/MSVC+vcpkg) 矩阵
+│   │   ├── ci.yml              #     build 矩阵（Ubuntu GCC/Clang、MSYS2、MSVC）+ HTTP/2 四路矩阵、CLI 测试、双轨契约冒烟（native-contract-smoke，PR 时由 contract-scope 判断要不要跑）、手动触发的互操作
 │   │   ├── sanitizer.yml       #     ASan/UBSan/TSan 检查
 │   │   ├── benchmark.yml       #     基准测试
 │   │   ├── labeler.yml         #     PR 自动打标签（独立 workflow，fork PR 也生效）
@@ -76,7 +76,17 @@ hical/
 │   ├── cli/                    #   hical.in（POSIX）和 hical_windows.c（Windows）
 │   ├── test_hical_cli.py       #   测试文件生成和失败后的清理
 │   ├── test_hical_cli_windows.py # 测试 PowerShell 和 cmd 调用时的参数传递
-│   └── check_hical_cli.py      #   安装、搬移、生成后独立编译和测试
+│   ├── check_hical_cli.py      #   安装、搬移、生成后独立编译和测试
+│   ├── gen_test_certs.py       #   现场签 SSL 测试证书
+│   ├── ci_http2_deps.py        #   HTTP/2 CI 依赖（Boost + 静态 nghttp2）下载与构建
+│   ├── test_ci_http2_deps.py   #   上面那个的单元测试
+│   ├── test_http2_interop.py   #   h2spec / nghttp 互操作脚本
+│   ├── bench_http2.py          #   HTTP/2 压测
+│   ├── check_json_contract.py  #   双轨契约结果比对
+│   ├── check_contract_ctest.py #   核对 CTest 找到的用例都真跑了
+│   ├── check_api_contract.py   #   房间示例的接口联调
+│   ├── run_native_contract_smoke.sh   # 契约冒烟总入口（CI 路径）
+│   └── prepare_native_contract_boost.sh # 给契约冒烟编 Boost 1.90
 └── docs/                       # 文档
 ```
 
@@ -192,7 +202,7 @@ hical/
 │       ├── PgStmtCache.h/.cpp  # PG 服务端预处理语句 LRU 缓存
 │       └── PgSocketAdapter.h   # libpq 与 Boost.Asio 的 socket 适配层
 │
-├── tests/                      # 单元测试（Google Test）— 75 个测试目标
+├── tests/                      # 单元测试（Google Test）。测试目标按开关登记，数量看 tests/CMakeLists.txt 和 ctest 发现结果
 │   ├── CMakeLists.txt          # hical_add_test 辅助函数 + gtest_discover_tests 自动注册
 │   ├── test_main.cpp           # GTest main（所有测试目标共用）
 │   │
@@ -282,7 +292,15 @@ hical/
 │   ├── test_mysql_integration.cpp    # MySQL 集成（无实例时自动 SKIP）
 │   ├── test_pgsql_conn.cpp           # PostgreSQL 连接与静态 SQL 集成（无实例时自动 SKIP）
 │   ├── test_pgsql_socket.cpp         # PgSocketAdapter 异步等待（不依赖真实 PG）
-│   └── test_pgsql_unit.cpp           # PgStmtCache LRU 缓存纯单元测试（不依赖真实 PG）
+│   ├── test_pgsql_unit.cpp           # PgStmtCache LRU 缓存纯单元测试（不依赖真实 PG）
+│   │
+│   │ # —— 双轨契约测试 ——
+│   ├── test_json_contract.cpp        # 同一组输入喂给宏轨和原生轨，导出结果供比对
+│   └── contract/
+│       ├── field_cases.h             # 两条轨共用的输入与预期结果
+│       ├── test_check_json_contract.py  # 比较器自身的单元测试
+│       ├── install_consumer/         # 验证安装包导出的标准和 OpenAPI 开关
+│       └── api_contract/             # 房间接口：compile_cases、client（TS 联调）、comparison（手写/oatpp 对照）
 │
 ├── examples/                   # 示例程序（按构建开关条件编译）
 │   ├── CMakeLists.txt
@@ -298,7 +316,8 @@ hical/
 │   ├── reflection_server_26.cpp # C++26 注解路径示例（HICAL_ENABLE_REFLECTION=ON 时才构建）
 │   ├── static_server/          # 静态文件服务示例（含 public/ 资源）
 │   ├── openapi_server.cpp      # OpenAPI 文档自动生成示例（HICAL_WITH_OPENAPI=ON 且未开反射时构建）
-│   └── pgsql_example.cpp       # PostgreSQL 后端示例（HICAL_WITH_PGSQL=ON 时才构建）
+│   ├── pgsql_example.cpp       # PostgreSQL 后端示例（HICAL_WITH_PGSQL=ON 时才构建）
+│   └── api_contract/           # 房间接口示例：独立 CMake 工程，用安装包编译，演示 OpenAPI 输入/输出 Schema 分开登记
 │
 └── docs/                       # 文档
     ├── project_structure.md    # 本文件 — 项目代码结构说明

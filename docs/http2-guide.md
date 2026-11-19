@@ -1,6 +1,6 @@
 # HTTP/2 使用指南
 
-> 本文对应当前候选实现。Windows 本机功能、包消费、互操作、安装示例和性能矩阵已完成下述验证；Linux Sanitizer 和 CI 尚未运行，仍待最终验收。示例和配置以当前源码为准，不把单个平台的结果当作跨平台证明。
+> 本文对应当前候选实现。Windows 本机功能、包消费、互操作、安装示例和性能矩阵已完成下述验证。CI 里的 `http2` job 在 Linux GCC、Linux Clang（ASan + UBSan）、MSYS2 GCC、MSVC 四路上跑 H2 用例，通过情况以 CI 结果为准；互操作（h2spec / nghttp）是手动触发的独立 workflow，不在默认矩阵里。示例和配置以当前源码为准，不把单个平台的结果当作跨平台证明。
 
 Hical 的 HTTP/2 通过 TLS ALPN 协商，继续使用现有路由、`HttpRequest`、`HttpResponse` 和中间件。默认构建和默认客户端仍使用 HTTP/1.1，应用需要显式开启 HTTP/2。
 
